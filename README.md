@@ -1,39 +1,163 @@
-# 工作台及项目管理
+# 工作台 DevStudio
 
-#### 介绍
-{**以下是 Gitee 平台说明，您可以替换此简介**
-Gitee 是 OSCHINA 推出的基于 Git 的代码托管平台（同时支持 SVN）。专为开发者提供稳定、高效、安全的云端软件开发协作平台
-无论是个人、团队、或是企业，都能够用 Gitee 实现代码托管、项目管理、协作开发。企业项目请看 [https://gitee.com/enterprises](https://gitee.com/enterprises)}
+一个自用的任务看板（Kanban）：**今天要做什么、每件事花了多久、这周交付了什么**，放在同一张页面里。
 
-#### 软件架构
-软件架构说明
+后端 Spring Boot + MyBatis + MySQL，前端是零框架、零构建的原生 JavaScript（单页应用 + PWA 离线壳）。
+整个前端可以打包成一份单文件离线预览。
 
+> **在线预览** → [`docs/ui-preview.html`](docs/ui-preview.html)
+> 内联了真实 CSS/JS 与演示数据，不连后端也能点开看全部界面。
 
-#### 安装教程
+---
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+## 为什么做这个
 
-#### 使用说明
+用 Excel 或记事本管任务，缺的往往不是"任务清单"，而是三样东西：
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+1. **一件事现在处于什么阶段** —— 待处理 / 进行中 / 已完成，靠列表达不出来；
+2. **这件事到底花了多久** —— 只记"做完了"，事后没法回答"这个月时间都去哪了"；
+3. **这周我交付了什么** —— 翻聊天记录拼凑，月底写总结时最痛苦。
 
-#### 参与贡献
+所以这个看板的重点不在"任务管理"本身，而在**工时**和**回顾**：任务移动会驱动计时，计时会沉淀成周回顾和月度清单。
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+---
 
+## 功能
 
-#### 特技
+| 模块 | 说明 |
+| --- | --- |
+| **任务看板** | 拖拽移列、列内排序、行内新增；筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 到期 / 阻塞） |
+| **计时** | 每张卡片直接开 / 停，不用点进详情；拖进「进行中」自动开表，拖进「已完成」自动停表并**接力**同列下一个任务 |
+| **任务列表** | 沿用看板筛选条件，按行操作 |
+| **日历** | 任务在 `[开始日期, 实际结束日]` 区间逐日铺开，截止日高亮；**提前完成的任务不会在后来的日期里继续出现** |
+| **周回顾** | 自动总结 + 完成 / 待确认 / 进行中三个互斥分区；看历史周期时只统计"那一周确实动过"的任务 |
+| **任务清单** | 任务完成时落一条**快照**（项目名、负责人、起止、总耗时），按月成表并可导出 CSV，用于月底统计 |
+| **我的任务** | 跨空间汇总所有分派给我的待办 |
+| **通知中心** | 任务提醒、每日汇总、逾期与今日到期角标，通过 SSE 实时推送 |
+| **项目 / 回收站 / 设置** | 项目进度汇总、30 天回收站、空间成员与邀请链接、看板列与分类管理、数据导入导出 |
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+---
+
+## 技术栈
+
+| 层 | 选型 |
+| --- | --- |
+| 后端 | Spring Boot 2.7.18 / Java 8 / MyBatis 2.3.2 / Spring Security（会话登录） |
+| 数据库 | MySQL 8（utf8mb4）；**不使用 Redis**，缓存与并发控制都在进程内 |
+| 前端 | 原生 JavaScript，无框架、无构建步骤；内联 SVG 图标；Service Worker 做离线壳 |
+| 部署 | systemd 托管 + Nginx 反向代理，`deploy/deploy.sh` 一条命令完成打包上传换包 |
+
+---
+
+## 快速开始
+
+前置：**JDK 8**、**Maven**、**MySQL 8**。
+
+```bash
+# 1. 建库建表：脚本按编号执行，全部幂等（可重复执行）
+for f in sql/0*.sql; do mysql -u root -p < "$f"; done
+
+# 2. 配置（全部可用环境变量覆盖，见下表）
+export DB_USER=devstudio
+export DB_PASSWORD='你的数据库密码'
+export AUTH_USER=admin
+export AUTH_PASSWORD='你的登录密码'
+
+# 3. 打包运行
+mvn -DskipTests package
+java -jar target/devstudio-server.jar
+```
+
+打开 <http://127.0.0.1:8080>，用 `AUTH_USER` / `AUTH_PASSWORD` 登录。
+首次启动会自动创建管理员账号并生成你的个人空间。
+
+---
+
+## 配置项
+
+全部通过环境变量注入，配置文件里只保留占位符（**没有任何凭据入库**）。
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SERVER_PORT` | `8080` | 应用端口 |
+| `BIND_ADDR` | `127.0.0.1` | 默认只绑回环，对外统一走 Nginx |
+| `DB_HOST` / `DB_PORT` | `127.0.0.1` / `3306` | MySQL 地址 |
+| `DB_NAME` | `devstudio` | 库名 |
+| `DB_USER` / `DB_PASSWORD` | `devstudio` / 空 | 数据库账号 |
+| `AUTH_USER` / `AUTH_PASSWORD` | `admin` / 空 | 首次启动创建的管理员账号（密码留空则不创建，需自行初始化） |
+| `ATTACH_DIR` | `./data/attachments` | 附件存储目录 |
+| `NOTIFY_TYPE` / `NOTIFY_ENABLED` | `webhook` / `false` | 外部提醒渠道 |
+
+---
+
+## 目录结构
+
+```
+src/main/java/com/devstudio/kanban/
+├─ common/       常量、统一返回体、异常、工时口径（WorkTime）、任务派生计算（TaskCalc）
+├─ config/       Security、拦截器、SSE、定时任务
+├─ controller/   REST 接口
+├─ dto/          请求 / 响应体
+├─ entity/       实体
+├─ mapper/       MyBatis Mapper 接口
+└─ service/      业务逻辑
+src/main/resources/
+├─ mapper/*.xml  SQL 映射
+├─ static/       前端（index / login / join + css/js + sw.js）
+└─ application.yml
+sql/             按编号执行的迁移脚本（幂等）
+deploy/          systemd、nginx 配置与部署脚本
+docs/            接口契约、UI 规范、代码审查记录、离线预览稿
+tools/           静态预览稿生成器（node tools/gen-preview.js）
+```
+
+---
+
+## 几个刻意的设计
+
+这些是踩过坑之后定下来的口径，写在文档里也写在这里，避免以后改回去：
+
+- **有效工时 = 跳过周末 + 每人每天合计封顶 8 小时**
+  同一天做几个任务，共用这 8 小时额度（不是每个任务各 8 小时），跨空间也一起算。
+  实现集中在 `common/WorkTime`，停表、运行中显示、自动停表走同一套算法。
+- **计时是"人"的属性，不是"任务"的属性**
+  一个人同一时刻只计一个任务；开始 B 会自动停掉 A，界面会明确告诉你停了谁。
+- **完成后接力**
+  计时中的任务被完成后，如果原列还有任务，自动接上第一个 —— 避免出现"这一列谁都没在计时"的空档。
+  但它只在你当前没有任何运行中计时时才接力，不会抢掉别的空间正在计的任务。
+- **日历按「实际结束日」铺开**
+  `实际结束日 = min(完成日, 截止日)`。提前做完的事不该在后来的日期里继续占格。
+- **周回顾的三个分区互斥**
+  已完成 / 待确认完成（进度 100% 但没归档）/ 进行中，同一件事只出现一次。
+- **历史周期的回顾靠日志近似还原**
+  没有任务状态快照，所以看"上周"时用 `task_log` 的活动记录收敛：只保留那一周确实动过、且当时已存在的任务。
+- **任务清单是快照，不是实时查询**
+  项目名、负责人、分类都存完成那一刻的值。项目后来改名、任务后来被删，历史统计都不受影响。
+
+---
+
+## 文档
+
+| 文件 | 内容 |
+| --- | --- |
+| [`docs/api.md`](docs/api.md) | 接口契约，含全部口径附录（工时、日历、回顾、归档的历次修订） |
+| [`docs/ui-redesign-spec.md`](docs/ui-redesign-spec.md) | UI 规范：布局、组件、交互与状态 |
+| [`docs/ui-preview.html`](docs/ui-preview.html) | 离线预览稿（单文件，直接双击打开） |
+| [`deploy/README.md`](deploy/README.md) | 部署指南：服务器准备、systemd、Nginx、备份与回滚 |
+
+---
+
+## 部署
+
+```bash
+./deploy/deploy.sh
+```
+
+自动完成：检测改动 → 打包 → 备份数据库并执行 SQL → 上传换包 → 健康校验 → 记录部署基准。
+详细步骤与服务器准备见 [`deploy/README.md`](deploy/README.md)。
+
+---
+
+## 许可
+
+见 [LICENSE](LICENSE)。
