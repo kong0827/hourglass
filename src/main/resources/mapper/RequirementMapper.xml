@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.RequirementMapper">
+
+  <sql id="cols">
+    id, workspace_id, name, description, status, created_at, updated_at
+  </sql>
+
+  <select id="selectAll" resultType="Requirement">
+    SELECT <include refid="cols"/> FROM requirement WHERE workspace_id = #{workspaceId} ORDER BY created_at, id
+  </select>
+
+  <select id="selectById" resultType="Requirement">
+    SELECT <include refid="cols"/> FROM requirement WHERE id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO requirement (id, workspace_id, name, description, status)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{status})
+  </insert>
+
+  <update id="update">
+    UPDATE requirement SET
+      name = #{name},
+      description = #{description},
+      status = #{status},
+      updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM requirement WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM requirement WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM requirement WHERE workspace_id = #{workspaceId}
+  </select>
+</mapper>

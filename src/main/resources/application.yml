@@ -1,0 +1,64 @@
+server:
+  port: ${SERVER_PORT:8080}
+  # 默认只绑本机回环，对外统一走 nginx 反代；需要临时直连调试可用环境变量覆盖
+  address: ${BIND_ADDR:127.0.0.1}
+  # 信任 nginx 传来的 X-Forwarded-*，HTTPS 下会话/CSRF Cookie 才会带 Secure
+  forward-headers-strategy: native
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        max-age: 30d
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: devstudio-kanban-server
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  web:
+    resources:
+      cache:
+        period: 0
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:devstudio}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DB_USER:devstudio}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: devstudio-pool
+      maximum-pool-size: 8
+      connection-timeout: 5000
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.devstudio.kanban.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: 'NULL'
+
+# 登录账号：AUTH_PASSWORD 可用明文（启动时转 bcrypt）或直接配置 bcrypt 哈希
+app:
+  auth:
+    username: ${AUTH_USER:admin}
+    password: ${AUTH_PASSWORD:}
+  attach:
+    # 附件存储目录（相对工作目录或绝对路径）
+    dir: ${ATTACH_DIR:./data/attachments}
+  notify:
+    # 推送渠道：webhook（企业微信/钉钉机器人）/ serverchan（Server酱）/ pushplus
+    type: ${NOTIFY_TYPE:webhook}
+    enabled: ${NOTIFY_ENABLED:false}
+    # pushplus 的 token（serverchan 把 key 写在 URL 里）
+    token: ${NOTIFY_TOKEN:}
+    # Spring cron（秒 分 时 日 月 周），默认每天 09:00
+    cron: "${NOTIFY_CRON:0 0 9 * * *}"
+    # 可选：推送消息末尾附上的看板地址
+    link: ${NOTIFY_LINK:}
+    # 说明：推送 webhook 现在按空间配置（页面「空间设置」里由空间主填写），不再走环境变量
+
+logging:
+  level:
+    com.devstudio.kanban: info

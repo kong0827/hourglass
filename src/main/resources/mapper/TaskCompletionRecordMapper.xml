@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TaskCompletionRecordMapper">
+
+  <!-- 完成任务时落快照；同任务重复完成覆盖旧记录（唯一键 uk_ws_task） -->
+  <insert id="upsert">
+    INSERT INTO task_completion_record
+      (workspace_id, task_id, title, description, req_id, req_name, owner, owner_user_id,
+       category, priority, start_date, completed_at, first_started_at, last_ended_at, total_minutes)
+    VALUES
+      (#{workspaceId}, #{taskId}, #{title}, #{description}, #{reqId}, #{reqName}, #{owner}, #{ownerUserId},
+       #{category}, #{priority}, #{startDate}, #{completedAt}, #{firstStartedAt}, #{lastEndedAt}, #{totalMinutes})
+    ON DUPLICATE KEY UPDATE
+      title            = VALUES(title),
+      description      = VALUES(description),
+      req_id           = VALUES(req_id),
+      req_name         = VALUES(req_name),
+      owner            = VALUES(owner),
+      owner_user_id    = VALUES(owner_user_id),
+      category         = VALUES(category),
+      priority         = VALUES(priority),
+      start_date       = VALUES(start_date),
+      completed_at     = VALUES(completed_at),
+      first_started_at = VALUES(first_started_at),
+      last_ended_at    = VALUES(last_ended_at),
+      total_minutes    = VALUES(total_minutes)
+  </insert>
+
+  <delete id="deleteByTaskId">
+    DELETE FROM task_completion_record
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <select id="selectByRange" resultType="TaskCompletionRecord">
+    SELECT id, workspace_id, task_id, title, description, req_id, req_name, owner, owner_user_id,
+           category, priority, start_date, completed_at, first_started_at, last_ended_at,
+           total_minutes, created_at
+    FROM task_completion_record
+    WHERE workspace_id = #{workspaceId}
+      AND completed_at &gt;= #{from}
+      AND completed_at &lt; #{to}
+    ORDER BY completed_at DESC, id DESC
+  </select>
+</mapper>

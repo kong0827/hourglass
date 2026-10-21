@@ -1,0 +1,32 @@
+package com.devstudio.kanban.mapper;
+
+import com.devstudio.kanban.entity.AppNotification;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+@Mapper
+public interface AppNotificationMapper {
+
+    List<AppNotification> selectByUser(@Param("userId") String userId,
+                                       @Param("workspaceId") String workspaceId,
+                                       @Param("limit") int limit);
+
+    int countUnread(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
+
+    int insert(AppNotification n);
+
+    /** 标记单条已读（限本人） */
+    int markRead(@Param("id") Long id, @Param("userId") String userId);
+
+    int markAllRead(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
+
+    /** 去重：同一收件人 + 同一任务 + 同一类型 在窗口内是否已存在（防止提醒风暴） */
+    int countRecent(@Param("userId") String userId, @Param("refTaskId") String refTaskId,
+                    @Param("type") String type, @Param("since") java.time.LocalDateTime since);
+
+    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+}

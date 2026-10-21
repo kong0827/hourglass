@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TaskLogMapper">
+
+  <insert id="insert">
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail)
+    VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail})
+  </insert>
+
+  <select id="selectByTaskId" resultType="TaskLog">
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail, l.created_at,
+           u.display_name AS actor_name
+    FROM task_log l
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    WHERE l.workspace_id = #{workspaceId} AND l.task_id = #{taskId}
+    ORDER BY l.id DESC
+    LIMIT 200
+  </select>
+
+  <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
+  <select id="selectByWorkspace" resultType="TaskLog">
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail, l.created_at,
+           u.display_name AS actor_name,
+           t.title AS task_title
+    FROM task_log l
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+    ORDER BY l.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <!-- 某周期内有活动的任务（周回顾看历史周期时用；CFG 哨兵事件没有任务，自然被过滤） -->
+  <select id="selectActiveTaskIds" resultType="string">
+    SELECT DISTINCT l.task_id
+    FROM task_log l
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.task_id &lt;&gt; 'CFG'
+      AND l.created_at &gt;= #{from}
+      AND l.created_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+  </select>
+
+  <delete id="deleteByTaskId">
+    DELETE FROM task_log WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task_log WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

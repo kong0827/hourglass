@@ -1,0 +1,665 @@
+# 开发工坊 · 接口清单（步骤 2 验收用）
+
+基准地址：`http://<服务器地址>:8080`（部署后走 nginx 时换成对外地址）
+
+## 统一返回约定
+
+- 成功：`{"code": 0, "message": "ok", "data": ...}`
+- 业务错误：HTTP 200，`code` 非 0（400 参数问题 / 404 不存在 / 409 冲突 / 500 内部错误），`message` 为中文提示
+- 校验失败：`code=400`，`message` 为具体字段提示（如「请填写任务标题」）
+
+## 认证
+
+除 `/api/health` 外所有接口需要登录态（会话 Cookie，有效期 30 天）：
+
+- `POST /api/auth/login`（表单参数 `username`、`password`）→ 成功 `{"code":0,"message":"ok"}`，失败 HTTP 200 + `{"code":401,"message":"用户名或密码错误"}`
+- `POST /api/auth/logout` → 退出登录
+- `POST /api/auth/password`（body `{"oldPassword":"...","newPassword":"..."}`）→ 修改自己的密码（校验旧密码）
+- 会话说明：登录状态 30 天有效；**管理员重置密码后，该用户已登录的会话保持有效直到过期**（无会话注册表，不会踢线）
+- 未登录访问接口返回 HTTP 401 + `{"code":401,...}`；页面访问未登录跳转 `/login.html`
+- 写操作（POST/PUT/DELETE）需携带 CSRF 头 `X-XSRF-TOKEN`（值取自 Cookie `XSRF-TOKEN`，前端已封装自动处理；Apifox 调试时先 GET 一次任意接口拿到 Cookie）
+
+## 多用户与空间
+
+- 账号由管理员创建下发（不开放注册）；共享空间可生成邀请链接，把**已有账号**拉入空间协作；管理员只管账号
+- **空间模型**：每个账号自动有一个「我的看板」个人空间；任何人可新建共享空间并当空间主，按登录名把成员加进来，成员看到同一块看板
+- 所有业务接口都接受 `workspace` 查询参数（空间ID）；不传时用"上次使用的空间"，再退回个人空间。前端切换空间后自动携带
+- **数据按空间隔离**：任务/子任务/项目/附件/工时/操作日志/标签/看板列/分类属于空间；保存的筛选视图属于"人+空间"
+- **权限**：全员可做日常操作（增改删任务、拖拽、子任务、标签、计时、附件、回收站恢复）；**仅空间主**可做：改空间名/推送配置、加/移成员、删空间、删看板列、删分类、清空数据、导入覆盖。跨空间访问一律 404，权限不足返回 403
+- **审计**：操作时间线记录操作人（`actorName`），历史数据显示为空
+- 账号接口：
+  - `GET /api/auth/me` → `{id, username, displayName, role, lastWorkspaceId}`
+  - `PUT /api/auth/profile`，body `{"displayName":"..."}` → 修改自己的显示名（负责人默认值与成员列表随之更新；**其参与空间中「负责人=旧显示名」的任务同步改为新名**，含回收站任务；操作时间线保留历史记录）
+  - 管理员专属（`/api/admin/users`，见下方原章节）：新增/改显示名与角色/重置密码/删除（需先清空其个人空间数据、非共享空间主、不能删自己、至少留一名管理员）
+- 空间接口：
+  - `GET /api/workspaces` → 我参与的空间（含 `type` personal/shared、`myRole`、`memberCount`）
+  - `POST /api/workspaces`，body `{"name":"项目组看板"}` → 新建共享空间（创建者为空间主）
+  - `POST /api/workspaces/{id}/select` → 记住"上次使用的空间"
+  - `PUT /api/workspaces/{id}`，body `{"name":"...","notifyWebhook":"..."}`（仅空间主；个人空间名称不可改）
+  - `DELETE /api/workspaces/{id}`（仅空间主，连带全部数据，不可恢复；个人空间不可删）
+  - `GET /api/workspaces/{id}/members` → 成员（含显示名/登录名/角色）
+  - `POST /api/workspaces/{id}/members`，body `{"username":"xiaoming"}`（仅空间主）
+  - `DELETE /api/workspaces/{id}/members/{userId}` → 空间主移除成员；成员自己调用即退出；空间主不能退出自己的空间（可直接删空间）
+  - 邀请链接（共享空间协作入口，见 §29）：`POST/GET /api/workspaces/{id}/invites`、`DELETE /api/workspaces/{id}/invites/{inviteId}`（均仅空间主）
+- 分类接口（每个空间一套，可增删改色，默认种子「工作/学习/生活/其他」）：
+  - `GET /api/categories` → `[{id,name,color,sortOrder}]`
+  - `POST /api/categories`，body `{"name":"客户跟进","color":"#7a5c86"}`
+  - `PUT /api/categories/{id}`（改名会同步历史任务上的分类名）
+  - `DELETE /api/categories/{id}`（仅空间主；其下任务改到第一个分类，至少保留一个）
+  - `PUT /api/categories/order`，body `{"ids":[...]}`
+- 任务保存的 `category` 必须是当前空间已有分类；不传则落在第一个分类（迁移数据自动保留原分类名与配色）
+
+## 通用查询参数（看板 / 已完成列表）
+
+| 参数 | 说明 |
+|---|---|
+| q | 关键词，匹配标题/描述/进度备注（不区分大小写） |
+| owners / pris / cats / reqs / tags | 逗号分隔多选；pris 取值 P0,P1,P2,P3；reqs 支持特殊值 `__none`（未归类）；tags 为标签名 |
+| due | 截止维度：over（逾期）/ today（今天）/ soon（3 天内，含今天） |
+| focus | true = 今日聚焦（逾期 + 今天到期 + 进行中的 P0） |
+| doneScope | 已完成列范围：week（默认，本周）/ all |
+| doneLimit / doneOffset | 分页，默认 20 / 0，limit 上限 200 |
+
+---
+
+## 1. GET /api/health
+
+应用 + 数据库连通检查。
+
+```json
+{"code":0,"data":{"app":"devstudio-kanban-server","time":"2026-10-14 21:00:00","db":"up"}}
+```
+
+## 2. GET /api/board
+
+看板聚合：三列数据、提醒计数、筛选元数据（负责人/优先级/分类/项目计数）。完成列返回第一页。
+
+```json
+{"code":0,"data":{
+  "columns":{
+    "backlog":{"items":[],"matched":0,"total":0,"allTotal":0,"hasMore":false},
+    "doing":{"items":[],"matched":0,"total":0,"allTotal":0,"hasMore":false},
+    "done":{"items":[],"matched":0,"total":0,"allTotal":12,"hasMore":false}
+  },
+  "counts":{"over":0,"today":1,"soon":2},
+  "meta":{"owners":[{"name":"我","count":9}],"pris":[{"name":"P0","count":1}],
+          "cats":[],"reqs":[{"id":"R...","name":"资金小程序","status":"active","count":3}],"unassigned":4}
+}}
+```
+
+`matched`=筛选后条数；`total`=筛选前当前范围内条数；`allTotal`=全部历史条数（「仅本周 ⇄」提示用）。
+
+## 3. GET /api/tasks/done
+
+已完成列「加载更多」。参数同上（含 doneOffset）。响应为单个列对象：`{"items":[...],"matched":40,"total":40,"allTotal":40,"hasMore":true}`。
+
+## 4. POST /api/tasks
+
+新增任务。`id` 选填（撤销删除/导入时指定），不填服务端生成。
+
+```json
+{"title":"重构权限校验中间件","description":"","priority":"P1","category":"后端",
+ "boardColumn":"doing","dueDate":"2026-10-20","reqId":"Rxxx","progress":40,"note":"已确权方案"}
+```
+
+`dueDate` 格式 `yyyy-MM-dd`；`progress` 0-100；返回创建后的完整任务对象。撤销删除恢复时可在 body 中带 `completedAt`（yyyy-MM-dd）保留原完成日期、带 `subtasks: [{title, done}]` 一并重建检查清单。ID 只接受字母/数字/下划线/中划线（≤32 位），不合法会当作未提供重新生成；指定 ID 已被占用的返回 409；覆盖导入会保留附件/日志等子记录，指定这类"仍有历史子记录"的 ID 同样返回 409，防止旧记录误挂到新任务。
+
+## 5. PUT /api/tasks/{id}
+
+全量更新任务字段（与新增同结构，title 必填）。列变更时自动处理完成日期，并写入操作日志。
+
+## 6. POST /api/tasks/{id}/move
+
+拖拽移动。
+
+```json
+{"column":"done","beforeId":"Kxxx"}
+```
+
+`beforeId` 为空字符串/不传 = 移到列尾；同列内也用它调整顺序。返回：
+
+```json
+{"code":0,"data":{"task":{...},"from":"doing","to":"done"}}
+```
+
+## 7. DELETE /api/tasks/{id}
+
+删除任务：软删除进回收站（30 天自动清理）；撤销/恢复用 `POST /api/tasks/{id}/restore`，详见第 20 节。
+
+## 8. GET /api/tasks/{id}/logs
+
+任务时间线，倒序最多 200 条：
+
+```json
+{"code":0,"data":[{"id":12,"taskId":"Kxxx","action":"move","detail":"从「进行中」移动到「已完成」","createdAt":"2026-10-14T21:00:00"}]}
+```
+
+## 9. GET /api/reqs
+
+项目列表（含任务数/完成数/平均进度）：
+
+```json
+{"code":0,"data":[{"id":"Rxxx","name":"资金上场小程序","description":"","status":"active",
+  "progressPct":45,"taskCount":4,"doneCount":1}]}
+```
+
+## 10. POST /api/reqs
+
+新增项目：`{"name":"资金上场小程序","description":"","status":"active"}`（status: active/done/hold）。
+
+## 11. PUT /api/reqs/{id}
+
+更新项目，结构同新增。
+
+## 12. DELETE /api/reqs/{id}
+
+删除项目，其下任务保留、仅解除关联；返回 `{"unlinked": 3}`。
+
+## 13. GET /api/review?weekOffset=-1
+
+工作回顾。`weekOffset` 不传时自动选最近一个有完成记录的周；0=本周，-1=上周。返回：
+
+```json
+{"code":0,"data":{
+  "weekOffset":-1,"weekStart":"2026-10-06","weekEnd":"2026-10-12","label":"上周",
+  "completed":[{...任务}],
+  "stats":{"done":5,"withDue":5,"onTime":4,"onTimeRate":80,"members":1,"late":1},
+  "members":[{"name":"我","count":5}],
+  "catDist":[{"name":"后端","count":3}],
+  "progressTasks":[{...}],
+  "reqDist":[{...同 /api/reqs}],
+  "counts":{"over":1,"today":0,"soon":2},
+  "openP0":2,"doing":3,"backlog":5
+}}
+```
+
+完成率口径：按期率分母为「设置有截止日期的完成项」（withDue）；无截止日期的完成项既不计入按期也不计入延期（`late = withDue - onTime`）。
+
+## 14. GET /api/export
+
+导出当前空间的全部数据。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：额外包含 subtasks/tags/循环/提醒设置/工时/任务创建时间（createdAt）/看板列定义（columns），旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
+
+## 15. POST /api/import
+
+导入旧版备份文件，覆盖当前数据：
+
+```json
+{"v":3,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
+  "col":"doing","due":"2026-10-20","progress":40,"note":"","reqId":"Rxxx","completedAt":null}],
+ "reqs":[{"id":"Rxxx","name":"...","desc":"","status":"active","createdAt":"2026-10-01"}]}
+```
+
+返回 `{"tasks": 42, "reqs": 5}`。
+
+**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、项目、子任务、标签、工时（回收站一并清空）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置（分类按备份补齐）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。
+
+字段兜底：旧列 id（todo/review）自动映射、非法枚举取默认值、超长字段截断、无效项目引用置空；`subtasks`/`tags`/`recurType`/`remindAt`/`remindSent`/`timeLogs`（含计时人 userId）/`createdAt`/`columns` 导入时自动恢复，旧版备份（无这些字段）依旧兼容。
+
+**导出不含**：附件文件本身（磁盘文件，随服务器备份目录 tar 保留，见 `deploy/backup.sh`）、操作时间线日志（导入时不会被删除）。
+
+## 16. 子任务（检查清单）
+
+- `GET /api/tasks/{id}/subtasks` → `[{"id":1,"taskId":"Kxxx","title":"...","done":false,"createdAt":"...","updatedAt":"..."}]`
+- `POST /api/tasks/{id}/subtasks`，body `{"title":"..."}`（必填，≤60 字）
+- `PUT /api/subtasks/{id}`，body `{"title":"...","done":true}`（两个字段都可选，用于改名/勾选；父任务在回收站中时拒绝修改）
+- `DELETE /api/subtasks/{id}`（父任务在回收站中时同样拒绝）
+
+看板接口返回的任务对象带 `subtaskTotal` / `subtaskDone` 两个统计字段（卡片角标用）；子任务的增删改会自动写入任务操作时间线。
+
+## 17. GET /api/calendar?year=2026&month=10
+
+日历视图：返回该月内截止日期落在当月的任务（含已完成）。不传参数默认当月。
+
+```json
+{"code":0,"data":{"year":2026,"month":10,"tasks":[{...任务}]}}
+```
+
+## 18. GET /api/stats?weeks=8
+
+统计报表：weeks 范围 4-26，默认 8。
+
+```json
+{"code":0,"data":{
+  "weeks":[{"start":"2026-10-05","end":"2026-10-11","created":3,"completed":2}],
+  "byCategory":[{"name":"后端","count":5}],
+  "byOwner":[{"name":"我","count":8}],
+  "current":{"backlog":5,"doing":3,"done":12,"other":2,"overdue":1,"workMinutes":320,"workMinutesWeek":95}
+}}
+```
+
+口径：新增按创建日期、完成按完成日期；byCategory/byOwner 为窗口内完成任务的分布；current 为当前全量（`backlog`/`doing` 为内置列计数，自定义列中的任务计入 `other`；`workMinutes` 为累计计时工时、`workMinutesWeek` 为本周工时，单位分钟）。
+
+## 19. POST /api/notify/test
+
+立即对当前空间执行一次提醒推送（手动测试用，**仅空间主**）。需先在「空间设置」中配置该空间的推送 webhook。
+
+```json
+{"code":0,"data":{"sent":true,"content":"【开发工坊】任务提醒 2026-10-14\n逾期 2 项：..."}}
+```
+
+无逾期与今日到期任务时返回 `{"sent":false,"reason":"当前无逾期或今日到期任务，静默跳过"}`；手动测试（force）模式下即使为空也会发送一条测试消息。渠道由 `NOTIFY_TYPE` 决定：`webhook`（企微/钉钉，报文 `msgtype:text`）/ `serverchan`（Server酱，URL 里带 key，报文 `title/desp`）/ `pushplus`（报文 `token/title/content`，token 配 `NOTIFY_TOKEN`）。**pushplus 渠道下统一 token 只发送到官方固定端点（`https://www.pushplus.plus/send`），空间设置里的地址仅作为"启用推送"开关**；其余渠道的空间地址保存与发送时都会校验（仅 http/https，拒绝本机/内网地址），服务端不跟随重定向。推送结果以渠道**明确返回的成功码**为准（`errcode=0` / `code=0` / pushplus `code=200`）；HTML 错误页、空响应、跳转等无法确认成功的响应按失败处理，任务级提醒会保留在原 6 小时窗口内重试。超过 6 小时重试窗口仍未发出的提醒会被标记为已处理并在任务时间线记「提醒时间已过（超过 6 小时重试窗口），未推送」；未配置 webhook 的空间同样参与过期处理（记「提醒时间已过，空间未配置推送渠道，未推送」），不会永久静默挂起。
+
+## 20. 回收站
+
+- `GET /api/trash` → 已删除任务列表（按删除时间倒序，含 `deletedAt`）
+- `POST /api/tasks/{id}/restore` → 从回收站恢复
+- `DELETE /api/tasks/{id}/purge` → 彻底删除（含子任务、标签关联、附件文件、工时、操作日志）
+- 说明：`DELETE /api/tasks/{id}` 现在是软删除（进回收站）；满 30 天由服务端每日 04:30 自动清理
+
+## 21. 列表视图
+
+`GET /api/tasks/list`，参数同看板（含 tags/focus），另加 `sort`：`column`（默认）/ `due` / `priority` / `updated`。返回：
+
+```json
+{"code":0,"data":{"items":[{...任务}],"total":128}}
+```
+
+阈值 500 条（超出截断，返回的 `total` 为真实匹配数）。
+
+## 22. 看板列配置
+
+- `GET /api/columns` → 列定义（含系统列 `done`，`done:true`）
+- `POST /api/columns`，body `{"name":"待验收","color":"#7a5c86"}` → 新增
+- `PUT /api/columns/{id}`，body `{"name":"...","color":"#RRGGBB"}` → 改名/改色（「已完成」为保留名）
+- `DELETE /api/columns/{id}` → 删除列，任务移入最靠前的列；backlog/doing 内置列不可删
+- `PUT /api/columns/order`，body `{"ids":["doing","backlog",...]}` → 重排（须与现有列完全一致）
+
+## 23. 标签
+
+`GET /api/tags` → 有任务关联的标签 `[{"name":"线上问题","count":3}]`（写标签在任务保存接口的 `tags` 字段里，自动创建）。
+
+## 24. 保存的筛选视图
+
+- `GET /api/views` → `[{"id":"Vxxx","name":"我的 P0","params":"{\"pris\":[\"P0\"],...}"}]`
+- `POST /api/views`，body `{"name":"我的 P0","params":"<筛选参数JSON字符串>"}`
+- `DELETE /api/views/{id}`
+
+params 为前端筛选状态序列化：`{q, owners, pris, cats, reqs, tags, due, focus, doneScope}`。服务端保存时校验结构（必须是 JSON 对象，数组字段须为字符串数组，focus 须为布尔）并只保留已知字段，非法参数返回 400；前端应用视图时同样先整体校验再一次性应用，参数不合法时保持当前筛选不变。
+
+## 25. 任务附件
+
+- `POST /api/tasks/{id}/attachments`（multipart，字段 `file`）→ 上传，≤10MB，允许 jpg/jpeg/png/gif/webp/pdf/txt/md/zip
+- `GET /api/tasks/{id}/attachments` → 附件列表
+- `GET /api/attachments/{id}/download` → 下载（inline；Content-Type 由服务端按扩展名判定，不信任上传方声明；图片可直接在页面预览）
+- `GET /api/attachments/{id}/thumb` → 缩略图（≤200px，jpg/png/gif 服务端缩放；webp 等回退原图），列表预览用
+- `DELETE /api/attachments/{id}` → 删除（含磁盘文件）
+- 附件文件不随 JSON 导出/导入，随服务器备份目录保留（`deploy/backup.sh` 已含打包步骤）
+
+## 26. 工时计时
+
+- `GET /api/tasks/{id}/timer` → `{"running":false,"startedAt":null,"elapsedMinutes":0,"totalMinutes":45,"myTotalMinutes":30}`（`running/elapsedMinutes` 为"当前登录人"在该任务的计时状态；`totalMinutes` 为该任务全部成员的累计）
+- `POST /api/tasks/{id}/timer/start` / `POST /api/tasks/{id}/timer/stop`（开始/停止仅作用于"我自己"；任务整体结算见下）
+- 计时按**人**归属（`time_log.user_id` = 计时人）：开始新计时只自动停止"我自己"其他任务上已可见的运行中计时，不影响他人；**单次计时上限 12 小时**（忘停时按上限计入并在时间线注明）；任务完成（移入已完成）或删除时自动停止并结算**该任务上全部成员**的计时；统计报表的工时只统计"我"在当前空间的记录
+
+## 27. 实时变更事件（SSE）
+
+`GET /api/events`（EventSource）：任一写操作成功后服务端广播 `changed` 事件，另有 `ping` 心跳（25 秒）。**事件在服务端按空间成员过滤**：携带空间 ID 的事件只投递给该空间成员的连接（非成员收不到任何事件）；账号管理等与空间无关的变更投递给全部订阅者（事件数据为空串）。前端另有当前空间过滤与轮询兜底。
+
+## 28. CSV 导出
+
+`GET /api/export/csv` → `text/csv`（带 BOM，Excel 直接打开），文件名 `workbench-tasks-YYYY-MM-DD.csv`。以 `=`/`+`/`-`/`@`/制表符/回车开头的文本单元格会自动加单引号前缀（防 Excel 公式注入，显示为原文）。
+
+## 29. 邀请链接（共享空间协作）
+
+账号仍由管理员创建下发（**不提供自助注册**）；邀请链接用于把**已有账号**的同事拉进共享空间：对方打开 `/join.html?code=XXXXXXXXXX` 后，已登录则一键加入；未登录先登录（登录后自动回到该页完成加入）。个人空间不可邀请。
+
+- 生成：`POST /api/workspaces/{id}/invites`（仅空间主）→ `{id, expiresAt}`；邀请码为 10 位大写字母数字（去掉易混淆字符），有效期 **7 天**
+- 列表：`GET /api/workspaces/{id}/invites`（仅空间主）→ `[{id, workspaceId, createdBy, expiresAt, usedCount, createdAt}]`
+- 撤销：`DELETE /api/workspaces/{id}/invites/{inviteId}`（仅空间主）；删除空间时邀请一并清理
+- 查看（公开）：`GET /api/invite/{code}` → `{workspaceName, inviterName, expiresAt}`；无效/已撤销 404，过期 400
+- 加入（需登录）：`POST /api/invite/{code}/join` → `{workspaceId, workspaceName, already}`；`already=true` 表示原本就是成员（幂等，不再计数）
+- `usedCount` 在每次成功加入时 +1；邀请码大小写不敏感（统一转大写查询）
+- 安全：仅 `GET /api/invite/{code}` 为公开接口（放行见 SecurityConfig），`/join` 需登录；建议在 nginx 对邀请路径同样启用限速（与登录接口共用注释块）
+
+## 已接受的现状口径（按设计如此，非缺陷）
+
+以下行为是当前版本有意保留的设计边界，使用/验收时按此预期判断：
+
+1. **会话与权限快照**：登录会话 30 天有效，角色写在会话里。管理员**重置密码/调整角色/删除账号不会踢掉旧会话**（无会话注册表）；但 `/api/admin/**` 每次请求按数据库当前角色复核，被降权或删除的管理员立即无法再调用管理接口；`/api/auth/me` 也读取数据库实时角色。普通接口的权限变化在下次登录（或会话过期）后完全生效。
+2. **任务并发写为"最后写入生效"**：多人同时编辑同一任务不做版本校验/冲突提示，后提交的整体覆盖先提交的（实现范围约定，界面无冲突弹窗）。
+3. **JSON 导入导出不做全量恢复**：导出对象不含附件二进制与操作时间线；导入覆盖任务类数据，保留附件文件/记录与时间线（保留的附件/日志按"空间+任务ID"关联，同空间原样导回会重新挂回原任务）。
+4. **文件与数据库无两阶段一致性**：附件删除为"先删文件、后删记录"（或相反顺序的单边提交），极端故障下可能出现孤儿文件或失效引用；失败会写服务端告警日志，不做补偿任务。
+5. **同账号跨设备计时并发窗口**：开始计时为无锁"先查后插"，同一账号在两台设备极端同时点击"开始"可能短暂并存两条运行记录；单设备串行操作与不同账号之间不受影响，任务完成/删除时会统一结算。已完成的任务仍可手动开始计时（用于事后补录），未做禁止。
+
+## 任务对象新增字段说明
+
+`recurType`（daily/weekly/monthly/null）、`recurNextId`（循环任务派生的下一次任务ID：把已完成任务移回未完成再重新完成时复用该任务，不会重复生成；**彻底删除派生的下一次任务会清除该关联**，此后再次完成会重新生成；回收站中的派生任务视为仍存在）、`remindAt`（yyyy-MM-ddTHH:mm）、`tags`（字符串数组）、`totalMinutes`（累计工时）、`subtaskTotal/subtaskDone`、`deletedAt`（回收站中非空）。任务保存接口 `POST/PUT /api/tasks` 同步接受 `recurType`（空字符串=清除循环）、`remindAt`（null=清除）、`tags`（最多 8 个、每个 ≤16 字）。
+
+---
+
+## 附录 · 2026-10-16 功能评估报告改造（v1.1 增量）
+
+> 迁移脚本：`sql/03_report_2026-10-16.sql`（纯增量、幂等，用 information_schema + PREPARE 动态执行，无需存储过程权限）。
+> 可选脚本：`sql/04_backfill_owner_user.sql`（把历史负责人文本回填成账号ID，不跑也能用，见下文 N-2）。
+
+### 1. 任务对象新增字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ownerUserId` | string / null | 负责人账号ID（N-2 身份绑定）。**为空时全部下游逻辑回落 `owner` 显示名文本**，因此不需要回填即可工作 |
+| `remindTarget` | `owner` / `owner+admin` | 提醒谁（N-1），默认 `owner` |
+| `blocked` | bool | 是否被阻塞（N-4 卡点） |
+| `blockedReason` | string(120) / null | 卡点原因 |
+| `blockedByTaskId` | string / null | 等待的任务ID（可选依赖，仅做记录不参与计算） |
+| `commentCount` | int | 评论条数（非表字段，查询时合并填充） |
+| `workspaceName` | string | 所属空间名（非表字段，仅 `/api/my-tasks` 返回） |
+
+`POST/PUT /api/tasks` 同步接受 `ownerUserId` / `remindTarget` / `blocked` / `blockedReason` / `blockedByTaskId`。
+
+### 2. 通用查询参数新增
+
+| 参数 | 取值 | 适用 | 说明 |
+|---|---|---|---|
+| `blocked` | `true` | `/api/board`、`/api/tasks/done`、`/api/tasks/list` | 仅看被阻塞任务（N-4） |
+| `noDue` | `true` | 同上 | 仅看没有截止日期的任务（O-25 日历「本月未排期」） |
+
+`q` 的匹配范围已扩展（O-8）：标题 / 描述 / 进度备注 **+ 项目名 + 分类名 + 标签名 + 附件文件名**。回收站任务不纳入搜索。
+
+### 3. 新增接口
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/task/{id}` | **任务深链读取**（O-3）。刻意用单数路径，与 `/api/tasks/list`、`/api/tasks/done` 零歧义。只在「我参与的空间」内查找；不存在与无权限同样返回 404（不泄露存在性）；回收站中的任务照常返回（`deletedAt` 非空），由前端提示"已被删除，可在回收站查看" |
+| `GET /api/tasks/{id}/comments` | 评论列表（N-6）。**回收站中的任务保留可读** |
+| `POST /api/tasks/{id}/comments` | 发评论，body `{"content":"…"}`（≤500 字）。回收站中的任务拒绝（400）；会写一条时间线并定向通知负责人本人 |
+| `DELETE /api/comments/{id}` | 删评论，**仅作者本人**（403） |
+| `GET /api/my-tasks?scope=open\|all` | 跨空间「我的任务」（N-3）。返回 `{items,total,spaces,matchedByNameOnly}`；`matchedByNameOnly` 是"仅按显示名匹配、还没绑定账号"的条数，用于提示是否需要跑 sql/04 |
+| `GET /api/activity?limit=200` | 空间级活动流（O-9）。复用 `task_log`，配置类事件以哨兵 `task_id='CFG'` + `action='config'` 落库（不会混进任何任务时间线） |
+| `GET /api/notify/status` | 推送**真实生效状态**（O-1）：`{enabled,enabledSource,channel,channelSource,workspaceHasAddress,hasToken,lastAttemptAt,lastResult,lastError,disabledReason}`。仅空间主；不回传地址与 token 原文 |
+| `GET /api/notifications?workspace=&limit=` | 应用内通知列表 + 未读数（N-1） |
+| `GET /api/notifications/unread` | 未读数（铃铛角标轮询） |
+| `POST /api/notifications/{id}/read` | 标记单条已读（限本人） |
+| `POST /api/notifications/read-all` | 全部已读（可按空间） |
+
+### 4. 行为变化（破坏性为零，但语义要清楚）
+
+1. **测试推送不再"假绿"（O-1③）**：`POST /api/notify/test` 走与定时任务相同的开关判断。总开关未开时返回 `{sent:false, enabled:false, reason:"服务端未启用推送（app.notify.enabled 未打开），定时提醒不会发送；本次为单次测试"}`。
+2. **推送渠道下沉到空间级（O-1）**：`workspace` 新增 `notify_channel` / `notify_enabled` / `notify_token` / `notify_last_at` / `notify_last_status`。`notify_enabled = NULL` 表示"跟随全局 `app.notify.enabled`"，因此**升级后行为不变**。`PUT /api/workspaces/{id}` 接受 `notifyChannel` / `notifyEnabled` / `notifyToken`。`pushplus` 渠道下空间地址仅作启用开关（仍只发官方端点）。
+3. **任务级提醒定向到人（N-1）**：到点提醒除了按空间配置发外部渠道，**一定会写应用内通知**给负责人本人（`remind_target=owner+admin` 时加上空间主）。负责人未绑定账号时按显示名匹配空间成员。所以**不配群机器人也能收到提醒**。同一收件人+同一任务+同一类型 6 小时内去重。
+4. **只配外部渠道时以它为准决定闭环**：配了渠道但发送失败 → 保留在 6 小时重试窗口内；完全没配外部渠道 → 应用内送达即闭环，并在时间线记录「提醒时间已到，空间未启用外部推送，已通过应用内通知送达」。
+5. **SSE `changed` 事件载荷（O-11）**：升级为 JSON `{"w":"空间ID","t":"任务ID","a":"操作人显示名"}`（字段按需出现）。**旧格式（纯空间ID文本）继续兼容**，前端两种都解析。用途：前端判断"是不是当前打开着的这条任务被改了"，给出「此任务刚被 X 修改，点击刷新」的轻提示，**不自动覆盖未保存草稿**。
+6. **撤销删除的时间线文案（O-26）**：`POST /api/tasks/{id}/restore` 在 120 秒内的这次恢复记为「撤销删除：…回到看板」，更早的记为「从回收站恢复…」。
+7. **配置类破坏性操作留审计（O-9）**：删除看板列 / 分类 / 项目会写一条 `action=config` 的活动记录。
+8. **`/api/stats` 新增全空间工时**（N-5）：`current.workMinutesAll` / `current.workMinutesWeekAll`。原 `workMinutes` / `workMinutesWeek` 仍是"仅我"。
+9. **`/api/review` 新增三处**（N-5 / O-10）：`workMinutes{space,mine,spaceWeek}`、`pendingDone[]`（进度 100% 但未入已完成列）、`members[].minutes`。
+10. **保存视图 params 新增 `blocked`**（可选布尔）：服务端校验时保留，历史视图不受影响。
+11. **`GET /api/board` 的 `columnDefs` 已按空间自定义列返回**（本次一并核对）。
+
+### 5. 未做 / 边界
+
+- `sql/04_backfill_owner_user.sql` 是**可选**的：不跑，`/api/my-tasks` 与定向通知按显示名回落，同名成员无法区分；跑了才彻底消除串号风险。脚本只填空值、可回滚（`owner_user_id` 置回 NULL）。
+- CSV 导出（`/api/export/csv`）仍只导任务一张表，未按项目/工时拆多张表（**v1.2 已在任务 CSV 里补齐阻塞/卡点/工时/提醒四列**，见文末 v1.2 附录）。
+- 评论不做 @提及与提及通知（报告 §8.5/§10.1 Q5 的建议口径）。
+- `blockedByTaskId` 只是记录字段，不参与任何计算或校验。
+
+## 附录 · 第二轮功能复评 + 第九轮代码审查改造（v1.2 增量）
+
+来源：`工作台DevStudio-功能复评报告-2026-10-16.html`（R-1 ~ R-4、§5.3）与 `docs/code-review-round9-2026-10-16.md`（1 个 P2 + 8 个 P3）。
+**没有改动任何接口的路径与入参结构**，以下是语义 / 行为上的变化。
+
+### 1. 接口契约变化
+
+| 接口 | 变化 |
+| --- | --- |
+| `GET /api/notifications` | 前端**已接上**（铃铛即通知中心）。前端按**跨空间**口径调用（不带 `workspace`），拿到的是"我的全部未读"；接口自身的 `workspace` 过滤能力不变。 |
+| `GET /api/notifications/unread` | 同上，跨空间调用；前端 3 秒节流 + 60 秒兜底轮询。 |
+| `POST /api/notifications/{id}/read`、`/api/notifications/read-all` | 行为不变，但**不再触发 SSE 广播**（标记已读是收件人私事，不改变任何共享数据）。 |
+| `GET /api/my-tasks` | 语义明确为**跨空间**；该方法不接受 `workspace` 参数（多余参数会被忽略，前端已改为显式跨空间调用）。 |
+| `GET /api/export/csv` | 任务 CSV **新增 4 列**：`是否阻塞`、`卡点原因`、`累计工时(分钟)`、`提醒时间`。原有 14 列的列序与含义不变，新列追加在末尾。 |
+
+### 2. 行为变化
+
+1. **业务失败的写请求不再广播 SSE**（第九轮 #4）：`ApiResult.code != 0`（HTTP 仍是 200）时不再触发 `changed`，避免被业务规则拒绝的操作让全空间白刷一次。
+2. **改名不再无差别改写"负责人文本"**（复评 R-2）：`owner_user_id = 该用户` 的任务无条件同步；`owner_user_id` 为空的历史任务，仅在"该空间内没有另一个同名在册成员"时才同步。同名串号的口子封住，且未回填数据也不会显示旧名。
+3. **每日汇总也写应用内通知**（复评 R-3）：`dailyPush` 从"只遍历配了 webhook 的空间"改为遍历**全部启用**的空间；汇总按负责人分组落应用内通知（type=`task_due`）。因此**没配群机器人时汇总不再完全静默**。外部渠道行为不变（未配地址就不发外网）。
+4. **提醒扫描按空间/按任务隔离异常**（复评 R-4）：任一空间或任一任务出错只跳过该条，不再中断整轮扫描（原实现一个 try 包住所有空间）。
+5. **任务级联删除补齐评论与通知**（第九轮 #1/#2）：彻底删除任务（`DELETE /api/tasks/{id}/purge`、回收站每日自动清理）、清空空间、覆盖导入三处，都会一并删除 `task_comment` 与 `app_notification` 中该任务的记录。
+   - 修正的后果：此前 `countChildRefs` 把评论计入，导致**已彻底删除的任务 ID 被永久锁死**（既不能新建同 ID，同 ID 还原还会把旧评论挂到新任务上）。
+   - 导入口径：评论与通知**跟随任务删除**，与"操作时间线保留"有意区分 —— 时间线是审计记录，评论/通知会把内容直接展示给用户，留着就是可见的数据错乱。
+6. **看板兜底列**（第九轮 #3）：空间的 `board_column` 为空（手工改库 / 异常恢复）时，未完成任务归入 `backlog`，而不是被静默丢弃（原实现响应里只剩「已完成」一列）。
+7. **工时口径自洽**（第九轮 #5）：`/api/review` 的 `members[]` 在"成员贡献合计 < 空间总工时"时，追加一行 `name = "已离开成员 / 未在册"`，把差额显式列出。
+8. **ID 生成**（第九轮 #6）：`Ids.gen` 的随机后缀由 `Math.random()` 4 位改为 `ThreadLocalRandom` 8 位（同毫秒组合数从 ~1.7×10⁶ 升到 ~2.8×10¹²），ID 仍 ≤32 字符。
+9. **启动兜底的事务语义**（第九轮 #7）：`ensureDefaults` 改为通过自身代理调用 `ensureDefaultsFor`，实现**每个空间一个独立事务**（此前 `@Transactional` 因同类自调用而失效，等于每个 mapper 各自提交）。
+10. **删除看板列的审计文案**（第九轮 #9）：活动流里写列名而不是列 ID（不再出现「其下任务已移入「C1a2b3c4」」）。
+11. **删除零调用死代码**（第九轮 #8）：移除 `TimeLogMapper.sumSinceByWorkspaceUserFrom`（与 `sumSinceByWorkspaceUser` 完全重复且全项目零调用）。
+
+### 3. 未做 / 边界
+
+- 通知中心不做"按空间分组折叠"，不做已读回执；默认拉取上限 30 条（接口支持 `limit`，上限 200）。
+- 评论仍不做 @提及；通知不接浏览器系统级推送（仍是站内通知 + 外部渠道）。
+- CSV 仍未按项目/工时**拆成多张表**（任务 CSV 已含这两类信息）。
+- 用户被删除后，其作为收件人的历史 `app_notification` 不清理（本轮报告未提，属低频残留）。
+- 复评列出的 4 个借鉴项里，仅 **#2 快速录入语法扩展**落地（`@负责人` / `+标签` / `%进度` / `~循环`）；**#1 命令面板、#4 任务模板、#7 日历 ICS 导出与拖动改期**未做。
+
+## 附录 · 2026-10-19 四项体验修复（v1.3 增量）
+
+来源：用户实测反馈 4 条。**1 个 SQL 修复 + 1 个字段新增 + 2 个口径 / 交互修正**，没有改动任何既有接口的路径与出参结构。
+
+### 1. 接口契约变化
+
+| 接口 / 字段 | 变化 |
+| --- | --- |
+| `GET /api/my-tasks` | 返回的每个任务现在带 `workspaceName`。此前该字段恒为 `null` —— 因为 `selectMyTasks` 只 `SELECT` 了 `task` 表、没有 JOIN `workspace`，前端「空间」列只能显示「—」。修复：补 `LEFT JOIN workspace w ON w.id = t.workspace_id` + `w.name AS workspace_name`（其余列加 `t.` 前缀避免歧义）。 |
+| `task.startDate`（**新增字段**） | `DATE`，可空。语义：任务开始日期。`POST/PUT /api/tasks` 接受 `startDate`（yyyy-MM-dd）；`startDate > dueDate` 返回 400「开始日期不能晚于截止日期」。备份导出 / 导入的 `tasks[].start` 同步带上（老备份没有该字段 → 空值，向后兼容）。 |
+| `GET /api/calendar` | 口径从「**截止日期落在本月**」改为「**与本月有交集**」：按 `[start_date, due_date]` 区间判断；`start_date` 为空（或晚于截止日期）时退化为只占截止日那一格，与升级前行为完全一致。**响应结构不变**。 |
+
+### 2. 数据库
+
+- 新增 `sql/05_task_start_date.sql`（幂等，只 `ADD COLUMN`）：`task.start_date DATE NULL`。
+- 老数据该列为 `NULL` → 日历行为与升级前一致，**不需要回填**。
+
+### 3. 前端行为变化
+
+1. **切换空间一律二次确认**（三处统一走 `askSwitchWorkspace`）：
+   - 侧边栏空间菜单的手动切换；
+   - 「我的任务」点其它空间的任务（原先是 toast 之后直接 reload —— 最容易误触）；
+   - 通知中心点其它空间的通知。
+   确认框写明目标空间名（跨空间任务还会带上任务标题），并提示「当前空间的筛选条件、抽屉里未保存的编辑都不会保留」；**取消则不发任何请求**（连 `select` 都不发）。
+2. **「一周后」= 5 个工作日**（跳过周六日），不再是 +7 自然日。三处共用同一个 `duePresetDate`：抽屉内的日期预设按钮、卡片 `D` 键改期浮层、列表批量改截止。今天 / 明天仍按自然日。
+3. **日历按区间逐日展示**：填了开始日期的任务会在 `[开始, 截止]` 的每一天出现，非截止日弱化显示（`.cal-chip.span`）；右侧当日列表也按区间包含判断。没填开始日期的任务行为不变。
+
+### 4. 未做 / 边界
+
+- 开始日期**不会**自动填充（不根据「移入进行中」隐式设置），保持显式录入。
+- 循环任务派生下一次时 `startDate` 置空（新周期尚未开始）。
+- 日历仍不显示"没有截止日期"的任务（它们进「本月未排期」区）。
+
+### 5. 补充：周回顾「推进中」口径修正（同日第二轮反馈）
+
+`GET /api/review` 的 `progressTasks` 原来只判断 `progressOf(t) > 0`，而 `TaskCalc.progressOf` 对**已完成列的任务一律返回 100** —— 于是已完成的任务会同时出现在「本周完成」和「推进中」两个区块里，读起来就是同一件事写了两遍。
+
+现在三个区块严格互斥：
+
+| 字段 | 口径 |
+| --- | --- |
+| `completed` | 已完成列，且 `completed_at` 落在本周期 |
+| `pendingDone` | **未完成**列但进度 = 100%（单独成组，提醒去归档） |
+| `progressTasks` | **未完成**列且 0 < 进度 < 100 |
+
+响应结构不变，只是 `progressTasks` 的条数会变少（不再含已完成与进度 100% 的）。
+
+> 已知局限（**部分已修，见 v1.5**）：`progressTasks` 取的是**当前**进度，不按周做历史快照。看历史周期时已按"那一周有活动"收敛（v1.5），但"进度数字"仍然是现在的值，不是上周结束时的值 —— 要精确到周需要每次改动都记录进度历史，属另一个量级的改造。
+
+## 附录 · 2026-10-20 计时与周回顾（v1.4 增量）
+
+### 1. 计时：拖列自动开关 + 有效工时口径
+
+| 变化 | 说明 |
+| --- | --- |
+| **移入「进行中」自动开始计时** | `POST /api/tasks/{id}/move` 目标列不是 `backlog` 也不是 `done` 时，为**操作人**自动开始计时；若本人已有别的任务在计时，按原有"个人同一时刻只计一个任务"的规则先停掉它。响应新增 `autoTimerStarted: boolean`，前端据此提示「已开始计时」。 |
+| **移入「已完成」自动结束** | 原有行为保留：关闭**该任务上所有人**的运行中计时。删除 / 移入回收站同样关闭。 |
+| `TaskMoveRequest.autoTimer`（**新增**） | 可选布尔。不传 = 自动计时（拖拽、键盘移列、列表/日历的"移动到"）；传 `false` = 不自动（**取消完成**回退到进行中时用，避免"纠正状态"顺手开表）。 |
+| **有效工时口径**（全新） | 停表时不再用"实际经过时间、上限 12 小时"，改为按 `WorkTime.effectiveMinutes()` 计算：① **跳过周六 / 周日**（整段落在周末记 0）；② **每人每天最多计入 8 小时**，并扣减当天已记录的工时（跨任务、跨空间都算）。运行中的 `elapsedMinutes` 也用同一口径。 |
+| 时间线文案 | 停表日志改为「本次计入 N 分钟」，被裁剪时补一句「已按每天 8 小时 / 跳过周末裁剪，实际经过 M 分钟」。 |
+
+**口径说明（容易踩的点）**：跨天计时按天切分、每天各自封顶 8 小时。例如周五 18:00 开表、周一 09:00 停表 → 周五记 6 小时 + 周末 0 + 周一封顶 8 小时 = 14 小时。这是"每天 8 小时"的字面实现；如果希望"跨天只算开始当天"，属于另一种口径，需要再确认。
+
+### 2. 周回顾：`progressTasks` 改为按所在列
+
+`GET /api/review` 的 `progressTasks`（前端「进行中」面板）口径改为：
+
+> **未完成列且不在 `backlog` 列**，且进度未到 100%（100% 的归 `pendingDone`）。
+
+原来按「0 < 进度 < 100」过滤，但很多人不会手动拖进度条 —— 进行中的任务进度就是 0，整块永远是空的，看起来像"没有进行中的任务"。现在只要任务被移进「进行中」（或任何自定义中间列）就会出现。排序改为**先按截止日期、再按进度倒序**。
+
+响应结构不变（`progressTasks[]`）。
+
+### 3. 周回顾页面渲染修复
+
+`completedAt` 为 `null` 的历史任务会让 `fmtShortMD(parseDate(null))` 抛 `getMonth of null`，**整个周回顾渲染中断** —— 表现为「复制总结」里有完成明细、页面上却看不到。已修：
+- `fmtMD / fmtShortMD / fmtFull / weekdayCN` 全部容忍 `null`（返回 `—` / 空串）；
+- 完成列表里缺完成时间的条目显示「完成时间未记录」，不再中断渲染。
+
+### 4. 文案调整
+
+- 面板标题：「进展更新」→ **「进行中」**（并显示 `共 N 项`）；「完成明细」→ **「本周完成」**。
+- 复制总结文本：先「进行中（N 项）」再「本周完成（N 项）」，不再出现「完成明细」字样；缺完成时间的条目写「（完成时间未记录）」。
+
+### 5. 补丁（v1.5）：历史周期的「进行中」按周收敛
+
+**问题**（用户实测反馈）：切到「上一周」时，「进行中」面板仍然列出**当前**进行中的任务 —— 包括这一周才创建 / 才拖进进行中的任务，等于把本周的工作算进了上周。
+
+**原因**：`progressTasks` 是"当前状态"，与周期无关。
+
+**修法**：`GET /api/review` 在 `weekOffset < 0`（历史周期）时，对 `progressTasks` 再做一次收敛：
+
+> 只保留「**该周期内有日志活动**」（`task_log.created_at` 落在周期内）**且**「周期结束时任务已存在」（`created_at <= 周期结束日`）的任务。
+
+- **本周（`weekOffset == 0`）不收敛** —— 「进行中」就该是"我现在在做的事"，不受"本周有没有动过"限制；
+- 没有状态快照，用日志近似还原。因此「上周开工、这周一直没碰」的任务在本周视图里仍然出现（符合直觉），在更早的周期里则按"那一周动过"判断；
+- 新增 `TaskLogMapper.selectActiveTaskIds(workspaceId, from, to)`（`DISTINCT task_id`，排除 `CFG` 哨兵事件）；
+- `ReviewResponse` 结构不变。
+
+**仍存在的局限**：进度数字仍是当前值；"上周拖进进行中、本周已完成"的任务只会出现在「本周完成」里，不会同时出现在上周的「进行中」。
+
+### 6. 补丁（v1.6）：日历里提前完成的任务不再往后铺
+
+**问题**（用户实测）：任务 5 号开始、25 号截止，12 号就做完了，但日历从 13 号到 25 号仍然每天显示它。
+
+**原因**：日历区间是 `[start_date, due_date]`，没有考虑 `completed_at`。
+
+**修法**：引入"**实际结束日**"概念：
+
+> `实际结束日 = (已完成 && completed_at < due_date) ? completed_at : due_date`
+
+| 位置 | 处理 |
+| --- | --- |
+| `GET /api/calendar` | 用实际结束日判断"与本月是否有交集"，提前完成的任务不再因为 `due_date` 在未来而被返回 |
+| 前端 `calRangeOf(t)` | 日历格子铺开、右侧当日列表的区间判断都用同一个函数；已完成任务的 chip 带 `done` 样式（划线），悬停提示显示「已完成 10-12」而不是「进行中，截止 10-25」 |
+| 边界 | `completed_at` 为空（历史数据）→ 退回 `due_date`，行为与升级前一致；"取消完成"会把 `completed_at` 置空，区间自动恢复满铺 |
+
+`CalendarResponse` 结构不变。
+
+## 附录 · 2026-10-21 看板计时与任务清单（v1.7 增量）
+
+### 1. 新接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/my-running-timer` | **全局接口**（不走 `?workspace=`）：返回我当前正在计时的任务。个人同一时刻只计一个，所以最多一条。出参 `{running, taskId, workspaceId, workspaceName, taskTitle, startedAt, elapsedMinutes}`；没有运行中时只有 `running:false`。前端必须用 `API.getGlobal` 调，看板卡片靠它渲染「计时中」。 |
+| `GET /api/completions?month=YYYY-MM` | 任务清单（完成快照），按月返回，按 `completed_at` 倒序。`month` 为空取当月；格式不对返回 400「月份格式应为 YYYY-MM」。走当前空间（`?workspace=`）。 |
+
+### 2. 新表 `task_completion_record`
+
+任务完成那一刻落一条**快照**，之后任务改名 / 换项目 / 被删除都不影响已归档的统计 —— 这是"统计"与"查当前任务表"的本质区别。
+
+| 字段 | 说明 |
+| --- | --- |
+| `workspace_id` + `task_id` | 唯一键 `uk_ws_task`，同一任务重复完成只保留最后一次 |
+| `title` / `description` | 完成时的名称与详情（截断 200 字） |
+| `req_id` / `req_name` | 归属项目；**项目名冗余存一份**，防项目改名或删除后统计失真 |
+| `owner` / `owner_user_id` | 负责人（快照） |
+| `category` / `priority` | 分类与优先级（快照） |
+| `start_date` | 任务开始日期 |
+| `completed_at` | 完成日期（必填） |
+| `first_started_at` / `last_ended_at` | 首次计时开始 / 最后一次计时结束（来自 `time_log` 的 MIN/MAX） |
+| `total_minutes` | 总耗时（`time_log.minutes` 汇总，已按「每天 8h / 跳过周末」裁剪） |
+
+迁移脚本：`sql/06_task_completion_record.sql`（幂等建表 + 自检 + 可选的存量回填语句，默认注释）。
+
+### 3. 归档时机
+
+| 时机 | 动作 |
+| --- | --- |
+| `move` 到已完成列 / `PUT /api/tasks` 把列改成已完成 | `upsert` 一条快照 |
+| 取消完成（离开已完成列） | 删除该 task_id 的记录，再次完成会重新生成 |
+| 软删除（进回收站） | **保留**归档（"做过"是事实） |
+| 彻底删除（回收站清理 / purge） | 一并删除，避免任务 ID 复用时把新任务的归档写到旧记录上 |
+
+### 4. 前端行为
+
+1. **卡片上直接计时**：每张卡片右上角多一个计时按钮（时钟图标，hover 出现）。未运行 → 点击开始；自己正在计时 → 按钮常驻高亮（绿色 + 图标脉动）、卡片 meta 首位显示实时工时。
+2. **互斥**：开始 B 会自动停掉 A（后端 `start()` 的既有规则），前端在 toast 里明确写出「已开始「B」的计时 · 自动暂停了「A」」。
+3. **已完成列显示总耗时**：卡片 meta 显示 `总耗时 6h41m`。
+4. **任务清单视图**（侧边栏「任务清单」）：按月表格 + 4 个统计卡（完成数 / 总耗时 / 平均每项 / 参与成员）+ 上月/下月切换 + **导出 CSV**（带 BOM，Excel 打开不乱码）。
+
+### 5. 补丁（v1.8）：只有「进行中」能计时 + 任务清单精简列
+
+**问题**（用户实测）：
+1. 计时中的绿色按钮常驻卡片右上角，**盖住了标题**；
+2. 「待处理」「已完成」列也能点计时，不符合业务（只有开工的任务才该计工时）；
+3. 任务清单里的「首次计时 / 最后计时」两列对统计没用。
+
+**修法**：
+
+| 项 | 变化 |
+| --- | --- |
+| 手动开始计时的入口 | `POST /api/tasks/{id}/timer/start` 现在校验任务所在列：`backlog` / `done` 直接返回 400「只有「进行中」的任务才能计时，请先把任务移到进行中」。实现为 `TimeLogService.startManual()`；`move` 的自动开表仍走 `start()`（那时任务还没落库到新列，走校验会读到旧列）。 |
+| 回退到待处理 | `move` / `update` 把任务移回 `backlog` 时**关闭该任务上所有人的计时**，已记录的工时不删（`time_log` 原样保留）。 |
+| 卡片上的计时控件 | 停止入口从右上角动作区移到 **meta 行的胶囊按钮**（`.timer-chip`，绿色，显示「计时中 48m」，点一下停止）；「开始计时」仍留在动作区（hover 出现）。待处理 / 已完成的卡片**不显示任何计时控件**，但历史记录的工时会照常显示。 |
+| 任务清单 | 表格与 CSV 去掉「首次计时 / 最后计时」两列，只保留：完成日 / 任务 / 项目 / 负责人 / 分类 / 优先级 / 开始 / 总耗时。接口字段不变（`firstStartedAt` / `lastEndedAt` 仍返回，留给将来用）。 |
+
+### 6. 补丁（v1.9）：任务清单补回「结束时间」列
+
+上一版删「首次计时 / 最后计时」时，连带把首列的「完成日」也当成重复项去掉了，结果表里**没有"结束时间"这个字段**（用户指出）。
+
+现在列固定为 8 列，开始与结束成对：
+
+| # | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 列名 | 任务 | 项目 | 负责人 | 分类 | 优先级 | **开始时间** | **结束时间** | 总耗时 |
+
+- `开始时间` = `startDate`（任务开始日期）
+- `结束时间` = `completedAt`（任务完成日期）
+- 两者目前都精确到**日**（与 `task.start_date` / `task.completed_at` 的字段类型一致）；要精确到时分需要给归档表加 `DATETIME` 字段并改任务表的类型，属另一次改动。
+- CSV 表头同步为「开始时间 / 结束时间」，顺序一致。
+
+### 7. 补丁（v2.0）：完成计时任务后自动接力 + 每天 8 小时口径确认
+
+#### 7.1 完成后自动接力计时
+
+**问题**（用户实测）：正在计时的任务被拖进「已完成」后，表停了，但「进行中」列还有别的任务，却没有任何一个在计时 —— 得手动再去点一次。
+
+**规则**：`move` / `update` 把任务改到「已完成」时，先 `closeRunningForTask` 停表，再调 `TimeLogService.resumeInColumn(userId, workspaceId, fromColumn, finishedTaskId)`：
+
+| 条件 | 行为 |
+| --- | --- |
+| 我当前**还有**运行中的计时（比如别的空间的任务） | **不接力** —— 不能把别的任务抢掉 |
+| 刚完成的任务来自 `backlog` / `done` 列 | **不接力**（待处理列本来就不该计时） |
+| 原列还有其他任务 | 按 `sort_order` 取**第一个**开始计时（复用 `start()`，含"个人同时只计一个"） |
+| 原列没有剩余任务 | 不接力 |
+
+`POST /api/tasks/{id}/move` 响应新增 `autoTimerTask`（接力上的任务名，没有则为 `null`），前端在完成提示后追加「· 已接着开始「X」的计时」。
+
+**注意**：接力**不区分负责人** —— 列里第一个任务是谁的就给谁计时。因为计时记的是"我"的工时（我在做这件事），且用户要求"进行中必须有一个在计时"。这是刻意的取舍，写在 spec G.5。
+
+#### 7.2 每天 8 小时是「整天合计」，不是「每个任务各 8 小时」
+
+**确认：已经是整天合计口径**，代码在 `WorkTime.effectiveMinutes()`：
+
+```java
+int used = usedMinutesOn.applyAsInt(day);          // 当天已记录的工时
+int quota = Math.max(0, MAX_MINUTES_PER_DAY - used); // 480 - used
+total += (int) Math.min(minutes, quota);
+```
+
+而 `usedMinutesOn` → `sumMinutesByUserOnDate` 的 SQL 是：
+
+```sql
+SELECT COALESCE(SUM(minutes), 0) FROM time_log
+WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date}
+```
+
+**只有 `user_id` 和日期**，不限 `task_id`、不限 `workspace_id` —— 所以同一天多个任务共用 480 分钟额度，跨空间也算在一起。
+
+实测（`WorkTime` 单测）：同一天三个任务各 200 分钟 → 记 200 + 200 + **80** = 480；额度满后再计 → 0；换一天重新有 8 小时。

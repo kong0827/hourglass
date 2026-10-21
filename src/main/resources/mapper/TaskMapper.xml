@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TaskMapper">
+
+  <sql id="cols">
+    id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id,
+    progress, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
+    remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at
+  </sql>
+
+  <select id="selectAll" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectDeleted" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  </select>
+
+  <select id="selectById" resultType="Task">
+    SELECT <include refid="cols"/> FROM task WHERE id = #{id}
+  </select>
+
+  <!-- 任务深链（O-3）：只在「我参与的空间」内查找，越权与不存在的返回同一结果（不泄露存在性） -->
+  <select id="selectByIdInMyWorkspaces" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE id = #{id}
+      AND workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+  </select>
+
+  <!-- 跨空间「我的任务」（N-3）：优先按账号ID匹配；历史数据 owner_user_id 为空时回落显示名文本 -->
+  <!-- 跨空间「我的任务」。
+       workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。 -->
+  <select id="selectMyTasks" resultType="Task">
+    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
+           t.board_column, t.start_date, t.due_date, t.req_id, t.progress, t.is_blocked AS blocked,
+           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
+           t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
+           w.name AS workspace_name
+    FROM task t
+    LEFT JOIN workspace w ON w.id = t.workspace_id
+    WHERE t.deleted_at IS NULL
+      AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+      AND (t.owner_user_id = #{userId}
+           <if test="displayName != null and displayName != ''">
+             OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+           </if>)
+      <if test="openOnly"> AND t.board_column != 'done' </if>
+    ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC
+  </select>
+
+  <insert id="insert">
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
+                      start_date, due_date, req_id, progress, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      recur_type, remind_at, remind_target, remind_sent, sort_order, created_at)
+    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{progress}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE task SET
+      title = #{title},
+      description = #{description},
+      priority = #{priority},
+      owner = #{owner},
+      owner_user_id = #{ownerUserId},
+      category = #{category},
+      board_column = #{boardColumn},
+      start_date = #{startDate},
+      due_date = #{dueDate},
+      req_id = #{reqId},
+      progress = #{progress},
+      is_blocked = #{blocked},
+      blocked_reason = #{blockedReason},
+      blocked_by_task_id = #{blockedByTaskId},
+      note = #{note},
+      completed_at = #{completedAt},
+      recur_type = #{recurType},
+      remind_at = #{remindAt},
+      remind_target = #{remindTarget},
+      remind_sent = #{remindSent},
+      sort_order = #{sortOrder},
+      updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <update id="softDelete">
+    UPDATE task SET deleted_at = NOW(), updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <update id="restore">
+    UPDATE task SET deleted_at = NULL, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM task WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="selectPurgeable" resultType="Task">
+    SELECT <include refid="cols"/> FROM task WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+  </select>
+
+  <select id="selectRemindDue" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId}
+      AND deleted_at IS NULL
+      AND board_column != 'done'
+      AND remind_sent = 0
+      AND remind_at IS NOT NULL
+      AND remind_at &lt;= #{now}
+      AND remind_at &gt;= #{windowStart}
+    ORDER BY remind_at
+  </select>
+
+  <select id="selectRemindExpired" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId}
+      AND deleted_at IS NULL
+      AND board_column != 'done'
+      AND remind_sent = 0
+      AND remind_at IS NOT NULL
+      AND remind_at &lt; #{before}
+    ORDER BY remind_at
+  </select>
+
+  <update id="markRemindSent">
+    UPDATE task SET remind_sent = 1 WHERE id = #{id}
+  </update>
+
+  <update id="setRecurNext">
+    UPDATE task SET recur_next_id = #{recurNextId} WHERE id = #{id} AND recur_next_id IS NULL
+  </update>
+
+  <update id="clearRecurNext">
+    UPDATE task SET recur_next_id = NULL WHERE recur_next_id = #{taskId}
+  </update>
+
+  <!--
+    用户改名后同步"负责人文本"（复评 R-2 收紧口径）。
+    身份绑定上线后 owner_user_id 才是权威，文本列只作历史兜底，因此分两类处理：
+    ① owner_user_id = 该用户：无条件同步 —— 这是确定属于他的任务，不会误伤别人；
+    ② owner_user_id 为空且 owner = 旧名（未回填的历史数据）：仅当该空间内
+       "不存在另一个在册成员也叫旧名"时才同步。原实现只看"旧显示名 + 该用户参与的空间"，
+       同一空间里有同名的另一个人时，会把别人的任务也改成新名。
+    回收站任务一并同步（与旧行为一致）。
+  -->
+  <update id="renameOwner">
+    UPDATE task SET owner = #{newName}
+    WHERE workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+      AND (
+        owner_user_id = #{userId}
+        OR (
+          owner_user_id IS NULL
+          AND owner = #{oldName}
+          AND NOT EXISTS (
+            SELECT 1 FROM workspace_member m
+            JOIN app_user u ON u.id = m.user_id
+            WHERE m.workspace_id = task.workspace_id
+              AND m.user_id &lt;&gt; #{userId}
+              AND u.display_name = #{oldName}
+          )
+        )
+      )
+  </update>
+
+  <update id="updateSortOrder">
+    UPDATE task SET sort_order = #{sortOrder} WHERE id = #{id}
+  </update>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM task
+    WHERE workspace_id = #{workspaceId} AND board_column = #{boardColumn} AND deleted_at IS NULL
+  </select>
+
+  <update id="clearReq">
+    UPDATE task SET req_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </update>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM task WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <select id="countChildRefs" resultType="int">
+    SELECT
+      (SELECT COUNT(*) FROM attachment WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM subtask    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM time_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_tag   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_comment WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+  </select>
+
+  <!-- 每任务评论数（看板角标 / 抽屉计数用） -->
+  <select id="countCommentsByTask" resultType="TaskCountAgg">
+    SELECT task_id AS task_id, COUNT(*) AS cnt
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+    GROUP BY task_id
+  </select>
+
+  <!-- 一次性回填（可选脚本 04 使用）：把显示名文本对应到空间成员账号 -->
+  <select id="selectDistinctOwnerTexts" resultType="java.lang.String">
+    SELECT DISTINCT owner FROM task WHERE owner_user_id IS NULL AND owner IS NOT NULL AND owner != ''
+  </select>
+
+  <update id="backfillOwnerUserId">
+    UPDATE task t
+    SET t.owner_user_id = #{userId}
+    WHERE t.owner = #{displayName}
+      AND t.owner_user_id IS NULL
+      AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+  </update>
+</mapper>

@@ -1,0 +1,24 @@
+[Unit]
+Description=DevStudio Kanban Server (开发工坊·任务看板)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=devstudio
+Group=devstudio
+WorkingDirectory=/opt/devstudio
+EnvironmentFile=/etc/devstudio.env
+# 固定时区：逾期判定、周回顾、报表分周、每日推送时间都依赖服务器时区
+Environment=TZ=Asia/Shanghai
+ExecStart=/usr/bin/java -Xms128m -Xmx320m -Dfile.encoding=UTF-8 -jar /opt/devstudio/devstudio-server.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

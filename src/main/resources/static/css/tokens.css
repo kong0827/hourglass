@@ -1,0 +1,100 @@
+/* ==========================================================================
+   tokens.css · 设计令牌（ui-redesign-spec §2）
+   新令牌为唯一真源；末尾的「兼容别名」把旧变量名映射到新令牌，
+   以保证历史内联样式（var(--red) / var(--accent) / var(--green) 等）继续生效。
+   ========================================================================== */
+
+:root{
+  /* ---- 中性 ---- */
+  --bg-app:#F7F8FA;
+  --surface:#FFFFFF;
+  --surface-sunken:#F2F4F7;
+  --surface-hover:#F2F4F7;
+  --surface-active:#E9ECF1;
+  --border:#E4E7EC;
+  --border-strong:#D0D5DD;
+  --text:#101828;
+  --text-2:#475467;
+  --text-3:#98A2B3;
+  --text-inverse:#FFFFFF;
+
+  /* ---- 品牌 ---- */
+  --primary:#2563EB;
+  --primary-hover:#1D4ED8;
+  --primary-active:#1E40AF;
+  --primary-soft:#EFF4FF;
+  --primary-border:#BFD3FE;
+  --primary-fg:#1D4ED8;
+
+  /* ---- 语义 ---- */
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89;
+  --danger:#F04438;  --danger-soft:#FEF3F2;  --danger-border:#FDA29B;
+  --info:#2E90FA;    --info-soft:#EFF8FF;    --info-border:#B2DDFF;
+  --plum:#7A5AF8;    --plum-soft:#F4F3FF;    --plum-border:#D9D6FE;
+
+  /* ---- 优先级专色 ---- */
+  --p0:#F04438; --p0-soft:#FEF3F2;
+  --p1:#F79009; --p1-soft:#FFFAEB;
+  --p2:#2E90FA; --p2-soft:#EFF8FF;
+  --p3:#98A2B3; --p3-soft:#F2F4F7;
+
+  /* ---- 排版 ---- */
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",
+              "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+
+  /* ---- 圆角 ---- */
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+
+  /* ---- 阴影（仅浮层使用） ---- */
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+
+  /* ---- 动效 ---- */
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  --ease-in-out:cubic-bezier(.4,0,.2,1);
+  --dur-fast:120ms; --dur-base:180ms; --dur-slow:240ms;
+
+  /* ---- 布局尺寸 ---- */
+  --sidebar-w:240px;
+  --sidebar-w-rail:64px;
+  --topbar-h:60px;
+  --filterbar-h:48px;
+  --content-pad:24px;
+  --drawer-w:680px;
+  --board-col-w:300px;
+
+  /* ---- 面板调色板（分类 / 看板列取色器预设） ---- */
+  --palette-1:#2563EB; --palette-2:#12B76A; --palette-3:#F79009; --palette-4:#F04438;
+  --palette-5:#7A5AF8; --palette-6:#0E9384; --palette-7:#DD2590; --palette-8:#98A2B3;
+
+  /* ======================================================================
+     兼容别名 · 旧令牌 → 新令牌
+     这些名字在 JS 生成的内联 style 与历史 HTML 中出现，不可删除。
+     ====================================================================== */
+  --bg:var(--bg-app);
+  --surface-2:var(--surface-sunken);
+  --surface-3:var(--surface-active);
+
+  --accent:var(--primary);
+  --accent-soft:var(--primary-soft);
+
+  --blue:var(--info);         --blue-soft:var(--info-soft);
+  --green:var(--success);     --green-soft:var(--success-soft);
+  --amber:var(--warning);     --amber-soft:var(--warning-soft);
+  --red:var(--danger);        --red-soft:var(--danger-soft);
+  --plum-soft:var(--plum-soft);
+
+  --side-w:var(--sidebar-w);
+  --side-w-rail:var(--sidebar-w-rail);
+
+  --shadow-1:var(--shadow-xs);
+  --shadow-2:var(--shadow-md);
+  --shadow-3:var(--shadow-xl);
+  --ease:var(--ease-out);
+}

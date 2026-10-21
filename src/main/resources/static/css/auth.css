@@ -1,0 +1,59 @@
+/* ==========================================================================
+   auth.css · 独立页（登录 / 加入空间）（ui-redesign-spec §6.1 §6.2）
+   全屏居中卡片，不套 App Shell。
+   ========================================================================== */
+
+.auth-body{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100dvh;padding:24px;background:var(--bg-app);
+}
+.auth-card{
+  width:100%;max-width:380px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-md);
+  padding:32px;
+}
+.auth-card.wide{max-width:400px;}
+.auth-brand{display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:24px;}
+.auth-brand .brand-mark{width:32px;height:32px;border-radius:var(--r-sm);background:var(--primary);display:grid;place-items:center;}
+.auth-brand h1{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em;}
+.auth-brand .sub{margin:2px 0 0;font-size:13px;color:var(--text-2);line-height:20px;}
+.auth-card .field input{height:38px;}
+.auth-card .btn.lg{width:100%;justify-content:center;}
+.auth-err{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--danger-soft);border:1px solid var(--danger-border);color:var(--danger);
+  font-size:12.5px;line-height:18px;
+}
+.auth-err svg{flex:0 0 auto;margin-top:1px;}
+.auth-tip{margin:16px 0 0;font-size:12px;line-height:19px;color:var(--text-3);}
+.auth-foot{margin-top:14px;text-align:center;font-size:12.5px;color:var(--text-2);}
+
+/* 登录失败抖动 */
+@keyframes auth-shake{
+  0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}
+  50%{transform:translateX(4px);}75%{transform:translateX(-3px);}
+}
+.auth-card.shake{animation:auth-shake 160ms var(--ease-in-out) 1;}
+
+/* ---- 加入空间页 ---- */
+.join-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin-bottom:8px;}
+.join-hero .hero-ic{
+  width:48px;height:48px;border-radius:var(--r-lg);display:grid;place-items:center;
+  background:var(--primary-soft);color:var(--primary);margin-bottom:6px;
+}
+.join-hero.invalid .hero-ic{background:var(--danger-soft);color:var(--danger);}
+.join-hero h2{font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.01em;}
+.join-hero p{margin:0;font-size:13px;line-height:20px;color:var(--text-2);}
+.join-hero .muted{font-size:12.5px;color:var(--text-3);}
+.join-info{
+  margin:16px 0;padding:12px 14px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);border:1px solid var(--border);
+  display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-2);
+}
+.join-info .ir{display:flex;align-items:center;gap:8px;}
+.join-info .ir .k{flex:0 0 64px;color:var(--text-3);font-size:12px;}
+.join-info .ir .v{min-width:0;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.join-actions{display:flex;flex-direction:column;gap:10px;}
+.join-note{margin:0;font-size:12.5px;line-height:19px;color:var(--text-2);text-align:center;}
+.join-skel{display:flex;flex-direction:column;gap:10px;padding:4px 0;}

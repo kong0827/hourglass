@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TimeLogMapper">
+
+  <sql id="cols">
+    id, task_id, workspace_id, user_id, started_at, ended_at, minutes
+  </sql>
+
+  <select id="selectRunningByTaskAndUser" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE task_id = #{taskId} AND user_id = #{userId} AND ended_at IS NULL
+    ORDER BY id DESC
+    LIMIT 1
+  </select>
+
+  <select id="selectRunningByTask" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NULL
+    ORDER BY id
+  </select>
+
+  <select id="selectRunningAllByUser" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE user_id = #{userId} AND ended_at IS NULL
+    ORDER BY id
+  </select>
+
+  <select id="selectAllByWorkspace" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    ORDER BY task_id, id
+  </select>
+
+  <select id="sumByTaskByWorkspace" resultType="TimeAgg">
+    SELECT task_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    GROUP BY task_id
+  </select>
+
+  <update id="closeRunning">
+    UPDATE time_log SET ended_at = NOW(), minutes = #{minutes}
+    WHERE task_id = #{taskId} AND user_id = #{userId} AND ended_at IS NULL
+  </update>
+
+  <insert id="insert">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at)
+    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt})
+  </insert>
+
+  <insert id="insertCompleted">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes)
+    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt}, #{endedAt}, #{minutes})
+  </insert>
+
+  <delete id="deleteByTaskId">
+    DELETE FROM time_log WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM time_log WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="sumByWorkspaceUser" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND ended_at IS NOT NULL
+  </select>
+
+  <!-- 每人每天 8 小时额度：该用户当天（跨全部空间）已记录的工时 -->
+  <select id="sumMinutesByUserOnDate" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE user_id = #{userId} AND ended_at IS NOT NULL
+      AND DATE(started_at) = #{date}
+  </select>
+
+  <!-- 任务完成快照用：首次开始 / 最后一次结束（没有记录时两者为 null） -->
+  <select id="selectBoundsByTask" resultType="TimeBounds">
+    SELECT MIN(started_at) AS first_started_at, MAX(ended_at) AS last_ended_at
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
+  <select id="sumSinceByWorkspaceUser" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+      AND ended_at IS NOT NULL AND started_at &gt;= #{from}
+  </select>
+
+  <select id="sumByTaskId" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
+  </select>
+
+  <!-- N-5：本空间全员合计（含未完成任务的计时） -->
+  <select id="sumByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+  </select>
+
+  <select id="sumSinceByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND ended_at IS NOT NULL AND started_at &gt;= #{from}
+  </select>
+
+  <!-- N-5 下钻：按成员统计本空间工时 -->
+  <select id="sumByWorkspaceGroupByUser" resultType="TimeAgg">
+    SELECT user_id AS user_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    GROUP BY user_id
+  </select>
+</mapper>

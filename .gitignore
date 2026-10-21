@@ -1,18 +1,25 @@
-# Build and Release Folders
+# 构建产物
+target/
 bin-debug/
 bin-release/
 [Oo]bj/
 [Bb]in/
 
-# Other files and folders
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
 .settings/
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# 运行期数据与日志
+*.log
+logs/
+data/
+deploy/.last-deploy.stamp
+deploy/.pending-deploy.stamp
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# 系统文件
+.DS_Store
+Thumbs.db

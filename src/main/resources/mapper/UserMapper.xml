@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.UserMapper">
+
+  <sql id="cols">
+    id, username, password_hash, display_name, role, last_workspace_id, created_at, updated_at
+  </sql>
+
+  <select id="selectAll" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user ORDER BY created_at, id
+  </select>
+
+  <select id="selectById" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE id = #{id}
+  </select>
+
+  <select id="selectByUsername" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE username = #{username}
+  </select>
+
+  <select id="countAll" resultType="int">
+    SELECT COUNT(*) FROM app_user
+  </select>
+
+  <!-- 事务内锁定管理员行：并发降权/删除时串行化，保证至少保留一名管理员 -->
+  <select id="lockAdmins" resultType="string">
+    SELECT id FROM app_user WHERE role = 'admin' FOR UPDATE
+  </select>
+
+  <insert id="insert">
+    INSERT INTO app_user (id, username, password_hash, display_name, role, last_workspace_id)
+    VALUES (#{id}, #{username}, #{passwordHash}, #{displayName}, #{role}, #{lastWorkspaceId})
+  </insert>
+
+  <!-- role 为空时不更新角色：仅改显示名不携带角色，避免把读取时的旧角色回写 -->
+  <update id="update">
+    UPDATE app_user SET
+      display_name = #{displayName},
+      <if test="role != null">role = #{role},</if>
+      updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <update id="updatePassword">
+    UPDATE app_user SET password_hash = #{passwordHash}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <update id="updateLastWorkspace">
+    UPDATE app_user SET last_workspace_id = #{workspaceId} WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM app_user WHERE id = #{id}
+  </delete>
+</mapper>

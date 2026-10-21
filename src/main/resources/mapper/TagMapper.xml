@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TagMapper">
+
+  <select id="selectAllWithCount" resultType="TagCount">
+    SELECT t.name AS name, COUNT(tt.task_id) AS count
+    FROM tag t
+    JOIN task_tag tt ON tt.tag_id = t.id
+    JOIN task tk ON tk.id = tt.task_id AND tk.deleted_at IS NULL
+    WHERE t.workspace_id = #{workspaceId}
+    GROUP BY t.id, t.name
+    HAVING count > 0
+    ORDER BY count DESC, t.name
+  </select>
+
+  <select id="selectByName" resultType="Tag">
+    SELECT id, workspace_id, name, created_at FROM tag WHERE workspace_id = #{workspaceId} AND name = #{name}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO tag (id, workspace_id, name) VALUES (#{id}, #{workspaceId}, #{name})
+  </insert>
+
+  <select id="selectByTaskIds" resultType="TagTaskRow">
+    SELECT tt.task_id, t.name
+    FROM task_tag tt
+    JOIN tag t ON t.id = tt.tag_id
+    WHERE tt.workspace_id = #{workspaceId} AND tt.task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">
+      #{taskId}
+    </foreach>
+    ORDER BY t.name
+  </select>
+
+  <insert id="insertTaskTag">
+    INSERT IGNORE INTO task_tag (task_id, tag_id, workspace_id) VALUES (#{taskId}, #{tagId}, #{workspaceId})
+  </insert>
+
+  <delete id="deleteTaskTags">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteAllTaskTagsByWorkspace">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteTagsByWorkspace">
+    DELETE FROM tag WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>
