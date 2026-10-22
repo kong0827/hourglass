@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.RequirementDocMapper">
+
+  <sql id="cols">
+    id, workspace_id, req_id, title, content, status, owner, owner_user_id, created_at, updated_at
+  </sql>
+
+  <!-- 列表：不带完整正文，只取前 400 字符给服务层抽摘要 -->
+  <select id="selectViewByWorkspace" resultType="com.devstudio.kanban.dto.ReqDocView">
+    SELECT d.id, d.req_id, d.title, d.status, d.owner, d.created_at, d.updated_at,
+           r.name AS req_name,
+           LEFT(COALESCE(d.content, ''), 400) AS content_brief,
+           (SELECT COUNT(*) FROM task t
+             WHERE t.workspace_id = d.workspace_id AND t.req_doc_id = d.id AND t.deleted_at IS NULL) AS task_count,
+           (SELECT COUNT(*) FROM task t
+             WHERE t.workspace_id = d.workspace_id AND t.req_doc_id = d.id AND t.deleted_at IS NULL
+               AND t.board_column = 'done') AS done_count
+    FROM requirement_doc d
+    LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
+    WHERE d.workspace_id = #{workspaceId}
+    ORDER BY d.updated_at DESC
+  </select>
+
+  <select id="selectById" resultType="RequirementDoc">
+    SELECT <include refid="cols"/> FROM requirement_doc WHERE id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO requirement_doc (id, workspace_id, req_id, title, content, status, owner, owner_user_id)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{content}, #{status}, #{owner}, #{ownerUserId})
+  </insert>
+
+  <update id="update">
+    UPDATE requirement_doc SET
+      req_id        = #{reqId},
+      title         = #{title},
+      content       = #{content},
+      status        = #{status},
+      owner         = #{owner},
+      owner_user_id = #{ownerUserId},
+      updated_at    = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM requirement_doc WHERE id = #{id}
+  </delete>
+
+  <select id="countByReq" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <update id="clearTaskRef">
+    UPDATE task SET req_doc_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId}
+  </update>
+
+  <select id="selectIdsByReq" resultType="string">
+    SELECT id FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <delete id="deleteByReq">
+    DELETE FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+</mapper>

@@ -697,3 +697,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .done-item .di-note{font-size:12px;color:var(--text-2);line-height:18px;}
 .done-item .di-d{flex:0 0 auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .late{color:var(--danger);font-weight:600;}
+
+/* 卡片上的「关联需求」标签：可点击，跳到需求正文 */
+.tag.tag-doc{
+  background:var(--surface-sunken);border-color:var(--border-strong);
+  color:var(--text-2);cursor:pointer;
+}
+.tag.tag-doc:hover{background:var(--surface-hover);color:var(--text);}

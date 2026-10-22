@@ -14,7 +14,7 @@
   function T(o) {
     return Object.assign({
       id: "K0", title: "任务", description: "", priority: "P2", category: "后端", owner: "我",
-      ownerUserId: "U1", boardColumn: "backlog", startDate: null, dueDate: null, reqId: null,
+      ownerUserId: "U1", boardColumn: "backlog", startDate: null, dueDate: null, reqId: null, reqDocId: null,
       progress: 0, note: "", recurType: "", remindAt: null, remindTarget: "owner", tags: [],
       subtaskTotal: 0, subtaskDone: 0, totalMinutes: 0, attachmentCount: 0,
       blocked: false, blockedReason: null, blockedByTaskId: null,
@@ -44,7 +44,7 @@
   });
 
   var doing = [
-    T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60,
+    T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
         startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2, totalMinutes: 320 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
         startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径" })
@@ -107,10 +107,52 @@
         startDate: dayIn(1), dueDate: dayIn(28), completedAt: shift(-1) })
   ];
 
+  /* 需求：挂在项目下（演示 2 份，列表用摘要、详情带正文） */
+  var reqDocs = [
+    { id: "D1", reqId: "R1", reqName: "流程引擎", title: "权限校验需求", status: "active",
+      owner: "我", excerpt: "统一入口校验：先鉴权再进业务，覆盖角色与数据权限",
+      taskCount: 3, doneCount: 1, createdAt: ts(-6, 10, 20), updatedAt: ts(-1, 17, 20),
+      content: '<h1>一、背景与目标</h1>' +
+        '<h2>1.1 现状与问题</h2>' +
+        '<p>所有对外接口各自判断权限，<b>先鉴权再进业务</b>的约定只写在文档里，实际有不少接口漏判。</p>' +
+        '<ul><li>角色权限（菜单 / 操作）散落在各 Controller</li><li>数据权限按空间隔离，靠各 service 自觉</li></ul>' +
+        '<h2>1.2 目标</h2>' +
+        '<ol><li>未登录请求返回 401</li><li>越权访问返回 403 并记日志</li></ol>' +
+        '<h1>二、方案</h1>' +
+        '<h2>2.1 统一入口</h2>' +
+        '<p>在网关层统一做一次鉴权，业务侧只取上下文里的身份。</p>' +
+        '<h3>2.1.1 放行清单</h3>' +
+        '<p>登录、健康检查、回调类接口走白名单，白名单单独维护在配置中心。</p>' +
+        '<h2>2.2 角色矩阵</h2>' +
+        '<table><thead><tr><th>角色</th><th>菜单</th><th>数据范围</th></tr></thead>' +
+        '<tbody><tr><td>管理员</td><td>全部</td><td>全部空间</td></tr>' +
+        '<tr><td>成员</td><td>看板 / 需求 / 报表</td><td>本空间</td></tr></tbody></table>' +
+        '<h1>三、上线步骤</h1>' +
+        '<h2>3.1 配置</h2><p>先把白名单配好，再打开开关。</p>' +
+        '<h2>3.2 回滚</h2><p>开关关掉即回到旧逻辑，无需回滚代码。</p>' +
+        '<blockquote>注意：系统接口放行清单要单独维护。</blockquote>' },
+    { id: "D3", reqId: "R2", reqName: "结算改造", title: "日终批处理拆分", status: "active",
+      owner: "我", excerpt: "把跑批拆成三个阶段，失败可单段重跑",
+      taskCount: 2, doneCount: 0, createdAt: ts(-4, 9, 30), updatedAt: ts(-1, 11, 0),
+      content: '<h1>目标</h1><p>把日终跑批拆成"取数 / 核对 / 落账"三段。</p>' +
+        '<h2>拆分后的好处</h2><ul><li>某一段失败可以只重跑那一段</li><li>取数阶段能提前开始</li></ul>' },
+    { id: "D4", reqId: "R2", reqName: "结算改造", title: "对账差异回溯", status: "draft",
+      owner: "陈工", excerpt: null, taskCount: 0, doneCount: 0,
+      createdAt: ts(-3, 14, 10), updatedAt: ts(-3, 14, 10),
+      content: '<p>待补充：差异明细怎么存档、保留多久。</p>' },
+
+    { id: "D2", reqId: "R1", reqName: "流程引擎", title: "对账落库需求", status: "draft",
+      owner: "我", excerpt: "异常明细单独建表，附原流水号便于回溯",
+      taskCount: 0, doneCount: 0, createdAt: ts(-5, 15, 0), updatedAt: ts(-2, 18, 0),
+      content: '<h1>背景</h1><p>对账失败的单子目前只在日志里，查起来很痛苦。</p>' +
+        '<h2>做法</h2><ul><li>异常明细单独建表</li><li>保留原流水号与失败原因</li></ul>' }
+  ];
+
   /* 任务清单：任务完成快照（月度统计） */
   var completions = [
     { id: 4, workspaceId: "W1", taskId: "K7", title: "登录重构与验证码", description: "统一验证码与登录态，去掉重复的 token 刷新",
-      reqId: "R1", reqName: "流程引擎", owner: "我", ownerUserId: "U1", category: "后端", priority: "P2",
+      reqId: "R1", reqName: "流程引擎", reqDocId: "D1", reqDocTitle: "权限校验需求",
+      owner: "我", ownerUserId: "U1", category: "后端", priority: "P2",
       startDate: shift(-9), completedAt: shift(-1), firstStartedAt: ts(-9, 9, 10), lastEndedAt: ts(-1, 17, 30),
       totalMinutes: 480, createdAt: ts(-1, 17, 31) },
     { id: 3, workspaceId: "W1", taskId: "K8", title: "代理登录权限修正", description: "代理人登录后菜单权限未刷新",
@@ -137,7 +179,10 @@
     "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "member", memberCount: 3, ownerId: "U2" }],
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
-    "/api/reqs": [{ id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" }],
+    "/api/reqs": [
+      { id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" },
+      { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
+    ],
     "/api/views": [{ id: "V1", name: "我的 P0", params: { pris: ["P0"] } }],
     "/api/trash": [T({ id: "X1", title: "旧的定时任务配置", deletedAt: ts(-29, 10, 0) })],
     "/api/notifications/unread": { unread: 2 },
@@ -177,6 +222,18 @@
 
   function pick(clean) {
     if (Object.prototype.hasOwnProperty.call(routes, clean)) return routes[clean];
+    if (clean === "/api/req-docs") {
+      return reqDocs.map(function (d) {
+        return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
+                 owner: d.owner, excerpt: d.excerpt, taskCount: d.taskCount, doneCount: d.doneCount,
+                 createdAt: d.createdAt, updatedAt: d.updatedAt };
+      });
+    }
+    if (/^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
+      var did = clean.split("/").pop();
+      for (var di = 0; di < reqDocs.length; di++) if (reqDocs[di].id === did) return reqDocs[di];
+      return reqDocs[0];
+    }
     if (clean === "/api/my-running-timer") {
       /* 演示：K1 正在计时（看板上那张卡会显示「计时中」+ 实时工时） */
       return { running: true, taskId: "K1", workspaceId: "W1", workspaceName: "我的看板",

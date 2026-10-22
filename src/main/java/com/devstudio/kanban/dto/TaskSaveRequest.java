@@ -49,8 +49,12 @@ public class TaskSaveRequest {
     /** yyyy-MM-dd，选填 */
     private LocalDate dueDate;
 
-    @Size(max = 32, message = "所属需求ID不合法")
+    @Size(max = 32, message = "所属项目ID不合法")
     private String reqId;
+
+    /** 关联需求 ID（requirement_doc）；需求必须属于上面那个项目 */
+    @Size(max = 32, message = "关联需求ID不合法")
+    private String reqDocId;
 
     @Min(value = 0, message = "进度不能小于 0")
     @Max(value = 100, message = "进度不能大于 100")

@@ -192,6 +192,26 @@ touch "$PENDING_STAMP"
 
 # ============================= 2. 本地打包 ====================================
 step "2/6 本地打包"
+
+# 打包前硬校验：MyBatis 的 resultType 短别名只能解析 mybatis.type-aliases-package
+# （= com.devstudio.kanban.entity）。若在 mapper XML 里写 dto 包的短名（如 ReqDocView），
+# 打包会成功、运行期启动时报 "Could not resolve type alias" 直接起不来。
+# 2026-10-21 就是这么把线上搞挂的，这里提前拦住。
+ALIAS_BAD=""
+while read -r _alias; do
+  [ -n "$_alias" ] || continue
+  case "$_alias" in
+    int|integer|long|short|byte|float|double|boolean|String|string|map|Map|list|List|object|date|Date|bigdecimal|BigDecimal|void) continue ;;
+  esac
+  [ -f "${PROJECT_DIR}/src/main/java/com/devstudio/kanban/entity/${_alias}.java" ] || ALIAS_BAD="${ALIAS_BAD} ${_alias}"
+done < <(grep -rhoE 'resultType="[A-Za-z_][A-Za-z0-9_]*"' "${PROJECT_DIR}"/src/main/resources/mapper/*.xml 2>/dev/null | sed 's/.*="//;s/"//' | sort -u || true)
+if [ -n "$ALIAS_BAD" ]; then
+  die "mapper 里有无法解析的短别名：${ALIAS_BAD}
+      这些类型不在 entity 包（mybatis.type-aliases-package）里，写全限定名即可，例如
+      resultType=\"com.devstudio.kanban.dto.ReqDocView\"
+      已中止部署（服务器未受任何影响）"
+fi
+
 command -v "$MVN" >/dev/null 2>&1 || die "找不到 mvn，请确认 Maven 已装且在 PATH 中"
 info "执行：$MVN -B -DskipTests clean package"
 # 用变量承载构建输出（不用临时文件：部分受限 shell 会拦截 rm，导致脚本莫名中断）

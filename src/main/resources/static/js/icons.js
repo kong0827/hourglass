@@ -33,6 +33,26 @@
     users: function (s) { return svg(s, '<circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/>'); },
     user: function (s) { return svg(s, '<circle cx="10" cy="6.8" r="3.2"/><path d="M4.6 16.4c0-2.8 2.3-4.8 5.4-4.8s5.4 2 5.4 4.8"/>'); },
 
+    /* ---- 富文本编辑器 ---- */
+    bold: function (s) { return svg(s, '<path d="M6.4 4.2h4a2.9 2.9 0 0 1 0 5.8h-4z"/><path d="M6.4 10h4.6a3.1 3.1 0 0 1 0 6.2H6.4z"/>'); },
+    italic: function (s) { return svg(s, '<path d="M9.4 4.2h4.4M6.2 15.8h4.4M11.8 4.2 8.2 15.8"/>'); },
+    underline: function (s) { return svg(s, '<path d="M6.2 3.6v5.6a3.8 3.8 0 0 0 7.6 0V3.6"/><path d="M4.6 16.4h10.8"/>'); },
+    strike: function (s) { return svg(s, '<path d="M3.8 10h12.4"/><path d="M7.2 6.4a3.1 3.1 0 0 1 5.9.7c0 .8-.3 1.5-.9 2"/><path d="M12.8 13.1a3.1 3.1 0 0 1-5.9-.7c0-.8.3-1.5.9-2"/>'); },
+    listUl: function (s) { return svg(s, '<path d="M7.6 5.6h8.6M7.6 10h8.6M7.6 14.4h8.6"/><path d="M4 5.6h.01M4 10h.01M4 14.4h.01"/>', 1.9); },
+    listOl: function (s) { return svg(s, '<path d="M7.6 5.6h8.6M7.6 10h8.6M7.6 14.4h8.6"/><path d="M3.5 4.3h1.1v4.1M3.1 8.4h1.9"/><path d="M3.1 12.3h1.9v1.6H3.1z"/>'); },
+    quote: function (s) { return svg(s, '<path d="M8.2 6.4c-1.7 0-2.9 1.3-2.9 3v4.4h3.9V9.4H6.1c0-1 .6-1.6 1.5-1.9z"/><path d="M15 6.4c-1.7 0-2.9 1.3-2.9 3v4.4h3.9V9.4h-3.1c0-1 .6-1.6 1.5-1.9z"/>'); },
+    codeBlock: function (s) { return svg(s, '<path d="M7.4 7 4.6 10l2.8 3M12.6 7l2.8 3-2.8 3"/>'); },
+    link: function (s) { return svg(s, '<path d="M8.6 11.4a3.2 3.2 0 0 0 4.5 0l1.3-1.3a3.2 3.2 0 0 0-4.5-4.5l-.6.6"/><path d="M11.4 8.6a3.2 3.2 0 0 0-4.5 0l-1.3 1.3a3.2 3.2 0 0 0 4.5 4.5l.6-.6"/>'); },
+    hr: function (s) { return svg(s, '<path d="M3.6 10h12.8"/>', 1.9); },
+    eraser: function (s) { return svg(s, '<path d="M8.2 14.2 14 8.4a2 2 0 0 1 2.8 2.8L12 16H9.4z"/><path d="M4.4 16.4h11.2"/>'); },
+    undo: function (s) { return svg(s, '<path d="M7.2 4.8 4 8l3.2 3.2"/><path d="M4 8h5.6a4.4 4.4 0 0 1 0 8.8H7.8"/>'); },
+    redo: function (s) { return svg(s, '<path d="M12.8 4.8 16 8l-3.2 3.2"/><path d="M16 8h-5.6a4.4 4.4 0 0 0 0 8.8h1.8"/>'); },
+    rail: function (s) { return svg(s, '<path d="M11.2 5.2 7 10l4.2 4.8"/><path d="M15.4 5.2 11.2 10l4.2 4.8"/>'); },
+
+    /* ---- 箭头（需求列表树用） ---- */
+    down: function (s) { return svg(s, '<path d="M5 7.8 10 12.8l5-5"/>'); },
+    chevronRight: function (s) { return svg(s, '<path d="M7.6 4.6 13 10l-5.4 5.4"/>'); },
+
     /* ---- 操作 ---- */
     plus: function (s) { return svg(s, '<path d="M10 4.4v11.2M4.4 10h11.2"/>', 1.8); },
     minus: function (s) { return svg(s, '<path d="M4.4 10h11.2"/>', 1.8); },

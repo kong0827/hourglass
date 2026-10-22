@@ -663,3 +663,62 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 **只有 `user_id` 和日期**，不限 `task_id`、不限 `workspace_id` —— 所以同一天多个任务共用 480 分钟额度，跨空间也算在一起。
 
 实测（`WorkTime` 单测）：同一天三个任务各 200 分钟 → 记 200 + 200 + **80** = 480；额度满后再计 → 0；换一天重新有 8 小时。
+
+## 附录 · 2026-10-21 需求模块（v2.1 增量）
+
+### 1. 层级
+
+原来是两层（空间 → 项目 → 任务），现在补上第三层：
+
+```
+空间 workspace
+ └─ 项目 requirement          （原有，界面上叫「项目」，/api/reqs）
+      └─ 需求 requirement_doc  （本次新增，带富文本正文，/api/req-docs）
+           └─ 任务 task.req_doc_id
+```
+
+迁移脚本 `sql/07_requirement_doc.sql`（幂等：建表 + `task` 加 `req_doc_id` 列与索引）。
+
+### 2. 新接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/req-docs` | 需求列表。**不含完整正文**，只返回 `excerpt`（从 HTML 抽出的纯文本前 80 字）+ `reqName`（项目名）+ `taskCount`/`doneCount` |
+| `GET /api/req-docs/{id}` | 需求详情，含 `content`（清洗后的 HTML） |
+| `POST /api/req-docs` | 新建。body：`{reqId, title, content, status, owner}` |
+| `PUT /api/req-docs/{id}` | 保存 |
+| `DELETE /api/req-docs/{id}` | 删除：**先解绑关联任务**（`task.req_doc_id = NULL`），任务本身保留 |
+
+任务侧：`TaskSaveRequest` 新增 `reqDocId`。保存时校验「需求必须存在、同空间、且属于任务所选的项目」，否则 400「所选需求不属于该项目」。切项目时前端会清空已选需求。
+
+### 3. 正文安全（重点）
+
+编辑器提交的是 HTML，**入库前在服务端用 jsoup 白名单清洗**（`RequirementDocService.sanitize`）：
+
+- 允许：`p / br / h1-h4 / ul / ol / li / blockquote / pre / code / hr / b / strong / i / em / u / s / del / ins / a[href|title]`
+  **+ 表格全套**（`table / thead / tbody / tr / th / td`，单元格合并 `colspan / rowspan`）
+  **+ 图片**（`img[src|alt]`，http(s) 外链或 png/jpeg/gif/webp 的 data URL，单图 ≤3MB）
+- 禁止：`script / iframe / object / embed / svg`、一切事件属性（`onclick` 等）；`style` 逐属性过滤，只留 `color / background-color / text-align`
+- 链接只允许 `http / https / mailto` 协议
+- 正文上限 **12MB**（列是 MEDIUMTEXT；粘贴截图以 base64 内联，200KB 会截断图片）；清洗后只剩空标签（`<p><br></p>`）时按 null 存
+
+前端渲染时**再清洗一次**（`sanitizeHTML`），双保险。
+> 清洗口径有独立单测口径验证：表格结构（含 colspan/rowspan）与 png data URL 放行，script / onclick / iframe / svg / `position` / `background-image` 全部拦截。
+
+### 4. 编辑器
+
+**SunEditor 2.47.3**（本地托管 `static/vendor/suneditor/`，进 `sw.js` SHELL 预缓存，不走 CDN，无构建）。
+
+> 选型沿革：自建 `contenteditable + execCommand` 在长文档/多格式下选区不可靠（复制失效）→ 换 Quill 2 → **Quill 2 无原生表格支持，从 Word 粘贴的表格被拍平** → 最终换 SunEditor（原生表格 + 单文件 + 无构建）。历史数据里的 `li[data-list]` 属性保留兼容。
+
+配置要点：`mode:"classic"`、`height:"auto"`（不内滚，内容多高编辑区就多高，靠整页滚动）、`minHeight:360px`、`resizingBar:false`、`showPathLabel:false`；工具栏含 `table`（表格插入/行列增删/合并单元格）。CSS 侧去掉全部边框（`.se-container`、`.se-wrapper` 无边框，正文区 `padding:18px 0 180px`），呈现为无边框整页书写。
+
+### 5. 前端展示
+
+- 看板卡片在分类标签后显示**需求名**（`.tag-doc`），点击 → 切到「需求」视图并打开那一份（不打开任务抽屉）。
+- 任务抽屉新增「关联需求」下拉，按当前选中的项目过滤；未选项目时禁用并提示。
+
+### 6. 连带处理
+
+- 删除项目 → 该项目下的需求一并删除（`RequirementDocService.deleteByReq`），任务的项目与需求关联都清空。
+- 循环任务派生的下一次任务继承 `reqDocId`（同一需求下的连续任务）。

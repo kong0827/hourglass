@@ -25,6 +25,10 @@ public class TaskCompletionRecord {
     private String reqId;
     /** 归属项目名称（冗余存一份，防项目改名/删除后统计失真） */
     private String reqName;
+    /** 关联需求 ID（requirement_doc） */
+    private String reqDocId;
+    /** 需求名称（完成时的快照，需求改名/删除都不影响这里） */
+    private String reqDocTitle;
     private String owner;
     private String ownerUserId;
     private String category;

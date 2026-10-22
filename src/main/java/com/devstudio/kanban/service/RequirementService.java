@@ -26,13 +26,16 @@ public class RequirementService {
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final ActivityService activityService;
+    /** 项目删除时连带清理它下面的需求 */
+    private final RequirementDocService docService;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                              ActivityService activityService) {
+                              ActivityService activityService, RequirementDocService docService) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.activityService = activityService;
+        this.docService = docService;
     }
 
     public List<ReqProgress> list(String workspaceId) {
@@ -120,6 +123,8 @@ public class RequirementService {
             }
         }
         taskMapper.clearReq(workspaceId, id);
+        /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目） */
+        docService.deleteByReq(workspaceId, id);
         reqMapper.deleteById(id);
         /* O-9：破坏性配置变更留审计（活动流可见） */
         activityService.logConfig(workspaceId,

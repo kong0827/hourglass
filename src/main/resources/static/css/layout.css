@@ -8,6 +8,7 @@
 
 /* ===================== 侧边栏 ===================== */
 .sidebar{
+  position:relative;
   width:var(--sidebar-w);flex:0 0 auto;
   display:flex;flex-direction:column;min-height:0;
   background:var(--surface);
@@ -210,8 +211,8 @@ body[data-view="list"] .filterbar{display:flex;}
 .view.view-flush{padding:0;overflow:hidden;}
 
 /* 视图内部纵向流 */
-.view-page{display:flex;flex-direction:column;gap:16px;padding-top:16px;max-width:1240px;}
-.view-page.wide{max-width:none;}
+.view-page{display:flex;flex-direction:column;gap:16px;padding-top:16px;max-width:1240px;margin:0 auto;width:100%;}
+.view-page.wide{max-width:1440px;}
 .page-toolbar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;min-height:32px;}
 .toolbar-title{font-size:16px;font-weight:650;letter-spacing:-.01em;}
 .toolbar-meta{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
@@ -259,3 +260,27 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
   border-radius:var(--r-sm);font-size:12.5px;font-weight:600;
 }
 @media (max-width:1279px){.narrow-hint{display:flex;}}
+
+/* 侧边栏收起/展开按钮：压在中缝上（VS Code 那种位置），收起态箭头翻转 */
+.rail-btn{
+  position:absolute;top:16px;right:-13px;z-index:6;
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text-3);cursor:pointer;box-shadow:var(--shadow-sm);
+  transition:color var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),
+             transform var(--dur-mid) var(--ease-out);
+}
+.rail-btn:hover{color:var(--text);border-color:var(--border-strong);}
+.rail-btn span{display:grid;place-items:center;pointer-events:none;}
+.rail-btn svg{pointer-events:none;}
+body.side-rail .rail-btn{transform:rotate(180deg);}
+
+/* 收起态下的导航名称气泡（.side-nav 有 overflow:auto，用 fixed 层避免被裁） */
+.rail-tip{
+  position:fixed;z-index:9000;padding:5px 9px;border-radius:var(--r-sm);
+  background:var(--text);color:var(--surface);font-size:12px;font-weight:550;
+  line-height:1.4;white-space:nowrap;pointer-events:none;
+  box-shadow:var(--shadow-md);opacity:0;transform:translateX(-4px);
+  transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out);
+}
+.rail-tip.on{opacity:1;transform:none;}

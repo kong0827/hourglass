@@ -1,9 +1,11 @@
 package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.entity.Requirement;
+import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskCompletionRecord;
 import com.devstudio.kanban.entity.TimeBounds;
+import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskCompletionRecordMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -28,12 +30,14 @@ public class TaskCompletionService {
     private final TaskCompletionRecordMapper recordMapper;
     private final TimeLogMapper timeLogMapper;
     private final RequirementMapper reqMapper;
+    private final RequirementDocMapper requirementDocMapper;
 
     public TaskCompletionService(TaskCompletionRecordMapper recordMapper, TimeLogMapper timeLogMapper,
-                                 RequirementMapper reqMapper) {
+                                 RequirementMapper reqMapper, RequirementDocMapper requirementDocMapper) {
         this.recordMapper = recordMapper;
         this.timeLogMapper = timeLogMapper;
         this.reqMapper = reqMapper;
+        this.requirementDocMapper = requirementDocMapper;
     }
 
     /**
@@ -55,6 +59,14 @@ public class TaskCompletionService {
             Requirement req = reqMapper.selectById(t.getReqId());
             if (req != null && t.getWorkspaceId().equals(req.getWorkspaceId())) {
                 r.setReqName(req.getName());
+            }
+        }
+        /* 关联需求也存快照：需求改名 / 删除后，任务清单仍然读得出当时的名字 */
+        if (t.getReqDocId() != null) {
+            RequirementDoc doc = requirementDocMapper.selectById(t.getReqDocId());
+            if (doc != null && t.getWorkspaceId().equals(doc.getWorkspaceId())) {
+                r.setReqDocId(doc.getId());
+                r.setReqDocTitle(doc.getTitle());
             }
         }
         r.setOwner(t.getOwner());

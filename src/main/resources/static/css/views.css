@@ -515,9 +515,28 @@
 
 /* ===================== 6.10 任务清单（完成快照 · 月度统计） ===================== */
 .comp-scroll{overflow-x:auto;margin-top:6px;border:1px solid var(--border);border-radius:var(--r-sm);}
-.comp-table{width:100%;border-collapse:collapse;font-size:13px;}
+.comp-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;min-width:880px;}
+/* 固定列宽：内容长短一致，表格不会因为某个标题很长而整体扭曲 */
+.comp-table th:nth-child(1),.comp-table td:nth-child(1){width:27%;}
+.comp-table th:nth-child(2),.comp-table td:nth-child(2){width:11%;}
+.comp-table th:nth-child(3),.comp-table td:nth-child(3){width:14%;}
+.comp-table th:nth-child(4),.comp-table td:nth-child(4){width:9%;}
+.comp-table th:nth-child(5),.comp-table td:nth-child(5){width:9%;}
+.comp-table th:nth-child(6),.comp-table td:nth-child(6){width:7%;}
+.comp-table th:nth-child(7),.comp-table td:nth-child(7){width:8%;}
+.comp-table th:nth-child(8),.comp-table td:nth-child(8){width:8%;}
+.comp-table th:nth-child(9),.comp-table td:nth-child(9){width:7%;}
+/* 需求名做成可点击的链接样式 */
+.link-cell{
+  display:inline-block;max-width:100%;padding:0;border:none;background:none;cursor:pointer;
+  font-size:13px;color:var(--text);text-decoration:underline;text-underline-offset:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;
+}
+.link-cell:hover{color:var(--text-2);}
 .comp-table th,.comp-table td{
-  padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;
+  padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);
+  /* 任务列有两行（名称 + 详情），其它列只有一行 —— 统一垂直居中，否则整行看着"上重下轻" */
+  vertical-align:middle;
 }
 .comp-table th{
   font-size:11.5px;font-weight:650;color:var(--text-3);white-space:nowrap;
@@ -529,7 +548,179 @@
 .comp-t{display:block;font-weight:600;color:var(--text);}
 .comp-d{
   display:block;margin-top:2px;font-size:12px;color:var(--text-3);
-  max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .comp-dim{color:var(--text-3);}
 .comp-stat-s{font-size:11.5px;color:var(--text-3);margin-top:2px;}
+
+/* ===================== 6.11 需求（列表树 + 独立编辑页） ===================== */
+.reqdoc-search input{
+  width:220px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);font-size:13px;color:var(--text);
+}
+.reqdoc-search input:focus{outline:none;border-color:var(--border-strong);}
+
+.reqdoc-tree{display:flex;flex-direction:column;gap:10px;}
+.reqdoc-empty2{
+  padding:40px 20px;text-align:center;font-size:13px;color:var(--text-3);
+  border:1px dashed var(--border);border-radius:var(--r-md);
+}
+
+/* 项目分组（可展开收起） */
+.reqdoc-proj{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
+.reqdoc-proj-head{
+  display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;
+  background:var(--surface-sunken);border:none;cursor:pointer;text-align:left;
+}
+.reqdoc-proj-head:hover{background:var(--surface-hover);}
+.rp-caret{display:grid;place-items:center;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+.reqdoc-proj.collapsed .rp-caret{transform:rotate(-90deg);}
+.rp-name{font-size:13.5px;font-weight:650;color:var(--text);}
+.rp-count{
+  font-size:11.5px;color:var(--text-3);background:var(--surface);
+  border:1px solid var(--border);border-radius:999px;padding:1px 7px;
+}
+.reqdoc-proj.collapsed .reqdoc-proj-body{display:none;}
+
+.reqdoc-row{
+  display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;
+  background:none;border:none;border-top:1px solid var(--border);cursor:pointer;text-align:left;
+}
+.reqdoc-row:hover{background:var(--surface-hover);}
+.rr-main{min-width:0;flex:1;}
+.rr-title{display:block;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rr-meta{display:block;margin-top:3px;font-size:11.5px;color:var(--text-3);}
+.rr-excerpt{display:block;margin-top:4px;font-size:12px;color:var(--text-3);opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rr-go{color:var(--text-3);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+.reqdoc-row:hover .rr-go{opacity:1;}
+
+/* 编辑页：独立成页，无边框书写区（像笔记应用那样，不要方框） */
+.reqdoc-editpage{max-width:1480px;margin:0 auto;width:100%;padding:14px var(--content-pad) 0;cursor:text;}
+.reqdoc-editbar{display:flex;align-items:center;gap:10px;padding-bottom:8px;flex-wrap:wrap;}
+.reqdoc-crumb{
+  font-size:13px;font-weight:600;color:var(--text);max-width:420px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.reqdoc-saved{font-size:11.5px;color:var(--text-3);}
+.reqdoc-count{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.reqdoc-actions{margin-left:auto;display:flex;gap:8px;align-items:center;}
+
+/* SunEditor：无边框整页书写区。
+   ⚠️ 只清 .se-container 去不掉框 —— SunEditor 默认还带
+   `.sun-editor{border:1px solid #dadada;background:#fff}` 与 `.se-toolbar{outline:1px solid #dadada}`，
+   三层（外框 / 工具条 outline / 白底）必须一起清零，否则页面上仍是一个方框。 */
+.reqdoc-editwrap{display:flex;align-items:flex-start;gap:18px;}
+.reqdoc-editbody{border:none;background:transparent;flex:1;min-width:0;}
+.reqdoc-editbody .sun-editor,
+.reqdoc-editbody .se-container,
+.reqdoc-editbody .se-toolbar,
+.reqdoc-editbody .se-toolbar-holder,
+.reqdoc-editbody .se-toolbar-shadow,
+.reqdoc-editbody .se-wrapper,
+.reqdoc-editbody .se-wrapper-inner,
+.reqdoc-editbody .se-resizing-bar,
+.reqdoc-editbody .se-toolbar-resizing-bar{
+  border:none !important;outline:none !important;
+  box-shadow:none !important;background:transparent !important;
+}
+.reqdoc-editbody .sun-editor{border-radius:0;font-family:inherit;width:100%;}
+.reqdoc-editbody .se-toolbar{padding:2px 0 10px;font-family:inherit;z-index:5;}
+.reqdoc-editbody .se-wrapper{overflow:visible !important;}
+.reqdoc-editbody .se-wrapper-inner{overflow:visible !important;height:auto !important;min-height:0;}
+.reqdoc-editbody .sun-editor-editable{
+  padding:18px 0 180px;font-size:15px;line-height:1.8;color:var(--text);
+  background:transparent;font-family:inherit;
+}
+.reqdoc-editbody .sun-editor-editable[contenteditable="true"]{outline:none;}
+.reqdoc-editbody .sun-editor-editable h1{font-size:24px;font-weight:700;margin:26px 0 10px;}
+.reqdoc-editbody .sun-editor-editable h2{font-size:18.5px;font-weight:650;margin:22px 0 8px;}
+.reqdoc-editbody .sun-editor-editable h3{font-size:16px;font-weight:650;margin:18px 0 6px;}
+.reqdoc-editbody .sun-editor-editable p{margin:10px 0;}
+.reqdoc-editbody .sun-editor-editable img{max-width:100%;height:auto;}
+.reqdoc-editbody .sun-editor-editable a{color:var(--text);text-decoration:underline;}
+/* 表格：细边框 + 表头浅底，跟正文风格一致 */
+.reqdoc-editbody .sun-editor-editable table{
+  border-collapse:collapse;width:auto;max-width:100%;margin:14px 0;font-size:13.5px;
+}
+.reqdoc-editbody .sun-editor-editable table th,
+.reqdoc-editbody .sun-editor-editable table td{
+  border:1px solid var(--border);padding:8px 10px;vertical-align:middle;
+}
+.reqdoc-editbody .sun-editor-editable table th{
+  background:var(--surface-sunken);font-weight:650;text-align:left;
+}
+/* 隐藏底部调整条与路径栏（要的是整页书写，不要这些控件） */
+.reqdoc-editbody .se-resizing-bar,
+.reqdoc-editbody .se-resizing-bar-holder,
+.reqdoc-editbody .se-path,
+.reqdoc-editbody .se-char-counter-wrapper{display:none;}
+
+/* ---------------- 大纲（右侧目录） ---------------- */
+.reqdoc-toc{
+  flex:0 0 196px;width:196px;position:sticky;top:14px;
+  max-height:calc(100vh - 96px);overflow:auto;overscroll-behavior:contain;
+  padding:2px 2px 24px;align-self:flex-start;
+  transition:flex-basis .18s var(--ease-out),width .18s var(--ease-out);
+}
+.reqdoc-toc-head{
+  display:flex;align-items:center;gap:8px;
+  padding:4px 8px 10px;font-size:12.5px;font-weight:700;color:var(--text-2);
+}
+.rt-title{flex:1;letter-spacing:.02em;}
+.rt-fold{
+  display:grid;place-items:center;width:22px;height:22px;padding:0;
+  border:none;background:none;border-radius:5px;color:var(--text-3);cursor:pointer;
+}
+.rt-fold:hover{background:var(--surface-hover);color:var(--text);}
+.rt-fold svg{transform:rotate(180deg);}
+.reqdoc-toc-body{position:relative;padding-left:9px;}
+/* 竖向引导线：从第一项贯穿到最后一项 */
+.reqdoc-toc-body::before{
+  content:"";position:absolute;left:0;top:4px;bottom:4px;width:1px;
+  background:var(--border);border-radius:1px;
+}
+.rt-item{
+  position:relative;display:flex;align-items:flex-start;gap:3px;width:100%;
+  padding:5px 8px 5px 2px;border:none;background:none;border-radius:0 6px 6px 0;
+  font-size:12.5px;line-height:1.55;color:var(--text-2);cursor:pointer;text-align:left;
+}
+.rt-item:hover{background:var(--surface-hover);color:var(--text);}
+.rt-item.active{color:var(--text);font-weight:650;}
+/* 当前项左侧加一小段高亮竖条，盖住引导线 */
+.rt-item.active::before{
+  content:"";position:absolute;left:-9px;top:5px;bottom:5px;width:2px;
+  background:var(--text);border-radius:1px;
+}
+.rt-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rt-caret{
+  flex:0 0 14px;width:14px;height:18px;display:grid;place-items:center;
+  color:var(--text-3);border-radius:4px;
+}
+.rt-caret[data-toc-fold]{cursor:pointer;}
+.rt-caret[data-toc-fold]:hover{background:var(--surface-hover);color:var(--text);}
+.rt-caret svg{transition:transform var(--dur-fast) var(--ease-out);}
+.rt-caret.collapsed svg{transform:rotate(-90deg);}
+.rt-lv2{padding-left:16px;}
+.rt-lv3{padding-left:30px;}
+.rt-lv4{padding-left:42px;}
+.rt-empty{padding:8px 10px;font-size:12px;line-height:1.6;color:var(--text-3);}
+/* 收起大纲：整块隐藏，正文占满整宽。要看回来点工具条上的「大纲」按钮即可。
+   不要再做竖排条 / 碎横线 / 悬停浮层 —— 用户要的就是"收起就收起"。 */
+.reqdoc-editpage.no-toc .reqdoc-toc{display:none;}
+@media (max-width:1080px){
+  .reqdoc-editwrap{display:block;}
+  .reqdoc-toc{display:none;}
+}
+
+/* 需求模块的弹窗（自己一套，不复用 confirm-* 的居中布局） */
+.reqdoc-dlg{max-width:430px;padding:22px 22px 18px;text-align:left;}
+.reqdoc-dlg-title{margin:0;font-size:15.5px;font-weight:650;color:var(--text);}
+.reqdoc-dlg-msg{margin:8px 0 0;font-size:13px;line-height:1.65;color:var(--text-2);}
+.reqdoc-dlg-form{display:flex;flex-direction:column;gap:12px;margin-top:16px;}
+.reqdoc-dlg-field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--text-3);}
+.reqdoc-dlg-field select,.reqdoc-dlg-field input{
+  height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);font-size:13px;color:var(--text);
+}
+.reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:focus{outline:none;border-color:var(--border-strong);}
+.reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}

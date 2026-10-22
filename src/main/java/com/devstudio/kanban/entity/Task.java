@@ -23,6 +23,8 @@ public class Task {
     private LocalDate startDate;
     private LocalDate dueDate;
     private String reqId;
+    /** 关联需求 ID（requirement_doc）；需求必须属于同一个项目 */
+    private String reqDocId;
     /** 0-100 */
     private Integer progress;
     private String note;

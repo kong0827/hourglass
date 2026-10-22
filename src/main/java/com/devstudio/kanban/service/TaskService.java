@@ -16,6 +16,7 @@ import com.devstudio.kanban.entity.Attachment;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
 import com.devstudio.kanban.entity.Requirement;
+import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Subtask;
 import com.devstudio.kanban.entity.SubtaskAgg;
 import com.devstudio.kanban.entity.Tag;
@@ -28,6 +29,7 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
@@ -77,6 +79,8 @@ public class TaskService {
     private final TimeLogService timeLogService;
     /** 任务完成快照（「任务清单」视图的数据源） */
     private final TaskCompletionService completionService;
+    /** 关联需求校验用（需求必须属于任务所选的项目） */
+    private final RequirementDocMapper requirementDocMapper;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -86,7 +90,8 @@ public class TaskService {
                        TaskCommentMapper commentMapper,
                        AppNotificationMapper appNotificationMapper,
                        TimeLogService timeLogService,
-                       TaskCompletionService completionService) {
+                       TaskCompletionService completionService,
+                       RequirementDocMapper requirementDocMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -102,6 +107,7 @@ public class TaskService {
         this.appNotificationMapper = appNotificationMapper;
         this.timeLogService = timeLogService;
         this.completionService = completionService;
+        this.requirementDocMapper = requirementDocMapper;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -673,6 +679,8 @@ public class TaskService {
         nt.setBoardColumn(firstCol);
         nt.setDueDate(next);
         nt.setReqId(doneTask.getReqId());
+        /* 循环任务的下一次落在同一需求下 */
+        nt.setReqDocId(doneTask.getReqDocId());
         nt.setProgress(0);
         nt.setRecurType(doneTask.getRecurType());
         nt.setRemindSent(Boolean.FALSE);
@@ -751,6 +759,19 @@ public class TaskService {
             }
         }
         t.setReqId(reqId);
+        /* 关联需求：必须存在、同空间、且属于任务所选的那个项目。
+           项目为空 / 换了项目时，旧需求自动失效（前端也会在切项目时清空下拉）。 */
+        String reqDocId = Texts.trimToNull(req.getReqDocId());
+        if (reqDocId != null) {
+            if (reqId == null) {
+                throw AppException.badRequest("请先选择所属项目，再关联需求");
+            }
+            RequirementDoc doc = requirementDocMapper.selectById(reqDocId);
+            if (doc == null || !workspaceId.equals(doc.getWorkspaceId()) || !reqId.equals(doc.getReqId())) {
+                throw AppException.badRequest("所选需求不属于该项目");
+            }
+        }
+        t.setReqDocId(reqDocId);
         t.setProgress(req.getProgress() == null ? 0 : Math.max(0, Math.min(100, req.getProgress())));
         t.setNote(Texts.trimToNull(req.getNote()));
         t.setRemindAt(req.getRemindAt());

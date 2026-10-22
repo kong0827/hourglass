@@ -81,3 +81,16 @@ a:hover{text-decoration:underline;}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
 }
+
+/* ===================== 细滚动条 ===================== */
+/* 默认很淡、悬停加深，接近 macOS 的 overlay 观感（用户要求去掉笨重的灰色滚动条） */
+*{scrollbar-width:thin;scrollbar-color:rgba(120,130,145,.32) transparent;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{
+  background:rgba(120,130,145,.26);
+  border:3px solid transparent;border-radius:999px;
+  background-clip:content-box;
+}
+::-webkit-scrollbar-thumb:hover{background:rgba(120,130,145,.48);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}

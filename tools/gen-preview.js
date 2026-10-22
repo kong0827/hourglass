@@ -46,7 +46,11 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, function (m, src) {
   return pre + "<script>\n" + code + "\n</" + "script>";
 });
 
-/* 3) 底部说明条 */
+/* 3) 底部说明条
+   ⚠️ 不能用 html.replace("</body>", …)：replace 只换第一个匹配，而 SunEditor 的
+   代码视图模板里自带 "</body>\n</html>" 字符串（出现在真正的 </body> 之前），
+   横幅会被注入进 JS 字符串中间，把编辑器脚本炸出 SyntaxError。
+   必须拼接「最后一个 </body>」。 */
 html = html.replace("<body", '<body data-preview="1"');
 const banner = [
   '<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;',
@@ -55,12 +59,13 @@ const banner = [
   '<strong style="font-weight:700">静态预览稿</strong>',
   '<span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。',
   '可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；',
-  '②「周回顾」的「进行中」（按所在列取，进度 0 也算）与「本周完成」（有一条缺完成时间也不会让整块消失）；',
-  '③抽屉里「开始日期」的快捷按钮。</span>',
+  '②「需求」编辑页的 SunEditor（表格/无边框整页书写）；',
+  '③「周回顾」的「进行中」与「本周完成」。</span>',
   '<span style="margin-left:auto;opacity:.62">' + new Date().toISOString().slice(0, 16).replace("T", " ") + "</span>",
   "</div>"
 ].join("");
-html = html.replace("</body>", banner + "\n</body>");
+const bodyClose = html.lastIndexOf("</body>");
+html = html.slice(0, bodyClose) + banner + "\n</body>" + html.slice(bodyClose + "</body>".length);
 
 fs.writeFileSync(OUT, html, "utf8");
 console.log("已生成 " + OUT + "  （" + Math.round(Buffer.byteLength(html, "utf8") / 1024) + " KB）");

@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS task (
   start_date   DATE             DEFAULT NULL COMMENT '开始日期（空=只在截止日出现在日历上）',
   due_date     DATE             DEFAULT NULL COMMENT '截止日期',
   req_id       VARCHAR(32)      DEFAULT NULL COMMENT '所属项目ID（requirement 表）',
+  req_doc_id   VARCHAR(32)      DEFAULT NULL COMMENT '关联需求ID（requirement_doc）',
   progress     TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '进度 0-100',
   is_blocked   TINYINT(1)       NOT NULL DEFAULT 0 COMMENT '是否被阻塞（卡点）',
   blocked_reason VARCHAR(120)   DEFAULT NULL COMMENT '卡点原因（卡在什么上/等谁）',
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS task (
   KEY idx_ws (workspace_id),
   KEY idx_board (workspace_id, board_column, sort_order),
   KEY idx_req (req_id),
+  KEY idx_req_doc (req_doc_id),
   KEY idx_due (due_date),
   KEY idx_deleted (deleted_at),
   KEY idx_remind (remind_at, remind_sent),
@@ -106,6 +108,24 @@ CREATE TABLE IF NOT EXISTS requirement (
   PRIMARY KEY (id),
   KEY idx_ws (workspace_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '项目（原需求）';
+
+-- 需求：挂在项目下的一层，带富文本正文；任务通过 task.req_doc_id 关联
+CREATE TABLE IF NOT EXISTS requirement_doc (
+  id            VARCHAR(32)  NOT NULL COMMENT '需求ID',
+  workspace_id  VARCHAR(32)  NOT NULL COMMENT '归属空间ID',
+  req_id        VARCHAR(32)  NOT NULL COMMENT '所属项目ID（requirement.id）',
+  title         VARCHAR(100) NOT NULL COMMENT '需求标题',
+  content       MEDIUMTEXT   DEFAULT NULL COMMENT '需求正文（清洗后的 HTML）',
+  status        VARCHAR(16)  NOT NULL DEFAULT 'draft' COMMENT '状态：draft/active/done',
+  owner         VARCHAR(32)  DEFAULT NULL COMMENT '负责人显示名',
+  owner_user_id VARCHAR(32)  DEFAULT NULL COMMENT '负责人账号ID',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_ws (workspace_id),
+  KEY idx_req (req_id),
+  KEY idx_ws_updated (workspace_id, updated_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '需求（项目下的需求文档）';
 
 CREATE TABLE IF NOT EXISTS task_log (
   id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '日志ID',
@@ -251,6 +271,8 @@ CREATE TABLE IF NOT EXISTS task_completion_record (
   description      VARCHAR(200)    DEFAULT NULL COMMENT '任务详情（完成时快照）',
   req_id           VARCHAR(32)     DEFAULT NULL COMMENT '归属项目ID',
   req_name         VARCHAR(60)     DEFAULT NULL COMMENT '归属项目名称（冗余，防改名失真）',
+  req_doc_id       VARCHAR(32)     DEFAULT NULL COMMENT '关联需求ID（requirement_doc）',
+  req_doc_title    VARCHAR(100)    DEFAULT NULL COMMENT '需求名称（完成时快照）',
   owner            VARCHAR(32)     DEFAULT NULL COMMENT '负责人（完成时快照）',
   owner_user_id    VARCHAR(32)     DEFAULT NULL COMMENT '负责人账号ID',
   category         VARCHAR(16)     DEFAULT NULL COMMENT '分类',
