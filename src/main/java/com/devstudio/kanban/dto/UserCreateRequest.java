@@ -10,7 +10,7 @@ import javax.validation.constraints.Size;
 public class UserCreateRequest {
 
     @NotBlank(message = "请填写登录名")
-    @Pattern(regexp = "^[A-Za-z0-9_.-]{3,32}$", message = "登录名只允许字母、数字、_ . -，长度 3-32")
+    @Pattern(regexp = "^[A-Za-z0-9_.-]{2,32}$", message = "登录名只允许字母、数字、_ . -，长度 2-32")
     private String username;
 
     @NotBlank(message = "请填写初始密码")

@@ -3,12 +3,13 @@
 <mapper namespace="com.devstudio.kanban.mapper.TaskLogMapper">
 
   <insert id="insert">
-    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail)
-    VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail})
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail, from_column, to_column)
+    VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail}, #{fromColumn}, #{toColumn})
   </insert>
 
   <select id="selectByTaskId" resultType="TaskLog">
-    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail, l.created_at,
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
+           l.from_column, l.to_column, l.created_at,
            u.display_name AS actor_name
     FROM task_log l
     LEFT JOIN app_user u ON u.id = l.actor_id
@@ -19,7 +20,8 @@
 
   <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
   <select id="selectByWorkspace" resultType="TaskLog">
-    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail, l.created_at,
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
+           l.from_column, l.to_column, l.created_at,
            u.display_name AS actor_name,
            t.title AS task_title
     FROM task_log l

@@ -945,6 +945,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 @media (max-width:900px){.form-grid{grid-template-columns:1fr;}}
 .row-inline{display:flex;gap:8px;align-items:center;}
 .row-inline .input{flex:1 1 auto;min-width:0;}
+/* 「9:00 至 18:00」中间的连接词 */
+.row-inline .ws-sep{font-size:12.5px;color:var(--text-3);flex:0 0 auto;}
 
 /* 危险确认弹窗 */
 .confirm-sheet{max-width:400px;padding:24px 20px 18px;position:relative;text-align:center;}
@@ -1484,6 +1486,21 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .set-actions,.data-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;}
 .set-actions .spacer{flex:1 1 auto;}
 
+/* 个人设置：身份卡 + 口径预览 */
+.me-idcard{display:flex;align-items:center;gap:14px;margin:2px 0 18px;}
+.me-avatar{
+  display:grid;place-items:center;width:52px;height:52px;border-radius:50%;flex:0 0 auto;
+  background:var(--a,var(--primary-soft));color:#fff;font-size:20px;font-weight:650;letter-spacing:.02em;
+}
+.me-name{font-size:16px;font-weight:650;color:var(--text);line-height:1.3;}
+.me-sub{margin-top:3px;font-size:12px;color:var(--text-3);}
+.me-preview{
+  margin:14px 0 0;padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12.5px;line-height:1.7;color:var(--text-2);
+}
+.set-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
+@media (max-width:1279px){.set-grid.three{grid-template-columns:1fr;}}
+
 /* 列 / 分类配置行 */
 .cfg-list{display:flex;flex-direction:column;gap:6px;}
 .cfg-row{
@@ -1928,6 +1945,180 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:focus{outline:none;border-color:var(--border-strong);}
 .reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
 
+/* ===== 流程体检（v1） ===== */
+/* 结论条：一眼看到"哪里不对"，所以放在整个页面最上面，颜色只用来表达严重度 */
+.flow-ins{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 14px;border-radius:var(--r-md);
+  background:var(--surface-sunken);border-left:3px solid var(--info);
+}
+.flow-ins + .flow-ins{margin-top:8px;}
+.flow-ins.warn{border-left-color:var(--warning);}
+.flow-ins.good{border-left-color:var(--success);}
+.flow-ins.info{border-left-color:var(--info);}
+.flow-ins .fi-dot{width:6px;height:6px;border-radius:50%;background:var(--info);margin-top:7px;flex:0 0 auto;}
+.flow-ins.warn .fi-dot{background:var(--warning);}
+.flow-ins.good .fi-dot{background:var(--success);}
+.flow-ins .fi-main{min-width:0;}
+.flow-ins .fi-t{font-size:13.5px;font-weight:600;color:var(--text);line-height:20px;}
+.flow-ins .fi-x{font-size:12.5px;color:var(--text-2);line-height:19px;margin-top:2px;}
+
+/* 各列停留：一行一列，条形长度是占比，颜色沿用列自己的颜色 */
+.flow-bars{display:flex;flex-direction:column;gap:16px;}
+.flow-bar .fb-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+.flow-bar .fb-name{
+  font-size:13px;font-weight:600;color:var(--text);
+  display:flex;align-items:center;gap:6px;min-width:0;
+}
+.flow-bar .fb-tag{
+  font-style:normal;font-size:10.5px;font-weight:600;line-height:16px;
+  color:var(--warning);background:var(--warning-soft);
+  border:1px solid var(--warning-border);border-radius:4px;padding:0 5px;
+}
+.flow-bar .fb-v{
+  font-size:12px;color:var(--text-2);margin-left:auto;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.flow-bar .fb-share{
+  font-size:12px;font-weight:600;color:var(--text-3);
+  width:44px;text-align:right;font-variant-numeric:tabular-nums;
+}
+.flow-bar .fb-meta{
+  display:flex;justify-content:space-between;gap:12px;
+  margin-top:6px;font-size:11.5px;color:var(--text-3);line-height:16px;
+}
+.flow-bar.is-bn .bar{background:var(--warning-soft);}
+
+.flow-note{margin-top:12px;font-size:12px;color:var(--text-3);line-height:18px;}
+.flow-note b{color:var(--text-2);font-weight:600;}
+.flow-orphans{margin-top:4px;}
+/* 未拆任务的需求清单：button 默认 text-align:center，被 flex 拉伸后标题会跑到中间，
+   这里显式左对齐并去掉表格里那套下划线样式（它是列表项，不是表格里的链接） */
+.flow-orphans .done-item{display:block;min-height:0;padding:10px 0;}
+.flow-orphans .di-main{display:block;}
+.flow-orphans .link-cell{
+  display:block;width:100%;text-align:left;white-space:normal;
+  font-size:13.5px;font-weight:600;color:var(--text);text-decoration:none;
+}
+.flow-orphans .link-cell:hover{color:var(--primary-fg);text-decoration:underline;}
+.flow-orphans .di-m{display:block;margin-top:3px;font-size:12px;color:var(--text-3);}
+
+/* ===== AI 设置（个人设置页） ===== */
+.ai-field-wide{grid-column:1/-1;}
+.ai-switch{
+  display:flex;align-items:center;gap:8px;margin-top:12px;
+  font-size:13px;color:var(--text-2);cursor:pointer;
+}
+.ai-switch input{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;}
+
+/* ===== AI 弹窗（拆分 / 完成度） ===== */
+/* 内容量不固定（拆 3 条和 12 条差很多），所以弹窗自身定高上限、列表内部滚动 */
+.ai-dlg{
+  max-width:680px;width:calc(100vw - 40px);max-height:84vh;
+  padding:22px 22px 18px;display:flex;flex-direction:column;
+}
+.ai-dlg .ai-list{
+  flex:1 1 auto;overflow-y:auto;margin:14px 0 0;padding-right:2px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.ai-item{
+  display:flex;gap:10px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+}
+.ai-item.on{border-color:var(--primary-border);background:var(--primary-soft);}
+.ai-item > input[type=checkbox]{
+  flex:0 0 auto;margin-top:3px;width:15px;height:15px;
+  accent-color:var(--primary);cursor:pointer;
+}
+.ai-item .ai-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;}
+/* 标题可编辑：做成"看起来像文字"的输入框，聚焦才露底线 */
+.ai-item .ai-title{
+  width:100%;padding:0;border:none;border-bottom:1px solid transparent;
+  background:transparent;font-size:13.5px;font-weight:600;color:var(--text);
+  font-family:inherit;outline:none;
+}
+.ai-item .ai-title:focus{border-bottom-color:var(--primary-border);}
+.ai-item .ai-desc{font-size:12px;color:var(--text-2);line-height:18px;}
+.ai-item .ai-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.ai-item .ai-reason{font-size:11.5px;color:var(--text-3);line-height:17px;}
+
+.ai-tag{
+  font-size:10.5px;font-weight:600;line-height:16px;padding:0 6px;
+  border-radius:4px;border:1px solid var(--border);color:var(--text-3);
+  background:var(--surface-sunken);white-space:nowrap;
+}
+.ai-tag.done{color:var(--success);background:var(--success-soft);border-color:var(--success-border);}
+.ai-tag.doing{color:var(--info);background:var(--info-soft);border-color:var(--info-border);}
+.ai-tag.todo{color:var(--text-3);background:var(--surface-sunken);border-color:var(--border);}
+.ai-tag.missing{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.p0{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.p1{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+
+/* 覆盖率：数字要大到一眼看到，条形说明"差多少" */
+.ai-score{
+  display:flex;align-items:center;gap:16px;margin-top:14px;padding:14px 16px;
+  border-radius:var(--r-md);background:var(--surface-sunken);
+}
+.ai-score .big{
+  font-size:34px;line-height:1;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.ai-score .big small{font-size:14px;font-weight:600;color:var(--text-3);margin-left:1px;}
+.ai-score.good .big{color:var(--success);}
+.ai-score.warn .big{color:var(--warning);}
+.ai-score.bad .big{color:var(--danger);}
+.ai-score .sc-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:7px;}
+.ai-score .sc-lbl{font-size:12px;color:var(--text-2);}
+.ai-score .sc-cnt{font-size:11.5px;color:var(--text-3);}
+
+.ai-usage{margin-top:10px;font-size:11.5px;color:var(--text-3);line-height:17px;}
+
+/* ===== 预计耗时（任务抽屉 + 卡片） ===== */
+.est-wrap{position:relative;display:flex;align-items:center;}
+.est-wrap input{flex:1 1 auto;padding-right:46px;}
+.est-unit{
+  position:absolute;right:12px;font-size:12px;color:var(--text-3);
+  pointer-events:none;user-select:none;
+}
+.est-actual{
+  min-height:36px;display:flex;align-items:center;gap:6px;
+  font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums;
+}
+.est-actual .ea-ratio{font-size:11.5px;color:var(--text-3);}
+.est-actual.over{color:var(--danger);font-weight:600;}
+.est-actual.over .ea-ratio{color:var(--danger);}
+.est-actual.near{color:var(--warning);font-weight:600;}
+
+/* 卡片 meta 行：实际/预估，超了标红 */
+.est-chip.over{color:var(--danger);font-weight:600;}
+.est-chip.near{color:var(--warning);font-weight:600;}
+
+/* ===== 流程体检 · 估时准不准 ===== */
+.flow-est-top{display:flex;align-items:center;gap:18px;padding:14px 16px;border-radius:var(--r-md);background:var(--surface-sunken);}
+.flow-est-top .fe-factor{flex:0 0 auto;text-align:center;min-width:74px;}
+.flow-est-top .fe-factor .big{
+  font-size:30px;line-height:1;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.flow-est-top .fe-factor .big small{font-size:14px;font-weight:600;color:var(--text-3);margin-left:1px;}
+.flow-est-top .fe-factor .lbl{font-size:11px;color:var(--text-3);margin-top:5px;white-space:nowrap;}
+.flow-est-top .fe-factor.good .big{color:var(--success);}
+.flow-est-top .fe-factor.warn .big{color:var(--warning);}
+.flow-est-top .fe-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:7px;}
+/* 三段分布条：高估(省时) / 准确 / 低估(超时) */
+.flow-est-top .fe-bar{display:flex;height:8px;border-radius:var(--r-pill);overflow:hidden;background:var(--surface-2);}
+.flow-est-top .fe-bar i{display:block;height:100%;}
+.flow-est-top .fe-bar .under{background:var(--success);}
+.flow-est-top .fe-bar .ok{background:var(--info);}
+.flow-est-top .fe-bar .over{background:var(--danger);}
+.flow-est-top .fe-dist{font-size:11.5px;color:var(--text-3);display:flex;gap:10px;flex-wrap:wrap;}
+.flow-est-top .fe-dist b{font-weight:600;color:var(--text-2);}
+.flow-est-top .fe-sug{font-size:12.5px;color:var(--text-2);line-height:18px;}
+
+.flow-est-cat{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.ai-tag.risk-hi{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.risk-lo{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+
 /* ==========================================================================
    auth.css · 独立页（登录 / 加入空间）（ui-redesign-spec §6.1 §6.2）
    全屏居中卡片，不套 App Shell。
@@ -2090,6 +2281,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.4 16.2V11M10 16.2V4.6M15.6 16.2v-7"/></svg>
         <span class="nl">报表</span>
       </button>
+      <button class="nav-item" type="button" data-view="flow">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.2h13.6l-5.2 6.2v4.6l-3.2 1.8V10.4Z"/></svg>
+        <span class="nl">流程体检</span>
+      </button>
 
       <span class="nav-sec">管理</span>
       <button class="nav-item" type="button" data-view="trash">
@@ -2107,7 +2302,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     </nav>
 
     <div class="side-foot">
-      <button class="side-user" id="sideUserBtn" type="button" title="个人资料 / 修改密码">
+      <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
         <span class="avatar" id="sideUserAv" style="--a:#98A2B3">·</span>
         <span class="side-user-n" id="sideUserName">…</span>
       </button>
@@ -2417,6 +2612,12 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <span class="reqdoc-saved" id="reqDocSaved"></span>
             <span class="reqdoc-count" id="reqDocCount"></span>
             <span class="reqdoc-actions">
+              <button class="btn sm ghost" type="button" id="reqDocAiSplit" title="用 AI 把正文拆成任务草稿（需要先配好 AI）">
+                AI 拆分
+              </button>
+              <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查需求里的功能点是否都有任务覆盖">
+                完成度检查
+              </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
@@ -2474,6 +2675,34 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               <button class="btn ghost" type="button" id="dlgReqDocCloseCancel">取消</button>
               <button class="btn" type="button" id="dlgReqDocCloseDiscard">不保存</button>
               <button class="btn primary" type="button" id="dlgReqDocCloseSave">保存并关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 拆分：草稿先给人看，确认后才落库 -->
+        <div class="modal-layer" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆分结果</h3>
+            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的任务，标题可以直接改。不勾的不会落库。</p>
+            <div class="ai-list" id="aiSplitList"></div>
+            <div class="ai-usage" id="aiSplitUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="dlgAiSplitCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgAiSplitOk">创建选中任务</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 完成度检查 -->
+        <div class="modal-layer" id="dlgAiAudit" role="dialog" aria-modal="true" aria-labelledby="dlgAiAuditTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgAiAuditTitle">完成度检查</h3>
+            <p class="reqdoc-dlg-msg" id="dlgAiAuditSummary">—</p>
+            <div class="ai-score" id="aiAuditScore"></div>
+            <div class="ai-list" id="aiAuditList"></div>
+            <div class="ai-usage" id="aiAuditUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
             </div>
           </div>
         </div>
@@ -2636,6 +2865,65 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         </div>
       </section>
 
+      <!-- ===== 流程体检 ===== -->
+      <section class="view" id="view-flow" aria-label="流程体检">
+        <div class="view-page wide">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>体检结论</h3>
+              <span class="meta-right row row-gap" style="gap:6px">
+                <span>近</span>
+                <select id="flowDays" class="mini-select" aria-label="统计范围">
+                  <option value="30">30 天</option>
+                  <option value="90" selected>90 天</option>
+                  <option value="180">180 天</option>
+                  <option value="365">365 天</option>
+                </select>
+              </span>
+            </div>
+            <div id="flowInsights"></div>
+            <p class="foot-note" id="flowCoverage" style="margin-top:12px"></p>
+          </div>
+
+          <div class="stat-grid" id="flowKpi"></div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>各列停留时长</h3>
+              <span class="meta-right" id="flowRange">—</span>
+            </div>
+            <div class="flow-bars" id="flowBars"></div>
+            <p class="foot-note">条形长度 = 该列累计停留占全部列的比例。均值与中位数只算<b>已经离开</b>该列的停留，右列单独列出「当前仍卡在这列」的任务，不混进历史均值。</p>
+          </div>
+
+          <div class="duo">
+            <div class="panel">
+              <div class="panel-head"><h3>返工与一次通过</h3></div>
+              <div id="flowRework"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>优先级有没有起作用</h3></div>
+              <div id="flowPriority"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>需求 → 开工</h3><span class="meta-right" id="flowReqMeta">—</span></div>
+            <div id="flowReqs"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>估时准不准</h3>
+              <span class="meta-right" id="flowEstMeta">—</span>
+            </div>
+            <div class="flow-est-top" id="flowEstTop"></div>
+            <div id="flowEstRisk"></div>
+            <p class="foot-note" id="flowEstNote"></p>
+          </div>
+        </div>
+      </section>
+
       <!-- ===== 回收站 ===== -->
       <section class="view" id="view-trash" aria-label="回收站">
         <div class="view-page wide">
@@ -2651,7 +2939,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div class="panel-head"><h3>账号列表</h3></div>
             <div class="notice">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
-              <span>账号由管理员创建下发（不开放注册）；在共享空间里可通过邀请链接或按登录名把账号加为成员。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
+              <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
             </div>
             <div class="user-list" id="userList" style="margin-top:12px"></div>
           </div>
@@ -2761,6 +3049,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
                 <span class="meta-right" id="wsMemberCount"></span>
               </div>
               <div class="member-list" id="wsMemberList"></div>
+              <p class="set-hint" id="wsMemberHint" hidden>共享空间不能直接把别人拉进来：请用下面的「邀请链接」发给对方，对方打开链接、确认后才会成为成员。</p>
               <div class="cfg-add" id="wsMemberAdd" hidden>
                 <input type="text" id="wsMemberName" maxlength="32" placeholder="输入成员登录名（如 xiaoming）" />
                 <button class="btn" type="button" id="btnWsMemberAdd">添加成员</button>
@@ -2855,6 +3144,134 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         </div>
       </section>
 
+      <!-- ===== 个人设置（点左下角头像进入） ===== -->
+      <section class="view" id="view-profile" aria-label="个人设置">
+        <div class="set-layout">
+          <nav class="set-anchor" id="meAnchor" aria-label="个人设置分区">
+            <a href="#me-basic">基本信息</a>
+            <a href="#me-timer">计时设置</a>
+            <a href="#me-ai">AI 设置</a>
+            <a href="#me-pwd">修改密码</a>
+          </nav>
+
+          <div class="set-panels">
+            <div class="panel" id="me-basic">
+              <div class="panel-head">
+                <h3>基本信息</h3>
+                <span class="meta-right" id="meRoleHint"></span>
+              </div>
+              <div class="me-idcard">
+                <span class="me-avatar" id="meAvatar">?</span>
+                <div class="me-idtext">
+                  <div class="me-name" id="meName">—</div>
+                  <div class="me-sub" id="meUsername">@—</div>
+                </div>
+              </div>
+              <div class="set-grid">
+                <div class="field" id="fMeName">
+                  <label for="meNameInput">显示名</label>
+                  <input id="meNameInput" type="text" maxlength="32" autocomplete="off" placeholder="用于任务负责人默认值" />
+                  <span class="hint">改名会同步你名下任务的负责人文本；历史时间线保留旧记录。</span>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="meNameSave">保存显示名</button>
+              </div>
+            </div>
+
+            <div class="panel" id="me-timer">
+              <div class="panel-head">
+                <h3>计时设置</h3>
+                <span class="meta-right">只影响之后的计时</span>
+              </div>
+              <p class="set-hint">只有上班时间到下班时间之间的计时才计入工时；每天累计到上限后当天不再增加。忘停表过夜不会再多算（0 点到上班时间之间不计）。</p>
+              <div class="set-grid three">
+                <div class="field">
+                  <label for="meStart">上班时间</label>
+                  <select id="meStart"></select>
+                </div>
+                <div class="field">
+                  <label for="meEnd">下班时间</label>
+                  <select id="meEnd"></select>
+                </div>
+                <div class="field">
+                  <label for="meMax">每天最多计入</label>
+                  <select id="meMax"></select>
+                </div>
+              </div>
+              <p class="me-preview" id="mePreview"></p>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="meTimerSave">保存计时设置</button>
+              </div>
+            </div>
+
+            <div class="panel" id="me-ai">
+              <div class="panel-head">
+                <h3>AI 设置</h3>
+                <span class="meta-right" id="meAiState">—</span>
+              </div>
+              <p class="set-hint">用来「按需求拆任务」和「检查需求做完了没」。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
+              <div class="set-grid">
+                <div class="field">
+                  <label for="meAiProvider">厂商</label>
+                  <select id="meAiProvider"></select>
+                </div>
+                <div class="field">
+                  <label for="meAiModel">模型</label>
+                  <input id="meAiModel" type="text" autocomplete="off" placeholder="例如 deepseek-chat" />
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="meAiBase">接口地址</label>
+                  <input id="meAiBase" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1" />
+                  <span class="hint" id="meAiKeyHint">选厂商后会自动填好，走中转/代理时改这里即可。</span>
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="meAiKey">API Key</label>
+                  <input id="meAiKey" type="password" autocomplete="new-password" placeholder="粘贴你的 API Key" />
+                  <span class="hint" id="meAiKeyState">还没有配置</span>
+                </div>
+              </div>
+              <label class="ai-switch">
+                <input type="checkbox" id="meAiEnabled" />
+                <span>启用 AI（关掉之后不会发出任何请求）</span>
+              </label>
+              <div class="set-actions">
+                <button class="btn ghost" type="button" id="meAiClear">清除 Key</button>
+                <button class="btn" type="button" id="meAiSave">保存</button>
+                <button class="btn primary" type="button" id="meAiTest">保存并测试连接</button>
+              </div>
+              <p class="me-preview" id="meAiResult" hidden></p>
+            </div>
+
+            <div class="panel" id="me-pwd">
+              <div class="panel-head">
+                <h3>修改密码</h3>
+                <span class="meta-right">已登录设备保持有效，直到会话过期</span>
+              </div>
+              <div class="set-grid three">
+                <div class="field">
+                  <label for="meOldPwd">当前密码</label>
+                  <input id="meOldPwd" type="password" maxlength="64" autocomplete="current-password" />
+                </div>
+                <div class="field" id="fMeNewPwd">
+                  <label for="meNewPwd">新密码</label>
+                  <input id="meNewPwd" type="password" maxlength="64" autocomplete="new-password" />
+                  <span class="err">新密码至少 6 位</span>
+                </div>
+                <div class="field" id="fMeAgainPwd">
+                  <label for="meAgainPwd">确认新密码</label>
+                  <input id="meAgainPwd" type="password" maxlength="64" autocomplete="new-password" />
+                  <span class="err">两次输入的新密码不一致</span>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button class="btn" type="button" id="mePwdSave">修改密码</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -2941,6 +3358,22 @@ body.dragging-active{cursor:grabbing;user-select:none;}
           <div class="field">
             <label>分类</label>
             <div class="seg" id="segCat"></div>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="iEstimate">预计耗时</label>
+            <div class="est-wrap">
+              <input id="iEstimate" type="number" min="0" max="168" step="0.5" placeholder="选填，例如 4" />
+              <span class="est-unit">小时</span>
+            </div>
+            <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
+          </div>
+          <div class="field">
+            <label>实际投入</label>
+            <div class="est-actual" id="iActual">—</div>
+            <span class="hint" id="iActualHint">按工作时段折算的计时累计</span>
           </div>
         </div>
 
@@ -3104,7 +3537,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     <div class="sheet-head">
       <div style="flex:1 1 auto;min-width:0">
         <h2 id="dlgWsCreateTitle">新建共享空间</h2>
-        <div class="desc">创建后可通过「添加成员」邀请同事一起维护</div>
+        <div class="desc">创建后生成邀请链接发给同事，对方确认后即可一起维护</div>
       </div>
       <button class="icon-btn sm" type="button" id="dlgWsCreateX" aria-label="关闭">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
@@ -3123,54 +3556,6 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       <button class="btn primary" type="submit" id="dlgWsCreateOk">创建空间</button>
     </div>
   </form>
-</div>
-
-<!-- 个人资料 / 修改密码 -->
-<div class="modal-layer" id="dlgProfile" role="dialog" aria-modal="true" aria-labelledby="dlgProfileTitle">
-  <div class="sheet xs">
-    <div class="sheet-head">
-      <div style="flex:1 1 auto;min-width:0">
-        <h2 id="dlgProfileTitle">个人资料</h2>
-        <div class="desc">显示名用于任务负责人默认值与成员列表展示</div>
-      </div>
-      <button class="icon-btn sm" type="button" id="dlgProfileX" aria-label="关闭">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
-      </button>
-    </div>
-    <div class="sheet-body">
-      <div class="field" id="fDlgProfileName">
-        <label for="dlgProfileNameInput">显示名</label>
-        <div class="row-inline">
-          <input id="dlgProfileNameInput" type="text" maxlength="32" autocomplete="off" />
-          <button class="btn primary" type="button" id="dlgProfileNameSave">保存</button>
-        </div>
-        <span class="err">请填写显示名</span>
-      </div>
-      <div class="divider"></div>
-      <div class="group-label">修改密码（新密码 6-64 位）</div>
-      <div class="field">
-        <label for="dlgProfileOld">当前密码</label>
-        <input id="dlgProfileOld" type="password" maxlength="64" autocomplete="current-password" />
-      </div>
-      <div class="field" id="fDlgProfileNew">
-        <label for="dlgProfileNew">新密码</label>
-        <input id="dlgProfileNew" type="password" maxlength="64" autocomplete="new-password" />
-        <span class="err">新密码至少 6 位</span>
-      </div>
-      <div class="field" id="fDlgProfileAgain">
-        <label for="dlgProfileAgain">确认新密码</label>
-        <input id="dlgProfileAgain" type="password" maxlength="64" autocomplete="new-password" />
-        <span class="err">两次输入的新密码不一致</span>
-      </div>
-      <div class="row" style="justify-content:flex-end">
-        <button class="btn" type="button" id="dlgProfilePwdSave">修改密码</button>
-      </div>
-    </div>
-    <div class="sheet-foot">
-      <span class="hint">修改密码后已登录的设备保持有效，直到会话过期</span>
-      <button class="btn" type="button" id="dlgProfileCancel">关闭</button>
-    </div>
-  </div>
 </div>
 
 <!-- 保存视图命名 -->
@@ -3293,6 +3678,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       id: "K0", title: "任务", description: "", priority: "P2", category: "后端", owner: "我",
       ownerUserId: "U1", boardColumn: "backlog", startDate: null, dueDate: null, reqId: null, reqDocId: null,
       progress: 0, note: "", recurType: "", remindAt: null, remindTarget: "owner", tags: [],
+      estimateMinutes: null,
       subtaskTotal: 0, subtaskDone: 0, totalMinutes: 0, attachmentCount: 0,
       blocked: false, blockedReason: null, blockedByTaskId: null,
       workspaceId: "W1", sortOrder: 0, deletedAt: null,
@@ -3322,9 +3708,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 
   var doing = [
     T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
-        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2, totalMinutes: 320 }),
+        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
+        totalMinutes: 520, estimateMinutes: 480 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
-        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径" })
+        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
+        totalMinutes: 200, estimateMinutes: 240 })
   ];
   var done = [
     T({ id: "K7", title: "登录重构与验证码", priority: "P2", boardColumn: "done", progress: 100,
@@ -3452,8 +3840,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   };
 
   var routes = {
-    "/api/auth/me": { id: "U1", displayName: "我", username: "me", role: "user", lastWorkspaceId: "W1" },
-    "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "member", memberCount: 3, ownerId: "U2" }],
+    /* 演示用：当前登录者是「普通用户」，同时是共享空间「团队空间」的空间主
+       —— 设置页应只给邀请链接，不给"按登录名直接加人" */
+    "/api/auth/me": { id: "U1", displayName: "我", username: "me", role: "user", lastWorkspaceId: "W2",
+      workStartHour: 9, workEndHour: 18, workMaxHours: 8 },
+    "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "owner", memberCount: 3, ownerId: "U1" }],
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
     "/api/reqs": [
@@ -3461,6 +3852,17 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
     ],
     "/api/views": [{ id: "V1", name: "我的 P0", params: { pris: ["P0"] } }],
+    /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
+    "/api/columns": [
+      { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, done: false },
+      { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, done: false },
+      { id: "done", name: "已完成", color: "#12B76A", sortOrder: 2, done: true }
+    ],
+    "/api/categories": [
+      { id: "C1", name: "后端", color: "#2563EB", sortOrder: 0 },
+      { id: "C2", name: "前端", color: "#7C3AED", sortOrder: 1 },
+      { id: "C3", name: "数据", color: "#0E9384", sortOrder: 2 }
+    ],
     "/api/trash": [T({ id: "X1", title: "旧的定时任务配置", deletedAt: ts(-29, 10, 0) })],
     "/api/notifications/unread": { unread: 2 },
     "/api/notifications": {
@@ -3494,11 +3896,143 @@ body.dragging-active{cursor:grabbing;user-select:none;}
                  workMinutesAll: 2410, workMinutesWeekAll: 705 }
     },
     "/api/activity": [],
+    "/api/ai/config": {
+      provider: "deepseek",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+      hasKey: true,
+      apiKeyMasked: "sk-****a1b2",
+      enabled: true,
+      keyBroken: false,
+      status: "已就绪：调用会走你自己的额度",
+      presets: [
+        { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "platform.deepseek.com 创建 API Key" },
+        { id: "qwen", name: "通义千问（阿里云）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "阿里云百炼控制台创建 API Key" },
+        { id: "moonshot", name: "月之暗面 Kimi", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k", keyHint: "platform.moonshot.cn 创建 API Key" },
+        { id: "zhipu", name: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-plus", keyHint: "open.bigmodel.cn 创建 API Key" },
+        { id: "hunyuan", name: "腾讯混元", baseUrl: "https://api.hunyuan.cloud.tencent.com/v1", model: "hunyuan-turbo", keyHint: "腾讯云控制台「混元大模型」创建 API Key" },
+        { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", keyHint: "platform.openai.com 创建 API Key" },
+        { id: "ollama", name: "本地 Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5:7b", keyHint: "本地模型无需 Key，Ollama 默认不校验" },
+        { id: "custom", name: "自定义 / 中转", baseUrl: "", model: "", keyHint: "任何 OpenAI 兼容服务：填 /v1 基址和模型名" }
+      ]
+    },
+    "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
+    "/api/estimate/stats": {
+      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4,
+      overallFactor: 1.42, medianFactor: 1.45,
+      underCount: 0, accurateCount: 1, overCount: 3,
+      byCategory: [
+        { category: "后端", sampleCount: 2, estimateTotal: 600, actualTotal: 1000, factor: 1.67 },
+        { category: "运维", sampleCount: 1, estimateTotal: 120, actualTotal: 168, factor: 1.4 },
+        { category: "前端", sampleCount: 1, estimateTotal: 300, actualTotal: 280, factor: 0.93 }
+      ],
+      atRisk: [
+        { id: "K1", title: "重构权限校验中间件", category: "后端", column: "doing",
+          estimateMinutes: 480, actualMinutes: 520, ratio: 1.08, level: "danger" },
+        { id: "K2", title: "导出 CSV 补工时列", category: "前端", column: "doing",
+          estimateMinutes: 240, actualMinutes: 200, ratio: 0.83, level: "warn" }
+      ],
+      overrun: [
+        { id: "D3", title: "次席出金接口幂等校验", category: "后端", column: "done",
+          estimateMinutes: 240, actualMinutes: 420, ratio: 1.75, level: "danger" },
+        { id: "D4", title: "归档任务异常重试机制", category: "后端", column: "done",
+          estimateMinutes: 120, actualMinutes: 180, ratio: 1.5, level: "danger" }
+      ],
+      suggestion: "你的估时偏乐观：过去 4 个已完成任务的实际投入是预估的 1.42 倍。下次填预估时，把心里的数乘 1.42 再填，会贴近真实。",
+      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。"
+    },
+    "/api/flow-health": {
+      rangeDays: 90,
+      since: shift(-90),
+      generatedAt: ts(0, 9, 0).replace("T", " ").slice(0, 16),
+      coverage: {
+        moveEvents: 46, usableMoves: 44, tasksTotal: 13, tasksWithMoves: 9, completedInRange: 5,
+        note: "近 90 天共 46 次移动，其中 44 次能定位到具体列（早期记录只有列名文本，列改名过的会对不上）；「已完成」列不作为在制停留统计。"
+      },
+      columns: [
+        { id: "backlog", name: "待处理", color: "#8a8578", segments: 18, totalSeconds: 486000,
+          avgSeconds: 27000, medianSeconds: 21600, p90Seconds: 61200, share: 0.52,
+          ongoingCount: 8, ongoingMaxSeconds: 1036800, ongoingAvgSeconds: 432000, bottleneck: true },
+        { id: "doing", name: "进行中", color: "#2563EB", segments: 12, totalSeconds: 302400,
+          avgSeconds: 25200, medianSeconds: 18000, p90Seconds: 50400, share: 0.32,
+          ongoingCount: 2, ongoingMaxSeconds: 259200, ongoingAvgSeconds: 172800, bottleneck: false },
+        { id: "done", name: "已完成", color: "#12B76A", segments: 0, totalSeconds: 0,
+          avgSeconds: 0, medianSeconds: 0, p90Seconds: 0, share: 0,
+          ongoingCount: 0, ongoingMaxSeconds: 0, ongoingAvgSeconds: 0, bottleneck: false }
+      ],
+      bottleneckId: "backlog",
+      bottleneckName: "待处理",
+      bottleneckShare: 0.52,
+      rework: { totalMoves: 44, backMoves: 9, backRate: 0.2045, completedTasks: 5, firstPassTasks: 3, firstPassRate: 0.6 },
+      priority: [
+        { priority: "P0", tasks: 6, avgMoves: 3.2 },
+        { priority: "P1", tasks: 4, avgMoves: 1.8 },
+        { priority: "P2", tasks: 3, avgMoves: 1.2 }
+      ],
+      reqDocs: {
+        total: 5, withTasks: 3, noTask: 2, avgLeadHours: 30.4,
+        noTaskList: [
+          { id: "D9", title: "结算改造-对账口径调整", ageDays: 12 },
+          { id: "D8", title: "流程引擎-节点超时告警", ageDays: 4 }
+        ]
+      },
+      insights: [
+        { level: "warn", title: "最堵的是「待处理」",
+          text: "它吃掉了全流程 52% 的停留时间，平均 7.5 小时。瓶颈在这一列，加人加班在别处都没用。" },
+        { level: "warn", title: "返工偏多",
+          text: "近 90 天 44 次跨列移动里有 9 次是往回退（20%）。退回通常意味着进入下一列的门槛不清 —— 验收标准写在需求里会好很多。" },
+        { level: "warn", title: "2 份需求还没拆出任务",
+          text: "共 5 份需求，其中 2 份一个任务都没有。挂得最久的是「结算改造-对账口径调整」，已经 12 天没拆出任务。" },
+        { level: "warn", title: "P0 反而更折腾",
+          text: "P0 任务平均被移动 3.2 次，P2 只有 1.2 次。要么 P0 的定义太宽（什么都标 P0），要么它们总是在需求不清的时候就开工了。" }
+      ]
+    },
     "/api/notify/status": { enabled: true, channel: "webhook", lastStatus: "success", effectiveEnabled: true }
   };
 
   function pick(clean) {
     if (Object.prototype.hasOwnProperty.call(routes, clean)) return routes[clean];
+    /* AI 的三次交互都是 POST，且路径带需求 id —— 用正则匹配 */
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/split$/.test(clean)) {
+      return {
+        reqDocId: "D1", reqDocTitle: "权限校验中间件改造", docChars: 1840,
+        tasks: [
+          { title: "梳理现有权限校验入口并列出调用方", description: "把所有走鉴权的入口列清楚，产出清单作为后续改动基线", priority: "P1", dependsOnIndex: -1, reason: "文档第一部分列了 4 个入口，先固化范围", selected: true },
+          { title: "重构权限校验中间件为可插拔结构", description: "抽出校验链，支持按接口配置不同策略", priority: "P0", dependsOnIndex: 0, reason: "核心改造，后续策略都挂在这一层", selected: true },
+          { title: "实现次席代码维度的权限过滤", description: "按次席代码隔离数据，越权返回 403", priority: "P0", dependsOnIndex: 1, reason: "需求明确要求按次席隔离", selected: true },
+          { title: "补权限矩阵查询接口", description: "GET /api/perm/matrix 返回当前用户的权限项", priority: "P2", dependsOnIndex: 1, reason: "前端要根据它渲染按钮", selected: true },
+          { title: "权限变更后清理相关缓存", description: "改角色时同步失效 Redis 里的鉴权缓存", priority: "P2", dependsOnIndex: -1, reason: "文档写了缓存一致性要求", selected: true }
+        ],
+        usage: { model: "deepseek-chat", promptTokens: 1520, completionTokens: 486, totalTokens: 2006, jsonMode: true }
+      };
+    }
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/audit$/.test(clean)) {
+      return {
+        reqDocId: "D1", reqDocTitle: "权限校验中间件改造",
+        coverage: 56, verdict: "partial",
+        summary: "主体改造已完成，但次席维度的越权校验和下游通知还没落地，现在验收会漏。",
+        nextStep: "补「次席代码越权返回 403」的任务 —— 这是文档里写死的规则，不能靠口头约定",
+        totalPoints: 8, donePoints: 3, doingPoints: 2, todoPoints: 1, missingPoints: 2,
+        points: [
+          { point: "接口入口全部走统一的校验中间件", covered: true, status: "done", taskTitle: "重构权限校验中间件", note: "4 个入口已全部切换" },
+          { point: "校验失败返回 403 而不是 500", covered: true, status: "done", taskTitle: "重构权限校验中间件", note: "统一异常处理已覆盖" },
+          { point: "权限变更后 Redis 缓存同步失效", covered: true, status: "done", taskTitle: "权限变更后清理相关缓存", note: "改角色时主动清 key" },
+          { point: "按次席代码隔离数据", covered: true, status: "doing", taskTitle: "实现次席代码维度的权限过滤", note: "过滤逻辑写了，还没接进查询" },
+          { point: "角色权限矩阵可配置", covered: true, status: "doing", taskTitle: "补权限矩阵查询接口", note: "只读接口在做，写接口没有" },
+          { point: "审计日志记录每次越权尝试", covered: true, status: "todo", taskTitle: "（未建任务，需求里提到了）", note: "文档第 3 节提到要留痕，但没有对应任务" },
+          { point: "次席代码越权时返回 403 并带错误码", covered: false, status: "missing", taskTitle: "", note: "文档写死了错误码 4013，任务里完全没提到" },
+          { point: "权限变更通知下游系统", covered: false, status: "missing", taskTitle: "", note: "需求要求同步告知清算，找不到任何相关任务" }
+        ],
+        tasks: [
+          { id: "K1", title: "重构权限校验中间件", column: "doing", progress: 60, done: false },
+          { id: "K2", title: "导出 CSV 补工时列", column: "doing", progress: 0, done: false }
+        ],
+        usage: { model: "deepseek-chat", promptTokens: 1680, completionTokens: 720, totalTokens: 2400, jsonMode: true }
+      };
+    }
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
+      return { created: 5, skipped: 0, failed: [] };
+    }
     if (clean === "/api/req-docs") {
       return reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
@@ -3546,7 +4080,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       var mM = /[?&]month=(\d+)/.exec(u), yM = /[?&]year=(\d+)/.exec(u);
       data = { year: yM ? Number(yM[1]) : Y, month: mM ? Number(mM[1]) : M, tasks: calTasks };
     } else {
-      data = (method === "GET") ? pick(clean) : {};
+      /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
+      var picked = pick(clean);
+      data = (picked === undefined) ? {} : picked;
     }
     return Promise.resolve({
       status: 200,
@@ -3878,7 +4414,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 
   function modalEls() {
     if (!MODALS) {
-      MODALS = ["dlgWsCreate", "dlgProfile", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm"]
+      MODALS = ["dlgWsCreate", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm"]
         .map(function (id) { return document.getElementById(id); })
         .filter(Boolean);
     }
@@ -4159,7 +4695,6 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       wireModal(dlgConfirm, function () { settleConfirm(false); });
     }
     [["dlgWsCreate", ["dlgWsCreateX", "dlgWsCreateCancel"]],
-     ["dlgProfile", ["dlgProfileX", "dlgProfileCancel"]],
      ["dlgViewName", ["dlgViewNameX", "dlgViewNameCancel"]],
      ["dlgWsDelete", ["dlgWsDeleteX", "dlgWsDeleteCancel"]],
      ["dlgUserPwd", ["dlgUserPwdX", "dlgUserPwdCancel"]]].forEach(function (pair) {
@@ -4400,7 +4935,7 @@ var state = {
   q:"", owners:[], pris:[], cats:[], reqs:[], tags:[],
   due:null, focus:false, doneScope:"week", blocked:false,
   board:null, doneExtra:[], loadSeq:0, boardGen:0,
-  reviewData:null, statsWeeks:8, workScope:"mine", reviewWork:null,
+  reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
   mineScope:"open", mineSpace:"", minePri:"", mineBlocked:false,
   collapsedCols:{}, inlineAdd:null,
   runningTimer:null, compMonth:null, reqDocId:null
@@ -4461,6 +4996,7 @@ var board = $("board");
 var taskDrawer = $("taskDrawer");
 var taskForm = $("taskForm");
 var iTitle = $("iTitle"), iDesc = $("iDesc"), iStart = $("iStart"), iDue = $("iDue"), iCol = $("iCol"),
+    iEstimate = $("iEstimate"), iActual = $("iActual"),
     iReq = $("iReq"), iProg = $("iProg"), progVal = $("progVal"), iNote = $("iNote"),
     iRemind = $("iRemind"), iOwner = $("iOwner"), iTags = $("iTags"),
     tagWrap = $("tagWrap"), subList = $("subList"), subCount = $("subCount"),
@@ -4516,9 +5052,11 @@ var VIEWS = {
   review:   { title:"工作回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
   completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
   stats:    { title:"统计报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
+  flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
   trash:    { title:"回收站",   sub:"删除的任务保留 30 天，之后自动清理", enter:enterTrashView },
   users:    { title:"用户管理", sub:"账号由管理员创建下发；成员可凭邀请链接自助加入", enter:enterUsersView },
-  settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView }
+  settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
+  profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
 function showView(name){
   if(!VIEWS[name]) return;
@@ -4564,6 +5102,7 @@ function refreshActiveView(){
   else if(activeView === "trash") loadTrash();
   else if(activeView === "users") loadUsers(true);
   else if(activeView === "stats") loadStats();
+  else if(activeView === "flow") loadFlowHealth();
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") loadMine();
   else if(activeView === "completions") loadCompletions();
@@ -4820,7 +5359,18 @@ function cardHTML(t, idx){
   if(Number(t.commentCount) > 0){
     metaHTML += '<span class="meta" title="评论">' + icon("comment", 14) + t.commentCount + '</span>';
   }
-  if(t.totalMinutes && !running){
+  if(t.estimateMinutes){
+    /* 有预估就显示「实际/预估」：光看实际用了几小时没人知道自己算不算慢。
+       计时中的任务同样要显示 —— 那正是最该知道自己快超了的时候；
+       此时实际值只含已结束的段，title 里说明，避免误读。 */
+    var actMin = Number(t.totalMinutes) || 0;
+    var estR = actMin / t.estimateMinutes;
+    var estCls = estR >= 1 ? " over" : (estR >= 0.8 ? " near" : "");
+    metaHTML += '<span class="meta est-chip' + estCls + '" title="实际 ' + fmtMinutes(actMin) +
+      (running ? '（不含正在计的这一段）' : '') + ' / 预估 ' + fmtMinutes(t.estimateMinutes) + '">' +
+      (running ? '' : icon("timer", 14)) +
+      fmtMinutesShort(actMin) + '/' + fmtMinutesShort(t.estimateMinutes) + '</span>';
+  }else if(t.totalMinutes && !running){
     metaHTML += '<span class="meta' + (isDone ? ' full' : '') + '" title="' + (isDone ? "总耗时" : "累计工时") + '">' +
       icon("timer", 14) + (isDone ? '总耗时 ' : '') + fmtMinutesShort(t.totalMinutes) + '</span>';
   }
@@ -6499,8 +7049,29 @@ function renderTimeline(logs){
 var origProgress = 0;      // 已完成任务入列前的原始进度（O-13：展示 100%，保存时保留原值）
 var startedDone = false;   // 打开抽屉时该任务是否已在已完成列
 var commentsCache = [];
-function openTaskDrawer(colId, task){
-  taskFormSeq++;
+/** 抽屉里的「实际投入」：有预估就带出消耗比例，超了标红、接近标黄 */
+function renderActualEstimate(actualMinutes, estimateMinutes){
+  if(!iActual) return;
+  var act = Number(actualMinutes) || 0;
+  var est = Number(estimateMinutes) || 0;
+  iActual.className = "est-actual";
+  if(!act && !est){
+    iActual.textContent = "—";
+    return;
+  }
+  var html = fmtMinutesShort(act);
+  if(est > 0){
+    var r = act / est;
+    html += ' <span class="ea-ratio">/ 预估 ' + fmtMinutesShort(est) + '（' + Math.round(r * 100) + '%）</span>';
+    if(r >= 1) iActual.classList.add("over");
+    else if(r >= 0.8) iActual.classList.add("near");
+  }else{
+    html += ' <span class="ea-ratio">还没填预估</span>';
+  }
+  iActual.innerHTML = html;
+}
+
+function openTaskDrawer(colId, task){  taskFormSeq++;
   editingId = task ? task.id : null;
   formDirty = false;
   if(task) taskCacheExtra[task.id] = task;
@@ -6516,6 +7087,9 @@ function openTaskDrawer(colId, task){
     iStart.value = task.startDate || "";
     iDue.value = task.dueDate || "";
     syncDateBounds();
+    /* 预估耗时：库里存分钟，表单用小时（0.5 步进） */
+    if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
+    renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     formPri = task.priority || "P2";
     formCat = task.category || (categoriesCache.length ? categoriesCache[0].name : "");
     populateColSelect();
@@ -6552,6 +7126,8 @@ function openTaskDrawer(colId, task){
     btnDeleteTask.hidden = true;
     startedDone = false;
     iTitle.value = ""; iDesc.value = ""; iStart.value = ""; iDue.value = "";
+    if(iEstimate) iEstimate.value = "";
+    renderActualEstimate(0, null);
     formPri = "P2";
     formCat = categoriesCache.length ? categoriesCache[0].name : "";
     populateColSelect();
@@ -6651,6 +7227,14 @@ function syncDateBounds(){
   iDue.min = iStart.value || "";
 }
 if(iStart) iStart.addEventListener("change", function(){ syncDateBounds(); formDirty = true; });
+/* 改预估时实时更新「实际/预估」的比例，不用保存后才看到 */
+if(iEstimate) iEstimate.addEventListener("input", function(){
+  formDirty = true;
+  var t = editingId ? taskCacheExtra[editingId] : null;
+  var act = (t && t.totalMinutes) ? t.totalMinutes : 0;
+  var h = Number(this.value);
+  renderActualEstimate(act, h > 0 ? Math.round(h * 60) : 0);
+});
 if(iDue) iDue.addEventListener("change", function(){ syncDateBounds(); formDirty = true; });
 /* 开始日期的快捷设置：与截止日期的预设按钮对称 */
 if(segStart) segStart.addEventListener("click", function(e){
@@ -6880,6 +7464,12 @@ taskForm.addEventListener("submit", function(e){
     reqDocId: (($("iReqDoc") || {}).value) || null,
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
+    /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
+    estimateMinutes: (function(){
+      var h = iEstimate ? Number(iEstimate.value) : 0;
+      if(!h || h <= 0) return null;
+      return Math.min(10080, Math.round(h * 60));
+    })(),
     note: iNote.value.trim(),
     recurType: formRecur,
     remindAt: iRemind.value ? iRemind.value : null,
@@ -8671,6 +9261,201 @@ function closeReqDocCloseDialog(){
   if(d) d.classList.remove("open");
 }
 
+/* ==================== 需求页 · AI 拆分 / 完成度检查 ==================== */
+/* 三次交互，原则一致：AI 只给草稿和判断，落库永远要人点确认。 */
+var aiSplitDrafts = [];
+var aiBusy = false;
+
+/** AI 读的是**已保存**的正文：有未保存的修改先存，否则拆出来的和屏幕上看到的不是同一份 */
+function ensureReqDocSaved(fn){
+  if(!reqDocDirty){ fn(); return; }
+  saveReqDoc().then(function(doc){ if(doc) fn(); });
+}
+function aiBtnBusy(btn, busy, label){
+  if(!btn) return;
+  btn.disabled = busy;
+  if(busy){
+    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = label || "处理中…";
+  }else if(btn.dataset.label){
+    btn.textContent = btn.dataset.label;
+  }
+}
+/** 配置类错误直接把"去哪改"带上，别让人对着 400 发呆 */
+function aiErrMsg(msg){
+  var m = msg || "AI 调用失败";
+  if(m.indexOf("个人设置") < 0 &&
+     (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
+      || m.indexOf("AI 配置") >= 0)){
+    m += "（到「个人设置 → AI 设置」里配一下）";
+  }
+  return m;
+}
+function aiUsageText(u){
+  if(!u) return "";
+  return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
+    + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
+    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
+}
+
+function runAiSplit(){
+  if(!editingDocId || aiBusy) return;
+  var btn = $("reqDocAiSplit");
+  ensureReqDocSaved(function(){
+    aiBusy = true;
+    aiBtnBusy(btn, true, "拆分中…");
+    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}).then(function(d){
+      aiSplitDrafts = d.tasks || [];
+      renderAiSplit(d);
+      $("dlgAiSplit").classList.add("open");
+    }).catch(function(ex){
+      toast(aiErrMsg(ex && ex.message), "bad");
+    }).then(function(){
+      aiBusy = false;
+      aiBtnBusy(btn, false);
+    });
+  });
+}
+
+function renderAiSplit(d){
+  $("dlgAiSplitMsg").textContent = "「" + (d.reqDocTitle || "") + "」正文 " + (d.docChars || 0)
+    + " 字，AI 拆出 " + aiSplitDrafts.length + " 条。勾选要创建的，标题可以直接改；没勾的不会落库。";
+  $("aiSplitList").innerHTML = aiSplitDrafts.map(function(t, i){
+    var p = String(t.priority || "P2").toUpperCase();
+    var pcls = p === "P0" ? "p0" : (p === "P1" ? "p1" : "");
+    return '<div class="ai-item on" data-i="' + i + '">' +
+      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择任务">' +
+      '<div class="ai-main">' +
+        '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="任务标题">' +
+        (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
+        '<div class="ai-meta">' +
+          '<span class="ai-tag ' + pcls + '">' + esc(p) + '</span>' +
+          (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '') +
+          (t.reason ? '<span class="ai-reason">' + esc(t.reason) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+  $("aiSplitUsage").textContent = aiUsageText(d.usage);
+}
+
+function applyAiSplit(){
+  var picked = [];
+  var nodes = document.querySelectorAll("#aiSplitList .ai-item");
+  for(var i = 0; i < nodes.length; i++){
+    var cb = nodes[i].querySelector("input[type=checkbox]");
+    if(!cb || !cb.checked) continue;
+    var idx = Number(nodes[i].dataset.i);
+    var src = aiSplitDrafts[idx] || {};
+    var titleEl = nodes[i].querySelector(".ai-title");
+    var title = (titleEl ? titleEl.value : src.title || "").trim();
+    if(!title) continue;
+    picked.push({
+      title: title,
+      description: src.description || "",
+      priority: src.priority || "P2",
+      dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex
+    });
+  }
+  if(!picked.length){ toast("至少选一条要创建的任务", "warn"); return; }
+
+  var btn = $("dlgAiSplitOk");
+  btn.disabled = true;
+  API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/tasks", { tasks: picked }).then(function(r){
+    btn.disabled = false;
+    $("dlgAiSplit").classList.remove("open");
+    var msg = "已创建 " + r.created + " 个任务";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名任务";
+    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 个失败";
+    toast(msg, r.failed && r.failed.length ? "warn" : "fs");
+    if(r.failed && r.failed.length){
+      console.warn("AI 拆分落库失败项", r.failed);
+    }
+    /* 任务数变了：列表页的「任务/完成」计数要跟着动 */
+    loadReqDocs(true);
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(aiErrMsg(ex && ex.message), "bad");
+  });
+}
+
+function runAiAudit(){
+  if(!editingDocId || aiBusy) return;
+  var btn = $("reqDocAiAudit");
+  ensureReqDocSaved(function(){
+    aiBusy = true;
+    aiBtnBusy(btn, true, "检查中…");
+    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}).then(function(d){
+      renderAiAudit(d);
+      $("dlgAiAudit").classList.add("open");
+    }).catch(function(ex){
+      toast(aiErrMsg(ex && ex.message), "bad");
+    }).then(function(){
+      aiBusy = false;
+      aiBtnBusy(btn, false);
+    });
+  });
+}
+
+function renderAiAudit(d){
+  var V = { done: "已完成", mostly: "基本完成", partial: "做了一部分", not_started: "基本没开始" };
+  /* 配色跟结论文字走同一套档位：done→绿 / mostly·partial→橙 / not_started→红 */
+  var cls = d.verdict === "done" ? "good" : (d.verdict === "not_started" ? "bad" : "warn");
+  var color = cls === "good" ? "var(--success)" : (cls === "warn" ? "var(--warning)" : "var(--danger)");
+
+  $("dlgAiAuditTitle").textContent = "完成度检查 · " + (d.reqDocTitle || "");
+  $("dlgAiAuditSummary").textContent = d.summary || "—";
+
+  $("aiAuditScore").className = "ai-score " + cls;
+  $("aiAuditScore").innerHTML =
+    '<div class="big">' + d.coverage + '<small>%</small></div>' +
+    '<div class="sc-main">' +
+      '<div class="bar"><i style="width:' + Math.max(2, d.coverage) + '%;--c:' + color + '"></i></div>' +
+      '<div class="sc-lbl">' + (V[d.verdict] || d.verdict) + ' · 共拆出 ' + d.totalPoints + ' 个功能点，按状态加权计算</div>' +
+      '<div class="sc-cnt">已完成 ' + d.donePoints + ' · 进行中 ' + d.doingPoints
+        + ' · 未开始 ' + d.todoPoints + ' · <b>缺任务 ' + d.missingPoints + '</b></div>' +
+    '</div>';
+
+  var S = { done: "已完成", doing: "进行中", todo: "未开始", missing: "缺任务" };
+  /* 缺任务的排最前面：那才是用户真正要动手的地方 */
+  var order = { missing: 0, todo: 1, doing: 2, done: 3 };
+  var pts = (d.points || []).slice().sort(function(a, b){
+    return (order[a.status] == null ? 9 : order[a.status]) - (order[b.status] == null ? 9 : order[b.status]);
+  });
+  $("aiAuditList").innerHTML = pts.map(function(p){
+    var st = p.status || "missing";
+    return '<div class="ai-item' + (st === "missing" ? " on" : "") + '">' +
+      '<div class="ai-main">' +
+        '<div class="ai-meta">' +
+          '<span class="ai-tag ' + st + '">' + (S[st] || st) + '</span>' +
+          (p.taskTitle ? '<span>对应任务：' + esc(p.taskTitle) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);line-height:19px">' + esc(p.point) + '</div>' +
+        (p.note ? '<div class="ai-reason">' + esc(p.note) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join("");
+
+  var extra = d.nextStep ? "建议下一步：" + d.nextStep + "　·　" : "";
+  $("aiAuditUsage").textContent = extra + aiUsageText(d.usage);
+}
+
+if($("reqDocAiSplit")){
+  $("reqDocAiSplit").addEventListener("click", runAiSplit);
+  $("reqDocAiAudit").addEventListener("click", runAiAudit);
+  $("dlgAiSplitCancel").addEventListener("click", function(){ $("dlgAiSplit").classList.remove("open"); });
+  $("dlgAiSplitOk").addEventListener("click", applyAiSplit);
+  $("dlgAiAuditClose").addEventListener("click", function(){ $("dlgAiAudit").classList.remove("open"); });
+  /* 勾选态与卡片底色联动：一眼看出哪几条会被创建 */
+  $("aiSplitList").addEventListener("change", function(e){
+    var cb = e.target;
+    if(!cb || cb.type !== "checkbox") return;
+    var item = cb.closest(".ai-item");
+    if(item) item.classList.toggle("on", cb.checked);
+  });
+}
+
+
 function fillReqDocEditor(doc){
   var q = initEditor();
   if(q) q.setContents(doc.content || "", false);
@@ -9300,6 +10085,271 @@ $("statsWeeks").addEventListener("change", function(){
   loadStats();
 });
 
+/* ==================== 流程体检 ==================== */
+/* 口径全部由后端算好（FlowHealthService），前端只负责让它一眼能读懂：
+   瓶颈列、返工率、一次通过率、需求开工延迟 —— 都是日志里能追溯的事实，不做预测。 */
+function enterFlowView(){ loadFlowHealth(); }
+
+function spanParts(sec){
+  var s = Number(sec) || 0;
+  if(s <= 0) return {n:"—", u:""};
+  if(s < 3600) return {n:String(Math.max(1, Math.round(s/60))), u:"分钟"};
+  if(s < 86400) return {n:(s/3600).toFixed(1), u:"小时"};
+  return {n:(s/86400).toFixed(1), u:"天"};
+}
+function fmtSpan(sec){
+  var p = spanParts(sec);
+  return p.n === "—" ? "—" : p.n + " " + p.u;
+}
+function fmtPct(v){
+  return Math.round((Number(v) || 0) * 100) + "%";
+}
+function flowCard(k, html, cls){
+  return '<div class="stat ' + (cls || "") + '"><div class="k">' + k + '</div><div class="v">' + html + '</div></div>';
+}
+function flowRow(label, value, widthPct, color){
+  var w = Math.max(0, Math.min(100, Math.round(Number(widthPct) || 0)));
+  return '<div class="dist-row">' +
+    '<span class="lb">' + esc(label) + '</span>' +
+    '<span class="bar"><i style="width:' + w + '%;--c:' + color + '"></i></span>' +
+    '<span class="vl">' + value + '</span></div>';
+}
+function loadFlowHealth(){
+  var days = Number(state.flowDays) || 90;
+  if($("flowDays")) $("flowDays").value = String(days);
+  $("flowInsights").innerHTML = UI.skeletonRows(3);
+  $("flowKpi").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  $("flowBars").innerHTML = UI.skeletonRows(3);
+  $("flowRework").innerHTML = UI.skeletonRows(2);
+  $("flowPriority").innerHTML = UI.skeletonRows(2);
+  $("flowReqs").innerHTML = UI.skeletonRows(2);
+  $("flowRange").textContent = "近 " + days + " 天 · 全空间";
+  /* 估时区块单独取：口径和流程瓶颈无关，各算各的，一个失败不影响另一个 */
+  if($("flowEstTop")){
+    $("flowEstTop").innerHTML = UI.skeletonRows(1);
+    API.get("/api/estimate/stats", {}).then(renderFlowEstimate).catch(function(ex){
+      $("flowEstTop").innerHTML = UI.errorState(ex.message);
+    });
+  }
+  API.get("/api/flow-health", {days: days}).then(renderFlowHealth).catch(function(ex){
+    $("flowInsights").innerHTML = UI.errorState(ex.message);
+    bindRetry($("flowInsights"), function(){ loadFlowHealth(); });
+  });
+}
+function renderFlowHealth(d){
+  var cov = d.coverage || {}, rw = d.rework || {}, rs = d.reqDocs || {};
+  var cols = d.columns || [], ins = d.insights || [];
+
+  /* ---- 结论：这是整个页面的重点，放最上面 ---- */
+  $("flowInsights").innerHTML = ins.length ? ins.map(function(x){
+    return '<div class="flow-ins ' + (x.level || "info") + '">' +
+      '<span class="fi-dot" aria-hidden="true"></span>' +
+      '<div class="fi-main"><div class="fi-t">' + esc(x.title) + '</div>' +
+      '<div class="fi-x">' + esc(x.text) + '</div></div></div>';
+  }).join("") : '<div class="col-empty" style="margin:16px 0">暂无结论</div>';
+  $("flowCoverage").textContent = cov.note || "";
+
+  /* ---- KPI ---- */
+  var leadP = spanParts(rs.avgLeadHours == null ? 0 : rs.avgLeadHours * 3600);
+  var passCls = !rw.completedTasks ? "" : (rw.firstPassRate >= 0.8 ? "good" : (rw.firstPassRate < 0.6 ? "bad" : ""));
+  var backCls = !rw.totalMoves ? "" : (rw.backRate >= 0.2 ? "bad" : "");
+  $("flowKpi").innerHTML =
+    flowCard("瓶颈列", d.bottleneckName ? esc(d.bottleneckName) : "—",
+      d.bottleneckName ? "warn" : "") +
+    flowCard("一次通过率", rw.completedTasks ? fmtPct(rw.firstPassRate) +
+      '<small> · ' + rw.firstPassTasks + "/" + rw.completedTasks + ' 项</small>' : "—",
+      passCls) +
+    flowCard("回退率", rw.totalMoves ? fmtPct(rw.backRate) +
+      '<small> · ' + rw.backMoves + "/" + rw.totalMoves + ' 次</small>' : "—", backCls) +
+    flowCard("需求开工延迟", leadP.n === "—" ? "—" :
+      leadP.n + '<small> ' + leadP.u + '</small>', "");
+  if($("flowKpi").children[0] && d.bottleneckName){
+    $("flowKpi").children[0].querySelector(".v").insertAdjacentHTML("beforeend",
+      '<small> · 占 ' + fmtPct(d.bottleneckShare) + '</small>');
+  }
+
+  /* ---- 各列停留 ---- */
+  if(!cols.length){
+    $("flowBars").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有看板列</div>';
+  }else{
+    var maxShare = 0;
+    cols.forEach(function(c){ if((c.share || 0) > maxShare) maxShare = c.share; });
+    $("flowBars").innerHTML = cols.map(function(c){
+      var w = maxShare > 0 ? Math.max(1, Math.round((c.share || 0) / maxShare * 100)) : 0;
+      var ongoing = c.ongoingCount
+        ? '现 ' + c.ongoingCount + ' 个在制 · 最久 ' + fmtSpan(c.ongoingMaxSeconds)
+        : '当前无在制';
+      return '<div class="flow-bar' + (c.bottleneck ? " is-bn" : "") + '">' +
+        '<div class="fb-row">' +
+          '<span class="fb-name">' + esc(c.name) +
+            (c.bottleneck ? '<i class="fb-tag">瓶颈</i>' : '') + '</span>' +
+          '<span class="fb-v">平均 ' + fmtSpan(c.avgSeconds) + '</span>' +
+          '<span class="fb-share">' + fmtPct(c.share) + '</span>' +
+        '</div>' +
+        '<div class="bar"><i style="width:' + w + '%;--c:' + (c.color || "var(--primary)") + '"></i></div>' +
+        '<div class="fb-meta"><span>' + (c.segments || 0) + ' 段已离开 · 中位 ' +
+          fmtSpan(c.medianSeconds) + ' · P90 ' + fmtSpan(c.p90Seconds) + '</span>' +
+          '<span class="' + (c.ongoingCount ? '' : 'muted') + '">' + ongoing + '</span></div>' +
+      '</div>';
+    }).join("");
+  }
+
+  /* ---- 返工 ---- */
+  if(!rw.totalMoves){
+    $("flowRework").innerHTML = '<div class="col-empty" style="margin:16px 0">这段时间没有跨列移动</div>';
+  }else{
+    $("flowRework").innerHTML = '<div class="dist">' +
+      flowRow("跨列移动", rw.totalMoves + " 次", 100, "var(--info)") +
+      flowRow("其中回退", rw.backMoves + " 次 · " + fmtPct(rw.backRate), rw.backRate * 100, "var(--warning)") +
+      flowRow("一次通过", rw.firstPassTasks + "/" + rw.completedTasks + " 项",
+        rw.completedTasks ? rw.firstPassRate * 100 : 0, "var(--success)") +
+      '</div>' +
+      '<p class="flow-note">回退 = 目标列在列顺序里比来源列更靠前。退回多半说明"进入下一列的门槛"没写清楚。</p>';
+  }
+
+  /* ---- 优先级 ---- */
+  var prio = d.priority || [];
+  if(!prio.length){
+    $("flowPriority").innerHTML = '<div class="col-empty" style="margin:16px 0">还没有任务</div>';
+  }else{
+    var maxMv = 0;
+    prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
+    $("flowPriority").innerHTML = '<div class="dist">' + prio.map(function(p){
+      return flowRow(p.priority + " · " + p.tasks + " 项", p.avgMoves + " 次",
+        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0,
+        p.priority === "P0" ? "var(--danger)" : (p.priority === "P1" ? "var(--warning)" : "var(--text-3)"));
+    }).join("") + '</div>' +
+      '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，P0 应该<b>更少</b>被来回拖。</p>';
+  }
+
+  /* ---- 需求 → 开工 ---- */
+  if(!rs.total){
+    $("flowReqMeta").textContent = "—";
+    $("flowReqs").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有需求文档</div>';
+  }else{
+    $("flowReqMeta").textContent = rs.withTasks + " / " + rs.total + " 份已开工";
+    var html = '<div class="stat-grid" style="margin-bottom:14px">' +
+      flowCard("需求总数", rs.total + '<small>份</small>', "") +
+      flowCard("已拆出任务", rs.withTasks + '<small>份</small>', "") +
+      flowCard("还没拆任务", rs.noTask + '<small>份</small>', rs.noTask ? "warn" : "good") +
+      flowCard("平均开工延迟", leadP.n === "—" ? "—" : leadP.n + '<small>' + leadP.u + '</small>', "") +
+      '</div>';
+    if(rs.noTaskList && rs.noTaskList.length){
+      html += '<div class="flow-orphans">' + rs.noTaskList.map(function(x){
+        return '<div class="done-item">' +
+          '<div class="di-main"><button class="link-cell" type="button" data-open-reqdoc="' + esc(x.id) + '">' +
+            esc(x.title) + '</button>' +
+          '<div class="di-m"><span>已挂 ' + x.ageDays + ' 天，还没有任务</span></div></div></div>';
+      }).join("") + '</div>';
+    }
+    $("flowReqs").innerHTML = html;
+  }
+}
+/* 估时准不准：系数 + 偏差分布 + 超支预警。数字全由后端算，这里只排版。
+   刻意不拿 start_date 推工期 —— 开始日期是"接到任务的那天"，不是"动手的那天"。 */
+function renderFlowEstimate(d){
+  if($("flowEstMeta")){
+    $("flowEstMeta").textContent = d.tasksWithEstimate + " / " + d.tasksTotal + " 个任务填了预估";
+  }
+  var top = $("flowEstTop");
+  if(!top) return;
+
+  if(!d.sampleCount){
+    top.innerHTML = '<div class="fe-main"><div class="fe-sug">'
+      + esc(d.suggestion || "还没有可对比的样本") + '</div></div>';
+    if($("flowEstRisk")) $("flowEstRisk").innerHTML = "";
+    if($("flowEstNote")) $("flowEstNote").textContent = d.note || "";
+    return;
+  }
+
+  var f = d.overallFactor || 0;
+  /* 偏乐观（实际超预估）和偏保守都值得提醒，只有落在中间才算"准" */
+  var cls = (f >= 1.15 || f <= 0.87) ? "warn" : "good";
+  var n = d.sampleCount;
+  var wu = Math.round(d.underCount / n * 100);
+  var wa = Math.round(d.accurateCount / n * 100);
+  var wo = Math.max(0, 100 - wu - wa);
+  top.innerHTML =
+    '<div class="fe-factor ' + cls + '">' +
+      '<div class="big">' + f.toFixed(2) + '<small>×</small></div>' +
+      '<div class="lbl">实际 / 预估</div>' +
+    '</div>' +
+    '<div class="fe-main">' +
+      '<div class="fe-bar" title="按任务数分布">' +
+        '<i class="under" style="width:' + wu + '%"></i>' +
+        '<i class="ok" style="width:' + wa + '%"></i>' +
+        '<i class="over" style="width:' + wo + '%"></i>' +
+      '</div>' +
+      '<div class="fe-dist">' +
+        '<span>高估 <b>' + d.underCount + '</b></span>' +
+        '<span>准确 <b>' + d.accurateCount + '</b></span>' +
+        '<span>低估 <b>' + d.overCount + '</b></span>' +
+        '<span>样本 <b>' + n + '</b> 项已完成</span>' +
+      '</div>' +
+      '<div class="fe-sug">' + esc(d.suggestion || "") + '</div>' +
+    '</div>';
+
+  var html = "";
+  /* 进行中且已消耗 80% 以上：唯一还来得及处理的清单 */
+  if(d.atRisk && d.atRisk.length){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">'
+      + d.atRisk.length + ' 个进行中的任务已用掉预估的 80% 以上</div>';
+    for(var i = 0; i < d.atRisk.length && i < 8; i++){
+      var t = d.atRisk[i];
+      var hi = t.level === "danger";
+      html += '<div class="done-item"><div class="di-main">' +
+        '<div class="di-t">' + esc(t.title) + '</div>' +
+        '<div class="di-m">' +
+          '<span class="ai-tag ' + (hi ? "risk-hi" : "risk-lo") + '">' + (hi ? "已超预估" : "接近预估") + '</span>' +
+          '<span>实际 ' + fmtMinutesShort(t.actualMinutes) + ' / 预估 ' + fmtMinutesShort(t.estimateMinutes)
+            + '（' + Math.round(t.ratio * 100) + '%）</span>' +
+        '</div></div></div>';
+    }
+    html += '</div>';
+  }
+  /* 已完成但超预估：复盘用，别和"还能救"的混一起 */
+  if(d.overrun && d.overrun.length){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">已完成但超出预估（复盘）</div>';
+    for(var j = 0; j < d.overrun.length; j++){
+      var o = d.overrun[j];
+      html += '<div class="done-item"><div class="di-main">' +
+        '<div class="di-t">' + esc(o.title) + '</div>' +
+        '<div class="di-m"><span>实际 ' + fmtMinutesShort(o.actualMinutes) + ' / 预估 '
+          + fmtMinutesShort(o.estimateMinutes) + '（' + Math.round(o.ratio * 100) + '%）</span></div>' +
+      '</div></div>';
+    }
+    html += '</div>';
+  }
+  /* 分类系数：只有一个分类时没有对比意义 */
+  if(d.byCategory && d.byCategory.length > 1){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按分类看系数</div>';
+    d.byCategory.forEach(function(c){
+      var cf = c.factor || 0;
+      html += flowRow(c.category + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
+        Math.min(100, cf * 50),
+        cf >= 1.15 ? "var(--danger)" : (cf >= 0.87 ? "var(--info)" : "var(--success)"));
+    });
+    html += '</div>';
+  }
+  if($("flowEstRisk")) $("flowEstRisk").innerHTML = html;
+  if($("flowEstNote")) $("flowEstNote").textContent = d.note || "";
+}
+
+if($("flowDays")){
+  $("flowDays").addEventListener("change", function(){
+    state.flowDays = Number(this.value) || 90;
+    loadFlowHealth();
+  });
+}
+/* 需求名可点：跳到需求编辑页（和任务清单里的交互一致） */
+if($("view-flow")){
+  $("view-flow").addEventListener("click", function(e){
+    var b = e.target.closest("[data-open-reqdoc]");
+    if(b) openReqDocAndJump(b.dataset.openReqdoc);
+  });
+}
+
 /* ==================== 回收站（§6.9） ==================== */
 var trashList = $("trashList");
 function enterTrashView(){ loadTrash(); }
@@ -9421,7 +10471,10 @@ function enterSettingsView(){
   if(nh) nh.textContent = canNotify
     ? "改动立即生效；关闭后，定时汇总与任务提醒都不会发出（测试推送走同一开关）"
     : "仅空间主可配置与测试";
-  $("wsMemberAdd").hidden = !isOwner;
+  /* 按登录名直接加人只有平台管理员可用；普通空间主只能走邀请链接（对方确认后加入） */
+  var isAdmin = !!(currentUser && currentUser.role === "admin");
+  $("wsMemberAdd").hidden = !(isOwner && isAdmin);
+  if($("wsMemberHint")) $("wsMemberHint").hidden = !(isOwner && !isPersonal && !isAdmin);
   var canInvite = !isPersonal && isOwner;
   $("inviteBox").hidden = !canInvite;
   if(isPersonal){
@@ -10376,6 +11429,8 @@ function loadMe(){
       userListEl.innerHTML = '<div class="foot-note">仅管理员可访问用户管理</div>';
     }
     renderSideUser(u);
+    /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
+    flushMeReady();
     return loadWorkspaces(u);
   }).catch(function(){ /* 未登录由 api.js 统一跳转 */ });
 }
@@ -10385,20 +11440,122 @@ function renderSideUser(u){
   if(av){ av.textContent = initial(name); av.style.setProperty("--a", avatarColor(name)); }
   if(nm) nm.textContent = name;
 }
-function openProfileDialog(){
-  if(!currentUser){ toast("用户信息加载中，请稍后重试", "warn"); return; }
-  $("dlgProfileNameInput").value = currentUser.displayName || "";
-  $("fDlgProfileName").classList.remove("invalid");
-  ["dlgProfileOld","dlgProfileNew","dlgProfileAgain"].forEach(function(id){ $(id).value = ""; });
-  ["fDlgProfileNew","fDlgProfileAgain"].forEach(function(id){ $(id).classList.remove("invalid"); });
-  UI.openModal($("dlgProfile"));
+/* ==================== 个人设置（独立页，不再是挤在一起的弹窗） ==================== */
+
+/* 深链直达（#/profile）时 /api/auth/me 可能还没回来，视图拿不到 currentUser。
+   把这类"要等当前用户"的初始化排到 me 返回之后再跑，而不是直接 return 留一屏空白。 */
+var meReadyCbs = [];
+function afterMeReady(fn){
+  if(currentUser){ fn(); return; }
+  meReadyCbs.push(fn);
 }
-$("sideUserBtn").addEventListener("click", openProfileDialog);
-$("dlgProfileNameSave").addEventListener("click", function(){
-  var name = $("dlgProfileNameInput").value.trim();
-  if(!name){ $("fDlgProfileName").classList.add("invalid"); return; }
-  if(currentUser && name === currentUser.displayName){ toast("显示名未变化"); return; }
-  var btn = $("dlgProfileNameSave");
+function flushMeReady(){
+  var list = meReadyCbs;
+  meReadyCbs = [];
+  for(var i = 0; i < list.length; i++){
+    try{ list[i](); }catch(e){ /* 单个视图初始化失败不该拖垮其它 */ }
+  }
+}
+
+function enterProfileView(){
+  if(!currentUser){
+    afterMeReady(enterProfileView);
+    return;
+  }
+  var name = currentUser.displayName || currentUser.username || "?";
+  if($("meAvatar")){
+    $("meAvatar").textContent = initial(name);
+    $("meAvatar").style.setProperty("--a", avatarColor(name));
+  }
+  if($("meName")) $("meName").textContent = name;
+  if($("meUsername")) $("meUsername").textContent = "@" + (currentUser.username || "");
+  if($("meRoleHint")) $("meRoleHint").textContent = (currentUser.role === "admin") ? "平台管理员" : "普通成员";
+  if($("meNameInput")){
+    $("meNameInput").value = currentUser.displayName || "";
+    $("fMeName").classList.remove("invalid");
+  }
+  fillMeSelects();
+  ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
+  ["fMeNewPwd","fMeAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.classList.remove("invalid"); });
+  wireMeAnchor();
+  updateMePreview();
+  /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
+  loadAiConfig();
+}
+
+/** 计时设置下拉：上班 0-23 / 下班 1-24（24 = 当天 24:00）/ 每天上限 1-24 小时 */
+function fillMeSelects(){
+  var s = $("meStart"), e = $("meEnd"), m = $("meMax");
+  if(!s || !e || !m) return;
+  if(!s.options.length){
+    var hs = "";
+    for(var h = 0; h < 24; h++) hs += '<option value="' + h + '">' + pad2(h) + ':00</option>';
+    s.innerHTML = hs;
+    var es = "";
+    for(var k = 1; k <= 24; k++) es += '<option value="' + k + '">' + (k === 24 ? "24:00" : pad2(k) + ":00") + '</option>';
+    e.innerHTML = es;
+    var ms = "";
+    for(var x = 1; x <= 24; x++) ms += '<option value="' + x + '">' + x + ' 小时</option>';
+    m.innerHTML = ms;
+  }
+  s.value = String(currentUser.workStartHour == null ? 9 : currentUser.workStartHour);
+  e.value = String(currentUser.workEndHour == null ? 18 : currentUser.workEndHour);
+  m.value = String(currentUser.workMaxHours == null ? 8 : currentUser.workMaxHours);
+}
+
+/** 把当前选择翻成一句人话（时段比上限还短时直接点出来，免得用户以为设了 8 小时就有 8 小时） */
+function updateMePreview(){
+  var p = $("mePreview");
+  if(!p || !$("meStart")) return;
+  var sh = Number($("meStart").value), eh = Number($("meEnd").value), mh = Number($("meMax").value);
+  var win = eh - sh;
+  var text = "每天 " + pad2(sh) + ":00–" + pad2(eh) + ":00 之间才计入，最多 " + mh + " 小时；周末不计。";
+  if(win < mh){
+    text += "（这个时段只有 " + win + " 小时，实际最多记 " + win + " 小时）";
+  }
+  p.textContent = text;
+}
+
+function wireMeAnchor(){
+  var nav = $("meAnchor");
+  var view = $("view-profile");
+  if(!nav || !view) return;
+  if(!nav.__wired){
+    nav.__wired = true;
+    nav.querySelectorAll("a").forEach(function(a){
+      a.addEventListener("click", function(e){
+        e.preventDefault();
+        var el = document.querySelector(a.getAttribute("href"));
+        if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
+      });
+    });
+  }
+  function spy(){
+    var panels = view.querySelectorAll(".set-panels .panel[id]");
+    var cur = panels.length ? panels[0].id : null;
+    var best = -1e9;
+    panels.forEach(function(p){
+      var top = p.getBoundingClientRect().top;
+      if(top - 140 <= 0 && top > best){ best = top; cur = p.id; }
+    });
+    nav.querySelectorAll("a").forEach(function(a){
+      a.classList.toggle("on", a.getAttribute("href") === "#" + cur);
+    });
+  }
+  if(!view.__spyWired){
+    view.__spyWired = true;
+    view.addEventListener("scroll", spy, {passive:true});
+  }
+  spy();
+}
+
+$("sideUserBtn").addEventListener("click", function(){ showView("profile"); });
+
+$("meNameSave") && $("meNameSave").addEventListener("click", function(){
+  var name = $("meNameInput").value.trim();
+  if(!name){ $("fMeName").classList.add("invalid"); toast("请填写显示名", "warn"); return; }
+  if(currentUser && name === currentUser.displayName){ toast("显示名没有变化"); return; }
+  var btn = $("meNameSave");
   btn.disabled = true;
   API.put("/api/auth/profile", { displayName: name }).then(function(res){
     btn.disabled = false;
@@ -10406,6 +11563,7 @@ $("dlgProfileNameSave").addEventListener("click", function(){
     OWNER_DEFAULT = currentUser.displayName;
     renderSideUser(currentUser);
     refreshOwnerSelect();
+    enterProfileView();
     toast("显示名已更新为「" + currentUser.displayName + "」", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
@@ -10413,20 +11571,175 @@ $("dlgProfileNameSave").addEventListener("click", function(){
     toast(ex.message || "保存失败", "bad");
   });
 });
-$("dlgProfilePwdSave").addEventListener("click", function(){
-  var oldPwd = $("dlgProfileOld").value;
-  var newPwd = $("dlgProfileNew").value;
-  var again = $("dlgProfileAgain").value;
-  var fNew = $("fDlgProfileNew"), fAgain = $("fDlgProfileAgain");
+
+["meStart","meEnd","meMax"].forEach(function(id){
+  var el = $(id);
+  if(el) el.addEventListener("change", updateMePreview);
+});
+
+$("meTimerSave") && $("meTimerSave").addEventListener("click", function(){
+  if(!currentUser) return;
+  var sh = Number($("meStart").value), eh = Number($("meEnd").value), mh = Number($("meMax").value);
+  if(eh <= sh){ toast("下班时间要晚于上班时间", "warn"); return; }
+  var btn = $("meTimerSave");
+  btn.disabled = true;
+  API.put("/api/auth/work-hours", { startHour: sh, endHour: eh, maxHours: mh }).then(function(res){
+    btn.disabled = false;
+    currentUser.workStartHour = res && res.workStartHour != null ? res.workStartHour : sh;
+    currentUser.workEndHour = res && res.workEndHour != null ? res.workEndHour : eh;
+    currentUser.workMaxHours = res && res.workMaxHours != null ? res.workMaxHours : mh;
+    updateMePreview();
+    toast("已保存：" + pad2(sh) + ":00–" + pad2(eh) + ":00，每天最多 " + mh + " 小时（只影响之后的计时）", "fs");
+    /* 运行中的计时按新口径重算 */
+    loadRunningTimer();
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+
+/* ==================== 个人设置 · AI（走每个人自己的额度） ==================== */
+var aiCfg = null;
+
+function findAiPreset(id){
+  var list = (aiCfg && aiCfg.presets) || [];
+  for(var i = 0; i < list.length; i++){ if(list[i].id === id) return list[i]; }
+  return null;
+}
+function loadAiConfig(){
+  if(!$("meAiProvider")) return;
+  API.get("/api/ai/config").then(function(d){
+    aiCfg = d;
+    renderAiConfig(d);
+  }).catch(function(ex){
+    if($("meAiResult")){
+      $("meAiResult").hidden = false;
+      $("meAiResult").textContent = "AI 配置加载失败：" + (ex.message || "未知错误");
+    }
+  });
+}
+function renderAiConfig(d){
+  var sel = $("meAiProvider");
+  if(!sel.options.length){
+    sel.innerHTML = ((d.presets || []).map(function(p){
+      return '<option value="' + p.id + '">' + esc(p.name) + '</option>';
+    })).join("");
+  }
+  sel.value = d.provider || "deepseek";
+  $("meAiModel").value = d.model || "";
+  $("meAiBase").value = d.baseUrl || "";
+  $("meAiEnabled").checked = !!d.enabled;
+  $("meAiKey").value = "";
+  $("meAiKey").placeholder = d.hasKey
+    ? "已保存 " + (d.apiKeyMasked || "****") + "（留空表示不修改）"
+    : "粘贴你的 API Key";
+  if($("meAiKeyState")){
+    $("meAiKeyState").textContent = d.keyBroken
+      ? "已保存的 Key 无法解密（部署密钥变更过），请重新填一次"
+      : (d.hasKey ? "已保存 " + (d.apiKeyMasked || "") + "，留空则保持不变" : "还没有配置 Key");
+  }
+  if($("meAiState")){
+    $("meAiState").textContent = d.status || "";
+    $("meAiState").className = "meta-right" + (d.enabled && d.hasKey ? "" : " muted");
+  }
+  var p = findAiPreset(sel.value);
+  if(p && $("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+}
+function aiFormBody(clearKey){
+  var key = $("meAiKey") ? $("meAiKey").value.trim() : "";
+  return {
+    provider: $("meAiProvider").value,
+    baseUrl: $("meAiBase").value.trim(),
+    model: $("meAiModel").value.trim(),
+    apiKey: key,
+    clearKey: !!clearKey,
+    enabled: $("meAiEnabled").checked
+  };
+}
+function saveAiConfig(clearKey){
+  return API.put("/api/ai/config", aiFormBody(clearKey)).then(function(d){
+    aiCfg = d;
+    renderAiConfig(d);
+    return d;
+  });
+}
+if($("meAiProvider")){
+  $("meAiProvider").addEventListener("change", function(){
+    var p = findAiPreset(this.value);
+    if(!p) return;
+    /* 自定义厂商没有默认值，保留用户已经填的地址和模型 */
+    if(this.value !== "custom"){
+      if(p.baseUrl) $("meAiBase").value = p.baseUrl;
+      if(p.model) $("meAiModel").value = p.model;
+    }
+    if($("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+  });
+}
+if($("meAiSave")){
+  $("meAiSave").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    saveAiConfig(false).then(function(d){
+      btn.disabled = false;
+      toast("AI 设置已保存", "fs");
+      if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = d.status || ""; }
+    }).catch(function(ex){
+      btn.disabled = false;
+      toast(ex.message || "保存失败", "bad");
+    });
+  });
+}
+if($("meAiTest")){
+  /* 先存再测：测的一定是"表单里这个样子"，而不是上次存的旧配置 */
+  $("meAiTest").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    var t0 = Date.now();
+    if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = "正在保存并测试连接…"; }
+    saveAiConfig(false).then(function(){
+      return API.post("/api/ai/config/test", {});
+    }).then(function(r){
+      btn.disabled = false;
+      var sec = ((Date.now() - t0) / 1000).toFixed(1);
+      if($("meAiResult")){
+        $("meAiResult").textContent = "连通正常：模型 " + (r.model || "—")
+          + "，往返 " + sec + " 秒，返回「" + String(r.reply || "").slice(0, 20) + "」，本次 " + (r.tokens || 0) + " tokens";
+      }
+      toast("AI 连接正常", "fs");
+    }).catch(function(ex){
+      btn.disabled = false;
+      if($("meAiResult")){
+        $("meAiResult").textContent = "连接失败：" + (ex.message || "未知错误");
+      }
+      toast(ex.message || "连接失败", "bad");
+    });
+  });
+}
+if($("meAiClear")){
+  $("meAiClear").addEventListener("click", function(){
+    if(!window.confirm("清除已保存的 API Key？清除后 AI 功能不可用，直到重新填写。")) return;
+    saveAiConfig(true).then(function(){
+      toast("已清除 API Key", "fs");
+      if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = "已清除，可以填入新的 Key"; }
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  });
+}
+
+$("mePwdSave") && $("mePwdSave").addEventListener("click", function(){
+  var oldPwd = $("meOldPwd").value;
+  var newPwd = $("meNewPwd").value;
+  var again = $("meAgainPwd").value;
+  var fNew = $("fMeNewPwd"), fAgain = $("fMeAgainPwd");
   var bad = false;
+  if(!oldPwd){ toast("请填写当前密码", "warn"); return; }
   if(newPwd.length < 6){ fNew.classList.add("invalid"); bad = true; } else fNew.classList.remove("invalid");
   if(newPwd !== again){ fAgain.classList.add("invalid"); bad = true; } else fAgain.classList.remove("invalid");
   if(bad) return;
-  var btn = $("dlgProfilePwdSave");
+  var btn = $("mePwdSave");
   btn.disabled = true;
   API.post("/api/auth/password", { oldPassword: oldPwd, newPassword: newPwd }).then(function(){
     btn.disabled = false;
-    ["dlgProfileOld","dlgProfileNew","dlgProfileAgain"].forEach(function(id){ $(id).value = ""; });
+    ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
     toast("密码已修改（已登录的设备保持有效，直到会话过期）", "fs");
   }).catch(function(ex){
     btn.disabled = false;
@@ -11069,6 +12382,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-22 02:53</span></div>
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-23 02:53</span></div>
 </body>
 </html>

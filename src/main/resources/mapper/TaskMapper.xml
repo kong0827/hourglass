@@ -4,7 +4,7 @@
 
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id,
-    progress, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
+    progress, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at
   </sql>
 
@@ -54,10 +54,10 @@
 
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
-                      start_date, due_date, req_id, req_doc_id, progress, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      start_date, due_date, req_id, req_doc_id, progress, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
-            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{progress}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{progress}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -76,6 +76,7 @@
       req_id = #{reqId},
       req_doc_id = #{reqDocId},
       progress = #{progress},
+      estimate_minutes = #{estimateMinutes},
       is_blocked = #{blocked},
       blocked_reason = #{blockedReason},
       blocked_by_task_id = #{blockedByTaskId},

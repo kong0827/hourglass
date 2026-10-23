@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.common.LoginUser;
 import com.devstudio.kanban.dto.PasswordChangeRequest;
 import com.devstudio.kanban.dto.ProfileUpdateRequest;
+import com.devstudio.kanban.dto.WorkHoursRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.service.UserService;
@@ -40,6 +41,10 @@ public class AuthController {
         data.put("displayName", u.getDisplayName());
         data.put("role", db != null ? db.getRole() : u.getRole());
         data.put("lastWorkspaceId", db == null ? null : db.getLastWorkspaceId());
+        /* 计时设置：只有工作时段内累计、每天有上限（没配置过就是 9-18 / 8 小时） */
+        data.put("workStartHour", db == null || db.getWorkStartHour() == null ? 9 : db.getWorkStartHour());
+        data.put("workEndHour", db == null || db.getWorkEndHour() == null ? 18 : db.getWorkEndHour());
+        data.put("workMaxHours", db == null || db.getWorkMaxHours() == null ? 8 : db.getWorkMaxHours());
         return ApiResult.ok(data);
     }
 
@@ -56,6 +61,17 @@ public class AuthController {
         AppUser u = userService.updateProfile(CurrentUser.id(), req);
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("displayName", u.getDisplayName());
+        return ApiResult.ok(data);
+    }
+
+    /** 修改自己的计时设置（工作时段 + 每天上限；只影响之后的计时折算，历史工时不动） */
+    @PutMapping("/api/auth/work-hours")
+    public ApiResult<Map<String, Object>> updateWorkHours(@Valid @RequestBody WorkHoursRequest req) {
+        AppUser u = userService.updateWorkHours(CurrentUser.id(), req);
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("workStartHour", u.getWorkStartHour());
+        data.put("workEndHour", u.getWorkEndHour());
+        data.put("workMaxHours", u.getWorkMaxHours());
         return ApiResult.ok(data);
     }
 }

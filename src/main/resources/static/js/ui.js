@@ -83,7 +83,7 @@
 
   function modalEls() {
     if (!MODALS) {
-      MODALS = ["dlgWsCreate", "dlgProfile", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm"]
+      MODALS = ["dlgWsCreate", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm"]
         .map(function (id) { return document.getElementById(id); })
         .filter(Boolean);
     }
@@ -364,7 +364,6 @@
       wireModal(dlgConfirm, function () { settleConfirm(false); });
     }
     [["dlgWsCreate", ["dlgWsCreateX", "dlgWsCreateCancel"]],
-     ["dlgProfile", ["dlgProfileX", "dlgProfileCancel"]],
      ["dlgViewName", ["dlgViewNameX", "dlgViewNameCancel"]],
      ["dlgWsDelete", ["dlgWsDeleteX", "dlgWsDeleteCancel"]],
      ["dlgUserPwd", ["dlgUserPwdX", "dlgUserPwdCancel"]]].forEach(function (pair) {

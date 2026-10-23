@@ -22,13 +22,14 @@
 ## 多用户与空间
 
 - 账号由管理员创建下发（不开放注册）；共享空间可生成邀请链接，把**已有账号**拉入空间协作；管理员只管账号
-- **空间模型**：每个账号自动有一个「我的看板」个人空间；任何人可新建共享空间并当空间主，按登录名把成员加进来，成员看到同一块看板
+- **空间模型**：每个账号自动有一个「我的看板」个人空间；任何人可新建共享空间并当空间主，成员**只能通过邀请链接加入**（对方打开链接并确认后才成为成员）；`POST /api/workspaces/{id}/members` 按登录名直接加人**仅平台管理员可用**，普通空间主调用返回 403，避免不经同意就把人拉进空间
 - 所有业务接口都接受 `workspace` 查询参数（空间ID）；不传时用"上次使用的空间"，再退回个人空间。前端切换空间后自动携带
 - **数据按空间隔离**：任务/子任务/项目/附件/工时/操作日志/标签/看板列/分类属于空间；保存的筛选视图属于"人+空间"
-- **权限**：全员可做日常操作（增改删任务、拖拽、子任务、标签、计时、附件、回收站恢复）；**仅空间主**可做：改空间名/推送配置、加/移成员、删空间、删看板列、删分类、清空数据、导入覆盖。跨空间访问一律 404，权限不足返回 403
+- **权限**：全员可做日常操作（增改删任务、拖拽、子任务、标签、计时、附件、回收站恢复）；**仅空间主**可做：改空间名/推送配置、移成员、生成/撤销邀请、删空间、删看板列、删分类、清空数据、导入覆盖。跨空间访问一律 404，权限不足返回 403
 - **审计**：操作时间线记录操作人（`actorName`），历史数据显示为空
 - 账号接口：
-  - `GET /api/auth/me` → `{id, username, displayName, role, lastWorkspaceId}`
+  - `GET /api/auth/me` → `{id, username, displayName, role, lastWorkspaceId, workStartHour, workEndHour, workMaxHours}`
+  - `PUT /api/auth/work-hours`，body `{"startHour":9,"endHour":18,"maxHours":8}` → 修改自己的计时设置（`0 ≤ startHour ≤ 23`、`1 ≤ endHour ≤ 24`、`endHour > startHour`、`1 ≤ maxHours ≤ 24`）；只影响之后的计时折算，已记录工时不重算
   - `PUT /api/auth/profile`，body `{"displayName":"..."}` → 修改自己的显示名（负责人默认值与成员列表随之更新；**其参与空间中「负责人=旧显示名」的任务同步改为新名**，含回收站任务；操作时间线保留历史记录）
   - 管理员专属（`/api/admin/users`，见下方原章节）：新增/改显示名与角色/重置密码/删除（需先清空其个人空间数据、非共享空间主、不能删自己、至少留一名管理员）
 - 空间接口：
@@ -311,6 +312,148 @@ params 为前端筛选状态序列化：`{q, owners, pris, cats, reqs, tags, due
 - `usedCount` 在每次成功加入时 +1；邀请码大小写不敏感（统一转大写查询）
 - 安全：仅 `GET /api/invite/{code}` 为公开接口（放行见 SecurityConfig），`/join` 需登录；建议在 nginx 对邀请路径同样启用限速（与登录接口共用注释块）
 
+## 30. GET /api/flow-health?days=90
+
+流程体检：从 `task_log` 的跨列移动记录反推流程健康度。`days` 取 1-730，默认 90。只读，不改任何业务数据。
+
+```json
+{"code":0,"data":{
+  "rangeDays":90,"since":"2026-07-24","generatedAt":"2026-10-22 16:58",
+  "coverage":{"moveEvents":46,"usableMoves":44,"tasksTotal":13,"tasksWithMoves":9,
+              "completedInRange":5,"note":"口径说明 / 数据不足时的引导语"},
+  "columns":[{"id":"backlog","name":"待处理","color":"#8a8578","segments":18,
+              "totalSeconds":486000,"avgSeconds":27000,"medianSeconds":21600,"p90Seconds":61200,
+              "share":0.52,"ongoingCount":8,"ongoingMaxSeconds":1036800,
+              "ongoingAvgSeconds":432000,"bottleneck":true}],
+  "bottleneckId":"backlog","bottleneckName":"待处理","bottleneckShare":0.52,
+  "rework":{"totalMoves":44,"backMoves":9,"backRate":0.2045,
+            "completedTasks":5,"firstPassTasks":3,"firstPassRate":0.6},
+  "priority":[{"priority":"P0","tasks":6,"avgMoves":3.2}],
+  "reqDocs":{"total":5,"withTasks":3,"noTask":2,"avgLeadHours":30.4,
+             "noTaskList":[{"id":"D9","title":"结算改造-对账口径调整","ageDays":12}]},
+  "insights":[{"level":"warn","title":"最堵的是「待处理」","text":"..."}]
+}}
+```
+
+**口径**（改这里之前先看 `FlowHealthService` 的类注释）：
+
+- **列停留**：任务进入某列到离开该列的时间。`avgSeconds`/`medianSeconds`/`p90Seconds` **只统计已经离开该列的段**（`segments`），当前仍停在该列的单独给 `ongoingCount`/`ongoingMaxSeconds`，不混进历史均值。
+- **`share` 的分母只含已结束的停留**，但包含「已被删除的列」那段时间；「已完成」列是终点，不计入停留（`segments` 恒为 0）。
+- **回退** = 目标列在 `board_column.sort_order` 里比来源列更靠前。`totalMoves` 只含跨列移动（列内排序不算）。
+- **一次通过率** = 时间窗内完成的任务里，窗内没发生过回退的比例（窗口口径，不是任务全生命周期）。
+- **需求开工延迟** = `requirement_doc.created_at` → 首个关联任务 `created_at` 的平均小时数。
+- **时长单位全部是秒**，由前端格式化。
+
+**数据来源与兼容**：`task_log.from_column`/`to_column` 是 `09_task_flow.sql` 新增的结构化字段，`POST /api/tasks/{id}/move` 写入；历史数据在该脚本里按 `detail` 文本「从「X」移动到「Y」」回填，列改名过的会回填不上（`from/to` 留 NULL，计入 `coverage.moveEvents` 但不算 `usableMoves`）。Service 侧另有基于 `detail` 的兜底解析。
+
+## 31. AI 辅助需求（按账号走自己的额度）
+
+三件事：**配自己的 AI**、**把需求拆成任务草稿**、**检查需求做完了没**。
+账号级配置（不是空间级）—— 额度是按人买的，换空间不用重填；共享空间里各人走各人的 key。
+
+### 31.1 配置
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/ai/config` | 我的配置（**key 只回掩码**） |
+| PUT | `/api/ai/config` | 保存（`apiKey` 空=不改，`clearKey=true`=删除） |
+| POST | `/api/ai/config/test` | 用已保存配置发一次极小请求，验证 key/地址/模型 |
+
+```json
+{"code":0,"data":{
+  "provider":"deepseek","baseUrl":"https://api.deepseek.com/v1","model":"deepseek-chat",
+  "hasKey":true,"apiKeyMasked":"sk-****a1b2","enabled":true,"keyBroken":false,
+  "status":"已就绪：调用会走你自己的额度",
+  "presets":[{"id":"deepseek","name":"DeepSeek","baseUrl":"...","model":"deepseek-chat","keyHint":"..."}]
+}}
+```
+
+**安全口径**（不要改）：
+
+- Key 用 AES-GCM 加密后入库（`v1:` 前缀 + Base64(IV‖密文)），密钥来自 `app.ai.crypto-key`（部署用环境变量 `AI_CRYPTO_KEY` 覆盖）。
+- 接口**永不回传明文**，只有 `apiKeyMasked`（`sk-****a1b2`，短 key 全遮）。
+- 换过部署密钥 → `keyBroken=true`、`hasKey=false`，提示用户重填。**这是设计行为，不是故障**。
+- 所有 AI 调用只从 `CurrentUser.id()` 取配置，**没有公共 key 兜底**：没配就直接报错。
+
+**内置厂商**（全部 OpenAI 兼容，`baseUrl` 可改，可走中转/代理）：
+DeepSeek、通义千问、月之暗面 Kimi、智谱 GLM、腾讯混元、OpenAI、本地 Ollama、自定义。
+加新厂商只需改 `AiProviders`。
+
+### 31.2 拆分与体检
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/ai/reqdoc/{id}/split?maxTasks=8` | 拆成任务**草稿**（不落库） |
+| POST | `/api/ai/reqdoc/{id}/audit` | 完成度体检 |
+| POST | `/api/ai/reqdoc/{id}/tasks` | 把勾选的草稿创建成任务 |
+
+`split` 返回 `{reqDocId, reqDocTitle, docChars, tasks:[{title,description,priority,dependsOnIndex,reason}], usage}`。
+喂给模型的是**已保存的正文**（转纯文本，保留段落/列表/表格行），超过 12000 字会截断并在 prompt 里注明；
+同项目已有任务标题作为 few-shot 参考命名风格。
+
+`audit` 返回 `{coverage, verdict, summary, nextStep, totalPoints, donePoints, doingPoints, todoPoints, missingPoints, points:[{point,covered,status,taskTitle,note}], tasks, usage}`。
+
+**分工是刻意的**：AI 只负责"把需求拆成可验证的功能点"和"给每个点找覆盖它的任务"；
+`coverage` 与 `verdict` **由服务端按规则算**，不让模型打分：
+
+```
+coverage = round((done×1 + doing×0.6 + todo×0.3 + missing×0) / total × 100)
+verdict  = coverage>=95 且 missing==0 → done
+         | coverage>=70 → mostly
+         | coverage>=30 → partial
+         | 否则 → not_started
+```
+
+理由：模型直接给的分"看起来合理但没法解释"，也无法保证"有缺失就不会说做完了"。
+
+`tasks` 逐条创建，单条失败不影响其它条，返回 `{created, skipped, failed:[{title,reason}]}`；
+与已有任务**同名会跳过**（避免重复建）。
+
+**注意**：这两个接口是长请求（模型生成通常 20-60 秒），nginx 的 `proxy_read_timeout` 必须大于 120 秒，否则前端拿到 504。
+
+## 32. GET /api/estimate/stats
+
+估时准确度与超支预警。只读。
+
+```json
+{"code":0,"data":{
+  "tasksTotal":13,"tasksWithEstimate":7,"sampleCount":4,
+  "overallFactor":1.42,"medianFactor":1.45,
+  "underCount":0,"accurateCount":1,"overCount":3,
+  "byCategory":[{"category":"后端","sampleCount":2,"estimateTotal":600,"actualTotal":1000,"factor":1.67}],
+  "atRisk":[{"id":"K1","title":"重构权限校验中间件","category":"后端","column":"doing",
+             "estimateMinutes":480,"actualMinutes":520,"ratio":1.08,"level":"danger"}],
+  "overrun":[{"id":"D3","title":"次席出金接口幂等校验","estimateMinutes":240,
+              "actualMinutes":420,"ratio":1.75,"level":"danger"}],
+  "suggestion":"你的估时偏乐观：……下次填预估时，把心里的数乘 1.42 再填。",
+  "note":"口径：实际 = 计时记录……"
+}}
+```
+
+### ⚠️ 为什么不用 `start_date` 算工期
+
+**开始日期是"什么时候接到的"，不是"什么时候动手"。** 一个任务可能今天创建、下周才真正开工，
+`[开始, 完成]` 之间的跨度里大部分是排队等待 —— 拿它算效率只会得出"我干活很慢"的错误结论。
+
+唯一的可比基准是两个数：
+
+| | 来源 | 说明 |
+| --- | --- | --- |
+| **预估** | `task.estimate_minutes` | 人自己填的，单位分钟（表单用小时，0.5 步进） |
+| **实际** | `time_log.minutes` 累计 | 已按工作时段折算、跳过周末、每天封顶 |
+
+`start_date` / `due_date` 仍然只用于日历排布与逾期判断，**不参与任何效率计算**。
+
+### 口径
+
+- **系数 = Σ实际 / Σ预估**（不是"平均每个任务的比值"）。后者会让"预估 0.5h 实际 2h"（4 倍）的小任务
+  和"预估 40h 实际 60h"（1.5 倍）的大任务等权重，结论会被小事带偏。
+- **只统计已完成任务**：进行中的实际值还不完整，算进去会显得"总是高估"。
+- **偏差分档**：实际/预估 `< 0.85` 高估 / `0.85~1.15` 准确 / `> 1.15` 低估。
+- **预警只看进行中**（非 `backlog`、非 `done`）且 `实际/预估 ≥ 0.8`：`≥ 1.0` 记 `danger`（已超），否则 `warn`（接近）。
+  `backlog` 里的任务还没开工（实际 0），预警没有意义。
+- `estimate_minutes` 为 `null` 或 `0` 一律视为"没估"，不参与任何统计；保存时也统一存 `NULL`。
+
 ## 已接受的现状口径（按设计如此，非缺陷）
 
 以下行为是当前版本有意保留的设计边界，使用/验收时按此预期判断：
@@ -493,6 +636,16 @@ params 为前端筛选状态序列化：`{q, owners, pris, cats, reqs, tags, due
 | 时间线文案 | 停表日志改为「本次计入 N 分钟」，被裁剪时补一句「已按每天 8 小时 / 跳过周末裁剪，实际经过 M 分钟」。 |
 
 **口径说明（容易踩的点）**：跨天计时按天切分、每天各自封顶 8 小时。例如周五 18:00 开表、周一 09:00 停表 → 周五记 6 小时 + 周末 0 + 周一封顶 8 小时 = 14 小时。这是"每天 8 小时"的字面实现；如果希望"跨天只算开始当天"，属于另一种口径，需要再确认。
+
+> **v3.1 修订（2026-10-23）：按「工作时段」而不是自然日切段。**
+> 原实现从每天 00:00 切，所以忘停表过夜时，凌晨一过就开始重新累计（用户实测报障）。
+> 现在只计**工作时段**内的时长：默认 **09:00–18:00**，每个账号可在「个人设置 → 计时设置」自己调
+> （`app_user.work_start_hour` / `work_end_hour`，开始 0-23、结束 1-24，结束须晚于开始）。
+> 于是：周一 18:00 开表 → 周二 10:00 停表，只记周二 09:00–10:00 = **60 分钟**；
+> 周一 22:00 → 周二 08:00 则记 **0**。周末跳过与"每天封顶"两条规则不变。
+>
+> **v3.2（同日）：每天上限也可配。** `app_user.work_max_hours`（1-24，默认 8）。
+> 上限仍是"人的属性"：跨任务、跨空间一起扣减；时段比上限短时以时段长度为准。
 
 ### 2. 周回顾：`progressTasks` 改为按所在列
 

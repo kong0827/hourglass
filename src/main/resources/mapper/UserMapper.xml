@@ -3,7 +3,9 @@
 <mapper namespace="com.devstudio.kanban.mapper.UserMapper">
 
   <sql id="cols">
-    id, username, password_hash, display_name, role, last_workspace_id, created_at, updated_at
+    id, username, password_hash, display_name, role, work_start_hour, work_end_hour, work_max_hours,
+    ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
+    last_workspace_id, created_at, updated_at
   </sql>
 
   <select id="selectAll" resultType="AppUser">
@@ -47,6 +49,25 @@
 
   <update id="updateLastWorkspace">
     UPDATE app_user SET last_workspace_id = #{workspaceId} WHERE id = #{id}
+  </update>
+
+  <!-- 只改计时设置（工作时段 + 每天上限）：独立语句，避免和"改显示名/角色"的 update 互相覆盖 -->
+  <update id="updateWorkHours">
+    UPDATE app_user
+    SET work_start_hour = #{startHour}, work_end_hour = #{endHour}, work_max_hours = #{maxHours}, updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <!-- 只改 AI 配置：独立语句，避免和别的 update 互相覆盖（同 updateWorkHours 的做法） -->
+  <update id="updateAiConfig">
+    UPDATE app_user
+    SET ai_provider = #{provider},
+        ai_base_url = #{baseUrl},
+        ai_model    = #{model},
+        ai_enabled  = #{enabled},
+        ai_api_key  = #{apiKey},
+        updated_at  = NOW()
+    WHERE id = #{id}
   </update>
 
   <delete id="deleteById">

@@ -281,6 +281,21 @@
 .set-actions,.data-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;}
 .set-actions .spacer{flex:1 1 auto;}
 
+/* 个人设置：身份卡 + 口径预览 */
+.me-idcard{display:flex;align-items:center;gap:14px;margin:2px 0 18px;}
+.me-avatar{
+  display:grid;place-items:center;width:52px;height:52px;border-radius:50%;flex:0 0 auto;
+  background:var(--a,var(--primary-soft));color:#fff;font-size:20px;font-weight:650;letter-spacing:.02em;
+}
+.me-name{font-size:16px;font-weight:650;color:var(--text);line-height:1.3;}
+.me-sub{margin-top:3px;font-size:12px;color:var(--text-3);}
+.me-preview{
+  margin:14px 0 0;padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12.5px;line-height:1.7;color:var(--text-2);
+}
+.set-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
+@media (max-width:1279px){.set-grid.three{grid-template-columns:1fr;}}
+
 /* 列 / 分类配置行 */
 .cfg-list{display:flex;flex-direction:column;gap:6px;}
 .cfg-row{
@@ -724,3 +739,177 @@
 }
 .reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:focus{outline:none;border-color:var(--border-strong);}
 .reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+
+/* ===== 流程体检（v1） ===== */
+/* 结论条：一眼看到"哪里不对"，所以放在整个页面最上面，颜色只用来表达严重度 */
+.flow-ins{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 14px;border-radius:var(--r-md);
+  background:var(--surface-sunken);border-left:3px solid var(--info);
+}
+.flow-ins + .flow-ins{margin-top:8px;}
+.flow-ins.warn{border-left-color:var(--warning);}
+.flow-ins.good{border-left-color:var(--success);}
+.flow-ins.info{border-left-color:var(--info);}
+.flow-ins .fi-dot{width:6px;height:6px;border-radius:50%;background:var(--info);margin-top:7px;flex:0 0 auto;}
+.flow-ins.warn .fi-dot{background:var(--warning);}
+.flow-ins.good .fi-dot{background:var(--success);}
+.flow-ins .fi-main{min-width:0;}
+.flow-ins .fi-t{font-size:13.5px;font-weight:600;color:var(--text);line-height:20px;}
+.flow-ins .fi-x{font-size:12.5px;color:var(--text-2);line-height:19px;margin-top:2px;}
+
+/* 各列停留：一行一列，条形长度是占比，颜色沿用列自己的颜色 */
+.flow-bars{display:flex;flex-direction:column;gap:16px;}
+.flow-bar .fb-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+.flow-bar .fb-name{
+  font-size:13px;font-weight:600;color:var(--text);
+  display:flex;align-items:center;gap:6px;min-width:0;
+}
+.flow-bar .fb-tag{
+  font-style:normal;font-size:10.5px;font-weight:600;line-height:16px;
+  color:var(--warning);background:var(--warning-soft);
+  border:1px solid var(--warning-border);border-radius:4px;padding:0 5px;
+}
+.flow-bar .fb-v{
+  font-size:12px;color:var(--text-2);margin-left:auto;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.flow-bar .fb-share{
+  font-size:12px;font-weight:600;color:var(--text-3);
+  width:44px;text-align:right;font-variant-numeric:tabular-nums;
+}
+.flow-bar .fb-meta{
+  display:flex;justify-content:space-between;gap:12px;
+  margin-top:6px;font-size:11.5px;color:var(--text-3);line-height:16px;
+}
+.flow-bar.is-bn .bar{background:var(--warning-soft);}
+
+.flow-note{margin-top:12px;font-size:12px;color:var(--text-3);line-height:18px;}
+.flow-note b{color:var(--text-2);font-weight:600;}
+.flow-orphans{margin-top:4px;}
+/* 未拆任务的需求清单：button 默认 text-align:center，被 flex 拉伸后标题会跑到中间，
+   这里显式左对齐并去掉表格里那套下划线样式（它是列表项，不是表格里的链接） */
+.flow-orphans .done-item{display:block;min-height:0;padding:10px 0;}
+.flow-orphans .di-main{display:block;}
+.flow-orphans .link-cell{
+  display:block;width:100%;text-align:left;white-space:normal;
+  font-size:13.5px;font-weight:600;color:var(--text);text-decoration:none;
+}
+.flow-orphans .link-cell:hover{color:var(--primary-fg);text-decoration:underline;}
+.flow-orphans .di-m{display:block;margin-top:3px;font-size:12px;color:var(--text-3);}
+
+/* ===== AI 设置（个人设置页） ===== */
+.ai-field-wide{grid-column:1/-1;}
+.ai-switch{
+  display:flex;align-items:center;gap:8px;margin-top:12px;
+  font-size:13px;color:var(--text-2);cursor:pointer;
+}
+.ai-switch input{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;}
+
+/* ===== AI 弹窗（拆分 / 完成度） ===== */
+/* 内容量不固定（拆 3 条和 12 条差很多），所以弹窗自身定高上限、列表内部滚动 */
+.ai-dlg{
+  max-width:680px;width:calc(100vw - 40px);max-height:84vh;
+  padding:22px 22px 18px;display:flex;flex-direction:column;
+}
+.ai-dlg .ai-list{
+  flex:1 1 auto;overflow-y:auto;margin:14px 0 0;padding-right:2px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.ai-item{
+  display:flex;gap:10px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+}
+.ai-item.on{border-color:var(--primary-border);background:var(--primary-soft);}
+.ai-item > input[type=checkbox]{
+  flex:0 0 auto;margin-top:3px;width:15px;height:15px;
+  accent-color:var(--primary);cursor:pointer;
+}
+.ai-item .ai-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;}
+/* 标题可编辑：做成"看起来像文字"的输入框，聚焦才露底线 */
+.ai-item .ai-title{
+  width:100%;padding:0;border:none;border-bottom:1px solid transparent;
+  background:transparent;font-size:13.5px;font-weight:600;color:var(--text);
+  font-family:inherit;outline:none;
+}
+.ai-item .ai-title:focus{border-bottom-color:var(--primary-border);}
+.ai-item .ai-desc{font-size:12px;color:var(--text-2);line-height:18px;}
+.ai-item .ai-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+.ai-item .ai-reason{font-size:11.5px;color:var(--text-3);line-height:17px;}
+
+.ai-tag{
+  font-size:10.5px;font-weight:600;line-height:16px;padding:0 6px;
+  border-radius:4px;border:1px solid var(--border);color:var(--text-3);
+  background:var(--surface-sunken);white-space:nowrap;
+}
+.ai-tag.done{color:var(--success);background:var(--success-soft);border-color:var(--success-border);}
+.ai-tag.doing{color:var(--info);background:var(--info-soft);border-color:var(--info-border);}
+.ai-tag.todo{color:var(--text-3);background:var(--surface-sunken);border-color:var(--border);}
+.ai-tag.missing{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.p0{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.p1{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+
+/* 覆盖率：数字要大到一眼看到，条形说明"差多少" */
+.ai-score{
+  display:flex;align-items:center;gap:16px;margin-top:14px;padding:14px 16px;
+  border-radius:var(--r-md);background:var(--surface-sunken);
+}
+.ai-score .big{
+  font-size:34px;line-height:1;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.ai-score .big small{font-size:14px;font-weight:600;color:var(--text-3);margin-left:1px;}
+.ai-score.good .big{color:var(--success);}
+.ai-score.warn .big{color:var(--warning);}
+.ai-score.bad .big{color:var(--danger);}
+.ai-score .sc-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:7px;}
+.ai-score .sc-lbl{font-size:12px;color:var(--text-2);}
+.ai-score .sc-cnt{font-size:11.5px;color:var(--text-3);}
+
+.ai-usage{margin-top:10px;font-size:11.5px;color:var(--text-3);line-height:17px;}
+
+/* ===== 预计耗时（任务抽屉 + 卡片） ===== */
+.est-wrap{position:relative;display:flex;align-items:center;}
+.est-wrap input{flex:1 1 auto;padding-right:46px;}
+.est-unit{
+  position:absolute;right:12px;font-size:12px;color:var(--text-3);
+  pointer-events:none;user-select:none;
+}
+.est-actual{
+  min-height:36px;display:flex;align-items:center;gap:6px;
+  font-size:13px;color:var(--text-2);font-variant-numeric:tabular-nums;
+}
+.est-actual .ea-ratio{font-size:11.5px;color:var(--text-3);}
+.est-actual.over{color:var(--danger);font-weight:600;}
+.est-actual.over .ea-ratio{color:var(--danger);}
+.est-actual.near{color:var(--warning);font-weight:600;}
+
+/* 卡片 meta 行：实际/预估，超了标红 */
+.est-chip.over{color:var(--danger);font-weight:600;}
+.est-chip.near{color:var(--warning);font-weight:600;}
+
+/* ===== 流程体检 · 估时准不准 ===== */
+.flow-est-top{display:flex;align-items:center;gap:18px;padding:14px 16px;border-radius:var(--r-md);background:var(--surface-sunken);}
+.flow-est-top .fe-factor{flex:0 0 auto;text-align:center;min-width:74px;}
+.flow-est-top .fe-factor .big{
+  font-size:30px;line-height:1;font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.flow-est-top .fe-factor .big small{font-size:14px;font-weight:600;color:var(--text-3);margin-left:1px;}
+.flow-est-top .fe-factor .lbl{font-size:11px;color:var(--text-3);margin-top:5px;white-space:nowrap;}
+.flow-est-top .fe-factor.good .big{color:var(--success);}
+.flow-est-top .fe-factor.warn .big{color:var(--warning);}
+.flow-est-top .fe-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:7px;}
+/* 三段分布条：高估(省时) / 准确 / 低估(超时) */
+.flow-est-top .fe-bar{display:flex;height:8px;border-radius:var(--r-pill);overflow:hidden;background:var(--surface-2);}
+.flow-est-top .fe-bar i{display:block;height:100%;}
+.flow-est-top .fe-bar .under{background:var(--success);}
+.flow-est-top .fe-bar .ok{background:var(--info);}
+.flow-est-top .fe-bar .over{background:var(--danger);}
+.flow-est-top .fe-dist{font-size:11.5px;color:var(--text-3);display:flex;gap:10px;flex-wrap:wrap;}
+.flow-est-top .fe-dist b{font-weight:600;color:var(--text-2);}
+.flow-est-top .fe-sug{font-size:12.5px;color:var(--text-2);line-height:18px;}
+
+.flow-est-cat{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.ai-tag.risk-hi{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
+.ai-tag.risk-lo{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}

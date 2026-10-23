@@ -3,6 +3,7 @@ package com.devstudio.kanban.service;
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.common.WorkTime;
+import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.TimeLog;
@@ -10,6 +11,7 @@ import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +30,15 @@ public class TimeLogService {
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final WorkspaceMapper workspaceMapper;
+    private final UserMapper userMapper;
 
     public TimeLogService(TimeLogMapper timeLogMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                          WorkspaceMapper workspaceMapper) {
+                          WorkspaceMapper workspaceMapper, UserMapper userMapper) {
         this.timeLogMapper = timeLogMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.workspaceMapper = workspaceMapper;
+        this.userMapper = userMapper;
     }
 
     /**
@@ -202,15 +206,28 @@ public class TimeLogService {
     }
 
     private String capNote(int wall, int effective) {
-        return wall > effective ? "（已按「每天 8 小时、跳过周末」裁剪，实际经过 " + wall + " 分钟）" : "";
+        return wall > effective ? "（已按「工作时段 + 你的每天上限 + 跳过周末」裁剪，实际经过 " + wall + " 分钟）" : "";
     }
 
     /**
      * 一段计时的有效工时（分钟）—— 规则见 {@link WorkTime}：
-     * 跳过周末、每人每天封顶 8 小时（并扣减当天已记录工时）。
+     * 只计**该账号自己设定的工作时段**（默认 09:00–18:00）、跳过周末、
+     * 每人每天封顶**该账号自己设定的上限**（默认 8 小时），并扣减当天已记录工时。
      */
     private int effectiveMinutes(LocalDateTime start, String userId) {
-        return WorkTime.effectiveMinutes(start, LocalDateTime.now(), day -> usedMinutesOn(userId, day));
+        int[] w = workHoursOf(userId);
+        return WorkTime.effectiveMinutes(start, LocalDateTime.now(), w[0], w[1], w[2],
+                day -> usedMinutesOn(userId, day));
+    }
+
+    /** 该账号的计时设置：[开始小时, 结束小时, 每天上限分钟]；没配置或越界时回落默认 9 / 18 / 8h */
+    private int[] workHoursOf(String userId) {
+        AppUser u = userId == null ? null : userMapper.selectById(userId);
+        int sh = (u == null || u.getWorkStartHour() == null) ? WorkTime.DEFAULT_START_HOUR : u.getWorkStartHour();
+        int eh = (u == null || u.getWorkEndHour() == null) ? WorkTime.DEFAULT_END_HOUR : u.getWorkEndHour();
+        int mh = (u == null || u.getWorkMaxHours() == null) ? WorkTime.MAX_HOURS_PER_DAY : u.getWorkMaxHours();
+        int nsh = WorkTime.normalizeStartHour(sh);
+        return new int[]{ nsh, WorkTime.normalizeEndHour(eh, nsh), WorkTime.normalizeMaxHours(mh) * 60 };
     }
 
     private int usedMinutesOn(String userId, LocalDate day) {

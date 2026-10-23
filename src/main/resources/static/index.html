@@ -103,6 +103,10 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.4 16.2V11M10 16.2V4.6M15.6 16.2v-7"/></svg>
         <span class="nl">报表</span>
       </button>
+      <button class="nav-item" type="button" data-view="flow">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.2h13.6l-5.2 6.2v4.6l-3.2 1.8V10.4Z"/></svg>
+        <span class="nl">流程体检</span>
+      </button>
 
       <span class="nav-sec">管理</span>
       <button class="nav-item" type="button" data-view="trash">
@@ -120,7 +124,7 @@
     </nav>
 
     <div class="side-foot">
-      <button class="side-user" id="sideUserBtn" type="button" title="个人资料 / 修改密码">
+      <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
         <span class="avatar" id="sideUserAv" style="--a:#98A2B3">·</span>
         <span class="side-user-n" id="sideUserName">…</span>
       </button>
@@ -430,6 +434,12 @@
             <span class="reqdoc-saved" id="reqDocSaved"></span>
             <span class="reqdoc-count" id="reqDocCount"></span>
             <span class="reqdoc-actions">
+              <button class="btn sm ghost" type="button" id="reqDocAiSplit" title="用 AI 把正文拆成任务草稿（需要先配好 AI）">
+                AI 拆分
+              </button>
+              <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查需求里的功能点是否都有任务覆盖">
+                完成度检查
+              </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
@@ -487,6 +497,34 @@
               <button class="btn ghost" type="button" id="dlgReqDocCloseCancel">取消</button>
               <button class="btn" type="button" id="dlgReqDocCloseDiscard">不保存</button>
               <button class="btn primary" type="button" id="dlgReqDocCloseSave">保存并关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 拆分：草稿先给人看，确认后才落库 -->
+        <div class="modal-layer" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆分结果</h3>
+            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的任务，标题可以直接改。不勾的不会落库。</p>
+            <div class="ai-list" id="aiSplitList"></div>
+            <div class="ai-usage" id="aiSplitUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="dlgAiSplitCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgAiSplitOk">创建选中任务</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 完成度检查 -->
+        <div class="modal-layer" id="dlgAiAudit" role="dialog" aria-modal="true" aria-labelledby="dlgAiAuditTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgAiAuditTitle">完成度检查</h3>
+            <p class="reqdoc-dlg-msg" id="dlgAiAuditSummary">—</p>
+            <div class="ai-score" id="aiAuditScore"></div>
+            <div class="ai-list" id="aiAuditList"></div>
+            <div class="ai-usage" id="aiAuditUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
             </div>
           </div>
         </div>
@@ -649,6 +687,65 @@
         </div>
       </section>
 
+      <!-- ===== 流程体检 ===== -->
+      <section class="view" id="view-flow" aria-label="流程体检">
+        <div class="view-page wide">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>体检结论</h3>
+              <span class="meta-right row row-gap" style="gap:6px">
+                <span>近</span>
+                <select id="flowDays" class="mini-select" aria-label="统计范围">
+                  <option value="30">30 天</option>
+                  <option value="90" selected>90 天</option>
+                  <option value="180">180 天</option>
+                  <option value="365">365 天</option>
+                </select>
+              </span>
+            </div>
+            <div id="flowInsights"></div>
+            <p class="foot-note" id="flowCoverage" style="margin-top:12px"></p>
+          </div>
+
+          <div class="stat-grid" id="flowKpi"></div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>各列停留时长</h3>
+              <span class="meta-right" id="flowRange">—</span>
+            </div>
+            <div class="flow-bars" id="flowBars"></div>
+            <p class="foot-note">条形长度 = 该列累计停留占全部列的比例。均值与中位数只算<b>已经离开</b>该列的停留，右列单独列出「当前仍卡在这列」的任务，不混进历史均值。</p>
+          </div>
+
+          <div class="duo">
+            <div class="panel">
+              <div class="panel-head"><h3>返工与一次通过</h3></div>
+              <div id="flowRework"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>优先级有没有起作用</h3></div>
+              <div id="flowPriority"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>需求 → 开工</h3><span class="meta-right" id="flowReqMeta">—</span></div>
+            <div id="flowReqs"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h3>估时准不准</h3>
+              <span class="meta-right" id="flowEstMeta">—</span>
+            </div>
+            <div class="flow-est-top" id="flowEstTop"></div>
+            <div id="flowEstRisk"></div>
+            <p class="foot-note" id="flowEstNote"></p>
+          </div>
+        </div>
+      </section>
+
       <!-- ===== 回收站 ===== -->
       <section class="view" id="view-trash" aria-label="回收站">
         <div class="view-page wide">
@@ -664,7 +761,7 @@
             <div class="panel-head"><h3>账号列表</h3></div>
             <div class="notice">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
-              <span>账号由管理员创建下发（不开放注册）；在共享空间里可通过邀请链接或按登录名把账号加为成员。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
+              <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
             </div>
             <div class="user-list" id="userList" style="margin-top:12px"></div>
           </div>
@@ -774,6 +871,7 @@
                 <span class="meta-right" id="wsMemberCount"></span>
               </div>
               <div class="member-list" id="wsMemberList"></div>
+              <p class="set-hint" id="wsMemberHint" hidden>共享空间不能直接把别人拉进来：请用下面的「邀请链接」发给对方，对方打开链接、确认后才会成为成员。</p>
               <div class="cfg-add" id="wsMemberAdd" hidden>
                 <input type="text" id="wsMemberName" maxlength="32" placeholder="输入成员登录名（如 xiaoming）" />
                 <button class="btn" type="button" id="btnWsMemberAdd">添加成员</button>
@@ -868,6 +966,134 @@
         </div>
       </section>
 
+      <!-- ===== 个人设置（点左下角头像进入） ===== -->
+      <section class="view" id="view-profile" aria-label="个人设置">
+        <div class="set-layout">
+          <nav class="set-anchor" id="meAnchor" aria-label="个人设置分区">
+            <a href="#me-basic">基本信息</a>
+            <a href="#me-timer">计时设置</a>
+            <a href="#me-ai">AI 设置</a>
+            <a href="#me-pwd">修改密码</a>
+          </nav>
+
+          <div class="set-panels">
+            <div class="panel" id="me-basic">
+              <div class="panel-head">
+                <h3>基本信息</h3>
+                <span class="meta-right" id="meRoleHint"></span>
+              </div>
+              <div class="me-idcard">
+                <span class="me-avatar" id="meAvatar">?</span>
+                <div class="me-idtext">
+                  <div class="me-name" id="meName">—</div>
+                  <div class="me-sub" id="meUsername">@—</div>
+                </div>
+              </div>
+              <div class="set-grid">
+                <div class="field" id="fMeName">
+                  <label for="meNameInput">显示名</label>
+                  <input id="meNameInput" type="text" maxlength="32" autocomplete="off" placeholder="用于任务负责人默认值" />
+                  <span class="hint">改名会同步你名下任务的负责人文本；历史时间线保留旧记录。</span>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="meNameSave">保存显示名</button>
+              </div>
+            </div>
+
+            <div class="panel" id="me-timer">
+              <div class="panel-head">
+                <h3>计时设置</h3>
+                <span class="meta-right">只影响之后的计时</span>
+              </div>
+              <p class="set-hint">只有上班时间到下班时间之间的计时才计入工时；每天累计到上限后当天不再增加。忘停表过夜不会再多算（0 点到上班时间之间不计）。</p>
+              <div class="set-grid three">
+                <div class="field">
+                  <label for="meStart">上班时间</label>
+                  <select id="meStart"></select>
+                </div>
+                <div class="field">
+                  <label for="meEnd">下班时间</label>
+                  <select id="meEnd"></select>
+                </div>
+                <div class="field">
+                  <label for="meMax">每天最多计入</label>
+                  <select id="meMax"></select>
+                </div>
+              </div>
+              <p class="me-preview" id="mePreview"></p>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="meTimerSave">保存计时设置</button>
+              </div>
+            </div>
+
+            <div class="panel" id="me-ai">
+              <div class="panel-head">
+                <h3>AI 设置</h3>
+                <span class="meta-right" id="meAiState">—</span>
+              </div>
+              <p class="set-hint">用来「按需求拆任务」和「检查需求做完了没」。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
+              <div class="set-grid">
+                <div class="field">
+                  <label for="meAiProvider">厂商</label>
+                  <select id="meAiProvider"></select>
+                </div>
+                <div class="field">
+                  <label for="meAiModel">模型</label>
+                  <input id="meAiModel" type="text" autocomplete="off" placeholder="例如 deepseek-chat" />
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="meAiBase">接口地址</label>
+                  <input id="meAiBase" type="text" autocomplete="off" placeholder="https://api.deepseek.com/v1" />
+                  <span class="hint" id="meAiKeyHint">选厂商后会自动填好，走中转/代理时改这里即可。</span>
+                </div>
+                <div class="field ai-field-wide">
+                  <label for="meAiKey">API Key</label>
+                  <input id="meAiKey" type="password" autocomplete="new-password" placeholder="粘贴你的 API Key" />
+                  <span class="hint" id="meAiKeyState">还没有配置</span>
+                </div>
+              </div>
+              <label class="ai-switch">
+                <input type="checkbox" id="meAiEnabled" />
+                <span>启用 AI（关掉之后不会发出任何请求）</span>
+              </label>
+              <div class="set-actions">
+                <button class="btn ghost" type="button" id="meAiClear">清除 Key</button>
+                <button class="btn" type="button" id="meAiSave">保存</button>
+                <button class="btn primary" type="button" id="meAiTest">保存并测试连接</button>
+              </div>
+              <p class="me-preview" id="meAiResult" hidden></p>
+            </div>
+
+            <div class="panel" id="me-pwd">
+              <div class="panel-head">
+                <h3>修改密码</h3>
+                <span class="meta-right">已登录设备保持有效，直到会话过期</span>
+              </div>
+              <div class="set-grid three">
+                <div class="field">
+                  <label for="meOldPwd">当前密码</label>
+                  <input id="meOldPwd" type="password" maxlength="64" autocomplete="current-password" />
+                </div>
+                <div class="field" id="fMeNewPwd">
+                  <label for="meNewPwd">新密码</label>
+                  <input id="meNewPwd" type="password" maxlength="64" autocomplete="new-password" />
+                  <span class="err">新密码至少 6 位</span>
+                </div>
+                <div class="field" id="fMeAgainPwd">
+                  <label for="meAgainPwd">确认新密码</label>
+                  <input id="meAgainPwd" type="password" maxlength="64" autocomplete="new-password" />
+                  <span class="err">两次输入的新密码不一致</span>
+                </div>
+              </div>
+              <div class="set-actions">
+                <button class="btn" type="button" id="mePwdSave">修改密码</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -954,6 +1180,22 @@
           <div class="field">
             <label>分类</label>
             <div class="seg" id="segCat"></div>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="iEstimate">预计耗时</label>
+            <div class="est-wrap">
+              <input id="iEstimate" type="number" min="0" max="168" step="0.5" placeholder="选填，例如 4" />
+              <span class="est-unit">小时</span>
+            </div>
+            <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
+          </div>
+          <div class="field">
+            <label>实际投入</label>
+            <div class="est-actual" id="iActual">—</div>
+            <span class="hint" id="iActualHint">按工作时段折算的计时累计</span>
           </div>
         </div>
 
@@ -1117,7 +1359,7 @@
     <div class="sheet-head">
       <div style="flex:1 1 auto;min-width:0">
         <h2 id="dlgWsCreateTitle">新建共享空间</h2>
-        <div class="desc">创建后可通过「添加成员」邀请同事一起维护</div>
+        <div class="desc">创建后生成邀请链接发给同事，对方确认后即可一起维护</div>
       </div>
       <button class="icon-btn sm" type="button" id="dlgWsCreateX" aria-label="关闭">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
@@ -1136,54 +1378,6 @@
       <button class="btn primary" type="submit" id="dlgWsCreateOk">创建空间</button>
     </div>
   </form>
-</div>
-
-<!-- 个人资料 / 修改密码 -->
-<div class="modal-layer" id="dlgProfile" role="dialog" aria-modal="true" aria-labelledby="dlgProfileTitle">
-  <div class="sheet xs">
-    <div class="sheet-head">
-      <div style="flex:1 1 auto;min-width:0">
-        <h2 id="dlgProfileTitle">个人资料</h2>
-        <div class="desc">显示名用于任务负责人默认值与成员列表展示</div>
-      </div>
-      <button class="icon-btn sm" type="button" id="dlgProfileX" aria-label="关闭">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
-      </button>
-    </div>
-    <div class="sheet-body">
-      <div class="field" id="fDlgProfileName">
-        <label for="dlgProfileNameInput">显示名</label>
-        <div class="row-inline">
-          <input id="dlgProfileNameInput" type="text" maxlength="32" autocomplete="off" />
-          <button class="btn primary" type="button" id="dlgProfileNameSave">保存</button>
-        </div>
-        <span class="err">请填写显示名</span>
-      </div>
-      <div class="divider"></div>
-      <div class="group-label">修改密码（新密码 6-64 位）</div>
-      <div class="field">
-        <label for="dlgProfileOld">当前密码</label>
-        <input id="dlgProfileOld" type="password" maxlength="64" autocomplete="current-password" />
-      </div>
-      <div class="field" id="fDlgProfileNew">
-        <label for="dlgProfileNew">新密码</label>
-        <input id="dlgProfileNew" type="password" maxlength="64" autocomplete="new-password" />
-        <span class="err">新密码至少 6 位</span>
-      </div>
-      <div class="field" id="fDlgProfileAgain">
-        <label for="dlgProfileAgain">确认新密码</label>
-        <input id="dlgProfileAgain" type="password" maxlength="64" autocomplete="new-password" />
-        <span class="err">两次输入的新密码不一致</span>
-      </div>
-      <div class="row" style="justify-content:flex-end">
-        <button class="btn" type="button" id="dlgProfilePwdSave">修改密码</button>
-      </div>
-    </div>
-    <div class="sheet-foot">
-      <span class="hint">修改密码后已登录的设备保持有效，直到会话过期</span>
-      <button class="btn" type="button" id="dlgProfileCancel">关闭</button>
-    </div>
-  </div>
 </div>
 
 <!-- 保存视图命名 -->

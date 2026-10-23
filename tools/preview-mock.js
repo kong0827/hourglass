@@ -16,6 +16,7 @@
       id: "K0", title: "任务", description: "", priority: "P2", category: "后端", owner: "我",
       ownerUserId: "U1", boardColumn: "backlog", startDate: null, dueDate: null, reqId: null, reqDocId: null,
       progress: 0, note: "", recurType: "", remindAt: null, remindTarget: "owner", tags: [],
+      estimateMinutes: null,
       subtaskTotal: 0, subtaskDone: 0, totalMinutes: 0, attachmentCount: 0,
       blocked: false, blockedReason: null, blockedByTaskId: null,
       workspaceId: "W1", sortOrder: 0, deletedAt: null,
@@ -45,9 +46,11 @@
 
   var doing = [
     T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
-        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2, totalMinutes: 320 }),
+        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
+        totalMinutes: 520, estimateMinutes: 480 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
-        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径" })
+        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
+        totalMinutes: 200, estimateMinutes: 240 })
   ];
   var done = [
     T({ id: "K7", title: "登录重构与验证码", priority: "P2", boardColumn: "done", progress: 100,
@@ -175,8 +178,11 @@
   };
 
   var routes = {
-    "/api/auth/me": { id: "U1", displayName: "我", username: "me", role: "user", lastWorkspaceId: "W1" },
-    "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "member", memberCount: 3, ownerId: "U2" }],
+    /* 演示用：当前登录者是「普通用户」，同时是共享空间「团队空间」的空间主
+       —— 设置页应只给邀请链接，不给"按登录名直接加人" */
+    "/api/auth/me": { id: "U1", displayName: "我", username: "me", role: "user", lastWorkspaceId: "W2",
+      workStartHour: 9, workEndHour: 18, workMaxHours: 8 },
+    "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "owner", memberCount: 3, ownerId: "U1" }],
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
     "/api/reqs": [
@@ -184,6 +190,17 @@
       { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
     ],
     "/api/views": [{ id: "V1", name: "我的 P0", params: { pris: ["P0"] } }],
+    /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
+    "/api/columns": [
+      { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, done: false },
+      { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, done: false },
+      { id: "done", name: "已完成", color: "#12B76A", sortOrder: 2, done: true }
+    ],
+    "/api/categories": [
+      { id: "C1", name: "后端", color: "#2563EB", sortOrder: 0 },
+      { id: "C2", name: "前端", color: "#7C3AED", sortOrder: 1 },
+      { id: "C3", name: "数据", color: "#0E9384", sortOrder: 2 }
+    ],
     "/api/trash": [T({ id: "X1", title: "旧的定时任务配置", deletedAt: ts(-29, 10, 0) })],
     "/api/notifications/unread": { unread: 2 },
     "/api/notifications": {
@@ -217,11 +234,143 @@
                  workMinutesAll: 2410, workMinutesWeekAll: 705 }
     },
     "/api/activity": [],
+    "/api/ai/config": {
+      provider: "deepseek",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+      hasKey: true,
+      apiKeyMasked: "sk-****a1b2",
+      enabled: true,
+      keyBroken: false,
+      status: "已就绪：调用会走你自己的额度",
+      presets: [
+        { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", keyHint: "platform.deepseek.com 创建 API Key" },
+        { id: "qwen", name: "通义千问（阿里云）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyHint: "阿里云百炼控制台创建 API Key" },
+        { id: "moonshot", name: "月之暗面 Kimi", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k", keyHint: "platform.moonshot.cn 创建 API Key" },
+        { id: "zhipu", name: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-plus", keyHint: "open.bigmodel.cn 创建 API Key" },
+        { id: "hunyuan", name: "腾讯混元", baseUrl: "https://api.hunyuan.cloud.tencent.com/v1", model: "hunyuan-turbo", keyHint: "腾讯云控制台「混元大模型」创建 API Key" },
+        { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", keyHint: "platform.openai.com 创建 API Key" },
+        { id: "ollama", name: "本地 Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5:7b", keyHint: "本地模型无需 Key，Ollama 默认不校验" },
+        { id: "custom", name: "自定义 / 中转", baseUrl: "", model: "", keyHint: "任何 OpenAI 兼容服务：填 /v1 基址和模型名" }
+      ]
+    },
+    "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
+    "/api/estimate/stats": {
+      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4,
+      overallFactor: 1.42, medianFactor: 1.45,
+      underCount: 0, accurateCount: 1, overCount: 3,
+      byCategory: [
+        { category: "后端", sampleCount: 2, estimateTotal: 600, actualTotal: 1000, factor: 1.67 },
+        { category: "运维", sampleCount: 1, estimateTotal: 120, actualTotal: 168, factor: 1.4 },
+        { category: "前端", sampleCount: 1, estimateTotal: 300, actualTotal: 280, factor: 0.93 }
+      ],
+      atRisk: [
+        { id: "K1", title: "重构权限校验中间件", category: "后端", column: "doing",
+          estimateMinutes: 480, actualMinutes: 520, ratio: 1.08, level: "danger" },
+        { id: "K2", title: "导出 CSV 补工时列", category: "前端", column: "doing",
+          estimateMinutes: 240, actualMinutes: 200, ratio: 0.83, level: "warn" }
+      ],
+      overrun: [
+        { id: "D3", title: "次席出金接口幂等校验", category: "后端", column: "done",
+          estimateMinutes: 240, actualMinutes: 420, ratio: 1.75, level: "danger" },
+        { id: "D4", title: "归档任务异常重试机制", category: "后端", column: "done",
+          estimateMinutes: 120, actualMinutes: 180, ratio: 1.5, level: "danger" }
+      ],
+      suggestion: "你的估时偏乐观：过去 4 个已完成任务的实际投入是预估的 1.42 倍。下次填预估时，把心里的数乘 1.42 再填，会贴近真实。",
+      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。"
+    },
+    "/api/flow-health": {
+      rangeDays: 90,
+      since: shift(-90),
+      generatedAt: ts(0, 9, 0).replace("T", " ").slice(0, 16),
+      coverage: {
+        moveEvents: 46, usableMoves: 44, tasksTotal: 13, tasksWithMoves: 9, completedInRange: 5,
+        note: "近 90 天共 46 次移动，其中 44 次能定位到具体列（早期记录只有列名文本，列改名过的会对不上）；「已完成」列不作为在制停留统计。"
+      },
+      columns: [
+        { id: "backlog", name: "待处理", color: "#8a8578", segments: 18, totalSeconds: 486000,
+          avgSeconds: 27000, medianSeconds: 21600, p90Seconds: 61200, share: 0.52,
+          ongoingCount: 8, ongoingMaxSeconds: 1036800, ongoingAvgSeconds: 432000, bottleneck: true },
+        { id: "doing", name: "进行中", color: "#2563EB", segments: 12, totalSeconds: 302400,
+          avgSeconds: 25200, medianSeconds: 18000, p90Seconds: 50400, share: 0.32,
+          ongoingCount: 2, ongoingMaxSeconds: 259200, ongoingAvgSeconds: 172800, bottleneck: false },
+        { id: "done", name: "已完成", color: "#12B76A", segments: 0, totalSeconds: 0,
+          avgSeconds: 0, medianSeconds: 0, p90Seconds: 0, share: 0,
+          ongoingCount: 0, ongoingMaxSeconds: 0, ongoingAvgSeconds: 0, bottleneck: false }
+      ],
+      bottleneckId: "backlog",
+      bottleneckName: "待处理",
+      bottleneckShare: 0.52,
+      rework: { totalMoves: 44, backMoves: 9, backRate: 0.2045, completedTasks: 5, firstPassTasks: 3, firstPassRate: 0.6 },
+      priority: [
+        { priority: "P0", tasks: 6, avgMoves: 3.2 },
+        { priority: "P1", tasks: 4, avgMoves: 1.8 },
+        { priority: "P2", tasks: 3, avgMoves: 1.2 }
+      ],
+      reqDocs: {
+        total: 5, withTasks: 3, noTask: 2, avgLeadHours: 30.4,
+        noTaskList: [
+          { id: "D9", title: "结算改造-对账口径调整", ageDays: 12 },
+          { id: "D8", title: "流程引擎-节点超时告警", ageDays: 4 }
+        ]
+      },
+      insights: [
+        { level: "warn", title: "最堵的是「待处理」",
+          text: "它吃掉了全流程 52% 的停留时间，平均 7.5 小时。瓶颈在这一列，加人加班在别处都没用。" },
+        { level: "warn", title: "返工偏多",
+          text: "近 90 天 44 次跨列移动里有 9 次是往回退（20%）。退回通常意味着进入下一列的门槛不清 —— 验收标准写在需求里会好很多。" },
+        { level: "warn", title: "2 份需求还没拆出任务",
+          text: "共 5 份需求，其中 2 份一个任务都没有。挂得最久的是「结算改造-对账口径调整」，已经 12 天没拆出任务。" },
+        { level: "warn", title: "P0 反而更折腾",
+          text: "P0 任务平均被移动 3.2 次，P2 只有 1.2 次。要么 P0 的定义太宽（什么都标 P0），要么它们总是在需求不清的时候就开工了。" }
+      ]
+    },
     "/api/notify/status": { enabled: true, channel: "webhook", lastStatus: "success", effectiveEnabled: true }
   };
 
   function pick(clean) {
     if (Object.prototype.hasOwnProperty.call(routes, clean)) return routes[clean];
+    /* AI 的三次交互都是 POST，且路径带需求 id —— 用正则匹配 */
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/split$/.test(clean)) {
+      return {
+        reqDocId: "D1", reqDocTitle: "权限校验中间件改造", docChars: 1840,
+        tasks: [
+          { title: "梳理现有权限校验入口并列出调用方", description: "把所有走鉴权的入口列清楚，产出清单作为后续改动基线", priority: "P1", dependsOnIndex: -1, reason: "文档第一部分列了 4 个入口，先固化范围", selected: true },
+          { title: "重构权限校验中间件为可插拔结构", description: "抽出校验链，支持按接口配置不同策略", priority: "P0", dependsOnIndex: 0, reason: "核心改造，后续策略都挂在这一层", selected: true },
+          { title: "实现次席代码维度的权限过滤", description: "按次席代码隔离数据，越权返回 403", priority: "P0", dependsOnIndex: 1, reason: "需求明确要求按次席隔离", selected: true },
+          { title: "补权限矩阵查询接口", description: "GET /api/perm/matrix 返回当前用户的权限项", priority: "P2", dependsOnIndex: 1, reason: "前端要根据它渲染按钮", selected: true },
+          { title: "权限变更后清理相关缓存", description: "改角色时同步失效 Redis 里的鉴权缓存", priority: "P2", dependsOnIndex: -1, reason: "文档写了缓存一致性要求", selected: true }
+        ],
+        usage: { model: "deepseek-chat", promptTokens: 1520, completionTokens: 486, totalTokens: 2006, jsonMode: true }
+      };
+    }
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/audit$/.test(clean)) {
+      return {
+        reqDocId: "D1", reqDocTitle: "权限校验中间件改造",
+        coverage: 56, verdict: "partial",
+        summary: "主体改造已完成，但次席维度的越权校验和下游通知还没落地，现在验收会漏。",
+        nextStep: "补「次席代码越权返回 403」的任务 —— 这是文档里写死的规则，不能靠口头约定",
+        totalPoints: 8, donePoints: 3, doingPoints: 2, todoPoints: 1, missingPoints: 2,
+        points: [
+          { point: "接口入口全部走统一的校验中间件", covered: true, status: "done", taskTitle: "重构权限校验中间件", note: "4 个入口已全部切换" },
+          { point: "校验失败返回 403 而不是 500", covered: true, status: "done", taskTitle: "重构权限校验中间件", note: "统一异常处理已覆盖" },
+          { point: "权限变更后 Redis 缓存同步失效", covered: true, status: "done", taskTitle: "权限变更后清理相关缓存", note: "改角色时主动清 key" },
+          { point: "按次席代码隔离数据", covered: true, status: "doing", taskTitle: "实现次席代码维度的权限过滤", note: "过滤逻辑写了，还没接进查询" },
+          { point: "角色权限矩阵可配置", covered: true, status: "doing", taskTitle: "补权限矩阵查询接口", note: "只读接口在做，写接口没有" },
+          { point: "审计日志记录每次越权尝试", covered: true, status: "todo", taskTitle: "（未建任务，需求里提到了）", note: "文档第 3 节提到要留痕，但没有对应任务" },
+          { point: "次席代码越权时返回 403 并带错误码", covered: false, status: "missing", taskTitle: "", note: "文档写死了错误码 4013，任务里完全没提到" },
+          { point: "权限变更通知下游系统", covered: false, status: "missing", taskTitle: "", note: "需求要求同步告知清算，找不到任何相关任务" }
+        ],
+        tasks: [
+          { id: "K1", title: "重构权限校验中间件", column: "doing", progress: 60, done: false },
+          { id: "K2", title: "导出 CSV 补工时列", column: "doing", progress: 0, done: false }
+        ],
+        usage: { model: "deepseek-chat", promptTokens: 1680, completionTokens: 720, totalTokens: 2400, jsonMode: true }
+      };
+    }
+    if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
+      return { created: 5, skipped: 0, failed: [] };
+    }
     if (clean === "/api/req-docs") {
       return reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
@@ -269,7 +418,9 @@
       var mM = /[?&]month=(\d+)/.exec(u), yM = /[?&]year=(\d+)/.exec(u);
       data = { year: yM ? Number(yM[1]) : Y, month: mM ? Number(mM[1]) : M, tasks: calTasks };
     } else {
-      data = (method === "GET") ? pick(clean) : {};
+      /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
+      var picked = pick(clean);
+      data = (picked === undefined) ? {} : picked;
     }
     return Promise.resolve({
       status: 200,

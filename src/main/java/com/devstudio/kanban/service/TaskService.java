@@ -524,7 +524,9 @@ public class TaskService {
         String detail = from.equals(to)
                 ? "「" + columnName(workspaceId, to) + "」列内顺序调整"
                 : "从「" + columnName(workspaceId, from) + "」移动到「" + columnName(workspaceId, to) + "」";
-        log(userId, workspaceId, id, "move", detail);
+        /* 列内排序（from==to）不算流程事件，不写 from/to，免得把"停留"切成碎段 */
+        log(userId, workspaceId, id, "move", detail,
+                from.equals(to) ? null : from, from.equals(to) ? null : to);
 
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("task", taskMapper.selectById(id));
@@ -773,6 +775,9 @@ public class TaskService {
         }
         t.setReqDocId(reqDocId);
         t.setProgress(req.getProgress() == null ? 0 : Math.max(0, Math.min(100, req.getProgress())));
+        /* 预估耗时：0 与空等价，都表示"没估过"，不要存 0 去污染系数计算 */
+        Integer est = req.getEstimateMinutes();
+        t.setEstimateMinutes(est == null || est <= 0 ? null : est);
         t.setNote(Texts.trimToNull(req.getNote()));
         t.setRemindAt(req.getRemindAt());
         /* N-1：提醒谁（默认仅负责人） */
@@ -1245,12 +1250,24 @@ public class TaskService {
     }
 
     private void log(String userId, String workspaceId, String taskId, String action, String detail) {
+        log(userId, workspaceId, taskId, action, detail, null, null);
+    }
+
+    /**
+     * 带列信息的日志：move 事件额外记下移动前后的列 id。
+     * 流程体检靠这两个字段算「每列停留多久」「有没有往回退」——
+     * 只靠 detail 里的列名，列一旦改名历史就断链了。
+     */
+    private void log(String userId, String workspaceId, String taskId, String action, String detail,
+                     String fromColumn, String toColumn) {
         TaskLog taskLog = new TaskLog();
         taskLog.setTaskId(taskId);
         taskLog.setWorkspaceId(workspaceId);
         taskLog.setActorId(userId);
         taskLog.setAction(action);
         taskLog.setDetail(detail);
+        taskLog.setFromColumn(fromColumn);
+        taskLog.setToColumn(toColumn);
         logMapper.insert(taskLog);
     }
 }

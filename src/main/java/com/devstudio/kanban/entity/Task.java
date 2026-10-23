@@ -27,6 +27,8 @@ public class Task {
     private String reqDocId;
     /** 0-100 */
     private Integer progress;
+    /** 预估耗时（分钟，空=没估过）。和 totalMinutes（实际投入）相除就是估时偏差 */
+    private Integer estimateMinutes;
     private String note;
     private LocalDate completedAt;
     /** daily/weekly/monthly，空为不循环 */

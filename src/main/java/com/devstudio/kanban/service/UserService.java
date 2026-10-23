@@ -10,6 +10,7 @@ import com.devstudio.kanban.dto.PasswordResetRequest;
 import com.devstudio.kanban.dto.ProfileUpdateRequest;
 import com.devstudio.kanban.dto.UserCreateRequest;
 import com.devstudio.kanban.dto.UserUpdateRequest;
+import com.devstudio.kanban.dto.WorkHoursRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
@@ -141,6 +142,23 @@ public class UserService implements UserDetailsService {
         u.setDisplayName(newName);
         userMapper.update(u);
         syncTaskOwnerName(id, oldName, newName);
+        return userMapper.selectById(id);
+    }
+
+    /**
+     * 修改自己的计时设置：工作时段（默认 09:00–18:00）+ 每天上限（默认 8 小时）。
+     * 只影响**之后**的计时折算，已记录的工时不做重算（避免历史数据被改来改去）。
+     */
+    @Transactional
+    public AppUser updateWorkHours(String id, WorkHoursRequest req) {
+        requireUser(id);
+        int sh = req.getStartHour();
+        int eh = req.getEndHour();
+        int mh = req.getMaxHours() == null ? 8 : req.getMaxHours();
+        if (eh <= sh) {
+            throw AppException.badRequest("下班时间必须晚于上班时间（例如 9 点到 18 点）");
+        }
+        userMapper.updateWorkHours(id, sh, eh, mh);
         return userMapper.selectById(id);
     }
 

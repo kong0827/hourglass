@@ -31,5 +31,14 @@ public interface UserMapper {
 
     int updateLastWorkspace(@Param("id") String id, @Param("workspaceId") String workspaceId);
 
+    /** 只改计时设置（工作时段 + 每天上限），不动显示名/角色 */
+    int updateWorkHours(@Param("id") String id, @Param("startHour") int startHour,
+                        @Param("endHour") int endHour, @Param("maxHours") int maxHours);
+
+    /** 只改 AI 配置（apiKey 传 null 表示保持原值，由 Service 决定） */
+    int updateAiConfig(@Param("id") String id, @Param("provider") String provider,
+                       @Param("baseUrl") String baseUrl, @Param("model") String model,
+                       @Param("apiKey") String apiKey, @Param("enabled") boolean enabled);
+
     int deleteById(String id);
 }

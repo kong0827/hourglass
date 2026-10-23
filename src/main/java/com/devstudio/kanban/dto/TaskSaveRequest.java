@@ -60,6 +60,14 @@ public class TaskSaveRequest {
     @Max(value = 100, message = "进度不能大于 100")
     private Integer progress = 0;
 
+    /**
+     * 预估耗时（分钟，空=没估）。0 与空等价，都表示"没填"。
+     * 上限 10080 分钟（168 小时）—— 单任务估到一周以上说明该拆了。
+     */
+    @Min(value = 0, message = "预估耗时不能为负")
+    @Max(value = 10080, message = "预估耗时不能超过 168 小时")
+    private Integer estimateMinutes;
+
     @Size(max = 80, message = "进度备注不能超过 80 字")
     private String note;
 

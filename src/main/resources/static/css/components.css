@@ -449,6 +449,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 @media (max-width:900px){.form-grid{grid-template-columns:1fr;}}
 .row-inline{display:flex;gap:8px;align-items:center;}
 .row-inline .input{flex:1 1 auto;min-width:0;}
+/* 「9:00 至 18:00」中间的连接词 */
+.row-inline .ws-sep{font-size:12.5px;color:var(--text-3);flex:0 0 auto;}
 
 /* 危险确认弹窗 */
 .confirm-sheet{max-width:400px;padding:24px 20px 18px;position:relative;text-align:center;}

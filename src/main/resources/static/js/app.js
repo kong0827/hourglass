@@ -190,7 +190,7 @@ var state = {
   q:"", owners:[], pris:[], cats:[], reqs:[], tags:[],
   due:null, focus:false, doneScope:"week", blocked:false,
   board:null, doneExtra:[], loadSeq:0, boardGen:0,
-  reviewData:null, statsWeeks:8, workScope:"mine", reviewWork:null,
+  reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
   mineScope:"open", mineSpace:"", minePri:"", mineBlocked:false,
   collapsedCols:{}, inlineAdd:null,
   runningTimer:null, compMonth:null, reqDocId:null
@@ -251,6 +251,7 @@ var board = $("board");
 var taskDrawer = $("taskDrawer");
 var taskForm = $("taskForm");
 var iTitle = $("iTitle"), iDesc = $("iDesc"), iStart = $("iStart"), iDue = $("iDue"), iCol = $("iCol"),
+    iEstimate = $("iEstimate"), iActual = $("iActual"),
     iReq = $("iReq"), iProg = $("iProg"), progVal = $("progVal"), iNote = $("iNote"),
     iRemind = $("iRemind"), iOwner = $("iOwner"), iTags = $("iTags"),
     tagWrap = $("tagWrap"), subList = $("subList"), subCount = $("subCount"),
@@ -306,9 +307,11 @@ var VIEWS = {
   review:   { title:"工作回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
   completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
   stats:    { title:"统计报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
+  flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
   trash:    { title:"回收站",   sub:"删除的任务保留 30 天，之后自动清理", enter:enterTrashView },
   users:    { title:"用户管理", sub:"账号由管理员创建下发；成员可凭邀请链接自助加入", enter:enterUsersView },
-  settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView }
+  settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
+  profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
 function showView(name){
   if(!VIEWS[name]) return;
@@ -354,6 +357,7 @@ function refreshActiveView(){
   else if(activeView === "trash") loadTrash();
   else if(activeView === "users") loadUsers(true);
   else if(activeView === "stats") loadStats();
+  else if(activeView === "flow") loadFlowHealth();
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") loadMine();
   else if(activeView === "completions") loadCompletions();
@@ -610,7 +614,18 @@ function cardHTML(t, idx){
   if(Number(t.commentCount) > 0){
     metaHTML += '<span class="meta" title="评论">' + icon("comment", 14) + t.commentCount + '</span>';
   }
-  if(t.totalMinutes && !running){
+  if(t.estimateMinutes){
+    /* 有预估就显示「实际/预估」：光看实际用了几小时没人知道自己算不算慢。
+       计时中的任务同样要显示 —— 那正是最该知道自己快超了的时候；
+       此时实际值只含已结束的段，title 里说明，避免误读。 */
+    var actMin = Number(t.totalMinutes) || 0;
+    var estR = actMin / t.estimateMinutes;
+    var estCls = estR >= 1 ? " over" : (estR >= 0.8 ? " near" : "");
+    metaHTML += '<span class="meta est-chip' + estCls + '" title="实际 ' + fmtMinutes(actMin) +
+      (running ? '（不含正在计的这一段）' : '') + ' / 预估 ' + fmtMinutes(t.estimateMinutes) + '">' +
+      (running ? '' : icon("timer", 14)) +
+      fmtMinutesShort(actMin) + '/' + fmtMinutesShort(t.estimateMinutes) + '</span>';
+  }else if(t.totalMinutes && !running){
     metaHTML += '<span class="meta' + (isDone ? ' full' : '') + '" title="' + (isDone ? "总耗时" : "累计工时") + '">' +
       icon("timer", 14) + (isDone ? '总耗时 ' : '') + fmtMinutesShort(t.totalMinutes) + '</span>';
   }
@@ -2289,8 +2304,29 @@ function renderTimeline(logs){
 var origProgress = 0;      // 已完成任务入列前的原始进度（O-13：展示 100%，保存时保留原值）
 var startedDone = false;   // 打开抽屉时该任务是否已在已完成列
 var commentsCache = [];
-function openTaskDrawer(colId, task){
-  taskFormSeq++;
+/** 抽屉里的「实际投入」：有预估就带出消耗比例，超了标红、接近标黄 */
+function renderActualEstimate(actualMinutes, estimateMinutes){
+  if(!iActual) return;
+  var act = Number(actualMinutes) || 0;
+  var est = Number(estimateMinutes) || 0;
+  iActual.className = "est-actual";
+  if(!act && !est){
+    iActual.textContent = "—";
+    return;
+  }
+  var html = fmtMinutesShort(act);
+  if(est > 0){
+    var r = act / est;
+    html += ' <span class="ea-ratio">/ 预估 ' + fmtMinutesShort(est) + '（' + Math.round(r * 100) + '%）</span>';
+    if(r >= 1) iActual.classList.add("over");
+    else if(r >= 0.8) iActual.classList.add("near");
+  }else{
+    html += ' <span class="ea-ratio">还没填预估</span>';
+  }
+  iActual.innerHTML = html;
+}
+
+function openTaskDrawer(colId, task){  taskFormSeq++;
   editingId = task ? task.id : null;
   formDirty = false;
   if(task) taskCacheExtra[task.id] = task;
@@ -2306,6 +2342,9 @@ function openTaskDrawer(colId, task){
     iStart.value = task.startDate || "";
     iDue.value = task.dueDate || "";
     syncDateBounds();
+    /* 预估耗时：库里存分钟，表单用小时（0.5 步进） */
+    if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
+    renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     formPri = task.priority || "P2";
     formCat = task.category || (categoriesCache.length ? categoriesCache[0].name : "");
     populateColSelect();
@@ -2342,6 +2381,8 @@ function openTaskDrawer(colId, task){
     btnDeleteTask.hidden = true;
     startedDone = false;
     iTitle.value = ""; iDesc.value = ""; iStart.value = ""; iDue.value = "";
+    if(iEstimate) iEstimate.value = "";
+    renderActualEstimate(0, null);
     formPri = "P2";
     formCat = categoriesCache.length ? categoriesCache[0].name : "";
     populateColSelect();
@@ -2441,6 +2482,14 @@ function syncDateBounds(){
   iDue.min = iStart.value || "";
 }
 if(iStart) iStart.addEventListener("change", function(){ syncDateBounds(); formDirty = true; });
+/* 改预估时实时更新「实际/预估」的比例，不用保存后才看到 */
+if(iEstimate) iEstimate.addEventListener("input", function(){
+  formDirty = true;
+  var t = editingId ? taskCacheExtra[editingId] : null;
+  var act = (t && t.totalMinutes) ? t.totalMinutes : 0;
+  var h = Number(this.value);
+  renderActualEstimate(act, h > 0 ? Math.round(h * 60) : 0);
+});
 if(iDue) iDue.addEventListener("change", function(){ syncDateBounds(); formDirty = true; });
 /* 开始日期的快捷设置：与截止日期的预设按钮对称 */
 if(segStart) segStart.addEventListener("click", function(e){
@@ -2670,6 +2719,12 @@ taskForm.addEventListener("submit", function(e){
     reqDocId: (($("iReqDoc") || {}).value) || null,
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
+    /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
+    estimateMinutes: (function(){
+      var h = iEstimate ? Number(iEstimate.value) : 0;
+      if(!h || h <= 0) return null;
+      return Math.min(10080, Math.round(h * 60));
+    })(),
     note: iNote.value.trim(),
     recurType: formRecur,
     remindAt: iRemind.value ? iRemind.value : null,
@@ -4461,6 +4516,201 @@ function closeReqDocCloseDialog(){
   if(d) d.classList.remove("open");
 }
 
+/* ==================== 需求页 · AI 拆分 / 完成度检查 ==================== */
+/* 三次交互，原则一致：AI 只给草稿和判断，落库永远要人点确认。 */
+var aiSplitDrafts = [];
+var aiBusy = false;
+
+/** AI 读的是**已保存**的正文：有未保存的修改先存，否则拆出来的和屏幕上看到的不是同一份 */
+function ensureReqDocSaved(fn){
+  if(!reqDocDirty){ fn(); return; }
+  saveReqDoc().then(function(doc){ if(doc) fn(); });
+}
+function aiBtnBusy(btn, busy, label){
+  if(!btn) return;
+  btn.disabled = busy;
+  if(busy){
+    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = label || "处理中…";
+  }else if(btn.dataset.label){
+    btn.textContent = btn.dataset.label;
+  }
+}
+/** 配置类错误直接把"去哪改"带上，别让人对着 400 发呆 */
+function aiErrMsg(msg){
+  var m = msg || "AI 调用失败";
+  if(m.indexOf("个人设置") < 0 &&
+     (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
+      || m.indexOf("AI 配置") >= 0)){
+    m += "（到「个人设置 → AI 设置」里配一下）";
+  }
+  return m;
+}
+function aiUsageText(u){
+  if(!u) return "";
+  return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
+    + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
+    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
+}
+
+function runAiSplit(){
+  if(!editingDocId || aiBusy) return;
+  var btn = $("reqDocAiSplit");
+  ensureReqDocSaved(function(){
+    aiBusy = true;
+    aiBtnBusy(btn, true, "拆分中…");
+    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}).then(function(d){
+      aiSplitDrafts = d.tasks || [];
+      renderAiSplit(d);
+      $("dlgAiSplit").classList.add("open");
+    }).catch(function(ex){
+      toast(aiErrMsg(ex && ex.message), "bad");
+    }).then(function(){
+      aiBusy = false;
+      aiBtnBusy(btn, false);
+    });
+  });
+}
+
+function renderAiSplit(d){
+  $("dlgAiSplitMsg").textContent = "「" + (d.reqDocTitle || "") + "」正文 " + (d.docChars || 0)
+    + " 字，AI 拆出 " + aiSplitDrafts.length + " 条。勾选要创建的，标题可以直接改；没勾的不会落库。";
+  $("aiSplitList").innerHTML = aiSplitDrafts.map(function(t, i){
+    var p = String(t.priority || "P2").toUpperCase();
+    var pcls = p === "P0" ? "p0" : (p === "P1" ? "p1" : "");
+    return '<div class="ai-item on" data-i="' + i + '">' +
+      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择任务">' +
+      '<div class="ai-main">' +
+        '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="任务标题">' +
+        (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
+        '<div class="ai-meta">' +
+          '<span class="ai-tag ' + pcls + '">' + esc(p) + '</span>' +
+          (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '') +
+          (t.reason ? '<span class="ai-reason">' + esc(t.reason) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+  $("aiSplitUsage").textContent = aiUsageText(d.usage);
+}
+
+function applyAiSplit(){
+  var picked = [];
+  var nodes = document.querySelectorAll("#aiSplitList .ai-item");
+  for(var i = 0; i < nodes.length; i++){
+    var cb = nodes[i].querySelector("input[type=checkbox]");
+    if(!cb || !cb.checked) continue;
+    var idx = Number(nodes[i].dataset.i);
+    var src = aiSplitDrafts[idx] || {};
+    var titleEl = nodes[i].querySelector(".ai-title");
+    var title = (titleEl ? titleEl.value : src.title || "").trim();
+    if(!title) continue;
+    picked.push({
+      title: title,
+      description: src.description || "",
+      priority: src.priority || "P2",
+      dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex
+    });
+  }
+  if(!picked.length){ toast("至少选一条要创建的任务", "warn"); return; }
+
+  var btn = $("dlgAiSplitOk");
+  btn.disabled = true;
+  API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/tasks", { tasks: picked }).then(function(r){
+    btn.disabled = false;
+    $("dlgAiSplit").classList.remove("open");
+    var msg = "已创建 " + r.created + " 个任务";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名任务";
+    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 个失败";
+    toast(msg, r.failed && r.failed.length ? "warn" : "fs");
+    if(r.failed && r.failed.length){
+      console.warn("AI 拆分落库失败项", r.failed);
+    }
+    /* 任务数变了：列表页的「任务/完成」计数要跟着动 */
+    loadReqDocs(true);
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(aiErrMsg(ex && ex.message), "bad");
+  });
+}
+
+function runAiAudit(){
+  if(!editingDocId || aiBusy) return;
+  var btn = $("reqDocAiAudit");
+  ensureReqDocSaved(function(){
+    aiBusy = true;
+    aiBtnBusy(btn, true, "检查中…");
+    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}).then(function(d){
+      renderAiAudit(d);
+      $("dlgAiAudit").classList.add("open");
+    }).catch(function(ex){
+      toast(aiErrMsg(ex && ex.message), "bad");
+    }).then(function(){
+      aiBusy = false;
+      aiBtnBusy(btn, false);
+    });
+  });
+}
+
+function renderAiAudit(d){
+  var V = { done: "已完成", mostly: "基本完成", partial: "做了一部分", not_started: "基本没开始" };
+  /* 配色跟结论文字走同一套档位：done→绿 / mostly·partial→橙 / not_started→红 */
+  var cls = d.verdict === "done" ? "good" : (d.verdict === "not_started" ? "bad" : "warn");
+  var color = cls === "good" ? "var(--success)" : (cls === "warn" ? "var(--warning)" : "var(--danger)");
+
+  $("dlgAiAuditTitle").textContent = "完成度检查 · " + (d.reqDocTitle || "");
+  $("dlgAiAuditSummary").textContent = d.summary || "—";
+
+  $("aiAuditScore").className = "ai-score " + cls;
+  $("aiAuditScore").innerHTML =
+    '<div class="big">' + d.coverage + '<small>%</small></div>' +
+    '<div class="sc-main">' +
+      '<div class="bar"><i style="width:' + Math.max(2, d.coverage) + '%;--c:' + color + '"></i></div>' +
+      '<div class="sc-lbl">' + (V[d.verdict] || d.verdict) + ' · 共拆出 ' + d.totalPoints + ' 个功能点，按状态加权计算</div>' +
+      '<div class="sc-cnt">已完成 ' + d.donePoints + ' · 进行中 ' + d.doingPoints
+        + ' · 未开始 ' + d.todoPoints + ' · <b>缺任务 ' + d.missingPoints + '</b></div>' +
+    '</div>';
+
+  var S = { done: "已完成", doing: "进行中", todo: "未开始", missing: "缺任务" };
+  /* 缺任务的排最前面：那才是用户真正要动手的地方 */
+  var order = { missing: 0, todo: 1, doing: 2, done: 3 };
+  var pts = (d.points || []).slice().sort(function(a, b){
+    return (order[a.status] == null ? 9 : order[a.status]) - (order[b.status] == null ? 9 : order[b.status]);
+  });
+  $("aiAuditList").innerHTML = pts.map(function(p){
+    var st = p.status || "missing";
+    return '<div class="ai-item' + (st === "missing" ? " on" : "") + '">' +
+      '<div class="ai-main">' +
+        '<div class="ai-meta">' +
+          '<span class="ai-tag ' + st + '">' + (S[st] || st) + '</span>' +
+          (p.taskTitle ? '<span>对应任务：' + esc(p.taskTitle) + '</span>' : '') +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);line-height:19px">' + esc(p.point) + '</div>' +
+        (p.note ? '<div class="ai-reason">' + esc(p.note) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join("");
+
+  var extra = d.nextStep ? "建议下一步：" + d.nextStep + "　·　" : "";
+  $("aiAuditUsage").textContent = extra + aiUsageText(d.usage);
+}
+
+if($("reqDocAiSplit")){
+  $("reqDocAiSplit").addEventListener("click", runAiSplit);
+  $("reqDocAiAudit").addEventListener("click", runAiAudit);
+  $("dlgAiSplitCancel").addEventListener("click", function(){ $("dlgAiSplit").classList.remove("open"); });
+  $("dlgAiSplitOk").addEventListener("click", applyAiSplit);
+  $("dlgAiAuditClose").addEventListener("click", function(){ $("dlgAiAudit").classList.remove("open"); });
+  /* 勾选态与卡片底色联动：一眼看出哪几条会被创建 */
+  $("aiSplitList").addEventListener("change", function(e){
+    var cb = e.target;
+    if(!cb || cb.type !== "checkbox") return;
+    var item = cb.closest(".ai-item");
+    if(item) item.classList.toggle("on", cb.checked);
+  });
+}
+
+
 function fillReqDocEditor(doc){
   var q = initEditor();
   if(q) q.setContents(doc.content || "", false);
@@ -5090,6 +5340,271 @@ $("statsWeeks").addEventListener("change", function(){
   loadStats();
 });
 
+/* ==================== 流程体检 ==================== */
+/* 口径全部由后端算好（FlowHealthService），前端只负责让它一眼能读懂：
+   瓶颈列、返工率、一次通过率、需求开工延迟 —— 都是日志里能追溯的事实，不做预测。 */
+function enterFlowView(){ loadFlowHealth(); }
+
+function spanParts(sec){
+  var s = Number(sec) || 0;
+  if(s <= 0) return {n:"—", u:""};
+  if(s < 3600) return {n:String(Math.max(1, Math.round(s/60))), u:"分钟"};
+  if(s < 86400) return {n:(s/3600).toFixed(1), u:"小时"};
+  return {n:(s/86400).toFixed(1), u:"天"};
+}
+function fmtSpan(sec){
+  var p = spanParts(sec);
+  return p.n === "—" ? "—" : p.n + " " + p.u;
+}
+function fmtPct(v){
+  return Math.round((Number(v) || 0) * 100) + "%";
+}
+function flowCard(k, html, cls){
+  return '<div class="stat ' + (cls || "") + '"><div class="k">' + k + '</div><div class="v">' + html + '</div></div>';
+}
+function flowRow(label, value, widthPct, color){
+  var w = Math.max(0, Math.min(100, Math.round(Number(widthPct) || 0)));
+  return '<div class="dist-row">' +
+    '<span class="lb">' + esc(label) + '</span>' +
+    '<span class="bar"><i style="width:' + w + '%;--c:' + color + '"></i></span>' +
+    '<span class="vl">' + value + '</span></div>';
+}
+function loadFlowHealth(){
+  var days = Number(state.flowDays) || 90;
+  if($("flowDays")) $("flowDays").value = String(days);
+  $("flowInsights").innerHTML = UI.skeletonRows(3);
+  $("flowKpi").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  $("flowBars").innerHTML = UI.skeletonRows(3);
+  $("flowRework").innerHTML = UI.skeletonRows(2);
+  $("flowPriority").innerHTML = UI.skeletonRows(2);
+  $("flowReqs").innerHTML = UI.skeletonRows(2);
+  $("flowRange").textContent = "近 " + days + " 天 · 全空间";
+  /* 估时区块单独取：口径和流程瓶颈无关，各算各的，一个失败不影响另一个 */
+  if($("flowEstTop")){
+    $("flowEstTop").innerHTML = UI.skeletonRows(1);
+    API.get("/api/estimate/stats", {}).then(renderFlowEstimate).catch(function(ex){
+      $("flowEstTop").innerHTML = UI.errorState(ex.message);
+    });
+  }
+  API.get("/api/flow-health", {days: days}).then(renderFlowHealth).catch(function(ex){
+    $("flowInsights").innerHTML = UI.errorState(ex.message);
+    bindRetry($("flowInsights"), function(){ loadFlowHealth(); });
+  });
+}
+function renderFlowHealth(d){
+  var cov = d.coverage || {}, rw = d.rework || {}, rs = d.reqDocs || {};
+  var cols = d.columns || [], ins = d.insights || [];
+
+  /* ---- 结论：这是整个页面的重点，放最上面 ---- */
+  $("flowInsights").innerHTML = ins.length ? ins.map(function(x){
+    return '<div class="flow-ins ' + (x.level || "info") + '">' +
+      '<span class="fi-dot" aria-hidden="true"></span>' +
+      '<div class="fi-main"><div class="fi-t">' + esc(x.title) + '</div>' +
+      '<div class="fi-x">' + esc(x.text) + '</div></div></div>';
+  }).join("") : '<div class="col-empty" style="margin:16px 0">暂无结论</div>';
+  $("flowCoverage").textContent = cov.note || "";
+
+  /* ---- KPI ---- */
+  var leadP = spanParts(rs.avgLeadHours == null ? 0 : rs.avgLeadHours * 3600);
+  var passCls = !rw.completedTasks ? "" : (rw.firstPassRate >= 0.8 ? "good" : (rw.firstPassRate < 0.6 ? "bad" : ""));
+  var backCls = !rw.totalMoves ? "" : (rw.backRate >= 0.2 ? "bad" : "");
+  $("flowKpi").innerHTML =
+    flowCard("瓶颈列", d.bottleneckName ? esc(d.bottleneckName) : "—",
+      d.bottleneckName ? "warn" : "") +
+    flowCard("一次通过率", rw.completedTasks ? fmtPct(rw.firstPassRate) +
+      '<small> · ' + rw.firstPassTasks + "/" + rw.completedTasks + ' 项</small>' : "—",
+      passCls) +
+    flowCard("回退率", rw.totalMoves ? fmtPct(rw.backRate) +
+      '<small> · ' + rw.backMoves + "/" + rw.totalMoves + ' 次</small>' : "—", backCls) +
+    flowCard("需求开工延迟", leadP.n === "—" ? "—" :
+      leadP.n + '<small> ' + leadP.u + '</small>', "");
+  if($("flowKpi").children[0] && d.bottleneckName){
+    $("flowKpi").children[0].querySelector(".v").insertAdjacentHTML("beforeend",
+      '<small> · 占 ' + fmtPct(d.bottleneckShare) + '</small>');
+  }
+
+  /* ---- 各列停留 ---- */
+  if(!cols.length){
+    $("flowBars").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有看板列</div>';
+  }else{
+    var maxShare = 0;
+    cols.forEach(function(c){ if((c.share || 0) > maxShare) maxShare = c.share; });
+    $("flowBars").innerHTML = cols.map(function(c){
+      var w = maxShare > 0 ? Math.max(1, Math.round((c.share || 0) / maxShare * 100)) : 0;
+      var ongoing = c.ongoingCount
+        ? '现 ' + c.ongoingCount + ' 个在制 · 最久 ' + fmtSpan(c.ongoingMaxSeconds)
+        : '当前无在制';
+      return '<div class="flow-bar' + (c.bottleneck ? " is-bn" : "") + '">' +
+        '<div class="fb-row">' +
+          '<span class="fb-name">' + esc(c.name) +
+            (c.bottleneck ? '<i class="fb-tag">瓶颈</i>' : '') + '</span>' +
+          '<span class="fb-v">平均 ' + fmtSpan(c.avgSeconds) + '</span>' +
+          '<span class="fb-share">' + fmtPct(c.share) + '</span>' +
+        '</div>' +
+        '<div class="bar"><i style="width:' + w + '%;--c:' + (c.color || "var(--primary)") + '"></i></div>' +
+        '<div class="fb-meta"><span>' + (c.segments || 0) + ' 段已离开 · 中位 ' +
+          fmtSpan(c.medianSeconds) + ' · P90 ' + fmtSpan(c.p90Seconds) + '</span>' +
+          '<span class="' + (c.ongoingCount ? '' : 'muted') + '">' + ongoing + '</span></div>' +
+      '</div>';
+    }).join("");
+  }
+
+  /* ---- 返工 ---- */
+  if(!rw.totalMoves){
+    $("flowRework").innerHTML = '<div class="col-empty" style="margin:16px 0">这段时间没有跨列移动</div>';
+  }else{
+    $("flowRework").innerHTML = '<div class="dist">' +
+      flowRow("跨列移动", rw.totalMoves + " 次", 100, "var(--info)") +
+      flowRow("其中回退", rw.backMoves + " 次 · " + fmtPct(rw.backRate), rw.backRate * 100, "var(--warning)") +
+      flowRow("一次通过", rw.firstPassTasks + "/" + rw.completedTasks + " 项",
+        rw.completedTasks ? rw.firstPassRate * 100 : 0, "var(--success)") +
+      '</div>' +
+      '<p class="flow-note">回退 = 目标列在列顺序里比来源列更靠前。退回多半说明"进入下一列的门槛"没写清楚。</p>';
+  }
+
+  /* ---- 优先级 ---- */
+  var prio = d.priority || [];
+  if(!prio.length){
+    $("flowPriority").innerHTML = '<div class="col-empty" style="margin:16px 0">还没有任务</div>';
+  }else{
+    var maxMv = 0;
+    prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
+    $("flowPriority").innerHTML = '<div class="dist">' + prio.map(function(p){
+      return flowRow(p.priority + " · " + p.tasks + " 项", p.avgMoves + " 次",
+        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0,
+        p.priority === "P0" ? "var(--danger)" : (p.priority === "P1" ? "var(--warning)" : "var(--text-3)"));
+    }).join("") + '</div>' +
+      '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，P0 应该<b>更少</b>被来回拖。</p>';
+  }
+
+  /* ---- 需求 → 开工 ---- */
+  if(!rs.total){
+    $("flowReqMeta").textContent = "—";
+    $("flowReqs").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有需求文档</div>';
+  }else{
+    $("flowReqMeta").textContent = rs.withTasks + " / " + rs.total + " 份已开工";
+    var html = '<div class="stat-grid" style="margin-bottom:14px">' +
+      flowCard("需求总数", rs.total + '<small>份</small>', "") +
+      flowCard("已拆出任务", rs.withTasks + '<small>份</small>', "") +
+      flowCard("还没拆任务", rs.noTask + '<small>份</small>', rs.noTask ? "warn" : "good") +
+      flowCard("平均开工延迟", leadP.n === "—" ? "—" : leadP.n + '<small>' + leadP.u + '</small>', "") +
+      '</div>';
+    if(rs.noTaskList && rs.noTaskList.length){
+      html += '<div class="flow-orphans">' + rs.noTaskList.map(function(x){
+        return '<div class="done-item">' +
+          '<div class="di-main"><button class="link-cell" type="button" data-open-reqdoc="' + esc(x.id) + '">' +
+            esc(x.title) + '</button>' +
+          '<div class="di-m"><span>已挂 ' + x.ageDays + ' 天，还没有任务</span></div></div></div>';
+      }).join("") + '</div>';
+    }
+    $("flowReqs").innerHTML = html;
+  }
+}
+/* 估时准不准：系数 + 偏差分布 + 超支预警。数字全由后端算，这里只排版。
+   刻意不拿 start_date 推工期 —— 开始日期是"接到任务的那天"，不是"动手的那天"。 */
+function renderFlowEstimate(d){
+  if($("flowEstMeta")){
+    $("flowEstMeta").textContent = d.tasksWithEstimate + " / " + d.tasksTotal + " 个任务填了预估";
+  }
+  var top = $("flowEstTop");
+  if(!top) return;
+
+  if(!d.sampleCount){
+    top.innerHTML = '<div class="fe-main"><div class="fe-sug">'
+      + esc(d.suggestion || "还没有可对比的样本") + '</div></div>';
+    if($("flowEstRisk")) $("flowEstRisk").innerHTML = "";
+    if($("flowEstNote")) $("flowEstNote").textContent = d.note || "";
+    return;
+  }
+
+  var f = d.overallFactor || 0;
+  /* 偏乐观（实际超预估）和偏保守都值得提醒，只有落在中间才算"准" */
+  var cls = (f >= 1.15 || f <= 0.87) ? "warn" : "good";
+  var n = d.sampleCount;
+  var wu = Math.round(d.underCount / n * 100);
+  var wa = Math.round(d.accurateCount / n * 100);
+  var wo = Math.max(0, 100 - wu - wa);
+  top.innerHTML =
+    '<div class="fe-factor ' + cls + '">' +
+      '<div class="big">' + f.toFixed(2) + '<small>×</small></div>' +
+      '<div class="lbl">实际 / 预估</div>' +
+    '</div>' +
+    '<div class="fe-main">' +
+      '<div class="fe-bar" title="按任务数分布">' +
+        '<i class="under" style="width:' + wu + '%"></i>' +
+        '<i class="ok" style="width:' + wa + '%"></i>' +
+        '<i class="over" style="width:' + wo + '%"></i>' +
+      '</div>' +
+      '<div class="fe-dist">' +
+        '<span>高估 <b>' + d.underCount + '</b></span>' +
+        '<span>准确 <b>' + d.accurateCount + '</b></span>' +
+        '<span>低估 <b>' + d.overCount + '</b></span>' +
+        '<span>样本 <b>' + n + '</b> 项已完成</span>' +
+      '</div>' +
+      '<div class="fe-sug">' + esc(d.suggestion || "") + '</div>' +
+    '</div>';
+
+  var html = "";
+  /* 进行中且已消耗 80% 以上：唯一还来得及处理的清单 */
+  if(d.atRisk && d.atRisk.length){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">'
+      + d.atRisk.length + ' 个进行中的任务已用掉预估的 80% 以上</div>';
+    for(var i = 0; i < d.atRisk.length && i < 8; i++){
+      var t = d.atRisk[i];
+      var hi = t.level === "danger";
+      html += '<div class="done-item"><div class="di-main">' +
+        '<div class="di-t">' + esc(t.title) + '</div>' +
+        '<div class="di-m">' +
+          '<span class="ai-tag ' + (hi ? "risk-hi" : "risk-lo") + '">' + (hi ? "已超预估" : "接近预估") + '</span>' +
+          '<span>实际 ' + fmtMinutesShort(t.actualMinutes) + ' / 预估 ' + fmtMinutesShort(t.estimateMinutes)
+            + '（' + Math.round(t.ratio * 100) + '%）</span>' +
+        '</div></div></div>';
+    }
+    html += '</div>';
+  }
+  /* 已完成但超预估：复盘用，别和"还能救"的混一起 */
+  if(d.overrun && d.overrun.length){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">已完成但超出预估（复盘）</div>';
+    for(var j = 0; j < d.overrun.length; j++){
+      var o = d.overrun[j];
+      html += '<div class="done-item"><div class="di-main">' +
+        '<div class="di-t">' + esc(o.title) + '</div>' +
+        '<div class="di-m"><span>实际 ' + fmtMinutesShort(o.actualMinutes) + ' / 预估 '
+          + fmtMinutesShort(o.estimateMinutes) + '（' + Math.round(o.ratio * 100) + '%）</span></div>' +
+      '</div></div>';
+    }
+    html += '</div>';
+  }
+  /* 分类系数：只有一个分类时没有对比意义 */
+  if(d.byCategory && d.byCategory.length > 1){
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按分类看系数</div>';
+    d.byCategory.forEach(function(c){
+      var cf = c.factor || 0;
+      html += flowRow(c.category + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
+        Math.min(100, cf * 50),
+        cf >= 1.15 ? "var(--danger)" : (cf >= 0.87 ? "var(--info)" : "var(--success)"));
+    });
+    html += '</div>';
+  }
+  if($("flowEstRisk")) $("flowEstRisk").innerHTML = html;
+  if($("flowEstNote")) $("flowEstNote").textContent = d.note || "";
+}
+
+if($("flowDays")){
+  $("flowDays").addEventListener("change", function(){
+    state.flowDays = Number(this.value) || 90;
+    loadFlowHealth();
+  });
+}
+/* 需求名可点：跳到需求编辑页（和任务清单里的交互一致） */
+if($("view-flow")){
+  $("view-flow").addEventListener("click", function(e){
+    var b = e.target.closest("[data-open-reqdoc]");
+    if(b) openReqDocAndJump(b.dataset.openReqdoc);
+  });
+}
+
 /* ==================== 回收站（§6.9） ==================== */
 var trashList = $("trashList");
 function enterTrashView(){ loadTrash(); }
@@ -5211,7 +5726,10 @@ function enterSettingsView(){
   if(nh) nh.textContent = canNotify
     ? "改动立即生效；关闭后，定时汇总与任务提醒都不会发出（测试推送走同一开关）"
     : "仅空间主可配置与测试";
-  $("wsMemberAdd").hidden = !isOwner;
+  /* 按登录名直接加人只有平台管理员可用；普通空间主只能走邀请链接（对方确认后加入） */
+  var isAdmin = !!(currentUser && currentUser.role === "admin");
+  $("wsMemberAdd").hidden = !(isOwner && isAdmin);
+  if($("wsMemberHint")) $("wsMemberHint").hidden = !(isOwner && !isPersonal && !isAdmin);
   var canInvite = !isPersonal && isOwner;
   $("inviteBox").hidden = !canInvite;
   if(isPersonal){
@@ -6166,6 +6684,8 @@ function loadMe(){
       userListEl.innerHTML = '<div class="foot-note">仅管理员可访问用户管理</div>';
     }
     renderSideUser(u);
+    /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
+    flushMeReady();
     return loadWorkspaces(u);
   }).catch(function(){ /* 未登录由 api.js 统一跳转 */ });
 }
@@ -6175,20 +6695,122 @@ function renderSideUser(u){
   if(av){ av.textContent = initial(name); av.style.setProperty("--a", avatarColor(name)); }
   if(nm) nm.textContent = name;
 }
-function openProfileDialog(){
-  if(!currentUser){ toast("用户信息加载中，请稍后重试", "warn"); return; }
-  $("dlgProfileNameInput").value = currentUser.displayName || "";
-  $("fDlgProfileName").classList.remove("invalid");
-  ["dlgProfileOld","dlgProfileNew","dlgProfileAgain"].forEach(function(id){ $(id).value = ""; });
-  ["fDlgProfileNew","fDlgProfileAgain"].forEach(function(id){ $(id).classList.remove("invalid"); });
-  UI.openModal($("dlgProfile"));
+/* ==================== 个人设置（独立页，不再是挤在一起的弹窗） ==================== */
+
+/* 深链直达（#/profile）时 /api/auth/me 可能还没回来，视图拿不到 currentUser。
+   把这类"要等当前用户"的初始化排到 me 返回之后再跑，而不是直接 return 留一屏空白。 */
+var meReadyCbs = [];
+function afterMeReady(fn){
+  if(currentUser){ fn(); return; }
+  meReadyCbs.push(fn);
 }
-$("sideUserBtn").addEventListener("click", openProfileDialog);
-$("dlgProfileNameSave").addEventListener("click", function(){
-  var name = $("dlgProfileNameInput").value.trim();
-  if(!name){ $("fDlgProfileName").classList.add("invalid"); return; }
-  if(currentUser && name === currentUser.displayName){ toast("显示名未变化"); return; }
-  var btn = $("dlgProfileNameSave");
+function flushMeReady(){
+  var list = meReadyCbs;
+  meReadyCbs = [];
+  for(var i = 0; i < list.length; i++){
+    try{ list[i](); }catch(e){ /* 单个视图初始化失败不该拖垮其它 */ }
+  }
+}
+
+function enterProfileView(){
+  if(!currentUser){
+    afterMeReady(enterProfileView);
+    return;
+  }
+  var name = currentUser.displayName || currentUser.username || "?";
+  if($("meAvatar")){
+    $("meAvatar").textContent = initial(name);
+    $("meAvatar").style.setProperty("--a", avatarColor(name));
+  }
+  if($("meName")) $("meName").textContent = name;
+  if($("meUsername")) $("meUsername").textContent = "@" + (currentUser.username || "");
+  if($("meRoleHint")) $("meRoleHint").textContent = (currentUser.role === "admin") ? "平台管理员" : "普通成员";
+  if($("meNameInput")){
+    $("meNameInput").value = currentUser.displayName || "";
+    $("fMeName").classList.remove("invalid");
+  }
+  fillMeSelects();
+  ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
+  ["fMeNewPwd","fMeAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.classList.remove("invalid"); });
+  wireMeAnchor();
+  updateMePreview();
+  /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
+  loadAiConfig();
+}
+
+/** 计时设置下拉：上班 0-23 / 下班 1-24（24 = 当天 24:00）/ 每天上限 1-24 小时 */
+function fillMeSelects(){
+  var s = $("meStart"), e = $("meEnd"), m = $("meMax");
+  if(!s || !e || !m) return;
+  if(!s.options.length){
+    var hs = "";
+    for(var h = 0; h < 24; h++) hs += '<option value="' + h + '">' + pad2(h) + ':00</option>';
+    s.innerHTML = hs;
+    var es = "";
+    for(var k = 1; k <= 24; k++) es += '<option value="' + k + '">' + (k === 24 ? "24:00" : pad2(k) + ":00") + '</option>';
+    e.innerHTML = es;
+    var ms = "";
+    for(var x = 1; x <= 24; x++) ms += '<option value="' + x + '">' + x + ' 小时</option>';
+    m.innerHTML = ms;
+  }
+  s.value = String(currentUser.workStartHour == null ? 9 : currentUser.workStartHour);
+  e.value = String(currentUser.workEndHour == null ? 18 : currentUser.workEndHour);
+  m.value = String(currentUser.workMaxHours == null ? 8 : currentUser.workMaxHours);
+}
+
+/** 把当前选择翻成一句人话（时段比上限还短时直接点出来，免得用户以为设了 8 小时就有 8 小时） */
+function updateMePreview(){
+  var p = $("mePreview");
+  if(!p || !$("meStart")) return;
+  var sh = Number($("meStart").value), eh = Number($("meEnd").value), mh = Number($("meMax").value);
+  var win = eh - sh;
+  var text = "每天 " + pad2(sh) + ":00–" + pad2(eh) + ":00 之间才计入，最多 " + mh + " 小时；周末不计。";
+  if(win < mh){
+    text += "（这个时段只有 " + win + " 小时，实际最多记 " + win + " 小时）";
+  }
+  p.textContent = text;
+}
+
+function wireMeAnchor(){
+  var nav = $("meAnchor");
+  var view = $("view-profile");
+  if(!nav || !view) return;
+  if(!nav.__wired){
+    nav.__wired = true;
+    nav.querySelectorAll("a").forEach(function(a){
+      a.addEventListener("click", function(e){
+        e.preventDefault();
+        var el = document.querySelector(a.getAttribute("href"));
+        if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
+      });
+    });
+  }
+  function spy(){
+    var panels = view.querySelectorAll(".set-panels .panel[id]");
+    var cur = panels.length ? panels[0].id : null;
+    var best = -1e9;
+    panels.forEach(function(p){
+      var top = p.getBoundingClientRect().top;
+      if(top - 140 <= 0 && top > best){ best = top; cur = p.id; }
+    });
+    nav.querySelectorAll("a").forEach(function(a){
+      a.classList.toggle("on", a.getAttribute("href") === "#" + cur);
+    });
+  }
+  if(!view.__spyWired){
+    view.__spyWired = true;
+    view.addEventListener("scroll", spy, {passive:true});
+  }
+  spy();
+}
+
+$("sideUserBtn").addEventListener("click", function(){ showView("profile"); });
+
+$("meNameSave") && $("meNameSave").addEventListener("click", function(){
+  var name = $("meNameInput").value.trim();
+  if(!name){ $("fMeName").classList.add("invalid"); toast("请填写显示名", "warn"); return; }
+  if(currentUser && name === currentUser.displayName){ toast("显示名没有变化"); return; }
+  var btn = $("meNameSave");
   btn.disabled = true;
   API.put("/api/auth/profile", { displayName: name }).then(function(res){
     btn.disabled = false;
@@ -6196,6 +6818,7 @@ $("dlgProfileNameSave").addEventListener("click", function(){
     OWNER_DEFAULT = currentUser.displayName;
     renderSideUser(currentUser);
     refreshOwnerSelect();
+    enterProfileView();
     toast("显示名已更新为「" + currentUser.displayName + "」", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
@@ -6203,20 +6826,175 @@ $("dlgProfileNameSave").addEventListener("click", function(){
     toast(ex.message || "保存失败", "bad");
   });
 });
-$("dlgProfilePwdSave").addEventListener("click", function(){
-  var oldPwd = $("dlgProfileOld").value;
-  var newPwd = $("dlgProfileNew").value;
-  var again = $("dlgProfileAgain").value;
-  var fNew = $("fDlgProfileNew"), fAgain = $("fDlgProfileAgain");
+
+["meStart","meEnd","meMax"].forEach(function(id){
+  var el = $(id);
+  if(el) el.addEventListener("change", updateMePreview);
+});
+
+$("meTimerSave") && $("meTimerSave").addEventListener("click", function(){
+  if(!currentUser) return;
+  var sh = Number($("meStart").value), eh = Number($("meEnd").value), mh = Number($("meMax").value);
+  if(eh <= sh){ toast("下班时间要晚于上班时间", "warn"); return; }
+  var btn = $("meTimerSave");
+  btn.disabled = true;
+  API.put("/api/auth/work-hours", { startHour: sh, endHour: eh, maxHours: mh }).then(function(res){
+    btn.disabled = false;
+    currentUser.workStartHour = res && res.workStartHour != null ? res.workStartHour : sh;
+    currentUser.workEndHour = res && res.workEndHour != null ? res.workEndHour : eh;
+    currentUser.workMaxHours = res && res.workMaxHours != null ? res.workMaxHours : mh;
+    updateMePreview();
+    toast("已保存：" + pad2(sh) + ":00–" + pad2(eh) + ":00，每天最多 " + mh + " 小时（只影响之后的计时）", "fs");
+    /* 运行中的计时按新口径重算 */
+    loadRunningTimer();
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+
+/* ==================== 个人设置 · AI（走每个人自己的额度） ==================== */
+var aiCfg = null;
+
+function findAiPreset(id){
+  var list = (aiCfg && aiCfg.presets) || [];
+  for(var i = 0; i < list.length; i++){ if(list[i].id === id) return list[i]; }
+  return null;
+}
+function loadAiConfig(){
+  if(!$("meAiProvider")) return;
+  API.get("/api/ai/config").then(function(d){
+    aiCfg = d;
+    renderAiConfig(d);
+  }).catch(function(ex){
+    if($("meAiResult")){
+      $("meAiResult").hidden = false;
+      $("meAiResult").textContent = "AI 配置加载失败：" + (ex.message || "未知错误");
+    }
+  });
+}
+function renderAiConfig(d){
+  var sel = $("meAiProvider");
+  if(!sel.options.length){
+    sel.innerHTML = ((d.presets || []).map(function(p){
+      return '<option value="' + p.id + '">' + esc(p.name) + '</option>';
+    })).join("");
+  }
+  sel.value = d.provider || "deepseek";
+  $("meAiModel").value = d.model || "";
+  $("meAiBase").value = d.baseUrl || "";
+  $("meAiEnabled").checked = !!d.enabled;
+  $("meAiKey").value = "";
+  $("meAiKey").placeholder = d.hasKey
+    ? "已保存 " + (d.apiKeyMasked || "****") + "（留空表示不修改）"
+    : "粘贴你的 API Key";
+  if($("meAiKeyState")){
+    $("meAiKeyState").textContent = d.keyBroken
+      ? "已保存的 Key 无法解密（部署密钥变更过），请重新填一次"
+      : (d.hasKey ? "已保存 " + (d.apiKeyMasked || "") + "，留空则保持不变" : "还没有配置 Key");
+  }
+  if($("meAiState")){
+    $("meAiState").textContent = d.status || "";
+    $("meAiState").className = "meta-right" + (d.enabled && d.hasKey ? "" : " muted");
+  }
+  var p = findAiPreset(sel.value);
+  if(p && $("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+}
+function aiFormBody(clearKey){
+  var key = $("meAiKey") ? $("meAiKey").value.trim() : "";
+  return {
+    provider: $("meAiProvider").value,
+    baseUrl: $("meAiBase").value.trim(),
+    model: $("meAiModel").value.trim(),
+    apiKey: key,
+    clearKey: !!clearKey,
+    enabled: $("meAiEnabled").checked
+  };
+}
+function saveAiConfig(clearKey){
+  return API.put("/api/ai/config", aiFormBody(clearKey)).then(function(d){
+    aiCfg = d;
+    renderAiConfig(d);
+    return d;
+  });
+}
+if($("meAiProvider")){
+  $("meAiProvider").addEventListener("change", function(){
+    var p = findAiPreset(this.value);
+    if(!p) return;
+    /* 自定义厂商没有默认值，保留用户已经填的地址和模型 */
+    if(this.value !== "custom"){
+      if(p.baseUrl) $("meAiBase").value = p.baseUrl;
+      if(p.model) $("meAiModel").value = p.model;
+    }
+    if($("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+  });
+}
+if($("meAiSave")){
+  $("meAiSave").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    saveAiConfig(false).then(function(d){
+      btn.disabled = false;
+      toast("AI 设置已保存", "fs");
+      if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = d.status || ""; }
+    }).catch(function(ex){
+      btn.disabled = false;
+      toast(ex.message || "保存失败", "bad");
+    });
+  });
+}
+if($("meAiTest")){
+  /* 先存再测：测的一定是"表单里这个样子"，而不是上次存的旧配置 */
+  $("meAiTest").addEventListener("click", function(){
+    var btn = this;
+    btn.disabled = true;
+    var t0 = Date.now();
+    if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = "正在保存并测试连接…"; }
+    saveAiConfig(false).then(function(){
+      return API.post("/api/ai/config/test", {});
+    }).then(function(r){
+      btn.disabled = false;
+      var sec = ((Date.now() - t0) / 1000).toFixed(1);
+      if($("meAiResult")){
+        $("meAiResult").textContent = "连通正常：模型 " + (r.model || "—")
+          + "，往返 " + sec + " 秒，返回「" + String(r.reply || "").slice(0, 20) + "」，本次 " + (r.tokens || 0) + " tokens";
+      }
+      toast("AI 连接正常", "fs");
+    }).catch(function(ex){
+      btn.disabled = false;
+      if($("meAiResult")){
+        $("meAiResult").textContent = "连接失败：" + (ex.message || "未知错误");
+      }
+      toast(ex.message || "连接失败", "bad");
+    });
+  });
+}
+if($("meAiClear")){
+  $("meAiClear").addEventListener("click", function(){
+    if(!window.confirm("清除已保存的 API Key？清除后 AI 功能不可用，直到重新填写。")) return;
+    saveAiConfig(true).then(function(){
+      toast("已清除 API Key", "fs");
+      if($("meAiResult")){ $("meAiResult").hidden = false; $("meAiResult").textContent = "已清除，可以填入新的 Key"; }
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  });
+}
+
+$("mePwdSave") && $("mePwdSave").addEventListener("click", function(){
+  var oldPwd = $("meOldPwd").value;
+  var newPwd = $("meNewPwd").value;
+  var again = $("meAgainPwd").value;
+  var fNew = $("fMeNewPwd"), fAgain = $("fMeAgainPwd");
   var bad = false;
+  if(!oldPwd){ toast("请填写当前密码", "warn"); return; }
   if(newPwd.length < 6){ fNew.classList.add("invalid"); bad = true; } else fNew.classList.remove("invalid");
   if(newPwd !== again){ fAgain.classList.add("invalid"); bad = true; } else fAgain.classList.remove("invalid");
   if(bad) return;
-  var btn = $("dlgProfilePwdSave");
+  var btn = $("mePwdSave");
   btn.disabled = true;
   API.post("/api/auth/password", { oldPassword: oldPwd, newPassword: newPwd }).then(function(){
     btn.disabled = false;
-    ["dlgProfileOld","dlgProfileNew","dlgProfileAgain"].forEach(function(id){ $(id).value = ""; });
+    ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
     toast("密码已修改（已登录的设备保持有效，直到会话过期）", "fs");
   }).catch(function(ex){
     btn.disabled = false;

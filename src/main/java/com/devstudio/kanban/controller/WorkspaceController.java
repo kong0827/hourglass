@@ -1,12 +1,15 @@
 package com.devstudio.kanban.controller;
 
 import com.devstudio.kanban.common.ApiResult;
+import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.MemberAddRequest;
 import com.devstudio.kanban.dto.WorkspaceCreateRequest;
 import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
+import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
+import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,15 +23,17 @@ import javax.validation.Valid;
 import java.util.List;
 
 /**
- * 空间：个人空间 + 共享空间（空间主按登录名添加成员，危险操作仅空间主）
+ * 空间：个人空间 + 共享空间。成员通过邀请链接加入（对方确认）；按登录名直接加人仅平台管理员可用。
  */
 @RestController
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
+    private final UserMapper userMapper;
 
-    public WorkspaceController(WorkspaceService workspaceService) {
+    public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper) {
         this.workspaceService = workspaceService;
+        this.userMapper = userMapper;
     }
 
     /** 我参与的空间（个人空间排前） */
@@ -69,9 +74,17 @@ public class WorkspaceController {
         return ApiResult.ok(workspaceService.members(CurrentUser.id(), id));
     }
 
-    /** 添加成员（仅空间主，按登录名） */
+    /**
+     * 按登录名直接加人只留给平台管理员做运维。
+     * 普通空间主不能这么干 —— 那等于不经对方同意就把人拉进空间（对方的「我的任务」/通知里
+     * 会突然出现这个空间的内容）。普通空间主请改用「邀请链接」：对方打开链接、确认后才加入。
+     */
     @PostMapping("/api/workspaces/{id}/members")
     public ApiResult<Void> addMember(@PathVariable String id, @Valid @RequestBody MemberAddRequest req) {
+        AppUser me = userMapper.selectById(CurrentUser.id());
+        if (me == null || !"admin".equals(me.getRole())) {
+            throw new AppException(403, "共享空间成员需通过邀请链接加入：请生成邀请链接发给对方，对方确认后才会成为成员");
+        }
         workspaceService.addMember(CurrentUser.id(), id, req.getUsername());
         return ApiResult.ok();
     }
