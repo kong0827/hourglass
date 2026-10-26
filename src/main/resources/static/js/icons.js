@@ -32,6 +32,8 @@
     settings: function (s) { return svg(s, '<path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/>'); },
     users: function (s) { return svg(s, '<circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/>'); },
     user: function (s) { return svg(s, '<circle cx="10" cy="6.8" r="3.2"/><path d="M4.6 16.4c0-2.8 2.3-4.8 5.4-4.8s5.4 2 5.4 4.8"/>'); },
+    /* git 分支：下面的圆是当前分支，右上角是目标分支，曲线表示即将合并 */
+    branch: function (s) { return svg(s, '<circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/>'); },
 
     /* ---- 富文本编辑器 ---- */
     bold: function (s) { return svg(s, '<path d="M6.4 4.2h4a2.9 2.9 0 0 1 0 5.8h-4z"/><path d="M6.4 10h4.6a3.1 3.1 0 0 1 0 6.2H6.4z"/>'); },

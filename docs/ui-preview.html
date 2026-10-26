@@ -2119,6 +2119,149 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .ai-tag.risk-hi{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
 .ai-tag.risk-lo{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
 
+/* ===================== 分支管理（2026-10-26） =====================
+   一条分支 = 一次「开发 → 测 → 合 → 发布」。四列按状态分组，卡片上的
+   状态标签就是切换入口（点开浮层选另一档）；时间只记首次进入，操作记录记每一次。 */
+.br-page{max-width:1360px;}
+.br-search input{
+  height:30px;width:200px;padding:0 10px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);font:inherit;font-size:12.5px;color:var(--text);
+}
+.br-search input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+
+/* 状态圆点：统计格、分组头、卡片徽章、浮层四处共用 */
+.br-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--text-3);}
+.br-dot.br-st-dev{background:var(--primary);}
+.br-dot.br-st-testing{background:var(--warning);}
+.br-dot.br-st-merging{background:var(--plum);}
+.br-dot.br-st-released{background:var(--success);}
+
+/* 顶部：四档计数（点击只看这一档）+ 平均发布周期 */
+.br-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+.br-flow-cell{
+  display:flex;align-items:center;gap:8px;min-width:0;padding:11px 13px;text-align:left;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;
+  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.br-flow-cell:hover{background:var(--surface-hover);}
+.br-flow-cell.on{border-color:var(--primary-border);background:var(--primary-soft);}
+.br-flow-cell.static{cursor:default;}
+.br-flow-cell.static:hover{background:var(--surface);}
+.bf-n{font-size:19px;line-height:1;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text);}
+.bf-l{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* 四列分组 */
+.br-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;}
+.br-group{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:8px;}
+.br-group-head{display:flex;align-items:center;gap:7px;padding:4px 4px 9px;min-width:0;}
+.br-group-name{font-size:13px;font-weight:650;color:var(--text);white-space:nowrap;}
+.br-group-n{
+  font-size:11.5px;color:var(--text-3);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:0 6px;font-variant-numeric:tabular-nums;
+}
+.br-group-hint{margin-left:auto;font-size:11px;color:var(--text-3);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.br-group-body{display:flex;flex-direction:column;gap:8px;min-height:56px;}
+.br-empty{
+  font-size:12px;color:var(--text-3);text-align:center;padding:16px 0;
+  border:1px dashed var(--border);border-radius:var(--r-md);
+}
+.br-emptyall{
+  font-size:13px;color:var(--text-3);line-height:22px;padding:26px 20px;text-align:center;
+  border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface);
+}
+
+/* 分支卡片 */
+.br-card{
+  display:flex;flex-direction:column;gap:6px;padding:10px 11px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+.br-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm);}
+.br-card:focus-visible{outline:none;box-shadow:var(--ring-focus);border-color:var(--primary);}
+.br-card-top{display:flex;align-items:center;gap:8px;min-height:21px;}
+.br-badge{
+  display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;cursor:pointer;
+  border-radius:var(--r-pill);border:1px solid transparent;background:none;
+  font-size:11.5px;font-weight:650;font-family:inherit;
+}
+.br-badge.br-st-dev{color:var(--primary);background:var(--primary-soft);border-color:var(--primary-border);}
+.br-badge.br-st-testing{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+.br-badge.br-st-merging{color:var(--plum);background:var(--plum-soft);border-color:var(--plum-border);}
+.br-badge.br-st-released{color:var(--success);background:var(--success-soft);border-color:var(--success-border);}
+.br-owner{margin-left:auto;display:inline-flex;}
+.br-name{
+  font-family:var(--font-mono);font-size:12.5px;font-weight:600;line-height:1.35;
+  color:var(--text);word-break:break-all;
+}
+.br-target{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);word-break:break-all;}
+.br-note{font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-card-foot{display:flex;align-items:center;gap:8px;margin-top:2px;font-size:11.5px;color:var(--text-3);}
+.br-tasks{display:inline-flex;align-items:center;gap:3px;min-width:0;}
+.br-age{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* 状态浮层 */
+.br-status-menu{min-width:160px;}
+.br-status-menu .menu-item{display:flex;align-items:center;gap:8px;}
+.br-status-menu .menu-item.on{color:var(--text);font-weight:650;}
+
+/* 新建/编辑弹窗 */
+.br-dlg{max-width:470px;}
+.br-dlg-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* 详情抽屉 */
+.br-drawer-seg{margin:14px 0 10px;}
+.br-drawer-stay{font-size:12px;color:var(--text-3);line-height:18px;margin-bottom:14px;}
+.br-kv{
+  display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;padding:12px 14px;
+  border-radius:var(--r-md);background:var(--surface-sunken);
+}
+.br-kv > div{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.br-kv span{font-size:11px;color:var(--text-3);}
+.br-kv b{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-drawer-note{
+  margin:12px 0 0;padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12.5px;color:var(--text-2);line-height:19px;
+}
+.br-sect{margin-top:20px;}
+.br-sect h4{margin:0 0 8px;font-size:12px;font-weight:650;color:var(--text-2);letter-spacing:.02em;}
+.br-times{display:flex;flex-direction:column;}
+.br-tnode{
+  display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12.5px;
+  color:var(--text-3);border-bottom:1px dashed var(--border);
+}
+.br-tnode:last-child{border-bottom:none;}
+.br-tnode.on{color:var(--text);}
+.br-tnode .bt-name{font-weight:600;min-width:56px;}
+.br-tnode .bt-time{margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums;}
+
+.br-tasklist{display:flex;flex-direction:column;gap:6px;}
+.br-task{
+  display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;text-align:left;cursor:pointer;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-family:inherit;
+}
+.br-task:hover{background:var(--surface-hover);}
+.bt-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);flex:0 0 auto;}
+.bt-dot.done{background:var(--success);}
+.bt-title{flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bt-title.done{color:var(--text-3);text-decoration:line-through;}
+.bt-pri{font-size:10.5px;font-weight:700;color:var(--text-3);}
+.br-drawer-foot{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:14px;border-top:1px solid var(--border);}
+.danger-text{color:var(--danger);}
+
+/* 看板卡片上的分支标签 */
+.tag.tag-branch{
+  font-family:var(--font-mono);font-size:11px;font-weight:600;
+  background:var(--plum-soft);color:var(--plum);max-width:100%;overflow:hidden;text-overflow:ellipsis;
+}
+
+@media (max-width:1200px){
+  .br-groups{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .br-flow{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (max-width:780px){
+  .br-groups,.br-flow{grid-template-columns:1fr;}
+}
+
 /* ==========================================================================
    auth.css · 独立页（登录 / 加入空间）（ui-redesign-spec §6.1 §6.2）
    全屏居中卡片，不套 App Shell。
@@ -2266,6 +2409,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       <button class="nav-item" type="button" data-view="requirements">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.6h6.2l3.4 3.4v9.4H5.4Z"/><path d="M11.4 3.6V7h3.4"/><path d="M7.6 10.4h4.8M7.6 13h3.2"/></svg>
         <span class="nl">需求</span>
+      </button>
+      <button class="nav-item" type="button" data-view="branches" id="navBranches">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/></svg>
+        <span class="nl">分支</span>
+        <span class="nav-dot" id="branchDot" hidden>0</span>
       </button>
 
       <span class="nav-sec">洞察</span>
@@ -2703,6 +2851,66 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div class="ai-usage" id="aiAuditUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 分支管理 ===== -->
+      <section class="view" id="view-branches" aria-label="分支">
+        <div class="view-page br-page">
+          <div class="page-toolbar">
+            <span class="toolbar-title">分支</span>
+            <span class="toolbar-meta" id="branchMeta"></span>
+            <span class="toolbar-right">
+              <span class="br-search">
+                <input type="search" id="branchSearch" placeholder="搜索分支名 / 目标分支…" aria-label="搜索分支" autocomplete="off" />
+              </span>
+              <button class="btn primary sm" type="button" id="branchNew">
+                <span data-icon="plus"></span>&nbsp;新建分支
+              </button>
+            </span>
+          </div>
+
+          <!-- 四个状态格子：点一下只看这一档；再点一次取消 -->
+          <div class="br-flow" id="branchFlow"></div>
+
+          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布 -->
+          <div class="br-groups" id="branchGroups"></div>
+        </div>
+
+        <!-- 新建 / 编辑分支 -->
+        <div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
+          <div class="sheet reqdoc-dlg br-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
+            <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
+            <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>分支名</span>
+                <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
+              </label>
+              <label class="reqdoc-dlg-field">
+                <span>目标分支</span>
+                <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
+              </label>
+              <div class="br-dlg-2col">
+                <label class="reqdoc-dlg-field">
+                  <span>负责人</span>
+                  <select id="brOwner"></select>
+                </label>
+                <label class="reqdoc-dlg-field" id="brStatusField">
+                  <span>初始状态</span>
+                  <select id="brStatus"></select>
+                </label>
+              </div>
+              <label class="reqdoc-dlg-field">
+                <span>备注</span>
+                <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
+              </label>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgBranchCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
             </div>
           </div>
         </div>
@@ -3387,6 +3595,14 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <select id="iReqDoc"></select>
             <span class="hint" id="iReqDocHint">先选项目，再从该项目的需求里挑</span>
           </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="iBranch">所属分支</label>
+            <select id="iBranch"></select>
+            <span class="hint" id="iBranchHint">分支在「分支」页里建，这里只负责挂上去</span>
+          </div>
           <div class="field">
             <label for="iOwner">负责人</label>
             <select id="iOwner"></select>
@@ -3639,6 +3855,20 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   </form>
 </div>
 
+<!-- 分支详情抽屉：状态切换 + 时间线 + 关联任务 -->
+<div class="drawer-layer" id="branchDrawer" role="dialog" aria-modal="true" aria-labelledby="brDrawerTitle">
+  <div class="drawer-scrim" id="branchScrim"></div>
+  <div class="drawer br-drawer">
+    <div class="drawer-head">
+      <h2 id="brDrawerTitle">分支</h2>
+      <button class="icon-btn" type="button" id="brDrawerClose" aria-label="关闭">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="brDrawerBody"></div>
+  </div>
+</div>
+
 <!-- 统一危险确认框 -->
 <div class="modal-layer" id="dlgConfirm" role="dialog" aria-modal="true" aria-labelledby="dlgConfirmTitle">
   <div class="sheet xs confirm-sheet">
@@ -3708,10 +3938,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 
   var doing = [
     T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
-        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
+        branchId: "BR1", startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
         totalMinutes: 520, estimateMinutes: 480 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
-        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
+        branchId: "BR2", startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
         totalMinutes: 200, estimateMinutes: 240 })
   ];
   var done = [
@@ -3724,6 +3954,38 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         completedAt: null })
   ];
   var tasks = backlog.concat(doing, done);
+
+  /* ---------------- 分支（空间级分支池） ---------------- */
+  var branches = [
+    { id: "BR1", workspaceId: "W1", name: "feature/permission-middleware", status: "dev",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "权限校验中间件改造，等测试环境排队",
+      devAt: ts(-3, 10, 0), testAt: null, mergeAt: null, releasedAt: null,
+      taskCount: 3, doneCount: 1, createdAt: ts(-3, 10, 0), updatedAt: ts(-1, 17, 20) },
+    { id: "BR2", workspaceId: "W1", name: "feature/export-csv-hours", status: "testing",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "导出补工时列，提测中",
+      devAt: ts(-7, 9, 30), testAt: ts(-2, 15, 0), mergeAt: null, releasedAt: null,
+      taskCount: 2, doneCount: 1, createdAt: ts(-7, 9, 30), updatedAt: ts(-2, 15, 0) },
+    { id: "BR3", workspaceId: "W1", name: "hotfix/oa-push-oversize", status: "merging",
+      owner: "我", ownerUserId: "U1", targetBranch: "release/1.2", note: "OA 待办标题超 80 字节被拒，等合并窗口",
+      devAt: ts(-4, 11, 0), testAt: ts(-3, 16, 0), mergeAt: ts(-1, 9, 40), releasedAt: null,
+      taskCount: 1, doneCount: 1, createdAt: ts(-4, 11, 0), updatedAt: ts(-1, 9, 40) },
+    { id: "BR4", workspaceId: "W1", name: "feature/recur-task", status: "released",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "循环任务",
+      devAt: ts(-16, 9, 0), testAt: ts(-12, 14, 0), mergeAt: ts(-10, 10, 0), releasedAt: ts(-8, 18, 30),
+      taskCount: 4, doneCount: 4, createdAt: ts(-16, 9, 0), updatedAt: ts(-8, 18, 30) }
+  ];
+  var branchLogs = {
+    BR1: [
+      { id: "L3", action: "status", fromStatus: "dev", toStatus: "dev", detail: "开发中 → 待测试 被退回：联调环境没权限", actorName: "我", createdAt: ts(-3, 18, 0) },
+      { id: "L2", action: "update", fromStatus: "dev", toStatus: "dev", detail: "目标分支 （空） → main", actorName: "我", createdAt: ts(-3, 11, 20) },
+      { id: "L1", action: "create", fromStatus: null, toStatus: "dev", detail: "创建分支（初始状态：开发中）", actorName: "我", createdAt: ts(-3, 10, 0) }
+    ],
+    BR3: [
+      { id: "L5", action: "status", fromStatus: "testing", toStatus: "merging", detail: "待测试 → 待合并：测试通过，等周四合并窗口", actorName: "我", createdAt: ts(-1, 9, 40) },
+      { id: "L4", action: "status", fromStatus: "dev", toStatus: "testing", detail: "开发中 → 待测试", actorName: "我", createdAt: ts(-3, 16, 0) }
+    ]
+  };
+
 
   var board = {
     columns: {
@@ -3918,7 +4180,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     },
     "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
     "/api/estimate/stats": {
-      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4,
+      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4, noTimeCount: 3,
       overallFactor: 1.42, medianFactor: 1.45,
       underCount: 0, accurateCount: 1, overCount: 3,
       byCategory: [
@@ -3939,7 +4201,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
           estimateMinutes: 120, actualMinutes: 180, ratio: 1.5, level: "danger" }
       ],
       suggestion: "你的估时偏乐观：过去 4 个已完成任务的实际投入是预估的 1.42 倍。下次填预估时，把心里的数乘 1.42 再填，会贴近真实。",
-      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。"
+      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。另有 3 个已完成任务没开过计时，不计入（没记录 ≠ 干得快）。"
     },
     "/api/flow-health": {
       rangeDays: 90,
@@ -4033,8 +4295,21 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
       return { created: 5, skipped: 0, failed: [] };
     }
-    if (clean === "/api/req-docs") {
-      return reqDocs.map(function (d) {
+    /* 分支：带子路径的要先判断，否则会被单 id 那条正则先吃掉 */
+    if (clean === "/api/branches") return branches;
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+\/logs$/.test(clean)) {
+      return branchLogs[clean.split("/")[3]] || [];
+    }
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
+      var bid = clean.split("/")[3];
+      return tasks.filter(function (t) { return t.branchId === bid; });
+    }
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+$/.test(clean)) {
+      var brId = clean.split("/").pop();
+      for (var bi = 0; bi < branches.length; bi++) if (branches[bi].id === brId) return branches[bi];
+      return branches[0];
+    }
+    if (clean === "/api/req-docs") {      return reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
                  owner: d.owner, excerpt: d.excerpt, taskCount: d.taskCount, doneCount: d.doneCount,
                  createdAt: d.createdAt, updatedAt: d.updatedAt };
@@ -4132,6 +4407,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     settings: function (s) { return svg(s, '<path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/>'); },
     users: function (s) { return svg(s, '<circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/>'); },
     user: function (s) { return svg(s, '<circle cx="10" cy="6.8" r="3.2"/><path d="M4.6 16.4c0-2.8 2.3-4.8 5.4-4.8s5.4 2 5.4 4.8"/>'); },
+    /* git 分支：下面的圆是当前分支，右上角是目标分支，曲线表示即将合并 */
+    branch: function (s) { return svg(s, '<circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/>'); },
 
     /* ---- 富文本编辑器 ---- */
     bold: function (s) { return svg(s, '<path d="M6.4 4.2h4a2.9 2.9 0 0 1 0 5.8h-4z"/><path d="M6.4 10h4.6a3.1 3.1 0 0 1 0 6.2H6.4z"/>'); },
@@ -4998,7 +5275,7 @@ var taskForm = $("taskForm");
 var iTitle = $("iTitle"), iDesc = $("iDesc"), iStart = $("iStart"), iDue = $("iDue"), iCol = $("iCol"),
     iEstimate = $("iEstimate"), iActual = $("iActual"),
     iReq = $("iReq"), iProg = $("iProg"), progVal = $("progVal"), iNote = $("iNote"),
-    iRemind = $("iRemind"), iOwner = $("iOwner"), iTags = $("iTags"),
+    iRemind = $("iRemind"), iOwner = $("iOwner"), iTags = $("iTags"), iBranch = $("iBranch"),
     tagWrap = $("tagWrap"), subList = $("subList"), subCount = $("subCount"),
     iSubNew = $("iSubNew"), attachList = $("attachList"), attachCount = $("attachCount"),
     iAttachFile = $("iAttachFile"), workVal = $("workVal"), btnTimer = $("btnTimer"),
@@ -5015,6 +5292,7 @@ var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var viewBox = $("viewBox");
 var reqListEl = $("reqList"), reqDot = $("reqDot");
+var branchDot = $("branchDot");
 /* 报告增量（O-1/O-4/O-5/O-6/O-9/O-10/O-11/O-12/N-1/N-3/N-4/N-6）新增引用 */
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
 var fComments = $("fComments"), commentList = $("commentList"), commentCount = $("commentCount"),
@@ -5049,6 +5327,7 @@ var VIEWS = {
   calendar: { title:"日历",     sub:"按截止日期排布；点击任务打开详情抽屉", enter:enterCalendarView },
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:enterProjectsView },
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
+  branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"工作回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
   completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
   stats:    { title:"统计报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
@@ -5107,6 +5386,7 @@ function refreshActiveView(){
   else if(activeView === "mine") loadMine();
   else if(activeView === "completions") loadCompletions();
   else if(activeView === "requirements") loadReqDocs();
+  else if(activeView === "branches") loadBranches(true).then(renderBranches);
 }
 $("sideNav").addEventListener("click", function(e){
   var b = e.target.closest("[data-view]");
@@ -5334,6 +5614,12 @@ function cardHTML(t, idx){
       tagsHTML += '<button type="button" class="tag tag-doc" data-open-reqdoc="' + esc(t.reqDocId) + '"' +
         ' title="打开需求：' + esc(docTitle) + '">' + esc(docTitle) + '</button>';
     }
+  }
+  if(t.branchId){
+    /* 分支标签只做展示（点击跳转交给「分支」页，避免卡片上三个标签抢点击） */
+    var brName = branchNameById(t.branchId);
+    if(brName) tagsHTML += '<span class="tag tag-branch" title="所属分支：' + esc(brName) + '">' +
+      icon("branch", 11) + esc(brName) + '</span>';
   }
   if(t.tags && t.tags.length){
     t.tags.slice(0, 2).forEach(function(tg){ tagsHTML += tagChip(tg); });
@@ -7076,6 +7362,9 @@ function openTaskDrawer(colId, task){  taskFormSeq++;
   formDirty = false;
   if(task) taskCacheExtra[task.id] = task;
   if(drawerNotice) drawerNotice.hidden = true;
+  /* 分支列表可能还没拉回来（比如刚登录就直接点开卡片）：补一次。
+     loadBranches 内部会调 populateBranchSelect()，它保留当前选中值，不会冲掉刚回填的分支。 */
+  if(!branchesLoaded) loadBranches();
 
   if(task){
     var isDone = task.boardColumn === "done";
@@ -7097,6 +7386,7 @@ function openTaskDrawer(colId, task){  taskFormSeq++;
     populateReqSelect();
     iReq.value = task.reqId || "";
     populateReqDocSelect(task.reqDocId || "");
+    populateBranchSelect(task.branchId || "");
     origProgress = (typeof task.progress === "number") ? task.progress : 0;
     iProg.value = origProgress;
     iNote.value = task.note || "";
@@ -7135,6 +7425,7 @@ function openTaskDrawer(colId, task){  taskFormSeq++;
     populateReqSelect();
     iReq.value = "";
     populateReqDocSelect("");
+    populateBranchSelect("");
     origProgress = 0;
     iProg.value = 0;
     iNote.value = "";
@@ -7462,6 +7753,7 @@ taskForm.addEventListener("submit", function(e){
     dueDate: iDue.value || null,
     reqId: iReq.value || null,
     reqDocId: (($("iReqDoc") || {}).value) || null,
+    branchId: (($("iBranch") || {}).value) || null,
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
     /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
@@ -9834,6 +10126,549 @@ function populateReqDocSelect(keep){
   });
 })();
 
+/* ==================== 分支管理（空间级分支池） ====================
+   状态：开发中 → 待测试 → 待合并 → 已发布。允许来回切 —— 打回重做是常态，
+   强行单向只会逼人删分支重建，反而丢时间。
+   时间口径有两套（后端也这么分）：
+     · 分支上的 4 个时间点只记「首次进入」，用来算停留和发布周期；
+     · 操作记录记每一次变更，用来还原「谁在什么时候把它退回了开发中」。 */
+var BRANCH_STATUS = [
+  { id:"dev",      name:"开发中", cls:"br-st-dev",      timeKey:"devAt",      hint:"代码还在写" },
+  { id:"testing",  name:"待测试", cls:"br-st-testing",  timeKey:"testAt",     hint:"开发完成，等测试验证" },
+  { id:"merging",  name:"待合并", cls:"br-st-merging",  timeKey:"mergeAt",    hint:"测过了，等合并窗口" },
+  { id:"released", name:"已发布", cls:"br-st-released", timeKey:"releasedAt", hint:"已上线" }
+];
+var branchList = [], branchesLoaded = false;
+var branchFilter = "";     // 当前只看某一档状态（空 = 全部）
+var brDrawerId = null;     // 抽屉里正在看的分支
+var brEditingId = null;    // 弹窗里正在编辑的分支（null = 新建）
+
+function branchStatusMeta(id){
+  for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return BRANCH_STATUS[i];
+  return { id: id, name: id || "未知", cls: "", timeKey: "", hint: "" };
+}
+function branchById(id){
+  for(var i = 0; i < branchList.length; i++) if(branchList[i].id === id) return branchList[i];
+  return null;
+}
+function branchNameById(id){
+  var b = branchById(id);
+  return b ? b.name : "";
+}
+/** 毫秒 → 「3 天 / 5 小时 / 刚刚」 */
+function branchDurText(ms){
+  if(!ms || ms < 0) return "刚刚";
+  var h = Math.floor(ms / 3600000);
+  if(h < 1) return "刚刚";
+  if(h < 24) return h + " 小时";
+  var d = Math.floor(h / 24);
+  if(d < 60) return d + " 天";
+  return Math.floor(d / 30) + " 个月";
+}
+/** 卡片右下角那行：当前状态待了多久；已发布的分支显示从创建到发布的总周期 */
+function branchStay(b){
+  if(b.status === "released"){
+    if(!b.releasedAt || !b.createdAt) return { text:"周期 —", tip:"缺少发布或创建时间" };
+    var span = new Date(b.releasedAt).getTime() - new Date(b.createdAt).getTime();
+    return { text:"周期 " + branchDurText(span),
+             tip:"创建 " + fmtTs(b.createdAt) + " → 发布 " + fmtTs(b.releasedAt) };
+  }
+  var meta = branchStatusMeta(b.status);
+  var from = b[meta.timeKey] || b.createdAt;
+  if(!from) return { text:"—", tip:"没有进入该状态的时间" };
+  var ms = Date.now() - new Date(from).getTime();
+  var q = branchDurText(ms);
+  return { text: (q === "刚刚" ? "刚刚进入" : "已 " + q), tip: meta.name + "自 " + fmtTs(from) };
+}
+
+/** force=true 强制重拉（增删改后）；否则每个会话只拉一次 */
+function loadBranches(force){
+  if(branchesLoaded && !force) return Promise.resolve(branchList);
+  return API.get("/api/branches").then(function(rows){
+    branchList = rows || [];
+    branchesLoaded = true;
+    if(activeView === "branches") renderBranches();
+    populateBranchSelect();
+    updateBranchDot();
+    /* 看板卡片上带着分支标签，数据回来后要重画一次（render 会重建 DOM，所以只在看板停留时做） */
+    if(state.board && activeView === "board") render({animate:false});
+  }).catch(function(){ /* 分支模块不可用时静默降级，不影响主流程 */ });
+}
+/** 侧栏角标：还在进行中的分支数（开发中 + 待测试 + 待合并），全发布完就不显示 */
+function updateBranchDot(){
+  if(!branchDot) return;
+  var n = 0;
+  branchList.forEach(function(b){ if(b.status !== "released") n++; });
+  branchDot.hidden = n === 0;
+  branchDot.textContent = n > 99 ? "99+" : String(n);
+  branchDot.title = n ? (n + " 条分支还没发布") : "";
+}
+
+function enterBranchesView(){
+  renderBranches();                       // 先用缓存出一版，避免空白
+  loadBranches().then(function(){ renderBranches(); });
+}
+
+function branchStat(){
+  var s = { total: 0 };
+  BRANCH_STATUS.forEach(function(x){ s[x.id] = 0; });
+  branchList.forEach(function(b){
+    s.total++;
+    if(s[b.status] === undefined) s[b.status] = 0;
+    s[b.status]++;
+  });
+  return s;
+}
+/** 已发布分支的平均发布周期（天）；没有已发布的分支就返回 null */
+function branchCycleAvg(){
+  var sum = 0, n = 0;
+  branchList.forEach(function(b){
+    if(b.status !== "released" || !b.releasedAt || !b.createdAt) return;
+    var ms = new Date(b.releasedAt).getTime() - new Date(b.createdAt).getTime();
+    if(ms >= 0){ sum += ms; n++; }
+  });
+  if(!n) return null;
+  return (sum / n / 86400000).toFixed(sum / n / 86400000 >= 10 ? 0 : 1);
+}
+
+function renderBranches(){
+  var box = $("branchGroups");
+  if(!box) return;
+  var st = branchStat();
+  var meta = $("branchMeta");
+  if(meta){
+    meta.textContent = st.total
+      ? ("共 " + st.total + " 条 · 开发中 " + st.dev + " · 待测试 " + st.testing +
+         " · 待合并 " + st.merging + " · 已发布 " + st.released)
+      : "";
+  }
+  renderBranchFlow(st);
+
+  if(!st.total){
+    box.innerHTML = '<div class="br-emptyall">' +
+      '还没有分支。点右上角「新建分支」把正在开发的分支记下来 —— 之后每次改状态都会自动留下时间，' +
+      '谁在什么时候把它推到哪一步一目了然。</div>';
+    return;
+  }
+
+  var kw = (($("branchSearch") || {}).value || "").trim().toLowerCase();
+  var rows = branchList.filter(function(b){
+    if(branchFilter && b.status !== branchFilter) return false;
+    if(!kw) return true;
+    return String(b.name || "").toLowerCase().indexOf(kw) !== -1
+        || String(b.targetBranch || "").toLowerCase().indexOf(kw) !== -1
+        || String(b.owner || "").toLowerCase().indexOf(kw) !== -1;
+  });
+  if(!rows.length){
+    box.innerHTML = '<div class="br-emptyall">没有匹配的分支' +
+      (branchFilter ? '（当前只看「' + esc(branchStatusMeta(branchFilter).name) + '」）' : '') + '。</div>';
+    return;
+  }
+
+  box.innerHTML = BRANCH_STATUS.map(function(s){
+    var items = rows.filter(function(b){ return b.status === s.id; });
+    return '<div class="br-group" data-status="' + s.id + '">' +
+      '<div class="br-group-head">' +
+        '<i class="br-dot ' + s.cls + '"></i>' +
+        '<span class="br-group-name">' + s.name + '</span>' +
+        '<span class="br-group-n">' + items.length + '</span>' +
+        '<span class="br-group-hint">' + s.hint + '</span>' +
+      '</div>' +
+      '<div class="br-group-body">' +
+        (items.length ? items.map(branchCardHTML).join("") : '<div class="br-empty">暂无</div>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function renderBranchFlow(st){
+  var box = $("branchFlow");
+  if(!box) return;
+  var cycle = branchCycleAvg();
+  box.innerHTML = BRANCH_STATUS.map(function(s){
+    var on = branchFilter === s.id;
+    return '<button class="br-flow-cell' + (on ? " on" : "") + '" type="button" data-br-filter="' + s.id + '"' +
+        ' aria-pressed="' + on + '">' +
+        '<i class="br-dot ' + s.cls + '"></i>' +
+        '<span class="bf-n">' + (st[s.id] || 0) + '</span>' +
+        '<span class="bf-l">' + s.name + '</span>' +
+      '</button>';
+  }).join("") +
+    '<div class="br-flow-cell static" title="已发布分支从创建到发布的平均天数">' +
+      '<span class="bf-n">' + (cycle === null ? "—" : cycle) + '</span>' +
+      '<span class="bf-l">平均发布周期' + (cycle === null ? "" : "（天）") + '</span>' +
+    '</div>';
+}
+
+function branchCardHTML(b){
+  var sm = branchStatusMeta(b.status);
+  var stay = branchStay(b);
+  var taskTxt = b.taskCount
+    ? ((b.doneCount || 0) + "/" + b.taskCount + " 任务")
+    : "无关联任务";
+  return '<article class="br-card" data-branch="' + esc(b.id) + '" tabindex="0" role="button"' +
+      ' aria-label="' + esc(b.name) + '，' + esc(sm.name) + '">' +
+    '<div class="br-card-top">' +
+      '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) + '"' +
+        ' title="点击切换状态">' + sm.name + icon("down", 11) + '</button>' +
+      (b.owner ? '<span class="br-owner" title="负责人：' + esc(b.owner) + '">' + avatarHTML(b.owner) + '</span>' : '') +
+    '</div>' +
+    '<div class="br-name" title="' + esc(b.name) + '">' + esc(b.name) + '</div>' +
+    (b.targetBranch ? '<div class="br-target" title="目标分支：' + esc(b.targetBranch) + '">→ ' + esc(b.targetBranch) + '</div>' : '') +
+    (b.note ? '<div class="br-note" title="' + esc(b.note) + '">' + esc(b.note) + '</div>' : '') +
+    '<div class="br-card-foot">' +
+      '<span class="br-tasks">' + icon("checklist", 12) + taskTxt + '</span>' +
+      '<span class="br-age" title="' + esc(stay.tip) + '">' + esc(stay.text) + '</span>' +
+    '</div>' +
+  '</article>';
+}
+
+/** 状态浮层：四档状态 + 编辑 / 删除入口 */
+function openBranchStatusMenu(anchor, id){
+  var b = branchById(id);
+  if(!b) return;
+  var el = document.createElement("div");
+  el.className = "menu br-status-menu";
+  el.innerHTML = BRANCH_STATUS.map(function(s){
+    var cur = s.id === b.status;
+    return '<button class="menu-item' + (cur ? " on" : "") + '" type="button" data-br-set="' + s.id + '">' +
+        '<i class="br-dot ' + s.cls + '"></i>' + s.name +
+        (cur ? '<span class="k">当前</span>' : '') +
+      '</button>';
+  }).join("") +
+    '<div class="menu-sep"></div>' +
+    '<button class="menu-item" type="button" data-br-edit="1">编辑分支信息</button>' +
+    '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>';
+  el.addEventListener("click", function(e){
+    var set = e.target.closest("[data-br-set]");
+    if(set){
+      UI.closeAllPops();
+      setBranchStatus(id, set.dataset.brSet);
+      return;
+    }
+    if(e.target.closest("[data-br-edit]")){ UI.closeAllPops(); openBranchDialog(id); return; }
+    if(e.target.closest("[data-br-del]")){ UI.closeAllPops(); deleteBranch(id); }
+  });
+  UI.openPop(el, anchor, { align: "left" });
+}
+
+/** 改状态：成功后刷新列表；抽屉开着就一起刷新 */
+function setBranchStatus(id, status){
+  var b = branchById(id);
+  if(!b || b.status === status) return;
+  API.post("/api/branches/" + encodeURIComponent(id) + "/status", { status: status })
+    .then(function(nb){
+      toast("「" + nb.name + "」→ " + branchStatusMeta(nb.status).name, "fs");
+      return loadBranches(true);
+    })
+    .then(function(){
+      if(brDrawerId === id) openBranchDrawer(id);
+    })
+    .catch(function(ex){ toast(ex.message || "状态切换失败", "bad"); });
+}
+
+/* ---------------- 新建 / 编辑弹窗 ---------------- */
+
+function fillBranchStatusOptions(sel, cur){
+  if(!sel) return;
+  sel.innerHTML = BRANCH_STATUS.map(function(s){
+    return '<option value="' + s.id + '"' + (s.id === cur ? " selected" : "") + '>' + s.name + '</option>';
+  }).join("");
+}
+
+function openBranchDialog(id){
+  brEditingId = id || null;
+  var b = brEditingId ? branchById(brEditingId) : null;
+  $("dlgBranchTitle").textContent = b ? "编辑分支" : "新建分支";
+  $("dlgBranchMsg").textContent = b
+    ? "状态不在这里改 —— 点分支卡片上的状态标签切换，那样才会记进时间线。"
+    : "分支名照 git 里的写法填，建好之后就能跟状态和时间。";
+  $("dlgBranchOk").textContent = b ? "保存" : "创建分支";
+  /* 编辑时隐藏「初始状态」（状态只能走状态切换接口） */
+  if($("brStatusField")) $("brStatusField").hidden = !!b;
+  $("brName").value = b ? (b.name || "") : "";
+  $("brTarget").value = b ? (b.targetBranch || "") : "";
+  $("brNote").value = b ? (b.note || "") : "";
+  fillBranchStatusOptions($("brStatus"), b ? b.status : "dev");
+
+  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定） */
+  var sel = $("brOwner");
+  if(sel){
+    var opts = ownerOptions();
+    var curName = b ? (b.owner || "") : (currentUser ? (currentUser.displayName || "") : "");
+    var curId = b ? (b.ownerUserId || "") : (currentUser ? currentUser.id : "");
+    var html = "", matched = false;
+    opts.forEach(function(o){
+      var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
+      if(on) matched = true;
+      html += '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (on ? " selected" : "") + '>' +
+        esc(o.name) + '</option>';
+    });
+    if(curName && !matched){
+      html += '<option value="__text__" data-name="' + esc(curName) + '" selected>○ ' + esc(curName) + '（非成员）</option>';
+    }
+    sel.innerHTML = html;
+  }
+
+  $("dlgBranch").classList.add("open");
+  setTimeout(function(){ try{ $("brName").focus(); }catch(e){ /* noop */ } }, 40);
+}
+function closeBranchDialog(){
+  var d = $("dlgBranch");
+  if(d) d.classList.remove("open");
+  brEditingId = null;
+}
+function submitBranchDialog(){
+  var name = ($("brName").value || "").trim();
+  if(!name){ toast("请填写分支名", "warn"); try{ $("brName").focus(); }catch(e){} return; }
+  if(!/^[\p{L}\p{N}._/-]{1,80}$/u.test(name)){
+    toast("分支名只允许字母、数字、点、下划线、中划线、斜杠", "warn");
+    try{ $("brName").focus(); }catch(e){}
+    return;
+  }
+  var sel = $("brOwner");
+  var picked = sel && sel.options[sel.selectedIndex];
+  var payload = {
+    name: name,
+    targetBranch: ($("brTarget").value || "").trim() || null,
+    note: ($("brNote").value || "").trim() || null,
+    owner: picked ? (picked.dataset.name || picked.textContent || null) : null,
+    ownerUserId: picked && picked.value !== "__text__" ? picked.value : null
+  };
+  if(!brEditingId) payload.status = ($("brStatus") || {}).value || "dev";
+
+  var req = brEditingId
+    ? API.put("/api/branches/" + encodeURIComponent(brEditingId), payload)
+    : API.post("/api/branches", payload);
+  var wasEdit = !!brEditingId;
+  var btn = $("dlgBranchOk");
+  btn.disabled = true;
+  req.then(function(b){
+    btn.disabled = false;
+    closeBranchDialog();
+    toast(wasEdit ? ("已更新「" + b.name + "」") : ("已创建分支「" + b.name + "」"), "fs");
+    loadBranches(true).then(function(){
+      if(brDrawerId === b.id) openBranchDrawer(b.id);
+    });
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+}
+
+function deleteBranch(id){
+  var b = branchById(id);
+  if(!b) return;
+  var n = b.taskCount || 0;
+  UI.showConfirm({
+    title: "删除分支",
+    msg: "「" + b.name + "」将被删除，操作记录一起清掉" +
+      (n ? ("；挂在它上面的 " + n + " 个任务会解除关联（任务本身保留）") : "") + "。确定删除？",
+    okText: "删除分支"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/branches/" + encodeURIComponent(id)).then(function(){
+      if(brDrawerId === id) closeBranchDrawer();
+      toast("已删除「" + b.name + "」", "fs");
+      loadBranches(true);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+
+/* ---------------- 分支详情抽屉 ---------------- */
+
+function openBranchDrawer(id){
+  API.get("/api/branches/" + encodeURIComponent(id)).then(function(b){
+    brDrawerId = b.id;
+    renderBranchDrawer(b);
+    $("branchDrawer").classList.add("on");
+    loadBranchLogs(b.id);
+    loadBranchTasks(b.id);
+  }).catch(function(ex){ toast(ex.message || "分支加载失败", "bad"); });
+}
+function closeBranchDrawer(){
+  var d = $("branchDrawer");
+  if(d) d.classList.remove("on");
+  brDrawerId = null;
+}
+
+function renderBranchDrawer(b){
+  var body = $("brDrawerBody");
+  if(!body) return;
+  $("brDrawerTitle").textContent = b.name;
+  var stay = branchStay(b);
+  var segs = BRANCH_STATUS.map(function(s){
+    return '<button type="button" class="' + (s.id === b.status ? "on" : "") + '"' +
+      ' data-br-drawer-status="' + s.id + '" aria-pressed="' + (s.id === b.status) + '">' + s.name + '</button>';
+  }).join("");
+  var times = BRANCH_STATUS.map(function(s){
+    var at = b[s.timeKey];
+    return '<div class="br-tnode' + (at ? " on" : "") + '">' +
+      '<i class="br-dot ' + s.cls + '"></i>' +
+      '<span class="bt-name">' + s.name + '</span>' +
+      '<span class="bt-time">' + (at ? esc(fmtTs(at)) : "未进入") + '</span>' +
+    '</div>';
+  }).join("");
+
+  body.innerHTML =
+    '<div class="br-drawer-seg seg grid4">' + segs + '</div>' +
+    '<div class="br-drawer-stay">' + esc(stay.text) + ' · ' + esc(stay.tip) + '</div>' +
+    '<div class="br-kv">' +
+      '<div><span>目标分支</span><b>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</b></div>' +
+      '<div><span>负责人</span><b>' + (b.owner ? esc(b.owner) : "—") + '</b></div>' +
+      '<div><span>创建时间</span><b>' + esc(fmtTs(b.createdAt)) + '</b></div>' +
+      '<div><span>关联任务</span><b>' + (b.taskCount ? ((b.doneCount || 0) + " / " + b.taskCount + " 已完成") : "—") + '</b></div>' +
+    '</div>' +
+    (b.note ? '<p class="br-drawer-note">' + esc(b.note) + '</p>' : '') +
+    '<div class="br-sect"><h4>状态时间</h4><div class="br-times">' + times + '</div></div>' +
+    '<div class="br-sect"><h4>关联任务</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
+    '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
+    '<div class="br-drawer-foot">' +
+      '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>' +
+      '<span style="flex:1 1 auto"></span>' +
+      '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' +
+    '</div>';
+
+  var del = $("brDrawerDelete");
+  if(del) del.addEventListener("click", function(){ deleteBranch(b.id); });
+  var ed = $("brDrawerEdit");
+  if(ed) ed.addEventListener("click", function(){ openBranchDialog(b.id); });
+}
+
+function loadBranchLogs(id){
+  API.get("/api/branches/" + encodeURIComponent(id) + "/logs").then(function(logs){
+    var box = $("brLogList");
+    if(!box || brDrawerId !== id) return;
+    if(!logs || !logs.length){
+      box.innerHTML = '<div class="tl-empty">暂无操作记录</div>';
+      return;
+    }
+    box.innerHTML = logs.map(function(l){
+      var actor = l.actorName ? (esc(l.actorName) + " · ") : "";
+      return '<div class="tl-item"><span class="tl-time">' + esc(fmtTs(l.createdAt)) + '</span>' +
+        '<span class="tl-detail">' + actor + esc(l.detail || l.action || "") + '</span></div>';
+    }).join("");
+  }).catch(function(){
+    var box = $("brLogList");
+    if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">操作记录加载失败</div>';
+  });
+}
+
+function loadBranchTasks(id){
+  API.get("/api/branches/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+    var box = $("brTaskList");
+    if(!box || brDrawerId !== id) return;
+    if(!tasks || !tasks.length){
+      box.innerHTML = '<div class="tl-empty">还没有任务关联到这条分支。在任务详情的「所属分支」里挂上来。</div>';
+      return;
+    }
+    box.innerHTML = tasks.map(function(t){
+      var done = t.boardColumn === "done";
+      return '<button class="br-task" type="button" data-br-task="' + esc(t.id) + '">' +
+        '<span class="bt-dot' + (done ? " done" : "") + '"></span>' +
+        '<span class="bt-title' + (done ? " done" : "") + '">' + esc(t.title) + '</span>' +
+        '<span class="bt-pri ' + esc(t.priority || "") + '">' + esc(t.priority || "") + '</span>' +
+      '</button>';
+    }).join("");
+  }).catch(function(){
+    var box = $("brTaskList");
+    if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">关联任务加载失败</div>';
+  });
+}
+
+/* ---------------- 任务抽屉里的「所属分支」下拉 ---------------- */
+
+function populateBranchSelect(keep){
+  var sel = $("iBranch");
+  if(!sel) return;
+  var cur = (keep === undefined ? sel.value : keep) || "";
+  var html = '<option value="">不关联分支</option>';
+  BRANCH_STATUS.forEach(function(s){
+    var items = branchList.filter(function(b){ return b.status === s.id; });
+    if(!items.length) return;
+    html += '<optgroup label="' + esc(s.name) + '">';
+    items.forEach(function(b){
+      html += '<option value="' + esc(b.id) + '">' + esc(b.name) +
+        (b.targetBranch ? " → " + esc(b.targetBranch) : "") + '</option>';
+    });
+    html += '</optgroup>';
+  });
+  sel.innerHTML = html;
+  var ok = false;
+  for(var i = 0; i < branchList.length; i++) if(branchList[i].id === cur) ok = true;
+  sel.value = ok ? cur : "";
+  var hint = $("iBranchHint");
+  if(hint){
+    hint.textContent = branchList.length
+      ? "分支在「分支」页里建，这里只负责挂上去"
+      : "还没有分支 —— 先去「分支」页建一条，再回来挂";
+  }
+}
+
+/* ---------------- 事件绑定 ---------------- */
+
+(function wireBranchView(){
+  var box = $("branchGroups");
+  if(box){
+    box.addEventListener("click", function(e){
+      var menu = e.target.closest("[data-br-status-menu]");
+      if(menu){ e.stopPropagation(); openBranchStatusMenu(menu, menu.dataset.brStatusMenu); return; }
+      var card = e.target.closest("[data-branch]");
+      if(card) openBranchDrawer(card.dataset.branch);
+    });
+    box.addEventListener("keydown", function(e){
+      if(e.key !== "Enter" && e.key !== " ") return;
+      var card = e.target.closest("[data-branch]");
+      if(card){ e.preventDefault(); openBranchDrawer(card.dataset.branch); }
+    });
+  }
+  if($("branchFlow")){
+    $("branchFlow").addEventListener("click", function(e){
+      var c = e.target.closest("[data-br-filter]");
+      if(!c) return;
+      branchFilter = (branchFilter === c.dataset.brFilter) ? "" : c.dataset.brFilter;
+      renderBranches();
+    });
+  }
+  if($("branchNew")) $("branchNew").addEventListener("click", function(){ openBranchDialog(null); });
+  if($("branchSearch")) $("branchSearch").addEventListener("input", renderBranches);
+  if($("dlgBranchCancel")) $("dlgBranchCancel").addEventListener("click", closeBranchDialog);
+  if($("dlgBranchOk")) $("dlgBranchOk").addEventListener("click", submitBranchDialog);
+  if($("brName")){
+    $("brName").addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); submitBranchDialog(); }
+    });
+  }
+
+  if($("branchDrawer")){
+    /* 抽屉内的状态切换与任务跳转：动态内容，统一委托 */
+    $("branchDrawer").addEventListener("click", function(e){
+      var st = e.target.closest("[data-br-drawer-status]");
+      if(st){
+        var b = branchById(brDrawerId);
+        if(b && branchStatusMeta(b.status).id !== st.dataset.brDrawerStatus){
+          setBranchStatus(brDrawerId, st.dataset.brDrawerStatus);
+        }
+        return;
+      }
+      var task = e.target.closest("[data-br-task]");
+      if(task){
+        /* 任务抽屉是另一层浮层，先收起分支抽屉再打开，避免两层遮罩叠在一起 */
+        var tid = task.dataset.brTask;
+        closeBranchDrawer();
+        openTaskById(tid);
+      }
+    });
+    $("branchScrim").addEventListener("click", closeBranchDrawer);
+  }
+  if($("brDrawerClose")) $("brDrawerClose").addEventListener("click", closeBranchDrawer);
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "Escape") return;
+    if($("dlgBranch") && $("dlgBranch").classList.contains("open")){ closeBranchDialog(); return; }
+    if($("branchDrawer") && $("branchDrawer").classList.contains("on")){ closeBranchDrawer(); }
+  });
+})();
+
 /* ==================== 任务清单（完成快照 · 月度统计） ==================== */
 var compSeq = 0, compRowsCache = [];
 function enterCompletionsView(){ loadCompletions(); }
@@ -10286,6 +11121,7 @@ function renderFlowEstimate(d){
         '<span>准确 <b>' + d.accurateCount + '</b></span>' +
         '<span>低估 <b>' + d.overCount + '</b></span>' +
         '<span>样本 <b>' + n + '</b> 项已完成</span>' +
+        (d.noTimeCount ? '<span title="没开过计时的任务没有实际耗时，不参与系数">未计时 <b>' + d.noTimeCount + '</b> 项</span>' : '') +
       '</div>' +
       '<div class="fe-sug">' + esc(d.suggestion || "") + '</div>' +
     '</div>';
@@ -12350,6 +13186,7 @@ function boot(){
     if(pendingTask) openTaskById(pendingTask);
   });
   loadReqs();
+  loadBranches();
   loadViews();
   loadMe();
   initSSE();
@@ -12382,6 +13219,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-23 02:53</span></div>
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-26 03:19</span></div>
 </body>
 </html>

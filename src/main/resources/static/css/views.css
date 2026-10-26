@@ -913,3 +913,146 @@
 .flow-est-cat{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 .ai-tag.risk-hi{color:var(--danger);background:var(--danger-soft);border-color:var(--danger-border);}
 .ai-tag.risk-lo{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+
+/* ===================== 分支管理（2026-10-26） =====================
+   一条分支 = 一次「开发 → 测 → 合 → 发布」。四列按状态分组，卡片上的
+   状态标签就是切换入口（点开浮层选另一档）；时间只记首次进入，操作记录记每一次。 */
+.br-page{max-width:1360px;}
+.br-search input{
+  height:30px;width:200px;padding:0 10px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);font:inherit;font-size:12.5px;color:var(--text);
+}
+.br-search input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+
+/* 状态圆点：统计格、分组头、卡片徽章、浮层四处共用 */
+.br-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--text-3);}
+.br-dot.br-st-dev{background:var(--primary);}
+.br-dot.br-st-testing{background:var(--warning);}
+.br-dot.br-st-merging{background:var(--plum);}
+.br-dot.br-st-released{background:var(--success);}
+
+/* 顶部：四档计数（点击只看这一档）+ 平均发布周期 */
+.br-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+.br-flow-cell{
+  display:flex;align-items:center;gap:8px;min-width:0;padding:11px 13px;text-align:left;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;
+  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.br-flow-cell:hover{background:var(--surface-hover);}
+.br-flow-cell.on{border-color:var(--primary-border);background:var(--primary-soft);}
+.br-flow-cell.static{cursor:default;}
+.br-flow-cell.static:hover{background:var(--surface);}
+.bf-n{font-size:19px;line-height:1;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text);}
+.bf-l{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* 四列分组 */
+.br-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;}
+.br-group{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:8px;}
+.br-group-head{display:flex;align-items:center;gap:7px;padding:4px 4px 9px;min-width:0;}
+.br-group-name{font-size:13px;font-weight:650;color:var(--text);white-space:nowrap;}
+.br-group-n{
+  font-size:11.5px;color:var(--text-3);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:0 6px;font-variant-numeric:tabular-nums;
+}
+.br-group-hint{margin-left:auto;font-size:11px;color:var(--text-3);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.br-group-body{display:flex;flex-direction:column;gap:8px;min-height:56px;}
+.br-empty{
+  font-size:12px;color:var(--text-3);text-align:center;padding:16px 0;
+  border:1px dashed var(--border);border-radius:var(--r-md);
+}
+.br-emptyall{
+  font-size:13px;color:var(--text-3);line-height:22px;padding:26px 20px;text-align:center;
+  border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface);
+}
+
+/* 分支卡片 */
+.br-card{
+  display:flex;flex-direction:column;gap:6px;padding:10px 11px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+.br-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm);}
+.br-card:focus-visible{outline:none;box-shadow:var(--ring-focus);border-color:var(--primary);}
+.br-card-top{display:flex;align-items:center;gap:8px;min-height:21px;}
+.br-badge{
+  display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;cursor:pointer;
+  border-radius:var(--r-pill);border:1px solid transparent;background:none;
+  font-size:11.5px;font-weight:650;font-family:inherit;
+}
+.br-badge.br-st-dev{color:var(--primary);background:var(--primary-soft);border-color:var(--primary-border);}
+.br-badge.br-st-testing{color:var(--warning);background:var(--warning-soft);border-color:var(--warning-border);}
+.br-badge.br-st-merging{color:var(--plum);background:var(--plum-soft);border-color:var(--plum-border);}
+.br-badge.br-st-released{color:var(--success);background:var(--success-soft);border-color:var(--success-border);}
+.br-owner{margin-left:auto;display:inline-flex;}
+.br-name{
+  font-family:var(--font-mono);font-size:12.5px;font-weight:600;line-height:1.35;
+  color:var(--text);word-break:break-all;
+}
+.br-target{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);word-break:break-all;}
+.br-note{font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-card-foot{display:flex;align-items:center;gap:8px;margin-top:2px;font-size:11.5px;color:var(--text-3);}
+.br-tasks{display:inline-flex;align-items:center;gap:3px;min-width:0;}
+.br-age{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* 状态浮层 */
+.br-status-menu{min-width:160px;}
+.br-status-menu .menu-item{display:flex;align-items:center;gap:8px;}
+.br-status-menu .menu-item.on{color:var(--text);font-weight:650;}
+
+/* 新建/编辑弹窗 */
+.br-dlg{max-width:470px;}
+.br-dlg-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* 详情抽屉 */
+.br-drawer-seg{margin:14px 0 10px;}
+.br-drawer-stay{font-size:12px;color:var(--text-3);line-height:18px;margin-bottom:14px;}
+.br-kv{
+  display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;padding:12px 14px;
+  border-radius:var(--r-md);background:var(--surface-sunken);
+}
+.br-kv > div{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.br-kv span{font-size:11px;color:var(--text-3);}
+.br-kv b{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-drawer-note{
+  margin:12px 0 0;padding:10px 12px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12.5px;color:var(--text-2);line-height:19px;
+}
+.br-sect{margin-top:20px;}
+.br-sect h4{margin:0 0 8px;font-size:12px;font-weight:650;color:var(--text-2);letter-spacing:.02em;}
+.br-times{display:flex;flex-direction:column;}
+.br-tnode{
+  display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12.5px;
+  color:var(--text-3);border-bottom:1px dashed var(--border);
+}
+.br-tnode:last-child{border-bottom:none;}
+.br-tnode.on{color:var(--text);}
+.br-tnode .bt-name{font-weight:600;min-width:56px;}
+.br-tnode .bt-time{margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums;}
+
+.br-tasklist{display:flex;flex-direction:column;gap:6px;}
+.br-task{
+  display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;text-align:left;cursor:pointer;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-family:inherit;
+}
+.br-task:hover{background:var(--surface-hover);}
+.bt-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);flex:0 0 auto;}
+.bt-dot.done{background:var(--success);}
+.bt-title{flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bt-title.done{color:var(--text-3);text-decoration:line-through;}
+.bt-pri{font-size:10.5px;font-weight:700;color:var(--text-3);}
+.br-drawer-foot{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:14px;border-top:1px solid var(--border);}
+.danger-text{color:var(--danger);}
+
+/* 看板卡片上的分支标签 */
+.tag.tag-branch{
+  font-family:var(--font-mono);font-size:11px;font-weight:600;
+  background:var(--plum-soft);color:var(--plum);max-width:100%;overflow:hidden;text-overflow:ellipsis;
+}
+
+@media (max-width:1200px){
+  .br-groups{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .br-flow{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (max-width:780px){
+  .br-groups,.br-flow{grid-template-columns:1fr;}
+}

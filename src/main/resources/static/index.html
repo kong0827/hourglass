@@ -89,6 +89,11 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.6h6.2l3.4 3.4v9.4H5.4Z"/><path d="M11.4 3.6V7h3.4"/><path d="M7.6 10.4h4.8M7.6 13h3.2"/></svg>
         <span class="nl">需求</span>
       </button>
+      <button class="nav-item" type="button" data-view="branches" id="navBranches">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/></svg>
+        <span class="nl">分支</span>
+        <span class="nav-dot" id="branchDot" hidden>0</span>
+      </button>
 
       <span class="nav-sec">洞察</span>
       <button class="nav-item" type="button" data-view="review">
@@ -525,6 +530,66 @@
             <div class="ai-usage" id="aiAuditUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 分支管理 ===== -->
+      <section class="view" id="view-branches" aria-label="分支">
+        <div class="view-page br-page">
+          <div class="page-toolbar">
+            <span class="toolbar-title">分支</span>
+            <span class="toolbar-meta" id="branchMeta"></span>
+            <span class="toolbar-right">
+              <span class="br-search">
+                <input type="search" id="branchSearch" placeholder="搜索分支名 / 目标分支…" aria-label="搜索分支" autocomplete="off" />
+              </span>
+              <button class="btn primary sm" type="button" id="branchNew">
+                <span data-icon="plus"></span>&nbsp;新建分支
+              </button>
+            </span>
+          </div>
+
+          <!-- 四个状态格子：点一下只看这一档；再点一次取消 -->
+          <div class="br-flow" id="branchFlow"></div>
+
+          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布 -->
+          <div class="br-groups" id="branchGroups"></div>
+        </div>
+
+        <!-- 新建 / 编辑分支 -->
+        <div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
+          <div class="sheet reqdoc-dlg br-dlg">
+            <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
+            <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
+            <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>分支名</span>
+                <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
+              </label>
+              <label class="reqdoc-dlg-field">
+                <span>目标分支</span>
+                <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
+              </label>
+              <div class="br-dlg-2col">
+                <label class="reqdoc-dlg-field">
+                  <span>负责人</span>
+                  <select id="brOwner"></select>
+                </label>
+                <label class="reqdoc-dlg-field" id="brStatusField">
+                  <span>初始状态</span>
+                  <select id="brStatus"></select>
+                </label>
+              </div>
+              <label class="reqdoc-dlg-field">
+                <span>备注</span>
+                <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
+              </label>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgBranchCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
             </div>
           </div>
         </div>
@@ -1209,6 +1274,14 @@
             <select id="iReqDoc"></select>
             <span class="hint" id="iReqDocHint">先选项目，再从该项目的需求里挑</span>
           </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="iBranch">所属分支</label>
+            <select id="iBranch"></select>
+            <span class="hint" id="iBranchHint">分支在「分支」页里建，这里只负责挂上去</span>
+          </div>
           <div class="field">
             <label for="iOwner">负责人</label>
             <select id="iOwner"></select>
@@ -1459,6 +1532,20 @@
       <button class="btn primary" type="submit" id="dlgUserPwdOk">重置密码</button>
     </div>
   </form>
+</div>
+
+<!-- 分支详情抽屉：状态切换 + 时间线 + 关联任务 -->
+<div class="drawer-layer" id="branchDrawer" role="dialog" aria-modal="true" aria-labelledby="brDrawerTitle">
+  <div class="drawer-scrim" id="branchScrim"></div>
+  <div class="drawer br-drawer">
+    <div class="drawer-head">
+      <h2 id="brDrawerTitle">分支</h2>
+      <button class="icon-btn" type="button" id="brDrawerClose" aria-label="关闭">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="brDrawerBody"></div>
+  </div>
 </div>
 
 <!-- 统一危险确认框 -->

@@ -15,6 +15,7 @@ import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Attachment;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
+import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Subtask;
@@ -29,6 +30,7 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -81,6 +83,8 @@ public class TaskService {
     private final TaskCompletionService completionService;
     /** 关联需求校验用（需求必须属于任务所选的项目） */
     private final RequirementDocMapper requirementDocMapper;
+    /** 关联分支校验用（分支必须属于同一空间） */
+    private final DevBranchMapper devBranchMapper;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -91,7 +95,8 @@ public class TaskService {
                        AppNotificationMapper appNotificationMapper,
                        TimeLogService timeLogService,
                        TaskCompletionService completionService,
-                       RequirementDocMapper requirementDocMapper) {
+                       RequirementDocMapper requirementDocMapper,
+                       DevBranchMapper devBranchMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -108,6 +113,7 @@ public class TaskService {
         this.timeLogService = timeLogService;
         this.completionService = completionService;
         this.requirementDocMapper = requirementDocMapper;
+        this.devBranchMapper = devBranchMapper;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -683,6 +689,8 @@ public class TaskService {
         nt.setReqId(doneTask.getReqId());
         /* 循环任务的下一次落在同一需求下 */
         nt.setReqDocId(doneTask.getReqDocId());
+        /* 长期任务（如每周回归）通常还在同一条分支上，一起继承 */
+        nt.setBranchId(doneTask.getBranchId());
         nt.setProgress(0);
         nt.setRecurType(doneTask.getRecurType());
         nt.setRemindSent(Boolean.FALSE);
@@ -774,6 +782,15 @@ public class TaskService {
             }
         }
         t.setReqDocId(reqDocId);
+        /* 关联分支：空间级分支池，只校验存在性与同空间（分支不绑项目，换项目不影响关联） */
+        String branchId = Texts.trimToNull(req.getBranchId());
+        if (branchId != null) {
+            DevBranch br = devBranchMapper.selectById(branchId);
+            if (br == null || !workspaceId.equals(br.getWorkspaceId())) {
+                throw AppException.badRequest("所选分支不存在：" + branchId);
+            }
+        }
+        t.setBranchId(branchId);
         t.setProgress(req.getProgress() == null ? 0 : Math.max(0, Math.min(100, req.getProgress())));
         /* 预估耗时：0 与空等价，都表示"没估过"，不要存 0 去污染系数计算 */
         Integer est = req.getEstimateMinutes();

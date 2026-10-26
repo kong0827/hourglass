@@ -46,10 +46,10 @@
 
   var doing = [
     T({ id: "K1", title: "重构权限校验中间件", priority: "P0", boardColumn: "doing", progress: 60, reqId: "R1", reqDocId: "D1",
-        startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
+        branchId: "BR1", startDate: shift(-3), dueDate: shift(2), tags: ["权限"], subtaskTotal: 4, subtaskDone: 2,
         totalMinutes: 520, estimateMinutes: 480 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
-        startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
+        branchId: "BR2", startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
         totalMinutes: 200, estimateMinutes: 240 })
   ];
   var done = [
@@ -62,6 +62,38 @@
         completedAt: null })
   ];
   var tasks = backlog.concat(doing, done);
+
+  /* ---------------- 分支（空间级分支池） ---------------- */
+  var branches = [
+    { id: "BR1", workspaceId: "W1", name: "feature/permission-middleware", status: "dev",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "权限校验中间件改造，等测试环境排队",
+      devAt: ts(-3, 10, 0), testAt: null, mergeAt: null, releasedAt: null,
+      taskCount: 3, doneCount: 1, createdAt: ts(-3, 10, 0), updatedAt: ts(-1, 17, 20) },
+    { id: "BR2", workspaceId: "W1", name: "feature/export-csv-hours", status: "testing",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "导出补工时列，提测中",
+      devAt: ts(-7, 9, 30), testAt: ts(-2, 15, 0), mergeAt: null, releasedAt: null,
+      taskCount: 2, doneCount: 1, createdAt: ts(-7, 9, 30), updatedAt: ts(-2, 15, 0) },
+    { id: "BR3", workspaceId: "W1", name: "hotfix/oa-push-oversize", status: "merging",
+      owner: "我", ownerUserId: "U1", targetBranch: "release/1.2", note: "OA 待办标题超 80 字节被拒，等合并窗口",
+      devAt: ts(-4, 11, 0), testAt: ts(-3, 16, 0), mergeAt: ts(-1, 9, 40), releasedAt: null,
+      taskCount: 1, doneCount: 1, createdAt: ts(-4, 11, 0), updatedAt: ts(-1, 9, 40) },
+    { id: "BR4", workspaceId: "W1", name: "feature/recur-task", status: "released",
+      owner: "我", ownerUserId: "U1", targetBranch: "main", note: "循环任务",
+      devAt: ts(-16, 9, 0), testAt: ts(-12, 14, 0), mergeAt: ts(-10, 10, 0), releasedAt: ts(-8, 18, 30),
+      taskCount: 4, doneCount: 4, createdAt: ts(-16, 9, 0), updatedAt: ts(-8, 18, 30) }
+  ];
+  var branchLogs = {
+    BR1: [
+      { id: "L3", action: "status", fromStatus: "dev", toStatus: "dev", detail: "开发中 → 待测试 被退回：联调环境没权限", actorName: "我", createdAt: ts(-3, 18, 0) },
+      { id: "L2", action: "update", fromStatus: "dev", toStatus: "dev", detail: "目标分支 （空） → main", actorName: "我", createdAt: ts(-3, 11, 20) },
+      { id: "L1", action: "create", fromStatus: null, toStatus: "dev", detail: "创建分支（初始状态：开发中）", actorName: "我", createdAt: ts(-3, 10, 0) }
+    ],
+    BR3: [
+      { id: "L5", action: "status", fromStatus: "testing", toStatus: "merging", detail: "待测试 → 待合并：测试通过，等周四合并窗口", actorName: "我", createdAt: ts(-1, 9, 40) },
+      { id: "L4", action: "status", fromStatus: "dev", toStatus: "testing", detail: "开发中 → 待测试", actorName: "我", createdAt: ts(-3, 16, 0) }
+    ]
+  };
+
 
   var board = {
     columns: {
@@ -256,7 +288,7 @@
     },
     "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
     "/api/estimate/stats": {
-      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4,
+      tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4, noTimeCount: 3,
       overallFactor: 1.42, medianFactor: 1.45,
       underCount: 0, accurateCount: 1, overCount: 3,
       byCategory: [
@@ -277,7 +309,7 @@
           estimateMinutes: 120, actualMinutes: 180, ratio: 1.5, level: "danger" }
       ],
       suggestion: "你的估时偏乐观：过去 4 个已完成任务的实际投入是预估的 1.42 倍。下次填预估时，把心里的数乘 1.42 再填，会贴近真实。",
-      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。"
+      note: "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— 开始日期只代表什么时候接到的，不代表什么时候动手。样本 4 个已完成任务。另有 3 个已完成任务没开过计时，不计入（没记录 ≠ 干得快）。"
     },
     "/api/flow-health": {
       rangeDays: 90,
@@ -371,8 +403,21 @@
     if (/^\/api\/ai\/reqdoc\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
       return { created: 5, skipped: 0, failed: [] };
     }
-    if (clean === "/api/req-docs") {
-      return reqDocs.map(function (d) {
+    /* 分支：带子路径的要先判断，否则会被单 id 那条正则先吃掉 */
+    if (clean === "/api/branches") return branches;
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+\/logs$/.test(clean)) {
+      return branchLogs[clean.split("/")[3]] || [];
+    }
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+\/tasks$/.test(clean)) {
+      var bid = clean.split("/")[3];
+      return tasks.filter(function (t) { return t.branchId === bid; });
+    }
+    if (/^\/api\/branches\/[A-Za-z0-9_-]+$/.test(clean)) {
+      var brId = clean.split("/").pop();
+      for (var bi = 0; bi < branches.length; bi++) if (branches[bi].id === brId) return branches[bi];
+      return branches[0];
+    }
+    if (clean === "/api/req-docs") {      return reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
                  owner: d.owner, excerpt: d.excerpt, taskCount: d.taskCount, doneCount: d.doneCount,
                  createdAt: d.createdAt, updatedAt: d.updatedAt };

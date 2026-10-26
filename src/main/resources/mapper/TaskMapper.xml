@@ -3,7 +3,7 @@
 <mapper namespace="com.devstudio.kanban.mapper.TaskMapper">
 
   <sql id="cols">
-    id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id,
+    id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at
   </sql>
@@ -36,7 +36,7 @@
        workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。 -->
   <select id="selectMyTasks" resultType="Task">
     SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
-           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.progress, t.is_blocked AS blocked,
+           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
            w.name AS workspace_name
@@ -54,10 +54,10 @@
 
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
-                      start_date, due_date, req_id, req_doc_id, progress, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
-            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{progress}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -75,6 +75,7 @@
       due_date = #{dueDate},
       req_id = #{reqId},
       req_doc_id = #{reqDocId},
+      branch_id = #{branchId},
       progress = #{progress},
       estimate_minutes = #{estimateMinutes},
       is_blocked = #{blocked},
@@ -187,6 +188,17 @@
     UPDATE task SET req_id = NULL, req_doc_id = NULL, updated_at = NOW()
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </update>
+
+  <update id="clearBranchRef">
+    UPDATE task SET branch_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId}
+  </update>
+
+  <select id="selectByBranch" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), FIELD(priority, 'P0', 'P1', 'P2', 'P3'), sort_order, created_at
+  </select>
 
   <select id="countByWorkspace" resultType="int">
     SELECT COUNT(*) FROM task WHERE workspace_id = #{workspaceId}

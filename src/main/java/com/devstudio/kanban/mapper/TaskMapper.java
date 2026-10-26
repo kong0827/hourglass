@@ -51,6 +51,13 @@ public interface TaskMapper {
 
     int clearReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 分支被删除时，把挂在它上面的任务解绑（任务本身保留） */
+    int clearBranchRef(@Param("workspaceId") String workspaceId, @Param("branchId") String branchId);
+
+    /** 分支详情：挂在某条分支上的未删除任务（未完成的排前面） */
+    List<com.devstudio.kanban.entity.Task> selectByBranch(@Param("workspaceId") String workspaceId,
+                                                          @Param("branchId") String branchId);
+
     int countByWorkspace(@Param("workspaceId") String workspaceId);
 
     /** 该空间内仍引用指定任务ID的子记录数（附件/日志/子任务/工时/标签）：导入保留子记录后 ID 视作占用 */

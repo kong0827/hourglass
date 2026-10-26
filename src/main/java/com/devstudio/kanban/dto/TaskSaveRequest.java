@@ -56,6 +56,10 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "关联需求ID不合法")
     private String reqDocId;
 
+    /** 关联分支 ID（dev_branch，空间级）；为空表示不关联分支 */
+    @Size(max = 32, message = "关联分支ID不合法")
+    private String branchId;
+
     @Min(value = 0, message = "进度不能小于 0")
     @Max(value = 100, message = "进度不能大于 100")
     private Integer progress = 0;

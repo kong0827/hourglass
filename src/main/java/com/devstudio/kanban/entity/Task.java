@@ -25,6 +25,8 @@ public class Task {
     private String reqId;
     /** 关联需求 ID（requirement_doc）；需求必须属于同一个项目 */
     private String reqDocId;
+    /** 关联分支 ID（dev_branch，空间级分支池）；删分支时自动解绑 */
+    private String branchId;
     /** 0-100 */
     private Integer progress;
     /** 预估耗时（分钟，空=没估过）。和 totalMinutes（实际投入）相除就是估时偏差 */

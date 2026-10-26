@@ -14,6 +14,7 @@ import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
@@ -63,6 +64,8 @@ public class WorkspaceService {
     private final InviteMapper inviteMapper;
     private final TaskCommentMapper commentMapper;
     private final AppNotificationMapper appNotificationMapper;
+    /** 分支与分支时间线（清空空间数据时一并清理） */
+    private final DevBranchMapper devBranchMapper;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -72,7 +75,8 @@ public class WorkspaceService {
                             SavedViewMapper savedViewMapper, TimeLogMapper timeLogMapper,
                             AttachmentService attachmentService, InviteMapper inviteMapper,
                             TaskCommentMapper commentMapper,
-                            AppNotificationMapper appNotificationMapper) {
+                            AppNotificationMapper appNotificationMapper,
+                            DevBranchMapper devBranchMapper) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -89,6 +93,7 @@ public class WorkspaceService {
         this.inviteMapper = inviteMapper;
         this.commentMapper = commentMapper;
         this.appNotificationMapper = appNotificationMapper;
+        this.devBranchMapper = devBranchMapper;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -275,6 +280,9 @@ public class WorkspaceService {
            否则任务 ID 被复用时旧评论/旧通知会挂到新任务上。 */
         commentMapper.deleteAllByWorkspace(workspaceId);
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
+        /* 分支（含状态变更时间线）：任务已经先删掉了，这里不需要再解绑 */
+        devBranchMapper.deleteLogsByWorkspace(workspaceId);
+        devBranchMapper.deleteByWorkspace(workspaceId);
     }
 
     /* ==================== 成员 ==================== */
