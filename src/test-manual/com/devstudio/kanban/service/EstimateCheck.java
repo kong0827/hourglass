@@ -48,12 +48,17 @@ public class EstimateCheck {
         tasks.add(task("T8", "done", "后端", 0));
         actual.put("T8", 90);
 
+        /* 已完成、填了预估，但从没开过计时：实际=0 不能当"高估"算，否则系数被拉低 */
+        tasks.add(task("T9", "done", "后端", 240));
+        actual.put("T9", 0);
+
         EstimateStats s = svc.compute(tasks, actual);
 
         System.out.println("— 样本与覆盖 —");
-        eq("任务总数", 8, s.getTasksTotal());
-        eq("填了预估的任务数（0 与空都算没填）", 6, s.getTasksWithEstimate());
-        eq("参与系数的已完成样本", 3, s.getSampleCount());
+        eq("任务总数", 9, s.getTasksTotal());
+        eq("填了预估的任务数（0 与空都算没填）", 7, s.getTasksWithEstimate());
+        eq("参与系数的已完成样本（不含没计时的）", 3, s.getSampleCount());
+        eq("没开过计时的已完成任务", 1, s.getNoTimeCount());
 
         System.out.println("— 系数 —");
         /* (420+130+50)/(240+120+100) = 600/460 = 1.304 */

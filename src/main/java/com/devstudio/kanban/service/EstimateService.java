@@ -70,6 +70,7 @@ public class EstimateService {
         long estSum = 0;
         long actSum = 0;
         int sample = 0;
+        int noTime = 0;
         int under = 0;
         int accurate = 0;
         int over = 0;
@@ -99,6 +100,14 @@ public class EstimateService {
                     }
                 }
                 /* 分类累计也只用已完成样本，避免进行中的任务把某个分类的系数压低 */
+                continue;
+            }
+
+            /* 没有计时记录的完成任务不能进样本：act=0 会让 ratio=0，被判成"严重高估"，
+               把系数整体拉低 —— 那是"压根没记录"，不是"干得比预估快"。
+               （线上 8 个已完成任务里 5 个从没开过计时，不排除的话第一次看到的系数就是错的） */
+            if (act <= 0) {
+                noTime++;
                 continue;
             }
 
@@ -134,6 +143,7 @@ public class EstimateService {
 
         s.setTasksWithEstimate(withEstimate);
         s.setSampleCount(sample);
+        s.setNoTimeCount(noTime);
         s.setUnderCount(under);
         s.setAccurateCount(accurate);
         s.setOverCount(over);
@@ -209,10 +219,18 @@ public class EstimateService {
             return "共 " + s.getTasksTotal() + " 个任务，还没有一个填了预估耗时 —— 全部填上才能算出系数。";
         }
         if (s.getSampleCount() == 0) {
+            if (s.getNoTimeCount() > 0) {
+                return "有 " + s.getNoTimeCount() + " 个已完成任务填了预估，但它们从没开过计时 —— "
+                        + "没有实际耗时可比。下次做这类事顺手点一下「开始计时」，系数才有样本。";
+            }
             return "有 " + s.getTasksWithEstimate() + " 个任务填了预估，但都还没完成；系数要等完成后再算。";
         }
+        String skip = s.getNoTimeCount() > 0
+                ? "另有 " + s.getNoTimeCount() + " 个已完成任务没开过计时，不计入（没记录 ≠ 干得快）；"
+                : "";
         return "口径：实际 = 计时记录（只算工作时段、跳周末、每天封顶），不用开始/结束日期推算 —— "
-                + "开始日期只代表什么时候接到的，不代表什么时候动手。样本 " + s.getSampleCount() + " 个已完成任务。";
+                + "开始日期只代表什么时候接到的，不代表什么时候动手。" + skip
+                + "样本 " + s.getSampleCount() + " 个已完成任务。";
     }
 
     private static EstimateStats.RiskTask brief(Task t, int est, int act, double ratio) {

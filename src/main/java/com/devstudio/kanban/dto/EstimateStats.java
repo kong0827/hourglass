@@ -20,6 +20,8 @@ public class EstimateStats {
     private int tasksWithEstimate;
     /** 已完成且有预估，参与系数计算的样本数 */
     private int sampleCount;
+    /** 已完成、填了预估，但从没开过计时 —— 不进样本，界面上要说明，否则用户会疑惑"我明明完成了" */
+    private int noTimeCount;
 
     /** Σ实际 / Σ预估（样本少时比"平均比值"稳，小任务不会把系数带偏） */
     private Double overallFactor;
