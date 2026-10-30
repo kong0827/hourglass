@@ -76,6 +76,7 @@
   --sidebar-w-rail:64px;
   --topbar-h:60px;
   --filterbar-h:48px;
+  --app-foot-h:26px;
   --content-pad:24px;
   --drawer-w:680px;
   --board-col-w:300px;
@@ -118,6 +119,8 @@
 html,body{height:100%;}
 body{
   margin:0;height:100dvh;overflow:hidden;
+  /* 竖向 flex：.app 吃掉剩余高度，底部页脚（备案号）占自己那一行，谁也不盖谁 */
+  display:flex;flex-direction:column;
   background:var(--bg-app);color:var(--text);
   font-family:var(--font-sans);font-size:14px;line-height:1.571;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
@@ -212,7 +215,7 @@ a:hover{text-decoration:underline;}
    侧边栏 240 / 顶栏 60 / 筛选栏 48 / 内容区独立滚动
    ========================================================================== */
 
-.app{display:flex;width:100%;height:100dvh;overflow:hidden;background:var(--bg-app);}
+.app{display:flex;width:100%;flex:1 1 auto;min-height:0;height:auto;overflow:hidden;background:var(--bg-app);}
 .main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
 
 /* ===================== 侧边栏 ===================== */
@@ -427,6 +430,24 @@ body[data-view="list"] .filterbar{display:flex;}
 .toolbar-meta{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .toolbar-right{margin-left:auto;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+
+/* ===================== 应用页脚（备案信息） =====================
+   注意：页脚是 .app 的兄弟节点、参与 flex 布局占一行高度（--app-foot-h），
+   不要改成 position:fixed —— 那样会盖住 side-foot（头像/退出）和内容区底部。
+   ============================================================== */
+.app-foot{
+  flex:0 0 auto;height:var(--app-foot-h);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:0 var(--content-pad);
+  background:var(--surface);border-top:1px solid var(--border);
+  font-size:11.5px;line-height:1;font-weight:500;
+  color:var(--text-3);letter-spacing:.2px;
+  white-space:nowrap;overflow:hidden;
+}
+.app-foot .af-sep{color:var(--border-strong);}
+.app-foot .af-link{color:var(--text-3);text-decoration:none;transition:color var(--dur-fast) var(--ease-out);}
+.app-foot .af-link:hover{color:var(--primary-fg);text-decoration:none;}
+.app-foot .af-ga:empty{display:none;}
 
 /* ===================== 断点（§3.5） ===================== */
 /* 侧边栏收起为 64px 图标态：由 body.side-rail 驱动
@@ -964,7 +985,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 
 /* ===================== 4.9 Toast ===================== */
 .toast-layer{
-  position:fixed;right:24px;bottom:24px;z-index:300;
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:300;
   display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;
 }
 .toast{
@@ -1423,6 +1444,29 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .summary-panel p{margin:0;font-size:14px;line-height:22px;color:var(--text-2);}
 .summary-panel b{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
 .summary-panel .up{color:var(--danger);font-weight:700;}
+
+/* ===== 回顾页 · AI 周报 ===== */
+/* 正文是纯文本：white-space:pre-wrap 保住模型的换行，不再解析整段 Markdown；
+   只认「## 小节」这一层，用于加重标题（见 app.js reportHTML）。 */
+.ai-report .ai-report-note{margin:0 0 10px;}
+.ai-report .ai-report-note input{
+  width:100%;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12.5px;color:var(--text);
+  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+}
+.ai-report .ai-report-note input::placeholder{color:var(--text-3);}
+.ai-report .ai-report-note input:focus{outline:none;background:var(--surface);border-color:var(--primary);box-shadow:var(--ring-focus);}
+.ai-report-body{
+  padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface-sunken);max-height:380px;overflow:auto;
+  font-size:13px;line-height:1.8;color:var(--text-2);
+  white-space:pre-wrap;word-break:break-word;
+}
+.ai-report-body .rp-h{display:block;margin:12px 0 3px;font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.01em;}
+.ai-report-body .rp-h:first-child{margin-top:0;}
+.ai-report-body .rp-loading{display:flex;flex-direction:column;gap:8px;}
+.ai-report-foot{display:flex;align-items:center;gap:12px;margin-top:10px;}
+.ai-report-foot .ai-usage{margin:0;flex:1 1 auto;}
 
 .chart{display:flex;align-items:flex-end;gap:12px;height:220px;padding:8px 4px 0;position:relative;}
 .chart::before{
@@ -2946,6 +2990,27 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <p id="summaryText">—</p>
           </div>
 
+          <!-- AI 周报：把本页数据写成可复制的纯文本；不落库、不改任何数据 -->
+          <div class="panel ai-report" id="reviewAiBox">
+            <div class="panel-head">
+              <h3>AI 周报</h3>
+              <span class="meta-right" id="reviewAiMeta">用你自己的模型额度</span>
+            </div>
+            <p class="set-hint" id="reviewAiHint">把这一周的完成、进行中、风险写成一份能直接发出去的周报。只读本页数据，数字按上面的统计来，不编造。</p>
+            <div class="ai-report-note">
+              <input id="reviewAiNote" type="text" maxlength="200" autocomplete="off"
+                     placeholder="补充一句 AI 看不到的事（可留空）：周三线上排查了支付超时…" aria-label="补充说明" />
+            </div>
+            <div class="ai-report-body" id="reviewAiBody" hidden></div>
+            <div class="ai-report-foot">
+              <span class="ai-usage" id="reviewAiUsage"></span>
+              <span class="row row-gap">
+                <button class="btn sm ghost" type="button" id="btnAiReportCopy" hidden>复制周报</button>
+                <button class="btn sm" type="button" id="btnAiReport">生成周报</button>
+              </span>
+            </div>
+          </div>
+
           <div class="stat-grid" id="statGrid"></div>
 
           <div class="panel">
@@ -3243,6 +3308,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               <div class="field" id="fNotifyToken" hidden style="margin-top:12px">
                 <label for="wsNotifyToken">Token（Server 酱 SendKey / PushPlus token，可选）</label>
                 <input id="wsNotifyToken" type="text" maxlength="64" placeholder="留空则用服务端环境变量里的 token" autocomplete="off" />
+                <span class="hint" id="wsNotifyTokenHint"></span>
+                <label class="sw" style="margin-top:8px"><input type="checkbox" id="wsNotifyClearToken" /> 清除已保存的 Token（改用服务端环境变量）</label>
               </div>
               <div class="set-actions">
                 <button class="btn primary" type="button" id="btnNotifySave">保存推送配置</button>
@@ -3304,13 +3371,13 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div class="panel" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
-                <button class="btn" type="button" id="btnExport" title="下载一份 JSON 备份文件到本机（固定文件名，可手动覆盖）">
+                <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论（不含需求文档、分支、附件、时间线）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
-                  导出备份
+                  导出任务备份
                 </button>
-                <button class="btn" type="button" id="btnImport" title="从 JSON 备份文件恢复数据（覆盖当前空间任务类数据）">
+                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖任务/项目/评论；不含需求文档、分支、附件）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.6V4M6.2 8.2 10 4.4 13.8 8.2M4.4 15.6h11.2"/></svg>
-                  导入备份
+                  导入任务备份
                 </button>
                 <button class="btn" type="button" id="btnExportCsv" title="导出 CSV（Excel 可打开）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="4.2" width="13.2" height="11.6" rx="2"/><path d="M3.4 8.2h13.2M8 8.2v7.6"/></svg>
@@ -3318,11 +3385,12 @@ body.dragging-active{cursor:grabbing;user-select:none;}
                 </button>
                 <button class="btn danger" type="button" id="btnReset">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
-                  <span id="resetLabel">清空数据</span>
+                  <span id="resetLabel">清空任务数据</span>
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" id="wsFootHint" style="margin-top:12px">删除列/分类、清空数据、导入覆盖仅空间主可操作</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论；导入时按任务与工时重建完成归档。不含需求文档、分支、附件文件、操作时间线、保存视图、看板列/分类设置。</p>
+              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
             <div class="panel" id="set-activity">
@@ -3483,6 +3551,14 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     </main>
   </div>
 </div>
+
+<!-- ==================== 应用页脚：备案信息（占一行高度，不压内容） ==================== -->
+<footer class="app-foot" id="appFoot">
+  <span class="af-brand">个人自由工具开发</span>
+  <span class="af-sep" aria-hidden="true">·</span>
+  <a class="af-link" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer noopener">赣ICP备2026026881号-1</a>
+  <span class="af-ga" id="ga-record"></span>
+</footer>
 
 <!-- ==================== 任务详情抽屉（§7.1） ==================== -->
 <div class="drawer-layer" id="taskDrawer" role="dialog" aria-modal="true" aria-labelledby="taskDrawerTitle">
@@ -4023,6 +4099,26 @@ body.dragging-active{cursor:grabbing;user-select:none;}
     openP0: 10, doing: 2, backlog: 8
   };
 
+  /** 按 weekOffset 造一份回顾数据：翻周要看得出差别，否则测不出「AI 周报跟着周走」 */
+  function reviewAt(off) {
+    var o = (typeof off === "number" && !isNaN(off)) ? off : 0;
+    var out = {};
+    for (var k in review) if (Object.prototype.hasOwnProperty.call(review, k)) out[k] = review[k];
+    out.weekOffset = o;
+    out.label = o === 0 ? "本周" : (o === -1 ? "上周" : "该周期");
+    out.weekStart = shift(-6 + o * 7);
+    out.weekEnd = shift(o * 7);
+    if (o !== 0) {
+      out.completed = done.slice(0, 2);
+      out.stats = { done: 2, withDue: 1, onTime: 1, onTimeRate: 100, members: 1, late: 0 };
+      out.members = [{ name: "我", count: 2, minutes: 420 }];
+      out.catDist = [{ name: "后端", count: 2 }];
+      out.pendingDone = [];
+      out.openP0 = 8;
+    }
+    return out;
+  }
+
   var calTasks = [
     T({ id: "K11", title: "月度对账（跨天示例）", priority: "P1", boardColumn: "doing", progress: 45,
         startDate: dayIn(5), dueDate: dayIn(9) }),
@@ -4148,8 +4244,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       matchedByNameOnly: 0
     },
     "/api/review": review,
-    "/api/stats": {
-      weeks: [-4, -3, -2, -1, 0].map(function (dy) {
+    "/api/stats": {      weeks: [-4, -3, -2, -1, 0].map(function (dy) {
         return { start: shift(dy * 7 - 6), end: shift(dy * 7), created: 3, completed: 2 };
       }),
       byCategory: [{ name: "后端", count: 8 }],
@@ -4179,6 +4274,25 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       ]
     },
     "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
+    /* 回顾页「AI 周报」：预览稿里给一段不用后端也能看的示例输出 */
+    "/api/ai/review/polish": {
+      weekOffset: 0, label: "本周", weekStart: shift(-6), weekEnd: shift(0),
+      report: "## 本周完成\n"
+        + "- 完成登录重构与验证码改造，登录链路收敛到统一入口\n"
+        + "- 修正代理登录权限判断，代理人登录后可正确落到本人空间\n"
+        + "- 补齐历史任务（完成时间缺失）的数据，回顾统计不再漏项\n\n"
+        + "## 进行中\n"
+        + "- 权限校验中间件改造：四个入口已切换，准备提测（进度 60%）\n"
+        + "- 导出 CSV 补工时列：字段已加，待前端联调（进度 35%）\n\n"
+        + "## 风险与阻塞\n"
+        + "- 3 项任务已逾期，其中「月度对账」卡在等对方接口\n"
+        + "- 10 项 P0 未关闭，权限中间件不完成会挡住后续三个需求\n\n"
+        + "## 下周计划\n"
+        + "- 推动权限中间件提测并修复回归问题\n"
+        + "- 完成导出工时列的联调与验收\n",
+      source: { completed: 3, progress: 2, pendingDone: 0, truncated: false, chars: 1240, withNote: false },
+      usage: { model: "deepseek-chat", promptTokens: 1580, completionTokens: 320, totalTokens: 1900, jsonMode: false }
+    },
     "/api/estimate/stats": {
       tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4, noTimeCount: 3,
       overallFactor: 1.42, medianFactor: 1.45,
@@ -4350,18 +4464,47 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
+    var reqBody = null;
+    if (opts && opts.body) { try { reqBody = JSON.parse(opts.body); } catch (e) { reqBody = null; } }
     var data;
     if (clean === "/api/calendar") {
       var mM = /[?&]month=(\d+)/.exec(u), yM = /[?&]year=(\d+)/.exec(u);
       data = { year: yM ? Number(yM[1]) : Y, month: mM ? Number(mM[1]) : M, tasks: calTasks };
+    } else if (clean === "/api/review") {
+      /* 带上 weekOffset：翻上一周要看到不同的数据，否则测不出「AI 周报跟着周走」 */
+      var wM = /[?&]weekOffset=(-?\d+)/.exec(u);
+      data = reviewAt(wM ? Number(wM[1]) : 0);
+    } else if (clean === "/api/ai/review/polish") {
+      /* 周报接口的返回值跟着请求里的 weekOffset 走（预览稿里没有真模型，body 里就是刚填的补充说明） */
+      var off = reqBody && typeof reqBody.weekOffset === "number" ? reqBody.weekOffset : 0;
+      var pol = routes["/api/ai/review/polish"];
+      data = {
+        weekOffset: off, label: off === 0 ? "本周" : (off === -1 ? "上周" : "该周期"),
+        weekStart: shift(-6 + off * 7), weekEnd: shift(off * 7),
+        report: pol.report, source: pol.source, usage: pol.usage
+      };
+      if (off !== 0) {
+        data.report = "## 本周完成\n- 完成登录重构与验证码改造\n- 修正代理登录权限判断\n\n"
+          + "## 进行中\n- 权限校验中间件改造（进度 60%）\n\n"
+          + "## 风险与阻塞\n- 8 项 P0 未关闭\n\n"
+          + "## 下周计划\n- 推进权限中间件提测\n";
+        data.source = { completed: 2, progress: 2, pendingDone: 0, truncated: false, chars: 980, withNote: !!reqBody.note };
+      }
     } else {
       /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
       var picked = pick(clean);
       data = (picked === undefined) ? {} : picked;
     }
-    return Promise.resolve({
-      status: 200,
-      text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
+    /* AI 周报在真机上是 10-30 秒的长请求：这里故意拖 400ms，
+       否则「生成中」的置灰与骨架屏一帧就闪过去了，界面上什么都看不到 */
+    var waitMs = clean === "/api/ai/review/polish" ? 400 : 0;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        resolve({
+          status: 200,
+          text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
+        });
+      }, waitMs);
     });
   };
 
@@ -7117,22 +7260,27 @@ function toggleTaskDone(taskId){
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
-  var target = isDone ? "doing" : "done";
-  /* 取消完成属于"回退/纠正状态"，不顺手开始计时；只有主动把任务移到进行中才自动计时 */
-  var moveBody = {column: target};
-  if(isDone) moveBody.autoTimer = false;
-  API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", moveBody).then(function(res){
+  /* 取消完成 = 回到「完成前所在列」，由后端按最后一次进入已完成列的移动日志还原；
+     不是固定回「进行中」。 */
+  if(isDone){
+    API.post("/api/tasks/" + encodeURIComponent(taskId) + "/reopen", {}).then(function(res){
+      var backCol = res && res.to ? colName(res.to) : "进行中";
+      toast("已取消完成，回到「" + backCol + "」", "warn");
+      loadBoard({animate:false, movedId: taskId});
+      loadReqs();
+      refreshListIfOpen();
+      refreshCalendarIfOpen();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    return;
+  }
+  API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", {column:"done"}).then(function(res){
     var task = res.task;
-    if(target === "done"){
-      var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
-      var doneMsg = dd > 0
-        ? ("已完成任务「" + task.title + "」，延期 " + dd + " 天完成")
-        : ("已完成任务「" + task.title + "」，按期完成");
-      if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
-      toast(doneMsg, dd > 0 ? "warn" : "fs");
-    }else{
-      toast("已取消完成，回到「" + colName("doing") + "」", "warn");
-    }
+    var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
+    var doneMsg = dd > 0
+      ? ("已完成任务「" + task.title + "」，延期 " + dd + " 天完成")
+      : ("已完成任务「" + task.title + "」，按期完成");
+    if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
+    toast(doneMsg, dd > 0 ? "warn" : "fs");
     loadBoard({animate:false, movedId: task.id});
     loadReqs();
     refreshListIfOpen();
@@ -7547,12 +7695,19 @@ segProg.addEventListener("click", function(e){
   iProg.value = b.dataset.prog; syncProgVal(); formDirty = true;
 });
 iProg.addEventListener("input", function(){ syncProgVal(); formDirty = true; });
+/* 评论区、检查清单、附件属于“任务详情里的附属操作”，不在保存任务的表单字段里：
+   在里面输入/勾选/选文件不应该把主表单标脏，否则关闭时会误提示“放弃未保存的改动”。 */
+function inTaskAuxSection(target){
+  return !!(target && target.closest && target.closest("#fComments, #fSubtasks, #fAttach"));
+}
 taskForm.addEventListener("input", function(e){
   if(e.target === iProg) return;
-  formDirty = true;
+  if(!inTaskAuxSection(e.target)) formDirty = true;
   if(e.target === iTitle) fTitle.classList.remove("invalid");
 });
-taskForm.addEventListener("change", function(){ formDirty = true; });
+taskForm.addEventListener("change", function(e){
+  if(!inTaskAuxSection(e.target)) formDirty = true;
+});
 /* O-13：切换「所在列」时同步进度控件的口径 */
 iCol.addEventListener("change", function(){ syncProgByCol(); formDirty = true; });
 /* N-4：勾选「被阻塞」时才允许填原因 */
@@ -7619,7 +7774,12 @@ if(btnCommentSend) btnCommentSend.addEventListener("click", sendComment);
 if(iComment){
   iComment.addEventListener("keydown", function(e){
     if(e.isComposing || e.keyCode === 229) return;
-    if((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); sendComment(); }
+    if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+      e.preventDefault();
+      /* 阻止冒泡：否则文档级 Ctrl+Enter 会把评论当成“保存任务”，跟着提交并关闭抽屉 */
+      e.stopPropagation();
+      sendComment();
+    }
   });
 }
 if(commentList){
@@ -7718,7 +7878,7 @@ $("taskMoreMenu").addEventListener("click", function(e){
   }
   if(kind === "trash"){
     if(!t) return;
-    forceCloseTaskDrawer();
+    /* 确认框取消时抽屉保持打开；成功删除后 deleteTask 内部关闭 */
     deleteTask(t.id);
   }
 });
@@ -7814,10 +7974,8 @@ $("btnCancelTask").addEventListener("click", tryCloseTaskDrawer);
 $("taskScrim").addEventListener("click", tryCloseTaskDrawer);
 $("btnDeleteTask").addEventListener("click", function(){
   if(!editingId) return;
-  var t = taskById(editingId);
-  if(!t) return;
   var id = editingId;
-  forceCloseTaskDrawer();
+  /* 先弹确认：取消时抽屉保持打开，未保存的内容不丢；成功删除后 deleteTask 会关闭抽屉 */
   deleteTask(id);
 });
 /* 抽屉焦点陷阱（§12.5） */
@@ -8219,6 +8377,28 @@ function bulkApply(patchFor, label){
     loadReqs();
   });
 }
+/* 批量改列走 move 语义（服务端批量接口）：会写移动日志、处理完成归档，
+   不会像 PUT 那样绕过流程体检；批量操作也不顺手开始计时。 */
+function bulkMoveTo(column){
+  var ids = bulkIds();
+  if(!ids.length) return;
+  UI.syncBusy(true);
+  API.post("/api/tasks/bulk-move", {
+    ids: ids,
+    column: column,
+    autoTimer: false,
+    autoResume: false
+  }).then(function(res){
+    UI.syncBusy(false);
+    toast("已批量移动到「" + colName(column) + "」：" + ((res && res.moved) || ids.length) + " 项", "fs");
+    loadList();
+    loadBoard({silent:true});
+    loadReqs();
+  }).catch(function(ex){
+    UI.syncBusy(false);
+    toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
+  });
+}
 function openBulkMenu(anchor, kind){
   var el = document.createElement("div");
   el.className = "menu";
@@ -8255,7 +8435,7 @@ function openBulkMenu(anchor, kind){
     if(k === "pri") bulkApply(function(){ return {priority: v}; }, "改优先级");
     else if(k === "owner") bulkApply(function(){ return {owner: n, ownerUserId: v || null}; }, "改负责人");
     else if(k === "due") bulkApply(function(){ return {dueDate: duePresetDate(v)}; }, "改截止");
-    else if(k === "col") bulkApply(function(){ return {boardColumn: v}; }, "改所在列");
+    else if(k === "col") bulkMoveTo(v);
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
 }
@@ -8655,7 +8835,8 @@ function renderReqList(){
         '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + r.progressPct +
           '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
         '<span style="font-weight:600;color:var(--text-2)">' + r.progressPct + '%</span>' +
-        '<span>' + r.taskCount + ' 任务 · ' + r.doneCount + ' 完成</span>' +
+        '<span>' + r.taskCount + ' 任务 · ' + r.doneCount + ' 完成' +
+          (Number(r.docCount) ? (' · ' + r.docCount + ' 需求文档') : '') + '</span>' +
       '</div>' +
       '<div class="req-taskbar">' +
         '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
@@ -8699,16 +8880,27 @@ function deleteReq(id){
   var r = null;
   for(var i = 0; i < reqList.length; i++) if(reqList[i].id === id) r = reqList[i];
   if(!r) return;
+  /* 后端删除项目会连带删除其下需求文档；确认框必须把这件事说清楚。
+     docCount 来自项目列表，reqDocList 是本会话已加载的需求，取较大值防止列表快照过期。 */
+  var liveDocs = (reqDocList || []).filter(function(d){ return d.reqId === id; }).length;
+  var docs = Math.max(Number(r.docCount) || 0, liveDocs);
+  var msg = "删除项目「" + esc(r.name) + "」？其下任务会保留，仅解除关联。";
+  if(docs){
+    msg += "<br><br>其下 <b>" + docs + "</b> 份需求文档会一并删除，<b>不可恢复</b>。";
+  }
   UI.showConfirm({
     title:"删除项目",
-    msg:"删除项目「" + esc(r.name) + "」？其下任务会保留，仅解除关联。",
-    okText:"删除"
+    msg: msg,
+    okText: docs ? "删除项目与需求文档" : "删除"
   }).then(function(ok){
     if(!ok) return;
     API.del("/api/reqs/" + encodeURIComponent(id)).then(function(res){
+      var deletedDocs = res && typeof res.docs === "number" ? res.docs : docs;
       toast("已删除项目「" + r.name + "」，其下任务已解除关联" +
-        (res && res.unlinked ? "（" + res.unlinked + " 项）" : ""), "fs");
+        (res && res.unlinked ? "（" + res.unlinked + " 项）" : "") +
+        (deletedDocs ? "；同时删除 " + deletedDocs + " 份需求文档" : ""), "fs");
       if(editingReqId === id) resetReqForm();
+      loadReqDocs(true);
       loadReqs().then(function(){
         renderReqList();
         loadBoard({silent:true});
@@ -9215,6 +9407,9 @@ function renderReview(d){
         function(r){ return r.extra.status === "done" ? "var(--success)" : "var(--primary)"; },
         function(r){ return r.count + "% · " + r.extra.doneCount + "/" + r.extra.taskCount; })
     : '<div class="col-empty">暂无项目</div>';
+
+  /* AI 周报跟着「当前这一周」走：有缓存还原，没有则空态（函数定义在下方，靠声明提升） */
+  syncAiReport(d);
 }
 $("weekPrev").addEventListener("click", function(){ navWeek(-1); });
 $("weekNext").addEventListener("click", function(){
@@ -9242,6 +9437,100 @@ $("btnCopy").addEventListener("click", function(){
           + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
       }).join("\n") : "（本周没有完成的任务）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
+});
+
+/* ==================== 周回顾 · AI 周报 ==================== */
+/* 口径：AI 只负责措辞 —— 完成数/按期率/工时这些数字全部由 /api/review 算好再喂给模型，
+   并且要求它只能引用、不得加总（后端 AiReviewService 里有同样的注释）。
+   结果按「周偏移」缓存在内存里：来回翻周不会把周报弄丢，也不会把上周的周报误认成这周的。 */
+var aiReportCache = {};   // { "空间id#周偏移": AiReviewResponse }
+var aiReportBusy = false;
+
+/** 缓存键要带空间：换空间后同一个 weekOffset 是完全不同的一批任务，不能复用 */
+function aiKey(off){
+  return String(window.CURRENT_WORKSPACE || "") + "#" + off;
+}
+
+function aiReportIdle(){
+  var body = $("reviewAiBody");
+  if(!body) return;
+  body.hidden = true;
+  body.innerHTML = "";
+  $("reviewAiUsage").textContent = "";
+  $("btnAiReportCopy").hidden = true;
+  $("reviewAiHint").hidden = false;
+  $("reviewAiMeta").textContent = "用你自己的模型额度";
+}
+
+/** 切周/切空间后同步面板：有缓存就还原，没有就回到空态 */
+function syncAiReport(d){
+  if(!d || !$("reviewAiBody")) return;
+  var hit = aiReportCache[aiKey(d.weekOffset)];
+  if(hit) renderAiReport(hit); else aiReportIdle();
+}
+
+/** 只把「## 小节」那一行加重，其余原样；全程 escape —— 模型输出绝不进 innerHTML */
+function reportHTML(text){
+  return String(text || "").split("\n").map(function(line){
+    var m = /^#{1,3}\s+(.*)$/.exec(line);
+    return m ? ('<span class="rp-h">' + esc(m[1]) + '</span>') : esc(line);
+  }).join("\n");
+}
+
+function renderAiReport(r){
+  var body = $("reviewAiBody");
+  body.hidden = false;
+  body.innerHTML = reportHTML(r.report);
+  $("reviewAiHint").hidden = true;
+  $("btnAiReportCopy").hidden = false;
+  $("reviewAiMeta").textContent = (r.label || "该周期") + "（" + (r.weekStart || "") + " — " + (r.weekEnd || "") + "）";
+  var s = r.source || {};
+  var based = "基于 " + (s.completed || 0) + " 项完成 / " + (s.progress || 0) + " 项进行中";
+  if(s.pendingDone) based += " / " + s.pendingDone + " 项待确认完成";
+  if(s.truncated) based += "（任务太多，只取了前若干条）";
+  $("reviewAiUsage").textContent = based + " · " + aiUsageText(r.usage);
+}
+
+function runAiReport(){
+  var d = state.reviewData;
+  if(!d || aiReportBusy) return;
+  var btn = $("btnAiReport");
+  var noteEl = $("reviewAiNote");
+  var body = $("reviewAiBody");
+  var week = d.weekOffset;
+  aiReportBusy = true;
+  aiBtnBusy(btn, true, "生成中…");
+  $("reviewAiMeta").textContent = "正在写…（10–30 秒）";
+  $("reviewAiHint").hidden = true;
+  $("btnAiReportCopy").hidden = true;
+  body.hidden = false;
+  body.innerHTML = '<div class="rp-loading">' + UI.skeletonRows(4) + '</div>';
+  $("reviewAiUsage").textContent = "";
+  API.post("/api/ai/review/polish", {
+    weekOffset: week,
+    note: noteEl ? String(noteEl.value || "").trim() : ""
+  }).then(function(r){
+    aiReportCache[aiKey(r.weekOffset == null ? week : r.weekOffset)] = r;
+    /* 生成过程中可能已经翻到别的周：存进缓存就好，不要覆盖当前这一周的界面 */
+    if(state.reviewData && state.reviewData.weekOffset === week) renderAiReport(r);
+  }).catch(function(ex){
+    if(state.reviewData && state.reviewData.weekOffset === week){
+      body.hidden = true;
+      $("reviewAiHint").hidden = false;
+      $("reviewAiMeta").textContent = "生成失败";
+    }
+    toast(aiErrMsg(ex && ex.message), "bad");
+  }).then(function(){
+    aiReportBusy = false;
+    aiBtnBusy(btn, false);
+  });
+}
+if($("btnAiReport")) $("btnAiReport").addEventListener("click", runAiReport);
+if($("btnAiReportCopy")) $("btnAiReportCopy").addEventListener("click", function(){
+  var d = state.reviewData;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
+  copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
 });
 
 /* ==================== 侧边栏收起（可见按钮 + Ctrl+B / Ctrl+\） ==================== */
@@ -11298,7 +11587,7 @@ function enterSettingsView(){
   $("wsSaveNote").textContent = isOwner ? "改动立即生效" : "仅空间主可修改名称与推送";
   /* O-1：通知推送面板按角色门控，并读取真实生效状态 */
   var canNotify = isOwner;
-  ["wsNotifyEnabled","wsWebhook","wsNotifyToken"].forEach(function(id){
+  ["wsNotifyEnabled","wsWebhook","wsNotifyToken","wsNotifyClearToken"].forEach(function(id){
     if($(id)) $(id).disabled = !canNotify;
   });
   if(btnNotifySave) btnNotifySave.disabled = !canNotify;
@@ -11323,8 +11612,8 @@ function enterSettingsView(){
   $("btnWsLeave").hidden = isPersonal || isOwner;
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
-    ? "清空数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "清空数据、导入覆盖、删除列/分类仅空间主可操作");
+    ? "清空任务数据仅空间主可操作"
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
   loadColCfg();
   loadCatCfg();
   loadNotifyStatus();
@@ -11607,12 +11896,31 @@ function loadNotifyStatus(){
   API.get("/api/notify/status").then(function(d){
     notifyInfo = d || {};
     if(!pickedChannel) pickedChannel = notifyInfo.channel || "webhook";
+    fillNotifyForm(d);
     renderNotifyStatus();
   }).catch(function(){
     notifyInfo = null;
     if(notifyStatus) notifyStatus.className = "notify-status off";
     if(notifyStatusText) notifyStatusText.textContent = "无法读取推送状态（该接口需要后端支持）";
   });
+}
+/* 只在“读服务端状态”时回填表单；切渠道只更新渠道和提示，不能把用户刚勾/刚填的内容冲掉 */
+function fillNotifyForm(d){
+  d = d || {};
+  if($("wsNotifyEnabled")) $("wsNotifyEnabled").checked = !!d.enabled;
+  if($("wsNotifyToken")){
+    $("wsNotifyToken").value = "";
+    $("wsNotifyToken").placeholder = d.workspaceHasToken
+      ? "已保存，留空保持不变"
+      : "留空则用服务端环境变量里的 token";
+  }
+  if($("wsNotifyClearToken")) $("wsNotifyClearToken").checked = false;
+  var hint = $("wsNotifyTokenHint");
+  if(hint){
+    hint.textContent = d.workspaceHasToken
+      ? "本空间已保存 Token；留空保持不变，勾选下方可清除"
+      : (d.hasToken ? "当前使用服务端环境变量里的 Token" : "还没有配置 Token");
+  }
 }
 function renderNotifyStatus(){
   var d = notifyInfo || {};
@@ -11649,8 +11957,6 @@ function renderNotifyStatus(){
       }
     });
   }
-  if($("wsNotifyEnabled")) $("wsNotifyEnabled").checked = !!d.enabled;
-  if($("wsNotifyToken")) $("wsNotifyToken").value = d.workspaceToken || "";
   updateWebhookField();
 }
 /* 渠道 ↔ 输入框的显式映射，避免「地址填了但渠道其实是另一个」的静默错配 */
@@ -11713,13 +12019,14 @@ if(btnNotifySave){
     if(!currentWs) return;
     if(!validateWebhookInput()){ toast("推送地址与所选渠道不匹配，请检查", "warn"); return; }
     var body = {
-      name: currentWs.type === "personal" ? currentWs.name : ($("wsNameInput") ? $("wsNameInput").value.trim() : currentWs.name),
-      notifyWebhook: ($("wsWebhook") ? $("wsWebhook").value.trim() : "") || null,
+      /* 推送面板只保存推送字段：名称由「空间信息」面板单独保存，两个入口互不覆盖 */
+      notifyWebhook: ($("wsWebhook") ? $("wsWebhook").value.trim() : ""),
       notifyChannel: pickedChannel || "webhook",
       notifyEnabled: !!($("wsNotifyEnabled") && $("wsNotifyEnabled").checked),
-      notifyToken: ($("wsNotifyToken") ? $("wsNotifyToken").value.trim() : "") || null
+      /* Token 留空 + clearToken=false 表示“保持原值”，不再把已保存的 Token 静默写空 */
+      notifyToken: ($("wsNotifyToken") ? $("wsNotifyToken").value.trim() : "") || null,
+      clearToken: !!($("wsNotifyClearToken") && $("wsNotifyClearToken").checked)
     };
-    if(!body.name){ toast("空间名称不能为空", "warn"); return; }
     btnNotifySave.disabled = true;
     API.put("/api/workspaces/" + encodeURIComponent(currentWs.id), body).then(function(ws){
       btnNotifySave.disabled = false;
@@ -11734,6 +12041,9 @@ if(btnNotifySave){
   });
 }
 if($("wsWebhook")) $("wsWebhook").addEventListener("input", function(){ validateWebhookInput(); });
+if($("wsNotifyToken")) $("wsNotifyToken").addEventListener("input", function(){
+  if(this.value.trim() && $("wsNotifyClearToken")) $("wsNotifyClearToken").checked = false;
+});
 
 /* ---- 空间级活动流（O-9） ---- */
 var ACT_LABEL = {create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置"};
@@ -11768,8 +12078,7 @@ function renderActivity(list){
 $("btnWsSave").addEventListener("click", function(){
   if(!currentWs) return;
   var body = {
-    name: currentWs.type === "personal" ? currentWs.name : wsNameInput.value.trim(),
-    notifyWebhook: wsWebhook.value.trim() || null
+    name: currentWs.type === "personal" ? currentWs.name : wsNameInput.value.trim()
   };
   if(!body.name){ toast("空间名称不能为空", "warn"); return; }
   var btn = $("btnWsSave");
@@ -11914,7 +12223,7 @@ $("inviteList").addEventListener("click", function(e){
 $("btnExport").addEventListener("click", function(){
   API.get("/api/export").then(function(data){
     triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-    toast("已导出备份：" + BACKUP_NAME, "fs");
+    toast("已导出任务备份（含任务/项目/评论，不含需求文档与分支）", "fs");
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
@@ -11923,9 +12232,10 @@ $("fileImport").addEventListener("change", function(e){
   e.target.value = "";
   if(!f) return;
   UI.showConfirm({
-    title:"导入备份",
-    msg:"导入将覆盖当前空间的全部任务类数据（任务、回收站、项目、子任务、标签、工时），已选文件：<b>" +
-      esc(f.name) + "</b>。确定继续？",
+    title:"导入任务备份",
+    msg:"导入会覆盖当前空间的任务、回收站、项目、子任务、标签、工时与评论，并按任务重建完成归档；同时清空任务通知。已选文件：<b>" +
+      esc(f.name) + "</b>。<br><br>需求文档、分支、附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
+      "<br><br>旧版备份不含评论：导入旧备份后本空间评论会被清空。建议先导出一份当前任务备份。",
     okText:"继续导入"
   }).then(function(ok){
     if(!ok) return;
@@ -11938,9 +12248,11 @@ $("fileImport").addEventListener("change", function(e){
         return;
       }
       API.post("/api/import", data).then(function(res){
-        toast("已从备份恢复 " + res.tasks + " 项任务 / " + res.reqs + " 项项目", "fs");
+        toast("已从备份恢复 " + res.tasks + " 项任务 / " + res.reqs + " 项项目" +
+          (res.comments ? " / " + res.comments + " 条评论" : ""), "fs");
         loadBoard({animate:true});
         loadReqs();
+        loadReqDocs(true);
       }).catch(function(ex){ toast("导入失败：" + (ex.message || "网络异常"), "bad"); });
     }).catch(function(){ toast("读取文件失败", "bad"); });
   });
@@ -11967,30 +12279,31 @@ var btnReset = $("btnReset"), resetLabel = $("resetLabel");
 function disarmReset(){
   if(resetArmed){ clearTimeout(resetArmed); resetArmed = null; }
   btnReset.classList.remove("armed");
-  resetLabel.textContent = "清空数据";
-  btnReset.title = "清空当前空间的任务类数据：任务、回收站、项目、子任务、标签、工时（保留附件文件、时间线、看板列与分类）";
+  resetLabel.textContent = "清空任务数据";
+  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、任务通知与完成归档；需求文档、分支、附件、时间线、视图、看板列与分类保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){
   if(resetArmed){
     disarmReset();
     var n = totalTaskCount(), m = reqList.length;
-    API.post("/api/import", {v:3, tasks:[], reqs:[]}).then(function(){
+    API.post("/api/import", {v:4, tasks:[], reqs:[], comments:[]}).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.due = null; state.focus = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站）")
-        : "空间任务类数据已清空（此前没有任务/项目）", "warn");
+        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知与完成归档）")
+        : "任务数据已清空（需求文档、分支、附件、时间线保留）", "warn");
       loadBoard({animate:true});
       loadReqs();
+      loadReqDocs(true);
     }).catch(function(ex){ toast("清空失败：" + (ex.message || "网络异常"), "bad"); });
     return;
   }
   btnReset.classList.add("armed");
-  resetLabel.textContent = "再次点击确认";
-  toast("再次点击确认：清空任务 / 回收站 / 项目（附件与时间线保留）", "warn");
+  resetLabel.textContent = "再次点击清空任务数据";
+  toast("再次点击确认：删除任务/回收站/项目/评论/任务通知/完成归档；需求文档、分支、附件、时间线保留", "warn");
   resetArmed = setTimeout(disarmReset, 3500);
 });
 
@@ -12093,7 +12406,7 @@ userListEl.addEventListener("click", function(e){
   if(e.target.closest("[data-u-del]")){
     UI.showConfirm({
       title:"删除用户",
-      msg:"删除用户「" + esc(display) + "」？该账号数据需已清空，删除后不可恢复。",
+      msg:"删除用户「" + esc(display) + "」？该账号个人空间的任务/项目需已清空；个人空间剩余的需求文档、附件与配置会随账号一并删除，不可恢复。",
       okText:"删除用户"
     }).then(function(ok){
       if(!ok) return;
@@ -12183,7 +12496,7 @@ function loadWorkspaces(meUser){
 }
 function applyWsRoleGating(){
   var owner = !currentWs || currentWs.myRole === "owner";
-  [["btnImport","导入备份"],["btnReset","清空数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
+  [["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
     var b = $(pair[0]);
     if(!b) return;
     b.disabled = !owner;
@@ -13094,7 +13407,9 @@ document.addEventListener("keydown", function(e){
     return;
   }
 });
-/* 把任务对象还原成 PUT 的全量 payload（快捷键局部更新用） */
+/* 快捷编辑（改期 / 快捷键改优先级 / 批量改字段）走的是 PUT 全量更新，
+   必须把任务的全部可编辑字段带上；漏一个字段，后端就会把它写成 null。
+   关联需求、所属分支、预估工时曾经就是这样被快捷编辑悄悄清空的。 */
 function taskPayloadWith(t, patch){
   var p = {
     title: t.title,
@@ -13107,13 +13422,17 @@ function taskPayloadWith(t, patch){
     startDate: t.startDate || null,
     dueDate: t.dueDate || null,
     reqId: t.reqId || null,
+    reqDocId: t.reqDocId || null,
+    branchId: t.branchId || null,
     progress: Number(t.progress) || 0,
+    estimateMinutes: t.estimateMinutes == null ? null : Number(t.estimateMinutes),
     note: t.note || "",
     recurType: t.recurType || "",
     remindAt: t.remindAt || null,
     remindTarget: t.remindTarget || "owner",
     blocked: !!t.blocked,
     blockedReason: t.blockedReason || null,
+    blockedByTaskId: t.blockedByTaskId || null,
     tags: t.tags || []
   };
   for(var k in patch) if(Object.prototype.hasOwnProperty.call(patch, k)) p[k] = patch[k];
@@ -13219,6 +13538,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-26 03:19</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-29 05:50</span></div>
 </body>
 </html>

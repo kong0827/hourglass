@@ -131,6 +131,26 @@
     openP0: 10, doing: 2, backlog: 8
   };
 
+  /** 按 weekOffset 造一份回顾数据：翻周要看得出差别，否则测不出「AI 周报跟着周走」 */
+  function reviewAt(off) {
+    var o = (typeof off === "number" && !isNaN(off)) ? off : 0;
+    var out = {};
+    for (var k in review) if (Object.prototype.hasOwnProperty.call(review, k)) out[k] = review[k];
+    out.weekOffset = o;
+    out.label = o === 0 ? "本周" : (o === -1 ? "上周" : "该周期");
+    out.weekStart = shift(-6 + o * 7);
+    out.weekEnd = shift(o * 7);
+    if (o !== 0) {
+      out.completed = done.slice(0, 2);
+      out.stats = { done: 2, withDue: 1, onTime: 1, onTimeRate: 100, members: 1, late: 0 };
+      out.members = [{ name: "我", count: 2, minutes: 420 }];
+      out.catDist = [{ name: "后端", count: 2 }];
+      out.pendingDone = [];
+      out.openP0 = 8;
+    }
+    return out;
+  }
+
   var calTasks = [
     T({ id: "K11", title: "月度对账（跨天示例）", priority: "P1", boardColumn: "doing", progress: 45,
         startDate: dayIn(5), dueDate: dayIn(9) }),
@@ -256,8 +276,7 @@
       matchedByNameOnly: 0
     },
     "/api/review": review,
-    "/api/stats": {
-      weeks: [-4, -3, -2, -1, 0].map(function (dy) {
+    "/api/stats": {      weeks: [-4, -3, -2, -1, 0].map(function (dy) {
         return { start: shift(dy * 7 - 6), end: shift(dy * 7), created: 3, completed: 2 };
       }),
       byCategory: [{ name: "后端", count: 8 }],
@@ -287,6 +306,25 @@
       ]
     },
     "/api/ai/config/test": { ok: true, latencyMs: 860, model: "deepseek-chat", reply: "正常", tokens: 42 },
+    /* 回顾页「AI 周报」：预览稿里给一段不用后端也能看的示例输出 */
+    "/api/ai/review/polish": {
+      weekOffset: 0, label: "本周", weekStart: shift(-6), weekEnd: shift(0),
+      report: "## 本周完成\n"
+        + "- 完成登录重构与验证码改造，登录链路收敛到统一入口\n"
+        + "- 修正代理登录权限判断，代理人登录后可正确落到本人空间\n"
+        + "- 补齐历史任务（完成时间缺失）的数据，回顾统计不再漏项\n\n"
+        + "## 进行中\n"
+        + "- 权限校验中间件改造：四个入口已切换，准备提测（进度 60%）\n"
+        + "- 导出 CSV 补工时列：字段已加，待前端联调（进度 35%）\n\n"
+        + "## 风险与阻塞\n"
+        + "- 3 项任务已逾期，其中「月度对账」卡在等对方接口\n"
+        + "- 10 项 P0 未关闭，权限中间件不完成会挡住后续三个需求\n\n"
+        + "## 下周计划\n"
+        + "- 推动权限中间件提测并修复回归问题\n"
+        + "- 完成导出工时列的联调与验收\n",
+      source: { completed: 3, progress: 2, pendingDone: 0, truncated: false, chars: 1240, withNote: false },
+      usage: { model: "deepseek-chat", promptTokens: 1580, completionTokens: 320, totalTokens: 1900, jsonMode: false }
+    },
     "/api/estimate/stats": {
       tasksTotal: 13, tasksWithEstimate: 7, sampleCount: 4, noTimeCount: 3,
       overallFactor: 1.42, medianFactor: 1.45,
@@ -458,18 +496,47 @@
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
+    var reqBody = null;
+    if (opts && opts.body) { try { reqBody = JSON.parse(opts.body); } catch (e) { reqBody = null; } }
     var data;
     if (clean === "/api/calendar") {
       var mM = /[?&]month=(\d+)/.exec(u), yM = /[?&]year=(\d+)/.exec(u);
       data = { year: yM ? Number(yM[1]) : Y, month: mM ? Number(mM[1]) : M, tasks: calTasks };
+    } else if (clean === "/api/review") {
+      /* 带上 weekOffset：翻上一周要看到不同的数据，否则测不出「AI 周报跟着周走」 */
+      var wM = /[?&]weekOffset=(-?\d+)/.exec(u);
+      data = reviewAt(wM ? Number(wM[1]) : 0);
+    } else if (clean === "/api/ai/review/polish") {
+      /* 周报接口的返回值跟着请求里的 weekOffset 走（预览稿里没有真模型，body 里就是刚填的补充说明） */
+      var off = reqBody && typeof reqBody.weekOffset === "number" ? reqBody.weekOffset : 0;
+      var pol = routes["/api/ai/review/polish"];
+      data = {
+        weekOffset: off, label: off === 0 ? "本周" : (off === -1 ? "上周" : "该周期"),
+        weekStart: shift(-6 + off * 7), weekEnd: shift(off * 7),
+        report: pol.report, source: pol.source, usage: pol.usage
+      };
+      if (off !== 0) {
+        data.report = "## 本周完成\n- 完成登录重构与验证码改造\n- 修正代理登录权限判断\n\n"
+          + "## 进行中\n- 权限校验中间件改造（进度 60%）\n\n"
+          + "## 风险与阻塞\n- 8 项 P0 未关闭\n\n"
+          + "## 下周计划\n- 推进权限中间件提测\n";
+        data.source = { completed: 2, progress: 2, pendingDone: 0, truncated: false, chars: 980, withNote: !!reqBody.note };
+      }
     } else {
       /* 非 GET 也要走 pick：AI 的拆分/体检都是 POST，返回空对象会让界面直接报错 */
       var picked = pick(clean);
       data = (picked === undefined) ? {} : picked;
     }
-    return Promise.resolve({
-      status: 200,
-      text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
+    /* AI 周报在真机上是 10-30 秒的长请求：这里故意拖 400ms，
+       否则「生成中」的置灰与骨架屏一帧就闪过去了，界面上什么都看不到 */
+    var waitMs = clean === "/api/ai/review/polish" ? 400 : 0;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        resolve({
+          status: 200,
+          text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
+        });
+      }, waitMs);
     });
   };
 

@@ -57,6 +57,12 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/notifications")) {
             return;
         }
+        /* AI 的交互大多是**只读**的（拆需求出草稿、完成度体检、周报润色、改自己的 AI 配置），
+           但它们都是 POST，照常广播会让空间里其他人白刷新一遍。
+           唯一真写库的是 /api/ai/reqdoc/{id}/tasks（把草稿建成任务），必须照常广播。 */
+        if (uri.startsWith("/api/ai/") && !uri.endsWith("/tasks")) {
+            return;
+        }
         int status = response.getStatus();
         if (status < 200 || status >= 300) {
             return;

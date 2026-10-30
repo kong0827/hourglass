@@ -431,6 +431,38 @@ verdict  = coverage>=95 且 missing==0 → done
 
 **注意**：这两个接口是长请求（模型生成通常 20-60 秒），nginx 的 `proxy_read_timeout` 必须大于 120 秒，否则前端拿到 504。
 
+### 31.3 周报润色
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/ai/review/polish?workspace=` | 把某一周的回顾数据写成一份可直接发出去的周报（只读，不落库） |
+
+请求体：`{weekOffset: 0, note: "周三线上排查了支付超时"}`
+
+- `weekOffset`：`0` 本周、`-1` 上周……不传按 `0`；服务端夹到 `[-52, 0]`。
+- `note`（选填，≤200 字）：任务里体现不出来的事（线上排查、口头对齐、临时支持）。留空也行。
+
+返回：
+
+```json
+{"code":0,"data":{
+  "weekOffset":0,"label":"本周","weekStart":"2026-10-19","weekEnd":"2026-10-25",
+  "report":"## 本周完成\n- 重构权限校验中间件，四个入口统一走鉴权\n…",
+  "source":{"completed":3,"progress":2,"pendingDone":0,"truncated":false,"chars":1240,"withNote":true},
+  "usage":{"model":"deepseek-chat","promptTokens":1580,"completionTokens":320,"totalTokens":1900,"jsonMode":false}
+}}
+```
+
+**口径（与 31.2 同一条原则）**：数字不交给模型。完成数、按期率、延期、工时、逾期、P0 未关闭全部由
+`ReviewService` 先算好、拼成"事实清单"塞进提示词，并明确要求模型只能引用、不得加总；
+`source` 里的计数也是服务端给的，用来在界面上说明"这份周报基于多少条事实"。
+
+- `report` 是**纯 Markdown 文本**（不带 ``` 围栏，服务端会剥掉围栏与"好的，以下是…"这类开场）：
+  终点是粘进 IM/邮件，给 HTML 只会满屏标签。固定四节：本周完成 / 进行中 / 风险与阻塞 / 下周计划。
+- 这一周**没有任何记录**时直接 400（"这一周没有任何工作记录，没有素材可写"），不调模型 —— 省额度也更诚实。
+- 任务太多时只喂前 30 条完成 + 15 条进行中，并在 `source.truncated=true` 里说明。
+- 同样是长请求（10-30 秒），前端按钮置灰 + 骨架屏；`ChangeBroadcastFilter` 不会广播（没有写操作）。
+
 ## 32. GET /api/estimate/stats
 
 估时准确度与超支预警。只读。

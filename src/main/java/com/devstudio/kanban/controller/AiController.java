@@ -7,10 +7,13 @@ import com.devstudio.kanban.dto.AiApplyResult;
 import com.devstudio.kanban.dto.AiAuditResponse;
 import com.devstudio.kanban.dto.AiConfigRequest;
 import com.devstudio.kanban.dto.AiConfigView;
+import com.devstudio.kanban.dto.AiReviewRequest;
+import com.devstudio.kanban.dto.AiReviewResponse;
 import com.devstudio.kanban.dto.AiSplitResponse;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.AiConfigService;
 import com.devstudio.kanban.service.AiReqDocService;
+import com.devstudio.kanban.service.AiReviewService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,12 +40,14 @@ public class AiController {
 
     private final AiConfigService configService;
     private final AiReqDocService reqDocService;
+    private final AiReviewService reviewService;
     private final WorkspaceService workspaceService;
 
     public AiController(AiConfigService configService, AiReqDocService reqDocService,
-                        WorkspaceService workspaceService) {
+                        AiReviewService reviewService, WorkspaceService workspaceService) {
         this.configService = configService;
         this.reqDocService = reqDocService;
+        this.reviewService = reviewService;
         this.workspaceService = workspaceService;
     }
 
@@ -90,5 +95,20 @@ public class AiController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(reqDocService.applyTasks(userId, ws.getId(), id, req.getTasks()));
+    }
+
+    /**
+     * 把某一周的回顾数据润色成一份可以直接发出去的周报。
+     *
+     * <p>不改任何数据、不落库：输出只回给当前这个页面，用户复制走就结束。
+     * 所以不需要 SSE 广播（{@code ChangeBroadcastFilter} 会因为请求里没有写操作而不触发）。
+     */
+    @PostMapping("/api/ai/review/polish")
+    public ApiResult<AiReviewResponse> polishReview(@RequestBody(required = false) AiReviewRequest req,
+                                                    @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        AiReviewRequest body = req == null ? new AiReviewRequest() : req;
+        return ApiResult.ok(reviewService.polish(userId, ws.getId(), body.getWeekOffset(), body.getNote()));
     }
 }

@@ -53,7 +53,7 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, function (m, src) {
    必须拼接「最后一个 </body>」。 */
 html = html.replace("<body", '<body data-preview="1"');
 const banner = [
-  '<div style="position:fixed;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;gap:10px;',
+  '<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;',
   'padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,',
   '\'Segoe UI\',\'Microsoft YaHei\',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)">',
   '<strong style="font-weight:700">静态预览稿</strong>',
