@@ -6,13 +6,28 @@
 
 USE devstudio;
 
-ALTER TABLE task_log
-  ADD COLUMN from_column VARCHAR(16) DEFAULT NULL COMMENT '移动前所在看板列 id（仅 action=move 且跨列时非空）' AFTER detail,
-  ADD COLUMN to_column   VARCHAR(16) DEFAULT NULL COMMENT '移动后所在看板列 id（仅 action=move 且跨列时非空）' AFTER from_column;
+-- 幂等：先查 information_schema 再决定是否 ALTER，重复执行安全（--sql-all 重放不会报错）
+SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task_log' AND COLUMN_NAME = 'from_column');
+SET @s := IF(@x = 0,
+  'ALTER TABLE task_log ADD COLUMN from_column VARCHAR(16) DEFAULT NULL COMMENT ''移动前所在看板列 id（仅 action=move 且跨列时非空）'' AFTER detail',
+  'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task_log' AND COLUMN_NAME = 'to_column');
+SET @s := IF(@x = 0,
+  'ALTER TABLE task_log ADD COLUMN to_column VARCHAR(16) DEFAULT NULL COMMENT ''移动后所在看板列 id（仅 action=move 且跨列时非空）'' AFTER from_column',
+  'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 -- 流程体检按「空间 + 动作 + 时间」扫描，量最大的是 move
-ALTER TABLE task_log
-  ADD KEY idx_ws_action_time (workspace_id, action, created_at);
+SET @x := (SELECT COUNT(*) FROM information_schema.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task_log' AND INDEX_NAME = 'idx_ws_action_time');
+SET @s := IF(@x = 0,
+  'ALTER TABLE task_log ADD KEY idx_ws_action_time (workspace_id, action, created_at)',
+  'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 -- 历史回填：detail 形如 从「待处理」移动到「进行中」
 --   from = 第 2 个「 到其后第一个 」之间的内容
