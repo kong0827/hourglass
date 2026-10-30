@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TaskBaselineMapper">
+
+  <select id="selectByWorkspace" resultType="TaskBaseline">
+    SELECT workspace_id, task_id, start_date, due_date, captured_at
+    FROM task_baseline
+    WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <select id="selectCapturedAt" resultType="java.time.LocalDateTime">
+    SELECT MAX(captured_at) FROM task_baseline WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM task_baseline WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByTask">
+    DELETE FROM task_baseline WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <insert id="insertBatch">
+    INSERT INTO task_baseline (workspace_id, task_id, start_date, due_date, captured_at) VALUES
+    <foreach collection="list" item="b" separator=",">
+      (#{b.workspaceId}, #{b.taskId}, #{b.startDate}, #{b.dueDate}, #{b.capturedAt})
+    </foreach>
+  </insert>
+</mapper>

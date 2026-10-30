@@ -24,6 +24,8 @@ public interface TimeLogMapper {
 
     /** 任务累计工时（不区分计时人，用于卡片/任务角标） */
     List<TimeAgg> sumByTaskByWorkspace(@Param("workspaceId") String workspaceId);
+    /** 本页任务的累计工时（按 id 批量） */
+    List<TimeAgg> sumByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     /** 结算某人在某任务上的运行中计时 */
     int closeRunning(@Param("taskId") String taskId, @Param("userId") String userId,
@@ -63,6 +65,11 @@ public interface TimeLogMapper {
 
     /** 本空间自 from 起全员工时（分钟） */
     Integer sumSinceByWorkspace(@Param("workspaceId") String workspaceId, @Param("from") LocalDateTime from);
+
+    /** 本空间 [from, to) 区间全员工时（分钟） */
+    Integer sumBetweenByWorkspace(@Param("workspaceId") String workspaceId,
+                                  @Param("from") LocalDateTime from,
+                                  @Param("to") LocalDateTime to);
 
     /** 按成员分组统计本空间工时（下钻用，user_id 回填在 TimeAgg.userId） */
     List<TimeAgg> sumByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId);

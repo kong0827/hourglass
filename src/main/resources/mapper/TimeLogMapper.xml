@@ -103,11 +103,27 @@
       AND ended_at IS NOT NULL AND started_at &gt;= #{from}
   </select>
 
+  <!-- 回顾页：历史周必须有上界，否则把之后几周的工时也算进「本周」 -->
+  <select id="sumBetweenByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+  </select>
+
   <!-- N-5 下钻：按成员统计本空间工时 -->
   <select id="sumByWorkspaceGroupByUser" resultType="TimeAgg">
     SELECT user_id AS user_id, SUM(minutes) AS total_minutes
     FROM time_log
     WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
     GROUP BY user_id
+  </select>
+  <select id="sumByTaskIds" resultType="TimeAgg">
+    SELECT task_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
   </select>
 </mapper>

@@ -37,6 +37,8 @@ import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskCommentMapper;
+import com.devstudio.kanban.mapper.TaskBaselineMapper;
+import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -86,6 +88,10 @@ public class TaskService {
     private final RequirementDocMapper requirementDocMapper;
     /** 关联分支校验用（分支必须属于同一空间） */
     private final DevBranchMapper devBranchMapper;
+    /** 甘特图依赖：任务彻底删除时一起清 */
+    private final TaskDependencyMapper dependencyMapper;
+    /** 甘特图基线：任务彻底删除时一起清 */
+    private final TaskBaselineMapper baselineMapper;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -97,7 +103,9 @@ public class TaskService {
                        TimeLogService timeLogService,
                        TaskCompletionService completionService,
                        RequirementDocMapper requirementDocMapper,
-                       DevBranchMapper devBranchMapper) {
+                       DevBranchMapper devBranchMapper,
+                       TaskDependencyMapper dependencyMapper,
+                       TaskBaselineMapper baselineMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -115,6 +123,8 @@ public class TaskService {
         this.completionService = completionService;
         this.requirementDocMapper = requirementDocMapper;
         this.devBranchMapper = devBranchMapper;
+        this.dependencyMapper = dependencyMapper;
+        this.baselineMapper = baselineMapper;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -288,6 +298,65 @@ public class TaskService {
         return resp;
     }
 
+    /* ---- 甘特图（V1.4）：复用看板的扩展字段与筛选口径，避免两套语义 ---- */
+
+    /** 全量任务 + 子任务/工时/标签/评论等扩展字段（甘特图数据源） */
+    public List<Task> allWithExtras(String workspaceId) {
+        List<Task> all = taskMapper.selectAll(workspaceId);
+        mergeTaskExtras(workspaceId, all);
+        return all;
+    }
+
+    /** 甘特图分页后的扩展字段：只按本页 id 批量查，避免全空间聚合 */
+    public void mergeGanttExtras(String workspaceId, List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>();
+        for (Task t : tasks) {
+            ids.add(t.getId());
+        }
+        Map<String, List<String>> tagMap = new HashMap<String, List<String>>();
+        for (TagTaskRow row : tagMapper.selectByTaskIds(workspaceId, ids)) {
+            List<String> list = tagMap.get(row.getTaskId());
+            if (list == null) {
+                list = new ArrayList<String>();
+                tagMap.put(row.getTaskId(), list);
+            }
+            list.add(row.getName());
+        }
+        Map<String, SubtaskAgg> subMap = new HashMap<String, SubtaskAgg>();
+        for (SubtaskAgg agg : subtaskMapper.countByTaskIds(workspaceId, ids)) {
+            subMap.put(agg.getTaskId(), agg);
+        }
+        Map<String, Integer> minuteMap = new HashMap<String, Integer>();
+        for (TimeAgg agg : timeLogMapper.sumByTaskIds(workspaceId, ids)) {
+            minuteMap.put(agg.getTaskId(), agg.getTotalMinutes());
+        }
+        Map<String, Integer> commentMap = new HashMap<String, Integer>();
+        for (TaskCountAgg agg : taskMapper.countCommentsByTaskIds(workspaceId, ids)) {
+            commentMap.put(agg.getTaskId(), agg.getCnt());
+        }
+        Map<String, String> reqNameMap = new HashMap<String, String>();
+        for (Requirement r : reqMapper.selectAll(workspaceId)) {
+            reqNameMap.put(r.getId(), r.getName());
+        }
+        for (Task t : tasks) {
+            SubtaskAgg sub = subMap.get(t.getId());
+            t.setSubtaskTotal(sub == null || sub.getTotal() == null ? 0 : sub.getTotal());
+            t.setSubtaskDone(sub == null || sub.getDone() == null ? 0 : sub.getDone());
+            Integer minutes = minuteMap.get(t.getId());
+            t.setTotalMinutes(minutes == null ? 0 : minutes);
+            List<String> tags = tagMap.get(t.getId());
+            t.setTags(tags == null ? new ArrayList<String>() : tags);
+            Integer cc = commentMap.get(t.getId());
+            t.setCommentCount(cc == null ? 0 : cc);
+            if (t.getReqId() != null) {
+                t.setSearchExtra(reqNameMap.get(t.getReqId()));
+            }
+        }
+    }
+
     public List<TaskLog> logs(String workspaceId, String taskId) {
         requireOwned(workspaceId, taskId);
         return logMapper.selectByTaskId(workspaceId, taskId);
@@ -364,6 +433,10 @@ public class TaskService {
         }
         taskMapper.insert(t);
         saveTags(workspaceId, id, req.getTags());
+        /* 直接建成已完成（含备份恢复）也要补完成快照，否则完成统计里查不到这条任务 */
+        if (Consts.COL_DONE.equals(t.getBoardColumn())) {
+            completionService.archive(t);
+        }
 
         int subCount = 0;
         if (req.getSubtasks() != null) {
@@ -401,6 +474,17 @@ public class TaskService {
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req);
+        /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
+        if (req.getIsMilestone() == null) {
+            t.setIsMilestone(old.getIsMilestone());
+            if (Boolean.TRUE.equals(old.getIsMilestone())) {
+                LocalDate day = t.getStartDate() != null ? t.getStartDate() : t.getDueDate();
+                if (day != null) {
+                    t.setStartDate(day);
+                    t.setDueDate(day);
+                }
+            }
+        }
         t.setRecurType(old.getRecurType());
         if (req.getRecurType() != null) {
             t.setRecurType(Texts.trimToNull(req.getRecurType()));
@@ -717,6 +801,9 @@ public class TaskService {
         appNotificationMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
         // 任务行即将消失、ID 可被复用：清掉上游循环派生关联，避免之后误认到无关的新任务
         taskMapper.clearRecurNext(t.getId());
+        /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
+        dependencyMapper.deleteByTask(t.getWorkspaceId(), t.getId());
+        baselineMapper.deleteByTask(t.getWorkspaceId(), t.getId());
     }
 
     /* 计时相关的计算（有效工时 / 关闭计时）已统一收在 TimeLogService，这里不再各留一套口径 */
@@ -784,6 +871,11 @@ public class TaskService {
         nt.setBranchId(doneTask.getBranchId());
         nt.setProgress(0);
         nt.setRecurType(doneTask.getRecurType());
+        nt.setEstimateMinutes(doneTask.getEstimateMinutes());
+        nt.setIsMilestone(doneTask.getIsMilestone());
+        if (Boolean.TRUE.equals(doneTask.getIsMilestone())) {
+            nt.setStartDate(next);
+        }
         nt.setRemindSent(Boolean.FALSE);
         nt.setSortOrder(taskMapper.maxSortOrder(workspaceId, firstCol) + 1);
         taskMapper.insert(nt);
@@ -852,6 +944,14 @@ public class TaskService {
         }
         t.setStartDate(req.getStartDate());
         t.setDueDate(req.getDueDate());
+        /* 里程碑是单日节点：只给了一端就补另一端；两端都给时以开始日为准 */
+        if (Boolean.TRUE.equals(req.getIsMilestone())) {
+            LocalDate milestoneDay = t.getStartDate() != null ? t.getStartDate() : t.getDueDate();
+            if (milestoneDay != null) {
+                t.setStartDate(milestoneDay);
+                t.setDueDate(milestoneDay);
+            }
+        }
         String reqId = Texts.trimToNull(req.getReqId());
         if (reqId != null) {
             Requirement r = reqMapper.selectById(reqId);
@@ -883,6 +983,7 @@ public class TaskService {
         }
         t.setBranchId(branchId);
         t.setProgress(req.getProgress() == null ? 0 : Math.max(0, Math.min(100, req.getProgress())));
+        t.setIsMilestone(Boolean.TRUE.equals(req.getIsMilestone()));
         /* 预估耗时：0 与空等价，都表示"没估过"，不要存 0 去污染系数计算 */
         Integer est = req.getEstimateMinutes();
         t.setEstimateMinutes(est == null || est <= 0 ? null : est);

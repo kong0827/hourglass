@@ -4,7 +4,7 @@
 
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
-    progress, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
+    progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at
   </sql>
 
@@ -36,7 +36,7 @@
        workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。 -->
   <select id="selectMyTasks" resultType="Task">
     SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
-           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_blocked AS blocked,
+           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
            w.name AS workspace_name
@@ -54,10 +54,10 @@
 
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
-                      start_date, due_date, req_id, req_doc_id, branch_id, progress, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
-            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -77,6 +77,7 @@
       req_doc_id = #{reqDocId},
       branch_id = #{branchId},
       progress = #{progress},
+      is_milestone = #{isMilestone},
       estimate_minutes = #{estimateMinutes},
       is_blocked = #{blocked},
       blocked_reason = #{blockedReason},
@@ -238,4 +239,138 @@
       AND t.owner_user_id IS NULL
       AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
   </update>
+  <!-- ==================== 甘特图（V1.4 SQL 区间分页） ==================== -->
+  <!-- 口径与 TaskService.match() 对齐；区间用生成列 gantt_start/gantt_end（见 sql/16） -->
+  <sql id="ganttWhere">
+    t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <if test="query.includeDone == false">
+      AND t.board_column &lt;&gt; 'done'
+    </if>
+    <if test="query.q != null">
+      AND (
+        LOCATE(LOWER(#{query.q}), LOWER(t.title)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.description)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.note)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.category)) > 0
+        OR EXISTS (SELECT 1 FROM requirement r
+                   WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(r.name)) > 0)
+        OR EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
+                   WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(g.name)) > 0)
+        OR EXISTS (SELECT 1 FROM attachment a
+                   WHERE a.task_id = t.id AND a.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(a.filename)) > 0)
+      )
+    </if>
+    <if test="query.owners != null and query.owners.size() > 0">
+      AND t.owner IN
+      <foreach collection="query.owners" item="o" open="(" separator="," close=")">#{o}</foreach>
+    </if>
+    <if test="query.pris != null and query.pris.size() > 0">
+      AND t.priority IN
+      <foreach collection="query.pris" item="p" open="(" separator="," close=")">#{p}</foreach>
+    </if>
+    <if test="query.cats != null and query.cats.size() > 0">
+      AND t.category IN
+      <foreach collection="query.cats" item="cc" open="(" separator="," close=")">#{cc}</foreach>
+    </if>
+    <if test="query.reqNone">
+      <choose>
+        <when test="query.reqIds != null and query.reqIds.size() > 0">
+          AND (t.req_id IS NULL OR t.req_id IN
+          <foreach collection="query.reqIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>)
+        </when>
+        <otherwise>
+          AND t.req_id IS NULL
+        </otherwise>
+      </choose>
+    </if>
+    <if test="query.reqNone == false and query.reqIds != null and query.reqIds.size() > 0">
+      AND t.req_id IN
+      <foreach collection="query.reqIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>
+    </if>
+    <if test="query.tags != null and query.tags.size() > 0">
+      AND EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
+                  WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
+                    AND g.name IN
+                  <foreach collection="query.tags" item="tg" open="(" separator="," close=")">#{tg}</foreach>)
+    </if>
+    <if test="query.due != null">
+      <choose>
+        <when test="query.due == 'over'">
+          AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{query.today}
+        </when>
+        <when test="query.due == 'today'">
+          AND t.board_column &lt;&gt; 'done' AND t.due_date = #{query.today}
+        </when>
+        <when test="query.due == 'soon'">
+          AND t.board_column &lt;&gt; 'done'
+          AND t.due_date &gt;= #{query.today}
+          AND t.due_date &lt;= DATE_ADD(#{query.today}, INTERVAL 3 DAY)
+        </when>
+        <otherwise>AND 1 = 0</otherwise>
+      </choose>
+    </if>
+    <if test="query.focus">
+      AND (
+        (t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{query.today})
+        OR (t.board_column = 'doing' AND t.priority = 'P0')
+      )
+    </if>
+    <if test="query.blocked">
+      AND t.is_blocked = 1
+    </if>
+    <if test="query.noDue">
+      AND t.due_date IS NULL
+    </if>
+  </sql>
+
+  <sql id="ganttScheduled">
+    AND (t.start_date IS NOT NULL OR t.due_date IS NOT NULL)
+    <if test="query.from != null">
+      AND t.gantt_end &gt;= #{query.from}
+    </if>
+    <if test="query.to != null">
+      AND t.gantt_start &lt;= #{query.to}
+    </if>
+  </sql>
+
+  <select id="selectGantt" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="ganttScheduled"/>
+    ORDER BY t.gantt_start, t.gantt_end, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countGantt" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="ganttScheduled"/>
+  </select>
+
+  <select id="selectGanttUnscheduled" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.start_date IS NULL AND t.due_date IS NULL
+    ORDER BY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="countGanttUnscheduled" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.start_date IS NULL AND t.due_date IS NULL
+  </select>
+
+  <select id="countCommentsByTaskIds" resultType="TaskCountAgg">
+    SELECT task_id AS task_id, COUNT(*) AS cnt
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
+  </select>
+
 </mapper>

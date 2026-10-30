@@ -56,6 +56,12 @@
     WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId}
   </update>
 
+  <update id="clearTaskRefExceptReq">
+    UPDATE task SET req_doc_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId}
+      AND (req_id IS NULL OR req_id &lt;&gt; #{reqId})
+  </update>
+
   <select id="selectIdsByReq" resultType="string">
     SELECT id FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </select>

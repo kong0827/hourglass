@@ -547,9 +547,18 @@ public class NotificationService {
             return true;
         } catch (Exception e) {
             log.warn("推送请求失败", e);
-            recordResult(ws, "failed:" + Texts.cut(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), 120));
+            /* 异常文本可能带完整 webhook（serverchan 的 URL 里就有 token），回写到设置页前先脱敏 */
+            recordResult(ws, "failed:" + Texts.cut(safeError(e), 120));
             return false;
         }
+    }
+
+    private static String safeError(Exception e) {
+        String m = e.getMessage();
+        if (m == null || m.trim().isEmpty()) {
+            return e.getClass().getSimpleName();
+        }
+        return m.replaceAll("https?://\\S+", "<url>");
     }
 
     /** 推送结果回写（失败只记日志，不影响业务） */

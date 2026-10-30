@@ -50,4 +50,12 @@
     WHERE workspace_id = #{workspaceId}
     GROUP BY task_id
   </select>
+  <select id="countByTaskIds" resultType="SubtaskAgg">
+    SELECT task_id, COUNT(*) AS total, SUM(done) AS done
+    FROM subtask
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
+  </select>
 </mapper>

@@ -99,3 +99,56 @@
   --shadow-3:var(--shadow-xl);
   --ease:var(--ease-out);
 }
+
+/* ==========================================================================
+   深色主题（V1.4）：只覆盖基础令牌，兼容别名会自动跟随。
+   切换入口：顶栏月亮按钮；首屏由 index.html <head> 的内联脚本提前应用。
+   ========================================================================== */
+html[data-theme="dark"]{
+  color-scheme: dark;
+  --bg-app:#0D1219;
+  --surface:#151B24;
+  --surface-sunken:#1A222D;
+  --surface-hover:#1F2937;
+  --surface-active:#26313F;
+  --border:#25303D;
+  --border-strong:#334153;
+  --text:#E7ECF3;
+  --text-2:#A9B4C2;
+  --text-3:#7B8798;
+  --text-inverse:#0D1219;
+
+  --primary:#4C8DFF;
+  --primary-hover:#6BA1FF;
+  --primary-active:#3B76DE;
+  --primary-soft:#16243C;
+  --primary-border:#2B4772;
+  --primary-fg:#8FB4FF;
+
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E;
+  --danger:#F97066;  --danger-soft:#2B1615;  --danger-border:#5C2A26;
+  --info:#53B1FD;    --info-soft:#10202F;    --info-border:#1F4468;
+  --plum:#9B8AFB;    --plum-soft:#1D1933;    --plum-border:#3B3266;
+
+  --p0:#F97066; --p0-soft:#2B1615;
+  --p1:#FDB022; --p1-soft:#2A2110;
+  --p2:#53B1FD; --p2-soft:#10202F;
+  --p3:#7B8798; --p3-soft:#1A222D;
+
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.6);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+
+/* 第三方富文本编辑器只做浅层适配，避免整块刺眼 */
+html[data-theme="dark"] .sun-editor,
+html[data-theme="dark"] .se-wrapper,
+html[data-theme="dark"] .se-wrapper-inner{
+  background:var(--surface) !important;color:var(--text) !important;border-color:var(--border) !important;
+}
+html[data-theme="dark"] .se-toolbar{background:var(--surface-sunken) !important;border-color:var(--border) !important;}
+html[data-theme="dark"] .se-btn{color:var(--text-2) !important;}

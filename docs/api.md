@@ -192,7 +192,7 @@
 
 ## 14. GET /api/export
 
-导出当前空间的**任务备份**（v4）。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：包含 tasks/reqs/columns，v4 额外包含任务评论（comments）、任务 `deletedAt`（回收站）与任务的 `reqDocId`/`branchId`/`estimateMinutes`/`blocked`/`blockedReason`/`ownerUserId`/`remindTarget` 字段，旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
+导出当前空间的**任务备份**（v5）。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：包含 tasks/reqs/columns；v4 起额外包含任务评论（comments）、任务 `deletedAt`（回收站）与任务的 `reqDocId`/`branchId`/`estimateMinutes`/`blocked`/`blockedReason`/`ownerUserId`/`remindTarget` 字段；v5 起额外包含任务 `isMilestone`、甘特依赖（`deps`）、基线（`baseline` + `baselineAt`）。旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
 
 **不含**：需求文档正文、分支、附件文件、操作时间线、保存视图、分类/看板列设置。
 
@@ -201,18 +201,21 @@
 导入任务备份文件，覆盖当前数据：
 
 ```json
-{"v":4,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
+{"v":5,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
   "col":"doing","due":"2026-10-20","progress":40,"note":"","reqId":"Rxxx","reqDocId":"Dxxx",
-  "branchId":"Bxxx","estimateMinutes":240,"blocked":false,"completedAt":null}],
+  "branchId":"Bxxx","estimateMinutes":240,"blocked":false,"isMilestone":false,"completedAt":null}],
  "reqs":[{"id":"Rxxx","name":"...","desc":"","status":"active","createdAt":"2026-10-01"}],
- "comments":[{"taskId":"Kxxx","authorId":"Uxxx","authorName":"我","content":"...","createdAt":"2026-10-02T10:00:00"}]}
+ "comments":[{"taskId":"Kxxx","authorId":"Uxxx","authorName":"我","content":"...","createdAt":"2026-10-02T10:00:00"}],
+ "deps":[{"from":"K1","to":"K2","type":"FS","lag":0}],
+ "baseline":[{"taskId":"K1","start":"2026-10-01","due":"2026-10-08"}],
+ "baselineAt":"2026-10-28T18:00:00"}
 ```
 
 返回 `{"tasks": 42, "reqs": 5, "comments": 18}`。
 
-**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置、**需求文档与分支**（但任务的 `reqDocId`/`branchId` 会按目标空间是否存在对应记录校验，不存在则置空）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。
+**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**、**甘特依赖与基线**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置、**需求文档与分支**（但任务的 `reqDocId`/`branchId` 会按目标空间是否存在对应记录校验，不存在则置空）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用（依赖端点按任务 ID 映射回指，自环/重复/成环边会被跳过）；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。导入会清除当前空间的只读分享令牌（旧链接立即失效），需要重新生成。
 
-**旧备份兼容**：v3 及更早备份没有 comments 字段，导入后会清空本空间评论（前端确认框已明确提示）；新增任务字段缺失时按空值处理。
+**旧备份兼容**：v3 及更早备份没有 comments 字段，v4 及更早没有依赖/基线字段；导入后会清空本空间对应的评论、依赖与基线（前端确认框已明确提示）；新增任务字段缺失时按空值处理。
 
 字段兜底：旧列 id（todo/review）自动映射、非法枚举取默认值、超长字段截断、无效项目/需求/分支引用置空；`subtasks`/`tags`/`recurType`/`remindAt`/`remindSent`/`timeLogs`（含计时人 userId）/`createdAt`/`columns` 导入时自动恢复，旧版备份（无这些字段）依旧兼容。
 
@@ -991,3 +994,85 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 
 自检：`node tools/check-branch.mjs`（CDP 真 Chrome，25 项：进视图、四列渲染、统计筛选、状态浮层、编辑弹窗、
 抽屉各区块、看板分支标签、任务抽屉下拉分组与回填）。
+
+---
+
+## 附录 · 2026-10-30 甘特图 V1.4 / V2.0（增量）
+
+> 迁移脚本：`sql/15_gantt_v2.sql`、`sql/16_gantt_index.sql`（均幂等）。
+> 口径：任务筛选与 `/api/tasks/list` 完全一致；扩展字段（子任务/工时/标签/评论）同 `/api/board`，
+> 但只为本页任务补齐。
+
+### 1. 任务分页（SQL 区间分页）
+
+`GET /api/gantt`（登录）
+
+参数：与 `/api/tasks/list` 相同的 `workspace/q/owners/pris/cats/reqs/tags/due/focus/blocked/noDue`，
+另加：
+
+| 参数 | 说明 |
+|---|---|
+| `from` / `to` | `yyyy-MM-dd`，按「与区间有交集」在 SQL 层过滤已排期任务；不传=全部排期任务 |
+| `includeDone` | 默认 `true`；传 `false` 时 SQL 直接排除已完成列 |
+| `offset` / `limit` | 稳定分页；`limit` 默认 300，上限 2000（前端按 500/页自动加载） |
+
+返回：
+
+```json
+{ "items": [{...任务}], "total": 415, "offset": 0, "limit": 500, "hasMore": true,
+  "unscheduledCount": 3,
+  "unscheduled": [{...任务}],
+  "deps": [{ "id": "D...", "fromTaskId": "K1", "toTaskId": "K2", "depType": "FS", "lagDays": 0 }],
+  "baseline": { "K1": { "startDate": "2026-10-01", "dueDate": "2026-10-08" } },
+  "baselineAt": "2026-10-28T18:00:00" }
+```
+
+- `total` / `items` 只统计**已排期**任务；未排期任务单独放在 `unscheduled`（最多 200 条，总数见 `unscheduledCount`），
+  `deps` / `baseline` / `baselineAt` 与 `unscheduled` 都只随第一页（`offset=0`）返回。
+- 区间相交：`LEAST(COALESCE(start,due), COALESCE(due,start)) <= to AND GREATEST(...) >= from`，
+  由生成列 `task.gantt_start / gantt_end` 承载（`sql/16`），走 `idx_gantt_range`。
+- 排序稳定：`gantt_start, gantt_end, id`。
+- `q` 在 SQL 中覆盖：标题/描述/备注/分类子串匹配（`LOCATE`，避免 `%`/`_` 被当通配符）+ 项目名 / 标签名 / 附件文件名 EXISTS，与看板 `match()` 对齐。
+- `due` 的 over/today/soon、`focus`、`blocked`、`noDue`、负责人/优先级/分类/项目/标签同样在 SQL 层过滤。
+- 前端：月视图把 `from/to` 下推并翻月重新查询；「适配全部」不带区间，按 500/页加载排期任务。
+- 任务新增 `isMilestone` 字段：`POST/PUT /api/tasks` 可传；旧客户端更新时未传则保留原值，里程碑日期在服务端归一为单日。
+
+### 2. 依赖
+
+- `GET /api/gantt/deps` → 全部依赖（空间级）
+- `POST /api/gantt/deps`，body `{"fromTaskId":"A","toTaskId":"B","depType":"FS","lagDays":0}`
+  - 校验：同空间、非自环、同边不重复、不产生环、总量上限 5000；失败返回业务错误（HTTP 200 + `code!=0`）
+- `PUT /api/gantt/deps/{id}`，body `{"depType":"SS","lagDays":2}`（改类型/滞后）
+- `DELETE /api/gantt/deps/{id}`
+
+历史 `blocked_by_task_id` 会在迁移脚本中幂等转成 FS 依赖；新依赖不再回写该字段。
+
+### 3. 基线
+
+- `POST /api/gantt/baseline` → 快照当前所有有日期任务的计划起止，返回 `{baseline, baselineAt}`（覆盖旧基线）
+- `GET /api/gantt/baseline` → 同上（只读）
+- `DELETE /api/gantt/baseline` → 清除
+
+### 4. 资源负载
+
+`GET /api/gantt/load?from=yyyy-MM-dd&to=yyyy-MM-dd`（筛选参数同上）
+
+```json
+{ "from": "2026-10-05", "to": "2026-11-09",
+  "weeks": ["2026-10-05", "..."],
+  "members": [{ "name": "我", "buckets": [
+    { "weekStart": "2026-10-05", "estimateMinutes": 600, "actualMinutes": 400, "capacityMinutes": 2400 }
+  ]}]}
+```
+
+- 预估工时按任务区间内**工作日**（跳周末）摊到周；实际工时按 `time_log.started_at` 归周、按计时人汇总。
+- 容量固定 5×8h；不包含法定节假日。
+
+### 5. 只读分享
+
+- `GET /api/gantt/share` → 当前分享 `{token, expiresAt}` 或 `null`（**仅空间主**：token 本身就能公开读取，不能发给普通成员）
+- `POST /api/gantt/share` → 生成/重置（30 天有效，**仅空间主**）
+- `DELETE /api/gantt/share` → 停止分享（仅空间主）
+- `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，含任务（已剔除描述/备注/提醒/分支/附件关联）、依赖、基线；token 无效或过期返回 404。
+
+页面：`/share.html?token=...`（独立只读甘特页，无写操作）。

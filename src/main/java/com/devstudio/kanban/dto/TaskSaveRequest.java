@@ -64,6 +64,9 @@ public class TaskSaveRequest {
     @Max(value = 100, message = "进度不能大于 100")
     private Integer progress = 0;
 
+    /** 里程碑：单日节点（甘特图菱形），不展示进度条 */
+    private Boolean isMilestone;
+
     /**
      * 预估耗时（分钟，空=没估）。0 与空等价，都表示"没填"。
      * 上限 10080 分钟（168 小时）—— 单任务估到一周以上说明该拆了。

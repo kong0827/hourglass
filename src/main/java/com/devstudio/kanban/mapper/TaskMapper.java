@@ -1,5 +1,6 @@
 package com.devstudio.kanban.mapper;
 
+import com.devstudio.kanban.dto.GanttQuery;
 import com.devstudio.kanban.entity.Task;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,6 +12,22 @@ import java.util.List;
 public interface TaskMapper {
 
     List<Task> selectAll(@Param("workspaceId") String workspaceId);
+
+    /* ---- 甘特图：SQL 区间过滤 + 稳定排序 + 分页 ---- */
+
+    List<Task> selectGantt(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                           @Param("offset") int offset, @Param("limit") int limit);
+
+    int countGantt(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query);
+
+    List<Task> selectGanttUnscheduled(@Param("workspaceId") String workspaceId,
+                                      @Param("query") GanttQuery query, @Param("limit") int limit);
+
+    int countGanttUnscheduled(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query);
+
+    /** 本页任务的评论数（甘特图分页后按 id 批量查，避免全空间扫描） */
+    List<com.devstudio.kanban.entity.TaskCountAgg> countCommentsByTaskIds(
+            @Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     List<Task> selectDeleted(@Param("workspaceId") String workspaceId);
 

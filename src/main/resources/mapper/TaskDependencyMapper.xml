@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TaskDependencyMapper">
+
+  <sql id="cols">
+    id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at
+  </sql>
+
+  <select id="selectByWorkspace" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at, id
+  </select>
+
+  <select id="selectById" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency WHERE id = #{id}
+  </select>
+
+  <select id="countEdge" resultType="int">
+    SELECT COUNT(*) FROM task_dependency
+    WHERE from_task_id = #{fromTaskId} AND to_task_id = #{toTaskId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO task_dependency (id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at)
+    VALUES (#{id}, #{workspaceId}, #{fromTaskId}, #{toTaskId}, #{depType}, #{lagDays},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE task_dependency
+    SET dep_type = #{depType}, lag_days = #{lagDays}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM task_dependency WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByTask">
+    DELETE FROM task_dependency
+    WHERE workspace_id = #{workspaceId}
+      AND (from_task_id = #{taskId} OR to_task_id = #{taskId})
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM task_dependency WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM task_dependency WHERE workspace_id = #{workspaceId}
+  </select>
+</mapper>

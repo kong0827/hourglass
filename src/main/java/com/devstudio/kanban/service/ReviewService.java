@@ -56,7 +56,8 @@ public class ReviewService {
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         List<Task> all = taskMapper.selectAll(workspaceId);
 
-        int offset = weekOffset == null ? autoOffset(all, monday) : weekOffset;
+        /* 只允许回看过去 52 周：正向偏移会翻到未来（永远是空周），无上限还会让 LocalDate 溢出 */
+        int offset = weekOffset == null ? autoOffset(all, monday) : Math.max(-52, Math.min(0, weekOffset));
         LocalDate start = monday.plusWeeks(offset);
         LocalDate end = start.plusDays(6);
 
@@ -138,7 +139,8 @@ public class ReviewService {
         /* N-5：工时（本空间全员 / 我的 / 本周期全空间） */
         ReviewResponse.WorkMinutes wm = new ReviewResponse.WorkMinutes();
         Integer allTotal = timeLogMapper.sumByWorkspace(workspaceId);
-        Integer weekAll = timeLogMapper.sumSinceByWorkspace(workspaceId, start.atStartOfDay());
+        Integer weekAll = timeLogMapper.sumBetweenByWorkspace(workspaceId,
+                start.atStartOfDay(), end.plusDays(1).atStartOfDay());
         wm.setSpace(allTotal == null ? 0 : allTotal);
         wm.setSpaceWeek(weekAll == null ? 0 : weekAll);
         if (userId != null) {

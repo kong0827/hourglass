@@ -107,9 +107,14 @@ public class RequirementDocService {
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
         RequirementDoc d = get(workspaceId, id);
+        String oldReqId = d.getReqId();
         String reqId = ensureProject(workspaceId, req.getReqId());
         apply(d, reqId, req, userId);
         docMapper.update(d);
+        /* 需求换项目后，仍挂在旧项目下的任务会指向别的项目的文档：解掉这些关联 */
+        if (oldReqId != null && !oldReqId.equals(reqId)) {
+            docMapper.clearTaskRefExceptReq(workspaceId, d.getId(), reqId);
+        }
         return docMapper.selectById(id);
     }
 

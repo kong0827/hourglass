@@ -15,13 +15,16 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
+import com.devstudio.kanban.mapper.TaskBaselineMapper;
 import com.devstudio.kanban.mapper.TaskCommentMapper;
+import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -68,6 +71,10 @@ public class WorkspaceService {
     private final AppNotificationMapper appNotificationMapper;
     /** 分支与分支时间线（清空空间数据时一并清理） */
     private final DevBranchMapper devBranchMapper;
+    /** 甘特图：空间清空/删除时一并清理依赖、基线与分享 token */
+    private final TaskDependencyMapper dependencyMapper;
+    private final TaskBaselineMapper baselineMapper;
+    private final GanttShareMapper ganttShareMapper;
     /** 完成归档（清空空间时一并清理，否则「任务清单」会残留） */
     private final TaskCompletionService completionService;
 
@@ -82,7 +89,10 @@ public class WorkspaceService {
                             AppNotificationMapper appNotificationMapper,
                             DevBranchMapper devBranchMapper,
                             RequirementDocMapper requirementDocMapper,
-                            TaskCompletionService completionService) {
+                            TaskCompletionService completionService,
+                            TaskDependencyMapper dependencyMapper,
+                            TaskBaselineMapper baselineMapper,
+                            GanttShareMapper ganttShareMapper) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -102,6 +112,9 @@ public class WorkspaceService {
         this.appNotificationMapper = appNotificationMapper;
         this.devBranchMapper = devBranchMapper;
         this.completionService = completionService;
+        this.dependencyMapper = dependencyMapper;
+        this.baselineMapper = baselineMapper;
+        this.ganttShareMapper = ganttShareMapper;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -295,6 +308,10 @@ public class WorkspaceService {
     @Transactional
     public void wipeData(String workspaceId) {
         logMapper.deleteAllByWorkspace(workspaceId);
+        /* 甘特图数据没有外键，任务删掉后必须显式清，避免空间 ID 残留 */
+        dependencyMapper.deleteByWorkspace(workspaceId);
+        baselineMapper.deleteByWorkspace(workspaceId);
+        ganttShareMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
         reqMapper.deleteAllByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);

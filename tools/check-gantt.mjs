@@ -6,8 +6,10 @@ import { execSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const PREVIEW = 'file:///C:/Users/chenghongchang/Desktop/%E5%B7%A5%E4%BD%9C%E5%8F%B0/devstudio-server/docs/ui-preview.html#/gantt'
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const PREVIEW = pathToFileURL(path.join(ROOT, 'docs/ui-preview.html')).href + '#/gantt'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function findBrowserCli() {

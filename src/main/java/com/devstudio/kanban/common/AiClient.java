@@ -86,6 +86,12 @@ public class AiClient {
             throw new IllegalStateException(readableError(e), e);
         } catch (ResourceAccessException e) {
             throw new IllegalStateException(DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            /* baseUrl 写错等底层异常可能把完整地址（含内部主机名）带到界面：统一包装成可读提示 */
+            throw new IllegalStateException("AI 请求失败（" + e.getClass().getSimpleName()
+                    + "）：请检查接口地址格式与网络连通性", e);
         }
     }
 

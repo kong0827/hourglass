@@ -43,9 +43,10 @@ MVN="${MVN:-mvn}"
 # 新增 js/ui.js、js/icons.js、manifest.webmanifest —— 全部纳入校验，避免只验旧清单而漏掉新文件。
 VERIFY_FILES=(
   "index.html" "login.html" "join.html" "manifest.webmanifest"
-  "js/app.js" "js/api.js" "js/ui.js" "js/icons.js"
+  "js/app.js" "js/api.js" "js/ui.js" "js/icons.js" "js/share.js"
   "css/app.css" "css/tokens.css" "css/base.css" "css/auth.css"
-  "css/views.css" "css/layout.css" "css/components.css"
+  "css/views.css" "css/layout.css" "css/components.css" "css/gantt.css" "css/share.css"
+  "share.html"
   "sw.js"
 )
 

@@ -18,7 +18,7 @@
       progress: 0, note: "", recurType: "", remindAt: null, remindTarget: "owner", tags: [],
       estimateMinutes: null,
       subtaskTotal: 0, subtaskDone: 0, totalMinutes: 0, attachmentCount: 0,
-      blocked: false, blockedReason: null, blockedByTaskId: null,
+      blocked: false, blockedReason: null, blockedByTaskId: null, isMilestone: false,
       workspaceId: "W1", sortOrder: 0, deletedAt: null,
       createdAt: ts(-12, 10, 0), updatedAt: ts(-1, 16, 0)
     }, o || {});
@@ -50,7 +50,7 @@
         totalMinutes: 520, estimateMinutes: 480 }),
     T({ id: "K2", title: "导出 CSV 补工时列", priority: "P1", boardColumn: "doing", progress: 0,
         branchId: "BR2", startDate: shift(-1), dueDate: shift(4), blocked: true, blockedReason: "等确认工时口径",
-        totalMinutes: 200, estimateMinutes: 240 })
+        blockedByTaskId: "B1", totalMinutes: 200, estimateMinutes: 240 })
   ];
   var done = [
     T({ id: "K7", title: "登录重构与验证码", priority: "P2", boardColumn: "done", progress: 100,
@@ -67,15 +67,18 @@
         owner: "陈工", ownerUserId: "U2", reqId: null, dueDate: shift(3) }),
     T({ id: "G5", title: "接口压测准备（仅开始）", priority: "P2", boardColumn: "backlog", progress: 20,
         owner: "我", reqId: "R1", startDate: shift(-2) }),
+    T({ id: "G7", title: "里程碑：一期上线", priority: "P0", boardColumn: "backlog", progress: 0,
+        startDate: shift(8), dueDate: shift(8), isMilestone: true, owner: "我", reqId: "R1" }),
     T({ id: "G6", title: "补充通知模板（未排期）", priority: "P3", boardColumn: "backlog", progress: 0,
         owner: "我", reqId: "R1" })
   );
   doing.push(
     T({ id: "G1", title: "结算批处理拆分（跨月）", priority: "P0", boardColumn: "doing", progress: 30,
-        owner: "陈工", ownerUserId: "U2", reqId: "R2", startDate: shift(-20), dueDate: shift(12) }),
+        owner: "陈工", ownerUserId: "U2", reqId: "R2", startDate: shift(-20), dueDate: shift(12),
+        estimateMinutes: 1200, totalMinutes: 300 }),
     T({ id: "G2", title: "对账差异回溯（阻塞+逾期）", priority: "P1", boardColumn: "doing", progress: 45,
         owner: "李雷", ownerUserId: "U3", reqId: "R2", startDate: shift(-6), dueDate: shift(-2),
-        blocked: true, blockedReason: "等上游数据" })
+        blocked: true, blockedReason: "等上游数据", blockedByTaskId: "G1" })
   );
 
   var tasks = backlog.concat(doing, done);
@@ -541,6 +544,102 @@
     return {};
   }
 
+
+  /* ==================== 甘特图 V1.4 演示数据 ==================== */
+  var ganttDeps = [
+    { id: "D1", workspaceId: "W1", fromTaskId: "G1", toTaskId: "G2", depType: "FS", lagDays: 0 },
+    { id: "D2", workspaceId: "W1", fromTaskId: "B1", toTaskId: "K2", depType: "FS", lagDays: 0 },
+    { id: "D3", workspaceId: "W1", fromTaskId: "G1", toTaskId: "K1", depType: "SS", lagDays: 2 }
+  ];
+  var ganttBaseline = {
+    G1: { startDate: shift(-24), dueDate: shift(8) },
+    G2: { startDate: shift(-8), dueDate: shift(-3) },
+    K1: { startDate: shift(-4), dueDate: shift(1) }
+  };
+  var ganttBaselineAt = ts(-2, 18, 0);
+
+  function mockGantt(u) {
+    /* 与后端一致：区间只筛已排期任务，未排期单独返回；都在 filters 之后 */
+    var all = mockTaskList(u).items;
+    var fromM = /[?&]from=(\d{4}-\d{2}-\d{2})/.exec(u);
+    var toM = /[?&]to=(\d{4}-\d{2}-\d{2})/.exec(u);
+    var from = fromM ? fromM[1] : null, to = toM ? toM[1] : null;
+    function effS(t) { return t.startDate || t.dueDate; }
+    function effE(t) { return t.dueDate || t.startDate; }
+    var scheduled = [], unplanned = [];
+    all.forEach(function (t) {
+      if (!t.startDate && !t.dueDate) { unplanned.push(t); return; }
+      if (from && effE(t) < from) return;
+      if (to && effS(t) > to) return;
+      scheduled.push(t);
+    });
+    scheduled.sort(function (a, b) {
+      var sa = effS(a), sb = effS(b);
+      if (sa !== sb) return sa < sb ? -1 : 1;
+      var ea = effE(a), eb = effE(b);
+      if (ea !== eb) return ea < eb ? -1 : 1;
+      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+    });
+    var off = Number((/[?&]offset=(\d+)/.exec(u) || [])[1] || 0);
+    var lim = Number((/[?&]limit=(\d+)/.exec(u) || [])[1] || 300);
+    var page = scheduled.slice(off, off + lim);
+    var res = {
+      items: page, total: scheduled.length, offset: off, limit: lim,
+      hasMore: off + page.length < scheduled.length,
+      unscheduledCount: unplanned.length,
+      unscheduled: unplanned.slice(0, 200)
+    };
+    if (off === 0) {
+      res.deps = ganttDeps;
+      res.baseline = ganttBaseline;
+      res.baselineAt = ganttBaselineAt;
+    }
+    return res;
+  }
+
+  function mondayOf(d) {
+    var x = new Date(d.getTime());
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  function mockGanttLoad(u) {
+    var fromM = /[?&]from=(\d{4}-\d{2}-\d{2})/.exec(u);
+    var base = fromM ? new Date(Number(fromM[1].slice(0, 4)), Number(fromM[1].slice(5, 7)) - 1, Number(fromM[1].slice(8, 10))) : new Date();
+    var start = mondayOf(base);
+    var weeks = [];
+    for (var i = 0; i < 6; i++) {
+      var d = new Date(start.getTime());
+      d.setDate(d.getDate() + i * 7);
+      weeks.push(iso(d));
+    }
+    var members = ["我", "陈工", "李雷"].map(function (name, idx) {
+      return {
+        name: name,
+        buckets: weeks.map(function (w, j) {
+          return {
+            weekStart: w,
+            estimateMinutes: Math.max(0, 600 + idx * 480 + j * (idx === 1 ? 420 : 120) - (j > 3 ? 900 : 0)),
+            actualMinutes: idx === 0 ? 400 + j * 90 : idx * 60,
+            capacityMinutes: 2400
+          };
+        })
+      };
+    });
+    return { from: weeks[0], to: weeks[weeks.length - 1], weeks: weeks, members: members };
+  }
+
+  function mockShare() {
+    return {
+      workspaceName: "我的看板",
+      generatedAt: ts(0, 10, 0),
+      baselineAt: ganttBaselineAt,
+      tasks: tasks,
+      deps: ganttDeps,
+      baseline: ganttBaseline
+    };
+  }
+
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
@@ -564,6 +663,47 @@
         for (var pk in reqBody) if (Object.prototype.hasOwnProperty.call(reqBody, pk)) hit[pk] = reqBody[pk];
       }
       data = hit || {};
+    } else if (clean === "/api/gantt") {
+      data = mockGantt(u);
+    } else if (clean === "/api/gantt/deps" && method === "GET") {
+      data = ganttDeps;
+    } else if (clean === "/api/gantt/deps" && method === "POST") {
+      var nd = { id: "D" + (ganttDeps.length + 1), workspaceId: "W1", fromTaskId: reqBody.fromTaskId,
+                 toTaskId: reqBody.toTaskId, depType: reqBody.depType || "FS", lagDays: reqBody.lagDays || 0 };
+      ganttDeps.push(nd);
+      data = nd;
+    } else if (/^\/api\/gantt\/deps\/[A-Za-z0-9_-]+$/.test(clean) && method === "PUT") {
+      var did2 = clean.split("/").pop();
+      ganttDeps.forEach(function (d) { if (d.id === did2) { d.depType = reqBody.depType; d.lagDays = reqBody.lagDays; } });
+      data = {};
+    } else if (/^\/api\/gantt\/deps\/[A-Za-z0-9_-]+$/.test(clean) && method === "DELETE") {
+      var did3 = clean.split("/").pop();
+      ganttDeps = ganttDeps.filter(function (d) { return d.id !== did3; });
+      data = {};
+    } else if (clean === "/api/gantt/baseline" && method === "GET") {
+      data = { baseline: ganttBaseline, baselineAt: ganttBaselineAt };
+    } else if (clean === "/api/gantt/baseline" && method === "POST") {
+      ganttBaseline = {};
+      tasks.forEach(function (t) {
+        if (t.startDate || t.dueDate) ganttBaseline[t.id] = { startDate: t.startDate, dueDate: t.dueDate };
+      });
+      ganttBaselineAt = ts(0, 12, 0);
+      data = { baseline: ganttBaseline, baselineAt: ganttBaselineAt };
+    } else if (clean === "/api/gantt/baseline" && method === "DELETE") {
+      ganttBaseline = {};
+      ganttBaselineAt = null;
+      data = {};
+    } else if (clean === "/api/gantt/load") {
+      data = mockGanttLoad(u);
+    } else if (clean === "/api/gantt/share" && method === "GET") {
+      data = { token: "previewtoken", workspaceId: "W1", createdAt: ts(0, 9, 0), expiresAt: ts(30, 9, 0) };
+    } else if (clean === "/api/gantt/share" && method === "POST") {
+      data = { token: "previewtoken", workspaceId: "W1", createdAt: ts(0, 9, 0), expiresAt: ts(30, 9, 0) };
+    } else if (clean === "/api/gantt/share" && method === "DELETE") {
+      data = {};
+    } else if (clean === "/api/share/gantt") {
+      data = { workspaceName: "我的看板", generatedAt: ts(0, 10, 0), baselineAt: ganttBaselineAt,
+               tasks: tasks, deps: ganttDeps, baseline: ganttBaseline };
     } else if (clean === "/api/review") {
       /* 带上 weekOffset：翻上一周要看到不同的数据，否则测不出「AI 周报跟着周走」 */
       var wM = /[?&]weekOffset=(-?\d+)/.exec(u);

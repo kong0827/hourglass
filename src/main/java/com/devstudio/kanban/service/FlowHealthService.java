@@ -142,15 +142,19 @@ public class FlowHealthService {
             int cross = list == null ? 0 : list.size();
             movesOfTask.put(t.getId(), cross);
 
+            /* 早于统计区间创建的任务：首段从区间起点算，别让几年前的任务把 90 天口径撑爆 */
+            LocalDateTime segStart = (t.getCreatedAt() == null || t.getCreatedAt().isBefore(since))
+                    ? since : t.getCreatedAt();
+
             if (list == null || list.isEmpty()) {
                 /* 从没拖过列：一直待在初始列。用当前列近似 —— 没移动过就等于初始列 */
                 if (t.getBoardColumn() != null) {
-                    addSegment(acc, t.getBoardColumn(), t.getCreatedAt(), now, true);
+                    addSegment(acc, t.getBoardColumn(), segStart, now, true);
                 }
                 continue;
             }
             /* 首段：创建 → 第一次移动，起点列取第一次移动的 from */
-            addSegment(acc, list.get(0).from, t.getCreatedAt(), list.get(0).at, false);
+            addSegment(acc, list.get(0).from, segStart, list.get(0).at, false);
             for (int i = 0; i < list.size(); i++) {
                 LocalDateTime end = (i + 1 < list.size()) ? list.get(i + 1).at : null;
                 /* 最后一段还没结束：截止时间用 now，并且标记为 ongoing

@@ -14,18 +14,23 @@ import com.devstudio.kanban.entity.Subtask;
 import com.devstudio.kanban.entity.Tag;
 import com.devstudio.kanban.entity.TagTaskRow;
 import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.TaskBaseline;
 import com.devstudio.kanban.entity.TaskComment;
+import com.devstudio.kanban.entity.TaskDependency;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.entity.TimeLog;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
+import com.devstudio.kanban.mapper.TaskBaselineMapper;
 import com.devstudio.kanban.mapper.TaskCommentMapper;
+import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
@@ -77,6 +82,9 @@ public class BackupService {
     private final AppNotificationMapper appNotificationMapper;
     private final RequirementDocMapper requirementDocMapper;
     private final DevBranchMapper devBranchMapper;
+    private final TaskDependencyMapper dependencyMapper;
+    private final TaskBaselineMapper baselineMapper;
+    private final GanttShareMapper ganttShareMapper;
     private final TaskCompletionService completionService;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
@@ -87,6 +95,9 @@ public class BackupService {
                          AppNotificationMapper appNotificationMapper,
                          RequirementDocMapper requirementDocMapper,
                          DevBranchMapper devBranchMapper,
+                         TaskDependencyMapper dependencyMapper,
+                         TaskBaselineMapper baselineMapper,
+                         GanttShareMapper ganttShareMapper,
                          TaskCompletionService completionService) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
@@ -101,12 +112,15 @@ public class BackupService {
         this.appNotificationMapper = appNotificationMapper;
         this.requirementDocMapper = requirementDocMapper;
         this.devBranchMapper = devBranchMapper;
+        this.dependencyMapper = dependencyMapper;
+        this.baselineMapper = baselineMapper;
+        this.ganttShareMapper = ganttShareMapper;
         this.completionService = completionService;
     }
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(4);
+        data.setV(5);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -158,6 +172,7 @@ public class BackupService {
             b.setStart(t.getStartDate() == null ? null : t.getStartDate().toString());
             b.setDue(t.getDueDate() == null ? null : t.getDueDate().toString());
             b.setProgress(t.getProgress());
+            b.setIsMilestone(Boolean.TRUE.equals(t.getIsMilestone()));
             b.setNote(t.getNote());
             b.setReqId(t.getReqId());
             b.setReqDocId(t.getReqDocId());
@@ -215,6 +230,40 @@ public class BackupService {
             comments.add(bc);
         }
         data.setComments(comments);
+
+        /* 甘特依赖与基线（v5）：只导出两端都在本次备份任务集合里的边，避免悬挂 */
+        Set<String> exportedTaskIds = new HashSet<String>();
+        for (Task t : all) {
+            exportedTaskIds.add(t.getId());
+        }
+        List<BackupData.BackupDependency> deps = new ArrayList<BackupData.BackupDependency>();
+        for (TaskDependency d : dependencyMapper.selectByWorkspace(workspaceId)) {
+            if (!exportedTaskIds.contains(d.getFromTaskId()) || !exportedTaskIds.contains(d.getToTaskId())) {
+                continue;
+            }
+            BackupData.BackupDependency bd = new BackupData.BackupDependency();
+            bd.setFrom(d.getFromTaskId());
+            bd.setTo(d.getToTaskId());
+            bd.setType(d.getDepType());
+            bd.setLag(d.getLagDays());
+            deps.add(bd);
+        }
+        data.setDeps(deps);
+
+        List<BackupData.BackupBaseline> baseline = new ArrayList<BackupData.BackupBaseline>();
+        for (TaskBaseline tb : baselineMapper.selectByWorkspace(workspaceId)) {
+            if (!exportedTaskIds.contains(tb.getTaskId())) {
+                continue;
+            }
+            BackupData.BackupBaseline bb = new BackupData.BackupBaseline();
+            bb.setTaskId(tb.getTaskId());
+            bb.setStart(tb.getStartDate() == null ? null : tb.getStartDate().toString());
+            bb.setDue(tb.getDueDate() == null ? null : tb.getDueDate().toString());
+            baseline.add(bb);
+        }
+        data.setBaseline(baseline);
+        LocalDateTime baselineAt = baselineMapper.selectCapturedAt(workspaceId);
+        data.setBaselineAt(baselineAt == null ? null : baselineAt.format(ISO_TS));
         return data;
     }
 
@@ -227,6 +276,11 @@ public class BackupService {
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
         // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"
         taskMapper.deleteAllByWorkspace(workspaceId);
+        /* 依赖/基线挂在任务 ID 上，任务被清空后必须一起清，否则会挂到导入后的同名任务 */
+        dependencyMapper.deleteByWorkspace(workspaceId);
+        baselineMapper.deleteByWorkspace(workspaceId);
+        /* 覆盖导入后旧分享链接不应继续对外暴露新数据 */
+        ganttShareMapper.deleteByWorkspace(workspaceId);
         reqMapper.deleteAllByWorkspace(workspaceId);
         subtaskMapper.deleteAllByWorkspace(workspaceId);
         tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
@@ -395,6 +449,14 @@ public class BackupService {
             t.setBoardColumn(col);
             t.setStartDate(parseDate(b.getStart()));
             t.setDueDate(parseDate(b.getDue()));
+            t.setIsMilestone(Boolean.TRUE.equals(b.getIsMilestone()));
+            if (Boolean.TRUE.equals(t.getIsMilestone())) {
+                LocalDate milestoneDay = t.getStartDate() != null ? t.getStartDate() : t.getDueDate();
+                if (milestoneDay != null) {
+                    t.setStartDate(milestoneDay);
+                    t.setDueDate(milestoneDay);
+                }
+            }
             t.setCompletedAt(parseDate(b.getCompletedAt()));
             t.setCreatedAt(parseTs(b.getCreatedAt()));
             String reqId = Texts.trimToNull(b.getReqId());
@@ -529,6 +591,85 @@ public class BackupService {
                 }
             }
             taskCount++;
+        }
+
+        // 恢复依赖：任务 ID 可能被重映射；跳过自环、重复边与成环边
+        if (data.getDeps() != null) {
+            Map<String, Set<String>> adj = new HashMap<String, Set<String>>();
+            Set<String> seenEdges = new HashSet<String>();
+            for (BackupData.BackupDependency d : data.getDeps()) {
+                if (d == null) {
+                    continue;
+                }
+                String depFrom = taskIdMap.get(Texts.trimToNull(d.getFrom()));
+                String depTo = taskIdMap.get(Texts.trimToNull(d.getTo()));
+                if (depFrom == null || depTo == null || depFrom.equals(depTo)) {
+                    continue;
+                }
+                if (!taskIds.contains(depFrom) || !taskIds.contains(depTo)) {
+                    continue;
+                }
+                if (!seenEdges.add(depFrom + ">" + depTo)) {
+                    continue;
+                }
+                if (reachable(adj, depTo, depFrom)) {
+                    continue;
+                }
+                String depType = oneOf(d.getType(), new String[]{"FS", "SS", "FF", "SF"}, "FS");
+                int lag = d.getLag() == null ? 0 : Math.max(-365, Math.min(365, d.getLag()));
+                TaskDependency dep = new TaskDependency();
+                dep.setId(Ids.gen("D"));
+                dep.setWorkspaceId(workspaceId);
+                dep.setFromTaskId(depFrom);
+                dep.setToTaskId(depTo);
+                dep.setDepType(depType);
+                dep.setLagDays(lag);
+                try {
+                    dependencyMapper.insert(dep);
+                    Set<String> next = adj.get(depFrom);
+                    if (next == null) {
+                        next = new HashSet<String>();
+                        adj.put(depFrom, next);
+                    }
+                    next.add(depTo);
+                } catch (Exception ignored) {
+                    // 唯一键冲突等异常：跳过该边
+                }
+            }
+        }
+
+        // 恢复基线：只保留本次导入里存在的任务
+        if (data.getBaseline() != null) {
+            LocalDateTime captured = parseTs(data.getBaselineAt());
+            if (captured == null) {
+                captured = LocalDateTime.now();
+            }
+            List<TaskBaseline> baselineRows = new ArrayList<TaskBaseline>();
+            Set<String> seenBaseline = new HashSet<String>();
+            for (BackupData.BackupBaseline bb : data.getBaseline()) {
+                if (bb == null) {
+                    continue;
+                }
+                String mapped = taskIdMap.get(Texts.trimToNull(bb.getTaskId()));
+                if (mapped == null || !taskIds.contains(mapped) || !seenBaseline.add(mapped)) {
+                    continue;
+                }
+                LocalDate start = parseDate(bb.getStart());
+                LocalDate due = parseDate(bb.getDue());
+                if (start == null && due == null) {
+                    continue;
+                }
+                TaskBaseline tb = new TaskBaseline();
+                tb.setWorkspaceId(workspaceId);
+                tb.setTaskId(mapped);
+                tb.setStartDate(start);
+                tb.setDueDate(due);
+                tb.setCapturedAt(captured);
+                baselineRows.add(tb);
+            }
+            if (!baselineRows.isEmpty()) {
+                baselineMapper.insertBatch(baselineRows);
+            }
         }
 
         // 恢复循环派生关联：等到全部任务落库后，按 ID 映射校验目标存在性再写回（旧备份无此字段则跳过）
@@ -718,6 +859,29 @@ public class BackupService {
         }
         String byName = colNameToId.get(c);
         return byName != null ? byName : Consts.COL_BACKLOG;
+    }
+
+    private static boolean reachable(Map<String, Set<String>> adj, String from, String to) {
+        if (from == null || to == null) {
+            return false;
+        }
+        Set<String> seen = new HashSet<String>();
+        List<String> stack = new ArrayList<String>();
+        stack.add(from);
+        while (!stack.isEmpty()) {
+            String cur = stack.remove(stack.size() - 1);
+            if (!seen.add(cur)) {
+                continue;
+            }
+            if (cur.equals(to)) {
+                return true;
+            }
+            Set<String> next = adj.get(cur);
+            if (next != null) {
+                stack.addAll(next);
+            }
+        }
+        return false;
     }
 
     private String oneOf(String value, String[] allowed, String fallback) {

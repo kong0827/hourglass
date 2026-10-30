@@ -27,6 +27,11 @@ public interface RequirementDocMapper {
     /** 需求删除时，把关联到它的任务解绑（任务本身保留） */
     int clearTaskRef(@Param("workspaceId") String workspaceId, @Param("reqDocId") String reqDocId);
 
+    /** 需求换项目：只解绑仍挂在其它项目下的任务引用 */
+    int clearTaskRefExceptReq(@Param("workspaceId") String workspaceId,
+                              @Param("reqDocId") String reqDocId,
+                              @Param("reqId") String reqId);
+
     /** 项目删除时，连带清掉它下面的所有需求（返回被清掉的需求 ID，便于再清任务引用） */
     List<String> selectIdsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

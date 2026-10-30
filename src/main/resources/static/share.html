@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<meta name="referrer" content="no-referrer" />
+<title>甘特图分享 · 工作台</title>
+<link rel="stylesheet" href="css/app.css" />
+<link rel="stylesheet" href="css/share.css" />
+<script>
+(function(){try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();
+</script>
+</head>
+<body data-view="gantt">
+<div class="app">
+  <div class="main">
+    <section class="view on" id="view-gantt" aria-label="甘特图只读分享">
+      <div class="view-page wide gantt-page">
+        <div class="share-top">
+          <div class="share-title">
+            <h1 id="shareWsName">甘特图</h1>
+            <p id="shareMeta">只读分享</p>
+          </div>
+          <div class="share-tools">
+            <label class="row row-gap" style="gap:6px">
+              <span class="toolbar-meta is-strong">显示已完成</span>
+              <input type="checkbox" class="cbx" id="shareShowDone" checked />
+            </label>
+            <label class="row row-gap" style="gap:6px">
+              <span class="toolbar-meta is-strong">刻度</span>
+              <select id="shareScale" class="mini-select">
+                <option value="day">日</option>
+                <option value="week">周</option>
+                <option value="month">月</option>
+              </select>
+            </label>
+            <button class="btn sm" type="button" id="shareToday">今天</button>
+          </div>
+        </div>
+        <div class="gantt-scroll" id="shareScroll"></div>
+        <div class="gantt-legend">
+          <span class="gl-item"><i style="background:var(--p2)"></i>进行中</span>
+          <span class="gl-item"><i style="background:var(--danger)"></i>逾期</span>
+          <span class="gl-item"><i class="dashed"></i>阻塞</span>
+          <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
+          <span class="gl-item"><i class="ms"></i>里程碑</span>
+          <span class="gl-item"><i class="dep"></i>依赖</span>
+          <span class="gantt-legend-hint">只读链接 · 数据由分享者实时生成</span>
+        </div>
+        <p class="share-foot" id="shareFoot"></p>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="js/share.js"></script>
+</body>
+</html>

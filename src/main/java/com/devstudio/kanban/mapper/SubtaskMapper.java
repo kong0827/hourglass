@@ -27,4 +27,5 @@ public interface SubtaskMapper {
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 
     List<SubtaskAgg> countByTask(@Param("workspaceId") String workspaceId);
+    List<SubtaskAgg> countByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 }

@@ -83,7 +83,8 @@
 
   function modalEls() {
     if (!MODALS) {
-      MODALS = ["dlgWsCreate", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm"]
+      MODALS = ["dlgWsCreate", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm", "dlgGanttShare",
+        "dlgNewReqDoc", "dlgReqDocClose", "dlgAiSplit", "dlgAiAudit", "dlgBranch"]
         .map(function (id) { return document.getElementById(id); })
         .filter(Boolean);
     }
@@ -366,7 +367,8 @@
     [["dlgWsCreate", ["dlgWsCreateX", "dlgWsCreateCancel"]],
      ["dlgViewName", ["dlgViewNameX", "dlgViewNameCancel"]],
      ["dlgWsDelete", ["dlgWsDeleteX", "dlgWsDeleteCancel"]],
-     ["dlgUserPwd", ["dlgUserPwdX", "dlgUserPwdCancel"]]].forEach(function (pair) {
+     ["dlgUserPwd", ["dlgUserPwdX", "dlgUserPwdCancel"]],
+     ["dlgGanttShare", ["ganttShareClose"]]].forEach(function (pair) {
       var m = document.getElementById(pair[0]);
       if (!m) return;
       pair[1].forEach(function (id) {

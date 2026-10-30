@@ -29,6 +29,8 @@ public class Task {
     private String branchId;
     /** 0-100 */
     private Integer progress;
+    /** 里程碑：单日节点，甘特图用菱形展示；不参与逾期天数以外的排期计算 */
+    private Boolean isMilestone = Boolean.FALSE;
     /** 预估耗时（分钟，空=没估过）。和 totalMinutes（实际投入）相除就是估时偏差 */
     private Integer estimateMinutes;
     private String note;

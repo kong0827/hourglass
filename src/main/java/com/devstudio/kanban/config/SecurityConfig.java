@@ -33,6 +33,8 @@ public class SecurityConfig {
                 .antMatchers("/api/health").permitAll()
                 // 邀请链接：访客可查看邀请信息（join 加入需登录，走下方 authenticated）
                 .antMatchers(HttpMethod.GET, "/api/invite/**").permitAll()
+                // 甘特图只读分享：凭 token 访问，不需要登录（只读、无写接口）
+                .antMatchers(HttpMethod.GET, "/api/share/**").permitAll()
                 .antMatchers("/api/admin/**").hasRole("ADMIN")
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

@@ -4,6 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>工作台 · 任务看板</title>
+<script>
+/* 首屏前应用主题，避免深色模式闪白 */
+(function(){try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();
+</script>
 <link rel="stylesheet" href="css/app.css" />
   <!-- 富文本编辑器 SunEditor（本地托管，离线可用；原生支持表格） -->
   <link rel="stylesheet" href="/vendor/suneditor/suneditor.min.css" />
@@ -191,6 +195,14 @@
               新建项目
             </button>
           </div>
+        </div>
+
+        <div style="position:relative">
+          <button class="icon-btn" id="btnTheme" type="button" aria-label="切换深色模式" title="浅色 / 深色">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16.2 11.4A6.6 6.6 0 0 1 8.6 3.8a6.8 6.8 0 1 0 7.6 7.6Z"/>
+            </svg>
+          </button>
         </div>
 
         <div style="position:relative">
@@ -393,6 +405,7 @@
                   <option value="40">宽松</option>
                 </select>
               </label>
+              <button class="btn sm primary" type="button" id="ganttNew">新建任务</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
           </div>
@@ -412,10 +425,30 @@
                   <option value="none">不分组</option>
                   <option value="project">按项目</option>
                   <option value="owner">按负责人</option>
+                  <option value="status">按状态</option>
+                  <option value="category">按分类</option>
+                  <option value="priority">按优先级</option>
                 </select>
               </label>
+              <button class="btn sm ghost" type="button" id="ganttUndo" disabled title="撤销上一次改期（Ctrl+Z）">撤销</button>
+              <div class="gantt-filter-wrap">
+                <button class="btn sm ghost" type="button" id="ganttViewsBtn" aria-haspopup="true" aria-expanded="false">视图</button>
+                <div class="menu popover" id="ganttViewsMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
+              </div>
             </div>
             <div class="gantt-tools-right">
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">刻度</span>
+                <select id="ganttScale" class="mini-select" aria-label="时间刻度">
+                  <option value="day">日</option>
+                  <option value="week">周</option>
+                  <option value="month">月</option>
+                </select>
+              </label>
+              <div class="gantt-filter-wrap">
+                <button class="btn sm ghost" type="button" id="ganttAnalysisBtn" aria-haspopup="true" aria-expanded="false">分析</button>
+                <div class="menu popover" id="ganttAnalysisMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
+              </div>
               <div class="seg mini gantt-range-mode" id="ganttRangeMode" role="group" aria-label="时间范围模式">
                 <button type="button" data-gantt-range="auto" aria-pressed="true" title="自动覆盖全部任务并包含今天">适配全部</button>
                 <button type="button" data-gantt-range="month" aria-pressed="false" title="按自然月查看">月视图</button>
@@ -424,8 +457,21 @@
               <span class="gantt-range-label" id="ganttRangeLabel" aria-live="polite">自动范围</span>
               <button class="btn sm ghost gantt-range-btn" type="button" id="ganttNextMonth" aria-label="下一月" title="下一月（自动切到月视图）">›</button>
               <button class="btn sm" type="button" id="ganttToday">今天</button>
+              <div class="gantt-filter-wrap">
+                <button class="btn sm ghost" type="button" id="ganttExportBtn" aria-haspopup="true" aria-expanded="false">导出</button>
+                <div class="menu popover" id="ganttExportMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
+              </div>
             </div>
           </div>
+          <section class="gantt-load" id="ganttLoad" hidden aria-label="资源负载">
+            <div class="gantt-load-head">
+              <strong>资源负载</strong>
+              <span class="foot-note" id="ganttLoadRange"></span>
+              <button class="icon-btn sm" type="button" id="ganttLoadClose" aria-label="关闭负载面板">×</button>
+            </div>
+            <div class="gantt-load-body" id="ganttLoadBody"></div>
+          </section>
+          <div class="menu popover" id="ganttDepMenu" hidden style="left:0;top:0"></div>
           <div class="gantt-notice" id="ganttNotice" hidden></div>
           <div class="gantt-scroll" id="ganttScroll"></div>
           <div class="gantt-legend" aria-label="甘特图图例">
@@ -433,7 +479,9 @@
             <span class="gl-item"><i style="background:var(--danger)"></i>逾期</span>
             <span class="gl-item"><i class="dashed"></i>阻塞</span>
             <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
-            <span class="gantt-legend-hint">拖动条改期 · 拖两端调起止 · Esc 取消 · 把未排期任务拖到时间轴即可排期</span>
+            <span class="gl-item"><i class="ms"></i>里程碑</span>
+            <span class="gl-item"><i class="dep"></i>等待依赖</span>
+            <span class="gantt-legend-hint">拖动改期 · 拖两端调起止 · Ctrl 点选后批量拖动 · 拖条尾圆点连依赖 · 双击空白新建 · Ctrl+Z 撤销 · Esc 取消</span>
           </div>
           <details class="unplanned-box" id="ganttUnplannedBox" hidden>
             <summary>
@@ -1373,6 +1421,12 @@
           </div>
         </div>
 
+        <label class="row row-gap" style="gap:8px;padding:2px 0 6px">
+          <input type="checkbox" class="cbx" id="iMilestone" />
+          <span class="toolbar-meta is-strong">里程碑（单日节点）</span>
+          <span class="foot-note">勾选后甘特图用菱形展示，不占工期</span>
+        </label>
+
         <div class="form-grid">
           <div class="field">
             <label for="iReq">所属项目</label>
@@ -1675,6 +1729,24 @@
   </div>
 </div>
 
+<!-- 甘特图分享：只读链接（30 天有效） -->
+        <div class="modal-layer" id="dlgGanttShare" role="dialog" aria-modal="true" aria-labelledby="dlgGanttShareTitle">
+          <div class="sheet">
+            <h3 class="reqdoc-dlg-title" id="dlgGanttShareTitle">分享甘特图</h3>
+            <p class="reqdoc-dlg-msg">拿到链接的人无需登录即可查看只读甘特图；链接 30 天有效，可随时停止分享。</p>
+            <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>只读链接</span>
+                <input id="ganttShareUrl" type="text" readonly placeholder="点击下方「生成链接」" />
+              </label>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn danger" type="button" id="ganttShareRevoke">停止分享</button>
+              <button class="btn" type="button" id="ganttShareClose">关闭</button>
+              <button class="btn primary" type="button" id="ganttShareCopy">复制链接</button>
+            </div>
+          </div>
+        </div>
 <div class="toast-layer" id="toastWrap" aria-live="polite"></div>
 
 <script src="js/icons.js"></script>

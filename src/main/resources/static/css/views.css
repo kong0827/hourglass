@@ -940,7 +940,7 @@
 /* ===================== 分支管理（2026-10-26） =====================
    一条分支 = 一次「开发 → 测 → 合 → 发布」。四列按状态分组，卡片上的
    状态标签就是切换入口（点开浮层选另一档）；时间只记首次进入，操作记录记每一次。 */
-.br-page{max-width:1360px;}
+.br-page{max-width:2000px;}
 .br-search input{
   height:30px;width:200px;padding:0 10px;border:1px solid var(--border);
   border-radius:var(--r-sm);background:var(--surface);font:inherit;font-size:12.5px;color:var(--text);

@@ -92,8 +92,8 @@
       .then(function () {
         var next = null;
         try { next = new URLSearchParams(window.location.search).get("next"); } catch (e2) { /* 忽略 */ }
-        // 仅允许站内相对路径回跳，防开放重定向
-        if (next && next.charAt(0) === "/" && next.charAt(1) !== "/") {
+        // 仅允许站内相对路径回跳，防开放重定向（反斜杠会被浏览器当作斜杠）
+        if (next && next.charAt(0) === "/" && next.charAt(1) !== "/" && next.indexOf("\\") === -1) {
           window.location.href = next;
           return;
         }

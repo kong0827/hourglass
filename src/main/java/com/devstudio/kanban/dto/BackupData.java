@@ -18,6 +18,28 @@ public class BackupData {
     private List<BackupColumn> columns;
     /** 任务评论（v4 起纳入；旧备份没有该字段时导入会清空评论，前端会明确提示） */
     private List<BackupComment> comments;
+    /** 甘特图依赖（v5 起纳入；旧备份没有该字段时导入会清空依赖） */
+    private List<BackupDependency> deps;
+    /** 甘特图基线（v5 起纳入） */
+    private List<BackupBaseline> baseline;
+    /** 基线快照时间 */
+    private String baselineAt;
+
+    @Data
+    public static class BackupDependency {
+        private String from;
+        private String to;
+        /** FS/SS/FF/SF */
+        private String type;
+        private Integer lag;
+    }
+
+    @Data
+    public static class BackupBaseline {
+        private String taskId;
+        private String start;
+        private String due;
+    }
 
     @Data
     public static class BackupColumn {
@@ -61,6 +83,8 @@ public class BackupData {
         private String createdAt;
         /** 非空表示这条任务在回收站；导入时按原时间恢复（过期则由每日清理任务处理） */
         private String deletedAt;
+        /** 里程碑（v5 起；旧备份没有该字段按普通任务处理） */
+        private Boolean isMilestone;
     }
 
     @Data
