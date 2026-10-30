@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.BoardQuery;
 import com.devstudio.kanban.dto.BoardResponse;
 import com.devstudio.kanban.dto.CalendarResponse;
+import com.devstudio.kanban.dto.TaskBulkMoveRequest;
 import com.devstudio.kanban.dto.TaskListResponse;
 import com.devstudio.kanban.dto.TaskMoveRequest;
 import com.devstudio.kanban.dto.TaskSaveRequest;
@@ -159,6 +160,24 @@ public class TaskController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(taskService.move(userId, ws.getId(), id, req));
+    }
+
+    /** 列表页批量改列：统一走 move 语义 */
+    @PostMapping("/api/tasks/bulk-move")
+    public ApiResult<Map<String, Object>> bulkMove(@Valid @RequestBody TaskBulkMoveRequest req,
+                                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(taskService.bulkMove(userId, ws.getId(), req));
+    }
+
+    /** 取消完成：回到完成前所在列 */
+    @PostMapping("/api/tasks/{id}/reopen")
+    public ApiResult<Map<String, Object>> reopen(@PathVariable String id,
+                                                 @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(taskService.reopen(userId, ws.getId(), id));
     }
 
     /** 软删除：进回收站（30 天自动清理），撤销走 restore */

@@ -2,6 +2,7 @@ package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Consts;
+import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.common.WorkTime;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Task;
@@ -141,12 +142,21 @@ public class TimeLogService {
         if (!timeLogMapper.selectRunningAllByUser(userId).isEmpty()) {
             return null;
         }
+        /* 只接力“自己的任务”：共享空间里 A 完成自己的任务，不该自动把计时开到 B 的任务上 */
+        AppUser me = userMapper.selectById(userId);
+        String myName = me == null ? null : Texts.trimToNull(me.getDisplayName());
         Task next = null;
         for (Task t : taskMapper.selectAll(workspaceId)) {
             if (t.getDeletedAt() != null || !columnId.equals(t.getBoardColumn())) {
                 continue;
             }
             if (excludeTaskId != null && excludeTaskId.equals(t.getId())) {
+                continue;
+            }
+            boolean mine = t.getOwnerUserId() != null
+                    ? userId.equals(t.getOwnerUserId())
+                    : (myName != null && myName.equals(t.getOwner()));
+            if (!mine) {
                 continue;
             }
             if (next == null || sortKey(t) < sortKey(next)) {

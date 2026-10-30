@@ -31,4 +31,7 @@ public interface RequirementDocMapper {
     List<String> selectIdsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 删除空间时清空该空间的全部需求文档（含正文） */
+    int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

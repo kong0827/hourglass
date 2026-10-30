@@ -11,6 +11,9 @@ public interface TaskCommentMapper {
 
     List<TaskComment> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
+    /** 备份导出：空间内全部评论（含回收站任务上的评论） */
+    List<TaskComment> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
+
     TaskComment selectById(@Param("id") Long id);
 
     int insert(TaskComment comment);

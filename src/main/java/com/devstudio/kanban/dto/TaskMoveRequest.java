@@ -21,4 +21,11 @@ public class TaskMoveRequest {
      * 传 false = 不自动（例如"取消完成"回退到进行中，用户只是在纠正状态）。
      */
     private Boolean autoTimer;
+
+    /**
+     * 移到「已完成」后是否自动接力同列下一个任务开始计时。
+     * 不传 = 自动（拖拽/勾选完成沿用既有行为）；
+     * 批量移动传 false，避免批量整理数据时突然给别人或自己开表。
+     */
+    private Boolean autoResume;
 }

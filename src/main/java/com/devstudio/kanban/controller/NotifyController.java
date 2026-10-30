@@ -51,8 +51,10 @@ public class NotifyController {
         res.put("enabledSource", raw.getNotifyEnabled() == null ? "global" : "workspace");
         res.put("channel", notificationService.effectiveChannel(raw));
         res.put("channelSource", Texts.trimToNull(raw.getNotifyChannel()) == null ? "global" : "workspace");
-        res.put("workspaceHasAddress", Texts.trimToNull(raw.getNotifyWebhook()) != null);
+        res.put("workspaceHasAddress", notificationService.effectiveHook(raw) != null);
         res.put("hasToken", notificationService.effectiveToken(raw) != null);
+        /* 空间自己有没有存 Token（不回传原文）：前端据此提示“留空保持不变” */
+        res.put("workspaceHasToken", Texts.trimToNull(raw.getNotifyToken()) != null);
         res.put("lastAttemptAt", raw.getNotifyLastAt());
         String last = Texts.trimToNull(raw.getNotifyLastStatus());
         if (last == null) {

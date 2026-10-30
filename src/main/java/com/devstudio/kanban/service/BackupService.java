@@ -7,16 +7,21 @@ import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.BackupData;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
+import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.Requirement;
+import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Subtask;
 import com.devstudio.kanban.entity.Tag;
 import com.devstudio.kanban.entity.TagTaskRow;
 import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.TaskComment;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.entity.TimeLog;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
@@ -70,13 +75,19 @@ public class BackupService {
     private final WorkspaceMemberMapper memberMapper;
     private final TaskCommentMapper commentMapper;
     private final AppNotificationMapper appNotificationMapper;
+    private final RequirementDocMapper requirementDocMapper;
+    private final DevBranchMapper devBranchMapper;
+    private final TaskCompletionService completionService;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                          BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
                          WorkspaceService workspaceService, WorkspaceMemberMapper memberMapper,
                          TaskCommentMapper commentMapper,
-                         AppNotificationMapper appNotificationMapper) {
+                         AppNotificationMapper appNotificationMapper,
+                         RequirementDocMapper requirementDocMapper,
+                         DevBranchMapper devBranchMapper,
+                         TaskCompletionService completionService) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -88,14 +99,19 @@ public class BackupService {
         this.memberMapper = memberMapper;
         this.commentMapper = commentMapper;
         this.appNotificationMapper = appNotificationMapper;
+        this.requirementDocMapper = requirementDocMapper;
+        this.devBranchMapper = devBranchMapper;
+        this.completionService = completionService;
     }
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(3);
+        data.setV(4);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
-        List<Task> all = taskMapper.selectAll(workspaceId);
+        /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
+        List<Task> all = new ArrayList<Task>(taskMapper.selectAll(workspaceId));
+        all.addAll(taskMapper.selectDeleted(workspaceId));
         List<String> ids = new ArrayList<String>();
         for (Task t : all) {
             ids.add(t.getId());
@@ -144,6 +160,13 @@ public class BackupService {
             b.setProgress(t.getProgress());
             b.setNote(t.getNote());
             b.setReqId(t.getReqId());
+            b.setReqDocId(t.getReqDocId());
+            b.setBranchId(t.getBranchId());
+            b.setEstimateMinutes(t.getEstimateMinutes());
+            b.setBlocked(Boolean.TRUE.equals(t.getBlocked()));
+            b.setBlockedReason(t.getBlockedReason());
+            b.setOwnerUserId(t.getOwnerUserId());
+            b.setRemindTarget(t.getRemindTarget());
             b.setCompletedAt(t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
             b.setSubtasks(subMap.get(t.getId()));
             b.setTags(tagMap.get(t.getId()));
@@ -153,6 +176,7 @@ public class BackupService {
             b.setRemindSent(t.getRemindSent());
             b.setTimeLogs(timeMap.get(t.getId()));
             b.setCreatedAt(t.getCreatedAt() == null ? null : t.getCreatedAt().format(ISO_TS));
+            b.setDeletedAt(t.getDeletedAt() == null ? null : t.getDeletedAt().format(ISO_TS));
             tasks.add(b);
         }
         data.setTasks(tasks);
@@ -178,6 +202,19 @@ public class BackupService {
             reqs.add(b);
         }
         data.setReqs(reqs);
+
+        /* 评论是用户内容：导入会清空评论，因此备份必须带上，否则“导出→导入”会静默丢讨论 */
+        List<BackupData.BackupComment> comments = new ArrayList<BackupData.BackupComment>();
+        for (TaskComment c : commentMapper.selectAllByWorkspace(workspaceId)) {
+            BackupData.BackupComment bc = new BackupData.BackupComment();
+            bc.setTaskId(c.getTaskId());
+            bc.setAuthorId(c.getAuthorId());
+            bc.setAuthorName(c.getAuthorName());
+            bc.setContent(c.getContent());
+            bc.setCreatedAt(c.getCreatedAt() == null ? null : c.getCreatedAt().format(ISO_TS));
+            comments.add(bc);
+        }
+        data.setComments(comments);
         return data;
     }
 
@@ -195,6 +232,8 @@ public class BackupService {
         tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
         tagMapper.deleteTagsByWorkspace(workspaceId);
         timeLogMapper.deleteAllByWorkspace(workspaceId);
+        /* 完成归档是任务的派生物；先清再按导入后的任务重建，避免旧快照挂到新任务上 */
+        completionService.clearWorkspace(workspaceId);
         /* 第九轮审查 #1/#2：评论与任务通知随任务一起清，与"操作时间线保留"的口径区分开——
            时间线是审计记录，而评论与通知会把内容直接展示给用户；
            导入后任务 ID 可能被复用/重映射，留着旧记录就是可见的数据错乱（旧评论挂到新任务上）。 */
@@ -312,6 +351,7 @@ public class BackupService {
         /** (落库任务ID, 备份中的 recurNextId)：全部任务落库后再校验并恢复 */
         List<String[]> recurLinks = new ArrayList<String[]>();
         int taskCount = 0;
+        List<Task> importedDone = new ArrayList<Task>();
         for (BackupData.BackupTask b : data.getTasks()) {
             if (b == null) {
                 continue;
@@ -365,6 +405,35 @@ public class BackupService {
                 }
             }
             t.setReqId(reqId != null && reqIds.contains(reqId) ? reqId : null);
+            /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
+            String reqDocId = Texts.trimToNull(b.getReqDocId());
+            if (reqDocId != null) {
+                RequirementDoc doc = requirementDocMapper.selectById(reqDocId);
+                if (doc == null || !workspaceId.equals(doc.getWorkspaceId())
+                        || t.getReqId() == null || !t.getReqId().equals(doc.getReqId())) {
+                    reqDocId = null;
+                }
+            }
+            t.setReqDocId(reqDocId);
+            /* 关联分支：空间级分支池，必须存在且同空间 */
+            String branchId = Texts.trimToNull(b.getBranchId());
+            if (branchId != null) {
+                DevBranch br = devBranchMapper.selectById(branchId);
+                if (br == null || !workspaceId.equals(br.getWorkspaceId())) {
+                    branchId = null;
+                }
+            }
+            t.setBranchId(branchId);
+            Integer est = b.getEstimateMinutes();
+            t.setEstimateMinutes(est == null || est <= 0 ? null : Math.min(10080, est));
+            t.setBlocked(Boolean.TRUE.equals(b.getBlocked()));
+            t.setBlockedReason(Boolean.TRUE.equals(b.getBlocked())
+                    ? Texts.cut(Texts.trimToNull(b.getBlockedReason()), 120) : null);
+            /* 负责人账号只在目标空间成员内恢复；否则保留显示名文本，避免出现“幽灵账号” */
+            String ownerUserId = Texts.trimToNull(b.getOwnerUserId());
+            t.setOwnerUserId(ownerUserId != null && memberMapper.selectMember(workspaceId, ownerUserId) != null
+                    ? ownerUserId : null);
+            t.setRemindTarget(oneOf(b.getRemindTarget(), new String[]{"owner", "owner+admin"}, "owner"));
             Integer progress = b.getProgress();
             t.setProgress(progress == null ? 0 : Math.max(0, Math.min(100, progress)));
             t.setNote(Texts.cut(Texts.trimToNull(b.getNote()), 80));
@@ -382,6 +451,15 @@ public class BackupService {
             colSeq.put(col, sortOrder + 1);
 
             taskMapper.insert(t);
+
+            /* 回收站任务：按原删除时间放回回收站（不重新出现在看板） */
+            LocalDateTime deletedAt = parseTs(b.getDeletedAt());
+            if (deletedAt != null) {
+                taskMapper.setDeletedAt(id, deletedAt);
+            }
+            if (Consts.COL_DONE.equals(t.getBoardColumn())) {
+                importedDone.add(t);
+            }
 
             if (b.getSubtasks() != null) {
                 for (BackupData.BackupSubtask sb : b.getSubtasks()) {
@@ -462,9 +540,43 @@ public class BackupService {
             taskMapper.setRecurNext(link[0], nextId);
         }
 
+        /* 评论：任务 ID 可能因跨空间冲突被重映射，按 taskIdMap 回指；不在本次备份里的任务评论跳过 */
+        int commentCount = 0;
+        if (data.getComments() != null) {
+            for (BackupData.BackupComment c : data.getComments()) {
+                if (c == null) {
+                    continue;
+                }
+                String originalTaskId = Texts.trimToNull(c.getTaskId());
+                String mappedTaskId = originalTaskId == null ? null : taskIdMap.get(originalTaskId);
+                if (mappedTaskId == null) {
+                    continue;
+                }
+                String content = Texts.cut(Texts.trimToNull(c.getContent()), 500);
+                if (content == null) {
+                    continue;
+                }
+                TaskComment tc = new TaskComment();
+                tc.setTaskId(mappedTaskId);
+                tc.setWorkspaceId(workspaceId);
+                tc.setAuthorId(Texts.cut(Texts.trimToNull(c.getAuthorId()), 32));
+                tc.setAuthorName(Texts.cut(Texts.trimToNull(c.getAuthorName()), 32));
+                tc.setContent(content);
+                tc.setCreatedAt(parseTs(c.getCreatedAt()));
+                commentMapper.insert(tc);
+                commentCount++;
+            }
+        }
+
+        /* 完成归档是任务快照的派生物：按导入后的任务与工时重建「任务清单」 */
+        for (Task t : importedDone) {
+            completionService.archive(t);
+        }
+
         BackupData.ImportResult result = new BackupData.ImportResult();
         result.setTasks(taskCount);
         result.setReqs(reqCount);
+        result.setComments(commentCount);
         return result;
     }
 

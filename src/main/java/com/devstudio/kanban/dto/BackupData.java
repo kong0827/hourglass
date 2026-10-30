@@ -16,6 +16,8 @@ public class BackupData {
     private List<BackupReq> reqs;
     /** 看板列定义（跨空间导入时保证自定义列可用） */
     private List<BackupColumn> columns;
+    /** 任务评论（v4 起纳入；旧备份没有该字段时导入会清空评论，前端会明确提示） */
+    private List<BackupComment> comments;
 
     @Data
     public static class BackupColumn {
@@ -39,6 +41,14 @@ public class BackupData {
         private Integer progress;
         private String note;
         private String reqId;
+        /** 关联需求文档 / 分支 / 预估工时：任务数据的完整往返（v4 起） */
+        private String reqDocId;
+        private String branchId;
+        private Integer estimateMinutes;
+        private Boolean blocked;
+        private String blockedReason;
+        private String ownerUserId;
+        private String remindTarget;
         private String completedAt;
         private List<BackupSubtask> subtasks;
         private List<String> tags;
@@ -49,6 +59,8 @@ public class BackupData {
         private Boolean remindSent;
         private List<BackupTimeLog> timeLogs;
         private String createdAt;
+        /** 非空表示这条任务在回收站；导入时按原时间恢复（过期则由每日清理任务处理） */
+        private String deletedAt;
     }
 
     @Data
@@ -74,8 +86,18 @@ public class BackupData {
     }
 
     @Data
+    public static class BackupComment {
+        private String taskId;
+        private String authorId;
+        private String authorName;
+        private String content;
+        private String createdAt;
+    }
+
+    @Data
     public static class ImportResult {
         private int tasks;
         private int reqs;
+        private int comments;
     }
 }

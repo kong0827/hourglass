@@ -13,4 +13,6 @@ public class ReqProgress {
     private int progressPct;
     private int taskCount;
     private int doneCount;
+    /** 该项目下的需求文档数（删除项目会连带删除，确认框据此提示） */
+    private int docCount;
 }

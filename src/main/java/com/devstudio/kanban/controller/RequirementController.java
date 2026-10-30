@@ -4,6 +4,7 @@ import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.ReqProgress;
 import com.devstudio.kanban.dto.ReqSaveRequest;
+import com.devstudio.kanban.dto.RequirementDeleteResult;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.RequirementService;
@@ -18,9 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 public class RequirementController {
@@ -54,15 +53,12 @@ public class RequirementController {
         return ApiResult.ok(requirementService.update(ws.getId(), id, req));
     }
 
-    /** 删除项目：其下任务保留，仅解除关联 */
+    /** 删除项目：其下任务保留（解除关联），其下需求文档一并删除 */
     @DeleteMapping("/api/reqs/{id}")
-    public ApiResult<Map<String, Object>> delete(@PathVariable String id,
-                                                 @RequestParam(required = false) String workspace) {
+    public ApiResult<RequirementDeleteResult> delete(@PathVariable String id,
+                                                     @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        int unlinked = requirementService.delete(userId, ws.getId(), id);
-        Map<String, Object> data = new LinkedHashMap<String, Object>();
-        data.put("unlinked", unlinked);
-        return ApiResult.ok(data);
+        return ApiResult.ok(requirementService.delete(userId, ws.getId(), id));
     }
 }

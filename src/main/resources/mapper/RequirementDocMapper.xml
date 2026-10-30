@@ -63,4 +63,8 @@
   <delete id="deleteByReq">
     DELETE FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM requirement_doc WHERE workspace_id = #{workspaceId}
+  </delete>
 </mapper>

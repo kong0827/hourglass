@@ -126,8 +126,18 @@ public class RequirementDocService {
 
     /** 项目被删除时连带清理（由 RequirementService 调用） */
     @Transactional
-    public void deleteByReq(String workspaceId, String reqId) {
-        docMapper.deleteByReq(workspaceId, reqId);
+    public int deleteByReq(String workspaceId, String reqId) {
+        /* 需求没了，任务上的 req_doc_id 必须一起解绑；
+           只删 requirement_doc 会留下悬空引用，任务详情里看不到但数据已经不一致。 */
+        for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
+            docMapper.clearTaskRef(workspaceId, docId);
+        }
+        return docMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    /** 某项目下的需求文档数（项目列表展示 / 删除前提示用） */
+    public int countByReq(String workspaceId, String reqId) {
+        return docMapper.countByReq(workspaceId, reqId);
     }
 
     /**

@@ -11,14 +11,21 @@
     ORDER BY c.id ASC
   </select>
 
+  <select id="selectAllByWorkspace" resultType="TaskComment">
+    SELECT id, task_id, workspace_id, author_id, author_name, content, created_at
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY task_id, id
+  </select>
+
   <select id="selectById" resultType="TaskComment">
     SELECT id, task_id, workspace_id, author_id, author_name, content, created_at
     FROM task_comment WHERE id = #{id}
   </select>
 
   <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-    INSERT INTO task_comment (task_id, workspace_id, author_id, author_name, content)
-    VALUES (#{taskId}, #{workspaceId}, #{authorId}, #{authorName}, #{content})
+    INSERT INTO task_comment (task_id, workspace_id, author_id, author_name, content, created_at)
+    VALUES (#{taskId}, #{workspaceId}, #{authorId}, #{authorName}, #{content}, COALESCE(#{createdAt,jdbcType=TIMESTAMP}, NOW()))
   </insert>
 
   <delete id="deleteById">

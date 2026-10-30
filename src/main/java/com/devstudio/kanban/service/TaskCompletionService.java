@@ -101,6 +101,11 @@ public class TaskCompletionService {
         return recordMapper.selectByRange(workspaceId, from, from.plusMonths(1));
     }
 
+    /** 清空空间 / 覆盖导入前清空完成归档，避免旧快照挂在新任务上 */
+    public int clearWorkspace(String workspaceId) {
+        return recordMapper.deleteAllByWorkspace(workspaceId);
+    }
+
     private String truncate(String s, int max) {
         if (s == null) {
             return null;

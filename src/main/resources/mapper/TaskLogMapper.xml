@@ -18,6 +18,19 @@
     LIMIT 200
   </select>
 
+  <!-- 取消完成时还原“完成前所在列”：取最近一次进入 done 的跨列移动 -->
+  <select id="selectLastDoneFromColumn" resultType="string">
+    SELECT from_column
+    FROM task_log
+    WHERE workspace_id = #{workspaceId}
+      AND task_id = #{taskId}
+      AND action = 'move'
+      AND to_column = 'done'
+      AND from_column IS NOT NULL
+    ORDER BY id DESC
+    LIMIT 1
+  </select>
+
   <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
   <select id="selectByWorkspace" resultType="TaskLog">
     SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,

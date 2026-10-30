@@ -100,6 +100,10 @@
     UPDATE task SET deleted_at = NULL, updated_at = NOW() WHERE id = #{id}
   </update>
 
+  <update id="setDeletedAt">
+    UPDATE task SET deleted_at = #{deletedAt}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
   <delete id="deleteById">
     DELETE FROM task WHERE id = #{id}
   </delete>

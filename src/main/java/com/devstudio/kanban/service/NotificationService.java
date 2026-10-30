@@ -126,6 +126,24 @@ public class NotificationService {
         return tk != null ? tk : Texts.trimToNull(token);
     }
 
+    /**
+     * 实际发送地址：空间地址优先；Server 酱只填了 Token 时按官方端点补全，
+     * 与设置页「只填 Token 时服务端会自动补全端点」的提示保持一致。
+     */
+    public String effectiveHook(Workspace ws) {
+        String hook = Texts.trimToNull(ws == null ? null : ws.getNotifyWebhook());
+        if (hook != null) {
+            return hook;
+        }
+        if ("serverchan".equals(effectiveChannel(ws))) {
+            String tk = effectiveToken(ws);
+            if (tk != null) {
+                return "https://sctapi.ftqq.com/" + tk + ".send";
+            }
+        }
+        return null;
+    }
+
     /* ==================== 定时任务 ==================== */
 
     @Scheduled(cron = "${app.notify.cron:0 0 9 * * *}")
@@ -176,7 +194,7 @@ public class NotificationService {
     /** 单空间一轮提醒扫描（本方法内的异常由调用方按空间兜住） */
     private void scanWorkspaceReminders(Workspace ws, LocalDateTime now) {
         boolean wsEnabled = effectiveEnabled(ws);
-        String hook = Texts.trimToNull(ws.getNotifyWebhook());
+        String hook = effectiveHook(ws);
         for (Task t : taskMapper.selectRemindDue(ws.getId(), now, now.minusHours(REMIND_WINDOW_HOURS))) {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
@@ -326,7 +344,7 @@ public class NotificationService {
         int inApp = pushDigestInApp(ws, over, todayDue);
         res.put("inApp", inApp);
 
-        String hook = Texts.trimToNull(ws.getNotifyWebhook());
+        String hook = effectiveHook(ws);
         if (hook == null) {
             res.put("sent", false);
             res.put("reason", inApp > 0

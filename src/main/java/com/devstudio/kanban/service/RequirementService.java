@@ -7,6 +7,7 @@ import com.devstudio.kanban.common.TaskCalc;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.ReqProgress;
 import com.devstudio.kanban.dto.ReqSaveRequest;
+import com.devstudio.kanban.dto.RequirementDeleteResult;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskLog;
@@ -62,6 +63,7 @@ public class RequirementService {
             }
             p.setTaskCount(count);
             p.setDoneCount(done);
+            p.setDocCount(docService.countByReq(workspaceId, r.getId()));
             p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) sum / count));
             out.add(p);
         }
@@ -102,13 +104,14 @@ public class RequirementService {
         return reqMapper.selectById(id);
     }
 
-    /** @return 被解除关联的任务数 */
+    /** @return 解绑任务数 + 连带删除的需求文档数 */
     @Transactional
-    public int delete(String userId, String workspaceId, String id) {
+    public RequirementDeleteResult delete(String userId, String workspaceId, String id) {
         Requirement r = reqMapper.selectById(id);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
+        int docs = docService.countByReq(workspaceId, id);
         int unlinked = 0;
         for (Task t : taskMapper.selectAll(workspaceId)) {
             if (id.equals(t.getReqId())) {
@@ -123,12 +126,16 @@ public class RequirementService {
             }
         }
         taskMapper.clearReq(workspaceId, id);
-        /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目） */
+        /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);
         reqMapper.deleteById(id);
         /* O-9：破坏性配置变更留审计（活动流可见） */
         activityService.logConfig(workspaceId,
-                "删除项目「" + r.getName() + "」，解除关联 " + unlinked + " 项任务");
-        return unlinked;
+                "删除项目「" + r.getName() + "」，解除关联 " + unlinked + " 项任务" +
+                        (docs > 0 ? "，连带删除 " + docs + " 份需求文档" : ""));
+        RequirementDeleteResult result = new RequirementDeleteResult();
+        result.setUnlinked(unlinked);
+        result.setDocs(docs);
+        return result;
     }
 }

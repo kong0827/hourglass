@@ -14,6 +14,9 @@ public interface TaskLogMapper {
     /** 查询/删除一律带空间条件：任务 ID 跨空间复用时防止误读误删 */
     List<TaskLog> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
+    /** 该任务最近一次“移入已完成列”之前所在的列；没有结构化日志时返回 null */
+    String selectLastDoneFromColumn(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
     /** 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG），倒序取 limit 条 */
     List<TaskLog> selectByWorkspace(@Param("workspaceId") String workspaceId, @Param("limit") int limit);
 

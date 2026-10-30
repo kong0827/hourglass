@@ -3,7 +3,7 @@
    侧边栏 240 / 顶栏 60 / 筛选栏 48 / 内容区独立滚动
    ========================================================================== */
 
-.app{display:flex;width:100%;height:100dvh;overflow:hidden;background:var(--bg-app);}
+.app{display:flex;width:100%;flex:1 1 auto;min-height:0;height:auto;overflow:hidden;background:var(--bg-app);}
 .main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
 
 /* ===================== 侧边栏 ===================== */
@@ -218,6 +218,24 @@ body[data-view="list"] .filterbar{display:flex;}
 .toolbar-meta{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .toolbar-right{margin-left:auto;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+
+/* ===================== 应用页脚（备案信息） =====================
+   注意：页脚是 .app 的兄弟节点、参与 flex 布局占一行高度（--app-foot-h），
+   不要改成 position:fixed —— 那样会盖住 side-foot（头像/退出）和内容区底部。
+   ============================================================== */
+.app-foot{
+  flex:0 0 auto;height:var(--app-foot-h);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:0 var(--content-pad);
+  background:var(--surface);border-top:1px solid var(--border);
+  font-size:11.5px;line-height:1;font-weight:500;
+  color:var(--text-3);letter-spacing:.2px;
+  white-space:nowrap;overflow:hidden;
+}
+.app-foot .af-sep{color:var(--border-strong);}
+.app-foot .af-link{color:var(--text-3);text-decoration:none;transition:color var(--dur-fast) var(--ease-out);}
+.app-foot .af-link:hover{color:var(--primary-fg);text-decoration:none;}
+.app-foot .af-ga:empty{display:none;}
 
 /* ===================== 断点（§3.5） ===================== */
 /* 侧边栏收起为 64px 图标态：由 body.side-rail 驱动

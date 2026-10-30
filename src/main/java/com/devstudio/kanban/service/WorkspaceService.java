@@ -16,6 +16,7 @@ import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
+import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -55,6 +56,7 @@ public class WorkspaceService {
     private final CategoryMapper categoryMapper;
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
+    private final RequirementDocMapper requirementDocMapper;
     private final SubtaskMapper subtaskMapper;
     private final TaskLogMapper logMapper;
     private final TagMapper tagMapper;
@@ -66,6 +68,8 @@ public class WorkspaceService {
     private final AppNotificationMapper appNotificationMapper;
     /** 分支与分支时间线（清空空间数据时一并清理） */
     private final DevBranchMapper devBranchMapper;
+    /** 完成归档（清空空间时一并清理，否则「任务清单」会残留） */
+    private final TaskCompletionService completionService;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -76,7 +80,9 @@ public class WorkspaceService {
                             AttachmentService attachmentService, InviteMapper inviteMapper,
                             TaskCommentMapper commentMapper,
                             AppNotificationMapper appNotificationMapper,
-                            DevBranchMapper devBranchMapper) {
+                            DevBranchMapper devBranchMapper,
+                            RequirementDocMapper requirementDocMapper,
+                            TaskCompletionService completionService) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -84,6 +90,7 @@ public class WorkspaceService {
         this.categoryMapper = categoryMapper;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
+        this.requirementDocMapper = requirementDocMapper;
         this.subtaskMapper = subtaskMapper;
         this.logMapper = logMapper;
         this.tagMapper = tagMapper;
@@ -94,6 +101,7 @@ public class WorkspaceService {
         this.commentMapper = commentMapper;
         this.appNotificationMapper = appNotificationMapper;
         this.devBranchMapper = devBranchMapper;
+        this.completionService = completionService;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -224,11 +232,23 @@ public class WorkspaceService {
     @Transactional
     public Workspace update(String userId, String workspaceId, WorkspaceUpdateRequest req) {
         Workspace ws = requireOwner(userId, workspaceId);
-        if (!"personal".equals(ws.getType())) {
-            ws.setName(Texts.cut(req.getName().trim(), 20));
+        String name = Texts.trimToNull(req.getName());
+        if (!"personal".equals(ws.getType()) && name != null) {
+            ws.setName(Texts.cut(name, 20));
         }
-        String hook = Texts.trimToNull(req.getNotifyWebhook());
+        /* 两个保存入口（空间信息 / 推送配置）提交的字段不同：
+           没提交的渠道、开关、Token、地址必须保持原值，不能当“清空”处理。
+           否则改一次空间名就会把已配好的推送悄悄关掉。 */
+        String rawHook = req.getNotifyWebhook();
+        String hook = Texts.trimToNull(rawHook);
+        if (rawHook == null) {
+            /* 字段没提交（空间信息面板）→ 保持原地址 */
+            hook = ws.getNotifyWebhook();
+        }
         String channel = Texts.trimToNull(req.getNotifyChannel());
+        if (channel == null) {
+            channel = ws.getNotifyChannel();
+        }
         /* O-1：渠道下沉到空间级。地址校验只在"按地址发送"的渠道上做：
            pushplus 统一发官方端点，空间地址仅作启用开关，不参与解析（与 NotificationService 一致）。 */
         if (hook != null && !"pushplus".equals(channel)) {
@@ -239,8 +259,17 @@ public class WorkspaceService {
         }
         ws.setNotifyWebhook(hook);
         ws.setNotifyChannel(channel);
-        ws.setNotifyEnabled(req.getNotifyEnabled());
-        ws.setNotifyToken(Texts.trimToNull(req.getNotifyToken()));
+        if (req.getNotifyEnabled() != null) {
+            ws.setNotifyEnabled(req.getNotifyEnabled());
+        }
+        if (Boolean.TRUE.equals(req.getClearToken())) {
+            ws.setNotifyToken(null);
+        } else {
+            String token = Texts.trimToNull(req.getNotifyToken());
+            if (token != null) {
+                ws.setNotifyToken(token);
+            }
+        }
         workspaceMapper.update(ws);
         return workspaceMapper.selectById(workspaceId);
     }
@@ -262,12 +291,14 @@ public class WorkspaceService {
         }
     }
 
-    /** 清空一个空间的全部数据（任务/需求/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知） */
+    /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知/分支） */
     @Transactional
     public void wipeData(String workspaceId) {
         logMapper.deleteAllByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
         reqMapper.deleteAllByWorkspace(workspaceId);
+        requirementDocMapper.deleteAllByWorkspace(workspaceId);
+        completionService.clearWorkspace(workspaceId);
         subtaskMapper.deleteAllByWorkspace(workspaceId);
         tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
         tagMapper.deleteTagsByWorkspace(workspaceId);

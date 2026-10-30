@@ -8,6 +8,7 @@ import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.BoardQuery;
 import com.devstudio.kanban.dto.BoardResponse;
 import com.devstudio.kanban.dto.CalendarResponse;
+import com.devstudio.kanban.dto.TaskBulkMoveRequest;
 import com.devstudio.kanban.dto.TaskListResponse;
 import com.devstudio.kanban.dto.TaskMoveRequest;
 import com.devstudio.kanban.dto.TaskSaveRequest;
@@ -433,7 +434,8 @@ public class TaskService {
             t.setSortOrder(old.getSortOrder());
             t.setCompletedAt(old.getCompletedAt());
         }
-        String detail = diffDetail(workspaceId, old, t, oldTags, req.getTags());
+        boolean columnChanged = !old.getBoardColumn().equals(t.getBoardColumn());
+        List<String> changes = diffParts(workspaceId, old, t, oldTags, req.getTags());
         taskMapper.update(t);
         // 先落最终标签，再派生下一次任务：保证循环任务的后续任务继承本次保存后的标签
         saveTags(workspaceId, id, req.getTags());
@@ -445,7 +447,19 @@ public class TaskService {
         if (movedToDone) {
             maybeGenerateNext(userId, workspaceId, t, old.getBoardColumn());
         }
-        log(userId, workspaceId, id, "update", detail);
+        /* 抽屉里改列也是“移动”：流程体检只读 action=move 的日志，
+           只记 update 会让这些移动在停留时长/返工率里凭空消失。 */
+        if (columnChanged) {
+            log(userId, workspaceId, id, "move",
+                    "从「" + columnName(workspaceId, old.getBoardColumn()) + "」移动到「" + columnName(workspaceId, t.getBoardColumn()) + "」",
+                    old.getBoardColumn(), t.getBoardColumn());
+        }
+        if (!columnChanged || !changes.isEmpty()) {
+            String detail = changes.isEmpty()
+                    ? "更新任务「" + t.getTitle() + "」（无字段变化）"
+                    : Texts.cut("更新任务「" + t.getTitle() + "」：" + String.join("；", changes), 250);
+            log(userId, workspaceId, id, "update", detail);
+        }
         Task result = taskMapper.selectById(id);
         result.setTags(tagNames(workspaceId, id));
         return result;
@@ -488,8 +502,12 @@ public class TaskService {
                 task.setCompletedAt(LocalDate.now());
                 /* 拖到已完成：把这个任务上所有人的计时都停掉（口径：每天 8 小时、跳过周末） */
                 timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已完成");
-                /* 接力：「进行中」不该出现"这一列谁都没在计时"的空档 —— 自动接上同列的下一个任务 */
-                resumed = timeLogService.resumeInColumn(userId, workspaceId, from, id);
+                /* 接力：「进行中」不该出现"这一列谁都没在计时"的空档 —— 自动接上同列的下一个任务。
+                   批量移动/整理数据时 autoResume=false，避免突然开表。 */
+                boolean wantResume = req.getAutoResume() == null || req.getAutoResume();
+                if (wantResume) {
+                    resumed = timeLogService.resumeInColumn(userId, workspaceId, from, id);
+                }
                 generatedDue = maybeGenerateNext(userId, workspaceId, task, from);
             } else {
                 task.setCompletedAt(null);
@@ -544,6 +562,79 @@ public class TaskService {
         /* 完成后接力上的下一个任务（有的话），前端会提示"已接着开始「X」" */
         res.put("autoTimerTask", resumed == null ? null : resumed.getTitle());
         return res;
+    }
+
+    /**
+     * 批量改列：逐个走 move 语义（移动日志、完成归档、循环派生都一致）。
+     * 批量操作不自动开始计时、不接力计时；任一项失败整批回滚，避免“一半成功”的中间态。
+     */
+    @Transactional
+    public Map<String, Object> bulkMove(String userId, String workspaceId, TaskBulkMoveRequest req) {
+        validateColumn(workspaceId, req.getColumn());
+        Set<String> seen = new HashSet<String>();
+        int moved = 0;
+        for (String id : req.getIds()) {
+            String taskId = Texts.trimToNull(id);
+            if (taskId == null || !seen.add(taskId)) {
+                continue;
+            }
+            TaskMoveRequest one = new TaskMoveRequest();
+            one.setColumn(req.getColumn());
+            one.setAutoTimer(req.getAutoTimer() != null && req.getAutoTimer());
+            one.setAutoResume(req.getAutoResume() != null && req.getAutoResume());
+            move(userId, workspaceId, taskId, one);
+            moved++;
+        }
+        Map<String, Object> res = new LinkedHashMap<String, Object>();
+        res.put("moved", moved);
+        res.put("column", req.getColumn());
+        return res;
+    }
+
+    /**
+     * 取消完成：回到「完成前所在列」，而不是固定回「进行中」。
+     * 优先用最近一次移入 done 的移动日志；列已被删除/找不到时依次回退到 doing、第一个非完成列、backlog。
+     */
+    @Transactional
+    public Map<String, Object> reopen(String userId, String workspaceId, String id) {
+        Task task = taskMapper.selectById(id);
+        if (task == null || !workspaceId.equals(task.getWorkspaceId()) || task.getDeletedAt() != null) {
+            throw AppException.notFound("任务不存在：" + id);
+        }
+        if (!Consts.COL_DONE.equals(task.getBoardColumn())) {
+            throw AppException.badRequest("任务不在已完成列，无需取消完成");
+        }
+        String target = logMapper.selectLastDoneFromColumn(workspaceId, id);
+        if (target != null && (Consts.COL_DONE.equals(target) || !columnExists(workspaceId, target))) {
+            target = null;
+        }
+        if (target == null) {
+            target = columnExists(workspaceId, Consts.COL_DOING) ? Consts.COL_DOING : firstOpenColumn(workspaceId);
+        }
+        TaskMoveRequest req = new TaskMoveRequest();
+        req.setColumn(target);
+        req.setAutoTimer(false);
+        req.setAutoResume(false);
+        return move(userId, workspaceId, id, req);
+    }
+
+    private boolean columnExists(String workspaceId, String column) {
+        if (column == null) {
+            return false;
+        }
+        if (Consts.COL_BACKLOG.equals(column) || Consts.COL_DOING.equals(column) || Consts.COL_DONE.equals(column)) {
+            return true;
+        }
+        return boardColumnMapper.selectById(workspaceId, column) != null;
+    }
+
+    private String firstOpenColumn(String workspaceId) {
+        for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
+            if (!Consts.COL_DONE.equals(c.getId())) {
+                return c.getId();
+            }
+        }
+        return Consts.COL_BACKLOG;
     }
 
     /** 软删除：进回收站，30 天后由定时任务清理 */
@@ -1130,7 +1221,7 @@ public class TaskService {
         return meta;
     }
 
-    private String diffDetail(String workspaceId, Task old, Task t, List<String> oldTags, List<String> newTags) {
+    private List<String> diffParts(String workspaceId, Task old, Task t, List<String> oldTags, List<String> newTags) {
         List<String> parts = new ArrayList<String>();
         if (!Objects.equals(old.getTitle(), t.getTitle())) {
             parts.add("标题");
@@ -1147,9 +1238,7 @@ public class TaskService {
         if (!Objects.equals(old.getOwner(), t.getOwner())) {
             parts.add("负责人 " + old.getOwner() + "→" + t.getOwner());
         }
-        if (!Objects.equals(old.getBoardColumn(), t.getBoardColumn())) {
-            parts.add("所在列 " + columnName(workspaceId, old.getBoardColumn()) + "→" + columnName(workspaceId, t.getBoardColumn()));
-        }
+        /* 列变化单独写 move 日志（见 update()），这里不重复。 */
         if (!Objects.equals(old.getStartDate(), t.getStartDate())) {
             parts.add("开始日期 " + fmtDate(old.getStartDate()) + "→" + fmtDate(t.getStartDate()));
         }
@@ -1158,6 +1247,16 @@ public class TaskService {
         }
         if (!Objects.equals(old.getReqId(), t.getReqId())) {
             parts.add("所属项目 " + reqName(workspaceId, old.getReqId()) + "→" + reqName(workspaceId, t.getReqId()));
+        }
+        if (!Objects.equals(old.getReqDocId(), t.getReqDocId())) {
+            parts.add("关联需求变更");
+        }
+        if (!Objects.equals(old.getBranchId(), t.getBranchId())) {
+            parts.add("所属分支变更");
+        }
+        if (!Objects.equals(old.getEstimateMinutes(), t.getEstimateMinutes())) {
+            parts.add("预估耗时 " + (old.getEstimateMinutes() == null ? "无" : old.getEstimateMinutes() + " 分钟")
+                    + "→" + (t.getEstimateMinutes() == null ? "无" : t.getEstimateMinutes() + " 分钟"));
         }
         if (!Objects.equals(old.getRecurType(), t.getRecurType())) {
             parts.add("循环 " + recurName(old.getRecurType()) + "→" + recurName(t.getRecurType()));
@@ -1201,10 +1300,7 @@ public class TaskService {
         if (!Objects.equals(old.getNote(), t.getNote())) {
             parts.add("进度备注");
         }
-        if (parts.isEmpty()) {
-            return "更新任务「" + t.getTitle() + "」（无字段变化）";
-        }
-        return Texts.cut("更新任务「" + t.getTitle() + "」：" + String.join("；", parts), 250);
+        return parts;
     }
 
     private String fmtDate(LocalDate date) {

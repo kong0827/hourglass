@@ -389,7 +389,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .drawer-layer.on .drawer-scrim{opacity:1;}
 .drawer{
-  position:absolute;top:0;right:0;bottom:0;width:var(--drawer-w);max-width:100vw;
+  position:absolute;top:0;right:0;bottom:var(--app-foot-h);width:var(--drawer-w);max-width:100vw;
   background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-xl);
   display:flex;flex-direction:column;
   transform:translateX(24px);opacity:0;
@@ -468,7 +468,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 
 /* ===================== 4.9 Toast ===================== */
 .toast-layer{
-  position:fixed;right:24px;bottom:24px;z-index:300;
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:300;
   display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;
 }
 .toast{

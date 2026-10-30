@@ -28,6 +28,9 @@ public interface TaskMapper {
 
     int restore(String id);
 
+    /** 导入回收站任务时恢复原删除时间（用于保留剩余保留期） */
+    int setDeletedAt(@Param("id") String id, @Param("deletedAt") java.time.LocalDateTime deletedAt);
+
     List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff);
 
     List<Task> selectRemindDue(@Param("workspaceId") String workspaceId, @Param("now") LocalDateTime now,

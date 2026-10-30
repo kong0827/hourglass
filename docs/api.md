@@ -25,7 +25,7 @@
 - **空间模型**：每个账号自动有一个「我的看板」个人空间；任何人可新建共享空间并当空间主，成员**只能通过邀请链接加入**（对方打开链接并确认后才成为成员）；`POST /api/workspaces/{id}/members` 按登录名直接加人**仅平台管理员可用**，普通空间主调用返回 403，避免不经同意就把人拉进空间
 - 所有业务接口都接受 `workspace` 查询参数（空间ID）；不传时用"上次使用的空间"，再退回个人空间。前端切换空间后自动携带
 - **数据按空间隔离**：任务/子任务/项目/附件/工时/操作日志/标签/看板列/分类属于空间；保存的筛选视图属于"人+空间"
-- **权限**：全员可做日常操作（增改删任务、拖拽、子任务、标签、计时、附件、回收站恢复）；**仅空间主**可做：改空间名/推送配置、移成员、生成/撤销邀请、删空间、删看板列、删分类、清空数据、导入覆盖。跨空间访问一律 404，权限不足返回 403
+- **权限**：全员可做日常操作（增改删任务、拖拽、子任务、标签、计时、附件、回收站恢复）；**仅空间主**可做：改空间名/推送配置、移成员、生成/撤销邀请、删空间、删看板列、删分类、清空任务数据、导入覆盖。跨空间访问一律 404，权限不足返回 403
 - **审计**：操作时间线记录操作人（`actorName`），历史数据显示为空
 - 账号接口：
   - `GET /api/auth/me` → `{id, username, displayName, role, lastWorkspaceId, workStartHour, workEndHour, workMaxHours}`
@@ -36,7 +36,7 @@
   - `GET /api/workspaces` → 我参与的空间（含 `type` personal/shared、`myRole`、`memberCount`）
   - `POST /api/workspaces`，body `{"name":"项目组看板"}` → 新建共享空间（创建者为空间主）
   - `POST /api/workspaces/{id}/select` → 记住"上次使用的空间"
-  - `PUT /api/workspaces/{id}`，body `{"name":"...","notifyWebhook":"..."}`（仅空间主；个人空间名称不可改）
+  - `PUT /api/workspaces/{id}`，body 可按需提交 `{"name":"..."}` 或推送字段（仅空间主；个人空间名称不可改）。PATCH 语义：`name` 不传=保持原值；`notifyChannel`/`notifyEnabled` 不传=保持原值；`notifyWebhook` 不传=保持原值、传空串=清除；`notifyToken` 留空=保持原值，`clearToken:true` 才清除已保存 Token
   - `DELETE /api/workspaces/{id}`（仅空间主，连带全部数据，不可恢复；个人空间不可删）
   - `GET /api/workspaces/{id}/members` → 成员（含显示名/登录名/角色）
   - `POST /api/workspaces/{id}/members`，body `{"username":"xiaoming"}`（仅空间主）
@@ -107,7 +107,7 @@
 
 ## 5. PUT /api/tasks/{id}
 
-全量更新任务字段（与新增同结构，title 必填）。列变更时自动处理完成日期，并写入操作日志。
+全量更新任务字段（与新增同结构，title 必填）。列变更时自动处理完成日期，并**同时写入一条 `action=move` 的移动日志**（流程体检据此统计）；其他字段变更写 `action=update`。
 
 ## 6. POST /api/tasks/{id}/move
 
@@ -117,11 +117,21 @@
 {"column":"done","beforeId":"Kxxx"}
 ```
 
-`beforeId` 为空字符串/不传 = 移到列尾；同列内也用它调整顺序。返回：
+`beforeId` 为空字符串/不传 = 移到列尾；同列内也用它调整顺序。`autoTimer=false` 时移入非待处理/非完成列不自动计时；`autoResume=false` 时移到已完成不自动接力下一条。返回：
 
 ```json
-{"code":0,"data":{"task":{...},"from":"doing","to":"done"}}
+{"code":0,"data":{"task":{...},"from":"doing","to":"done","autoTimerStarted":false,"autoTimerTask":null}}
 ```
+
+同列内移动（只调顺序）不会把停留时长切成碎段。
+
+### 6.1 POST /api/tasks/bulk-move
+
+列表页批量改列，body `{"ids":["K1","K2"],"column":"done","autoTimer":false,"autoResume":false}`。逐项走 move 语义（移动日志、完成归档、循环派生一致）；批量默认不自动开始/接力计时。最多 500 项，任一项失败整批回滚。
+
+### 6.2 POST /api/tasks/{id}/reopen
+
+取消完成：按最近一次移入 done 的 `from_column` 回到**完成前所在列**；该列已删除时依次回退到 `doing`、第一个非完成列、`backlog`。不自动开始计时。返回结构同 move。
 
 ## 7. DELETE /api/tasks/{id}
 
@@ -137,11 +147,11 @@
 
 ## 9. GET /api/reqs
 
-项目列表（含任务数/完成数/平均进度）：
+项目列表（含任务数/完成数/平均进度/需求文档数）：
 
 ```json
 {"code":0,"data":[{"id":"Rxxx","name":"资金上场小程序","description":"","status":"active",
-  "progressPct":45,"taskCount":4,"doneCount":1}]}
+  "progressPct":45,"taskCount":4,"doneCount":1,"docCount":2}]}
 ```
 
 ## 10. POST /api/reqs
@@ -154,7 +164,11 @@
 
 ## 12. DELETE /api/reqs/{id}
 
-删除项目，其下任务保留、仅解除关联；返回 `{"unlinked": 3}`。
+删除项目：其下任务保留、仅解除关联；其下**需求文档会一并删除**（同时清理任务上的 `reqDocId`）。返回：
+
+```json
+{"unlinked": 3, "docs": 2}
+```
 
 ## 13. GET /api/review?weekOffset=-1
 
@@ -178,25 +192,31 @@
 
 ## 14. GET /api/export
 
-导出当前空间的全部数据。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：额外包含 subtasks/tags/循环/提醒设置/工时/任务创建时间（createdAt）/看板列定义（columns），旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
+导出当前空间的**任务备份**（v4）。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：包含 tasks/reqs/columns，v4 额外包含任务评论（comments）、任务 `deletedAt`（回收站）与任务的 `reqDocId`/`branchId`/`estimateMinutes`/`blocked`/`blockedReason`/`ownerUserId`/`remindTarget` 字段，旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
+
+**不含**：需求文档正文、分支、附件文件、操作时间线、保存视图、分类/看板列设置。
 
 ## 15. POST /api/import
 
-导入旧版备份文件，覆盖当前数据：
+导入任务备份文件，覆盖当前数据：
 
 ```json
-{"v":3,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
-  "col":"doing","due":"2026-10-20","progress":40,"note":"","reqId":"Rxxx","completedAt":null}],
- "reqs":[{"id":"Rxxx","name":"...","desc":"","status":"active","createdAt":"2026-10-01"}]}
+{"v":4,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
+  "col":"doing","due":"2026-10-20","progress":40,"note":"","reqId":"Rxxx","reqDocId":"Dxxx",
+  "branchId":"Bxxx","estimateMinutes":240,"blocked":false,"completedAt":null}],
+ "reqs":[{"id":"Rxxx","name":"...","desc":"","status":"active","createdAt":"2026-10-01"}],
+ "comments":[{"taskId":"Kxxx","authorId":"Uxxx","authorName":"我","content":"...","createdAt":"2026-10-02T10:00:00"}]}
 ```
 
-返回 `{"tasks": 42, "reqs": 5}`。
+返回 `{"tasks": 42, "reqs": 5, "comments": 18}`。
 
-**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、项目、子任务、标签、工时（回收站一并清空）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置（分类按备份补齐）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。
+**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置、**需求文档与分支**（但任务的 `reqDocId`/`branchId` 会按目标空间是否存在对应记录校验，不存在则置空）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。
 
-字段兜底：旧列 id（todo/review）自动映射、非法枚举取默认值、超长字段截断、无效项目引用置空；`subtasks`/`tags`/`recurType`/`remindAt`/`remindSent`/`timeLogs`（含计时人 userId）/`createdAt`/`columns` 导入时自动恢复，旧版备份（无这些字段）依旧兼容。
+**旧备份兼容**：v3 及更早备份没有 comments 字段，导入后会清空本空间评论（前端确认框已明确提示）；新增任务字段缺失时按空值处理。
 
-**导出不含**：附件文件本身（磁盘文件，随服务器备份目录 tar 保留，见 `deploy/backup.sh`）、操作时间线日志（导入时不会被删除）。
+字段兜底：旧列 id（todo/review）自动映射、非法枚举取默认值、超长字段截断、无效项目/需求/分支引用置空；`subtasks`/`tags`/`recurType`/`remindAt`/`remindSent`/`timeLogs`（含计时人 userId）/`createdAt`/`columns` 导入时自动恢复，旧版备份（无这些字段）依旧兼容。
+
+**导出不含**：附件文件本身（磁盘文件，随服务器备份目录 tar 保留，见 `deploy/backup.sh`）、操作时间线日志（导入时不会被删除）、需求文档正文、分支、完成归档快照（导入时按任务与工时重建）。
 
 ## 16. 子任务（检查清单）
 
@@ -460,7 +480,7 @@ verdict  = coverage>=95 且 missing==0 → done
 
 1. **会话与权限快照**：登录会话 30 天有效，角色写在会话里。管理员**重置密码/调整角色/删除账号不会踢掉旧会话**（无会话注册表）；但 `/api/admin/**` 每次请求按数据库当前角色复核，被降权或删除的管理员立即无法再调用管理接口；`/api/auth/me` 也读取数据库实时角色。普通接口的权限变化在下次登录（或会话过期）后完全生效。
 2. **任务并发写为"最后写入生效"**：多人同时编辑同一任务不做版本校验/冲突提示，后提交的整体覆盖先提交的（实现范围约定，界面无冲突弹窗）。
-3. **JSON 导入导出不做全量恢复**：导出对象不含附件二进制与操作时间线；导入覆盖任务类数据，保留附件文件/记录与时间线（保留的附件/日志按"空间+任务ID"关联，同空间原样导回会重新挂回原任务）。
+3. **JSON 导入导出不做全量恢复**：导出对象不含附件二进制、需求文档正文、分支与操作时间线；导入覆盖任务类数据（任务/项目/评论等），保留附件文件/记录与时间线（保留的附件/日志按"空间+任务ID"关联，同空间原样导回会重新挂回原任务）。
 4. **文件与数据库无两阶段一致性**：附件删除为"先删文件、后删记录"（或相反顺序的单边提交），极端故障下可能出现孤儿文件或失效引用；失败会写服务端告警日志，不做补偿任务。
 5. **同账号跨设备计时并发窗口**：开始计时为无锁"先查后插"，同一账号在两台设备极端同时点击"开始"可能短暂并存两条运行记录；单设备串行操作与不同账号之间不受影响，任务完成/删除时会统一结算。已完成的任务仍可手动开始计时（用于事后补录），未做禁止。
 
@@ -508,7 +528,7 @@ verdict  = coverage>=95 且 missing==0 → done
 | `DELETE /api/comments/{id}` | 删评论，**仅作者本人**（403） |
 | `GET /api/my-tasks?scope=open\|all` | 跨空间「我的任务」（N-3）。返回 `{items,total,spaces,matchedByNameOnly}`；`matchedByNameOnly` 是"仅按显示名匹配、还没绑定账号"的条数，用于提示是否需要跑 sql/04 |
 | `GET /api/activity?limit=200` | 空间级活动流（O-9）。复用 `task_log`，配置类事件以哨兵 `task_id='CFG'` + `action='config'` 落库（不会混进任何任务时间线） |
-| `GET /api/notify/status` | 推送**真实生效状态**（O-1）：`{enabled,enabledSource,channel,channelSource,workspaceHasAddress,hasToken,lastAttemptAt,lastResult,lastError,disabledReason}`。仅空间主；不回传地址与 token 原文 |
+| `GET /api/notify/status` | 推送**真实生效状态**（O-1）：`{enabled,enabledSource,channel,channelSource,workspaceHasAddress,hasToken,workspaceHasToken,lastAttemptAt,lastResult,lastError,disabledReason}`。仅空间主；不回传地址与 token 原文 |
 | `GET /api/notifications?workspace=&limit=` | 应用内通知列表 + 未读数（N-1） |
 | `GET /api/notifications/unread` | 未读数（铃铛角标轮询） |
 | `POST /api/notifications/{id}/read` | 标记单条已读（限本人） |
@@ -517,7 +537,7 @@ verdict  = coverage>=95 且 missing==0 → done
 ### 4. 行为变化（破坏性为零，但语义要清楚）
 
 1. **测试推送不再"假绿"（O-1③）**：`POST /api/notify/test` 走与定时任务相同的开关判断。总开关未开时返回 `{sent:false, enabled:false, reason:"服务端未启用推送（app.notify.enabled 未打开），定时提醒不会发送；本次为单次测试"}`。
-2. **推送渠道下沉到空间级（O-1）**：`workspace` 新增 `notify_channel` / `notify_enabled` / `notify_token` / `notify_last_at` / `notify_last_status`。`notify_enabled = NULL` 表示"跟随全局 `app.notify.enabled`"，因此**升级后行为不变**。`PUT /api/workspaces/{id}` 接受 `notifyChannel` / `notifyEnabled` / `notifyToken`。`pushplus` 渠道下空间地址仅作启用开关（仍只发官方端点）。
+2. **推送渠道下沉到空间级（O-1）**：`workspace` 新增 `notify_channel` / `notify_enabled` / `notify_token` / `notify_last_at` / `notify_last_status`。`notify_enabled = NULL` 表示"跟随全局 `app.notify.enabled`"，因此**升级后行为不变**。`PUT /api/workspaces/{id}` 接受 `name` / `notifyWebhook` / `notifyChannel` / `notifyEnabled` / `notifyToken` / `clearToken`，未提交字段保持原值（`notifyWebhook` 传空串才清除；`notifyToken` 留空保持原值，`clearToken=true` 才清空）。`pushplus` 渠道下空间地址仅作启用开关（仍只发官方端点）；`serverchan` 只填 Token 时服务端按 `https://sctapi.ftqq.com/{token}.send` 补全地址。
 3. **任务级提醒定向到人（N-1）**：到点提醒除了按空间配置发外部渠道，**一定会写应用内通知**给负责人本人（`remind_target=owner+admin` 时加上空间主）。负责人未绑定账号时按显示名匹配空间成员。所以**不配群机器人也能收到提醒**。同一收件人+同一任务+同一类型 6 小时内去重。
 4. **只配外部渠道时以它为准决定闭环**：配了渠道但发送失败 → 保留在 6 小时重试窗口内；完全没配外部渠道 → 应用内送达即闭环，并在时间线记录「提醒时间已到，空间未启用外部推送，已通过应用内通知送达」。
 5. **SSE `changed` 事件载荷（O-11）**：升级为 JSON `{"w":"空间ID","t":"任务ID","a":"操作人显示名"}`（字段按需出现）。**旧格式（纯空间ID文本）继续兼容**，前端两种都解析。用途：前端判断"是不是当前打开着的这条任务被改了"，给出「此任务刚被 X 修改，点击刷新」的轻提示，**不自动覆盖未保存草稿**。
