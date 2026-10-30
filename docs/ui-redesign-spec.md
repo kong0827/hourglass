@@ -2780,3 +2780,86 @@ mvn -q dependency:build-classpath -Dmdep.outputFile=target/cp.txt
 javac -encoding UTF-8 -cp "target/classes;$(cat target/cp.txt)" -d target/tools tools/AiReviewFactsTest.java
 java -cp "target/classes;target/tools;$(cat target/cp.txt)" AiReviewFactsTest
 ```
+
+---
+
+## 附录 N：v3.5 甘特图 V1.1 产品化与实底化（2026-10-30）
+
+> 对应 `docs/gantt-product-development-spec-2026-10-30.md` G-01～G-05 与
+> `docs/gantt-ui-optimization-2026-10-30.md` §2.1～§2.6。接口无变化，`docs/api.md` 不动。
+
+### 1. 筛选与分组
+
+- 甘特图请求沿用全局筛选状态，`loadGantt()` 使用 `ganttTaskParams()` 取
+  `q/owners/pris/cats/reqs/tags/due/focus/blocked/sort`；**不传 `doneScope`**（那是看板分页参数）。
+- 工具栏第二行提供筛选浮层（负责人/优先级/项目）、已应用数量、清除入口；
+  筛选与看板/列表共用同一份 `state`，不另建第二套筛选状态。
+- `groupBy = none | project | owner`：项目名走 `reqNameById()`，空值归「未关联项目」；
+  负责人空值归「未分配」。分组头显示名称、任务数、折叠图标，本身不生成甘特条。
+- 组内按 `(startDate||dueDate, dueDate||startDate, id)` 稳定排序；折叠只影响显示，
+  不改变时间范围与顶部计数计算结果。
+
+### 2. 时间窗口
+
+- `rangeMode = auto | month`。auto 覆盖全部可见已排期任务并始终包含今天，前后留白；
+  month 取 `anchorMonth` 的自然月，不持久化。
+- 月交集统一为 `effectiveStart <= monthEnd && effectiveEnd >= monthStart`，
+  其中 `effectiveStart = startDate||dueDate`、`effectiveEnd = dueDate||startDate`；
+  跨月条按月份边界裁切，不越出网格。
+- 「适配全部」回 auto；「上一月/下一月」在 auto 下会先切到月视图再翻月；
+  「今天」auto 下滚到今天，month 下回到当前自然月并滚到今天。
+- 月视图无交集任务时显示「本月没有排期任务」，时间轴仍保留以便翻月；
+  今天线只在今天位于范围内时渲染。
+- auto 范围超过 740 天（约 2 年）时自动切月视图并给出黄色提示，避免一次生成数千个日期表头。
+
+### 3. 状态语义（done > blocked > overdue > 优先级色）
+
+- `done = boardColumn==="done"`；`overdue = !done && dueDate < TODAY`；`blocked = !!blocked`。
+- 阻塞且逾期：底色/虚线走 blocked，文字同时保留「逾期 N 天」。
+- 条内：宽条显示任务名；`>=72px` 显示状态或百分比，`>=150px` 且为风险状态时状态与百分比并存；
+  窄条用 `!`/`✓` 角标，状态同时写入左列 meta、原生 `title` 与 `aria-label`。
+- 甘特条 `tabindex=0`、`role=button`、`aria-label`（任务、起止、进度、状态），
+  Enter/Space 打开详情；focus 用独立 `:focus-visible` 描边，不依赖 hover。
+- 底部图例：进行中 / 逾期 / 阻塞 / 已完成，不占工具栏主操作。
+
+### 4. 拖拽闭环
+
+- 拖动条/左右把手：按 `.gantt-axis` 实际 rect 与 `dayW` 换算日期，忽略 sticky 左列与 scrollLeft 偏差；
+  保存仍走 `taskPayloadWith()`，不丢需求、分支、预估工时等字段。
+- 指针进入时间轴左右 32px 内启动 `requestAnimationFrame` 横滚，速度随距离增加、封顶 18px/帧；
+  横滚时按最新 pointer 坐标重算日期；`pointerup/pointercancel/Esc/重绘前` 取消 RAF。
+- Esc 取消：不发请求、恢复原位置、清理 tooltip / dragging / 监听与横滚。
+- 未排期行拖入时间轴：默认 `startDate = dueDate = 目标日期`；点击与拖动阈值 5px，
+  小位移仍按点击打开详情；失败保留未排期状态并提示原因。
+- 撤销通过 `toastAction()`：只恢复旧起止日期；撤销前比对最新缓存，任务已被再次修改时提示
+  「任务已再次变更，未撤销」。未排期拖入也提供撤销（回到未排期）。
+
+### 5. 偏好与显示口径
+
+- `localStorage` key `ds.gantt.prefs.<workspaceId>`，保存 `showDone/dayW/groupBy/collapsed`；
+  无 workspaceId 时只用内存状态；工作空间确定后会补读一次偏好（深链直达甘特图不丢设置）。
+- 「显示已完成」仍是甘特图本地显示开关，不与全局状态筛选混用。
+- 继续使用 track 背景网格，不按行按天生成 DOM；分组/折叠只重绘甘特图，不请求项目列表。
+
+### 6. 视觉（实底化）
+
+- 甘特条：语义 soft 实底 + `inset 0 0 0 1px` 语义描边，删除左端 4px 竖条；
+  进度层 `--bc` @32%（done @22%）；blocked 用 `outline:1px dashed`；done 不再整条半透明。
+- `ganttRowHTML()` 传 `--bc / --bc-soft / --bc-bd` 三件套；`PRIORITY_COLOR` 保持给看板/清单用。
+- 今天：正文整列 `--primary-soft` @45% + 1.5px @45% 标线，删掉被表头挡住的圆点。
+- 把手：hover/focus 显示 2px 竖线 @50%，不再整块半透明；触屏常显。
+- 日期字号 10.5px；月份标签只在首段或 1 月带年份；auto 尾部留白 7 天 → 4 天。
+- 工具栏「显示已完成 / 缩放」标签由三级灰提到二级灰。
+
+### 7. 自检
+
+```bash
+node --check src/main/resources/static/js/app.js
+node --check src/main/resources/static/sw.js
+node tools/gen-preview.js
+node tools/check-gantt.mjs   # 37 项真 Chrome 断言
+node tools/shot-gantt.mjs    # default / zoom40 / 1280 / month / group / filter
+```
+
+截图：`docs/_shot_gantt-default.png`、`-zoom40`、`-1280`、`-month`、`-group`、`-filter`。
+SW `CACHE_NAME` 已递增到 `devstudio-shell-v35`。

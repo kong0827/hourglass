@@ -383,27 +383,64 @@
             <span class="toolbar-right">
               <label class="row row-gap" style="gap:6px">
                 <input type="checkbox" class="cbx" id="ganttShowDone" />
-                <span class="toolbar-meta">显示已完成</span>
+                <span class="toolbar-meta is-strong">显示已完成</span>
               </label>
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">缩放</span>
+                <span class="toolbar-meta is-strong">缩放</span>
                 <select id="ganttZoom" class="mini-select" aria-label="时间轴缩放">
                   <option value="20">紧凑</option>
                   <option value="28" selected>标准</option>
                   <option value="40">宽松</option>
                 </select>
               </label>
-              <button class="btn sm" type="button" id="ganttToday">今天</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
           </div>
+          <div class="gantt-tools">
+            <div class="gantt-tools-left">
+              <div class="gantt-filter-wrap">
+                <button class="btn sm" type="button" id="ganttFilterBtn" aria-haspopup="true" aria-expanded="false">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
+                  筛选 <span class="cnt" id="ganttFilterCount" hidden>0</span>
+                </button>
+                <div class="menu popover" id="ganttFilterMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
+              </div>
+              <button class="btn sm ghost" type="button" id="ganttClearFilter" hidden>清除筛选</button>
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">分组</span>
+                <select id="ganttGroup" class="mini-select" aria-label="任务分组方式">
+                  <option value="none">不分组</option>
+                  <option value="project">按项目</option>
+                  <option value="owner">按负责人</option>
+                </select>
+              </label>
+            </div>
+            <div class="gantt-tools-right">
+              <div class="seg mini gantt-range-mode" id="ganttRangeMode" role="group" aria-label="时间范围模式">
+                <button type="button" data-gantt-range="auto" aria-pressed="true" title="自动覆盖全部任务并包含今天">适配全部</button>
+                <button type="button" data-gantt-range="month" aria-pressed="false" title="按自然月查看">月视图</button>
+              </div>
+              <button class="btn sm ghost gantt-range-btn" type="button" id="ganttPrevMonth" aria-label="上一月" title="上一月（自动切到月视图）">‹</button>
+              <span class="gantt-range-label" id="ganttRangeLabel" aria-live="polite">自动范围</span>
+              <button class="btn sm ghost gantt-range-btn" type="button" id="ganttNextMonth" aria-label="下一月" title="下一月（自动切到月视图）">›</button>
+              <button class="btn sm" type="button" id="ganttToday">今天</button>
+            </div>
+          </div>
+          <div class="gantt-notice" id="ganttNotice" hidden></div>
           <div class="gantt-scroll" id="ganttScroll"></div>
+          <div class="gantt-legend" aria-label="甘特图图例">
+            <span class="gl-item"><i style="background:var(--p2)"></i>进行中</span>
+            <span class="gl-item"><i style="background:var(--danger)"></i>逾期</span>
+            <span class="gl-item"><i class="dashed"></i>阻塞</span>
+            <span class="gl-item"><i style="background:var(--success)"></i>已完成</span>
+            <span class="gantt-legend-hint">拖动条改期 · 拖两端调起止 · Esc 取消 · 把未排期任务拖到时间轴即可排期</span>
+          </div>
           <details class="unplanned-box" id="ganttUnplannedBox" hidden>
             <summary>
               <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
               未排期
               <span class="cnt" id="ganttUnplannedCount">0</span>
-              <span class="foot-note" style="font-weight:400">（没有开始/截止日期，因此不在甘特图里）</span>
+              <span class="foot-note" style="font-weight:400">（没有开始/截止日期；拖到时间轴即可排期）</span>
             </summary>
             <div class="unplanned-list" id="ganttUnplannedList"></div>
           </details>

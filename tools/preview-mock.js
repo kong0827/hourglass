@@ -61,7 +61,55 @@
     T({ id: "K9", title: "历史任务（完成时间缺失）", priority: "P3", boardColumn: "done", progress: 100,
         completedAt: null })
   ];
+  /* 甘特图演示任务：跨月、阻塞+逾期、仅截止、仅开始、不同负责人/项目，方便看筛选、分组和状态 */
+  backlog.push(
+    T({ id: "G3", title: "通知中心改造（仅截止）", priority: "P2", boardColumn: "backlog", progress: 0,
+        owner: "陈工", ownerUserId: "U2", reqId: null, dueDate: shift(3) }),
+    T({ id: "G5", title: "接口压测准备（仅开始）", priority: "P2", boardColumn: "backlog", progress: 20,
+        owner: "我", reqId: "R1", startDate: shift(-2) }),
+    T({ id: "G6", title: "补充通知模板（未排期）", priority: "P3", boardColumn: "backlog", progress: 0,
+        owner: "我", reqId: "R1" })
+  );
+  doing.push(
+    T({ id: "G1", title: "结算批处理拆分（跨月）", priority: "P0", boardColumn: "doing", progress: 30,
+        owner: "陈工", ownerUserId: "U2", reqId: "R2", startDate: shift(-20), dueDate: shift(12) }),
+    T({ id: "G2", title: "对账差异回溯（阻塞+逾期）", priority: "P1", boardColumn: "doing", progress: 45,
+        owner: "李雷", ownerUserId: "U3", reqId: "R2", startDate: shift(-6), dueDate: shift(-2),
+        blocked: true, blockedReason: "等上游数据" })
+  );
+
   var tasks = backlog.concat(doing, done);
+
+  /* /api/tasks/list 的筛选在预览里也照做：筛选/分组/清除的界面效果才可验证 */
+  function mockTaskList(url) {
+    var p = new URLSearchParams(url.split("?")[1] || "");
+    function list(name) { var v = p.get(name); return v ? v.split(",") : []; }
+    var owners = list("owners"), pris = list("pris"), cats = list("cats"),
+        reqs = list("reqs"), tags = list("tags");
+    var kw = p.get("q") || "", due = p.get("due");
+    var blockedOnly = p.get("blocked") === "true";
+    var noDue = p.get("noDue") === "true";
+    var todayIso = shift(0);
+    var items = tasks.filter(function (t) {
+      if (kw && (t.title || "").indexOf(kw) === -1 && (t.description || "").indexOf(kw) === -1) return false;
+      if (owners.length && owners.indexOf(t.owner) === -1) return false;
+      if (pris.length && pris.indexOf(t.priority) === -1) return false;
+      if (cats.length && cats.indexOf(t.category) === -1) return false;
+      if (reqs.length && reqs.indexOf(t.reqId) === -1) return false;
+      if (tags.length && !(t.tags || []).some(function (x) { return tags.indexOf(x) !== -1; })) return false;
+      if (noDue && t.dueDate) return false;
+      if (blockedOnly && !t.blocked) return false;
+      if (due === "over" && !(t.dueDate && t.dueDate < todayIso && t.boardColumn !== "done")) return false;
+      if (due === "today" && t.dueDate !== todayIso) return false;
+      if (due === "soon") {
+        var d = t.dueDate ? new Date(t.dueDate + "T00:00:00") : null;
+        var diff = d ? Math.round((d - new Date(todayIso + "T00:00:00")) / 86400000) : -1;
+        if (diff < 0 || diff > 3) return false;
+      }
+      return true;
+    });
+    return { items: items, total: items.length };
+  }
 
   /* ---------------- 分支（空间级分支池） ---------------- */
   var branches = [
@@ -502,6 +550,20 @@
     if (clean === "/api/calendar") {
       var mM = /[?&]month=(\d+)/.exec(u), yM = /[?&]year=(\d+)/.exec(u);
       data = { year: yM ? Number(yM[1]) : Y, month: mM ? Number(mM[1]) : M, tasks: calTasks };
+    } else if (clean === "/api/tasks/list") {
+      /* 列表/甘特/未排期共用：按查询参数筛选，并保持 {items,total} 结构 */
+      data = mockTaskList(u);
+    } else if (method === "PUT" && /^\/api\/tasks\/[A-Za-z0-9_-]+$/.test(clean)) {
+      /* 预览稿里把改期写回内存数组，拖动/撤销/排期才能看到真实回流 */
+      var putId = clean.split("/").pop(), hit = null;
+      for (var ti = 0; ti < tasks.length; ti++) if (tasks[ti].id === putId) { hit = tasks[ti]; break; }
+      if (!hit) {
+        for (var ci = 0; ci < calTasks.length; ci++) if (calTasks[ci].id === putId) { hit = calTasks[ci]; break; }
+      }
+      if (hit && reqBody) {
+        for (var pk in reqBody) if (Object.prototype.hasOwnProperty.call(reqBody, pk)) hit[pk] = reqBody[pk];
+      }
+      data = hit || {};
     } else if (clean === "/api/review") {
       /* 带上 weekOffset：翻上一周要看到不同的数据，否则测不出「AI 周报跟着周走」 */
       var wM = /[?&]weekOffset=(-?\d+)/.exec(u);

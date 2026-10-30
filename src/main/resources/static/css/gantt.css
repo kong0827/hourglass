@@ -4,13 +4,42 @@
    ========================================================================== */
 
 #view-gantt{overflow:hidden;}
-.gantt-page{height:100%;min-height:0;display:flex;flex-direction:column;gap:12px;padding-top:16px;}
+.gantt-page{height:100%;min-height:0;display:flex;flex-direction:column;gap:10px;padding-top:14px;}
 .gantt-page .page-toolbar{flex:0 0 auto;}
+.gantt-page .toolbar-meta.is-strong{color:var(--text-2);font-weight:550;}
+
+/* 工具栏第二行：筛选 / 分组 / 时间窗口 */
+.gantt-tools{flex:0 0 auto;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;}
+.gantt-tools-left,.gantt-tools-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.gantt-tools-right{margin-left:auto;}
+.gantt-filter-wrap{position:relative;display:inline-flex;}
+.gantt-filter-wrap .cnt,
+.gantt-tools .cnt{
+  min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);
+  display:inline-grid;place-items:center;margin-left:5px;
+  background:var(--primary);color:#fff;font-size:10px;font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.gantt-tools .cnt[hidden]{display:none;}
+.btn.filter-on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+.gantt-range-btn{width:26px;padding:0;font-size:16px;line-height:1;color:var(--text-2);}
+.gantt-range-btn:disabled{opacity:.35;cursor:default;}
+.gantt-range-label{
+  min-width:104px;text-align:center;font-size:12.5px;font-weight:600;
+  color:var(--text-2);font-variant-numeric:tabular-nums;
+}
+.gantt-notice{
+  flex:0 0 auto;padding:7px 10px;border-radius:var(--r-sm);
+  background:var(--warning-soft);border:1px solid var(--warning-border);
+  color:var(--text-2);font-size:12px;
+}
+.gantt-notice[hidden]{display:none;}
+
 .gantt-scroll{
   flex:1 1 auto;min-height:240px;position:relative;overflow:auto;
   border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
 }
-.gantt-grid{position:relative;min-width:max-content;}
+.gantt-grid{position:relative;min-width:max-content;width:100%;}
 
 /* 表头 */
 .gantt-head{position:sticky;top:0;z-index:20;display:flex;background:var(--surface);box-shadow:0 1px 0 var(--border);}
@@ -32,7 +61,7 @@
 .gantt-day{
   flex:0 0 auto;display:grid;place-items:center;
   border-right:1px solid var(--border);
-  font-size:10px;color:var(--text-3);font-variant-numeric:tabular-nums;
+  font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;
 }
 .gantt-day.weekend{background:var(--surface-sunken);}
 .gantt-day.today{color:var(--primary);font-weight:700;background:var(--primary-soft);}
@@ -56,43 +85,111 @@
 }
 .gantt-meta .pdot{font-size:10.5px;}
 .gantt-meta .ellipsis{min-width:0;}
+.gantt-meta .meta.blocked{color:var(--warning);font-weight:600;}
+
+/* 分组头：不是任务，不生成甘特条 */
+.gantt-group{display:flex;height:32px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.gantt-group-head{
+  position:sticky;left:0;z-index:12;
+  flex:0 0 var(--gantt-label-w,280px);width:var(--gantt-label-w,280px);
+  display:flex;align-items:center;gap:7px;padding:0 12px;text-align:left;
+  background:var(--surface-sunken);border-right:1px solid var(--border);
+  font-size:12px;font-weight:650;color:var(--text-2);
+}
+.gantt-group-head:hover{background:var(--surface-hover);}
+.gantt-group-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.gantt-group-caret{flex:0 0 auto;width:12px;font-size:10px;color:var(--text-3);}
+.gantt-group-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gantt-group-cnt{margin-left:auto;font-size:10.5px;font-weight:500;color:var(--text-3);}
 
 /* 时间轴 */
 .gantt-track{
-  position:relative;flex:0 0 auto;height:100%;
+  position:relative;flex:0 0 auto;height:100%;overflow:hidden;
   background-image:repeating-linear-gradient(to right,
     transparent 0, transparent calc(var(--gantt-day-w,28px) - 1px),
     var(--border) calc(var(--gantt-day-w,28px) - 1px), var(--border) var(--gantt-day-w,28px));
 }
 .gantt-bar{
-  position:absolute;top:11px;height:24px;border-radius:7px;
-  border:1px solid var(--bc,var(--primary));background:var(--surface);
-  box-shadow:inset 4px 0 0 var(--bc,var(--primary)),var(--shadow-xs);
+  position:absolute;top:11px;height:24px;border-radius:var(--r-xs);
+  background:var(--bc-soft,var(--primary-soft));
+  box-shadow:inset 0 0 0 1px var(--bc-bd,var(--primary-border)),var(--shadow-xs);
   overflow:hidden;cursor:grab;touch-action:none;z-index:3;
-  transition:box-shadow var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out);
+  transition:box-shadow var(--dur-fast) var(--ease-out),filter var(--dur-fast) var(--ease-out);
 }
-.gantt-bar:hover{box-shadow:inset 4px 0 0 var(--bc,var(--primary)),var(--shadow-md);}
-.gantt-bar.is-done{opacity:.55;}
-.gantt-bar.is-blocked{border-style:dashed;}
-.gantt-bar.dragging{cursor:grabbing;z-index:6;opacity:.96;}
-.gantt-bar-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--bc,var(--primary));opacity:.14;pointer-events:none;}
-.gantt-handle{
-  position:absolute;top:0;bottom:0;width:8px;z-index:4;cursor:ew-resize;
+.gantt-bar:hover{
+  filter:brightness(.97);
+  box-shadow:inset 0 0 0 1px var(--bc-bd,var(--primary-border)),var(--shadow-md);
+}
+.gantt-bar:focus-visible{
+  outline:2px solid var(--primary);outline-offset:2px;
+  box-shadow:inset 0 0 0 1px var(--bc-bd,var(--primary-border)),var(--shadow-md);
+}
+/* 进度层：浅底 + 深进度两层分明 */
+.gantt-bar-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--bc,var(--primary));opacity:.32;pointer-events:none;}
+.gantt-bar.is-done .gantt-bar-fill{opacity:.22;}
+/* 阻塞：虚线保留可识别性，底色走 warning-soft */
+.gantt-bar.is-blocked{outline:1px dashed var(--bc-bd,var(--warning-border));outline-offset:-1px;}
+.gantt-bar.dragging{cursor:grabbing;z-index:6;filter:brightness(.95);box-shadow:inset 0 0 0 1px var(--bc-bd,var(--primary-border)),var(--shadow-lg);}
+
+/* 条内信息：标题 / 状态 / 百分比 */
+.gantt-bar-inner{
+  position:absolute;inset:0;z-index:2;display:flex;align-items:center;gap:6px;
+  padding:0 8px;pointer-events:none;
+}
+.gantt-bar-label{
+  flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:11px;font-weight:600;color:var(--text-2);
+}
+.gantt-bar-stat{
+  flex:0 0 auto;font-size:10.5px;font-weight:650;color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+}
+.gantt-bar-pct{
+  flex:0 0 auto;font-size:10.5px;font-weight:600;color:var(--text-3);
+  font-variant-numeric:tabular-nums;
+}
+.gantt-bar-flag{
+  position:absolute;right:3px;top:4px;z-index:2;width:12px;height:12px;border-radius:50%;
+  display:grid;place-items:center;background:var(--danger);color:#fff;
+  font-size:9px;font-weight:700;line-height:1;pointer-events:none;
+}
+.gantt-bar.is-blocked .gantt-bar-flag{background:var(--warning);}
+.gantt-bar.is-done .gantt-bar-flag{background:var(--success);}
+
+/* 拖拽把手：hover 显竖线，不再是一整块半透明色 */
+.gantt-handle{position:absolute;top:0;bottom:0;width:10px;z-index:4;cursor:ew-resize;}
+.gantt-handle::after{
+  content:"";position:absolute;top:7px;bottom:7px;width:2px;border-radius:1px;
   background:var(--bc,var(--primary));opacity:0;
   transition:opacity var(--dur-fast) var(--ease-out);
 }
-.gantt-bar:hover .gantt-handle{opacity:.28;}
-.gantt-handle.l{left:0;}
-.gantt-handle.r{right:0;}
+.gantt-handle.l{left:0;}   .gantt-handle.l::after{left:3px;}
+.gantt-handle.r{right:0;}  .gantt-handle.r::after{right:3px;}
+.gantt-bar:hover .gantt-handle::after,
+.gantt-bar:focus-visible .gantt-handle::after{opacity:.5;}
 
-/* 今天线 */
-.gantt-today{
-  position:absolute;top:0;bottom:0;width:2px;background:var(--primary);
-  opacity:.6;z-index:8;pointer-events:none;
+/* 今天：正文整列淡底 + 细线，圆点去掉（原来被 sticky 表头挡住） */
+.gantt-today-col{
+  position:absolute;top:0;bottom:0;background:var(--primary-soft);
+  opacity:.45;z-index:1;pointer-events:none;
 }
-.gantt-today::before{
-  content:"";position:absolute;top:0;left:-3px;width:8px;height:8px;border-radius:50%;
-  background:var(--primary);
+.gantt-today{
+  position:absolute;top:0;bottom:0;width:1.5px;background:var(--primary);
+  opacity:.45;z-index:8;pointer-events:none;
+}
+
+/* 未排期拖入时的目标列提示 */
+.gantt-drop-col{
+  position:absolute;top:0;bottom:0;z-index:2;pointer-events:none;
+  background:var(--primary-soft);opacity:.7;
+  border-left:1px solid var(--primary-border);border-right:1px solid var(--primary-border);
+}
+
+/* 月视图空态（时间轴仍然保留，便于翻月） */
+.gantt-month-empty{
+  position:relative;z-index:2;
+  padding:28px 20px 28px calc(var(--gantt-label-w,280px) + 24px);
+  font-size:12.5px;color:var(--text-3);
 }
 
 /* 拖动日期提示 */
@@ -105,15 +202,30 @@
 /* 未排期列表 */
 .gantt-unplanned-row{
   display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;
-  border-bottom:1px solid var(--border);text-align:left;
+  border-bottom:1px solid var(--border);text-align:left;cursor:grab;
 }
 .gantt-unplanned-row:last-child{border-bottom:none;}
 .gantt-unplanned-row:hover{background:var(--surface-hover);}
+.gantt-unplanned-row.dragging{opacity:.6;cursor:grabbing;}
 .gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
 .gantt-unplanned-t{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-unplanned-m{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-empty-note{font-size:12px;color:var(--text-3);}
 
+/* 图例 */
+.gantt-legend{
+  flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:0 2px;font-size:11.5px;color:var(--text-3);
+}
+.gantt-legend .gl-item{display:inline-flex;align-items:center;gap:5px;}
+.gantt-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.gantt-legend i.dashed{background:var(--warning-soft);border:1px dashed var(--warning-border);}
+.gantt-legend-hint{margin-left:auto;color:var(--text-3);}
+
 @media (hover:none){
-  .gantt-handle{opacity:.28;}
+  .gantt-handle::after{opacity:.5;}
+}
+
+@media (max-width:1279px){
+  .gantt-legend-hint{display:none;}
 }

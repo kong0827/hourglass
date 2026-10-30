@@ -1324,6 +1324,8 @@ function toggleIn(arr, v){
 function reloadFilteredViews(){
   loadBoard({animate:true});
   refreshListIfOpen();
+  refreshGanttIfOpen();
+  if(activeView === "gantt") renderGanttFilterState();
 }
 var searchTimer = null;
 searchInput.addEventListener("input", function(){
@@ -3636,29 +3638,114 @@ if(unplannedList) wireCardContainer(unplannedList);
 /* ==================== 甘特图视图 ==================== */
 var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttShowDoneEl = $("ganttShowDone"), ganttZoomEl = $("ganttZoom"),
+    ganttGroupEl = $("ganttGroup"), ganttRangeModeEl = $("ganttRangeMode"),
+    ganttRangeLabelEl = $("ganttRangeLabel"), ganttPrevMonthEl = $("ganttPrevMonth"),
+    ganttNextMonthEl = $("ganttNextMonth"), ganttFilterBtn = $("ganttFilterBtn"),
+    ganttFilterMenu = $("ganttFilterMenu"), ganttFilterCountEl = $("ganttFilterCount"),
+    ganttClearFilterEl = $("ganttClearFilter"), ganttNoticeEl = $("ganttNotice"),
     ganttUnplannedBox = $("ganttUnplannedBox"), ganttUnplannedCount = $("ganttUnplannedCount"),
     ganttUnplannedList = $("ganttUnplannedList");
 var GANTT_LABEL_W = 280;
-var ganttTipEl = null;
-var ganttState = { tasks: [], byId: {}, dayW: 28, showDone: false, range: null, seq: 0, drag: null, total: 0, scrolled: false, unplannedAuto: false };
+var GANTT_MAX_DAYS = 740;   // 自动范围的安全上限；超过就切月视图，避免一次生成数千个日期表头
+var GANTT_BC = {
+  P0:{c:"var(--p0)", soft:"var(--p0-soft)", bd:"var(--danger-border)"},
+  P1:{c:"var(--p1)", soft:"var(--p1-soft)", bd:"var(--warning-border)"},
+  P2:{c:"var(--p2)", soft:"var(--p2-soft)", bd:"var(--info-border)"},
+  P3:{c:"var(--p3)", soft:"var(--p3-soft)", bd:"var(--border-strong)"}
+};
+var GANTT_DONE    = {c:"var(--success)", soft:"var(--success-soft)", bd:"var(--success-border)"};
+var GANTT_BLOCKED = {c:"var(--warning)", soft:"var(--warning-soft)", bd:"var(--warning-border)"};
+var GANTT_OVERDUE = {c:"var(--danger)",  soft:"var(--danger-soft)",  bd:"var(--danger-border)"};
+var ganttTipEl = null, ganttDropEl = null;
+var ganttSuppressUnplannedClick = 0;
+var ganttState = {
+  tasks: [], byId: {}, dayW: 28, showDone: false, range: null, seq: 0, drag: null,
+  total: 0, scrolled: false, unplannedAuto: false,
+  groupBy: "none", collapsed: {}, rangeMode: "auto", anchorMonth: null,
+  notice: "", unplannedDrag: null
+};
+
+/* 偏好按工作空间保存：换空间各自一套，没有空间 id 时只留在内存里 */
+function ganttPrefsKey(){
+  var id = currentWs && currentWs.id;
+  return id ? ("ds.gantt.prefs." + id) : null;
+}
+function loadGanttPrefs(){
+  var key = ganttPrefsKey();
+  if(!key) return;   // 没有空间 id：保持内存状态，不写/不读错误 key
+  /* 有空间 id 才落偏好；先回默认值，避免沿用上一个空间的显示设置 */
+  ganttState.showDone = false;
+  ganttState.dayW = 28;
+  ganttState.groupBy = "none";
+  ganttState.collapsed = {};
+  var saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ saved = null; }
+  if(!saved || typeof saved !== "object") return;
+  if(typeof saved.showDone === "boolean") ganttState.showDone = saved.showDone;
+  var dw = Number(saved.dayW);
+  if(dw === 20 || dw === 28 || dw === 40) ganttState.dayW = dw;
+  if(saved.groupBy === "project" || saved.groupBy === "owner") ganttState.groupBy = saved.groupBy;
+  if(saved.collapsed && typeof saved.collapsed === "object") ganttState.collapsed = saved.collapsed;
+}
+function saveGanttPrefs(){
+  var key = ganttPrefsKey();
+  if(!key) return;
+  try{
+    localStorage.setItem(key, JSON.stringify({
+      showDone: ganttState.showDone,
+      dayW: ganttState.dayW,
+      groupBy: ganttState.groupBy,
+      collapsed: ganttState.collapsed
+    }));
+  }catch(e){ /* 隐私模式 / 配额满：偏好只是增强，不打断使用 */ }
+}
 
 function enterGanttView(){
-  if(ganttShowDoneEl) ganttShowDoneEl.checked = ganttState.showDone;
-  if(ganttZoomEl) ganttZoomEl.value = String(ganttState.dayW);
+  loadGanttPrefs();
+  syncGanttControls();
   loadGantt();
   loadReqs().then(function(){
-    if(activeView === "gantt" && !ganttState.drag && ganttState.tasks.length) renderGantt();
+    if(activeView === "gantt" && !ganttState.drag && !ganttState.unplannedDrag && ganttState.tasks.length) renderGantt();
   }).catch(function(){ /* 项目名只是展示增强，失败不影响甘特图 */ });
 }
 
+function syncGanttControls(){
+  if(ganttShowDoneEl) ganttShowDoneEl.checked = ganttState.showDone;
+  if(ganttZoomEl) ganttZoomEl.value = String(ganttState.dayW);
+  if(ganttGroupEl) ganttGroupEl.value = ganttState.groupBy;
+  if(ganttRangeModeEl){
+    ganttRangeModeEl.querySelectorAll("[data-gantt-range]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.getAttribute("data-gantt-range") === ganttState.rangeMode ? "true" : "false");
+    });
+  }
+  updateGanttRangeUI();
+  renderGanttFilterState();
+}
+
+/* 只带 /api/tasks/list 已支持的筛选字段，doneScope 是看板分页参数，不往这里传 */
+function ganttTaskParams(){
+  return {
+    q: state.q || null,
+    owners: state.owners.length ? state.owners : null,
+    pris: state.pris.length ? state.pris : null,
+    cats: state.cats.length ? state.cats : null,
+    reqs: state.reqs.length ? state.reqs : null,
+    tags: state.tags.length ? state.tags : null,
+    due: state.due || null,
+    focus: state.focus ? true : null,
+    blocked: state.blocked ? true : null,
+    sort: "due"
+  };
+}
+
 function loadGantt(){
-  if(ganttState.drag || !ganttScroll) return;
+  if(ganttState.drag || ganttState.unplannedDrag || !ganttScroll) return;
   var seq = ++ganttState.seq;
   if(!ganttState.tasks.length){
     ganttScroll.innerHTML = '<div style="padding:20px">' + UI.skeletonRows(6) + '</div>';
     ganttMeta.textContent = "加载中…";
   }
-  API.get("/api/tasks/list", { sort: "due" }).then(function(d){
+  API.get("/api/tasks/list", ganttTaskParams()).then(function(d){
     if(seq !== ganttState.seq) return;
     var items = (d && d.items) || [];
     ganttState.tasks = items;
@@ -3681,6 +3768,18 @@ function loadGantt(){
   });
 }
 
+function ganttMonthStart(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function ganttMonthEnd(d){ return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+function ganttMonthRange(anchor){
+  var m = anchor || TODAY;
+  var start = ganttMonthStart(m), end = ganttMonthEnd(m);
+  return { start: start, end: end, days: dayDiff(end, start) + 1 };
+}
+function ganttMonthLabel(d){
+  var m = d || TODAY;
+  return m.getFullYear() + " 年 " + (m.getMonth() + 1) + " 月";
+}
+
 function ganttDateRange(dated){
   var min = dated[0].s, max = dated[0].e;
   dated.forEach(function(x){
@@ -3690,32 +3789,40 @@ function ganttDateRange(dated){
   /* 今天始终留在时间轴里，方便对照进度 */
   if(TODAY < min) min = TODAY;
   if(TODAY > max) max = TODAY;
-  var start = addDays(min, -3), end = addDays(max, 7);
+  var start = addDays(min, -3), end = addDays(max, 4);
   return { start: start, end: end, days: dayDiff(end, start) + 1 };
 }
 
-function ganttMetaText(all, visible, hiddenDone){
-  var txt = visible.length + " 项" + (hiddenDone ? "（已隐藏 " + hiddenDone + " 项已完成）" : "");
-  if(ganttState.range){
-    txt += " · " + fmtShortMD(ganttState.range.start) + " → " + fmtShortMD(ganttState.range.end);
+function ganttMetaText(info){
+  var txt = info.count + " 项";
+  if(info.hiddenDone) txt += "（已隐藏 " + info.hiddenDone + " 项已完成）";
+  if(info.range){
+    txt += " · " + (info.mode === "month"
+      ? ganttMonthLabel(ganttState.anchorMonth)
+      : (fmtShortMD(info.range.start) + " → " + fmtShortMD(info.range.end)));
   }
-  if(ganttState.total > all.length){
-    txt += " · 列表仅显示前 500 项";
-  }
+  var n = selectedFilterCount();
+  if(n) txt += " · 已应用 " + n + " 项筛选";
+  if(info.total > info.allCount) txt += " · 列表仅显示前 500 项";
   return txt;
 }
 
 function ganttMonthsHTML(range, dayW){
   var out = "";
   var cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+  var first = true;
   while(cur <= range.end){
     var from = cur < range.start ? range.start : cur;
     var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     var to = addDays(next, -1);
     if(to > range.end) to = range.end;
     var w = (dayDiff(to, from) + 1) * dayW;
-    out += '<span class="gantt-month" style="width:' + w + 'px">' +
-      cur.getFullYear() + "年" + (cur.getMonth() + 1) + '月</span>';
+    /* 同年只在首段和 1 月标年份，避免每个月都重复 "2026年" */
+    var label = (first || cur.getMonth() === 0)
+      ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月")
+      : ((cur.getMonth() + 1) + "月");
+    out += '<span class="gantt-month" style="width:' + w + 'px">' + label + '</span>';
+    first = false;
     cur = next;
   }
   return out;
@@ -3733,41 +3840,108 @@ function ganttDaysHTML(range, dayW){
   return out;
 }
 
+/* 状态优先级：done > blocked > overdue > 普通优先级色；阻塞且逾期时底色走阻塞，文字仍标逾期 */
+function ganttStatusOf(t){
+  var done = t.boardColumn === "done";
+  var days = 0;
+  if(!done && t.dueDate && t.dueDate < TODAY_ISO){
+    days = Math.abs(dayDiff(parseDate(t.dueDate), TODAY));
+  }
+  if(done) return { key: "done", color: GANTT_DONE, days: 0, badge: "已完成" };
+  if(t.blocked) return {
+    key: "blocked", color: GANTT_BLOCKED, days: days,
+    badge: days ? ("阻塞 · 逾期 " + days + " 天") : "阻塞"
+  };
+  if(days > 0) return { key: "overdue", color: GANTT_OVERDUE, days: days, badge: "逾期 " + days + " 天" };
+  return { key: "doing", color: GANTT_BC[t.priority] || GANTT_BC.P2, days: 0, badge: "" };
+}
+
+function ganttGroupOf(t){
+  if(ganttState.groupBy === "project"){
+    if(!t.reqId) return { key: "project:__none", name: "未关联项目" };
+    var rn = reqNameById(t.reqId);
+    return { key: "project:" + t.reqId, name: (rn && rn !== "无") ? rn : "未关联项目" };
+  }
+  if(ganttState.groupBy === "owner"){
+    if(!t.owner) return { key: "owner:__none", name: "未分配" };
+    return { key: "owner:" + t.owner, name: t.owner };
+  }
+  return { key: "__all", name: "" };
+}
+function ganttGroups(rows){
+  var out = [], map = {};
+  rows.forEach(function(x){
+    var g = ganttGroupOf(x.t);
+    var cur = map[g.key];
+    if(!cur){ cur = map[g.key] = { key: g.key, name: g.name, rows: [] }; out.push(cur); }
+    cur.rows.push(x);
+  });
+  return out;
+}
+
 function ganttRowHTML(x, range, dayW, totalW){
-  var t = x.t, s = x.s, e = x.e;
+  var t = x.t, s = x.rs || x.s, e = x.re || x.e;
   var off = dayDiff(s, range.start);
   var span = Math.max(1, dayDiff(e, s) + 1);
   var left = off * dayW, width = span * dayW;
   var p = progressOf(t);
   var done = t.boardColumn === "done";
-  var color = done ? "var(--success)"
-    : (t.blocked ? "var(--warning)" : (PRIORITY_COLOR[t.priority] || "var(--primary)"));
+  var st = ganttStatusOf(t);
+  var bc = st.color;
   var rn = t.reqId ? reqNameById(t.reqId) : "";
   if(rn === "无") rn = "";
   var meta = '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>';
   if(rn) meta += '<span class="ellipsis">' + esc(rn) + '</span>';
   if(t.owner) meta += '<span class="ellipsis">' + esc(t.owner) + '</span>';
   var rangeText = (t.startDate && t.dueDate)
-    ? fmtShortMD(s) + '→' + fmtShortMD(e)
-    : (t.startDate ? '开始 ' + fmtShortMD(s) : '截止 ' + fmtShortMD(e));
+    ? fmtShortMD(x.s) + '→' + fmtShortMD(x.e)
+    : (t.startDate ? '开始 ' + fmtShortMD(x.s) : '截止 ' + fmtShortMD(x.e));
   meta += '<span>' + rangeText + '</span>';
+  if(st.key === "overdue"){
+    meta += '<span class="meta over">逾期 ' + st.days + ' 天</span>';
+  }else if(st.key === "blocked"){
+    meta += '<span class="meta blocked">' + icon("alert", 12) + '阻塞' +
+      (st.days ? ' · 逾期 ' + st.days + ' 天' : '') + '</span>';
+  }
   var fullRange = (t.startDate && t.dueDate)
-    ? fmtFull(s) + " → " + fmtFull(e)
-    : (t.startDate ? "开始 " + fmtFull(s) : "截止 " + fmtFull(e));
-  var barTitle = t.title + " · " + fullRange + (done ? " · 已完成" : "");
+    ? fmtFull(x.s) + " → " + fmtFull(x.e)
+    : (t.startDate ? "开始 " + fmtFull(x.s) : "截止 " + fmtFull(x.e));
+  var statusText = st.key === "done" ? "已完成"
+    : st.key === "blocked" ? ("阻塞" + (st.days ? "，逾期 " + st.days + " 天" : ""))
+    : st.key === "overdue" ? ("逾期 " + st.days + " 天")
+    : "进行中";
+  var barTitle = t.title + " · " + fullRange + " · 进度 " + p + "% · " + statusText +
+    (rn ? " · " + rn : "") + (t.owner ? " · " + t.owner : "");
+  var aria = t.title + "，" + fullRange + "，进度 " + p + "%，状态：" + statusText + "。按 Enter 打开详情";
   var handles = (t.startDate && t.dueDate)
     ? '<span class="gantt-handle l" data-gantt-handle="l"></span><span class="gantt-handle r" data-gantt-handle="r"></span>'
     : "";
+  var inner = "";
+  var hasStatus = st.key !== "doing";
+  if(width >= 110 && !(hasStatus && width < 200)){
+    inner += '<span class="gantt-bar-label">' + esc((done ? "✓ " : "") + t.title) + '</span>';
+  }
+  if(width >= 72){
+    inner += '<span class="gantt-bar-stat">' + esc(hasStatus ? st.badge : (p + "%")) + '</span>';
+  }else if(width >= 28 && hasStatus){
+    inner += '<span class="gantt-bar-flag" aria-hidden="true">' + (done ? "✓" : "!") + '</span>';
+  }
+  if(hasStatus && !done && width >= 150){
+    inner += '<span class="gantt-bar-pct">' + p + '%</span>';
+  }
   return '<div class="gantt-row">' +
     '<button class="gantt-label" type="button" data-gantt-open="' + esc(t.id) + '">' +
       '<span class="gantt-title">' + esc(t.title) + '</span>' +
       '<span class="gantt-meta">' + meta + '</span>' +
     '</button>' +
     '<div class="gantt-track" style="width:' + totalW + 'px">' +
-      '<div class="gantt-bar' + (done ? " is-done" : "") + (t.blocked ? " is-blocked" : "") + '"' +
-        ' data-gantt-bar="' + esc(t.id) + '"' +
-        ' style="left:' + left + 'px;width:' + width + 'px;--bc:' + color + '"' +
+      '<div class="gantt-bar' + (done ? " is-done" : "") + (t.blocked ? " is-blocked" : "") +
+        (st.key === "overdue" ? " is-overdue" : "") + '"' +
+        ' data-gantt-bar="' + esc(t.id) + '" role="button" tabindex="0" aria-label="' + esc(aria) + '"' +
+        ' style="left:' + left + 'px;width:' + width + 'px;--bc:' + bc.c +
+        ';--bc-soft:' + bc.soft + ';--bc-bd:' + bc.bd + '"' +
         ' title="' + esc(barTitle) + '">' +
+        (inner ? '<span class="gantt-bar-inner">' + inner + '</span>' : '') +
         '<span class="gantt-bar-fill" style="width:' + p + '%"></span>' + handles +
       '</div>' +
     '</div>' +
@@ -3795,7 +3969,7 @@ function renderGanttUnplanned(list, openIt){
     if(t.owner) meta.push(esc(t.owner));
     meta.push(esc(colName(t.boardColumn)));
     var cat = catTag(t.category);
-    return '<button class="gantt-unplanned-row" type="button" data-gantt-open="' + esc(t.id) + '">' +
+    return '<button class="gantt-unplanned-row" type="button" data-gantt-open="' + esc(t.id) + '" title="拖到时间轴即可排期">' +
       '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
       '<span class="gantt-unplanned-main">' +
         '<span class="gantt-unplanned-t">' + esc(t.title) + '</span>' +
@@ -3820,59 +3994,82 @@ function renderGantt(){
     if(!s) s = e;
     if(!e) e = s;
     if(s > e){ var tmp = s; s = e; e = tmp; }
-    dated.push({ t: t, s: s, e: e });
+    dated.push({ t: t, s: s, e: e, rs: s, re: e });
   });
   dated.sort(function(a, b){
-    return (a.s - b.s) || String(a.t.id).localeCompare(String(b.t.id));
+    return (a.s - b.s) || (a.e - b.e) || String(a.t.id).localeCompare(String(b.t.id));
   });
   renderGanttUnplanned(undated, dated.length === 0);
+  ganttState.notice = "";
 
   if(!dated.length){
-    ganttState.range = null;
-    var title, text, action = "";
-    if(!all.length){
-      title = "还没有任务";
-      text = "新建任务并填上开始或截止日期，就会按时间出现在甘特图里。";
-      action = "新建任务";
-    }else if(!visible.length){
-      title = "当前没有未完成任务";
-      text = "已完成任务被隐藏了；勾选上方「显示已完成」可以查看。";
-    }else{
-      title = "还没有排期任务";
-      text = "给任务填上开始或截止日期后，这里会按时间排布。";
-      action = "去列表";
-    }
-    ganttScroll.innerHTML = '<div style="padding:20px">' +
-      UI.emptyState({ icon: "calendar", title: title, text: text, actionLabel: action }) + '</div>';
-    var btn = ganttScroll.querySelector(".empty-state .btn");
-    if(btn) btn.addEventListener("click", function(){
-      if(!all.length) openTaskDrawer("backlog"); else showView("list");
-    });
-    ganttMeta.textContent = ganttMetaText(all, visible, hiddenDone) +
-      (undated.length ? " · 未排期 " + undated.length + " 项" : "");
+    renderGanttEmpty(all, visible, hiddenDone, undated);
     return;
   }
 
-  var range = ganttDateRange(dated);
+  var range;
+  if(ganttState.rangeMode === "month"){
+    if(!ganttState.anchorMonth) ganttState.anchorMonth = ganttMonthStart(TODAY);
+    range = ganttMonthRange(ganttState.anchorMonth);
+  }else{
+    range = ganttDateRange(dated);
+    if(range.days > GANTT_MAX_DAYS){
+      ganttState.rangeMode = "month";
+      ganttState.anchorMonth = ganttMonthStart(TODAY);
+      range = ganttMonthRange(ganttState.anchorMonth);
+      ganttState.notice = "任务时间跨度超过 2 年，已切换到月视图；可用上一月/下一月查看其他区间。";
+      syncGanttControls();
+    }
+  }
   ganttState.range = range;
+
+  var inRange = dated;
+  if(ganttState.rangeMode === "month"){
+    inRange = dated.filter(function(x){ return x.s <= range.end && x.e >= range.start; });
+    inRange.forEach(function(x){
+      x.rs = x.s < range.start ? range.start : x.s;
+      x.re = x.e > range.end ? range.end : x.e;
+    });
+  }
+
   var dayW = ganttState.dayW;
   var totalW = range.days * dayW;
   var todayOff = dayDiff(TODAY, range.start);
+  var todayIn = todayOff >= 0 && todayOff < range.days;
   var months = ganttMonthsHTML(range, dayW);
   var daysHTML = ganttDaysHTML(range, dayW);
-  var rows = dated.map(function(x){ return ganttRowHTML(x, range, dayW, totalW); }).join("");
+  var rowsHTML = "";
+  ganttGroups(inRange).forEach(function(g){
+    if(g.key !== "__all"){
+      var collapsed = !!ganttState.collapsed[g.key];
+      rowsHTML += '<div class="gantt-group">' +
+        '<button class="gantt-group-head" type="button" data-gantt-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
+          '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
+          '<span class="gantt-group-name">' + esc(g.name) + '</span>' +
+          '<span class="gantt-group-cnt">' + g.rows.length + ' 项</span>' +
+        '</button>' +
+      '</div>';
+      if(collapsed) return;
+    }
+    g.rows.forEach(function(x){ rowsHTML += ganttRowHTML(x, range, dayW, totalW); });
+  });
+  var emptyMonth = (ganttState.rangeMode === "month" && !inRange.length)
+    ? '<div class="gantt-month-empty">本月没有排期任务；可以翻到上一月/下一月，或把未排期任务拖进时间轴。</div>'
+    : "";
 
   ganttScroll.innerHTML = '<div class="gantt-grid" style="--gantt-label-w:' + GANTT_LABEL_W + 'px;--gantt-day-w:' + dayW + 'px;">' +
     '<div class="gantt-head">' +
-      '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + dated.length + '</span></div>' +
+      '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span></div>' +
       '<div class="gantt-axis" style="width:' + totalW + 'px">' +
         '<div class="gantt-months">' + months + '</div>' +
         '<div class="gantt-days">' + daysHTML + '</div>' +
       '</div>' +
     '</div>' +
-    '<div class="gantt-body">' + rows + '</div>' +
-    (todayOff >= 0 && todayOff < range.days
-      ? '<div class="gantt-today" style="left:calc(' + GANTT_LABEL_W + 'px + ' + (todayOff * dayW) + 'px)"></div>' : '') +
+    '<div class="gantt-body">' + rowsHTML + emptyMonth + '</div>' +
+    (todayIn
+      ? '<div class="gantt-today-col" style="left:calc(' + GANTT_LABEL_W + 'px + ' + (todayOff * dayW) + 'px);width:' + dayW + 'px"></div>' +
+        '<div class="gantt-today" style="left:calc(' + GANTT_LABEL_W + 'px + ' + (todayOff * dayW) + 'px)"></div>'
+      : '') +
   '</div>';
   ganttScroll.scrollLeft = prevLeft;
   ganttScroll.scrollTop = prevTop;
@@ -3880,13 +4077,74 @@ function renderGantt(){
     ganttState.scrolled = true;
     ganttScrollToToday();
   }
-  ganttMeta.textContent = ganttMetaText(all, visible, hiddenDone) +
-    (undated.length ? " · 未排期 " + undated.length + " 项" : "");
+  if(ganttNoticeEl){
+    ganttNoticeEl.hidden = !ganttState.notice;
+    ganttNoticeEl.textContent = ganttState.notice;
+  }
+  updateGanttRangeUI();
+  ganttMeta.textContent = ganttMetaText({
+    count: inRange.length, hiddenDone: hiddenDone, range: range,
+    mode: ganttState.rangeMode, total: ganttState.total, allCount: all.length
+  }) + (undated.length ? " · 未排期 " + undated.length + " 项" : "");
+}
+
+function renderGanttEmpty(all, visible, hiddenDone, undated){
+  ganttState.range = null;
+  var title, text, action = "", actionKind = "";
+  if(!all.length){
+    if(filterOn()){
+      title = "没有符合筛选的任务";
+      text = "当前筛选条件下没有任务；清除筛选后可查看全部任务。";
+      action = "清除筛选"; actionKind = "clear";
+    }else{
+      title = "还没有任务";
+      text = "新建任务并填上开始或截止日期，就会按时间出现在甘特图里。";
+      action = "新建任务"; actionKind = "new";
+    }
+  }else if(!visible.length){
+    title = "当前没有未完成任务";
+    text = "已完成任务被隐藏了；勾选上方「显示已完成」可以查看。";
+  }else{
+    title = "还没有排期任务";
+    text = "给任务填上开始或截止日期后，这里会按时间排布。";
+    action = "去列表"; actionKind = "list";
+  }
+  ganttScroll.innerHTML = '<div style="padding:20px">' +
+    UI.emptyState({ icon: "calendar", title: title, text: text, actionLabel: action }) + '</div>';
+  var btn = ganttScroll.querySelector(".empty-state .btn");
+  if(btn) btn.addEventListener("click", function(){
+    if(actionKind === "clear") clearFilters();
+    else if(actionKind === "new") openTaskDrawer("backlog");
+    else showView("list");
+  });
+  if(ganttNoticeEl){ ganttNoticeEl.hidden = true; ganttNoticeEl.textContent = ""; }
+  updateGanttRangeUI();
+  ganttMeta.textContent = ganttMetaText({
+    count: 0, hiddenDone: hiddenDone, range: null, mode: ganttState.rangeMode,
+    total: ganttState.total, allCount: all.length
+  }) + (undated.length ? " · 未排期 " + undated.length + " 项" : "");
+}
+
+function updateGanttRangeUI(){
+  var monthMode = ganttState.rangeMode === "month";
+  if(ganttRangeLabelEl){
+    ganttRangeLabelEl.textContent = monthMode
+      ? ganttMonthLabel(ganttState.anchorMonth || TODAY)
+      : "自动范围";
+  }
+  if(ganttPrevMonthEl) ganttPrevMonthEl.disabled = false;
+  if(ganttNextMonthEl) ganttNextMonthEl.disabled = false;
+  if(ganttRangeModeEl){
+    ganttRangeModeEl.querySelectorAll("[data-gantt-range]").forEach(function(b){
+      b.setAttribute("aria-pressed", b.getAttribute("data-gantt-range") === ganttState.rangeMode ? "true" : "false");
+    });
+  }
 }
 
 function ganttScrollToToday(){
   if(!ganttState.range || !ganttScroll) return;
   var off = dayDiff(TODAY, ganttState.range.start);
+  if(off < 0) off = 0;
   ganttScroll.scrollLeft = Math.max(0, off * ganttState.dayW - 160);
 }
 
@@ -3905,12 +4163,191 @@ function hideGanttTip(){
   if(ganttTipEl) ganttTipEl.hidden = true;
 }
 
+/* ==================== 筛选 / 分组 / 范围控件 ==================== */
+function renderGanttFilterState(){
+  var n = selectedFilterCount();
+  if(ganttFilterCountEl){
+    ganttFilterCountEl.hidden = n === 0;
+    ganttFilterCountEl.textContent = String(n);
+  }
+  if(ganttClearFilterEl) ganttClearFilterEl.hidden = n === 0;
+  if(ganttFilterBtn) ganttFilterBtn.classList.toggle("filter-on", n > 0);
+}
+function ganttFilterOwners(){
+  var out = [], seen = {};
+  var meta = state.board && state.board.meta;
+  if(meta && meta.owners){
+    meta.owners.forEach(function(o){
+      if(o && o.name && !seen[o.name]){ seen[o.name] = 1; out.push(o.name); }
+    });
+  }
+  ganttState.tasks.forEach(function(t){
+    if(t.owner && !seen[t.owner]){ seen[t.owner] = 1; out.push(t.owner); }
+  });
+  return out;
+}
+function ganttFilterSection(title, inner){
+  return '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">' + title + '</div>' +
+    '<div class="row row-gap" style="flex-wrap:wrap;gap:6px">' + inner + '</div></div>';
+}
+function renderGanttFilterMenu(){
+  if(!ganttFilterMenu) return;
+  var owners = ganttFilterOwners();
+  var ownerHTML = owners.map(function(o){
+    return '<button class="chip" type="button" data-gantt-owner="' + esc(o) + '" aria-pressed="' +
+      (state.owners.indexOf(o) !== -1) + '">' + esc(o) + '</button>';
+  }).join("");
+  var priHTML = PRIORITIES.map(function(p){
+    return '<button class="chip" type="button" data-gantt-pri="' + p + '" aria-pressed="' +
+      (state.pris.indexOf(p) !== -1) + '"><i class="cdot" style="background:' + PRIORITY_COLOR[p] + '"></i>' + p + '</button>';
+  }).join("");
+  var projHTML = reqList.map(function(r){
+    return '<button class="chip" type="button" data-gantt-req="' + esc(r.id) + '" aria-pressed="' +
+      (state.reqs.indexOf(r.id) !== -1) + '">' + esc(r.name) + '</button>';
+  }).join("");
+  if(state.reqs.indexOf("__none") !== -1){
+    projHTML += '<button class="chip" type="button" data-gantt-req="__none" aria-pressed="true">未归类</button>';
+  }
+  var html = '<div class="menu-title">筛选任务</div>' +
+    ganttFilterSection("负责人", ownerHTML || '<span class="foot-note">当前空间没有负责人可选</span>') +
+    ganttFilterSection("优先级", priHTML) +
+    ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-filter-reset>重置</button></div>';
+  ganttFilterMenu.innerHTML = html;
+}
+function afterGanttFilterChange(){
+  renderGanttFilterMenu();
+  renderGanttFilterState();
+  reloadFilteredViews();
+}
+
+function ganttSetRangeMode(mode){
+  if(mode !== "auto" && mode !== "month") return;
+  if(ganttState.rangeMode === mode) return;
+  ganttState.rangeMode = mode;
+  if(mode === "month" && !ganttState.anchorMonth) ganttState.anchorMonth = ganttMonthStart(TODAY);
+  syncGanttControls();
+  renderGantt();
+  if(mode === "month"){
+    if(ganttScroll) ganttScroll.scrollLeft = 0;
+  }else{
+    ganttScrollToToday();
+  }
+}
+function ganttShiftMonth(delta){
+  if(ganttState.rangeMode !== "month"){
+    ganttState.rangeMode = "month";
+    ganttState.anchorMonth = ganttMonthStart(TODAY);
+  }
+  var a = ganttState.anchorMonth || ganttMonthStart(TODAY);
+  ganttState.anchorMonth = new Date(a.getFullYear(), a.getMonth() + delta, 1);
+  syncGanttControls();
+  renderGantt();
+  if(ganttScroll) ganttScroll.scrollLeft = 0;
+}
+function ganttGoToday(){
+  if(ganttState.rangeMode === "month"){
+    ganttState.anchorMonth = ganttMonthStart(TODAY);
+    syncGanttControls();
+    renderGantt();
+  }
+  ganttScrollToToday();
+}
+function ganttToggleGroup(key){
+  if(!key) return;
+  if(ganttState.collapsed[key]) delete ganttState.collapsed[key];
+  else ganttState.collapsed[key] = true;
+  saveGanttPrefs();
+  renderGantt();
+}
+
+/* ==================== 拖拽坐标与自动横滚 ==================== */
+function ganttAxisEl(){ return ganttScroll ? ganttScroll.querySelector(".gantt-axis") : null; }
+function ganttAxisDayIndex(clientX){
+  var axis = ganttAxisEl();
+  if(!axis || !ganttState.range) return null;
+  var r = axis.getBoundingClientRect();
+  if(r.width <= 0) return null;
+  return (clientX - r.left) / ganttState.dayW;
+}
+function ganttDayAtClientX(clientX, clientY, timelineOnly){
+  if(!ganttState.range) return null;
+  if(timelineOnly){
+    if(!ganttScroll) return null;
+    var sr = ganttScroll.getBoundingClientRect();
+    if(clientX < sr.left + GANTT_LABEL_W || clientX > sr.right) return null;
+    if(clientY < sr.top || clientY > sr.bottom) return null;
+  }
+  var idx = ganttAxisDayIndex(clientX);
+  if(idx === null) return null;
+  idx = Math.floor(idx);
+  if(idx < 0) idx = 0;
+  if(idx > ganttState.range.days - 1) idx = ganttState.range.days - 1;
+  return addDays(ganttState.range.start, idx);
+}
+function ganttEdgeCalc(clientX, clientY){
+  var r = ganttScroll.getBoundingClientRect();
+  if(clientY === null || clientY === undefined || clientY < r.top || clientY > r.bottom){
+    return { dir: 0, speed: 0 };
+  }
+  var left = r.left + GANTT_LABEL_W, right = r.right, zone = 32, max = 18;
+  var dir = 0, dist = 0;
+  if(clientX < left + zone){ dir = -1; dist = left + zone - clientX; }
+  else if(clientX > right - zone){ dir = 1; dist = clientX - (right - zone); }
+  if(dist < 0) dist = 0;
+  if(dist > zone) dist = zone;
+  return { dir: dir, speed: dir ? dir * Math.max(2, Math.round((dist / zone) * max)) : 0 };
+}
+function showGanttDropHint(dayIdx){
+  var grid = ganttScroll && ganttScroll.querySelector(".gantt-grid");
+  if(!grid || !ganttState.range || dayIdx === null || dayIdx === undefined) return;
+  if(!ganttDropEl){
+    ganttDropEl = document.createElement("div");
+    ganttDropEl.className = "gantt-drop-col";
+  }
+  if(ganttDropEl.parentNode !== grid) grid.appendChild(ganttDropEl);
+  ganttDropEl.style.left = "calc(" + GANTT_LABEL_W + "px + " + (dayIdx * ganttState.dayW) + "px)";
+  ganttDropEl.style.width = ganttState.dayW + "px";
+  ganttDropEl.hidden = false;
+}
+function hideGanttDropHint(){
+  if(ganttDropEl){ ganttDropEl.hidden = true; ganttDropEl.remove(); }
+}
+
+/* 改期成功后的撤销：只恢复起止日期；若任务已被后续操作改过则不覆盖 */
+function ganttUndoChange(id, prev, next){
+  var latest = ganttState.byId[id] || taskById(id) || taskCacheExtra[id] || null;
+  if(!latest){ toast("任务已不存在，未撤销", "bad"); return; }
+  if(String(latest.startDate || "") !== String(next.startDate || "") ||
+     String(latest.dueDate || "") !== String(next.dueDate || "")){
+    toast("任务已再次变更，未撤销", "bad");
+    return;
+  }
+  API.put("/api/tasks/" + encodeURIComponent(id), taskPayloadWith(latest, {
+    startDate: prev.startDate, dueDate: prev.dueDate
+  })).then(function(){
+    toast("已撤销改期", "fs");
+    loadGantt(); loadBoard({silent:true}); refreshListIfOpen(); refreshCalendarIfOpen();
+  }).catch(function(ex){
+    toast("撤销失败：" + (ex.message || "网络异常"), "bad");
+    loadGantt();
+  });
+}
+
+function ganttClampTimelineX(clientX){
+  var sr = ganttScroll.getBoundingClientRect();
+  var min = sr.left + GANTT_LABEL_W;
+  if(clientX < min) return min + 1;
+  if(clientX > sr.right) return sr.right - 1;
+  return clientX;
+}
+
 function onGanttPointerDown(e){
   var bar = e.target.closest ? e.target.closest("[data-gantt-bar]") : null;
   if(!bar) return;
   if(e.pointerType === "mouse" && e.button !== 0) return;
   var t = ganttState.byId[bar.dataset.ganttBar];
-  if(!t) return;
+  if(!t || !ganttState.range) return;
   var handle = e.target.closest("[data-gantt-handle]");
   var mode = handle ? handle.dataset.ganttHandle : "move";
   var hasStart = !!t.startDate, hasDue = !!t.dueDate;
@@ -3922,22 +4359,29 @@ function onGanttPointerDown(e){
   e.stopPropagation();
   ganttState.drag = {
     id: t.id, task: t, bar: bar, mode: mode,
-    x0: e.clientX, s0: s, e0: d, ns: s, ne: d,
+    x0: e.clientX, y0: e.clientY,
+    pointerDay0: ganttAxisDayIndex(ganttClampTimelineX(e.clientX)) || 0,
+    lastX: e.clientX, lastY: e.clientY,
+    os: t.startDate || null, oe: t.dueDate || null,
+    s0: s, e0: d, ns: s, ne: d,
     hasStart: hasStart, hasDue: hasDue,
     dayW: ganttState.dayW, start: ganttState.range.start,
-    moved: false, delta: 0
+    moved: false, delta: 0, edgeDir: 0, edgeSpeed: 0, raf: 0
   };
   bar.classList.add("dragging");
   document.addEventListener("pointermove", onGanttDragMove);
   document.addEventListener("pointerup", onGanttDragEnd);
   document.addEventListener("pointercancel", onGanttDragCancel);
+  document.addEventListener("keydown", onGanttDragKey);
 }
 
-function onGanttDragMove(e){
+function ganttDragApply(clientX){
   var d = ganttState.drag;
   if(!d) return;
-  var delta = Math.round((e.clientX - d.x0) / d.dayW);
-  if(!d.moved && Math.abs(e.clientX - d.x0) > 3) d.moved = true;
+  var idx = ganttAxisDayIndex(ganttClampTimelineX(clientX));
+  if(idx === null) idx = d.pointerDay0;
+  var delta = Math.round(idx - d.pointerDay0);
+  if(!d.moved && Math.abs(clientX - d.x0) > 3) d.moved = true;
   d.delta = delta;
   var ns = d.s0, ne = d.e0;
   if(d.mode === "move"){
@@ -3958,22 +4402,62 @@ function onGanttDragMove(e){
   var span = Math.max(1, dayDiff(ne, ns) + 1);
   d.bar.style.left = (off * d.dayW) + "px";
   d.bar.style.width = (span * d.dayW) + "px";
-  showGanttTip(fmtShortMD(ns) + " → " + fmtShortMD(ne) + " · " + span + " 天", e.clientX, e.clientY);
+  showGanttTip(fmtShortMD(ns) + " → " + fmtShortMD(ne) + " · " + span + " 天", d.lastX, d.lastY);
+}
+
+function ganttEdgeTick(){
+  var d = ganttState.drag;
+  if(!d || !d.edgeDir){ if(d) d.raf = 0; return; }
+  var before = ganttScroll.scrollLeft;
+  ganttScroll.scrollLeft = before + d.edgeSpeed;
+  if(ganttScroll.scrollLeft === before){ d.edgeDir = 0; d.raf = 0; return; }
+  ganttDragApply(d.lastX);
+  d.raf = requestAnimationFrame(ganttEdgeTick);
+}
+
+function onGanttDragMove(e){
+  var d = ganttState.drag;
+  if(!d) return;
+  d.lastX = e.clientX;
+  d.lastY = e.clientY;
+  ganttDragApply(e.clientX);
+  var edge = ganttEdgeCalc(e.clientX, e.clientY);
+  d.edgeDir = edge.dir;
+  d.edgeSpeed = edge.speed;
+  if(d.edgeDir && !d.raf) d.raf = requestAnimationFrame(ganttEdgeTick);
+  if(!d.edgeDir && d.raf){ cancelAnimationFrame(d.raf); d.raf = 0; }
 }
 
 function cleanupGanttDrag(){
   var d = ganttState.drag;
   ganttState.drag = null;
-  if(d && d.bar) d.bar.classList.remove("dragging");
+  if(d){
+    if(d.bar) d.bar.classList.remove("dragging");
+    if(d.raf) cancelAnimationFrame(d.raf);
+  }
   document.removeEventListener("pointermove", onGanttDragMove);
   document.removeEventListener("pointerup", onGanttDragEnd);
   document.removeEventListener("pointercancel", onGanttDragCancel);
+  document.removeEventListener("keydown", onGanttDragKey);
   hideGanttTip();
 }
 
-function onGanttDragEnd(){
+function onGanttDragKey(e){
+  if(e.key !== "Escape") return;
+  e.preventDefault();
+  var d = ganttState.drag;
+  cleanupGanttDrag();
+  if(d) renderGantt();
+}
+
+function onGanttDragEnd(e){
   var d = ganttState.drag;
   if(!d) return;
+  if(e && e.clientX !== undefined){
+    d.lastX = e.clientX;
+    d.lastY = e.clientY;
+    ganttDragApply(e.clientX);
+  }
   cleanupGanttDrag();
   if(!d.moved){
     openTaskById(d.id);
@@ -3993,9 +4477,20 @@ function onGanttDragEnd(){
   }else{
     patch.dueDate = iso(d.ne);
   }
+  var prev = { startDate: d.os, dueDate: d.oe };
+  var next = {
+    startDate: patch.startDate !== undefined ? patch.startDate : d.os,
+    dueDate: patch.dueDate !== undefined ? patch.dueDate : d.oe
+  };
   var label = (d.hasStart ? fmtShortMD(d.ns) : "—") + " → " + (d.hasDue ? fmtShortMD(d.ne) : "—");
   API.put("/api/tasks/" + encodeURIComponent(d.id), taskPayloadWith(d.task, patch)).then(function(t){
-    toast("已调整「" + t.title + "」：" + label, "fs");
+    if(t && t.id){
+      ganttState.byId[t.id] = t;
+      taskCacheExtra[t.id] = t;
+    }
+    toastAction("已调整「" + t.title + "」：" + label, "撤销", function(){
+      ganttUndoChange(d.id, prev, next);
+    });
     loadGantt();
     loadBoard({silent:true});
     refreshListIfOpen();
@@ -4012,22 +4507,159 @@ function onGanttDragCancel(){
   renderGantt();
 }
 
+/* ==================== 未排期拖入时间轴 ==================== */
+function onGanttUnplannedPointerDown(e){
+  var row = e.target.closest ? e.target.closest(".gantt-unplanned-row") : null;
+  if(!row) return;
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  var t = ganttState.byId[row.dataset.ganttOpen];
+  if(!t) return;
+  ganttState.unplannedDrag = {
+    task: t, row: row, x0: e.clientX, y0: e.clientY,
+    lastX: e.clientX, lastY: e.clientY,
+    moved: false, date: null, edgeDir: 0, edgeSpeed: 0, raf: 0
+  };
+  document.addEventListener("pointermove", onGanttUnplannedMove);
+  document.addEventListener("pointerup", onGanttUnplannedEnd);
+  document.addEventListener("pointercancel", onGanttUnplannedCancel);
+  document.addEventListener("keydown", onGanttUnplannedKey);
+}
+
+function ganttUnplannedApply(clientX, clientY){
+  var d = ganttState.unplannedDrag;
+  if(!d) return;
+  var date = ganttDayAtClientX(clientX, clientY, true);
+  d.date = date;
+  if(date){
+    showGanttDropHint(dayDiff(date, ganttState.range.start));
+    showGanttTip("排期到 " + fmtFull(date), clientX, clientY);
+  }else{
+    hideGanttDropHint();
+    showGanttTip("拖到时间轴上松手即可排期", clientX, clientY);
+  }
+}
+
+function ganttUnplannedTick(){
+  var d = ganttState.unplannedDrag;
+  if(!d || !d.edgeDir){ if(d) d.raf = 0; return; }
+  var before = ganttScroll.scrollLeft;
+  ganttScroll.scrollLeft = before + d.edgeSpeed;
+  if(ganttScroll.scrollLeft === before){ d.edgeDir = 0; d.raf = 0; return; }
+  ganttUnplannedApply(d.lastX, d.lastY);
+  d.raf = requestAnimationFrame(ganttUnplannedTick);
+}
+
+function onGanttUnplannedMove(e){
+  var d = ganttState.unplannedDrag;
+  if(!d) return;
+  d.lastX = e.clientX;
+  d.lastY = e.clientY;
+  if(!d.moved){
+    if(Math.abs(e.clientX - d.x0) <= 5 && Math.abs(e.clientY - d.y0) <= 5) return;
+    d.moved = true;
+    d.row.classList.add("dragging");
+  }
+  e.preventDefault();
+  ganttUnplannedApply(e.clientX, e.clientY);
+  var edge = ganttEdgeCalc(e.clientX, e.clientY);
+  d.edgeDir = edge.dir;
+  d.edgeSpeed = edge.speed;
+  if(d.edgeDir && !d.raf) d.raf = requestAnimationFrame(ganttUnplannedTick);
+  if(!d.edgeDir && d.raf){ cancelAnimationFrame(d.raf); d.raf = 0; }
+}
+
+function cleanupGanttUnplannedDrag(){
+  var d = ganttState.unplannedDrag;
+  ganttState.unplannedDrag = null;
+  if(d){
+    if(d.row) d.row.classList.remove("dragging");
+    if(d.raf) cancelAnimationFrame(d.raf);
+  }
+  document.removeEventListener("pointermove", onGanttUnplannedMove);
+  document.removeEventListener("pointerup", onGanttUnplannedEnd);
+  document.removeEventListener("pointercancel", onGanttUnplannedCancel);
+  document.removeEventListener("keydown", onGanttUnplannedKey);
+  hideGanttTip();
+  hideGanttDropHint();
+}
+
+function onGanttUnplannedEnd(e){
+  var d = ganttState.unplannedDrag;
+  if(!d) return;
+  if(d.moved && e && e.clientX !== undefined){
+    d.lastX = e.clientX;
+    d.lastY = e.clientY;
+    ganttUnplannedApply(e.clientX, e.clientY);
+  }
+  var date = d.date, moved = d.moved;
+  cleanupGanttUnplannedDrag();
+  if(!moved) return;   // 小位移当作点击，交给 click 打开详情
+  ganttSuppressUnplannedClick = Date.now() + 400;
+  if(!date){
+    toast("拖到时间轴上的某一天再松手，才能排期", "bad");
+    return;
+  }
+  var t = d.task;
+  API.put("/api/tasks/" + encodeURIComponent(t.id), taskPayloadWith(t, {
+    startDate: iso(date), dueDate: iso(date)
+  })).then(function(nt){
+    if(nt && nt.id){
+      ganttState.byId[nt.id] = nt;
+      taskCacheExtra[nt.id] = nt;
+    }
+    toastAction("已排期「" + nt.title + "」：" + fmtFull(date), "撤销", function(){
+      ganttUndoChange(nt.id, { startDate: null, dueDate: null },
+        { startDate: iso(date), dueDate: iso(date) });
+    });
+    loadGantt(); loadBoard({silent:true}); refreshListIfOpen(); refreshCalendarIfOpen();
+  }).catch(function(ex){
+    toast("排期失败：" + (ex.message || "网络异常"), "bad");
+  });
+}
+
+function onGanttUnplannedCancel(){
+  if(!ganttState.unplannedDrag) return;
+  ganttSuppressUnplannedClick = Date.now() + 400;
+  cleanupGanttUnplannedDrag();
+}
+
+function onGanttUnplannedKey(e){
+  if(e.key !== "Escape") return;
+  e.preventDefault();
+  var d = ganttState.unplannedDrag;
+  cleanupGanttUnplannedDrag();
+  if(d && d.moved) renderGantt();
+}
+
+/* ==================== 事件绑定 ==================== */
 if(ganttScroll){
   ganttScroll.addEventListener("click", function(e){
+    var grp = e.target.closest("[data-gantt-group-toggle]");
+    if(grp){ ganttToggleGroup(grp.dataset.ganttGroupToggle); return; }
     var open = e.target.closest("[data-gantt-open]");
     if(open) openTaskById(open.dataset.ganttOpen);
+  });
+  ganttScroll.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var bar = e.target.closest ? e.target.closest("[data-gantt-bar]") : null;
+    if(!bar) return;
+    e.preventDefault();
+    openTaskById(bar.dataset.ganttBar);
   });
   ganttScroll.addEventListener("pointerdown", onGanttPointerDown);
 }
 if(ganttUnplannedList){
   ganttUnplannedList.addEventListener("click", function(e){
+    if(Date.now() < ganttSuppressUnplannedClick) return;
     var open = e.target.closest("[data-gantt-open]");
     if(open) openTaskById(open.dataset.ganttOpen);
   });
+  ganttUnplannedList.addEventListener("pointerdown", onGanttUnplannedPointerDown);
 }
 if(ganttShowDoneEl){
   ganttShowDoneEl.addEventListener("change", function(){
     ganttState.showDone = this.checked;
+    saveGanttPrefs();
     renderGantt();
   });
 }
@@ -4035,11 +4667,47 @@ if(ganttZoomEl){
   ganttZoomEl.addEventListener("change", function(){
     var dayIndex = ganttScroll.scrollLeft / Math.max(1, ganttState.dayW);
     ganttState.dayW = Number(this.value) || 28;
+    saveGanttPrefs();
     renderGantt();
     ganttScroll.scrollLeft = dayIndex * ganttState.dayW;
   });
 }
-if($("ganttToday")) $("ganttToday").addEventListener("click", ganttScrollToToday);
+if(ganttGroupEl){
+  ganttGroupEl.addEventListener("change", function(){
+    ganttState.groupBy = ["project","owner"].indexOf(this.value) !== -1 ? this.value : "none";
+    saveGanttPrefs();
+    renderGantt();
+  });
+}
+if(ganttRangeModeEl){
+  ganttRangeModeEl.addEventListener("click", function(e){
+    var b = e.target.closest("[data-gantt-range]");
+    if(b) ganttSetRangeMode(b.getAttribute("data-gantt-range"));
+  });
+}
+if(ganttPrevMonthEl) ganttPrevMonthEl.addEventListener("click", function(){ ganttShiftMonth(-1); });
+if(ganttNextMonthEl) ganttNextMonthEl.addEventListener("click", function(){ ganttShiftMonth(1); });
+if(ganttFilterBtn){
+  ganttFilterBtn.addEventListener("click", function(){
+    if(UI.popOpen(ganttFilterMenu)){ UI.closeAllPops(); return; }
+    renderGanttFilterMenu();
+    UI.openPop(ganttFilterMenu, ganttFilterBtn, {align:"left", width:320});
+  });
+}
+if(ganttFilterMenu){
+  ganttFilterMenu.addEventListener("click", function(e){
+    var reset = e.target.closest("[data-gantt-filter-reset]");
+    if(reset){ clearFilters(); renderGanttFilterMenu(); return; }
+    var o = e.target.closest("[data-gantt-owner]");
+    if(o){ toggleIn(state.owners, o.getAttribute("data-gantt-owner")); afterGanttFilterChange(); return; }
+    var p = e.target.closest("[data-gantt-pri]");
+    if(p){ toggleIn(state.pris, p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
+    var r = e.target.closest("[data-gantt-req]");
+    if(r){ toggleIn(state.reqs, r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
+  });
+}
+if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters(); });
+if($("ganttToday")) $("ganttToday").addEventListener("click", ganttGoToday);
 if($("ganttRefresh")) $("ganttRefresh").addEventListener("click", function(){ loadGantt(); });
 
 /* ==================== 项目视图（§6.6） ==================== */
@@ -7743,6 +8411,12 @@ function loadWorkspaces(meUser){
     applyWsRoleGating();
     loadWsMembers();
     updateBrand();
+    /* 深链直达甘特图时，空间在首屏之后才确定：偏好与请求都要按新空间补跑一次 */
+    if(activeView === "gantt"){
+      loadGanttPrefs();
+      syncGanttControls();
+      loadGantt();
+    }
     if(activeView === "settings" && !settingsReady) enterSettingsView();
     return target;
   }).catch(function(){ return null; });
@@ -8517,6 +9191,7 @@ document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
     if(drag){ cancelDrag(); return; }
     if(ganttState.drag){ onGanttDragCancel(); return; }
+    if(ganttState.unplannedDrag){ onGanttUnplannedCancel(); return; }
     if(UI.confirmOpen()){ UI.settleConfirm(false); return; }
     if(document.querySelector(".menu:not([hidden]),.ws-menu:not([hidden])")){ UI.closeAllPops(); return; }
     if(taskDrawer.classList.contains("on")){ tryCloseTaskDrawer(); return; }
