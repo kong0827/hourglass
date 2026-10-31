@@ -130,10 +130,10 @@
     SELECT <include refid="cols"/> FROM task WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
   </select>
 
-  <select id="selectRemindDue" resultType="Task">
+  <!-- 提醒扫描改为跨空间一条 SQL：每 5 分钟只查两次，再按 workspace_id 分组取空间配置 -->
+  <select id="selectRemindDueAll" resultType="Task">
     SELECT <include refid="cols"/> FROM task
-    WHERE workspace_id = #{workspaceId}
-      AND deleted_at IS NULL
+    WHERE deleted_at IS NULL
       AND board_column != 'done'
       AND remind_sent = 0
       AND remind_at IS NOT NULL
@@ -142,10 +142,9 @@
     ORDER BY remind_at
   </select>
 
-  <select id="selectRemindExpired" resultType="Task">
+  <select id="selectRemindExpiredAll" resultType="Task">
     SELECT <include refid="cols"/> FROM task
-    WHERE workspace_id = #{workspaceId}
-      AND deleted_at IS NULL
+    WHERE deleted_at IS NULL
       AND board_column != 'done'
       AND remind_sent = 0
       AND remind_at IS NOT NULL

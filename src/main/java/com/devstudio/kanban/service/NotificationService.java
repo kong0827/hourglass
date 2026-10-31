@@ -29,12 +29,21 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.annotation.PreDestroy;
 
 /**
  * 推送提醒（按空间隔离）。
@@ -53,6 +62,9 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int REMIND_WINDOW_HOURS = 6;
+    /** webhook 异步发送队列上限；满了就丢弃本轮，任务下一轮扫描重试 */
+    private static final int SEND_QUEUE_CAPACITY = 100;
+    private static final AtomicInteger SEND_THREAD_SEQ = new AtomicInteger();
     /** pushplus 官方端点：统一 token 只发这里，绝不发给空间自填地址 */
     private static final String PUSHPLUS_ENDPOINT = "https://www.pushplus.plus/send";
     /** 未启用推送时的统一说明（设置页与测试推送共用，避免"测试通过但定时不发"） */
@@ -66,6 +78,10 @@ public class NotificationService {
     private final UserMapper userMapper;
     private final AppNotificationService appNotificationService;
     private final RestTemplate restTemplate;
+    /** 有界发送池：不占用调度线程，同一时间最多 2 个 webhook 在飞 */
+    private final ThreadPoolExecutor remindSender;
+    /** 正在发送中的任务 id：多轮扫描重叠时同一任务不重复发送 */
+    private final Set<String> remindInFlight = ConcurrentHashMap.newKeySet();
 
     @Value("${app.notify.enabled:false}")
     private boolean enabled;
@@ -96,9 +112,25 @@ public class NotificationService {
                 connection.setInstanceFollowRedirects(false);
             }
         };
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(5000);
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(3000);
         this.restTemplate = new RestTemplate(factory);
+        this.remindSender = new ThreadPoolExecutor(2, 2, 60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<Runnable>(SEND_QUEUE_CAPACITY),
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread t = new Thread(r, "remind-webhook-" + SEND_THREAD_SEQ.incrementAndGet());
+                        t.setDaemon(true);
+                        return t;
+                    }
+                },
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @PreDestroy
+    public void shutdownRemindSender() {
+        remindSender.shutdownNow();
     }
 
     /* ==================== 生效判定（O-1） ==================== */
@@ -173,40 +205,73 @@ public class NotificationService {
     @Scheduled(cron = "0 */5 * * * *")
     public void remindScan() {
         LocalDateTime now = LocalDateTime.now();
-        List<Workspace> all;
+        LocalDateTime windowStart = now.minusHours(REMIND_WINDOW_HOURS);
+        List<Task> due;
+        List<Task> expired;
         try {
-            all = workspaceMapper.selectAll();
+            /* 跨空间各一条 SQL：不再"每个空间 2 条"，空间数量与扫描成本脱钩 */
+            due = taskMapper.selectRemindDueAll(now, windowStart);
+            expired = taskMapper.selectRemindExpiredAll(windowStart);
         } catch (Exception e) {
-            log.warn("任务级提醒扫描：读取空间列表失败", e);
+            log.warn("任务级提醒扫描：跨空间查询失败，本轮跳过", e);
             return;
         }
-        for (Workspace ws : all) {
+        if (due.isEmpty() && expired.isEmpty()) {
+            return;
+        }
+        Map<String, List<Task>> dueByWs = groupByWorkspace(due);
+        Map<String, List<Task>> expiredByWs = groupByWorkspace(expired);
+        Set<String> workspaceIds = new LinkedHashSet<String>(dueByWs.keySet());
+        workspaceIds.addAll(expiredByWs.keySet());
+        for (String wsId : workspaceIds) {
             /* 第九轮/复评 R-4：按空间隔离异常。
                原实现用一个 try 包住全部空间的循环，任一空间抛异常会让后续空间的当轮提醒全部停发。 */
             try {
-                scanWorkspaceReminders(ws, now);
+                Workspace ws = workspaceMapper.selectById(wsId);
+                if (ws == null) {
+                    log.warn("任务级提醒扫描：空间 {} 不存在（任务可能已随空间删除），本轮跳过", wsId);
+                    continue;
+                }
+                List<Task> wsDue = dueByWs.get(wsId);
+                List<Task> wsExpired = expiredByWs.get(wsId);
+                scanWorkspaceReminders(ws,
+                        wsDue == null ? Collections.<Task>emptyList() : wsDue,
+                        wsExpired == null ? Collections.<Task>emptyList() : wsExpired);
             } catch (Exception e) {
-                log.warn("任务级提醒扫描异常（空间 {}），已跳过该空间继续处理其它空间", ws.getId(), e);
+                log.warn("任务级提醒扫描异常（空间 {}），已跳过该空间继续处理其它空间", wsId, e);
             }
         }
     }
 
+    private Map<String, List<Task>> groupByWorkspace(List<Task> tasks) {
+        Map<String, List<Task>> out = new LinkedHashMap<String, List<Task>>();
+        for (Task t : tasks) {
+            List<Task> list = out.get(t.getWorkspaceId());
+            if (list == null) {
+                list = new ArrayList<Task>();
+                out.put(t.getWorkspaceId(), list);
+            }
+            list.add(t);
+        }
+        return out;
+    }
+
     /** 单空间一轮提醒扫描（本方法内的异常由调用方按空间兜住） */
-    private void scanWorkspaceReminders(Workspace ws, LocalDateTime now) {
+    private void scanWorkspaceReminders(Workspace ws, List<Task> due, List<Task> expired) {
         boolean wsEnabled = effectiveEnabled(ws);
         String hook = effectiveHook(ws);
-        Map<String, String> memberByName = memberNameMap(ws.getId());
-        for (Task t : taskMapper.selectRemindDue(ws.getId(), now, now.minusHours(REMIND_WINDOW_HOURS))) {
+        /* 成员名→账号映射每空间只查一次；本空间没有到期任务时不必查成员 */
+        Map<String, String> memberByName = due.isEmpty()
+                ? Collections.<String, String>emptyMap() : memberNameMap(ws.getId());
+        for (Task t : due) {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
                 boolean externalConfigured = wsEnabled && hook != null;
                 /* N-1：先写应用内通知（不依赖外部渠道是否配置），做到"提醒到本人" */
                 boolean inApp = notifyTaskRemindInApp(ws, t, memberByName);
                 if (externalConfigured) {
-                    // 配了外部渠道：以它为准决定是否闭环（失败保留在 6 小时窗口内重试）
-                    if (sendContent(ws, buildTaskRemindContent(ws, t), hook)) {
-                        taskMapper.markRemindSent(t.getId());
-                    }
+                    // 配了外部渠道：异步发送，成功后才闭环；失败/丢弃时留在 6 小时窗口内重试
+                    scheduleRemindSend(ws, t, hook);
                 } else if (inApp) {
                     // 没配外部渠道：应用内送达即闭环，并在时间线上说明"为什么没发群消息"
                     taskMapper.markRemindSent(t.getId());
@@ -216,7 +281,7 @@ public class NotificationService {
                 log.warn("单条任务提醒处理失败（task={}），已跳过", t.getId(), e);
             }
         }
-        for (Task t : taskMapper.selectRemindExpired(ws.getId(), now.minusHours(REMIND_WINDOW_HOURS))) {
+        for (Task t : expired) {
             try {
                 taskMapper.markRemindSent(t.getId());
                 logRemindSkipped(ws, t, hook == null
@@ -225,6 +290,39 @@ public class NotificationService {
             } catch (Exception e) {
                 log.warn("过期提醒标记失败（task={}），已跳过", t.getId(), e);
             }
+        }
+    }
+
+    /**
+     * 把单条 webhook 发送交给有界线程池，不阻塞调度线程。
+     * 同一任务若上一轮还在发送中则本轮跳过（不写库、不重复发）；
+     * 成功后在发送线程里 markRemindSent，失败则清除在飞标记，留待下一轮重试。
+     */
+    private void scheduleRemindSend(Workspace ws, Task t, String hook) {
+        final String taskId = t.getId();
+        if (!remindInFlight.add(taskId)) {
+            return;
+        }
+        final String content = buildTaskRemindContent(ws, t);
+        try {
+            remindSender.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (sendContent(ws, content, hook)) {
+                            taskMapper.markRemindSent(taskId);
+                        }
+                    } catch (Exception e) {
+                        log.warn("提醒推送处理失败（task={}），保留待重试", taskId, e);
+                    } finally {
+                        remindInFlight.remove(taskId);
+                    }
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            remindInFlight.remove(taskId);
+            log.warn("提醒推送队列已满（容量 {}），本轮丢弃 task={} 的 webhook，下一轮扫描重试",
+                    SEND_QUEUE_CAPACITY, taskId);
         }
     }
 

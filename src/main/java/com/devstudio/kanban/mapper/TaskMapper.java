@@ -94,12 +94,12 @@ public interface TaskMapper {
 
     List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff);
 
-    List<Task> selectRemindDue(@Param("workspaceId") String workspaceId, @Param("now") LocalDateTime now,
-                               @Param("windowStart") LocalDateTime windowStart);
+    /** 全库到期未提醒的任务（跨空间一次取回，调用方按 workspace_id 分组） */
+    List<Task> selectRemindDueAll(@Param("now") LocalDateTime now,
+                                  @Param("windowStart") LocalDateTime windowStart);
 
     /** 提醒时间已错过重试窗口的任务（标记为已处理，避免永久静默挂起） */
-    List<Task> selectRemindExpired(@Param("workspaceId") String workspaceId,
-                                   @Param("before") LocalDateTime before);
+    List<Task> selectRemindExpiredAll(@Param("before") LocalDateTime before);
 
     int markRemindSent(String id);
 

@@ -678,3 +678,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - EstimateService：只读 estimate_minutes>0 的窄列 + 工时 JOIN 聚合；AiReqDocService/RequirementService 改为定向查询/GROUP BY。
 - GanttService.load：实际工时按当前任务集合 + 区间 + 计时人×周 SQL 聚合（口径收紧，见风险）。
 - 新增 sql/19_stats_index.sql（幂等 5 条索引）；修正周聚合 completed_at 未取 DATE 导致同周 created/completed 分组的错误。
+
+**第二十三轮：BE-RT-3 提醒扫描/webhook 异步**
+- 提醒扫描改为全库 2 条 SQL（到期/已过期）再按 workspace 分组，只对涉及空间取配置与成员。
+- webhook 改有界线程池（2 线程、队列 100）：调度线程不等待；remindInFlight 防止重复发送；成功后才 markRemindSent，失败/队列满下轮重试。
+- RestTemplate 超时收紧到连接 2s/读取 3s（手动测试与每日汇总共用，属已知行为变化）。
+- 新增 sql/20_remind_scan.sql 幂等索引 idx_remind_scan(remind_sent, remind_at)。
