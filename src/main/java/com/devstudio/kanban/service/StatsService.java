@@ -34,26 +34,33 @@ public class StatsService {
         List<Task> all = taskMapper.selectAll(workspaceId);
         StatsResponse resp = new StatsResponse();
 
+        /* 一次扫描按周聚合新增/完成；原实现是「周数 × 全部任务」的双重循环 */
+        Map<String, int[]> byWeek = new java.util.HashMap<String, int[]>();
+        for (Task t : all) {
+            LocalDate createdDate = t.getCreatedAt() == null ? null : t.getCreatedAt().toLocalDate();
+            if (createdDate != null && !createdDate.isBefore(rangeStart) && !createdDate.isAfter(today)) {
+                String k = createdDate.minusDays(createdDate.getDayOfWeek().getValue() - 1).toString();
+                int[] c = byWeek.get(k);
+                if (c == null) { c = new int[2]; byWeek.put(k, c); }
+                c[0]++;
+            }
+            if (Consts.COL_DONE.equals(t.getBoardColumn()) && t.getCompletedAt() != null
+                    && !t.getCompletedAt().isBefore(rangeStart) && !t.getCompletedAt().isAfter(today)) {
+                String k = t.getCompletedAt().minusDays(t.getCompletedAt().getDayOfWeek().getValue() - 1).toString();
+                int[] c = byWeek.get(k);
+                if (c == null) { c = new int[2]; byWeek.put(k, c); }
+                c[1]++;
+            }
+        }
         for (int i = w - 1; i >= 0; i--) {
             LocalDate start = monday.minusWeeks(i);
             LocalDate end = start.plusDays(6);
             StatsResponse.WeekStat stat = new StatsResponse.WeekStat();
             stat.setStart(start.toString());
             stat.setEnd(end.toString());
-            int created = 0;
-            int completed = 0;
-            for (Task t : all) {
-                LocalDate createdDate = t.getCreatedAt() == null ? null : t.getCreatedAt().toLocalDate();
-                if (createdDate != null && !createdDate.isBefore(start) && !createdDate.isAfter(end)) {
-                    created++;
-                }
-                if (Consts.COL_DONE.equals(t.getBoardColumn()) && t.getCompletedAt() != null
-                        && !t.getCompletedAt().isBefore(start) && !t.getCompletedAt().isAfter(end)) {
-                    completed++;
-                }
-            }
-            stat.setCreated(created);
-            stat.setCompleted(completed);
+            int[] c = byWeek.get(start.toString());
+            stat.setCreated(c == null ? 0 : c[0]);
+            stat.setCompleted(c == null ? 0 : c[1]);
             resp.getWeeks().add(stat);
         }
 
