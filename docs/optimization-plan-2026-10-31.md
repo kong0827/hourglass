@@ -658,3 +658,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十八轮：F-RENDER-4（看板拖拽）**
 - 看板 pointermove 的 updateDrag 合并到 rAF，每帧最多一次 DOM 读写；pointerup 前先刷新最后一帧，避免落点滞后。
+
+**第十九轮：BE-Q-4（接力查询）**
+- `resumeInColumn` 只查目标列（复用 selectColumnTasks），按 sort_order 取第一条自己的任务，不再整空间 selectAll + sortKey 比较。

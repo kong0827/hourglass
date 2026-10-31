@@ -145,29 +145,20 @@ public class TimeLogService {
         /* 只接力“自己的任务”：共享空间里 A 完成自己的任务，不该自动把计时开到 B 的任务上 */
         AppUser me = userMapper.selectById(userId);
         String myName = me == null ? null : Texts.trimToNull(me.getDisplayName());
-        Task next = null;
-        for (Task t : taskMapper.selectAll(workspaceId)) {
-            if (t.getDeletedAt() != null || !columnId.equals(t.getBoardColumn())) {
-                continue;
-            }
+        /* 只查目标列（已按 sort_order,id 排序），第一条属于自己的就是接力目标 */
+        for (Task t : taskMapper.selectColumnTasks(workspaceId, columnId)) {
             if (excludeTaskId != null && excludeTaskId.equals(t.getId())) {
                 continue;
             }
             boolean mine = t.getOwnerUserId() != null
                     ? userId.equals(t.getOwnerUserId())
                     : (myName != null && myName.equals(t.getOwner()));
-            if (!mine) {
-                continue;
-            }
-            if (next == null || sortKey(t) < sortKey(next)) {
-                next = t;
+            if (mine) {
+                start(userId, workspaceId, t.getId());
+                return t;
             }
         }
-        if (next == null) {
-            return null;
-        }
-        start(userId, workspaceId, next.getId());
-        return next;
+        return null;
     }
 
     /** 列内顺序，空的排最后 */
