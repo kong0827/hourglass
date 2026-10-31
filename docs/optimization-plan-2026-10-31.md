@@ -638,3 +638,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十二轮：F-NET-4 筛选防抖**
 - `reloadFilteredViews` 合并 150ms：连续点选多个筛选条件只发一轮看板/列表/甘特请求；搜索输入原有 300ms 防抖不变。
+
+**第十三轮：CODE-1（部分）**
+- 任务清单 CSV 改用统一 `triggerDownload`，去掉重复的 Blob/URL/createElement 下载代码；单元格转义继续复用 `ganttCsvCell`。

@@ -8838,15 +8838,7 @@ function exportCompCSV(){
   var csv = "\uFEFF" + lines.map(function(cols){
     return cols.map(ganttCsvCell).join(",");
   }).join("\r\n");
-  var blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
-  a.href = url;
-  a.download = "任务清单-" + month + ".csv";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  triggerDownload("任务清单-" + month + ".csv", csv, "text/csv;charset=utf-8;");
   toast("已导出 " + rows.length + " 条记录", "fs");
 }
 /* 任务清单里点需求名 → 跳到需求正文 */
