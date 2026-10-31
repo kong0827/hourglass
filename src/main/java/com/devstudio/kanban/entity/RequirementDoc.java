@@ -20,6 +20,8 @@ public class RequirementDoc {
     private String title;
     /** 正文 HTML（清洗后） */
     private String content;
+    /** 纯文本摘要（列表用，避免每次读 MEDIUMTEXT 全文） */
+    private String contentBrief;
     /** 状态：draft / active / done */
     private String status;
     private String owner;

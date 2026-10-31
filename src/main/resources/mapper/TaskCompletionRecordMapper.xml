@@ -35,6 +35,11 @@
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
   </delete>
 
+  <select id="countByTaskId" resultType="int">
+    SELECT COUNT(*) FROM task_completion_record
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
   <delete id="deleteAllByWorkspace">
     DELETE FROM task_completion_record WHERE workspace_id = #{workspaceId}
   </delete>

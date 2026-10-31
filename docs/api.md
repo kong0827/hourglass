@@ -192,34 +192,36 @@
 
 ## 14. GET /api/export
 
-导出当前空间的**任务备份**（v5）。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：包含 tasks/reqs/columns；v4 起额外包含任务评论（comments）、任务 `deletedAt`（回收站）与任务的 `reqDocId`/`branchId`/`estimateMinutes`/`blocked`/`blockedReason`/`ownerUserId`/`remindTarget` 字段；v5 起额外包含任务 `isMilestone`、甘特依赖（`deps`）、基线（`baseline` + `baselineAt`）。旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
+导出当前空间的**任务备份**（v6）。结构与旧版前端 `devstudio-kanban-backup.json` **兼容（超集）**：包含 tasks/reqs/columns；v4 起额外包含任务评论（comments）、任务 `deletedAt`（回收站）与任务的 `reqDocId`/`branchId`/`estimateMinutes`/`blocked`/`blockedReason`/`ownerUserId`/`remindTarget` 字段；v5 起额外包含任务 `isMilestone`、甘特依赖（`deps`）、基线（`baseline` + `baselineAt`）；v6 起额外包含 `reqDocs`（需求文档，含正文）与 `branches`（分支池，不含分支操作时间线）。旧版页面仍可直接导入读取；本系统导入旧备份时按备份里出现的分类名自动补齐分类表（旧四类保留原配色）。
 
-**不含**：需求文档正文、分支、附件文件、操作时间线、保存视图、分类/看板列设置。
+**不含**：附件文件、操作时间线、保存视图、分类/看板列设置。
 
 ## 15. POST /api/import
 
 导入任务备份文件，覆盖当前数据：
 
 ```json
-{"v":5,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
+{"v":6,"tasks":[{"id":"Kxxx","title":"...","desc":"...","pri":"P1","owner":"我","cat":"后端",
   "col":"doing","due":"2026-10-20","progress":40,"note":"","reqId":"Rxxx","reqDocId":"Dxxx",
   "branchId":"Bxxx","estimateMinutes":240,"blocked":false,"isMilestone":false,"completedAt":null}],
  "reqs":[{"id":"Rxxx","name":"...","desc":"","status":"active","createdAt":"2026-10-01"}],
  "comments":[{"taskId":"Kxxx","authorId":"Uxxx","authorName":"我","content":"...","createdAt":"2026-10-02T10:00:00"}],
  "deps":[{"from":"K1","to":"K2","type":"FS","lag":0}],
  "baseline":[{"taskId":"K1","start":"2026-10-01","due":"2026-10-08"}],
- "baselineAt":"2026-10-28T18:00:00"}
+ "baselineAt":"2026-10-28T18:00:00",
+ "reqDocs":[{"id":"Dxxx","reqId":"Rxxx","title":"...","content":"<p>...</p>","status":"draft","owner":"我"}],
+ "branches":[{"id":"Bxxx","name":"feature/login","status":"dev","owner":"我","targetBranch":"main"}]}
 ```
 
-返回 `{"tasks": 42, "reqs": 5, "comments": 18}`。
+返回 `{"tasks": 42, "reqs": 5, "comments": 18, "reqDocs": 3, "branches": 2}`。
 
-**覆盖语义（重要）**：导入只清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**、**甘特依赖与基线**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置、**需求文档与分支**（但任务的 `reqDocId`/`branchId` 会按目标空间是否存在对应记录校验，不存在则置空）。跨空间复制导入时任务/项目 ID 冲突会自动重新生成并同步迁移引用（依赖端点按任务 ID 映射回指，自环/重复/成环边会被跳过）；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。导入会清除当前空间的只读分享令牌（旧链接立即失效），需要重新生成。
+**覆盖语义（重要）**：导入清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**、**甘特依赖与基线**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；v6 备份还会覆盖 **需求文档与分支**（含正文/状态/负责人，分支操作时间线清空）；旧备份没有这两个字段时保留现状。**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置。跨空间复制导入时任务/项目/需求文档/分支 ID 冲突会自动重新生成并同步迁移引用（依赖端点按任务 ID 映射回指，自环/重复/成环边会被跳过）；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。导入会清除当前空间的只读分享令牌（旧链接立即失效），需要重新生成。
 
-**旧备份兼容**：v3 及更早备份没有 comments 字段，v4 及更早没有依赖/基线字段；导入后会清空本空间对应的评论、依赖与基线（前端确认框已明确提示）；新增任务字段缺失时按空值处理。
+**旧备份兼容**：v3 及更早备份没有 comments 字段，v4 及更早没有依赖/基线字段，v5 及更早没有需求文档/分支字段；导入后会清空本空间对应的评论、依赖与基线（前端确认框已明确提示），需求文档/分支保持不变；新增任务字段缺失时按空值处理。
 
 字段兜底：旧列 id（todo/review）自动映射、非法枚举取默认值、超长字段截断、无效项目/需求/分支引用置空；`subtasks`/`tags`/`recurType`/`remindAt`/`remindSent`/`timeLogs`（含计时人 userId）/`createdAt`/`columns` 导入时自动恢复，旧版备份（无这些字段）依旧兼容。
 
-**导出不含**：附件文件本身（磁盘文件，随服务器备份目录 tar 保留，见 `deploy/backup.sh`）、操作时间线日志（导入时不会被删除）、需求文档正文、分支、完成归档快照（导入时按任务与工时重建）。
+**导出不含**：附件文件本身（磁盘文件，随服务器备份目录 tar 保留，见 `deploy/backup.sh`）、操作时间线日志（导入时不会被删除）、完成归档快照（导入时按任务与工时重建）、分支操作时间线。
 
 ## 16. 子任务（检查清单）
 
@@ -1073,6 +1075,40 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - `GET /api/gantt/share` → 当前分享 `{token, expiresAt}` 或 `null`（**仅空间主**：token 本身就能公开读取，不能发给普通成员）
 - `POST /api/gantt/share` → 生成/重置（30 天有效，**仅空间主**）
 - `DELETE /api/gantt/share` → 停止分享（仅空间主）
-- `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，含任务（已剔除描述/备注/提醒/分支/附件关联）、依赖、基线；token 无效或过期返回 404。
+- `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，任务走白名单 DTO（id/标题/负责人/优先级/列/起止/进度/里程碑/阻塞/估时/实际工时），依赖与基线只返回可见任务之间的；token 由 `SecureRandom` 生成（32 位 base64url），无效或过期返回 404。
 
 页面：`/share.html?token=...`（独立只读甘特页，无写操作）。
+
+---
+
+## 附录 · 权限矩阵（2026-10-31）
+
+空间角色：`owner`（空间主）/ `member`（普通成员）。个人空间里本人恒为 owner。
+
+| 操作 | 接口 | owner | member |
+| --- | --- | --- | --- |
+| 任务增改、移列、计时、评论、附件 | `/api/tasks/**`（除 purge） | ✓ | ✓ |
+| 任务移入回收站 / 恢复 | `DELETE /api/tasks/{id}`、`POST .../restore` | ✓ | ✓ |
+| **彻底删除任务** | `DELETE /api/tasks/{id}/purge` | ✓ | 403 |
+| 项目（需求分组）增改 | `/api/reqs`、`PUT /api/reqs/{id}` | ✓ | ✓ |
+| **删除项目（连带需求文档）** | `DELETE /api/reqs/{id}` | ✓ | 403 |
+| 需求文档增删改 | `/api/req-docs/**` | ✓ | ✓ |
+| 分支增改、状态流转 | `/api/branches/**`（除 DELETE） | ✓ | ✓ |
+| **删除分支** | `DELETE /api/branches/{id}` | ✓ | 403 |
+| 看板列/分类增改 | `/api/columns`、`/api/categories` | ✓ | ✓ |
+| 删除看板列/分类 | `DELETE /api/columns/{id}`、`/api/categories/{id}` | ✓ | 403 |
+| 甘特依赖增删改、基线拍摄 | `/api/gantt/deps*`、`POST /api/gantt/baseline` | ✓ | ✓ |
+| **清除基线** | `DELETE /api/gantt/baseline` | ✓ | 403 |
+| 只读分享生成/查看/撤销 | `/api/gantt/share` | ✓ | 403 |
+| **导出全量备份** | `GET /api/export` | ✓ | 403 |
+| 导出任务 CSV | `GET /api/export/csv` | ✓ | ✓ |
+| **导入覆盖 / 清空数据** | `POST /api/import`、清空接口 | ✓ | 403 |
+| 通知推送配置/测试 | `/api/notify/**` | ✓ | 403 |
+| 成员、邀请、空间设置 | `/api/workspaces/**` 写操作 | ✓ | 部分只读 |
+| 账号管理 | `/api/admin/**` | 平台管理员 | 403 |
+
+约定：越权仍返回 `code=403` 的业务错误体（HTTP 200），未登录返回 HTTP 401。
+
+迁移：执行 `sql/17_perf_index.sql`（幂等）后再启动新 jar —— 需求列表依赖 `requirement_doc.content_brief` 列。
+
+> 部署提示：v6 备份可能包含需求文档正文（含内嵌图片），`deploy/nginx-devstudio.conf` 已给 `POST /api/import` 单独放宽到 128 MB；若自行改过 nginx 配置，请同时确认 `client_max_body_size` 与 `proxy_read_timeout`。

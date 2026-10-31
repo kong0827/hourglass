@@ -229,6 +229,8 @@ public class RequirementDocService {
         d.setReqId(reqId);
         d.setTitle(Texts.cut(Texts.trimToNull(req.getTitle()), 100));
         d.setContent(sanitize(req.getContent()));
+        /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
+        d.setContentBrief(excerptOf(d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
         d.setStatus(status == null ? "draft" : status);
         String owner = Texts.trimToNull(req.getOwner());
@@ -255,8 +257,8 @@ public class RequirementDocService {
         return rid;
     }
 
-    /** 从 HTML 片段抽纯文本摘要 */
-    private String excerptOf(String html) {
+    /** 从 HTML 片段抽纯文本摘要（列表与备份导入共用） */
+    public static String excerptOf(String html) {
         if (html == null || html.trim().isEmpty()) {
             return null;
         }

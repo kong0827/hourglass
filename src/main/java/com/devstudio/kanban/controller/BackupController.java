@@ -29,10 +29,12 @@ public class BackupController {
         this.workspaceService = workspaceService;
     }
 
-    /** 导出当前空间的全部数据（成员可用） */
+    /** 导出当前空间的全部数据（仅空间主：包含全量任务/评论/依赖/基线） */
     @GetMapping("/api/export")
     public ApiResult<BackupData> export(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireOwner(userId, ws.getId());
         return ApiResult.ok(backupService.export(ws.getId()));
     }
 

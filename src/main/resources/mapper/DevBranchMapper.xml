@@ -7,16 +7,21 @@
     dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at
   </sql>
 
-  <!-- 列表：按状态顺序（开发中 → 待测试 → 待合并 → 已发布）排，同状态里最近更新的在前 -->
+  <!-- 列表：任务数用一次 GROUP BY 汇总，避免每条分支两个相关子查询 -->
   <select id="selectByWorkspace" resultType="DevBranch">
     SELECT b.id, b.workspace_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
            b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
-           (SELECT COUNT(*) FROM task t
-             WHERE t.workspace_id = b.workspace_id AND t.branch_id = b.id AND t.deleted_at IS NULL) AS task_count,
-           (SELECT COUNT(*) FROM task t
-             WHERE t.workspace_id = b.workspace_id AND t.branch_id = b.id AND t.deleted_at IS NULL
-               AND t.board_column = 'done') AS done_count
+           COALESCE(tc.task_count, 0) AS task_count,
+           COALESCE(tc.done_count, 0) AS done_count
     FROM dev_branch b
+    LEFT JOIN (
+      SELECT branch_id,
+             COUNT(*) AS task_count,
+             SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task
+      WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND branch_id IS NOT NULL
+      GROUP BY branch_id
+    ) tc ON tc.branch_id = b.id
     WHERE b.workspace_id = #{workspaceId}
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
@@ -33,9 +38,10 @@
 
   <insert id="insert">
     INSERT INTO dev_branch (id, workspace_id, name, status, owner, owner_user_id, target_branch, note,
-                            dev_at, test_at, merge_at, released_at)
+                            dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
-            #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt})
+            #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt},
+            COALESCE(#{sortOrder}, 0), COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
   <update id="update">
@@ -81,6 +87,7 @@
     FROM dev_branch_log
     WHERE branch_id = #{branchId}
     ORDER BY created_at DESC, id DESC
+    LIMIT 200
   </select>
 
   <delete id="deleteLogsByBranch">

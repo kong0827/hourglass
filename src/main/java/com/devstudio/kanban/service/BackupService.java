@@ -120,7 +120,7 @@ public class BackupService {
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(5);
+        data.setV(6);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -264,6 +264,44 @@ public class BackupService {
         data.setBaseline(baseline);
         LocalDateTime baselineAt = baselineMapper.selectCapturedAt(workspaceId);
         data.setBaselineAt(baselineAt == null ? null : baselineAt.format(ISO_TS));
+
+        /* v6：需求文档（含正文）与分支池。分支操作时间线属于审计记录，不随备份迁移 */
+        List<BackupData.BackupReqDoc> reqDocs = new ArrayList<BackupData.BackupReqDoc>();
+        for (RequirementDoc d : requirementDocMapper.selectAllByWorkspace(workspaceId)) {
+            BackupData.BackupReqDoc bd = new BackupData.BackupReqDoc();
+            bd.setId(d.getId());
+            bd.setReqId(d.getReqId());
+            bd.setTitle(d.getTitle());
+            bd.setContent(d.getContent());
+            bd.setStatus(d.getStatus());
+            bd.setOwner(d.getOwner());
+            bd.setOwnerUserId(d.getOwnerUserId());
+            bd.setCreatedAt(d.getCreatedAt() == null ? null : d.getCreatedAt().format(ISO_TS));
+            bd.setUpdatedAt(d.getUpdatedAt() == null ? null : d.getUpdatedAt().format(ISO_TS));
+            reqDocs.add(bd);
+        }
+        data.setReqDocs(reqDocs);
+
+        List<BackupData.BackupBranch> branches = new ArrayList<BackupData.BackupBranch>();
+        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupBranch bb = new BackupData.BackupBranch();
+            bb.setId(br.getId());
+            bb.setName(br.getName());
+            bb.setStatus(br.getStatus());
+            bb.setOwner(br.getOwner());
+            bb.setOwnerUserId(br.getOwnerUserId());
+            bb.setTargetBranch(br.getTargetBranch());
+            bb.setNote(br.getNote());
+            bb.setDevAt(br.getDevAt() == null ? null : br.getDevAt().format(ISO_TS));
+            bb.setTestAt(br.getTestAt() == null ? null : br.getTestAt().format(ISO_TS));
+            bb.setMergeAt(br.getMergeAt() == null ? null : br.getMergeAt().format(ISO_TS));
+            bb.setReleasedAt(br.getReleasedAt() == null ? null : br.getReleasedAt().format(ISO_TS));
+            bb.setSortOrder(br.getSortOrder());
+            bb.setCreatedAt(br.getCreatedAt() == null ? null : br.getCreatedAt().format(ISO_TS));
+            bb.setUpdatedAt(br.getUpdatedAt() == null ? null : br.getUpdatedAt().format(ISO_TS));
+            branches.add(bb);
+        }
+        data.setBranches(branches);
         return data;
     }
 
@@ -286,13 +324,24 @@ public class BackupService {
         tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
         tagMapper.deleteTagsByWorkspace(workspaceId);
         timeLogMapper.deleteAllByWorkspace(workspaceId);
-        /* 完成归档是任务的派生物；先清再按导入后的任务重建，避免旧快照挂到新任务上 */
+        /* 完成归档是任务的派生物；覆盖导入/清空属于整体替换，先清再按导入后的任务重建 */
         completionService.clearWorkspace(workspaceId);
         /* 第九轮审查 #1/#2：评论与任务通知随任务一起清，与"操作时间线保留"的口径区分开——
            时间线是审计记录，而评论与通知会把内容直接展示给用户；
            导入后任务 ID 可能被复用/重映射，留着旧记录就是可见的数据错乱（旧评论挂到新任务上）。 */
         commentMapper.deleteAllByWorkspace(workspaceId);
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
+
+        /* v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状 */
+        boolean withReqDocs = data.getReqDocs() != null;
+        boolean withBranches = data.getBranches() != null;
+        if (withReqDocs) {
+            requirementDocMapper.deleteAllByWorkspace(workspaceId);
+        }
+        if (withBranches) {
+            devBranchMapper.deleteLogsByWorkspace(workspaceId);
+            devBranchMapper.deleteByWorkspace(workspaceId);
+        }
 
         Set<String> reqIds = new HashSet<String>();
         Set<String> seenReqIds = new HashSet<String>();
@@ -334,6 +383,112 @@ public class BackupService {
         }
 
         Map<String, Integer> colSeq = new HashMap<String, Integer>();
+
+        /* v6：分支池先于任务导入，任务上的 branchId 才能按映射落位 */
+        Map<String, String> branchIdMap = new HashMap<String, String>();
+        int branchCount = 0;
+        if (withBranches) {
+            Set<String> seenBranchIds = new HashSet<String>();
+            for (BackupData.BackupBranch bb : data.getBranches()) {
+                if (bb == null) {
+                    continue;
+                }
+                String title0 = Texts.trimToNull(bb.getName());
+                if (title0 == null) {
+                    continue;
+                }
+                String original = Ids.sanitize(Texts.trimToNull(bb.getId()));
+                if (original != null && !seenBranchIds.add(original)) {
+                    continue;
+                }
+                String id;
+                if (original == null) {
+                    id = Ids.gen("B");
+                } else if (devBranchMapper.selectById(original) != null) {
+                    id = Ids.gen("B");
+                    branchIdMap.put(original, id);
+                } else {
+                    id = original;
+                }
+                DevBranch br = new DevBranch();
+                br.setId(id);
+                br.setWorkspaceId(workspaceId);
+                br.setName(Texts.cut(title0, 80));
+                /* 同空间已有同名分支（手工改过的备份）时跳过，避免撞唯一键中断整次导入 */
+                if (devBranchMapper.countByName(workspaceId, br.getName(), null) > 0) {
+                    continue;
+                }
+                br.setStatus(oneOf(bb.getStatus(), new String[]{"dev", "testing", "merging", "released"}, "dev"));
+                br.setOwner(Texts.cut(Texts.trimToNull(bb.getOwner()), 32));
+                String ownerUserId = Texts.trimToNull(bb.getOwnerUserId());
+                br.setOwnerUserId(ownerUserId != null
+                        && memberMapper.selectMember(workspaceId, ownerUserId) != null ? ownerUserId : null);
+                br.setTargetBranch(Texts.cut(Texts.trimToNull(bb.getTargetBranch()), 80));
+                br.setNote(Texts.cut(Texts.trimToNull(bb.getNote()), 200));
+                br.setDevAt(parseTs(bb.getDevAt()));
+                br.setTestAt(parseTs(bb.getTestAt()));
+                br.setMergeAt(parseTs(bb.getMergeAt()));
+                br.setReleasedAt(parseTs(bb.getReleasedAt()));
+                br.setSortOrder(bb.getSortOrder() == null ? 0 : bb.getSortOrder());
+                br.setCreatedAt(parseTs(bb.getCreatedAt()));
+                br.setUpdatedAt(parseTs(bb.getUpdatedAt()));
+                devBranchMapper.insert(br);
+                branchCount++;
+            }
+        }
+
+        /* v6：需求文档依赖项目映射；不存在的项目直接跳过，避免悬空引用 */
+        Map<String, String> reqDocIdMap = new HashMap<String, String>();
+        int reqDocCount = 0;
+        if (withReqDocs) {
+            Set<String> seenDocIds = new HashSet<String>();
+            for (BackupData.BackupReqDoc bd : data.getReqDocs()) {
+                if (bd == null) {
+                    continue;
+                }
+                String title0 = Texts.trimToNull(bd.getTitle());
+                if (title0 == null) {
+                    continue;
+                }
+                String backupReqId = Texts.trimToNull(bd.getReqId());
+                String reqId = backupReqId == null ? null : reqIdMap.get(backupReqId);
+                if (reqId == null) {
+                    reqId = backupReqId;
+                }
+                if (reqId == null || !reqIds.contains(reqId)) {
+                    continue;
+                }
+                String original = Ids.sanitize(Texts.trimToNull(bd.getId()));
+                if (original != null && !seenDocIds.add(original)) {
+                    continue;
+                }
+                String id;
+                if (original == null) {
+                    id = Ids.gen("D");
+                } else if (requirementDocMapper.selectById(original) != null) {
+                    id = Ids.gen("D");
+                    reqDocIdMap.put(original, id);
+                } else {
+                    id = original;
+                }
+                RequirementDoc doc = new RequirementDoc();
+                doc.setId(id);
+                doc.setWorkspaceId(workspaceId);
+                doc.setReqId(reqId);
+                doc.setTitle(Texts.cut(title0, 100));
+                doc.setContent(RequirementDocService.sanitize(bd.getContent()));
+                doc.setContentBrief(RequirementDocService.excerptOf(doc.getContent()));
+                doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
+                doc.setOwner(Texts.cut(Texts.trimToNull(bd.getOwner()), 32));
+                String ownerUserId = Texts.trimToNull(bd.getOwnerUserId());
+                doc.setOwnerUserId(ownerUserId != null
+                        && memberMapper.selectMember(workspaceId, ownerUserId) != null ? ownerUserId : null);
+                doc.setCreatedAt(parseTs(bd.getCreatedAt()));
+                doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
+                requirementDocMapper.insert(doc);
+                reqDocCount++;
+            }
+        }
 
         // 分类：按备份中出现的分类名补齐分类表（旧四类保留原配色），空则落默认分类
         Set<String> catNames = new java.util.LinkedHashSet<String>();
@@ -469,6 +624,9 @@ public class BackupService {
             t.setReqId(reqId != null && reqIds.contains(reqId) ? reqId : null);
             /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
             String reqDocId = Texts.trimToNull(b.getReqDocId());
+            if (reqDocId != null && reqDocIdMap.containsKey(reqDocId)) {
+                reqDocId = reqDocIdMap.get(reqDocId);
+            }
             if (reqDocId != null) {
                 RequirementDoc doc = requirementDocMapper.selectById(reqDocId);
                 if (doc == null || !workspaceId.equals(doc.getWorkspaceId())
@@ -479,6 +637,9 @@ public class BackupService {
             t.setReqDocId(reqDocId);
             /* 关联分支：空间级分支池，必须存在且同空间 */
             String branchId = Texts.trimToNull(b.getBranchId());
+            if (branchId != null && branchIdMap.containsKey(branchId)) {
+                branchId = branchIdMap.get(branchId);
+            }
             if (branchId != null) {
                 DevBranch br = devBranchMapper.selectById(branchId);
                 if (br == null || !workspaceId.equals(br.getWorkspaceId())) {
@@ -718,6 +879,8 @@ public class BackupService {
         result.setTasks(taskCount);
         result.setReqs(reqCount);
         result.setComments(commentCount);
+        result.setReqDocs(reqDocCount);
+        result.setBranches(branchCount);
         return result;
     }
 

@@ -40,6 +40,12 @@
     WHERE user_id = #{userId} AND ref_task_id = #{refTaskId} AND type = #{type} AND created_at &gt;= #{since}
   </select>
 
+  <select id="countRecentNoRef" resultType="int">
+    SELECT COUNT(*) FROM app_notification
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+      AND ref_task_id IS NULL AND type = #{type} AND created_at &gt;= #{since}
+  </select>
+
   <delete id="deleteByTaskId">
     DELETE FROM app_notification WHERE workspace_id = #{workspaceId} AND ref_task_id = #{taskId}
   </delete>

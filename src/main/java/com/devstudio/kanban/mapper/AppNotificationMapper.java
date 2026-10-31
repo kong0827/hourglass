@@ -26,6 +26,10 @@ public interface AppNotificationMapper {
     int countRecent(@Param("userId") String userId, @Param("refTaskId") String refTaskId,
                     @Param("type") String type, @Param("since") java.time.LocalDateTime since);
 
+    /** 无关联任务的站内信（如每日汇总）按 workspace+user+type+时间窗去重 */
+    int countRecentNoRef(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
+                         @Param("type") String type, @Param("since") java.time.LocalDateTime since);
+
     int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

@@ -79,10 +79,27 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
             Matcher m = TASK_PATH.matcher(uri);
             String taskId = m.matches() ? m.group(1) : null;
             String actor = currentDisplayName();
-            sseService.broadcast("changed", workspace, taskId, actor);
+            String clientId = request.getHeader("X-Client-Id");
+            if (clientId != null && clientId.length() > 64) {
+                clientId = clientId.substring(0, 64);
+            }
+            sseService.broadcast("changed", workspace, taskId, actor, clientId, entityOf(uri));
         } catch (Exception e) {
             log.warn("SSE 广播异常（业务请求已成功，仅影响刷新通知）", e);
         }
+    }
+
+    /** 按接口前缀判断变更实体，前端据此只刷新相关数据 */
+    private String entityOf(String uri) {
+        if (uri.startsWith("/api/import") || uri.startsWith("/api/export")) return "all";
+        if (uri.startsWith("/api/tasks")) return uri.contains("/timer/") ? "timer" : "task";
+        if (uri.startsWith("/api/req-docs")) return "reqdoc";
+        if (uri.startsWith("/api/reqs")) return "req";
+        if (uri.startsWith("/api/branches")) return "branch";
+        if (uri.startsWith("/api/columns")) return "column";
+        if (uri.startsWith("/api/categories")) return "category";
+        if (uri.startsWith("/api/workspaces") || uri.startsWith("/api/invite")) return "workspace";
+        return "other";
     }
 
     /** 操作人显示名（取不到就留空：前端会退化为"他人"文案，不影响功能） */

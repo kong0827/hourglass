@@ -8,9 +8,13 @@
 /* 首屏前应用主题，避免深色模式闪白 */
 (function(){try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();
 </script>
-<link rel="stylesheet" href="css/app.css" />
-  <!-- 富文本编辑器 SunEditor（本地托管，离线可用；原生支持表格） -->
-  <link rel="stylesheet" href="/vendor/suneditor/suneditor.min.css" />
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/views.css" />
+<link rel="stylesheet" href="css/gantt.css" />
+<link rel="stylesheet" href="css/auth.css" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <meta name="theme-color" content="#2563EB" />
 <link rel="apple-touch-icon" href="/icons/icon-1024.png" />
@@ -167,6 +171,13 @@
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/><circle cx="10" cy="10" r="7.6"/></svg>
           实时连接已断开，正在重连…
         </span>
+
+        <button class="timer-pill" id="timerPill" type="button" hidden title="正在计时，点击打开任务">
+          <span class="tp-dot" aria-hidden="true"></span>
+          <span class="tp-name" id="timerPillName"></span>
+          <b data-elapsed>0:00</b>
+          <span class="tp-stop" id="timerPillStop" title="停止计时">停止</span>
+        </button>
 
         <label class="global-search" id="searchWrap" title="搜索标题 / 描述 / 备注（Ctrl/⌘ + K）">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
@@ -1131,11 +1142,11 @@
             <div class="panel" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
-                <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论（不含需求文档、分支、附件、时间线）">
+                <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论、依赖/基线、需求文档与分支（不含附件文件与时间线）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
                   导出任务备份
                 </button>
-                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖任务/项目/评论；不含需求文档、分支、附件）">
+                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖任务/项目/评论/依赖与基线；v6 备份还覆盖需求文档与分支，不含附件文件与时间线）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.6V4M6.2 8.2 10 4.4 13.8 8.2M4.4 15.6h11.2"/></svg>
                   导入任务备份
                 </button>
@@ -1149,7 +1160,7 @@
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论；导入时按任务与工时重建完成归档。不含需求文档、分支、附件文件、操作时间线、保存视图、看板列/分类设置。</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、需求文档与分支（v6）；导入时按任务与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类设置。</p>
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
@@ -1752,7 +1763,6 @@
 <script src="js/icons.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
-<script src="/vendor/suneditor/suneditor.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

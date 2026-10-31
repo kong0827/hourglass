@@ -20,7 +20,8 @@ a:hover{text-decoration:underline;}
 [hidden]{display:none !important;}
 
 /* 全局禁用 outline 后必须补回焦点可见性（无障碍硬要求） */
-:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+/* 键盘焦点必须看得见：淡色 ring 在浅背景上对比不足 */
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:var(--ring-focus);}
 :focus:not(:focus-visible){outline:none;}
 
 /* ---------- 字号阶梯 ---------- */

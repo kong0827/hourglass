@@ -71,6 +71,17 @@ public interface TimeLogMapper {
                                   @Param("from") LocalDateTime from,
                                   @Param("to") LocalDateTime to);
 
+    /** 本空间 [from, to) 区间按成员分组的工时（分钟） */
+    List<TimeAgg> sumBetweenByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId,
+                                                   @Param("from") LocalDateTime from,
+                                                   @Param("to") LocalDateTime to);
+
+    /** 本空间 [from, to) 区间的计时原始记录（甘特负载用，按 started_at 走索引） */
+    List<com.devstudio.kanban.entity.TimeLog> selectByWorkspaceBetween(
+            @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
+
     /** 按成员分组统计本空间工时（下钻用，user_id 回填在 TimeAgg.userId） */
     List<TimeAgg> sumByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId);
 }

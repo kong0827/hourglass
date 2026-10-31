@@ -106,6 +106,14 @@ public class TaskCompletionService {
         return recordMapper.deleteAllByWorkspace(workspaceId);
     }
 
+    /** 彻底删除任务后快照仍保留，因此该 ID 不允许再被新任务复用 */
+    public boolean hasSnapshot(String workspaceId, String taskId) {
+        if (workspaceId == null || taskId == null) {
+            return false;
+        }
+        return recordMapper.countByTaskId(workspaceId, taskId) > 0;
+    }
+
     private String truncate(String s, int max) {
         if (s == null) {
             return null;

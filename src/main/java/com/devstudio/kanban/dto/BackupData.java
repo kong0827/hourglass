@@ -18,6 +18,10 @@ public class BackupData {
     private List<BackupColumn> columns;
     /** 任务评论（v4 起纳入；旧备份没有该字段时导入会清空评论，前端会明确提示） */
     private List<BackupComment> comments;
+    /** 需求文档（v6 起纳入；跨空间导入会重建并重映射项目/任务引用） */
+    private List<BackupReqDoc> reqDocs;
+    /** 分支池（v6 起纳入；不含分支操作时间线） */
+    private List<BackupBranch> branches;
     /** 甘特图依赖（v5 起纳入；旧备份没有该字段时导入会清空依赖） */
     private List<BackupDependency> deps;
     /** 甘特图基线（v5 起纳入） */
@@ -119,9 +123,44 @@ public class BackupData {
     }
 
     @Data
+    public static class BackupReqDoc {
+        private String id;
+        private String reqId;
+        private String title;
+        private String content;
+        private String status;
+        private String owner;
+        private String ownerUserId;
+        private String createdAt;
+        private String updatedAt;
+    }
+
+    @Data
+    public static class BackupBranch {
+        private String id;
+        private String name;
+        private String status;
+        private String owner;
+        private String ownerUserId;
+        private String targetBranch;
+        private String note;
+        private String devAt;
+        private String testAt;
+        private String mergeAt;
+        private String releasedAt;
+        private Integer sortOrder;
+        private String createdAt;
+        private String updatedAt;
+    }
+
+    @Data
     public static class ImportResult {
         private int tasks;
         private int reqs;
         private int comments;
+        /** v6：重建的需求文档数 */
+        private int reqDocs;
+        /** v6：重建的分支数 */
+        private int branches;
     }
 }

@@ -43,6 +43,7 @@ import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,6 +93,8 @@ public class TaskService {
     private final TaskDependencyMapper dependencyMapper;
     /** 甘特图基线：任务彻底删除时一起清 */
     private final TaskBaselineMapper baselineMapper;
+    /** 负责人必须是空间成员 */
+    private final WorkspaceMemberMapper memberMapper;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -105,7 +108,8 @@ public class TaskService {
                        RequirementDocMapper requirementDocMapper,
                        DevBranchMapper devBranchMapper,
                        TaskDependencyMapper dependencyMapper,
-                       TaskBaselineMapper baselineMapper) {
+                       TaskBaselineMapper baselineMapper,
+                       WorkspaceMemberMapper memberMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -125,6 +129,7 @@ public class TaskService {
         this.devBranchMapper = devBranchMapper;
         this.dependencyMapper = dependencyMapper;
         this.baselineMapper = baselineMapper;
+        this.memberMapper = memberMapper;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -411,7 +416,12 @@ public class TaskService {
 
     @Transactional
     public Task create(String userId, String workspaceId, TaskSaveRequest req) {
-        String id = Ids.sanitize(Texts.trimToNull(req.getId()));
+        String rawId = Texts.trimToNull(req.getId());
+        /* CFG 是配置审计日志的保留伪任务 ID，客户端不能占用 */
+        if ("CFG".equalsIgnoreCase(rawId)) {
+            throw AppException.badRequest("任务ID不可使用保留字：" + rawId);
+        }
+        String id = Ids.sanitize(rawId);
         if (id == null) {
             id = Ids.gen("K");
         } else if (taskMapper.selectById(id) != null) {
@@ -419,12 +429,15 @@ public class TaskService {
         } else if (taskMapper.countChildRefs(workspaceId, id) > 0) {
             // 覆盖导入会保留附件/日志等子记录但删除任务行，这类 ID 视为占用，防止旧记录误挂到新任务
             throw new AppException(409, "该ID仍关联历史附件/日志/工时记录（覆盖导入保留的旧数据），不能复用：" + id);
+        } else if (completionService.hasSnapshot(workspaceId, id)) {
+            /* 彻底删除后完成快照仍保留在任务清单里，复用 ID 会让新任务继承旧历史 */
+            throw new AppException(409, "该ID的历史完成快照仍保留（任务清单），不能复用：" + id);
         }
 
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
-        applyRequest(userId, workspaceId, t, req);
+        applyRequest(userId, workspaceId, t, req, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);
         t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + 1);
@@ -473,7 +486,7 @@ public class TaskService {
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
-        applyRequest(userId, workspaceId, t, req);
+        applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
         if (req.getIsMilestone() == null) {
             t.setIsMilestone(old.getIsMilestone());
@@ -791,8 +804,8 @@ public class TaskService {
         timeLogMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
         attachmentService.deleteByTask(t.getWorkspaceId(), t.getId());
         logMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
-        /* 任务彻底消失、ID 可能被复用：完成快照也一起清掉，避免新任务的归档写到旧记录上 */
-        completionService.remove(t.getWorkspaceId(), t.getId());
+        /* 完成快照不随任务删除：任务清单是历史快照，彻底删除后仍保留；
+           ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
         /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清。
            漏清的后果不只是"孤儿数据无限增长"——TaskMapper.countChildRefs 把 task_comment
            计入，已彻底删除的任务 ID 会因此被永久锁死（既不能新建同 ID，同 ID 还原时
@@ -901,7 +914,8 @@ public class TaskService {
         return next.toString();
     }
 
-    private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req) {
+    private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req,
+                              String oldOwnerUserId) {
         t.setTitle(req.getTitle().trim());
         t.setDescription(Texts.trimToNull(req.getDescription()));
         t.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
@@ -917,6 +931,11 @@ public class TaskService {
             AppUser ou = userMapper.selectById(ownerUserId);
             if (ou == null) {
                 throw AppException.badRequest("负责人账号不存在：" + ownerUserId);
+            }
+            if (memberMapper.selectMember(workspaceId, ownerUserId) == null
+                    && !ownerUserId.equals(oldOwnerUserId)) {
+                /* 成员已离开空间的历史任务允许原样保存，但不能再把任务新指派给非成员 */
+                throw AppException.badRequest("负责人不是该空间成员：" + ownerUserId);
             }
             t.setOwnerUserId(ownerUserId);
             if (owner == null || owner.isEmpty()) {
@@ -989,15 +1008,24 @@ public class TaskService {
         t.setEstimateMinutes(est == null || est <= 0 ? null : est);
         t.setNote(Texts.trimToNull(req.getNote()));
         t.setRemindAt(req.getRemindAt());
-        /* N-1：提醒谁（默认仅负责人） */
+        /* N-1：提醒谁（默认仅负责人；未知值归一，避免脏数据进入通知链路） */
         String remindTarget = Texts.trimToNull(req.getRemindTarget());
-        t.setRemindTarget(remindTarget == null ? "owner" : remindTarget);
+        t.setRemindTarget("owner+admin".equals(remindTarget) ? "owner+admin" : "owner");
         /* N-4：阻塞 / 卡点（取消阻塞时一并清空原因与依赖） */
         boolean blocked = Boolean.TRUE.equals(req.getBlocked());
         String reason = Texts.trimToNull(req.getBlockedReason());
         t.setBlocked(blocked);
         t.setBlockedReason(blocked && reason != null ? Texts.cut(reason, 120) : null);
-        t.setBlockedByTaskId(blocked ? Texts.trimToNull(req.getBlockedByTaskId()) : null);
+        String blockedBy = blocked ? Texts.trimToNull(req.getBlockedByTaskId()) : null;
+        if (blockedBy != null) {
+            /* 前置任务只认同空间、未删除的有效任务；失效引用静默清空，避免历史任务被锁死无法保存 */
+            Task pre = taskMapper.selectById(blockedBy);
+            if (blockedBy.equals(t.getId()) || pre == null
+                    || !workspaceId.equals(pre.getWorkspaceId()) || pre.getDeletedAt() != null) {
+                blockedBy = null;
+            }
+        }
+        t.setBlockedByTaskId(blockedBy);
     }
 
     private String defaultOwner(String userId) {

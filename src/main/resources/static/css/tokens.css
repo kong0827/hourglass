@@ -15,7 +15,7 @@
   --border-strong:#D0D5DD;
   --text:#101828;
   --text-2:#475467;
-  --text-3:#98A2B3;
+  --text-3:#667085;
   --text-inverse:#FFFFFF;
 
   /* ---- 品牌 ---- */
@@ -37,7 +37,7 @@
   --p0:#F04438; --p0-soft:#FEF3F2;
   --p1:#F79009; --p1-soft:#FFFAEB;
   --p2:#2E90FA; --p2-soft:#EFF8FF;
-  --p3:#98A2B3; --p3-soft:#F2F4F7;
+  --p3:#667085; --p3-soft:#F2F4F7;
 
   /* ---- 排版 ---- */
   --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",

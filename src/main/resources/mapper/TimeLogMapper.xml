@@ -70,7 +70,7 @@
   <select id="sumMinutesByUserOnDate" resultType="int">
     SELECT COALESCE(SUM(minutes), 0) FROM time_log
     WHERE user_id = #{userId} AND ended_at IS NOT NULL
-      AND DATE(started_at) = #{date}
+      AND started_at &gt;= #{date} AND started_at &lt; DATE_ADD(#{date}, INTERVAL 1 DAY)
   </select>
 
   <!-- 任务完成快照用：首次开始 / 最后一次结束（没有记录时两者为 null） -->
@@ -108,6 +108,21 @@
     SELECT COALESCE(SUM(minutes), 0) FROM time_log
     WHERE workspace_id = #{workspaceId}
       AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+  </select>
+
+  <select id="sumBetweenByWorkspaceGroupByUser" resultType="TimeAgg">
+    SELECT user_id AS user_id, SUM(minutes) AS total_minutes FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+    GROUP BY user_id
+  </select>
+
+  <select id="selectByWorkspaceBetween" resultType="TimeLog">
+    SELECT id, task_id, workspace_id, user_id, started_at, ended_at, minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId}
       AND started_at &gt;= #{from} AND started_at &lt; #{to}
   </select>
 

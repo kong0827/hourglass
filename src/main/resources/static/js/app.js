@@ -103,11 +103,6 @@ function fmtTs(s){
   if(isNaN(d.getTime())) return String(s);
   return pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
 }
-function fmtDateTime(v){
-  var d = new Date(v);
-  if(isNaN(d.getTime())) return String(v || "");
-  return pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
-}
 function fmtMinutes(total){
   var m = Number(total) || 0;
   if(m < 60) return m + " 分钟";
@@ -303,7 +298,7 @@ var VIEWS = {
   mine:     { title:"我的任务", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
   board:    { title:"任务看板", sub:null, enter:null },
   list:     { title:"任务列表", sub:"沿用当前筛选条件，点击行打开详情抽屉", enter:enterListView },
-  calendar: { title:"日历",     sub:"按截止日期排布；点击任务打开详情抽屉", enter:enterCalendarView },
+  calendar: { title:"日历",     sub:"按 [开始日期, 实际结束日] 逐日铺开；点任务开详情，格子可新建", enter:enterCalendarView },
   gantt:    { title:"甘特图",   sub:"按开始/截止日期排布任务；拖动条改期，拖两端调起止", enter:enterGanttView },
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:enterProjectsView },
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
@@ -339,21 +334,37 @@ function showView(name){
   syncViewHash(name);
   try{ localStorage.setItem("ds.view", name); }catch(e){ /* 隐私模式忽略 */ }
   if(VIEWS[name].enter) VIEWS[name].enter();
+  /* 看板不在当前视图时只置脏，切回来再渲染一次 */
+  if(name === "board" && boardDirty){ boardDirty = false; render({animate:false}); }
 }
 function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
   return VIEWS[name] ? name : "board";
 }
+var suppressHashSync = false;
 function syncViewHash(name){
+  if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
-  /* replaceState 在 file:// 等受限环境下会抛 SecurityError，降级为直接改 hash */
-  try{ history.replaceState(null, "", h); }
+  /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
+  try{ history.pushState(null, "", h); }
   catch(e){ try{ window.location.hash = h; }catch(e2){ /* 完全不可用则忽略 */ } }
 }
 window.addEventListener("popstate", function(){
   var n = viewFromHash();
-  if(n !== activeView) showView(n);
+  /* 后退时正在编辑需求且未保存：留在编辑页并问是否保存，避免静默丢正文 */
+  if(n !== activeView && activeView === "requirements"
+      && $("reqDocEditPage") && !$("reqDocEditPage").hidden && reqDocDirty){
+    try{ history.pushState(null, "", "#/requirements"); }catch(e){ /* noop */ }
+    tryCloseReqDocEditor();
+    return;
+  }
+  if(n !== activeView){
+    suppressHashSync = true;
+    try{ showView(n); } finally { suppressHashSync = false; }
+  }
+  /* 返回到带 ?task= 的历史项时直接打开对应任务 */
+  handleDeepLink();
 });
 function refreshActiveView(){
   if(activeView === "calendar") loadCalendar();
@@ -651,7 +662,7 @@ function cardHTML(t, idx){
     metaHTML += '<span class="meta" title="循环任务：' + recurLabel(t.recurType) + '">' + icon("recur", 14) + '</span>';
   }
   if(t.remindAt && !isDone){
-    metaHTML += '<span class="meta" title="提醒 ' + esc(fmtDateTime(t.remindAt)) + '">' + icon("bell", 14) + fmtDateTime(t.remindAt) + '</span>';
+    metaHTML += '<span class="meta" title="提醒 ' + esc(fmtTs(t.remindAt)) + '">' + icon("bell", 14) + fmtTs(t.remindAt) + '</span>';
   }
 
   var p = progressOf(t);
@@ -705,9 +716,17 @@ function cardAddHTML(colId){
 }
 
 /* ==================== 渲染：看板 ==================== */
+var boardDirty = false;
 function render(opts){
   opts = opts || {};
   updateBrand();
+  /* 不在看板视图时只置脏：避免甘特/列表视图下后台反复重建整块 DOM */
+  if(activeView !== "board"){
+    boardDirty = true;
+    return;
+  }
+  boardDirty = false;
+  UI.hideTip();
   if(!state.board) return;
 
   var scrollMemo = {}, boardLeft = board.scrollLeft;
@@ -1336,15 +1355,18 @@ searchInput.addEventListener("input", function(){
 });
 /* 跨视图搜索（O-7 / F6）：搜索框是全站唯一入口，结果统一在看板呈现 */
 function applySearch(kw){
-  var turned = (kw && activeView !== "board" && activeView !== "list" && activeView !== "mine");
+  var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};
   state.q = kw || "";
-  if(turned){
+  /* 支持筛选的视图就地过滤；其余视图仍回看板展示结果（避免搜索框看起来没反应） */
+  if(kw && !supported[activeView]){
     showView("board");
     reloadFilteredViews();
     toast("已在看板中显示「" + kw + "」的搜索结果");
     return;
   }
   if(activeView === "mine"){ loadMine(); return; }
+  if(activeView === "calendar"){ renderCalendar(); return; }
+  if(activeView === "gantt"){ loadGantt({silent:true}); renderGanttFilterState(); return; }
   reloadFilteredViews();
 }
 $("searchClear").addEventListener("click", function(){
@@ -1386,7 +1408,6 @@ selectedSummary.addEventListener("click", function(){
   }
   clearFilters();
 });
-function closePopsSoon(){ setTimeout(function(){ UI.closeAllPops(); }, 0); }
 $("filterbar").addEventListener("click", function(e){
   var o = e.target.closest("[data-owner]");
   if(o){ toggleIn(state.owners, o.dataset.owner); reloadFilteredViews(); return; }
@@ -2039,12 +2060,26 @@ function loadRunningTimer(cb){
     if(seq !== runningTimerSeq) return;
     state.runningTimer = (d && d.running) ? d : null;
     updateElapsedTexts();
+    renderTimerPill();
     if(cb) cb(state.runningTimer);
   }).catch(function(){
     if(seq !== runningTimerSeq) return;
     state.runningTimer = null;
+    renderTimerPill();
     if(cb) cb(null);
   });
+}
+/** 顶栏计时胶囊：任何视图都能看到正在计时的任务，并一键停止/打开 */
+function renderTimerPill(){
+  var pill = $("timerPill");
+  if(!pill) return;
+  var rt = state.runningTimer;
+  pill.hidden = !rt;
+  if(!rt) return;
+  var name = rt.taskTitle || "任务";
+  $("timerPillName").textContent = name;
+  pill.title = "正在计时：" + name + "（点击打开任务）";
+  updateElapsedTexts();
 }
 function updateElapsedTexts(){
   var rt = state.runningTimer;
@@ -2084,6 +2119,19 @@ function toggleTaskTimer(taskId){
     });
   }).catch(function(ex){
     toast(ex.message || "计时操作失败", "bad");
+  });
+}
+/* 顶栏计时胶囊事件 */
+if($("timerPill")){
+  $("timerPill").addEventListener("click", function(e){
+    var rt = state.runningTimer;
+    if(!rt) return;
+    if(e.target.closest("#timerPillStop")){
+      e.stopPropagation();
+      toggleTaskTimer(rt.taskId);
+      return;
+    }
+    openTaskById(rt.taskId);
   });
 }
 /* 每分钟校准一次（换设备操作也能同步）；只有"当前计时的任务变了"才重渲染，避免整页每分钟闪一下 */
@@ -2139,11 +2187,14 @@ function openCardMenu(anchor, taskId){
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
+  var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   var html =
     '<button class="menu-item" type="button" data-cm="open">' + icon("edit", 14) + '打开详情</button>' +
     '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' +
     '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "undo" : "check", 14) +
       (isDone ? "取消完成" : "标记完成") + '<span class="k">X</span></button>' +
+    '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
+      (running ? "停止计时" : "开始计时") + '</button>' +
     '<button class="menu-item" type="button" data-cm="copy">' + icon("copy", 14) + '复制标题</button>' +
     '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制任务链接</button>';
   var others = COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
@@ -2173,6 +2224,7 @@ function openCardMenu(anchor, taskId){
       UI.closeAllPops();
       if(k === "open") openTaskDrawer(null, t);
       else if(k === "done") toggleTaskDone(t.id);
+      else if(k === "timer") toggleTaskTimer(t.id);
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");
       else if(k === "link") copyToClipboard(taskLink(t.id), "任务链接已复制（可直接定位到该任务）");
       else if(k === "del") deleteTask(t.id);
@@ -2303,14 +2355,6 @@ function renderTagChips(){
       '" aria-label="移除标签 ' + esc(tg) + '">' + icon("close", 10) + '</button>';
     tagWrap.insertBefore(span, iTags);
   });
-}
-function parseTags(value){
-  var out = [];
-  String(value || "").split(/[,，]/).forEach(function(part){
-    var name = part.trim();
-    if(name && out.indexOf(name) === -1 && out.length < 8) out.push(name.slice(0, 16));
-  });
-  return out;
 }
 function syncProgVal(){ progVal.textContent = (Number(iProg.value) || 0) + "%"; }
 function renderTimeline(logs){
@@ -3403,8 +3447,16 @@ btnListBulk.addEventListener("click", function(){
 function openRowMenu(anchor, id){
   var t = listCache[id];
   if(!t) return;
+  var isDone = t.boardColumn === "done";
+  var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   var html = '<button class="menu-item" type="button" data-row-act="edit">' + icon("edit", 14) + '编辑</button>' +
-    '<button class="menu-item" type="button" data-row-act="copy">' + icon("copy", 14) + '复制标题</button>';
+    '<button class="menu-item" type="button" data-row-act="done">' + icon(isDone ? "undo" : "check", 14) +
+      (isDone ? "取消完成" : "标记完成") + '</button>' +
+    '<button class="menu-item" type="button" data-row-act="due">' + icon("calSmall", 14) + '改期</button>' +
+    '<button class="menu-item" type="button" data-row-act="timer">' +
+      icon("timer", 14) + (running ? "停止计时" : "开始计时") + '</button>' +
+    '<button class="menu-item" type="button" data-row-act="copy">' + icon("copy", 14) + '复制标题</button>' +
+    '<button class="menu-item" type="button" data-row-act="link">' + icon("extlink", 14) + '复制任务链接</button>';
   var others = COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
@@ -3425,7 +3477,12 @@ function openRowMenu(anchor, id){
     UI.closeAllPops();
     if(act){
       var k = act.dataset.rowAct;
-      if(k === "edit") openTaskDrawer(null, t);
+      if(k === "due"){
+        setTimeout(function(){ openDuePopover(anchor, t.id); }, 0);
+      }else if(k === "edit") openTaskDrawer(null, t);
+      else if(k === "done") toggleTaskDone(t.id);
+      else if(k === "timer") toggleTaskTimer(t.id);
+      else if(k === "link") copyToClipboard(taskLink(t.id), "任务链接已复制（可直接定位到该任务）");
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");
       else if(k === "del") deleteTask(t.id);
       return;
@@ -3452,7 +3509,7 @@ function enterCalendarView(){
   loadCalendar();
 }
 function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar(); }
-function refreshGanttIfOpen(){ if(activeView === "gantt") loadGantt(); }
+function refreshGanttIfOpen(){ if(activeView === "gantt") loadGantt({silent:true}); }
 function calShift(delta){
   calState.month += delta;
   if(calState.month < 1){ calState.month = 12; calState.year--; }
@@ -3501,7 +3558,9 @@ function renderCalendar(){
   /* 按 [开始日期, 截止日期] 区间逐日铺开：正在做的任务每天都应该出现在日历上。
      没填开始日期（或开始晚于截止）就只占截止日那一格，与升级前行为一致。 */
   var byDay = {};
+  var q = (state.q || "").toLowerCase();
   calState.tasks.forEach(function(t){
+    if(q && [t.title, t.description, t.note].join(" ").toLowerCase().indexOf(q) === -1) return;
     var range = calRangeOf(t);
     if(!range) return;
     var begin = range.begin, end = range.end;
@@ -3869,8 +3928,22 @@ function ganttTaskParams(offset, limit){
   return params;
 }
 
-function loadGantt(){
+function loadGantt(opts){
+  opts = opts || {};
   if(ganttState.drag || ganttState.unplannedDrag || !ganttScroll) return;
+  var silent = !!opts.silent;
+  var keepSel = silent ? ganttState.sel : {};
+  var keepAnchor = silent ? ganttState.selAnchor : null;
+  /* 静默刷新失败时回滚到旧数据，避免页面还显示旧条、状态却已被清空 */
+  ganttState.silentBackup = silent ? {
+    tasks: ganttState.tasks, byId: ganttState.byId, deps: ganttState.deps,
+    depById: ganttState.depById, depsLoaded: ganttState.depsLoaded,
+    baseline: ganttState.baseline, baselineAt: ganttState.baselineAt,
+    serverUnplanned: ganttState.serverUnplanned, unplannedTasks: ganttState.unplannedTasks,
+    unscheduledTotal: ganttState.unscheduledTotal, paging: ganttState.paging,
+    loadData: ganttState.loadData, critical: ganttState.critical, criticalDeps: ganttState.criticalDeps
+  } : null;
+  if(!silent) ganttState.silentBackup = null;
   var seq = ++ganttState.seq;
   ganttState.tasks = [];
   ganttState.byId = {};
@@ -3889,10 +3962,10 @@ function loadGantt(){
   ganttState.baselineAt = null;
   ganttState.critical = null;
   ganttState.criticalDeps = {};
-  ganttState.sel = {};
-  ganttState.selAnchor = null;
-  ganttState.paging = { total: 0, loaded: 0, hasMore: true, loading: true, nextOffset: 0 };
-  if(!ganttScroll.querySelector(".gantt-grid")){
+  ganttState.sel = keepSel;
+  ganttState.selAnchor = keepAnchor;
+  ganttState.paging = { total: 0, loaded: 0, hasMore: true, loading: true, nextOffset: 0, silent: silent, present: {} };
+  if(!silent && !ganttScroll.querySelector(".gantt-grid")){
     ganttScroll.innerHTML = '<div style="padding:20px">' + UI.skeletonRows(6) + '</div>';
     ganttMeta.textContent = "加载中…";
   }
@@ -3908,6 +3981,7 @@ function ganttLoadPage(seq, offset){
     if(offset > 0 && !fetched.length){
       ganttState.paging.hasMore = false;
       ganttState.paging.loading = false;
+      if(ganttState.paging.silent){ ganttPruneSelection(); renderGantt(); ganttState.silentBackup = null; }
       return;
     }
     if(offset === 0){
@@ -3944,24 +4018,52 @@ function ganttLoadPage(seq, offset){
       taskCacheExtra[t.id] = t;
       present[t.id] = 1;
     });
-    if(offset === 0){
+    if(offset === 0 && !ganttState.paging.silent){
       Object.keys(ganttState.sel).forEach(function(id){ if(!present[id]) delete ganttState.sel[id]; });
       if(ganttState.selAnchor && !present[ganttState.selAnchor]) ganttState.selAnchor = null;
+    }
+    if(ganttState.paging.silent){
+      for(var pid in present) ganttState.paging.present[pid] = 1;
     }
     ganttState.total = (d && typeof d.total === "number") ? d.total : ganttState.tasks.length;
     ganttState.paging.total = ganttState.total;
     ganttState.paging.loaded = ganttState.tasks.length;
     ganttState.paging.hasMore = !!(d && d.hasMore) && fetched.length > 0;
     ganttState.paging.loading = false;
-    renderGantt();
+    if(!ganttState.paging.silent) renderGantt();
     /* 自动拉完后续分页，但设上限，避免一次把几万条塞进浏览器 */
     /* 如果渲染过程中切了月视图并重启了加载，seq 会变，旧分页不能再追 */
     if(seq === ganttState.seq && ganttState.paging.hasMore && fetched.length > 0 && ganttState.tasks.length < GANTT_MAX_LOAD){
       ganttLoadPage(seq, ganttState.paging.nextOffset);
+    }else if(ganttState.paging.silent){
+      /* 静默刷新等全部分页到齐后只渲染一次 */
+      ganttPruneSelection();
+      renderGantt();
+      ganttState.silentBackup = null;
     }
   }).catch(function(ex){
     if(seq !== ganttState.seq) return;
     ganttState.paging.loading = false;
+    if(ganttState.silentBackup){
+      var b = ganttState.silentBackup;
+      ganttState.silentBackup = null;
+      ganttState.tasks = b.tasks;
+      ganttState.byId = b.byId;
+      ganttState.deps = b.deps;
+      ganttState.depById = b.depById;
+      ganttState.depsLoaded = b.depsLoaded;
+      ganttState.baseline = b.baseline;
+      ganttState.baselineAt = b.baselineAt;
+      ganttState.serverUnplanned = b.serverUnplanned;
+      ganttState.unplannedTasks = b.unplannedTasks;
+      ganttState.unscheduledTotal = b.unscheduledTotal;
+      ganttState.paging = b.paging;
+      ganttState.loadData = b.loadData;
+      ganttState.critical = b.critical;
+      ganttState.criticalDeps = b.criticalDeps;
+      toast("甘特图刷新失败：" + (ex.message || "网络异常") + "（保留当前视图）", "bad");
+      return;
+    }
     if(!ganttState.tasks.length){
       ganttMeta.textContent = "";
       ganttScroll.innerHTML = '<div style="padding:20px">' + UI.errorState(ex.message) + '</div>';
@@ -3970,6 +4072,13 @@ function ganttLoadPage(seq, offset){
       toast("甘特图加载失败：" + (ex.message || "网络异常"), "bad");
     }
   });
+}
+
+function ganttPruneSelection(){
+  var present = ganttState.paging && ganttState.paging.present;
+  if(!present) return;
+  Object.keys(ganttState.sel).forEach(function(id){ if(!present[id]) delete ganttState.sel[id]; });
+  if(ganttState.selAnchor && !present[ganttState.selAnchor]) ganttState.selAnchor = null;
 }
 
 function ganttMonthStart(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
@@ -4683,8 +4792,8 @@ function ganttUndoLast(){
 /* ==================== CSV 导出 ==================== */
 function ganttCsvCell(v){
   v = (v === null || v === undefined) ? "" : String(v);
-  /* 公式注入：Excel 会把 = + - @ 开头的单元格当公式执行（含 CSV 导出的任务标题） */
-  if(/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+  /* 公式注入：Excel 会把 = + - @ 开头的单元格当公式执行；纯数字（含负数）保持可计算 */
+  if(!/^-?\d+(\.\d+)?$/.test(v) && /^\s*[=+\-@\t\r]/.test(v)) v = "'" + v;
   return '"' + v.replace(/"/g, '""') + '"';
 }
 function ganttStatusText(t){
@@ -4799,15 +4908,16 @@ function ganttAnalysisItem(attr, label, active, hint){
 function renderGanttAnalysisMenu(){
   if(!ganttAnalysisMenu) return;
   var hasBaseline = !!ganttState.baselineAt;
+  var isOwner = !!(currentWs && currentWs.myRole === "owner");
   ganttAnalysisMenu.innerHTML = '<div class="menu-title">分析</div>' +
     ganttAnalysisItem('data-gantt-critical', '关键路径高亮', ganttState.showCritical, '') +
     ganttAnalysisItem('data-gantt-baseline-toggle', '显示基线', ganttState.baselineOn, hasBaseline ? '' : '未设置') +
     '<div class="menu-sep"></div>' +
     '<button class="menu-item" type="button" data-gantt-baseline-set>设为基线（当前计划）</button>' +
-    '<button class="menu-item" type="button" data-gantt-baseline-clear"' + (hasBaseline ? '' : ' disabled') + '>清除基线</button>' +
+    (isOwner ? '<button class="menu-item" type="button" data-gantt-baseline-clear"' + (hasBaseline ? '' : ' disabled') + '>清除基线</button>' : '') +
     '<div class="menu-sep"></div>' +
     ganttAnalysisItem('data-gantt-load', '资源负载面板', ganttState.showLoad, '') +
-    '<button class="menu-item" type="button" data-gantt-share>分享只读链接…</button>';
+    (isOwner ? '<button class="menu-item" type="button" data-gantt-share>分享只读链接…</button>' : '');
 }
 function ganttApplyBaselineInfo(info){
   ganttState.baseline = (info && info.baseline) || {};
@@ -4848,6 +4958,7 @@ function ganttCaptureBaseline(){
 }
 function ganttClearBaseline(){
   if(ganttReadOnly()){ toast("移动端只读，不能清除基线", "warn"); return; }
+  if(!(currentWs && currentWs.myRole === "owner")){ toast("仅空间主可清除基线", "warn"); return; }
   UI.showConfirm({ title:"清除基线", msg:"清除后无法再对比「计划 vs 当前」，确定？", okText:"清除" }).then(function(ok){
     if(!ok) return;
     API.del("/api/gantt/baseline").then(function(){
@@ -4948,6 +5059,7 @@ function ganttFillShare(token){
   $("ganttShareRevoke").hidden = false;
 }
 function openGanttShare(){
+  if(!(currentWs && currentWs.myRole === "owner")){ toast("仅空间主可生成或查看分享链接", "warn"); return; }
   var dlg = $("dlgGanttShare");
   if(!dlg){ toast("分享弹窗未加载", "bad"); return; }
   $("ganttShareUrl").value = "";
@@ -6431,7 +6543,9 @@ function renderReqList(){
           reqStatusName(r.status) + '</span>' +
         '<span class="req-acts">' +
           '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>' +
-          '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>' +
+          (currentWs && currentWs.myRole === "owner"
+            ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>'
+            : '') +
         '</span>' +
       '</div>' +
       (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
@@ -6484,6 +6598,7 @@ function deleteReq(id){
   var r = null;
   for(var i = 0; i < reqList.length; i++) if(reqList[i].id === id) r = reqList[i];
   if(!r) return;
+  if(!(currentWs && currentWs.myRole === "owner")){ toast("仅空间主可删除项目", "warn"); return; }
   /* 后端删除项目会连带删除其下需求文档；确认框必须把这件事说清楚。
      docCount 来自项目列表，reqDocList 是本会话已加载的需求，取较大值防止列表快照过期。 */
   var liveDocs = (reqDocList || []).filter(function(d){ return d.reqId === id; }).length;
@@ -6624,15 +6739,17 @@ function enterMineView(){
 /* 复评 §5.3：「我的任务」原来只有"范围"一个开关，任务一多就是一条长列表。
    这里补空间/优先级/被阻塞三个筛选，在客户端过滤（后端一次返回全量，交互即时）。 */
 function mineFiltered(items){
+  var q = (state.q || "").toLowerCase();
   return (items || []).filter(function(t){
     if(state.mineSpace && t.workspaceId !== state.mineSpace) return false;
     if(state.minePri && t.priority !== state.minePri) return false;
     if(state.mineBlocked && !t.blocked) return false;
+    if(q && [t.title, t.description, t.note].join(" ").toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
 }
 function mineFiltering(){
-  return !!(state.mineSpace || state.minePri || state.mineBlocked);
+  return !!(state.mineSpace || state.minePri || state.mineBlocked || state.q);
 }
 function syncMineFilters(){
   if(minePriFilter) minePriFilter.value = state.minePri || "";
@@ -7187,42 +7304,9 @@ var reqDocDirty = false;    // 编辑页有未保存修改
 var reqEditor = null;       // SunEditor 实例（第一次打开编辑页时创建）
 var reqCollapsed = {};      // 项目折叠状态 {reqId: true}
 var editingDocId = null;    // 编辑页当前需求
+var reqDocOpenSeq = 0;      // 连续打开多份需求时，只认最后一次请求的结果
 /* 标题 / 项目 / 状态在「新增需求」时就确定了，编辑页只写正文 —— 这里缓存住，保存时带回去 */
 var editingMeta = { title: "", reqId: "", status: "draft" };
-
-/* 允许的标签：与后端 jsoup 白名单保持一致（渲染兜底用） */
-var REQDOC_TAGS = { P:1, BR:1, H1:1, H2:1, H3:1, H4:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1,
-  PRE:1, CODE:1, HR:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, DEL:1, INS:1, A:1, SPAN:1, DIV:1 };
-
-/** 白名单清洗（服务端已清洗，这里只用于"把外来 HTML 塞进非编辑器区域"的场景） */
-function sanitizeHTML(html){
-  var box = document.createElement("div");
-  box.innerHTML = html || "";
-  (function walk(node){
-    Array.prototype.slice.call(node.childNodes).forEach(function(n){
-      if(n.nodeType === 3) return;
-      if(n.nodeType !== 1){ node.removeChild(n); return; }
-      var tag = n.tagName.toUpperCase();
-      if(tag === "SCRIPT" || tag === "STYLE" || tag === "IFRAME" || tag === "OBJECT" || tag === "EMBED"){
-        node.removeChild(n);
-        return;
-      }
-      if(!REQDOC_TAGS[tag]){
-        var frag = document.createDocumentFragment();
-        while(n.firstChild) frag.appendChild(n.firstChild);
-        node.replaceChild(frag, n);
-        walk(node);
-        return;
-      }
-      Array.prototype.slice.call(n.attributes).forEach(function(a){
-        var keep = (tag === "A" && /^(href|title)$/i.test(a.name));
-        if(!keep) n.removeAttribute(a.name);
-      });
-      walk(n);
-    });
-  })(box);
-  return box.innerHTML;
-}
 
 function reqDocNameById(id){
   if(!id) return null;
@@ -7241,35 +7325,70 @@ function reqDocProjectName(reqId){
 }
 
 /**
- * 初始化 SunEditor（本地 vendor/suneditor，离线可用）。
- * 换掉 Quill 的原因：Quill 2 没有表格支持，从 Word 粘贴的表格会被拍平成一串文字；
- * SunEditor 原生支持表格编辑，且同样是"单文件 + 无构建"。
+ * SunEditor 按需加载（2.5 MB，不能跟着首屏一起下）。
+ * 首次打开需求正文时才插入 CSS/JS；失败可重试，Promise 结果缓存。
  */
-function initEditor(){
-  if(reqEditor || typeof SUNEDITOR === "undefined" || !$("reqDocCanvas")) return reqEditor;
-  reqEditor = SUNEDITOR.create("reqDocCanvas", {
-    buttonList: [
-      ["undo", "redo"],
-      ["formatBlock", "font", "fontSize"],
-      ["bold", "underline", "italic", "strike"],
-      ["fontColor", "hiliteColor"],
-      ["align", "list", "lineHeight"],
-      ["outdent", "indent"],
-      ["table", "link", "image"],
-      ["removeFormat"],
-      ["codeView"]
-    ],
-    mode: "classic",
-    /* auto：不内滚，内容多高就多高，靠外层整页滚动 */
-    height: "auto",
-    minHeight: "360px",
-    placeholder: "在这里写需求：目标、范围、验收标准…",
-    charCounter: false,
-    resizingBar: false,
-    showPathLabel: false
+var sunEditorPromise = null;
+function loadSunEditor(){
+  if(typeof window.SUNEDITOR !== "undefined") return Promise.resolve();
+  if(sunEditorPromise) return sunEditorPromise;
+  sunEditorPromise = new Promise(function(resolve, reject){
+    var css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "vendor/suneditor/suneditor.min.css";
+    document.head.appendChild(css);
+    var s = document.createElement("script");
+    s.src = "vendor/suneditor/suneditor.min.js";
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){
+      sunEditorPromise = null;
+      reject(new Error("富文本编辑器加载失败，请检查网络后重试"));
+    };
+    document.head.appendChild(s);
   });
-  reqEditor.onChange = function(){ markReqDocDirty(); scheduleTocRebuild(); };
-  return reqEditor;
+  return sunEditorPromise;
+}
+
+var editorPromise = null;
+/** 取（或创建）编辑器实例；返回 Promise，未就绪时不要保存正文，避免把内容清空 */
+function ensureEditor(){
+  if(reqEditor) return Promise.resolve(reqEditor);
+  if(!$("reqDocCanvas")) return Promise.resolve(null);
+  if(editorPromise) return editorPromise;
+  editorPromise = loadSunEditor().then(function(){
+    /* 加载期间用户已经退出编辑页：不要对着隐藏容器创建（尺寸会算成 0） */
+    if(!$("reqDocEditPage") || $("reqDocEditPage").hidden){
+      editorPromise = null;
+      return null;
+    }
+    reqEditor = SUNEDITOR.create("reqDocCanvas", {
+      buttonList: [
+        ["undo", "redo"],
+        ["formatBlock", "font", "fontSize"],
+        ["bold", "underline", "italic", "strike"],
+        ["fontColor", "hiliteColor"],
+        ["align", "list", "lineHeight"],
+        ["outdent", "indent"],
+        ["table", "link", "image"],
+        ["removeFormat"],
+        ["codeView"]
+      ],
+      mode: "classic",
+      /* auto：不内滚，内容多高就多高，靠外层整页滚动 */
+      height: "auto",
+      minHeight: "360px",
+      placeholder: "在这里写需求：目标、范围、验收标准…",
+      charCounter: false,
+      resizingBar: false,
+      showPathLabel: false
+    });
+    reqEditor.onChange = function(){ markReqDocDirty(); scheduleTocRebuild(); };
+    return reqEditor;
+  }).catch(function(e){
+    editorPromise = null;
+    throw e;
+  });
+  return editorPromise;
 }
 
 var reqDocsLoaded = false;
@@ -7295,6 +7414,7 @@ function enterRequirementsView(){
 }
 
 function showReqDocList(){
+  reqDocOpenSeq++;
   editingDocId = null;
   state.reqDocId = null;
   reqDocDirty = false;
@@ -7407,14 +7527,17 @@ function submitNewReqDoc(){
 /* ---------------- 编辑页 ---------------- */
 
 function openReqDocEditor(id){
+  var seq = ++reqDocOpenSeq;
   API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
+    if(seq !== reqDocOpenSeq) return;   // 连续点开多份：丢弃过期的响应
     editingDocId = doc.id;
     state.reqDocId = doc.id;
     editingMeta = { title: doc.title || "", reqId: doc.reqId || "", status: doc.status || "draft" };
-    fillReqDocEditor(doc);
-    setTocVisible(tocVisiblePref());
+    /* 先让编辑页可见，再创建编辑器：隐藏容器里量出来的宽高是 0 */
     if($("reqDocListPage")) $("reqDocListPage").hidden = true;
     if($("reqDocEditPage")) $("reqDocEditPage").hidden = false;
+    fillReqDocEditor(doc);
+    setTocVisible(tocVisiblePref());
     if($("reqDocCrumb")) $("reqDocCrumb").textContent = reqDocProjectName(doc.reqId) + " / " + (doc.title || "未命名需求");
     /* 打开时停在顶部：目录高亮与滚动位置对齐 */
     try{ window.scrollTo(0, 0); }catch(e){ /* 忽略 */ }
@@ -7642,11 +7765,22 @@ if($("reqDocAiSplit")){
 
 
 function fillReqDocEditor(doc){
-  var q = initEditor();
-  if(q) q.setContents(doc.content || "", false);
+  var id = doc.id;
+  if(reqEditor){
+    reqEditor.setContents(doc.content || "", false);
+    updateReqDocCount();
+    rebuildToc();
+  }else{
+    /* 首次打开：编辑器按需下载，下载完再灌正文（期间用户切走就丢弃结果） */
+    ensureEditor().then(function(ed){
+      if(!ed || editingDocId !== id) return;
+      ed.setContents(doc.content || "", false);
+      updateReqDocCount();
+      rebuildToc();
+    }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
+  }
   $("reqDocSaved").textContent = doc.updatedAt ? ("最后保存 " + fmtTs(doc.updatedAt)) : "尚未保存";
   reqDocDirty = false;
-  updateReqDocCount();
   /* 正文换人了：目录要跟着换（重建前先清掉旧的高亮） */
   tocActive = null;
   rebuildToc();
@@ -7861,6 +7995,10 @@ function saveReqDoc(){
     toast("这份需求缺少标题或项目，请回到列表重新创建", "warn");
     return Promise.resolve(null);
   }
+  if(!reqEditor){
+    toast("正文编辑器还在加载，请稍候再保存", "warn");
+    return Promise.resolve(null);
+  }
   var body = {
     reqId: reqId,
     title: title,
@@ -8006,7 +8144,7 @@ function populateReqDocSelect(keep){
     if(activeView === "requirements" && $("reqDocEditPage") && !$("reqDocEditPage").hidden){ tryCloseReqDocEditor(); }
   });
 
-  initEditor();
+  /* 编辑器改成打开需求时按需加载，这里不再预初始化（首屏省下 2.5 MB） */
 
   /* Ctrl/Cmd+S 保存（SunEditor 内部会接管键盘，这里在文档级兜住） */
   document.addEventListener("keydown", function(e){
@@ -8231,7 +8369,8 @@ function openBranchStatusMenu(anchor, id){
   }).join("") +
     '<div class="menu-sep"></div>' +
     '<button class="menu-item" type="button" data-br-edit="1">编辑分支信息</button>' +
-    '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>';
+    (currentWs && currentWs.myRole === "owner"
+      ? '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>' : '');
   el.addEventListener("click", function(e){
     var set = e.target.closest("[data-br-set]");
     if(set){
@@ -8352,6 +8491,7 @@ function submitBranchDialog(){
 function deleteBranch(id){
   var b = branchById(id);
   if(!b) return;
+  if(!(currentWs && currentWs.myRole === "owner")){ toast("仅空间主可删除分支", "warn"); return; }
   var n = b.taskCount || 0;
   UI.showConfirm({
     title: "删除分支",
@@ -8417,7 +8557,8 @@ function renderBranchDrawer(b){
     '<div class="br-sect"><h4>关联任务</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
-      '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>' +
+      (currentWs && currentWs.myRole === "owner"
+        ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>' : '') +
       '<span style="flex:1 1 auto"></span>' +
       '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' +
     '</div>';
@@ -8671,10 +8812,7 @@ function exportCompCSV(){
       r.startDate, r.completedAt, r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes)]);
   });
   var csv = "\uFEFF" + lines.map(function(cols){
-    return cols.map(function(c){
-      var s = (c === null || c === undefined) ? "" : String(c);
-      return '"' + s.replace(/"/g, '""') + '"';
-    }).join(",");
+    return cols.map(ganttCsvCell).join(",");
   }).join("\r\n");
   var blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
@@ -9111,6 +9249,7 @@ function renderTrash(list){
     html += '<div class="trash-warn">' + icon("alert", 14) +
       '<span>' + soon.length + ' 项将在 3 天内被自动清理（保留 30 天后不可恢复），需要的话请先恢复。</span></div>';
   }
+  var canPurge = !!(currentWs && currentWs.myRole === "owner");
   html += list.map(function(t){
     var rem = remainingDays(t.deletedAt);
     return '<div class="trash-item" data-trash-id="' + esc(t.id) + '">' +
@@ -9128,7 +9267,7 @@ function renderTrash(list){
       '</span>' +
       '<span class="ti-acts">' +
         '<button class="btn sm" type="button" data-trash-restore="' + esc(t.id) + '">恢复</button>' +
-        '<button class="btn sm danger" type="button" data-trash-purge="' + esc(t.id) + '">彻底删除</button>' +
+        (canPurge ? '<button class="btn sm danger" type="button" data-trash-purge="' + esc(t.id) + '">彻底删除</button>' : '') +
       '</span>' +
     '</div>';
   }).join("");
@@ -9154,6 +9293,7 @@ trashList.addEventListener("click", function(e){
   }
   var pg = e.target.closest("[data-trash-purge]");
   if(pg){
+    if(!(currentWs && currentWs.myRole === "owner")){ toast("仅空间主可彻底删除任务", "warn"); return; }
     var row2 = pg.closest("[data-trash-id]");
     var title2 = row2 && row2.querySelector(".ti-t") ? row2.querySelector(".ti-t").textContent : "";
     UI.showConfirm({
@@ -9827,7 +9967,7 @@ $("inviteList").addEventListener("click", function(e){
 $("btnExport").addEventListener("click", function(){
   API.get("/api/export").then(function(data){
     triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线，不含需求文档与分支）", "fs");
+    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线/需求文档/分支）", "fs");
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
@@ -9838,8 +9978,8 @@ $("fileImport").addEventListener("change", function(e){
   UI.showConfirm({
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的任务、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按任务重建完成归档；同时清空任务通知。已选文件：<b>" +
-      esc(f.name) + "</b>。<br><br>需求文档、分支、附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
-      "<br><br>旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
+      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
+      "<br><br>v6 备份会连同<b>需求文档与分支</b>一起覆盖恢复；旧备份不含这两类数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
     if(!ok) return;
@@ -9853,6 +9993,8 @@ $("fileImport").addEventListener("change", function(e){
       }
       API.post("/api/import", data).then(function(res){
         toast("已从备份恢复 " + res.tasks + " 项任务 / " + res.reqs + " 项项目" +
+          (res.reqDocs ? " / " + res.reqDocs + " 份需求文档" : "") +
+          (res.branches ? " / " + res.branches + " 个分支" : "") +
           (res.comments ? " / " + res.comments + " 条评论" : ""), "fs");
         ganttState.undo = [];
         syncGanttUndoUI();
@@ -9886,21 +10028,21 @@ function disarmReset(){
   if(resetArmed){ clearTimeout(resetArmed); resetArmed = null; }
   btnReset.classList.remove("armed");
   resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档，分享链接失效；需求文档、分支、附件、时间线、视图、看板列与分类保留";
+  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档、需求文档（随项目）、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){
   if(resetArmed){
     disarmReset();
     var n = totalTaskCount(), m = reqList.length;
-    API.post("/api/import", {v:5, tasks:[], reqs:[], comments:[], deps:[], baseline:[]}).then(function(){
+    API.post("/api/import", {v:6, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[]}).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.due = null; state.focus = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知与完成归档）")
-        : "任务数据已清空（需求文档、分支、附件、时间线保留）", "warn");
+        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档与需求文档）")
+        : "任务数据已清空（分支、附件、时间线保留）", "warn");
       ganttState.undo = [];
       syncGanttUndoUI();
       loadBoard({animate:true});
@@ -9911,7 +10053,7 @@ btnReset.addEventListener("click", function(){
   }
   btnReset.classList.add("armed");
   resetLabel.textContent = "再次点击清空任务数据";
-  toast("再次点击确认：删除任务/回收站/项目/评论/甘特依赖与基线/任务通知/完成归档，分享链接失效；需求文档、分支、附件、时间线保留", "warn");
+  toast("再次点击确认：删除任务/回收站/项目/评论/甘特依赖与基线/任务通知/完成归档/需求文档，分享链接失效；分支、附件、时间线保留", "warn");
   resetArmed = setTimeout(disarmReset, 3500);
 });
 
@@ -10110,11 +10252,12 @@ function loadWorkspaces(meUser){
 }
 function applyWsRoleGating(){
   var owner = !currentWs || currentWs.myRole === "owner";
-  [["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
+  [["btnExport","导出任务备份"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
     var b = $(pair[0]);
     if(!b) return;
+    if(b.dataset.ownerTitle === undefined) b.dataset.ownerTitle = b.title || "";
     b.disabled = !owner;
-    b.title = owner ? "" : ("仅空间主可" + pair[1]);
+    b.title = owner ? b.dataset.ownerTitle : ("仅空间主可" + pair[1]);
   });
 }
 function loadWsMembers(){
@@ -10727,10 +10870,11 @@ $("alertPanel").addEventListener("click", function(e){
 });
 
 /* ==================== SSE 实时同步（§8.3 + O-11） ==================== */
-var sse = {conn:null, lastMsg:0, retry:0, timer:null, debounce:null, lastRefresh:0};
-/* 事件载荷：新格式为 JSON {"w":空间ID,"t":任务ID,"a":操作人}；旧格式（纯空间ID文本）继续兼容 */
+var sse = {conn:null, lastMsg:0, retry:0, timer:null, debounce:null, lastRefresh:0,
+  pending:false, pendingEntity:"", disconnectedAt:0};
+/* 事件载荷：JSON {"w":空间ID,"t":任务ID,"a":操作人,"c":客户端ID,"e":实体}；旧格式（纯空间ID）继续兼容 */
 function parseSseData(raw){
-  var out = {ws:"", taskId:"", actor:""};
+  var out = {ws:"", taskId:"", actor:"", clientId:"", entity:""};
   if(!raw) return out;
   var s = String(raw);
   if(s.charAt(0) === "{"){
@@ -10739,6 +10883,8 @@ function parseSseData(raw){
       out.ws = o.w || o.workspaceId || "";
       out.taskId = o.t || o.taskId || "";
       out.actor = o.a || o.actorName || "";
+      out.clientId = o.c || "";
+      out.entity = o.e || "";
       return out;
     }catch(e){ /* 解析失败则落回文本口径 */ }
   }
@@ -10766,9 +10912,39 @@ function sseScheduleReconnect(){
   sse.retry++;
   sse.timer = setTimeout(function(){ sse.timer = null; sseConnect(); }, delay);
 }
+function refreshByEntity(entity){
+  if(!entity || entity === "all" || entity === "task" || entity === "timer"
+      || entity === "column" || entity === "category" || entity === "workspace" || entity === "other"){
+    refreshBoardPreserving();
+    loadReqs();
+    refreshActiveView();
+    return;
+  }
+  if(entity === "req" || entity === "reqdoc"){
+    loadReqs();
+    refreshActiveView();
+    return;
+  }
+  if(entity === "branch"){
+    loadBranches(true).then(renderBranches).catch(function(){ /* 忽略 */ });
+    refreshActiveView();
+    return;
+  }
+  refreshActiveView();
+}
 function onSseChanged(event){
   sseTick();
   var info = parseSseData(event && event.data);
+  /* F-NET-1：发起者自己的写请求会收到回声，直接忽略，避免同一操作刷新两遍 */
+  if(info.clientId && info.clientId === window.DS_CLIENT_ID) return;
+  /* 后台标签页不刷新：只记一笔，切回来时补一次 */
+  if(document.hidden){
+    sse.pending = true;
+    var ent = info.entity || "all";
+    /* 后台期间可能收到多种实体：合并成 all，切回时一次全刷，避免漏掉 */
+    sse.pendingEntity = (sse.pendingEntity && sse.pendingEntity !== ent) ? "all" : ent;
+    return;
+  }
   /* R-1：未读角标是跨空间的，且与"是否刷新当前看板"无关，因此放在空间判断之前 */
   loadUnread();
   if(info.ws && window.CURRENT_WORKSPACE && info.ws !== window.CURRENT_WORKSPACE) return;
@@ -10784,9 +10960,7 @@ function onSseChanged(event){
     if(taskDrawer.classList.contains("on") && formDirty) return;     // 仅在「有未保存改动」时延迟刷新
     if(Date.now() - sse.lastRefresh < 300) return;
     sse.lastRefresh = Date.now();
-    refreshBoardPreserving();
-    loadReqs();
-    refreshActiveView();
+    refreshByEntity(info.entity);
   }, 300);
 }
 function sseConnect(){
@@ -10797,8 +10971,16 @@ function sseConnect(){
   sse.conn.addEventListener("changed", onSseChanged);
   sse.conn.addEventListener("ping", sseTick);
   sse.conn.onmessage = sseTick;
-  sse.conn.onopen = function(){ sse.retry = 0; sseTick(); };
+  sse.conn.onopen = function(){
+    var gap = sse.disconnectedAt ? (Date.now() - sse.disconnectedAt) : 0;
+    sse.retry = 0;
+    sse.disconnectedAt = 0;
+    sseTick();
+    /* 断开超过 5 秒：期间的事件可能已经丢了，重连后补拉一次 */
+    if(gap > 5000 && !document.hidden) refreshByEntity("all");
+  };
   sse.conn.onerror = function(){
+    if(!sse.disconnectedAt) sse.disconnectedAt = Date.now();
     sseClose();
     updateSseAlert();
     sseScheduleReconnect();
@@ -10832,7 +11014,8 @@ setInterval(function(){
   if(UI.anyDialogOpen()) return;
   if(taskDrawer.classList.contains("on") && formDirty) return;
   pollTick++;
-  if(sseHealthy() && pollTick % 2 !== 0) return;   // SSE 正常时降频到 60s
+  /* SSE 健康时不做数据轮询：事件驱动已经够用，只保留跨零点检查 */
+  if(sseHealthy()){ refreshIfDayChanged(); return; }
   if(refreshIfDayChanged()) return;
   refreshBoardPreserving();
   loadReqs();
@@ -10843,6 +11026,15 @@ document.addEventListener("visibilitychange", function(){
   if(UI.anyDialogOpen() || drag || pending) return;
   if(taskDrawer.classList.contains("on") && formDirty) return;
   if(refreshIfDayChanged()) return;
+  /* 后台期间收到的变更在切回来时补一次 */
+  if(sse.pending){
+    var ent = sse.pendingEntity;
+    sse.pending = false;
+    sse.pendingEntity = "";
+    loadUnread();
+    refreshByEntity(ent);
+    return;
+  }
   refreshBoardPreserving();
 });
 

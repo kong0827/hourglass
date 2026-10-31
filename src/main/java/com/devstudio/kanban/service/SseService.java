@@ -30,16 +30,32 @@ public class SseService {
 
     private static final Logger log = LoggerFactory.getLogger(SseService.class);
 
+    /** 单用户最多保留的 SSE 连接数：多标签页够用，异常重连不会无限堆积 */
+    private static final int MAX_PER_USER = 5;
+    /** 30 分钟主动超时：让客户端按 EventSource 规则自动重连，顺便回收半死连接 */
+    private static final long EMITTER_TIMEOUT_MS = 30L * 60L * 1000L;
+
     /** emitter → 订阅用户ID */
     private final Map<SseEmitter, String> subscribers = new ConcurrentHashMap<SseEmitter, String>();
     private final WorkspaceMemberMapper memberMapper;
+    /** 广播放到单线程有界队列：请求线程只负责投递，不被成员查询和慢连接拖住 */
+    private final java.util.concurrent.ThreadPoolExecutor broadcaster =
+            new java.util.concurrent.ThreadPoolExecutor(1, 1, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                    new java.util.concurrent.ArrayBlockingQueue<Runnable>(512),
+                    new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
 
     public SseService(WorkspaceMemberMapper memberMapper) {
         this.memberMapper = memberMapper;
     }
 
+    @javax.annotation.PreDestroy
+    public void shutdown() {
+        broadcaster.shutdownNow();
+    }
+
     public SseEmitter subscribe(String userId) {
-        final SseEmitter emitter = new SseEmitter(0L);
+        evictOldestIfFull(userId);
+        final SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
         subscribers.put(emitter, userId);
         emitter.onCompletion(new Runnable() {
             @Override
@@ -67,30 +83,67 @@ public class SseService {
         return emitter;
     }
 
+    /** 同一用户连接达到上限时，先关掉一条旧连接（通常是崩溃后没清理的） */
+    private void evictOldestIfFull(String userId) {
+        int count = 0;
+        SseEmitter oldest = null;
+        for (Map.Entry<SseEmitter, String> e : subscribers.entrySet()) {
+            if (!userId.equals(e.getValue())) {
+                continue;
+            }
+            count++;
+            if (oldest == null) {
+                oldest = e.getKey();
+            }
+        }
+        if (count >= MAX_PER_USER && oldest != null) {
+            try {
+                oldest.complete();
+            } catch (Exception ignored) {
+                /* 连接已经断了也行 */
+            }
+            subscribers.remove(oldest);
+        }
+    }
+
     /** 仅带空间粒度的广播（账号管理等与空间无关的变更传空串，发给全部订阅者） */
     public void broadcast(String event, String workspaceId) {
-        broadcast(event, workspaceId, null, null);
+        broadcast(event, workspaceId, null, null, null, null);
     }
 
     /**
-     * 带任务与操作人的广播（O-11）。
+     * 带任务、操作人、发起客户端与实体类型的广播（O-11 / F-NET-1）。
      * data 为空 = 与空间无关的变更，发给全部订阅；否则仅发给该空间成员。
      */
-    public void broadcast(String event, String workspaceId, String taskId, String actorName) {
+    public void broadcast(final String event, String workspaceId, String taskId, String actorName,
+                          final String clientId, final String entity) {
         if (subscribers.isEmpty()) {
             return; // 没有订阅者时不查成员、直接返回
         }
         String wsId = Texts.trimToNull(workspaceId);
         String tId = Texts.trimToNull(taskId);
         String actor = Texts.trimToNull(actorName);
-        // 只在确实带了任务信息时才用 JSON 载荷；否则保持旧格式（纯空间ID），避免前端解析歧义
+        final String cid = Texts.trimToNull(clientId);
+        final String ent = Texts.trimToNull(entity);
+        // 只在确实带了任务/操作人/客户端/实体信息时才用 JSON 载荷；否则保持旧格式（纯空间ID）
         String data = wsId == null ? "" : wsId;
-        if (wsId != null && (tId != null || actor != null)) {
+        if (wsId != null && (tId != null || actor != null || cid != null || ent != null)) {
             data = "{\"w\":\"" + escape(wsId) + "\""
                     + (tId == null ? "" : ",\"t\":\"" + escape(tId) + "\"")
-                    + (actor == null ? "" : ",\"a\":\"" + escape(actor) + "\"") + "}";
+                    + (actor == null ? "" : ",\"a\":\"" + escape(actor) + "\"")
+                    + (cid == null ? "" : ",\"c\":\"" + escape(cid) + "\"")
+                    + (ent == null ? "" : ",\"e\":\"" + escape(ent) + "\"") + "}";
         }
+        final String payload = data;
+        broadcaster.execute(new Runnable() {
+            @Override
+            public void run() {
+                deliver(event, wsId, payload);
+            }
+        });
+    }
 
+    private void deliver(String event, String wsId, String data) {
         Set<String> allowed = null;
         if (wsId != null) {
             try {

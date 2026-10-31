@@ -1,5 +1,7 @@
 package com.devstudio.kanban.common;
 
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
@@ -14,8 +16,17 @@ public final class Ids {
      * 仍远小于 32 字符的 ID 上限（前缀 1 + 时间戳最多 9 + 后缀 8）。
      */
     private static final int SUFFIX_LEN = 8;
+    /** 分享令牌：SecureRandom 24 字节 → base64url 32 字符（与 gantt_share.token VARCHAR(32) 对齐） */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private Ids() {
+    }
+
+    /** 不可预测的公开令牌（只用于分享链接，不参与实体 ID） */
+    public static String genToken() {
+        byte[] bytes = new byte[24];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     /** 与旧版前端一致的短字符串ID：前缀 + 时间戳36进制 + 随机后缀 */

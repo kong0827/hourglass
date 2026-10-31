@@ -308,12 +308,17 @@ public class NotificationService {
             res.put("reason", DISABLED_REASON);
             return res;
         }
-        Map<String, Object> out = pushDigest(ws, force);
+        /* 手动测试只走外部渠道：站内汇总只应由每日任务生成，否则点几次测试就多几条重复站内信 */
+        Map<String, Object> out = pushDigest(ws, force, false);
         out.put("enabled", true);
         return out;
     }
 
     private Map<String, Object> pushDigest(Workspace ws, boolean force) {
+        return pushDigest(ws, force, true);
+    }
+
+    private Map<String, Object> pushDigest(Workspace ws, boolean force, boolean withInApp) {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         LocalDate today = LocalDate.now();
         List<Task> over = new ArrayList<Task>();
@@ -340,8 +345,9 @@ public class NotificationService {
         }
 
         /* R-3：每日汇总同样落应用内通知（按负责人分组），
-           使"空间没配群机器人"时汇总不会完全静默 —— 与任务级提醒同一口径。 */
-        int inApp = pushDigestInApp(ws, over, todayDue);
+           使"空间没配群机器人"时汇总不会完全静默 —— 与任务级提醒同一口径。
+           手动测试（withInApp=false）不写站内信，避免反复点测试刷重复汇总。 */
+        int inApp = withInApp ? pushDigestInApp(ws, over, todayDue) : 0;
         res.put("inApp", inApp);
 
         String hook = effectiveHook(ws);

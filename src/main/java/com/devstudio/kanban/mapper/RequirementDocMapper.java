@@ -39,4 +39,7 @@ public interface RequirementDocMapper {
 
     /** 删除空间时清空该空间的全部需求文档（含正文） */
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 备份导出：读取全部需求（含正文） */
+    List<RequirementDoc> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

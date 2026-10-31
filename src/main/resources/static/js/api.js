@@ -30,11 +30,21 @@
     return parts.length ? ("?" + parts.join("&")) : "";
   }
 
+  /* 每个标签页一个客户端 ID：服务端把它带回 SSE 载荷，发起者据此忽略自己的回声 */
+  var CLIENT_ID = (function () {
+    try {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    } catch (e) { /* 非安全上下文 */ }
+    return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  })();
+  window.DS_CLIENT_ID = CLIENT_ID;
+
   function request(method, url, body, isForm) {
     url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
     if (method !== "GET") {
       opts.headers["X-XSRF-TOKEN"] = readCookie("XSRF-TOKEN");
+      opts.headers["X-Client-Id"] = CLIENT_ID;
     }
     if (body !== undefined && body !== null) {
       if (isForm) {

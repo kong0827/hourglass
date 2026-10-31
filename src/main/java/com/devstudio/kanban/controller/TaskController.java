@@ -133,7 +133,10 @@ public class TaskController {
 
     @DeleteMapping("/api/tasks/{id}/purge")
     public ApiResult<Void> purge(@PathVariable String id, @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        /* 彻底删除不可恢复：仅空间主可执行（移到回收站仍是成员操作） */
+        workspaceService.requireOwner(userId, ws.getId());
         taskService.purge(ws.getId(), id);
         return ApiResult.ok();
     }

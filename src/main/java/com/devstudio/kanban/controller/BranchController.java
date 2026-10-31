@@ -99,7 +99,10 @@ public class BranchController {
     @DeleteMapping("/api/branches/{id}")
     public ApiResult<Void> delete(@PathVariable String id,
                                   @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        /* 删除分支会清掉操作记录并解除任务关联：仅空间主可执行 */
+        workspaceService.requireOwner(userId, ws.getId());
         branchService.delete(ws.getId(), id);
         return ApiResult.ok(null);
     }

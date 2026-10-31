@@ -8,13 +8,13 @@ import com.devstudio.kanban.dto.GanttLoadResponse;
 import com.devstudio.kanban.dto.GanttQuery;
 import com.devstudio.kanban.dto.GanttResponse;
 import com.devstudio.kanban.dto.GanttShareResponse;
+import com.devstudio.kanban.dto.PublicGanttTask;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.GanttShare;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskBaseline;
 import com.devstudio.kanban.entity.TaskDependency;
 import com.devstudio.kanban.entity.TimeLog;
-import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.TaskBaselineMapper;
@@ -300,6 +300,7 @@ public class GanttService {
         }
 
         Map<String, GanttLoadResponse.Member> members = new LinkedHashMap<String, GanttLoadResponse.Member>();
+        Map<String, String> nameByKey = new HashMap<String, String>();
         GanttQuery gq = GanttQuery.from(query, LocalDate.now(), rangeFrom, rangeTo, true);
         List<Task> tasks = taskMapper.selectGantt(workspaceId, gq, 0, LOAD_MAX_TASKS);
         for (Task t : tasks) {
@@ -315,12 +316,22 @@ public class GanttService {
             if (e.isBefore(s)) {
                 continue;
             }
-            String name = t.getOwner() == null || t.getOwner().isEmpty() ? "未分配" : t.getOwner();
-            GanttLoadResponse.Member m = members.get(name);
+            /* 估时与工时统一按账号归属；没有账号时回落到负责人文本 */
+            String key;
+            String name;
+            if (t.getOwnerUserId() != null && !t.getOwnerUserId().isEmpty()) {
+                key = "u:" + t.getOwnerUserId();
+                name = nameOfUser(t.getOwnerUserId(), t.getOwner());
+            } else {
+                name = t.getOwner() == null || t.getOwner().isEmpty() ? "未分配" : t.getOwner();
+                key = "n:" + name;
+            }
+            nameByKey.put(key, name);
+            GanttLoadResponse.Member m = members.get(key);
             if (m == null) {
                 m = new GanttLoadResponse.Member();
                 m.setName(name);
-                members.put(name, m);
+                members.put(key, m);
             }
             int totalWork = workingDays(t.getStartDate() == null ? s : t.getStartDate(),
                     t.getDueDate() == null ? e : t.getDueDate());
@@ -343,9 +354,9 @@ public class GanttService {
             }
         }
 
-        /* 实际工时：按计时人 + 周汇总 */
-        Map<String, String> nameCache = new HashMap<String, String>();
-        for (TimeLog log : timeLogMapper.selectAllByWorkspace(workspaceId)) {
+        /* 实际工时：按计时人 + 周汇总（只查统计区间，避免整空间全量加载） */
+        for (TimeLog log : timeLogMapper.selectByWorkspaceBetween(workspaceId,
+                rangeFrom.minusDays(6).atStartOfDay(), rangeTo.plusDays(1).atStartOfDay())) {
             if (log.getStartedAt() == null || log.getMinutes() == null) {
                 continue;
             }
@@ -357,17 +368,28 @@ public class GanttService {
             if (week.isBefore(weeks.get(0)) || week.isAfter(weeks.get(weeks.size() - 1))) {
                 continue;
             }
-            String name = nameCache.get(log.getUserId());
-            if (name == null) {
-                AppUser u = log.getUserId() == null ? null : userMapper.selectById(log.getUserId());
-                name = u == null ? "未绑定账号" : (u.getDisplayName() == null ? u.getUsername() : u.getDisplayName());
-                nameCache.put(log.getUserId(), name);
+            String key;
+            String name;
+            if (log.getUserId() != null && !log.getUserId().isEmpty()) {
+                key = "u:" + log.getUserId();
+                name = nameByKey.get(key);
+                if (name == null) {
+                    name = nameOfUser(log.getUserId(), null);
+                    /* 账号行不存在时，尝试并到同名文本负责人那一行 */
+                    if (members.containsKey("n:" + name)) {
+                        key = "n:" + name;
+                    }
+                }
+            } else {
+                name = "未绑定账号";
+                key = "n:" + name;
             }
-            GanttLoadResponse.Member m = members.get(name);
+            nameByKey.put(key, name);
+            GanttLoadResponse.Member m = members.get(key);
             if (m == null) {
                 m = new GanttLoadResponse.Member();
                 m.setName(name);
-                members.put(name, m);
+                members.put(key, m);
             }
             bucket(m, week).setActualMinutes(bucket(m, week).getActualMinutes() + log.getMinutes());
         }
@@ -389,8 +411,21 @@ public class GanttService {
         return resp;
     }
 
-    private int sumEstimate(GanttLoadResponse.Member m) {
-        int sum = 0;
+    /** 负载行的显示名：账号优先，取不到时回落到任务上的负责人文本 */
+    private String nameOfUser(String userId, String fallback) {
+        AppUser u = userId == null ? null : userMapper.selectById(userId);
+        if (u != null) {
+            if (u.getDisplayName() != null && !u.getDisplayName().trim().isEmpty()) {
+                return u.getDisplayName().trim();
+            }
+            if (u.getUsername() != null && !u.getUsername().trim().isEmpty()) {
+                return u.getUsername().trim();
+            }
+        }
+        return fallback == null || fallback.trim().isEmpty() ? "未绑定账号" : fallback.trim();
+    }
+
+    private int sumEstimate(GanttLoadResponse.Member m) {        int sum = 0;
         for (GanttLoadResponse.Bucket b : m.getBuckets()) {
             sum += b.getEstimateMinutes();
         }
@@ -435,7 +470,7 @@ public class GanttService {
     public GanttShare createShare(String workspaceId) {
         GanttShare share = new GanttShare();
         share.setWorkspaceId(workspaceId);
-        share.setToken(Ids.gen("S"));
+        share.setToken(Ids.genToken());
         share.setCreatedAt(LocalDateTime.now());
         share.setExpiresAt(LocalDateTime.now().plusDays(SHARE_DAYS));
         shareMapper.upsert(share);
@@ -467,29 +502,48 @@ public class GanttService {
         if (ws == null) {
             throw AppException.notFound("分享链接无效或已过期");
         }
-        List<Task> tasks = taskService.allWithExtras(share.getWorkspaceId());
-        for (Task t : tasks) {
-            t.setDescription(null);
-            t.setNote(null);
-            t.setBlockedReason(null);
-            t.setRemindAt(null);
-            t.setRemindTarget(null);
-            t.setRemindSent(null);
-            t.setRecurType(null);
-            t.setRecurNextId(null);
-            t.setBranchId(null);
-            t.setReqDocId(null);
-            t.setOwnerUserId(null);
-            t.setSearchExtra(null);
-            t.setDeletedAt(null);
+        List<Task> all = taskService.allWithExtras(share.getWorkspaceId());
+        if (all.size() > LOAD_MAX_TASKS) {
+            all = new ArrayList<Task>(all.subList(0, LOAD_MAX_TASKS));
+        }
+        List<PublicGanttTask> tasks = new ArrayList<PublicGanttTask>(all.size());
+        Set<String> visibleIds = new HashSet<String>();
+        for (Task t : all) {
+            PublicGanttTask p = new PublicGanttTask();
+            p.setId(t.getId());
+            p.setTitle(t.getTitle());
+            p.setPriority(t.getPriority());
+            p.setOwner(t.getOwner());
+            p.setBoardColumn(t.getBoardColumn());
+            p.setStartDate(t.getStartDate());
+            p.setDueDate(t.getDueDate());
+            p.setProgress(t.getProgress());
+            p.setIsMilestone(t.getIsMilestone());
+            p.setBlocked(t.getBlocked());
+            p.setEstimateMinutes(t.getEstimateMinutes());
+            p.setTotalMinutes(t.getTotalMinutes());
+            tasks.add(p);
+            visibleIds.add(p.getId());
+        }
+        List<TaskDependency> deps = new ArrayList<TaskDependency>();
+        for (TaskDependency d : dependencyMapper.selectByWorkspace(share.getWorkspaceId())) {
+            if (visibleIds.contains(d.getFromTaskId()) && visibleIds.contains(d.getToTaskId())) {
+                deps.add(d);
+            }
+        }
+        Map<String, GanttResponse.BaselinePoint> baseline = new LinkedHashMap<String, GanttResponse.BaselinePoint>();
+        for (Map.Entry<String, GanttResponse.BaselinePoint> e : baselineMap(share.getWorkspaceId()).entrySet()) {
+            if (visibleIds.contains(e.getKey())) {
+                baseline.put(e.getKey(), e.getValue());
+            }
         }
         GanttShareResponse resp = new GanttShareResponse();
         resp.setWorkspaceName(ws.getName());
         resp.setGeneratedAt(LocalDateTime.now());
         resp.setBaselineAt(baselineMapper.selectCapturedAt(share.getWorkspaceId()));
         resp.setTasks(tasks);
-        resp.setDeps(dependencyMapper.selectByWorkspace(share.getWorkspaceId()));
-        resp.setBaseline(baselineMap(share.getWorkspaceId()));
+        resp.setDeps(deps);
+        resp.setBaseline(baseline);
         return resp;
     }
 

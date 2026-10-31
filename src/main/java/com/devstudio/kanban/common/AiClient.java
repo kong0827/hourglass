@@ -38,7 +38,9 @@ import java.util.Map;
 @Component
 public class AiClient {
 
-    private static final String DEFAULT_TIMEOUT_MSG = "AI 服务响应超时（已等待 120 秒）";
+    private static final String DEFAULT_TIMEOUT_MSG = "AI 服务响应超时（已等待 90 秒）";
+    /** 同时只允许 2 个上游请求：慢模型不能把 Tomcat 线程和连接堆满 */
+    private static final java.util.concurrent.Semaphore AI_SLOTS = new java.util.concurrent.Semaphore(2);
 
     private final ObjectMapper om = new ObjectMapper();
     private final RestTemplate rt;
@@ -46,8 +48,8 @@ public class AiClient {
     public AiClient() {
         SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
         f.setConnectTimeout(10000);
-        /* 生成任务清单可能跑几十秒，读超时给足；nginx 侧也要相应放宽 */
-        f.setReadTimeout(120000);
+        /* 单次读超时 90s；JSON 模式不支持时会重试一次，总预算仍要压在 nginx 的 200s 以内 */
+        f.setReadTimeout(90000);
         this.rt = new RestTemplate(f);
     }
 
@@ -69,6 +71,17 @@ public class AiClient {
         }
         String url = endpoint(cfg.getBaseUrl());
 
+        if (!AI_SLOTS.tryAcquire()) {
+            throw new IllegalStateException("AI 正忙（同时最多 2 个生成任务），请稍后再试");
+        }
+        try {
+            return call(cfg, url, systemPrompt, userPrompt, wantJson);
+        } finally {
+            AI_SLOTS.release();
+        }
+    }
+
+    private Reply call(AiConfig cfg, String url, String systemPrompt, String userPrompt, boolean wantJson) {
         List<Map<String, String>> messages = new ArrayList<Map<String, String>>();
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
             messages.add(msg("system", systemPrompt));

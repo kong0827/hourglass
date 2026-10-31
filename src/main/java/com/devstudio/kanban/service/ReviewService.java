@@ -4,14 +4,12 @@ import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.common.TaskCalc;
 import com.devstudio.kanban.dto.BoardResponse;
 import com.devstudio.kanban.dto.ReviewResponse;
-import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
-import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 
@@ -33,17 +31,24 @@ public class ReviewService {
     private final RequirementService requirementService;
     private final TimeLogMapper timeLogMapper;
     private final WorkspaceMemberMapper memberMapper;
-    private final UserMapper userMapper;
     private final TaskLogMapper taskLogMapper;
 
     public ReviewService(TaskMapper taskMapper, RequirementService requirementService, TimeLogMapper timeLogMapper,
-                         WorkspaceMemberMapper memberMapper, UserMapper userMapper, TaskLogMapper taskLogMapper) {
+                         WorkspaceMemberMapper memberMapper, TaskLogMapper taskLogMapper) {
         this.taskMapper = taskMapper;
         this.requirementService = requirementService;
         this.timeLogMapper = timeLogMapper;
         this.memberMapper = memberMapper;
-        this.userMapper = userMapper;
         this.taskLogMapper = taskLogMapper;
+    }
+
+    /** 成员显示名（成员查询已 JOIN 出 display_name，缺省回退登录名/ID） */
+    private static String memberDisplayName(WorkspaceMember m) {
+        String name = m.getDisplayName() == null ? null : m.getDisplayName().trim();
+        if (name == null || name.isEmpty()) {
+            name = m.getUsername() == null ? null : m.getUsername().trim();
+        }
+        return name == null || name.isEmpty() ? m.getUserId() : name;
     }
 
     /** 兼容旧调用（不带用户时工作区工时的"我的"部分按 0 计） */
@@ -108,29 +113,59 @@ public class ReviewService {
         stats.setMembers(memberCount.size());
         resp.setStats(stats);
 
-        /* N-5：成员贡献带上工时（按账号归属的 time_log 合计，映射到显示名） */
-        Map<String, Integer> userMinutes = new HashMap<String, Integer>();
-        for (TimeAgg a : timeLogMapper.sumByWorkspaceGroupByUser(workspaceId)) {
-            if (a.getUserId() != null) {
-                userMinutes.put(a.getUserId(), a.getTotalMinutes() == null ? 0 : a.getTotalMinutes());
+        /* N-5：成员贡献以空间成员全集为准，工时只取本周期。
+           原实现只遍历"本周完成过任务的人"，且工时取全量累计 —— 只计时没完成的在册成员
+           会被误并进"已离开成员"，列表上的工时也不是本周值。 */
+        List<WorkspaceMember> members = memberMapper.selectByWorkspace(workspaceId);
+        Set<String> memberIds = new HashSet<String>();
+        for (WorkspaceMember m : members) {
+            if (m.getUserId() != null) {
+                memberIds.add(m.getUserId());
+            }
+        }
+        Map<String, Integer> weekUserMinutes = new HashMap<String, Integer>();
+        int nonMemberMinutes = 0;
+        for (TimeAgg a : timeLogMapper.sumBetweenByWorkspaceGroupByUser(workspaceId,
+                start.atStartOfDay(), end.plusDays(1).atStartOfDay())) {
+            int mm = a.getTotalMinutes() == null ? 0 : a.getTotalMinutes();
+            if (a.getUserId() != null && memberIds.contains(a.getUserId())) {
+                Integer old = weekUserMinutes.get(a.getUserId());
+                weekUserMinutes.put(a.getUserId(), (old == null ? 0 : old) + mm);
+            } else {
+                nonMemberMinutes += mm;
             }
         }
         Map<String, Integer> nameMinutes = new HashMap<String, Integer>();
-        for (WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
-            AppUser u = userMapper.selectById(m.getUserId());
-            Integer mm = userMinutes.get(m.getUserId());
-            if (u != null && mm != null) {
-                Integer old = nameMinutes.get(u.getDisplayName());
-                nameMinutes.put(u.getDisplayName(), (old == null ? 0 : old) + mm);
+        for (WorkspaceMember m : members) {
+            Integer mm = weekUserMinutes.get(m.getUserId());
+            if (mm != null) {
+                String name = memberDisplayName(m);
+                Integer old = nameMinutes.get(name);
+                nameMinutes.put(name, (old == null ? 0 : old) + mm);
             }
         }
+        Map<String, Integer> doneLeft = new LinkedHashMap<String, Integer>(memberCount);
+        Set<String> seenNames = new HashSet<String>();
         List<ReviewResponse.MemberStat> memberStats = new ArrayList<ReviewResponse.MemberStat>();
-        for (Map.Entry<String, Integer> e : memberCount.entrySet()) {
+        for (WorkspaceMember m : members) {
+            String name = memberDisplayName(m);
+            if (!seenNames.add(name)) {
+                continue; // 同名成员合并成一行，避免出现两条一样的名字
+            }
+            ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
+            ms.setName(name);
+            Integer c = doneLeft.remove(name);
+            ms.setCount(c == null ? 0 : c);
+            Integer mm = nameMinutes.get(name);
+            ms.setMinutes(mm == null ? 0 : mm);
+            memberStats.add(ms);
+        }
+        /* 负责人只存了文本（历史值 / 非成员）的任务：保留完成数，工时归不到账号 */
+        for (Map.Entry<String, Integer> e : doneLeft.entrySet()) {
             ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
             ms.setName(e.getKey());
             ms.setCount(e.getValue());
-            Integer mm = nameMinutes.get(e.getKey());
-            ms.setMinutes(mm == null ? 0 : mm);
+            ms.setMinutes(0);
             memberStats.add(ms);
         }
         resp.setMembers(memberStats);
@@ -149,20 +184,13 @@ public class ReviewService {
         }
         resp.setWorkMinutes(wm);
 
-        /* 第九轮审查 #5：成员退出空间（或被删号）后，其历史 time_log 仍留在
-           "空间总工时"里，而成员贡献只按当前成员映射 —— 用户会看到"成员贡献合计
-           小于空间总工时，且差额无从解释"。这里把无法归到在册成员的工时单独成行，
-           让两个口径能对上（同一空间总工时口径：全部已结束的计时）。 */
-        int listed = 0;
-        for (ReviewResponse.MemberStat ms : memberStats) {
-            listed += ms.getMinutes();
-        }
-        int orphan = wm.getSpace() - listed;
-        if (orphan > 0) {
+        /* 成员退出空间（或被删号）后，其工时仍留在空间总额里：本周期内无法归到在册成员的
+           部分单独成行，让"成员贡献合计"与"本周全空间"能对上。 */
+        if (nonMemberMinutes > 0) {
             ReviewResponse.MemberStat ms = new ReviewResponse.MemberStat();
             ms.setName("已离开成员 / 未在册");
             ms.setCount(0);
-            ms.setMinutes(orphan);
+            ms.setMinutes(nonMemberMinutes);
             memberStats.add(ms);
         }
 
@@ -240,10 +268,11 @@ public class ReviewService {
             if ("P0".equals(t.getPriority())) {
                 openP0++;
             }
-            if (Consts.COL_DOING.equals(t.getBoardColumn())) {
-                doing++;
-            } else if (Consts.COL_BACKLOG.equals(t.getBoardColumn())) {
+            if (Consts.COL_BACKLOG.equals(t.getBoardColumn())) {
                 backlog++;
+            } else {
+                /* 与 progressTasks 同口径：自定义列也算「进行中」 */
+                doing++;
             }
         }
         resp.setOpenP0(openP0);

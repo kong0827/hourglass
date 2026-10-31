@@ -117,7 +117,10 @@ public class GanttController {
 
     @DeleteMapping("/api/gantt/baseline")
     public ApiResult<Void> clearBaseline(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        /* 基线是团队共用的对照基准：拍摄成员可做，清除仅空间主 */
+        workspaceService.requireOwner(userId, ws.getId());
         ganttService.clearBaseline(ws.getId());
         return ApiResult.ok();
     }

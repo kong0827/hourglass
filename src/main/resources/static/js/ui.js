@@ -5,7 +5,6 @@
 (function () {
   "use strict";
 
-  var esc = window.esc;
   function esc2(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

@@ -59,6 +59,8 @@ public class RequirementController {
                                                      @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
+        /* 删除项目会级联删需求文档：仅空间主可执行 */
+        workspaceService.requireOwner(userId, ws.getId());
         return ApiResult.ok(requirementService.delete(userId, ws.getId(), id));
     }
 }

@@ -18,6 +18,9 @@ public interface TaskCompletionRecordMapper {
 
     int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
+    /** 该 ID 是否还有历史完成快照（彻底删除后快照会保留，ID 不可复用） */
+    int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
     /** 清空空间时连完成归档一起清（否则清空任务后「任务清单」仍显示旧记录） */
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 

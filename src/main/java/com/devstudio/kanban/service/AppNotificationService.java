@@ -35,8 +35,10 @@ public class AppNotificationService {
             return;
         }
         try {
-            if (refTaskId != null
-                    && mapper.countRecent(userId, refTaskId, type, LocalDateTime.now().minusHours(DEDUP_HOURS)) > 0) {
+            boolean recent = refTaskId != null
+                    ? mapper.countRecent(userId, refTaskId, type, LocalDateTime.now().minusHours(DEDUP_HOURS)) > 0
+                    : mapper.countRecentNoRef(workspaceId, userId, type, LocalDateTime.now().minusHours(DEDUP_HOURS)) > 0;
+            if (recent) {
                 return;
             }
             AppNotification n = new AppNotification();
