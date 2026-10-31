@@ -629,3 +629,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第九轮：BUG-12 配置审计**
 - 成员退出空间、空间主移除成员补写配置审计日志（ActivityService），与删除列/分类/项目保持一致。
+
+**第十轮：BUG-12 HTTP 状态码统一**
+- 全局异常处理改为 HTTP 状态与业务 code 对齐（400/403/404/409/500），响应体仍为 ApiResult；前端 api.js 读取非 2xx JSON 并显示 message，未登录仍由 Security 返回 401。
