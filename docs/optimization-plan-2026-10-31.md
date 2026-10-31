@@ -619,3 +619,7 @@ spring.datasource.hikari.connection-timeout: 3000
 - 项目列表的需求数改一次 `GROUP BY req_id`，去掉逐项目 COUNT。
 - 删除共享空间后，用一条 `UPDATE ... CONCAT(prefix,id)` 把所有人的 last_workspace 改回个人空间。
 - `api.js` 增加 AbortController 超时：普通请求 20s，AI/导入/导出 180s；超时提示“请求超时，请稍后重试”。
+
+**第七轮：F-RENDER-3 静默刷新**
+- 列表、日历、我的任务、回收站、统计、流程体检、任务清单的 `load*` 支持 `{silent:true}`：SSE/轮询刷新不再先换骨架屏；用户主动操作仍显示加载态。
+- `refreshActiveView` 统一使用静默刷新；甘特同步走 `loadGantt({silent:true})`。

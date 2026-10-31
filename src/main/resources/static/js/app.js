@@ -367,16 +367,16 @@ window.addEventListener("popstate", function(){
   handleDeepLink();
 });
 function refreshActiveView(){
-  if(activeView === "calendar") loadCalendar();
-  else if(activeView === "gantt") loadGantt();
-  else if(activeView === "list") loadList();
-  else if(activeView === "trash") loadTrash();
+  if(activeView === "calendar") loadCalendar({silent:true});
+  else if(activeView === "gantt") loadGantt({silent:true});
+  else if(activeView === "list") loadList({silent:true});
+  else if(activeView === "trash") loadTrash({silent:true});
   else if(activeView === "users") loadUsers(true);
-  else if(activeView === "stats") loadStats();
-  else if(activeView === "flow") loadFlowHealth();
+  else if(activeView === "stats") loadStats({silent:true});
+  else if(activeView === "flow") loadFlowHealth({silent:true});
   else if(activeView === "projects") loadReqs();
-  else if(activeView === "mine") loadMine();
-  else if(activeView === "completions") loadCompletions();
+  else if(activeView === "mine") loadMine({silent:true});
+  else if(activeView === "completions") loadCompletions({silent:true});
   else if(activeView === "requirements") loadReqDocs();
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
 }
@@ -3165,10 +3165,13 @@ var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort")
     listSelectAll = $("listSelectAll"), btnListBulk = $("btnListBulk");
 function enterListView(){ loadList(); }
 function refreshListIfOpen(){ if(activeView === "list") loadList(); }
-function loadList(){
+function loadList(opts){
+  opts = opts || {};
   var seq = ++listSeq;
-  listBody.innerHTML = UI.skeletonRows(8);
-  listMeta.textContent = "加载中…";
+  if(!opts.silent){
+    listBody.innerHTML = UI.skeletonRows(8);
+    listMeta.textContent = "加载中…";
+  }
   /* 选中态不在重载时清空：批量操作后会重载，清空让人误以为操作没生效；
      真正失效的 id 在 renderListItems 里按可见行裁剪 */
   syncListSelectionUI();
@@ -3516,11 +3519,14 @@ function calShift(delta){
   if(calState.month > 12){ calState.month = 1; calState.year++; }
   loadCalendar();
 }
-function loadCalendar(){
+function loadCalendar(opts){
+  opts = opts || {};
   var seq = ++calState.seq;
-  calLabel.textContent = "加载中…";
-  calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
-  calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
+  if(!opts.silent){
+    calLabel.textContent = "加载中…";
+    calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
+    calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
+  }
   API.get("/api/calendar", {year: calState.year, month: calState.month}).then(function(d){
     if(seq !== calState.seq) return;
     calState.year = d.year;
@@ -6775,10 +6781,13 @@ var mineAll = [], mineSpaces = [], mineNameOnly = 0;
 function rerenderMine(){
   renderMine({items: mineAll, spaces: mineSpaces, matchedByNameOnly: mineNameOnly, total: mineAll.length});
 }
-function loadMine(){
+function loadMine(opts){
+  opts = opts || {};
   if(!mineBody) return;
-  mineBody.innerHTML = UI.skeletonRows(6);
-  if(mineMeta) mineMeta.textContent = "加载中…";
+  if(!opts.silent){
+    mineBody.innerHTML = UI.skeletonRows(6);
+    if(mineMeta) mineMeta.textContent = "加载中…";
+  }
   /* my-tasks 的语义是"我跨全部空间的任务"，因此显式跳过自动附加的 workspace 参数 */
   API.getGlobal("/api/my-tasks", {scope: state.mineScope}).then(function(d){
     renderMine(d || {});
@@ -8720,14 +8729,17 @@ function shiftCompMonth(delta){
   state.compMonth = d.getFullYear() + "-" + pad2(d.getMonth() + 1);
   loadCompletions();
 }
-function loadCompletions(){
+function loadCompletions(opts){
+  opts = opts || {};
   var month = currentCompMonth();
   var seq = ++compSeq;
   $("compMonth").textContent = month.replace("-", " 年 ") + " 月";
-  $("compCount").textContent = "";
-  $("compWrap").innerHTML = UI.skeletonRows(4);
-  $("compStats").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
-    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  if(!opts.silent){
+    $("compCount").textContent = "";
+    $("compWrap").innerHTML = UI.skeletonRows(4);
+    $("compStats").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+      '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  }
   API.get("/api/completions", {month: month}).then(function(rows){
     if(seq !== compSeq) return;
     compRowsCache = rows || [];
@@ -8836,14 +8848,17 @@ $("btnCompExport").addEventListener("click", exportCompCSV);
 
 /* ==================== 报表（§6.8） ==================== */
 function enterStatsView(){ loadStats(); }
-function loadStats(){
+function loadStats(opts){
+  opts = opts || {};
   var weeks = Number(state.statsWeeks) || 8;
-  $("chartWeeks").innerHTML = '<div class="skel skel-chart"></div>';
-  $("statsCurrent").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
-    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
-  if(statsHoursEl) statsHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
-  $("statsCat").innerHTML = UI.skeletonRows(3);
-  $("statsOwner").innerHTML = UI.skeletonRows(3);
+  if(!opts.silent){
+    $("chartWeeks").innerHTML = '<div class="skel skel-chart"></div>';
+    $("statsCurrent").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+      '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+    if(statsHoursEl) statsHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+    $("statsCat").innerHTML = UI.skeletonRows(3);
+    $("statsOwner").innerHTML = UI.skeletonRows(3);
+  }
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(renderStats).catch(function(ex){
@@ -8980,15 +8995,18 @@ function flowRow(label, value, widthPct, color){
     '<span class="bar"><i style="width:' + w + '%;--c:' + color + '"></i></span>' +
     '<span class="vl">' + value + '</span></div>';
 }
-function loadFlowHealth(){
+function loadFlowHealth(opts){
+  opts = opts || {};
   var days = Number(state.flowDays) || 90;
   if($("flowDays")) $("flowDays").value = String(days);
-  $("flowInsights").innerHTML = UI.skeletonRows(3);
-  $("flowKpi").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
-    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
-  $("flowBars").innerHTML = UI.skeletonRows(3);
-  $("flowRework").innerHTML = UI.skeletonRows(2);
-  $("flowPriority").innerHTML = UI.skeletonRows(2);
+  if(!opts.silent){
+    $("flowInsights").innerHTML = UI.skeletonRows(3);
+    $("flowKpi").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+      '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+    $("flowBars").innerHTML = UI.skeletonRows(3);
+    $("flowRework").innerHTML = UI.skeletonRows(2);
+    $("flowPriority").innerHTML = UI.skeletonRows(2);
+  }
   $("flowReqs").innerHTML = UI.skeletonRows(2);
   $("flowRange").textContent = "近 " + days + " 天 · 全空间";
   /* 估时区块单独取：口径和流程瓶颈无关，各算各的，一个失败不影响另一个 */
@@ -9220,8 +9238,9 @@ if($("view-flow")){
 /* ==================== 回收站（§6.9） ==================== */
 var trashList = $("trashList");
 function enterTrashView(){ loadTrash(); }
-function loadTrash(){
-  trashList.innerHTML = UI.skeletonRows(4);
+function loadTrash(opts){
+  opts = opts || {};
+  if(!opts.silent) trashList.innerHTML = UI.skeletonRows(4);
   API.get("/api/trash").then(function(list){
     renderTrash(list);
   }).catch(function(ex){
