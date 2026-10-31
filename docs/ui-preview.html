@@ -7380,11 +7380,17 @@ function toggleIn(arr, v){
   var i = arr.indexOf(v);
   if(i === -1) arr.push(v); else arr.splice(i, 1);
 }
+var filterReloadTimer = null;
 function reloadFilteredViews(){
-  loadBoard({animate:true});
-  refreshListIfOpen();
-  refreshGanttIfOpen();
-  if(activeView === "gantt") renderGanttFilterState();
+  /* 连续点选多个筛选条件时合并成一次请求（150ms），避免每点一下都刷新看板/列表/甘特 */
+  if(filterReloadTimer) clearTimeout(filterReloadTimer);
+  filterReloadTimer = setTimeout(function(){
+    filterReloadTimer = null;
+    loadBoard({animate:true});
+    refreshListIfOpen();
+    refreshGanttIfOpen();
+    if(activeView === "gantt") renderGanttFilterState();
+  }, 150);
 }
 var searchTimer = null;
 searchInput.addEventListener("input", function(){
@@ -17419,6 +17425,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-31 14:20</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-31 14:24</span></div>
 </body>
 </html>

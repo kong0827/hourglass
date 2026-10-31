@@ -1344,11 +1344,17 @@ function toggleIn(arr, v){
   var i = arr.indexOf(v);
   if(i === -1) arr.push(v); else arr.splice(i, 1);
 }
+var filterReloadTimer = null;
 function reloadFilteredViews(){
-  loadBoard({animate:true});
-  refreshListIfOpen();
-  refreshGanttIfOpen();
-  if(activeView === "gantt") renderGanttFilterState();
+  /* 连续点选多个筛选条件时合并成一次请求（150ms），避免每点一下都刷新看板/列表/甘特 */
+  if(filterReloadTimer) clearTimeout(filterReloadTimer);
+  filterReloadTimer = setTimeout(function(){
+    filterReloadTimer = null;
+    loadBoard({animate:true});
+    refreshListIfOpen();
+    refreshGanttIfOpen();
+    if(activeView === "gantt") renderGanttFilterState();
+  }, 150);
 }
 var searchTimer = null;
 searchInput.addEventListener("input", function(){

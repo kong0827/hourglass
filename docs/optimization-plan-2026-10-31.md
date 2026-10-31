@@ -635,3 +635,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十一轮：CODE-3 颜色白名单**
 - 分类/看板列颜色统一经 `safeColor()` 校验（仅接受 `#rrggbb`），非法值回落默认色，避免脏数据进入内联 style。
+
+**第十二轮：F-NET-4 筛选防抖**
+- `reloadFilteredViews` 合并 150ms：连续点选多个筛选条件只发一轮看板/列表/甘特请求；搜索输入原有 300ms 防抖不变。
