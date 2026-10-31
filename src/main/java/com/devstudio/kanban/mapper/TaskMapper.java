@@ -151,4 +151,67 @@ public interface TaskMapper {
 
     /** 可选回填脚本（sql/04）用：按显示名把某账号在本空间内的任务补上 owner_user_id（仅填空值） */
     int backfillOwnerUserId(@Param("userId") String userId, @Param("displayName") String displayName);
+
+    /* ==================== 统计类服务 SQL 聚合（BE-Q-3） ==================== */
+
+    /** 近 N 周新增 / 完成：一次扫描按周聚合（UNION ALL + GROUP BY） */
+    List<com.devstudio.kanban.dto.WeekCountRow> countCreatedCompletedByWeek(
+            @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDate from, @Param("before") LocalDate before);
+
+    /** 区间内完成项按分类分布（顺序与旧 selectAll 首次出现一致） */
+    List<com.devstudio.kanban.dto.NameCountRow> countCompletedByCategory(
+            @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDate from, @Param("before") LocalDate before);
+
+    /** 区间内完成项按负责人文本分布 */
+    List<com.devstudio.kanban.dto.NameCountRow> countCompletedByOwner(
+            @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDate from, @Param("before") LocalDate before);
+
+    /** 当前各列计数与逾期（含自定义列） */
+    com.devstudio.kanban.dto.TaskBucketRow countBuckets(@Param("workspaceId") String workspaceId,
+                                                        @Param("today") LocalDate today);
+
+    /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
+    LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId);
+
+    /** 指定周内的已完成任务（按完成时间倒序） */
+    List<Task> selectCompletedBetween(@Param("workspaceId") String workspaceId,
+                                      @Param("from") LocalDate from, @Param("before") LocalDate before);
+
+    /** 进度 100% 但不在已完成列的任务 */
+    List<Task> selectPendingDone(@Param("workspaceId") String workspaceId);
+
+    /**
+     * 周回顾「进行中」：非待处理 / 非已完成且进度 &lt; 100。
+     * history=true 时再收敛到「该周有日志活动」且「周结束前已创建」。
+     */
+    List<Task> selectProgressTasks(@Param("workspaceId") String workspaceId,
+                                   @Param("from") LocalDate from, @Param("before") LocalDate before,
+                                   @Param("history") boolean history);
+
+    /** 周回顾：未完成任务计数与到期分布 */
+    com.devstudio.kanban.dto.ReviewCountRow countReviewStatus(@Param("workspaceId") String workspaceId,
+                                                              @Param("today") LocalDate today);
+
+    /** 未删除任务总数（估时统计的分母） */
+    int countLive(@Param("workspaceId") String workspaceId);
+
+    /** 估时统计：只取填了预估的任务及其累计工时 */
+    List<Task> selectEstimateTasks(@Param("workspaceId") String workspaceId);
+
+    /** AI 拆分 few-shot：同项目若干条已有标题（保持旧 selectAll 顺序） */
+    List<String> selectTitlesByReq(@Param("workspaceId") String workspaceId,
+                                   @Param("reqId") String reqId, @Param("limit") int limit);
+
+    /** AI 体检：某需求下的任务（只取展示 / 判定所需列） */
+    List<Task> selectByReqDoc(@Param("workspaceId") String workspaceId,
+                              @Param("reqDocId") String reqDocId);
+
+    /** AI 落库去重：空间内已有任务标题 */
+    List<String> selectTitles(@Param("workspaceId") String workspaceId);
+
+    /** 项目进度：一次 GROUP BY 汇总各项目的任务数 / 完成数 / 进度和 */
+    List<com.devstudio.kanban.dto.ReqTaskAggRow> countByReq(@Param("workspaceId") String workspaceId);
 }

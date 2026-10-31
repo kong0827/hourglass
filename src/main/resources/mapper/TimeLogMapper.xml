@@ -141,4 +141,35 @@
       <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
     GROUP BY task_id
   </select>
+
+  <!-- ==================== BE-Q-3：统计聚合 ==================== -->
+
+  <!-- 一次扫描返回「累计 / 区间」×「全空间 / 我」四个数；区间上界可选 -->
+  <select id="sumWork" resultType="com.devstudio.kanban.dto.WorkSumRow">
+    SELECT COALESCE(SUM(minutes), 0) AS total_all,
+           COALESCE(SUM(CASE WHEN started_at &gt;= #{from}
+             <if test="to != null"> AND started_at &lt; #{to}</if>
+             THEN minutes ELSE 0 END), 0) AS week_all,
+           COALESCE(SUM(CASE WHEN user_id = #{userId} THEN minutes ELSE 0 END), 0) AS total_mine,
+           COALESCE(SUM(CASE WHEN user_id = #{userId} AND started_at &gt;= #{from}
+             <if test="to != null"> AND started_at &lt; #{to}</if>
+             THEN minutes ELSE 0 END), 0) AS week_mine
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+  </select>
+
+  <!-- 甘特负载：只聚合区间内、且属于本次任务集合的工时（按计时人 × 周） -->
+  <select id="sumUserWeeklyMinutes" resultType="com.devstudio.kanban.dto.UserWeekRow">
+    SELECT user_id AS user_id,
+           DATE_SUB(DATE(started_at), INTERVAL WEEKDAY(started_at) DAY) AS week_start,
+           SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND minutes IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY user_id, week_start
+    ORDER BY MIN(started_at), user_id
+  </select>
 </mapper>

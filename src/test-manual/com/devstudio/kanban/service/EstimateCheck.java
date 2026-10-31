@@ -19,7 +19,7 @@ public class EstimateCheck {
     private static int fail = 0;
 
     public static void main(String[] args) {
-        EstimateService svc = new EstimateService(null, null);
+        EstimateService svc = new EstimateService(null);
 
         List<Task> tasks = new ArrayList<Task>();
         Map<String, Integer> actual = new HashMap<String, Integer>();

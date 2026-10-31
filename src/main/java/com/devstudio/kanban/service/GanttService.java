@@ -9,12 +9,12 @@ import com.devstudio.kanban.dto.GanttQuery;
 import com.devstudio.kanban.dto.GanttResponse;
 import com.devstudio.kanban.dto.GanttShareResponse;
 import com.devstudio.kanban.dto.PublicGanttTask;
+import com.devstudio.kanban.dto.UserWeekRow;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.GanttShare;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskBaseline;
 import com.devstudio.kanban.entity.TaskDependency;
-import com.devstudio.kanban.entity.TimeLog;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.TaskBaselineMapper;
@@ -354,44 +354,48 @@ public class GanttService {
             }
         }
 
-        /* 实际工时：按计时人 + 周汇总（只查统计区间，避免整空间全量加载） */
-        for (TimeLog log : timeLogMapper.selectByWorkspaceBetween(workspaceId,
-                rangeFrom.minusDays(6).atStartOfDay(), rangeTo.plusDays(1).atStartOfDay())) {
-            if (log.getStartedAt() == null || log.getMinutes() == null) {
-                continue;
-            }
-            LocalDate d = log.getStartedAt().toLocalDate();
-            if (d.isBefore(rangeFrom.minusDays(6)) || d.isAfter(rangeTo)) {
-                continue;
-            }
-            LocalDate week = mondayOf(d);
-            if (week.isBefore(weeks.get(0)) || week.isAfter(weeks.get(weeks.size() - 1))) {
-                continue;
-            }
-            String key;
-            String name;
-            if (log.getUserId() != null && !log.getUserId().isEmpty()) {
-                key = "u:" + log.getUserId();
-                name = nameByKey.get(key);
-                if (name == null) {
-                    name = nameOfUser(log.getUserId(), null);
-                    /* 账号行不存在时，尝试并到同名文本负责人那一行 */
-                    if (members.containsKey("n:" + name)) {
-                        key = "n:" + name;
-                    }
+        /* 实际工时：只聚合本次任务集合 + 统计区间，按计时人 × 周在 SQL 里 SUM，不再拉原始记录 */
+        List<String> taskIds = new ArrayList<String>(tasks.size());
+        for (Task t : tasks) {
+            taskIds.add(t.getId());
+        }
+        if (!taskIds.isEmpty()) {
+            for (UserWeekRow row : timeLogMapper.sumUserWeeklyMinutes(workspaceId,
+                    mondayOf(rangeFrom).atStartOfDay(), rangeTo.plusDays(1).atStartOfDay(), taskIds)) {
+                LocalDate week = row.getWeekStart();
+                Integer mins = row.getTotalMinutes();
+                if (week == null || mins == null) {
+                    continue;
                 }
-            } else {
-                name = "未绑定账号";
-                key = "n:" + name;
+                if (week.isBefore(weeks.get(0)) || week.isAfter(weeks.get(weeks.size() - 1))) {
+                    continue;
+                }
+                String uid = row.getUserId();
+                String key;
+                String name;
+                if (uid != null && !uid.isEmpty()) {
+                    key = "u:" + uid;
+                    name = nameByKey.get(key);
+                    if (name == null) {
+                        name = nameOfUser(uid, null);
+                        /* 账号行不存在时，尝试并到同名文本负责人那一行 */
+                        if (members.containsKey("n:" + name)) {
+                            key = "n:" + name;
+                        }
+                    }
+                } else {
+                    name = "未绑定账号";
+                    key = "n:" + name;
+                }
+                nameByKey.put(key, name);
+                GanttLoadResponse.Member m = members.get(key);
+                if (m == null) {
+                    m = new GanttLoadResponse.Member();
+                    m.setName(name);
+                    members.put(key, m);
+                }
+                bucket(m, week).setActualMinutes(bucket(m, week).getActualMinutes() + mins);
             }
-            nameByKey.put(key, name);
-            GanttLoadResponse.Member m = members.get(key);
-            if (m == null) {
-                m = new GanttLoadResponse.Member();
-                m.setName(name);
-                members.put(key, m);
-            }
-            bucket(m, week).setActualMinutes(bucket(m, week).getActualMinutes() + log.getMinutes());
         }
 
         List<GanttLoadResponse.Member> list = new ArrayList<GanttLoadResponse.Member>(members.values());

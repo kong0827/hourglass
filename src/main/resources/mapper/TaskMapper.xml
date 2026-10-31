@@ -474,4 +474,159 @@
     ORDER BY board_column, sort_order, id
   </select>
 
+  <!-- ==================== BE-Q-3：统计类服务 SQL 聚合 ==================== -->
+  <!--
+    统一口径：只统计未删除任务；日期区间为 [from, before)（before 由 Service 传「上界 + 1 天」）。
+    聚合行的名字 / 顺序尽量复刻旧 selectAll 的首次出现顺序，避免 JSON 数组顺序漂移。
+  -->
+
+  <!-- 近 N 周新增 / 完成：一次扫描，UNION ALL 后按周聚合 -->
+  <select id="countCreatedCompletedByWeek" resultType="com.devstudio.kanban.dto.WeekCountRow">
+    SELECT x.week_start AS week_start,
+           SUM(x.created) AS created,
+           SUM(x.completed) AS completed
+    FROM (
+      SELECT DATE_SUB(DATE(created_at), INTERVAL WEEKDAY(created_at) DAY) AS week_start,
+             1 AS created, 0 AS completed
+      FROM task
+      WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+        AND created_at &gt;= #{from} AND created_at &lt; #{before}
+      UNION ALL
+      SELECT DATE_SUB(DATE(completed_at), INTERVAL WEEKDAY(completed_at) DAY) AS week_start,
+             0 AS created, 1 AS completed
+      FROM task
+      WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+        AND board_column = 'done'
+        AND completed_at &gt;= #{from} AND completed_at &lt; #{before}
+    ) x
+    GROUP BY x.week_start
+  </select>
+
+  <select id="countCompletedByCategory" resultType="com.devstudio.kanban.dto.NameCountRow">
+    SELECT category AS name, COUNT(*) AS cnt
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND board_column = 'done'
+      AND completed_at &gt;= #{from} AND completed_at &lt; #{before}
+    GROUP BY category
+    ORDER BY MAX(completed_at) DESC, MIN(id)
+  </select>
+
+  <select id="countCompletedByOwner" resultType="com.devstudio.kanban.dto.NameCountRow">
+    SELECT owner AS name, COUNT(*) AS cnt
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND board_column = 'done'
+      AND completed_at &gt;= #{from} AND completed_at &lt; #{before}
+    GROUP BY owner
+    ORDER BY MAX(completed_at) DESC, MIN(id)
+  </select>
+
+  <select id="countBuckets" resultType="com.devstudio.kanban.dto.TaskBucketRow">
+    SELECT COALESCE(SUM(CASE WHEN board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN board_column = 'doing' THEN 1 ELSE 0 END), 0) AS doing,
+           COALESCE(SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN board_column NOT IN ('backlog', 'doing', 'done') THEN 1 ELSE 0 END), 0) AS other,
+           COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done'
+                              AND due_date IS NOT NULL AND due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS overdue
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+  </select>
+
+  <select id="selectLatestCompletedAt" resultType="java.time.LocalDate">
+    SELECT MAX(completed_at) FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND board_column = 'done'
+  </select>
+
+  <select id="selectCompletedBetween" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND board_column = 'done'
+      AND completed_at &gt;= #{from} AND completed_at &lt; #{before}
+    ORDER BY completed_at DESC, BINARY id
+  </select>
+
+  <select id="selectPendingDone" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND board_column &lt;&gt; 'done' AND progress &gt;= 100
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectProgressTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column NOT IN ('backlog', 'done')
+      AND (t.progress IS NULL OR t.progress &lt; 100)
+    <if test="history">
+      AND (t.created_at IS NULL OR t.created_at &lt; #{before})
+      AND EXISTS (SELECT 1 FROM task_log l
+                  WHERE l.workspace_id = t.workspace_id AND l.task_id = t.id
+                    AND l.task_id &lt;&gt; 'CFG'
+                    AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before})
+    </if>
+    ORDER BY (t.due_date IS NULL), t.due_date, t.progress DESC, t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="countReviewStatus" resultType="com.devstudio.kanban.dto.ReviewCountRow">
+    SELECT COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done' AND priority = 'P0' THEN 1 ELSE 0 END), 0) AS open_p0,
+           COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done' AND board_column &lt;&gt; 'backlog' THEN 1 ELSE 0 END), 0) AS doing,
+           COALESCE(SUM(CASE WHEN board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done'
+                              AND due_date IS NOT NULL AND due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS over,
+           COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done' AND due_date = #{today} THEN 1 ELSE 0 END), 0) AS today,
+           COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done'
+                              AND due_date &gt; #{today}
+                              AND due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY) THEN 1 ELSE 0 END), 0) AS soon
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+  </select>
+
+  <select id="countLive" resultType="int">
+    SELECT COUNT(*) FROM task WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+  </select>
+
+  <!-- 估时样本：只取填了预估的窄列 + 对应任务的工时合计（一次 JOIN 聚合） -->
+  <select id="selectEstimateTasks" resultType="Task">
+    SELECT t.id, t.title, t.category, t.board_column, t.estimate_minutes,
+           COALESCE(SUM(l.minutes), 0) AS total_minutes
+    FROM task t
+    LEFT JOIN time_log l
+           ON l.workspace_id = t.workspace_id AND l.task_id = t.id AND l.ended_at IS NOT NULL
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.estimate_minutes &gt; 0
+    GROUP BY t.id, t.title, t.category, t.board_column, t.estimate_minutes, t.sort_order
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="selectTitlesByReq" resultType="string">
+    SELECT title FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND req_id = #{reqId}
+      AND title IS NOT NULL AND TRIM(title) &lt;&gt; ''
+    ORDER BY board_column, sort_order, id
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectByReqDoc" resultType="Task">
+    SELECT id, title, description, board_column, progress
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectTitles" resultType="string">
+    SELECT title FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND title IS NOT NULL
+  </select>
+
+  <select id="countByReq" resultType="com.devstudio.kanban.dto.ReqTaskAggRow">
+    SELECT req_id AS req_id,
+           COUNT(*) AS total,
+           COALESCE(SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN board_column = 'done' THEN 100 ELSE COALESCE(progress, 0) END), 0) AS progress_sum
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_id IS NOT NULL
+    GROUP BY req_id
+  </select>
+
 </mapper>

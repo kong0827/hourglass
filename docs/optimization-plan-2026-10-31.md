@@ -671,3 +671,10 @@ spring.datasource.hikari.connection-timeout: 3000
 - 子任务/工时/标签/评论/项目名/附件名只按本次可见 task id 批量查询；meta 与到期计数改用窄列投影 TaskFacetRow。
 - 新增 `sql/18_board_query.sql`（幂等）：idx_ws_done_completed、idx_ws_updated，兜底 idx_ws_due。
 - 本地验证：构建、9 个单测、23 个 Mapper/357 条语句解析、BoundSql 参数核对、无头预览四视图无 JS 异常；未跑真实 EXPLAIN。
+
+**第二十二轮：BE-Q-3 统计/回顾 SQL 聚合**
+- StatsService：周趋势 UNION ALL 聚合、分类/负责人 GROUP BY、列计数条件 SUM、工时 4 项合一；分类/负责人排序按“首次完成时间倒序”复刻旧顺序。
+- ReviewService：完成列表/待确认/进行中/计数按周 SQL；autoOffset 改 MAX(completed_at)；成员全集、orphan、同名合并口径不变。
+- EstimateService：只读 estimate_minutes>0 的窄列 + 工时 JOIN 聚合；AiReqDocService/RequirementService 改为定向查询/GROUP BY。
+- GanttService.load：实际工时按当前任务集合 + 区间 + 计时人×周 SQL 聚合（口径收紧，见风险）。
+- 新增 sql/19_stats_index.sql（幂等 5 条索引）；修正周聚合 completed_at 未取 DATE 导致同周 created/completed 分组的错误。

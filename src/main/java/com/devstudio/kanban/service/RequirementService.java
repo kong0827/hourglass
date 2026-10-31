@@ -40,7 +40,14 @@ public class RequirementService {
     }
 
     public List<ReqProgress> list(String workspaceId) {
-        List<Task> all = taskMapper.selectAll(workspaceId);
+        /* 一次 GROUP BY 汇总各项目，避免为整页进度加载全部任务 */
+        java.util.Map<String, com.devstudio.kanban.dto.ReqTaskAggRow> aggByReq =
+                new java.util.HashMap<String, com.devstudio.kanban.dto.ReqTaskAggRow>();
+        for (com.devstudio.kanban.dto.ReqTaskAggRow a : taskMapper.countByReq(workspaceId)) {
+            if (a.getReqId() != null) {
+                aggByReq.put(a.getReqId(), a);
+            }
+        }
         java.util.Map<String, Integer> docCounts = docService.countByReqMap(workspaceId);
         List<ReqProgress> out = new ArrayList<ReqProgress>();
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
@@ -50,23 +57,13 @@ public class RequirementService {
             p.setDescription(r.getDescription());
             p.setStatus(r.getStatus());
 
-            int sum = 0;
-            int count = 0;
-            int done = 0;
-            for (Task t : all) {
-                if (r.getId().equals(t.getReqId())) {
-                    sum += TaskCalc.progressOf(t);
-                    count++;
-                    if (Consts.COL_DONE.equals(t.getBoardColumn())) {
-                        done++;
-                    }
-                }
-            }
+            com.devstudio.kanban.dto.ReqTaskAggRow agg = aggByReq.get(r.getId());
+            int count = agg == null ? 0 : agg.getTotal();
             p.setTaskCount(count);
-            p.setDoneCount(done);
+            p.setDoneCount(agg == null ? 0 : agg.getDone());
             Integer dc = docCounts.get(r.getId());
             p.setDocCount(dc == null ? 0 : dc);
-            p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) sum / count));
+            p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) agg.getProgressSum() / count));
             out.add(p);
         }
         return out;

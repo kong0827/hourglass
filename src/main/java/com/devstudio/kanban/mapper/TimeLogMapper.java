@@ -84,4 +84,21 @@ public interface TimeLogMapper {
 
     /** 按成员分组统计本空间工时（下钻用，user_id 回填在 TimeAgg.userId） */
     List<TimeAgg> sumByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId);
+
+    /* ---- BE-Q-3：统计页 / 回顾页 / 甘特负载一次聚合 ---- */
+
+    /**
+     * 本空间工时合计：[from, to) 区间内 + 累计，全空间 + 我。
+     * {@code to} 为空时不设上界（报表「近 N 周」的当周就是至今）。
+     */
+    com.devstudio.kanban.dto.WorkSumRow sumWork(@Param("workspaceId") String workspaceId,
+                                                @Param("userId") String userId,
+                                                @Param("from") LocalDateTime from,
+                                                @Param("to") LocalDateTime to);
+
+    /** 甘特负载：限定任务集合，按时计人 + 周聚合实际工时（不再拉原始记录） */
+    List<com.devstudio.kanban.dto.UserWeekRow> sumUserWeeklyMinutes(
+            @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+            @Param("taskIds") List<String> taskIds);
 }

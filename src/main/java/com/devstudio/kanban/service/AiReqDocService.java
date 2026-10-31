@@ -18,7 +18,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,8 +72,7 @@ public class AiReqDocService {
             throw AppException.badRequest("需求正文还是空的，先写点内容再拆");
         }
 
-        List<Task> all = taskMapper.selectAll(workspaceId);
-        String fewShot = fewShotTitles(all, doc);
+        String fewShot = fewShotTitles(workspaceId, doc);
         boolean truncated = text.length() > MAX_DOC_CHARS;
         String body = truncated ? text.substring(0, MAX_DOC_CHARS) : text;
 
@@ -144,23 +142,17 @@ public class AiReqDocService {
         return res;
     }
 
-    /** 同项目下已有任务标题，给模型学命名风格；排除本需求自己的任务，避免自我强化 */
-    private String fewShotTitles(List<Task> all, RequirementDoc doc) {
+    /** 同项目下已有任务标题，给模型学命名风格；SQL 只取该项目的前 N 条 */
+    private String fewShotTitles(String workspaceId, RequirementDoc doc) {
+        if (doc.getReqId() == null) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
-        int n = 0;
-        for (Task t : all) {
-            if (n >= FEW_SHOT_LIMIT) {
-                break;
-            }
-            if (t.getTitle() == null || t.getTitle().trim().isEmpty()) {
+        for (String title : taskMapper.selectTitlesByReq(workspaceId, doc.getReqId(), FEW_SHOT_LIMIT)) {
+            if (title == null || title.trim().isEmpty()) {
                 continue;
             }
-            boolean sameReq = doc.getReqId() != null && doc.getReqId().equals(t.getReqId());
-            if (!sameReq) {
-                continue;
-            }
-            sb.append("- ").append(t.getTitle().trim()).append("\n");
-            n++;
+            sb.append("- ").append(title.trim()).append("\n");
         }
         return sb.toString();
     }
@@ -175,13 +167,7 @@ public class AiReqDocService {
             throw AppException.badRequest("需求正文还是空的，没有可检查的内容");
         }
 
-        List<Task> all = taskMapper.selectAll(workspaceId);
-        List<Task> mine = new ArrayList<Task>();
-        for (Task t : all) {
-            if (docId.equals(t.getReqDocId())) {
-                mine.add(t);
-            }
-        }
+        List<Task> mine = taskMapper.selectByReqDoc(workspaceId, docId);
 
         String body = text.length() > MAX_DOC_CHARS ? text.substring(0, MAX_DOC_CHARS) : text;
         StringBuilder taskList = new StringBuilder();
@@ -308,11 +294,10 @@ public class AiReqDocService {
             throw AppException.badRequest("没有选中的任务");
         }
         RequirementDoc doc = docService.get(workspaceId, docId);
-        List<Task> existing = taskMapper.selectAll(workspaceId);
         Set<String> titles = new HashSet<String>();
-        for (Task t : existing) {
-            if (t.getTitle() != null) {
-                titles.add(t.getTitle().trim());
+        for (String title : taskMapper.selectTitles(workspaceId)) {
+            if (title != null) {
+                titles.add(title.trim());
             }
         }
 

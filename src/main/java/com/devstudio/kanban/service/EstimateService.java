@@ -3,9 +3,7 @@ package com.devstudio.kanban.service;
 import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.dto.EstimateStats;
 import com.devstudio.kanban.entity.Task;
-import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.mapper.TaskMapper;
-import com.devstudio.kanban.mapper.TimeLogMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -42,29 +40,30 @@ public class EstimateService {
     private static final double RISK_AT = 0.8;
 
     private final TaskMapper taskMapper;
-    private final TimeLogMapper timeLogMapper;
 
-    public EstimateService(TaskMapper taskMapper, TimeLogMapper timeLogMapper) {
+    public EstimateService(TaskMapper taskMapper) {
         this.taskMapper = taskMapper;
-        this.timeLogMapper = timeLogMapper;
     }
 
     public EstimateStats stats(String workspaceId) {
-        List<Task> tasks = taskMapper.selectAll(workspaceId);
+        /* 只取填了预估的任务（窄列）并一次 JOIN 出各自工时，不再加载全部历史任务 */
+        List<Task> tasks = taskMapper.selectEstimateTasks(workspaceId);
         Map<String, Integer> actual = new HashMap<String, Integer>();
-        for (TimeAgg agg : timeLogMapper.sumByTaskByWorkspace(workspaceId)) {
-            if (agg.getTaskId() != null && agg.getTotalMinutes() != null) {
-                actual.put(agg.getTaskId(), agg.getTotalMinutes());
-            }
+        for (Task t : tasks) {
+            actual.put(t.getId(), t.getTotalMinutes() == null ? 0 : t.getTotalMinutes());
         }
-        return compute(tasks, actual);
+        return compute(tasks, actual, taskMapper.countLive(workspaceId));
     }
 
     // ==================== 纯计算（无 Spring 依赖，可直接单测） ====================
 
     EstimateStats compute(List<Task> tasks, Map<String, Integer> actualByTask) {
+        return compute(tasks, actualByTask, tasks.size());
+    }
+
+    EstimateStats compute(List<Task> tasks, Map<String, Integer> actualByTask, int tasksTotal) {
         EstimateStats s = new EstimateStats();
-        s.setTasksTotal(tasks.size());
+        s.setTasksTotal(tasksTotal);
 
         int withEstimate = 0;
         long estSum = 0;
