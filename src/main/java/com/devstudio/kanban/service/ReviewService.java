@@ -283,17 +283,21 @@ public class ReviewService {
 
     /** 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周 */
     private int autoOffset(List<Task> all, LocalDate monday) {
-        for (int k = 0; k >= -12; k--) {
-            LocalDate start = monday.plusWeeks(k);
-            LocalDate end = start.plusDays(6);
-            for (Task t : all) {
-                if (Consts.COL_DONE.equals(t.getBoardColumn()) && t.getCompletedAt() != null
-                        && !t.getCompletedAt().isBefore(start) && !t.getCompletedAt().isAfter(end)) {
-                    return k;
+        /* 一次扫描找最近完成日，按周差回推；原实现是 13 周 × 全部任务的双重循环 */
+        LocalDate latest = null;
+        for (Task t : all) {
+            if (Consts.COL_DONE.equals(t.getBoardColumn()) && t.getCompletedAt() != null) {
+                if (latest == null || t.getCompletedAt().isAfter(latest)) {
+                    latest = t.getCompletedAt();
                 }
             }
         }
-        return -1;
+        if (latest == null) {
+            return -1;
+        }
+        LocalDate weekStart = latest.minusDays(latest.getDayOfWeek().getValue() - 1);
+        int offset = (int) java.time.temporal.ChronoUnit.WEEKS.between(monday, weekStart);
+        return Math.max(-12, Math.min(0, offset));
     }
 
     private List<BoardResponse.NameCount> toNameCounts(Map<String, Integer> map) {
