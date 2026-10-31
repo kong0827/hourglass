@@ -222,9 +222,12 @@ var listTotal = 0;
 var calState = {year:null, month:null, tasks:[], selected:null, seq:0};
 var reviewSeq = 0, reviewTarget = null;
 
+function safeColor(c){
+  return /^#[0-9a-f]{6}$/i.test(String(c == null ? "" : c)) ? c : CAT_DEFAULT_COLOR;
+}
 function catColor(name){
   for(var i = 0; i < categoriesCache.length; i++){
-    if(categoriesCache[i].name === name) return categoriesCache[i].color;
+    if(categoriesCache[i].name === name) return safeColor(categoriesCache[i].color);
   }
   return CAT_DEFAULT_COLOR;
 }
@@ -1916,7 +1919,7 @@ function startColRename(el, colId){
 }
 function colColorOf(colId){
   var c = colMeta(colId);
-  return (c && c.color) || CAT_DEFAULT_COLOR;
+  return safeColor(c && c.color);
 }
 function openColColorPop(anchor, colId){
   var html = '<div class="menu-title">列颜色</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:8px">';

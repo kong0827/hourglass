@@ -632,3 +632,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十轮：BUG-12 HTTP 状态码统一**
 - 全局异常处理改为 HTTP 状态与业务 code 对齐（400/403/404/409/500），响应体仍为 ApiResult；前端 api.js 读取非 2xx JSON 并显示 message，未登录仍由 Security 返回 401。
+
+**第十一轮：CODE-3 颜色白名单**
+- 分类/看板列颜色统一经 `safeColor()` 校验（仅接受 `#rrggbb`），非法值回落默认色，避免脏数据进入内联 style。
