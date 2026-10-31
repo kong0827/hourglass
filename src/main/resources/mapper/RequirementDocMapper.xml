@@ -65,6 +65,12 @@
     SELECT COUNT(*) FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </select>
 
+  <select id="countGroupByReq" resultType="java.util.HashMap">
+    SELECT req_id AS reqId, COUNT(*) AS cnt
+    FROM requirement_doc WHERE workspace_id = #{workspaceId}
+    GROUP BY req_id
+  </select>
+
   <update id="clearTaskRef">
     UPDATE task SET req_doc_id = NULL, updated_at = NOW()
     WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId}

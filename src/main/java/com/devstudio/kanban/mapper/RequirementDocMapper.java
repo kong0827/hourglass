@@ -24,6 +24,9 @@ public interface RequirementDocMapper {
     /** 某项目下的需求数（删除项目前拦一下） */
     int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 项目列表一次性取各项目的需求数，避免逐项目 COUNT */
+    java.util.List<java.util.Map<String, Object>> countGroupByReq(@Param("workspaceId") String workspaceId);
+
     /** 需求删除时，把关联到它的任务解绑（任务本身保留） */
     int clearTaskRef(@Param("workspaceId") String workspaceId, @Param("reqDocId") String reqDocId);
 

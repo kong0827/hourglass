@@ -31,6 +31,9 @@ public interface UserMapper {
 
     int updateLastWorkspace(@Param("id") String id, @Param("workspaceId") String workspaceId);
 
+    /** 删除共享空间后，把所有还停留在这个空间的人一次性改回各自个人空间 */
+    int resetLastWorkspaceForAll(@Param("workspaceId") String workspaceId, @Param("personalPrefix") String personalPrefix);
+
     /** 只改计时设置（工作时段 + 每天上限），不动显示名/角色 */
     int updateWorkHours(@Param("id") String id, @Param("startHour") int startHour,
                         @Param("endHour") int endHour, @Param("maxHours") int maxHours);

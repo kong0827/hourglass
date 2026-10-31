@@ -614,3 +614,8 @@ spring.datasource.hikari.connection-timeout: 3000
 - `/api/board`、`/api/tasks/list`、`/api/gantt` 支持 `If-None-Match` → 304（不查库、不序列化）。
 - 前端 `api.js` 为 GET 缓存 ETag 与解析后的数据，命中 304 直接复用（上限 80 条）。
 - 注意：版本号在内存中，重启后 `BOOT_ID` 变化会让旧缓存自然失效；多实例部署需要改为共享版本源。
+
+**第六轮：BE-Q-4 收尾 + F-NET-3 超时**
+- 项目列表的需求数改一次 `GROUP BY req_id`，去掉逐项目 COUNT。
+- 删除共享空间后，用一条 `UPDATE ... CONCAT(prefix,id)` 把所有人的 last_workspace 改回个人空间。
+- `api.js` 增加 AbortController 超时：普通请求 20s，AI/导入/导出 180s；超时提示“请求超时，请稍后重试”。

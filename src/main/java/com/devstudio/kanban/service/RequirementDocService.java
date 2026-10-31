@@ -145,6 +145,19 @@ public class RequirementDocService {
         return docMapper.countByReq(workspaceId, reqId);
     }
 
+    /** 项目列表用：一次 GROUP BY 取全部项目的需求数 */
+    public java.util.Map<String, Integer> countByReqMap(String workspaceId) {
+        java.util.Map<String, Integer> out = new java.util.HashMap<String, Integer>();
+        for (java.util.Map<String, Object> row : docMapper.countGroupByReq(workspaceId)) {
+            Object k = row.get("reqId");
+            Object v = row.get("cnt");
+            if (k != null && v instanceof Number) {
+                out.put(String.valueOf(k), ((Number) v).intValue());
+            }
+        }
+        return out;
+    }
+
     /**
      * HTML 白名单清洗。返回 null 表示"清洗后没有实质内容"（空段落之类）。
      */

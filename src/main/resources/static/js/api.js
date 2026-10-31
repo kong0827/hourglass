@@ -63,7 +63,25 @@
         opts.body = JSON.stringify(body);
       }
     }
-    return fetch(url, opts).then(function (res) {
+    /* 默认 20s 超时；AI / 导入导出给 180s，避免慢模型或大备份被误杀 */
+    var path = url.split("?")[0];
+    var timeout = /\/api\/(ai|import|export)(\/|$)/.test(path) ? 180000 : 20000;
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = null;
+    if (ctrl) {
+      opts.signal = ctrl.signal;
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) { /* noop */ } }, timeout);
+    }
+    return fetch(url, opts).catch(function (err) {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (err && err.name === "AbortError") {
+        var e = new Error("请求超时，请稍后重试");
+        e.silent = true;
+        throw e;
+      }
+      throw err;
+    }).then(function (res) {
+      if (timer) { clearTimeout(timer); timer = null; }
       if (res.status === 401 && window.location.pathname.indexOf("login") === -1) {
         window.location.href = "/login.html";
         throw new Error("未登录或登录已过期");

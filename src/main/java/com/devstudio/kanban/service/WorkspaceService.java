@@ -297,11 +297,7 @@ public class WorkspaceService {
         memberMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
-        for (AppUser u : userMapper.selectAll()) {
-            if (workspaceId.equals(u.getLastWorkspaceId())) {
-                userMapper.updateLastWorkspace(u.getId(), personalId(u.getId()));
-            }
-        }
+        userMapper.resetLastWorkspaceForAll(workspaceId, PERSONAL_PREFIX);
     }
 
     /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知/分支） */

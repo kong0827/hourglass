@@ -51,6 +51,11 @@
     UPDATE app_user SET last_workspace_id = #{workspaceId} WHERE id = #{id}
   </update>
 
+  <update id="resetLastWorkspaceForAll">
+    UPDATE app_user SET last_workspace_id = CONCAT(#{personalPrefix}, id)
+    WHERE last_workspace_id = #{workspaceId}
+  </update>
+
   <!-- 只改计时设置（工作时段 + 每天上限）：独立语句，避免和"改显示名/角色"的 update 互相覆盖 -->
   <update id="updateWorkHours">
     UPDATE app_user

@@ -41,6 +41,7 @@ public class RequirementService {
 
     public List<ReqProgress> list(String workspaceId) {
         List<Task> all = taskMapper.selectAll(workspaceId);
+        java.util.Map<String, Integer> docCounts = docService.countByReqMap(workspaceId);
         List<ReqProgress> out = new ArrayList<ReqProgress>();
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
             ReqProgress p = new ReqProgress();
@@ -63,7 +64,8 @@ public class RequirementService {
             }
             p.setTaskCount(count);
             p.setDoneCount(done);
-            p.setDocCount(docService.countByReq(workspaceId, r.getId()));
+            Integer dc = docCounts.get(r.getId());
+            p.setDocCount(dc == null ? 0 : dc);
             p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) sum / count));
             out.add(p);
         }
