@@ -1617,6 +1617,8 @@ function onPointerCancel(){
   pending = null;
   if(drag) cancelDrag();
 }
+function boardTouchMove(e){ if(drag && e.cancelable) e.preventDefault(); }
+
 function beginDrag(x, y){
   if(!pending) return;
   var cardEl = pending.el, id = pending.id;
@@ -1646,6 +1648,7 @@ function beginDrag(x, y){
     beforeId: null
   };
   if(drag.colEl) drag.colEl.classList.add("drop-active");
+  document.addEventListener("touchmove", boardTouchMove, {passive:false});
   var originBody = cardEl.closest(".board-col-body");
   if(originBody) originBody.insertBefore(line, cardEl.nextSibling);
   updateDrag();
@@ -1744,6 +1747,7 @@ function endDrag(){
 function cancelDrag(){ cleanupDrag(); render({animate:false}); }
 function cleanupDrag(){
   if(!drag) return;
+  document.removeEventListener("touchmove", boardTouchMove);
   if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
   if(drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
   if(drag.line && drag.line.parentNode) drag.line.parentNode.removeChild(drag.line);
@@ -1802,7 +1806,6 @@ document.addEventListener("pointerdown", onPointerDown);
 document.addEventListener("pointermove", onPointerMove, {passive:false});
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", onPointerCancel);
-document.addEventListener("touchmove", function(e){ if(drag && e.cancelable) e.preventDefault(); }, {passive:false});
 
 /* ==================== 看板点击 / 列操作 ==================== */
 board.addEventListener("click", function(e){

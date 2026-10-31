@@ -623,3 +623,6 @@ spring.datasource.hikari.connection-timeout: 3000
 **第七轮：F-RENDER-3 静默刷新**
 - 列表、日历、我的任务、回收站、统计、流程体检、任务清单的 `load*` 支持 `{silent:true}`：SSE/轮询刷新不再先换骨架屏；用户主动操作仍显示加载态。
 - `refreshActiveView` 统一使用静默刷新；甘特同步走 `loadGantt({silent:true})`。
+
+**第八轮：F-MEM-1**
+- 看板拖拽的 `touchmove`（passive:false）不再常驻 document：只在拖拽开始时挂上，`cleanupDrag` 时移除；非拖拽状态不再阻塞移动端滚动。
