@@ -9412,7 +9412,10 @@ function initSetAnchor(){
   }
   if(!view.__spyWired){
     view.__spyWired = true;
-    view.addEventListener("scroll", spy, {passive:true});
+    view.addEventListener("scroll", function(){
+      if(view.__spyRaf) return;
+      view.__spyRaf = requestAnimationFrame(function(){ view.__spyRaf = 0; spy(); });
+    }, {passive:true});
   }
   spy();
 }
@@ -10473,7 +10476,10 @@ function wireMeAnchor(){
   }
   if(!view.__spyWired){
     view.__spyWired = true;
-    view.addEventListener("scroll", spy, {passive:true});
+    view.addEventListener("scroll", function(){
+      if(view.__spyRaf) return;
+      view.__spyRaf = requestAnimationFrame(function(){ view.__spyRaf = 0; spy(); });
+    }, {passive:true});
   }
   spy();
 }

@@ -646,3 +646,6 @@ spring.datasource.hikari.connection-timeout: 3000
 - 拖拽移动只查目标列（`selectColumnTasks`），不再整空间 `selectAll`。
 - sort_order 改为 1024 间隔：插入时取前后中值，只更新被拖动的一行；只有间隔用完才整列重排。
 - 同列排序/跨列移动共用同一逻辑；旧数据首次在相邻项之间插入时会触发一次整列重排，之后恢复稀疏。
+
+**第十五轮：F-RENDER-4（部分）**
+- 设置页 / 需求页的滚动目录高亮改为 rAF 合并：滚动事件不再每帧多次测量 DOM。
