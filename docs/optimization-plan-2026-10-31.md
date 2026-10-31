@@ -626,3 +626,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第八轮：F-MEM-1**
 - 看板拖拽的 `touchmove`（passive:false）不再常驻 document：只在拖拽开始时挂上，`cleanupDrag` 时移除；非拖拽状态不再阻塞移动端滚动。
+
+**第九轮：BUG-12 配置审计**
+- 成员退出空间、空间主移除成员补写配置审计日志（ActivityService），与删除列/分类/项目保持一致。

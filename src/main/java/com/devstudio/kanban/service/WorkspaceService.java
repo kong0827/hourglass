@@ -77,6 +77,8 @@ public class WorkspaceService {
     private final GanttShareMapper ganttShareMapper;
     /** 完成归档（清空空间时一并清理，否则「任务清单」会残留） */
     private final TaskCompletionService completionService;
+    /** 配置审计日志 */
+    private final com.devstudio.kanban.service.ActivityService activityService;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -92,7 +94,8 @@ public class WorkspaceService {
                             TaskCompletionService completionService,
                             TaskDependencyMapper dependencyMapper,
                             TaskBaselineMapper baselineMapper,
-                            GanttShareMapper ganttShareMapper) {
+                            GanttShareMapper ganttShareMapper,
+                            com.devstudio.kanban.service.ActivityService activityService) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -115,6 +118,7 @@ public class WorkspaceService {
         this.dependencyMapper = dependencyMapper;
         this.baselineMapper = baselineMapper;
         this.ganttShareMapper = ganttShareMapper;
+        this.activityService = activityService;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -381,6 +385,7 @@ public class WorkspaceService {
                 throw AppException.badRequest("空间主不能退出自己的空间，可直接删除空间");
             }
             memberMapper.delete(workspaceId, targetUserId);
+            activityService.logConfig(workspaceId, userId, "退出空间");
             return;
         }
         // 移除他人：仅空间主（个人空间允许清理历史遗留的非法成员）
@@ -391,6 +396,9 @@ public class WorkspaceService {
             throw AppException.badRequest("不能移除空间主");
         }
         memberMapper.delete(workspaceId, targetUserId);
+        AppUser target = userMapper.selectById(targetUserId);
+        activityService.logConfig(workspaceId, userId, "移除成员「"
+                + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");
     }
 
     /* ==================== 初始化与种子 ==================== */
