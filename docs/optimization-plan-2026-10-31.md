@@ -608,3 +608,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - 复查修复：SSE 列/分类/工作区事件漏刷看板；后台多实体事件合并为 all；甘特静默刷新失败回滚旧视图；估时 1.15 浮点边界误判（加 1e-9 容差）。
 - BE-Q-4（部分）：通知扫描的成员名→账号映射每空间只查一次，去掉逐任务 N+1。
 - 看板 SQL 化 / 稀疏排序 / ETag / 大事务等仍待实现；按用户选择，本地只保证编译+预览，SQL/EXPLAIN 由用户在服务器验证。
+
+**第五轮：BE-RT-4 ETag**
+- 新增进程内 `WorkspaceVersionService`：写请求成功即递增空间版本，ETag 含启动批次+版本+查询串哈希。
+- `/api/board`、`/api/tasks/list`、`/api/gantt` 支持 `If-None-Match` → 304（不查库、不序列化）。
+- 前端 `api.js` 为 GET 缓存 ETag 与解析后的数据，命中 304 直接复用（上限 80 条）。
+- 注意：版本号在内存中，重启后 `BOOT_ID` 变化会让旧缓存自然失效；多实例部署需要改为共享版本源。

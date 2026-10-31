@@ -33,9 +33,12 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
     private static final Pattern TASK_PATH = Pattern.compile("^/api/tasks/([A-Za-z0-9_-]{1,32})(/.*)?$");
 
     private final SseService sseService;
+    private final com.devstudio.kanban.service.WorkspaceVersionService versionService;
 
-    public ChangeBroadcastFilter(SseService sseService) {
+    public ChangeBroadcastFilter(SseService sseService,
+                                 com.devstudio.kanban.service.WorkspaceVersionService versionService) {
         this.sseService = sseService;
+        this.versionService = versionService;
     }
 
     @Override
@@ -83,6 +86,8 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
             if (clientId != null && clientId.length() > 64) {
                 clientId = clientId.substring(0, 64);
             }
+            /* 读缓存版本号：写成功后递增，下一次 GET 的 ETag 必然变化 */
+            versionService.bump(workspace);
             sseService.broadcast("changed", workspace, taskId, actor, clientId, entityOf(uri));
         } catch (Exception e) {
             log.warn("SSE 广播异常（业务请求已成功，仅影响刷新通知）", e);

@@ -12,16 +12,21 @@ import com.devstudio.kanban.entity.TaskDependency;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.GanttService;
 import com.devstudio.kanban.service.WorkspaceService;
+import com.devstudio.kanban.service.WorkspaceVersionService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,15 +42,18 @@ public class GanttController {
 
     private final GanttService ganttService;
     private final WorkspaceService workspaceService;
+    private final WorkspaceVersionService versionService;
 
-    public GanttController(GanttService ganttService, WorkspaceService workspaceService) {
+    public GanttController(GanttService ganttService, WorkspaceService workspaceService,
+                       WorkspaceVersionService versionService) {
         this.ganttService = ganttService;
         this.workspaceService = workspaceService;
+        this.versionService = versionService;
     }
 
     /** 任务分页 + 依赖 + 基线（依赖/基线只随第一页返回）；筛选参数与 /api/tasks/list 一致 */
     @GetMapping("/api/gantt")
-    public ApiResult<GanttResponse> gantt(@RequestParam(required = false) String workspace,
+    public ResponseEntity<ApiResult<GanttResponse>> gantt(@RequestParam(required = false) String workspace,
                                           @RequestParam(required = false) String q,
                                           @RequestParam(required = false) String owners,
                                           @RequestParam(required = false) String pris,
@@ -62,15 +70,21 @@ public class GanttController {
                                           @RequestParam(required = false)
                                           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                           @RequestParam(required = false) Integer offset,
-                                          @RequestParam(required = false) Integer limit) {
+                                          @RequestParam(required = false) Integer limit,
+                                          @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
+                                          HttpServletRequest request) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String etag = versionService.etag(ws.getId(), request.getQueryString(), versionService.version(ws.getId()));
+        if (etag.equals(inm)) {
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+        }
         BoardQuery query = BoardQuery.from(q, owners, pris, cats, reqs, tags, due, focus, blocked, noDue,
                 "all", null, null);
         GanttResponse resp = ganttService.gantt(ws.getId(), query, from, to,
                 includeDone == null || includeDone,
                 offset == null ? 0 : offset, limit == null ? 0 : limit);
         /* includeDone 由服务端过滤；前端默认不传（true），切换「显示已完成」时本地过滤即可 */
-        return ApiResult.ok(resp);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag).body(ApiResult.ok(resp));
     }
 
     @GetMapping("/api/gantt/deps")

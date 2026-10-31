@@ -14,15 +14,20 @@ import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.TaskService;
 import com.devstudio.kanban.service.WorkspaceService;
+import com.devstudio.kanban.service.WorkspaceVersionService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -32,15 +37,18 @@ public class TaskController {
 
     private final TaskService taskService;
     private final WorkspaceService workspaceService;
+    private final WorkspaceVersionService versionService;
 
-    public TaskController(TaskService taskService, WorkspaceService workspaceService) {
+    public TaskController(TaskService taskService, WorkspaceService workspaceService,
+                          WorkspaceVersionService versionService) {
         this.taskService = taskService;
         this.workspaceService = workspaceService;
+        this.versionService = versionService;
     }
 
     /** 看板聚合：列数据 + 列定义 + 提醒计数 + 筛选元数据 */
     @GetMapping("/api/board")
-    public ApiResult<BoardResponse> board(@RequestParam(required = false) String workspace,
+    public ResponseEntity<ApiResult<BoardResponse>> board(@RequestParam(required = false) String workspace,
                                           @RequestParam(required = false) String q,
                                           @RequestParam(required = false) String owners,
                                           @RequestParam(required = false) String pris,
@@ -52,11 +60,18 @@ public class TaskController {
                                           @RequestParam(required = false) Boolean blocked,
                                           @RequestParam(required = false) Boolean noDue,
                                           @RequestParam(required = false) String doneScope,
-                                          @RequestParam(required = false) Integer doneLimit) {
+                                          @RequestParam(required = false) Integer doneLimit,
+                                          @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
+                                          HttpServletRequest request) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String etag = versionService.etag(ws.getId(), request.getQueryString(), versionService.version(ws.getId()));
+        if (etag.equals(inm)) {
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+        }
         BoardQuery query = BoardQuery.from(q, owners, pris, cats, reqs, tags, due, focus, blocked, noDue,
                 doneScope, doneLimit, null);
-        return ApiResult.ok(taskService.board(ws.getId(), query));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
+                .body(ApiResult.ok(taskService.board(ws.getId(), query)));
     }
 
     /** 已完成列分页（「加载更多」） */
@@ -83,7 +98,7 @@ public class TaskController {
 
     /** 列表视图：筛选后的全量任务（上限 500），sort: due/priority/updated/column */
     @GetMapping("/api/tasks/list")
-    public ApiResult<TaskListResponse> list(@RequestParam(required = false) String workspace,
+    public ResponseEntity<ApiResult<TaskListResponse>> list(@RequestParam(required = false) String workspace,
                                             @RequestParam(required = false) String q,
                                             @RequestParam(required = false) String owners,
                                             @RequestParam(required = false) String pris,
@@ -94,11 +109,18 @@ public class TaskController {
                                             @RequestParam(required = false) Boolean focus,
                                             @RequestParam(required = false) Boolean blocked,
                                             @RequestParam(required = false) Boolean noDue,
-                                            @RequestParam(required = false) String sort) {
+                                            @RequestParam(required = false) String sort,
+                                            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
+                                            HttpServletRequest request) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String etag = versionService.etag(ws.getId(), request.getQueryString(), versionService.version(ws.getId()));
+        if (etag.equals(inm)) {
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+        }
         BoardQuery query = BoardQuery.from(q, owners, pris, cats, reqs, tags, due, focus, blocked, noDue,
                 "all", null, null);
-        return ApiResult.ok(taskService.list(ws.getId(), query, sort));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
+                .body(ApiResult.ok(taskService.list(ws.getId(), query, sort)));
     }
 
     /**

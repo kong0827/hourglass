@@ -39,9 +39,17 @@
   })();
   window.DS_CLIENT_ID = CLIENT_ID;
 
+  /* GET 的 ETag 缓存：304 时直接复用上次解析好的数据 */
+  var etagCache = {};
+  var etagOrder = [];
+  var ETAG_MAX = 80;
+
   function request(method, url, body, isForm) {
     url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
+    if (method === "GET" && etagCache[url]) {
+      opts.headers["If-None-Match"] = etagCache[url].etag;
+    }
     if (method !== "GET") {
       opts.headers["X-XSRF-TOKEN"] = readCookie("XSRF-TOKEN");
       opts.headers["X-Client-Id"] = CLIENT_ID;
@@ -60,6 +68,10 @@
         window.location.href = "/login.html";
         throw new Error("未登录或登录已过期");
       }
+      if (res.status === 304 && etagCache[url]) {
+        return etagCache[url].data;
+      }
+      var etag = res.headers.get("ETag");
       return res.text().then(function (text) {
         var json = null;
         try { json = text ? JSON.parse(text) : null; } catch (e) { /* 非 JSON */ }
@@ -67,6 +79,14 @@
           throw new Error("请求失败（HTTP " + res.status + "）");
         }
         if (json.code === 0) {
+          if (etag && method === "GET") {
+            if (!etagCache[url]) etagOrder.push(url);
+            etagCache[url] = { etag: etag, data: json.data };
+            while (etagOrder.length > ETAG_MAX) {
+              var old = etagOrder.shift();
+              delete etagCache[old];
+            }
+          }
           return json.data;
         }
         throw new Error(json.message || "请求失败");
