@@ -7616,7 +7616,7 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
 });
 
 /* ==================== 拖拽（指针事件，兼容鼠标与触屏） ==================== */
-var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null;
+var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null, dragRaf = 0;
 
 function onPointerDown(e){
   var cardEl = e.target.closest ? e.target.closest(".card") : null;
@@ -7649,12 +7649,14 @@ function onPointerMove(e){
   }
   if(drag){
     if(e.cancelable) e.preventDefault();
-    updateDrag();
+    /* 合并到一帧里读写 DOM，避免 pointermove 高频触发时反复测量布局 */
+    if(!dragRaf) dragRaf = requestAnimationFrame(function(){ dragRaf = 0; if(drag) updateDrag(); });
   }
 }
 function onPointerUp(){
   if(pending && pending.timer) clearTimeout(pending.timer);
   pending = null;
+  if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf = 0; if(drag) updateDrag(); }
   if(drag) endDrag();
 }
 function onPointerCancel(){
@@ -7792,6 +7794,7 @@ function endDrag(){
 function cancelDrag(){ cleanupDrag(); render({animate:false}); }
 function cleanupDrag(){
   if(!drag) return;
+  if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf = 0; }
   document.removeEventListener("touchmove", boardTouchMove);
   if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
   if(drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
@@ -17423,6 +17426,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-31 14:29</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-31 14:39</span></div>
 </body>
 </html>

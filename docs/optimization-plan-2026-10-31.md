@@ -655,3 +655,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十七轮：BE-Q-3（统计周聚合）**
 - 报表“近 N 周新增/完成”从「周数 × 全部任务」改为一次扫描按周聚合，O(N + 周数)；输出结构不变。
+
+**第十八轮：F-RENDER-4（看板拖拽）**
+- 看板 pointermove 的 updateDrag 合并到 rAF，每帧最多一次 DOM 读写；pointerup 前先刷新最后一帧，避免落点滞后。

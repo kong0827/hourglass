@@ -1580,7 +1580,7 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
 });
 
 /* ==================== 拖拽（指针事件，兼容鼠标与触屏） ==================== */
-var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null;
+var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null, dragRaf = 0;
 
 function onPointerDown(e){
   var cardEl = e.target.closest ? e.target.closest(".card") : null;
@@ -1613,12 +1613,14 @@ function onPointerMove(e){
   }
   if(drag){
     if(e.cancelable) e.preventDefault();
-    updateDrag();
+    /* 合并到一帧里读写 DOM，避免 pointermove 高频触发时反复测量布局 */
+    if(!dragRaf) dragRaf = requestAnimationFrame(function(){ dragRaf = 0; if(drag) updateDrag(); });
   }
 }
 function onPointerUp(){
   if(pending && pending.timer) clearTimeout(pending.timer);
   pending = null;
+  if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf = 0; if(drag) updateDrag(); }
   if(drag) endDrag();
 }
 function onPointerCancel(){
@@ -1756,6 +1758,7 @@ function endDrag(){
 function cancelDrag(){ cleanupDrag(); render({animate:false}); }
 function cleanupDrag(){
   if(!drag) return;
+  if(dragRaf){ cancelAnimationFrame(dragRaf); dragRaf = 0; }
   document.removeEventListener("touchmove", boardTouchMove);
   if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
   if(drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
