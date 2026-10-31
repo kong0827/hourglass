@@ -14,6 +14,12 @@
     ORDER BY board_column, sort_order, id
   </select>
 
+  <select id="selectColumnTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND board_column = #{column} AND deleted_at IS NULL
+    ORDER BY sort_order, id
+  </select>
+
   <select id="selectDeleted" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL

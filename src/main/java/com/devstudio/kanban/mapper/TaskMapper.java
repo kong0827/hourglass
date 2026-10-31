@@ -13,6 +13,10 @@ public interface TaskMapper {
 
     List<Task> selectAll(@Param("workspaceId") String workspaceId);
 
+    /** 只取某一列的任务（拖拽排序用，避免整空间 selectAll） */
+    List<Task> selectColumnTasks(@Param("workspaceId") String workspaceId,
+                                 @Param("column") String column);
+
     /* ---- 甘特图：SQL 区间过滤 + 稳定排序 + 分页 ---- */
 
     List<Task> selectGantt(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,

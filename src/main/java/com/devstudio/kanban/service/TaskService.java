@@ -67,6 +67,8 @@ public class TaskService {
 
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
     private static final int LIST_LIMIT = 500;
+    /** 列内排序的稀疏步长：插入时取中值，只有间隔用完才整列重排 */
+    private static final int SORT_STEP = 1024;
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
@@ -562,6 +564,22 @@ public class TaskService {
         return result;
     }
 
+    /** 取前后两项之间的中值；返回 -1 表示间隔不够，需要整列重排 */
+    private int sparseOrder(Task prev, Task next) {
+        Integer p = prev == null ? null : prev.getSortOrder();
+        Integer n = next == null ? null : next.getSortOrder();
+        if (p == null && n == null) {
+            return 0;
+        }
+        if (p == null) {
+            return n > SORT_STEP ? n - SORT_STEP : -1;
+        }
+        if (n == null) {
+            return p + SORT_STEP;
+        }
+        return n - p > 1 ? p + (n - p) / 2 : -1;
+    }
+
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
         Task task = taskMapper.selectById(id);
@@ -573,8 +591,8 @@ public class TaskService {
         validateColumn(workspaceId, to);
 
         List<Task> target = new ArrayList<Task>();
-        for (Task t : taskMapper.selectAll(workspaceId)) {
-            if (to.equals(t.getBoardColumn()) && !t.getId().equals(id)) {
+        for (Task t : taskMapper.selectColumnTasks(workspaceId, to)) {
+            if (!t.getId().equals(id)) {
                 target.add(t);
             }
         }
@@ -588,7 +606,10 @@ public class TaskService {
                 }
             }
         }
-        target.add(position, task);
+        /* 稀疏编号：只改被拖动的一条；只有前后间隔用完时才重排整列 */
+        Task prev = position > 0 ? target.get(position - 1) : null;
+        Task next = position < target.size() ? target.get(position) : null;
+        int sparse = sparseOrder(prev, next);
 
         task.setBoardColumn(to);
         String generatedDue = null;
@@ -623,12 +644,18 @@ public class TaskService {
                 }
             }
         }
-        for (int i = 0; i < target.size(); i++) {
-            Task t = target.get(i);
-            boolean changed = t.getSortOrder() == null || t.getSortOrder() != i;
-            t.setSortOrder(i);
-            if (changed) {
-                taskMapper.updateSortOrder(t.getId(), i);
+        target.add(position, task);
+        if(sparse >= 0){
+            task.setSortOrder(sparse);
+        }else{
+            /* 间隔用完：整列按 1024 重新编号（含被拖动的任务） */
+            for (int i = 0; i < target.size(); i++) {
+                Task t = target.get(i);
+                int order = i * SORT_STEP;
+                t.setSortOrder(order);
+                if (!t.getId().equals(id)) {
+                    taskMapper.updateSortOrder(t.getId(), order);
+                }
             }
         }
         taskMapper.update(task);

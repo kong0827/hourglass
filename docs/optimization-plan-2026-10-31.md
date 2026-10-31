@@ -641,3 +641,8 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十三轮：CODE-1（部分）**
 - 任务清单 CSV 改用统一 `triggerDownload`，去掉重复的 Blob/URL/createElement 下载代码；单元格转义继续复用 `ganttCsvCell`。
+
+**第十四轮：BE-Q-2 稀疏排序**
+- 拖拽移动只查目标列（`selectColumnTasks`），不再整空间 `selectAll`。
+- sort_order 改为 1024 间隔：插入时取前后中值，只更新被拖动的一行；只有间隔用完才整列重排。
+- 同列排序/跨列移动共用同一逻辑；旧数据首次在相邻项之间插入时会触发一次整列重排，之后恢复稀疏。
