@@ -442,7 +442,7 @@ public class TaskService {
         applyRequest(userId, workspaceId, t, req, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);
-        t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + 1);
+        t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
             t.setCompletedAt(req.getCompletedAt() != null ? req.getCompletedAt() : LocalDate.now());
         }
@@ -516,7 +516,7 @@ public class TaskService {
         boolean leftDone = !old.getBoardColumn().equals(t.getBoardColumn())
                 && Consts.COL_DONE.equals(old.getBoardColumn());
         if (!old.getBoardColumn().equals(t.getBoardColumn())) {
-            t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + 1);
+            t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
             if (movedToDone) {
                 t.setCompletedAt(LocalDate.now());
                 timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已完成");
@@ -917,7 +917,7 @@ public class TaskService {
             nt.setStartDate(next);
         }
         nt.setRemindSent(Boolean.FALSE);
-        nt.setSortOrder(taskMapper.maxSortOrder(workspaceId, firstCol) + 1);
+        nt.setSortOrder(taskMapper.maxSortOrder(workspaceId, firstCol) + SORT_STEP);
         taskMapper.insert(nt);
         // 关联写入是并发完成的唯一裁决点：条件更新只允许第一个成功，落败方回删刚插入的任务（此刻尚无子任务/标签/日志）
         if (taskMapper.setRecurNext(doneTask.getId(), nt.getId()) == 0) {

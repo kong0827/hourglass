@@ -661,3 +661,6 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第十九轮：BE-Q-4（接力查询）**
 - `resumeInColumn` 只查目标列（复用 selectColumnTasks），按 sort_order 取第一条自己的任务，不再整空间 selectAll + sortKey 比较。
+
+**第二十轮：稀疏排序一致性**
+- 新建任务、抽屉改列、循环任务派生统一使用 `maxSortOrder + 1024`，与拖拽的稀疏步长一致，避免新任务把相邻间隔压成 1。
