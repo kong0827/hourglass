@@ -13,6 +13,10 @@ public interface RequirementMapper {
 
     Requirement selectById(String id);
 
+    /** 按 id 批量取项目名称（只取 id/name） */
+    List<Requirement> selectNamesByIds(@Param("workspaceId") String workspaceId,
+                                       @Param("ids") List<String> ids);
+
     int insert(Requirement requirement);
 
     int update(Requirement requirement);

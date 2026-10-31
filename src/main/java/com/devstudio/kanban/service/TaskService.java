@@ -8,6 +8,7 @@ import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.BoardQuery;
 import com.devstudio.kanban.dto.BoardResponse;
 import com.devstudio.kanban.dto.CalendarResponse;
+import com.devstudio.kanban.dto.GanttQuery;
 import com.devstudio.kanban.dto.TaskBulkMoveRequest;
 import com.devstudio.kanban.dto.TaskListResponse;
 import com.devstudio.kanban.dto.TaskMoveRequest;
@@ -25,6 +26,7 @@ import com.devstudio.kanban.entity.Tag;
 import com.devstudio.kanban.entity.TagTaskRow;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskCountAgg;
+import com.devstudio.kanban.entity.TaskFacetRow;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
@@ -52,7 +54,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -173,9 +174,6 @@ public class TaskService {
 
     public BoardResponse board(String workspaceId, BoardQuery query) {
         LocalDate today = LocalDate.now();
-        List<Task> all = taskMapper.selectAll(workspaceId);
-        mergeTaskExtras(workspaceId, all);
-
         List<BoardColumn> configCols = boardColumnMapper.selectAll(workspaceId);
         Map<String, List<Task>> byCol = new LinkedHashMap<String, List<Task>>();
         for (BoardColumn c : configCols) {
@@ -189,7 +187,30 @@ public class TaskService {
         if (!byCol.containsKey(fallbackCol)) {
             byCol.put(fallbackCol, new ArrayList<Task>());
         }
-        for (Task t : all) {
+
+        /* 未完成列：SQL 直接按列取（board_column <> done），历史已完成任务不再进内存 */
+        List<Task> open = taskMapper.selectOpenTasks(workspaceId);
+
+        /* 已完成列：计数与筛选下推 SQL，只取当前页；筛选口径复用 ganttWhere（与 match() 对齐） */
+        LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate sunday = monday.plusDays(6);
+        boolean scopeAll = "all".equals(query.getDoneScope());
+        GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
+        int doneAll = taskMapper.countDoneAll(workspaceId);
+        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, monday, sunday);
+        int doneMatched = hasFilters(query)
+                ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
+                : doneTotal;
+        List<Task> doneItems = doneMatched == 0 ? new ArrayList<Task>()
+                : taskMapper.selectDonePage(workspaceId, doneQuery, scopeAll, monday, sunday, 0, query.getDoneLimit());
+
+        /* 附属数据只对本次真正返回的 id 批量查一次（未完成 + 已完成当前页） */
+        List<Task> visible = new ArrayList<Task>(open.size() + doneItems.size());
+        visible.addAll(open);
+        visible.addAll(doneItems);
+        mergeTaskExtras(workspaceId, visible);
+
+        for (Task t : open) {
             List<Task> list = byCol.get(t.getBoardColumn());
             if (list == null) {
                 list = byCol.get(fallbackCol);
@@ -198,6 +219,7 @@ public class TaskService {
                 list.add(t);
             }
         }
+        byCol.get(Consts.COL_DONE).addAll(doneItems);
 
         BoardResponse resp = new BoardResponse();
         for (BoardColumn c : configCols) {
@@ -208,100 +230,67 @@ public class TaskService {
         for (Map.Entry<String, List<Task>> entry : byCol.entrySet()) {
             String col = entry.getKey();
             List<Task> colTasks = entry.getValue();
-            List<Task> scope = Consts.COL_DONE.equals(col) ? inDoneScope(colTasks, query, today) : colTasks;
-            List<Task> matched = filter(scope, query, today);
-
             BoardResponse.ColumnData data = new BoardResponse.ColumnData();
-            data.setAllTotal(colTasks.size());
-            data.setMatched(matched.size());
-            data.setTotal(scope.size());
             if (Consts.COL_DONE.equals(col)) {
-                data.setItems(page(matched, 0, query.getDoneLimit()));
-                data.setHasMore(matched.size() > query.getDoneLimit());
+                data.setAllTotal(doneAll);
+                data.setMatched(doneMatched);
+                data.setTotal(doneTotal);
+                data.setItems(colTasks);
+                data.setHasMore(doneMatched > query.getDoneLimit());
             } else {
+                List<Task> matched = filter(colTasks, query, today);
+                data.setAllTotal(colTasks.size());
+                data.setMatched(matched.size());
+                data.setTotal(colTasks.size());
                 data.setItems(matched);
             }
             resp.getColumns().put(col, data);
         }
-        resp.setCounts(TaskCalc.countDue(all, today));
-        resp.setMeta(buildMeta(workspaceId, all));
+
+        List<TaskFacetRow> facets = taskMapper.selectBoardFacets(workspaceId);
+        resp.setCounts(countDue(facets, today));
+        resp.setMeta(buildMeta(workspaceId, facets));
         return resp;
     }
 
     public BoardResponse.ColumnData donePage(String workspaceId, BoardQuery query) {
         LocalDate today = LocalDate.now();
-        List<Task> all = taskMapper.selectAll(workspaceId);
-        mergeTaskExtras(workspaceId, all);
-        List<Task> doneAll = new ArrayList<Task>();
-        for (Task t : all) {
-            if (Consts.COL_DONE.equals(t.getBoardColumn())) {
-                doneAll.add(t);
-            }
-        }
-        List<Task> scope = inDoneScope(doneAll, query, today);
-        List<Task> matched = filter(scope, query, today);
+        LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate sunday = monday.plusDays(6);
+        boolean scopeAll = "all".equals(query.getDoneScope());
+        GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
+        int doneAll = taskMapper.countDoneAll(workspaceId);
+        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, monday, sunday);
+        int doneMatched = hasFilters(query)
+                ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
+                : doneTotal;
+        List<Task> items = doneMatched <= query.getDoneOffset() ? new ArrayList<Task>()
+                : taskMapper.selectDonePage(workspaceId, doneQuery, scopeAll, monday, sunday,
+                        query.getDoneOffset(), query.getDoneLimit());
+        mergeTaskExtras(workspaceId, items);
 
         BoardResponse.ColumnData data = new BoardResponse.ColumnData();
-        data.setAllTotal(doneAll.size());
-        data.setMatched(matched.size());
-        data.setTotal(scope.size());
-        data.setItems(page(matched, query.getDoneOffset(), query.getDoneLimit()));
-        data.setHasMore(matched.size() > query.getDoneOffset() + query.getDoneLimit());
+        data.setAllTotal(doneAll);
+        data.setMatched(doneMatched);
+        data.setTotal(doneTotal);
+        data.setItems(items);
+        data.setHasMore(doneMatched > query.getDoneOffset() + query.getDoneLimit());
         return data;
     }
 
-    /** 列表视图：筛选后的全量任务（上限 500），sort: due/priority/updated/column */
+    /** 列表视图：筛选与 LIMIT 下推 SQL（上限 500），sort: due/priority/updated/column */
     public TaskListResponse list(String workspaceId, BoardQuery query, String sort) {
         LocalDate today = LocalDate.now();
-        List<Task> all = taskMapper.selectAll(workspaceId);
-        mergeTaskExtras(workspaceId, all);
-        List<Task> matched = filter(all, query, today);
-        final Map<String, Integer> colIndex = columnIndexMap(workspaceId);
-        Comparator<Task> cmp;
-        String s = sort == null ? "column" : sort;
-        if ("due".equals(s)) {
-            cmp = new Comparator<Task>() {
-                @Override
-                public int compare(Task a, Task b) {
-                    if (a.getDueDate() == null && b.getDueDate() == null) return 0;
-                    if (a.getDueDate() == null) return 1;
-                    if (b.getDueDate() == null) return -1;
-                    return a.getDueDate().compareTo(b.getDueDate());
-                }
-            };
-        } else if ("priority".equals(s)) {
-            cmp = new Comparator<Task>() {
-                @Override
-                public int compare(Task a, Task b) {
-                    return Integer.compare(priIndex(a.getPriority()), priIndex(b.getPriority()));
-                }
-            };
-        } else if ("updated".equals(s)) {
-            cmp = new Comparator<Task>() {
-                @Override
-                public int compare(Task a, Task b) {
-                    LocalDateTime ta = a.getUpdatedAt() == null ? LocalDateTime.MIN : a.getUpdatedAt();
-                    LocalDateTime tb = b.getUpdatedAt() == null ? LocalDateTime.MIN : b.getUpdatedAt();
-                    return tb.compareTo(ta);
-                }
-            };
-        } else {
-            cmp = new Comparator<Task>() {
-                @Override
-                public int compare(Task a, Task b) {
-                    int ca = colIndex.containsKey(a.getBoardColumn()) ? colIndex.get(a.getBoardColumn()) : 999;
-                    int cb = colIndex.containsKey(b.getBoardColumn()) ? colIndex.get(b.getBoardColumn()) : 999;
-                    if (ca != cb) return Integer.compare(ca, cb);
-                    int sa = a.getSortOrder() == null ? 0 : a.getSortOrder();
-                    int sb = b.getSortOrder() == null ? 0 : b.getSortOrder();
-                    return Integer.compare(sa, sb);
-                }
-            };
-        }
-        Collections.sort(matched, cmp);
+        GanttQuery gq = GanttQuery.from(query, today, null, null, true);
+        String s = "due".equals(sort) || "priority".equals(sort) || "updated".equals(sort) ? sort : "column";
+        int total = taskMapper.countTaskList(workspaceId, gq);
+        List<Task> items = total == 0 ? new ArrayList<Task>()
+                : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, LIST_LIMIT);
+        mergeTaskExtras(workspaceId, items);
+
         TaskListResponse resp = new TaskListResponse();
-        resp.setTotal(matched.size());
-        resp.setItems(matched.size() > LIST_LIMIT ? new ArrayList<Task>(matched.subList(0, LIST_LIMIT)) : matched);
+        resp.setTotal(total);
+        resp.setItems(items);
         return resp;
     }
 
@@ -345,8 +334,16 @@ public class TaskService {
             commentMap.put(agg.getTaskId(), agg.getCnt());
         }
         Map<String, String> reqNameMap = new HashMap<String, String>();
-        for (Requirement r : reqMapper.selectAll(workspaceId)) {
-            reqNameMap.put(r.getId(), r.getName());
+        Set<String> reqIds = new HashSet<String>();
+        for (Task t : tasks) {
+            if (t.getReqId() != null) {
+                reqIds.add(t.getReqId());
+            }
+        }
+        if (!reqIds.isEmpty()) {
+            for (Requirement r : reqMapper.selectNamesByIds(workspaceId, new ArrayList<String>(reqIds))) {
+                reqNameMap.put(r.getId(), r.getName());
+            }
         }
         for (Task t : tasks) {
             SubtaskAgg sub = subMap.get(t.getId());
@@ -381,8 +378,9 @@ public class TaskService {
         }
         LocalDate first = LocalDate.of(y, m, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
+        /* SQL 先把区间收敛到 due_date（走 idx_ws_due）；「提前完成收敛到完成日」的精确判定仍在这里，口径不变 */
         List<Task> tasks = new ArrayList<Task>();
-        for (Task t : taskMapper.selectAll(workspaceId)) {
+        for (Task t : taskMapper.selectCalendar(workspaceId, first, last)) {
             LocalDate end = t.getDueDate();
             if (end == null) {
                 // 没有截止日期的任务进「本月未排期」区，不占日历格
@@ -1126,21 +1124,26 @@ public class TaskService {
         return names;
     }
 
+    /** 附属数据（子任务/工时/标签/评论数/项目名/附件名）只按本次可见任务 id 批量查询 */
     private void mergeTaskExtras(String workspaceId, List<Task> tasks) {
-        if (tasks.isEmpty()) {
+        if (tasks == null || tasks.isEmpty()) {
             return;
         }
+        List<String> ids = new ArrayList<String>(tasks.size());
+        Set<String> reqIds = new HashSet<String>();
+        for (Task t : tasks) {
+            ids.add(t.getId());
+            if (t.getReqId() != null) {
+                reqIds.add(t.getReqId());
+            }
+        }
         Map<String, SubtaskAgg> subMap = new HashMap<String, SubtaskAgg>();
-        for (SubtaskAgg agg : subtaskMapper.countByTask(workspaceId)) {
+        for (SubtaskAgg agg : subtaskMapper.countByTaskIds(workspaceId, ids)) {
             subMap.put(agg.getTaskId(), agg);
         }
         Map<String, Integer> minuteMap = new HashMap<String, Integer>();
-        for (TimeAgg agg : timeLogMapper.sumByTaskByWorkspace(workspaceId)) {
+        for (TimeAgg agg : timeLogMapper.sumByTaskIds(workspaceId, ids)) {
             minuteMap.put(agg.getTaskId(), agg.getTotalMinutes());
-        }
-        List<String> ids = new ArrayList<String>();
-        for (Task t : tasks) {
-            ids.add(t.getId());
         }
         Map<String, List<String>> tagMap = new HashMap<String, List<String>>();
         for (TagTaskRow row : tagMapper.selectByTaskIds(workspaceId, ids)) {
@@ -1153,16 +1156,19 @@ public class TaskService {
         }
         /* 评论数（看板角标 / 抽屉计数） */
         Map<String, Integer> commentMap = new HashMap<String, Integer>();
-        for (TaskCountAgg agg : taskMapper.countCommentsByTask(workspaceId)) {
+        for (TaskCountAgg agg : taskMapper.countCommentsByTaskIds(workspaceId, ids)) {
             commentMap.put(agg.getTaskId(), agg.getCnt());
         }
-        /* O-8：搜索范围扩到「项目名 / 附件文件名」，拼成扩展检索文本（不落库） */
+        /* O-8：搜索范围扩到「项目名 / 附件文件名」，拼成扩展检索文本（不落库）。
+           项目名只查任务里出现的 id；附件只查可见任务，不再整空间加载。 */
         Map<String, String> reqNameMap = new HashMap<String, String>();
-        for (Requirement r : reqMapper.selectAll(workspaceId)) {
-            reqNameMap.put(r.getId(), r.getName());
+        if (!reqIds.isEmpty()) {
+            for (Requirement r : reqMapper.selectNamesByIds(workspaceId, new ArrayList<String>(reqIds))) {
+                reqNameMap.put(r.getId(), r.getName());
+            }
         }
         Map<String, StringBuilder> attachMap = new HashMap<String, StringBuilder>();
-        for (Attachment a : attachmentMapper.selectAllByWorkspace(workspaceId)) {
+        for (Attachment a : attachmentMapper.selectByTaskIds(workspaceId, ids)) {
             StringBuilder sb = attachMap.get(a.getTaskId());
             if (sb == null) {
                 sb = new StringBuilder();
@@ -1197,20 +1203,18 @@ public class TaskService {
         }
     }
 
-    private List<Task> inDoneScope(List<Task> doneTasks, BoardQuery query, LocalDate today) {
-        if ("all".equals(query.getDoneScope())) {
-            return new ArrayList<Task>(doneTasks);
-        }
-        LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
-        LocalDate sunday = monday.plusDays(6);
-        List<Task> list = new ArrayList<Task>();
-        for (Task t : doneTasks) {
-            LocalDate completed = t.getCompletedAt();
-            if (completed == null || (!completed.isBefore(monday) && !completed.isAfter(sunday))) {
-                list.add(t);
-            }
-        }
-        return list;
+    /** 已完成列是否带筛选：无筛选时直接复用 doneScope 的计数，不再多查一次 */
+    private boolean hasFilters(BoardQuery query) {
+        return query.getQ() != null
+                || !query.getOwners().isEmpty()
+                || !query.getPris().isEmpty()
+                || !query.getCats().isEmpty()
+                || !query.getReqs().isEmpty()
+                || !query.getTags().isEmpty()
+                || query.getDue() != null
+                || query.isFocus()
+                || query.isBlocked()
+                || query.isNoDue();
     }
 
     private List<Task> filter(List<Task> tasks, BoardQuery query, LocalDate today) {
@@ -1313,15 +1317,23 @@ public class TaskService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(lowerCaseKeyword);
     }
 
-    private List<Task> page(List<Task> list, int offset, int limit) {
-        if (offset >= list.size()) {
-            return new ArrayList<Task>();
+    /** 到期计数：与 TaskCalc.countDue 同一口径，只是数据来自窄列投影 */
+    private BoardResponse.Counts countDue(List<TaskFacetRow> facets, LocalDate today) {
+        BoardResponse.Counts counts = new BoardResponse.Counts();
+        for (TaskFacetRow r : facets) {
+            String kind = TaskCalc.dueKind(r.getBoardColumn(), r.getDueDate(), today);
+            if ("over".equals(kind)) {
+                counts.setOver(counts.getOver() + 1);
+            } else if ("today".equals(kind)) {
+                counts.setToday(counts.getToday() + 1);
+            } else if ("soon".equals(kind)) {
+                counts.setSoon(counts.getSoon() + 1);
+            }
         }
-        int end = Math.min(list.size(), offset + limit);
-        return new ArrayList<Task>(list.subList(offset, end));
+        return counts;
     }
 
-    private BoardResponse.Meta buildMeta(String workspaceId, List<Task> all) {
+    private BoardResponse.Meta buildMeta(String workspaceId, List<TaskFacetRow> facets) {
         BoardResponse.Meta meta = new BoardResponse.Meta();
 
         Map<String, Integer> ownerCount = new LinkedHashMap<String, Integer>();
@@ -1335,7 +1347,7 @@ public class TaskService {
             catCount.put(c.getName(), 0);
         }
         int unassigned = 0;
-        for (Task t : all) {
+        for (TaskFacetRow t : facets) {
             ownerCount.merge(t.getOwner(), 1, Integer::sum);
             if (priCount.containsKey(t.getPriority())) {
                 priCount.merge(t.getPriority(), 1, Integer::sum);
@@ -1359,7 +1371,7 @@ public class TaskService {
         meta.setTags(tagMapper.selectAllWithCount(workspaceId));
 
         Map<String, Integer> reqCount = new LinkedHashMap<String, Integer>();
-        for (Task t : all) {
+        for (TaskFacetRow t : facets) {
             if (t.getReqId() != null) {
                 reqCount.merge(t.getReqId(), 1, Integer::sum);
             }
@@ -1491,23 +1503,14 @@ public class TaskService {
         return r == null || !workspaceId.equals(r.getWorkspaceId()) ? "无" : r.getName();
     }
 
-    private int priIndex(String pri) {
-        for (int i = 0; i < PRIORITIES.length; i++) {
-            if (PRIORITIES[i].equals(pri)) {
-                return i;
-            }
-        }
-        return 9;
-    }
-
-    private Map<String, Integer> columnIndexMap(String workspaceId) {
-        Map<String, Integer> map = new LinkedHashMap<String, Integer>();
-        int i = 0;
+    /** 列表按列排序时的列顺序（与看板列配置一致，已完成最后） */
+    private List<String> columnOrder(String workspaceId) {
+        List<String> ids = new ArrayList<String>();
         for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
-            map.put(c.getId(), i++);
+            ids.add(c.getId());
         }
-        map.put(Consts.COL_DONE, i);
-        return map;
+        ids.add(Consts.COL_DONE);
+        return ids;
     }
 
     public String columnName(String workspaceId, String column) {

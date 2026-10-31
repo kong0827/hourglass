@@ -664,3 +664,10 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第二十轮：稀疏排序一致性**
 - 新建任务、抽屉改列、循环任务派生统一使用 `maxSortOrder + 1024`，与拖拽的稀疏步长一致，避免新任务把相邻间隔压成 1。
+
+**第二十一轮：BE-Q-1 看板 SQL 化**
+- 看板未完成列只查 `board_column <> 'done'`；已完成列的范围计数、筛选计数、分页与 hasMore 全部下推 SQL，只返回当前页。
+- 列表筛选/四种排序/500 上限下推；日历先按 due_date 月份区间取候选（idx_ws_due），再保留原区间判定。
+- 子任务/工时/标签/评论/项目名/附件名只按本次可见 task id 批量查询；meta 与到期计数改用窄列投影 TaskFacetRow。
+- 新增 `sql/18_board_query.sql`（幂等）：idx_ws_done_completed、idx_ws_updated，兜底 idx_ws_due。
+- 本地验证：构建、9 个单测、23 个 Mapper/357 条语句解析、BoundSql 参数核对、无头预览四视图无 JS 异常；未跑真实 EXPLAIN。

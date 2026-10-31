@@ -20,6 +20,13 @@
     ORDER BY sort_order, id
   </select>
 
+  <!-- 看板未完成列：只取非 done 的任务，历史已完成任务不再进内存（board_column 走 idx_board） -->
+  <select id="selectOpenTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND board_column &lt;&gt; 'done'
+    ORDER BY board_column, sort_order, id
+  </select>
+
   <select id="selectDeleted" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
@@ -377,6 +384,94 @@
       AND task_id IN
       <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
     GROUP BY task_id
+  </select>
+
+  <!-- ==================== 看板 / 列表 / 日历（BE-Q-1 SQL 下推） ==================== -->
+  <!--
+    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/分类/项目名/标签/附件名；
+    due/focus/blocked/noDue 与 TaskService.match 一致），已完成列再加完成时间范围。
+  -->
+  <sql id="doneScope">
+    <if test="scopeAll == false">
+      AND (t.completed_at IS NULL
+           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+    </if>
+  </sql>
+
+  <select id="countDoneAll" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND board_column = 'done'
+  </select>
+
+  <select id="countDoneInScope" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+    <include refid="doneScope"/>
+  </select>
+
+  <select id="countDoneMatched" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.board_column = 'done'
+    <include refid="doneScope"/>
+  </select>
+
+  <select id="selectDonePage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.board_column = 'done'
+    <include refid="doneScope"/>
+    ORDER BY t.sort_order, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countTaskList" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+  </select>
+
+  <select id="selectTaskList" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+    ORDER BY
+    <choose>
+      <when test="sort == 'due'">
+        (t.due_date IS NULL), t.due_date, t.board_column, t.sort_order, t.id
+      </when>
+      <when test="sort == 'priority'">
+        CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 9 END,
+        t.board_column, t.sort_order, t.id
+      </when>
+      <when test="sort == 'updated'">
+        t.updated_at DESC, t.board_column, t.sort_order, t.id
+      </when>
+      <otherwise>
+        CASE t.board_column
+        <foreach collection="columnIds" item="cid" index="ci">WHEN #{cid} THEN ${ci}</foreach>
+        ELSE 999 END,
+        t.sort_order, t.board_column, t.id
+      </otherwise>
+    </choose>
+    LIMIT #{limit}
+  </select>
+
+  <!-- 日历候选：先把区间收敛到 due_date（走 idx_ws_due），精确的
+       「提前完成收敛到完成日」仍在 Java 里按原逻辑判定，避免两套口径。 -->
+  <select id="selectCalendar" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND due_date IS NOT NULL
+      AND due_date &gt;= #{first}
+      AND (due_date &lt;= #{last} OR start_date &lt;= #{last} OR completed_at &lt;= #{last})
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
+  <select id="selectBoardFacets" resultType="TaskFacetRow">
+    SELECT owner, priority, category, req_id, board_column, due_date
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+    ORDER BY board_column, sort_order, id
   </select>
 
 </mapper>

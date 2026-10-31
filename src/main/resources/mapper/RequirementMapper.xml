@@ -14,6 +14,14 @@
     SELECT <include refid="cols"/> FROM requirement WHERE id = #{id}
   </select>
 
+  <!-- 只按任务里出现的项目 id 取名称（搜索字段 / 甘特展示用） -->
+  <select id="selectNamesByIds" resultType="Requirement">
+    SELECT id, name FROM requirement
+    WHERE workspace_id = #{workspaceId}
+      AND id IN
+      <foreach collection="ids" item="rid" open="(" separator="," close=")">#{rid}</foreach>
+  </select>
+
   <insert id="insert">
     INSERT INTO requirement (id, workspace_id, name, description, status)
     VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{status})

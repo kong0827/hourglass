@@ -736,6 +736,9 @@
       setTimeout(function () {
         resolve({
           status: 200,
+          ok: true,
+          /* api.js 的 ETag 协商会读 res.headers.get("ETag")：预览没有 ETag，返回 null 即可 */
+          headers: { get: function () { return null; } },
           text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
         });
       }, waitMs);

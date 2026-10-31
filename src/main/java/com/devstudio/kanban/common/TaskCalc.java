@@ -24,13 +24,18 @@ public final class TaskCalc {
 
     /** @return none/done/over/today/soon/ok */
     public static String dueKind(Task t, LocalDate today) {
-        if (t.getDueDate() == null) {
+        return dueKind(t.getBoardColumn(), t.getDueDate(), today);
+    }
+
+    /** 窄列投影（看板 meta / counts）复用同一口径 */
+    public static String dueKind(String boardColumn, LocalDate dueDate, LocalDate today) {
+        if (dueDate == null) {
             return "none";
         }
-        if (Consts.COL_DONE.equals(t.getBoardColumn())) {
+        if (Consts.COL_DONE.equals(boardColumn)) {
             return "done";
         }
-        long days = ChronoUnit.DAYS.between(today, t.getDueDate());
+        long days = ChronoUnit.DAYS.between(today, dueDate);
         if (days < 0) {
             return "over";
         }

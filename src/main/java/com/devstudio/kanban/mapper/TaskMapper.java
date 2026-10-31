@@ -2,9 +2,11 @@ package com.devstudio.kanban.mapper;
 
 import com.devstudio.kanban.dto.GanttQuery;
 import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.TaskFacetRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -16,6 +18,44 @@ public interface TaskMapper {
     /** 只取某一列的任务（拖拽排序用，避免整空间 selectAll） */
     List<Task> selectColumnTasks(@Param("workspaceId") String workspaceId,
                                  @Param("column") String column);
+
+    /* ---- 看板 / 列表 / 日历：筛选与分页下推（BE-Q-1） ---- */
+
+    /** 看板未完成列（board_column <> done），走 idx_board */
+    List<Task> selectOpenTasks(@Param("workspaceId") String workspaceId);
+
+    /** 已完成列：全部条数（不受 doneScope / 筛选影响） */
+    int countDoneAll(@Param("workspaceId") String workspaceId);
+
+    /** 已完成列：当前 doneScope（仅本周 / 全部）内的条数 */
+    int countDoneInScope(@Param("workspaceId") String workspaceId,
+                         @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);
+
+    /** 已完成列：doneScope + 看板筛选后的条数（ganttWhere 与 TaskService.match 同口径） */
+    int countDoneMatched(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                         @Param("scopeAll") boolean scopeAll,
+                         @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);
+
+    /** 已完成列分页：ORDER BY sort_order, id + LIMIT/OFFSET */
+    List<Task> selectDonePage(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                              @Param("scopeAll") boolean scopeAll,
+                              @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd,
+                              @Param("offset") int offset, @Param("limit") int limit);
+
+    /** 列表视图筛选后的总数（可能大于 500） */
+    int countTaskList(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query);
+
+    /** 列表视图分页：筛选 + 排序 + LIMIT 都在 SQL 完成 */
+    List<Task> selectTaskList(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                              @Param("columnIds") List<String> columnIds, @Param("sort") String sort,
+                              @Param("limit") int limit);
+
+    /** 日历：与月份区间有交集的候选任务（due_date 收敛区间，精确判定仍在 Java） */
+    List<Task> selectCalendar(@Param("workspaceId") String workspaceId,
+                              @Param("first") LocalDate first, @Param("last") LocalDate last);
+
+    /** 看板 meta 与到期计数用的窄列投影（顺序与 selectAll 一致） */
+    List<TaskFacetRow> selectBoardFacets(@Param("workspaceId") String workspaceId);
 
     /* ---- 甘特图：SQL 区间过滤 + 稳定排序 + 分页 ---- */
 

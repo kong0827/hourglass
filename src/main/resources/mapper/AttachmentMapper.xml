@@ -15,6 +15,15 @@
     SELECT <include refid="cols"/> FROM attachment WHERE workspace_id = #{workspaceId}
   </select>
 
+  <!-- 只按本次可见任务 id 批量取（拼搜索字段用），不再整空间加载 -->
+  <select id="selectByTaskIds" resultType="Attachment">
+    SELECT <include refid="cols"/> FROM attachment
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    ORDER BY task_id, id
+  </select>
+
   <select id="selectById" resultType="Attachment">
     SELECT <include refid="cols"/> FROM attachment WHERE id = #{id}
   </select>
