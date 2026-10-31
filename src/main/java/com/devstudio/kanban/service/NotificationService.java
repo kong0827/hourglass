@@ -195,12 +195,13 @@ public class NotificationService {
     private void scanWorkspaceReminders(Workspace ws, LocalDateTime now) {
         boolean wsEnabled = effectiveEnabled(ws);
         String hook = effectiveHook(ws);
+        Map<String, String> memberByName = memberNameMap(ws.getId());
         for (Task t : taskMapper.selectRemindDue(ws.getId(), now, now.minusHours(REMIND_WINDOW_HOURS))) {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
                 boolean externalConfigured = wsEnabled && hook != null;
                 /* N-1：先写应用内通知（不依赖外部渠道是否配置），做到"提醒到本人" */
-                boolean inApp = notifyTaskRemindInApp(ws, t);
+                boolean inApp = notifyTaskRemindInApp(ws, t, memberByName);
                 if (externalConfigured) {
                     // 配了外部渠道：以它为准决定是否闭环（失败保留在 6 小时窗口内重试）
                     if (sendContent(ws, buildTaskRemindContent(ws, t), hook)) {
@@ -238,8 +239,8 @@ public class NotificationService {
     }
 
     /** N-1：任务级提醒写入应用内通知，投递给负责人本人（可选带上空间主） */
-    private boolean notifyTaskRemindInApp(Workspace ws, Task t) {
-        Set<String> targets = resolveRecipients(ws, t);
+    private boolean notifyTaskRemindInApp(Workspace ws, Task t, Map<String, String> memberByName) {
+        Set<String> targets = resolveRecipients(ws, t, memberByName);
         if (targets.isEmpty()) {
             return false;
         }
@@ -263,13 +264,13 @@ public class NotificationService {
      *  - owner（默认）：负责人的账号（优先 owner_user_id，历史行回落显示名匹配空间成员）
      *  - owner+admin：负责人 + 空间主
      */
-    private Set<String> resolveRecipients(Workspace ws, Task t) {
+    private Set<String> resolveRecipients(Workspace ws, Task t, Map<String, String> memberByName) {
         Set<String> out = new LinkedHashSet<String>();
         String ownerId = Texts.trimToNull(t.getOwnerUserId());
         if (ownerId != null) {
             out.add(ownerId);
         } else {
-            String byName = matchMemberByName(ws.getId(), t.getOwner());
+            String byName = matchMemberByName(memberByName, t.getOwner());
             if (byName != null) {
                 out.add(byName);
             }
@@ -280,18 +281,22 @@ public class NotificationService {
         return out;
     }
 
-    private String matchMemberByName(String workspaceId, String displayName) {
-        String name = Texts.trimToNull(displayName);
-        if (name == null) {
-            return null;
-        }
+    /** 空间成员显示名 → 账号ID（每轮扫描只查一次，避免逐任务 N+1） */
+    private Map<String, String> memberNameMap(String workspaceId) {
+        Map<String, String> map = new java.util.HashMap<String, String>();
         for (WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
             AppUser u = userMapper.selectById(m.getUserId());
-            if (u != null && name.equals(u.getDisplayName())) {
-                return m.getUserId();
+            String name = u == null ? null : Texts.trimToNull(u.getDisplayName());
+            if (name != null && !map.containsKey(name)) {
+                map.put(name, m.getUserId());
             }
         }
-        return null;
+        return map;
+    }
+
+    private String matchMemberByName(Map<String, String> memberByName, String displayName) {
+        String name = Texts.trimToNull(displayName);
+        return name == null ? null : memberByName.get(name);
     }
 
     /* ==================== 手动测试推送（O-1③） ==================== */
@@ -375,11 +380,12 @@ public class NotificationService {
      */
     private int pushDigestInApp(Workspace ws, List<Task> over, List<Task> todayDue) {
         Map<String, List<Task>> byUser = new LinkedHashMap<String, List<Task>>();
+        Map<String, String> memberByName = memberNameMap(ws.getId());
         for (Task t : over) {
-            addDigestTarget(ws, byUser, t);
+            addDigestTarget(byUser, memberByName, t);
         }
         for (Task t : todayDue) {
-            addDigestTarget(ws, byUser, t);
+            addDigestTarget(byUser, memberByName, t);
         }
         LocalDate today = LocalDate.now();
         int sent = 0;
@@ -411,10 +417,10 @@ public class NotificationService {
         return sent;
     }
 
-    private void addDigestTarget(Workspace ws, Map<String, List<Task>> byUser, Task t) {
+    private void addDigestTarget(Map<String, List<Task>> byUser, Map<String, String> memberByName, Task t) {
         String uid = Texts.trimToNull(t.getOwnerUserId());
         if (uid == null) {
-            uid = matchMemberByName(ws.getId(), t.getOwner());
+            uid = matchMemberByName(memberByName, t.getOwner());
         }
         if (uid == null) {
             return;

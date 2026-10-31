@@ -201,11 +201,12 @@ public class EstimateService {
         if (f == null || s.getSampleCount() < 1) {
             return "还没有可对比的样本：给任务填上「预计耗时」并完成几个，这里就会算出你自己的系数。";
         }
-        if (f >= ACCURATE_HIGH) {
+        /* 系数做过 round2，1.15 可能是 1.1500000000000001：阈值比较留 1e-9 容差，避免边界被误判 */
+        if (f > ACCURATE_HIGH + 1e-9) {
             return "团队估时偏乐观：过去 " + s.getSampleCount() + " 个已完成任务的实际投入是预估的 "
                     + fmt(f) + " 倍。下次填预估时，把心里的数乘 " + fmt(f) + " 再填，会贴近真实。";
         }
-        if (f < ACCURATE_LOW) {
+        if (f < ACCURATE_LOW - 1e-9) {
             return "团队估时偏保守：实际只用到预估的 " + pct(f) + "。可以估得更紧一些，别把缓冲垫得太厚。";
         }
         return "团队估时挺准：实际投入是预估的 " + fmt(f) + " 倍，偏差在可接受范围。";

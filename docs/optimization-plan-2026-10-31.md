@@ -602,3 +602,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - TEST-1：需要新增 `spring-boot-starter-test`（文档要求先补测试再动 BE-Q-1/BE-ARCH-1/CODE-5）。
 - IA-1/2/3/5、MOB-1、BE-Q-1/2/3/5、BE-ARCH-1/2/3、CODE-5：L/M 级结构性改造，需测试与真实库 EXPLAIN 验证，建议单独排期。
 - BE-RT-4 ETag、BE-CACHE-1（Caffeine）、OPS-2 连接池（HttpComponents）、UX-3 FilterBar、UX-6/7、CODE-1/3/4、BE-Q-4：尚未开始；其中 Caffeine/HttpComponents/测试依赖需用户同意。
+
+**第四轮：TEST-1 与复查修复**
+- 新增 `spring-boot-starter-test`（test 范围）与 `src/test/java`：WorkTime（16 个时段/上限用例）、TaskCalc（进度/截止边界）、EstimateService（0.85/1.15 边界与无计时样本）、Ids（分享令牌/ID 白名单）、PublicGanttTask 白名单字段快照；`mvn test` 9 个测试通过。
+- 复查修复：SSE 列/分类/工作区事件漏刷看板；后台多实体事件合并为 all；甘特静默刷新失败回滚旧视图；估时 1.15 浮点边界误判（加 1e-9 容差）。
+- BE-Q-4（部分）：通知扫描的成员名→账号映射每空间只查一次，去掉逐任务 N+1。
+- 看板 SQL 化 / 稀疏排序 / ETag / 大事务等仍待实现；按用户选择，本地只保证编译+预览，SQL/EXPLAIN 由用户在服务器验证。
