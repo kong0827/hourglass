@@ -154,7 +154,10 @@ public interface TaskMapper {
                              @Param("cats") java.util.List<String> cats,
                              @Param("reqs") java.util.List<String> reqs,
                              @Param("tags") java.util.List<String> tags,
-                             @Param("blocked") boolean blocked);
+                             @Param("blocked") boolean blocked,
+                             @Param("due") String due,
+                             @Param("focus") boolean focus,
+                             @Param("today") java.time.LocalDate today);
 
     /** 每任务评论数（看板角标） */
     List<com.devstudio.kanban.entity.TaskCountAgg> countCommentsByTask(@Param("workspaceId") String workspaceId);

@@ -65,7 +65,7 @@ public class NotificationService {
     private static final String PUSHPLUS_ENDPOINT = "https://www.pushplus.plus/send";
     /** 未启用推送时的统一说明（设置页与测试推送共用，避免"测试通过但定时不发"） */
     public static final String DISABLED_REASON =
-            "服务端未启用推送（app.notify.enabled 未打开），定时提醒不会发送；本次为单次测试";
+            "外部推送未启用（app.notify.enabled 未打开），本次不发送外部消息；站内提醒/汇总不受影响";
 
     private final TaskMapper taskMapper;
     private final WorkspaceMapper workspaceMapper;

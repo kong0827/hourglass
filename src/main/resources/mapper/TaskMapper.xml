@@ -92,8 +92,21 @@
                     <foreach collection="tags" item="tg" open="(" separator="," close=")">#{tg}</foreach>)
       </if>
       <if test="blocked"> AND t.is_blocked = 1 </if>
+      <if test="due != null">
+        <choose>
+          <when test="due == 'over'">AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{today}</when>
+          <when test="due == 'today'">AND t.board_column &lt;&gt; 'done' AND t.due_date = #{today}</when>
+          <when test="due == 'soon'">AND t.board_column &lt;&gt; 'done'
+            AND t.due_date &gt;= #{today} AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY)</when>
+          <otherwise>AND 1 = 0</otherwise>
+        </choose>
+      </if>
+      <if test="focus">
+        AND ((t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{today})
+             OR (t.board_column = 'doing' AND t.priority = 'P0'))
+      </if>
     ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC
-    LIMIT 200
+    LIMIT 201
   </select>
 
   <insert id="insert">

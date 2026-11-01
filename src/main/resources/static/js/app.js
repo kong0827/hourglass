@@ -343,7 +343,8 @@ function showView(name){
 }
 function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
-  return VIEWS[name] ? name : "board";
+  var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
+  return (VIEWS[name] || legacy[name]) ? name : "board";
 }
 var suppressHashSync = false;
 function syncViewHash(name){
@@ -399,7 +400,7 @@ function openMobMore(){
     menu = document.createElement("div");
     menu.className = "menu";
     menu.id = "mobMoreMenu";
-    menu.innerHTML = [["projects","项目"],["branches","分支"],["analysis","分析"],["settings","设置"],["profile","个人设置"]]
+    menu.innerHTML = [["list","列表"],["gantt","甘特图"],["requirements","需求"],["projects","项目"],["branches","分支"],["analysis","分析"],["settings","设置"],["profile","个人设置"]]
       .map(function(x){ return '<button class="menu-item" type="button" data-mob-view="' + x[0] + '">' + x[1] + '</button>'; }).join("");
     document.body.appendChild(menu);
     menu.addEventListener("click", function(ev){
@@ -1414,6 +1415,8 @@ function reloadFilteredViews(){
     loadBoard({animate:true});
     refreshListIfOpen();
     refreshGanttIfOpen();
+    refreshCalendarIfOpen();
+    if(activeView === "mine") loadMine({silent:true});
     if(activeView === "gantt") renderGanttFilterState();
   }, 150);
 }
@@ -1427,7 +1430,6 @@ searchInput.addEventListener("input", function(){
 function applySearch(kw){
   var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};
   state.q = kw || "";
-  searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
   /* 不支持筛选的视图：保留关键词并提示，由用户决定何时去看板/列表查看（不打断当前上下文） */
   if(kw && !supported[activeView]){
@@ -1435,7 +1437,7 @@ function applySearch(kw){
     return;
   }
   if(activeView === "mine"){ loadMine(); return; }
-  if(activeView === "calendar"){ renderCalendar(); return; }
+  if(activeView === "calendar"){ loadCalendar({silent:true}); return; }
   if(activeView === "gantt"){ loadGantt({silent:true}); renderGanttFilterState(); return; }
   reloadFilteredViews();
 }
@@ -6695,6 +6697,8 @@ reqListEl.addEventListener("click", function(e){
   if(toBoard){
     var rid1 = toBoard.dataset.reqBoard;
     state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.due = null; state.focus = false; state.blocked = false;
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
     state.reqs = [rid1];
     showView("board");
     reloadFilteredViews();
@@ -6879,6 +6883,7 @@ function renderMine(d){
     var nameOnly = mineNameOnly;
     mineMeta.textContent = (filtering ? ("筛选出 " + items.length + " / " + all.length + " 项") : ("共 " + all.length + " 项")) +
       " · 覆盖 " + spaces.length + " 个空间" +
+      (d.truncated ? " · 仅显示前 200 项，请用筛选缩小范围" : "") +
       (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(mineDot){
@@ -7014,6 +7019,7 @@ if(mineBody){
   });
   mineBody.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;
+    if(e.target.closest("button,input,select,a,textarea")) return;
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
     e.preventDefault();
@@ -9407,8 +9413,8 @@ if($("flowDays")){
   });
 }
 /* 需求名可点：跳到需求编辑页（和任务清单里的交互一致） */
-if($("view-flow")){
-  $("view-flow").addEventListener("click", function(e){
+if($("view-analysis")){
+  $("view-analysis").addEventListener("click", function(e){
     var b = e.target.closest("[data-open-reqdoc]");
     if(b) openReqDocAndJump(b.dataset.openReqdoc);
   });
@@ -11360,17 +11366,17 @@ document.addEventListener("keydown", function(e){
     openHelp();
     return;
   }
-  /* g + 字母：跳转视图（800ms 内组合） */
-  if(!mod && !e.altKey && (e.key === "g" || e.key === "G")){
-    gPending = Date.now();
-    return;
-  }
+  /* g + 字母：跳转视图（800ms 内组合，允许 g g） */
   if(gPending && Date.now() - gPending < 900){
     var gmap = {b:"board", l:"list", m:"mine", c:"calendar", g:"gantt", p:"projects",
                 r:"review", a:"analysis", s:"settings"};
     var gt = gmap[String(e.key || "").toLowerCase()];
     gPending = 0;
     if(gt){ e.preventDefault(); showView(gt); return; }
+  }
+  if(!mod && !e.altKey && (e.key === "g" || e.key === "G")){
+    gPending = Date.now();
+    return;
   }
   gPending = 0;
 

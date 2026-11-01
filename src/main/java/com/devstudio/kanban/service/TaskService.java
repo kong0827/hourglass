@@ -162,7 +162,8 @@ public class TaskService {
                               com.devstudio.kanban.dto.BoardQuery query) {
         List<Task> list = taskMapper.selectMyTasks(userId, displayName, openOnly,
                 com.devstudio.kanban.common.Texts.trimToNull(query.getQ()),
-                query.getPris(), query.getCats(), query.getReqs(), query.getTags(), query.isBlocked());
+                query.getPris(), query.getCats(), query.getReqs(), query.getTags(), query.isBlocked(),
+                query.getDue(), query.isFocus(), java.time.LocalDate.now());
         if (list.isEmpty()) {
             return list;
         }
