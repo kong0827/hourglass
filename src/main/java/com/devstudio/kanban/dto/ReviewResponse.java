@@ -63,5 +63,7 @@ public class ReviewResponse {
         private int mine;
         /** 本空间全员在本周期内的工时（分钟） */
         private int spaceWeek;
+        /** 我在本周期内的工时（分钟）；IA-7：与 spaceWeek 成对展示 */
+        private int mineWeek;
     }
 }

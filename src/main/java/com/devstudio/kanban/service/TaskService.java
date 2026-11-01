@@ -369,8 +369,13 @@ public class TaskService {
 
     /** 日历视图：与指定月份有交集的全部任务（默认当月）。
      *  区间口径：[start_date, due_date]；没填开始日期（或数据异常）时退化为"只占截止日那一格"，
-     *  与升级前的行为一致。 */
+     *  与升级前的行为一致。IA-4：支持与看板/列表相同的筛选（负责人、优先级、分类、项目、标签、关键词）。 */
     public CalendarResponse calendar(String workspaceId, Integer year, Integer month) {
+        return calendar(workspaceId, year, month, new com.devstudio.kanban.dto.BoardQuery());
+    }
+
+    public CalendarResponse calendar(String workspaceId, Integer year, Integer month,
+                                     com.devstudio.kanban.dto.BoardQuery query) {
         LocalDate today = LocalDate.now();
         int y = year == null ? today.getYear() : year;
         int m = month == null ? today.getMonthValue() : month;
@@ -401,10 +406,20 @@ public class TaskService {
             }
             tasks.add(t);
         }
+        /* 筛选要读项目名/标签等扩展字段：先补齐再按统一 match 过滤（月份已由 SQL 收窄，量可控） */
+        mergeTaskExtras(workspaceId, tasks);
+        if (query != null) {
+            List<Task> filtered = new ArrayList<Task>(tasks.size());
+            for (Task t : tasks) {
+                if (match(t, query, today)) {
+                    filtered.add(t);
+                }
+            }
+            tasks = filtered;
+        }
         CalendarResponse resp = new CalendarResponse();
         resp.setYear(y);
         resp.setMonth(m);
-        mergeTaskExtras(workspaceId, tasks);
         resp.setTasks(tasks);
         return resp;
     }

@@ -163,6 +163,7 @@ public class ReviewService {
             wm.setSpace(work.getTotalAll());
             wm.setSpaceWeek(work.getWeekAll());
             wm.setMine(work.getTotalMine());
+            wm.setMineWeek(work.getWeekMine());
         }
         resp.setWorkMinutes(wm);
 

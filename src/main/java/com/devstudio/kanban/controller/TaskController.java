@@ -221,12 +221,23 @@ public class TaskController {
         return ApiResult.ok(taskService.logs(ws.getId(), id));
     }
 
-    /** 日历视图：按截止日期取整月任务 */
+    /** 日历视图：按 [开始日, 实际结束日] 取整月任务（IA-4：接入与看板相同的筛选） */
     @GetMapping("/api/calendar")
     public ApiResult<CalendarResponse> calendar(@RequestParam(required = false) String workspace,
                                                 @RequestParam(required = false) Integer year,
-                                                @RequestParam(required = false) Integer month) {
+                                                @RequestParam(required = false) Integer month,
+                                                @RequestParam(required = false) String q,
+                                                @RequestParam(required = false) String owners,
+                                                @RequestParam(required = false) String pris,
+                                                @RequestParam(required = false) String cats,
+                                                @RequestParam(required = false) String reqs,
+                                                @RequestParam(required = false) String tags,
+                                                @RequestParam(required = false) String due,
+                                                @RequestParam(required = false) Boolean focus,
+                                                @RequestParam(required = false) Boolean blocked) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(taskService.calendar(ws.getId(), year, month));
+        BoardQuery query = BoardQuery.from(q, owners, pris, cats, reqs, tags, due, focus, blocked, null,
+                null, null, null);
+        return ApiResult.ok(taskService.calendar(ws.getId(), year, month, query));
     }
 }

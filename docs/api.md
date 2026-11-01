@@ -1147,3 +1147,9 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 超时口径：webhook 连接 2s / 读 3s（不跟随重定向）；AI 连接 10s / 读 90s。
 - AI 单次调用总预算 150s（含 `response_format` 降级重试）；nginx `location /api/ai/` 的 `proxy_read_timeout` 保持 200s，两侧对齐后前端不会先收到 504。
 - 并发上限不变：AI 同时最多 2 个上游请求，超出返回业务错误「AI 正忙」。
+
+## 附录 · 2026-11-01 IA-4 / IA-5 / IA-7（增量）
+
+- `GET /api/calendar` 新增筛选参数：`q`、`owners`、`pris`、`cats`、`reqs`、`tags`、`due`、`focus`、`blocked`（与看板同名同义）。响应结构不变。
+- `GET /api/review` 的 `workMinutes` 新增 `mineWeek`（我在本周期内的工时，分钟）；原 `space` / `mine` / `spaceWeek` 不变。
+- 页面入口：侧栏不再直接提供「回收站」「用户管理」，分别并入「设置 → 数据」「设置 → 账号」；旧地址 `#/trash`、`#/users` 仍可用（自动跳到设置对应 tab）。

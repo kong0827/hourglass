@@ -1079,3 +1079,31 @@
 @media (max-width:780px){
   .br-groups,.br-flow{grid-template-columns:1fr;}
 }
+
+/* IA-5：设置页 tabs（原长页锚点导航改为分区切换） */
+#view-settings .set-layout{grid-template-columns:1fr;gap:0;}
+.set-tabs{
+  display:flex;gap:4px;flex-wrap:wrap;align-items:center;
+  border-bottom:1px solid var(--border);margin:0 0 16px;padding-top:8px;
+  position:sticky;top:0;z-index:3;background:var(--bg);
+}
+.set-tab{
+  height:34px;padding:0 13px;border-radius:var(--r-sm) var(--r-sm) 0 0;border:none;background:none;
+  font-size:13px;font-weight:600;color:var(--text-3);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.set-tab:hover{color:var(--text);background:var(--surface-hover);}
+.set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);}
+#view-settings [data-set-pane][hidden]{display:none;}
+
+/* IA-7：分支列头即筛选入口（顶部状态格子已删除，避免与列头计数重复） */
+.br-group-head{cursor:pointer;border-radius:var(--r-sm);}
+.br-group-head:hover{background:var(--surface-hover);}
+.br-group-head.on{background:var(--primary-soft);}
+
+/* IA-7：自动总结默认折叠两行，点标题展开 */
+.summary-panel .sh{cursor:pointer;}
+.summary-panel.collapsed p{
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.summary-panel .sh .meta-right{margin-left:auto;font-size:12px;font-weight:600;color:var(--primary-fg);opacity:.75;}

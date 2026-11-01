@@ -213,7 +213,7 @@ var listCache = {};
 var listSeq = 0;
 var listSelected = {};
 var listTotal = 0;
-var calState = {year:null, month:null, tasks:[], selected:null, seq:0};
+var calState = {year:null, month:null, tasks:[], selected:null, seq:0, showDone:{}};
 var reviewSeq = 0, reviewTarget = null;
 
 function safeColor(c){
@@ -261,7 +261,7 @@ var chipsOwner = $("chipsOwner"), chipsPri = $("chipsPri");
 var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var viewBox = $("viewBox");
-var reqListEl = $("reqList"), reqDot = $("reqDot");
+var reqListEl = $("reqList");
 var branchDot = $("branchDot");
 /* 报告增量（O-1/O-4/O-5/O-6/O-9/O-10/O-11/O-12/N-1/N-3/N-4/N-6）新增引用 */
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
@@ -300,16 +300,17 @@ var VIEWS = {
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:enterProjectsView },
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
-  review:   { title:"工作回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
+  review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
   completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
-  stats:    { title:"统计报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
+  stats:    { title:"报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
   flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
-  trash:    { title:"回收站",   sub:"删除的任务保留 30 天，之后自动清理", enter:enterTrashView },
-  users:    { title:"用户管理", sub:"账号由管理员创建下发；成员可凭邀请链接自助加入", enter:enterUsersView },
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
 function showView(name){
+  /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
+  if(name === "trash"){ showView("settings"); setSettingsTab("data"); return; }
+  if(name === "users"){ showView("settings"); setSettingsTab("account"); return; }
   if(!VIEWS[name]) return;
   activeView = name;
   document.body.dataset.view = name;
@@ -367,8 +368,6 @@ function refreshActiveView(){
   if(activeView === "calendar") loadCalendar({silent:true});
   else if(activeView === "gantt") loadGantt({silent:true});
   else if(activeView === "list") loadList({silent:true});
-  else if(activeView === "trash") loadTrash({silent:true});
-  else if(activeView === "users") loadUsers(true);
   else if(activeView === "stats") loadStats({silent:true});
   else if(activeView === "flow") loadFlowHealth({silent:true});
   else if(activeView === "projects") loadReqs();
@@ -376,6 +375,10 @@ function refreshActiveView(){
   else if(activeView === "completions") loadCompletions({silent:true});
   else if(activeView === "requirements") loadReqDocs();
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
+  else if(activeView === "settings"){
+    if(settingsTab === "data") loadTrash({silent:true});
+    if(settingsTab === "account") loadUsers(true);
+  }
 }
 $("sideNav").addEventListener("click", function(e){
   var b = e.target.closest("[data-view]");
@@ -1359,8 +1362,6 @@ function renderFilterChips(){
     renderOwnerChips(meta);
     renderPriChips(meta);
     renderMoreFilter(meta);
-    var reqsMeta = meta.reqs || [];
-    if(reqDot){ reqDot.textContent = reqsMeta.length; reqDot.hidden = reqsMeta.length === 0; }
   }else{
     chipsOwner.innerHTML = "";
     chipsPri.innerHTML = "";
@@ -3548,7 +3549,7 @@ function enterCalendarView(){
   if(calState.selected === null) calState.selected = iso(TODAY);
   loadCalendar();
 }
-function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar(); }
+function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar({silent:true}); }
 function refreshGanttIfOpen(){ if(activeView === "gantt") loadGantt({silent:true}); }
 function calShift(delta){
   calState.month += delta;
@@ -3564,7 +3565,8 @@ function loadCalendar(opts){
     calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
     calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
   }
-  API.get("/api/calendar", {year: calState.year, month: calState.month}).then(function(d){
+  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 关键词 / 到期） */
+  API.get("/api/calendar", boardParams({year: calState.year, month: calState.month})).then(function(d){
     if(seq !== calState.seq) return;
     calState.year = d.year;
     calState.month = d.month;
@@ -3601,9 +3603,7 @@ function renderCalendar(){
   /* 按 [开始日期, 截止日期] 区间逐日铺开：正在做的任务每天都应该出现在日历上。
      没填开始日期（或开始晚于截止）就只占截止日那一格，与升级前行为一致。 */
   var byDay = {};
-  var q = (state.q || "").toLowerCase();
   calState.tasks.forEach(function(t){
-    if(q && [t.title, t.description, t.note].join(" ").toLowerCase().indexOf(q) === -1) return;
     var range = calRangeOf(t);
     if(!range) return;
     var begin = range.begin, end = range.end;
@@ -3626,8 +3626,13 @@ function renderCalendar(){
     if(dateIso === TODAY_ISO) cls += " today";
     if(calState.selected === dateIso) cls += " sel";
     var chips = "";
-    for(var k = 0; k < Math.min(list.length, 3); k++){
-      var it = list[k], t = it.t;
+    /* IA-4：已完成默认折叠，只显示「+n 已完成」；点开后当天才展开（避免格子被历史完成项塞满） */
+    var doneItems = list.filter(function(it){ return it.t.boardColumn === "done"; });
+    var openItems = list.filter(function(it){ return it.t.boardColumn !== "done"; });
+    var expanded = !!calState.showDone[dateIso];
+    var visible = expanded ? list : openItems;
+    for(var k = 0; k < Math.min(visible.length, 3); k++){
+      var it = visible[k], t = it.t;
       var kind = dueState(t).kind;
       /* 已完成的任务在区间内每一格都显示完成日；未完成才提示"进行中，截止 X" */
       var tip = (it.isEnd || kind === "done") ? dueText(t) : ("进行中，截止 " + t.dueDate);
@@ -3637,7 +3642,11 @@ function renderCalendar(){
         '" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + tip) + '">' +
         '<i class="cbar"></i>' + esc(t.title) + '</button>';
     }
-    if(list.length > 3) chips += '<span class="cal-more">+' + (list.length - 3) + ' 更多</span>';
+    if(visible.length > 3) chips += '<span class="cal-more">+' + (visible.length - 3) + ' 更多</span>';
+    if(doneItems.length && !expanded){
+      chips += '<button type="button" class="cal-chip done cal-done-toggle" data-cal-show-done="' + dateIso +
+        '" title="展开当天已完成的任务">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
+    }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
       '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' +
         icon("plus", 12) + '</button>' +
@@ -3708,13 +3717,24 @@ function renderCalDayList(){
     return !!range && selIso >= range.begin && selIso <= range.end;
   });
   list.forEach(function(t){ taskCacheExtra[t.id] = t; });
+  var openList = list.filter(function(t){ return t.boardColumn !== "done"; });
+  var doneList = list.filter(function(t){ return t.boardColumn === "done"; });
+  var showDone = !!calState.showDone[selIso];
   var html = '<div class="cal-side-head">' +
       '<h3>' + fmtMD(sel) + ' ' + weekdayCN(sel) + '</h3>' +
       '<span class="foot-note">共 ' + list.length + ' 项任务</span>' +
     '</div>';
-  html += '<div class="cal-side-list">' + (list.length
-    ? list.map(function(t){ return cardHTML(t, 0); }).join("")
-    : '<div class="col-empty">当日没有到期或在做的任务</div>') + '</div>';
+  html += '<div class="cal-side-list">' + (openList.length
+    ? openList.map(function(t){ return cardHTML(t, 0); }).join("")
+    : '<div class="col-empty">当日没有进行中的任务</div>');
+  if(doneList.length){
+    html += '<button class="btn sm ghost cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
+      (showDone ? "收起已完成" : "展开 " + doneList.length + " 项已完成") + '</button>';
+    if(showDone){
+      html += doneList.map(function(t){ return cardHTML(t, 0); }).join("");
+    }
+  }
+  html += '</div>';
   calDayList.innerHTML = html;
   wireCardContainer(calDayList);
   UI.wireTooltips(calDayList);
@@ -3731,6 +3751,15 @@ $("calToday").addEventListener("click", function(){
 calGrid.addEventListener("click", function(e){
   var addBtn = e.target.closest("[data-cal-add]");
   if(addBtn){ e.stopPropagation(); openNewTaskOnDate(addBtn.dataset.calAdd); return; }
+  var doneToggle = e.target.closest("[data-cal-show-done]");
+  if(doneToggle){
+    e.stopPropagation();
+    var dayIso = doneToggle.dataset.calShowDone;
+    calState.showDone[dayIso] = !calState.showDone[dayIso];
+    calState.selected = dayIso;
+    renderCalendar();
+    return;
+  }
   var chip = e.target.closest("[data-cal-id]");
   if(chip){
     e.stopPropagation();
@@ -3753,6 +3782,12 @@ calGrid.addEventListener("keydown", function(e){
   renderCalendar();
 });
 calDayList.addEventListener("click", function(e){
+  var more = e.target.closest("[data-cal-side-done]");
+  if(more){
+    calState.showDone[more.dataset.calSideDone] = !calState.showDone[more.dataset.calSideDone];
+    renderCalendar();
+    return;
+  }
   if(e.target.closest("button,a")) return;
   var card = e.target.closest(".card");
   if(!card) return;
@@ -6725,9 +6760,16 @@ function renderMine(d){
       (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(mineDot){
-    var n = all.length;
+    /* IA-7：角标只统计「逾期 + 今日到期」，不再是全部条数 */
+    var n = 0;
+    all.forEach(function(t){
+      if(t.boardColumn === "done") return;
+      var k = dueState(t).kind;
+      if(k === "over" || k === "today") n++;
+    });
     mineDot.textContent = n > 99 ? "99+" : n;
     mineDot.hidden = n === 0;
+    mineDot.classList.add("urgent");
   }
   if(!all.length){
     mineBody.innerHTML = UI.emptyState({
@@ -6964,9 +7006,9 @@ function renderReview(d){
   /* N-5：工时区（全空间 / 我的） */
   if(reviewHoursEl){
     var w = d.workMinutes || {};
+    /* IA-7：只保留本周两个口径；累计工时挪到分析页 */
     var hcards = [
-      {k:"全空间累计", v:fmtMinutesShort(w.space || 0)},
-      {k:"我的累计", v:fmtMinutesShort(w.mine || 0)},
+      {k:"本周·我的", v:fmtMinutesShort(w.mineWeek || 0)},
       {k:"本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
     ];
     reviewHoursEl.innerHTML = hcards.map(function(x){
@@ -7054,7 +7096,7 @@ $("weekNext").addEventListener("click", function(){
   if(state.reviewData && state.reviewData.weekOffset >= 0) return;
   navWeek(1);
 });
-$("btnCopy").addEventListener("click", function(){
+function copyReviewPlain(){
   var d = state.reviewData;
   if(!d){ toast("回顾还没加载完成", "warn"); return; }
   var progTasks = d.progressTasks || [];
@@ -7075,7 +7117,42 @@ $("btnCopy").addEventListener("click", function(){
           + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
       }).join("\n") : "（本周没有完成的任务）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
-});
+}
+function copyReviewAi(){
+  var d = state.reviewData;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
+  copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
+}
+(function wireCopyMenu(){
+  var btn = $("btnCopy"), menu = $("copyMenu");
+  if(!btn || !menu) return;
+  btn.addEventListener("click", function(){
+    if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+    UI.openPop(menu, btn, {align:"right"});
+  });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-copy]");
+    if(!b || b.disabled) return;
+    UI.closeAllPops();
+    if(b.dataset.copy === "ai") copyReviewAi(); else copyReviewPlain();
+  });
+})();
+
+/* 自动总结默认折叠成两行，点标题展开（IA-7：避免把下面的列表重写一遍） */
+(function wireSummaryToggle(){
+  var panel = $("summaryPanel"), head = $("summaryToggle"), hint = $("summaryToggleHint");
+  if(!panel || !head) return;
+  function toggle(){
+    var collapsed = panel.classList.toggle("collapsed");
+    head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if(hint) hint.textContent = collapsed ? "展开" : "收起";
+  }
+  head.addEventListener("click", toggle);
+  head.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+  });
+})();
 
 /* ==================== 周回顾 · AI 周报 ==================== */
 /* 口径：AI 只负责措辞 —— 完成数/按期率/工时这些数字全部由 /api/review 算好再喂给模型，
@@ -7096,6 +7173,8 @@ function aiReportIdle(){
   body.innerHTML = "";
   $("reviewAiUsage").textContent = "";
   $("btnAiReportCopy").hidden = true;
+  var aiItem0 = $("copyAiItem");
+  if(aiItem0){ aiItem0.disabled = true; aiItem0.textContent = "复制 AI 周报（尚未生成）"; }
   $("reviewAiHint").hidden = false;
   $("reviewAiMeta").textContent = "用你自己的模型额度";
 }
@@ -7121,6 +7200,8 @@ function renderAiReport(r){
   body.innerHTML = reportHTML(r.report);
   $("reviewAiHint").hidden = true;
   $("btnAiReportCopy").hidden = false;
+  var aiItem = $("copyAiItem");
+  if(aiItem){ aiItem.disabled = false; aiItem.textContent = "复制 AI 周报（纯文本）"; }
   $("reviewAiMeta").textContent = (r.label || "该周期") + "（" + (r.weekStart || "") + " — " + (r.weekEnd || "") + "）";
   var s = r.source || {};
   var based = "基于 " + (s.completed || 0) + " 项完成 / " + (s.progress || 0) + " 项进行中";
@@ -8185,12 +8266,14 @@ function renderBranches(){
   var st = branchStat();
   var meta = $("branchMeta");
   if(meta){
+    var cycle = branchCycleAvg();
     meta.textContent = st.total
       ? ("共 " + st.total + " 条 · 开发中 " + st.dev + " · 待测试 " + st.testing +
-         " · 待合并 " + st.merging + " · 已发布 " + st.released)
+         " · 待合并 " + st.merging + " · 已发布 " + st.released +
+         (cycle === null ? "" : (" · 平均发布周期 " + cycle + " 天")) +
+         (branchFilter ? ("　·　仅看「" + branchStatusMeta(branchFilter).name + "」（点列头取消）") : ""))
       : "";
   }
-  renderBranchFlow(st);
 
   if(!st.total){
     box.innerHTML = '<div class="br-emptyall">' +
@@ -8215,8 +8298,10 @@ function renderBranches(){
 
   box.innerHTML = BRANCH_STATUS.map(function(s){
     var items = rows.filter(function(b){ return b.status === s.id; });
+    var on = branchFilter === s.id;
     return '<div class="br-group" data-status="' + s.id + '">' +
-      '<div class="br-group-head">' +
+      '<div class="br-group-head' + (on ? " on" : "") + '" data-br-filter="' + s.id + '" role="button" tabindex="0"' +
+        ' aria-pressed="' + on + '" title="点击只看这一档；再点一次取消">' +
         '<i class="br-dot ' + s.cls + '"></i>' +
         '<span class="br-group-name">' + s.name + '</span>' +
         '<span class="br-group-n">' + items.length + '</span>' +
@@ -8227,25 +8312,6 @@ function renderBranches(){
       '</div>' +
     '</div>';
   }).join("");
-}
-
-function renderBranchFlow(st){
-  var box = $("branchFlow");
-  if(!box) return;
-  var cycle = branchCycleAvg();
-  box.innerHTML = BRANCH_STATUS.map(function(s){
-    var on = branchFilter === s.id;
-    return '<button class="br-flow-cell' + (on ? " on" : "") + '" type="button" data-br-filter="' + s.id + '"' +
-        ' aria-pressed="' + on + '">' +
-        '<i class="br-dot ' + s.cls + '"></i>' +
-        '<span class="bf-n">' + (st[s.id] || 0) + '</span>' +
-        '<span class="bf-l">' + s.name + '</span>' +
-      '</button>';
-  }).join("") +
-    '<div class="br-flow-cell static" title="已发布分支从创建到发布的平均天数">' +
-      '<span class="bf-n">' + (cycle === null ? "—" : cycle) + '</span>' +
-      '<span class="bf-l">平均发布周期' + (cycle === null ? "" : "（天）") + '</span>' +
-    '</div>';
 }
 
 function branchCardHTML(b){
@@ -9137,7 +9203,6 @@ if($("view-flow")){
 
 /* ==================== 回收站（§6.9） ==================== */
 var trashList = $("trashList");
-function enterTrashView(){ loadTrash(); }
 function loadTrash(opts){
   opts = opts || {};
   if(!opts.silent) trashList.innerHTML = UI.skeletonRows(4);
@@ -9281,39 +9346,34 @@ function enterSettingsView(){
   loadCatCfg();
   loadNotifyStatus();
   loadActivity();
-  initSetAnchor();
+  initSetTabs();
+  setSettingsTab(settingsTab);
 }
-function initSetAnchor(){
-  var links = document.querySelectorAll("#setAnchor a");
-  if(!document.getElementById("setAnchor").__wired){
-    document.getElementById("setAnchor").__wired = true;
-    links.forEach(function(a){
-      a.addEventListener("click", function(e){
-        e.preventDefault();
-        var el = document.querySelector(a.getAttribute("href"));
-        if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
-      });
-    });
-  }
-  var view = $("view-settings");
-  function spy(){
-    var panels = document.querySelectorAll(".set-panels .panel[id]");
-    var cur = panels.length ? panels[0].id : null;
-    var best = -1e9;
-    panels.forEach(function(p){
-      var top = p.getBoundingClientRect().top;
-      if(top - 140 <= 0 && top > best){ best = top; cur = p.id; }
-    });
-    links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href") === "#" + cur); });
-  }
-  if(!view.__spyWired){
-    view.__spyWired = true;
-    view.addEventListener("scroll", function(){
-      if(view.__spyRaf) return;
-      view.__spyRaf = requestAnimationFrame(function(){ view.__spyRaf = 0; spy(); });
-    }, {passive:true});
-  }
-  spy();
+/* IA-5：设置页改为 tabs；回收站并入「数据」，用户管理并入「账号」（仅管理员可见） */
+var settingsTab = "space";
+function setSettingsTab(tab){
+  var isAdmin = !!(currentUser && currentUser.role === "admin");
+  if(tab === "account" && !isAdmin) tab = "space";
+  settingsTab = tab;
+  document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
+    var on = b.dataset.setTab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll("#view-settings [data-set-pane]").forEach(function(p){
+    p.hidden = p.dataset.setPane !== tab;
+  });
+  if(tab === "data") loadTrash({silent:true});
+  if(tab === "account") enterUsersView();
+}
+function initSetTabs(){
+  var box = $("setTabs");
+  if(!box || box.__wired) return;
+  box.__wired = true;
+  box.addEventListener("click", function(e){
+    var b = e.target.closest("[data-set-tab]");
+    if(b) setSettingsTab(b.dataset.setTab);
+  });
 }
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
@@ -10011,7 +10071,7 @@ function renderShortcutRows(){
       '<span class="di-main"><span class="di-m">' + esc(r[1]) + '</span></span></div>';
   }).join("");
 }
-$("kbdBody").innerHTML = renderShortcutRows();
+if($("kbdBody")) $("kbdBody").innerHTML = renderShortcutRows();
 if($("helpBody")) $("helpBody").innerHTML = renderShortcutRows();
 function openHelp(){
   if(!$("dlgHelp")) return;
@@ -10270,11 +10330,8 @@ function loadMe(){
   API.get("/api/auth/me").then(function(u){
     currentUser = u;
     if(u.displayName) OWNER_DEFAULT = u.displayName;
-    var navAU = $("navAdminUsers");
-    if(navAU) navAU.hidden = u.role !== "admin";
-    if(u.role !== "admin" && activeView === "users" && userListEl){
-      userListEl.innerHTML = '<div class="foot-note">仅管理员可访问用户管理</div>';
-    }
+    var tabAcc = $("setTabAccount");
+    if(tabAcc) tabAcc.hidden = u.role !== "admin";
     renderSideUser(u);
     /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
     flushMeReady();

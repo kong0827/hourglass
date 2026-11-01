@@ -356,9 +356,11 @@ a:hover{text-decoration:underline;}
 .nav-item.on svg{color:var(--primary);}
 .nav-dot{
   margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);
-  background:var(--danger);color:#fff;font-size:11px;font-weight:700;
+  background:var(--text-3);color:var(--bg);font-size:11px;font-weight:700;
   display:inline-grid;place-items:center;font-variant-numeric:tabular-nums;
 }
+/* 只有「我的任务」需要紧迫感：逾期 + 今日到期用红色，其余角标保持中性灰 */
+.nav-dot.urgent{background:var(--danger);color:#fff;}
 
 /* 底部 48px */
 .side-foot{
@@ -2388,6 +2390,34 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   .br-groups,.br-flow{grid-template-columns:1fr;}
 }
 
+/* IA-5：设置页 tabs（原长页锚点导航改为分区切换） */
+#view-settings .set-layout{grid-template-columns:1fr;gap:0;}
+.set-tabs{
+  display:flex;gap:4px;flex-wrap:wrap;align-items:center;
+  border-bottom:1px solid var(--border);margin:0 0 16px;padding-top:8px;
+  position:sticky;top:0;z-index:3;background:var(--bg);
+}
+.set-tab{
+  height:34px;padding:0 13px;border-radius:var(--r-sm) var(--r-sm) 0 0;border:none;background:none;
+  font-size:13px;font-weight:600;color:var(--text-3);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.set-tab:hover{color:var(--text);background:var(--surface-hover);}
+.set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);}
+#view-settings [data-set-pane][hidden]{display:none;}
+
+/* IA-7：分支列头即筛选入口（顶部状态格子已删除，避免与列头计数重复） */
+.br-group-head{cursor:pointer;border-radius:var(--r-sm);}
+.br-group-head:hover{background:var(--surface-hover);}
+.br-group-head.on{background:var(--primary-soft);}
+
+/* IA-7：自动总结默认折叠两行，点标题展开 */
+.summary-panel .sh{cursor:pointer;}
+.summary-panel.collapsed p{
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.summary-panel .sh .meta-right{margin-left:auto;font-size:12px;font-weight:600;color:var(--primary-fg);opacity:.75;}
+
 </style>
 <style>
 /* ==========================================================================
@@ -2924,7 +2954,6 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       <button class="nav-item" type="button" data-view="projects">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.4A1.8 1.8 0 0 1 5 3.6h8l4 4v8a1.8 1.8 0 0 1-1.8 1.8H5A1.8 1.8 0 0 1 3.2 15.6Z"/><path d="M12.6 3.6v4.2h4.2"/></svg>
         <span class="nl">项目</span>
-        <span class="nav-dot" id="reqDot" hidden>0</span>
       </button>
       <button class="nav-item" type="button" data-view="requirements">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.6h6.2l3.4 3.4v9.4H5.4Z"/><path d="M11.4 3.6V7h3.4"/><path d="M7.6 10.4h4.8M7.6 13h3.2"/></svg>
@@ -2955,19 +2984,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       </button>
 
       <span class="nav-sec">管理</span>
-      <button class="nav-item" type="button" data-view="trash">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
-        <span class="nl">回收站</span>
-      </button>
       <button class="nav-item" type="button" data-view="settings">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
         <span class="nl">设置</span>
       </button>
-      <button class="nav-item" type="button" data-view="users" id="navAdminUsers" hidden>
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/></svg>
-        <span class="nl">用户管理</span>
-      </button>
-    </nav>
+      </nav>
 
     <div class="side-foot">
       <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
@@ -3123,7 +3144,6 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       <section class="view" id="view-mine" aria-label="我的任务">
         <div class="view-page wide">
           <div class="page-toolbar">
-            <span class="toolbar-title">我的任务</span>
             <span class="toolbar-meta" id="mineMeta">—</span>
             <span class="toolbar-right">
               <label class="row row-gap" style="gap:6px">
@@ -3192,6 +3212,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               <span></span>
             </div>
             <div class="list-body" id="listBody"></div>
+
           </div>
         </div>
       </section>
@@ -3524,10 +3545,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             </span>
           </div>
 
-          <!-- 四个状态格子：点一下只看这一档；再点一次取消 -->
-          <div class="br-flow" id="branchFlow"></div>
-
-          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布 -->
+          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布（计数已在列头与顶栏，不再重复放一排状态格子） -->
           <div class="br-groups" id="branchGroups"></div>
         </div>
 
@@ -3583,17 +3601,25 @@ body.dragging-active{cursor:grabbing;user-select:none;}
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3l4 4-4 4"/></svg>
                 </button>
               </span>
-              <button class="btn sm" type="button" id="btnCopy">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
-                复制总结
-              </button>
+              <div style="position:relative">
+                <button class="btn sm" type="button" id="btnCopy" aria-haspopup="true" aria-expanded="false">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
+                  复制
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+                </button>
+                <div class="menu" id="copyMenu" hidden style="right:0;top:calc(100% + 6px)">
+                  <button class="menu-item" type="button" data-copy="plain">复制总结（纯文本）</button>
+                  <button class="menu-item" type="button" data-copy="ai" id="copyAiItem" disabled>复制 AI 周报（尚未生成）</button>
+                </div>
+              </div>
             </span>
           </div>
 
-          <div class="summary-panel">
-            <div class="sh">
+          <div class="summary-panel collapsed" id="summaryPanel">
+            <div class="sh" role="button" tabindex="0" id="summaryToggle" aria-expanded="false">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 9.9 6l4.8.4-3.6 3.1 1.1 4.7L8 11.7l-4.2 2.5 1.1-4.7L1.3 6.4 6.1 6 8 1.6Z"/></svg>
               自动总结
+              <span class="meta-right" id="summaryToggleHint">展开</span>
             </div>
             <p id="summaryText">—</p>
           </div>
@@ -3624,7 +3650,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
           <div class="panel">
             <div class="panel-head">
               <h3>工时</h3>
-              <span class="meta-right" id="reviewHoursScope">全空间合计 + 我的</span>
+              <span class="meta-right" id="reviewHoursScope">本周 · 我的 / 全空间</span>
             </div>
             <div class="stat-grid" id="reviewHours"></div>
           </div>
@@ -3722,7 +3748,6 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div class="panel-head">
               <h3>工时</h3>
               <span class="meta-right row row-gap" style="gap:8px">
-                <span class="scope-tag" id="workScopeTag">统计范围</span>
                 <span class="seg scope" id="segWorkScope">
                   <button type="button" data-wscope="mine" aria-pressed="true">仅我</button>
                   <button type="button" data-wscope="all" aria-pressed="false">全空间</button>
@@ -3805,58 +3830,25 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         </div>
       </section>
 
-      <!-- ===== 回收站 ===== -->
-      <section class="view" id="view-trash" aria-label="回收站">
-        <div class="view-page wide">
-          <p class="foot-note" style="padding-top:16px">删除的任务保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回</p>
-          <div class="trash-list" id="trashList"></div>
-        </div>
-      </section>
+      
 
-      <!-- ===== 用户管理（仅管理员） ===== -->
-      <section class="view" id="view-users" aria-label="用户管理">
-        <div class="view-page wide">
-          <div class="panel">
-            <div class="panel-head"><h3>账号列表</h3></div>
-            <div class="notice">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
-              <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
-            </div>
-            <div class="user-list" id="userList" style="margin-top:12px"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>新增用户</h3></div>
-            <div class="user-add">
-              <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" />
-              <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" />
-              <input class="input" type="password" id="uNewPass" maxlength="64" placeholder="初始密码（≥6 位）" />
-              <select class="select" id="uNewRole" aria-label="角色">
-                <option value="user">成员</option>
-                <option value="admin">管理员</option>
-              </select>
-              <button class="btn primary" type="button" id="btnUserAdd">创建</button>
-            </div>
-            <p class="set-hint" style="margin:12px 0 0">成员角色只能管理自己的数据与参与的空间；管理员另可管理全部账号（本页）。</p>
-          </div>
-        </div>
-      </section>
+      
 
       <!-- ===== 设置 ===== -->
       <section class="view" id="view-settings" aria-label="设置">
         <div class="set-layout">
-          <nav class="set-anchor" id="setAnchor" aria-label="设置分区">
-            <a href="#set-ws">空间信息</a>
-            <a href="#set-notify">通知推送</a>
-            <a href="#set-members">成员与邀请</a>
-            <a href="#set-columns">看板列</a>
-            <a href="#set-cats">分类</a>
-            <a href="#set-data">数据</a>
-            <a href="#set-activity">活动</a>
-          </nav>
+                    <div class="set-tabs" id="setTabs" role="tablist" aria-label="设置分区">
+            <button class="set-tab on" type="button" role="tab" aria-selected="true" data-set-tab="space">空间</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="workflow">工作流</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="integration">集成</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="data">数据</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="activity">活动</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="account" id="setTabAccount" hidden>账号</button>
+          </div>
 
           <div class="set-panels">
 
-            <div class="panel" id="set-ws">
+            <div class="panel" data-set-pane="space" id="set-ws">
               <div class="panel-head">
                 <h3>空间信息</h3>
                 <span class="meta-right" id="wsTypeHint">加载中…</span>
@@ -3876,7 +3868,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               </div>
             </div>
 
-            <div class="panel" id="set-notify">
+            <div class="panel" data-set-pane="integration" id="set-notify">
               <div class="panel-head">
                 <h3>通知推送</h3>
                 <span class="meta-right">服务端推送渠道</span>
@@ -3930,7 +3922,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               </div>
             </div>
 
-            <div class="panel" id="set-members">
+            <div class="panel" data-set-pane="space" id="set-members">
               <div class="panel-head">
                 <h3>成员</h3>
                 <span class="meta-right" id="wsMemberCount"></span>
@@ -3952,7 +3944,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               </div>
             </div>
 
-            <div class="panel" id="set-columns">
+            <div class="panel" data-set-pane="workflow" id="set-columns">
               <div class="panel-head">
                 <h3>看板列</h3>
                 <span class="meta-right">拖拽/按钮调整顺序</span>
@@ -3966,7 +3958,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               </div>
             </div>
 
-            <div class="panel" id="set-cats">
+            <div class="panel" data-set-pane="workflow" id="set-cats">
               <div class="panel-head">
                 <h3>分类</h3>
                 <span class="meta-right" id="catCount"></span>
@@ -3980,7 +3972,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               </div>
             </div>
 
-            <div class="panel" id="set-data">
+            <div class="panel" data-set-pane="data" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
                 <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论、依赖/基线、需求文档与分支（不含附件文件与时间线）">
@@ -4005,7 +3997,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
-            <div class="panel" id="set-activity">
+            <div class="panel" data-set-pane="activity" id="set-activity">
               <div class="panel-head">
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
@@ -4014,21 +4006,34 @@ body.dragging-active{cursor:grabbing;user-select:none;}
               <div class="act-list" id="actList"></div>
             </div>
 
-            <div class="panel">
-              <div class="panel-head">
-                <h3>快捷键</h3>
-                <span class="meta-right">点击标题展开</span>
-              </div>
-              <div class="drawer-sect collapsed" id="kbdSect" style="border-top:none;padding-top:0;margin-top:0">
-                <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-                  <h3 style="font-size:14px">全部快捷键</h3>
-                  <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-                </div>
-                <div class="drawer-sect-body" id="kbdBody"></div>
-              </div>
-            </div>
+            <div class="panel" data-set-pane="data" id="set-trash">
+                          <div class="panel-head"><h3>回收站</h3><span class="meta-right">30 天自动清理</span></div>
+                          <p class="set-hint">删除的任务保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
+                          <div class="trash-list" id="trashList"></div>
+                        </div>
+            
+                        <div class="panel" data-set-pane="account" id="set-account">
+                          <div class="panel-head"><h3>账号管理</h3><span class="meta-right">仅平台管理员</span></div>
+                          <div class="notice">
+                            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
+                            <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
+                          </div>
+                          <div class="user-list" id="userList" style="margin-top:12px"></div>
+                          <div class="panel-head" style="margin-top:20px"><h3 style="font-size:14px">新增用户</h3></div>
+                          <div class="user-add">
+                            <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" />
+                            <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" />
+                            <input class="input" type="password" id="uNewPass" maxlength="64" placeholder="初始密码（≥6 位）" />
+                            <select class="select" id="uNewRole" aria-label="角色">
+                              <option value="user">成员</option>
+                              <option value="admin">管理员</option>
+                            </select>
+                            <button class="btn primary" type="button" id="btnUserAdd">创建</button>
+                          </div>
+                          <p class="set-hint" style="margin:12px 0 0">成员角色只能管理自己的数据与参与的空间；管理员另可管理全部账号（本页）。</p>
+                        </div>
 
-          </div>
+                      </div>
         </div>
       </section>
 
@@ -6587,7 +6592,7 @@ var listCache = {};
 var listSeq = 0;
 var listSelected = {};
 var listTotal = 0;
-var calState = {year:null, month:null, tasks:[], selected:null, seq:0};
+var calState = {year:null, month:null, tasks:[], selected:null, seq:0, showDone:{}};
 var reviewSeq = 0, reviewTarget = null;
 
 function safeColor(c){
@@ -6635,7 +6640,7 @@ var chipsOwner = $("chipsOwner"), chipsPri = $("chipsPri");
 var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var viewBox = $("viewBox");
-var reqListEl = $("reqList"), reqDot = $("reqDot");
+var reqListEl = $("reqList");
 var branchDot = $("branchDot");
 /* 报告增量（O-1/O-4/O-5/O-6/O-9/O-10/O-11/O-12/N-1/N-3/N-4/N-6）新增引用 */
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
@@ -6674,16 +6679,17 @@ var VIEWS = {
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:enterProjectsView },
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
-  review:   { title:"工作回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
+  review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
   completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
-  stats:    { title:"统计报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
+  stats:    { title:"报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
   flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
-  trash:    { title:"回收站",   sub:"删除的任务保留 30 天，之后自动清理", enter:enterTrashView },
-  users:    { title:"用户管理", sub:"账号由管理员创建下发；成员可凭邀请链接自助加入", enter:enterUsersView },
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
 function showView(name){
+  /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
+  if(name === "trash"){ showView("settings"); setSettingsTab("data"); return; }
+  if(name === "users"){ showView("settings"); setSettingsTab("account"); return; }
   if(!VIEWS[name]) return;
   activeView = name;
   document.body.dataset.view = name;
@@ -6741,8 +6747,6 @@ function refreshActiveView(){
   if(activeView === "calendar") loadCalendar({silent:true});
   else if(activeView === "gantt") loadGantt({silent:true});
   else if(activeView === "list") loadList({silent:true});
-  else if(activeView === "trash") loadTrash({silent:true});
-  else if(activeView === "users") loadUsers(true);
   else if(activeView === "stats") loadStats({silent:true});
   else if(activeView === "flow") loadFlowHealth({silent:true});
   else if(activeView === "projects") loadReqs();
@@ -6750,6 +6754,10 @@ function refreshActiveView(){
   else if(activeView === "completions") loadCompletions({silent:true});
   else if(activeView === "requirements") loadReqDocs();
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
+  else if(activeView === "settings"){
+    if(settingsTab === "data") loadTrash({silent:true});
+    if(settingsTab === "account") loadUsers(true);
+  }
 }
 $("sideNav").addEventListener("click", function(e){
   var b = e.target.closest("[data-view]");
@@ -7733,8 +7741,6 @@ function renderFilterChips(){
     renderOwnerChips(meta);
     renderPriChips(meta);
     renderMoreFilter(meta);
-    var reqsMeta = meta.reqs || [];
-    if(reqDot){ reqDot.textContent = reqsMeta.length; reqDot.hidden = reqsMeta.length === 0; }
   }else{
     chipsOwner.innerHTML = "";
     chipsPri.innerHTML = "";
@@ -9922,7 +9928,7 @@ function enterCalendarView(){
   if(calState.selected === null) calState.selected = iso(TODAY);
   loadCalendar();
 }
-function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar(); }
+function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar({silent:true}); }
 function refreshGanttIfOpen(){ if(activeView === "gantt") loadGantt({silent:true}); }
 function calShift(delta){
   calState.month += delta;
@@ -9938,7 +9944,8 @@ function loadCalendar(opts){
     calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
     calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
   }
-  API.get("/api/calendar", {year: calState.year, month: calState.month}).then(function(d){
+  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 关键词 / 到期） */
+  API.get("/api/calendar", boardParams({year: calState.year, month: calState.month})).then(function(d){
     if(seq !== calState.seq) return;
     calState.year = d.year;
     calState.month = d.month;
@@ -9975,9 +9982,7 @@ function renderCalendar(){
   /* 按 [开始日期, 截止日期] 区间逐日铺开：正在做的任务每天都应该出现在日历上。
      没填开始日期（或开始晚于截止）就只占截止日那一格，与升级前行为一致。 */
   var byDay = {};
-  var q = (state.q || "").toLowerCase();
   calState.tasks.forEach(function(t){
-    if(q && [t.title, t.description, t.note].join(" ").toLowerCase().indexOf(q) === -1) return;
     var range = calRangeOf(t);
     if(!range) return;
     var begin = range.begin, end = range.end;
@@ -10000,8 +10005,13 @@ function renderCalendar(){
     if(dateIso === TODAY_ISO) cls += " today";
     if(calState.selected === dateIso) cls += " sel";
     var chips = "";
-    for(var k = 0; k < Math.min(list.length, 3); k++){
-      var it = list[k], t = it.t;
+    /* IA-4：已完成默认折叠，只显示「+n 已完成」；点开后当天才展开（避免格子被历史完成项塞满） */
+    var doneItems = list.filter(function(it){ return it.t.boardColumn === "done"; });
+    var openItems = list.filter(function(it){ return it.t.boardColumn !== "done"; });
+    var expanded = !!calState.showDone[dateIso];
+    var visible = expanded ? list : openItems;
+    for(var k = 0; k < Math.min(visible.length, 3); k++){
+      var it = visible[k], t = it.t;
       var kind = dueState(t).kind;
       /* 已完成的任务在区间内每一格都显示完成日；未完成才提示"进行中，截止 X" */
       var tip = (it.isEnd || kind === "done") ? dueText(t) : ("进行中，截止 " + t.dueDate);
@@ -10011,7 +10021,11 @@ function renderCalendar(){
         '" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + tip) + '">' +
         '<i class="cbar"></i>' + esc(t.title) + '</button>';
     }
-    if(list.length > 3) chips += '<span class="cal-more">+' + (list.length - 3) + ' 更多</span>';
+    if(visible.length > 3) chips += '<span class="cal-more">+' + (visible.length - 3) + ' 更多</span>';
+    if(doneItems.length && !expanded){
+      chips += '<button type="button" class="cal-chip done cal-done-toggle" data-cal-show-done="' + dateIso +
+        '" title="展开当天已完成的任务">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
+    }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
       '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' +
         icon("plus", 12) + '</button>' +
@@ -10082,13 +10096,24 @@ function renderCalDayList(){
     return !!range && selIso >= range.begin && selIso <= range.end;
   });
   list.forEach(function(t){ taskCacheExtra[t.id] = t; });
+  var openList = list.filter(function(t){ return t.boardColumn !== "done"; });
+  var doneList = list.filter(function(t){ return t.boardColumn === "done"; });
+  var showDone = !!calState.showDone[selIso];
   var html = '<div class="cal-side-head">' +
       '<h3>' + fmtMD(sel) + ' ' + weekdayCN(sel) + '</h3>' +
       '<span class="foot-note">共 ' + list.length + ' 项任务</span>' +
     '</div>';
-  html += '<div class="cal-side-list">' + (list.length
-    ? list.map(function(t){ return cardHTML(t, 0); }).join("")
-    : '<div class="col-empty">当日没有到期或在做的任务</div>') + '</div>';
+  html += '<div class="cal-side-list">' + (openList.length
+    ? openList.map(function(t){ return cardHTML(t, 0); }).join("")
+    : '<div class="col-empty">当日没有进行中的任务</div>');
+  if(doneList.length){
+    html += '<button class="btn sm ghost cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
+      (showDone ? "收起已完成" : "展开 " + doneList.length + " 项已完成") + '</button>';
+    if(showDone){
+      html += doneList.map(function(t){ return cardHTML(t, 0); }).join("");
+    }
+  }
+  html += '</div>';
   calDayList.innerHTML = html;
   wireCardContainer(calDayList);
   UI.wireTooltips(calDayList);
@@ -10105,6 +10130,15 @@ $("calToday").addEventListener("click", function(){
 calGrid.addEventListener("click", function(e){
   var addBtn = e.target.closest("[data-cal-add]");
   if(addBtn){ e.stopPropagation(); openNewTaskOnDate(addBtn.dataset.calAdd); return; }
+  var doneToggle = e.target.closest("[data-cal-show-done]");
+  if(doneToggle){
+    e.stopPropagation();
+    var dayIso = doneToggle.dataset.calShowDone;
+    calState.showDone[dayIso] = !calState.showDone[dayIso];
+    calState.selected = dayIso;
+    renderCalendar();
+    return;
+  }
   var chip = e.target.closest("[data-cal-id]");
   if(chip){
     e.stopPropagation();
@@ -10127,6 +10161,12 @@ calGrid.addEventListener("keydown", function(e){
   renderCalendar();
 });
 calDayList.addEventListener("click", function(e){
+  var more = e.target.closest("[data-cal-side-done]");
+  if(more){
+    calState.showDone[more.dataset.calSideDone] = !calState.showDone[more.dataset.calSideDone];
+    renderCalendar();
+    return;
+  }
   if(e.target.closest("button,a")) return;
   var card = e.target.closest(".card");
   if(!card) return;
@@ -13099,9 +13139,16 @@ function renderMine(d){
       (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(mineDot){
-    var n = all.length;
+    /* IA-7：角标只统计「逾期 + 今日到期」，不再是全部条数 */
+    var n = 0;
+    all.forEach(function(t){
+      if(t.boardColumn === "done") return;
+      var k = dueState(t).kind;
+      if(k === "over" || k === "today") n++;
+    });
     mineDot.textContent = n > 99 ? "99+" : n;
     mineDot.hidden = n === 0;
+    mineDot.classList.add("urgent");
   }
   if(!all.length){
     mineBody.innerHTML = UI.emptyState({
@@ -13338,9 +13385,9 @@ function renderReview(d){
   /* N-5：工时区（全空间 / 我的） */
   if(reviewHoursEl){
     var w = d.workMinutes || {};
+    /* IA-7：只保留本周两个口径；累计工时挪到分析页 */
     var hcards = [
-      {k:"全空间累计", v:fmtMinutesShort(w.space || 0)},
-      {k:"我的累计", v:fmtMinutesShort(w.mine || 0)},
+      {k:"本周·我的", v:fmtMinutesShort(w.mineWeek || 0)},
       {k:"本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
     ];
     reviewHoursEl.innerHTML = hcards.map(function(x){
@@ -13428,7 +13475,7 @@ $("weekNext").addEventListener("click", function(){
   if(state.reviewData && state.reviewData.weekOffset >= 0) return;
   navWeek(1);
 });
-$("btnCopy").addEventListener("click", function(){
+function copyReviewPlain(){
   var d = state.reviewData;
   if(!d){ toast("回顾还没加载完成", "warn"); return; }
   var progTasks = d.progressTasks || [];
@@ -13449,7 +13496,42 @@ $("btnCopy").addEventListener("click", function(){
           + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
       }).join("\n") : "（本周没有完成的任务）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
-});
+}
+function copyReviewAi(){
+  var d = state.reviewData;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
+  copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
+}
+(function wireCopyMenu(){
+  var btn = $("btnCopy"), menu = $("copyMenu");
+  if(!btn || !menu) return;
+  btn.addEventListener("click", function(){
+    if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+    UI.openPop(menu, btn, {align:"right"});
+  });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-copy]");
+    if(!b || b.disabled) return;
+    UI.closeAllPops();
+    if(b.dataset.copy === "ai") copyReviewAi(); else copyReviewPlain();
+  });
+})();
+
+/* 自动总结默认折叠成两行，点标题展开（IA-7：避免把下面的列表重写一遍） */
+(function wireSummaryToggle(){
+  var panel = $("summaryPanel"), head = $("summaryToggle"), hint = $("summaryToggleHint");
+  if(!panel || !head) return;
+  function toggle(){
+    var collapsed = panel.classList.toggle("collapsed");
+    head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if(hint) hint.textContent = collapsed ? "展开" : "收起";
+  }
+  head.addEventListener("click", toggle);
+  head.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+  });
+})();
 
 /* ==================== 周回顾 · AI 周报 ==================== */
 /* 口径：AI 只负责措辞 —— 完成数/按期率/工时这些数字全部由 /api/review 算好再喂给模型，
@@ -13470,6 +13552,8 @@ function aiReportIdle(){
   body.innerHTML = "";
   $("reviewAiUsage").textContent = "";
   $("btnAiReportCopy").hidden = true;
+  var aiItem0 = $("copyAiItem");
+  if(aiItem0){ aiItem0.disabled = true; aiItem0.textContent = "复制 AI 周报（尚未生成）"; }
   $("reviewAiHint").hidden = false;
   $("reviewAiMeta").textContent = "用你自己的模型额度";
 }
@@ -13495,6 +13579,8 @@ function renderAiReport(r){
   body.innerHTML = reportHTML(r.report);
   $("reviewAiHint").hidden = true;
   $("btnAiReportCopy").hidden = false;
+  var aiItem = $("copyAiItem");
+  if(aiItem){ aiItem.disabled = false; aiItem.textContent = "复制 AI 周报（纯文本）"; }
   $("reviewAiMeta").textContent = (r.label || "该周期") + "（" + (r.weekStart || "") + " — " + (r.weekEnd || "") + "）";
   var s = r.source || {};
   var based = "基于 " + (s.completed || 0) + " 项完成 / " + (s.progress || 0) + " 项进行中";
@@ -14559,12 +14645,14 @@ function renderBranches(){
   var st = branchStat();
   var meta = $("branchMeta");
   if(meta){
+    var cycle = branchCycleAvg();
     meta.textContent = st.total
       ? ("共 " + st.total + " 条 · 开发中 " + st.dev + " · 待测试 " + st.testing +
-         " · 待合并 " + st.merging + " · 已发布 " + st.released)
+         " · 待合并 " + st.merging + " · 已发布 " + st.released +
+         (cycle === null ? "" : (" · 平均发布周期 " + cycle + " 天")) +
+         (branchFilter ? ("　·　仅看「" + branchStatusMeta(branchFilter).name + "」（点列头取消）") : ""))
       : "";
   }
-  renderBranchFlow(st);
 
   if(!st.total){
     box.innerHTML = '<div class="br-emptyall">' +
@@ -14589,8 +14677,10 @@ function renderBranches(){
 
   box.innerHTML = BRANCH_STATUS.map(function(s){
     var items = rows.filter(function(b){ return b.status === s.id; });
+    var on = branchFilter === s.id;
     return '<div class="br-group" data-status="' + s.id + '">' +
-      '<div class="br-group-head">' +
+      '<div class="br-group-head' + (on ? " on" : "") + '" data-br-filter="' + s.id + '" role="button" tabindex="0"' +
+        ' aria-pressed="' + on + '" title="点击只看这一档；再点一次取消">' +
         '<i class="br-dot ' + s.cls + '"></i>' +
         '<span class="br-group-name">' + s.name + '</span>' +
         '<span class="br-group-n">' + items.length + '</span>' +
@@ -14601,25 +14691,6 @@ function renderBranches(){
       '</div>' +
     '</div>';
   }).join("");
-}
-
-function renderBranchFlow(st){
-  var box = $("branchFlow");
-  if(!box) return;
-  var cycle = branchCycleAvg();
-  box.innerHTML = BRANCH_STATUS.map(function(s){
-    var on = branchFilter === s.id;
-    return '<button class="br-flow-cell' + (on ? " on" : "") + '" type="button" data-br-filter="' + s.id + '"' +
-        ' aria-pressed="' + on + '">' +
-        '<i class="br-dot ' + s.cls + '"></i>' +
-        '<span class="bf-n">' + (st[s.id] || 0) + '</span>' +
-        '<span class="bf-l">' + s.name + '</span>' +
-      '</button>';
-  }).join("") +
-    '<div class="br-flow-cell static" title="已发布分支从创建到发布的平均天数">' +
-      '<span class="bf-n">' + (cycle === null ? "—" : cycle) + '</span>' +
-      '<span class="bf-l">平均发布周期' + (cycle === null ? "" : "（天）") + '</span>' +
-    '</div>';
 }
 
 function branchCardHTML(b){
@@ -15511,7 +15582,6 @@ if($("view-flow")){
 
 /* ==================== 回收站（§6.9） ==================== */
 var trashList = $("trashList");
-function enterTrashView(){ loadTrash(); }
 function loadTrash(opts){
   opts = opts || {};
   if(!opts.silent) trashList.innerHTML = UI.skeletonRows(4);
@@ -15655,39 +15725,34 @@ function enterSettingsView(){
   loadCatCfg();
   loadNotifyStatus();
   loadActivity();
-  initSetAnchor();
+  initSetTabs();
+  setSettingsTab(settingsTab);
 }
-function initSetAnchor(){
-  var links = document.querySelectorAll("#setAnchor a");
-  if(!document.getElementById("setAnchor").__wired){
-    document.getElementById("setAnchor").__wired = true;
-    links.forEach(function(a){
-      a.addEventListener("click", function(e){
-        e.preventDefault();
-        var el = document.querySelector(a.getAttribute("href"));
-        if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
-      });
-    });
-  }
-  var view = $("view-settings");
-  function spy(){
-    var panels = document.querySelectorAll(".set-panels .panel[id]");
-    var cur = panels.length ? panels[0].id : null;
-    var best = -1e9;
-    panels.forEach(function(p){
-      var top = p.getBoundingClientRect().top;
-      if(top - 140 <= 0 && top > best){ best = top; cur = p.id; }
-    });
-    links.forEach(function(a){ a.classList.toggle("on", a.getAttribute("href") === "#" + cur); });
-  }
-  if(!view.__spyWired){
-    view.__spyWired = true;
-    view.addEventListener("scroll", function(){
-      if(view.__spyRaf) return;
-      view.__spyRaf = requestAnimationFrame(function(){ view.__spyRaf = 0; spy(); });
-    }, {passive:true});
-  }
-  spy();
+/* IA-5：设置页改为 tabs；回收站并入「数据」，用户管理并入「账号」（仅管理员可见） */
+var settingsTab = "space";
+function setSettingsTab(tab){
+  var isAdmin = !!(currentUser && currentUser.role === "admin");
+  if(tab === "account" && !isAdmin) tab = "space";
+  settingsTab = tab;
+  document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
+    var on = b.dataset.setTab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll("#view-settings [data-set-pane]").forEach(function(p){
+    p.hidden = p.dataset.setPane !== tab;
+  });
+  if(tab === "data") loadTrash({silent:true});
+  if(tab === "account") enterUsersView();
+}
+function initSetTabs(){
+  var box = $("setTabs");
+  if(!box || box.__wired) return;
+  box.__wired = true;
+  box.addEventListener("click", function(e){
+    var b = e.target.closest("[data-set-tab]");
+    if(b) setSettingsTab(b.dataset.setTab);
+  });
 }
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
@@ -16385,7 +16450,7 @@ function renderShortcutRows(){
       '<span class="di-main"><span class="di-m">' + esc(r[1]) + '</span></span></div>';
   }).join("");
 }
-$("kbdBody").innerHTML = renderShortcutRows();
+if($("kbdBody")) $("kbdBody").innerHTML = renderShortcutRows();
 if($("helpBody")) $("helpBody").innerHTML = renderShortcutRows();
 function openHelp(){
   if(!$("dlgHelp")) return;
@@ -16644,11 +16709,8 @@ function loadMe(){
   API.get("/api/auth/me").then(function(u){
     currentUser = u;
     if(u.displayName) OWNER_DEFAULT = u.displayName;
-    var navAU = $("navAdminUsers");
-    if(navAU) navAU.hidden = u.role !== "admin";
-    if(u.role !== "admin" && activeView === "users" && userListEl){
-      userListEl.innerHTML = '<div class="foot-note">仅管理员可访问用户管理</div>';
-    }
+    var tabAcc = $("setTabAccount");
+    if(tabAcc) tabAcc.hidden = u.role !== "admin";
     renderSideUser(u);
     /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
     flushMeReady();
@@ -17727,6 +17789,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 11:53</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 12:06</span></div>
 </body>
 </html>

@@ -95,7 +95,6 @@
       <button class="nav-item" type="button" data-view="projects">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.4A1.8 1.8 0 0 1 5 3.6h8l4 4v8a1.8 1.8 0 0 1-1.8 1.8H5A1.8 1.8 0 0 1 3.2 15.6Z"/><path d="M12.6 3.6v4.2h4.2"/></svg>
         <span class="nl">项目</span>
-        <span class="nav-dot" id="reqDot" hidden>0</span>
       </button>
       <button class="nav-item" type="button" data-view="requirements">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.6h6.2l3.4 3.4v9.4H5.4Z"/><path d="M11.4 3.6V7h3.4"/><path d="M7.6 10.4h4.8M7.6 13h3.2"/></svg>
@@ -126,19 +125,11 @@
       </button>
 
       <span class="nav-sec">管理</span>
-      <button class="nav-item" type="button" data-view="trash">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
-        <span class="nl">回收站</span>
-      </button>
       <button class="nav-item" type="button" data-view="settings">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
         <span class="nl">设置</span>
       </button>
-      <button class="nav-item" type="button" data-view="users" id="navAdminUsers" hidden>
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/></svg>
-        <span class="nl">用户管理</span>
-      </button>
-    </nav>
+      </nav>
 
     <div class="side-foot">
       <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
@@ -294,7 +285,6 @@
       <section class="view" id="view-mine" aria-label="我的任务">
         <div class="view-page wide">
           <div class="page-toolbar">
-            <span class="toolbar-title">我的任务</span>
             <span class="toolbar-meta" id="mineMeta">—</span>
             <span class="toolbar-right">
               <label class="row row-gap" style="gap:6px">
@@ -363,6 +353,7 @@
               <span></span>
             </div>
             <div class="list-body" id="listBody"></div>
+
           </div>
         </div>
       </section>
@@ -695,10 +686,7 @@
             </span>
           </div>
 
-          <!-- 四个状态格子：点一下只看这一档；再点一次取消 -->
-          <div class="br-flow" id="branchFlow"></div>
-
-          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布 -->
+          <!-- 四列分组：开发中 / 待测试 / 待合并 / 已发布（计数已在列头与顶栏，不再重复放一排状态格子） -->
           <div class="br-groups" id="branchGroups"></div>
         </div>
 
@@ -754,17 +742,25 @@
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3l4 4-4 4"/></svg>
                 </button>
               </span>
-              <button class="btn sm" type="button" id="btnCopy">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
-                复制总结
-              </button>
+              <div style="position:relative">
+                <button class="btn sm" type="button" id="btnCopy" aria-haspopup="true" aria-expanded="false">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
+                  复制
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+                </button>
+                <div class="menu" id="copyMenu" hidden style="right:0;top:calc(100% + 6px)">
+                  <button class="menu-item" type="button" data-copy="plain">复制总结（纯文本）</button>
+                  <button class="menu-item" type="button" data-copy="ai" id="copyAiItem" disabled>复制 AI 周报（尚未生成）</button>
+                </div>
+              </div>
             </span>
           </div>
 
-          <div class="summary-panel">
-            <div class="sh">
+          <div class="summary-panel collapsed" id="summaryPanel">
+            <div class="sh" role="button" tabindex="0" id="summaryToggle" aria-expanded="false">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 9.9 6l4.8.4-3.6 3.1 1.1 4.7L8 11.7l-4.2 2.5 1.1-4.7L1.3 6.4 6.1 6 8 1.6Z"/></svg>
               自动总结
+              <span class="meta-right" id="summaryToggleHint">展开</span>
             </div>
             <p id="summaryText">—</p>
           </div>
@@ -795,7 +791,7 @@
           <div class="panel">
             <div class="panel-head">
               <h3>工时</h3>
-              <span class="meta-right" id="reviewHoursScope">全空间合计 + 我的</span>
+              <span class="meta-right" id="reviewHoursScope">本周 · 我的 / 全空间</span>
             </div>
             <div class="stat-grid" id="reviewHours"></div>
           </div>
@@ -893,7 +889,6 @@
             <div class="panel-head">
               <h3>工时</h3>
               <span class="meta-right row row-gap" style="gap:8px">
-                <span class="scope-tag" id="workScopeTag">统计范围</span>
                 <span class="seg scope" id="segWorkScope">
                   <button type="button" data-wscope="mine" aria-pressed="true">仅我</button>
                   <button type="button" data-wscope="all" aria-pressed="false">全空间</button>
@@ -976,58 +971,25 @@
         </div>
       </section>
 
-      <!-- ===== 回收站 ===== -->
-      <section class="view" id="view-trash" aria-label="回收站">
-        <div class="view-page wide">
-          <p class="foot-note" style="padding-top:16px">删除的任务保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回</p>
-          <div class="trash-list" id="trashList"></div>
-        </div>
-      </section>
+      
 
-      <!-- ===== 用户管理（仅管理员） ===== -->
-      <section class="view" id="view-users" aria-label="用户管理">
-        <div class="view-page wide">
-          <div class="panel">
-            <div class="panel-head"><h3>账号列表</h3></div>
-            <div class="notice">
-              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
-              <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
-            </div>
-            <div class="user-list" id="userList" style="margin-top:12px"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h3>新增用户</h3></div>
-            <div class="user-add">
-              <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" />
-              <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" />
-              <input class="input" type="password" id="uNewPass" maxlength="64" placeholder="初始密码（≥6 位）" />
-              <select class="select" id="uNewRole" aria-label="角色">
-                <option value="user">成员</option>
-                <option value="admin">管理员</option>
-              </select>
-              <button class="btn primary" type="button" id="btnUserAdd">创建</button>
-            </div>
-            <p class="set-hint" style="margin:12px 0 0">成员角色只能管理自己的数据与参与的空间；管理员另可管理全部账号（本页）。</p>
-          </div>
-        </div>
-      </section>
+      
 
       <!-- ===== 设置 ===== -->
       <section class="view" id="view-settings" aria-label="设置">
         <div class="set-layout">
-          <nav class="set-anchor" id="setAnchor" aria-label="设置分区">
-            <a href="#set-ws">空间信息</a>
-            <a href="#set-notify">通知推送</a>
-            <a href="#set-members">成员与邀请</a>
-            <a href="#set-columns">看板列</a>
-            <a href="#set-cats">分类</a>
-            <a href="#set-data">数据</a>
-            <a href="#set-activity">活动</a>
-          </nav>
+                    <div class="set-tabs" id="setTabs" role="tablist" aria-label="设置分区">
+            <button class="set-tab on" type="button" role="tab" aria-selected="true" data-set-tab="space">空间</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="workflow">工作流</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="integration">集成</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="data">数据</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="activity">活动</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="account" id="setTabAccount" hidden>账号</button>
+          </div>
 
           <div class="set-panels">
 
-            <div class="panel" id="set-ws">
+            <div class="panel" data-set-pane="space" id="set-ws">
               <div class="panel-head">
                 <h3>空间信息</h3>
                 <span class="meta-right" id="wsTypeHint">加载中…</span>
@@ -1047,7 +1009,7 @@
               </div>
             </div>
 
-            <div class="panel" id="set-notify">
+            <div class="panel" data-set-pane="integration" id="set-notify">
               <div class="panel-head">
                 <h3>通知推送</h3>
                 <span class="meta-right">服务端推送渠道</span>
@@ -1101,7 +1063,7 @@
               </div>
             </div>
 
-            <div class="panel" id="set-members">
+            <div class="panel" data-set-pane="space" id="set-members">
               <div class="panel-head">
                 <h3>成员</h3>
                 <span class="meta-right" id="wsMemberCount"></span>
@@ -1123,7 +1085,7 @@
               </div>
             </div>
 
-            <div class="panel" id="set-columns">
+            <div class="panel" data-set-pane="workflow" id="set-columns">
               <div class="panel-head">
                 <h3>看板列</h3>
                 <span class="meta-right">拖拽/按钮调整顺序</span>
@@ -1137,7 +1099,7 @@
               </div>
             </div>
 
-            <div class="panel" id="set-cats">
+            <div class="panel" data-set-pane="workflow" id="set-cats">
               <div class="panel-head">
                 <h3>分类</h3>
                 <span class="meta-right" id="catCount"></span>
@@ -1151,7 +1113,7 @@
               </div>
             </div>
 
-            <div class="panel" id="set-data">
+            <div class="panel" data-set-pane="data" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
                 <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论、依赖/基线、需求文档与分支（不含附件文件与时间线）">
@@ -1176,7 +1138,7 @@
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
-            <div class="panel" id="set-activity">
+            <div class="panel" data-set-pane="activity" id="set-activity">
               <div class="panel-head">
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
@@ -1185,21 +1147,34 @@
               <div class="act-list" id="actList"></div>
             </div>
 
-            <div class="panel">
-              <div class="panel-head">
-                <h3>快捷键</h3>
-                <span class="meta-right">点击标题展开</span>
-              </div>
-              <div class="drawer-sect collapsed" id="kbdSect" style="border-top:none;padding-top:0;margin-top:0">
-                <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-                  <h3 style="font-size:14px">全部快捷键</h3>
-                  <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-                </div>
-                <div class="drawer-sect-body" id="kbdBody"></div>
-              </div>
-            </div>
+            <div class="panel" data-set-pane="data" id="set-trash">
+                          <div class="panel-head"><h3>回收站</h3><span class="meta-right">30 天自动清理</span></div>
+                          <p class="set-hint">删除的任务保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
+                          <div class="trash-list" id="trashList"></div>
+                        </div>
+            
+                        <div class="panel" data-set-pane="account" id="set-account">
+                          <div class="panel-head"><h3>账号管理</h3><span class="meta-right">仅平台管理员</span></div>
+                          <div class="notice">
+                            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
+                            <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
+                          </div>
+                          <div class="user-list" id="userList" style="margin-top:12px"></div>
+                          <div class="panel-head" style="margin-top:20px"><h3 style="font-size:14px">新增用户</h3></div>
+                          <div class="user-add">
+                            <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" />
+                            <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" />
+                            <input class="input" type="password" id="uNewPass" maxlength="64" placeholder="初始密码（≥6 位）" />
+                            <select class="select" id="uNewRole" aria-label="角色">
+                              <option value="user">成员</option>
+                              <option value="admin">管理员</option>
+                            </select>
+                            <button class="btn primary" type="button" id="btnUserAdd">创建</button>
+                          </div>
+                          <p class="set-hint" style="margin:12px 0 0">成员角色只能管理自己的数据与参与的空间；管理员另可管理全部账号（本页）。</p>
+                        </div>
 
-          </div>
+                      </div>
         </div>
       </section>
 
