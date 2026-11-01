@@ -1,6 +1,6 @@
 /* 工作台 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」） */
-var CACHE_NAME = "devstudio-shell-v59";
+var CACHE_NAME = "devstudio-shell-v60";
 var SHELL = [
   "/",
   "/index.html",
@@ -17,6 +17,7 @@ var SHELL = [
   "/js/icons.js",
   "/js/api.js",
   "/js/ui.js",
+  "/js/gantt-shared.js",
   "/js/app.js",
   "/js/share.js",
   "/share.html",

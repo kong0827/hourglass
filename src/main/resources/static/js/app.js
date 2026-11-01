@@ -11,6 +11,8 @@ var esc = UI.esc;
 var toast = UI.toast;
 var toastAction = UI.toastAction;
 var copyToClipboard = UI.copyText;
+/* 与只读分享页共用的甘特纯函数（日期 / 刻度表头 / 依赖线几何） */
+var GS = window.GanttShared;
 
 /* ==================== 常量 ==================== */
 /* 默认列定义：服务端列定义返回后就地覆盖（syncColumns） */
@@ -48,8 +50,8 @@ var REQ_STATUS = [
 ];
 
 /* ==================== 日期 / 格式化 ==================== */
-function startOfDay(d){ var x = new Date(d.getTime()); x.setHours(0,0,0,0); return x; }
-function addDays(d, n){ var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+function startOfDay(d){ return GS.startOfDay(d); }
+function addDays(d, n){ return GS.addDays(d, n); }
 /* 工作日：向后累计 n 个工作日，自动跳过周六 / 周日。
    「一周后」按 5 个工作日算 —— 若按 7 个自然日，周五点"一周后"会落到下周五，
    中间那个周末白算了两天，排期上不合理。 */
@@ -79,23 +81,15 @@ function startPresetDate(v){
   }
   return iso(addDays(TODAY, Number(v)));
 }
-function iso(d){
-  var m = d.getMonth()+1, dd = d.getDate();
-  return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd;
-}
-function pad2(n){ return n < 10 ? ("0"+n) : String(n); }
-function parseDate(s){
-  if(!s) return null;
-  var p = String(s).split("-");
-  if(p.length < 3) return null;
-  return new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
-}
-function dayDiff(a, b){ return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
+function iso(d){ return GS.iso(d); }
+function pad2(n){ return GS.pad2(n); }
+function parseDate(s){ return GS.parseDate(s); }
+function dayDiff(a, b){ return GS.dayDiff(a, b); }
 /* 日期格式化：一律容忍 null —— 后端某些历史数据 completedAt / dueDate 可能为空，
    之前 fmtMD(parseDate(null)) 会抛 getMonth of null，把整个视图渲染打断。 */
-function fmtMD(d){ return d ? ((d.getMonth()+1)+"月"+d.getDate()+"日") : "—"; }
-function fmtShortMD(d){ return d ? ((d.getMonth()+1)+"-"+pad2(d.getDate())) : "—"; }
-function fmtFull(d){ return d ? (d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日") : "—"; }
+function fmtMD(d){ return GS.fmtMonthDay(d); }
+function fmtShortMD(d){ return GS.fmtShortMonthDay(d); }
+function fmtFull(d){ return GS.fmtFullDate(d); }
 function weekdayCN(d){ return d ? ("周"+"日一二三四五六".charAt(d.getDay())) : ""; }
 function fmtTs(s){
   if(!s) return "";
@@ -3875,9 +3869,7 @@ function saveGanttPrefs(){
 }
 /* 「日 / 周 / 月」刻度决定每天像素宽度；日刻度再用缩放档位 */
 function ganttEffectiveDayW(){
-  if(ganttState.scale === "week") return 12;
-  if(ganttState.scale === "month") return 5;
-  return ganttState.zoomDayW;
+  return GS.scaleDayW(ganttState.scale, ganttState.zoomDayW);
 }
 function ganttLabelW(){
   return window.innerWidth <= 900 ? GANTT_LABEL_W_NARROW : GANTT_LABEL_W;
@@ -4148,39 +4140,6 @@ function ganttMetaText(info){
       : (" · 已加载 " + info.paging.loaded + "/" + info.paging.total);
   }
   return txt;
-}
-
-function ganttMonthsHTML(range, dayW){
-  var out = "";
-  var cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-  var first = true;
-  while(cur <= range.end){
-    var from = cur < range.start ? range.start : cur;
-    var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-    var to = addDays(next, -1);
-    if(to > range.end) to = range.end;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    /* 同年只在首段和 1 月标年份，避免每个月都重复 "2026年" */
-    var label = (first || cur.getMonth() === 0)
-      ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月")
-      : ((cur.getMonth() + 1) + "月");
-    out += '<span class="gantt-month" style="width:' + w + 'px">' + label + '</span>';
-    first = false;
-    cur = next;
-  }
-  return out;
-}
-
-function ganttDaysHTML(range, dayW){
-  var out = "";
-  for(var i = 0; i < range.days; i++){
-    var d = addDays(range.start, i);
-    var cls = "gantt-day";
-    if(d.getDay() === 0 || d.getDay() === 6) cls += " weekend";
-    if(iso(d) === TODAY_ISO) cls += " today";
-    out += '<span class="' + cls + '" style="width:' + dayW + 'px">' + d.getDate() + '</span>';
-  }
-  return out;
 }
 
 /* 状态优先级：done > blocked > overdue > 普通优先级色；阻塞且逾期时底色走阻塞，文字仍标逾期 */
@@ -4469,16 +4428,6 @@ function ganttRowHTML(x, range, dayW, totalW){
 }
 
 /* ==================== 依赖线（可编辑，只读渲染） ==================== */
-function ganttDepConflict(pred, succ, type, lag){
-  if(pred.t.boardColumn === "done") return false;
-  var l = Number(lag) || 0;
-  var ps = pred.as || pred.s, pe = pred.ae || pred.e;
-  var ss = succ.as || succ.s, se = succ.ae || succ.e;
-  if(type === "SS") return ss < addDays(ps, l);
-  if(type === "FF") return se < addDays(pe, l);
-  if(type === "SF") return se < addDays(ps, l);
-  return ss < addDays(pe, 1 + l);
-}
 function ganttExpectedDeps(){
   /* 依赖表为空时，兼容 P0 的 blockedByTaskId（后端迁移前/旧数据） */
   if(ganttState.depsLoaded) return ganttState.deps;
@@ -4499,21 +4448,20 @@ function ganttDepsHTML(geom, range, dayW, totalW, bodyH, headH){
   all.forEach(function(d){
     var pred = geom[d.fromTaskId], succ = geom[d.toTaskId];
     if(!pred || !succ) return;
-    var x1 = labelW + (dayDiff(pred.e, range.start) + 1) * dayW;
-    var y1 = headH + pred.top + GANTT_ROW_H / 2;
-    var x2 = labelW + dayDiff(succ.s, range.start) * dayW;
-    var y2 = headH + succ.top + GANTT_ROW_H / 2;
     var type = d.depType || "FS", lag = Number(d.lagDays) || 0;
-    var conflict = ganttDepConflict(pred, succ, type, lag);
+    /* 主页面所有类型都保持 FS 式连线（历史视觉），端点计算与分享页共用同一套函数 */
+    var g = GS.depGeometry(type, pred, succ, {
+      fsLike: true, dayW: dayW, labelW: labelW, rangeStart: range.start,
+      rowH: GANTT_ROW_H, headH: headH, predTop: pred.top, succTop: succ.top
+    });
+    var x1 = g.x1, y1 = g.y1, x2 = g.x2, y2 = g.y2;
+    var conflict = GS.depConflict(
+      { s: pred.s, e: pred.e, as: pred.as, ae: pred.ae, done: !!(pred.t && pred.t.boardColumn === "done") },
+      { s: succ.s, e: succ.e, as: succ.as, ae: succ.ae },
+      type, lag
+    );
     var critical = !!(ganttState.showCritical && ganttState.criticalDeps && ganttState.criticalDeps[d.id]);
-    var path;
-    if(x2 >= x1 + 24){
-      var mx = Math.round((x1 + x2) / 2);
-      path = "M" + x1 + "," + y1 + " H" + mx + " V" + y2 + " H" + (x2 - 5);
-    }else{
-      var yb = y2 + 16;
-      path = "M" + x1 + "," + y1 + " H" + (x1 + 10) + " V" + yb + " H" + (x2 - 2);
-    }
+    var path = GS.depPath(x1, y1, x2, y2);
     var cls = "gantt-dep" + (conflict ? " is-conflict" : "") + (critical ? " is-critical-dep" : "");
     var tip = "「" + succ.t.title + "」依赖「" + pred.t.title + "」(" + type +
       (lag ? (lag > 0 ? "+" : "") + lag + " 天" : "") + ")" +
@@ -4538,79 +4486,6 @@ function ganttDepsHTML(geom, range, dayW, totalW, bodyH, headH){
     '</defs>';
   return '<svg class="gantt-deps" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
     defs + out.join("") + '</svg>';
-}
-
-/* ==================== 刻度表头 ==================== */
-function ganttIsoWeek(date){
-  var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  var dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return String(Math.ceil((((d - yearStart) / 86400000) + 1) / 7));
-}
-function ganttWeeksHTML(range, dayW){
-  var out = "";
-  for(var i = 0; i < range.days; i += 7){
-    var d = addDays(range.start, i);
-    var end = addDays(d, 6);
-    if(end > range.end) end = range.end;
-    var w = (dayDiff(end, d) + 1) * dayW;
-    var wn = ganttIsoWeek(d);
-    var isToday = iso(d) <= TODAY_ISO && TODAY_ISO <= iso(end);
-    out += '<span class="gantt-week' + (isToday ? " today" : "") + '" style="width:' + w + 'px">W' + wn + '</span>';
-  }
-  return out;
-}
-function ganttYearsHTML(range, dayW){
-  var out = "", cur = new Date(range.start.getFullYear(), 0, 1);
-  while(cur <= range.end){
-    var y = cur.getFullYear();
-    var from = cur < range.start ? range.start : cur;
-    var yEnd = new Date(y, 11, 31);
-    var to = yEnd > range.end ? range.end : yEnd;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    out += '<span class="gantt-year" style="width:' + w + 'px">' + y + ' 年</span>';
-    cur = new Date(y + 1, 0, 1);
-  }
-  return out;
-}
-function ganttMonthCellsHTML(range, dayW){
-  var out = "", cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-  while(cur <= range.end){
-    var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-    var from = cur < range.start ? range.start : cur;
-    var to = addDays(next, -1);
-    if(to > range.end) to = range.end;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    out += '<span class="gantt-month" style="width:' + w + 'px">' + (cur.getMonth() + 1) + ' 月</span>';
-    cur = next;
-  }
-  return out;
-}
-function ganttHeadHTML(range, dayW, totalW){
-  if(ganttState.scale === "week"){
-    return '<div class="gantt-months">' + ganttMonthsHTML(range, dayW) + '</div>' +
-      '<div class="gantt-weeks">' + ganttWeeksHTML(range, dayW) + '</div>';
-  }
-  if(ganttState.scale === "month"){
-    return '<div class="gantt-years">' + ganttYearsHTML(range, dayW) + '</div>' +
-      '<div class="gantt-months is-scale-month">' + ganttMonthCellsHTML(range, dayW) + '</div>';
-  }
-  return '<div class="gantt-months">' + ganttMonthsHTML(range, dayW) + '</div>' +
-    '<div class="gantt-days">' + ganttDaysHTML(range, dayW) + '</div>';
-}
-/* 周刻度对齐到周一，月刻度对齐到自然月边界 */
-function ganttAdjustRange(range){
-  if(ganttState.scale === "week"){
-    var s = addDays(range.start, -((range.start.getDay() + 6) % 7));
-    var e = addDays(range.end, 6 - ((range.end.getDay() + 6) % 7));
-    range.start = s; range.end = e; range.days = dayDiff(e, s) + 1;
-  }else if(ganttState.scale === "month"){
-    var ms = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-    var me = new Date(range.end.getFullYear(), range.end.getMonth() + 1, 0);
-    range.start = ms; range.end = me; range.days = dayDiff(me, ms) + 1;
-  }
-  return range;
 }
 
 /* ==================== 关键路径（CPM） ==================== */
@@ -5386,7 +5261,7 @@ function renderGantt(){
       return;
     }
   }
-  range = ganttAdjustRange(range);
+  range = GS.adjustRange(range, ganttState.scale);
   ganttState.range = range;
 
   var inRange = dated;
@@ -5423,7 +5298,7 @@ function renderGantt(){
       'px;--gantt-row-h:' + GANTT_ROW_H + 'px;--gantt-group-h:' + GANTT_GROUP_H + 'px;">' +
     '<div class="gantt-head">' +
       '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span></div>' +
-      '<div class="gantt-axis" style="width:' + totalW + 'px">' + ganttHeadHTML(range, dayW, totalW) + '</div>' +
+      '<div class="gantt-axis" style="width:' + totalW + 'px">' + GS.headHTML(range, dayW, ganttState.scale, TODAY_ISO) + '</div>' +
     '</div>' +
     '<div class="gantt-body"></div>' +
     (todayIn

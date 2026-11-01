@@ -3,6 +3,7 @@
   "use strict";
 
   var LABEL_W = 260, ROW_H = 50, GROUP_H = 0, HEAD_H = 54;
+  var GS = window.GanttShared;
   var state = {
     data: null, scale: "day", zoom: 28, showDone: true,
     range: null, dayW: 28
@@ -15,20 +16,10 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-  function pad2(n) { return (n < 10 ? "0" : "") + n; }
-  function iso(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
-  function parseDate(s) {
-    if (!s) return null;
-    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    return isNaN(d.getTime()) ? null : d;
-  }
-  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
-  function dayDiff(a, b) { return Math.round((a - b) / 86400000); }
-  function today() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
-  function fmtMD(d) { return pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
-  function fmtFull(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  var iso = GS.iso, parseDate = GS.parseDate, addDays = GS.addDays, dayDiff = GS.dayDiff;
+  /* 分享页沿用 MM-DD 口径（主页面的 fmtMD 是 M月D日，两者不要混用） */
+  var fmtMD = GS.fmtDashMD;
+  function today() { return GS.startOfDay(new Date()); }
   function priorityColor(p) {
     return { P0: "var(--p0)", P1: "var(--p1)", P2: "var(--p2)", P3: "var(--p3)" }[p] || "var(--p2)";
   }
@@ -48,91 +39,10 @@
     return { key: "doing", c: priorityColor(t.priority), soft: prioritySoft(t.priority), bd: "var(--border-strong)", label: "" };
   }
 
-  function effectiveDayW() {
-    if (state.scale === "week") return 12;
-    if (state.scale === "month") return 5;
-    return state.zoom;
-  }
-  function adjustRange(range) {
-    if (state.scale === "week") {
-      var s = addDays(range.start, -((range.start.getDay() + 6) % 7));
-      var e = addDays(range.end, 6 - ((range.end.getDay() + 6) % 7));
-      range.start = s; range.end = e;
-    } else if (state.scale === "month") {
-      range.start = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-      range.end = new Date(range.end.getFullYear(), range.end.getMonth() + 1, 0);
-    }
-    range.days = dayDiff(range.end, range.start) + 1;
-    return range;
-  }
-  function isoWeek(d) {
-    var x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    var day = x.getUTCDay() || 7;
-    x.setUTCDate(x.getUTCDate() + 4 - day);
-    var y0 = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
-    return Math.ceil((((x - y0) / 86400000) + 1) / 7);
-  }
-  function monthsHTML(range, dayW) {
-    var out = "", cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1), first = true;
-    while (cur <= range.end) {
-      var from = cur < range.start ? range.start : cur;
-      var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      var to = addDays(next, -1);
-      if (to > range.end) to = range.end;
-      var label = (first || cur.getMonth() === 0) ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月") : ((cur.getMonth() + 1) + "月");
-      out += '<span class="gantt-month" style="width:' + ((dayDiff(to, from) + 1) * dayW) + 'px">' + label + '</span>';
-      first = false; cur = next;
-    }
-    return out;
-  }
-  function daysHTML(range, dayW) {
-    var out = "", t = today();
-    for (var i = 0; i < range.days; i++) {
-      var d = addDays(range.start, i);
-      var cls = "gantt-day" + ((d.getDay() === 0 || d.getDay() === 6) ? " weekend" : "") + (iso(d) === iso(t) ? " today" : "");
-      out += '<span class="' + cls + '" style="width:' + dayW + 'px">' + d.getDate() + '</span>';
-    }
-    return out;
-  }
-  function weeksHTML(range, dayW) {
-    var out = "", t = iso(today());
-    for (var i = 0; i < range.days; i += 7) {
-      var d = addDays(range.start, i), e = addDays(d, 6);
-      if (e > range.end) e = range.end;
-      var cls = "gantt-week" + (iso(d) <= t && t <= iso(e) ? " today" : "");
-      out += '<span class="' + cls + '" style="width:' + ((dayDiff(e, d) + 1) * dayW) + 'px">W' + isoWeek(d) + '</span>';
-    }
-    return out;
-  }
-  function monthCellsHTML(range, dayW) {
-    var out = "", cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-    while (cur <= range.end) {
-      var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      var from = cur < range.start ? range.start : cur;
-      var to = addDays(next, -1);
-      if (to > range.end) to = range.end;
-      out += '<span class="gantt-month" style="width:' + ((dayDiff(to, from) + 1) * dayW) + 'px">' + (cur.getMonth() + 1) + ' 月</span>';
-      cur = next;
-    }
-    return out;
-  }
+  function effectiveDayW() { return GS.scaleDayW(state.scale, state.zoom); }
+  function adjustRange(range) { return GS.adjustRange(range, state.scale); }
   function headHTML(range, dayW) {
-    if (state.scale === "week") {
-      return '<div class="gantt-months">' + monthsHTML(range, dayW) + '</div><div class="gantt-weeks">' + weeksHTML(range, dayW) + '</div>';
-    }
-    if (state.scale === "month") {
-      var years = "", cur = new Date(range.start.getFullYear(), 0, 1);
-      while (cur <= range.end) {
-        var y = cur.getFullYear();
-        var ys = cur < range.start ? range.start : cur;
-        var ye = new Date(y, 11, 31);
-        if (ye > range.end) ye = range.end;
-        years += '<span class="gantt-year" style="width:' + ((dayDiff(ye, ys) + 1) * dayW) + 'px">' + y + ' 年</span>';
-        cur = new Date(y + 1, 0, 1);
-      }
-      return '<div class="gantt-years">' + years + '</div><div class="gantt-months is-scale-month">' + monthCellsHTML(range, dayW) + '</div>';
-    }
-    return '<div class="gantt-months">' + monthsHTML(range, dayW) + '</div><div class="gantt-days">' + daysHTML(range, dayW) + '</div>';
+    return GS.headHTML(range, dayW, state.scale, iso(today()));
   }
 
   function labelWidthPx() {
@@ -225,7 +135,7 @@
         '</div>' +
         '<div class="gantt-track" style="width:' + totalW + 'px">' + baseline + bar + '</div>' +
       '</div>';
-      geom[t.id] = { top: top, s: x.s, e: x.e };
+      geom[t.id] = { top: top, s: x.s, e: x.e, t: t };
       top += ROW_H;
     });
     scroll.innerHTML = '<div class="gantt-grid" style="--gantt-label-w:' + LABEL_W + 'px;--gantt-day-w:' + dayW +
@@ -251,18 +161,16 @@
       if (!a || !b) return;
       var dep = d.depType || "FS";
       var lag = Number(d.lagDays) || 0;
-      /* 连接点按依赖类型取：FS 前驱尾部→后继头部，SS 头部→头部，FF 尾部→尾部，SF 头部→尾部 */
-      var fromDay = (dep === "SS" || dep === "SF") ? a.s : a.e;
-      var toDay = (dep === "FF" || dep === "SF") ? b.e : b.s;
-      var x1 = lw + (dayDiff(fromDay, range.start) + ((dep === "FS" || dep === "FF") ? 1 : 0)) * dayW;
-      var x2 = lw + dayDiff(toDay, range.start) * dayW + ((dep === "FF" || dep === "SF") ? dayW : 0);
-      var y1 = a.top + ROW_H / 2, y2 = b.top + ROW_H / 2;
-      var path = x2 >= x1 + 24
-        ? "M" + x1 + "," + y1 + " H" + Math.round((x1 + x2) / 2) + " V" + y2 + " H" + (x2 - 5)
-        : "M" + x1 + "," + y1 + " H" + (x1 + 10) + " V" + (y2 + 16) + " H" + (x2 - 2);
-      /* 冲突判定与前台一致：后继端点早于「前驱端点 + 滞后」，含尾日 */
-      var minDay = addDays(fromDay, lag + ((dep === "FS" || dep === "FF") ? 1 : 0));
-      var conflict = toDay < minDay;
+      /* geom.top 已含表头高度，所以 headH 传 0 */
+      var g = GS.depGeometry(dep, a, b, {
+        dayW: dayW, labelW: lw, rangeStart: range.start, rowH: ROW_H, headH: 0
+      });
+      var path = GS.depPath(g.x1, g.y1, g.x2, g.y2);
+      var conflict = GS.depConflict(
+        { s: a.s, e: a.e, done: !!(a.t && a.t.boardColumn === "done") },
+        { s: b.s, e: b.e },
+        dep, lag
+      );
       out.push('<path class="gantt-dep' + (conflict ? " is-conflict" : "") + '" d="' + path + '" marker-end="url(#shareArrow)"></path>');
     });
     if (!out.length) return "";

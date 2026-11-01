@@ -5328,6 +5328,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       setTimeout(function () {
         resolve({
           status: 200,
+          ok: true,
+          /* api.js 的 ETag 协商会读 res.headers.get("ETag")：预览没有 ETag，返回 null 即可 */
+          headers: { get: function () { return null; } },
           text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: data })); }
         });
       }, waitMs);
@@ -6035,6 +6038,246 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 </script>
 <script>
 /* ==========================================================================
+   gantt-shared.js · 甘特图纯函数（日期 / 刻度表头 / 依赖线几何）
+   主页面（app.js）与只读分享页（share.js）共用。
+   约定：只做计算与字符串拼接，不读写 DOM，也不读写全局状态；
+   所有需要「今天」「当前刻度」的地方都由调用方以参数传入。
+   ========================================================================== */
+(function () {
+  "use strict";
+
+  /* ==================== 日期 ==================== */
+  function pad2(n) { return n < 10 ? ("0" + n) : String(n); }
+  function startOfDay(d) { var x = new Date(d.getTime()); x.setHours(0, 0, 0, 0); return x; }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function iso(d) {
+    var m = d.getMonth() + 1, dd = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (dd < 10 ? "0" : "") + dd;
+  }
+  /* 接受 "YYYY-M-D" 与 "YYYY-MM-DDTHH:mm…"；非法值返回 null */
+  function parseDate(s) {
+    if (!s) return null;
+    var m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function dayDiff(a, b) { return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
+  /* 周一 / 周日：getDay() 周日为 0，统一折算成「周一开头的一周」 */
+  function mondayOf(d) { var x = startOfDay(d); return addDays(x, -((x.getDay() + 6) % 7)); }
+  function sundayOf(d) { var x = startOfDay(d); return addDays(x, 6 - ((x.getDay() + 6) % 7)); }
+  function isoWeek(d) {
+    var x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var dayNum = x.getUTCDay() || 7;
+    x.setUTCDate(x.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+    return String(Math.ceil((((x - yearStart) / 86400000) + 1) / 7));
+  }
+
+  /* ==================== 格式化 ==================== */
+  /* 主页面口径：M月D日；分享页口径：MM-DD。两种都保留，由调用方选，避免两边显示串味 */
+  function fmtMonthDay(d) { return d ? ((d.getMonth() + 1) + "月" + d.getDate() + "日") : "—"; }
+  function fmtShortMonthDay(d) { return d ? ((d.getMonth() + 1) + "-" + pad2(d.getDate())) : "—"; }
+  function fmtFullDate(d) { return d ? (d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日") : "—"; }
+  function fmtDashMD(d) { return d ? (pad2(d.getMonth() + 1) + "-" + pad2(d.getDate())) : "—"; }
+
+  /* ==================== 刻度 / 区间 ==================== */
+  /* day / week / month 三种刻度下每天占的像素；日刻度用调用方给的缩放档位 */
+  function scaleDayW(scale, zoomDayW) {
+    if (scale === "week") return 12;
+    if (scale === "month") return 5;
+    return zoomDayW;
+  }
+  /* 周刻度对齐到周一，月刻度对齐到自然月边界；返回新对象，不改入参 */
+  function adjustRange(range, scale) {
+    var start = range.start, end = range.end;
+    if (scale === "week") {
+      start = mondayOf(start);
+      end = sundayOf(end);
+    } else if (scale === "month") {
+      start = new Date(start.getFullYear(), start.getMonth(), 1);
+      end = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+    }
+    return { start: start, end: end, days: dayDiff(end, start) + 1 };
+  }
+
+  /* ==================== 表头 HTML ==================== */
+  function monthsHTML(range, dayW) {
+    var out = "";
+    var cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+    var first = true;
+    while (cur <= range.end) {
+      var from = cur < range.start ? range.start : cur;
+      var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      var to = addDays(next, -1);
+      if (to > range.end) to = range.end;
+      var w = (dayDiff(to, from) + 1) * dayW;
+      /* 同年只在首段和 1 月标年份，避免每个月都重复 "2026年" */
+      var label = (first || cur.getMonth() === 0)
+        ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月")
+        : ((cur.getMonth() + 1) + "月");
+      out += '<span class="gantt-month" style="width:' + w + 'px">' + label + '</span>';
+      first = false;
+      cur = next;
+    }
+    return out;
+  }
+  function daysHTML(range, dayW, todayIso) {
+    var out = "";
+    for (var i = 0; i < range.days; i++) {
+      var d = addDays(range.start, i);
+      var cls = "gantt-day";
+      if (d.getDay() === 0 || d.getDay() === 6) cls += " weekend";
+      if (todayIso && iso(d) === todayIso) cls += " today";
+      out += '<span class="' + cls + '" style="width:' + dayW + 'px">' + d.getDate() + '</span>';
+    }
+    return out;
+  }
+  function weeksHTML(range, dayW, todayIso) {
+    var out = "";
+    for (var i = 0; i < range.days; i += 7) {
+      var d = addDays(range.start, i);
+      var end = addDays(d, 6);
+      if (end > range.end) end = range.end;
+      var w = (dayDiff(end, d) + 1) * dayW;
+      var isToday = !!todayIso && iso(d) <= todayIso && todayIso <= iso(end);
+      out += '<span class="gantt-week' + (isToday ? " today" : "") + '" style="width:' + w + 'px">W' + isoWeek(d) + '</span>';
+    }
+    return out;
+  }
+  function yearsHTML(range, dayW) {
+    var out = "", cur = new Date(range.start.getFullYear(), 0, 1);
+    while (cur <= range.end) {
+      var y = cur.getFullYear();
+      var from = cur < range.start ? range.start : cur;
+      var yEnd = new Date(y, 11, 31);
+      var to = yEnd > range.end ? range.end : yEnd;
+      var w = (dayDiff(to, from) + 1) * dayW;
+      out += '<span class="gantt-year" style="width:' + w + 'px">' + y + ' 年</span>';
+      cur = new Date(y + 1, 0, 1);
+    }
+    return out;
+  }
+  function monthCellsHTML(range, dayW) {
+    var out = "", cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
+    while (cur <= range.end) {
+      var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      var from = cur < range.start ? range.start : cur;
+      var to = addDays(next, -1);
+      if (to > range.end) to = range.end;
+      var w = (dayDiff(to, from) + 1) * dayW;
+      out += '<span class="gantt-month" style="width:' + w + 'px">' + (cur.getMonth() + 1) + ' 月</span>';
+      cur = next;
+    }
+    return out;
+  }
+  function headHTML(range, dayW, scale, todayIso) {
+    if (scale === "week") {
+      return '<div class="gantt-months">' + monthsHTML(range, dayW) + '</div>' +
+        '<div class="gantt-weeks">' + weeksHTML(range, dayW, todayIso) + '</div>';
+    }
+    if (scale === "month") {
+      return '<div class="gantt-years">' + yearsHTML(range, dayW) + '</div>' +
+        '<div class="gantt-months is-scale-month">' + monthCellsHTML(range, dayW) + '</div>';
+    }
+    return '<div class="gantt-months">' + monthsHTML(range, dayW) + '</div>' +
+      '<div class="gantt-days">' + daysHTML(range, dayW, todayIso) + '</div>';
+  }
+
+  /* ==================== 依赖线 ==================== */
+  function depTypeOf(type) {
+    return (type === "SS" || type === "FF" || type === "SF") ? type : "FS";
+  }
+  /* 依赖端点：
+     typed（分享页）：FS 前驱尾→后继头、SS 头→头、FF 尾→尾、SF 头→尾；
+       FS/FF 从前驱尾日之后起画（startPad 1），FF/SF 画到后继尾日右侧（endPad 1）。
+     fsLike（主页面现状）：所有类型都按 FS 样式连在前驱尾日之后、后继头日左侧，
+       视觉保持不变。 */
+  function depAnchors(type, pred, succ, fsLike) {
+    if (fsLike) return { fromDay: pred.e, toDay: succ.s, startPad: 1, endPad: 0 };
+    var t = depTypeOf(type);
+    return {
+      fromDay: (t === "SS" || t === "SF") ? pred.s : pred.e,
+      toDay: (t === "FF" || t === "SF") ? succ.e : succ.s,
+      startPad: (t === "FS" || t === "FF") ? 1 : 0,
+      endPad: (t === "FF" || t === "SF") ? 1 : 0
+    };
+  }
+  /* opts: {dayW, labelW, rangeStart, rowH, headH, predTop, succTop, fsLike}
+     分享页 geom 的 top 已含表头 → headH 传 0；主页面 geom 的 top 从 body 起算 → headH 传 54 */
+  function depGeometry(type, pred, succ, opts) {
+    opts = opts || {};
+    var a = depAnchors(type, pred, succ, !!opts.fsLike);
+    var dayW = opts.dayW || 1, labelW = opts.labelW || 0;
+    var rowH = opts.rowH || 0, headH = opts.headH || 0;
+    return {
+      x1: labelW + (dayDiff(a.fromDay, opts.rangeStart) + a.startPad) * dayW,
+      y1: headH + (pred.top || 0) + rowH / 2,
+      x2: labelW + dayDiff(a.toDay, opts.rangeStart) * dayW + a.endPad * dayW,
+      y2: headH + (succ.top || 0) + rowH / 2
+    };
+  }
+  /* 正向（后继在前驱右侧 ≥24px）画折线，否则绕到下一行再折回 */
+  function depPath(x1, y1, x2, y2) {
+    if (x2 >= x1 + 24) {
+      return "M" + x1 + "," + y1 + " H" + Math.round((x1 + x2) / 2) + " V" + y2 + " H" + (x2 - 5);
+    }
+    return "M" + x1 + "," + y1 + " H" + (x1 + 10) + " V" + (y2 + 16) + " H" + (x2 - 2);
+  }
+  /* 冲突口径（主页面为准）：前驱已完成不算冲突；
+     SS: 后继开始 < 前驱开始 + lag；FF: 后继结束 < 前驱结束 + lag；
+     SF: 后继结束 < 前驱开始 + lag；FS: 后继开始 < 前驱结束 + 1 + lag。
+     pred / succ 可带 as/ae（月视图里未裁剪的真实日期），缺省用 s/e。 */
+  function depConflict(pred, succ, type, lag) {
+    if (pred.done) return false;
+    var l = Number(lag) || 0;
+    var ps = pred.as || pred.s, pe = pred.ae || pred.e;
+    var ss = succ.as || succ.s, se = succ.ae || succ.e;
+    var t = depTypeOf(type);
+    if (t === "SS") return ss < addDays(ps, l);
+    if (t === "FF") return se < addDays(pe, l);
+    if (t === "SF") return se < addDays(ps, l);
+    return ss < addDays(pe, 1 + l);
+  }
+
+  window.GanttShared = {
+    /* 日期 */
+    pad2: pad2,
+    startOfDay: startOfDay,
+    addDays: addDays,
+    iso: iso,
+    parseDate: parseDate,
+    dayDiff: dayDiff,
+    mondayOf: mondayOf,
+    sundayOf: sundayOf,
+    isoWeek: isoWeek,
+    /* 格式化 */
+    fmtMonthDay: fmtMonthDay,
+    fmtShortMonthDay: fmtShortMonthDay,
+    fmtFullDate: fmtFullDate,
+    fmtDashMD: fmtDashMD,
+    /* 刻度 / 区间 */
+    scaleDayW: scaleDayW,
+    adjustRange: adjustRange,
+    /* 表头 */
+    monthsHTML: monthsHTML,
+    daysHTML: daysHTML,
+    weeksHTML: weeksHTML,
+    yearsHTML: yearsHTML,
+    monthCellsHTML: monthCellsHTML,
+    headHTML: headHTML,
+    /* 依赖线 */
+    depTypeOf: depTypeOf,
+    depAnchors: depAnchors,
+    depGeometry: depGeometry,
+    depPath: depPath,
+    depConflict: depConflict
+  };
+})();
+
+</script>
+<script>
+/* ==========================================================================
    app.js · 工作台前端主程序（按 ui-redesign-spec v1.0 重构）
    硬约束：不改变任何后端接口的路径 / 入参 / 出参 / 语义；功能只增不减。
    ========================================================================== */
@@ -6047,6 +6290,8 @@ var esc = UI.esc;
 var toast = UI.toast;
 var toastAction = UI.toastAction;
 var copyToClipboard = UI.copyText;
+/* 与只读分享页共用的甘特纯函数（日期 / 刻度表头 / 依赖线几何） */
+var GS = window.GanttShared;
 
 /* ==================== 常量 ==================== */
 /* 默认列定义：服务端列定义返回后就地覆盖（syncColumns） */
@@ -6084,8 +6329,8 @@ var REQ_STATUS = [
 ];
 
 /* ==================== 日期 / 格式化 ==================== */
-function startOfDay(d){ var x = new Date(d.getTime()); x.setHours(0,0,0,0); return x; }
-function addDays(d, n){ var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+function startOfDay(d){ return GS.startOfDay(d); }
+function addDays(d, n){ return GS.addDays(d, n); }
 /* 工作日：向后累计 n 个工作日，自动跳过周六 / 周日。
    「一周后」按 5 个工作日算 —— 若按 7 个自然日，周五点"一周后"会落到下周五，
    中间那个周末白算了两天，排期上不合理。 */
@@ -6115,23 +6360,15 @@ function startPresetDate(v){
   }
   return iso(addDays(TODAY, Number(v)));
 }
-function iso(d){
-  var m = d.getMonth()+1, dd = d.getDate();
-  return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd;
-}
-function pad2(n){ return n < 10 ? ("0"+n) : String(n); }
-function parseDate(s){
-  if(!s) return null;
-  var p = String(s).split("-");
-  if(p.length < 3) return null;
-  return new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
-}
-function dayDiff(a, b){ return Math.round((startOfDay(a) - startOfDay(b)) / 86400000); }
+function iso(d){ return GS.iso(d); }
+function pad2(n){ return GS.pad2(n); }
+function parseDate(s){ return GS.parseDate(s); }
+function dayDiff(a, b){ return GS.dayDiff(a, b); }
 /* 日期格式化：一律容忍 null —— 后端某些历史数据 completedAt / dueDate 可能为空，
    之前 fmtMD(parseDate(null)) 会抛 getMonth of null，把整个视图渲染打断。 */
-function fmtMD(d){ return d ? ((d.getMonth()+1)+"月"+d.getDate()+"日") : "—"; }
-function fmtShortMD(d){ return d ? ((d.getMonth()+1)+"-"+pad2(d.getDate())) : "—"; }
-function fmtFull(d){ return d ? (d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日") : "—"; }
+function fmtMD(d){ return GS.fmtMonthDay(d); }
+function fmtShortMD(d){ return GS.fmtShortMonthDay(d); }
+function fmtFull(d){ return GS.fmtFullDate(d); }
 function weekdayCN(d){ return d ? ("周"+"日一二三四五六".charAt(d.getDay())) : ""; }
 function fmtTs(s){
   if(!s) return "";
@@ -9911,9 +10148,7 @@ function saveGanttPrefs(){
 }
 /* 「日 / 周 / 月」刻度决定每天像素宽度；日刻度再用缩放档位 */
 function ganttEffectiveDayW(){
-  if(ganttState.scale === "week") return 12;
-  if(ganttState.scale === "month") return 5;
-  return ganttState.zoomDayW;
+  return GS.scaleDayW(ganttState.scale, ganttState.zoomDayW);
 }
 function ganttLabelW(){
   return window.innerWidth <= 900 ? GANTT_LABEL_W_NARROW : GANTT_LABEL_W;
@@ -10184,39 +10419,6 @@ function ganttMetaText(info){
       : (" · 已加载 " + info.paging.loaded + "/" + info.paging.total);
   }
   return txt;
-}
-
-function ganttMonthsHTML(range, dayW){
-  var out = "";
-  var cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-  var first = true;
-  while(cur <= range.end){
-    var from = cur < range.start ? range.start : cur;
-    var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-    var to = addDays(next, -1);
-    if(to > range.end) to = range.end;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    /* 同年只在首段和 1 月标年份，避免每个月都重复 "2026年" */
-    var label = (first || cur.getMonth() === 0)
-      ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月")
-      : ((cur.getMonth() + 1) + "月");
-    out += '<span class="gantt-month" style="width:' + w + 'px">' + label + '</span>';
-    first = false;
-    cur = next;
-  }
-  return out;
-}
-
-function ganttDaysHTML(range, dayW){
-  var out = "";
-  for(var i = 0; i < range.days; i++){
-    var d = addDays(range.start, i);
-    var cls = "gantt-day";
-    if(d.getDay() === 0 || d.getDay() === 6) cls += " weekend";
-    if(iso(d) === TODAY_ISO) cls += " today";
-    out += '<span class="' + cls + '" style="width:' + dayW + 'px">' + d.getDate() + '</span>';
-  }
-  return out;
 }
 
 /* 状态优先级：done > blocked > overdue > 普通优先级色；阻塞且逾期时底色走阻塞，文字仍标逾期 */
@@ -10505,16 +10707,6 @@ function ganttRowHTML(x, range, dayW, totalW){
 }
 
 /* ==================== 依赖线（可编辑，只读渲染） ==================== */
-function ganttDepConflict(pred, succ, type, lag){
-  if(pred.t.boardColumn === "done") return false;
-  var l = Number(lag) || 0;
-  var ps = pred.as || pred.s, pe = pred.ae || pred.e;
-  var ss = succ.as || succ.s, se = succ.ae || succ.e;
-  if(type === "SS") return ss < addDays(ps, l);
-  if(type === "FF") return se < addDays(pe, l);
-  if(type === "SF") return se < addDays(ps, l);
-  return ss < addDays(pe, 1 + l);
-}
 function ganttExpectedDeps(){
   /* 依赖表为空时，兼容 P0 的 blockedByTaskId（后端迁移前/旧数据） */
   if(ganttState.depsLoaded) return ganttState.deps;
@@ -10535,21 +10727,20 @@ function ganttDepsHTML(geom, range, dayW, totalW, bodyH, headH){
   all.forEach(function(d){
     var pred = geom[d.fromTaskId], succ = geom[d.toTaskId];
     if(!pred || !succ) return;
-    var x1 = labelW + (dayDiff(pred.e, range.start) + 1) * dayW;
-    var y1 = headH + pred.top + GANTT_ROW_H / 2;
-    var x2 = labelW + dayDiff(succ.s, range.start) * dayW;
-    var y2 = headH + succ.top + GANTT_ROW_H / 2;
     var type = d.depType || "FS", lag = Number(d.lagDays) || 0;
-    var conflict = ganttDepConflict(pred, succ, type, lag);
+    /* 主页面所有类型都保持 FS 式连线（历史视觉），端点计算与分享页共用同一套函数 */
+    var g = GS.depGeometry(type, pred, succ, {
+      fsLike: true, dayW: dayW, labelW: labelW, rangeStart: range.start,
+      rowH: GANTT_ROW_H, headH: headH, predTop: pred.top, succTop: succ.top
+    });
+    var x1 = g.x1, y1 = g.y1, x2 = g.x2, y2 = g.y2;
+    var conflict = GS.depConflict(
+      { s: pred.s, e: pred.e, as: pred.as, ae: pred.ae, done: !!(pred.t && pred.t.boardColumn === "done") },
+      { s: succ.s, e: succ.e, as: succ.as, ae: succ.ae },
+      type, lag
+    );
     var critical = !!(ganttState.showCritical && ganttState.criticalDeps && ganttState.criticalDeps[d.id]);
-    var path;
-    if(x2 >= x1 + 24){
-      var mx = Math.round((x1 + x2) / 2);
-      path = "M" + x1 + "," + y1 + " H" + mx + " V" + y2 + " H" + (x2 - 5);
-    }else{
-      var yb = y2 + 16;
-      path = "M" + x1 + "," + y1 + " H" + (x1 + 10) + " V" + yb + " H" + (x2 - 2);
-    }
+    var path = GS.depPath(x1, y1, x2, y2);
     var cls = "gantt-dep" + (conflict ? " is-conflict" : "") + (critical ? " is-critical-dep" : "");
     var tip = "「" + succ.t.title + "」依赖「" + pred.t.title + "」(" + type +
       (lag ? (lag > 0 ? "+" : "") + lag + " 天" : "") + ")" +
@@ -10574,79 +10765,6 @@ function ganttDepsHTML(geom, range, dayW, totalW, bodyH, headH){
     '</defs>';
   return '<svg class="gantt-deps" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
     defs + out.join("") + '</svg>';
-}
-
-/* ==================== 刻度表头 ==================== */
-function ganttIsoWeek(date){
-  var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  var dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return String(Math.ceil((((d - yearStart) / 86400000) + 1) / 7));
-}
-function ganttWeeksHTML(range, dayW){
-  var out = "";
-  for(var i = 0; i < range.days; i += 7){
-    var d = addDays(range.start, i);
-    var end = addDays(d, 6);
-    if(end > range.end) end = range.end;
-    var w = (dayDiff(end, d) + 1) * dayW;
-    var wn = ganttIsoWeek(d);
-    var isToday = iso(d) <= TODAY_ISO && TODAY_ISO <= iso(end);
-    out += '<span class="gantt-week' + (isToday ? " today" : "") + '" style="width:' + w + 'px">W' + wn + '</span>';
-  }
-  return out;
-}
-function ganttYearsHTML(range, dayW){
-  var out = "", cur = new Date(range.start.getFullYear(), 0, 1);
-  while(cur <= range.end){
-    var y = cur.getFullYear();
-    var from = cur < range.start ? range.start : cur;
-    var yEnd = new Date(y, 11, 31);
-    var to = yEnd > range.end ? range.end : yEnd;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    out += '<span class="gantt-year" style="width:' + w + 'px">' + y + ' 年</span>';
-    cur = new Date(y + 1, 0, 1);
-  }
-  return out;
-}
-function ganttMonthCellsHTML(range, dayW){
-  var out = "", cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-  while(cur <= range.end){
-    var next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-    var from = cur < range.start ? range.start : cur;
-    var to = addDays(next, -1);
-    if(to > range.end) to = range.end;
-    var w = (dayDiff(to, from) + 1) * dayW;
-    out += '<span class="gantt-month" style="width:' + w + 'px">' + (cur.getMonth() + 1) + ' 月</span>';
-    cur = next;
-  }
-  return out;
-}
-function ganttHeadHTML(range, dayW, totalW){
-  if(ganttState.scale === "week"){
-    return '<div class="gantt-months">' + ganttMonthsHTML(range, dayW) + '</div>' +
-      '<div class="gantt-weeks">' + ganttWeeksHTML(range, dayW) + '</div>';
-  }
-  if(ganttState.scale === "month"){
-    return '<div class="gantt-years">' + ganttYearsHTML(range, dayW) + '</div>' +
-      '<div class="gantt-months is-scale-month">' + ganttMonthCellsHTML(range, dayW) + '</div>';
-  }
-  return '<div class="gantt-months">' + ganttMonthsHTML(range, dayW) + '</div>' +
-    '<div class="gantt-days">' + ganttDaysHTML(range, dayW) + '</div>';
-}
-/* 周刻度对齐到周一，月刻度对齐到自然月边界 */
-function ganttAdjustRange(range){
-  if(ganttState.scale === "week"){
-    var s = addDays(range.start, -((range.start.getDay() + 6) % 7));
-    var e = addDays(range.end, 6 - ((range.end.getDay() + 6) % 7));
-    range.start = s; range.end = e; range.days = dayDiff(e, s) + 1;
-  }else if(ganttState.scale === "month"){
-    var ms = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
-    var me = new Date(range.end.getFullYear(), range.end.getMonth() + 1, 0);
-    range.start = ms; range.end = me; range.days = dayDiff(me, ms) + 1;
-  }
-  return range;
 }
 
 /* ==================== 关键路径（CPM） ==================== */
@@ -11422,7 +11540,7 @@ function renderGantt(){
       return;
     }
   }
-  range = ganttAdjustRange(range);
+  range = GS.adjustRange(range, ganttState.scale);
   ganttState.range = range;
 
   var inRange = dated;
@@ -11459,7 +11577,7 @@ function renderGantt(){
       'px;--gantt-row-h:' + GANTT_ROW_H + 'px;--gantt-group-h:' + GANTT_GROUP_H + 'px;">' +
     '<div class="gantt-head">' +
       '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span></div>' +
-      '<div class="gantt-axis" style="width:' + totalW + 'px">' + ganttHeadHTML(range, dayW, totalW) + '</div>' +
+      '<div class="gantt-axis" style="width:' + totalW + 'px">' + GS.headHTML(range, dayW, ganttState.scale, TODAY_ISO) + '</div>' +
     '</div>' +
     '<div class="gantt-body"></div>' +
     (todayIn
@@ -17426,6 +17544,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-10-31 14:39</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 09:04</span></div>
 </body>
 </html>

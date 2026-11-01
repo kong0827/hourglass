@@ -721,3 +721,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - CacheSync：写事务 afterCommit 失效，避免提交前并发读回填旧值。
 - TaskService 的列名/列序/校验/看板列定义统一走缓存；部署 README 注明单实例。
 - 新增 10 个缓存测试，共 31 个测试通过。
+
+**第二十七轮：CODE-4 甘特共享模块**
+- 新增 static/js/gantt-shared.js（纯函数）：日期/格式化/刻度/区间对齐/表头/依赖 FS-SS-FF-SF 端点与 path/冲突判定；无 DOM、无全局状态。
+- share.js 全面改用共享模块；app.js 的日期、区间对齐、表头、依赖几何改为复用；删除约 120 行重复实现；窗口化/分组/月视图/拖拽代码未动。
+- index.html/share.html 按顺序加载；SW 升 v60；预览稿重生成。
+- 份额页冲突口径统一为主页面：FF 不再多算 1 天、已完成前驱不再标冲突（仅视觉状态）。
