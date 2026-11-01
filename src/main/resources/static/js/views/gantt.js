@@ -2455,20 +2455,6 @@ if(ganttExportMenu){
 if(ganttClearFilterEl) ganttClearFilterEl.addEventListener("click", function(){ clearFilters(); });
 if($("ganttToday")) $("ganttToday").addEventListener("click", ganttGoToday);
 if($("ganttRefresh")) $("ganttRefresh").addEventListener("click", function(){ loadGantt(); });
-if($("iMilestone")){
-  $("iMilestone").addEventListener("change", function(){
-    if(!this.checked) return;
-    if(iStart.value) iDue.value = iStart.value;
-    else if(iDue.value) iStart.value = iDue.value;
-    syncDateBounds();
-  });
-  iStart.addEventListener("change", function(){
-    if($("iMilestone").checked && iStart.value){ iDue.value = iStart.value; syncDateBounds(); }
-  });
-  iDue.addEventListener("change", function(){
-    if($("iMilestone").checked && iDue.value){ iStart.value = iDue.value; syncDateBounds(); }
-  });
-}
 if(ganttAnalysisBtn){
   ganttAnalysisBtn.addEventListener("click", function(){
     if(UI.popOpen(ganttAnalysisMenu)){ UI.closeAllPops(); return; }

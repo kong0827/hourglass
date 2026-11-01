@@ -549,6 +549,8 @@ taskForm.addEventListener("submit", function(e){
   }
   var owner = ownerPick();
   var stillDone = (iCol.value || "backlog") === "done";
+  var current = rt.editingId ? taskCacheExtra[rt.editingId] : null;
+  var docSel = $("iReqDoc"), branchSel = $("iBranch");
   var payload = {
     title: title,
     description: iDesc.value.trim(),
@@ -561,8 +563,9 @@ taskForm.addEventListener("submit", function(e){
     dueDate: iDue.value || null,
     isMilestone: !!(($("iMilestone") || {}).checked),
     reqId: iReq.value || null,
-    reqDocId: (($("iReqDoc") || {}).value) || null,
-    branchId: (($("iBranch") || {}).value) || null,
+    /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
+    reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
+    branchId: (branchSel && branchSel.options.length > 1) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
     /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
@@ -899,5 +902,21 @@ btnTimer.addEventListener("click", function(){
     toast(ex.message || "操作失败", "bad");
   });
 });
+
+/* 里程碑只占一天：勾选后把另一端补齐；已勾选时改任一端，另一端跟随（抽屉预加载，不依赖甘特） */
+if($("iMilestone")){
+  $("iMilestone").addEventListener("change", function(){
+    if(!this.checked) return;
+    if(iStart.value) iDue.value = iStart.value;
+    else if(iDue.value) iStart.value = iDue.value;
+    syncDateBounds();
+  });
+  iStart.addEventListener("change", function(){
+    if($("iMilestone").checked && iStart.value){ iDue.value = iStart.value; syncDateBounds(); }
+  });
+  iDue.addEventListener("change", function(){
+    if($("iMilestone").checked && iDue.value){ iStart.value = iDue.value; syncDateBounds(); }
+  });
+}
 
 export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, showDrawerNotice, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

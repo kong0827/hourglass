@@ -234,6 +234,7 @@ public class TaskWorkflowService {
      * 抽屉里编辑导致的改列：计时联动（完成停表+接力 / 回待处理停表）。
      * 由 {@link TaskCommandService#update} 在落库前调用，保持与拖拽 move 相同的计时口径。
      */
+    @org.springframework.transaction.annotation.Transactional
     public void beforeEditColumnChange(String userId, String workspaceId, String id,
                                        String from, String to) {
         if (from == null || from.equals(to)) {
@@ -253,6 +254,7 @@ public class TaskWorkflowService {
      * 抽屉里编辑导致的改列：完成归档 / 取消完成撤档 / 循环派生 / 移动日志。
      * 顺序与拖拽 move 一致；标签由调用方先落库，循环任务才能继承保存后的标签。
      */
+    @org.springframework.transaction.annotation.Transactional
     public void afterEditColumnChange(String userId, String workspaceId, Task task, String from) {
         if (from == null || from.equals(task.getBoardColumn())) {
             return;

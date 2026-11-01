@@ -64,7 +64,8 @@ public class MyTasksController {
                 : Math.max(1, Math.min(TaskQueryService.MY_TASKS_MAX_LIMIT, limit));
         MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, query, off, lim);
         int loaded = off + page.getItems().size();
-        boolean hasMore = loaded < page.getTotal();
+        /* 空页时不能继续 hasMore=true：COUNT 与列表之间被删会导致客户端 offset 不前进 */
+        boolean hasMore = !page.getItems().isEmpty() && loaded < page.getTotal();
 
         /* 覆盖的空间列表（前端显示"覆盖 N 个空间"）：全量统计，不是本页 */
         List<Map<String, Object>> spaces = new ArrayList<Map<String, Object>>();
