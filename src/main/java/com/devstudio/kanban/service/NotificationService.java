@@ -15,14 +15,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -94,23 +92,15 @@ public class NotificationService {
 
     public NotificationService(TaskMapper taskMapper, WorkspaceMapper workspaceMapper,
                                WorkspaceMemberMapper memberMapper, UserMapper userMapper,
-                               AppNotificationService appNotificationService) {
+                               AppNotificationService appNotificationService,
+                               @Qualifier("webhookRestTemplate") RestTemplate restTemplate) {
         this.taskMapper = taskMapper;
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.appNotificationService = appNotificationService;
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
-            @Override
-            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
-                super.prepareConnection(connection, httpMethod);
-                // 不跟随重定向：防止公开地址 302 到内网（SSRF 绕行）
-                connection.setInstanceFollowRedirects(false);
-            }
-        };
-        factory.setConnectTimeout(2000);
-        factory.setReadTimeout(3000);
-        this.restTemplate = new RestTemplate(factory);
+        /* OPS-2：webhook 与 AI 共用出站连接池；该 bean 连接 2s / 读 3s、不跟随重定向 */
+        this.restTemplate = restTemplate;
         this.remindSender = new ThreadPoolExecutor(2, 2, 60L, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<Runnable>(SEND_QUEUE_CAPACITY),
                 new ThreadFactory() {

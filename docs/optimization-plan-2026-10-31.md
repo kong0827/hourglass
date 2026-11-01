@@ -735,3 +735,10 @@ spring.datasource.hikari.connection-timeout: 3000
 - 事务：`GanttService` 的依赖增/改/删与 `revokeShare` 补 `@Transactional`。
 - 审计：覆盖导入成功后写一条配置审计；`ActivityService` 写库失败改为 `log.warn`（不再静默）。
 - 迁移：`sql/21_notify_split.sql`（幂等 ADD COLUMN），启动前执行。
+
+**第二十九轮：OPS-2 出站 HTTP 连接池**
+- 新增 `OutboundHttpConfig`：Apache HttpClient 4.5 连接池（总连接 24、单路由 12、空闲 30s 回收、复用前 2s 校验），禁用自动重试与重定向。
+- `aiRestTemplate`（连接 10s / 读 90s）与 `webhookRestTemplate`（连接 2s / 读 3s）共用同一连接池；`AiClient` / `NotificationService` 改为注入，删除各自新建 `RestTemplate` 的代码。
+- AI 总预算 150s（含 JSON 模式降级重试）：首轮超过 60s 或剩余预算不足 30s 时不再重试，避免顶到 nginx `/api/ai/` 的 200s。
+- pom 新增 `httpclient`（Boot 管理版本）+ `commons-codec 1.16.0`（离线仓库没有 Boot 默认的 1.15）。未引入 Caffeine。
+- 验证：`mvn -o -DskipTests package` 通过；真实上游连通性需在服务器验证。

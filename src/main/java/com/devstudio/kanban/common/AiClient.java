@@ -8,7 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -41,16 +41,19 @@ public class AiClient {
     private static final String DEFAULT_TIMEOUT_MSG = "AI 服务响应超时（已等待 90 秒）";
     /** 同时只允许 2 个上游请求：慢模型不能把 Tomcat 线程和连接堆满 */
     private static final java.util.concurrent.Semaphore AI_SLOTS = new java.util.concurrent.Semaphore(2);
+    /**
+     * 总预算 150 秒（含可能的 JSON 模式降级重试）：
+     * nginx 对 /api/ai/ 的 read timeout 是 200 秒，留 50 秒给序列化与网络抖动。
+     * 首轮已经用掉 60 秒时不再重试，否则两轮 90 秒会顶到 200 秒边界。
+     */
+    private static final long TOTAL_BUDGET_MS = 150000L;
+    private static final long RETRY_DEADLINE_MS = 60000L;
 
     private final ObjectMapper om = new ObjectMapper();
     private final RestTemplate rt;
 
-    public AiClient() {
-        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
-        f.setConnectTimeout(10000);
-        /* 单次读超时 90s；JSON 模式不支持时会重试一次，总预算仍要压在 nginx 的 200s 以内 */
-        f.setReadTimeout(90000);
-        this.rt = new RestTemplate(f);
+    public AiClient(@Qualifier("aiRestTemplate") RestTemplate rt) {
+        this.rt = rt;
     }
 
     /** 调用结果：正文 + 用量（用于在界面上说明"这次用了多少 token"） */
@@ -82,6 +85,7 @@ public class AiClient {
     }
 
     private Reply call(AiConfig cfg, String url, String systemPrompt, String userPrompt, boolean wantJson) {
+        long startedAt = System.currentTimeMillis();
         List<Map<String, String>> messages = new ArrayList<Map<String, String>>();
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
             messages.add(msg("system", systemPrompt));
@@ -93,6 +97,11 @@ public class AiClient {
         } catch (HttpStatusCodeException e) {
             /* JSON 模式不被支持：去掉 response_format 再试一次，其余错误照常抛 */
             if (wantJson && e.getRawStatusCode() == 400) {
+                long used = System.currentTimeMillis() - startedAt;
+                if (used > RETRY_DEADLINE_MS || TOTAL_BUDGET_MS - used < 30000L) {
+                    throw new IllegalStateException("AI 首轮响应过慢（已用 " + (used / 1000)
+                            + " 秒），为避免代理超时未再重试；请稍后重试或换更快的模型", e);
+                }
                 Reply r = doCall(cfg, url, messages, false);
                 return r;
             }

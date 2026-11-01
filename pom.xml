@@ -56,6 +56,17 @@
       <artifactId>jsoup</artifactId>
       <version>1.17.2</version>
     </dependency>
+    <!-- OPS-2：AI / webhook 出站请求共用连接池（版本由 Spring Boot 管理） -->
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+    </dependency>
+    <!-- 本地离线仓库没有 Boot 管理的 1.15；1.16 与 httpclient 4.5 兼容 -->
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <version>1.16.0</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

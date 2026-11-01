@@ -1140,3 +1140,10 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 ### 4. 权限矩阵约定修正
 
 越权现在返回 **HTTP 403**（响应体 `code=403`），与第十轮 HTTP 状态码统一一致；未登录仍为 HTTP 401。
+
+## 附录 · 2026-11-01 OPS-2：AI / webhook 出站连接池
+
+- 行为契约不变；仅底层传输改为共享连接池（Apache HttpClient 4.5）。
+- 超时口径：webhook 连接 2s / 读 3s（不跟随重定向）；AI 连接 10s / 读 90s。
+- AI 单次调用总预算 150s（含 `response_format` 降级重试）；nginx `location /api/ai/` 的 `proxy_read_timeout` 保持 200s，两侧对齐后前端不会先收到 504。
+- 并发上限不变：AI 同时最多 2 个上游请求，超出返回业务错误「AI 正忙」。
