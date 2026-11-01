@@ -44,8 +44,8 @@
   var etagOrder = [];
   var ETAG_MAX = 80;
 
-  function request(method, url, body, isForm) {
-    url = withWorkspace(url);
+  function request(method, url, body, isForm, skipWorkspace) {
+    if (!skipWorkspace) url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
     if (method === "GET" && etagCache[url]) {
       opts.headers["If-None-Match"] = etagCache[url].etag;
@@ -128,6 +128,12 @@
     }
   }
 
+  /* 显式指定空间：跨空间行内操作（我的任务）不能依赖当前空间 */
+  function withWs(url, wsId) {
+    if (!wsId) return url;
+    return url + (url.indexOf("?") === -1 ? "?" : "&") + "workspace=" + encodeURIComponent(wsId);
+  }
+
   window.API = {
     get: function (path, params) {
       return request("GET", path + buildQuery(params));
@@ -137,6 +143,16 @@
     },
     postGlobal: function (path, body) {
       return withoutWorkspace(function () { return request("POST", path, body); });
+    },
+    /* 这些方法接受空间 ID，用于「我的任务」等跨空间场景 */
+    postWs: function (wsId, path, body) {
+      return request("POST", withWs(path, wsId), body, false, true);
+    },
+    putWs: function (wsId, path, body) {
+      return request("PUT", withWs(path, wsId), body, false, true);
+    },
+    delWs: function (wsId, path) {
+      return request("DELETE", withWs(path, wsId), null, false, true);
     },
     post: function (path, body) {
       return request("POST", path, body);

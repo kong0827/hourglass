@@ -148,7 +148,13 @@ public interface TaskMapper {
      */
     List<Task> selectMyTasks(@Param("userId") String userId,
                              @Param("displayName") String displayName,
-                             @Param("openOnly") boolean openOnly);
+                             @Param("openOnly") boolean openOnly,
+                             @Param("q") String q,
+                             @Param("pris") java.util.List<String> pris,
+                             @Param("cats") java.util.List<String> cats,
+                             @Param("reqs") java.util.List<String> reqs,
+                             @Param("tags") java.util.List<String> tags,
+                             @Param("blocked") boolean blocked);
 
     /** 每任务评论数（看板角标） */
     List<com.devstudio.kanban.entity.TaskCountAgg> countCommentsByTask(@Param("workspaceId") String workspaceId);

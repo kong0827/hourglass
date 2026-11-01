@@ -151,7 +151,15 @@ public class TaskService {
 
     /** 跨空间「我的任务」（N-3） */
     public List<Task> myTasks(String userId, String displayName, boolean openOnly) {
-        List<Task> list = taskMapper.selectMyTasks(userId, displayName, openOnly);
+        return myTasks(userId, displayName, openOnly, new com.devstudio.kanban.dto.BoardQuery());
+    }
+
+    /** IA-3：我的任务收件箱接入统一筛选（q / 优先级 / 分类 / 项目 / 标签 / 被阻塞） */
+    public List<Task> myTasks(String userId, String displayName, boolean openOnly,
+                              com.devstudio.kanban.dto.BoardQuery query) {
+        List<Task> list = taskMapper.selectMyTasks(userId, displayName, openOnly,
+                com.devstudio.kanban.common.Texts.trimToNull(query.getQ()),
+                query.getPris(), query.getCats(), query.getReqs(), query.getTags(), query.isBlocked());
         if (list.isEmpty()) {
             return list;
         }

@@ -54,15 +54,46 @@
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
            w.name AS workspace_name
     FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     LEFT JOIN workspace w ON w.id = t.workspace_id
     WHERE t.deleted_at IS NULL
-      AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
       AND (t.owner_user_id = #{userId}
            <if test="displayName != null and displayName != ''">
              OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
            </if>)
       <if test="openOnly"> AND t.board_column != 'done' </if>
+      <if test="q != null">
+        AND (t.title LIKE CONCAT('%', #{q}, '%')
+             OR t.description LIKE CONCAT('%', #{q}, '%')
+             OR t.note LIKE CONCAT('%', #{q}, '%')
+             OR t.category LIKE CONCAT('%', #{q}, '%'))
+      </if>
+      <if test="pris != null and pris.size() > 0">
+        AND t.priority IN
+        <foreach collection="pris" item="p" open="(" separator="," close=")">#{p}</foreach>
+      </if>
+      <if test="cats != null and cats.size() > 0">
+        AND t.category IN
+        <foreach collection="cats" item="c" open="(" separator="," close=")">#{c}</foreach>
+      </if>
+      <if test="reqs != null and reqs.size() > 0">
+        AND (
+        <foreach collection="reqs" item="r" separator=" OR ">
+          <choose>
+            <when test="r == '__none'">t.req_id IS NULL</when>
+            <otherwise>t.req_id = #{r}</otherwise>
+          </choose>
+        </foreach>
+        )
+      </if>
+      <if test="tags != null and tags.size() > 0">
+        AND EXISTS (SELECT 1 FROM task_tag tt JOIN tag tg ON tg.id = tt.tag_id
+                    WHERE tt.task_id = t.id AND tg.name IN
+                    <foreach collection="tags" item="tg" open="(" separator="," close=")">#{tg}</foreach>)
+      </if>
+      <if test="blocked"> AND t.is_blocked = 1 </if>
     ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC
+    LIMIT 200
   </select>
 
   <insert id="insert">

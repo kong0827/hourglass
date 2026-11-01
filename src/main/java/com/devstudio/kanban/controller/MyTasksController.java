@@ -35,13 +35,22 @@ public class MyTasksController {
     }
 
     @GetMapping("/api/my-tasks")
-    public ApiResult<Map<String, Object>> myTasks(@RequestParam(required = false) String scope) {
+    public ApiResult<Map<String, Object>> myTasks(@RequestParam(required = false) String scope,
+                                                  @RequestParam(required = false) String q,
+                                                  @RequestParam(required = false) String pris,
+                                                  @RequestParam(required = false) String cats,
+                                                  @RequestParam(required = false) String reqs,
+                                                  @RequestParam(required = false) String tags,
+                                                  @RequestParam(required = false) Boolean blocked) {
         String userId = CurrentUser.id();
         AppUser me = userMapper.selectById(userId);
         String displayName = me == null ? null : Texts.trimToNull(me.getDisplayName());
         boolean openOnly = !"all".equals(scope);
 
-        List<Task> items = taskService.myTasks(userId, displayName, openOnly);
+        /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
+        com.devstudio.kanban.dto.BoardQuery query = com.devstudio.kanban.dto.BoardQuery.from(
+                q, null, pris, cats, reqs, tags, null, null, blocked, null, null, null, null);
+        List<Task> items = taskService.myTasks(userId, displayName, openOnly, query);
 
         /* 覆盖的空间列表（前端显示"覆盖 N 个空间"） */
         Set<String> wsIds = new LinkedHashSet<String>();

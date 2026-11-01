@@ -1153,3 +1153,18 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - `GET /api/calendar` 新增筛选参数：`q`、`owners`、`pris`、`cats`、`reqs`、`tags`、`due`、`focus`、`blocked`（与看板同名同义）。响应结构不变。
 - `GET /api/review` 的 `workMinutes` 新增 `mineWeek`（我在本周期内的工时，分钟）；原 `space` / `mine` / `spaceWeek` 不变。
 - 页面入口：侧栏不再直接提供「回收站」「用户管理」，分别并入「设置 → 数据」「设置 → 账号」；旧地址 `#/trash`、`#/users` 仍可用（自动跳到设置对应 tab）。
+
+## 附录 · 2026-11-01 IA-3：我的任务收件箱（增量）
+
+`GET /api/my-tasks` 参数扩展（全部可选，语义与看板同名参数一致）：
+
+| 参数 | 说明 |
+| --- | --- |
+| scope | `open`（默认，排除已完成）/ `all` |
+| q | 标题 / 描述 / 备注 / 分类子串（不区分大小写） |
+| pris / cats / reqs / tags | 逗号分隔多选；`reqs` 支持 `__none` |
+| blocked | `true` 只看被阻塞 |
+
+- 负责人维度固定为"我"，`owners` 参数被忽略。
+- SQL 改为显式 JOIN `workspace_member`，默认 `LIMIT 200`；返回结构不变（`items` / `total` / `spaces` / `matchedByNameOnly`）。
+- 前端行内完成 / 计时 / 改期使用显式 `workspace` 的写请求（`API.postWs` / `putWs`），不要求先切换空间。

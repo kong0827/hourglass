@@ -216,7 +216,9 @@
   position:relative;z-index:30;
 }
 body[data-view="board"] .filterbar,
-body[data-view="list"] .filterbar{display:flex;}
+body[data-view="list"] .filterbar,
+body[data-view="mine"] .filterbar,
+body[data-view="calendar"] .filterbar{display:flex;}
 .fb-main{display:flex;align-items:center;gap:16px;min-width:0;flex:1 1 auto;overflow:visible;}
 .fb-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto;}
 .fb-actions{display:flex;align-items:center;gap:6px;padding-left:12px;border-left:1px solid var(--border);}
