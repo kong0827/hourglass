@@ -16,8 +16,9 @@
     DELETE FROM task_baseline WHERE workspace_id = #{workspaceId}
   </delete>
 
-  <delete id="deleteByTask">
-    DELETE FROM task_baseline WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  <delete id="deleteByTaskIds">
+    DELETE FROM task_baseline WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
   <insert id="insertBatch">

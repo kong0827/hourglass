@@ -17,12 +17,15 @@ public interface TaskDependencyMapper {
 
     int insert(TaskDependency dep);
 
+    /** 备份导入：多行 INSERT IGNORE（uk_edge 冲突跳过） */
+    int insertBatch(@Param("list") List<TaskDependency> list);
+
     int update(TaskDependency dep);
 
     int deleteById(@Param("id") String id, @Param("workspaceId") String workspaceId);
 
-    /** 任务被彻底删除时清理相关依赖 */
-    int deleteByTask(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    /** 批量彻底删除：删除任一端的任务都要清掉这条边 */
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     /** 空间被删除 / 清空时清理全部依赖 */
     int deleteByWorkspace(@Param("workspaceId") String workspaceId);

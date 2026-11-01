@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -109,13 +111,17 @@ public class AttachmentService {
         log(userId, workspaceId, a.getTaskId(), "删除附件「" + a.getFilename() + "」");
     }
 
-    /** 任务被彻底删除（清空回收站/自动清理）时调用 */
-    public void deleteByTask(String workspaceId, String taskId) {
-        List<Attachment> list = attachmentMapper.selectByTaskId(workspaceId, taskId);
-        for (Attachment a : list) {
-            deleteFile(a);
+    /**
+     * 任务被彻底删除（清空回收站/自动清理）时调用：记录随事务删，磁盘文件等事务提交后再删。
+     * 提交前失败/回滚时文件仍在，避免"记录回滚了、文件已经没了"。
+     */
+    public void deleteByTasks(String workspaceId, List<String> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return;
         }
-        attachmentMapper.deleteByTaskId(workspaceId, taskId);
+        List<Attachment> list = attachmentMapper.selectByTaskIds(workspaceId, taskIds);
+        attachmentMapper.deleteByTaskIds(workspaceId, taskIds);
+        deleteFilesAfterCommit(list);
     }
 
     /** 导入覆盖/清空空间数据时调用 */
@@ -124,6 +130,26 @@ public class AttachmentService {
             deleteFile(a);
         }
         attachmentMapper.deleteAllByWorkspace(workspaceId);
+    }
+
+    private void deleteFilesAfterCommit(final List<Attachment> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    for (Attachment a : list) {
+                        deleteFile(a);
+                    }
+                }
+            });
+            return;
+        }
+        for (Attachment a : list) {
+            deleteFile(a);
+        }
     }
 
     private void deleteFile(Attachment a) {

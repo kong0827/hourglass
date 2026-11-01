@@ -23,7 +23,7 @@ public interface AttachmentMapper {
 
     int deleteById(String id);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

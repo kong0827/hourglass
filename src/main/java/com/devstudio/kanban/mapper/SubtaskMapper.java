@@ -18,11 +18,14 @@ public interface SubtaskMapper {
 
     int insert(Subtask subtask);
 
+    /** 备份导入：按批多值写入 */
+    int insertBatch(@Param("list") List<Subtask> list);
+
     int update(Subtask subtask);
 
     int deleteById(Long id);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 

@@ -684,3 +684,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - webhook 改有界线程池（2 线程、队列 100）：调度线程不等待；remindInFlight 防止重复发送；成功后才 markRemindSent，失败/队列满下轮重试。
 - RestTemplate 超时收紧到连接 2s/读取 3s（手动测试与每日汇总共用，属已知行为变化）。
 - 新增 sql/20_remind_scan.sql 幂等索引 idx_remind_scan(remind_sent, remind_at)。
+
+**第二十四轮：BE-Q-5 大事务拆分**
+- 回收站清理每 100 条一批、REQUIRES_NEW 独立事务；子表 task_id IN 批量删除；单批失败回滚该批并留待下次。
+- 彻底删除子表批量删除，附件文件 afterCommit 才删；回滚保留文件。
+- 备份导入拆为 4 阶段/每 500 条事务，任务/子任务/工时/评论/标签关联/依赖/基线改多值 INSERT；保持 ID 映射、归档重建、依赖成环跳过。导出流式化因会改 controller 契约未做。
+- 新增 6 个测试（分批、失败隔离、附件 afterCommit、500 行批量导入），共 15 个测试通过。

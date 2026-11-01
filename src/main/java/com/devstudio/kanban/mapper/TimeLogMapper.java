@@ -35,7 +35,10 @@ public interface TimeLogMapper {
 
     int insertCompleted(TimeLog timeLog);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    /** 备份导入：按批多值写入已完成的工时 */
+    int insertCompletedBatch(@Param("list") List<TimeLog> list);
+
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 

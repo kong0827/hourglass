@@ -13,6 +13,10 @@
     ORDER BY count DESC, t.name
   </select>
 
+  <select id="selectAllByWorkspace" resultType="Tag">
+    SELECT id, workspace_id, name, created_at FROM tag WHERE workspace_id = #{workspaceId} ORDER BY id
+  </select>
+
   <select id="selectByName" resultType="Tag">
     SELECT id, workspace_id, name, created_at FROM tag WHERE workspace_id = #{workspaceId} AND name = #{name}
   </select>
@@ -36,8 +40,20 @@
     INSERT IGNORE INTO task_tag (task_id, tag_id, workspace_id) VALUES (#{taskId}, #{tagId}, #{workspaceId})
   </insert>
 
+  <insert id="insertTaskTags">
+    INSERT IGNORE INTO task_tag (task_id, tag_id, workspace_id) VALUES
+    <foreach collection="list" item="r" separator=",">
+      (#{r.taskId}, #{r.tagId}, #{workspaceId})
+    </foreach>
+  </insert>
+
   <delete id="deleteTaskTags">
     DELETE FROM task_tag WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteTaskTagsByTaskIds">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
   <delete id="deleteAllTaskTagsByWorkspace">

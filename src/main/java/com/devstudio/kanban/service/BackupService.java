@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.BackupData;
+import com.devstudio.kanban.dto.TaskTagRef;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
 import com.devstudio.kanban.entity.DevBranch;
@@ -35,7 +36,9 @@ import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -45,9 +48,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * 备份：JSON 导出/导入（与旧版前端备份文件互通、按用户隔离）、CSV 导出
@@ -68,6 +73,10 @@ public class BackupService {
     private static final String DEFAULT_CAT_COLOR = "#8a8578";
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter ISO_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    /** 导入：每条多值 INSERT / 每个事务处理的业务行数 */
+    private static final int IMPORT_BATCH_SIZE = 500;
+    /** 完成归档每批条数：每条要读工时汇总再 upsert，单独切小 */
+    private static final int ARCHIVE_BATCH_SIZE = 100;
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
@@ -86,6 +95,8 @@ public class BackupService {
     private final TaskBaselineMapper baselineMapper;
     private final GanttShareMapper ganttShareMapper;
     private final TaskCompletionService completionService;
+    /** 导入按阶段/批次提交，避免整次导入占用一个长事务 */
+    private final TransactionTemplate txTemplate;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -98,7 +109,8 @@ public class BackupService {
                          TaskDependencyMapper dependencyMapper,
                          TaskBaselineMapper baselineMapper,
                          GanttShareMapper ganttShareMapper,
-                         TaskCompletionService completionService) {
+                         TaskCompletionService completionService,
+                         PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -116,6 +128,8 @@ public class BackupService {
         this.baselineMapper = baselineMapper;
         this.ganttShareMapper = ganttShareMapper;
         this.completionService = completionService;
+        this.txTemplate = new TransactionTemplate(transactionManager);
+        this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public BackupData export(String workspaceId) {
@@ -305,12 +319,44 @@ public class BackupService {
         return data;
     }
 
-    /** 覆盖式导入（与旧版行为一致）：清空当前空间的任务类数据后写入备份内容（附件/时间线保留） */
-    @Transactional
+    /**
+     * 覆盖式导入（与旧版行为一致）：清空当前空间的任务类数据后写入备份内容（附件/时间线保留）。
+     * 事务按阶段/批次拆分：清空 + 基础数据、每 500 条任务一批、关联数据、完成归档各自提交，
+     * 不再把整次导入包成一个长事务。导入是覆盖式且幂等的，中途失败后重新导入同一文件即可恢复。
+     */
     public BackupData.ImportResult importData(String userId, String workspaceId, BackupData data) {
         if (data == null || data.getTasks() == null) {
             throw AppException.badRequest("备份文件中未找到任务数据");
         }
+        ImportState st = new ImportState(userId, workspaceId);
+        st.existingTaskIds = existingTaskIdsInOtherWorkspaces(workspaceId, data);
+        st.memberIds = memberIdsOf(workspaceId);
+
+        // 阶段 1：清空旧数据 + 项目/分支/文档/分类/列/标签（一个短事务）
+        txTemplate.execute(status -> {
+            clearWorkspaceTaskData(workspaceId, data);
+            importReferenceData(data, st);
+            return null;
+        });
+        // 阶段 2：任务与子表，每 500 条一个事务
+        importTaskBatches(data, st);
+        // 阶段 3：依赖/基线/循环关联/评论，同样每 500 条一个事务
+        importLinks(data, st);
+        importComments(data, st);
+        // 阶段 4：完成归档重建（读工时汇总后 upsert，单独分批）
+        archiveDone(st);
+
+        BackupData.ImportResult result = new BackupData.ImportResult();
+        result.setTasks(st.taskCount);
+        result.setReqs(st.reqCount);
+        result.setComments(st.commentCount);
+        result.setReqDocs(st.reqDocCount);
+        result.setBranches(st.branchCount);
+        return result;
+    }
+
+    /** 阶段 1a：清空当前空间的任务类数据（附件/时间线保留） */
+    private void clearWorkspaceTaskData(String workspaceId, BackupData data) {
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
         // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"
         taskMapper.deleteAllByWorkspace(workspaceId);
@@ -333,21 +379,22 @@ public class BackupService {
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
 
         /* v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状 */
-        boolean withReqDocs = data.getReqDocs() != null;
-        boolean withBranches = data.getBranches() != null;
-        if (withReqDocs) {
+        if (data.getReqDocs() != null) {
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
-        if (withBranches) {
+        if (data.getBranches() != null) {
             devBranchMapper.deleteLogsByWorkspace(workspaceId);
             devBranchMapper.deleteByWorkspace(workspaceId);
         }
+    }
 
-        Set<String> reqIds = new HashSet<String>();
+    /** 阶段 1b：项目/分支/需求文档/分类/看板列/标签先落库，供任务引用 */
+    private void importReferenceData(BackupData data, ImportState st) {
+        String workspaceId = st.workspaceId;
+        Set<String> reqIds = st.reqIds;
         Set<String> seenReqIds = new HashSet<String>();
         /** 备份里项目ID → 实际落库ID（跨空间导入时 ID 被占用会重新生成，需回指任务关联） */
-        Map<String, String> reqIdMap = new HashMap<String, String>();
-        int reqCount = 0;
+        Map<String, String> reqIdMap = st.reqIdMap;
         if (data.getReqs() != null) {
             for (BackupData.BackupReq r : data.getReqs()) {
                 if (r == null) {
@@ -378,15 +425,15 @@ public class BackupService {
                 req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 160));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
                 reqMapper.insert(req);
-                reqCount++;
+                st.reqCount++;
             }
         }
 
-        Map<String, Integer> colSeq = new HashMap<String, Integer>();
+        Map<String, Integer> colSeq = st.colSeq;
 
         /* v6：分支池先于任务导入，任务上的 branchId 才能按映射落位 */
-        Map<String, String> branchIdMap = new HashMap<String, String>();
-        int branchCount = 0;
+        boolean withBranches = data.getBranches() != null;
+        Map<String, String> branchIdMap = st.branchIdMap;
         if (withBranches) {
             Set<String> seenBranchIds = new HashSet<String>();
             for (BackupData.BackupBranch bb : data.getBranches()) {
@@ -421,8 +468,8 @@ public class BackupService {
                 br.setStatus(oneOf(bb.getStatus(), new String[]{"dev", "testing", "merging", "released"}, "dev"));
                 br.setOwner(Texts.cut(Texts.trimToNull(bb.getOwner()), 32));
                 String ownerUserId = Texts.trimToNull(bb.getOwnerUserId());
-                br.setOwnerUserId(ownerUserId != null
-                        && memberMapper.selectMember(workspaceId, ownerUserId) != null ? ownerUserId : null);
+                br.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)
+                        ? ownerUserId : null);
                 br.setTargetBranch(Texts.cut(Texts.trimToNull(bb.getTargetBranch()), 80));
                 br.setNote(Texts.cut(Texts.trimToNull(bb.getNote()), 200));
                 br.setDevAt(parseTs(bb.getDevAt()));
@@ -433,13 +480,17 @@ public class BackupService {
                 br.setCreatedAt(parseTs(bb.getCreatedAt()));
                 br.setUpdatedAt(parseTs(bb.getUpdatedAt()));
                 devBranchMapper.insert(br);
-                branchCount++;
+                st.branchCount++;
             }
+        }
+        /* 分支校验集合：分支被覆盖时是本次新导入的，未覆盖时是空间里原有的 */
+        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId)) {
+            st.branchIds.add(br.getId());
         }
 
         /* v6：需求文档依赖项目映射；不存在的项目直接跳过，避免悬空引用 */
-        Map<String, String> reqDocIdMap = new HashMap<String, String>();
-        int reqDocCount = 0;
+        boolean withReqDocs = data.getReqDocs() != null;
+        Map<String, String> reqDocIdMap = st.reqDocIdMap;
         if (withReqDocs) {
             Set<String> seenDocIds = new HashSet<String>();
             for (BackupData.BackupReqDoc bd : data.getReqDocs()) {
@@ -481,13 +532,17 @@ public class BackupService {
                 doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
                 doc.setOwner(Texts.cut(Texts.trimToNull(bd.getOwner()), 32));
                 String ownerUserId = Texts.trimToNull(bd.getOwnerUserId());
-                doc.setOwnerUserId(ownerUserId != null
-                        && memberMapper.selectMember(workspaceId, ownerUserId) != null ? ownerUserId : null);
+                doc.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)
+                        ? ownerUserId : null);
                 doc.setCreatedAt(parseTs(bd.getCreatedAt()));
                 doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
                 requirementDocMapper.insert(doc);
-                reqDocCount++;
+                st.reqDocCount++;
             }
+        }
+        /* 关联需求校验集合：id → 所属项目（覆盖导入时是本次新写入的） */
+        for (RequirementDoc doc : requirementDocMapper.selectAllByWorkspace(workspaceId)) {
+            st.reqDocReqId.put(doc.getId(), doc.getReqId());
         }
 
         // 分类：按备份中出现的分类名补齐分类表（旧四类保留原配色），空则落默认分类
@@ -518,7 +573,7 @@ public class BackupService {
         }
         workspaceService.ensureDefaultsFor(workspaceId);
         List<Category> cats = categoryMapper.selectByWorkspace(workspaceId);
-        String defaultCat = cats.isEmpty() ? "" : cats.get(0).getName();
+        st.defaultCat = cats.isEmpty() ? "" : cats.get(0).getName();
 
         // 看板列定义：按备份补齐缺失列（跨空间导入时自定义列才能落位；已存在的列不覆盖目标设置）
         if (data.getColumns() != null) {
@@ -546,45 +601,58 @@ public class BackupService {
                 boardColumnMapper.insert(bc);
             }
         }
-        Set<String> colIds = new HashSet<String>();
-        Map<String, String> colNameToId = new HashMap<String, String>();
         for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
-            colIds.add(c.getId());
-            colNameToId.put(c.getName(), c.getId());
+            st.colIds.add(c.getId());
+            st.colNameToId.put(c.getName(), c.getId());
         }
 
-        Set<String> taskIds = new HashSet<String>();
-        Set<String> seenTaskIds = new HashSet<String>();
-        /** 备份任务ID → 实际落库ID（含跨空间重映射），导入完成后据此恢复循环派生关联 */
-        Map<String, String> taskIdMap = new HashMap<String, String>();
-        /** (落库任务ID, 备份中的 recurNextId)：全部任务落库后再校验并恢复 */
-        List<String[]> recurLinks = new ArrayList<String[]>();
-        int taskCount = 0;
-        List<Task> importedDone = new ArrayList<Task>();
-        for (BackupData.BackupTask b : data.getTasks()) {
+        ensureTags(st, collectTagNames(data));
+    }
+
+    /** 阶段 2：任务与其子表，每 500 条一个事务 */
+    private void importTaskBatches(BackupData data, ImportState st) {
+        List<BackupData.BackupTask> all = data.getTasks();
+        for (int from = 0; from < all.size(); from += IMPORT_BATCH_SIZE) {
+            final List<BackupData.BackupTask> batch = all.subList(from,
+                    Math.min(from + IMPORT_BATCH_SIZE, all.size()));
+            txTemplate.execute(status -> {
+                importTaskBatch(batch, st);
+                return null;
+            });
+        }
+    }
+
+    /** 一个批次：先把任务行按 500 条多值写入，再落实子表（子表语句同样按 500 行切分） */
+    private void importTaskBatch(List<BackupData.BackupTask> batch, ImportState st) {
+        String workspaceId = st.workspaceId;
+        List<Task> tasks = new ArrayList<Task>(batch.size());
+        List<Subtask> subtasks = new ArrayList<Subtask>();
+        List<TaskTagRef> tagLinks = new ArrayList<TaskTagRef>();
+        List<TimeLog> timeLogs = new ArrayList<TimeLog>();
+        for (BackupData.BackupTask b : batch) {
             if (b == null) {
                 continue;
             }
             String original = Ids.sanitize(Texts.trimToNull(b.getId()));
-            if (original != null && !seenTaskIds.add(original)) {
+            if (original != null && !st.seenTaskIds.add(original)) {
                 continue; // 备份内重复ID，跳过
             }
             String id;
-            if (original == null || taskMapper.selectById(original) != null) {
+            if (original == null || st.existingTaskIds.contains(original)) {
                 // 跨空间复制导入：ID 已被其他空间占用 → 重新生成
                 id = Ids.gen("K");
             } else {
                 id = original;
             }
-            if (!taskIds.add(id)) {
+            if (!st.taskIds.add(id)) {
                 continue;
             }
             if (original != null) {
-                taskIdMap.put(original, id);
+                st.taskIdMap.put(original, id);
             }
             String recurNext = Ids.sanitize(Texts.trimToNull(b.getRecurNextId()));
             if (recurNext != null) {
-                recurLinks.add(new String[]{id, recurNext});
+                st.recurLinks.add(new String[]{id, recurNext});
             }
             Task t = new Task();
             t.setId(id);
@@ -599,8 +667,8 @@ public class BackupService {
             }
             t.setOwner(owner == null || owner.isEmpty() ? "我" : Texts.cut(owner, 32));
             String cat = normalizeCatName(b.getCat());
-            t.setCategory(cat == null ? defaultCat : cat);
-            String col = mapColumn(b.getCol(), colIds, colNameToId);
+            t.setCategory(cat == null ? st.defaultCat : cat);
+            String col = mapColumn(b.getCol(), st.colIds, st.colNameToId);
             t.setBoardColumn(col);
             t.setStartDate(parseDate(b.getStart()));
             t.setDueDate(parseDate(b.getDue()));
@@ -616,35 +684,31 @@ public class BackupService {
             t.setCreatedAt(parseTs(b.getCreatedAt()));
             String reqId = Texts.trimToNull(b.getReqId());
             if (reqId != null) {
-                String mapped = reqIdMap.get(reqId);
+                String mapped = st.reqIdMap.get(reqId);
                 if (mapped != null) {
                     reqId = mapped;
                 }
             }
-            t.setReqId(reqId != null && reqIds.contains(reqId) ? reqId : null);
+            t.setReqId(reqId != null && st.reqIds.contains(reqId) ? reqId : null);
             /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
             String reqDocId = Texts.trimToNull(b.getReqDocId());
-            if (reqDocId != null && reqDocIdMap.containsKey(reqDocId)) {
-                reqDocId = reqDocIdMap.get(reqDocId);
+            if (reqDocId != null && st.reqDocIdMap.containsKey(reqDocId)) {
+                reqDocId = st.reqDocIdMap.get(reqDocId);
             }
             if (reqDocId != null) {
-                RequirementDoc doc = requirementDocMapper.selectById(reqDocId);
-                if (doc == null || !workspaceId.equals(doc.getWorkspaceId())
-                        || t.getReqId() == null || !t.getReqId().equals(doc.getReqId())) {
+                String docReqId = st.reqDocReqId.get(reqDocId);
+                if (docReqId == null || t.getReqId() == null || !t.getReqId().equals(docReqId)) {
                     reqDocId = null;
                 }
             }
             t.setReqDocId(reqDocId);
             /* 关联分支：空间级分支池，必须存在且同空间 */
             String branchId = Texts.trimToNull(b.getBranchId());
-            if (branchId != null && branchIdMap.containsKey(branchId)) {
-                branchId = branchIdMap.get(branchId);
+            if (branchId != null && st.branchIdMap.containsKey(branchId)) {
+                branchId = st.branchIdMap.get(branchId);
             }
-            if (branchId != null) {
-                DevBranch br = devBranchMapper.selectById(branchId);
-                if (br == null || !workspaceId.equals(br.getWorkspaceId())) {
-                    branchId = null;
-                }
+            if (branchId != null && !st.branchIds.contains(branchId)) {
+                branchId = null;
             }
             t.setBranchId(branchId);
             Integer est = b.getEstimateMinutes();
@@ -654,7 +718,7 @@ public class BackupService {
                     ? Texts.cut(Texts.trimToNull(b.getBlockedReason()), 120) : null);
             /* 负责人账号只在目标空间成员内恢复；否则保留显示名文本，避免出现“幽灵账号” */
             String ownerUserId = Texts.trimToNull(b.getOwnerUserId());
-            t.setOwnerUserId(ownerUserId != null && memberMapper.selectMember(workspaceId, ownerUserId) != null
+            t.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)
                     ? ownerUserId : null);
             t.setRemindTarget(oneOf(b.getRemindTarget(), new String[]{"owner", "owner+admin"}, "owner"));
             Integer progress = b.getProgress();
@@ -668,20 +732,16 @@ public class BackupService {
             t.setRemindAt(parseTs(b.getRemindAt()));
             t.setRemindSent(b.getRemindSent() != null && b.getRemindSent());
 
-            Integer seq = colSeq.get(col);
+            Integer seq = st.colSeq.get(col);
             int sortOrder = seq == null ? 0 : seq;
             t.setSortOrder(sortOrder);
-            colSeq.put(col, sortOrder + 1);
-
-            taskMapper.insert(t);
+            st.colSeq.put(col, sortOrder + 1);
 
             /* 回收站任务：按原删除时间放回回收站（不重新出现在看板） */
-            LocalDateTime deletedAt = parseTs(b.getDeletedAt());
-            if (deletedAt != null) {
-                taskMapper.setDeletedAt(id, deletedAt);
-            }
+            t.setDeletedAt(parseTs(b.getDeletedAt()));
+            tasks.add(t);
             if (Consts.COL_DONE.equals(t.getBoardColumn())) {
-                importedDone.add(t);
+                st.importedDone.add(t);
             }
 
             if (b.getSubtasks() != null) {
@@ -693,36 +753,34 @@ public class BackupService {
                     if (subTitle == null) {
                         continue;
                     }
-                    Subtask st = new Subtask();
-                    st.setTaskId(id);
-                    st.setWorkspaceId(workspaceId);
-                    st.setTitle(Texts.cut(subTitle, 60));
-                    st.setDone(sb.getDone() != null && sb.getDone());
-                    subtaskMapper.insert(st);
+                    Subtask sub = new Subtask();
+                    sub.setTaskId(id);
+                    sub.setWorkspaceId(workspaceId);
+                    sub.setTitle(Texts.cut(subTitle, 60));
+                    sub.setDone(sb.getDone() != null && sb.getDone());
+                    subtasks.add(sub);
                 }
             }
             if (b.getTags() != null) {
                 Set<String> seen = new HashSet<String>();
                 int n = 0;
                 for (String raw : b.getTags()) {
-                    String name = Texts.trimToNull(raw);
-                    if (name == null) {
-                        continue;
-                    }
-                    name = name.replace(',', ' ').replace('，', ' ').trim();
-                    if (name.isEmpty()) {
-                        continue;
-                    }
-                    name = Texts.cut(name, 16);
-                    if (!seen.add(name)) {
+                    String name = normalizeTagName(raw);
+                    if (name == null || !seen.add(name)) {
                         continue;
                     }
                     if (++n > 8) {
                         break;
                     }
-                    Tag tag = findOrCreateTag(workspaceId, name);
+                    Tag tag = st.tagByName.get(name);
+                    if (tag == null) {
+                        tag = findOrCreateTag(workspaceId, name);
+                        if (tag != null) {
+                            st.tagByName.put(name, tag);
+                        }
+                    }
                     if (tag != null) {
-                        tagMapper.insertTaskTag(id, tag.getId(), workspaceId);
+                        tagLinks.add(new TaskTagRef(id, tag.getId()));
                     }
                 }
             }
@@ -738,8 +796,8 @@ public class BackupService {
                     int mins = item.getMinutes() == null ? 1 : Math.max(1, item.getMinutes());
                     // 原计时人不在目标空间（跨空间导入）：归导入者，避免工时记录变成幽灵账号
                     String logUserId = Texts.trimToNull(item.getUserId());
-                    if (logUserId == null || memberMapper.selectMember(workspaceId, logUserId) == null) {
-                        logUserId = userId;
+                    if (logUserId == null || !st.memberIds.contains(logUserId)) {
+                        logUserId = st.userId;
                     }
                     TimeLog tl = new TimeLog();
                     tl.setTaskId(id);
@@ -748,13 +806,28 @@ public class BackupService {
                     tl.setStartedAt(started);
                     tl.setEndedAt(started.plusMinutes(mins));
                     tl.setMinutes(mins);
-                    timeLogMapper.insertCompleted(tl);
+                    timeLogs.add(tl);
                 }
             }
-            taskCount++;
+            st.taskCount++;
         }
 
+        if (!tasks.isEmpty()) {
+            taskMapper.insertBatch(tasks);
+        }
+        insertInBatches(subtasks, subtaskMapper::insertBatch);
+        insertInBatches(tagLinks, rows -> tagMapper.insertTaskTags(workspaceId, rows));
+        insertInBatches(timeLogs, timeLogMapper::insertCompletedBatch);
+    }
+
+    /** 阶段 3a：依赖 / 基线 / 循环派生关联 */
+    private void importLinks(BackupData data, ImportState st) {
+        String workspaceId = st.workspaceId;
+        Map<String, String> taskIdMap = st.taskIdMap;
+        Set<String> taskIds = st.taskIds;
+
         // 恢复依赖：任务 ID 可能被重映射；跳过自环、重复边与成环边
+        List<TaskDependency> deps = new ArrayList<TaskDependency>();
         if (data.getDeps() != null) {
             Map<String, Set<String>> adj = new HashMap<String, Set<String>>();
             Set<String> seenEdges = new HashSet<String>();
@@ -785,18 +858,16 @@ public class BackupService {
                 dep.setToTaskId(depTo);
                 dep.setDepType(depType);
                 dep.setLagDays(lag);
-                try {
-                    dependencyMapper.insert(dep);
-                    Set<String> next = adj.get(depFrom);
-                    if (next == null) {
-                        next = new HashSet<String>();
-                        adj.put(depFrom, next);
-                    }
-                    next.add(depTo);
-                } catch (Exception ignored) {
-                    // 唯一键冲突等异常：跳过该边
+                deps.add(dep);
+                Set<String> next = adj.get(depFrom);
+                if (next == null) {
+                    next = new HashSet<String>();
+                    adj.put(depFrom, next);
                 }
+                next.add(depTo);
             }
+            /* INSERT IGNORE：uk_edge 冲突时跳过该边（等价于旧的逐条 try/catch） */
+            eachChunk(deps, dependencyMapper::insertBatch);
         }
 
         // 恢复基线：只保留本次导入里存在的任务
@@ -828,60 +899,70 @@ public class BackupService {
                 tb.setCapturedAt(captured);
                 baselineRows.add(tb);
             }
-            if (!baselineRows.isEmpty()) {
-                baselineMapper.insertBatch(baselineRows);
-            }
+            eachChunk(baselineRows, baselineMapper::insertBatch);
         }
 
         // 恢复循环派生关联：等到全部任务落库后，按 ID 映射校验目标存在性再写回（旧备份无此字段则跳过）
-        for (String[] link : recurLinks) {
-            String nextId = taskIdMap.get(link[1]);
-            if (nextId == null || taskMapper.selectById(nextId) == null) {
+        List<String[]> links = new ArrayList<String[]>();
+        for (String[] link : st.recurLinks) {
+            String nextId = st.taskIdMap.get(link[1]);
+            if (nextId == null || !st.taskIds.contains(nextId)) {
                 continue; // 派生的下一次任务不在本次导入中：保持无关联，完成时会重新生成
             }
-            taskMapper.setRecurNext(link[0], nextId);
+            links.add(new String[]{link[0], nextId});
         }
-
-        /* 评论：任务 ID 可能因跨空间冲突被重映射，按 taskIdMap 回指；不在本次备份里的任务评论跳过 */
-        int commentCount = 0;
-        if (data.getComments() != null) {
-            for (BackupData.BackupComment c : data.getComments()) {
-                if (c == null) {
-                    continue;
-                }
-                String originalTaskId = Texts.trimToNull(c.getTaskId());
-                String mappedTaskId = originalTaskId == null ? null : taskIdMap.get(originalTaskId);
-                if (mappedTaskId == null) {
-                    continue;
-                }
-                String content = Texts.cut(Texts.trimToNull(c.getContent()), 500);
-                if (content == null) {
-                    continue;
-                }
-                TaskComment tc = new TaskComment();
-                tc.setTaskId(mappedTaskId);
-                tc.setWorkspaceId(workspaceId);
-                tc.setAuthorId(Texts.cut(Texts.trimToNull(c.getAuthorId()), 32));
-                tc.setAuthorName(Texts.cut(Texts.trimToNull(c.getAuthorName()), 32));
-                tc.setContent(content);
-                tc.setCreatedAt(parseTs(c.getCreatedAt()));
-                commentMapper.insert(tc);
-                commentCount++;
+        eachChunk(links, batch -> {
+            for (String[] link : batch) {
+                taskMapper.setRecurNext(link[0], link[1]);
             }
-        }
+        });
+    }
 
-        /* 完成归档是任务快照的派生物：按导入后的任务与工时重建「任务清单」 */
-        for (Task t : importedDone) {
-            completionService.archive(t);
+    /** 阶段 3b：评论（任务 ID 可能因跨空间冲突被重映射，按 taskIdMap 回指） */
+    private void importComments(BackupData data, ImportState st) {
+        if (data.getComments() == null) {
+            return;
         }
+        String workspaceId = st.workspaceId;
+        List<TaskComment> rows = new ArrayList<TaskComment>();
+        for (BackupData.BackupComment c : data.getComments()) {
+            if (c == null) {
+                continue;
+            }
+            String originalTaskId = Texts.trimToNull(c.getTaskId());
+            String mappedTaskId = originalTaskId == null ? null : st.taskIdMap.get(originalTaskId);
+            if (mappedTaskId == null) {
+                continue;
+            }
+            String content = Texts.cut(Texts.trimToNull(c.getContent()), 500);
+            if (content == null) {
+                continue;
+            }
+            TaskComment tc = new TaskComment();
+            tc.setTaskId(mappedTaskId);
+            tc.setWorkspaceId(workspaceId);
+            tc.setAuthorId(Texts.cut(Texts.trimToNull(c.getAuthorId()), 32));
+            tc.setAuthorName(Texts.cut(Texts.trimToNull(c.getAuthorName()), 32));
+            tc.setContent(content);
+            tc.setCreatedAt(parseTs(c.getCreatedAt()));
+            rows.add(tc);
+            st.commentCount++;
+        }
+        eachChunk(rows, commentMapper::insertBatch);
+    }
 
-        BackupData.ImportResult result = new BackupData.ImportResult();
-        result.setTasks(taskCount);
-        result.setReqs(reqCount);
-        result.setComments(commentCount);
-        result.setReqDocs(reqDocCount);
-        result.setBranches(branchCount);
-        return result;
+    /** 阶段 4：完成归档是任务快照的派生物，按导入后的任务与工时重建「任务清单」 */
+    private void archiveDone(ImportState st) {
+        for (int from = 0; from < st.importedDone.size(); from += ARCHIVE_BATCH_SIZE) {
+            final List<Task> batch = st.importedDone.subList(from,
+                    Math.min(from + ARCHIVE_BATCH_SIZE, st.importedDone.size()));
+            txTemplate.execute(status -> {
+                for (Task t : batch) {
+                    completionService.archive(t);
+                }
+                return null;
+            });
+        }
     }
 
     /** CSV 导出（Excel 可直接打开，带 BOM） */
@@ -937,6 +1018,156 @@ public class BackupService {
               .append("\r\n");
         }
         return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /* ==================== 导入批次工具 ==================== */
+
+    private static final class ImportState {
+        final String userId;
+        final String workspaceId;
+        /** 其它空间已占用的任务 ID（本空间任务已清空，可复用原 ID） */
+        Set<String> existingTaskIds = new HashSet<String>();
+        Set<String> memberIds = new HashSet<String>();
+        final Set<String> reqIds = new HashSet<String>();
+        final Map<String, String> reqIdMap = new HashMap<String, String>();
+        /** 需求文档 id → 所属项目 id（本空间） */
+        final Map<String, String> reqDocReqId = new HashMap<String, String>();
+        final Set<String> branchIds = new HashSet<String>();
+        final Set<String> colIds = new HashSet<String>();
+        final Map<String, String> colNameToId = new HashMap<String, String>();
+        String defaultCat = "";
+        /** 标签名 → 标签（阶段 1 预建，阶段 2 只读） */
+        final Map<String, Tag> tagByName = new HashMap<String, Tag>();
+        final Map<String, Integer> colSeq = new HashMap<String, Integer>();
+        final Set<String> taskIds = new HashSet<String>();
+        final Set<String> seenTaskIds = new HashSet<String>();
+        final Map<String, String> taskIdMap = new HashMap<String, String>();
+        final Map<String, String> branchIdMap = new HashMap<String, String>();
+        final Map<String, String> reqDocIdMap = new HashMap<String, String>();
+        final List<String[]> recurLinks = new ArrayList<String[]>();
+        final List<Task> importedDone = new ArrayList<Task>();
+        int reqCount;
+        int branchCount;
+        int reqDocCount;
+        int taskCount;
+        int commentCount;
+
+        ImportState(String userId, String workspaceId) {
+            this.userId = userId;
+            this.workspaceId = workspaceId;
+        }
+    }
+
+    /** 只查其它空间的任务 ID：本空间任务会在阶段 1 清空，原 ID 可以复用 */
+    private Set<String> existingTaskIdsInOtherWorkspaces(String workspaceId, BackupData data) {
+        Set<String> originals = new LinkedHashSet<String>();
+        for (BackupData.BackupTask b : data.getTasks()) {
+            if (b == null) {
+                continue;
+            }
+            String original = Ids.sanitize(Texts.trimToNull(b.getId()));
+            if (original != null) {
+                originals.add(original);
+            }
+        }
+        Set<String> existing = new HashSet<String>();
+        List<String> ids = new ArrayList<String>(originals);
+        for (int from = 0; from < ids.size(); from += IMPORT_BATCH_SIZE) {
+            List<String> chunk = ids.subList(from, Math.min(from + IMPORT_BATCH_SIZE, ids.size()));
+            existing.addAll(taskMapper.selectIdsInOtherWorkspaces(workspaceId, chunk));
+        }
+        return existing;
+    }
+
+    private Set<String> memberIdsOf(String workspaceId) {
+        return new HashSet<String>(memberMapper.selectUserIds(workspaceId));
+    }
+
+    /** 与任务循环里的标签处理同口径（去空白/逗号、截断 16、去重、每任务最多 8 个） */
+    private String normalizeTagName(String raw) {
+        String name = Texts.trimToNull(raw);
+        if (name == null) {
+            return null;
+        }
+        name = name.replace(',', ' ').replace('，', ' ').trim();
+        if (name.isEmpty()) {
+            return null;
+        }
+        return Texts.cut(name, 16);
+    }
+
+    private Set<String> collectTagNames(BackupData data) {
+        Set<String> names = new LinkedHashSet<String>();
+        Set<String> seenTaskIds = new HashSet<String>();
+        for (BackupData.BackupTask b : data.getTasks()) {
+            if (b == null) {
+                continue;
+            }
+            /* 与任务循环一致：备份内的重复任务 ID 只按第一条处理，不给被跳过的条目建标签 */
+            String original = Ids.sanitize(Texts.trimToNull(b.getId()));
+            if (original != null && !seenTaskIds.add(original)) {
+                continue;
+            }
+            if (b.getTags() == null) {
+                continue;
+            }
+            Set<String> seen = new HashSet<String>();
+            int n = 0;
+            for (String raw : b.getTags()) {
+                String name = normalizeTagName(raw);
+                if (name == null || !seen.add(name)) {
+                    continue;
+                }
+                if (++n > 8) {
+                    break;
+                }
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    /** 阶段 1 预建标签：任务循环里不再逐个 selectByName */
+    private void ensureTags(ImportState st, Set<String> names) {
+        for (Tag tag : tagMapper.selectAllByWorkspace(st.workspaceId)) {
+            st.tagByName.put(tag.getName(), tag);
+        }
+        for (String name : names) {
+            if (st.tagByName.containsKey(name)) {
+                continue;
+            }
+            Tag tag = new Tag();
+            tag.setId(Ids.gen("T"));
+            tag.setWorkspaceId(st.workspaceId);
+            tag.setName(name);
+            try {
+                tagMapper.insert(tag);
+                st.tagByName.put(name, tag);
+            } catch (Exception e) {
+                Tag existing = tagMapper.selectByName(st.workspaceId, name);
+                if (existing != null) {
+                    st.tagByName.put(name, existing);
+                }
+            }
+        }
+    }
+
+    /** 当前事务内按批执行语句（用于一个任务批里的子表） */
+    private <T> void insertInBatches(List<T> rows, Consumer<List<T>> inserter) {
+        for (int from = 0; from < rows.size(); from += IMPORT_BATCH_SIZE) {
+            inserter.accept(rows.subList(from, Math.min(from + IMPORT_BATCH_SIZE, rows.size())));
+        }
+    }
+
+    /** 每批一个独立事务（用于依赖/基线/循环关联/评论） */
+    private <T> void eachChunk(List<T> rows, Consumer<List<T>> action) {
+        for (int from = 0; from < rows.size(); from += IMPORT_BATCH_SIZE) {
+            final List<T> chunk = rows.subList(from, Math.min(from + IMPORT_BATCH_SIZE, rows.size()));
+            txTemplate.execute(status -> {
+                action.accept(chunk);
+                return null;
+            });
+        }
     }
 
     private Map<String, List<String>> tagsOf(String workspaceId, List<String> taskIds) {

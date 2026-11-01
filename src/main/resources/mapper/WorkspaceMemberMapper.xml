@@ -11,6 +11,10 @@
     ORDER BY CASE WHEN m.role = 'owner' THEN 0 ELSE 1 END, u.display_name, u.id
   </select>
 
+  <select id="selectUserIds" resultType="string">
+    SELECT user_id FROM workspace_member WHERE workspace_id = #{workspaceId}
+  </select>
+
   <select id="selectMember" resultType="WorkspaceMember">
     SELECT workspace_id, user_id, role, created_at
     FROM workspace_member

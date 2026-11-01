@@ -11,6 +11,9 @@ public interface WorkspaceMemberMapper {
 
     List<WorkspaceMember> selectByWorkspace(@Param("workspaceId") String workspaceId);
 
+    /** 备份导入：一次取回成员 user_id 集合，替代逐个 selectMember */
+    List<String> selectUserIds(@Param("workspaceId") String workspaceId);
+
     WorkspaceMember selectMember(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
 
     int insert(WorkspaceMember member);

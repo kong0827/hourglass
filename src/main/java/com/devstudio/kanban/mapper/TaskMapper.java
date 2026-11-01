@@ -79,18 +79,25 @@ public interface TaskMapper {
 
     int insert(Task task);
 
+    /** 备份导入：按批多值写入（含回收站的 deleted_at） */
+    int insertBatch(@Param("list") List<Task> list);
+
+    /** 备份导入前预判 ID：本空间数据已清空，只有其它空间的同 ID 才需要重映射 */
+    List<String> selectIdsInOtherWorkspaces(@Param("workspaceId") String workspaceId,
+                                            @Param("ids") List<String> ids);
+
     int update(Task task);
 
     int deleteById(String id);
+
+    /** 回收站批量彻底删除 */
+    int deleteByIds(@Param("ids") List<String> ids);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 
     int softDelete(String id);
 
     int restore(String id);
-
-    /** 导入回收站任务时恢复原删除时间（用于保留剩余保留期） */
-    int setDeletedAt(@Param("id") String id, @Param("deletedAt") java.time.LocalDateTime deletedAt);
 
     List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff);
 
@@ -106,8 +113,8 @@ public interface TaskMapper {
     /** 只更新循环派生关联（仅当尚无关联时生效）：并发完成时后到的更新影响 0 行，调用方据此回删刚插入的任务 */
     int setRecurNext(@Param("id") String id, @Param("recurNextId") String recurNextId);
 
-    /** 清除所有指向该任务的循环派生关联（任务被彻底删除时调用，防止 ID 复用后误认） */
-    int clearRecurNext(@Param("taskId") String taskId);
+    /** 清除所有指向这些任务的循环派生关联（彻底删除时调用，防止 ID 复用后误认） */
+    int clearRecurNextByTaskIds(@Param("taskIds") List<String> taskIds);
 
     int updateSortOrder(@Param("id") String id, @Param("sortOrder") int sortOrder);
 

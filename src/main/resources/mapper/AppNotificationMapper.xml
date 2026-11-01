@@ -46,8 +46,9 @@
       AND ref_task_id IS NULL AND type = #{type} AND created_at &gt;= #{since}
   </select>
 
-  <delete id="deleteByTaskId">
-    DELETE FROM app_notification WHERE workspace_id = #{workspaceId} AND ref_task_id = #{taskId}
+  <delete id="deleteByTaskIds">
+    DELETE FROM app_notification WHERE workspace_id = #{workspaceId} AND ref_task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
   <delete id="deleteAllByWorkspace">

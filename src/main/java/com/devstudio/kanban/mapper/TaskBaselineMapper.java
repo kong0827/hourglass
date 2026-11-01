@@ -17,7 +17,7 @@ public interface TaskBaselineMapper {
 
     int deleteByWorkspace(@Param("workspaceId") String workspaceId);
 
-    int deleteByTask(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int insertBatch(@Param("list") List<TaskBaseline> list);
 }

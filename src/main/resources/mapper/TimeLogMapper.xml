@@ -53,8 +53,17 @@
     VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt}, #{endedAt}, #{minutes})
   </insert>
 
-  <delete id="deleteByTaskId">
-    DELETE FROM time_log WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  <insert id="insertCompletedBatch">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes)
+    VALUES
+    <foreach collection="list" item="t" separator=",">
+      (#{t.taskId}, #{t.workspaceId}, #{t.userId}, #{t.startedAt}, #{t.endedAt}, #{t.minutes})
+    </foreach>
+  </insert>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM time_log WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
   <delete id="deleteAllByWorkspace">

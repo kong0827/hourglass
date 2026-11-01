@@ -30,7 +30,7 @@ public interface AppNotificationMapper {
     int countRecentNoRef(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
                          @Param("type") String type, @Param("since") java.time.LocalDateTime since);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

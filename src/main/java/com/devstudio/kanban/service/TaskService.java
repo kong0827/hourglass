@@ -46,8 +46,13 @@ import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -66,10 +71,13 @@ import java.util.Set;
 @Service
 public class TaskService {
 
+    private static final Logger log = LoggerFactory.getLogger(TaskService.class);
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
     private static final int LIST_LIMIT = 500;
     /** 列内排序的稀疏步长：插入时取中值，只有间隔用完才整列重排 */
     private static final int SORT_STEP = 1024;
+    /** 回收站清理每批条数：每批一个独立事务，单批失败不影响其它批 */
+    private static final int PURGE_BATCH_SIZE = 100;
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
@@ -98,6 +106,8 @@ public class TaskService {
     private final TaskBaselineMapper baselineMapper;
     /** 负责人必须是空间成员 */
     private final WorkspaceMemberMapper memberMapper;
+    /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
+    private final TransactionTemplate purgeTx;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -112,7 +122,8 @@ public class TaskService {
                        DevBranchMapper devBranchMapper,
                        TaskDependencyMapper dependencyMapper,
                        TaskBaselineMapper baselineMapper,
-                       WorkspaceMemberMapper memberMapper) {
+                       WorkspaceMemberMapper memberMapper,
+                       PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -133,6 +144,8 @@ public class TaskService {
         this.dependencyMapper = dependencyMapper;
         this.baselineMapper = baselineMapper;
         this.memberMapper = memberMapper;
+        this.purgeTx = new TransactionTemplate(transactionManager);
+        this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -792,19 +805,32 @@ public class TaskService {
         if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() == null) {
             throw AppException.notFound("回收站中没有该任务：" + id);
         }
-        deleteChildren(t);
+        deleteChildren(Collections.singletonList(t));
         taskMapper.deleteById(id);
     }
 
-    /** 定时任务调用：清理超过保留期的回收站任务（跨空间），返回清理条数 */
-    @Transactional
+    /**
+     * 定时任务调用：清理超过保留期的回收站任务（跨空间），返回成功清理的条数。
+     * 每 100 条一个独立事务：单批失败只回滚该批（任务留在回收站，下次再清），不影响其它批。
+     */
     public int purgeExpired(LocalDateTime cutoff) {
         List<Task> tasks = taskMapper.selectPurgeable(cutoff);
-        for (Task t : tasks) {
-            deleteChildren(t);
-            taskMapper.deleteById(t.getId());
+        int purged = 0;
+        for (int from = 0; from < tasks.size(); from += PURGE_BATCH_SIZE) {
+            final List<Task> batch = new ArrayList<Task>(
+                    tasks.subList(from, Math.min(from + PURGE_BATCH_SIZE, tasks.size())));
+            try {
+                purgeTx.execute(status -> {
+                    purgeBatch(batch);
+                    return null;
+                });
+                purged += batch.size();
+            } catch (Exception e) {
+                log.warn("回收站清理批次失败（{} 条），本批回滚，留待下次清理：{}",
+                        batch.size(), e.getMessage(), e);
+            }
         }
-        return tasks.size();
+        return purged;
     }
 
     /* ==================== 列 ==================== */
@@ -823,25 +849,50 @@ public class TaskService {
         return t;
     }
 
-    private void deleteChildren(Task t) {
-        subtaskMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
-        tagMapper.deleteTaskTags(t.getWorkspaceId(), t.getId());
-        timeLogMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
-        attachmentService.deleteByTask(t.getWorkspaceId(), t.getId());
-        logMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
-        /* 完成快照不随任务删除：任务清单是历史快照，彻底删除后仍保留；
-           ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
-        /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清。
-           漏清的后果不只是"孤儿数据无限增长"——TaskMapper.countChildRefs 把 task_comment
-           计入，已彻底删除的任务 ID 会因此被永久锁死（既不能新建同 ID，同 ID 还原时
-           旧评论还会挂到新任务上，把上一个任务的讨论显示给新任务）。 */
-        commentMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
-        appNotificationMapper.deleteByTaskId(t.getWorkspaceId(), t.getId());
+    /** 一批任务一个事务内的彻底删除；子表按 task_id IN (...) 一次清完 */
+    private void purgeBatch(List<Task> tasks) {
+        deleteChildren(tasks);
+        List<String> ids = new ArrayList<String>(tasks.size());
+        for (Task t : tasks) {
+            ids.add(t.getId());
+        }
+        taskMapper.deleteByIds(ids);
+    }
+
+    private void deleteChildren(List<Task> tasks) {
+        Map<String, List<String>> idsByWorkspace = new LinkedHashMap<String, List<String>>();
+        List<String> allIds = new ArrayList<String>(tasks.size());
+        for (Task t : tasks) {
+            List<String> ids = idsByWorkspace.get(t.getWorkspaceId());
+            if (ids == null) {
+                ids = new ArrayList<String>();
+                idsByWorkspace.put(t.getWorkspaceId(), ids);
+            }
+            ids.add(t.getId());
+            allIds.add(t.getId());
+        }
         // 任务行即将消失、ID 可被复用：清掉上游循环派生关联，避免之后误认到无关的新任务
-        taskMapper.clearRecurNext(t.getId());
-        /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
-        dependencyMapper.deleteByTask(t.getWorkspaceId(), t.getId());
-        baselineMapper.deleteByTask(t.getWorkspaceId(), t.getId());
+        taskMapper.clearRecurNextByTaskIds(allIds);
+        for (Map.Entry<String, List<String>> entry : idsByWorkspace.entrySet()) {
+            String ws = entry.getKey();
+            List<String> ids = entry.getValue();
+            subtaskMapper.deleteByTaskIds(ws, ids);
+            tagMapper.deleteTaskTagsByTaskIds(ws, ids);
+            timeLogMapper.deleteByTaskIds(ws, ids);
+            attachmentService.deleteByTasks(ws, ids);
+            logMapper.deleteByTaskIds(ws, ids);
+            /* 完成快照不随任务删除：任务清单是历史快照，彻底删除后仍保留；
+               ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
+            /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清。
+               漏清的后果不只是"孤儿数据无限增长"——TaskMapper.countChildRefs 把 task_comment
+               计入，已彻底删除的任务 ID 会因此被永久锁死（既不能新建同 ID，同 ID 还原时
+               旧评论还会挂到新任务上，把上一个任务的讨论显示给新任务）。 */
+            commentMapper.deleteByTaskIds(ws, ids);
+            appNotificationMapper.deleteByTaskIds(ws, ids);
+            /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
+            dependencyMapper.deleteByTaskIds(ws, ids);
+            baselineMapper.deleteByTaskIds(ws, ids);
+        }
     }
 
     /* 计时相关的计算（有效工时 / 关闭计时）已统一收在 TimeLogService，这里不再各留一套口径 */

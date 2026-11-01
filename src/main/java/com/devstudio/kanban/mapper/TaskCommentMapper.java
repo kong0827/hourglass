@@ -18,9 +18,12 @@ public interface TaskCommentMapper {
 
     int insert(TaskComment comment);
 
+    /** 备份导入：按批多值写入 */
+    int insertBatch(@Param("list") List<TaskComment> list);
+
     int deleteById(@Param("id") Long id);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

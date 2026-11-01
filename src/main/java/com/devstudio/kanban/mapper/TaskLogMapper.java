@@ -29,7 +29,7 @@ public interface TaskLogMapper {
                                      @Param("from") java.time.LocalDate from,
                                      @Param("to") java.time.LocalDate to);
 
-    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }
