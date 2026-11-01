@@ -776,3 +776,12 @@ spring.datasource.hikari.connection-timeout: 3000
 - 甘特图在 ≤900px 已是只读（`ganttReadOnly()`：隐藏拖拽改期与依赖编辑），移动端沿用。
 - 顶栏压缩：副标题与 `Ctrl K` 提示隐藏、搜索框吃剩余宽度、新建按钮收窄；提示条与页脚在移动端隐藏，表格视图保留横向滚动。
 - 验证：无头 Edge 390×844 模拟（底部 5 个 tab、看板列宽 358px、更多菜单 5 项并可跳转分析、抽屉 390px 全宽、无 JS 异常）。
+
+**第三十五轮：BE-ARCH-2 / BE-ARCH-1（部分）/ CODE-5（配套工具）**
+- BE-ARCH-2 完成：
+  - 新增 `@CurrentWorkspace WorkspaceCtx` 参数解析器，解析规则与 `WorkspaceService.resolve` 完全一致（显式 workspace 严格校验、缺省回退上次/个人空间）。
+  - 新增 `@RequireRole`（OWNER）：在参数解析阶段校验空间角色，不足返回 HTTP 403；已用于彻底删除任务、清除基线、甘特分享的三个接口。
+  - 新增 `@BoardFilter BoardQuery` 解析器：看板 / 已完成 / 列表 / 日历 / 甘特 / 资源负载不再各重复声明 13 个 `@RequestParam`；HTTP 参数名与语义不变。
+  - `TaskController`、`GanttController` 改用解析器；新增 `TaskControllerResolveTest`（CSV 多选/分页绑定、成员 403、空间主放行），共 36 个测试通过。
+- BE-ARCH-1（部分）：抽出 `TaskAuditLogger`（操作日志 + 字段差异 + 项目名/循环/日期格式化），`TaskService` 从 1554 行降到 1440 行。`TaskQueryService` / `TaskCommandService` / `TaskWorkflowService` / `TaskTrashService` 的完整拆分**未做**：purge/循环/计时联动与 `TaskService` 的私有状态强耦合，本地没有真实 MySQL，拆分后无法做等价性验证（任务迁移/归档/恢复/循环派生都靠数据库约束），按风险优先原则暂缓。
+- CODE-5（部分）：新增 `tools/check-assets.js`，校验 SW `SHELL` 文件存在、页面引用的 js/css 均已预缓存、`CACHE_NAME` 带版本号。**app.js 的 ESM 拆分未做**：零构建下 `app.js` 是单个 IIFE，11100+ 行、149 个顶层 var 被跨视图重赋值；改为 ES Module 需要先大规模状态对象化（`export const S`）并逐视图迁移，属于多日改造，且本机无法跑完整后端做回归，本轮不冒险半途改造。
