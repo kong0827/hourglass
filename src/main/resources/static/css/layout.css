@@ -326,3 +326,68 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
   transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out);
 }
 .rail-tip.on{opacity:1;transform:none;}
+
+/* ===================== MOB-1：<768px 移动端 ===================== */
+.mob-more{display:none;}
+@media (max-width:767px){
+  :root{--content-pad:12px;}
+  .app-foot,.narrow-hint{display:none!important;}
+  /* 侧栏改为底部 tab（我的任务 / 看板 / 日历 / 周回顾 / 更多） */
+  .sidebar{
+    position:fixed;left:0;right:0;bottom:0;top:auto;
+    width:100%!important;height:58px;flex-direction:row;
+    border-right:none;border-top:1px solid var(--border);z-index:110;
+    box-shadow:0 -6px 20px rgba(16,24,40,.08);
+  }
+  .side-brand,.side-ws,.side-foot,.rail-btn,.nav-sec{display:none!important;}
+  .side-nav{
+    flex-direction:row;flex:1 1 auto;min-height:0;
+    overflow-x:auto;overflow-y:hidden;padding:0;gap:0;
+  }
+  .side-nav .nav-item{display:none;}
+  .side-nav .nav-item[data-view="mine"],
+  .side-nav .nav-item[data-view="board"],
+  .side-nav .nav-item[data-view="calendar"],
+  .side-nav .nav-item[data-view="review"]{
+    display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;
+    align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;
+  }
+  .side-nav .nav-item.on{background:var(--primary-soft);}
+  .side-nav .nav-dot{position:absolute;top:4px;right:calc(50% - 24px);margin:0;min-width:15px;height:15px;font-size:9.5px;padding:0 4px;}
+  .mob-more{display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;}
+  .main{width:100%;}
+  .topbar{height:52px;padding:0 12px;gap:8px;}
+  .tb-title{font-size:15px;}
+  .tb-sub{display:none;}
+  .gs-kbd{display:none;}
+  .timer-pill .tp-name{max-width:72px;}
+  .view{padding:0 12px 84px;}
+  .board{padding:12px 12px 84px;scroll-snap-type:x mandatory;}
+  .board-col{width:calc(100vw - 32px);scroll-snap-align:center;height:calc(100% - 12px);}
+  .filterbar{padding:0 12px;overflow-x:auto;}
+  .drawer{width:100%;top:0;bottom:0;border-left:none;}
+  .drawer-head{padding:0 12px;}
+  .drawer-body{padding:16px 12px 24px;}
+  .drawer-foot{padding:0 12px;}
+  .analysis-bar{padding:6px 12px 0;}
+  #view-analysis .view-page{padding-bottom:84px;}
+  .toast-layer{bottom:64px;}
+  /* 表格类视图在窄屏横向滚动，不挤压列 */
+  .mine-groups .list-scroll,.list-scroll{overflow-x:auto;}
+  .mine-groups .list-row,.list-row{min-width:880px;}
+}
+
+@media (max-width:767px){
+  /* 顶栏在 360~390 宽度下不换行：搜索框吃剩余宽度，次要按钮保持 32px */
+  .tb-right{flex:1 1 auto;justify-content:flex-end;gap:6px;min-width:0;}
+  .global-search{flex:1 1 88px;min-width:56px;padding:0 8px;}
+  .global-search input{width:100%;min-width:0;}
+  .topbar .btn.primary{padding:0 10px;}
+  .topbar .btn.primary svg:last-child{display:none;}
+}
+
+@media (max-width:767px){
+  /* 覆盖 views.css 里后加载的桌面列宽 */
+  .side-nav .mob-more{display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;}
+  #view-board .board .board-col{width:calc(100vw - 32px)!important;}
+}

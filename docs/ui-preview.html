@@ -597,6 +597,71 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 }
 .rail-tip.on{opacity:1;transform:none;}
 
+/* ===================== MOB-1：<768px 移动端 ===================== */
+.mob-more{display:none;}
+@media (max-width:767px){
+  :root{--content-pad:12px;}
+  .app-foot,.narrow-hint{display:none!important;}
+  /* 侧栏改为底部 tab（我的任务 / 看板 / 日历 / 周回顾 / 更多） */
+  .sidebar{
+    position:fixed;left:0;right:0;bottom:0;top:auto;
+    width:100%!important;height:58px;flex-direction:row;
+    border-right:none;border-top:1px solid var(--border);z-index:110;
+    box-shadow:0 -6px 20px rgba(16,24,40,.08);
+  }
+  .side-brand,.side-ws,.side-foot,.rail-btn,.nav-sec{display:none!important;}
+  .side-nav{
+    flex-direction:row;flex:1 1 auto;min-height:0;
+    overflow-x:auto;overflow-y:hidden;padding:0;gap:0;
+  }
+  .side-nav .nav-item{display:none;}
+  .side-nav .nav-item[data-view="mine"],
+  .side-nav .nav-item[data-view="board"],
+  .side-nav .nav-item[data-view="calendar"],
+  .side-nav .nav-item[data-view="review"]{
+    display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;
+    align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;
+  }
+  .side-nav .nav-item.on{background:var(--primary-soft);}
+  .side-nav .nav-dot{position:absolute;top:4px;right:calc(50% - 24px);margin:0;min-width:15px;height:15px;font-size:9.5px;padding:0 4px;}
+  .mob-more{display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;}
+  .main{width:100%;}
+  .topbar{height:52px;padding:0 12px;gap:8px;}
+  .tb-title{font-size:15px;}
+  .tb-sub{display:none;}
+  .gs-kbd{display:none;}
+  .timer-pill .tp-name{max-width:72px;}
+  .view{padding:0 12px 84px;}
+  .board{padding:12px 12px 84px;scroll-snap-type:x mandatory;}
+  .board-col{width:calc(100vw - 32px);scroll-snap-align:center;height:calc(100% - 12px);}
+  .filterbar{padding:0 12px;overflow-x:auto;}
+  .drawer{width:100%;top:0;bottom:0;border-left:none;}
+  .drawer-head{padding:0 12px;}
+  .drawer-body{padding:16px 12px 24px;}
+  .drawer-foot{padding:0 12px;}
+  .analysis-bar{padding:6px 12px 0;}
+  #view-analysis .view-page{padding-bottom:84px;}
+  .toast-layer{bottom:64px;}
+  /* 表格类视图在窄屏横向滚动，不挤压列 */
+  .mine-groups .list-scroll,.list-scroll{overflow-x:auto;}
+  .mine-groups .list-row,.list-row{min-width:880px;}
+}
+
+@media (max-width:767px){
+  /* 顶栏在 360~390 宽度下不换行：搜索框吃剩余宽度，次要按钮保持 32px */
+  .tb-right{flex:1 1 auto;justify-content:flex-end;gap:6px;min-width:0;}
+  .global-search{flex:1 1 88px;min-width:56px;padding:0 8px;}
+  .global-search input{width:100%;min-width:0;}
+  .topbar .btn.primary{padding:0 10px;}
+  .topbar .btn.primary svg:last-child{display:none;}
+}
+
+@media (max-width:767px){
+  /* 覆盖 views.css 里后加载的桌面列宽 */
+  .side-nav .mob-more{display:flex;flex:1 0 20%;height:58px;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;border-radius:0;font-size:10.5px;font-weight:600;}
+  #view-board .board .board-col{width:calc(100vw - 32px)!important;}
+}
+
 </style>
 <style>
 /* ==========================================================================
@@ -3011,6 +3076,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
       <button class="nav-item" type="button" data-view="analysis">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.6V9.4M10 15.6V4.4M16 15.6v-4"/><path d="M2.6 17.4h14.8"/></svg>
         <span class="nl">分析</span>
+      </button>
+
+      <button class="nav-item mob-more" type="button" id="mobMore" aria-haspopup="true" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg>
+        <span class="nl">更多</span>
       </button>
 
       <span class="nav-sec">管理</span>
@@ -6808,10 +6878,31 @@ function refreshActiveView(){
   }
 }
 $("sideNav").addEventListener("click", function(e){
+  /* MOB-1：底部 tab 的「更多」 */
+  if(e.target.closest("#mobMore")){ openMobMore(); return; }
   var b = e.target.closest("[data-view]");
   if(b) showView(b.dataset.view);
 });
-
+function openMobMore(){
+  var btn = $("mobMore");
+  var menu = $("mobMoreMenu");
+  if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+  if(!menu){
+    menu = document.createElement("div");
+    menu.className = "menu";
+    menu.id = "mobMoreMenu";
+    menu.innerHTML = [["projects","项目"],["branches","分支"],["analysis","分析"],["settings","设置"],["profile","个人设置"]]
+      .map(function(x){ return '<button class="menu-item" type="button" data-mob-view="' + x[0] + '">' + x[1] + '</button>'; }).join("");
+    document.body.appendChild(menu);
+    menu.addEventListener("click", function(ev){
+      var mb = ev.target.closest("[data-mob-view]");
+      if(!mb) return;
+      UI.closeAllPops();
+      showView(mb.dataset.mobView);
+    });
+  }
+  UI.openPop(menu, btn, {align:"right"});
+}
 /* ==================== 派生计算 ==================== */
 function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
 /* 只有「待处理」「已完成」以外的列才能计时 —— 与后端 move 的自动计时判断保持一致。
@@ -18024,6 +18115,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 12:20</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 12:24</span></div>
 </body>
 </html>

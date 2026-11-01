@@ -386,10 +386,31 @@ function refreshActiveView(){
   }
 }
 $("sideNav").addEventListener("click", function(e){
+  /* MOB-1：底部 tab 的「更多」 */
+  if(e.target.closest("#mobMore")){ openMobMore(); return; }
   var b = e.target.closest("[data-view]");
   if(b) showView(b.dataset.view);
 });
-
+function openMobMore(){
+  var btn = $("mobMore");
+  var menu = $("mobMoreMenu");
+  if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+  if(!menu){
+    menu = document.createElement("div");
+    menu.className = "menu";
+    menu.id = "mobMoreMenu";
+    menu.innerHTML = [["projects","项目"],["branches","分支"],["analysis","分析"],["settings","设置"],["profile","个人设置"]]
+      .map(function(x){ return '<button class="menu-item" type="button" data-mob-view="' + x[0] + '">' + x[1] + '</button>'; }).join("");
+    document.body.appendChild(menu);
+    menu.addEventListener("click", function(ev){
+      var mb = ev.target.closest("[data-mob-view]");
+      if(!mb) return;
+      UI.closeAllPops();
+      showView(mb.dataset.mobView);
+    });
+  }
+  UI.openPop(menu, btn, {align:"right"});
+}
 /* ==================== 派生计算 ==================== */
 function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
 /* 只有「待处理」「已完成」以外的列才能计时 —— 与后端 move 的自动计时判断保持一致。
