@@ -27,16 +27,19 @@ public class BoardColumnService {
     private final BoardColumnMapper boardColumnMapper;
     private final TaskMapper taskMapper;
     private final ActivityService activityService;
+    /** 列定义缓存：读列表/查名/排序校验共用，写入口负责失效 */
+    private final WorkspaceMetaCache metaCache;
 
     public BoardColumnService(BoardColumnMapper boardColumnMapper, TaskMapper taskMapper,
-                              ActivityService activityService) {
+                              ActivityService activityService, WorkspaceMetaCache metaCache) {
         this.boardColumnMapper = boardColumnMapper;
         this.taskMapper = taskMapper;
         this.activityService = activityService;
+        this.metaCache = metaCache;
     }
 
     public List<BoardColumn> list(String workspaceId) {
-        return boardColumnMapper.selectAll(workspaceId);
+        return metaCache.columns(workspaceId);
     }
 
     @Transactional
@@ -50,6 +53,7 @@ public class BoardColumnService {
         c.setColor(normalizeColor(req.getColor()));
         c.setSortOrder(boardColumnMapper.maxSortOrder(workspaceId) + 1);
         boardColumnMapper.insert(c);
+        evictColumns(workspaceId);
         return boardColumnMapper.selectById(workspaceId, c.getId());
     }
 
@@ -64,6 +68,7 @@ public class BoardColumnService {
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
         boardColumnMapper.update(c);
+        evictColumns(workspaceId);
         return boardColumnMapper.selectById(workspaceId, id);
     }
 
@@ -79,7 +84,7 @@ public class BoardColumnService {
         }
         String target = null;
         String targetName = null;
-        for (BoardColumn other : boardColumnMapper.selectAll(workspaceId)) {
+        for (BoardColumn other : metaCache.columns(workspaceId)) {
             if (!other.getId().equals(id)) {
                 target = other.getId();
                 targetName = other.getName();
@@ -92,6 +97,7 @@ public class BoardColumnService {
         boardColumnMapper.moveTasks(workspaceId, id, target);
         boardColumnMapper.deleteById(workspaceId, id);
         renumber(workspaceId, target);
+        evictColumns(workspaceId);
         /* O-9：破坏性配置变更留审计（活动流可见）
            第九轮审查 #9：文案写列名而不是列 ID，否则活动流里会出现「C1a2b3c4」这种不可读内容 */
         activityService.logConfig(workspaceId,
@@ -102,7 +108,7 @@ public class BoardColumnService {
     @Transactional
     public void order(String workspaceId, List<String> ids) {
         Set<String> known = new HashSet<String>();
-        for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
             known.add(c.getId());
         }
         Set<String> unique = new HashSet<String>(ids);
@@ -112,6 +118,7 @@ public class BoardColumnService {
         for (int i = 0; i < ids.size(); i++) {
             boardColumnMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
+        evictColumns(workspaceId);
     }
 
     private void renumber(String workspaceId, String columnId) {
@@ -130,11 +137,18 @@ public class BoardColumnService {
         if ("已完成".equals(name)) {
             throw AppException.badRequest("「已完成」是系统保留列名");
         }
-        for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
             if (name.equals(c.getName()) && !c.getId().equals(selfId)) {
                 throw AppException.badRequest("已存在同名看板列：" + name);
             }
         }
+    }
+
+    private void evictColumns(String workspaceId) {
+        /* 事务内先清一次（本请求后续读取也是最新值），提交后再清一次，
+           防止提交前的并发读把旧列表重新装回缓存 */
+        metaCache.evictColumns(workspaceId);
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evictColumns(workspaceId));
     }
 
     private String normalizeColor(String color) {

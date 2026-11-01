@@ -419,6 +419,24 @@ ALTER TABLE task ADD KEY idx_remind_scan (remind_sent, remind_at);       -- 配�
 - **现状**：项目里没有任何业务缓存。每个请求的 `resolve` / `requireMember` 都要查 2–3 次（`WorkspaceService.java:127-157`）；`buildMeta` 每次都查分类、标签、项目；`columnName()` / `columnIndexMap` 每次都查列定义（`TaskService.java:1448-1464`，`move` 和 `update` 各调用 2 次）。
 - **建议**：引入 Caffeine 2.x（兼容 Java 8，**这是新增依赖，需要用户同意**）。成员关系按 `(userId, wsId)` 缓存，TTL 60 秒，成员或角色变更时主动失效；列定义、分类、标签、项目这些 meta 按空间缓存，用 BE-RT-4 的版本号失效。如果不想加依赖，就用 `ConcurrentHashMap` 加版本号自己实现。
 
+#### 实现记录（2026-11-01，`ConcurrentHashMap` 方案，未新增依赖）
+
+- **新增组件**
+  - `WorkspaceMemberCache`：`(workspaceId, userId)` → 空间快照 + `myRole`，TTL 默认 60 秒（`app.cache.member-ttl-seconds`）。每次读取返回副本；非 `owner` 一律清空 `notifyWebhook`/`notifyToken`，因此命中缓存也不会绕过 `maskWebhook`。不缓存负结果，也不缓存用户私有数据。
+  - `WorkspaceMetaCache`：按空间缓存看板列、分类、标签列表；条目记录 `WorkspaceVersionService` 版本号，版本变化即重新加载；另有兜底 TTL（`app.cache.meta-ttl-seconds`，默认 300 秒）。返回只读副本。
+  - `CacheSync`：事务内写库后把失效动作注册到 `afterCommit`，避免“提交前并发读把旧值重新装回缓存”；无事务时立即失效。
+- **接入点**
+  - `WorkspaceService.resolve/requireMember` 走成员缓存；`select` 的“上次空间”分支同样走成员缓存。
+  - 主动失效：`addMember`、`joinByInvite`、`removeMember`（含主动退出）、`update`（改名/推送配置）、`deleteShared`、`wipeData`、`ensureDefaultsFor`，以及 `UserService.delete`（`evictUser`）。当前代码库没有“修改成员角色”的入口；若以后新增，必须调用 `WorkspaceMemberCache.evict`/`evictWorkspace`，否则角色变更最多延迟 60 秒。
+  - `update` 改为先 `requireOwnerRaw` 取库内最新配置再整行回写，避免把缓存快照的旧字段覆盖回库。
+  - 写入口主动失效：`BoardColumnService`（增删改/排序）、`CategoryService`（增删改/排序）、`TaskService.saveTags`（标签及计数）；其余写请求仍由 `ChangeBroadcastFilter` 成功后的版本号 bump 统一失效。
+  - `TaskService` 的 `columnName`、`columnIndexMap`、`columnOrder`、`validateColumn`、`columnExists`、`firstOpenColumn`、看板列定义、`buildMeta` 的分类/标签均改用 meta 缓存；一次 `move/update` 内不再重复查列定义。
+- **缓存边界**：只缓存空间配置与 `(用户, 空间)` 角色关系；不缓存任务/列表/看板响应体、ETag 响应、通知内容、AI 配置、用户资料或任何用户私有数据。
+- **失效与延迟上限**：本进程内成员增删/角色变更/空间改名删除立即失效；直接改库、其它实例写入或定时任务造成的变更，成员关系最多延迟 60 秒（TTL），meta 最多延迟 300 秒（兜底 TTL）。
+- **部署约束**：**进程内缓存、单实例**。多实例部署时各实例的内存互不通知，上面的延迟上限会按实例生效；若必须多实例，应移除本缓存或改用 Redis 等共享缓存。
+- **服务器验证**：本地无真实 MySQL，以下未实测，需在服务器执行——(1) 成员移除后该用户下一次请求立即 404，且空间名改名后成员视角立即更新；(2) 新建/改名/删除看板列后，看板与 `/api/columns` 立即反映（版本号 bump）；(3) 普通成员访问 `/api/workspaces` 与空间设置响应中无 `notifyWebhook`/`notifyToken`；(4) 连续 `move/update` 的 SQL 日志中列定义查询显著减少；(5) 观察内存占用随空间/成员数量增长是否可控。
+- **已知权衡**：`WorkspaceMemberCache` 按成员存空间快照（含 webhook 配置），成员多的大空间会多占少量内存；进程重启后缓存清空，无持久化。`TaskCascade` 的定时清理（无 HTTP 请求）不会 bump 版本号，标签计数最多延迟一个 meta TTL。
+
 ### BE-ARCH-1 拆分 TaskService `P1·L`
 - **位置**：`TaskService.java` 共 1487 行，构造器注入了 19 个依赖（`:96-128`）。
 - **拆分方案**（Controller 的签名不变）：
@@ -575,7 +593,7 @@ spring.datasource.hikari.connection-timeout: 3000
 - BUG-11（已按 v6）：备份导出/导入新增 `reqDocs` 与 `branches`，跨空间导入时项目/需求/分支/任务 ID 统一重映射；v6 备份覆盖文档与分支（分支操作时间线不迁移），旧备份保留现状。
 
 **未做 / 待决策**
-- F-NET-1/2/3、F-RENDER-1~4、BE-RT-2/4、BE-Q-2/5、BE-CACHE-1、IA-1~6、UX-2~8、MOB-1、CODE-1/3/4/5、TEST-1 尚未开始；其中 BE-CACHE-1、TEST-1、OPS-2 的连接池方案涉及新增依赖，需先确认。
+- F-NET-1/2/3、F-RENDER-1~4、BE-RT-2/4、BE-Q-2/5、IA-1~6、UX-2~8、MOB-1、CODE-1/3/4/5、TEST-1 尚未开始；其中 TEST-1、OPS-2 的连接池方案涉及新增依赖，需先确认。（BE-CACHE-1 已于 2026-11-01 用进程内 `ConcurrentHashMap` 实现，未新增依赖，见下方实现记录。）
 - `sql/17` 必须先执行再启动新 jar（需求列表依赖 `content_brief`）；索引脚本建议低峰执行并用 `EXPLAIN` 复核。
 
 **复查后追加修复（同日）**
@@ -601,7 +619,7 @@ spring.datasource.hikari.connection-timeout: 3000
 **仍未做（被文档自身前置条件或依赖阻塞）**
 - TEST-1：需要新增 `spring-boot-starter-test`（文档要求先补测试再动 BE-Q-1/BE-ARCH-1/CODE-5）。
 - IA-1/2/3/5、MOB-1、BE-Q-1/2/3/5、BE-ARCH-1/2/3、CODE-5：L/M 级结构性改造，需测试与真实库 EXPLAIN 验证，建议单独排期。
-- BE-RT-4 ETag、BE-CACHE-1（Caffeine）、OPS-2 连接池（HttpComponents）、UX-3 FilterBar、UX-6/7、CODE-1/3/4、BE-Q-4：尚未开始；其中 Caffeine/HttpComponents/测试依赖需用户同意。
+- BE-RT-4 ETag、OPS-2 连接池（HttpComponents）、UX-3 FilterBar、UX-6/7、CODE-1/3/4、BE-Q-4：尚未开始；其中 HttpComponents/测试依赖需用户同意。BE-CACHE-1 已实现（进程内 `ConcurrentHashMap` + 版本号，未新增依赖，单实例）。
 
 **第四轮：TEST-1 与复查修复**
 - 新增 `spring-boot-starter-test`（test 范围）与 `src/test/java`：WorkTime（16 个时段/上限用例）、TaskCalc（进度/截止边界）、EstimateService（0.85/1.15 边界与无计时样本）、Ids（分享令牌/ID 白名单）、PublicGanttTask 白名单字段快照；`mvn test` 9 个测试通过。
@@ -696,3 +714,10 @@ spring.datasource.hikari.connection-timeout: 3000
 - TaskService.purge/purgeExpired、WorkspaceService.wipeData、BackupService 导入清空段全部委托 TaskCascade，删除三处重复清单。
 - 新增 TaskCascadeTest（逐表批量删、跨空间分组、清空全表、导入保留项、清单快照、sql/ 建表扫描），共 21 个测试。
 - 顺带修复 BE-Q-1 遗留：countDoneInScope 引用缺失的 scopeAll 参数、countReviewStatus 的 over 保留字别名。
+
+**第二十六轮：BE-CACHE-1 进程内缓存**
+- WorkspaceMemberCache：(workspaceId,userId) 空间快照+myRole，TTL 60s，返回副本；非 owner 出口强制清 notifyWebhook/notifyToken；成员/角色/空间变更主动失效。
+- WorkspaceMetaCache：列/分类/标签按空间缓存，WorkspaceVersionService 版本失效 + 300s 兜底；只读副本。
+- CacheSync：写事务 afterCommit 失效，避免提交前并发读回填旧值。
+- TaskService 的列名/列序/校验/看板列定义统一走缓存；部署 README 注明单实例。
+- 新增 10 个缓存测试，共 31 个测试通过。

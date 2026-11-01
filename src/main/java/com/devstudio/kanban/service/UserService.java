@@ -50,6 +50,7 @@ public class UserService implements UserDetailsService {
     private final RequirementMapper reqMapper;
     private final WorkspaceService workspaceService;
     private final PasswordEncoder encoder;
+    private final WorkspaceMemberCache memberCache;
 
     @Value("${app.auth.username:admin}")
     private String bootstrapUser;
@@ -59,7 +60,8 @@ public class UserService implements UserDetailsService {
 
     public UserService(UserMapper userMapper, WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                        TaskMapper taskMapper, RequirementMapper reqMapper,
-                       WorkspaceService workspaceService, PasswordEncoder encoder) {
+                       WorkspaceService workspaceService, PasswordEncoder encoder,
+                       WorkspaceMemberCache memberCache) {
         this.userMapper = userMapper;
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
@@ -67,6 +69,7 @@ public class UserService implements UserDetailsService {
         this.reqMapper = reqMapper;
         this.workspaceService = workspaceService;
         this.encoder = encoder;
+        this.memberCache = memberCache;
     }
 
     /* ==================== 登录 ==================== */
@@ -247,6 +250,7 @@ public class UserService implements UserDetailsService {
         workspaceService.wipeData(personalId);
         workspaceMapper.deleteById(personalId);
         userMapper.deleteById(id);
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evictUser(id));
     }
 
     /* ==================== 内部 ==================== */

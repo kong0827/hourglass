@@ -30,7 +30,6 @@ import com.devstudio.kanban.entity.TaskFacetRow;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.mapper.AttachmentMapper;
-import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
@@ -81,7 +80,6 @@ public class TaskService {
     private final SubtaskMapper subtaskMapper;
     private final TagMapper tagMapper;
     private final TimeLogMapper timeLogMapper;
-    private final BoardColumnMapper boardColumnMapper;
     private final CategoryMapper categoryMapper;
     private final AttachmentService attachmentService;
     private final UserMapper userMapper;
@@ -100,10 +98,12 @@ public class TaskService {
     private final WorkspaceMemberMapper memberMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
+    /** 列/分类/标签定义缓存（按空间版本号失效，避免一次 move/update 重复查列定义） */
+    private final WorkspaceMetaCache metaCache;
 
     public TaskService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
-                       BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
+                       CategoryMapper categoryMapper,
                        AttachmentService attachmentService, UserMapper userMapper,
                        AttachmentMapper attachmentMapper,
                        TaskCascade cascade,
@@ -112,14 +112,14 @@ public class TaskService {
                        RequirementDocMapper requirementDocMapper,
                        DevBranchMapper devBranchMapper,
                        WorkspaceMemberMapper memberMapper,
-                       PlatformTransactionManager transactionManager) {
+                       PlatformTransactionManager transactionManager,
+                       WorkspaceMetaCache metaCache) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
         this.tagMapper = tagMapper;
         this.timeLogMapper = timeLogMapper;
-        this.boardColumnMapper = boardColumnMapper;
         this.categoryMapper = categoryMapper;
         this.attachmentService = attachmentService;
         this.userMapper = userMapper;
@@ -132,6 +132,7 @@ public class TaskService {
         this.memberMapper = memberMapper;
         this.purgeTx = new TransactionTemplate(transactionManager);
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.metaCache = metaCache;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -173,7 +174,7 @@ public class TaskService {
 
     public BoardResponse board(String workspaceId, BoardQuery query) {
         LocalDate today = LocalDate.now();
-        List<BoardColumn> configCols = boardColumnMapper.selectAll(workspaceId);
+        List<BoardColumn> configCols = metaCache.columns(workspaceId);
         Map<String, List<Task>> byCol = new LinkedHashMap<String, List<Task>>();
         for (BoardColumn c : configCols) {
             byCol.put(c.getId(), new ArrayList<Task>());
@@ -746,11 +747,11 @@ public class TaskService {
         if (Consts.COL_BACKLOG.equals(column) || Consts.COL_DOING.equals(column) || Consts.COL_DONE.equals(column)) {
             return true;
         }
-        return boardColumnMapper.selectById(workspaceId, column) != null;
+        return metaCache.column(workspaceId, column) != null;
     }
 
     private String firstOpenColumn(String workspaceId) {
-        for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
             if (!Consts.COL_DONE.equals(c.getId())) {
                 return c.getId();
             }
@@ -821,7 +822,7 @@ public class TaskService {
     /* ==================== 列 ==================== */
 
     public List<BoardColumn> boardColumns(String workspaceId) {
-        return boardColumnMapper.selectAll(workspaceId);
+        return metaCache.columns(workspaceId);
     }
 
     /* ==================== 内部方法 ==================== */
@@ -881,7 +882,7 @@ public class TaskService {
         } else {
             return null;
         }
-        List<BoardColumn> cols = boardColumnMapper.selectAll(workspaceId);
+        List<BoardColumn> cols = metaCache.columns(workspaceId);
         String firstCol = cols.isEmpty() ? Consts.COL_BACKLOG : cols.get(0).getId();
 
         Task nt = new Task();
@@ -1054,7 +1055,7 @@ public class TaskService {
     }
 
     private String defaultCategory(String workspaceId) {
-        List<Category> list = categoryMapper.selectByWorkspace(workspaceId);
+        List<Category> list = metaCache.categories(workspaceId);
         return list.isEmpty() ? "" : list.get(0).getName();
     }
 
@@ -1062,13 +1063,15 @@ public class TaskService {
         if (Consts.COL_DONE.equals(column)) {
             return;
         }
-        if (boardColumnMapper.selectById(workspaceId, column) == null) {
+        if (metaCache.column(workspaceId, column) == null) {
             throw AppException.badRequest("看板列不存在：" + column);
         }
     }
 
     private void saveTags(String workspaceId, String taskId, List<String> names) {
         tagMapper.deleteTaskTags(workspaceId, taskId);
+        /* 标签及关联计数变了：清缓存，下一次看板/联想重新查库 */
+        evictTagMeta(workspaceId);
         if (names == null) {
             return;
         }
@@ -1108,6 +1111,11 @@ public class TaskService {
             }
             tagMapper.insertTaskTag(taskId, tag.getId(), workspaceId);
         }
+    }
+
+    private void evictTagMeta(String workspaceId) {
+        metaCache.evictTags(workspaceId);
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evictTags(workspaceId));
     }
 
     private List<String> tagNames(String workspaceId, String taskId) {
@@ -1337,7 +1345,7 @@ public class TaskService {
         for (String p : PRIORITIES) {
             priCount.put(p, 0);
         }
-        List<Category> cats = categoryMapper.selectByWorkspace(workspaceId);
+        List<Category> cats = metaCache.categories(workspaceId);
         for (Category c : cats) {
             catCount.put(c.getName(), 0);
         }
@@ -1363,7 +1371,7 @@ public class TaskService {
         for (Map.Entry<String, Integer> e : catCount.entrySet()) {
             meta.getCats().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }
-        meta.setTags(tagMapper.selectAllWithCount(workspaceId));
+        meta.setTags(metaCache.tags(workspaceId));
 
         Map<String, Integer> reqCount = new LinkedHashMap<String, Integer>();
         for (TaskFacetRow t : facets) {
@@ -1500,19 +1508,25 @@ public class TaskService {
 
     /** 列表按列排序时的列顺序（与看板列配置一致，已完成最后） */
     private List<String> columnOrder(String workspaceId) {
-        List<String> ids = new ArrayList<String>();
-        for (BoardColumn c : boardColumnMapper.selectAll(workspaceId)) {
-            ids.add(c.getId());
+        return new ArrayList<String>(columnIndexMap(workspaceId).keySet());
+    }
+
+    /** 列 id → 列顺序（配置列按 sortOrder，系统「已完成」恒在最后）；单次请求只读一次缓存 */
+    public Map<String, Integer> columnIndexMap(String workspaceId) {
+        Map<String, Integer> index = new LinkedHashMap<String, Integer>();
+        int i = 0;
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
+            index.put(c.getId(), i++);
         }
-        ids.add(Consts.COL_DONE);
-        return ids;
+        index.put(Consts.COL_DONE, i);
+        return index;
     }
 
     public String columnName(String workspaceId, String column) {
         if (Consts.COL_DONE.equals(column)) {
             return "已完成";
         }
-        BoardColumn c = boardColumnMapper.selectById(workspaceId, column);
+        BoardColumn c = metaCache.column(workspaceId, column);
         return c == null ? column : c.getName();
     }
 

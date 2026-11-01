@@ -22,14 +22,18 @@ public class CategoryService {
 
     private final CategoryMapper categoryMapper;
     private final ActivityService activityService;
+    /** 分类列表缓存：读列表/删除时选目标分类共用，写入口负责失效 */
+    private final WorkspaceMetaCache metaCache;
 
-    public CategoryService(CategoryMapper categoryMapper, ActivityService activityService) {
+    public CategoryService(CategoryMapper categoryMapper, ActivityService activityService,
+                           WorkspaceMetaCache metaCache) {
         this.categoryMapper = categoryMapper;
         this.activityService = activityService;
+        this.metaCache = metaCache;
     }
 
     public List<Category> list(String workspaceId) {
-        return categoryMapper.selectByWorkspace(workspaceId);
+        return metaCache.categories(workspaceId);
     }
 
     @Transactional
@@ -45,6 +49,7 @@ public class CategoryService {
         c.setColor(normalizeColor(req.getColor()));
         c.setSortOrder(categoryMapper.maxSortOrder(workspaceId) + 1);
         categoryMapper.insert(c);
+        evictCategories(workspaceId);
         return categoryMapper.selectById(workspaceId, c.getId());
     }
 
@@ -65,6 +70,7 @@ public class CategoryService {
         }
         c.setColor(normalizeColor(req.getColor()));
         categoryMapper.update(c);
+        evictCategories(workspaceId);
         return categoryMapper.selectById(workspaceId, id);
     }
 
@@ -76,7 +82,7 @@ public class CategoryService {
             throw AppException.notFound("分类不存在：" + id);
         }
         String target = null;
-        for (Category other : categoryMapper.selectByWorkspace(workspaceId)) {
+        for (Category other : metaCache.categories(workspaceId)) {
             if (!other.getId().equals(id)) {
                 target = other.getName();
                 break;
@@ -87,6 +93,7 @@ public class CategoryService {
         }
         categoryMapper.renameInTasks(workspaceId, c.getName(), target);
         categoryMapper.deleteById(workspaceId, id);
+        evictCategories(workspaceId);
         /* O-9：破坏性配置变更留审计（活动流可见） */
         activityService.logConfig(workspaceId,
                 "删除分类「" + c.getName() + "」，其下任务已改到「" + target + "」");
@@ -95,7 +102,7 @@ public class CategoryService {
     @Transactional
     public void order(String workspaceId, List<String> ids) {
         Set<String> known = new HashSet<String>();
-        for (Category c : categoryMapper.selectByWorkspace(workspaceId)) {
+        for (Category c : metaCache.categories(workspaceId)) {
             known.add(c.getId());
         }
         Set<String> unique = new HashSet<String>(ids);
@@ -105,6 +112,12 @@ public class CategoryService {
         for (int i = 0; i < ids.size(); i++) {
             categoryMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
+        evictCategories(workspaceId);
+    }
+
+    private void evictCategories(String workspaceId) {
+        metaCache.evictCategories(workspaceId);
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evictCategories(workspaceId));
     }
 
     /** 分类名会拼接进筛选参数（逗号分隔），不允许含逗号 */

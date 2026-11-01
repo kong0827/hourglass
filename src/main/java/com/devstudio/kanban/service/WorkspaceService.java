@@ -50,6 +50,10 @@ public class WorkspaceService {
     private final TaskCascade cascade;
     /** 配置审计日志 */
     private final com.devstudio.kanban.service.ActivityService activityService;
+    /** 成员关系缓存（单实例进程内，TTL 60 秒，写入口主动失效） */
+    private final WorkspaceMemberCache memberCache;
+    /** 空间 meta 缓存（列/分类/标签，按空间版本号失效） */
+    private final WorkspaceMetaCache metaCache;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -57,7 +61,9 @@ public class WorkspaceService {
                             SavedViewMapper savedViewMapper,
                             InviteMapper inviteMapper,
                             TaskCascade cascade,
-                            com.devstudio.kanban.service.ActivityService activityService) {
+                            com.devstudio.kanban.service.ActivityService activityService,
+                            WorkspaceMemberCache memberCache,
+                            WorkspaceMetaCache metaCache) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -67,6 +73,8 @@ public class WorkspaceService {
         this.inviteMapper = inviteMapper;
         this.cascade = cascade;
         this.activityService = activityService;
+        this.memberCache = memberCache;
+        this.metaCache = metaCache;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -85,27 +93,20 @@ public class WorkspaceService {
         AppUser u = userMapper.selectById(userId);
         String last = u == null ? null : Texts.trimToNull(u.getLastWorkspaceId());
         if (last != null) {
-            Workspace ws = workspaceMapper.selectById(last);
-            WorkspaceMember m = ws == null ? null : memberMapper.selectMember(last, userId);
-            if (ws != null && m != null) {
-                ws.setMyRole(m.getRole());
-                return maskWebhook(ws);
+            Workspace ws = memberCache.view(last, userId);
+            if (ws != null) {
+                return ws;
             }
         }
         return requireMember(userId, personalId(userId));
     }
 
     public Workspace requireMember(String userId, String workspaceId) {
-        Workspace ws = workspaceMapper.selectById(workspaceId);
+        Workspace ws = memberCache.view(workspaceId, userId);
         if (ws == null) {
             throw AppException.notFound("空间不存在：" + workspaceId);
         }
-        WorkspaceMember m = memberMapper.selectMember(workspaceId, userId);
-        if (m == null) {
-            throw AppException.notFound("空间不存在：" + workspaceId);
-        }
-        ws.setMyRole(m.getRole());
-        return maskWebhook(ws);
+        return ws;
     }
 
     /** 群机器人地址与 token 对非空间主脱敏，避免成员拿到 webhook 对外发消息 */
@@ -196,7 +197,9 @@ public class WorkspaceService {
 
     @Transactional
     public Workspace update(String userId, String workspaceId, WorkspaceUpdateRequest req) {
-        Workspace ws = requireOwner(userId, workspaceId);
+        /* 鉴权走缓存，但要把完整字段写回库，必须以库里的最新配置为底稿：
+           缓存里的空间快照可能落后于最近一次推送结果/改名，直接写回会覆盖别人的修改 */
+        Workspace ws = requireOwnerRaw(userId, workspaceId);
         String name = Texts.trimToNull(req.getName());
         if (!"personal".equals(ws.getType()) && name != null) {
             ws.setName(Texts.cut(name, 20));
@@ -236,6 +239,8 @@ public class WorkspaceService {
             }
         }
         workspaceMapper.update(ws);
+        /* 名称/推送配置对成员可见，缓存里每个成员都存了一份空间快照 */
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evictWorkspace(workspaceId));
         return workspaceMapper.selectById(workspaceId);
     }
 
@@ -250,6 +255,10 @@ public class WorkspaceService {
         inviteMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
         userMapper.resetLastWorkspaceForAll(workspaceId, PERSONAL_PREFIX);
+        CacheSync.evictAfterCommitOrNow(() -> {
+            memberCache.evictWorkspace(workspaceId);
+            metaCache.evict(workspaceId);
+        });
     }
 
     /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知/分支） */
@@ -260,6 +269,7 @@ public class WorkspaceService {
         savedViewMapper.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
     /* ==================== 成员 ==================== */
@@ -287,6 +297,7 @@ public class WorkspaceService {
             throw AppException.badRequest("该用户已在空间中");
         }
         addMemberInternal(workspaceId, u.getId(), "member");
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, u.getId()));
     }
 
     /** 通过邀请链接加入共享空间（不校验操作者，由 InviteService 校验邀请有效性后调用） */
@@ -300,6 +311,8 @@ public class WorkspaceService {
             return;
         }
         addMemberInternal(workspaceId, userId, "member");
+        /* 退出后再次通过邀请加入：清掉可能残留的旧视图，加入后立即可用 */
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, userId));
     }
 
     @Transactional
@@ -315,6 +328,7 @@ public class WorkspaceService {
             }
             memberMapper.delete(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
+            CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
             return;
         }
         // 移除他人：仅空间主（个人空间允许清理历史遗留的非法成员）
@@ -328,6 +342,7 @@ public class WorkspaceService {
         AppUser target = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, userId, "移除成员「"
                 + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
     }
 
     /* ==================== 初始化与种子 ==================== */
@@ -364,6 +379,7 @@ public class WorkspaceService {
         if (categoryMapper.countByWorkspace(workspaceId) == 0) {
             seedDefaultCategories(workspaceId);
         }
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
     private void addMemberInternal(String workspaceId, String userId, String role) {

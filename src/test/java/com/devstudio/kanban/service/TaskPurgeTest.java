@@ -3,7 +3,6 @@ package com.devstudio.kanban.service;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.AttachmentMapper;
-import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
@@ -77,7 +76,7 @@ class TaskPurgeTest {
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(status);
 
         service = new TaskService(taskMapper, mock(RequirementMapper.class), logMapper,
-                subtaskMapper, tagMapper, timeLogMapper, mock(BoardColumnMapper.class),
+                subtaskMapper, tagMapper, timeLogMapper,
                 mock(CategoryMapper.class), attachmentService, mock(UserMapper.class),
                 mock(AttachmentMapper.class),
                 new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper, subtaskMapper,
@@ -87,7 +86,7 @@ class TaskPurgeTest {
                         mock(DevBranchMapper.class)),
                 mock(TimeLogService.class), mock(TaskCompletionService.class),
                 mock(RequirementDocMapper.class), mock(DevBranchMapper.class),
-                mock(WorkspaceMemberMapper.class), transactionManager);
+                mock(WorkspaceMemberMapper.class), transactionManager, mock(WorkspaceMetaCache.class));
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {
