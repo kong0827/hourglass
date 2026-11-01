@@ -423,6 +423,17 @@
     </if>
   </sql>
 
+  <!--
+    无条件版本：countDoneInScope 的方法签名只有 (workspaceId, weekStart, weekEnd)，
+    没有 scopeAll 参数，引用带 <if test="scopeAll"> 的 doneScope 会抛
+    BindingException: Parameter 'scopeAll' not found。
+    该查询的"仅本周"口径由调用方保证（scopeAll 为 true 时走 countDoneAll），故这里无条件加范围。
+  -->
+  <sql id="doneScopeAlways">
+      AND (t.completed_at IS NULL
+           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+  </sql>
+
   <select id="countDoneAll" resultType="int">
     SELECT COUNT(*) FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND board_column = 'done'
@@ -431,7 +442,7 @@
   <select id="countDoneInScope" resultType="int">
     SELECT COUNT(*) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
-    <include refid="doneScope"/>
+    <include refid="doneScopeAlways"/>
   </select>
 
   <select id="countDoneMatched" resultType="int">
@@ -597,7 +608,7 @@
            COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done' AND board_column &lt;&gt; 'backlog' THEN 1 ELSE 0 END), 0) AS doing,
            COALESCE(SUM(CASE WHEN board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
            COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done'
-                              AND due_date IS NOT NULL AND due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS over,
+                              AND due_date IS NOT NULL AND due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS `over`,
            COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done' AND due_date = #{today} THEN 1 ELSE 0 END), 0) AS today,
            COALESCE(SUM(CASE WHEN board_column &lt;&gt; 'done'
                               AND due_date &gt; #{today}

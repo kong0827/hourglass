@@ -6,6 +6,7 @@ import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -78,11 +79,15 @@ class TaskPurgeTest {
         service = new TaskService(taskMapper, mock(RequirementMapper.class), logMapper,
                 subtaskMapper, tagMapper, timeLogMapper, mock(BoardColumnMapper.class),
                 mock(CategoryMapper.class), attachmentService, mock(UserMapper.class),
-                mock(AttachmentMapper.class), commentMapper, notificationMapper,
+                mock(AttachmentMapper.class),
+                new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper, subtaskMapper,
+                        tagMapper, timeLogMapper, attachmentService, dependencyMapper, baselineMapper,
+                        mock(GanttShareMapper.class), mock(RequirementMapper.class),
+                        mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
+                        mock(DevBranchMapper.class)),
                 mock(TimeLogService.class), mock(TaskCompletionService.class),
                 mock(RequirementDocMapper.class), mock(DevBranchMapper.class),
-                dependencyMapper, baselineMapper, mock(WorkspaceMemberMapper.class),
-                transactionManager);
+                mock(WorkspaceMemberMapper.class), transactionManager);
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {

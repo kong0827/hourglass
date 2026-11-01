@@ -29,7 +29,6 @@ import com.devstudio.kanban.entity.TaskCountAgg;
 import com.devstudio.kanban.entity.TaskFacetRow;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.TimeAgg;
-import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
@@ -38,9 +37,6 @@ import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
-import com.devstudio.kanban.mapper.TaskCommentMapper;
-import com.devstudio.kanban.mapper.TaskBaselineMapper;
-import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -90,8 +86,8 @@ public class TaskService {
     private final AttachmentService attachmentService;
     private final UserMapper userMapper;
     private final AttachmentMapper attachmentMapper;
-    private final TaskCommentMapper commentMapper;
-    private final AppNotificationMapper appNotificationMapper;
+    /** 任务级联删除的唯一实现（子表清单、附件 afterCommit、完成快照口径都在这里） */
+    private final TaskCascade cascade;
     /** 计时口径（有效工时 / 关闭计时）统一收在 TimeLogService，这里只负责在移列时触发 */
     private final TimeLogService timeLogService;
     /** 任务完成快照（「任务清单」视图的数据源） */
@@ -100,10 +96,6 @@ public class TaskService {
     private final RequirementDocMapper requirementDocMapper;
     /** 关联分支校验用（分支必须属于同一空间） */
     private final DevBranchMapper devBranchMapper;
-    /** 甘特图依赖：任务彻底删除时一起清 */
-    private final TaskDependencyMapper dependencyMapper;
-    /** 甘特图基线：任务彻底删除时一起清 */
-    private final TaskBaselineMapper baselineMapper;
     /** 负责人必须是空间成员 */
     private final WorkspaceMemberMapper memberMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
@@ -114,14 +106,11 @@ public class TaskService {
                        BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
                        AttachmentService attachmentService, UserMapper userMapper,
                        AttachmentMapper attachmentMapper,
-                       TaskCommentMapper commentMapper,
-                       AppNotificationMapper appNotificationMapper,
+                       TaskCascade cascade,
                        TimeLogService timeLogService,
                        TaskCompletionService completionService,
                        RequirementDocMapper requirementDocMapper,
                        DevBranchMapper devBranchMapper,
-                       TaskDependencyMapper dependencyMapper,
-                       TaskBaselineMapper baselineMapper,
                        WorkspaceMemberMapper memberMapper,
                        PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
@@ -135,14 +124,11 @@ public class TaskService {
         this.attachmentService = attachmentService;
         this.userMapper = userMapper;
         this.attachmentMapper = attachmentMapper;
-        this.commentMapper = commentMapper;
-        this.appNotificationMapper = appNotificationMapper;
+        this.cascade = cascade;
         this.timeLogService = timeLogService;
         this.completionService = completionService;
         this.requirementDocMapper = requirementDocMapper;
         this.devBranchMapper = devBranchMapper;
-        this.dependencyMapper = dependencyMapper;
-        this.baselineMapper = baselineMapper;
         this.memberMapper = memberMapper;
         this.purgeTx = new TransactionTemplate(transactionManager);
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -805,8 +791,7 @@ public class TaskService {
         if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() == null) {
             throw AppException.notFound("回收站中没有该任务：" + id);
         }
-        deleteChildren(Collections.singletonList(t));
-        taskMapper.deleteById(id);
+        cascade.purgeTasks(workspaceId, Collections.singletonList(id));
     }
 
     /**
@@ -849,50 +834,9 @@ public class TaskService {
         return t;
     }
 
-    /** 一批任务一个事务内的彻底删除；子表按 task_id IN (...) 一次清完 */
+    /** 一批任务一个事务内的彻底删除；子表与任务行都交给 TaskCascade 批量清 */
     private void purgeBatch(List<Task> tasks) {
-        deleteChildren(tasks);
-        List<String> ids = new ArrayList<String>(tasks.size());
-        for (Task t : tasks) {
-            ids.add(t.getId());
-        }
-        taskMapper.deleteByIds(ids);
-    }
-
-    private void deleteChildren(List<Task> tasks) {
-        Map<String, List<String>> idsByWorkspace = new LinkedHashMap<String, List<String>>();
-        List<String> allIds = new ArrayList<String>(tasks.size());
-        for (Task t : tasks) {
-            List<String> ids = idsByWorkspace.get(t.getWorkspaceId());
-            if (ids == null) {
-                ids = new ArrayList<String>();
-                idsByWorkspace.put(t.getWorkspaceId(), ids);
-            }
-            ids.add(t.getId());
-            allIds.add(t.getId());
-        }
-        // 任务行即将消失、ID 可被复用：清掉上游循环派生关联，避免之后误认到无关的新任务
-        taskMapper.clearRecurNextByTaskIds(allIds);
-        for (Map.Entry<String, List<String>> entry : idsByWorkspace.entrySet()) {
-            String ws = entry.getKey();
-            List<String> ids = entry.getValue();
-            subtaskMapper.deleteByTaskIds(ws, ids);
-            tagMapper.deleteTaskTagsByTaskIds(ws, ids);
-            timeLogMapper.deleteByTaskIds(ws, ids);
-            attachmentService.deleteByTasks(ws, ids);
-            logMapper.deleteByTaskIds(ws, ids);
-            /* 完成快照不随任务删除：任务清单是历史快照，彻底删除后仍保留；
-               ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
-            /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清。
-               漏清的后果不只是"孤儿数据无限增长"——TaskMapper.countChildRefs 把 task_comment
-               计入，已彻底删除的任务 ID 会因此被永久锁死（既不能新建同 ID，同 ID 还原时
-               旧评论还会挂到新任务上，把上一个任务的讨论显示给新任务）。 */
-            commentMapper.deleteByTaskIds(ws, ids);
-            appNotificationMapper.deleteByTaskIds(ws, ids);
-            /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
-            dependencyMapper.deleteByTaskIds(ws, ids);
-            baselineMapper.deleteByTaskIds(ws, ids);
-        }
+        cascade.purgeTasks(tasks);
     }
 
     /* 计时相关的计算（有效工时 / 关闭计时）已统一收在 TimeLogService，这里不再各留一套口径 */

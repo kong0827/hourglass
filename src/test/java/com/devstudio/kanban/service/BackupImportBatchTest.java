@@ -14,6 +14,7 @@ import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskBaselineMapper;
 import com.devstudio.kanban.mapper.TaskCommentMapper;
 import com.devstudio.kanban.mapper.TaskDependencyMapper;
+import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
@@ -76,7 +77,14 @@ class BackupImportBatchTest {
                 timeLogMapper, columnMapper, categoryMapper, mock(WorkspaceService.class), memberMapper,
                 mock(TaskCommentMapper.class), mock(AppNotificationMapper.class), docMapper, branchMapper,
                 mock(TaskDependencyMapper.class), mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
-                mock(TaskCompletionService.class), transactionManager);
+                mock(TaskCompletionService.class),
+                new TaskCascade(taskMapper, mock(TaskLogMapper.class), mock(TaskCommentMapper.class),
+                        mock(AppNotificationMapper.class), subtaskMapper, tagMapper, timeLogMapper,
+                        mock(AttachmentService.class), mock(TaskDependencyMapper.class),
+                        mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
+                        mock(RequirementMapper.class), docMapper, mock(TaskCompletionService.class),
+                        branchMapper),
+                transactionManager);
     }
 
     private BackupData backup(int taskCount) {

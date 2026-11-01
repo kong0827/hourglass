@@ -95,6 +95,8 @@ public class BackupService {
     private final TaskBaselineMapper baselineMapper;
     private final GanttShareMapper ganttShareMapper;
     private final TaskCompletionService completionService;
+    /** 覆盖导入前清空任务类数据的清单统一收口在 TaskCascade */
+    private final TaskCascade cascade;
     /** 导入按阶段/批次提交，避免整次导入占用一个长事务 */
     private final TransactionTemplate txTemplate;
 
@@ -110,6 +112,7 @@ public class BackupService {
                          TaskBaselineMapper baselineMapper,
                          GanttShareMapper ganttShareMapper,
                          TaskCompletionService completionService,
+                         TaskCascade cascade,
                          PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
@@ -128,6 +131,7 @@ public class BackupService {
         this.baselineMapper = baselineMapper;
         this.ganttShareMapper = ganttShareMapper;
         this.completionService = completionService;
+        this.cascade = cascade;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -358,34 +362,10 @@ public class BackupService {
     /** 阶段 1a：清空当前空间的任务类数据（附件/时间线保留） */
     private void clearWorkspaceTaskData(String workspaceId, BackupData data) {
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
-        // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"
-        taskMapper.deleteAllByWorkspace(workspaceId);
-        /* 依赖/基线挂在任务 ID 上，任务被清空后必须一起清，否则会挂到导入后的同名任务 */
-        dependencyMapper.deleteByWorkspace(workspaceId);
-        baselineMapper.deleteByWorkspace(workspaceId);
-        /* 覆盖导入后旧分享链接不应继续对外暴露新数据 */
-        ganttShareMapper.deleteByWorkspace(workspaceId);
-        reqMapper.deleteAllByWorkspace(workspaceId);
-        subtaskMapper.deleteAllByWorkspace(workspaceId);
-        tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
-        tagMapper.deleteTagsByWorkspace(workspaceId);
-        timeLogMapper.deleteAllByWorkspace(workspaceId);
-        /* 完成归档是任务的派生物；覆盖导入/清空属于整体替换，先清再按导入后的任务重建 */
-        completionService.clearWorkspace(workspaceId);
-        /* 第九轮审查 #1/#2：评论与任务通知随任务一起清，与"操作时间线保留"的口径区分开——
-           时间线是审计记录，而评论与通知会把内容直接展示给用户；
-           导入后任务 ID 可能被复用/重映射，留着旧记录就是可见的数据错乱（旧评论挂到新任务上）。 */
-        commentMapper.deleteAllByWorkspace(workspaceId);
-        appNotificationMapper.deleteAllByWorkspace(workspaceId);
-
-        /* v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状 */
-        if (data.getReqDocs() != null) {
-            requirementDocMapper.deleteAllByWorkspace(workspaceId);
-        }
-        if (data.getBranches() != null) {
-            devBranchMapper.deleteLogsByWorkspace(workspaceId);
-            devBranchMapper.deleteByWorkspace(workspaceId);
-        }
+        // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"。
+        // v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状。
+        cascade.clearWorkspaceDataForImport(workspaceId,
+                data.getReqDocs() != null, data.getBranches() != null);
     }
 
     /** 阶段 1b：项目/分支/需求文档/分类/看板列/标签先落库，供任务引用 */

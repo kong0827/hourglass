@@ -11,23 +11,10 @@ import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
-import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
-import com.devstudio.kanban.mapper.DevBranchMapper;
-import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
-import com.devstudio.kanban.mapper.RequirementDocMapper;
-import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
-import com.devstudio.kanban.mapper.SubtaskMapper;
-import com.devstudio.kanban.mapper.TagMapper;
-import com.devstudio.kanban.mapper.TaskBaselineMapper;
-import com.devstudio.kanban.mapper.TaskCommentMapper;
-import com.devstudio.kanban.mapper.TaskDependencyMapper;
-import com.devstudio.kanban.mapper.TaskLogMapper;
-import com.devstudio.kanban.mapper.TaskMapper;
-import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
@@ -57,67 +44,28 @@ public class WorkspaceService {
     private final UserMapper userMapper;
     private final BoardColumnMapper boardColumnMapper;
     private final CategoryMapper categoryMapper;
-    private final TaskMapper taskMapper;
-    private final RequirementMapper reqMapper;
-    private final RequirementDocMapper requirementDocMapper;
-    private final SubtaskMapper subtaskMapper;
-    private final TaskLogMapper logMapper;
-    private final TagMapper tagMapper;
     private final SavedViewMapper savedViewMapper;
-    private final TimeLogMapper timeLogMapper;
-    private final AttachmentService attachmentService;
     private final InviteMapper inviteMapper;
-    private final TaskCommentMapper commentMapper;
-    private final AppNotificationMapper appNotificationMapper;
-    /** 分支与分支时间线（清空空间数据时一并清理） */
-    private final DevBranchMapper devBranchMapper;
-    /** 甘特图：空间清空/删除时一并清理依赖、基线与分享 token */
-    private final TaskDependencyMapper dependencyMapper;
-    private final TaskBaselineMapper baselineMapper;
-    private final GanttShareMapper ganttShareMapper;
-    /** 完成归档（清空空间时一并清理，否则「任务清单」会残留） */
-    private final TaskCompletionService completionService;
+    /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
+    private final TaskCascade cascade;
     /** 配置审计日志 */
     private final com.devstudio.kanban.service.ActivityService activityService;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
-                            CategoryMapper categoryMapper, TaskMapper taskMapper,
-                            RequirementMapper reqMapper, SubtaskMapper subtaskMapper,
-                            TaskLogMapper logMapper, TagMapper tagMapper,
-                            SavedViewMapper savedViewMapper, TimeLogMapper timeLogMapper,
-                            AttachmentService attachmentService, InviteMapper inviteMapper,
-                            TaskCommentMapper commentMapper,
-                            AppNotificationMapper appNotificationMapper,
-                            DevBranchMapper devBranchMapper,
-                            RequirementDocMapper requirementDocMapper,
-                            TaskCompletionService completionService,
-                            TaskDependencyMapper dependencyMapper,
-                            TaskBaselineMapper baselineMapper,
-                            GanttShareMapper ganttShareMapper,
+                            CategoryMapper categoryMapper,
+                            SavedViewMapper savedViewMapper,
+                            InviteMapper inviteMapper,
+                            TaskCascade cascade,
                             com.devstudio.kanban.service.ActivityService activityService) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.boardColumnMapper = boardColumnMapper;
         this.categoryMapper = categoryMapper;
-        this.taskMapper = taskMapper;
-        this.reqMapper = reqMapper;
-        this.requirementDocMapper = requirementDocMapper;
-        this.subtaskMapper = subtaskMapper;
-        this.logMapper = logMapper;
-        this.tagMapper = tagMapper;
         this.savedViewMapper = savedViewMapper;
-        this.timeLogMapper = timeLogMapper;
-        this.attachmentService = attachmentService;
         this.inviteMapper = inviteMapper;
-        this.commentMapper = commentMapper;
-        this.appNotificationMapper = appNotificationMapper;
-        this.devBranchMapper = devBranchMapper;
-        this.completionService = completionService;
-        this.dependencyMapper = dependencyMapper;
-        this.baselineMapper = baselineMapper;
-        this.ganttShareMapper = ganttShareMapper;
+        this.cascade = cascade;
         this.activityService = activityService;
     }
 
@@ -307,30 +255,11 @@ public class WorkspaceService {
     /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知/分支） */
     @Transactional
     public void wipeData(String workspaceId) {
-        logMapper.deleteAllByWorkspace(workspaceId);
-        /* 甘特图数据没有外键，任务删掉后必须显式清，避免空间 ID 残留 */
-        dependencyMapper.deleteByWorkspace(workspaceId);
-        baselineMapper.deleteByWorkspace(workspaceId);
-        ganttShareMapper.deleteByWorkspace(workspaceId);
-        taskMapper.deleteAllByWorkspace(workspaceId);
-        reqMapper.deleteAllByWorkspace(workspaceId);
-        requirementDocMapper.deleteAllByWorkspace(workspaceId);
-        completionService.clearWorkspace(workspaceId);
-        subtaskMapper.deleteAllByWorkspace(workspaceId);
-        tagMapper.deleteAllTaskTagsByWorkspace(workspaceId);
-        tagMapper.deleteTagsByWorkspace(workspaceId);
-        timeLogMapper.deleteAllByWorkspace(workspaceId);
-        attachmentService.deleteAllWithFiles(workspaceId);
+        cascade.wipeWorkspaceData(workspaceId);
+        /* 看板列/分类/保存视图属于空间配置，不属于任务级联，清空空间时单独处理 */
         savedViewMapper.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
-        /* 第九轮审查 #1/#2：评论与应用内通知也是空间数据，清空时必须一起走，
-           否则任务 ID 被复用时旧评论/旧通知会挂到新任务上。 */
-        commentMapper.deleteAllByWorkspace(workspaceId);
-        appNotificationMapper.deleteAllByWorkspace(workspaceId);
-        /* 分支（含状态变更时间线）：任务已经先删掉了，这里不需要再解绑 */
-        devBranchMapper.deleteLogsByWorkspace(workspaceId);
-        devBranchMapper.deleteByWorkspace(workspaceId);
     }
 
     /* ==================== 成员 ==================== */

@@ -690,3 +690,9 @@ spring.datasource.hikari.connection-timeout: 3000
 - 彻底删除子表批量删除，附件文件 afterCommit 才删；回滚保留文件。
 - 备份导入拆为 4 阶段/每 500 条事务，任务/子任务/工时/评论/标签关联/依赖/基线改多值 INSERT；保持 ID 映射、归档重建、依赖成环跳过。导出流式化因会改 controller 契约未做。
 - 新增 6 个测试（分批、失败隔离、附件 afterCommit、500 行批量导入），共 15 个测试通过。
+
+**第二十五轮：BE-ARCH-3 级联删除收口**
+- 新增 TaskCascade：登记 9 张随任务物理删除的子表 + 保留的 task_completion_record；purgeTasks（单/跨空间）与清空空间/覆盖导入共用一份清单。
+- TaskService.purge/purgeExpired、WorkspaceService.wipeData、BackupService 导入清空段全部委托 TaskCascade，删除三处重复清单。
+- 新增 TaskCascadeTest（逐表批量删、跨空间分组、清空全表、导入保留项、清单快照、sql/ 建表扫描），共 21 个测试。
+- 顺带修复 BE-Q-1 遗留：countDoneInScope 引用缺失的 scopeAll 参数、countReviewStatus 的 over 保留字别名。
