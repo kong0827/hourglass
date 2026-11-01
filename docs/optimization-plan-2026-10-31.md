@@ -796,3 +796,14 @@ spring.datasource.hikari.connection-timeout: 3000
 - 前端：我的任务底部「加载更多」（按已加载条数作为 offset 追加，跨页按 `workspaceId|id` 去重）；分组（逾期/今天/本周/以后）、行内完成/计时/改期、空间下拉与顶栏筛选保持不变；meta 文案改为「已加载 n / total」。
 - 文档：`docs/api.md` 更新接口表并新增 TOP-6 附录。
 - 验证：构建、37 个单测、`node --check`、`gen-preview`、`check-assets`、无头预览冒烟（我的任务 2 行渲染、meta 显示"已加载 2 项 · 覆盖 2 个空间"、无 JS 异常）。
+
+**第三十八轮：BE-ARCH-1 拆分 TaskService**
+- `TaskService`（1440 行，19 个依赖）拆为四个服务，`TaskAuditLogger` 改为 Spring 组件：
+  - `TaskQueryService`：看板 / 已完成分页 / 列表 / 日历 / 我的任务 / 时间线 / 甘特扩展字段 / meta；只读，不写库。
+  - `TaskCommandService`：新建 / 编辑 / 标签；保存时的项目、需求、分支、负责人成员身份、前置任务校验全部留在这一层；改列时回调流程服务，保证移动语义只有一份。
+  - `TaskWorkflowService`：移动 / 批量移动 / 取消完成 / 循环任务 / 计时联动 / 完成归档。
+  - `TaskTrashService`：回收站列表 / 软删除 / 恢复 / 彻底删除 / 过期清理，并入原 `TrashService` 的每日 04:30 定时任务；子表清单一律复用 `TaskCascade`。
+- 依赖方向：`Query → Support`、`Command → Workflow → Support`、`Trash → Cascade/Support`，没有回边，Spring 注入无循环依赖。
+- 对外契约不变：所有 HTTP 路径、参数、返回 JSON、ETag、分批事务、备份 v6 与权限校验均未改动；Controller 构造器改为注入四个服务。
+- 测试：新增 `MyTasksPaginationTest`（offset/limit 收敛、独立 COUNT、越界不查列表）与 `MyTasksControllerPaginationTest`（默认分页、上限 500、hasMore/truncated/spaces）；`TaskServiceColumnCacheTest` 改测 `TaskSupport + TaskQueryService` 共享一次列定义加载，`TaskPurgeTest` 改测 `TaskTrashService`。共 43 个测试通过。
+- 已知边界：`TaskQueryService` 仍承担看板筛选与 meta 聚合（682 行），是查询侧最重的一块；若后续继续拆分，建议先把 `match()` 过滤口径抽成独立的 `TaskFilter` 纯函数。

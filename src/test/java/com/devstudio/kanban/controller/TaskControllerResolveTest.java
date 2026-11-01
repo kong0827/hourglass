@@ -8,7 +8,10 @@ import com.devstudio.kanban.config.WorkspaceArgumentResolver;
 import com.devstudio.kanban.dto.BoardQuery;
 import com.devstudio.kanban.dto.TaskListResponse;
 import com.devstudio.kanban.entity.Workspace;
-import com.devstudio.kanban.service.TaskService;
+import com.devstudio.kanban.service.TaskCommandService;
+import com.devstudio.kanban.service.TaskQueryService;
+import com.devstudio.kanban.service.TaskTrashService;
+import com.devstudio.kanban.service.TaskWorkflowService;
 import com.devstudio.kanban.service.WorkspaceService;
 import com.devstudio.kanban.service.WorkspaceVersionService;
 import org.junit.jupiter.api.AfterEach;
@@ -37,13 +40,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class TaskControllerResolveTest {
 
-    private TaskService taskService;
+    private TaskQueryService taskService;
+    private TaskTrashService trashService;
     private WorkspaceService workspaceService;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        taskService = mock(TaskService.class);
+        taskService = mock(TaskQueryService.class);
+        trashService = mock(TaskTrashService.class);
         workspaceService = mock(WorkspaceService.class);
         WorkspaceVersionService versionService = mock(WorkspaceVersionService.class);
         when(versionService.version("W1")).thenReturn(1L);
@@ -56,7 +61,7 @@ class TaskControllerResolveTest {
         ws.setMyRole("owner");
         when(workspaceService.resolve(eq("U1"), any())).thenReturn(ws);
 
-        mvc = MockMvcBuilders.standaloneSetup(new TaskController(taskService, versionService))
+        mvc = MockMvcBuilders.standaloneSetup(new TaskController(taskService, mock(TaskCommandService.class), mock(TaskWorkflowService.class), trashService, versionService))
                 .setCustomArgumentResolvers(new WorkspaceArgumentResolver(workspaceService),
                         new BoardQueryArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -106,6 +111,6 @@ class TaskControllerResolveTest {
     @Test
     void requireRoleAllowsOwner() throws Exception {
         mvc.perform(delete("/api/tasks/K1/purge")).andExpect(status().isOk());
-        verify(taskService).purge("W1", "K1");
+        verify(trashService).purge("W1", "K1");
     }
 }

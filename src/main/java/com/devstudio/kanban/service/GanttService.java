@@ -43,7 +43,7 @@ import java.util.Set;
 /**
  * 甘特图数据服务（V1.4）。
  *
- * 口径与看板保持一致：筛选条件在 SQL 层复刻 TaskService.match()，扩展字段只为本页任务补齐。
+ * 口径与看板保持一致：筛选条件在 SQL 层复刻 TaskQueryService.match()，扩展字段只为本页任务补齐。
  * 这里只负责三件事：稳定分页、依赖图校验、基线与分享。
  */
 @Service
@@ -60,7 +60,7 @@ public class GanttService {
     private static final int WEEK_CAPACITY_MINUTES = 5 * 8 * 60;
     private static final int SHARE_DAYS = 30;
 
-    private final TaskService taskService;
+    private final TaskQueryService taskService;
     private final TaskMapper taskMapper;
     private final TaskDependencyMapper dependencyMapper;
     private final TaskBaselineMapper baselineMapper;
@@ -69,7 +69,7 @@ public class GanttService {
     private final UserMapper userMapper;
     private final WorkspaceMapper workspaceMapper;
 
-    public GanttService(TaskService taskService, TaskMapper taskMapper,
+    public GanttService(TaskQueryService taskService, TaskMapper taskMapper,
                         TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                         GanttShareMapper shareMapper, TimeLogMapper timeLogMapper,
                         UserMapper userMapper, WorkspaceMapper workspaceMapper) {

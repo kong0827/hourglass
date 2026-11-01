@@ -50,11 +50,11 @@ public class AiReqDocService {
     private final TaskMapper taskMapper;
     private final AiConfigService configService;
     private final AiClient client;
-    private final TaskService taskService;
+    private final TaskCommandService taskService;
     private final ObjectMapper om = new ObjectMapper();
 
     public AiReqDocService(RequirementDocService docService, TaskMapper taskMapper,
-                           AiConfigService configService, AiClient client, TaskService taskService) {
+                           AiConfigService configService, AiClient client, TaskCommandService taskService) {
         this.docService = docService;
         this.taskMapper = taskMapper;
         this.configService = configService;

@@ -7,7 +7,7 @@ import com.devstudio.kanban.dto.MyTaskWorkspace;
 import com.devstudio.kanban.dto.MyTasksPage;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
-import com.devstudio.kanban.service.TaskService;
+import com.devstudio.kanban.service.TaskQueryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,10 +31,10 @@ public class MyTasksController {
 
     private static final int DEFAULT_LIMIT = 200;
 
-    private final TaskService taskService;
+    private final TaskQueryService taskService;
     private final UserMapper userMapper;
 
-    public MyTasksController(TaskService taskService, UserMapper userMapper) {
+    public MyTasksController(TaskQueryService taskService, UserMapper userMapper) {
         this.taskService = taskService;
         this.userMapper = userMapper;
     }
@@ -61,7 +61,7 @@ public class MyTasksController {
                 q, null, pris, cats, reqs, tags, due, focus, blocked, null, null, null, null);
         int off = offset == null ? 0 : Math.max(0, offset);
         int lim = limit == null ? DEFAULT_LIMIT
-                : Math.max(1, Math.min(TaskService.MY_TASKS_MAX_LIMIT, limit));
+                : Math.max(1, Math.min(TaskQueryService.MY_TASKS_MAX_LIMIT, limit));
         MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, query, off, lim);
         int loaded = off + page.getItems().size();
         boolean hasMore = loaded < page.getTotal();

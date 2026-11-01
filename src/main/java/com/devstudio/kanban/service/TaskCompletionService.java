@@ -19,7 +19,7 @@ import java.util.List;
  * 任务完成快照：任务完成的那一刻把「名称 / 详情 / 归属项目 / 负责人 / 起止时间 / 总耗时」
  * 存成一条**独立记录**，之后任务改名、换项目、被删除都不影响已归档的统计。
  *
- * <p>写入由 TaskService 在移入「已完成」时触发，前端不用关心。
+ * <p>写入由 TaskWorkflowService / TaskCommandService 在移入「已完成」时触发，前端不用关心。
  */
 @Service
 public class TaskCompletionService {

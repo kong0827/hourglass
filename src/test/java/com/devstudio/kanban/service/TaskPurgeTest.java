@@ -57,7 +57,7 @@ class TaskPurgeTest {
     private TaskBaselineMapper baselineMapper;
     private AttachmentService attachmentService;
     private PlatformTransactionManager transactionManager;
-    private TaskService service;
+    private TaskTrashService service;
 
     @BeforeEach
     void setUp() {
@@ -75,18 +75,14 @@ class TaskPurgeTest {
         TransactionStatus status = new SimpleTransactionStatus();
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(status);
 
-        service = new TaskService(taskMapper, mock(RequirementMapper.class), logMapper,
-                subtaskMapper, tagMapper, timeLogMapper,
-                mock(CategoryMapper.class), attachmentService, mock(UserMapper.class),
-                mock(AttachmentMapper.class),
-                new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper, subtaskMapper,
-                        tagMapper, timeLogMapper, attachmentService, dependencyMapper, baselineMapper,
-                        mock(GanttShareMapper.class), mock(RequirementMapper.class),
-                        mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
-                        mock(DevBranchMapper.class)),
-                mock(TimeLogService.class), mock(TaskCompletionService.class),
-                mock(RequirementDocMapper.class), mock(DevBranchMapper.class),
-                mock(WorkspaceMemberMapper.class), transactionManager, mock(WorkspaceMetaCache.class));
+        TaskCascade cascade = new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper, subtaskMapper,
+                tagMapper, timeLogMapper, attachmentService, dependencyMapper, baselineMapper,
+                mock(GanttShareMapper.class), mock(RequirementMapper.class),
+                mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
+                mock(DevBranchMapper.class));
+        TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
+        service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
+                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), transactionManager);
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {

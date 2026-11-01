@@ -4,6 +4,7 @@ import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
+import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
@@ -44,18 +45,15 @@ class TaskServiceColumnCacheTest {
         WorkspaceMetaCache metaCache = new WorkspaceMetaCache(columnMapper, mock(CategoryMapper.class),
                 mock(TagMapper.class), new WorkspaceVersionService(), 300_000L, new AtomicLong(0L)::get);
 
-        TaskService service = new TaskService(
+        TaskSupport support = new TaskSupport(mock(TaskMapper.class), mock(TagMapper.class), metaCache);
+        TaskQueryService service = new TaskQueryService(
                 mock(TaskMapper.class), mock(RequirementMapper.class), mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
-                mock(CategoryMapper.class), mock(AttachmentService.class), mock(UserMapper.class),
-                mock(AttachmentMapper.class), mock(TaskCascade.class), mock(TimeLogService.class),
-                mock(TaskCompletionService.class), mock(RequirementDocMapper.class),
-                mock(DevBranchMapper.class), mock(WorkspaceMemberMapper.class),
-                mock(PlatformTransactionManager.class), metaCache);
+                mock(AttachmentMapper.class), metaCache, support);
 
-        assertEquals("待处理", service.columnName(WS, "C1"));
-        assertEquals("进行中", service.columnName(WS, "C2"));
-        assertEquals("已完成", service.columnName(WS, Consts.COL_DONE));
+        assertEquals("待处理", support.columnName(WS, "C1"));
+        assertEquals("进行中", support.columnName(WS, "C2"));
+        assertEquals("已完成", support.columnName(WS, Consts.COL_DONE));
 
         Map<String, Integer> index = service.columnIndexMap(WS);
         assertEquals(Arrays.asList("C1", "C2", Consts.COL_DONE), new ArrayList<String>(index.keySet()));

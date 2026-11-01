@@ -31,7 +31,7 @@ public interface TaskMapper {
     int countDoneInScope(@Param("workspaceId") String workspaceId,
                          @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);
 
-    /** 已完成列：doneScope + 看板筛选后的条数（ganttWhere 与 TaskService.match 同口径） */
+    /** 已完成列：doneScope + 看板筛选后的条数（ganttWhere 与 TaskQueryService.match 同口径） */
     int countDoneMatched(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
                          @Param("scopeAll") boolean scopeAll,
                          @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);

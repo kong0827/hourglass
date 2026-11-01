@@ -15,7 +15,10 @@ import com.devstudio.kanban.dto.TaskMoveRequest;
 import com.devstudio.kanban.dto.TaskSaveRequest;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskLog;
-import com.devstudio.kanban.service.TaskService;
+import com.devstudio.kanban.service.TaskCommandService;
+import com.devstudio.kanban.service.TaskQueryService;
+import com.devstudio.kanban.service.TaskTrashService;
+import com.devstudio.kanban.service.TaskWorkflowService;
 import com.devstudio.kanban.service.WorkspaceVersionService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -42,11 +45,20 @@ import java.util.Map;
 @RestController
 public class TaskController {
 
-    private final TaskService taskService;
+    /* BE-ARCH-1：查询 / 新建编辑 / 流程 / 回收站四个服务各管一段，避免再回到一个 1400 行的上帝类 */
+    private final TaskQueryService queryService;
+    private final TaskCommandService commandService;
+    private final TaskWorkflowService workflowService;
+    private final TaskTrashService trashService;
     private final WorkspaceVersionService versionService;
 
-    public TaskController(TaskService taskService, WorkspaceVersionService versionService) {
-        this.taskService = taskService;
+    public TaskController(TaskQueryService queryService, TaskCommandService commandService,
+                          TaskWorkflowService workflowService, TaskTrashService trashService,
+                          WorkspaceVersionService versionService) {
+        this.queryService = queryService;
+        this.commandService = commandService;
+        this.workflowService = workflowService;
+        this.trashService = trashService;
         this.versionService = versionService;
     }
 
@@ -62,14 +74,14 @@ public class TaskController {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
-                .body(ApiResult.ok(taskService.board(wsId, query)));
+                .body(ApiResult.ok(queryService.board(wsId, query)));
     }
 
     /** 已完成列分页（「加载更多」） */
     @GetMapping("/api/tasks/done")
     public ApiResult<BoardResponse.ColumnData> done(@CurrentWorkspace WorkspaceCtx ctx,
                                                     @BoardFilter BoardQuery query) {
-        return ApiResult.ok(taskService.donePage(ctx.getWsId(), query));
+        return ApiResult.ok(queryService.donePage(ctx.getWsId(), query));
     }
 
     /** 列表视图：筛选后的全量任务（上限 500），sort: due/priority/updated/column */
@@ -85,7 +97,7 @@ public class TaskController {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
-                .body(ApiResult.ok(taskService.list(wsId, query, sort)));
+                .body(ApiResult.ok(queryService.list(wsId, query, sort)));
     }
 
     /**
@@ -96,7 +108,7 @@ public class TaskController {
      */
     @GetMapping("/api/task/{id}")
     public ApiResult<Task> taskById(@PathVariable String id) {
-        Task t = taskService.forDeepLink(CurrentUser.id(), id);
+        Task t = queryService.forDeepLink(CurrentUser.id(), id);
         if (t == null) {
             throw com.devstudio.kanban.common.AppException.notFound("任务不存在或你没有访问权限：" + id);
         }
@@ -106,12 +118,12 @@ public class TaskController {
     /** 回收站 */
     @GetMapping("/api/trash")
     public ApiResult<List<Task>> trash(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.trash(ctx.getWsId()));
+        return ApiResult.ok(trashService.trash(ctx.getWsId()));
     }
 
     @PostMapping("/api/tasks/{id}/restore")
     public ApiResult<Void> restore(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        taskService.restore(ctx.getUserId(), ctx.getWsId(), id);
+        trashService.restore(ctx.getUserId(), ctx.getWsId(), id);
         return ApiResult.ok();
     }
 
@@ -119,53 +131,53 @@ public class TaskController {
     @RequireRole
     @DeleteMapping("/api/tasks/{id}/purge")
     public ApiResult<Void> purge(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        taskService.purge(ctx.getWsId(), id);
+        trashService.purge(ctx.getWsId(), id);
         return ApiResult.ok();
     }
 
     @PostMapping("/api/tasks")
     public ApiResult<Task> create(@Valid @RequestBody TaskSaveRequest req,
                                   @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.create(ctx.getUserId(), ctx.getWsId(), req));
+        return ApiResult.ok(commandService.create(ctx.getUserId(), ctx.getWsId(), req));
     }
 
     @PutMapping("/api/tasks/{id}")
     public ApiResult<Task> update(@PathVariable String id, @Valid @RequestBody TaskSaveRequest req,
                                   @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.update(ctx.getUserId(), ctx.getWsId(), id, req));
+        return ApiResult.ok(commandService.update(ctx.getUserId(), ctx.getWsId(), id, req));
     }
 
     @PostMapping("/api/tasks/{id}/move")
     public ApiResult<Map<String, Object>> move(@PathVariable String id, @Valid @RequestBody TaskMoveRequest req,
                                                @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.move(ctx.getUserId(), ctx.getWsId(), id, req));
+        return ApiResult.ok(workflowService.move(ctx.getUserId(), ctx.getWsId(), id, req));
     }
 
     /** 列表页批量改列：统一走 move 语义 */
     @PostMapping("/api/tasks/bulk-move")
     public ApiResult<Map<String, Object>> bulkMove(@Valid @RequestBody TaskBulkMoveRequest req,
                                                    @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.bulkMove(ctx.getUserId(), ctx.getWsId(), req));
+        return ApiResult.ok(workflowService.bulkMove(ctx.getUserId(), ctx.getWsId(), req));
     }
 
     /** 取消完成：回到完成前所在列 */
     @PostMapping("/api/tasks/{id}/reopen")
     public ApiResult<Map<String, Object>> reopen(@PathVariable String id,
                                                  @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.reopen(ctx.getUserId(), ctx.getWsId(), id));
+        return ApiResult.ok(workflowService.reopen(ctx.getUserId(), ctx.getWsId(), id));
     }
 
     /** 软删除：进回收站（30 天自动清理），撤销走 restore */
     @DeleteMapping("/api/tasks/{id}")
     public ApiResult<Void> delete(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        taskService.delete(ctx.getUserId(), ctx.getWsId(), id);
+        trashService.delete(ctx.getUserId(), ctx.getWsId(), id);
         return ApiResult.ok();
     }
 
     /** 任务操作时间线（含操作人） */
     @GetMapping("/api/tasks/{id}/logs")
     public ApiResult<List<TaskLog>> logs(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(taskService.logs(ctx.getWsId(), id));
+        return ApiResult.ok(queryService.logs(ctx.getWsId(), id));
     }
 
     /** 日历视图：按 [开始日, 实际结束日] 取整月任务（IA-4：接入与看板相同的筛选） */
@@ -174,6 +186,6 @@ public class TaskController {
                                                 @BoardFilter BoardQuery query,
                                                 @RequestParam(required = false) Integer year,
                                                 @RequestParam(required = false) Integer month) {
-        return ApiResult.ok(taskService.calendar(ctx.getWsId(), year, month, query));
+        return ApiResult.ok(queryService.calendar(ctx.getWsId(), year, month, query));
     }
 }

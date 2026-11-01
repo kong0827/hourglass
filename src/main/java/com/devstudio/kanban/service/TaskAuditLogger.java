@@ -6,6 +6,7 @@ import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ import java.util.Objects;
  * <p>从 TaskService 抽出的审计职责：只负责"把一次修改翻译成一句人话"并落 task_log，
  * 不参与任何业务规则。这样流程体检 / 任务时间线依赖的日志格式只有一处维护。
  */
+@Component
 public class TaskAuditLogger {
 
     private final TaskLogMapper logMapper;
@@ -70,7 +72,7 @@ public class TaskAuditLogger {
         if (!Objects.equals(old.getOwner(), t.getOwner())) {
             parts.add("负责人 " + old.getOwner() + "→" + t.getOwner());
         }
-        /* 列变化单独写 move 日志（见 TaskService.update()），这里不重复。 */
+        /* 列变化单独写 move 日志（见 TaskWorkflowService.afterEditColumnChange()），这里不重复。 */
         if (!Objects.equals(old.getStartDate(), t.getStartDate())) {
             parts.add("开始日期 " + fmtDate(old.getStartDate()) + "→" + fmtDate(t.getStartDate()));
         }

@@ -1201,3 +1201,9 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 列表 / 计数 / 覆盖空间三条 SQL 复用同一个 `myTasksWhere` 片段，筛选口径不会漂移。
 - 排序在原有 `(due_date IS NULL), due_date, FIELD(priority), updated_at DESC` 后追加 `t.id`，保证同一 `updated_at` 下翻页边界稳定。
 - 前端「我的任务」底部提供「加载更多」，按 `offset = 已加载条数` 追加；分组（逾期/今天/本周/以后）、行内完成/计时/改期、空间与顶栏筛选保持不变。
+
+## 附录 · 2026-11-01 BE-ARCH-1：后端服务拆分（无接口变化）
+
+- `TaskService` 拆为 `TaskQueryService`（看板/列表/日历/我的任务/扩展字段）、`TaskCommandService`（新建/编辑/标签与关联校验）、`TaskWorkflowService`（移动/循环任务/计时联动/完成归档）、`TaskTrashService`（回收站/恢复/彻底删除/过期清理）。
+- HTTP 契约完全不变：路径、参数、返回 JSON、ETag、权限、备份 v6、分批事务均保持原样；原 `TrashService` 的每日清理任务并入 `TaskTrashService`。
+- 仅供排障参考：移动类写操作（拖拽与抽屉改列）现在都走 `TaskWorkflowService`，查询类只读走 `TaskQueryService`。

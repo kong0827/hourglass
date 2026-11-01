@@ -181,7 +181,7 @@ public class TimeLogService {
     }
 
     /**
-     * 关闭某个任务上**所有人**的运行中计时（任务完成 / 删除时由 TaskService 调用）。
+     * 关闭某个任务上**所有人**的运行中计时（任务完成 / 删除时由 TaskWorkflowService / TaskTrashService 调用）。
      * 口径与手动停表完全一致：跳过周末、每人每天封顶 8 小时。
      *
      * @param reason 写进时间线的说明，例如「任务已完成」
