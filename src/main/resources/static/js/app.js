@@ -453,24 +453,64 @@ function reqNameById(id){
   for(var i = 0; i < reqList.length; i++) if(reqList[i].id === id) return reqList[i].name;
   return "无";
 }
-function boardParams(extra){
-  var p = {
-    q: state.q || null,
-    owners: state.owners.length ? state.owners : null,
-    pris: state.pris.length ? state.pris : null,
-    cats: state.cats.length ? state.cats : null,
-    reqs: state.reqs.length ? state.reqs : null,
-    tags: state.tags.length ? state.tags : null,
-    due: state.due || null,
-    focus: state.focus ? true : null,
-    blocked: state.blocked ? true : null,
-    doneScope: state.doneScope
-  };
+/* ==================== 统一筛选字段表（UX-3） ====================
+   新增一个筛选维度只改这里：参数构造、保存视图、看板/列表/甘特/日历/我的任务全部跟着变。 */
+var FILTER_KEYS = [
+  { k: "q", kind: "text" },
+  { k: "owners", kind: "list", s: "owners" },
+  { k: "pris", kind: "list", s: "pris" },
+  { k: "cats", kind: "list", s: "cats" },
+  { k: "reqs", kind: "list", s: "reqs" },
+  { k: "tags", kind: "list", s: "tags" },
+  { k: "due", kind: "text" },
+  { k: "focus", kind: "bool" },
+  { k: "blocked", kind: "bool" },
+  { k: "doneScope", kind: "text", always: true }
+];
+function filterSource(key){
+  for(var i = 0; i < FILTER_KEYS.length; i++){
+    if(FILTER_KEYS[i].k === key) return FILTER_KEYS[i];
+  }
+  return null;
+}
+/* 请求参数：空值不下发（null），数组复制一份避免调用方后续修改影响请求 */
+function filterParams(extra){
+  var p = {};
+  FILTER_KEYS.forEach(function(f){
+    var v = state[f.s || f.k];
+    if(f.kind === "list") p[f.k] = (v && v.length) ? v.slice() : null;
+    else if(f.kind === "bool") p[f.k] = v ? true : null;
+    else if(f.always) p[f.k] = v;
+    else p[f.k] = v || null;
+  });
   if(extra){
     for(var k in extra) if(Object.prototype.hasOwnProperty.call(extra, k)) p[k] = extra[k];
   }
   return p;
 }
+/* 保存视图用：保留空数组与 false，服务端按结构校验 */
+function currentFilterParams(){
+  var p = {};
+  FILTER_KEYS.forEach(function(f){
+    var v = state[f.s || f.k];
+    if(f.kind === "list") p[f.k] = (v || []).slice();
+    else if(f.kind === "bool") p[f.k] = !!v;
+    else p[f.k] = v == null ? "" : v;
+  });
+  return p;
+}
+function toggleFilterValue(key, value){
+  var f = filterSource(key);
+  var arr = state[(f && f.s) || key];
+  if(!Array.isArray(arr)) return;
+  toggleIn(arr, value);
+  reloadFilteredViews();
+}
+function setFilterValue(key, value){
+  state[key] = (state[key] === value) ? null : value;
+  reloadFilteredViews();
+}
+function boardParams(extra){ return filterParams(extra); }
 function updateBrand(){
   if(!brandSub) return;
   if(activeView === "board" && state.board){
@@ -1356,15 +1396,15 @@ searchInput.addEventListener("input", function(){
   if(searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(function(){ applySearch(searchInput.value.trim()); }, 300);
 });
-/* 跨视图搜索（O-7 / F6）：搜索框是全站唯一入口，结果统一在看板呈现 */
+/* 跨视图搜索（O-7 / F6 / UX-2）：搜索框是全站唯一入口，不再强制跳回看板 */
 function applySearch(kw){
   var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};
   state.q = kw || "";
-  /* 支持筛选的视图就地过滤；其余视图仍回看板展示结果（避免搜索框看起来没反应） */
+  searchInput.value = state.q;
+  searchWrap.classList.toggle("has", state.q.length > 0);
+  /* 不支持筛选的视图：保留关键词并提示，由用户决定何时去看板/列表查看（不打断当前上下文） */
   if(kw && !supported[activeView]){
-    showView("board");
-    reloadFilteredViews();
-    toast("已在看板中显示「" + kw + "」的搜索结果");
+    toastAction("「" + kw + "」的搜索结果在看板 / 列表中查看", "去列表", function(){ showView("list"); }, "warn");
     return;
   }
   if(activeView === "mine"){ loadMine(); return; }
@@ -1413,15 +1453,15 @@ selectedSummary.addEventListener("click", function(){
 });
 $("filterbar").addEventListener("click", function(e){
   var o = e.target.closest("[data-owner]");
-  if(o){ toggleIn(state.owners, o.dataset.owner); reloadFilteredViews(); return; }
+  if(o){ toggleFilterValue("owners", o.dataset.owner); return; }
   var p = e.target.closest("[data-pri]");
-  if(p){ toggleIn(state.pris, p.dataset.pri); reloadFilteredViews(); return; }
+  if(p){ toggleFilterValue("pris", p.dataset.pri); return; }
   var c = e.target.closest("[data-cat]");
-  if(c){ toggleIn(state.cats, c.dataset.cat); reloadFilteredViews(); return; }
+  if(c){ toggleFilterValue("cats", c.dataset.cat); return; }
   var r = e.target.closest("[data-req]");
-  if(r){ toggleIn(state.reqs, r.dataset.req); reloadFilteredViews(); return; }
+  if(r){ toggleFilterValue("reqs", r.dataset.req); return; }
   var t = e.target.closest("[data-tag]");
-  if(t){ toggleIn(state.tags, t.dataset.tag); reloadFilteredViews(); return; }
+  if(t){ toggleFilterValue("tags", t.dataset.tag); return; }
   var ov = e.target.closest("[data-overflow]");
   if(ov){ openOverflowPop(ov); return; }
   if(e.target.closest("[data-mf-reset]")){
@@ -1480,20 +1520,6 @@ function loadViews(){
     savedViews = list || [];
     renderViews();
   }).catch(function(){});
-}
-function currentFilterParams(){
-  return {
-    q: state.q,
-    owners: state.owners.slice(),
-    pris: state.pris.slice(),
-    cats: state.cats.slice(),
-    reqs: state.reqs.slice(),
-    tags: state.tags.slice(),
-    due: state.due,
-    focus: state.focus,
-    blocked: state.blocked,
-    doneScope: state.doneScope
-  };
 }
 function parseViewParams(p){
   if(!p || typeof p !== "object" || Array.isArray(p)) return null;
@@ -3380,18 +3406,20 @@ if(listBulkBar){
       return;
     }
     if(kind === "tag"){
-      var name = window.prompt("要批量添加的标签名（≤16 字，已存在则跳过）");
-      if(!name) return;
-      name = String(name).trim().slice(0, 16);
-      if(!name) return;
-      bulkApply(function(t){
-        var tags = (t.tags || []).slice();
-        if(tags.indexOf(name) === -1){
-          if(tags.length >= 8) return null;   // 已达上限：跳过该条
-          tags.push(name);
-        }
-        return {tags: tags};
-      }, "加标签");
+      UI.showPrompt({ title: "批量添加标签", label: "标签名（≤16 字，已存在则跳过）", maxLength: 16, okText: "添加" })
+        .then(function(input){
+          if(!input) return;
+          var name = String(input).trim().slice(0, 16);
+          if(!name) return;
+          bulkApply(function(t){
+            var tags = (t.tags || []).slice();
+            if(tags.indexOf(name) === -1){
+              if(tags.length >= 8) return null;   // 已达上限：跳过该条
+              tags.push(name);
+            }
+            return {tags: tags};
+          }, "加标签");
+        });
       return;
     }
     openBulkMenu(b, kind);
@@ -3922,20 +3950,11 @@ function ganttLoadRange(){
   return ganttMonthRange(ganttState.anchorMonth || ganttMonthStart(TODAY));
 }
 function ganttTaskParams(offset, limit){
-  var params = {
-    q: state.q || null,
-    owners: state.owners.length ? state.owners : null,
-    pris: state.pris.length ? state.pris : null,
-    cats: state.cats.length ? state.cats : null,
-    reqs: state.reqs.length ? state.reqs : null,
-    tags: state.tags.length ? state.tags : null,
-    due: state.due || null,
-    focus: state.focus ? true : null,
-    blocked: state.blocked ? true : null,
+  var params = filterParams({
     sort: "due",
     offset: offset || 0,
     limit: limit || GANTT_PAGE
-  };
+  });
   var r = ganttLoadRange();
   if(r){ params.from = iso(r.start); params.to = iso(r.end); }
   return params;
@@ -5590,7 +5609,7 @@ function afterGanttFilterChange(){
   renderGanttFilterState();
   reloadFilteredViews();
 }
-/* 甘特内关键词：不走 applySearch（那会把非看板视图切到看板），只同步全局搜索框并防抖刷新 */
+/* 甘特内关键词：与顶栏搜索共用一份状态，不切换视图 */
 var ganttQueryTimer = null;
 function ganttSetQuery(kw){
   state.q = kw || "";
@@ -6194,19 +6213,18 @@ if(ganttFilterMenu){
     var save = e.target.closest("[data-gantt-filter-save]");
     if(save){ UI.closeAllPops(); promptSaveView(); return; }
     var o = e.target.closest("[data-gantt-owner]");
-    if(o){ toggleIn(state.owners, o.getAttribute("data-gantt-owner")); afterGanttFilterChange(); return; }
+    if(o){ toggleFilterValue("owners", o.getAttribute("data-gantt-owner")); afterGanttFilterChange(); return; }
     var p = e.target.closest("[data-gantt-pri]");
-    if(p){ toggleIn(state.pris, p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
+    if(p){ toggleFilterValue("pris", p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
     var r = e.target.closest("[data-gantt-req]");
-    if(r){ toggleIn(state.reqs, r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
+    if(r){ toggleFilterValue("reqs", r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
     var c = e.target.closest("[data-gantt-cat]");
-    if(c){ toggleIn(state.cats, c.getAttribute("data-gantt-cat")); afterGanttFilterChange(); return; }
+    if(c){ toggleFilterValue("cats", c.getAttribute("data-gantt-cat")); afterGanttFilterChange(); return; }
     var tg = e.target.closest("[data-gantt-tag]");
-    if(tg){ toggleIn(state.tags, tg.getAttribute("data-gantt-tag")); afterGanttFilterChange(); return; }
+    if(tg){ toggleFilterValue("tags", tg.getAttribute("data-gantt-tag")); afterGanttFilterChange(); return; }
     var due = e.target.closest("[data-gantt-due]");
     if(due){
-      var v = due.getAttribute("data-gantt-due");
-      state.due = (state.due === v) ? null : v;
+      setFilterValue("due", due.getAttribute("data-gantt-due"));
       afterGanttFilterChange();
       return;
     }
@@ -6834,7 +6852,7 @@ function enterReviewView(){
   }).catch(function(ex){
     if(seq !== reviewSeq) return;
     reviewTarget = null;
-    $("summaryText").innerHTML = '<span style="color:var(--danger)">加载失败：' + esc(ex.message || "网络异常") + '</span>';
+    setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
   });
 }
 function navWeek(delta){
@@ -7401,12 +7419,12 @@ function openNewReqDocDialog(){
     ? reqList.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("")
     : '<option value="">（还没有项目，请先去「项目」建一个）</option>';
   $("newReqDocTitle").value = "";
-  $("dlgNewReqDoc").classList.add("open");
+  UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ $("newReqDocTitle").focus(); }, 40);
 }
 function closeNewReqDocDialog(){
   var d = $("dlgNewReqDoc");
-  if(d) d.classList.remove("open");
+  if(d) UI.closeModal(d);
 }
 function submitNewReqDoc(){
   var reqId = $("newReqDocProject").value;
@@ -7461,11 +7479,11 @@ function reqDirtyReset(){
 /** 点返回 / Esc：有未保存修改就弹三选一 */
 function tryCloseReqDocEditor(){
   if(!reqDocDirty){ closeReqDocEditor(); return; }
-  $("dlgReqDocClose").classList.add("open");
+  UI.openModal($("dlgReqDocClose"));
 }
 function closeReqDocCloseDialog(){
   var d = $("dlgReqDocClose");
-  if(d) d.classList.remove("open");
+  if(d) UI.closeModal(d);
 }
 
 /* ==================== 需求页 · AI 拆分 / 完成度检查 ==================== */
@@ -7514,7 +7532,7 @@ function runAiSplit(){
     API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}).then(function(d){
       aiSplitDrafts = d.tasks || [];
       renderAiSplit(d);
-      $("dlgAiSplit").classList.add("open");
+      UI.openModal($("dlgAiSplit"));
     }).catch(function(ex){
       toast(aiErrMsg(ex && ex.message), "bad");
     }).then(function(){
@@ -7570,7 +7588,7 @@ function applyAiSplit(){
   btn.disabled = true;
   API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/tasks", { tasks: picked }).then(function(r){
     btn.disabled = false;
-    $("dlgAiSplit").classList.remove("open");
+    UI.closeModal($("dlgAiSplit"));
     var msg = "已创建 " + r.created + " 个任务";
     if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名任务";
     if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 个失败";
@@ -7594,7 +7612,7 @@ function runAiAudit(){
     aiBtnBusy(btn, true, "检查中…");
     API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}).then(function(d){
       renderAiAudit(d);
-      $("dlgAiAudit").classList.add("open");
+      UI.openModal($("dlgAiAudit"));
     }).catch(function(ex){
       toast(aiErrMsg(ex && ex.message), "bad");
     }).then(function(){
@@ -7650,9 +7668,9 @@ function renderAiAudit(d){
 if($("reqDocAiSplit")){
   $("reqDocAiSplit").addEventListener("click", runAiSplit);
   $("reqDocAiAudit").addEventListener("click", runAiAudit);
-  $("dlgAiSplitCancel").addEventListener("click", function(){ $("dlgAiSplit").classList.remove("open"); });
+  $("dlgAiSplitCancel").addEventListener("click", function(){ UI.closeModal($("dlgAiSplit")); });
   $("dlgAiSplitOk").addEventListener("click", applyAiSplit);
-  $("dlgAiAuditClose").addEventListener("click", function(){ $("dlgAiAudit").classList.remove("open"); });
+  $("dlgAiAuditClose").addEventListener("click", function(){ UI.closeModal($("dlgAiAudit")); });
   /* 勾选态与卡片底色联动：一眼看出哪几条会被创建 */
   $("aiSplitList").addEventListener("change", function(e){
     var cb = e.target;
@@ -8341,12 +8359,13 @@ function openBranchDialog(id){
     sel.innerHTML = html;
   }
 
-  $("dlgBranch").classList.add("open");
+  $("dlgBranch").__uiOnClose = function(){ brEditingId = null; };
+  UI.openModal($("dlgBranch"));
   setTimeout(function(){ try{ $("brName").focus(); }catch(e){ /* noop */ } }, 40);
 }
 function closeBranchDialog(){
   var d = $("dlgBranch");
-  if(d) d.classList.remove("open");
+  if(d) UI.closeModal(d);
   brEditingId = null;
 }
 function submitBranchDialog(){
@@ -8637,7 +8656,7 @@ function loadCompletions(opts){
   }).catch(function(ex){
     if(seq !== compSeq) return;
     compRowsCache = [];
-    $("compWrap").innerHTML = UI.errorState(ex.message || "加载失败");
+    setPageError(ex, ["compStats","compWrap"], function(){ loadCompletions(); });
   });
 }
 function renderCompletions(rows, month){
@@ -8744,8 +8763,7 @@ function loadStats(opts){
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(renderStats).catch(function(ex){
-    $("chartWeeks").innerHTML = UI.errorState(ex.message);
-    bindRetry($("chartWeeks"), function(){ loadStats(); });
+    setPageError(ex, ["chartWeeks","statsCurrent","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
   });
 }
 /* O-12 / N-5：工时卡支持「仅我 / 全空间」切换，并在卡片上明示口径 */
@@ -8899,8 +8917,8 @@ function loadFlowHealth(opts){
     });
   }
   API.get("/api/flow-health", {days: days}).then(renderFlowHealth).catch(function(ex){
-    $("flowInsights").innerHTML = UI.errorState(ex.message);
-    bindRetry($("flowInsights"), function(){ loadFlowHealth(); });
+    setPageError(ex, ["flowInsights","flowKpi","flowBars","flowRework","flowPriority","flowReqs"],
+      function(){ loadFlowHealth(); });
   });
 }
 function renderFlowHealth(d){
@@ -9964,15 +9982,19 @@ btnReset.addEventListener("click", function(){
   resetArmed = setTimeout(disarmReset, 3500);
 });
 
-/* ---- 快捷键说明面板（O-16 / C6：与实现、与 UI 规范三处对齐） ---- */
-$("kbdBody").innerHTML = [
-  ["N","聚焦快速录入：在列表或其他视图按下会先切到看板，再落在列内录入框"],
+/* ---- 快捷键说明：设置页与帮助弹窗共用一份数据（UX-7） ---- */
+var SHORTCUT_ROWS = [
+  ["N","新建任务：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
   ["C","新建任务（打开详情抽屉）"],
-  ["/ 或 Ctrl/⌘ + K","聚焦全局搜索：任意视图都可用，结果统一在看板呈现"],
+  ["?","打开这份帮助（快捷键 + 录入语法）"],
+  ["g b / g l / g m","跳转：看板 / 列表 / 我的任务"],
+  ["g c / g g / g p","跳转：日历 / 甘特图 / 项目"],
+  ["g r / g a / g s","跳转：周回顾 / 分析 / 设置"],
+  ["0 / 1 / 2 / 3","卡片/列表行聚焦时设置优先级 P0–P3"],
+  ["/ 或 Ctrl/⌘ + K","聚焦全局搜索：任意视图可用；不支持筛选的视图不会自动跳页"],
   ["Space","卡片/列表行聚焦时打开详情抽屉"],
   ["D","卡片/列表行聚焦时改期（今天 / 明天 / 一周后＝5 个工作日 / 无期限，或选具体日期）"],
   ["X","卡片/列表行聚焦时标记完成；在已完成列内按 X 则取消完成"],
-  ["1 / 2 / 3 / 4","卡片/列表行聚焦时设置优先级 P0–P3"],
   ["← / →","卡片/列表行聚焦时移动到相邻列"],
   ["↑ / ↓","看板内卡片之间上下移动焦点"],
   ["Delete","卡片/列表行聚焦时移入回收站（可在提示里撤销）"],
@@ -9981,11 +10003,23 @@ $("kbdBody").innerHTML = [
   ["T","日历视图回到今天"],
   ["Ctrl/⌘ + B","收起 / 展开侧边栏"],
   ["录入语法","!P0 优先级 · #项目 · @负责人 · +标签 · %进度 · ~每周 循环 · 明天 / 3天后 / 10-20 日期"]
-].map(function(r){
-  return '<div class="done-item">' +
-    '<span class="tag tag-ghost" style="font-family:var(--font-mono)">' + esc(r[0]) + '</span>' +
-    '<span class="di-main"><span class="di-m">' + esc(r[1]) + '</span></span></div>';
-}).join("");
+];
+function renderShortcutRows(){
+  return SHORTCUT_ROWS.map(function(r){
+    return '<div class="done-item">' +
+      '<span class="tag tag-ghost" style="font-family:var(--font-mono)">' + esc(r[0]) + '</span>' +
+      '<span class="di-main"><span class="di-m">' + esc(r[1]) + '</span></span></div>';
+  }).join("");
+}
+$("kbdBody").innerHTML = renderShortcutRows();
+if($("helpBody")) $("helpBody").innerHTML = renderShortcutRows();
+function openHelp(){
+  if(!$("dlgHelp")) return;
+  UI.openModal($("dlgHelp"));
+}
+if($("btnHelp")) $("btnHelp").addEventListener("click", openHelp);
+if($("dlgHelpX")) $("dlgHelpX").addEventListener("click", function(){ UI.closeModal($("dlgHelp")); });
+if($("dlgHelpOk")) $("dlgHelpOk").addEventListener("click", function(){ UI.closeModal($("dlgHelp")); });
 
 /* ==================== 用户管理（§6.11） ==================== */
 var userListEl = $("userList");
@@ -10624,9 +10658,20 @@ function triggerDownload(filename, text, mime){
   a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
 }
-function bindRetry(root, fn){
-  var b = root.querySelector("[data-empty-action]");
+function bindRetry(root, fn){  var b = root.querySelector("[data-empty-action]");
   if(b) b.addEventListener("click", fn);
+}
+/* 页面级错误：一次把同一页的多个区块都换成错误态，避免"一块报错、其余永远停在骨架屏" */
+function setPageError(err, ids, retry){
+  var msg = (err && err.message) || "网络异常，请稍后重试";
+  var first = null;
+  ids.forEach(function(id){
+    var el = $(id);
+    if(!el) return;
+    el.innerHTML = UI.errorState(msg);
+    if(!first) first = el;
+  });
+  if(first) bindRetry(first, retry);
 }
 function stripFirst(s, find){
   var i = s.indexOf(find);
@@ -10949,6 +10994,7 @@ document.addEventListener("visibilitychange", function(){
 });
 
 /* ==================== 快捷键（§8.1） ==================== */
+var gPending = 0;   // g + 字母 的视图跳转组合键
 function inEditable(el){
   if(!el) return false;
   var tag = el.tagName;
@@ -11038,6 +11084,26 @@ document.addEventListener("keydown", function(e){
 
   if(inEditable(e.target) || UI.anyModalOpen()) return;
 
+  /* ?：快捷键帮助（Shift + /） */
+  if(!mod && e.key === "?"){
+    e.preventDefault();
+    openHelp();
+    return;
+  }
+  /* g + 字母：跳转视图（800ms 内组合） */
+  if(!mod && !e.altKey && (e.key === "g" || e.key === "G")){
+    gPending = Date.now();
+    return;
+  }
+  if(gPending && Date.now() - gPending < 900){
+    var gmap = {b:"board", l:"list", m:"mine", c:"calendar", g:"gantt", p:"projects",
+                r:"review", a:"stats", s:"settings"};
+    var gt = gmap[String(e.key || "").toLowerCase()];
+    gPending = 0;
+    if(gt){ e.preventDefault(); showView(gt); return; }
+  }
+  gPending = 0;
+
   var card = focusedCard();
   var row = focusedRow();
 
@@ -11084,10 +11150,10 @@ document.addEventListener("keydown", function(e){
       if(kt) deleteTask(kt.id);
       return;
     }
-    if(e.key >= "1" && e.key <= "4"){
+    if(e.key >= "0" && e.key <= "3"){
       e.preventDefault();
       if(!kt) return;
-      var pri = "P" + (Number(e.key) - 1);
+      var pri = "P" + e.key;
       API.put("/api/tasks/" + encodeURIComponent(kt.id), taskPayloadWith(kt, {priority: pri})).then(function(){
         toast("已设为 " + pri, "fs");
         loadBoard({silent:true});
@@ -11108,19 +11174,38 @@ document.addEventListener("keydown", function(e){
     }
   }
 
-  /* N：聚焦快速录入（看板列内新增） */
+  /* N：新建任务。看板内落在列内快速录入；其它视图就在当前视图打开抽屉并预填上下文 */
   if(!mod && !e.altKey && (e.key === "n" || e.key === "N")){
     e.preventDefault();
-    var colId = "backlog";
-    if(card){
-      var colEl = card.closest(".board-col");
-      if(colEl) colId = colEl.dataset.col;
-    }
-    if(activeView !== "board"){ showView("board"); }
-    setTimeout(function(){
+    if(activeView === "board"){
+      var colId = "backlog";
+      if(card){
+        var colEl = card.closest(".board-col");
+        if(colEl) colId = colEl.dataset.col;
+      }
       state.inlineAdd = {col: colId, value: ""};
       openInlineAdd(colId, "");
-    }, 40);
+      return;
+    }
+    if(activeView === "calendar"){
+      openTaskDrawer("backlog", null, {dueDate: calState.selected || TODAY_ISO});
+      return;
+    }
+    if(activeView === "gantt"){
+      var anchor = ganttState.anchorMonth ? parseDate(ganttState.anchorMonth) : TODAY;
+      openTaskDrawer("backlog", null, {startDate: iso(anchor)});
+      return;
+    }
+    if(activeView === "list" && listSelected && Object.keys(listSelected).length === 1){
+      var onlyId = Object.keys(listSelected)[0];
+      var onlyTask = listCache[onlyId];
+      if(onlyTask && onlyTask.reqId){
+        openTaskDrawer("backlog", null, {});
+        if(iReq) iReq.value = onlyTask.reqId;
+        return;
+      }
+    }
+    openTaskDrawer("backlog");
     return;
   }
   /* C：新建任务抽屉 */

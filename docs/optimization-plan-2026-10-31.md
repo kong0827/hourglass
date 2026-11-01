@@ -742,3 +742,10 @@ spring.datasource.hikari.connection-timeout: 3000
 - AI 总预算 150s（含 JSON 模式降级重试）：首轮超过 60s 或剩余预算不足 30s 时不再重试，避免顶到 nginx `/api/ai/` 的 200s。
 - pom 新增 `httpclient`（Boot 管理版本）+ `commons-codec 1.16.0`（离线仓库没有 Boot 默认的 1.15）。未引入 Caffeine。
 - 验证：`mvn -o -DskipTests package` 通过；真实上游连通性需在服务器验证。
+
+**第三十轮：UX-3 / UX-6 / UX-7**
+- UX-3（参数层）：新增 `FILTER_KEYS` 字段表与 `filterParams()` / `currentFilterParams()` / `toggleFilterValue()` / `setFilterValue()`；看板、列表、甘特、保存视图的参数构造统一走同一张表（`ganttTaskParams` 改为 `filterParams({sort,offset,limit})`），甘特筛选菜单的点击处理复用同一组切换函数。新增筛选维度只需改 `FILTER_KEYS` 一处。日历/我的任务接入在 IA-4 / IA-3 批次完成。
+- UX-6：`ui.js` 的弹窗不再维护 ID 白名单，自动收集页面内所有 `.modal-layer`；`openModal` 自动挂焦点陷阱、遮罩关闭、焦点恢复；新增 `UI.showPrompt(opts)` 取代 `window.prompt`（列表批量加标签已改用）；需求/需求关闭/AI 拆分/AI 体检/分支弹窗全部改走 `UI.openModal` / `UI.closeModal`；周回顾、任务清单、报表、流程体检失败时由 `setPageError()` 一次性把同页全部区块换成错误态（不再残留骨架屏），重试按钮统一 `bindRetry`。
+- UX-7：顶栏新增帮助按钮，`?` 打开「快捷键与录入语法」弹窗（与设置页共用 `SHORTCUT_ROWS`）；新增 `g b/l/m/c/g/p/r/a/s` 视图跳转；优先级快捷键改为 `0–3 → P0–P3`；`N` 不再强制切回看板：看板内仍是列内快速录入，日历预填当前选中日期、甘特预填当前锚点开始日、其它视图直接打开新建抽屉。
+- 搜索：不支持筛选的视图不再自动跳回看板，改为提示 +「去列表」动作，保留当前上下文。
+- 验证：`node --check` 通过；预览稿无头 Edge 冒烟（19 张卡、3 列、无 console/异常；`?` 打开/关闭帮助弹窗正常）。

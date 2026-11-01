@@ -77,17 +77,11 @@
   }
 
   /* ==================== 弹窗基础设施（§4.8） ==================== */
-  var MODALS = null;
   var lastFocus = null;
 
+  /* 不再维护 ID 白名单：页面里所有 .modal-layer 都是弹窗（含运行时新建的提示框） */
   function modalEls() {
-    if (!MODALS) {
-      MODALS = ["dlgWsCreate", "dlgViewName", "dlgWsDelete", "dlgUserPwd", "dlgConfirm", "dlgGanttShare",
-        "dlgNewReqDoc", "dlgReqDocClose", "dlgAiSplit", "dlgAiAudit", "dlgBranch"]
-        .map(function (id) { return document.getElementById(id); })
-        .filter(Boolean);
-    }
-    return MODALS;
+    return Array.prototype.slice.call(document.querySelectorAll(".modal-layer"));
   }
   function anyModalOpen() {
     var open = modalEls().some(function (m) { return m.classList.contains("open"); });
@@ -105,6 +99,8 @@
 
   function openModal(m, focusSel) {
     if (!m) return;
+    /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
+    if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { closeModal(m); }); }
     lastFocus = document.activeElement;
     m.classList.add("open");
     var target = focusSel ? m.querySelector(focusSel) : (m.querySelector("input:not([type=hidden]),textarea,select") || focusables(m)[0]);
@@ -115,6 +111,9 @@
     m.classList.remove("open");
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* noop */ } }
     lastFocus = null;
+    /* showPrompt 等"等待用户输入"的弹窗靠这个回调把 Promise 收口 */
+    var done = m.__uiOnClose;
+    if (done) { m.__uiOnClose = null; try { done(); } catch (e) { /* noop */ } }
   }
   /* 关闭最上层弹窗，返回是否关闭了东西 */
   function closeTopModal() {
@@ -170,6 +169,70 @@
   function confirmOpen() {
     var dlg = document.getElementById("dlgConfirm");
     return !!(dlg && dlg.classList.contains("open"));
+  }
+
+  /**
+   * 统一输入提示框（替代 window.prompt）。
+   * 返回 Promise：确认得到去空格后的字符串，取消/关闭得到 null。
+   * opts: {title, desc, label, value, placeholder, maxLength, required, multiline, okText, cancelText}
+   */
+  function showPrompt(opts) {
+    opts = typeof opts === "string" ? { title: opts } : (opts || {});
+    var layer = document.createElement("div");
+    layer.className = "modal-layer";
+    layer.setAttribute("role", "dialog");
+    layer.setAttribute("aria-modal", "true");
+    var titleId = "promptTitle" + Date.now();
+    layer.innerHTML =
+      '<form class="sheet xs" novalidate>' +
+        '<div class="sheet-head"><div style="flex:1 1 auto;min-width:0">' +
+          '<h2 id="' + titleId + '">' + esc2(opts.title || "请输入") + '</h2>' +
+          (opts.desc ? '<div class="desc">' + esc2(opts.desc) + '</div>' : '') +
+        '</div><button class="icon-btn sm" type="button" data-prompt-x aria-label="关闭">' +
+          window.icon("close", 15) + '</button></div>' +
+        '<div class="sheet-body"><div class="field">' +
+          (opts.label ? '<label for="' + titleId + 'Input">' + esc2(opts.label) + '</label>' : '') +
+          (opts.multiline
+            ? '<textarea id="' + titleId + 'Input" rows="4" placeholder="' + esc2(opts.placeholder || "") + '"></textarea>'
+            : '<input id="' + titleId + 'Input" type="text" autocomplete="off" placeholder="' + esc2(opts.placeholder || "") + '" />') +
+        '</div></div>' +
+        '<div class="sheet-foot"><span class="hint"></span>' +
+          '<button class="btn" type="button" data-prompt-cancel>' + esc2(opts.cancelText || "取消") + '</button>' +
+          '<button class="btn primary" type="submit">' + esc2(opts.okText || "确定") + '</button>' +
+        '</div>' +
+      '</form>';
+    layer.setAttribute("aria-labelledby", titleId);
+    document.body.appendChild(layer);
+    var form = layer.querySelector("form");
+    var input = layer.querySelector("input,textarea");
+    if (opts.maxLength) input.setAttribute("maxlength", String(opts.maxLength));
+    input.value = opts.value == null ? "" : String(opts.value);
+
+    return new Promise(function (resolve) {
+      var settled = false;
+      function done(v) {
+        if (settled) return;
+        settled = true;
+        layer.__uiOnClose = null;
+        closeModal(layer);
+        setTimeout(function () { if (layer.parentNode) layer.parentNode.removeChild(layer); }, 220);
+        resolve(v);
+      }
+      layer.__uiOnClose = function () { done(null); };
+      layer.querySelector("[data-prompt-x]").addEventListener("click", function () { done(null); });
+      layer.querySelector("[data-prompt-cancel]").addEventListener("click", function () { done(null); });
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var v = (input.value || "").trim();
+        if (opts.required !== false && !v) {
+          toast("请填写内容", "warn");
+          try { input.focus(); } catch (err) { /* noop */ }
+          return;
+        }
+        done(v);
+      });
+      openModal(layer, "input,textarea");
+    });
   }
 
   /* ==================== Popover / DropdownMenu（§4.10） ==================== */
@@ -386,6 +449,7 @@
     toast: toast,
     toastAction: toastAction,
     showConfirm: showConfirm,
+    showPrompt: showPrompt,
     settleConfirm: settleConfirm,
     confirmOpen: confirmOpen,
     openModal: openModal,

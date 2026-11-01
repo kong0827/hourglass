@@ -209,6 +209,14 @@
         </div>
 
         <div style="position:relative">
+          <button class="icon-btn" id="btnHelp" type="button" aria-label="快捷键帮助" title="快捷键帮助（?）">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10" cy="10" r="7.4"/><path d="M7.9 7.6a2.2 2.2 0 1 1 3.1 2c-.7.4-1 .9-1 1.7"/><path d="M10 14.2h.01"/>
+            </svg>
+          </button>
+        </div>
+
+        <div style="position:relative">
           <button class="icon-btn" id="btnTheme" type="button" aria-label="切换深色模式" title="浅色 / 深色">
             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M16.2 11.4A6.6 6.6 0 0 1 8.6 3.8a6.8 6.8 0 1 0 7.6 7.6Z"/>
@@ -1759,6 +1767,25 @@
               <button class="btn danger" type="button" id="ganttShareRevoke">停止分享</button>
               <button class="btn" type="button" id="ganttShareClose">关闭</button>
               <button class="btn primary" type="button" id="ganttShareCopy">复制链接</button>
+            </div>
+          </div>
+        </div>
+<!-- 快捷键与录入语法帮助（?） -->
+        <div class="modal-layer" id="dlgHelp" role="dialog" aria-modal="true" aria-labelledby="dlgHelpTitle">
+          <div class="sheet">
+            <div class="sheet-head">
+              <div style="flex:1 1 auto;min-width:0">
+                <h2 id="dlgHelpTitle">快捷键与录入语法</h2>
+                <div class="desc">按 <kbd>?</kbd> 随时打开；<kbd>g</kbd> 后接字母跳转视图</div>
+              </div>
+              <button class="icon-btn sm" type="button" id="dlgHelpX" aria-label="关闭">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+              </button>
+            </div>
+            <div class="sheet-body"><div id="helpBody"></div></div>
+            <div class="sheet-foot">
+              <span class="hint">输入框 / 编辑器中不触发单键快捷键</span>
+              <button class="btn primary" type="button" id="dlgHelpOk">知道了</button>
             </div>
           </div>
         </div>
