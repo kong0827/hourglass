@@ -44,18 +44,9 @@
       AND workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
   </select>
 
-  <!-- 跨空间「我的任务」（N-3）：优先按账号ID匹配；历史数据 owner_user_id 为空时回落显示名文本 -->
-  <!-- 跨空间「我的任务」。
-       workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。 -->
-  <select id="selectMyTasks" resultType="Task">
-    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
-           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
-           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
-           t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
-           w.name AS workspace_name
-    FROM task t
-    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
-    LEFT JOIN workspace w ON w.id = t.workspace_id
+  <!-- 跨空间「我的任务」的共享 WHERE：列表 / 计数 / 覆盖空间三条 SQL 复用同一片段，
+       任何一次筛选口径调整都不会出现"计数与列表不一致"。 -->
+  <sql id="myTasksWhere">
     WHERE t.deleted_at IS NULL
       AND (t.owner_user_id = #{userId}
            <if test="displayName != null and displayName != ''">
@@ -105,8 +96,42 @@
         AND ((t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{today})
              OR (t.board_column = 'doing' AND t.priority = 'P0'))
       </if>
-    ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC
-    LIMIT 201
+  </sql>
+
+  <!-- 跨空间「我的任务」（N-3）：优先按账号ID匹配；历史数据 owner_user_id 为空时回落显示名文本。
+       workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。
+       分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
+  <select id="selectMyTasks" resultType="Task">
+    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
+           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
+           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
+           t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
+           w.name AS workspace_name
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    LEFT JOIN workspace w ON w.id = t.workspace_id
+    <include refid="myTasksWhere"/>
+    ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <!-- total 用独立 COUNT（不依赖列表页），nameOnly=true 时再叠加"仅按显示名匹配"条件 -->
+  <select id="countMyTasks" resultType="int">
+    SELECT COUNT(*)
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    <include refid="myTasksWhere"/>
+    <if test="nameOnly"> AND t.owner_user_id IS NULL </if>
+  </select>
+
+  <!-- 覆盖空间：按筛选后的全量任务去重，分页不会让"覆盖 N 个空间"缩水 -->
+  <select id="selectMyTaskWorkspaces" resultType="com.devstudio.kanban.dto.MyTaskWorkspace">
+    SELECT DISTINCT t.workspace_id AS id, w.name AS name
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    LEFT JOIN workspace w ON w.id = t.workspace_id
+    <include refid="myTasksWhere"/>
+    ORDER BY name
   </select>
 
   <insert id="insert">

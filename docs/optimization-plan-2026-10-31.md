@@ -789,3 +789,10 @@ spring.datasource.hikari.connection-timeout: 3000
 **第三十六轮：复查修复**
 - 分支页：状态筛选点击从已删除的顶部格子迁到列头（`#branchGroups` 上的 `data-br-filter`），点击列头只看该状态、再点取消。
 - SW 升至 `devstudio-shell-v69`，预览稿重生成；`node tools/check-assets.js` 校验预缓存清单与页面引用一致。
+
+**第三十七轮：TOP-6 我的任务分页**
+- 后端：`/api/my-tasks` 新增 `offset` / `limit`（默认 0 / 200，上限 500，服务端收敛）；`TaskMapper` 新增 `myTasksWhere` 共享片段，列表 / `COUNT` / 覆盖空间三条 SQL 复用，筛选口径不会漂移；排序追加 `t.id` 保证翻页边界稳定。
+- 响应：新增 `total`（全量独立 COUNT）、`offset` / `limit`（实际生效值）、`hasMore`；`spaces` 与 `matchedByNameOnly` 改为全量统计；`truncated` 保留为 `hasMore` 的兼容别名。
+- 前端：我的任务底部「加载更多」（按已加载条数作为 offset 追加，跨页按 `workspaceId|id` 去重）；分组（逾期/今天/本周/以后）、行内完成/计时/改期、空间下拉与顶栏筛选保持不变；meta 文案改为「已加载 n / total」。
+- 文档：`docs/api.md` 更新接口表并新增 TOP-6 附录。
+- 验证：构建、37 个单测、`node --check`、`gen-preview`、`check-assets`、无头预览冒烟（我的任务 2 行渲染、meta 显示"已加载 2 项 · 覆盖 2 个空间"、无 JS 异常）。

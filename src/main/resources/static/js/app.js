@@ -6806,22 +6806,40 @@ function populateMineSpaces(spaces){
   }
 }
 var mineCache = {};
-var mineAll = [], mineSpaces = [], mineNameOnly = 0;
+var mineAll = [], mineSpaces = [], mineNameOnly = 0, mineTotal = 0, mineHasMore = false;
+var MINE_PAGE_SIZE = 200;
+var mineLoading = false, mineSeq = 0;
 function rerenderMine(){
-  renderMine({items: mineAll, spaces: mineSpaces, matchedByNameOnly: mineNameOnly, total: mineAll.length});
+  renderMine({items: mineAll, spaces: mineSpaces, matchedByNameOnly: mineNameOnly,
+    total: mineTotal, hasMore: mineHasMore}, false);
 }
 function loadMine(opts){
   opts = opts || {};
-  if(!mineBody) return;
-  if(!opts.silent){
+  if(!mineBody || mineLoading) return;
+  var append = !!opts.append;
+  mineLoading = true;
+  var seq = ++mineSeq;
+  var offset = append ? mineAll.length : 0;
+  var btn = mineBody.querySelector("[data-mine-more]");
+  if(btn){ btn.disabled = true; btn.textContent = "加载中…"; }
+  if(!opts.silent && !append){
     mineBody.innerHTML = UI.skeletonRows(6);
     if(mineMeta) mineMeta.textContent = "加载中…";
   }
-  var params = filterParams({scope: "open"});
+  var params = filterParams({scope: "open", offset: offset, limit: MINE_PAGE_SIZE});
   delete params.owners;      // 负责人维度天然是我
   API.getGlobal("/api/my-tasks", params).then(function(d){
-    renderMine(d || {});
+    if(seq !== mineSeq) return;
+    mineLoading = false;
+    renderMine(d || {}, append);
   }).catch(function(ex){
+    if(seq !== mineSeq) return;
+    mineLoading = false;
+    if(append){
+      toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+      if(btn){ btn.disabled = false; btn.textContent = "加载更多"; }
+      return;
+    }
     if(mineMeta) mineMeta.textContent = "";
     mineBody.innerHTML = UI.errorState(ex.message);
     bindRetry(mineBody, function(){ loadMine(); });
@@ -6868,27 +6886,41 @@ function mineRowHTML(t){
     '</span>' +
   '</div>';
 }
-function renderMine(d){
-  var all = d.items || [];
+function renderMine(d, append){
+  var incoming = d.items || [];
   var spaces = d.spaces || [];
-  mineAll = all;
   mineSpaces = spaces;
   mineNameOnly = Number(d.matchedByNameOnly) || 0;
+  mineTotal = typeof d.total === "number" ? d.total : (append ? mineAll.length : incoming.length);
+  mineHasMore = !!d.hasMore;
+  if(append){
+    var seen = {};
+    mineAll.forEach(function(t){ seen[t.workspaceId + "|" + t.id] = true; });
+    incoming.forEach(function(t){
+      var key = t.workspaceId + "|" + t.id;
+      if(!seen[key]){ seen[key] = true; mineAll.push(t); }
+    });
+  }else{
+    mineAll = incoming;
+  }
   populateMineSpaces(spaces);
   mineCache = {};
-  all.forEach(function(t){ mineCache[t.workspaceId + "|" + t.id] = t; });
-  var items = mineFiltered(all);
+  mineAll.forEach(function(t){ mineCache[t.workspaceId + "|" + t.id] = t; });
+  var items = mineFiltered(mineAll);
   var filtering = mineFiltering();
   if(mineMeta){
     var nameOnly = mineNameOnly;
-    mineMeta.textContent = (filtering ? ("筛选出 " + items.length + " / " + all.length + " 项") : ("共 " + all.length + " 项")) +
-      " · 覆盖 " + spaces.length + " 个空间" +
-      (d.truncated ? " · 仅显示前 200 项，请用筛选缩小范围" : "") +
+    var loaded = mineAll.length;
+    var countTxt = filtering
+      ? ("筛选出 " + items.length + " / " + loaded + " 项（已加载）")
+      : ("已加载 " + loaded + (mineTotal > loaded ? (" / " + mineTotal) : "") + " 项");
+    mineMeta.textContent = countTxt + " · 覆盖 " + spaces.length + " 个空间" +
+      (mineHasMore ? " · 还有更多，可继续加载" : "") +
       (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(mineDot){
     var n = 0;
-    all.forEach(function(t){
+    mineAll.forEach(function(t){
       if(t.boardColumn === "done") return;
       var k = dueState(t).kind;
       if(k === "over" || k === "today") n++;
@@ -6897,7 +6929,7 @@ function renderMine(d){
     mineDot.hidden = n === 0;
     mineDot.classList.add("urgent");
   }
-  if(!all.length){
+  if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({
       icon:"checkCircle", title:"没有分派给你的任务",
       text:"被指派到你账号的任务会汇总在这里（跨你参与的全部空间）。若老数据只填了显示名、没有绑定账号，请先在任务里重新指定负责人。"
@@ -6909,7 +6941,7 @@ function renderMine(d){
       icon:"filterOff", title:"当前筛选下没有任务", compact:true,
       text:"试着放宽顶栏筛选条件，或切换空间。",
       actionLabel:"清除筛选"
-    });
+    }) + mineMoreHTML();
     var btn = mineBody.querySelector(".empty-state .btn");
     if(btn) btn.addEventListener("click", function(){
       state.mineSpace = "";
@@ -6932,8 +6964,19 @@ function renderMine(d){
       '<div class="list-scroll"><div class="list-body">' + rows.map(mineRowHTML).join("") + '</div></div>' +
     '</section>';
   });
-  html += '</div>';
+  html += '</div>' + mineMoreHTML();
   mineBody.innerHTML = html;
+}
+/* 分页到底：还有更多时给"加载更多"，加载完后给一行"已显示全部"，避免用户以为列表被截断 */
+function mineMoreHTML(){
+  if(mineHasMore){
+    return '<div class="mine-more"><button class="btn sm" type="button" data-mine-more>加载更多（已显示 ' +
+      mineAll.length + ' / ' + mineTotal + '）</button></div>';
+  }
+  if(mineTotal > MINE_PAGE_SIZE){
+    return '<div class="mine-more"><span class="foot-note">已显示全部 ' + mineTotal + ' 项</span></div>';
+  }
+  return "";
 }
 function mineTaskFromRow(row){
   return mineCache[(row.dataset.mineWs || "") + "|" + row.dataset.mineId] || null;
@@ -6996,6 +7039,7 @@ function mineReschedule(anchor, t){
 }
 if(mineBody){
   mineBody.addEventListener("click", function(e){
+    if(e.target.closest("[data-mine-more]")){ e.stopPropagation(); loadMine({append:true}); return; }
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
     var t = mineTaskFromRow(row);

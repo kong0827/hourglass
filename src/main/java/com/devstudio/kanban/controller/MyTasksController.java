@@ -3,28 +3,33 @@ package com.devstudio.kanban.controller;
 import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.common.Texts;
+import com.devstudio.kanban.dto.MyTaskWorkspace;
+import com.devstudio.kanban.dto.MyTasksPage;
 import com.devstudio.kanban.entity.AppUser;
-import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.service.TaskService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 跨空间「我的任务」（N-3）：一屏看"分派给我的全部待办"。
  *
  * 归属判定优先用 owner_user_id（账号）；历史数据该列为空时回落显示名文本，
  * 因此不需要先跑数据回填也能立即生效（回填脚本 sql/04 可选）。
+ *
+ * TOP-6：结果改为分页（offset/limit，默认 0/200、上限 500），返回全量 total 与 hasMore；
+ * total / 覆盖空间 / 仅显示名匹配数都按筛选后的全量统计，分页不会让统计缩水。
  */
 @RestController
 public class MyTasksController {
+
+    private static final int DEFAULT_LIMIT = 200;
 
     private final TaskService taskService;
     private final UserMapper userMapper;
@@ -43,7 +48,9 @@ public class MyTasksController {
                                                   @RequestParam(required = false) String tags,
                                                   @RequestParam(required = false) Boolean blocked,
                                                   @RequestParam(required = false) String due,
-                                                  @RequestParam(required = false) Boolean focus) {
+                                                  @RequestParam(required = false) Boolean focus,
+                                                  @RequestParam(required = false) Integer offset,
+                                                  @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         AppUser me = userMapper.selectById(userId);
         String displayName = me == null ? null : Texts.trimToNull(me.getDisplayName());
@@ -52,49 +59,32 @@ public class MyTasksController {
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.devstudio.kanban.dto.BoardQuery query = com.devstudio.kanban.dto.BoardQuery.from(
                 q, null, pris, cats, reqs, tags, due, focus, blocked, null, null, null, null);
-        List<Task> items = taskService.myTasks(userId, displayName, openOnly, query);
-        boolean truncated = items.size() > 200;
-        if (truncated) {
-            items = new java.util.ArrayList<Task>(items.subList(0, 200));
-        }
+        int off = offset == null ? 0 : Math.max(0, offset);
+        int lim = limit == null ? DEFAULT_LIMIT
+                : Math.max(1, Math.min(TaskService.MY_TASKS_MAX_LIMIT, limit));
+        MyTasksPage page = taskService.myTasksPage(userId, displayName, openOnly, query, off, lim);
+        int loaded = off + page.getItems().size();
+        boolean hasMore = loaded < page.getTotal();
 
-        /* 覆盖的空间列表（前端显示"覆盖 N 个空间"） */
-        Set<String> wsIds = new LinkedHashSet<String>();
-        for (Task t : items) {
-            wsIds.add(t.getWorkspaceId());
-        }
-        List<Map<String, Object>> spaces = new java.util.ArrayList<Map<String, Object>>();
-        for (String id : wsIds) {
+        /* 覆盖的空间列表（前端显示"覆盖 N 个空间"）：全量统计，不是本页 */
+        List<Map<String, Object>> spaces = new ArrayList<Map<String, Object>>();
+        for (MyTaskWorkspace ws : page.getSpaces()) {
             Map<String, Object> m = new LinkedHashMap<String, Object>();
-            m.put("id", id);
-            String name = null;
-            for (Task t : items) {
-                if (id.equals(t.getWorkspaceId())) {
-                    name = t.getWorkspaceName();
-                    break;
-                }
-            }
-            m.put("name", name);
+            m.put("id", ws.getId());
+            m.put("name", ws.getName());
             spaces.add(m);
         }
 
         Map<String, Object> res = new LinkedHashMap<String, Object>();
-        res.put("items", items);
-        res.put("total", items.size());
-        res.put("truncated", truncated);
+        res.put("items", page.getItems());
+        res.put("total", page.getTotal());
+        res.put("offset", off);
+        res.put("limit", lim);
+        res.put("hasMore", hasMore);
+        /* 兼容字段：旧前端用它提示"只显示前 200 项"，语义等同 hasMore */
+        res.put("truncated", hasMore);
         res.put("spaces", spaces);
-        res.put("matchedByNameOnly", countNameOnly(items, userId));
+        res.put("matchedByNameOnly", page.getNameOnly());
         return ApiResult.ok(res);
-    }
-
-    /** 统计"仅靠显示名匹配、还没绑定账号"的条数，便于用户判断是否需要跑回填脚本 */
-    private int countNameOnly(List<Task> items, String userId) {
-        int n = 0;
-        for (Task t : items) {
-            if (t.getOwnerUserId() == null || !userId.equals(t.getOwnerUserId())) {
-                n++;
-            }
-        }
-        return n;
     }
 }

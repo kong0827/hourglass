@@ -1120,6 +1120,10 @@
 .mine-group[data-mine-group="over"] .mine-group-n{background:var(--danger-soft,var(--danger));color:var(--bg);}
 .mine-acts{display:flex;align-items:center;gap:2px;justify-content:flex-end;}
 .mine-acts .icon-btn.on{color:var(--success);background:var(--success-soft,rgba(0,0,0,.06));}
+/* TOP-6：我的任务分页「加载更多」 */
+.mine-more{display:flex;justify-content:center;padding:4px 0 28px;}
+.mine-more .btn{min-width:180px;justify-content:center;}
+.mine-more .foot-note{color:var(--text-3);font-size:12px;}
 
 /* IA-2：项目行展开（需求文档 / 任务进度 / 跳看板） */
 .proj-layout{display:block;}

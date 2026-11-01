@@ -144,20 +144,16 @@ public interface TaskMapper {
 
     /**
      * 跨空间「我的任务」（N-3）：按账号ID匹配，历史数据（owner_user_id 为空）回落显示名文本，
-     * 因此不做数据回填也能立即生效。
+     * 因此不做数据回填也能立即生效。TOP-6：分页下推 SQL（LIMIT/OFFSET，上限由调用方收敛到 500）。
      */
-    List<Task> selectMyTasks(@Param("userId") String userId,
-                             @Param("displayName") String displayName,
-                             @Param("openOnly") boolean openOnly,
-                             @Param("q") String q,
-                             @Param("pris") java.util.List<String> pris,
-                             @Param("cats") java.util.List<String> cats,
-                             @Param("reqs") java.util.List<String> reqs,
-                             @Param("tags") java.util.List<String> tags,
-                             @Param("blocked") boolean blocked,
-                             @Param("due") String due,
-                             @Param("focus") boolean focus,
-                             @Param("today") java.time.LocalDate today);
+    List<Task> selectMyTasks(com.devstudio.kanban.dto.MyTasksQuery query);
+
+    /** 「我的任务」全量计数：与 selectMyTasks 共用 myTasksWhere 片段，口径不会漂移 */
+    int countMyTasks(com.devstudio.kanban.dto.MyTasksQuery query);
+
+    /** 「我的任务」覆盖到的空间（按筛选后的全量任务统计，不受分页影响） */
+    List<com.devstudio.kanban.dto.MyTaskWorkspace> selectMyTaskWorkspaces(
+            com.devstudio.kanban.dto.MyTasksQuery query);
 
     /** 每任务评论数（看板角标） */
     List<com.devstudio.kanban.entity.TaskCountAgg> countCommentsByTask(@Param("workspaceId") String workspaceId);

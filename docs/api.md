@@ -563,7 +563,7 @@ verdict  = coverage>=95 且 missing==0 → done
 | `GET /api/tasks/{id}/comments` | 评论列表（N-6）。**回收站中的任务保留可读** |
 | `POST /api/tasks/{id}/comments` | 发评论，body `{"content":"…"}`（≤500 字）。回收站中的任务拒绝（400）；会写一条时间线并定向通知负责人本人 |
 | `DELETE /api/comments/{id}` | 删评论，**仅作者本人**（403） |
-| `GET /api/my-tasks?scope=open\|all` | 跨空间「我的任务」（N-3）。返回 `{items,total,spaces,matchedByNameOnly}`；`matchedByNameOnly` 是"仅按显示名匹配、还没绑定账号"的条数，用于提示是否需要跑 sql/04 |
+| `GET /api/my-tasks?scope=open\|all&offset=0&limit=200` | 跨空间「我的任务」（N-3，TOP-6 起分页）。返回 `{items,total,offset,limit,hasMore,truncated,spaces,matchedByNameOnly}`；`total` / `spaces` / `matchedByNameOnly` 均按筛选后的**全量**统计，`hasMore` 表示还能取下一页（`truncated` 为兼容别名） |
 | `GET /api/activity?limit=200` | 空间级活动流（O-9）。复用 `task_log`，配置类事件以哨兵 `task_id='CFG'` + `action='config'` 落库（不会混进任何任务时间线） |
 | `GET /api/notify/status` | 推送**真实生效状态**（O-1）：`{enabled,enabledSource,channel,channelSource,workspaceHasAddress,hasToken,workspaceHasToken,lastAttemptAt,lastResult,lastError,disabledReason}`。仅空间主；不回传地址与 token 原文 |
 | `GET /api/notifications?workspace=&limit=` | 应用内通知列表 + 未读数（N-1） |
@@ -1176,3 +1176,28 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
   - 「项目」页合并需求文档的查看入口，侧栏不再单独提供「需求」。
   - 「任务清单 / 报表 / 流程体检」合并为「分析」页的三个 tab；旧 hash `#/completions`、`#/stats`、`#/flow` 自动跳转到对应 tab。
 - 后端 `MetricsService` 统一逾期 / 工时 / 列计数的聚合口径；`/api/stats` 返回结构不变。
+
+## 附录 · 2026-11-01 TOP-6：我的任务分页（增量）
+
+`GET /api/my-tasks` 新增分页参数，响应在原有字段上增量扩展（老客户端不传新参数照常工作）：
+
+| 参数 | 说明 |
+| --- | --- |
+| offset | 默认 `0`；负数按 `0` 处理 |
+| limit | 默认 `200`，上限 `500`（超出按 500 截断；小于 1 按 1 处理） |
+
+响应字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| items | 本页任务（扩展字段与之前一致：`tags` / 子任务计数 / 工时 / 评论数 / `workspaceName`） |
+| total | 当前筛选条件下的**全量**条数（独立 `COUNT`，不是本页条数） |
+| offset / limit | 服务端实际生效的分页参数（已收敛到上限） |
+| hasMore | `offset + items.length < total` |
+| truncated | 兼容字段，等同 `hasMore`（旧前端用它提示"仅显示前 200 项"） |
+| spaces | 覆盖空间列表 `[{id,name}]`，按全量统计去重，分页不会缩水 |
+| matchedByNameOnly | 全量中"仅按显示名匹配、未绑定账号"的条数（用于提示跑 sql/04） |
+
+- 列表 / 计数 / 覆盖空间三条 SQL 复用同一个 `myTasksWhere` 片段，筛选口径不会漂移。
+- 排序在原有 `(due_date IS NULL), due_date, FIELD(priority), updated_at DESC` 后追加 `t.id`，保证同一 `updated_at` 下翻页边界稳定。
+- 前端「我的任务」底部提供「加载更多」，按 `offset = 已加载条数` 追加；分组（逾期/今天/本周/以后）、行内完成/计时/改期、空间与顶栏筛选保持不变。

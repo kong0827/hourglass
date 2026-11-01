@@ -152,34 +152,55 @@ public class TaskService {
         return t;
     }
 
-    /** 跨空间「我的任务」（N-3） */
-    public List<Task> myTasks(String userId, String displayName, boolean openOnly) {
-        return myTasks(userId, displayName, openOnly, new com.devstudio.kanban.dto.BoardQuery());
-    }
+    /** 我的任务分页上限（与 /api/tasks/list 的 500 上限一致） */
+    public static final int MY_TASKS_MAX_LIMIT = 500;
 
-    /** IA-3：我的任务收件箱接入统一筛选（q / 优先级 / 分类 / 项目 / 标签 / 被阻塞） */
-    public List<Task> myTasks(String userId, String displayName, boolean openOnly,
-                              com.devstudio.kanban.dto.BoardQuery query) {
-        List<Task> list = taskMapper.selectMyTasks(userId, displayName, openOnly,
-                com.devstudio.kanban.common.Texts.trimToNull(query.getQ()),
-                query.getPris(), query.getCats(), query.getReqs(), query.getTags(), query.isBlocked(),
-                query.getDue(), query.isFocus(), java.time.LocalDate.now());
-        if (list.isEmpty()) {
-            return list;
-        }
-        Map<String, List<Task>> byWs = new LinkedHashMap<String, List<Task>>();
-        for (Task t : list) {
-            List<Task> group = byWs.get(t.getWorkspaceId());
-            if (group == null) {
-                group = new ArrayList<Task>();
-                byWs.put(t.getWorkspaceId(), group);
+    /**
+     * IA-3 / TOP-6：我的任务收件箱接入统一筛选（q / 优先级 / 分类 / 项目 / 标签 / 被阻塞），
+     * 并按 offset/limit 分页下推 SQL。total / hasMore 基于独立 COUNT，不受本页条目数影响。
+     */
+    public com.devstudio.kanban.dto.MyTasksPage myTasksPage(String userId, String displayName,
+                                                           boolean openOnly,
+                                                           com.devstudio.kanban.dto.BoardQuery query,
+                                                           int offset, int limit) {
+        com.devstudio.kanban.dto.MyTasksQuery pageQuery = new com.devstudio.kanban.dto.MyTasksQuery();
+        pageQuery.setUserId(userId);
+        pageQuery.setDisplayName(displayName);
+        pageQuery.setOpenOnly(openOnly);
+        pageQuery.setQ(Texts.trimToNull(query.getQ()));
+        pageQuery.setPris(query.getPris());
+        pageQuery.setCats(query.getCats());
+        pageQuery.setReqs(query.getReqs());
+        pageQuery.setTags(query.getTags());
+        pageQuery.setBlocked(query.isBlocked());
+        pageQuery.setDue(query.getDue());
+        pageQuery.setFocus(query.isFocus());
+        offset = Math.max(0, offset);
+        limit = Math.max(1, Math.min(MY_TASKS_MAX_LIMIT, limit));
+        pageQuery.setOffset(offset);
+        pageQuery.setLimit(limit);
+
+        int total = taskMapper.countMyTasks(pageQuery);
+        List<Task> list = total <= offset ? new ArrayList<Task>() : taskMapper.selectMyTasks(pageQuery);
+        if (!list.isEmpty()) {
+            Map<String, List<Task>> byWs = new LinkedHashMap<String, List<Task>>();
+            for (Task t : list) {
+                List<Task> group = byWs.get(t.getWorkspaceId());
+                if (group == null) {
+                    group = new ArrayList<Task>();
+                    byWs.put(t.getWorkspaceId(), group);
+                }
+                group.add(t);
             }
-            group.add(t);
+            for (Map.Entry<String, List<Task>> e : byWs.entrySet()) {
+                mergeTaskExtras(e.getKey(), e.getValue());
+            }
         }
-        for (Map.Entry<String, List<Task>> e : byWs.entrySet()) {
-            mergeTaskExtras(e.getKey(), e.getValue());
-        }
-        return list;
+        /* 仅按显示名匹配的条数：同一 WHERE 再叠加 owner_user_id IS NULL，覆盖全量而非本页 */
+        pageQuery.setNameOnly(true);
+        int nameOnly = taskMapper.countMyTasks(pageQuery);
+        return new com.devstudio.kanban.dto.MyTasksPage(list, total,
+                taskMapper.selectMyTaskWorkspaces(pageQuery), nameOnly);
     }
 
     /* ==================== 查询 ==================== */
