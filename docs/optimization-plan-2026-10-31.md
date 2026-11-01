@@ -807,3 +807,17 @@ spring.datasource.hikari.connection-timeout: 3000
 - 对外契约不变：所有 HTTP 路径、参数、返回 JSON、ETag、分批事务、备份 v6 与权限校验均未改动；Controller 构造器改为注入四个服务。
 - 测试：新增 `MyTasksPaginationTest`（offset/limit 收敛、独立 COUNT、越界不查列表）与 `MyTasksControllerPaginationTest`（默认分页、上限 500、hasMore/truncated/spaces）；`TaskServiceColumnCacheTest` 改测 `TaskSupport + TaskQueryService` 共享一次列定义加载，`TaskPurgeTest` 改测 `TaskTrashService`。共 43 个测试通过。
 - 已知边界：`TaskQueryService` 仍承担看板筛选与 meta 聚合（682 行），是查询侧最重的一块；若后续继续拆分，建议先把 `match()` 过滤口径抽成独立的 `TaskFilter` 纯函数。
+
+**第三十九轮：CODE-5 app.js 拆为原生 ES Module**
+- 目录结构（零构建、无框架、无打包器）：
+  - `js/lib/`：`format.js`（日期/格式化/颜色/只读派生）、`download.js`、`gantt-shared.js`（原 `js/gantt-shared.js`，改为 ESM）。
+  - `js/core/`：`state.js`（全局状态 + 跨视图共享可变状态 `rt`）、`dom.js`、`router.js`、`filters.js`、`filters-ui.js`、`notifications.js`、`task-actions.js`、`task-drawer.js`、`app.js`、`realtime.js`、`shortcuts.js`、`shell.js`、`utils.js`、`theme.js`、`view-loader.js`、`api.js`、`ui.js`、`icons.js`。
+  - `js/views/`：`board` / `list` / `calendar` / `gantt` / `projects` / `requirements` / `branches` / `review` / `analysis` / `settings` / `profile` / `mine`。
+  - `js/main.js` 入口；原 `js/app.js`、`js/ui.js`、`js/icons.js`、`js/api.js`、`js/gantt-shared.js` 删除。
+- 状态对象化：原 149 个顶层 `var` 中，39 个会被跨视图写入的变量收进 `core/state.js` 的 `rt` 对象（`rt.listCache`、`rt.currentWs`、`rt.analysisTab`…），其余仍是模块私有 `var`；视图之间只通过 `rt` 或函数交换数据。
+- 加载策略：看板 / 列表 / 日历 / 我的任务 / 分支 / 需求 / 抽屉等首屏与半首屏模块同步 `import`；甘特、项目、周回顾、分析、设置、个人设置通过 `core/view-loader.js` 在第一次进入时 `import()`，同一模块只加载一次；`index.html` 改为 `<script type="module">` + `modulepreload`。
+- 兼容：`share.html` 仍使用独立的 `share.js`（入口改为 module，`GS` 改为 import）；`login.html` / `join.html` 的内联脚本改为 module 并 `import { API }`。
+- 工具链：`sw.js` 预缓存清单扩充到 50 项并升至 `devstudio-shell-v73`；`tools/check-assets.js` 新增 ES Module 静态 import 图递归校验；`tools/gen-preview.js` 改为按 import 图拼接单文件预览包，并通过 `window.__DS_MODULES__` 让低频视图在预览稿里也能按需取用；`deploy/deploy.sh` 的字节校验清单同步为模块文件。
+- 保留：IA/UX/MOB、ETag（`core/api.js` 未改请求层）、SSE、计时胶囊、甘特窗口化、筛选/搜索/保存视图。
+- 验证：`mvn -o -DskipTests package`、`mvn test`（43 个测试）、全量模块 acorn/module 语法检查、`node --check`（工作台入口外的工具脚本）、`node tools/gen-preview.js`、`node tools/check-assets.js`、无头 Edge 冒烟：12 个路由全部渲染且无 JS 异常；真实模块模式下首屏只加载 6 个视图 chunk，进入甘特/设置时才请求对应 chunk；任务抽屉打开后分支下拉 5 项（按需加载成功）。
+- 体积：首屏静态模块 321.5 KB 原始（约等于 90 KB gzip 传输），低频视图 chunk 225 KB 按需加载。**未达到计划里"首屏原始 <150 KB"的目标**：抽屉（34 KB）、筛选栏（16 KB）等虽属低频但交互入口密集，继续拆分需要把大量跨模块调用改成异步，风险大于收益，暂缓。

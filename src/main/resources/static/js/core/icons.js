@@ -4,8 +4,6 @@
         stroke-linecap/linejoin=round；stroke=currentColor；fill=none。
    用法：ICONS.edit(14) → '<svg …>'
    ========================================================================== */
-(function () {
-  "use strict";
 
   function svg(size, body, w) {
     size = size || 16;
@@ -20,7 +18,7 @@
       'aria-hidden="true" focusable="false">' + body + '</svg>';
   }
 
-  var ICONS = {
+  const ICONS = {
     /* ---- 导航 ---- */
     board: function (s) { return svg(s, '<rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/>'); },
     list: function (s) { return svg(s, '<path d="M3.6 5.2h12.8M3.6 10h12.8M3.6 14.8h7.2"/>'); },
@@ -114,8 +112,7 @@
     shield: function (s) { return svg(s, '<path d="M10 2.6 16.4 5v5c0 3.6-2.6 6.4-6.4 7.6C6.2 16.4 3.6 13.6 3.6 10V5Z"/><path d="M7.6 10.2 9.4 12l3.2-3.6"/>'); }
   };
 
-  window.ICONS = ICONS;
-  window.icon = function (name, size) {
-    return ICONS[name] ? ICONS[name](size) : "";
-  };
-})();
+export { ICONS };
+export function icon(name, size) {
+  return ICONS[name] ? ICONS[name](size) : "";
+}

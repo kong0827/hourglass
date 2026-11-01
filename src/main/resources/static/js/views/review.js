@@ -1,0 +1,383 @@
+/* views/review · 周回顾与 AI 周报 */
+
+import { API } from "../core/api.js";
+import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
+import { icon } from "../core/icons.js";
+import { catColor, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
+import { setPageError } from "../core/utils.js";
+import { avatarHTML, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, weekdayCN } from "../lib/format.js";
+import { loadReqs, pending } from "./board.js";
+import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
+
+function reviewTitle(off){
+  return off === -1 ? "上周工作回顾" : (off === 0 ? "本周工作回顾" : "工作回顾");
+}
+function setReviewLoading(){
+  $("summaryText").innerHTML = "加载中…";
+  $("statGrid").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
+    '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  if(reviewHoursEl) reviewHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
+  if(reviewPendingBox) reviewPendingBox.hidden = true;
+  $("peopleBox").innerHTML = '<span class="skel skel-line" style="width:120px"></span>';
+  $("catDist").innerHTML = UI.skeletonRows(3);
+  $("progList").innerHTML = UI.skeletonRows(3);
+  $("reqDist").innerHTML = UI.skeletonRows(3);
+  $("doneList").innerHTML = UI.skeletonRows(4);
+}
+function enterReviewView(){
+  setReviewLoading();
+  loadReqs();
+  var seq = ++rt.reviewSeq;
+  rt.reviewTarget = null;
+  API.get("/api/review").then(function(d){
+    if(seq !== rt.reviewSeq) return;
+    state.reviewData = d;
+    rt.reviewTarget = d.weekOffset;
+    renderReview(d);
+  }).catch(function(ex){
+    if(seq !== rt.reviewSeq) return;
+    rt.reviewTarget = null;
+    setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
+  });
+}
+function navWeek(delta){
+  var base = rt.reviewTarget !== null ? rt.reviewTarget : (state.reviewData ? state.reviewData.weekOffset : -1);
+  var off = base + delta;
+  rt.reviewTarget = off;
+  var seq = ++rt.reviewSeq;
+  API.get("/api/review", {weekOffset: off}).then(function(d){
+    if(seq !== rt.reviewSeq) return;
+    state.reviewData = d;
+    rt.reviewTarget = d.weekOffset;
+    renderReview(d);
+  }).catch(function(ex){
+    if(seq !== rt.reviewSeq) return;
+    rt.reviewTarget = state.reviewData ? state.reviewData.weekOffset : null;
+    toast("加载失败：" + (ex.message || "网络异常"), "bad");
+  });
+}
+function buildSummary(d){
+  var list = d.completed || [];
+  var n = list.length;
+  var label = d.label || "该周期";
+  var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
+  var progTasks = d.progressTasks || [];
+  if(!n && !progTasks.length && !d.doing && !d.backlog){
+    return label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在任务里填上进度，回顾里就能看到这一周你做了什么。";
+  }
+  var parts = [];
+  if(n){
+    var rate = d.stats.onTimeRate;
+    var withDue = d.stats.withDue || 0;
+    var p0 = list.filter(function(t){ return t.priority === "P0"; }).length;
+    var rateTxt = (withDue === 0)
+      ? "，完成项均未设置截止日期"
+      : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期交付");
+    parts.push("<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项任务" + rateTxt +
+      (p0 ? "，其中紧急 P0 <b>" + p0 + "</b> 项。" : "。"));
+  }else{
+    parts.push("<b>" + label + "（" + rangeTxt + "）</b>没有已交付的任务记录。");
+  }
+  if(n){
+    var items = list.slice(0, 12).map(function(t){
+      var late = t.completedAt && t.dueDate && t.completedAt > t.dueDate;
+      var dt = t.completedAt ? (fmtMD(parseDate(t.completedAt)) + " " + weekdayCN(parseDate(t.completedAt))) : "";
+      return "· " + esc(t.title) + "（" + esc(t.category) + " · " + esc(t.owner) +
+        (dt ? " · " + dt : "") + (late ? " · <span class='up'>延期</span>" : "") + "）";
+    });
+    parts.push("完成的工作：" + (list.length > 1 ? "<br>" : "") + items.join("<br>") +
+      (list.length > 12 ? "<br>…等共 " + n + " 项" : ""));
+  }
+  if(progTasks.length){
+    var pl = progTasks.slice(0, 8).map(function(t){
+      return "· " + esc(t.title) + "（" + progressOf(t) + "%" +
+        (t.boardColumn === "done" ? " · 已完成" : " · " + esc(colName(t.boardColumn))) +
+        (t.note ? " · " + esc(t.note) : "") + "）";
+    });
+    parts.push("进行中的工作（" + progTasks.length + " 项）：" + (progTasks.length > 1 ? "<br>" : "") +
+      pl.join("<br>") + (progTasks.length > 8 ? "<br>…等" : ""));
+  }
+  if(d.doing || d.backlog){
+    parts.push("当前看板：进行中 <b>" + d.doing + "</b> 项、待处理 <b>" + d.backlog + "</b> 项" +
+      (progTasks.length ? "，详细进度见下方「进行中」。" : "。"));
+  }
+  var c = d.counts || {over:0, today:0};
+  if(d.openP0 || c.over){
+    parts.push("需关注：" + (d.openP0 ? "<b>" + d.openP0 + "</b> 项 P0 未关闭" : "") +
+      (c.over ? (d.openP0 ? "，" : "") + "<b>" + c.over + "</b> 项已逾期" : "") +
+      (c.today ? "、<b>" + c.today + "</b> 项今日到期" : "") + "，建议优先处理。");
+  }
+  return parts.join("<br><br>");
+}
+function summaryPlain(d){
+  var el = document.createElement("div");
+  el.innerHTML = buildSummary(d).replace(/<br\s*\/?>/gi, "\n");
+  return el.textContent || "";
+}
+function distHTML(list, colorOf, valueOf){
+  if(!list || !list.length) return '<div class="col-empty">暂无数据</div>';
+  var max = 1;
+  list.forEach(function(x){ if(x.count > max) max = x.count; });
+  return list.map(function(x){
+    return '<div class="dist-row">' +
+      '<span class="lb">' + esc(x.name) + '</span>' +
+      '<span class="bar"><i style="width:' + Math.round(x.count/max*100) + '%;background:' + colorOf(x) + '"></i></span>' +
+      '<span class="vl">' + valueOf(x) + '</span></div>';
+  }).join("");
+}
+function renderReview(d){
+  $("reviewTitle").textContent = reviewTitle(d.weekOffset);
+  $("weekLabel").textContent = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
+  $("weekNext").disabled = d.weekOffset >= 0;
+  $("summaryText").innerHTML = buildSummary(d);
+
+  var s = d.stats;
+  var overN = (d.counts && d.counts.over) || 0;
+  var stats = [
+    {k:"完成", v:s.done, u:"项", cls:""},
+    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good")},
+    {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : "")},
+    {k:"参与成员", v:s.members, u:"人", cls:""},
+    {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : "")},
+    {k:"进行中", v:d.doing || 0, u:"项", cls:"info"}
+  ];
+  $("statGrid").innerHTML = stats.map(function(x){
+    return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
+      '<small>' + x.u + '</small></div></div>';
+  }).join("");
+
+  /* N-5：工时区（全空间 / 我的） */
+  if(reviewHoursEl){
+    var w = d.workMinutes || {};
+    /* IA-7：只保留本周两个口径；累计工时挪到分析页 */
+    var hcards = [
+      {k:"本周·我的", v:fmtMinutesShort(w.mineWeek || 0)},
+      {k:"本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
+    ];
+    reviewHoursEl.innerHTML = hcards.map(function(x){
+      return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
+    }).join("");
+  }
+  /* O-10：进度 100% 但未入已完成列的任务单独成组，不静默漏统计 */
+  var pending = d.pendingDone || [];
+  if(reviewPendingBox){
+    reviewPendingBox.hidden = pending.length === 0;
+    if(pendingCount) pendingCount.textContent = pending.length ? ("共 " + pending.length + " 项") : "";
+    if(pendingList){
+      pendingList.innerHTML = pending.map(function(t){
+        return '<div class="done-item">' + avatarHTML(t.owner) +
+          '<span class="di-main">' +
+            '<span class="di-t">' + esc(t.title) + '</span>' +
+            '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+              catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
+          '</span>' +
+          '<span class="di-d">' + esc(colName(t.boardColumn)) + ' · 进度 ' + progressOf(t) + '%</span>' +
+        '</div>';
+      }).join("");
+    }
+  }
+
+  $("catDist").innerHTML = distHTML(d.catDist,
+    function(c){ return catColor(c.name); },
+    function(c){ return c.count; });
+
+  var members = d.members || [];
+  $("peopleBox").innerHTML = members.length ? members.map(function(m){
+    return '<span class="person">' + avatarHTML(m.name) + '<span class="pn">' + esc(m.name) + '</span>' +
+      '<span class="pc">' + m.count + ' 项' + (m.minutes ? (' · ' + fmtMinutesShort(m.minutes)) : '') + '</span></span>';
+  }).join("") : '<span class="foot-note">该周期暂无成员交付记录</span>';
+
+  var list = d.completed || [];
+  $("doneList").innerHTML = list.length ? list.map(function(t){
+    /* completedAt 可能为空（历史数据 / 异常恢复）：那就显示「完成时间未记录」，不能让渲染崩掉 */
+    var doneAt = t.completedAt ? parseDate(t.completedAt) : null;
+    var due = t.dueDate ? parseDate(t.dueDate) : null;
+    var late = !!(doneAt && due && t.completedAt > t.dueDate);
+    var n = late ? dayDiff(doneAt, due) : 0;
+    var badge = late ? ("延期 " + n + " 天") : ((doneAt && due) ? "按期" : "—");
+    var badgeKind = late ? "warning" : ((doneAt && due) ? "success" : "ghost");
+    return '<div class="done-item">' +
+      '<span class="meta full">' + icon("check", 15) + '</span>' +
+      '<span class="di-main">' +
+        '<span class="di-t">' + esc(t.title) + '</span>' +
+        '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+          catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
+      '</span>' +
+      '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
+      '<span class="tag tag-' + badgeKind + '">' + badge + '</span>' +
+    '</div>';
+  }).join("") : '<div class="col-empty">该周期没有已完成的任务</div>';
+  if(doneCountEl) doneCountEl.textContent = list.length ? ("共 " + list.length + " 项") : "";
+
+  var progTasks = d.progressTasks || [];
+  $("progList").innerHTML = progTasks.length ? progTasks.map(function(t){
+    return '<div class="done-item">' + avatarHTML(t.owner) +
+      '<span class="di-main">' +
+        '<span class="di-t">' + esc(t.title) + '</span>' +
+        '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+          catTag(t.category) + (t.reqId ? tagChip(reqNameById(t.reqId)) : '') +
+          '<span>进度 ' + progressOf(t) + '%</span></span>' +
+        (t.note ? '<span class="di-note">备注：' + esc(t.note) + '</span>' : '') +
+      '</span>' +
+      '<span class="di-d">' + esc(colName(t.boardColumn)) + '</span>' +
+    '</div>';
+  }).join("") : '<div class="col-empty">当前没有进行中的任务（把任务拖到「进行中」列即可）</div>';
+  if(progCountEl) progCountEl.textContent = progTasks.length ? ("共 " + progTasks.length + " 项") : "";
+
+  var reqDist = d.reqDist || [];
+  $("reqDist").innerHTML = reqDist.length
+    ? distHTML(reqDist.map(function(r){ return {name:r.name, count:r.progressPct, extra:r}; }),
+        function(r){ return r.extra.status === "done" ? "var(--success)" : "var(--primary)"; },
+        function(r){ return r.count + "% · " + r.extra.doneCount + "/" + r.extra.taskCount; })
+    : '<div class="col-empty">暂无项目</div>';
+
+  /* AI 周报跟着「当前这一周」走：有缓存还原，没有则空态（函数定义在下方，靠声明提升） */
+  syncAiReport(d);
+}
+$("weekPrev").addEventListener("click", function(){ navWeek(-1); });
+$("weekNext").addEventListener("click", function(){
+  if(state.reviewData && state.reviewData.weekOffset >= 0) return;
+  navWeek(1);
+});
+function copyReviewPlain(){
+  var d = state.reviewData;
+  if(!d){ toast("回顾还没加载完成", "warn"); return; }
+  var progTasks = d.progressTasks || [];
+  var doneTasks = d.completed || [];
+  /* 复制口径与页面一致：先「进行中」（已开工未完成），再「本周完成」。
+     不再叫「完成明细」—— 页面上的区块也叫「本周完成」。 */
+  var text = "工作台 · " + (d.label || "") + "工作回顾（" + d.weekStart + " — " + d.weekEnd + "）\n\n"
+    + summaryPlain(d) + "\n\n"
+    + "进行中（" + progTasks.length + " 项）：\n"
+    + (progTasks.length ? progTasks.map(function(t){
+        var rn = t.reqId ? reqNameById(t.reqId) : null;
+        return "· " + colName(t.boardColumn) + "　" + t.title + "　" + progressOf(t) + "%"
+          + (rn ? "（" + rn + "）" : "") + (t.note ? "　备注：" + t.note : "");
+      }).join("\n") : "（当前没有进行中的任务）")
+    + "\n\n本周完成（" + doneTasks.length + " 项）：\n"
+    + (doneTasks.length ? doneTasks.map(function(t){
+        return "· [" + t.priority + "][" + t.category + "] " + t.title + " — " + t.owner
+          + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
+      }).join("\n") : "（本周没有完成的任务）");
+  copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
+}
+function copyReviewAi(){
+  var d = state.reviewData;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
+  copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
+}
+(function wireCopyMenu(){
+  var btn = $("btnCopy"), menu = $("copyMenu");
+  if(!btn || !menu) return;
+  btn.addEventListener("click", function(){
+    if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+    UI.openPop(menu, btn, {align:"right"});
+  });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-copy]");
+    if(!b || b.disabled) return;
+    UI.closeAllPops();
+    if(b.dataset.copy === "ai") copyReviewAi(); else copyReviewPlain();
+  });
+})();
+(function wireSummaryToggle(){
+  var panel = $("summaryPanel"), head = $("summaryToggle"), hint = $("summaryToggleHint");
+  if(!panel || !head) return;
+  function toggle(){
+    var collapsed = panel.classList.toggle("collapsed");
+    head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    if(hint) hint.textContent = collapsed ? "展开" : "收起";
+  }
+  head.addEventListener("click", toggle);
+  head.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
+  });
+})();
+var aiReportCache = {};
+var aiReportBusy = false;
+function aiKey(off){
+  return String(window.CURRENT_WORKSPACE || "") + "#" + off;
+}
+function aiReportIdle(){
+  var body = $("reviewAiBody");
+  if(!body) return;
+  body.hidden = true;
+  body.innerHTML = "";
+  $("reviewAiUsage").textContent = "";
+  $("btnAiReportCopy").hidden = true;
+  var aiItem0 = $("copyAiItem");
+  if(aiItem0){ aiItem0.disabled = true; aiItem0.textContent = "复制 AI 周报（尚未生成）"; }
+  $("reviewAiHint").hidden = false;
+  $("reviewAiMeta").textContent = "用你自己的模型额度";
+}
+function syncAiReport(d){
+  if(!d || !$("reviewAiBody")) return;
+  var hit = aiReportCache[aiKey(d.weekOffset)];
+  if(hit) renderAiReport(hit); else aiReportIdle();
+}
+function reportHTML(text){
+  return String(text || "").split("\n").map(function(line){
+    var m = /^#{1,3}\s+(.*)$/.exec(line);
+    return m ? ('<span class="rp-h">' + esc(m[1]) + '</span>') : esc(line);
+  }).join("\n");
+}
+function renderAiReport(r){
+  var body = $("reviewAiBody");
+  body.hidden = false;
+  body.innerHTML = reportHTML(r.report);
+  $("reviewAiHint").hidden = true;
+  $("btnAiReportCopy").hidden = false;
+  var aiItem = $("copyAiItem");
+  if(aiItem){ aiItem.disabled = false; aiItem.textContent = "复制 AI 周报（纯文本）"; }
+  $("reviewAiMeta").textContent = (r.label || "该周期") + "（" + (r.weekStart || "") + " — " + (r.weekEnd || "") + "）";
+  var s = r.source || {};
+  var based = "基于 " + (s.completed || 0) + " 项完成 / " + (s.progress || 0) + " 项进行中";
+  if(s.pendingDone) based += " / " + s.pendingDone + " 项待确认完成";
+  if(s.truncated) based += "（任务太多，只取了前若干条）";
+  $("reviewAiUsage").textContent = based + " · " + aiUsageText(r.usage);
+}
+function runAiReport(){
+  var d = state.reviewData;
+  if(!d || aiReportBusy) return;
+  var btn = $("btnAiReport");
+  var noteEl = $("reviewAiNote");
+  var body = $("reviewAiBody");
+  var week = d.weekOffset;
+  aiReportBusy = true;
+  aiBtnBusy(btn, true, "生成中…");
+  $("reviewAiMeta").textContent = "正在写…（10–30 秒）";
+  $("reviewAiHint").hidden = true;
+  $("btnAiReportCopy").hidden = true;
+  body.hidden = false;
+  body.innerHTML = '<div class="rp-loading">' + UI.skeletonRows(4) + '</div>';
+  $("reviewAiUsage").textContent = "";
+  API.post("/api/ai/review/polish", {
+    weekOffset: week,
+    note: noteEl ? String(noteEl.value || "").trim() : ""
+  }).then(function(r){
+    aiReportCache[aiKey(r.weekOffset == null ? week : r.weekOffset)] = r;
+    /* 生成过程中可能已经翻到别的周：存进缓存就好，不要覆盖当前这一周的界面 */
+    if(state.reviewData && state.reviewData.weekOffset === week) renderAiReport(r);
+  }).catch(function(ex){
+    if(state.reviewData && state.reviewData.weekOffset === week){
+      body.hidden = true;
+      $("reviewAiHint").hidden = false;
+      $("reviewAiMeta").textContent = "生成失败";
+    }
+    toast(aiErrMsg(ex && ex.message), "bad");
+  }).then(function(){
+    aiReportBusy = false;
+    aiBtnBusy(btn, false);
+  });
+}
+if($("btnAiReport")) $("btnAiReport").addEventListener("click", runAiReport);
+if($("btnAiReportCopy")) $("btnAiReportCopy").addEventListener("click", function(){
+  var d = state.reviewData;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
+  copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
+});
+
+export { distHTML, enterReviewView };

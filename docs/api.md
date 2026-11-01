@@ -1207,3 +1207,10 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - `TaskService` 拆为 `TaskQueryService`（看板/列表/日历/我的任务/扩展字段）、`TaskCommandService`（新建/编辑/标签与关联校验）、`TaskWorkflowService`（移动/循环任务/计时联动/完成归档）、`TaskTrashService`（回收站/恢复/彻底删除/过期清理）。
 - HTTP 契约完全不变：路径、参数、返回 JSON、ETag、权限、备份 v6、分批事务均保持原样；原 `TrashService` 的每日清理任务并入 `TaskTrashService`。
 - 仅供排障参考：移动类写操作（拖拽与抽屉改列）现在都走 `TaskWorkflowService`，查询类只读走 `TaskQueryService`。
+
+## 附录 · 2026-11-01 CODE-5：前端 ES Module 化（无接口变化）
+
+- `app.js` 拆为 `js/main.js` + `js/core/*` + `js/lib/*` + `js/views/*`，零构建、原生 `import` / 动态 `import()`；`index.html` 使用 `<script type="module">` 与 `modulepreload`。
+- 低频视图（甘特 / 项目 / 需求 / 周回顾 / 分析 / 设置 / 个人设置）首次进入时才加载；首屏只加载看板、列表、日历、我的任务、分支与抽屉。
+- 接口路径、参数、返回结构、ETag 与 SSE 行为均未改动；`share.html` 仍使用独立的 `share.js`。
+- `sw.js` 缓存名升至 `devstudio-shell-v73`，预缓存清单覆盖全部模块文件；`tools/check-assets.js` 会递归校验 import 图。

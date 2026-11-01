@@ -1,0 +1,246 @@
+/* core/app · 空间切换、当前用户、分类数据、顶栏 */
+
+import { API } from "./api.js";
+import { $ } from "./dom.js";
+import { updateBrand } from "./filters.js";
+import { icon } from "./icons.js";
+import { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, updateBellTitle } from "./notifications.js";
+import { activeView, showView } from "./router.js";
+import { rt, state, taskById } from "./state.js";
+import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js";
+import { UI, esc, toast } from "./ui.js";
+import { avatarColor, initial } from "../lib/format.js";
+import { loadBoard, loadReqs, render } from "../views/board.js";
+import { askSwitchWorkspace, wsNameById } from "../views/mine.js";
+import { loadView } from "./view-loader.js";
+
+var wsMenuEl = $("wsMenu"), wsListEl = $("wsList"), wsSwitchBtn = $("wsSwitch");
+function loadWorkspaces(meUser){
+  return API.get("/api/workspaces").then(function(list){
+    rt.allWorkspaces = list || [];
+    var target = null;
+    if(meUser && meUser.lastWorkspaceId){
+      for(var i = 0; i < rt.allWorkspaces.length; i++) if(rt.allWorkspaces[i].id === meUser.lastWorkspaceId) target = rt.allWorkspaces[i];
+    }
+    if(!target && rt.allWorkspaces.length) target = rt.allWorkspaces[0];
+    if(target){
+      rt.currentWs = target;
+      window.CURRENT_WORKSPACE = target.id;
+      var nameEl = $("wsName");
+      if(nameEl) nameEl.textContent = target.name;
+      var av = $("wsAvatar");
+      if(av){
+        av.textContent = target.name ? target.name.charAt(0) : "空";
+        av.style.setProperty("--a", avatarColor(target.name || "空"));
+      }
+      var kindEl = $("wsKind");
+      if(kindEl) kindEl.textContent = target.type === "personal"
+        ? "个人空间"
+        : ("共享 · " + (target.memberCount || 1) + " 人" + (target.myRole === "owner" ? " · 空间主" : ""));
+    }
+    renderWsMenu();
+    applyWsRoleGating();
+    loadWsMembers();
+    updateBrand();
+    /* 深链直达甘特图时，空间在首屏之后才确定：偏好与请求都要按新空间补跑一次 */
+    if(activeView === "gantt"){
+      loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });
+    }
+    if(activeView === "settings" && !rt.settingsReady) loadView("settings").then(function(m){ m.enterSettingsView(); });
+    return target;
+  }).catch(function(){ return null; });
+}
+function applyWsRoleGating(){
+  var owner = !rt.currentWs || rt.currentWs.myRole === "owner";
+  [["btnExport","导出任务备份"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
+    var b = $(pair[0]);
+    if(!b) return;
+    if(b.dataset.ownerTitle === undefined) b.dataset.ownerTitle = b.title || "";
+    b.disabled = !owner;
+    b.title = owner ? b.dataset.ownerTitle : ("仅空间主可" + pair[1]);
+  });
+}
+function loadWsMembers(){
+  rt.wsMembersCache = [];
+  refreshOwnerSelect();
+  if(!rt.currentWs || rt.currentWs.type !== "shared") return;
+  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members").then(function(list){
+    rt.wsMembersCache = list || [];
+    refreshOwnerSelect();
+  }).catch(function(){});
+}
+function renderWsMenu(){
+  if(!wsListEl) return;
+  wsListEl.innerHTML = rt.allWorkspaces.map(function(w){
+    var on = rt.currentWs && w.id === rt.currentWs.id;
+    return '<button class="ws-item' + (on ? " on" : "") + '" type="button" data-ws="' + esc(w.id) + '" data-ws-name="' + esc(w.name) + '">' +
+      icon(w.type === "personal" ? "user" : "users", 14) +
+      '<span class="ellipsis">' + esc(w.name) + '</span>' +
+      '<span class="ws-kind">' + (w.type === "personal" ? "个人" : "共享") + '</span>' +
+      (on ? '<span class="ws-check">' + icon("check", 12) + '</span>' : '') +
+    '</button>';
+  }).join("");
+}
+wsListEl.addEventListener("click", function(e){
+  var b = e.target.closest("[data-ws]");
+  if(!b) return;
+  var id = b.dataset.ws;
+  if(rt.currentWs && id === rt.currentWs.id){ UI.closeAllPops(); return; }
+  var name = b.dataset.wsName || wsNameById(id);
+  UI.closeAllPops();
+  /* 切空间会 reload：先确认，避免误点后丢掉当前筛选与未保存的编辑 */
+  askSwitchWorkspace(id, name);
+});
+wsSwitchBtn.addEventListener("click", function(){
+  if(UI.popOpen(wsMenuEl)){ UI.closeAllPops(); return; }
+  UI.openPop(wsMenuEl, wsSwitchBtn, {align:"left", width:232});
+});
+$("btnWsCreate").addEventListener("click", function(){
+  UI.closeAllPops();
+  $("dlgWsName").value = "";
+  $("fDlgWsName").classList.remove("invalid");
+  UI.openModal($("dlgWsCreate"));
+});
+$("btnWsSettings").addEventListener("click", function(){
+  UI.closeAllPops();
+  showView("settings");
+});
+$("dlgWsCreateForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  var name = $("dlgWsName").value.trim();
+  if(!name){ $("fDlgWsName").classList.add("invalid"); return; }
+  if(name.length > 20) name = name.slice(0, 20);
+  var btn = $("dlgWsCreateOk");
+  btn.disabled = true;
+  API.post("/api/workspaces", { name: name }).then(function(){
+    btn.disabled = false;
+    UI.closeModal($("dlgWsCreate"));
+    toast("已创建空间「" + name + "」", "fs");
+    loadWorkspaces(rt.currentUser).then(function(){
+      loadBoard({animate:true});
+      loadReqs();
+    });
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "创建失败", "bad");
+  });
+});
+function loadMe(){
+  API.get("/api/auth/me").then(function(u){
+    rt.currentUser = u;
+    if(u.displayName) rt.OWNER_DEFAULT = u.displayName;
+    var tabAcc = $("setTabAccount");
+    if(tabAcc) tabAcc.hidden = u.role !== "admin";
+    renderSideUser(u);
+    /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
+    loadView("profile").then(function(m){ m.flushMeReady(); });
+    return loadWorkspaces(u);
+  }).catch(function(){ /* 未登录由 api.js 统一跳转 */ });
+}
+function renderSideUser(u){
+  var name = (u && (u.displayName || u.username)) || "?";
+  var av = $("sideUserAv"), nm = $("sideUserName");
+  if(av){ av.textContent = initial(name); av.style.setProperty("--a", avatarColor(name)); }
+  if(nm) nm.textContent = name;
+}
+var lastCatLoad = 0;
+function loadCategories(force){
+  if(!force && Date.now() - lastCatLoad < 30000) return Promise.resolve();
+  lastCatLoad = Date.now();
+  return API.get("/api/categories").then(function(list){
+    var next = list || [];
+    var changed = JSON.stringify(next) !== JSON.stringify(rt.categoriesCache);
+    rt.categoriesCache = next;
+    if(changed){
+      syncCatSeg();
+      if(state.board) render({animate:false});
+    }
+  }).catch(function(){});
+}
+function updateTagDatalist(){
+  var el = $("tagOptions");
+  if(!el || !state.board || !state.board.meta) return;
+  el.innerHTML = (state.board.meta.tags || []).map(function(t){
+    return '<option value="' + esc(t.name) + '"></option>';
+  }).join("");
+}
+function pruneStaleFilters(meta){
+  if(!meta) return false;
+  var changed = false;
+  var catNames = {};
+  (meta.cats || []).forEach(function(c){ catNames[c.name] = 1; });
+  var keptCats = state.cats.filter(function(c){ return catNames[c]; });
+  if(keptCats.length !== state.cats.length){ state.cats = keptCats; changed = true; }
+  var reqIds = {};
+  (meta.reqs || []).forEach(function(r){ reqIds[r.id] = 1; });
+  var keptReqs = state.reqs.filter(function(v){ return v === "__none" || reqIds[v]; });
+  if(keptReqs.length !== state.reqs.length){ state.reqs = keptReqs; changed = true; }
+  var tagNames = {};
+  (meta.tags || []).forEach(function(t){ tagNames[t.name] = 1; });
+  var keptTags = state.tags.filter(function(t){ return tagNames[t]; });
+  if(keptTags.length !== state.tags.length){ state.tags = keptTags; changed = true; }
+  if(changed) toast("部分筛选条件已失效，已自动清理", "warn");
+  return changed;
+}
+$("btnNew").addEventListener("click", function(){
+  if(UI.popOpen($("newMenu"))){ UI.closeAllPops(); return; }
+  UI.openPop($("newMenu"), $("btnNew"), {align:"left"});
+});
+$("newMenu").addEventListener("click", function(e){
+  var b = e.target.closest("[data-new]");
+  if(!b) return;
+  UI.closeAllPops();
+  if(b.dataset.new === "task"){ openTaskDrawer("backlog"); }
+  else { showView("projects"); setTimeout(function(){ loadView("projects").then(function(m){ m.openProjectDialog(null); }); }, 60); }
+});
+$("btnAlert").addEventListener("click", function(){
+  if(UI.popOpen($("alertPanel"))){ UI.closeAllPops(); return; }
+  renderAlertPanel();     // 先用缓存渲染，避免打开瞬间空白
+  loadAlertPanel();
+  loadUnread();
+  UI.openPop($("alertPanel"), $("btnAlert"), {align:"left"});
+});
+$("alertPanel").addEventListener("click", function(e){
+  /* 顶部 tab：通知 / 截止提醒 */
+  var tabBtn = e.target.closest("[data-ap-tab]");
+  if(tabBtn){
+    var next = tabBtn.dataset.apTab === "due" ? "due" : "notice";
+    if(next !== rt.alertTab){
+      rt.alertTab = next;
+      try{ localStorage.setItem("ds.alertTab", rt.alertTab); }catch(err){ /* 受限环境忽略 */ }
+      renderAlertPanel();
+      loadAlertPanel();
+    }
+    return;
+  }
+  /* 全部标为已读 */
+  if(e.target.closest("[data-ap-readall]")){
+    API.postGlobal("/api/notifications/read-all").then(function(){
+      notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
+      notifyState.unread = 0;
+      renderBellBadge(); updateBellTitle(); renderAlertPanel();
+      toast("已全部标为已读", "fs");
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    return;
+  }
+  /* 通知项：标记已读 + 打开关联任务 */
+  var apn = e.target.closest("[data-apn]");
+  if(apn){
+    UI.closeAllPops();
+    openFromNotification(apn.dataset);
+    return;
+  }
+  var t = e.target.closest("[data-ap-task]");
+  if(t){
+    var task = taskById(t.dataset.apTask);
+    UI.closeAllPops();
+    if(task) openTaskDrawer(null, task);
+    return;
+  }
+  if(e.target.closest("[data-ap-test]")){
+    UI.closeAllPops();
+    $("btnNotifyTest").click();
+  }
+});
+
+export { loadCategories, loadMe, loadWorkspaces, pruneStaleFilters, renderSideUser, updateTagDatalist };

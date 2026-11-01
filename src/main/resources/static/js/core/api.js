@@ -1,6 +1,4 @@
 /* 工作台 · API 封装：统一处理返回结构、CSRF 头与登录态 */
-(function () {
-  "use strict";
 
   function readCookie(name) {
     var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
@@ -134,7 +132,7 @@
     return url + (url.indexOf("?") === -1 ? "?" : "&") + "workspace=" + encodeURIComponent(wsId);
   }
 
-  window.API = {
+  const API = {
     get: function (path, params) {
       return request("GET", path + buildQuery(params));
     },
@@ -166,5 +164,6 @@
     postForm: function (path, urlencoded) {
       return request("POST", path, urlencoded, true);
     }
-  };
-})();
+};
+
+export { API };

@@ -4,8 +4,6 @@
    约定：只做计算与字符串拼接，不读写 DOM，也不读写全局状态；
    所有需要「今天」「当前刻度」的地方都由调用方以参数传入。
    ========================================================================== */
-(function () {
-  "use strict";
 
   /* ==================== 日期 ==================== */
   function pad2(n) { return n < 10 ? ("0" + n) : String(n); }
@@ -201,7 +199,7 @@
     return ss < addDays(pe, 1 + l);
   }
 
-  window.GanttShared = {
+  const GS = {
     /* 日期 */
     pad2: pad2,
     startOfDay: startOfDay,
@@ -233,5 +231,6 @@
     depGeometry: depGeometry,
     depPath: depPath,
     depConflict: depConflict
-  };
-})();
+};
+
+export { GS };

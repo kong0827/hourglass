@@ -1,9 +1,8 @@
+import { icon } from "./icons.js";
 /* ==========================================================================
    ui.js · 通用交互组件（ui-redesign-spec §4.8–4.13）
    Toast / Modal / Confirm / Popover / Tooltip / 焦点陷阱 / 单例浮层管理
    ========================================================================== */
-(function () {
-  "use strict";
 
   function esc2(s) {
     return String(s == null ? "" : s)
@@ -22,7 +21,7 @@
 
     var ic = document.createElement("span");
     ic.className = "tic";
-    ic.innerHTML = window.icon(TICON[kind] || TICON[""], 16);
+    ic.innerHTML = icon(TICON[kind] || TICON[""], 16);
     el.appendChild(ic);
 
     var txt = document.createElement("span");
@@ -50,7 +49,7 @@
     x.type = "button";
     x.className = "tclose";
     x.setAttribute("aria-label", "关闭提示");
-    x.innerHTML = window.icon("close", 12);
+    x.innerHTML = icon("close", 12);
     x.addEventListener("click", close);
     el.appendChild(x);
 
@@ -189,7 +188,7 @@
           '<h2 id="' + titleId + '">' + esc2(opts.title || "请输入") + '</h2>' +
           (opts.desc ? '<div class="desc">' + esc2(opts.desc) + '</div>' : '') +
         '</div><button class="icon-btn sm" type="button" data-prompt-x aria-label="关闭">' +
-          window.icon("close", 15) + '</button></div>' +
+          icon("close", 15) + '</button></div>' +
         '<div class="sheet-body"><div class="field">' +
           (opts.label ? '<label for="' + titleId + 'Input">' + esc2(opts.label) + '</label>' : '') +
           (opts.multiline
@@ -361,7 +360,7 @@
     opts = opts || {};
     var ic = opts.icon || "inbox";
     var h = '<div class="empty-state' + (opts.compact ? " compact" : "") + '">' +
-      '<span class="es-ic">' + window.icon(ic, 48) + '</span>' +
+      '<span class="es-ic">' + icon(ic, 48) + '</span>' +
       '<h3>' + esc2(opts.title || "暂无数据") + '</h3>' +
       (opts.text ? '<p>' + opts.text + '</p>' : "");
     if (opts.actionLabel) {
@@ -371,7 +370,7 @@
   }
   function errorState(msg) {
     return '<div class="empty-state">' +
-      '<span class="es-ic">' + window.icon("alertCircle", 48) + '</span>' +
+      '<span class="es-ic">' + icon("alertCircle", 48) + '</span>' +
       '<h3>加载失败</h3>' +
       '<p>' + esc2(msg || "网络异常，请稍后重试") + '</p>' +
       '<button class="btn" type="button" data-empty-action="1">重试</button>' +
@@ -444,7 +443,7 @@
     document.addEventListener("DOMContentLoaded", wire);
   } else { wire(); }
 
-  window.UI = {
+  const UI = {
     esc: esc2,
     toast: toast,
     toastAction: toastAction,
@@ -468,5 +467,6 @@
     skeletonRows: skeletonRows,
     syncBusy: syncBusy,
     copyText: copyText
-  };
-})();
+};
+
+export { UI, esc2 as esc, toast, toastAction, copyText as copyToClipboard };

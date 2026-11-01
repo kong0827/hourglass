@@ -1,9 +1,7 @@
-/* 只读分享页：独立渲染，不依赖 app.js，也不发任何写请求 */
-(function () {
-  "use strict";
+/* 只读分享页：独立渲染，不依赖主程序，也不发任何写请求（ES Module 入口） */
+import { GS } from "./lib/gantt-shared.js";
 
   var LABEL_W = 260, ROW_H = 50, GROUP_H = 0, HEAD_H = 54;
-  var GS = window.GanttShared;
   var state = {
     data: null, scale: "day", zoom: 28, showDone: true,
     range: null, dayW: 28
@@ -215,4 +213,3 @@
   });
 
   boot();
-})();

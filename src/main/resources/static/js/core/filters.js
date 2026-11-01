@@ -1,0 +1,72 @@
+/* core/filters · 统一筛选参数（看板 / 列表 / 日历 / 甘特共用） */
+
+import { brandSub } from "./dom.js";
+import { reloadFilteredViews, toggleIn } from "./filters-ui.js";
+import { VIEWS, activeView } from "./router.js";
+import { rt, state, totalTaskCount } from "./state.js";
+
+var FILTER_KEYS = [
+  { k: "q", kind: "text" },
+  { k: "owners", kind: "list", s: "owners" },
+  { k: "pris", kind: "list", s: "pris" },
+  { k: "cats", kind: "list", s: "cats" },
+  { k: "reqs", kind: "list", s: "reqs" },
+  { k: "tags", kind: "list", s: "tags" },
+  { k: "due", kind: "text" },
+  { k: "focus", kind: "bool" },
+  { k: "blocked", kind: "bool" },
+  { k: "doneScope", kind: "text", always: true }
+];
+function filterSource(key){
+  for(var i = 0; i < FILTER_KEYS.length; i++){
+    if(FILTER_KEYS[i].k === key) return FILTER_KEYS[i];
+  }
+  return null;
+}
+function filterParams(extra){
+  var p = {};
+  FILTER_KEYS.forEach(function(f){
+    var v = state[f.s || f.k];
+    if(f.kind === "list") p[f.k] = (v && v.length) ? v.slice() : null;
+    else if(f.kind === "bool") p[f.k] = v ? true : null;
+    else if(f.always) p[f.k] = v;
+    else p[f.k] = v || null;
+  });
+  if(extra){
+    for(var k in extra) if(Object.prototype.hasOwnProperty.call(extra, k)) p[k] = extra[k];
+  }
+  return p;
+}
+function currentFilterParams(){
+  var p = {};
+  FILTER_KEYS.forEach(function(f){
+    var v = state[f.s || f.k];
+    if(f.kind === "list") p[f.k] = (v || []).slice();
+    else if(f.kind === "bool") p[f.k] = !!v;
+    else p[f.k] = v == null ? "" : v;
+  });
+  return p;
+}
+function toggleFilterValue(key, value){
+  var f = filterSource(key);
+  var arr = state[(f && f.s) || key];
+  if(!Array.isArray(arr)) return;
+  toggleIn(arr, value);
+  reloadFilteredViews();
+}
+function setFilterValue(key, value){
+  state[key] = (state[key] === value) ? null : value;
+  reloadFilteredViews();
+}
+function boardParams(extra){ return filterParams(extra); }
+function updateBrand(){
+  if(!brandSub) return;
+  if(activeView === "board" && state.board){
+    var doing = state.board.columns.doing ? state.board.columns.doing.total : 0;
+    brandSub.textContent = (rt.currentWs ? rt.currentWs.name + " · " : "") + doing + " 项进行中 · 共 " + totalTaskCount() + " 项";
+  }else{
+    brandSub.textContent = VIEWS[activeView] ? (VIEWS[activeView].sub || "") : "";
+  }
+}
+
+export { boardParams, currentFilterParams, filterParams, setFilterValue, toggleFilterValue, updateBrand };

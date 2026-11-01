@@ -1,0 +1,242 @@
+/* core/notifications · 通知中心与到期提醒 */
+
+import { API } from "./api.js";
+import { $ } from "./dom.js";
+import { icon } from "./icons.js";
+import { dueText, rt, state, taskCacheExtra } from "./state.js";
+import { openTaskById } from "./task-actions.js";
+import { UI, esc, toast } from "./ui.js";
+import { askSwitchWorkspace, wsNameById } from "../views/mine.js";
+
+var NOTIFY_ICON = {
+  task_remind: "clock",
+  task_due: "alert",
+  task_assigned: "user",
+  task_comment: "comment"
+};
+var notifyState = {unread:0, items:[], loading:false};
+var deadlineGroups = {over:[], today:[], soon:[]};
+try{ rt.alertTab = localStorage.getItem("ds.alertTab") === "due" ? "due" : "notice"; }
+catch(e){ rt.alertTab = "notice"; }
+function renderAlertBar(){
+  var c = state.board ? state.board.counts : {over:0, today:0, soon:0};
+  $("nOver").textContent = c.over;
+  $("nToday").textContent = c.today;
+  $("nSoon").textContent = c.soon;
+
+  var chipOver = $("chipOver"), chipToday = $("chipToday"), chipSoon = $("chipSoon"), chipFocus = $("chipFocus");
+  chipOver.setAttribute("aria-pressed", state.due === "over");
+  chipToday.setAttribute("aria-pressed", state.due === "today");
+  chipSoon.setAttribute("aria-pressed", state.due === "soon");
+  chipFocus.setAttribute("aria-pressed", state.focus);
+
+  chipOver.hidden  = !(c.over > 0 || state.due === "over");
+  chipToday.hidden = !(c.today > 0 || state.due === "today");
+  chipSoon.hidden  = !(c.soon > 0 || state.due === "soon");
+
+  /* R-1：角标 = 未读通知数；紧急截止改用独立橙点，两件事不共用一个数字 */
+  var urgent = c.over + c.today;
+  var healthy = $("chipHealthy"), bUrgent = $("bellUrgent");
+  if(bUrgent) bUrgent.hidden = !(urgent > 0);
+  healthy.hidden = urgent > 0;
+  if(urgent === 0){
+    healthy.textContent = c.soon > 0 ? ("暂无逾期，最近一项 " + c.soon + " 天后到期") : "暂无逾期";
+  }
+  renderBellBadge();
+  updateBellTitle();
+}
+function renderBellBadge(){
+  var dot = $("alertDot");
+  if(!dot) return;
+  var n = notifyState.unread;
+  dot.hidden = n <= 0;
+  dot.textContent = n > 99 ? "99+" : n;
+}
+function updateBellTitle(){
+  var c = state.board ? state.board.counts : {over:0, today:0, soon:0};
+  var parts = [];
+  if(notifyState.unread > 0) parts.push("未读 " + notifyState.unread);
+  if(c.over > 0) parts.push("逾期 " + c.over);
+  if(c.today > 0) parts.push("今天到期 " + c.today);
+  $("btnAlert").title = parts.length ? ("通知中心：" + parts.join(" · ")) : "通知中心";
+}
+function relTime(v){
+  if(!v) return "";
+  var s = String(v).replace(" ", "T");
+  var d = new Date(s);
+  if(isNaN(d.getTime())) return s.substring(0, 16).replace("T", " ");
+  var diff = Date.now() - d.getTime();
+  if(diff < 0) diff = 0;
+  var min = Math.floor(diff / 60000);
+  if(min < 1) return "刚刚";
+  if(min < 60) return min + " 分钟前";
+  var hr = Math.floor(min / 60);
+  if(hr < 24) return hr + " 小时前";
+  var day = Math.floor(hr / 24);
+  if(day === 1) return "昨天";
+  if(day < 30) return day + " 天前";
+  return s.substring(0, 10);
+}
+var unreadFetchedAt = 0;
+function loadUnread(force){
+  var now = Date.now();
+  if(!force && now - unreadFetchedAt < 3000) return Promise.resolve();
+  unreadFetchedAt = now;
+  return API.getGlobal("/api/notifications/unread").then(function(d){
+    var n = (d && d.unread) || 0;
+    var changed = n !== notifyState.unread;
+    notifyState.unread = n;
+    renderBellBadge();
+    updateBellTitle();
+    if(changed && !$("alertPanel").hidden && rt.alertTab === "notice") loadNoticeList();
+  }).catch(function(){ /* 通知是增强能力：失败静默，不打扰用户 */ });
+}
+function renderAlertPanel(){
+  var panel = $("alertPanel");
+  if(!panel) return;
+  var unread = notifyState.unread;
+  var html = '<div class="ap-tabs" role="tablist">' +
+      '<button class="ap-tab" type="button" role="tab" data-ap-tab="notice" aria-selected="' + (rt.alertTab === "notice") + '">' +
+        icon("bell", 14) + '通知' +
+        (unread > 0 ? '<span class="n">' + (unread > 99 ? "99+" : unread) + '</span>' : '') +
+      '</button>' +
+      '<button class="ap-tab" type="button" role="tab" data-ap-tab="due" aria-selected="' + (rt.alertTab === "due") + '">' +
+        icon("clock", 14) + '截止提醒' +
+      '</button>' +
+    '</div><div class="ap-body">' +
+      (rt.alertTab === "notice" ? noticeListHTML() : dueGroupsHTML()) +
+    '</div>';
+
+  if(rt.alertTab === "notice"){
+    if(notifyState.items.length){
+      html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-readall>全部标为已读</button></div>';
+    }
+  }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
+    html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-test>在空间中测试推送</button></div>';
+  }
+  panel.innerHTML = html;
+}
+function noticeListHTML(){
+  if(notifyState.loading && !notifyState.items.length) return UI.skeletonRows(4);
+  if(!notifyState.items.length){
+    return '<div class="ap-empty">' + icon("checkCircle", 22) +
+      '<div style="margin-top:6px">还没有通知</div>' +
+      '<div class="ap-empty-sub">任务到点提醒、评论与指派都会出现在这里</div></div>';
+  }
+  var unread = [], read = [];
+  notifyState.items.forEach(function(x){ (x.readAt ? read : unread).push(x); });
+  var html = unread.map(noticeItemHTML).join("");
+  if(unread.length && read.length){
+    html += '<div class="ap-glabel" style="padding-left:14px">更早 ' + read.length + '</div>';
+  }
+  html += read.map(noticeItemHTML).join("");
+  return html;
+}
+function noticeItemHTML(x){
+  var ic = NOTIFY_ICON[x.type] || "bell";
+  return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
+    ' data-apn="' + esc(x.id) + '"' +
+    (x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
+    (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
+    ' title="' + esc(x.title) + '">' +
+    '<span class="apn-ic">' + icon(ic, 13) + '</span>' +
+    '<span class="apn-main">' +
+      '<span class="apn-title">' + esc(x.title) + '</span>' +
+      (x.body ? '<span class="apn-body">' + esc(x.body) + '</span>' : "") +
+      '<span class="apn-meta">' + esc(relTime(x.createdAt)) +
+        (x.workspaceName ? " · " + esc(x.workspaceName) : "") + '</span>' +
+    '</span>' +
+    (x.readAt ? "" : '<i class="apn-dot"></i>') +
+  '</button>';
+}
+function dueGroupsHTML(){
+  var g = deadlineGroups;
+  var total = g.over.length + g.today.length + g.soon.length;
+  var html = "";
+  function group(cls, label, list){
+    if(!list.length) return;
+    html += '<div class="ap-group ' + cls + '"><div class="ap-glabel"><i></i>' + label + ' ' + list.length + '</div>';
+    list.forEach(function(t){
+      html += '<button class="ap-item" type="button" data-ap-task="' + esc(t.id) + '">' +
+        '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+        '<span class="apt">' + esc(t.title) + '</span>' +
+        '<span class="' + (cls === "over" ? "meta over" : (cls === "today" ? "meta today" : "meta ok")) + '">' + esc(dueText(t)) + '</span>' +
+      '</button>';
+    });
+    html += '</div>';
+  }
+  group("over","已逾期", g.over);
+  group("today","今天到期", g.today);
+  group("soon","3 天内", g.soon);
+  if(!total){
+    html += '<div class="ap-empty">' + icon("checkCircle", 22) + '<div style="margin-top:6px">节奏健康，没有逾期或临期任务</div></div>';
+  }
+  return html;
+}
+function loadAlertPanel(){
+  if(rt.alertTab === "notice") return loadNoticeList();
+  return loadDeadlineGroups();
+}
+function loadNoticeList(){
+  notifyState.loading = true;
+  if(!notifyState.items.length) renderAlertPanel();
+  return API.getGlobal("/api/notifications", {limit: 30}).then(function(d){
+    notifyState.loading = false;
+    notifyState.items = (d && d.items) || [];
+    if(d && typeof d.unread === "number") notifyState.unread = d.unread;
+    renderBellBadge();
+    updateBellTitle();
+    renderAlertPanel();
+  }).catch(function(){
+    notifyState.loading = false;
+    notifyState.items = [];
+    renderAlertPanel();
+  });
+}
+function loadDeadlineGroups(){
+  function fetchGroup(due){
+    return API.get("/api/tasks/list", {due: due, sort:"due"}).then(function(d){
+      var items = (d.items || []).slice(0, 5);
+      items.forEach(function(t){ taskCacheExtra[t.id] = t; });
+      return items;
+    }).catch(function(){ return []; });
+  }
+  return Promise.all([fetchGroup("over"), fetchGroup("today"), fetchGroup("soon")]).then(function(r){
+    deadlineGroups = {over:r[0], today:r[1], soon:r[2]};
+    renderAlertPanel();
+  });
+}
+function openFromNotification(ds){
+  var nid = Number(ds.apn);
+  var taskId = ds.apnTask || "";
+  var wsId = ds.apnWs || "";
+  var item = null;
+  for(var i = 0; i < notifyState.items.length; i++){
+    if(notifyState.items[i].id === nid){ item = notifyState.items[i]; break; }
+  }
+  if(item && !item.readAt){
+    item.readAt = new Date().toISOString();
+    notifyState.unread = Math.max(0, notifyState.unread - 1);
+    renderBellBadge();
+    updateBellTitle();
+    renderAlertPanel();
+    API.postGlobal("/api/notifications/" + nid + "/read").catch(function(){ /* 已读失败不阻断打开 */ });
+  }
+  if(!taskId){
+    toast(item && item.body ? item.body : (item ? item.title : "已读"));
+    return;
+  }
+  if(wsId && rt.currentWs && wsId !== rt.currentWs.id){
+    /* 跨空间通知：先二次确认（切空间会 reload，别让人点一下就被带走） */
+    askSwitchWorkspace(wsId, (item && item.workspaceName) || wsNameById(wsId), {
+      title: "打开其他空间的任务",
+      okText: "切换并打开",
+      taskTitle: item ? item.title : "",
+      openTaskId: taskId
+    });
+    return;
+  }
+  openTaskById(taskId);
+}
+
+export { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertBar, renderAlertPanel, renderBellBadge, updateBellTitle };
