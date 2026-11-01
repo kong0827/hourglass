@@ -3,12 +3,13 @@
 <mapper namespace="com.devstudio.kanban.mapper.WorkspaceMapper">
 
   <sql id="cols">
-    w.id, w.name, w.type, w.notify_webhook, w.notify_channel, w.notify_enabled, w.notify_token,
+    w.id, w.name, w.type, w.notify_webhook, w.notify_channel, w.notify_enabled,
+    w.notify_in_app_enabled, w.notify_token,
     w.notify_last_at, w.notify_last_status, w.owner_id, w.created_at, w.updated_at
   </sql>
 
   <sql id="plainCols">
-    id, name, type, notify_webhook, notify_channel, notify_enabled, notify_token,
+    id, name, type, notify_webhook, notify_channel, notify_enabled, notify_in_app_enabled, notify_token,
     notify_last_at, notify_last_status, owner_id, created_at, updated_at
   </sql>
 
@@ -43,6 +44,7 @@
       notify_channel = #{notifyChannel},
       notify_token = #{notifyToken},
       <if test="notifyEnabled != null">notify_enabled = #{notifyEnabled},</if>
+      <if test="notifyInAppEnabled != null">notify_in_app_enabled = #{notifyInAppEnabled},</if>
       updated_at = NOW()
     </set>
     WHERE id = #{id}

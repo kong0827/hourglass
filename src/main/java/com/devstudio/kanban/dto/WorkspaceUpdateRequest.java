@@ -25,6 +25,9 @@ public class WorkspaceUpdateRequest {
     /** O-1：空间级推送开关。null=跟随全局 app.notify.enabled */
     private Boolean notifyEnabled;
 
+    /** BUG-12：站内通知开关。null=启用；与外部推送开关相互独立 */
+    private Boolean notifyInAppEnabled;
+
     /** O-1：Server 酱 SendKey / PushPlus token；空=用全局 NOTIFY_TOKEN */
     @Size(max = 64, message = "推送 token 过长")
     private String notifyToken;

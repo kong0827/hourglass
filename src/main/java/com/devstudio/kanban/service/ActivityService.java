@@ -3,6 +3,8 @@ package com.devstudio.kanban.service;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.mapper.TaskLogMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,6 +19,8 @@ import java.util.List;
  */
 @Service
 public class ActivityService {
+
+    private static final Logger log = LoggerFactory.getLogger(ActivityService.class);
 
     /** 配置类事件的哨兵任务ID（不指向任何真实任务） */
     public static final String CONFIG_TASK_ID = "CFG";
@@ -38,7 +42,8 @@ public class ActivityService {
             l.setDetail(Texts.cut(detail, 250));
             logMapper.insert(l);
         } catch (Exception e) {
-            // 审计日志失败不应阻断业务操作
+            // 审计日志失败不应阻断业务操作，但要留痕便于排查
+            log.warn("配置审计写入失败（workspace={}）：{}", workspaceId, detail, e);
         }
     }
 

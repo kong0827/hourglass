@@ -9232,14 +9232,14 @@ function enterSettingsView(){
   $("wsSaveNote").textContent = isOwner ? "改动立即生效" : "仅空间主可修改名称与推送";
   /* O-1：通知推送面板按角色门控，并读取真实生效状态 */
   var canNotify = isOwner;
-  ["wsNotifyEnabled","wsWebhook","wsNotifyToken","wsNotifyClearToken"].forEach(function(id){
+  ["wsNotifyInAppEnabled","wsNotifyEnabled","wsWebhook","wsNotifyToken","wsNotifyClearToken"].forEach(function(id){
     if($(id)) $(id).disabled = !canNotify;
   });
   if(btnNotifySave) btnNotifySave.disabled = !canNotify;
   if($("btnNotifyTest")) $("btnNotifyTest").disabled = !canNotify;
   var nh = $("notifyHint");
   if(nh) nh.textContent = canNotify
-    ? "改动立即生效；关闭后，定时汇总与任务提醒都不会发出（测试推送走同一开关）"
+    ? "改动立即生效；站内通知与外部推送可分别开关（测试推送只走外部渠道）"
     : "仅空间主可配置与测试";
   /* 按登录名直接加人只有平台管理员可用；普通空间主只能走邀请链接（对方确认后加入） */
   var isAdmin = !!(currentUser && currentUser.role === "admin");
@@ -9556,6 +9556,7 @@ function loadNotifyStatus(){
 function fillNotifyForm(d){
   d = d || {};
   if($("wsNotifyEnabled")) $("wsNotifyEnabled").checked = !!d.enabled;
+  if($("wsNotifyInAppEnabled")) $("wsNotifyInAppEnabled").checked = d.inAppEnabled !== false;
   if($("wsNotifyToken")){
     $("wsNotifyToken").value = "";
     $("wsNotifyToken").placeholder = d.workspaceHasToken
@@ -9671,6 +9672,8 @@ if(btnNotifySave){
       notifyWebhook: ($("wsWebhook") ? $("wsWebhook").value.trim() : ""),
       notifyChannel: pickedChannel || "webhook",
       notifyEnabled: !!($("wsNotifyEnabled") && $("wsNotifyEnabled").checked),
+      /* BUG-12：站内通知独立开关，默认开启 */
+      notifyInAppEnabled: !!($("wsNotifyInAppEnabled") && $("wsNotifyInAppEnabled").checked),
       /* Token 留空 + clearToken=false 表示“保持原值”，不再把已保存的 Token 静默写空 */
       notifyToken: ($("wsNotifyToken") ? $("wsNotifyToken").value.trim() : "") || null,
       clearToken: !!($("wsNotifyClearToken") && $("wsNotifyClearToken").checked)

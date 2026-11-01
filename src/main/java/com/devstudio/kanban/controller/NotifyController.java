@@ -49,6 +49,9 @@ public class NotifyController {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("enabled", notificationService.effectiveEnabled(raw));
         res.put("enabledSource", raw.getNotifyEnabled() == null ? "global" : "workspace");
+        /* BUG-12：站内通知是独立开关（默认开启），不再跟随外部推送 */
+        res.put("inAppEnabled", notificationService.effectiveInAppEnabled(raw));
+        res.put("inAppSource", raw.getNotifyInAppEnabled() == null ? "default" : "workspace");
         res.put("channel", notificationService.effectiveChannel(raw));
         res.put("channelSource", Texts.trimToNull(raw.getNotifyChannel()) == null ? "global" : "workspace");
         res.put("workspaceHasAddress", notificationService.effectiveHook(raw) != null);

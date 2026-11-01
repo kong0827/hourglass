@@ -21,6 +21,8 @@ public class Workspace {
     private String notifyChannel;
     /** 空间推送开关：null=跟随全局，true=开，false=关 */
     private Boolean notifyEnabled;
+    /** 站内通知开关：null=启用（默认），false=只停站内汇总/提醒，不影响外部推送 */
+    private Boolean notifyInAppEnabled;
     /** Server酱 SendKey / PushPlus token；空=用全局 */
     private String notifyToken;
     /** 上次推送尝试时间（设置页「是否真正生效」的依据） */

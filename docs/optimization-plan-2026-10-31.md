@@ -727,3 +727,11 @@ spring.datasource.hikari.connection-timeout: 3000
 - share.js 全面改用共享模块；app.js 的日期、区间对齐、表头、依赖几何改为复用；删除约 120 行重复实现；窗口化/分组/月视图/拖拽代码未动。
 - index.html/share.html 按顺序加载；SW 升 v60；预览稿重生成。
 - 份额页冲突口径统一为主页面：FF 不再多算 1 天、已完成前驱不再标冲突（仅视觉状态）。
+
+**第二十八轮：BUG-12 收尾（通知拆分 / 删除口径 / 事务）**
+- 通知开关拆分：`workspace.notify_in_app_enabled`（新增 sql/21，幂等，NULL=启用）。站内提醒/汇总只受站内开关控制，外部渠道仍由 `notify_enabled` + `app.notify.enabled` 决定；设置页新增独立「站内通知」勾选，`/api/notify/status` 返回 `inAppEnabled` / `inAppSource`。
+- 提醒闭环日志：`logRemindSkipped` 不再写 `actor=null` 的任务时间线，改为应用日志（含"两个开关都关闭"的明确原因）；外部渠道关闭但站内开启时仍能正常送达。
+- 删除口径：`TaskService.requireTask(ws, id, Deleted.EXCLUDE|INCLUDE|ONLY)` 统一 update/move/reopen/delete/restore/purge 的查找与错误文案；`logs()` 显式 INCLUDE（回收站任务时间线可读）。
+- 事务：`GanttService` 的依赖增/改/删与 `revokeShare` 补 `@Transactional`。
+- 审计：覆盖导入成功后写一条配置审计；`ActivityService` 写库失败改为 `log.warn`（不再静默）。
+- 迁移：`sql/21_notify_split.sql`（幂等 ADD COLUMN），启动前执行。

@@ -362,7 +362,8 @@ public class TaskService {
     }
 
     public List<TaskLog> logs(String workspaceId, String taskId) {
-        requireOwned(workspaceId, taskId);
+        /* 回收站任务的日志保留可读（与评论一致），因此显式 INCLUDE，而不是沿用"排除已删除"的默认 */
+        requireTask(workspaceId, taskId, Deleted.INCLUDE);
         return logMapper.selectByTaskId(workspaceId, taskId);
     }
 
@@ -478,11 +479,7 @@ public class TaskService {
 
     @Transactional
     public Task update(String userId, String workspaceId, String id, TaskSaveRequest req) {
-        Task old = taskMapper.selectById(id);
-        if (old == null || !workspaceId.equals(old.getWorkspaceId()) || old.getDeletedAt() != null) {
-            throw AppException.notFound("任务不存在：" + id);
-        }
-
+        Task old = requireTask(workspaceId, id, Deleted.EXCLUDE);
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
@@ -580,10 +577,7 @@ public class TaskService {
 
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
-        Task task = taskMapper.selectById(id);
-        if (task == null || !workspaceId.equals(task.getWorkspaceId()) || task.getDeletedAt() != null) {
-            throw AppException.notFound("任务不存在：" + id);
-        }
+        Task task = requireTask(workspaceId, id, Deleted.EXCLUDE);
         String from = task.getBoardColumn();
         String to = req.getColumn();
         validateColumn(workspaceId, to);
@@ -719,10 +713,7 @@ public class TaskService {
      */
     @Transactional
     public Map<String, Object> reopen(String userId, String workspaceId, String id) {
-        Task task = taskMapper.selectById(id);
-        if (task == null || !workspaceId.equals(task.getWorkspaceId()) || task.getDeletedAt() != null) {
-            throw AppException.notFound("任务不存在：" + id);
-        }
+        Task task = requireTask(workspaceId, id, Deleted.EXCLUDE);
         if (!Consts.COL_DONE.equals(task.getBoardColumn())) {
             throw AppException.badRequest("任务不在已完成列，无需取消完成");
         }
@@ -762,10 +753,7 @@ public class TaskService {
     /** 软删除：进回收站，30 天后由定时任务清理 */
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
-        Task t = taskMapper.selectById(id);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
-            throw AppException.notFound("任务不存在：" + id);
-        }
+        Task t = requireTask(workspaceId, id, Deleted.EXCLUDE);
         taskMapper.softDelete(id);
         timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已移入回收站");
         log(userId, workspaceId, id, "delete", "移入回收站「" + t.getTitle() + "」（30 天后自动清理）");
@@ -773,10 +761,7 @@ public class TaskService {
 
     @Transactional
     public void restore(String userId, String workspaceId, String id) {
-        Task t = taskMapper.selectById(id);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() == null) {
-            throw AppException.notFound("回收站中没有该任务：" + id);
-        }
+        Task t = requireTask(workspaceId, id, Deleted.ONLY);
         taskMapper.restore(id);
         /* O-26：把"刚删就撤销"和"从回收站恢复"在时间线上区分开，让"这条任务为什么又回来了"可解释 */
         boolean undo = t.getDeletedAt() != null
@@ -788,10 +773,7 @@ public class TaskService {
 
     @Transactional
     public void purge(String workspaceId, String id) {
-        Task t = taskMapper.selectById(id);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() == null) {
-            throw AppException.notFound("回收站中没有该任务：" + id);
-        }
+        requireTask(workspaceId, id, Deleted.ONLY);
         cascade.purgeTasks(workspaceId, Collections.singletonList(id));
     }
 
@@ -828,9 +810,22 @@ public class TaskService {
     /* ==================== 内部方法 ==================== */
 
     private Task requireOwned(String workspaceId, String taskId) {
+        return requireTask(workspaceId, taskId, Deleted.EXCLUDE);
+    }
+
+    /** 任务存在性口径：统一区分"排除回收站 / 包含回收站 / 仅回收站"三种调用意图 */
+    private enum Deleted { EXCLUDE, INCLUDE, ONLY }
+
+    private Task requireTask(String workspaceId, String taskId, Deleted deleted) {
         Task t = taskMapper.selectById(taskId);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
-            throw AppException.notFound("任务不存在：" + taskId);
+        boolean inWorkspace = t != null && workspaceId.equals(t.getWorkspaceId());
+        boolean isDeleted = inWorkspace && t.getDeletedAt() != null;
+        boolean ok = inWorkspace && (deleted == Deleted.INCLUDE
+                || (deleted == Deleted.EXCLUDE && !isDeleted)
+                || (deleted == Deleted.ONLY && isDeleted));
+        if (!ok) {
+            throw AppException.notFound(deleted == Deleted.ONLY
+                    ? "回收站中没有该任务：" + taskId : "任务不存在：" + taskId);
         }
         return t;
     }

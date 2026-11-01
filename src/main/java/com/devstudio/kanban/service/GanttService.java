@@ -137,6 +137,7 @@ public class GanttService {
         return dependencyMapper.selectByWorkspace(workspaceId);
     }
 
+    @Transactional
     public TaskDependency createDep(String workspaceId, GanttDepRequest req) {
         String from = req.getFromTaskId();
         String to = req.getToTaskId();
@@ -172,6 +173,7 @@ public class GanttService {
         return dependencyMapper.selectById(dep.getId());
     }
 
+    @Transactional
     public TaskDependency updateDep(String workspaceId, String id, GanttDepRequest req) {
         TaskDependency dep = dependencyMapper.selectById(id);
         if (dep == null || !workspaceId.equals(dep.getWorkspaceId())) {
@@ -187,6 +189,7 @@ public class GanttService {
         return dependencyMapper.selectById(id);
     }
 
+    @Transactional
     public void deleteDep(String workspaceId, String id) {
         if (dependencyMapper.deleteById(id, workspaceId) == 0) {
             throw AppException.notFound("依赖不存在：" + id);
@@ -489,6 +492,7 @@ public class GanttService {
         return share;
     }
 
+    @Transactional
     public void revokeShare(String workspaceId) {
         shareMapper.deleteByWorkspace(workspaceId);
     }

@@ -230,6 +230,9 @@ public class WorkspaceService {
         if (req.getNotifyEnabled() != null) {
             ws.setNotifyEnabled(req.getNotifyEnabled());
         }
+        if (req.getNotifyInAppEnabled() != null) {
+            ws.setNotifyInAppEnabled(req.getNotifyInAppEnabled());
+        }
         if (Boolean.TRUE.equals(req.getClearToken())) {
             ws.setNotifyToken(null);
         } else {

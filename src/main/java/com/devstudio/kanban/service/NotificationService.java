@@ -5,10 +5,8 @@ import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.common.Webhooks;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Task;
-import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
-import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
@@ -73,7 +71,6 @@ public class NotificationService {
 
     private final TaskMapper taskMapper;
     private final WorkspaceMapper workspaceMapper;
-    private final TaskLogMapper logMapper;
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
     private final AppNotificationService appNotificationService;
@@ -95,12 +92,11 @@ public class NotificationService {
     @Value("${app.notify.link:}")
     private String link;
 
-    public NotificationService(TaskMapper taskMapper, WorkspaceMapper workspaceMapper, TaskLogMapper logMapper,
+    public NotificationService(TaskMapper taskMapper, WorkspaceMapper workspaceMapper,
                                WorkspaceMemberMapper memberMapper, UserMapper userMapper,
                                AppNotificationService appNotificationService) {
         this.taskMapper = taskMapper;
         this.workspaceMapper = workspaceMapper;
-        this.logMapper = logMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.appNotificationService = appNotificationService;
@@ -143,9 +139,19 @@ public class NotificationService {
         return enabled;
     }
 
+    /**
+     * BUG-12：站内通知开关与外部推送开关相互独立。
+     * 默认启用（null），关闭外部渠道不会连带停掉站内提醒。
+     */
+    public boolean effectiveInAppEnabled(Workspace ws) {
+        if (ws != null && ws.getNotifyInAppEnabled() != null) {
+            return ws.getNotifyInAppEnabled();
+        }
+        return true;
+    }
+
     /** 空间级渠道优先；为空时跟随全局 NOTIFY_TYPE */
-    public String effectiveChannel(Workspace ws) {
-        String ch = ws == null ? null : Texts.trimToNull(ws.getNotifyChannel());
+    public String effectiveChannel(Workspace ws) {        String ch = ws == null ? null : Texts.trimToNull(ws.getNotifyChannel());
         if (ch == null) {
             ch = type == null ? "webhook" : type.trim().toLowerCase();
         }
@@ -191,8 +197,8 @@ public class NotificationService {
             /* R-3：汇总现在也写应用内通知，因此不再只遍历"配了 webhook 的空间"；
                R-4：按空间隔离异常，一个空间失败不影响其它空间的当日汇总。 */
             try {
-                if (!effectiveEnabled(ws)) {
-                    continue; // 空间级或全局开关关闭：定时汇总不发送（应用内也不发）
+                if (!effectiveEnabled(ws) && !effectiveInAppEnabled(ws)) {
+                    continue; // 外部推送与站内通知都关闭：定时汇总不发送
                 }
                 Map<String, Object> result = pushDigest(ws, false);
                 log.info("每日提醒检查（{}）：{}", ws.getName(), result);
@@ -258,24 +264,28 @@ public class NotificationService {
 
     /** 单空间一轮提醒扫描（本方法内的异常由调用方按空间兜住） */
     private void scanWorkspaceReminders(Workspace ws, List<Task> due, List<Task> expired) {
-        boolean wsEnabled = effectiveEnabled(ws);
-        String hook = effectiveHook(ws);
+        boolean inAppEnabled = effectiveInAppEnabled(ws);
+        boolean externalEnabled = effectiveEnabled(ws);
+        String hook = externalEnabled ? effectiveHook(ws) : null;
         /* 成员名→账号映射每空间只查一次；本空间没有到期任务时不必查成员 */
         Map<String, String> memberByName = due.isEmpty()
                 ? Collections.<String, String>emptyMap() : memberNameMap(ws.getId());
         for (Task t : due) {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
-                boolean externalConfigured = wsEnabled && hook != null;
-                /* N-1：先写应用内通知（不依赖外部渠道是否配置），做到"提醒到本人" */
-                boolean inApp = notifyTaskRemindInApp(ws, t, memberByName);
-                if (externalConfigured) {
+                /* BUG-12：站内与外部各看各的开关；站内默认开启，关外部不会停站内 */
+                boolean inApp = inAppEnabled && notifyTaskRemindInApp(ws, t, memberByName);
+                if (hook != null) {
                     // 配了外部渠道：异步发送，成功后才闭环；失败/丢弃时留在 6 小时窗口内重试
                     scheduleRemindSend(ws, t, hook);
                 } else if (inApp) {
-                    // 没配外部渠道：应用内送达即闭环，并在时间线上说明"为什么没发群消息"
+                    // 没配外部渠道：应用内送达即闭环，并在应用日志里说明"为什么没发群消息"
                     taskMapper.markRemindSent(t.getId());
-                    logRemindSkipped(ws, t, "提醒时间已到，空间未启用外部推送，已通过应用内通知送达");
+                    log.info("提醒已通过站内通知送达（task={}，空间 {} 未启用外部推送）", t.getId(), ws.getId());
+                } else {
+                    // 外部未配置且站内关闭：标记已处理，避免永久重试；只写应用日志，不污染任务时间线
+                    taskMapper.markRemindSent(t.getId());
+                    log.info("提醒未送达：外部推送与站内通知均已关闭（task={}，空间 {}）", t.getId(), ws.getId());
                 }
             } catch (Exception e) {
                 log.warn("单条任务提醒处理失败（task={}），已跳过", t.getId(), e);
@@ -284,9 +294,7 @@ public class NotificationService {
         for (Task t : expired) {
             try {
                 taskMapper.markRemindSent(t.getId());
-                logRemindSkipped(ws, t, hook == null
-                        ? "提醒时间已过，空间未配置推送渠道，未推送"
-                        : "提醒时间已过（超过 6 小时重试窗口），未推送");
+                log.info("提醒时间已过（task={}，空间 {}），标记为已处理，未推送", t.getId(), ws.getId());
             } catch (Exception e) {
                 log.warn("过期提醒标记失败（task={}），已跳过", t.getId(), e);
             }
@@ -324,16 +332,6 @@ public class NotificationService {
             log.warn("提醒推送队列已满（容量 {}），本轮丢弃 task={} 的 webhook，下一轮扫描重试",
                     SEND_QUEUE_CAPACITY, taskId);
         }
-    }
-
-    private void logRemindSkipped(Workspace ws, Task t, String detail) {
-        TaskLog l = new TaskLog();
-        l.setTaskId(t.getId());
-        l.setWorkspaceId(ws.getId());
-        l.setActorId(null);
-        l.setAction("update");
-        l.setDetail(detail);
-        logMapper.insert(l);
     }
 
     /** N-1：任务级提醒写入应用内通知，投递给负责人本人（可选带上空间主） */
@@ -414,8 +412,7 @@ public class NotificationService {
         /* 手动测试只走外部渠道：站内汇总只应由每日任务生成，否则点几次测试就多几条重复站内信 */
         Map<String, Object> out = pushDigest(ws, force, false);
         out.put("enabled", true);
-        return out;
-    }
+        return out;    }
 
     private Map<String, Object> pushDigest(Workspace ws, boolean force) {
         return pushDigest(ws, force, true);
@@ -447,18 +444,16 @@ public class NotificationService {
             return res;
         }
 
-        /* R-3：每日汇总同样落应用内通知（按负责人分组），
-           使"空间没配群机器人"时汇总不会完全静默 —— 与任务级提醒同一口径。
-           手动测试（withInApp=false）不写站内信，避免反复点测试刷重复汇总。 */
-        int inApp = withInApp ? pushDigestInApp(ws, over, todayDue) : 0;
+        /* BUG-12：站内汇总只受站内开关控制，外部汇总只受推送开关控制 */
+        int inApp = withInApp && effectiveInAppEnabled(ws) ? pushDigestInApp(ws, over, todayDue) : 0;
         res.put("inApp", inApp);
 
-        String hook = effectiveHook(ws);
+        String hook = effectiveEnabled(ws) ? effectiveHook(ws) : null;
         if (hook == null) {
             res.put("sent", false);
             res.put("reason", inApp > 0
-                    ? "该空间未配置推送地址，已通过应用内通知送达 " + inApp + " 人"
-                    : "该空间未配置推送地址（在「设置 → 通知推送」中填写）");
+                    ? "该空间未启用外部推送，已通过站内通知送达 " + inApp + " 人"
+                    : "外部推送与站内通知均不可用（检查「通知推送」开关与地址）");
             return res;
         }
 

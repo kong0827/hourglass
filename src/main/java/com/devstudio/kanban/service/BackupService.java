@@ -99,6 +99,8 @@ public class BackupService {
     private final TaskCascade cascade;
     /** 导入按阶段/批次提交，避免整次导入占用一个长事务 */
     private final TransactionTemplate txTemplate;
+    /** 配置审计（导入是破坏性覆盖操作，必须留痕） */
+    private final ActivityService activityService;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -113,6 +115,7 @@ public class BackupService {
                          GanttShareMapper ganttShareMapper,
                          TaskCompletionService completionService,
                          TaskCascade cascade,
+                         ActivityService activityService,
                          PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
@@ -132,6 +135,7 @@ public class BackupService {
         this.ganttShareMapper = ganttShareMapper;
         this.completionService = completionService;
         this.cascade = cascade;
+        this.activityService = activityService;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -356,6 +360,9 @@ public class BackupService {
         result.setComments(st.commentCount);
         result.setReqDocs(st.reqDocCount);
         result.setBranches(st.branchCount);
+        activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
+                + " / 项目 " + st.reqCount + " / 评论 " + st.commentCount
+                + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount + "）");
         return result;
     }
 

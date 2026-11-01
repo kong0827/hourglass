@@ -84,6 +84,7 @@ class BackupImportBatchTest {
                         mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
                         mock(RequirementMapper.class), docMapper, mock(TaskCompletionService.class),
                         branchMapper),
+                mock(ActivityService.class),
                 transactionManager);
     }
 

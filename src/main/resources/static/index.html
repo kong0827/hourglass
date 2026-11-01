@@ -1067,8 +1067,12 @@
                 </button>
               </div>
               <div class="blocked-row" style="margin-top:2px">
+                <label class="sw"><input type="checkbox" id="wsNotifyInAppEnabled" /> 站内通知</label>
+                <span class="foot-note">逾期 / 今日到期的站内提醒与每日汇总（默认开启，与外部推送相互独立）</span>
+              </div>
+              <div class="blocked-row" style="margin-top:2px">
                 <label class="sw"><input type="checkbox" id="wsNotifyEnabled" /> 启用本空间的推送</label>
-                  <span class="foot-note">关闭后定时提醒与任务级提醒都不会发送（测试推送也会如实告知未启用）</span>
+                  <span class="foot-note">关闭后只停外部渠道（群机器人 / Server 酱 / PushPlus），站内通知不受影响</span>
               </div>
               <div class="field" style="margin-top:14px">
                 <label for="wsWebhook" id="wsWebhookLabel">推送地址</label>

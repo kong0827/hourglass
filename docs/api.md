@@ -1112,3 +1112,31 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 迁移：执行 `sql/17_perf_index.sql`（幂等）后再启动新 jar —— 需求列表依赖 `requirement_doc.content_brief` 列。
 
 > 部署提示：v6 备份可能包含需求文档正文（含内嵌图片），`deploy/nginx-devstudio.conf` 已给 `POST /api/import` 单独放宽到 128 MB；若自行改过 nginx 配置，请同时确认 `client_max_body_size` 与 `proxy_read_timeout`。
+
+---
+
+## 附录 · 2026-11-01 BUG-12：通知开关拆分与删除口径（增量）
+
+### 1. 接口契约变化
+
+| 接口 / 字段 | 变化 |
+| --- | --- |
+| `PUT /api/workspaces/{id}` | 新增可选布尔 `notifyInAppEnabled`（站内通知开关，NULL/不传=保持原值；新空间默认启用）。与 `notifyEnabled`（外部渠道开关）相互独立：关闭外部渠道不会连带停掉站内提醒/汇总。 |
+| `GET /api/notify/status` | 新增 `inAppEnabled`（布尔，默认 true）与 `inAppSource`（`default` / `workspace`）。 |
+| `POST /api/notify/test` | 语义不变：仍然只走外部渠道，且受 `notifyEnabled` / `app.notify.enabled` 控制；站内开关不影响测试结果。 |
+| `GET /api/tasks/{id}/logs` | 口径明确：回收站中的任务仍可读时间线（与评论一致）；已物理删除的任务 404。 |
+| 任务写接口（PUT / move / reopen / delete / restore / purge） | 统一走 `requireTask`：未删除任务接口看不到回收站任务，恢复/彻底删除只接受回收站任务，错误文案统一为「任务不存在」/「回收站中没有该任务」。 |
+
+### 2. 提醒闭环行为
+
+- 外部渠道与站内通知各看各的开关：外部关、站内开 → 站内提醒照常写 `app_notification`。
+- 两者都关闭时，到点的 `remind_at` 仍会标记为已处理（避免永久重试），只写应用日志，不再向任务时间线插入 `actor=null` 的记录。
+- 每个账号仍是"同一收件人 + 同一任务 + 同一类型 6 小时内去重"。
+
+### 3. 数据库
+
+- 新增 `sql/21_notify_split.sql`（幂等）：`workspace.notify_in_app_enabled TINYINT(1) NULL`。
+
+### 4. 权限矩阵约定修正
+
+越权现在返回 **HTTP 403**（响应体 `code=403`），与第十轮 HTTP 状态码统一一致；未登录仍为 HTTP 401。
