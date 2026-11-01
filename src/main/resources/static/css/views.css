@@ -1120,3 +1120,29 @@
 .mine-group[data-mine-group="over"] .mine-group-n{background:var(--danger-soft,var(--danger));color:var(--bg);}
 .mine-acts{display:flex;align-items:center;gap:2px;justify-content:flex-end;}
 .mine-acts .icon-btn.on{color:var(--success);background:var(--success-soft,rgba(0,0,0,.06));}
+
+/* IA-2：项目行展开（需求文档 / 任务进度 / 跳看板） */
+.proj-layout{display:block;}
+.req-expand-btn svg{transition:transform .15s;}
+.req-expand-btn.on svg{transform:rotate(90deg);}
+.req-expand{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
+.req-expand-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:650;color:var(--text-2);margin-bottom:6px;}
+.req-expand-doc{
+  display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:none;background:none;
+  border-radius:var(--r-sm);text-align:left;cursor:pointer;color:var(--text);
+}
+.req-expand-doc:hover{background:var(--surface-hover);}
+.req-expand-doc .rd-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
+.req-expand-doc .rd-meta{font-size:11.5px;color:var(--text-3);}
+.req-expand-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.proj-dlg-body .panel{border:none;padding:0;background:none;}
+
+/* IA-1：分析页（趋势 / 完成记录 / 流程体检） */
+#view-analysis{overflow-y:auto;}
+.analysis-bar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:8px 20px 0;border-bottom:1px solid var(--border);background:var(--bg);
+  position:sticky;top:0;z-index:3;
+}
+.analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
+#view-analysis [data-analysis-pane][hidden]{display:none;}

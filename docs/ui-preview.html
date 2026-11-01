@@ -2433,6 +2433,32 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .mine-acts{display:flex;align-items:center;gap:2px;justify-content:flex-end;}
 .mine-acts .icon-btn.on{color:var(--success);background:var(--success-soft,rgba(0,0,0,.06));}
 
+/* IA-2：项目行展开（需求文档 / 任务进度 / 跳看板） */
+.proj-layout{display:block;}
+.req-expand-btn svg{transition:transform .15s;}
+.req-expand-btn.on svg{transform:rotate(90deg);}
+.req-expand{margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
+.req-expand-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:650;color:var(--text-2);margin-bottom:6px;}
+.req-expand-doc{
+  display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:none;background:none;
+  border-radius:var(--r-sm);text-align:left;cursor:pointer;color:var(--text);
+}
+.req-expand-doc:hover{background:var(--surface-hover);}
+.req-expand-doc .rd-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;}
+.req-expand-doc .rd-meta{font-size:11.5px;color:var(--text-3);}
+.req-expand-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.proj-dlg-body .panel{border:none;padding:0;background:none;}
+
+/* IA-1：分析页（趋势 / 完成记录 / 流程体检） */
+#view-analysis{overflow-y:auto;}
+.analysis-bar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:8px 20px 0;border-bottom:1px solid var(--border);background:var(--bg);
+  position:sticky;top:0;z-index:3;
+}
+.analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
+#view-analysis [data-analysis-pane][hidden]{display:none;}
+
 </style>
 <style>
 /* ==========================================================================
@@ -2970,10 +2996,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.4A1.8 1.8 0 0 1 5 3.6h8l4 4v8a1.8 1.8 0 0 1-1.8 1.8H5A1.8 1.8 0 0 1 3.2 15.6Z"/><path d="M12.6 3.6v4.2h4.2"/></svg>
         <span class="nl">项目</span>
       </button>
-      <button class="nav-item" type="button" data-view="requirements">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3.6h6.2l3.4 3.4v9.4H5.4Z"/><path d="M11.4 3.6V7h3.4"/><path d="M7.6 10.4h4.8M7.6 13h3.2"/></svg>
-        <span class="nl">需求</span>
-      </button>
+      
       <button class="nav-item" type="button" data-view="branches" id="navBranches">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.6" cy="4.4" r="1.9"/><circle cx="5.6" cy="15.6" r="1.9"/><circle cx="14.4" cy="6.6" r="1.9"/><path d="M5.6 6.3v7.4"/><path d="M14.4 8.5c0 3.4-2.2 5.4-5.2 5.4H5.6"/></svg>
         <span class="nl">分支</span>
@@ -2985,17 +3008,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.3 9 12.5l4.4-4.7"/></svg>
         <span class="nl">周回顾</span>
       </button>
-      <button class="nav-item" type="button" data-view="completions" id="navCompletions">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 3.4h7.6a1.6 1.6 0 0 1 1.6 1.6v11.6H4.6V5a1.6 1.6 0 0 1 1.6-1.6Z"/><path d="M7.4 7.6h5.2M7.4 10.8h5.2M7.4 14h3.2"/></svg>
-        <span class="nl">任务清单</span>
-      </button>
-      <button class="nav-item" type="button" data-view="stats">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4.4 16.2V11M10 16.2V4.6M15.6 16.2v-7"/></svg>
-        <span class="nl">报表</span>
-      </button>
-      <button class="nav-item" type="button" data-view="flow">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.2h13.6l-5.2 6.2v4.6l-3.2 1.8V10.4Z"/></svg>
-        <span class="nl">流程体检</span>
+      <button class="nav-item" type="button" data-view="analysis">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.6V9.4M10 15.6V4.4M16 15.6v-4"/><path d="M2.6 17.4h14.8"/></svg>
+        <span class="nl">分析</span>
       </button>
 
       <span class="nav-sec">管理</span>
@@ -3368,12 +3383,13 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div class="panel-head" style="margin-bottom:12px">
               <h3>项目列表</h3>
               <span class="meta-right" id="reqCount"></span>
+              <button class="btn primary sm" type="button" id="btnReqNew" style="margin-left:auto">新建项目</button>
             </div>
             <div class="req-list" id="reqList"></div>
           </div>
-          <aside class="proj-form">
+          <div class="modal-layer" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
             <div class="panel">
-              <div class="panel-head"><h3 id="reqFormTitle">新增项目</h3></div>
+              <div class="panel-head"><h3 id="reqFormTitle">新增项目</h3><button class="icon-btn sm" type="button" id="dlgProjectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
               <div class="stack">
                 <div class="field" id="fReqName">
                   <label for="rName">项目名称 <span class="req">*</span></label>
@@ -3399,7 +3415,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
                 <p class="foot-note">删除项目时其下任务会保留，仅解除关联；把任务归入项目后，可在筛选栏按项目查看全部工作</p>
               </div>
             </div>
-          </aside>
+          </div></div></div>
         </div>
       </section>
 
@@ -3688,7 +3704,67 @@ body.dragging-active{cursor:grabbing;user-select:none;}
         </div>
       </section>
 
-      <section class="view" id="view-completions" aria-label="任务清单">
+      <section class="view" id="view-analysis" aria-label="分析">
+        <div class="analysis-bar">
+          <div class="set-tabs" id="analysisTabs" role="tablist" aria-label="分析视图">
+            <button class="set-tab on" type="button" role="tab" aria-selected="true" data-analysis-tab="stats">趋势与分布</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-analysis-tab="completions">完成记录</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-analysis-tab="flow">流程体检</button>
+          </div>
+          <label class="row row-gap" style="gap:6px">
+            <span class="toolbar-meta">周期</span>
+            <select id="analysisPeriod" class="mini-select" aria-label="统计周期">
+              <option value="week">本周</option>
+              <option value="month">本月</option>
+              <option value="weeks8" selected>近 8 周</option>
+              <option value="days90">近 90 天</option>
+            </select>
+          </label>
+        </div>
+        <div data-analysis-pane="stats">
+        <div class="view-page wide">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>每周新增 / 完成</h3>
+              <span class="meta-right row row-gap" style="gap:6px">
+                <span>近</span>
+                <select id="statsWeeks" class="mini-select" aria-label="统计周数">
+                  <option value="4">4 周</option>
+                  <option value="8" selected>8 周</option>
+                  <option value="12">12 周</option>
+                  <option value="26">26 周</option>
+                </select>
+              </span>
+            </div>
+            <div id="chartWeeks"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h3>工时</h3>
+              <span class="meta-right row row-gap" style="gap:8px">
+                <span class="seg scope" id="segWorkScope">
+                  <button type="button" data-wscope="mine" aria-pressed="true">仅我</button>
+                  <button type="button" data-wscope="all" aria-pressed="false">全空间</button>
+                </span>
+              </span>
+            </div>
+            <div class="stat-grid" id="statsHours"></div>
+            <p class="foot-note" style="margin-top:10px" id="hoursNote">「仅我」只统计我在本空间的计时记录；「全空间」为空间内全部成员合计。</p>
+          </div>
+          <div class="duo">
+            <div class="panel">
+              <div class="panel-head"><h3>完成分布 · 按分类</h3><span class="meta-right" id="statsRange1">—</span></div>
+              <div class="dist" id="statsCat"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h3>完成分布 · 按负责人</h3><span class="meta-right" id="statsRange2">—</span></div>
+              <div class="dist" id="statsOwner"></div>
+            </div>
+          </div>
+          <p class="foot-note">新增按创建日期、完成按完成日期统计；「完成分布」口径为<b>全空间</b>，与上方工时卡的口径已在卡片上分别标注</p>
+        </div>
+      </div>
+        <div data-analysis-pane="completions" hidden>
         <div class="view-page">
           <div class="page-toolbar">
             <span class="toolbar-title">任务清单</span>
@@ -3720,56 +3796,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <div id="compWrap"></div>
           </div>
         </div>
-      </section>
-
-      <!-- ===== 报表 ===== -->
-      <section class="view" id="view-stats" aria-label="统计报表">
-        <div class="view-page wide">
-          <div class="panel">
-            <div class="panel-head">
-              <h3>每周新增 / 完成</h3>
-              <span class="meta-right row row-gap" style="gap:6px">
-                <span>近</span>
-                <select id="statsWeeks" class="mini-select" aria-label="统计周数">
-                  <option value="4">4 周</option>
-                  <option value="8" selected>8 周</option>
-                  <option value="12">12 周</option>
-                  <option value="26">26 周</option>
-                </select>
-              </span>
-            </div>
-            <div id="chartWeeks"></div>
-          </div>
-          <div class="stat-grid" id="statsCurrent"></div>
-          <div class="panel">
-            <div class="panel-head">
-              <h3>工时</h3>
-              <span class="meta-right row row-gap" style="gap:8px">
-                <span class="seg scope" id="segWorkScope">
-                  <button type="button" data-wscope="mine" aria-pressed="true">仅我</button>
-                  <button type="button" data-wscope="all" aria-pressed="false">全空间</button>
-                </span>
-              </span>
-            </div>
-            <div class="stat-grid" id="statsHours"></div>
-            <p class="foot-note" style="margin-top:10px" id="hoursNote">「仅我」只统计我在本空间的计时记录；「全空间」为空间内全部成员合计。</p>
-          </div>
-          <div class="duo">
-            <div class="panel">
-              <div class="panel-head"><h3>完成分布 · 按分类</h3><span class="meta-right" id="statsRange1">—</span></div>
-              <div class="dist" id="statsCat"></div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><h3>完成分布 · 按负责人</h3><span class="meta-right" id="statsRange2">—</span></div>
-              <div class="dist" id="statsOwner"></div>
-            </div>
-          </div>
-          <p class="foot-note">新增按创建日期、完成按完成日期统计；「完成分布」口径为<b>全空间</b>，与上方工时卡的口径已在卡片上分别标注</p>
-        </div>
-      </section>
-
-      <!-- ===== 流程体检 ===== -->
-      <section class="view" id="view-flow" aria-label="流程体检">
+      </div>
+        <div data-analysis-pane="flow" hidden>
         <div class="view-page wide">
           <div class="panel">
             <div class="panel-head">
@@ -3825,7 +3853,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
             <p class="foot-note" id="flowEstNote"></p>
           </div>
         </div>
+      </div>
       </section>
+      
 
       
 
@@ -6607,6 +6637,8 @@ var listSelected = {};
 var listTotal = 0;
 var calState = {year:null, month:null, tasks:[], selected:null, seq:0, showDone:{}};
 var reviewSeq = 0, reviewTarget = null;
+/* IA-1：分析页三个 tab（趋势 / 完成记录 / 流程体检） */
+var analysisTab = "stats";
 
 function safeColor(c){
   return /^#[0-9a-f]{6}$/i.test(String(c == null ? "" : c)) ? c : CAT_DEFAULT_COLOR;
@@ -6654,6 +6686,8 @@ var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var viewBox = $("viewBox");
 var reqListEl = $("reqList");
+/* IA-2：项目行展开状态（每个项目一份） */
+var reqExpanded = {};
 var branchDot = $("branchDot");
 /* 报告增量（O-1/O-4/O-5/O-6/O-9/O-10/O-11/O-12/N-1/N-3/N-4/N-6）新增引用 */
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
@@ -6693,9 +6727,7 @@ var VIEWS = {
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
-  completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
-  stats:    { title:"报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
-  flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
+  analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:enterAnalysisView },
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
@@ -6703,6 +6735,10 @@ function showView(name){
   /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
   if(name === "trash"){ showView("settings"); setSettingsTab("data"); return; }
   if(name === "users"){ showView("settings"); setSettingsTab("account"); return; }
+  /* IA-1：旧入口并入「分析」的三个 tab */
+  if(name === "stats" || name === "completions" || name === "flow"){
+    analysisTab = name; showView("analysis"); return;
+  }
   if(!VIEWS[name]) return;
   activeView = name;
   document.body.dataset.view = name;
@@ -6760,11 +6796,10 @@ function refreshActiveView(){
   if(activeView === "calendar") loadCalendar({silent:true});
   else if(activeView === "gantt") loadGantt({silent:true});
   else if(activeView === "list") loadList({silent:true});
-  else if(activeView === "stats") loadStats({silent:true});
-  else if(activeView === "flow") loadFlowHealth({silent:true});
+
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") loadMine({silent:true});
-  else if(activeView === "completions") loadCompletions({silent:true});
+  else if(activeView === "analysis") refreshAnalysisTab(true);
   else if(activeView === "requirements") loadReqDocs();
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
   else if(activeView === "settings"){
@@ -12864,6 +12899,7 @@ function resetReqForm(){
   reqFormTitle.textContent = "新增项目";
   btnSaveReq.textContent = "添加项目";
   btnCancelReqEdit.hidden = true;
+  if($("dlgProject")) UI.closeModal($("dlgProject"));
   renderReqList();
 }
 function renderReqList(){
@@ -12872,13 +12908,24 @@ function renderReqList(){
   if(!reqList.length){
     reqListEl.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
-      text:"用右侧表单新建第一个项目；把任务归入项目后，可在筛选栏按项目查看全部工作。"
+      text:"点右上角「新建项目」创建第一个；展开项目可以查看需求文档与任务进度。"
     });
     return;
   }
   reqListEl.innerHTML = reqList.map(function(r){
+    var open = !!reqExpanded[r.id];
+    var docs = (reqDocList || []).filter(function(d){ return d.reqId === r.id; });
+    var docHTML = docs.length ? docs.map(function(d){
+      return '<button class="req-expand-doc" type="button" data-reqdoc-open="' + esc(d.id) + '">' +
+        '<span class="rd-title">' + esc(d.title) + '</span>' +
+        '<span class="rd-meta">' + esc(reqDocStatusLabel(d.status)) +
+          (Number(d.taskCount) ? (" · " + Number(d.doneCount || 0) + "/" + Number(d.taskCount) + " 任务") : "") +
+        '</span></button>';
+    }).join("") : '<p class="foot-note" style="margin:4px 0">还没有需求文档。</p>';
     return '<div class="req-item' + (editingReqId === r.id ? " editing" : "") + '" data-req-id="' + esc(r.id) + '">' +
       '<div class="req-top">' +
+        '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
+          icon("chevronRight", 14) + '</button>' +
         '<span class="req-name">' + esc(r.name) + '</span>' +
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
@@ -12903,6 +12950,15 @@ function renderReqList(){
         '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
           icon("edit", 14) + '</button>' +
       '</div>' +
+      (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
+        '<div class="req-expand-head"><span>需求文档</span>' +
+          '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增需求</button></div>' +
+        docHTML +
+        '<div class="req-expand-acts">' +
+          '<button class="btn sm primary" type="button" data-req-board="' + esc(r.id) + '">在看板中查看</button>' +
+          '<button class="btn sm" type="button" data-req-docs="' + esc(r.id) + '">管理需求文档</button>' +
+        '</div>' +
+      '</div>' : '') +
     '</div>';
   }).join("");
 }
@@ -12910,6 +12966,8 @@ function enterProjectsView(){
   if(reqsLoaded) renderReqList();
   else reqListEl.innerHTML = UI.skeletonRows(3);
   loadReqs();
+  /* IA-2：项目行展开要显示需求文档与任务进度 */
+  loadReqDocs().then(function(){ renderReqList(); });
 }
 function saveReq(){
   var name = rName.value.trim();
@@ -12968,6 +13026,26 @@ function deleteReq(id){
     }).catch(function(ex){ toast("删除失败：" + (ex.message || "网络异常"), "bad"); });
   });
 }
+function openProjectDialog(id){
+  editingReqId = id || null;
+  rName.value = "";
+  rDesc.value = "";
+  formReqStatus = "active";
+  fReqName.classList.remove("invalid");
+  if(id){
+    var r = null;
+    for(var i = 0; i < reqList.length; i++) if(reqList[i].id === id) r = reqList[i];
+    if(r){ rName.value = r.name; rDesc.value = r.description || ""; formReqStatus = r.status || "active"; }
+  }
+  syncReqStatusSeg();
+  reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
+  btnSaveReq.textContent = id ? "保存修改" : "添加项目";
+  btnCancelReqEdit.hidden = !id;
+  UI.openModal($("dlgProject"), "input");
+  setTimeout(function(){ try{ rName.focus(); }catch(e){ /* noop */ } }, 40);
+}
+if($("btnReqNew")) $("btnReqNew").addEventListener("click", function(){ openProjectDialog(null); });
+if($("dlgProjectX")) $("dlgProjectX").addEventListener("click", function(){ resetReqForm(); });
 btnSaveReq.addEventListener("click", saveReq);
 btnCancelReqEdit.addEventListener("click", resetReqForm);
 rName.addEventListener("input", function(){ fReqName.classList.remove("invalid"); });
@@ -12998,11 +13076,34 @@ reqListEl.addEventListener("click", function(e){
       reqFormTitle.textContent = "编辑项目";
       btnSaveReq.textContent = "保存修改";
       btnCancelReqEdit.hidden = false;
-      renderReqList();
+      UI.openModal($("dlgProject"), "input");
       try{ rName.focus(); }catch(e2){ /* noop */ }
     }
     return;
   }
+  var ex = e.target.closest("[data-req-expand]");
+  if(ex){
+    var rid0 = ex.dataset.reqExpand;
+    reqExpanded[rid0] = !reqExpanded[rid0];
+    renderReqList();
+    return;
+  }
+  var docNew = e.target.closest("[data-doc-new]");
+  if(docNew){ openNewReqDocDialog(docNew.dataset.docNew); return; }
+  var docOpen = e.target.closest("[data-reqdoc-open]");
+  if(docOpen){ openReqDocAndJump(docOpen.dataset.reqdocOpen); return; }
+  var toBoard = e.target.closest("[data-req-board]");
+  if(toBoard){
+    var rid1 = toBoard.dataset.reqBoard;
+    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.due = null; state.focus = false; state.blocked = false;
+    state.reqs = [rid1];
+    showView("board");
+    reloadFilteredViews();
+    toast("已按项目筛选看板：" + reqNameById(rid1));
+    return;
+  }
+  var manage = e.target.closest("[data-req-docs]");
+  if(manage){ showView("requirements"); return; }
   var dl = e.target.closest("[data-del-req]");
   if(dl) deleteReq(dl.dataset.delReq);
 });
@@ -13956,12 +14057,13 @@ function toggleReqProj(key){
 
 /* ---------------- 新增需求弹窗 ---------------- */
 
-function openNewReqDocDialog(){
+function openNewReqDocDialog(reqId){
   var sel = $("newReqDocProject");
   if(!sel) return;
   sel.innerHTML = reqList.length
     ? reqList.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("")
     : '<option value="">（还没有项目，请先去「项目」建一个）</option>';
+  if(reqId) sel.value = reqId;
   $("newReqDocTitle").value = "";
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ $("newReqDocTitle").focus(); }, 40);
@@ -15276,6 +15378,54 @@ $("compPrev").addEventListener("click", function(){ shiftCompMonth(-1); });
 $("compNext").addEventListener("click", function(){ shiftCompMonth(1); });
 $("btnCompExport").addEventListener("click", exportCompCSV);
 
+/* ==================== 分析页（IA-1：趋势 / 完成记录 / 流程体检） ==================== */
+function initAnalysisTabs(){
+  var box = $("analysisTabs");
+  if(box && !box.__wired){
+    box.__wired = true;
+    box.addEventListener("click", function(e){
+      var b = e.target.closest("[data-analysis-tab]");
+      if(b) setAnalysisTab(b.dataset.analysisTab);
+    });
+  }
+  var period = $("analysisPeriod");
+  if(period && !period.__wired){
+    period.__wired = true;
+    period.addEventListener("change", function(){ applyAnalysisPeriod(period.value); });
+  }
+}
+function setAnalysisTab(tab, opts){
+  if(tab !== "completions" && tab !== "flow") tab = "stats";
+  analysisTab = tab;
+  document.querySelectorAll("#analysisTabs [data-analysis-tab]").forEach(function(b){
+    var on = b.dataset.analysisTab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll("#view-analysis [data-analysis-pane]").forEach(function(p){
+    p.hidden = p.dataset.analysisPane !== tab;
+  });
+  if(!opts || !opts.noLoad) refreshAnalysisTab(!!(opts && opts.silent));
+}
+function refreshAnalysisTab(silent){
+  if(analysisTab === "stats") loadStats({silent:!!silent});
+  else if(analysisTab === "completions") loadCompletions({silent:!!silent});
+  else loadFlowHealth({silent:!!silent});
+}
+function enterAnalysisView(){
+  initAnalysisTabs();
+  setAnalysisTab(analysisTab, {silent:false});
+}
+function applyAnalysisPeriod(v){
+  if(v === "week"){ state.statsWeeks = 4; state.flowDays = 7; }
+  else if(v === "month"){ state.statsWeeks = 4; state.flowDays = 30; }
+  else if(v === "days90"){ state.statsWeeks = 26; state.flowDays = 90; }
+  else { state.statsWeeks = 8; state.flowDays = 90; }
+  if($("statsWeeks")) $("statsWeeks").value = String(state.statsWeeks);
+  if($("flowDays")) $("flowDays").value = String(state.flowDays);
+  refreshAnalysisTab(false);
+}
+
 /* ==================== 报表（§6.8） ==================== */
 function enterStatsView(){ loadStats(); }
 function loadStats(opts){
@@ -15283,8 +15433,6 @@ function loadStats(opts){
   var weeks = Number(state.statsWeeks) || 8;
   if(!opts.silent){
     $("chartWeeks").innerHTML = '<div class="skel skel-chart"></div>';
-    $("statsCurrent").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
-      '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
     if(statsHoursEl) statsHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
     $("statsCat").innerHTML = UI.skeletonRows(3);
     $("statsOwner").innerHTML = UI.skeletonRows(3);
@@ -15292,7 +15440,7 @@ function loadStats(opts){
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(renderStats).catch(function(ex){
-    setPageError(ex, ["chartWeeks","statsCurrent","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
+    setPageError(ex, ["chartWeeks","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
   });
 }
 /* O-12 / N-5：工时卡支持「仅我 / 全空间」切换，并在卡片上明示口径 */
@@ -15374,10 +15522,13 @@ function renderStats(d){
   ];
   if(c.other > 0) cards.push({k:"其他列", v:c.other, cls:""});
   cards.push({k:"逾期", v:overN, cls:(overN > 0 ? "bad" : "")});
-  $("statsCurrent").innerHTML = cards.map(function(x){
-    return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
-      '<small>项</small></div></div>';
-  }).join("");
+  var currentBox = $("statsCurrent");
+  if(currentBox){
+    currentBox.innerHTML = cards.map(function(x){
+      return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
+        '<small>项</small></div></div>';
+    }).join("");
+  }
 
   var wm = c.workMinutes || 0;
   renderStatsHours(c);
@@ -17291,8 +17442,8 @@ $("newMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-new]");
   if(!b) return;
   UI.closeAllPops();
-  if(b.dataset.new === "task") openTaskDrawer("backlog");
-  else showView("projects");
+  if(b.dataset.new === "task"){ openTaskDrawer("backlog"); }
+  else { showView("projects"); setTimeout(function(){ openProjectDialog(null); }, 60); }
 });
 $("btnAlert").addEventListener("click", function(){
   if(UI.popOpen($("alertPanel"))){ UI.closeAllPops(); return; }
@@ -17617,7 +17768,7 @@ document.addEventListener("keydown", function(e){
   }
   if(gPending && Date.now() - gPending < 900){
     var gmap = {b:"board", l:"list", m:"mine", c:"calendar", g:"gantt", p:"projects",
-                r:"review", a:"stats", s:"settings"};
+                r:"review", a:"analysis", s:"settings"};
     var gt = gmap[String(e.key || "").toLowerCase()];
     gPending = 0;
     if(gt){ e.preventDefault(); showView(gt); return; }
@@ -17873,6 +18024,6 @@ else boot();
 })();
 
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 12:10</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-01 12:20</span></div>
 </body>
 </html>

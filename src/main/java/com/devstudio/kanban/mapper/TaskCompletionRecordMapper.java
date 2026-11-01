@@ -24,6 +24,11 @@ public interface TaskCompletionRecordMapper {
     /** 清空空间时连完成归档一起清（否则清空任务后「任务清单」仍显示旧记录） */
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 
+    /** 区间完成条数（完成快照口径） */
+    int countByRange(@Param("workspaceId") String workspaceId,
+                     @Param("from") LocalDate from,
+                     @Param("to") LocalDate to);
+
     /** 按月查（completed_at 在 [from, to) 区间内），按完成日倒序 */
     List<TaskCompletionRecord> selectByRange(@Param("workspaceId") String workspaceId,
                                             @Param("from") LocalDate from,

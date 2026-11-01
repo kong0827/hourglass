@@ -215,6 +215,8 @@ var listSelected = {};
 var listTotal = 0;
 var calState = {year:null, month:null, tasks:[], selected:null, seq:0, showDone:{}};
 var reviewSeq = 0, reviewTarget = null;
+/* IA-1：分析页三个 tab（趋势 / 完成记录 / 流程体检） */
+var analysisTab = "stats";
 
 function safeColor(c){
   return /^#[0-9a-f]{6}$/i.test(String(c == null ? "" : c)) ? c : CAT_DEFAULT_COLOR;
@@ -262,6 +264,8 @@ var filterActions = $("filterActions"), selectedSummary = $("selectedSummary");
 var moreFilterMenu = $("moreFilterMenu"), moreFilterCount = $("moreFilterCount");
 var viewBox = $("viewBox");
 var reqListEl = $("reqList");
+/* IA-2：项目行展开状态（每个项目一份） */
+var reqExpanded = {};
 var branchDot = $("branchDot");
 /* 报告增量（O-1/O-4/O-5/O-6/O-9/O-10/O-11/O-12/N-1/N-3/N-4/N-6）新增引用 */
 var iRemindTarget = $("iRemindTarget"), iBlocked = $("iBlocked"), iBlockedReason = $("iBlockedReason");
@@ -301,9 +305,7 @@ var VIEWS = {
   requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsView },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:enterReviewView },
-  completions: { title:"任务清单", sub:"任务完成时自动归档：项目、负责人、起止时间与总耗时，可按月统计并导出", enter:enterCompletionsView },
-  stats:    { title:"报表", sub:"新增 / 完成趋势、当前指标与分布", enter:enterStatsView },
-  flow:     { title:"流程体检", sub:"用日志里的真实移动痕迹，算清哪一列最堵、返工多少、需求多久才开工", enter:enterFlowView },
+  analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:enterAnalysisView },
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsView },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:enterProfileView }
 };
@@ -311,6 +313,10 @@ function showView(name){
   /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
   if(name === "trash"){ showView("settings"); setSettingsTab("data"); return; }
   if(name === "users"){ showView("settings"); setSettingsTab("account"); return; }
+  /* IA-1：旧入口并入「分析」的三个 tab */
+  if(name === "stats" || name === "completions" || name === "flow"){
+    analysisTab = name; showView("analysis"); return;
+  }
   if(!VIEWS[name]) return;
   activeView = name;
   document.body.dataset.view = name;
@@ -368,11 +374,10 @@ function refreshActiveView(){
   if(activeView === "calendar") loadCalendar({silent:true});
   else if(activeView === "gantt") loadGantt({silent:true});
   else if(activeView === "list") loadList({silent:true});
-  else if(activeView === "stats") loadStats({silent:true});
-  else if(activeView === "flow") loadFlowHealth({silent:true});
+
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") loadMine({silent:true});
-  else if(activeView === "completions") loadCompletions({silent:true});
+  else if(activeView === "analysis") refreshAnalysisTab(true);
   else if(activeView === "requirements") loadReqDocs();
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
   else if(activeView === "settings"){
@@ -6472,6 +6477,7 @@ function resetReqForm(){
   reqFormTitle.textContent = "新增项目";
   btnSaveReq.textContent = "添加项目";
   btnCancelReqEdit.hidden = true;
+  if($("dlgProject")) UI.closeModal($("dlgProject"));
   renderReqList();
 }
 function renderReqList(){
@@ -6480,13 +6486,24 @@ function renderReqList(){
   if(!reqList.length){
     reqListEl.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
-      text:"用右侧表单新建第一个项目；把任务归入项目后，可在筛选栏按项目查看全部工作。"
+      text:"点右上角「新建项目」创建第一个；展开项目可以查看需求文档与任务进度。"
     });
     return;
   }
   reqListEl.innerHTML = reqList.map(function(r){
+    var open = !!reqExpanded[r.id];
+    var docs = (reqDocList || []).filter(function(d){ return d.reqId === r.id; });
+    var docHTML = docs.length ? docs.map(function(d){
+      return '<button class="req-expand-doc" type="button" data-reqdoc-open="' + esc(d.id) + '">' +
+        '<span class="rd-title">' + esc(d.title) + '</span>' +
+        '<span class="rd-meta">' + esc(reqDocStatusLabel(d.status)) +
+          (Number(d.taskCount) ? (" · " + Number(d.doneCount || 0) + "/" + Number(d.taskCount) + " 任务") : "") +
+        '</span></button>';
+    }).join("") : '<p class="foot-note" style="margin:4px 0">还没有需求文档。</p>';
     return '<div class="req-item' + (editingReqId === r.id ? " editing" : "") + '" data-req-id="' + esc(r.id) + '">' +
       '<div class="req-top">' +
+        '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
+          icon("chevronRight", 14) + '</button>' +
         '<span class="req-name">' + esc(r.name) + '</span>' +
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
@@ -6511,6 +6528,15 @@ function renderReqList(){
         '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
           icon("edit", 14) + '</button>' +
       '</div>' +
+      (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
+        '<div class="req-expand-head"><span>需求文档</span>' +
+          '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增需求</button></div>' +
+        docHTML +
+        '<div class="req-expand-acts">' +
+          '<button class="btn sm primary" type="button" data-req-board="' + esc(r.id) + '">在看板中查看</button>' +
+          '<button class="btn sm" type="button" data-req-docs="' + esc(r.id) + '">管理需求文档</button>' +
+        '</div>' +
+      '</div>' : '') +
     '</div>';
   }).join("");
 }
@@ -6518,6 +6544,8 @@ function enterProjectsView(){
   if(reqsLoaded) renderReqList();
   else reqListEl.innerHTML = UI.skeletonRows(3);
   loadReqs();
+  /* IA-2：项目行展开要显示需求文档与任务进度 */
+  loadReqDocs().then(function(){ renderReqList(); });
 }
 function saveReq(){
   var name = rName.value.trim();
@@ -6576,6 +6604,26 @@ function deleteReq(id){
     }).catch(function(ex){ toast("删除失败：" + (ex.message || "网络异常"), "bad"); });
   });
 }
+function openProjectDialog(id){
+  editingReqId = id || null;
+  rName.value = "";
+  rDesc.value = "";
+  formReqStatus = "active";
+  fReqName.classList.remove("invalid");
+  if(id){
+    var r = null;
+    for(var i = 0; i < reqList.length; i++) if(reqList[i].id === id) r = reqList[i];
+    if(r){ rName.value = r.name; rDesc.value = r.description || ""; formReqStatus = r.status || "active"; }
+  }
+  syncReqStatusSeg();
+  reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
+  btnSaveReq.textContent = id ? "保存修改" : "添加项目";
+  btnCancelReqEdit.hidden = !id;
+  UI.openModal($("dlgProject"), "input");
+  setTimeout(function(){ try{ rName.focus(); }catch(e){ /* noop */ } }, 40);
+}
+if($("btnReqNew")) $("btnReqNew").addEventListener("click", function(){ openProjectDialog(null); });
+if($("dlgProjectX")) $("dlgProjectX").addEventListener("click", function(){ resetReqForm(); });
 btnSaveReq.addEventListener("click", saveReq);
 btnCancelReqEdit.addEventListener("click", resetReqForm);
 rName.addEventListener("input", function(){ fReqName.classList.remove("invalid"); });
@@ -6606,11 +6654,34 @@ reqListEl.addEventListener("click", function(e){
       reqFormTitle.textContent = "编辑项目";
       btnSaveReq.textContent = "保存修改";
       btnCancelReqEdit.hidden = false;
-      renderReqList();
+      UI.openModal($("dlgProject"), "input");
       try{ rName.focus(); }catch(e2){ /* noop */ }
     }
     return;
   }
+  var ex = e.target.closest("[data-req-expand]");
+  if(ex){
+    var rid0 = ex.dataset.reqExpand;
+    reqExpanded[rid0] = !reqExpanded[rid0];
+    renderReqList();
+    return;
+  }
+  var docNew = e.target.closest("[data-doc-new]");
+  if(docNew){ openNewReqDocDialog(docNew.dataset.docNew); return; }
+  var docOpen = e.target.closest("[data-reqdoc-open]");
+  if(docOpen){ openReqDocAndJump(docOpen.dataset.reqdocOpen); return; }
+  var toBoard = e.target.closest("[data-req-board]");
+  if(toBoard){
+    var rid1 = toBoard.dataset.reqBoard;
+    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.due = null; state.focus = false; state.blocked = false;
+    state.reqs = [rid1];
+    showView("board");
+    reloadFilteredViews();
+    toast("已按项目筛选看板：" + reqNameById(rid1));
+    return;
+  }
+  var manage = e.target.closest("[data-req-docs]");
+  if(manage){ showView("requirements"); return; }
   var dl = e.target.closest("[data-del-req]");
   if(dl) deleteReq(dl.dataset.delReq);
 });
@@ -7564,12 +7635,13 @@ function toggleReqProj(key){
 
 /* ---------------- 新增需求弹窗 ---------------- */
 
-function openNewReqDocDialog(){
+function openNewReqDocDialog(reqId){
   var sel = $("newReqDocProject");
   if(!sel) return;
   sel.innerHTML = reqList.length
     ? reqList.map(function(r){ return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; }).join("")
     : '<option value="">（还没有项目，请先去「项目」建一个）</option>';
+  if(reqId) sel.value = reqId;
   $("newReqDocTitle").value = "";
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ $("newReqDocTitle").focus(); }, 40);
@@ -8884,6 +8956,54 @@ $("compPrev").addEventListener("click", function(){ shiftCompMonth(-1); });
 $("compNext").addEventListener("click", function(){ shiftCompMonth(1); });
 $("btnCompExport").addEventListener("click", exportCompCSV);
 
+/* ==================== 分析页（IA-1：趋势 / 完成记录 / 流程体检） ==================== */
+function initAnalysisTabs(){
+  var box = $("analysisTabs");
+  if(box && !box.__wired){
+    box.__wired = true;
+    box.addEventListener("click", function(e){
+      var b = e.target.closest("[data-analysis-tab]");
+      if(b) setAnalysisTab(b.dataset.analysisTab);
+    });
+  }
+  var period = $("analysisPeriod");
+  if(period && !period.__wired){
+    period.__wired = true;
+    period.addEventListener("change", function(){ applyAnalysisPeriod(period.value); });
+  }
+}
+function setAnalysisTab(tab, opts){
+  if(tab !== "completions" && tab !== "flow") tab = "stats";
+  analysisTab = tab;
+  document.querySelectorAll("#analysisTabs [data-analysis-tab]").forEach(function(b){
+    var on = b.dataset.analysisTab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll("#view-analysis [data-analysis-pane]").forEach(function(p){
+    p.hidden = p.dataset.analysisPane !== tab;
+  });
+  if(!opts || !opts.noLoad) refreshAnalysisTab(!!(opts && opts.silent));
+}
+function refreshAnalysisTab(silent){
+  if(analysisTab === "stats") loadStats({silent:!!silent});
+  else if(analysisTab === "completions") loadCompletions({silent:!!silent});
+  else loadFlowHealth({silent:!!silent});
+}
+function enterAnalysisView(){
+  initAnalysisTabs();
+  setAnalysisTab(analysisTab, {silent:false});
+}
+function applyAnalysisPeriod(v){
+  if(v === "week"){ state.statsWeeks = 4; state.flowDays = 7; }
+  else if(v === "month"){ state.statsWeeks = 4; state.flowDays = 30; }
+  else if(v === "days90"){ state.statsWeeks = 26; state.flowDays = 90; }
+  else { state.statsWeeks = 8; state.flowDays = 90; }
+  if($("statsWeeks")) $("statsWeeks").value = String(state.statsWeeks);
+  if($("flowDays")) $("flowDays").value = String(state.flowDays);
+  refreshAnalysisTab(false);
+}
+
 /* ==================== 报表（§6.8） ==================== */
 function enterStatsView(){ loadStats(); }
 function loadStats(opts){
@@ -8891,8 +9011,6 @@ function loadStats(opts){
   var weeks = Number(state.statsWeeks) || 8;
   if(!opts.silent){
     $("chartWeeks").innerHTML = '<div class="skel skel-chart"></div>';
-    $("statsCurrent").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
-      '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
     if(statsHoursEl) statsHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
     $("statsCat").innerHTML = UI.skeletonRows(3);
     $("statsOwner").innerHTML = UI.skeletonRows(3);
@@ -8900,7 +9018,7 @@ function loadStats(opts){
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(renderStats).catch(function(ex){
-    setPageError(ex, ["chartWeeks","statsCurrent","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
+    setPageError(ex, ["chartWeeks","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
   });
 }
 /* O-12 / N-5：工时卡支持「仅我 / 全空间」切换，并在卡片上明示口径 */
@@ -8982,10 +9100,13 @@ function renderStats(d){
   ];
   if(c.other > 0) cards.push({k:"其他列", v:c.other, cls:""});
   cards.push({k:"逾期", v:overN, cls:(overN > 0 ? "bad" : "")});
-  $("statsCurrent").innerHTML = cards.map(function(x){
-    return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
-      '<small>项</small></div></div>';
-  }).join("");
+  var currentBox = $("statsCurrent");
+  if(currentBox){
+    currentBox.innerHTML = cards.map(function(x){
+      return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
+        '<small>项</small></div></div>';
+    }).join("");
+  }
 
   var wm = c.workMinutes || 0;
   renderStatsHours(c);
@@ -10899,8 +11020,8 @@ $("newMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-new]");
   if(!b) return;
   UI.closeAllPops();
-  if(b.dataset.new === "task") openTaskDrawer("backlog");
-  else showView("projects");
+  if(b.dataset.new === "task"){ openTaskDrawer("backlog"); }
+  else { showView("projects"); setTimeout(function(){ openProjectDialog(null); }, 60); }
 });
 $("btnAlert").addEventListener("click", function(){
   if(UI.popOpen($("alertPanel"))){ UI.closeAllPops(); return; }
@@ -11225,7 +11346,7 @@ document.addEventListener("keydown", function(e){
   }
   if(gPending && Date.now() - gPending < 900){
     var gmap = {b:"board", l:"list", m:"mine", c:"calendar", g:"gantt", p:"projects",
-                r:"review", a:"stats", s:"settings"};
+                r:"review", a:"analysis", s:"settings"};
     var gt = gmap[String(e.key || "").toLowerCase()];
     gPending = 0;
     if(gt){ e.preventDefault(); showView(gt); return; }

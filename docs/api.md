@@ -1168,3 +1168,11 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 负责人维度固定为"我"，`owners` 参数被忽略。
 - SQL 改为显式 JOIN `workspace_member`，默认 `LIMIT 200`；返回结构不变（`items` / `total` / `spaces` / `matchedByNameOnly`）。
 - 前端行内完成 / 计时 / 改期使用显式 `workspace` 的写请求（`API.postWs` / `putWs`），不要求先切换空间。
+
+## 附录 · 2026-11-01 IA-2 / IA-1（增量）
+
+- `/api/projects` 与 `/api/reqs` 完全等价（GET / POST / PUT / DELETE，路径参数 `{id}`），语义、权限、返回结构一致；表名仍为 `requirement`。
+- 页面入口：
+  - 「项目」页合并需求文档的查看入口，侧栏不再单独提供「需求」。
+  - 「任务清单 / 报表 / 流程体检」合并为「分析」页的三个 tab；旧 hash `#/completions`、`#/stats`、`#/flow` 自动跳转到对应 tab。
+- 后端 `MetricsService` 统一逾期 / 工时 / 列计数的聚合口径；`/api/stats` 返回结构不变。

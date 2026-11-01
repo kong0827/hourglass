@@ -7,7 +7,6 @@ import com.devstudio.kanban.dto.TaskBucketRow;
 import com.devstudio.kanban.dto.WeekCountRow;
 import com.devstudio.kanban.dto.WorkSumRow;
 import com.devstudio.kanban.mapper.TaskMapper;
-import com.devstudio.kanban.mapper.TimeLogMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,11 +17,12 @@ import java.util.Map;
 public class StatsService {
 
     private final TaskMapper taskMapper;
-    private final TimeLogMapper timeLogMapper;
+    /** IA-1：列计数与工时统一走 MetricsService，避免报表/回头看板各算一套 */
+    private final MetricsService metrics;
 
-    public StatsService(TaskMapper taskMapper, TimeLogMapper timeLogMapper) {
+    public StatsService(TaskMapper taskMapper, MetricsService metrics) {
         this.taskMapper = taskMapper;
-        this.timeLogMapper = timeLogMapper;
+        this.metrics = metrics;
     }
 
     /** 近 N 周：每周新增/完成；窗口内完成按分类与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
@@ -63,7 +63,7 @@ public class StatsService {
             resp.getByOwner().add(new BoardResponse.NameCount(row.getName(), row.getCnt()));
         }
 
-        TaskBucketRow buckets = taskMapper.countBuckets(workspaceId, today);
+        TaskBucketRow buckets = metrics.buckets(workspaceId, today);
         StatsResponse.Current current = new StatsResponse.Current();
         current.setBacklog(buckets.getBacklog());
         current.setDoing(buckets.getDoing());
@@ -72,7 +72,7 @@ public class StatsService {
         current.setOverdue(buckets.getOverdue());
 
         /* 工时：累计 / 本周 × 全空间 / 我，一次聚合 */
-        WorkSumRow work = timeLogMapper.sumWork(workspaceId, userId, monday.atStartOfDay(), null);
+        WorkSumRow work = metrics.workMinutes(workspaceId, userId, monday.atStartOfDay());
         if (work != null) {
             current.setWorkMinutes(work.getTotalMine());
             current.setWorkMinutesWeek(work.getWeekMine());

@@ -44,6 +44,13 @@
     DELETE FROM task_completion_record WHERE workspace_id = #{workspaceId}
   </delete>
 
+  <select id="countByRange" resultType="int">
+    SELECT COUNT(*) FROM task_completion_record
+    WHERE workspace_id = #{workspaceId}
+      AND completed_at &gt;= #{from}
+      AND completed_at &lt; #{to}
+  </select>
+
   <select id="selectByRange" resultType="TaskCompletionRecord">
     SELECT id, workspace_id, task_id, title, description, req_id, req_name, req_doc_id, req_doc_title,
            owner, owner_user_id, category, priority, start_date, completed_at,

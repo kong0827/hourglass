@@ -33,20 +33,20 @@ public class RequirementController {
     }
 
     /** 项目列表（含任务数、完成数、平均进度） */
-    @GetMapping("/api/reqs")
+    @GetMapping({"/api/reqs", "/api/projects"})
     public ApiResult<List<ReqProgress>> list(@RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         return ApiResult.ok(requirementService.list(ws.getId()));
     }
 
-    @PostMapping("/api/reqs")
+    @PostMapping({"/api/reqs", "/api/projects"})
     public ApiResult<Requirement> create(@Valid @RequestBody ReqSaveRequest req,
                                          @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         return ApiResult.ok(requirementService.create(ws.getId(), req));
     }
 
-    @PutMapping("/api/reqs/{id}")
+    @PutMapping({"/api/reqs/{id}", "/api/projects/{id}"})
     public ApiResult<Requirement> update(@PathVariable String id, @Valid @RequestBody ReqSaveRequest req,
                                          @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
@@ -54,7 +54,7 @@ public class RequirementController {
     }
 
     /** 删除项目：其下任务保留（解除关联），其下需求文档一并删除 */
-    @DeleteMapping("/api/reqs/{id}")
+    @DeleteMapping({"/api/reqs/{id}", "/api/projects/{id}"})
     public ApiResult<RequirementDeleteResult> delete(@PathVariable String id,
                                                      @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
