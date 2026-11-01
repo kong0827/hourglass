@@ -8804,8 +8804,8 @@ function populateBranchSelect(keep){
       if(card){ e.preventDefault(); openBranchDrawer(card.dataset.branch); }
     });
   }
-  if($("branchFlow")){
-    $("branchFlow").addEventListener("click", function(e){
+  if($("branchGroups")){
+    $("branchGroups").addEventListener("click", function(e){
       var c = e.target.closest("[data-br-filter]");
       if(!c) return;
       branchFilter = (branchFilter === c.dataset.brFilter) ? "" : c.dataset.brFilter;

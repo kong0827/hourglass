@@ -785,3 +785,7 @@ spring.datasource.hikari.connection-timeout: 3000
   - `TaskController`、`GanttController` 改用解析器；新增 `TaskControllerResolveTest`（CSV 多选/分页绑定、成员 403、空间主放行），共 36 个测试通过。
 - BE-ARCH-1（部分）：抽出 `TaskAuditLogger`（操作日志 + 字段差异 + 项目名/循环/日期格式化），`TaskService` 从 1554 行降到 1440 行。`TaskQueryService` / `TaskCommandService` / `TaskWorkflowService` / `TaskTrashService` 的完整拆分**未做**：purge/循环/计时联动与 `TaskService` 的私有状态强耦合，本地没有真实 MySQL，拆分后无法做等价性验证（任务迁移/归档/恢复/循环派生都靠数据库约束），按风险优先原则暂缓。
 - CODE-5（部分）：新增 `tools/check-assets.js`，校验 SW `SHELL` 文件存在、页面引用的 js/css 均已预缓存、`CACHE_NAME` 带版本号。**app.js 的 ESM 拆分未做**：零构建下 `app.js` 是单个 IIFE，11100+ 行、149 个顶层 var 被跨视图重赋值；改为 ES Module 需要先大规模状态对象化（`export const S`）并逐视图迁移，属于多日改造，且本机无法跑完整后端做回归，本轮不冒险半途改造。
+
+**第三十六轮：复查修复**
+- 分支页：状态筛选点击从已删除的顶部格子迁到列头（`#branchGroups` 上的 `data-br-filter`），点击列头只看该状态、再点取消。
+- SW 升至 `devstudio-shell-v69`，预览稿重生成；`node tools/check-assets.js` 校验预缓存清单与页面引用一致。
