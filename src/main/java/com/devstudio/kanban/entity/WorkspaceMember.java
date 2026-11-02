@@ -9,7 +9,7 @@ public class WorkspaceMember {
 
     private String workspaceId;
     private String userId;
-    /** owner/member */
+    /** owner/member/exec（exec = 只读管理层） */
     private String role;
     private LocalDateTime createdAt;
 

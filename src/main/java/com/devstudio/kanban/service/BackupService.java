@@ -202,6 +202,8 @@ public class BackupService {
             b.setEstimateMinutes(t.getEstimateMinutes());
             b.setBlocked(Boolean.TRUE.equals(t.getBlocked()));
             b.setBlockedReason(t.getBlockedReason());
+            b.setBlockedAt(t.getBlockedAt() == null ? null : t.getBlockedAt().format(ISO_TS));
+            b.setBlockedAtSource(t.getBlockedAtSource());
             b.setOwnerUserId(t.getOwnerUserId());
             b.setRemindTarget(t.getRemindTarget());
             b.setCompletedAt(t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
@@ -235,6 +237,16 @@ public class BackupService {
             b.setName(r.getName());
             b.setDesc(r.getDescription());
             b.setStatus(r.getStatus());
+            b.setManagerUserId(r.getManagerUserId());
+            b.setStart(r.getStartDate() == null ? null : r.getStartDate().toString());
+            b.setDue(r.getDueDate() == null ? null : r.getDueDate().toString());
+            b.setPriority(r.getPriority());
+            b.setHealthOverride(r.getHealthOverride());
+            b.setHealthNote(r.getHealthNote());
+            b.setHealthUpdatedBy(r.getHealthUpdatedBy());
+            b.setHealthUpdatedAt(r.getHealthUpdatedAt() == null ? null : r.getHealthUpdatedAt().format(ISO_TS));
+            b.setHealthOverrideUntil(r.getHealthOverrideUntil() == null ? null : r.getHealthOverrideUntil().format(ISO_TS));
+            b.setCreatedBy(r.getCreatedBy());
             b.setCreatedAt(r.getCreatedAt() == null ? null : r.getCreatedAt().toLocalDate().toString());
             reqs.add(b);
         }
@@ -411,6 +423,25 @@ public class BackupService {
                 req.setName(name == null ? "未命名项目" : Texts.cut(name, 40));
                 req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 160));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
+                String managerUserId = Texts.trimToNull(r.getManagerUserId());
+                req.setManagerUserId(managerUserId != null && st.memberIds.contains(managerUserId)
+                        ? managerUserId : null);
+                req.setStartDate(parseDate(r.getStart()));
+                req.setDueDate(parseDate(r.getDue()));
+                req.setPriority(oneOf(r.getPriority(), PRIORITIES, "P2"));
+                req.setHealthOverride(oneOf(r.getHealthOverride(), new String[]{"red", "amber", "green"}, null));
+                req.setHealthNote(Texts.cut(Texts.trimToNull(r.getHealthNote()), 200));
+                req.setHealthUpdatedBy(Texts.trimToNull(r.getHealthUpdatedBy()));
+                req.setHealthUpdatedAt(parseTs(r.getHealthUpdatedAt()));
+                req.setHealthOverrideUntil(parseTs(r.getHealthOverrideUntil()));
+                /* done 项目不参与风险；恢复备份时也清掉人工覆盖，保持同一不变量 */
+                if ("done".equals(req.getStatus())) {
+                    req.setHealthOverride(null);
+                    req.setHealthNote(null);
+                    req.setHealthOverrideUntil(null);
+                }
+                String createdBy = Texts.trimToNull(r.getCreatedBy());
+                req.setCreatedBy(createdBy != null && st.memberIds.contains(createdBy) ? createdBy : null);
                 reqMapper.insert(req);
                 st.reqCount++;
             }
@@ -703,6 +734,9 @@ public class BackupService {
             t.setBlocked(Boolean.TRUE.equals(b.getBlocked()));
             t.setBlockedReason(Boolean.TRUE.equals(b.getBlocked())
                     ? Texts.cut(Texts.trimToNull(b.getBlockedReason()), 120) : null);
+            t.setBlockedAt(Boolean.TRUE.equals(b.getBlocked()) ? parseTs(b.getBlockedAt()) : null);
+            t.setBlockedAtSource(Boolean.TRUE.equals(b.getBlocked())
+                    ? oneOf(b.getBlockedAtSource(), new String[]{"real", "estimated"}, null) : null);
             /* 负责人账号只在目标空间成员内恢复；否则保留显示名文本，避免出现“幽灵账号” */
             String ownerUserId = Texts.trimToNull(b.getOwnerUserId());
             t.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)

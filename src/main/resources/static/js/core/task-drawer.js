@@ -16,6 +16,11 @@ function ensureReqDoc(v){ loadView("requirements").then(function(m){ m.ensureReq
 function ensureBranch(v){ loadView("branches").then(function(m){ m.ensureBranchOptions(v); }); }
 function openDrawer(){ taskDrawer.classList.add("on"); }
 function closeDrawer(){ taskDrawer.classList.remove("on"); rt.formDirty = false; }
+function setTaskSegmentsDisabled(on){
+  [segPri, segCat, segRecur, segDue, segStart, segProg].forEach(function(seg){
+    if(seg) seg.classList.toggle("disabled", on);
+  });
+}
 function buildFormControls(){
   segPri.innerHTML = PRIORITIES.map(function(p){
     return '<button type="button" class="' + p.toLowerCase() + '" data-fpri="' + p + '" aria-pressed="false">' + p + '</button>';
@@ -160,6 +165,11 @@ function renderActualEstimate(actualMinutes, estimateMinutes){
   iActual.innerHTML = html;
 }
 function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
+  if(!task && rt.currentWs && rt.currentWs.myRole === "exec"){
+    toast("管理层为只读模式，不能新建任务", "warn");
+    return;
+  }
+  setTaskSegmentsDisabled(false);
   rt.editingId = task ? task.id : null;
   rt.formDirty = false;
   if(task) taskCacheExtra[task.id] = task;
@@ -170,6 +180,9 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
   if(task){
     var isDone = task.boardColumn === "done";
     startedDone = isDone;
+    [iCol, iStart, iDue, iEstimate, iOwner, iProg, iNote, iRemind, iRemindTarget, iBlocked, iBlockedReason, iReq, $("iReqDoc"), $("iBranch"), $("iMilestone"), iTitle, iDesc, iTags, iSubNew, iComment].forEach(function(el){
+      if(el) el.disabled = false;
+    });
     taskDrawerTitle.textContent = task.title || "任务详情";
     btnDeleteTask.hidden = false;
     iTitle.value = task.title || "";
@@ -203,6 +216,22 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
     rt.tagsCache = (task.tags || []).slice(0, 8);
     renderTagChips();
     populateOwnerSelect(task.owner || "", task.ownerUserId || "");
+    if(isDone){
+      showDrawerNotice("已完成任务不可重开，也不能修改列/进度/负责人/日期/估时等字段；如需继续请新建续做任务。");
+      [iCol, iStart, iDue, iEstimate, iOwner, iProg, iNote, iRemind, iRemindTarget, iBlocked, iBlockedReason, iReq, $("iReqDoc"), $("iBranch"), $("iMilestone")].forEach(function(el){
+        if(el) el.disabled = true;
+      });
+      setTaskSegmentsDisabled(true);
+      if(btnTimer){ btnTimer.disabled = true; btnTimer.title = "已完成任务不能计时"; }
+    }else if(btnTimer){
+      btnTimer.title = "";
+    }
+    if(rt.currentWs && rt.currentWs.myRole === "exec"){
+      if(!isDone) showDrawerNotice("管理层为只读模式，只能查看任务详情；如需修改请联系空间成员。");
+      [iTitle, iDesc, iTags, iSubNew, iComment].forEach(function(el){
+        if(el) el.disabled = true;
+      });
+    }
     fWork.hidden = false; fAttach.hidden = false; fSubtasks.hidden = false; fTimeline.hidden = false;
     if(fComments) fComments.hidden = false;
     loadWorkStatus(task.id);
@@ -252,6 +281,7 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
   }
   syncProgVal();
   syncProgByCol();
+  if(rt.currentWs && rt.currentWs.myRole === "exec") setTaskSegmentsDisabled(true);
   fTitle.classList.remove("invalid");
   syncFormSegs();
   openDrawer();
@@ -533,6 +563,10 @@ $("taskMoreMenu").addEventListener("click", function(e){
 });
 taskForm.addEventListener("submit", function(e){
   e.preventDefault();
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){
+    toast("管理层为只读模式，不能修改任务", "warn");
+    return;
+  }
   var title = iTitle.value.trim();
   if(!title){
     fTitle.classList.add("invalid");
@@ -548,41 +582,49 @@ taskForm.addEventListener("submit", function(e){
     return;
   }
   var owner = ownerPick();
-  var stillDone = (iCol.value || "backlog") === "done";
   var current = rt.editingId ? taskCacheExtra[rt.editingId] : null;
   var docSel = $("iReqDoc"), branchSel = $("iBranch");
-  var payload = {
-    title: title,
-    description: iDesc.value.trim(),
-    priority: rt.formPri,
-    category: rt.formCat || null,
-    owner: owner.name,
-    ownerUserId: owner.userId,
-    boardColumn: iCol.value || "backlog",
-    startDate: iStart.value || null,
-    dueDate: iDue.value || null,
-    isMilestone: !!(($("iMilestone") || {}).checked),
-    reqId: iReq.value || null,
-    /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
-    reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
-    branchId: (branchSel && branchSel.options.length > 1) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
-    /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
-    progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
-    /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
-    estimateMinutes: (function(){
-      var h = iEstimate ? Number(iEstimate.value) : 0;
-      if(!h || h <= 0) return null;
-      return Math.min(10080, Math.round(h * 60));
-    })(),
-    note: iNote.value.trim(),
-    recurType: rt.formRecur,
-    remindAt: iRemind.value ? iRemind.value : null,
-    remindTarget: iRemindTarget ? iRemindTarget.value : "owner",
-    blocked: !!(iBlocked && iBlocked.checked),
-    blockedReason: (iBlocked && iBlocked.checked && iBlockedReason)
-      ? (iBlockedReason.value.trim() || null) : null,
-    tags: rt.tagsCache.slice(0, 8)
-  };
+  var payload;
+  if (startedDone) {
+    /* 已完成任务只提交允许修改的字段；锁定字段按界面默认值回传会被服务端 409 */
+    payload = {
+      title: title,
+      description: iDesc.value.trim(),
+      tags: rt.tagsCache.slice(0, 8)
+    };
+  } else {
+    payload = {
+      title: title,
+      description: iDesc.value.trim(),
+      priority: rt.formPri,
+      category: rt.formCat || null,
+      owner: owner.name,
+      ownerUserId: owner.userId,
+      boardColumn: iCol.value || "backlog",
+      startDate: iStart.value || null,
+      dueDate: iDue.value || null,
+      isMilestone: !!(($("iMilestone") || {}).checked),
+      reqId: iReq.value || null,
+      /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
+      reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
+      branchId: (branchSel && branchSel.options.length > 1) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
+      progress: Number(iProg.value) || 0,
+      /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
+      estimateMinutes: (function(){
+        var h = iEstimate ? Number(iEstimate.value) : 0;
+        if(!h || h <= 0) return null;
+        return Math.min(10080, Math.round(h * 60));
+      })(),
+      note: iNote.value.trim(),
+      recurType: rt.formRecur,
+      remindAt: iRemind.value ? iRemind.value : null,
+      remindTarget: iRemindTarget ? iRemindTarget.value : "owner",
+      blocked: !!(iBlocked && iBlocked.checked),
+      blockedReason: (iBlocked && iBlocked.checked && iBlockedReason)
+        ? (iBlockedReason.value.trim() || null) : null,
+      tags: rt.tagsCache.slice(0, 8)
+    };
+  }
   var seq = rt.taskFormSeq;
   var wasEdit = !!rt.editingId;
   var editId = rt.editingId;
@@ -644,6 +686,7 @@ taskDrawer.addEventListener("keydown", function(e){
   else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
 });
 function deleteTask(id){
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能删除任务", "warn"); return; }
   var t = taskById(id);
   if(!t) return;
   UI.showConfirm({
@@ -845,6 +888,7 @@ function clearWorkTick(){ if(workTick){ clearInterval(workTick); workTick = null
 function renderWork(d){
   if(!workVal || !btnTimer) return;
   var running = !!d.running;
+  btnTimer.disabled = startedDone;
   btnTimer.innerHTML = (running ? icon("pause", 14) + " 停止计时" : icon("play", 14) + " 开始计时");
   var mine = (d.myTotalMinutes && d.myTotalMinutes !== d.totalMinutes)
     ? ("（我 " + fmtMinutesShort(d.myTotalMinutes) + "）") : "";
@@ -856,7 +900,7 @@ function fetchTimer(taskId, seq){
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer").then(function(d){
     if(seq !== workSeq || rt.editingId !== taskId) return;
     renderWork(d);
-    if(btnTimer) btnTimer.disabled = false;
+    if(btnTimer) btnTimer.disabled = startedDone;
   }).catch(function(){
     if(seq !== workSeq || rt.editingId !== taskId) return;
     if(workVal) workVal.textContent = "—";
@@ -878,7 +922,7 @@ function loadWorkStatus(taskId){
   }, 30000);
 }
 btnTimer.addEventListener("click", function(){
-  if(!rt.editingId || btnTimer.disabled) return;
+  if(!rt.editingId || btnTimer.disabled || startedDone) return;
   var taskId = rt.editingId;
   var running = btnTimer.textContent.indexOf("停止") !== -1;
   workSeq++;
@@ -891,14 +935,14 @@ btnTimer.addEventListener("click", function(){
   p.then(function(d){
     if(opSeq !== workSeq || rt.editingId !== taskId) return;
     workBusy = false;
-    btnTimer.disabled = false;
+    btnTimer.disabled = startedDone;
     renderWork(d);
     toast(running ? ("已停止计时，累计 " + fmtMinutes(d.totalMinutes)) : "开始计时", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
     if(opSeq !== workSeq || rt.editingId !== taskId) return;
     workBusy = false;
-    btnTimer.disabled = false;
+    btnTimer.disabled = startedDone;
     toast(ex.message || "操作失败", "bad");
   });
 });

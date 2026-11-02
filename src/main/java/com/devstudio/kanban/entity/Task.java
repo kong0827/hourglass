@@ -58,6 +58,10 @@ public class Task {
     private String blockedReason;
     /** 等待的任务ID（可选依赖） */
     private String blockedByTaskId;
+    /** 首次进入阻塞状态的时间；解除阻塞时置空（sql/22_management.sql） */
+    private LocalDateTime blockedAt;
+    /** real/estimated；历史估算值标记 */
+    private String blockedAtSource;
 
     /** 子任务统计（非表字段，查询时合并填充） */
     private Integer subtaskTotal;

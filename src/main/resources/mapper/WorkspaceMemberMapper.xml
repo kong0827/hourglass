@@ -25,6 +25,11 @@
     INSERT INTO workspace_member (workspace_id, user_id, role) VALUES (#{workspaceId}, #{userId}, #{role})
   </insert>
 
+  <update id="updateRole">
+    UPDATE workspace_member SET role = #{role}
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </update>
+
   <delete id="delete">
     DELETE FROM workspace_member WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
   </delete>

@@ -16,14 +16,23 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     segReqStatus = $("segReqStatus"), btnSaveReq = $("btnSaveReq"),
     btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle");
 function syncReqStatusSeg(){
+  var editable = rt.formStatusEditable !== false;
   segReqStatus.querySelectorAll("[data-rst]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.rst === rt.formReqStatus);
+    b.disabled = !editable;
+    b.title = editable ? "" : "仅空间主或项目负责人可修改项目状态";
   });
+}
+function canEditReqStatus(r){
+  if(!r) return true;
+  if(rt.currentWs && rt.currentWs.myRole === "owner") return true;
+  return !!(r.managerUserId && rt.currentUser && r.managerUserId === rt.currentUser.id);
 }
 function resetReqForm(){
   rt.editingReqId = null;
   rName.value = ""; rDesc.value = "";
   rt.formReqStatus = "active";
+  rt.formStatusEditable = true;
   fReqName.classList.remove("invalid");
   syncReqStatusSeg();
   reqFormTitle.textContent = "新增项目";
@@ -44,6 +53,8 @@ function renderReqList(){
   }
   reqListEl.innerHTML = rt.reqList.map(function(r){
     var open = !!reqExpanded[r.id];
+    var canMeta = !!(rt.currentWs && (rt.currentWs.myRole === "owner"
+      || (r.managerUserId && rt.currentUser && r.managerUserId === rt.currentUser.id)));
     var docs = (reqDocList || []).filter(function(d){ return d.reqId === r.id; });
     var docHTML = docs.length ? docs.map(function(d){
       return '<button class="req-expand-doc" type="button" data-reqdoc-open="' + esc(d.id) + '">' +
@@ -60,6 +71,7 @@ function renderReqList(){
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
         '<span class="req-acts">' +
+          (canMeta ? '<button class="icon-btn sm" type="button" data-req-meta="' + esc(r.id) + '" title="项目资料（负责人/起止/优先级）" aria-label="项目资料">' + icon("settings", 14) + '</button>' : '') +
           '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>' +
           (rt.currentWs && rt.currentWs.myRole === "owner"
             ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>'
@@ -156,16 +168,81 @@ function deleteReq(id){
     }).catch(function(ex){ toast("删除失败：" + (ex.message || "网络异常"), "bad"); });
   });
 }
+function findReq(id){
+  for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) return rt.reqList[i];
+  return null;
+}
+function openReqMeta(id, tried){
+  var r = findReq(id);
+  if(!r) return;
+  var owner = rt.currentWs && rt.currentWs.myRole === "owner";
+  var members = (rt.wsMembersCache || []).filter(function(m){ return m.role === "owner" || m.role === "member"; });
+  if(!members.length && !tried && rt.currentWs){
+    API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members").then(function(list){
+      rt.wsMembersCache = list || [];
+      openReqMeta(id, true);
+    }).catch(function(ex){ toast(ex.message || "加载成员失败", "bad"); });
+    return;
+  }
+  var managerOptions = '<option value="">未指定</option>' + members.map(function(m){
+    return '<option value="' + esc(m.userId) + '"' + (m.userId === r.managerUserId ? " selected" : "") + '>' +
+      esc(m.displayName || m.username) + '</option>';
+  }).join("");
+  if (r.managerUserId && !members.some(function(m){ return m.userId === r.managerUserId; })) {
+    managerOptions += '<option value="' + esc(r.managerUserId) + '" selected>' +
+      esc(r.managerDisplayName || r.manager || "非成员") + '</option>';
+  }
+  var priOptions = ["P0","P1","P2","P3"].map(function(p){
+    return '<option value="' + p + '"' + ((r.priority || "P2") === p ? " selected" : "") + '>' + p + '</option>';
+  }).join("");
+  var overlay = document.createElement("div");
+  overlay.className = "mgmt-modal";
+  overlay.innerHTML = '<div class="mgmt-dialog"><div class="mgmt-dialog-head"><div><h3>项目资料</h3>' +
+    '<div class="mgmt-sub">' + esc(r.name) + (owner ? '' : ' · 你是项目负责人') + '</div></div>' +
+    '<button class="icon-btn sm" type="button" data-rm-close aria-label="关闭">×</button></div>' +
+    '<div class="mgmt-form">' +
+      '<label>项目负责人<select id="rmManager"' + (owner ? '' : ' disabled') + '>' + managerOptions + '</select></label>' +
+      '<label>优先级<select id="rmPriority">' + priOptions + '</select></label>' +
+      '<label>开始日期<input id="rmStart" type="date" value="' + esc(r.startDate || "") + '"></label>' +
+      '<label>截止日期<input id="rmDue" type="date" value="' + esc(r.dueDate || "") + '"></label>' +
+    '</div>' +
+    '<div class="mgmt-dialog-foot"><button class="btn sm" type="button" data-rm-close>取消</button>' +
+    '<button class="btn sm primary" type="button" id="rmSave">保存</button></div></div>';
+  document.body.appendChild(overlay);
+  function close(){ overlay.remove(); }
+  overlay.addEventListener("click", function(e){
+    if(e.target === overlay || e.target.closest("[data-rm-close]")) close();
+  });
+  overlay.querySelector("#rmSave").addEventListener("click", function(){
+    var body = {
+      managerUserId: owner ? overlay.querySelector("#rmManager").value : null,
+      startDate: overlay.querySelector("#rmStart").value || null,
+      dueDate: overlay.querySelector("#rmDue").value || null,
+      priority: overlay.querySelector("#rmPriority").value
+    };
+    API.put("/api/management/projects/" + encodeURIComponent(id) + "/meta", body).then(function(){
+      toast("项目资料已保存", "fs");
+      close();
+      loadReqs().then(function(){ renderReqList(); loadBoard({silent:true}); });
+    }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  });
+}
+
 function openProjectDialog(id){
   rt.editingReqId = id || null;
   rName.value = "";
   rDesc.value = "";
   rt.formReqStatus = "active";
+  rt.formStatusEditable = true;
   fReqName.classList.remove("invalid");
   if(id){
-    var r = null;
-    for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) r = rt.reqList[i];
-    if(r){ rName.value = r.name; rDesc.value = r.description || ""; rt.formReqStatus = r.status || "active"; }
+    var r = findReq(id);
+    if(r){
+      rName.value = r.name;
+      rDesc.value = r.description || "";
+      rt.formReqStatus = r.status || "active";
+      rt.formStatusEditable = canEditReqStatus(r);
+    }
   }
   syncReqStatusSeg();
   reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
@@ -192,15 +269,17 @@ reqListEl.addEventListener("click", function(e){
     iReq.value = rid;
     return;
   }
+  var meta = e.target.closest("[data-req-meta]");
+  if(meta){ openReqMeta(meta.dataset.reqMeta); return; }
   var ed = e.target.closest("[data-edit-req]");
   if(ed){
-    var r = null;
-    for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === ed.dataset.editReq) r = rt.reqList[i];
+    var r = findReq(ed.dataset.editReq);
     if(r){
       rt.editingReqId = r.id;
       rName.value = r.name;
       rDesc.value = r.description || "";
       rt.formReqStatus = r.status || "active";
+      rt.formStatusEditable = canEditReqStatus(r);
       fReqName.classList.remove("invalid");
       syncReqStatusSeg();
       reqFormTitle.textContent = "编辑项目";

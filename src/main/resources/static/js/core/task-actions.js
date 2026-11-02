@@ -5,7 +5,7 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, taskById, taskCacheExtra } from "./state.js";
+import { rt, state, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
 import { UI, copyToClipboard, esc, toast } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
@@ -56,6 +56,7 @@ function handleDeepLink(){
   openTaskById(id);
 }
 function openDuePopover(anchor, taskId){
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能改期", "warn"); return; }
   var t = taskById(taskId);
   if(!t) return;
   var el = document.createElement("div");
@@ -91,8 +92,10 @@ function openDuePopover(anchor, taskId){
   }, 30);
 }
 function setTaskDue(taskId, dueDate){
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能改期", "warn"); return; }
   var t = taskById(taskId);
   if(!t) return;
+  if(t.boardColumn === "done"){ toast("已完成任务不可改期，请新建续做任务", "warn"); return; }
   var before = t.dueDate || null;
   t.dueDate = dueDate;                                  // 乐观更新
   if(state.board && activeView === "board") render({animate:false});
@@ -143,6 +146,7 @@ function updateElapsedTexts(){
   });
 }
 function toggleTaskTimer(taskId){
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能操作计时", "warn"); return; }
   var prev = state.runningTimer;
   var on = !!(prev && prev.taskId === taskId);
   var t = taskById(taskId);
@@ -194,21 +198,16 @@ setInterval(function(){
   });
 }, 60000);
 function toggleTaskDone(taskId){
+  if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能修改任务状态", "warn"); return; }
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
-  /* 取消完成 = 回到「完成前所在列」，由后端按最后一次进入已完成列的移动日志还原；
-     不是固定回「进行中」。 */
   if(isDone){
-    API.post("/api/tasks/" + encodeURIComponent(taskId) + "/reopen", {}).then(function(res){
-      var backCol = res && res.to ? colName(res.to) : "进行中";
-      toast("已取消完成，回到「" + backCol + "」", "warn");
-      loadBoard({animate:false, movedId: taskId});
-      loadReqs();
-      refreshListIfOpen();
-      refreshCalendarIfOpen();
-      refreshGanttIfOpen();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    UI.showConfirm({
+      title: "已完成任务不可重开",
+      msg: "需要继续做时请新建一个续做任务，旧任务和完成记录会保留。是否现在新建？",
+      okText: "新建续做任务"
+    }).then(function(ok){ if(ok) createContinuationTask(t); });
     return;
   }
   API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", {column:"done"}).then(function(res){
@@ -226,21 +225,54 @@ function toggleTaskDone(taskId){
     refreshGanttIfOpen();
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
 }
+function createContinuationTask(t){
+  if(!t) return;
+  var desc = "续做自「" + t.title + "」" +
+    (t.completedAt ? ("（完成于 " + t.completedAt + "）") : "") +
+    (t.description ? ("\n\n" + t.description) : "");
+  if(desc.length > 200) desc = desc.substring(0, 200);
+  var body = {
+    title: t.title,
+    description: desc,
+    priority: t.priority || "P2",
+    owner: t.owner || null,
+    ownerUserId: t.ownerUserId || null,
+    category: t.category || null,
+    boardColumn: "backlog",
+    reqId: t.reqId || null,
+    reqDocId: t.reqDocId || null,
+    progress: 0,
+    isMilestone: false,
+    blocked: false,
+    tags: t.tags || []
+  };
+  API.post("/api/tasks", body).then(function(nt){
+    toast("已创建续做任务「" + nt.title + "」，旧任务完成记录保留", "fs");
+    loadBoard({animate:false});
+    loadReqs();
+    refreshListIfOpen();
+    refreshCalendarIfOpen();
+    refreshGanttIfOpen();
+    if(nt && nt.id) openTaskById(nt.id);
+  }).catch(function(ex){ toast(ex.message || "新建续做任务失败", "bad"); });
+}
+
 function openCardMenu(anchor, taskId){
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
+  var exec = !!(rt.currentWs && rt.currentWs.myRole === "exec");
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   var html =
     '<button class="menu-item" type="button" data-cm="open">' + icon("edit", 14) + '打开详情</button>' +
-    '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' +
-    '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "undo" : "check", 14) +
-      (isDone ? "取消完成" : "标记完成") + '<span class="k">X</span></button>' +
-    '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
-      (running ? "停止计时" : "开始计时") + '</button>' +
+    (!isDone && !exec ? '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' : '') +
+    (!exec ? '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "copy" : "check", 14) +
+      (isDone ? "新建续做任务" : "标记完成") + (isDone ? '' : '<span class="k">X</span>') + '</button>' : '') +
+    (!isDone && !exec ? '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
+      (running ? "停止计时" : "开始计时") + '</button>' : '') +
     '<button class="menu-item" type="button" data-cm="copy">' + icon("copy", 14) + '复制标题</button>' +
     '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制任务链接</button>';
-  var others = COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
+  var others = (isDone || exec) ? [] : COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
     others.forEach(function(c){
@@ -249,8 +281,10 @@ function openCardMenu(anchor, taskId){
         esc(c.name) + '</button>';
     });
   }
-  html += '<div class="menu-sep"></div>' +
-    '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
+  if(!exec){
+    html += '<div class="menu-sep"></div>' +
+      '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = html;

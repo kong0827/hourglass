@@ -75,6 +75,9 @@ public interface TaskMapper {
 
     List<Task> selectDeleted(@Param("workspaceId") String workspaceId);
 
+    /** 角色变更前检查：该用户是否仍是未完成任务负责人（已完成任务不阻塞转 exec） */
+    int countByOwnerUserId(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
+
     Task selectById(String id);
 
     int insert(Task task);

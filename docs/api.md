@@ -1214,3 +1214,62 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 低频视图（甘特 / 项目 / 需求 / 周回顾 / 分析 / 设置 / 个人设置）首次进入时才加载；首屏只加载看板、列表、日历、我的任务、分支与抽屉。
 - 接口路径、参数、返回结构、ETag 与 SSE 行为均未改动；`share.html` 仍使用独立的 `share.js`。
 - `sw.js` 缓存名升至 `devstudio-shell-v73`，预缓存清单覆盖全部模块文件；`tools/check-assets.js` 会递归校验 import 图。
+
+## 附录 · 2026-11-02 MGT-1：管理层驾驶舱（v0.2）
+
+### 角色与只读
+
+- `workspace_member.role` 新增 `exec`：空间内只读管理层；`owner/exec` 可读管理驾驶舱，`owner` 才可写。
+- `exec` 的非白名单 POST/PUT/DELETE 由服务端返回 HTTP 403；GET 不受影响。
+- 白名单：登录/退出/改密/改资料/改计时、切换空间、退出空间、通知已读、创建空间、接受邀请、平台管理接口。
+- 管理读接口：`GET /api/management/**` 需要共享空间 + owner/exec；个人空间和普通成员返回 403。
+- `GET /api/export` 保持 owner-only；`GET /api/export/csv` 收紧为 owner-only；exec 使用 `GET /api/management/export`。
+
+### 角色变更
+
+- `PUT /api/workspaces/{id}/members/{userId}/role`，仅空间主；只接受 `member`/`exec`。
+- 项目负责人或未完成任务负责人改为 `exec` 前必须先转交；空间主角色不参与变更。
+- exec 不能被设置为项目负责人/任务负责人。
+
+### 项目字段
+
+`requirement` 新增（`sql/22_management.sql`）：
+
+- `manager_user_id`、`start_date`、`due_date`、`priority`
+- `health_override`、`health_note`、`health_updated_by`、`health_updated_at`、`health_override_until`
+- `created_by`（仅新项目；存量无法回填）
+
+`task` 新增：
+
+- `blocked_at`、`blocked_at_source`（real/estimated）
+
+### 管理接口
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/management/overview` | owner/exec | KPI、风险分布、12 周趋势、Top 风险、负载摘要 |
+| GET | `/api/management/projects` | owner/exec | 项目组合分页；支持 riskLevel/status/manager/statusIssue/keyword/dueFrom/dueTo/offset/limit/sort |
+| GET | `/api/management/projects/{id}` | owner/exec | 项目详情 + 任务/风险/工时/趋势 |
+| GET | `/api/management/risks` | owner/exec | 风险清单，limit 默认 100 |
+| GET | `/api/management/workload` | owner/exec | 按人 × 周负载；from/to 最大 26 周 |
+| GET | `/api/management/export` | owner/exec | 管理字段 CSV（UTF-8 BOM、公式注入防护） |
+| PUT | `/api/management/projects/{id}/meta` | owner/项目负责人 | 负责人/起止/优先级；项目负责人仅能改自己项目的日期与优先级 |
+| PUT | `/api/management/projects/{id}/health` | owner | 人工覆盖/恢复风险；原因 ≥5 字、默认 30 天 |
+| POST | `/api/management/projects/bulk-meta` | owner | 批量补项目负责人/日期/优先级 |
+| POST | `/api/management/tasks/bulk-meta` | owner | 批量绑定任务负责人/补截止日期；done 任务拒绝 |
+
+### 任务完成锁定（MGT-019）
+
+- 任务进入 `done` 后不可重开/移出：`POST /api/tasks/{id}/reopen`、`PUT /api/tasks/{id}` 改列、`POST /api/tasks/{id}/move`、`POST /api/tasks/bulk-move` 返回 HTTP 409。
+- done 任务只允许修改标题/描述/标签；列、进度、估时、负责人、优先级、项目/需求关联、完成时间锁定。
+- 需要继续做时新建任务；完成快照不因重开删除，彻底删除任务后仍保留。
+- `TaskSaveRequest` 的 `priority/boardColumn/progress` 改为无默认值，由服务层补默认；done 更新按旧任务合并，避免隐式改字段。
+
+### 跨项目总览补充（2026-11-02 Phase 1/2）
+
+- `GET /api/management/portfolio`：当前空间全部项目卡片数据，不分页。
+- `GET /api/management/weekly-report`：周报 CSV，包含 KPI、异常项目、Top 逾期项目；UTF-8 BOM、公式注入防护、owner/exec 权限。
+- 项目行新增：`statusLight`（red/amber/green/unknown）、`healthOverride`、`healthNote`、`backlogCount`、`doingCount`、`otherCount`、`lastCompletedDate`、`daysSinceCompletion`、`overloadedMembers`、`participants`。
+- 总览 summary 新增：`overdueTasks`、`completedPrevWeek`、`workMinutesPrevWeek`、`members`、`topOverdueProject`。
+- `statusLight` 口径：人工覆盖生效时优先跟随覆盖等级；否则逾期占比 >10% 且连续 ≥7 天无完成 = red，有逾期任务或项目级超载 = amber，已暂停或没有有效任务 = unknown，其余 green。项目级超载按“项目成员在本空间本周未完成任务的预估负载”判断（跨项目合并），只统计绑定账号的成员。详细风险仍看 `riskLevel`。
+- 项目卡进度使用 `doneCount / taskCount`（自动，不读手填 progress）；详情里的完成率仍保留估时加权口径。

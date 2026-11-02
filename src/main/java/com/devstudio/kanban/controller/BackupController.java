@@ -41,7 +41,9 @@ public class BackupController {
     /** 导出当前空间 CSV（Excel 可直接打开） */
     @GetMapping("/api/export/csv")
     public ResponseEntity<byte[]> exportCsv(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireOwner(userId, ws.getId());
         byte[] bytes = backupService.exportCsv(ws.getId());
         String filename = "workbench-tasks-" + LocalDate.now() + ".csv";
         return ResponseEntity.ok()

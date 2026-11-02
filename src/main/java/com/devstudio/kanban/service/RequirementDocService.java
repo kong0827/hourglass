@@ -88,7 +88,7 @@ public class RequirementDocService {
     public RequirementDoc get(String workspaceId, String id) {
         RequirementDoc d = docMapper.selectById(id);
         if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
-            throw AppException.notFound("需求不存在：" + id);
+            throw AppException.notFound("需求不存在或已被删除");
         }
         return d;
     }
@@ -265,7 +265,7 @@ public class RequirementDocService {
         }
         Requirement r = reqMapper.selectById(rid);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
-            throw AppException.badRequest("所属项目不存在：" + rid);
+            throw AppException.badRequest("所属项目不存在或已被删除");
         }
         return rid;
     }

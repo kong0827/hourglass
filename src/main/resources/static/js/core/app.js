@@ -46,13 +46,27 @@ function loadWorkspaces(meUser){
     if(activeView === "gantt"){
       loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });
     }
+    if(activeView === "management"){
+      loadView("management").then(function(m){ m.enterManagementView(); });
+    }
     if(activeView === "settings" && !rt.settingsReady) loadView("settings").then(function(m){ m.enterSettingsView(); });
     return target;
   }).catch(function(){ return null; });
 }
 function applyWsRoleGating(){
   var owner = !rt.currentWs || rt.currentWs.myRole === "owner";
-  [["btnExport","导出任务备份"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
+  var exec = !!(rt.currentWs && rt.currentWs.myRole === "exec");
+  document.body.classList.toggle("role-exec", exec);
+  if($("btnNew")) $("btnNew").hidden = exec;
+  if($("btnReqNew")) $("btnReqNew").hidden = exec;
+  var mgmtNav = $("navManagement");
+  if(mgmtNav){
+    var canMgmt = !!(rt.currentWs && rt.currentWs.type === "shared"
+      && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "exec"));
+    mgmtNav.hidden = !canMgmt;
+    if(!canMgmt && activeView === "management") showView("board");
+  }
+  [["btnExport","导出任务备份"],["btnExportCsv","导出 CSV"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
     var b = $(pair[0]);
     if(!b) return;
     if(b.dataset.ownerTitle === undefined) b.dataset.ownerTitle = b.title || "";

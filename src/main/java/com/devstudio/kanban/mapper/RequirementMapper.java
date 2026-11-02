@@ -21,6 +21,15 @@ public interface RequirementMapper {
 
     int update(Requirement requirement);
 
+    /** 只更新管理元数据：负责人/起止/优先级 */
+    int updateMeta(Requirement requirement);
+
+    /** 只更新健康覆盖字段 */
+    int updateHealth(Requirement requirement);
+
+    /** 角色变更/成员移除前检查：该用户是否仍是项目负责人 */
+    int countByManager(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
+
     int deleteById(String id);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

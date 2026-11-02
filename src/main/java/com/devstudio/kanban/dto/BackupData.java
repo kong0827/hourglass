@@ -73,6 +73,8 @@ public class BackupData {
         private Integer estimateMinutes;
         private Boolean blocked;
         private String blockedReason;
+        private String blockedAt;
+        private String blockedAtSource;
         private String ownerUserId;
         private String remindTarget;
         private String completedAt;
@@ -110,6 +112,16 @@ public class BackupData {
         private String name;
         private String desc;
         private String status;
+        private String managerUserId;
+        private String start;
+        private String due;
+        private String priority;
+        private String healthOverride;
+        private String healthNote;
+        private String healthUpdatedBy;
+        private String healthUpdatedAt;
+        private String healthOverrideUntil;
+        private String createdBy;
         private String createdAt;
     }
 

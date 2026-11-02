@@ -130,7 +130,7 @@ class TaskSupport {
             return;
         }
         if (metaCache.column(workspaceId, column) == null) {
-            throw AppException.badRequest("看板列不存在：" + column);
+            throw AppException.badRequest("看板列不存在或已被删除");
         }
     }
 

@@ -4,7 +4,8 @@
 
   <sql id="cols">
     id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
-    progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
+    progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id,
+    blocked_at, blocked_at_source, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at
   </sql>
 
@@ -35,6 +36,12 @@
 
   <select id="selectById" resultType="Task">
     SELECT <include refid="cols"/> FROM task WHERE id = #{id}
+  </select>
+
+  <select id="countByOwnerUserId" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND owner_user_id = #{userId}
+      AND deleted_at IS NULL AND board_column &lt;&gt; 'done'
   </select>
 
   <!-- 任务深链（O-3）：只在「我参与的空间」内查找，越权与不存在的返回同一结果（不泄露存在性） -->
@@ -136,11 +143,12 @@
 
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
-                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id,
+                      blocked_at, blocked_at_source, note, completed_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
-            #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
+            #{blockedAt}, #{blockedAtSource}, #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -148,14 +156,14 @@
   <insert id="insertBatch">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
-                      is_blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, remind_at,
+                      is_blocked, blocked_reason, blocked_by_task_id, blocked_at, blocked_at_source, note, completed_at, recur_type, remind_at,
                       remind_target, remind_sent, sort_order, created_at, deleted_at)
     VALUES
     <foreach collection="list" item="t" separator=",">
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
        #{t.category}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
-       #{t.note}, #{t.completedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
+       #{t.blockedAt}, #{t.blockedAtSource}, #{t.note}, #{t.completedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
     </foreach>
   </insert>
@@ -180,6 +188,8 @@
       is_blocked = #{blocked},
       blocked_reason = #{blockedReason},
       blocked_by_task_id = #{blockedByTaskId},
+      blocked_at = #{blockedAt},
+      blocked_at_source = #{blockedAtSource},
       note = #{note},
       completed_at = #{completedAt},
       recur_type = #{recurType},

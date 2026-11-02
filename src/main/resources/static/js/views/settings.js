@@ -112,6 +112,7 @@ function enterSettingsView(){
   if(!rt.currentWs || !wsNameInput) return;
   rt.settingsReady = true;
   var isOwner = rt.currentWs.myRole === "owner";
+  var isExec = rt.currentWs.myRole === "exec";
   var isPersonal = rt.currentWs.type === "personal";
   $("wsTypeHint").textContent = isPersonal
     ? "个人空间 · 仅自己可见"
@@ -147,6 +148,8 @@ function enterSettingsView(){
   }
   $("btnWsLeave").hidden = isPersonal || isOwner;
   $("btnWsDelete").hidden = isPersonal || !isOwner;
+  if($("btnColAdd")) $("btnColAdd").disabled = isExec;
+  if($("btnCatAdd")) $("btnCatAdd").disabled = isExec;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
     : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
@@ -191,12 +194,20 @@ function loadWsMemberList(){
     wsMemberList.innerHTML = rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
       var canRemove = isOwner ? m.role !== "owner" : isSelf;
+      var roleHtml = m.role === "owner"
+        ? '<span class="tag tag-primary">空间主</span>'
+        : (isOwner
+          ? '<select class="mini-select" data-mid-role="' + esc(m.userId) + '" aria-label="成员角色">' +
+              '<option value="member"' + (m.role === "member" ? " selected" : "") + '>成员</option>' +
+              '<option value="exec"' + (m.role === "exec" ? " selected" : "") + '>管理层（只读）</option>' +
+            '</select>'
+          : '<span class="tag ' + (m.role === "exec" ? "tag-primary" : "tag-ghost") + '">' +
+              (m.role === "exec" ? "管理层" : "成员") + '</span>');
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
         '<span class="mi"><span class="nm">' + esc(m.displayName) + '</span>' +
           '<span class="sub">@' + esc(m.username) + '</span></span>' +
-        '<span class="tag ' + (m.role === "owner" ? "tag-primary" : "tag-ghost") + '">' +
-          (m.role === "owner" ? "空间主" : "成员") + '</span>' +
+        roleHtml +
         (canRemove ? '<span class="acts"><button class="btn sm danger" type="button" data-mid-del="' +
           esc(m.userId) + '">' + (isSelf ? "退出" : "移出") + '</button></span>' : '') +
       '</div>';
@@ -247,17 +258,18 @@ function loadColCfg(){
   });
 }
 function renderColCfg(){
-  var canEdit = rt.currentWs && rt.currentWs.myRole === "owner";
+  var canEdit = !(rt.currentWs && rt.currentWs.myRole === "exec");
+  var canDel = rt.currentWs && rt.currentWs.myRole === "owner";
   colCfgList.innerHTML = rt.colDefsCache.map(function(d, idx){
     var fixed = (d.id === "backlog" || d.id === "doing");
-    var delDisabled = fixed || !canEdit;
+    var delDisabled = fixed || !canDel;
     return '<div class="cfg-row" data-col-id="' + esc(d.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色" />' +
-      '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名" />' +
+      '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色"' + (canEdit ? "" : " disabled") + ' />' +
+      '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名"' + (canEdit ? "" : " disabled") + ' />' +
       (fixed ? '<span class="sysmark">系统列</span>' : '') +
-      '<button class="cc-act" type="button" data-col-up title="上移"' + (idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-col-down title="下移"' + (idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-col-up title="上移"' + (!canEdit || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-col-down title="下移"' + (!canEdit || idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
       '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : "删除列") + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
@@ -343,14 +355,15 @@ function loadCatCfg(){
 }
 function renderCatCfg(){
   $("catCount").textContent = rt.catDefsCache.length ? "共 " + rt.catDefsCache.length + " 个" : "";
+  var canEdit = !(rt.currentWs && rt.currentWs.myRole === "exec");
   var canDel = rt.currentWs && rt.currentWs.myRole === "owner";
   catCfgList.innerHTML = rt.catDefsCache.map(function(c, idx){
     return '<div class="cfg-row" data-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色" />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称" />' +
-      '<button class="cc-act" type="button" data-cat-up title="上移"' + (idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-cat-down title="下移"' + (idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色"' + (canEdit ? "" : " disabled") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称"' + (canEdit ? "" : " disabled") + ' />' +
+      '<button class="cc-act" type="button" data-cat-up title="上移"' + (!canEdit || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-cat-down title="下移"' + (!canEdit || idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
       '<button class="cc-act dan" type="button" data-cat-del title="删除分类"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
@@ -649,6 +662,18 @@ $("btnWsMemberAdd").addEventListener("click", function(){
     loadWsMemberList();
     loadWorkspaces(rt.currentUser);
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+});
+wsMemberList.addEventListener("change", function(e){
+  var sel = e.target.closest("[data-mid-role]");
+  if(!sel) return;
+  API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
+    encodeURIComponent(sel.dataset.midRole) + "/role", {role: sel.value}).then(function(){
+    toast(sel.value === "exec" ? "已设为管理层（只读）" : "已设为成员", "fs");
+    loadWsMemberList();
+  }).catch(function(ex){
+    toast(ex.message || "角色变更失败", "bad");
+    loadWsMemberList();
+  });
 });
 wsMemberList.addEventListener("click", function(e){
   var del = e.target.closest("[data-mid-del]");

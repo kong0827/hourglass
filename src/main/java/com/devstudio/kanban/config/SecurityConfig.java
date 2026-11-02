@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 import javax.servlet.http.HttpServletResponse;
@@ -21,6 +22,12 @@ import java.io.IOException;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private final com.devstudio.kanban.service.WorkspaceService workspaceService;
+
+    public SecurityConfig(com.devstudio.kanban.service.WorkspaceService workspaceService) {
+        this.workspaceService = workspaceService;
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -29,6 +36,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            .addFilterAfter(new ReadOnlyRoleFilter(workspaceService), UsernamePasswordAuthenticationFilter.class)
             .authorizeRequests()
                 .antMatchers("/api/health").permitAll()
                 // 邀请链接：访客可查看邀请信息（join 加入需登录，走下方 authenticated）

@@ -305,16 +305,17 @@ function openRowMenu(anchor, id){
   var t = rt.listCache[id];
   if(!t) return;
   var isDone = t.boardColumn === "done";
+  var exec = !!(rt.currentWs && rt.currentWs.myRole === "exec");
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
-  var html = '<button class="menu-item" type="button" data-row-act="edit">' + icon("edit", 14) + '编辑</button>' +
-    '<button class="menu-item" type="button" data-row-act="done">' + icon(isDone ? "undo" : "check", 14) +
-      (isDone ? "取消完成" : "标记完成") + '</button>' +
-    '<button class="menu-item" type="button" data-row-act="due">' + icon("calSmall", 14) + '改期</button>' +
-    '<button class="menu-item" type="button" data-row-act="timer">' +
-      icon("timer", 14) + (running ? "停止计时" : "开始计时") + '</button>' +
+  var html = '<button class="menu-item" type="button" data-row-act="edit">' + icon("edit", 14) + (exec ? '查看详情' : '编辑') + '</button>' +
+    (!exec ? '<button class="menu-item" type="button" data-row-act="done">' + icon(isDone ? "copy" : "check", 14) +
+      (isDone ? "新建续做任务" : "标记完成") + '</button>' : '') +
+    (!exec && !isDone ? '<button class="menu-item" type="button" data-row-act="due">' + icon("calSmall", 14) + '改期</button>' : '') +
+    (!exec && !isDone ? '<button class="menu-item" type="button" data-row-act="timer">' +
+      icon("timer", 14) + (running ? "停止计时" : "开始计时") + '</button>' : '') +
     '<button class="menu-item" type="button" data-row-act="copy">' + icon("copy", 14) + '复制标题</button>' +
     '<button class="menu-item" type="button" data-row-act="link">' + icon("extlink", 14) + '复制任务链接</button>';
-  var others = COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
+  var others = (isDone || exec) ? [] : COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
     others.forEach(function(c){
@@ -323,8 +324,10 @@ function openRowMenu(anchor, id){
         esc(c.name) + '</button>';
     });
   }
-  html += '<div class="menu-sep"></div>' +
-    '<button class="menu-item danger" type="button" data-row-act="del">' + icon("trash", 14) + '移到回收站</button>';
+  if(!exec){
+    html += '<div class="menu-sep"></div>' +
+      '<button class="menu-item danger" type="button" data-row-act="del">' + icon("trash", 14) + '移到回收站</button>';
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = html;

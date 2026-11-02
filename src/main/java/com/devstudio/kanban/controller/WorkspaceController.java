@@ -4,12 +4,14 @@ import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.MemberAddRequest;
+import com.devstudio.kanban.dto.MemberRoleRequest;
 import com.devstudio.kanban.dto.WorkspaceCreateRequest;
 import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.service.WorkspaceRoleService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +31,13 @@ import java.util.List;
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
+    private final WorkspaceRoleService workspaceRoleService;
     private final UserMapper userMapper;
 
-    public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper) {
+    public WorkspaceController(WorkspaceService workspaceService, WorkspaceRoleService workspaceRoleService,
+                               UserMapper userMapper) {
         this.workspaceService = workspaceService;
+        this.workspaceRoleService = workspaceRoleService;
         this.userMapper = userMapper;
     }
 
@@ -86,6 +91,14 @@ public class WorkspaceController {
             throw new AppException(403, "共享空间成员需通过邀请链接加入：请生成邀请链接发给对方，对方确认后才会成为成员");
         }
         workspaceService.addMember(CurrentUser.id(), id, req.getUsername());
+        return ApiResult.ok();
+    }
+
+    /** 变更成员角色：owner 操作，只允许 member/exec */
+    @PutMapping("/api/workspaces/{id}/members/{userId}/role")
+    public ApiResult<Void> changeRole(@PathVariable String id, @PathVariable String userId,
+                                      @Valid @RequestBody MemberRoleRequest req) {
+        workspaceRoleService.changeRole(CurrentUser.id(), id, userId, req.getRole());
         return ApiResult.ok();
     }
 

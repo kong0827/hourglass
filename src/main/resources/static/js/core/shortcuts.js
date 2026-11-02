@@ -176,6 +176,8 @@ document.addEventListener("keydown", function(e){
     if(e.key >= "0" && e.key <= "3"){
       e.preventDefault();
       if(!kt) return;
+      if(kt.boardColumn === "done"){ toast("已完成任务不可修改优先级，请新建续做任务", "warn"); return; }
+      if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式", "warn"); return; }
       var pri = "P" + e.key;
       API.put("/api/tasks/" + encodeURIComponent(kt.id), taskPayloadWith(kt, {priority: pri})).then(function(){
         toast("已设为 " + pri, "fs");
@@ -200,6 +202,7 @@ document.addEventListener("keydown", function(e){
   /* N：新建任务。看板内落在列内快速录入；其它视图就在当前视图打开抽屉并预填上下文 */
   if(!mod && !e.altKey && (e.key === "n" || e.key === "N")){
     e.preventDefault();
+    if(rt.currentWs && rt.currentWs.myRole === "exec"){ toast("管理层为只读模式，不能新建任务", "warn"); return; }
     if(activeView === "board"){
       var colId = "backlog";
       if(card){

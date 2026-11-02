@@ -12,6 +12,7 @@ import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Subtask;
 import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
@@ -20,6 +21,7 @@ import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,6 +102,7 @@ public class TaskCommandService {
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, null);
+        stampBlockedAt(t, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);
         t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
@@ -141,10 +144,14 @@ public class TaskCommandService {
     @Transactional
     public Task update(String userId, String workspaceId, String id, TaskSaveRequest req) {
         Task old = support.require(workspaceId, id);
+        if (Consts.COL_DONE.equals(old.getBoardColumn())) {
+            return updateDoneTask(userId, workspaceId, old, req);
+        }
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
+        stampBlockedAt(t, old);
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
         if (req.getIsMilestone() == null) {
             t.setIsMilestone(old.getIsMilestone());
@@ -197,6 +204,133 @@ public class TaskCommandService {
         return result;
     }
 
+    /**
+     * 已完成任务的编辑：只允许标题/描述/标签变化；其余字段按锁定处理。
+     * 这里不调用 applyRequest，避免 TaskSaveRequest 的默认值把 owner/priority/boardColumn 等改掉。
+     */
+    private Task updateDoneTask(String userId, String workspaceId, Task old, TaskSaveRequest req) {
+        assertDonePatch(old, req);
+        List<String> oldTags = support.tagNames(workspaceId, old.getId());
+        /* 缺省字段沿用旧任务：只改标题的请求不能把描述/标签清空 */
+        String description = req.getDescription() == null
+                ? old.getDescription() : Texts.trimToNull(req.getDescription());
+        List<String> tags = req.getTags() == null ? oldTags : req.getTags();
+        Task t = new Task();
+        BeanUtils.copyProperties(old, t);
+        t.setId(old.getId());
+        t.setWorkspaceId(old.getWorkspaceId());
+        t.setTitle(req.getTitle().trim());
+        t.setDescription(description);
+        t.setBlockedAt(old.getBlockedAt());
+        t.setBlockedAtSource(old.getBlockedAtSource());
+        t.setUpdatedAt(null);
+
+        List<String> changes = audit.diffParts(workspaceId, old, t, oldTags, tags);
+        taskMapper.update(t);
+        support.saveTags(workspaceId, old.getId(), tags);
+        if (!changes.isEmpty()) {
+            audit.log(userId, workspaceId, old.getId(), "update",
+                    Texts.cut("更新已完成任务「" + t.getTitle() + "」：" + String.join("；", changes), 250));
+        }
+        Task result = taskMapper.selectById(old.getId());
+        result.setTags(support.tagNames(workspaceId, old.getId()));
+        return result;
+    }
+
+    private void assertDonePatch(Task old, TaskSaveRequest req) {
+        if (req.getBoardColumn() != null && !Consts.COL_DONE.equals(req.getBoardColumn())) {
+            throw new AppException(409, "已完成任务不可重开，请新建续做任务");
+        }
+        if (req.getProgress() != null && !eq(old.getProgress(), req.getProgress())) {
+            throw locked();
+        }
+        Integer oldEstimate = old.getEstimateMinutes() == null || old.getEstimateMinutes() <= 0
+                ? null : old.getEstimateMinutes();
+        Integer newEstimate = req.getEstimateMinutes() == null || req.getEstimateMinutes() <= 0
+                ? null : req.getEstimateMinutes();
+        if (req.getEstimateMinutes() != null && !eq(oldEstimate, newEstimate)) {
+            throw locked();
+        }
+        if (req.getOwnerUserId() != null && !eq(old.getOwnerUserId(), req.getOwnerUserId())) {
+            throw locked();
+        }
+        if (req.getPriority() != null && !eq(old.getPriority(), req.getPriority())) {
+            throw locked();
+        }
+        if (req.getReqId() != null && !eq(old.getReqId(), Texts.trimToNull(req.getReqId()))) {
+            throw locked();
+        }
+        if (req.getReqDocId() != null && !eq(old.getReqDocId(), Texts.trimToNull(req.getReqDocId()))) {
+            throw locked();
+        }
+        if (req.getCompletedAt() != null && !eq(old.getCompletedAt(), req.getCompletedAt())) {
+            throw locked();
+        }
+        if (req.getOwner() != null) {
+            String owner = Texts.cut(req.getOwner().replace(',', ' ').replace('，', ' ').trim(), 32);
+            if (!eq(old.getOwner(), owner)) {
+                throw locked();
+            }
+        }
+        if (req.getCategory() != null && !eq(old.getCategory(), Texts.trimToNull(req.getCategory()))) {
+            throw locked();
+        }
+        if (req.getStartDate() != null && !eq(old.getStartDate(), req.getStartDate())) {
+            throw locked();
+        }
+        if (req.getDueDate() != null && !eq(old.getDueDate(), req.getDueDate())) {
+            throw locked();
+        }
+        if (req.getBranchId() != null && !eq(old.getBranchId(), Texts.trimToNull(req.getBranchId()))) {
+            throw locked();
+        }
+        if (req.getIsMilestone() != null && !eq(old.getIsMilestone(), req.getIsMilestone())) {
+            throw locked();
+        }
+        if (req.getBlocked() != null && !eq(old.getBlocked(), req.getBlocked())) {
+            throw locked();
+        }
+        if (req.getBlockedReason() != null && !eq(old.getBlockedReason(), Texts.trimToNull(req.getBlockedReason()))) {
+            throw locked();
+        }
+        if (req.getBlockedByTaskId() != null && !eq(old.getBlockedByTaskId(), Texts.trimToNull(req.getBlockedByTaskId()))) {
+            throw locked();
+        }
+        if (req.getNote() != null && !eq(old.getNote(), Texts.trimToNull(req.getNote()))) {
+            throw locked();
+        }
+        if (req.getRemindAt() != null && !sameMinute(old.getRemindAt(), req.getRemindAt())) {
+            throw locked();
+        }
+        if (req.getRecurType() != null && !eq(old.getRecurType(), Texts.trimToNull(req.getRecurType()))) {
+            throw locked();
+        }
+    }
+
+    private static boolean eq(Object a, Object b) {
+        return a == null ? b == null : a.equals(b);
+    }
+
+    private static AppException locked() {
+        return new AppException(409, "已完成任务字段已锁定，请新建续做任务");
+    }
+
+    private void stampBlockedAt(Task t, Task old) {
+        boolean blocked = Boolean.TRUE.equals(t.getBlocked());
+        if (!blocked) {
+            t.setBlockedAt(null);
+            t.setBlockedAtSource(null);
+            return;
+        }
+        if (old == null || !Boolean.TRUE.equals(old.getBlocked())) {
+            t.setBlockedAt(LocalDateTime.now());
+            t.setBlockedAtSource("real");
+        } else {
+            t.setBlockedAt(old.getBlockedAt());
+            t.setBlockedAtSource(old.getBlockedAtSource());
+        }
+    }
+
     private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req,
                               String oldOwnerUserId) {
         t.setTitle(req.getTitle().trim());
@@ -213,12 +347,15 @@ public class TaskCommandService {
         if (ownerUserId != null) {
             AppUser ou = userMapper.selectById(ownerUserId);
             if (ou == null) {
-                throw AppException.badRequest("负责人账号不存在：" + ownerUserId);
+                throw AppException.badRequest("负责人账号不存在");
             }
-            if (memberMapper.selectMember(workspaceId, ownerUserId) == null
-                    && !ownerUserId.equals(oldOwnerUserId)) {
+            WorkspaceMember target = memberMapper.selectMember(workspaceId, ownerUserId);
+            if (target == null && !ownerUserId.equals(oldOwnerUserId)) {
                 /* 成员已离开空间的历史任务允许原样保存，但不能再把任务新指派给非成员 */
                 throw AppException.badRequest("负责人不是该空间成员：" + ownerUserId);
+            }
+            if (target != null && "exec".equals(target.getRole()) && !ownerUserId.equals(oldOwnerUserId)) {
+                throw AppException.badRequest("只读管理层不能作为任务负责人");
             }
             t.setOwnerUserId(ownerUserId);
             if (owner == null || owner.isEmpty()) {
@@ -258,7 +395,7 @@ public class TaskCommandService {
         if (reqId != null) {
             Requirement r = reqMapper.selectById(reqId);
             if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
-                throw AppException.badRequest("所属项目不存在：" + reqId);
+                throw AppException.badRequest("所属项目不存在或已被删除");
             }
         }
         t.setReqId(reqId);
@@ -280,7 +417,7 @@ public class TaskCommandService {
         if (branchId != null) {
             DevBranch br = devBranchMapper.selectById(branchId);
             if (br == null || !workspaceId.equals(br.getWorkspaceId())) {
-                throw AppException.badRequest("所选分支不存在：" + branchId);
+                throw AppException.badRequest("所选分支不存在或已被删除");
             }
         }
         t.setBranchId(branchId);

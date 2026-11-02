@@ -16,6 +16,7 @@ import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.slf4j.Logger;
@@ -54,6 +55,10 @@ public class WorkspaceService {
     private final WorkspaceMemberCache memberCache;
     /** 空间 meta 缓存（列/分类/标签，按空间版本号失效） */
     private final WorkspaceMetaCache metaCache;
+
+    /** 成员移除前检查项目负责人（字段注入避免破坏既有构造器测试） */
+    @Autowired(required = false)
+    private RequirementMapper requirementMapper;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -329,6 +334,7 @@ public class WorkspaceService {
             if (userId.equals(ws.getOwnerId())) {
                 throw AppException.badRequest("空间主不能退出自己的空间，可直接删除空间");
             }
+            assertNotProjectManager(workspaceId, targetUserId, ws);
             memberMapper.delete(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
             CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
@@ -341,10 +347,15 @@ public class WorkspaceService {
         if (targetUserId.equals(ws.getOwnerId())) {
             throw AppException.badRequest("不能移除空间主");
         }
+        assertNotProjectManager(workspaceId, targetUserId, ws);
         memberMapper.delete(workspaceId, targetUserId);
         AppUser target = userMapper.selectById(targetUserId);
+        String targetName = target == null ? null : Texts.trimToNull(target.getDisplayName());
+        if (targetName == null && target != null) {
+            targetName = Texts.trimToNull(target.getUsername());
+        }
         activityService.logConfig(workspaceId, userId, "移除成员「"
-                + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");
+                + (targetName == null ? "该成员" : targetName) + "」");
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
     }
 
@@ -383,6 +394,15 @@ public class WorkspaceService {
             seedDefaultCategories(workspaceId);
         }
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
+    }
+
+    private void assertNotProjectManager(String workspaceId, String userId, Workspace ws) {
+        if (requirementMapper == null || userId.equals(ws.getOwnerId())) {
+            return;
+        }
+        if (requirementMapper.countByManager(workspaceId, userId) > 0) {
+            throw new AppException(409, "该成员仍是项目负责人，请先转交项目后再移出");
+        }
     }
 
     private void addMemberInternal(String workspaceId, String userId, String role) {

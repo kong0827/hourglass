@@ -39,9 +39,15 @@ public class WorkspaceArgumentResolver implements HandlerMethodArgumentResolver 
         String wsParam = request.getParameter("workspace");
         RequireRole role = parameter.getMethodAnnotation(RequireRole.class);
         Workspace ws = workspaceService.resolve(userId, wsParam);
-        if (role != null && RequireRole.OWNER.equals(role.value())
-                && !"owner".equals(ws.getMyRole())) {
-            throw new com.devstudio.kanban.common.AppException(403, "仅空间主可执行该操作");
+        if (role != null) {
+            String myRole = ws.getMyRole();
+            if (RequireRole.OWNER.equals(role.value()) && !"owner".equals(myRole)) {
+                throw new com.devstudio.kanban.common.AppException(403, "仅空间主可执行该操作");
+            }
+            if (RequireRole.MANAGEMENT.equals(role.value())
+                    && !"owner".equals(myRole) && !"exec".equals(myRole)) {
+                throw new com.devstudio.kanban.common.AppException(403, "仅空间主和管理层可查看");
+            }
         }
         return new WorkspaceCtx(userId, ws);
     }

@@ -73,12 +73,20 @@ public class TaskWorkflowService {
         return n - p > 1 ? p + (n - p) / 2 : -1;
     }
 
+    /** 完成锁定：done 任务只能在 done 列内排序，不能离开 done。 */
+    private void assertNotLeavingDone(Task task, String to) {
+        if (Consts.COL_DONE.equals(task.getBoardColumn()) && !Consts.COL_DONE.equals(to)) {
+            throw new AppException(409, "已完成任务不可重开，请新建续做任务");
+        }
+    }
+
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
         Task task = support.require(workspaceId, id);
         String from = task.getBoardColumn();
         String to = req.getColumn();
         support.validateColumn(workspaceId, to);
+        assertNotLeavingDone(task, to);
 
         List<Task> target = new ArrayList<Task>();
         for (Task t : taskMapper.selectColumnTasks(workspaceId, to)) {
@@ -206,8 +214,8 @@ public class TaskWorkflowService {
     }
 
     /**
-     * 取消完成：回到「完成前所在列」，而不是固定回「进行中」。
-     * 优先用最近一次移入 done 的移动日志；列已被删除/找不到时依次回退到 doing、第一个非完成列、backlog。
+     * 取消完成：v0.2 起已完成任务不可重开，需要继续做时新建续做任务。
+     * 保留接口对旧前端返回明确的 409，而不是静默失败。
      */
     @Transactional
     public Map<String, Object> reopen(String userId, String workspaceId, String id) {
@@ -215,19 +223,7 @@ public class TaskWorkflowService {
         if (!Consts.COL_DONE.equals(task.getBoardColumn())) {
             throw AppException.badRequest("任务不在已完成列，无需取消完成");
         }
-        String target = logMapper.selectLastDoneFromColumn(workspaceId, id);
-        if (target != null && (Consts.COL_DONE.equals(target) || !support.columnExists(workspaceId, target))) {
-            target = null;
-        }
-        if (target == null) {
-            target = support.columnExists(workspaceId, Consts.COL_DOING)
-                    ? Consts.COL_DOING : support.firstOpenColumn(workspaceId);
-        }
-        TaskMoveRequest req = new TaskMoveRequest();
-        req.setColumn(target);
-        req.setAutoTimer(false);
-        req.setAutoResume(false);
-        return move(userId, workspaceId, id, req);
+        throw new AppException(409, "已完成任务不可重开，请新建续做任务");
     }
 
     /**

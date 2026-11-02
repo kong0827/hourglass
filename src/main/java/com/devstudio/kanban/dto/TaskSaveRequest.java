@@ -26,7 +26,7 @@ public class TaskSaveRequest {
     private String description;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")
-    private String priority = "P2";
+    private String priority;
 
     @Size(max = 32, message = "负责人不能超过 32 字")
     private String owner;
@@ -41,7 +41,7 @@ public class TaskSaveRequest {
 
     /** 看板列 id：内置 backlog/doing/done 或自定义列（C 开头）；存在性由服务层校验 */
     @Pattern(regexp = "^[A-Za-z0-9_-]{1,16}$", message = "所在列不合法")
-    private String boardColumn = "backlog";
+    private String boardColumn;
 
     /** 开始日期 yyyy-MM-dd，选填。填了之后日历会按 [开始, 截止] 区间每天展示该任务 */
     private LocalDate startDate;
@@ -62,7 +62,7 @@ public class TaskSaveRequest {
 
     @Min(value = 0, message = "进度不能小于 0")
     @Max(value = 100, message = "进度不能大于 100")
-    private Integer progress = 0;
+    private Integer progress;
 
     /** 里程碑：单日节点（甘特图菱形），不展示进度条 */
     private Boolean isMilestone;

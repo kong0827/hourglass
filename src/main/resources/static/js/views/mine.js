@@ -247,8 +247,17 @@ function mineMoreHTML(){
 function mineTaskFromRow(row){
   return mineCache[(row.dataset.mineWs || "") + "|" + row.dataset.mineId] || null;
 }
+function mineTaskReadOnly(t){
+  if(!t) return false;
+  for(var i = 0; i < rt.allWorkspaces.length; i++){
+    if(rt.allWorkspaces[i].id === t.workspaceId) return rt.allWorkspaces[i].myRole === "exec";
+  }
+  return false;
+}
 function mineComplete(t){
   if(!t) return;
+  if(mineTaskReadOnly(t)){ toast("该空间的管理层为只读模式", "warn"); return; }
+  if(t.boardColumn === "done"){ toast("已完成任务不可重开；如需继续请新建续做任务", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/move", {column:"done"}).then(function(){
     toast("已完成「" + t.title + "」", "fs");
     loadMine({silent:true});
@@ -258,6 +267,8 @@ function mineComplete(t){
 }
 function mineToggleTimer(t){
   if(!t) return;
+  if(mineTaskReadOnly(t)){ toast("该空间的管理层为只读模式", "warn"); return; }
+  if(t.boardColumn === "done"){ toast("已完成任务不能计时", "warn"); return; }
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
@@ -268,6 +279,8 @@ function mineToggleTimer(t){
 }
 function mineReschedule(anchor, t){
   if(!t) return;
+  if(mineTaskReadOnly(t)){ toast("该空间的管理层为只读模式", "warn"); return; }
+  if(t.boardColumn === "done"){ toast("已完成任务不可改期，请新建续做任务", "warn"); return; }
   var el = document.createElement("div");
   el.className = "menu due-pop";
   el.innerHTML =

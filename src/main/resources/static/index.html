@@ -119,6 +119,10 @@
       </button>
 
       <span class="nav-sec">管理</span>
+      <button class="nav-item" type="button" data-view="management" id="navManagement" hidden>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 16.2V9.4M8 16.2V5.2M12.6 16.2v-4.6M17.2 16.2V7"/><path d="M2.6 17.8h15"/></svg>
+        <span class="nl">管理驾驶舱</span>
+      </button>
       <button class="nav-item" type="button" data-view="settings">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
         <span class="nl">设置</span>
@@ -807,6 +811,10 @@
             <p class="foot-note" style="margin-top:10px">完成时间依据卡片移入「已完成」的日期记录</p>
           </div>
         </div>
+      </section>
+
+      <section class="view" id="view-management" aria-label="管理驾驶舱">
+        <div class="mgmt-app" id="mgmtApp"></div>
       </section>
 
       <section class="view" id="view-analysis" aria-label="分析">

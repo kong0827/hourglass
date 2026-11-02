@@ -225,9 +225,9 @@ function cardHTML(t, idx){
             ? '<span class="pdot-ico" style="color:var(--success)">' + icon("check", 13) + '</span>'
             : '<span class="pdot ' + esc(t.priority) + '"><i></i></span>') +
           '<button class="card-tick" type="button" data-done-toggle="' + esc(t.id) + '"' +
-            ' title="' + (isDone ? "取消完成（快捷键 X）" : "标记完成（快捷键 X）") + '"' +
-            ' aria-label="' + (isDone ? "取消完成" : "标记完成") + '：' + esc(t.title) + '">' +
-            icon(isDone ? "undo" : "check", 11) + '</button>' +
+            ' title="' + (isDone ? "已完成，不可重开；点击新建续做任务" : "标记完成（快捷键 X）") + '"' +
+            ' aria-label="' + (isDone ? "已完成，点击新建续做任务" : "标记完成") + '：' + esc(t.title) + '">' +
+            icon("check", 11) + '</button>' +
         '</span>' +
         (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '">' + esc(t.priority) + '</span>') +
       '</span>' +
@@ -460,6 +460,7 @@ function inlineAddCreate(colId, title, input){
 }
 var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null, dragRaf = 0;
 function onPointerDown(e){
+  if(rt.currentWs && rt.currentWs.myRole === "exec") return;
   var cardEl = e.target.closest ? e.target.closest(".card") : null;
   if(!cardEl) return;
   if(e.pointerType === "mouse" && e.button !== 0) return;
@@ -601,6 +602,12 @@ function endDrag(){
   var fromCol = fromEl ? fromEl.dataset.col : null;
   cleanupDrag();
   if(!toCol){ render({animate:false}); return; }
+  var dragged = taskById(d.id);
+  if(dragged && dragged.boardColumn === "done" && toCol !== "done"){
+    render({animate:false});
+    toast("已完成任务不可重开，请新建续做任务", "warn");
+    return;
+  }
 
   rt.suppressClickUntil = Date.now() + 260;
   optimisticMove(d.id, toCol, beforeId);
@@ -700,6 +707,11 @@ board.addEventListener("click", function(e){
     var cid = fold.dataset.colFold;
     state.collapsedCols[cid] = !state.collapsedCols[cid];
     render({animate:false});
+    return;
+  }
+  if(rt.currentWs && rt.currentWs.myRole === "exec"
+      && e.target.closest("[data-col-add],[data-add],[data-col-color],[data-col-rename]")){
+    toast("管理层为只读模式，不能修改列或新增任务", "warn");
     return;
   }
   var colAdd = e.target.closest("[data-col-add]");

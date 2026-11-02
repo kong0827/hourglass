@@ -17,6 +17,7 @@ import com.devstudio.kanban.mapper.TaskMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,6 +57,10 @@ public class RequirementService {
             p.setName(r.getName());
             p.setDescription(r.getDescription());
             p.setStatus(r.getStatus());
+            p.setManagerUserId(r.getManagerUserId());
+            p.setStartDate(r.getStartDate());
+            p.setDueDate(r.getDueDate());
+            p.setPriority(r.getPriority());
 
             com.devstudio.kanban.dto.ReqTaskAggRow agg = aggByReq.get(r.getId());
             int count = agg == null ? 0 : agg.getTotal();
@@ -70,12 +75,12 @@ public class RequirementService {
     }
 
     @Transactional
-    public Requirement create(String workspaceId, ReqSaveRequest req) {
+    public Requirement create(String userId, String workspaceId, ReqSaveRequest req) {
         String id = Ids.sanitize(Texts.trimToNull(req.getId()));
         if (id == null) {
             id = Ids.gen("R");
         } else if (reqMapper.selectById(id) != null) {
-            throw new AppException(409, "项目ID已存在：" + id);
+            throw new AppException(409, "项目ID已存在，请检查导入数据");
         }
         Requirement r = new Requirement();
         r.setId(id);
@@ -83,23 +88,47 @@ public class RequirementService {
         r.setName(req.getName().trim());
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
+        r.setCreatedBy(userId);
         reqMapper.insert(r);
         return reqMapper.selectById(id);
     }
 
     @Transactional
-    public Requirement update(String workspaceId, String id, ReqSaveRequest req) {
+    public Requirement update(String userId, String myRole, String workspaceId, String id, ReqSaveRequest req) {
         Requirement old = reqMapper.selectById(id);
         if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
-            throw AppException.notFound("项目不存在：" + id);
+            throw AppException.notFound("项目不存在或已被移除");
+        }
+        String nextStatus = req.getStatus() == null ? "active" : req.getStatus();
+        /* PRD 2.2：项目状态只允许空间主或该项目负责人修改，名称/描述维持成员可改 */
+        if (!nextStatus.equals(old.getStatus())
+                && !"owner".equals(myRole)
+                && !(userId != null && userId.equals(old.getManagerUserId()))) {
+            throw new AppException(403, "仅空间主或项目负责人可修改项目状态");
         }
         Requirement r = new Requirement();
         r.setId(id);
         r.setWorkspaceId(workspaceId);
         r.setName(req.getName().trim());
         r.setDescription(Texts.trimToNull(req.getDescription()));
-        r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
+        r.setStatus(nextStatus);
         reqMapper.update(r);
+        /* done 项目不再参与风险；进入/离开 done 都清掉人工覆盖，避免重新打开时旧覆盖“复活” */
+        boolean doneTransition = !nextStatus.equals(old.getStatus())
+                && ("done".equals(nextStatus) || "done".equals(old.getStatus()));
+        if (doneTransition
+                && (old.getHealthOverride() != null || old.getHealthOverrideUntil() != null
+                    || old.getHealthNote() != null)) {
+            Requirement health = new Requirement();
+            health.setId(id);
+            health.setWorkspaceId(workspaceId);
+            health.setHealthOverride(null);
+            health.setHealthNote(null);
+            health.setHealthUpdatedBy(userId);
+            health.setHealthUpdatedAt(LocalDateTime.now());
+            health.setHealthOverrideUntil(null);
+            reqMapper.updateHealth(health);
+        }
         return reqMapper.selectById(id);
     }
 
@@ -108,7 +137,7 @@ public class RequirementService {
     public RequirementDeleteResult delete(String userId, String workspaceId, String id) {
         Requirement r = reqMapper.selectById(id);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
-            throw AppException.notFound("项目不存在：" + id);
+            throw AppException.notFound("项目不存在或已被移除");
         }
         int docs = docService.countByReq(workspaceId, id);
         int unlinked = 0;

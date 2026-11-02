@@ -153,6 +153,7 @@ function ganttLabelW(){
   return window.innerWidth <= 900 ? GANTT_LABEL_W_NARROW : GANTT_LABEL_W;
 }
 function ganttReadOnly(){
+  if(rt.currentWs && rt.currentWs.myRole === "exec") return true;
   return window.matchMedia("(max-width: 900px)").matches;
 }
 function enterGanttView(){
@@ -888,6 +889,7 @@ function ganttPutSeq(items){
   });
 }
 function ganttUndoLast(){
+  if(ganttReadOnly()){ toast("只读模式下不能撤销改期", "warn"); return; }
   if(ganttState.drag || ganttState.unplannedDrag || ganttState.depDrag || ganttState.undoBusy) return;
   if(!ganttState.undo.length){ toast("没有可撤销的改期", "warn"); return; }
   var entry = ganttState.undo.pop();
@@ -1080,7 +1082,7 @@ function ganttToggleBaseline(){
   renderGanttAnalysisMenu();
 }
 function ganttCaptureBaseline(){
-  if(ganttReadOnly()){ toast("移动端只读，不能设置基线", "warn"); return; }
+  if(ganttReadOnly()){ toast("只读模式下不能设置基线", "warn"); return; }
   API.post("/api/gantt/baseline").then(function(info){
     ganttApplyBaselineInfo(info);
     ganttState.baselineOn = !!ganttState.baselineAt;
@@ -1090,7 +1092,7 @@ function ganttCaptureBaseline(){
   }).catch(function(ex){ toast("设置基线失败：" + (ex.message || "网络异常"), "bad"); });
 }
 function ganttClearBaseline(){
-  if(ganttReadOnly()){ toast("移动端只读，不能清除基线", "warn"); return; }
+  if(ganttReadOnly()){ toast("只读模式下不能清除基线", "warn"); return; }
   if(!(rt.currentWs && rt.currentWs.myRole === "owner")){ toast("仅空间主可清除基线", "warn"); return; }
   UI.showConfirm({ title:"清除基线", msg:"清除后无法再对比「计划 vs 当前」，确定？", okText:"清除" }).then(function(ok){
     if(!ok) return;
@@ -1205,7 +1207,7 @@ function ganttCopyShare(){
   var input = $("ganttShareUrl");
   if(!input) return;
   if(!input.value){
-    if(ganttReadOnly()){ toast("移动端只读，不能生成分享链接", "warn"); return; }
+    if(ganttReadOnly()){ toast("只读模式下不能生成分享链接", "warn"); return; }
     API.post("/api/gantt/share").then(function(s){
       ganttFillShare(s.token);
       toast("分享链接已生成（30 天有效）", "fs");
@@ -1227,7 +1229,7 @@ function ganttCopyShare(){
   toast(ok ? "链接已复制" : "复制失败，请手动选中复制", ok ? "fs" : "bad");
 }
 function ganttRevokeShare(){
-  if(ganttReadOnly()){ toast("移动端只读，不能停止分享", "warn"); return; }
+  if(ganttReadOnly()){ toast("只读模式下不能停止分享", "warn"); return; }
   UI.showConfirm({ title:"停止分享", msg:"停止后旧链接立即失效，查看者无法再打开。", okText:"停止分享" }).then(function(ok){
     if(!ok) return;
     API.del("/api/gantt/share").then(function(){
@@ -1250,7 +1252,7 @@ function refreshGanttDeps(){
   }).catch(function(ex){ toast("依赖刷新失败：" + (ex.message || "网络异常"), "bad"); });
 }
 function openGanttDepMenu(depId, anchorEl){
-  if(ganttReadOnly()){ toast("移动端只读，不能编辑依赖", "warn"); return; }
+  if(ganttReadOnly()){ toast("只读模式下不能编辑依赖", "warn"); return; }
   var dep = ganttState.depById[depId];
   if(!dep){
     toast("旧版依赖暂不支持编辑，请删除后重新连线", "warn");
@@ -1950,6 +1952,7 @@ function onGanttPointerDown(e){
   /* Ctrl/⌘ 点选、Shift 连选：只改选择，不开始拖动 */
   if(e.ctrlKey || e.metaKey){ e.preventDefault(); ganttToggleSelection(t.id); return; }
   if(e.shiftKey){ e.preventDefault(); ganttSelectRange(t.id); return; }
+  if(t.boardColumn === "done"){ toast("已完成任务不可改期，请新建续做任务", "warn"); return; }
 
   var handle = e.target.closest("[data-gantt-handle]");
   var mode = handle ? handle.dataset.ganttHandle : "move";
@@ -1966,6 +1969,7 @@ function onGanttPointerDown(e){
     ids.forEach(function(id){
       var tt = ganttState.byId[id];
       if(!tt) return;
+      if(tt.boardColumn === "done") return;   // 已完成任务的日期已锁定
       var ss = parseDate(tt.startDate) || parseDate(tt.dueDate);
       var ee = parseDate(tt.dueDate) || ss;
       if(!ss || !ee) return;   // 未排期任务不参与批量平移
@@ -2155,6 +2159,7 @@ function onGanttUnplannedPointerDown(e){
   if(e.pointerType === "mouse" && e.button !== 0) return;
   var t = ganttState.byId[row.dataset.ganttOpen];
   if(!t) return;
+  if(t.boardColumn === "done"){ toast("已完成任务不可排期，请新建续做任务", "warn"); return; }
   ganttState.unplannedDrag = {
     task: t, row: row, x0: e.clientX, y0: e.clientY,
     lastX: e.clientX, lastY: e.clientY,

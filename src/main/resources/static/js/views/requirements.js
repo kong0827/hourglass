@@ -184,7 +184,11 @@ function toggleReqProj(key){
   reqCollapsed[key] = !reqCollapsed[key];
   renderReqDocTree();
 }
+function reqDocReadOnly(){
+  return !!(rt.currentWs && rt.currentWs.myRole === "exec");
+}
 function openNewReqDocDialog(reqId){
+  if(reqDocReadOnly()){ toast("管理层为只读模式，不能新增需求", "warn"); return; }
   var sel = $("newReqDocProject");
   if(!sel) return;
   sel.innerHTML = rt.reqList.length
@@ -632,6 +636,7 @@ function tocVisiblePref(){
   try{ return localStorage.getItem("ds.reqToc") !== "0"; }catch(e){ return true; }
 }
 function saveReqDoc(){
+  if(reqDocReadOnly()){ toast("管理层为只读模式，不能保存需求", "warn"); return Promise.resolve(null); }
   var title = (editingMeta.title || "").trim();
   var reqId = editingMeta.reqId;
   if(!title || !reqId){
@@ -667,6 +672,7 @@ function saveReqDoc(){
   });
 }
 function deleteReqDoc(){
+  if(reqDocReadOnly()){ toast("管理层为只读模式，不能删除需求", "warn"); return; }
   var id = editingDocId || state.reqDocId;
   if(!id){ toast("先打开一份已保存的需求", "warn"); return; }
   UI.showConfirm({
