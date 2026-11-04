@@ -4,8 +4,25 @@
 
 ## 0. 本地打包（开发机）
 
+Windows 上双击 `deploy\build.bat`（或命令行执行 `deploy\build.bat`），自动完成
+`mvn -DskipTests clean package` → 收集 Jar/前端/配置 → 打出一个交付包：
+
+```
+dist/DevStudio-<版本>/
+  devstudio-server.jar             后端可执行包（前端静态资源已打入 jar）
+  frontend/                        前端静态资源，独立留存
+  config/application.yml           外置配置，与 jar 同级的 config 目录会自动加载
+  config/devstudio.env.example     环境变量模板 → 复制为 /etc/devstudio.env
+  deploy/                          devstudio.service、nginx 配置、backup.sh、本指南
+  sql/                             建库脚本、种子数据、上线清单
+dist/DevStudio-<版本>.zip          同一交付包的压缩版
+```
+
+> 外置 `config/application.yml` 优先于 jar 内同名配置，改端口、连接池、附件目录不必重新打包。
+
+Linux/Mac 开发机也可直接：
+
 ```bash
-cd devstudio-server
 mvn -e -DskipTests package
 # 产出 target/devstudio-server.jar
 ```
