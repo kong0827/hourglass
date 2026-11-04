@@ -8,7 +8,7 @@ import { rt } from "../core/state.js";
 import { loadRunningTimer } from "../core/task-actions.js";
 import { refreshOwnerSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarColor, initial, pad2 } from "../lib/format.js";
+import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 
 var meReadyCbs = [];
@@ -30,8 +30,8 @@ function enterProfileView(){
   }
   var name = rt.currentUser.displayName || rt.currentUser.username || "?";
   if($("meAvatar")){
+    $("meAvatar").className = "avatar me-avatar avatar-c" + avatarColorIndex(name);
     $("meAvatar").textContent = initial(name);
-    $("meAvatar").style.setProperty("--a", avatarColor(name));
   }
   if($("meName")) $("meName").textContent = name;
   if($("meUsername")) $("meUsername").textContent = "@" + (rt.currentUser.username || "");
@@ -358,8 +358,8 @@ $("btnLogout").addEventListener("click", function(){
   UI.showConfirm({ title:"退出登录", msg:"确定退出当前账号？", okText:"退出", danger:false }).then(function(ok){
     if(!ok) return;
     API.post("/api/auth/logout", {}).then(function(){
-      window.location.href = "/login.html";
-    }).catch(function(){ window.location.href = "/login.html"; });
+      window.location.href = "/hourglass/login.html";
+    }).catch(function(){ window.location.href = "/hourglass/login.html"; });
   });
 });
 

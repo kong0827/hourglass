@@ -1,4 +1,4 @@
-# 工作台 DevStudio
+# 沙漏
 
 一个自用的任务看板（Kanban）：**今天要做什么、每件事花了多久、这周交付了什么**，放在同一张页面里。
 
@@ -69,7 +69,7 @@ mvn -DskipTests package
 java -jar target/devstudio-server.jar
 ```
 
-打开 <http://127.0.0.1:8080>，用 `AUTH_USER` / `AUTH_PASSWORD` 登录。
+打开 <http://127.0.0.1:8080/hourglass/>，用 `AUTH_USER` / `AUTH_PASSWORD` 登录。
 首次启动会自动创建管理员账号并生成你的个人空间。
 
 ---

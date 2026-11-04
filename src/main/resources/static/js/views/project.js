@@ -98,11 +98,11 @@ function renderProject(){
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
     + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>Epic 汇总</b><span>点击 Epic 查看子项</span></div>'
+    + '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
     + (epics.length ? epics.map(function(ep){
-      return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">Epic</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
-    }).join("") : '<div class="manager-empty-cell">该项目还没有 Epic</div>') + '</section>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th>未完成任务</th><th>剩余预估</th><th>本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+      return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
+    }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>'
+    + '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成任务</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
@@ -242,9 +242,9 @@ function drillProjectRow(p){
     if(epics.length || un.length){
       rows += epics.map(function(ep){
         var ek = "e:" + ep.id;
-        return drillGroupRow(1, ek, !!expanded[ek], '<i class="tag tag-plum">Epic</i>', ep.title, childrenOf(ep.id), ek);
+        return drillGroupRow(1, ek, !!expanded[ek], '<i class="tag tag-plum">史诗</i>', ep.title, childrenOf(ep.id), ek);
       }).join("");
-      if(un.length) rows += drillGroupRow(1, "g:" + p.reqId, !!expanded["g:" + p.reqId], "", "未归入 Epic", un, "g:" + p.reqId);
+      if(un.length) rows += drillGroupRow(1, "g:" + p.reqId, !!expanded["g:" + p.reqId], "", "未归入史诗", un, "g:" + p.reqId);
     }else{
       rows += '<tr class="drill-empty"><td colspan="11" class="manager-empty-cell">该项目还没有任务</td></tr>';
     }
@@ -290,9 +290,9 @@ function renderDrill(){
   }else{
     body = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
   }
-  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目看板 · 全部项目</b><span>逐层展开 Epic 与任务</span></div>'
+  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目看板 · 全部项目</b><span>逐层展开史诗与任务</span></div>'
     + '<div class="toolbar-right">' + drillControls() + modeSeg() + '</div></div>'
-    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数（与单项目看板同口径）；项目行统计该项目全部任务（含 Epic 任务本身），Epic 行只统计其子任务，因此子行数字相加不等于项目行。项目名进入单项目看板，Epic 名称查看子任务明细，任务行打开详情。')
+    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数（与单项目看板同口径）；项目行统计该项目全部任务（含史诗任务本身），史诗行只统计其子任务，因此子行数字相加不等于项目行。项目名进入单项目看板，史诗名称查看子任务明细，任务行打开详情。')
     + body;
 }
 function expandAllDrill(){
@@ -321,7 +321,7 @@ function exportDrill(){
   }
   function groupRow(p, name, kids){
     var c = countCols(kids);
-    rows.push(["Epic", name, p.name, "", "", avgPct(kids) + "%", c.backlog, c.doing, c.done, c.overdue, "",
+    rows.push(["史诗", name, p.name, "", "", avgPct(kids) + "%", c.backlog, c.doing, c.done, c.overdue, "",
       fmtDate(maxDue(kids)), hoursNum(sumMinutes(kids, "estimateMinutes")), hoursNum(sumMinutes(kids, "totalMinutes"))]);
     kids.forEach(function(t){ taskRow(p, t); });
   }
@@ -332,7 +332,7 @@ function exportDrill(){
       hoursNum(p.estimateMinutes), hoursNum(p.actualMinutes)]);
     epicTasks(p.reqId).forEach(function(ep){ groupRow(p, ep.title, childrenOf(ep.id)); });
     var un = ungroupedOf(p.reqId);
-    if(un.length) groupRow(p, "未归入 Epic", un);
+    if(un.length) groupRow(p, "未归入史诗", un);
   });
   downloadCsv("项目透视-" + pfCache.today + ".csv", rows);
   toast("已导出项目透视", "fs");
@@ -383,9 +383,9 @@ function onClick(e){
       var prefix = proj ? proj.name + " · " : "";
       if(ok.charAt(0) === "e"){
         var ep = drillTasks().filter(function(t){ return t.id === reqId; })[0];
-        openTaskTable(prefix + (ep ? ep.title : "Epic") + " · 子项", childrenOf(reqId));
+        openTaskTable(prefix + (ep ? ep.title : "史诗") + " · 子项", childrenOf(reqId));
       }else{
-        openTaskTable(prefix + "未归入 Epic", ungroupedOf(reqId));
+        openTaskTable(prefix + "未归入史诗", ungroupedOf(reqId));
       }
       return;
     }
@@ -409,7 +409,7 @@ function onClick(e){
   if(epic){
     var id = epic.dataset.epic;
     var ep = (cache.epics || []).filter(function(x){ return x.id === id; })[0];
-    openTaskTable((ep ? ep.title : "Epic") + " · 子项", (cache.tasks || []).filter(function(t){ return t.epicId === id; })); return;
+    openTaskTable((ep ? ep.title : "史诗") + " · 子项", (cache.tasks || []).filter(function(t){ return t.epicId === id; })); return;
   }
   var member = e.target.closest("[data-member-key]");
   if(member){

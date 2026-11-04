@@ -3,13 +3,17 @@ package com.devstudio.kanban.service;
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
+import com.devstudio.kanban.dto.BranchProjectTag;
 import com.devstudio.kanban.dto.BranchSaveRequest;
 import com.devstudio.kanban.dto.BranchStatusRequest;
+import com.devstudio.kanban.dto.BranchVersionTag;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.DevBranchLog;
+import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import org.springframework.stereotype.Service;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,13 +62,15 @@ public class BranchService {
     private final TaskMapper taskMapper;
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
+    private final RequirementMapper requirementMapper;
 
     public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
-                         ProjectAccessService projectAccess) {
+                         ProjectAccessService projectAccess, RequirementMapper requirementMapper) {
         this.branchMapper = branchMapper;
         this.taskMapper = taskMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
+        this.requirementMapper = requirementMapper;
     }
 
     public static String label(String status) {
@@ -72,8 +79,140 @@ public class BranchService {
     }
 
     public List<DevBranch> list(String workspaceId, String userId) {
-        return branchMapper.selectVisibleByWorkspace(workspaceId,
-                projectAccess.viewerScope(workspaceId, userId));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<DevBranch> branches = branchMapper.selectVisibleByWorkspace(workspaceId, viewerId, null);
+        excludeHiddenProjectBranches(workspaceId, userId, branches);
+        fillVersions(workspaceId, viewerId, branches);
+        fillProjects(workspaceId, viewerId, branches);
+        return branches;
+    }
+
+    /** 直接归属隐藏项目的分支不返回；空间级公共分支不受影响 */
+    private void excludeHiddenProjectBranches(String workspaceId, String userId, List<DevBranch> branches) {
+        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        if (hidden.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<DevBranch> it = branches.iterator();
+        while (it.hasNext()) {
+            DevBranch b = it.next();
+            if (b.getReqId() != null && hidden.contains(b.getReqId())) {
+                it.remove();
+            }
+        }
+    }
+
+    /**
+     * 按项目筛选的分支列表。
+     *
+     * <p>优先返回直接归属该项目的分支（reqId = projectId），同时保留空间级公共分支（reqId 为空）
+     * 以及通过任务推导归属该项目的分支，保证老数据不消失；尚未关联任何任务的公共分支
+     * 对所有项目可见，否则新建后无法挂到任务上。</p>
+     */
+    public List<DevBranch> list(String workspaceId, String userId, String projectId) {
+        if (projectId == null || projectId.isEmpty()) {
+            return list(workspaceId, userId);
+        }
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<DevBranch> branches = branchMapper.selectVisibleByWorkspace(workspaceId, viewerId, projectId);
+        excludeHiddenProjectBranches(workspaceId, userId, branches);
+        fillVersions(workspaceId, viewerId, branches);
+        fillProjects(workspaceId, viewerId, branches);
+        List<DevBranch> filtered = new ArrayList<DevBranch>();
+        for (DevBranch b : branches) {
+            if (projectId.equals(b.getReqId())) {
+                filtered.add(b);
+                continue;
+            }
+            List<BranchProjectTag> tags = b.getProjects();
+            if (tags == null || tags.isEmpty()) {
+                /* 尚未关联任何任务的公共分支：任何项目都能选 */
+                filtered.add(b);
+                continue;
+            }
+            for (BranchProjectTag tag : tags) {
+                if (projectId.equals(tag.getProjectId())) {
+                    filtered.add(b);
+                    break;
+                }
+            }
+        }
+        return filtered;
+    }
+
+    /** 分支详情（列表 + 抽屉共用实体）：带推导的影响版本标签与归属项目标签 */
+    public DevBranch getDetail(String workspaceId, String userId, String id) {
+        DevBranch b = get(workspaceId, id);
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        fillVersions(workspaceId, viewerId, java.util.Collections.singletonList(b));
+        fillProjects(workspaceId, viewerId, java.util.Collections.singletonList(b));
+        return b;
+    }
+
+    /**
+     * 影响版本标签：分支本身不绑版本，由「该分支下任务所归的版本」推导。
+     * 一条分支的任务可能分散在多个版本（含跨项目），全部并列展示、不强行归一；
+     * 排序按版本生命周期 planned → active → released。
+     */
+    private void fillVersions(String workspaceId, String viewerId, List<DevBranch> branches) {
+        if (branches.isEmpty()) {
+            return;
+        }
+        Map<String, List<BranchVersionTag>> byBranch = new LinkedHashMap<String, List<BranchVersionTag>>();
+        for (BranchVersionTag tag : branchMapper.selectVersionTags(workspaceId, viewerId)) {
+            List<BranchVersionTag> list = byBranch.get(tag.getBranchId());
+            if (list == null) {
+                list = new ArrayList<BranchVersionTag>();
+                byBranch.put(tag.getBranchId(), list);
+            }
+            list.add(tag);
+        }
+        for (DevBranch b : branches) {
+            List<BranchVersionTag> tags = byBranch.get(b.getId());
+            if (tags == null) {
+                continue;
+            }
+            Collections.sort(tags, (a, c) -> {
+                int d = versionRank(a.getStatus()) - versionRank(c.getStatus());
+                return d != 0 ? d : String.valueOf(a.getName()).compareTo(String.valueOf(c.getName()));
+            });
+            b.setVersions(tags);
+        }
+    }
+
+    private static int versionRank(String status) {
+        if ("planned".equals(status)) {
+            return 0;
+        }
+        if ("active".equals(status)) {
+            return 1;
+        }
+        return 2;
+    }
+
+    /**
+     * 归属项目标签：分支本身不绑项目，由「该分支下任务所在的项目」推导。
+     * 只返回查看人可见的项目，避免隐藏项目的项目名外泄。
+     */
+    private void fillProjects(String workspaceId, String viewerId, List<DevBranch> branches) {
+        if (branches.isEmpty()) {
+            return;
+        }
+        Map<String, List<BranchProjectTag>> byBranch = new LinkedHashMap<String, List<BranchProjectTag>>();
+        for (BranchProjectTag tag : branchMapper.selectProjectTags(workspaceId, viewerId)) {
+            List<BranchProjectTag> list = byBranch.get(tag.getBranchId());
+            if (list == null) {
+                list = new ArrayList<BranchProjectTag>();
+                byBranch.put(tag.getBranchId(), list);
+            }
+            list.add(tag);
+        }
+        for (DevBranch b : branches) {
+            List<BranchProjectTag> tags = byBranch.get(b.getId());
+            if (tags != null && !tags.isEmpty()) {
+                b.setProjects(tags);
+            }
+        }
     }
 
     public DevBranch get(String workspaceId, String id) {
@@ -87,7 +226,8 @@ public class BranchService {
     @Transactional
     public DevBranch create(String userId, String workspaceId, BranchSaveRequest req) {
         String name = normalizeName(req.getName());
-        if (branchMapper.countByName(workspaceId, name, null) > 0) {
+        String reqId = normalizeReqId(workspaceId, req.getReqId());
+        if (branchMapper.countByName(workspaceId, name, reqId, null) > 0) {
             throw AppException.badRequest("分支「" + name + "」已存在");
         }
         String status = normalizeStatus(req.getStatus(), ST_DEV);
@@ -95,6 +235,7 @@ public class BranchService {
         DevBranch b = new DevBranch();
         b.setId(Ids.gen("B"));
         b.setWorkspaceId(workspaceId);
+        b.setReqId(reqId);
         b.setName(name);
         b.setStatus(status);
         applyOwner(b, userId, req.getOwner(), req.getOwnerUserId());
@@ -116,13 +257,18 @@ public class BranchService {
     public DevBranch update(String userId, String workspaceId, String id, BranchSaveRequest req) {
         DevBranch b = get(workspaceId, id);
         String name = req.getName() == null ? b.getName() : normalizeName(req.getName());
-        if (!name.equals(b.getName()) && branchMapper.countByName(workspaceId, name, id) > 0) {
+        String reqId = req.getReqId() == null ? b.getReqId() : normalizeReqId(workspaceId, req.getReqId());
+        if ((!name.equals(b.getName()) || !eq(reqId, b.getReqId()))
+                && branchMapper.countByName(workspaceId, name, reqId, id) > 0) {
             throw AppException.badRequest("分支「" + name + "」已存在");
         }
 
         List<String> changed = new ArrayList<String>();
         if (!name.equals(b.getName())) {
             changed.add("分支名 " + b.getName() + " → " + name);
+        }
+        if (!eq(reqId, b.getReqId())) {
+            changed.add("所属项目 " + nz(reqIdLabel(b.getReqId())) + " → " + nz(reqIdLabel(reqId)));
         }
         String target = req.getTargetBranch() == null
                 ? b.getTargetBranch() : normalizeTarget(req.getTargetBranch());
@@ -145,6 +291,7 @@ public class BranchService {
         }
 
         b.setName(name);
+        b.setReqId(reqId);
         b.setTargetBranch(target);
         b.setNote(note);
         branchMapper.update(b);
@@ -185,7 +332,7 @@ public class BranchService {
         get(workspaceId, id);
         taskMapper.clearBranchRef(workspaceId, id);
         branchMapper.deleteLogsByBranch(id);
-        branchMapper.deleteById(id);
+        branchMapper.deleteById(workspaceId, id);
     }
 
     public List<DevBranchLog> logs(String workspaceId, String id) {
@@ -296,6 +443,23 @@ public class BranchService {
             throw AppException.badRequest("目标分支不能超过 80 字");
         }
         return t;
+    }
+
+    /** 空串统一按 null（空间级公共分支）处理；非空时必须是本空间的项目 */
+    private String normalizeReqId(String workspaceId, String raw) {
+        String reqId = Texts.trimToNull(raw);
+        if (reqId == null) {
+            return null;
+        }
+        Requirement r = requirementMapper.selectById(reqId);
+        if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
+            throw AppException.badRequest("所属项目不存在：" + reqId);
+        }
+        return reqId;
+    }
+
+    private String reqIdLabel(String reqId) {
+        return reqId == null ? "空间级公共" : reqId;
     }
 
     private static boolean eq(String a, String b) {

@@ -377,6 +377,10 @@ import { icon } from "./icons.js";
       '<button class="btn" type="button" data-empty-action="1">重试</button>' +
       '</div>';
   }
+  function colEmpty(text, iconName) {
+    var ic = iconName ? '<span class="ce-ic">' + icon(iconName, 18) + '</span>' : "";
+    return '<div class="col-empty">' + ic + '<b>' + esc2(text || "暂无数据") + '</b></div>';
+  }
   function skeletonCards(n) {
     var h = "";
     for (var i = 0; i < (n || 3); i++) h += '<div class="skel skel-card"></div>';
@@ -430,6 +434,7 @@ import { icon } from "./icons.js";
      ["dlgViewName", ["dlgViewNameX", "dlgViewNameCancel"]],
      ["dlgWsDelete", ["dlgWsDeleteX", "dlgWsDeleteCancel"]],
      ["dlgUserPwd", ["dlgUserPwdX", "dlgUserPwdCancel"]],
+     ["dlgUserEdit", ["dlgUserEditX", "dlgUserEditCancel"]],
      ["dlgGanttShare", ["ganttShareClose"]]].forEach(function (pair) {
       var m = document.getElementById(pair[0]);
       if (!m) return;
@@ -464,6 +469,7 @@ import { icon } from "./icons.js";
     wireTooltips: wireTooltips,
     emptyState: emptyState,
     errorState: errorState,
+    colEmpty: colEmpty,
     skeletonCards: skeletonCards,
     skeletonRows: skeletonRows,
     syncBusy: syncBusy,

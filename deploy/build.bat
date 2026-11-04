@@ -6,12 +6,12 @@ set "ROOT=%CD%"
 
 rem ===========================================================
 rem  DevStudio 一键打包
-rem  产物：dist\DevStudio-<版本>\（Jar + 前端 dist + 配置）
-rem        dist\DevStudio-<版本>.zip
+rem  产物：deploy\dist\DevStudio-<版本>\（Jar + 前端 dist + 配置）
+rem        deploy\dist\DevStudio-<版本>.zip
 rem  脚本位置：deploy\build.bat，与 deploy.sh 同目录
 rem ===========================================================
 
-set "APP_NAME=DevStudio"
+set "APP_NAME=Hourglass"
 set "JAR_NAME=devstudio-server.jar"
 set "TARGET_JAR=target\%JAR_NAME%"
 
@@ -79,7 +79,7 @@ if not defined VERSION (
 )
 if not defined VERSION set "VERSION=unknown"
 
-set "PACKAGE=dist\%APP_NAME%-%VERSION%"
+set "PACKAGE=deploy\dist\%APP_NAME%-%VERSION%"
 set "ZIP_FILE=%PACKAGE%.zip"
 set "CONF_DIR=%PACKAGE%\config"
 set "DEPLOY_DIR=%PACKAGE%\deploy"

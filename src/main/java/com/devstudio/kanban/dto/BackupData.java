@@ -196,6 +196,7 @@ public class BackupData {
     @Data
     public static class BackupBranch {
         private String id;
+        private String reqId;
         private String name;
         private String status;
         private String owner;

@@ -20,6 +20,7 @@ import { refreshListIfOpen } from "./list.js";
 
 var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
     ganttShowDoneEl = $("ganttShowDone"), ganttZoomEl = $("ganttZoom"),
+    ganttDensityEl = $("ganttDensity"),
     ganttGroupEl = $("ganttGroup"), ganttRangeModeEl = $("ganttRangeMode"),
     ganttRangeLabelEl = $("ganttRangeLabel"), ganttPrevMonthEl = $("ganttPrevMonth"),
     ganttNextMonthEl = $("ganttNextMonth"), ganttFilterBtn = $("ganttFilterBtn"),
@@ -72,7 +73,11 @@ var ganttState = {
   loadData: null, loadDoneKey: "", loadKey: "", loadSeq: 0, loadLoading: false,
   serverUnplanned: null, unplannedTasks: [], unscheduledTotal: 0, exportBusy: false, pendingNotice: "",
   wsId: null,
-  depDrag: null
+  depDrag: null,
+  /* ---- V1.4.1 显示密度与左列宽度 ---- */
+  density: "comfortable", // comfortable | compact | minimal
+  labelW: GANTT_LABEL_W,  // 左列任务列表像素宽度
+  labelDrag: null         // 拖拽调整左列宽度时的状态
 };
 var GANTT_DEFAULT_COLS = { project: true, owner: true, dates: true, work: true, subtask: true, tags: false, comments: false };
 function ganttPrefsKey(){
@@ -94,6 +99,8 @@ function loadGanttPrefs(){
   ganttState.baselineOn = false;
   ganttState.showCritical = false;
   ganttState.showLoad = false;
+  ganttState.density = "comfortable";
+  ganttState.labelW = GANTT_LABEL_W;
 
   var key = ganttPrefsKey();
   if(!key) return;   // 没有空间 id：保持内存状态，不写/不读错误 key
@@ -121,6 +128,9 @@ function loadGanttPrefs(){
   if(typeof saved.baselineOn === "boolean") ganttState.baselineOn = saved.baselineOn;
   if(typeof saved.showCritical === "boolean") ganttState.showCritical = saved.showCritical;
   if(typeof saved.showLoad === "boolean") ganttState.showLoad = saved.showLoad;
+  if(saved.density === "comfortable" || saved.density === "compact" || saved.density === "minimal") ganttState.density = saved.density;
+  var lw = Number(saved.labelW);
+  if(lw >= GANTT_LABEL_W_NARROW && lw <= 500) ganttState.labelW = lw;
 }
 function saveGanttPrefs(){
   var key = ganttPrefsKey();
@@ -137,15 +147,24 @@ function saveGanttPrefs(){
       cols: ganttState.cols,
       baselineOn: ganttState.baselineOn,
       showCritical: ganttState.showCritical,
-      showLoad: ganttState.showLoad
+      showLoad: ganttState.showLoad,
+      density: ganttState.density,
+      labelW: ganttState.labelW
     }));
   }catch(e){ /* 隐私模式 / 配额满：偏好只是增强，不打断使用 */ }
 }
 function ganttEffectiveDayW(){
   return GS.scaleDayW(ganttState.scale, ganttState.zoomDayW);
 }
+function ganttRowH(){
+  return ganttState.density === "minimal" ? 30 : (ganttState.density === "compact" ? 40 : GANTT_ROW_H);
+}
+function ganttGroupH(){
+  return ganttState.density === "minimal" ? 24 : (ganttState.density === "compact" ? 28 : GANTT_GROUP_H);
+}
 function ganttLabelW(){
-  return window.innerWidth <= 900 ? GANTT_LABEL_W_NARROW : GANTT_LABEL_W;
+  if(window.innerWidth <= 900) return GANTT_LABEL_W_NARROW;
+  return Math.max(GANTT_LABEL_W_NARROW, Math.min(500, ganttState.labelW || GANTT_LABEL_W));
 }
 function ganttReadOnly(){
   return window.matchMedia("(max-width: 900px)").matches;
@@ -163,6 +182,8 @@ function enterGanttView(){
   }
   loadGanttPrefs();
   syncGanttControls();
+  /* 启动时看板若未加载成功，筛选栏/筛选菜单会没有选项：进甘特时静默补拉一次 */
+  if(!state.board) loadBoard({silent:true});
   loadGantt();
   loadReqs().then(function(){
     if(activeView === "gantt" && !ganttState.drag && !ganttState.unplannedDrag && ganttState.tasks.length) renderGantt();
@@ -175,6 +196,7 @@ function syncGanttControls(){
     ganttZoomEl.value = String(ganttState.zoomDayW);
     ganttZoomEl.disabled = ganttState.scale !== "day";
   }
+  if(ganttDensityEl) ganttDensityEl.value = ganttState.density;
   if(ganttGroupEl) ganttGroupEl.value = ganttState.groupBy;
   if(ganttRangeModeEl){
     ganttRangeModeEl.querySelectorAll("[data-gantt-range]").forEach(function(b){
@@ -466,12 +488,13 @@ function ganttSortRows(rows){
 }
 function ganttBuildLayout(rows){
   var out = [], top = 0;
+  var rowH = ganttRowH(), groupH = ganttGroupH();
   ganttBuildGroups(rows).forEach(function(g1){
     var head1 = !!g1.key;
     var col1 = head1 && !!ganttState.collapsed[g1.key];
     if(head1){
       out.push({ type: "group", key: g1.key, name: g1.name, depth: 1, count: g1.count, collapsed: col1, top: top });
-      top += GANTT_GROUP_H;
+      top += groupH;
       if(col1) return;
     }
     var children = g1.children.length ? g1.children : [{ key: "", name: "", depth: 0, rows: g1.rows, count: g1.rows.length }];
@@ -480,12 +503,12 @@ function ganttBuildLayout(rows){
       var col2 = head2 && !!ganttState.collapsed[g2.key];
       if(head2){
         out.push({ type: "group", key: g2.key, name: g2.name, depth: 2, count: g2.count, collapsed: col2, top: top });
-        top += GANTT_GROUP_H;
+        top += groupH;
         if(col2) return;
       }
       g2.rows.forEach(function(x){
         out.push({ type: "row", x: x, top: top });
-        top += GANTT_ROW_H;
+        top += rowH;
       });
     });
   });
@@ -1506,19 +1529,21 @@ function renderGantt(){
   ganttState.layout = ganttBuildLayout(inRange);
   ganttState.win = { start: -1, end: -1 };
   ganttState.emptyMonthHTML = (ganttState.rangeMode === "month" && !inRange.length)
-    ? '<div class="gantt-month-empty">本月没有排期任务；可以翻到上一月/下一月，或把未排期任务拖进时间轴。</div>'
+    ? UI.colEmpty("本月没有排期任务；可以翻到上一月/下一月，或把未排期任务拖进时间轴。", "calendar")
     : "";
 
-  ganttScroll.innerHTML = '<div class="gantt-grid is-scale-' + ganttState.scale + '" style="--gantt-label-w:' + labelW + 'px;--gantt-day-w:' + dayW +
-      'px;--gantt-row-h:' + GANTT_ROW_H + 'px;--gantt-group-h:' + GANTT_GROUP_H + 'px;">' +
+  var densityClass = 'density-' + ganttState.density;
+  var rowH = ganttRowH(), groupH = ganttGroupH();
+  ganttScroll.innerHTML = '<div class="gantt-grid is-scale-' + ganttState.scale + ' ' + densityClass + '" style="--gantt-label-w:' + labelW + 'px;--gantt-day-w:' + dayW +
+      'px;--gantt-row-h:' + rowH + 'px;--gantt-group-h:' + groupH + 'px;">' +
     '<div class="gantt-head">' +
-      '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span></div>' +
+      '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span><span class="gantt-resizer" aria-label="拖动调整列宽" role="separator"></span></div>' +
       '<div class="gantt-axis" style="width:' + totalW + 'px">' + GS.headHTML(range, dayW, ganttState.scale, rt.TODAY_ISO) + '</div>' +
     '</div>' +
     '<div class="gantt-body"></div>' +
     (todayIn
-      ? '<div class="gantt-today-col" style="left:calc(' + labelW + 'px + ' + (todayOff * dayW) + 'px);width:' + dayW + 'px"></div>' +
-        '<div class="gantt-today" style="left:calc(' + labelW + 'px + ' + (todayOff * dayW) + 'px)"></div>'
+      ? '<div class="gantt-today-col" style="left:calc(var(--gantt-label-w) + ' + (todayOff * dayW) + 'px);width:' + dayW + 'px"></div>' +
+        '<div class="gantt-today" style="left:calc(var(--gantt-label-w) + ' + (todayOff * dayW) + 'px)"></div>'
       : '') +
   '</div>';
   /* 先按旧滚动位置渲染窗口，再恢复滚动条（空 body 时 scrollTop 会被夹到 0） */
@@ -1549,12 +1574,13 @@ function ganttWindowRange(layout, scrollTop, viewH){
   if(ganttState.pendingTop != null) scrollTop = ganttState.pendingTop;
   if(ganttState.printAll) return { start: 0, end: layout.length };
   if(layout.length <= 120) return { start: 0, end: layout.length };
+  var rowH = ganttRowH(), groupH = ganttGroupH();
   var from = Math.max(0, scrollTop - 600), to = scrollTop + viewH + 600;
   var lo = 0, hi = layout.length - 1, first = layout.length;
   while(lo <= hi){
     var mid = (lo + hi) >> 1;
     var e = layout[mid];
-    var bottom = e.top + (e.type === "group" ? GANTT_GROUP_H : GANTT_ROW_H);
+    var bottom = e.top + (e.type === "group" ? groupH : rowH);
     if(bottom >= from){ first = mid; hi = mid - 1; } else { lo = mid + 1; }
   }
   if(first >= layout.length) first = Math.max(0, layout.length - 1);
@@ -1574,6 +1600,7 @@ function ganttRenderBody(force){
   if(!force && win.start === ganttState.win.start && win.end === ganttState.win.end) return;
   ganttState.win = win;
   var range = ganttState.range, dayW = ganttState.dayW, totalW = range.days * dayW;
+  var rowH = ganttRowH(), groupH = ganttGroupH();
   var html = "", geom = {};
   for(var i = win.start; i < win.end; i++){
     var e = layout[i];
@@ -1586,7 +1613,7 @@ function ganttRenderBody(force){
   }
   var topPad = layout.length ? layout[win.start].top : 0;
   var last = layout[win.end - 1];
-  var lastH = last ? (last.type === "group" ? GANTT_GROUP_H : GANTT_ROW_H) : 0;
+  var lastH = last ? (last.type === "group" ? groupH : rowH) : 0;
   var bottomPad = Math.max(0, ganttState.layoutH - (last ? last.top + lastH : 0));
   bodyEl.innerHTML = (topPad ? '<div style="height:' + topPad + 'px"></div>' : "") + html +
     (bottomPad ? '<div style="height:' + bottomPad + 'px"></div>' : "") +
@@ -1741,6 +1768,21 @@ function ganttFilterTags(){
   });
   return out;
 }
+function ganttFilterVersions(){
+  var meta = state.board && state.board.meta;
+  var vs = (meta && meta.versions) || [];
+  var nameCount = {};
+  vs.forEach(function(v){ nameCount[v.name] = (nameCount[v.name] || 0) + 1; });
+  var out = vs.map(function(v){
+    var label = v.name;
+    if(nameCount[v.name] > 1 && v.projectName) label = v.name + "（" + v.projectName + "）";
+    return {id:v.id, label:label};
+  });
+  if((meta && meta.versionUnassigned) || state.versions.indexOf("__none") !== -1){
+    out.push({id:"__none", label:"待规划"});
+  }
+  return out;
+}
 function ganttFilterChip(attr, value, label, on){
   return '<button class="chip" type="button" ' + attr + '="' + esc(value) + '" aria-pressed="' +
     (on ? "true" : "false") + '">' + label + '</button>';
@@ -1763,6 +1805,9 @@ function renderGanttFilterMenu(){
   var typeHTML = ["task", "story", "bug", "epic"].map(function(t){
     return ganttFilterChip("data-gantt-type", t, esc(typeName(t)), state.types.indexOf(t) !== -1);
   }).join("");
+  var verHTML = ganttFilterVersions().map(function(v){
+    return ganttFilterChip("data-gantt-version", v.id, esc(v.label), state.versions.indexOf(v.id) !== -1);
+  }).join("");
   var projHTML = rt.reqList.map(function(r){
     return ganttFilterChip("data-gantt-req", r.id, esc(r.name), state.reqs.indexOf(r.id) !== -1);
   }).join("");
@@ -1784,6 +1829,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("负责人", ownerHTML || '<span class="foot-note">当前空间没有负责人可选</span>') +
     ganttFilterSection("优先级", priHTML) +
     ganttFilterSection("类型", typeHTML) +
+    (verHTML ? ganttFilterSection("版本", verHTML) : "") +
     ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
     (catHTML ? ganttFilterSection("分类", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
@@ -1819,7 +1865,7 @@ function renderGanttViewsMenu(){
         esc(v.name) + '</button>';
     }).join("");
   }
-  html += '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-view-save>保存当前筛选为视图</button></div>';
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-view-save>保存为视图</button></div>';
   html += '<div class="menu-sep"></div><div class="menu-title">排序</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
     [["start", "开始"], ["due", "截止"], ["priority", "优先级"], ["owner", "负责人"], ["progress", "进度"]].map(function(o){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
@@ -1947,7 +1993,61 @@ function ganttClampTimelineX(clientX){
   if(clientX > sr.right) return sr.right - 1;
   return clientX;
 }
+function ganttSetLabelWidth(w){
+  ganttState.labelW = Math.max(GANTT_LABEL_W_NARROW, Math.min(500, w));
+  var grid = ganttScroll && ganttScroll.querySelector(".gantt-grid");
+  if(grid) grid.style.setProperty("--gantt-label-w", ganttState.labelW + "px");
+}
+function cleanupGanttLabelDrag(){
+  var d = ganttState.labelDrag;
+  ganttState.labelDrag = null;
+  if(d && d.resizer) d.resizer.classList.remove("dragging");
+  document.removeEventListener("pointermove", onGanttLabelDragMove);
+  document.removeEventListener("pointerup", onGanttLabelDragEnd);
+  document.removeEventListener("pointercancel", onGanttLabelDragCancel);
+  document.removeEventListener("keydown", onGanttLabelDragKey);
+}
+function onGanttLabelDragMove(e){
+  var d = ganttState.labelDrag;
+  if(!d) return;
+  var nw = d.startW + (e.clientX - d.startX);
+  ganttSetLabelWidth(nw);
+}
+function onGanttLabelDragEnd(){
+  var d = ganttState.labelDrag;
+  if(!d) return;
+  cleanupGanttLabelDrag();
+  saveGanttPrefs();
+}
+function onGanttLabelDragCancel(){
+  if(!ganttState.labelDrag) return;
+  var d = ganttState.labelDrag;
+  ganttSetLabelWidth(d.startW);
+  cleanupGanttLabelDrag();
+  saveGanttPrefs();
+}
+function onGanttLabelDragKey(e){
+  if(e.key !== "Escape") return;
+  e.preventDefault();
+  onGanttLabelDragCancel();
+}
 function onGanttPointerDown(e){
+  /* 左列宽度调整条 */
+  var resizer = e.target.closest ? e.target.closest(".gantt-resizer") : null;
+  if(resizer){
+    if(e.pointerType === "mouse" && e.button !== 0) return;
+    var grid = resizer.closest ? resizer.closest(".gantt-grid") : null;
+    if(!grid) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizer.classList.add("dragging");
+    ganttState.labelDrag = { startX: e.clientX, startW: ganttLabelW(), resizer: resizer, grid: grid };
+    document.addEventListener("pointermove", onGanttLabelDragMove);
+    document.addEventListener("pointerup", onGanttLabelDragEnd);
+    document.addEventListener("pointercancel", onGanttLabelDragCancel);
+    document.addEventListener("keydown", onGanttLabelDragKey);
+    return;
+  }
   /* 条尾圆点 = 建依赖，不走改期拖拽 */
   var linkDot = e.target.closest ? e.target.closest("[data-gantt-link]") : null;
   if(linkDot){ onGanttLinkDown(e); return; }
@@ -2335,6 +2435,15 @@ if(ganttZoomEl){
     ganttScroll.scrollLeft = dayIndex * ganttState.dayW;
   });
 }
+if(ganttDensityEl){
+  ganttDensityEl.addEventListener("change", function(){
+    var v = this.value;
+    if(["comfortable","compact","minimal"].indexOf(v) === -1) return;
+    ganttState.density = v;
+    saveGanttPrefs();
+    renderGantt();
+  });
+}
 if(ganttScaleEl){
   ganttScaleEl.addEventListener("change", function(){
     var v = this.value;
@@ -2394,6 +2503,8 @@ if(ganttFilterMenu){
     if(p){ toggleFilterValue("pris", p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
     var tp = e.target.closest("[data-gantt-type]");
     if(tp){ toggleFilterValue("types", tp.getAttribute("data-gantt-type")); afterGanttFilterChange(); return; }
+    var vr = e.target.closest("[data-gantt-version]");
+    if(vr){ toggleFilterValue("versions", vr.getAttribute("data-gantt-version")); afterGanttFilterChange(); return; }
     var r = e.target.closest("[data-gantt-req]");
     if(r){ toggleFilterValue("reqs", r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
     var c = e.target.closest("[data-gantt-cat]");

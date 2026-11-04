@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>工作台 · 加入空间</title>
+<title>沙漏 · 加入空间</title>
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/components.css" />
@@ -29,7 +29,7 @@
       <h2 id="errTitle">邀请链接无效或已撤销</h2>
       <p id="errMsg">请向空间主索取新的邀请链接。</p>
     </div>
-    <p class="auth-tip" style="text-align:center"><a href="/">返回工作台</a></p>
+    <p class="auth-tip" style="text-align:center"><a href="/hourglass/">返回沙漏</a></p>
   </div>
 
   <!-- 状态三：有效 -->
@@ -55,7 +55,7 @@
 
     <div id="needLogin" class="join-actions" hidden>
       <p class="join-note">此邀请需要已有账号：请先登录，登录后会回到本页完成加入。</p>
-      <a class="btn primary lg" id="toLogin" href="/login.html">登录后加入</a>
+      <a class="btn primary lg" id="toLogin" href="/hourglass/login.html">登录后加入</a>
       <p class="join-note">没有账号？请先联系管理员创建账号</p>
     </div>
   </div>
@@ -104,7 +104,7 @@ import { API } from "./js/core/api.js";
     errMsg.textContent = msg || "请向空间主索取新的邀请链接。";
   }
   function loadMe() {
-    return fetch("/api/auth/me", { credentials: "same-origin" })
+    return fetch("/hourglass/api/auth/me", { credentials: "same-origin" })
       .then(function (res) {
         if (!res.ok) return null;
         return res.json().then(function (json) { return (json && json.code === 0) ? json.data : null; });
@@ -112,7 +112,7 @@ import { API } from "./js/core/api.js";
       .catch(function () { return null; });
   }
   function myWorkspaces() {
-    return fetch("/api/workspaces", { credentials: "same-origin" })
+    return fetch("/hourglass/api/workspaces", { credentials: "same-origin" })
       .then(function (res) { return res.json(); })
       .then(function (json) { return (json && json.code === 0) ? (json.data || []) : []; })
       .catch(function () { return []; });
@@ -122,11 +122,11 @@ import { API } from "./js/core/api.js";
     fail("链接缺少邀请码", "请使用空间主发来的完整邀请链接。");
     return;
   }
-  toLogin.href = "/login.html?next=" + encodeURIComponent("/join.html?code=" + code);
+  toLogin.href = "/hourglass/login.html?next=" + encodeURIComponent("/hourglass/join.html?code=" + code);
 
   var info = null, me = null, alreadyWsId = null;
 
-  fetch("/api/invite/" + encodeURIComponent(code), { credentials: "same-origin" })
+  fetch("/hourglass/api/invite/" + encodeURIComponent(code), { credentials: "same-origin" })
     .then(function (res) {
       return res.json().catch(function () { return null; }).then(function (json) {
         return { status: res.status, json: json };
@@ -198,7 +198,7 @@ import { API } from "./js/core/api.js";
       btnJoin.classList.remove("primary");
       btnJoin.style.background = "var(--success)";
       btnJoin.style.borderColor = "var(--success)";
-      btnJoin.style.color = "#fff";
+      btnJoin.style.color = "var(--text-inverse)";
       btnJoin.textContent = res && res.already ? "已是成员，正在进入…" : "已加入，正在进入…";
       setTimeout(function () { go(wsId); }, 800);
     }).catch(function (ex) {
@@ -210,7 +210,7 @@ import { API } from "./js/core/api.js";
   });
 
   function go(wsId) {
-    function done() { window.location.href = "/"; }
+    function done() { window.location.href = "/hourglass/"; }
     if (wsId) API.post("/api/workspaces/" + encodeURIComponent(wsId) + "/select", {}).then(done, done);
     else done();
   }

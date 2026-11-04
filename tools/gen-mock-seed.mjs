@@ -574,15 +574,17 @@ for (const ws of WORKSPACES) {
       const eEnd = created.map((c) => c.w.end).sort().at(-1);
       const eProg = Math.round(created.reduce((s, c) => s + c.rec.progress, 0) / created.length);
       const eCompleted = eDone ? created.map((c) => c.rec.completed_at).sort().at(-1) : null;
+      // 史诗标题取版本主题的业务表述（冒号后部分），避免与版本号重名
+      const eTheme = (vDesc.includes('：') ? vDesc.split('：').slice(1).join('：') : vDesc).slice(0, 60);
       add('task', {
-        id: E, workspace_id: W, title: `${vName} ${vDesc.split('：')[0]}`.slice(0, 60), description: vDesc.slice(0, 200), item_type: 'epic', epic_id: null, demand_id: null,
+        id: E, workspace_id: W, title: eTheme, description: vDesc.slice(0, 200), item_type: 'epic', epic_id: null, demand_id: null,
         priority: 'P1', owner: pmName, owner_user_id: pmId, category: '功能开发', board_column: eDone ? 'done' : eStarted ? 'doing' : 'backlog',
         start_date: eStart, due_date: eEnd, req_id: R, req_doc_id: vDoc, branch_id: null, progress: eProg, is_milestone: 0, estimate_minutes: null,
         is_blocked: 0, blocked_reason: null, note: null, completed_at: eCompleted, sort_order: 0,
         created_at: addDays(vStart, -7) + ' 10:00:00', updated_at: (eCompleted || addDays(vStart, -7)) + ' 18:30:00',
       });
       children.forEach((c) => { c.rec.epic_id = E; });
-      add('task_log', { task_id: E, workspace_id: W, actor_id: pmId, action: 'create', detail: `创建史诗「${vName}」`, created_at: addDays(vStart, -7) + ' 10:00:00' });
+      add('task_log', { task_id: E, workspace_id: W, actor_id: pmId, action: 'create', detail: `创建史诗「${eTheme}」`, created_at: addDays(vStart, -7) + ' 10:00:00' });
 
       const M = tid();
       const released = vStatus === 'released' || p.status === 'done';

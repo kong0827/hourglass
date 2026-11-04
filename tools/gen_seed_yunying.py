@@ -13,6 +13,13 @@
 - 部门日报         → 不导入（系统无日报概念）
 - 账号             → 仅执行角色（开发负责人/处理人/创建人/测试负责人）；提出人仅存 demand.source
 
+与代码不变量的对齐（2026-11-04）：
+- done 是后端自动追加的虚拟看板列，不写入 board_column；
+- plan 状态的需求必须挂同项目版本：优先取需求下已完成任务的实际归属版本；原表“已发版”的
+  落到提出后首个发布版本；其余取项目计划版本，再退到最近一次已发布版本；项目没有任何版本时降级为 pass（待排期）；
+- requirement.first_released_at 取该项目最早一个已发布版本的日期，没有发版记录的保持 NULL；
+- completed_at 只在看板列为 done 的任务上写，其余任务即使原表有“实际完成时间”也留空。
+
 用法：python tools/gen_seed_yunying.py [Excel路径] [输出SQL路径]
 """
 
@@ -209,6 +216,7 @@ def main():
             'created_by': user_by_name.get(proposer, {}).get('id'),
             'review_note': '暂不考虑' if status == '暂不考虑' else '',
             'created': d2dt(created) or P_CREATED,
+            'src_status': status,
             'sub_refs': txt(r.get('关联子任务')),
         })
     demand_by_title = {}
@@ -245,6 +253,8 @@ def main():
                             ('启动时间', '截止时间', '实际完成时间'))
         if column == 'done' and not done:
             done = due or date(2026, 8, 19)   # 无完成日期的已发布任务统一记为末次发版日
+        # completed_at 只在 done 列上有值，避免未完成任务被完成趋势统计计入
+        completed = done if column == 'done' else None
         demand_id = sub_demand.get(title)
         demand = next((d for d in demands if d['id'] == demand_id), None)
         req_id = (goal_to_project(r.get('关联的项目信息'))
@@ -259,7 +269,8 @@ def main():
             'priority': PRIORITY.get(txt(r.get('优先级')), 'P2'),
             'owner': owner, 'owner_uid': user_by_name.get(owner, {}).get('id'),
             'category': mod_first(r.get('关联模块')), 'column': column, 'progress': prog,
-            'start': start, 'due': due, 'done': done, 'req_id': req_id,
+            'start': start, 'due': due, 'done': done, 'completed': completed,
+            'req_id': req_id,
             'demand_id': demand_id, 'note': '', 'sort': col_counter[column] - 1,
             'created': d2dt(start) or d2dt(due) or P_CREATED,
         })
@@ -287,6 +298,7 @@ def main():
             'owner': owner, 'owner_uid': user_by_name.get(owner, {}).get('id'),
             'category': mod_first(r.get('关联模块')), 'column': column, 'progress': prog,
             'start': None, 'due': None, 'done': done if column == 'done' else None,
+            'completed': done if column == 'done' else None,
             'req_id': mod_project_of(r.get('关联模块')), 'demand_id': None,
             'note': '已拒绝' if status == '拒绝' else '',
             'sort': col_counter[column] - 1,
@@ -320,6 +332,56 @@ def main():
         fit = [v for v in released if v['released'][:10] >= t['done'].isoformat()]
         if fit:
             version_task.append((t['id'], sorted(fit, key=lambda v: v['released'])[0]['id']))
+
+    # ---- 需求挂版本：plan 必须落在同项目版本上（DemandService.plan 的硬约束）----
+    ver_by_id = {v['id']: v for v in versions}
+    task_by_id = {t['id']: t for t in tasks}
+    demand_versions = {}
+    for tid, vid in version_task:
+        did = task_by_id[tid]['demand_id']
+        if did:
+            demand_versions.setdefault(did, []).append(vid)
+
+    def pick_version(d):
+        """优先任务实际归属版本；否则原表“已发版”落到提出后首个发布版本，其余落到计划版本。"""
+        vids = [vid for vid in demand_versions.get(d['id'], [])
+                if ver_by_id[vid]['req_id'] == d['req_id']]
+        if vids:
+            return min(vids, key=lambda vid: ver_by_id[vid]['released'] or '9999')
+        same_project = [v for v in versions if v['req_id'] == d['req_id']]
+        shipped = sorted([v for v in same_project if v['released']], key=lambda v: v['released'])
+        if d['src_status'] == '已发版':
+            # 已发版但任务未进版本归属时，按提出日期落到其后首个发布版本
+            after = [v for v in shipped if v['released'][:10] >= d['created'][:10]]
+            if after:
+                return after[0]['id']
+        planned_versions = sorted([v for v in same_project if not v['released']],
+                                  key=lambda v: v['target'] or '9999-12-31')
+        if planned_versions:
+            return planned_versions[0]['id']
+        if shipped:
+            return shipped[-1]['id']
+        return None
+
+    downgraded = 0
+    for d in demands:
+        if d['status'] != 'plan':
+            d['version_id'] = None
+            continue
+        d['version_id'] = pick_version(d)
+        if not d['version_id']:
+            # 项目没有任何版本可挂，回退为待排期，避免“已排期但没有目标版本”的脏状态
+            d['status'] = 'pass'
+            downgraded += 1
+
+    # ---- 项目首版上线日：取最早一个已发布版本的日期 ----
+    first_release = {}
+    for v in versions:
+        if not v['released']:
+            continue
+        day = v['released'][:10]
+        if v['req_id'] not in first_release or day < first_release[v['req_id']]:
+            first_release[v['req_id']] = day
 
     # ==================== 输出 SQL ====================
     out = []
@@ -387,9 +449,11 @@ def main():
     w(',\n'.join(rows) + ';')
     w('')
 
-    w('-- 看板列（共享空间 6 列 + 个人空间基础列）')
+    # done 由后端在返回看板时自动追加（ColumnController / TaskQueryService），落库会渲染出两个“已完成”
+    w('-- 看板列（共享空间 5 列 + 个人空间基础列；done 为虚拟列，不落库）')
     w('INSERT INTO board_column (id, workspace_id, name, color, sort_order) VALUES')
-    rows = ["  ('%s', '%s', '%s', '%s', %d)" % (c[0], WS, c[1], c[2], c[3]) for c in COLUMNS]
+    rows = ["  ('%s', '%s', '%s', '%s', %d)" % (c[0], WS, c[1], c[2], c[3])
+            for c in COLUMNS if c[0] != 'done']
     for u in users:
         rows.append("  ('backlog', '%s', '待处理', '#c08a3e', 0)" % u['pw'])
         rows.append("  ('doing', '%s', '进行中', '#5b83ad', 1)" % u['pw'])
@@ -404,10 +468,11 @@ def main():
     w(',\n'.join(rows) + ';')
     w('')
 
-    w('-- 项目（%d 个）' % len(projects))
-    w('INSERT INTO requirement (id, workspace_id, name, description, status, created_at, updated_at) VALUES')
-    rows = ["  ('%s', '%s', %s, %s, '%s', '%s', '%s')" % (
-        p['id'], WS, esc(p['name']), esc(trunc(p['goal'], 160)), p['status'], P_CREATED, P_CREATED)
+    w('-- 项目（%d 个；first_released_at 取最早已发布版本日期）' % len(projects))
+    w('INSERT INTO requirement (id, workspace_id, name, description, status, first_released_at, created_at, updated_at) VALUES')
+    rows = ["  ('%s', '%s', %s, %s, '%s', %s, '%s', '%s')" % (
+        p['id'], WS, esc(p['name']), esc(trunc(p['goal'], 160)), p['status'],
+        sq(first_release.get(p['id'])), P_CREATED, P_CREATED)
         for p in projects]
     w(',\n'.join(rows) + ';')
     w('')
@@ -420,10 +485,10 @@ def main():
     w(',\n'.join(rows) + ';')
     w('')
 
-    w('-- 需求池（%d 行）' % len(demands))
-    w('INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, priority, status, review_note, created_by, created_at, updated_at) VALUES')
-    rows = ["  ('%s', '%s', %s, %s, %s, %s, '%s', '%s', '%s', %s, %s, '%s', '%s')" % (
-        d['id'], WS, sq(d['req_id']), esc(d['title']), sq(trunc(d['desc'], 2000)),
+    w('-- 需求池（%d 行；plan 行均带同项目 version_id，%d 行因项目无版本回退为 pass）' % (len(demands), downgraded))
+    w('INSERT INTO demand (id, workspace_id, req_id, version_id, title, description, source, item_kind, priority, status, review_note, created_by, created_at, updated_at) VALUES')
+    rows = ["  ('%s', '%s', %s, %s, %s, %s, %s, '%s', '%s', '%s', %s, %s, '%s', '%s')" % (
+        d['id'], WS, sq(d['req_id']), sq(d['version_id']), esc(d['title']), sq(trunc(d['desc'], 2000)),
         sq(d['source']), d['kind'], d['priority'], d['status'], sq(d['review_note']),
         sq(d['created_by']), d['created'], d['created']) for d in demands]
     w(',\n'.join(rows) + ';')
@@ -441,7 +506,7 @@ def main():
             t['priority'], sq(t['owner'] or '未指派'), sq(t['owner_uid']), esc(t['category'] or ''),
             t['column'], sq(t['start'].isoformat() if t['start'] else None),
             sq(t['due'].isoformat() if t['due'] else None), sq(t['req_id']), t['progress'],
-            sq(t['note']), sq(t['done'].isoformat() if t['done'] else None),
+            sq(t['note']), sq(t['completed'].isoformat() if t['completed'] else None),
             t['sort'], t['created'], updated))
     w(',\n'.join(rows) + ';')
     w('')
@@ -484,6 +549,13 @@ def main():
     print('工作项无项目归属 %d 个：%s' % (len(no_req), no_req[:10]))
     print('工作项无分类 %d 个：%s' % (len(no_cat), no_cat[:10]))
     print('工作项关联需求 %d 个' % linked)
+    from collections import Counter
+    st = Counter(d['status'] for d in demands)
+    print('需求状态：plan %d（均带 version_id）、pass %d、review %d、rej %d；因项目无版本回退 pass %d' % (
+        st.get('plan', 0), st.get('pass', 0), st.get('review', 0), st.get('rej', 0), downgraded))
+    print('首版上线日：%s' % ('、'.join('%s=%s' % kv for kv in sorted(first_release.items())) or '无'))
+    print('非 done 任务写 completed_at %d 个（应为 0）' % sum(
+        1 for t in tasks if t['column'] != 'done' and t['completed']))
     unpw = [u['name'] for u in users if u['username'] not in PINYIN.values()]
     if unpw:
         print('警告：以下账号未配拼音用户名，将使用中文用户名：%s' % '、'.join(unpw))

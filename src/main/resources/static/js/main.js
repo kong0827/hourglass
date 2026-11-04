@@ -41,10 +41,6 @@ function boot(){
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
   var startView = viewFromHash();
-  try{
-    var saved = localStorage.getItem("ds.view");
-    if(!window.location.hash && saved && VIEWS[saved]) startView = saved;
-  }catch(e){ /* noop */ }
   try{ history.replaceState(null, "", "#/" + startView); }
   catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
   showView(startView);

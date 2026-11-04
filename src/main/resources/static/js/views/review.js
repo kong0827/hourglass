@@ -116,7 +116,7 @@ function summaryPlain(d){
   return el.textContent || "";
 }
 function distHTML(list, colorOf, valueOf){
-  if(!list || !list.length) return '<div class="col-empty">暂无数据</div>';
+  if(!list || !list.length) return UI.colEmpty("暂无数据");
   var max = 1;
   list.forEach(function(x){ if(x.count > max) max = x.count; });
   return list.map(function(x){
@@ -207,7 +207,7 @@ function renderReview(d){
       '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
       '<span class="tag tag-' + badgeKind + '">' + badge + '</span>' +
     '</div>';
-  }).join("") : '<div class="col-empty">该周期没有已完成的任务</div>';
+  }).join("") : UI.colEmpty("该周期没有已完成的任务");
   if(doneCountEl) doneCountEl.textContent = list.length ? ("共 " + list.length + " 项") : "";
 
   var progTasks = d.progressTasks || [];
@@ -222,7 +222,7 @@ function renderReview(d){
       '</span>' +
       '<span class="di-d">' + esc(colName(t.boardColumn)) + '</span>' +
     '</div>';
-  }).join("") : '<div class="col-empty">当前没有进行中的任务（把任务拖到「进行中」列即可）</div>';
+  }).join("") : UI.colEmpty("当前没有进行中的任务（把任务拖到「进行中」列即可）");
   if(progCountEl) progCountEl.textContent = progTasks.length ? ("共 " + progTasks.length + " 项") : "";
 
   var reqDist = d.reqDist || [];
@@ -230,7 +230,7 @@ function renderReview(d){
     ? distHTML(reqDist.map(function(r){ return {name:r.name, count:r.progressPct, extra:r}; }),
         function(r){ return r.extra.status === "done" ? "var(--success)" : "var(--primary)"; },
         function(r){ return r.count + "% · " + r.extra.doneCount + "/" + r.extra.taskCount; })
-    : '<div class="col-empty">暂无项目</div>';
+    : UI.colEmpty("暂无项目");
 
   /* AI 周报跟着「当前这一周」走：有缓存还原，没有则空态（函数定义在下方，靠声明提升） */
   syncAiReport(d);
@@ -247,7 +247,7 @@ function copyReviewPlain(){
   var doneTasks = d.completed || [];
   /* 复制口径与页面一致：先「进行中」（已开工未完成），再「本周完成」。
      不再叫「完成明细」—— 页面上的区块也叫「本周完成」。 */
-  var text = "工作台 · " + (d.label || "") + "工作回顾（" + d.weekStart + " — " + d.weekEnd + "）\n\n"
+  var text = "沙漏 · " + (d.label || "") + "工作回顾（" + d.weekStart + " — " + d.weekEnd + "）\n\n"
     + summaryPlain(d) + "\n\n"
     + "进行中（" + progTasks.length + " 项）：\n"
     + (progTasks.length ? progTasks.map(function(t){

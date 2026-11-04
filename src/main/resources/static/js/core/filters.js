@@ -5,6 +5,11 @@ import { reloadFilteredViews, toggleIn } from "./filters-ui.js";
 import { VIEWS, activeView } from "./router.js";
 import { rt, state, totalTaskCount } from "./state.js";
 
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 var FILTER_KEYS = [
   { k: "q", kind: "text" },
   { k: "owners", kind: "list", s: "owners" },
@@ -13,6 +18,7 @@ var FILTER_KEYS = [
   { k: "reqs", kind: "list", s: "reqs" },
   { k: "tags", kind: "list", s: "tags" },
   { k: "types", kind: "list", s: "types" },
+  { k: "versions", kind: "list", s: "versions" },
   { k: "due", kind: "text" },
   { k: "focus", kind: "bool" },
   { k: "blocked", kind: "bool" },
@@ -62,12 +68,21 @@ function setFilterValue(key, value){
 function boardParams(extra){ return filterParams(extra); }
 function updateBrand(){
   if(!brandSub) return;
+  var wsName = rt.currentWs ? rt.currentWs.name : "";
+  var viewMeta = VIEWS[activeView] || {};
+  var parts = [];
+  if(wsName) parts.push(wsName);
+  parts.push(viewMeta.title || activeView);
   if(activeView === "board" && state.board){
     var doing = state.board.columns.doing ? state.board.columns.doing.total : 0;
-    brandSub.textContent = (rt.currentWs ? rt.currentWs.name + " · " : "") + doing + " 项进行中 · 共 " + totalTaskCount() + " 项";
-  }else{
-    brandSub.textContent = VIEWS[activeView] ? (VIEWS[activeView].sub || "") : "";
+    parts.push(doing + " 项进行中 · 共 " + totalTaskCount() + " 项");
+  }else if(viewMeta.sub){
+    parts.push(viewMeta.sub);
   }
+  brandSub.classList.add("breadcrumb");
+  brandSub.innerHTML = parts.map(function(p, i, arr){
+    return '<span>' + esc(p) + '</span>' + (i < arr.length - 1 ? '<span class="sep">/</span>' : '');
+  }).join("");
 }
 
 export { boardParams, currentFilterParams, filterParams, setFilterValue, toggleFilterValue, updateBrand };

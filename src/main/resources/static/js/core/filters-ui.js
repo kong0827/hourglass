@@ -1,8 +1,8 @@
 /* core/filters-ui · 筛选栏、搜索、保存视图 */
 
 import { API } from "./api.js";
-import { $, chipsOwner, chipsPri, chipsType, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
-import { currentFilterParams, toggleFilterValue } from "./filters.js";
+import { $, chipsOwner, chipsPri, chipsType, chipsVersion, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
+import { currentFilterParams, toggleFilterValue, updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { filterOn, rt, selectedFilterCount, state } from "./state.js";
@@ -11,7 +11,7 @@ import { PRIORITIES, PRIORITY_COLOR, avatarHTML, typeName } from "../lib/format.
 import { loadBoard } from "../views/board.js";
 import { loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { loadView } from "./view-loader.js";
-import { applyListSavedView, currentListViewName, currentListViewParams, listViewDeleted, markListViewSaved, refreshListIfOpen, renderSmartTabs } from "../views/list.js";
+import { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, listViewDeleted, markListViewSaved, refreshListIfOpen, renderSmartTabs } from "../views/list.js";
 import { loadMine } from "../views/mine.js";
 
 function metaCount(list, name){
@@ -50,18 +50,45 @@ function typeItems(meta){
   });
   return items;
 }
+/* 版本按 ID 筛选：同名版本跨项目存在，展示时用项目名消歧 */
+function versionItems(meta){
+  var vs = meta.versions || [];
+  var nameCount = {};
+  vs.forEach(function(v){ nameCount[v.name] = (nameCount[v.name] || 0) + 1; });
+  var items = [];
+  vs.forEach(function(v){
+    var on = state.versions.indexOf(v.id) !== -1;
+    if(v.count === 0 && !on) return;
+    var label = v.name;
+    if(nameCount[v.name] > 1 && v.projectName) label = v.name + "（" + v.projectName + "）";
+    items.push({id:v.id, name:label, count:v.count, on:on});
+  });
+  var noneOn = state.versions.indexOf("__none") !== -1;
+  if((meta.versionUnassigned || 0) > 0 || noneOn){
+    items.push({id:"__none", name:"待规划", count:meta.versionUnassigned || 0, on:noneOn});
+  }
+  return items;
+}
+function itemVal(o){ return o.id !== undefined ? o.id : o.name; }
 function ddCount(items, selected){
   var n = 0;
   items.forEach(function(o){
-    if(!selected.length || selected.indexOf(o.name) !== -1) n += o.count || 0;
+    if(!selected.length || selected.indexOf(itemVal(o)) !== -1) n += o.count || 0;
   });
   return n;
 }
 function ddButtonHTML(kind, selected, items){
-  var first = kind === "type" ? typeName(selected[0]) : selected[0];
+  var first;
+  if(kind === "version"){
+    var f0 = null;
+    for(var i = 0; i < items.length; i++) if(itemVal(items[i]) === selected[0]) f0 = items[i];
+    first = f0 ? f0.name : selected[0];
+  }else{
+    first = kind === "type" ? typeName(selected[0]) : selected[0];
+  }
   var label = !selected.length ? "全部"
     : (selected.length === 1 ? first : first + " +" + (selected.length - 1));
-  var title = kind === "owner" ? "负责人" : (kind === "type" ? "类型" : "优先级");
+  var title = kind === "owner" ? "负责人" : (kind === "type" ? "类型" : (kind === "version" ? "版本" : "优先级"));
   return '<button class="chip' + (selected.length ? "" : " ghost") + '" type="button" data-dd="' + kind +
     '" aria-haspopup="true" aria-expanded="false" title="选择' + title + '（可多选）">' +
     esc(label) + ' <span class="n">' + ddCount(items, selected) + '</span>' + icon("caretDown", 12) + '</button>';
@@ -93,6 +120,12 @@ function renderTypeChips(meta){
   chipsType.innerHTML = ddButtonHTML("type", state.types, items);
   $("fgType").hidden = items.length === 0 && state.types.length === 0;
   reopenDropdown("type");
+}
+function renderVersionChips(meta){
+  var items = versionItems(meta);
+  chipsVersion.innerHTML = ddButtonHTML("version", state.versions, items);
+  $("fgVersion").hidden = items.length === 0 && state.versions.length === 0;
+  reopenDropdown("version");
 }
 function renderMoreFilter(meta){
   var cats = (meta.cats || []).filter(function(c){ return c.count > 0 || state.cats.indexOf(c.name) !== -1; });
@@ -173,7 +206,9 @@ function renderViews(){
 }
 function updateFilterActions(){
   var n = selectedFilterCount();
-  filterActions.hidden = n === 0 && rt.savedViews.length === 0;
+  /* 列表视图由 Smart Bar 承载「视图」入口，筛选栏只保留清空与已选摘要 */
+  var showActions = n > 0 || (activeView !== "list" && rt.savedViews.length > 0);
+  filterActions.hidden = !showActions;
   selectedSummary.hidden = n === 0;
   selectedSummary.innerHTML = '已选 ' + n + ' 项 ' + icon("close", 12);
 }
@@ -183,15 +218,18 @@ function renderFilterChips(){
     renderOwnerChips(meta);
     renderPriChips(meta);
     renderTypeChips(meta);
+    renderVersionChips(meta);
     renderMoreFilter(meta);
   }else{
     chipsOwner.innerHTML = "";
     chipsPri.innerHTML = "";
     chipsType.innerHTML = "";
+    chipsVersion.innerHTML = "";
     moreFilterMenu.innerHTML = "";
     $("fgOwner").hidden = true;
     $("fgPri").hidden = true;
     $("fgType").hidden = true;
+    $("fgVersion").hidden = true;
   }
   renderBlockedChip();
   renderQueryChip();
@@ -213,7 +251,74 @@ function reloadFilteredViews(){
     refreshCalendarIfOpen();
     if(activeView === "mine") loadMine({silent:true});
     if(activeView === "gantt") loadView("gantt").then(function(m){ m.renderGanttFilterState(); });
+    saveViewState();
   }, 150);
+}
+/* 把当前筛选/视图/列表视图状态按工作区持久化到 localStorage，刷新后可恢复 */
+var VIEW_STATE_KEY = "ds.viewState.v1";
+function currentWsId(){ return rt.currentWs && rt.currentWs.id || ""; }
+function saveViewState(){
+  var ws = currentWsId();
+  if(!ws) return;
+  try{
+    var listSnap = null;
+    try{
+      var lp = currentListViewParams();
+      listSnap = { current: currentListViewId(), preset: lp.preset, group: lp.group, sort: lp.sort };
+    }catch(err){ /* 列表模块尚未就绪 */ }
+    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+      wsId: ws,
+      filters: {
+        q: state.q,
+        owners: state.owners.slice(), pris: state.pris.slice(), cats: state.cats.slice(), reqs: state.reqs.slice(),
+        tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
+        due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope
+      },
+      list: listSnap
+    }));
+  }catch(e){ /* 隐私模式/受限环境忽略 */ }
+}
+function restoreViewState(){
+  if(!rt.currentWs) return false;
+  var snap;
+  try{ snap = JSON.parse(localStorage.getItem(VIEW_STATE_KEY) || "null"); }catch(e){ return false; }
+  if(!snap || snap.wsId !== rt.currentWs.id) return false;
+  var changed = false;
+  var f = snap.filters;
+  if(f){
+    var newQ = typeof f.q === "string" ? f.q : "";
+    if(newQ !== state.q){ state.q = newQ; changed = true; }
+    ["owners","pris","cats","reqs","tags","types","versions"].forEach(function(k){
+      var arr = Array.isArray(f[k]) ? f[k].slice() : [];
+      if(arr.length !== state[k].length || arr.some(function(v,i){ return v !== state[k][i]; })){ state[k] = arr; changed = true; }
+    });
+    var newDue = f.due || null;
+    if(newDue !== state.due){ state.due = newDue; changed = true; }
+    var newFocus = !!f.focus;
+    if(newFocus !== state.focus){ state.focus = newFocus; changed = true; }
+    var newBlocked = !!f.blocked;
+    if(newBlocked !== state.blocked){ state.blocked = newBlocked; changed = true; }
+    var newDoneScope = f.doneScope || "week";
+    if(newDoneScope !== state.doneScope){ state.doneScope = newDoneScope; changed = true; }
+  }
+  if(snap.list && typeof applyListSavedView === "function"){
+    var lp = currentListViewParams();
+    if((snap.list.current || "all") !== currentListViewId() ||
+       snap.list.preset !== lp.preset || snap.list.group !== lp.group || snap.list.sort !== lp.sort){
+      applyListSavedView(snap.list.current || "all", {
+        preset: snap.list.preset || "all",
+        group: snap.list.group || "none",
+        sort: snap.list.sort || "default"
+      });
+      changed = true;
+    }
+  }
+  if(changed){
+    if(searchInput){ searchInput.value = state.q; searchWrap.classList.toggle("has", !!state.q); }
+    renderFilterChips();
+    updateBrand();
+  }
+  return changed;
 }
 var searchTimer = null;
 searchInput.addEventListener("input", function(){
@@ -225,6 +330,7 @@ function applySearch(kw){
   var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};
   state.q = kw || "";
   searchWrap.classList.toggle("has", state.q.length > 0);
+  saveViewState();
   /* 不支持筛选的视图：保留关键词并提示，由用户决定何时去看板/列表查看（不打断当前上下文） */
   if(kw && !supported[activeView]){
     toastAction("「" + kw + "」的搜索结果在看板 / 列表中查看", "去列表", function(){ showView("list"); }, "warn");
@@ -255,7 +361,7 @@ $("chipFocus").addEventListener("click", function(){
 });
 function clearFilters(){
   state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
-  state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
+  state.tags = []; state.types = []; state.versions = []; state.due = null; state.focus = false; state.blocked = false;
   searchInput.value = "";
   searchWrap.classList.remove("has");
   reloadFilteredViews();
@@ -316,17 +422,20 @@ function openFilterDropdown(anchor){
   var el = document.createElement("div");
   el.className = "menu popover filter-dd";
   function rows(){
-    var items = kind === "owner" ? ownerItems(meta) : (kind === "type" ? typeItems(meta) : priItems(meta));
-    var sel = kind === "owner" ? state.owners : (kind === "type" ? state.types : state.pris);
-    var title = kind === "owner" ? "负责人（可多选）" : (kind === "type" ? "类型（可多选）" : "优先级（可多选）");
+    var items = kind === "owner" ? ownerItems(meta)
+      : (kind === "type" ? typeItems(meta) : (kind === "version" ? versionItems(meta) : priItems(meta)));
+    var sel = kind === "owner" ? state.owners
+      : (kind === "type" ? state.types : (kind === "version" ? state.versions : state.pris));
+    var title = kind === "owner" ? "负责人（可多选）"
+      : (kind === "type" ? "类型（可多选）" : (kind === "version" ? "版本（可多选）" : "优先级（可多选）"));
     var html = '<div class="menu-title">' + title +
       '</div><div class="dd-list">';
     html += items.length ? items.map(function(o){
-      var on = sel.indexOf(o.name) !== -1;
+      var on = sel.indexOf(itemVal(o)) !== -1;
       var lead = kind === "owner"
         ? avatarHTML(o.name, "sm")
-        : (kind === "type" ? "" : '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>');
-      return '<button class="dd-row" type="button" data-dd-val="' + esc(o.name) + '" aria-pressed="' + on + '">' +
+        : (kind === "type" || kind === "version" ? "" : '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>');
+      return '<button class="dd-row" type="button" data-dd-val="' + esc(itemVal(o)) + '" aria-pressed="' + on + '">' +
         '<span class="tick">' + (on ? icon("check", 12) : "") + '</span>' + lead +
         '<span class="dd-name">' + (kind === "type" ? esc(typeName(o.name)) : esc(o.name)) + '</span>' +
         '<span class="n">' + o.count + '</span></button>';
@@ -340,14 +449,17 @@ function openFilterDropdown(anchor){
   el.innerHTML = rows();
   el.addEventListener("click", function(e){
     if(e.target.closest("[data-dd-clear]")){
-      if(kind === "owner") state.owners = []; else if(kind === "type") state.types = []; else state.pris = [];
+      if(kind === "owner") state.owners = [];
+      else if(kind === "type") state.types = [];
+      else if(kind === "version") state.versions = [];
+      else state.pris = [];
       reloadFilteredViews();
       el.innerHTML = rows();
       return;
     }
     var row = e.target.closest("[data-dd-val]");
     if(!row) return;
-    toggleFilterValue(kind === "owner" ? "owners" : (kind === "type" ? "types" : "pris"), row.dataset.ddVal);
+    toggleFilterValue(kind === "owner" ? "owners" : (kind === "type" ? "types" : (kind === "version" ? "versions" : "pris")), row.dataset.ddVal);
     el.innerHTML = rows();
   });
   ddPop = { anchor: anchor, el: el, kind: kind };
@@ -379,8 +491,8 @@ function parseViewParams(p){
     return v.slice();
   }
   var owners = strArr(p.owners), pris = strArr(p.pris), cats = strArr(p.cats),
-      reqs = strArr(p.reqs), tags = strArr(p.tags), types = strArr(p.types);
-  if(!owners || !pris || !cats || !reqs || !tags || !types) return null;
+      reqs = strArr(p.reqs), tags = strArr(p.tags), types = strArr(p.types), versions = strArr(p.versions);
+  if(!owners || !pris || !cats || !reqs || !tags || !types || !versions) return null;
   if(p.q !== undefined && p.q !== null && typeof p.q !== "string") return null;
   if(p.focus !== undefined && p.focus !== null && typeof p.focus !== "boolean") return null;
   if(p.blocked !== undefined && p.blocked !== null && typeof p.blocked !== "boolean") return null;
@@ -392,7 +504,7 @@ function parseViewParams(p){
   if(["default", "due", "priority", "estimate", "actual", "updated"].indexOf(sort) === -1) return null;
   return {
     q: p.q || "",
-    owners: owners, pris: pris, cats: cats, reqs: reqs, tags: tags, types: types,
+    owners: owners, pris: pris, cats: cats, reqs: reqs, tags: tags, types: types, versions: versions,
     due: (p.due === "over" || p.due === "today" || p.due === "soon") ? p.due : null,
     focus: p.focus === true,
     blocked: p.blocked === true,
@@ -410,7 +522,8 @@ function applyView(v){
   var f = parseViewParams(p);
   if(!f){ toast("视图参数不合法，无法应用（可删除后重新保存）", "bad"); return; }
   state.q = f.q; state.owners = f.owners; state.pris = f.pris; state.cats = f.cats;
-  state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.due = f.due; state.focus = f.focus;
+  state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.versions = f.versions;
+  state.due = f.due; state.focus = f.focus;
   state.blocked = f.blocked;
   state.doneScope = f.doneScope;
   searchInput.value = state.q;
@@ -482,4 +595,4 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
   }).catch(function(ex){ submitBtn.disabled = false; toast(ex.message || "保存失败", "bad"); });
 });
 
-export { applyView, clearFilters, deleteView, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, toggleIn };
+export { applyView, clearFilters, deleteView, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, toggleIn };

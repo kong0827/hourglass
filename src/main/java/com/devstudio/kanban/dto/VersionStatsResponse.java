@@ -51,6 +51,8 @@ public class VersionStatsResponse {
         private Integer scheduledDemandCount;
         /** 上线前未绑版本而自动归入本版本的任务数（仅首版 released 版本 &gt;0，口径见计划第 6 节） */
         private Integer preLaunchCount;
+        /** 分支进度：该版本下任务所挂分支（含上线前自动归入的任务），按分支状态 dev→released 排序 */
+        private List<BranchStat> branches = new ArrayList<BranchStat>();
     }
 
     @Data
@@ -61,5 +63,20 @@ public class VersionStatsResponse {
         private Integer workMinutes;
         private Integer estimateMinutes;
         private Integer remainingMinutes;
+        /** 分支进度：该桶任务所挂分支（待规划桶同样带，口径与版本卡一致） */
+        private List<BranchStat> branches = new ArrayList<BranchStat>();
+    }
+
+    /**
+     * 版本卡上的分支进度行：由「版本任务 → task.branch_id → dev_branch」推导，无独立绑定。
+     */
+    @Data
+    public static class BranchStat {
+        private String branchId;
+        private String name;
+        /** dev / testing / merging / released（分支模块四状态） */
+        private String status;
+        /** 该版本（或桶）下挂在此分支的任务数 */
+        private Integer taskCount;
     }
 }

@@ -1,7 +1,7 @@
 /* views/mine · 我的任务（分页 + 分组 + 行内操作） */
 
 import { API } from "../core/api.js";
-import { btnMineRefresh, mineBody, mineDot, mineMeta, mineSpaceFilter } from "../core/dom.js";
+import { btnMineRefresh, mineBody, mineMeta, mineSpaceFilter } from "../core/dom.js";
 import { clearFilters } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
@@ -184,17 +184,6 @@ function renderMine(d, append){
     mineMeta.textContent = countTxt + " · 覆盖 " + spaces.length + " 个空间" +
       (mineHasMore ? " · 还有更多，可继续加载" : "") +
       (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
-  }
-  if(mineDot){
-    var n = 0;
-    mineAll.forEach(function(t){
-      if(t.boardColumn === "done") return;
-      var k = dueState(t).kind;
-      if(k === "over" || k === "today") n++;
-    });
-    mineDot.textContent = n > 99 ? "99+" : n;
-    mineDot.hidden = n === 0;
-    mineDot.classList.add("urgent");
   }
   if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({

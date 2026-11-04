@@ -5,15 +5,60 @@ import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask,
 import { icon } from "./icons.js";
 import { rt, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { COLUMNS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, parseDate, startPresetDate } from "../lib/format.js";
+import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, parseDate, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { refreshListIfOpen } from "../views/list.js";
 
+/* 抽屉未保存改动的视觉同步：.drawer 加 .dirty，页脚 hint 变警示文案 */
+function syncDrawerDirty(){
+  var dirty = !!rt.formDirty;
+  var drawerEl = taskDrawer.querySelector(".drawer");
+  if(drawerEl) drawerEl.classList.toggle("dirty", dirty);
+  if(taskFormHint){
+    taskFormHint.classList.toggle("dirty", dirty);
+    taskFormHint.textContent = dirty ? "有未保存的改动" : "";
+  }
+}
+(function watchFormDirty(){
+  var desc = Object.getOwnPropertyDescriptor(rt, "formDirty");
+  if(desc && desc.set && desc.get) return; // 已被监听
+  var val = rt.formDirty;
+  Object.defineProperty(rt, "formDirty", {
+    get: function(){ return val; },
+    set: function(v){
+      val = !!v;
+      syncDrawerDirty();
+    }
+  });
+})();
+function setSaveLoading(loading){
+  if(loading){
+    if(!btnSaveTask.dataset.saveText) btnSaveTask.dataset.saveText = btnSaveTask.textContent.trim();
+    btnSaveTask.textContent = "保存中…";
+    btnSaveTask.disabled = true;
+    btnSaveTask.classList.add("loading");
+  }else{
+    btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存任务";
+    btnSaveTask.disabled = false;
+    btnSaveTask.classList.remove("loading");
+  }
+}
+function focusField(el){
+  if(!el) return;
+  try{
+    el.focus();
+    if(el.scrollIntoView) el.scrollIntoView({behavior:"smooth", block:"nearest", inline:"nearest"});
+  }catch(err){ /* noop */ }
+}
 
 function ensureReqDoc(v){ loadView("requirements").then(function(m){ m.ensureReqDocOptions(v); }); }
-function ensureBranch(v){ loadView("branches").then(function(m){ m.ensureBranchOptions(v); }); }
+function ensureBranch(v, projectId){
+  var sel = $("iBranch");
+  if(sel) sel.removeAttribute("data-ready");
+  loadView("branches").then(function(m){ m.ensureBranchOptions(v, projectId); });
+}
 function ensureVersion(keep, taskId){
   var sel = $("iVersion");
   if(sel) sel.removeAttribute("data-ready");
@@ -182,7 +227,10 @@ function renderActualEstimate(actualMinutes, estimateMinutes){
   }
   iActual.innerHTML = html;
 }
-function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
+function openTaskDrawer(colId, task, defaults){
+  rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
+    ? document.activeElement : null;
+  rt.taskFormSeq++;
   rt.editingId = task ? task.id : null;
   rt.formDirty = false;
   if(task) taskCacheExtra[task.id] = task;
@@ -216,7 +264,7 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
     ensureEpic(task.epicId, task.id);
     rt.formDemandId = task.demandId || null;
     ensureReqDoc(task.reqDocId || "");
-    ensureBranch(task.branchId || "");
+    ensureBranch(task.branchId || "", task.reqId || "");
     origProgress = (typeof task.progress === "number") ? task.progress : 0;
     iProg.value = origProgress;
     iNote.value = task.note || "";
@@ -270,7 +318,7 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
     ensureVersion((defaults && defaults.versionId) || "");
     ensureEpic((defaults && defaults.epicId) || "");
     ensureReqDoc((defaults && defaults.reqDocId) || "");
-    ensureBranch("");
+    ensureBranch("", (defaults && defaults.reqId) || "");
     origProgress = 0;
     iProg.value = 0;
     iNote.value = "";
@@ -332,9 +380,40 @@ function tryCloseTaskDrawer(){
 }
 function forceCloseTaskDrawer(){
   rt.taskFormSeq++;
+  var opener = rt.drawerOpener;
   closeDrawer();
   clearWorkTick();
   rt.editingId = null;
+  if(opener && opener.isConnected && opener.focus){
+    if(rt.drawerCloseTimer) clearTimeout(rt.drawerCloseTimer);
+    rt.drawerCloseTimer = setTimeout(function(){
+      rt.drawerCloseTimer = null;
+      if(!taskDrawer.classList.contains("on")) try{ opener.focus(); }catch(err){}
+    }, 160);
+  }
+}
+function wireSegKeyboard(seg){
+  if(!seg) return;
+  seg.addEventListener("keydown", function(e){
+    var b = e.target.closest("button");
+    if(!b || b.disabled) return;
+    var segEl = b.closest(".seg");
+    if(!segEl || segEl.classList.contains("disabled")) return;
+    var btns = Array.prototype.slice.call(segEl.querySelectorAll("button:not([disabled])"))
+      .filter(function(x){ return x.offsetParent !== null; });
+    var idx = btns.indexOf(b);
+    if(idx < 0) return;
+    var next = -1;
+    if(e.key === "ArrowRight" || e.key === "ArrowDown") next = (idx + 1) % btns.length;
+    else if(e.key === "ArrowLeft" || e.key === "ArrowUp") next = (idx - 1 + btns.length) % btns.length;
+    else if(e.key === "Home") next = 0;
+    else if(e.key === "End") next = btns.length - 1;
+    else return;
+    e.preventDefault();
+    var nb = btns[next];
+    nb.focus();
+    nb.click();
+  });
 }
 segPri.addEventListener("click", function(e){
   var b = e.target.closest("[data-fpri]"); if(!b) return;
@@ -386,6 +465,7 @@ segProg.addEventListener("click", function(e){
   var b = e.target.closest("[data-prog]"); if(!b) return;
   iProg.value = b.dataset.prog; syncProgVal(); rt.formDirty = true;
 });
+[segPri, segCat, segRecur, segDue, segStart, segProg].forEach(wireSegKeyboard);
 iProg.addEventListener("input", function(){ syncProgVal(); rt.formDirty = true; });
 function inTaskAuxSection(target){
   return !!(target && target.closest && target.closest("#fComments, #fSubtasks, #fAttach"));
@@ -399,8 +479,43 @@ taskForm.addEventListener("change", function(e){
   if(!inTaskAuxSection(e.target)) rt.formDirty = true;
 });
 iCol.addEventListener("change", function(){ syncProgByCol(); rt.formDirty = true; });
+/* 「工作项类型」旁的 ! 图标：点开弹层解释四类区别 */
+var itemTypeHelp = $("iItemTypeHelp");
+var itemTypeHelpPop = null;
+if(itemTypeHelp){
+  itemTypeHelp.innerHTML = icon("alertCircle", 13);
+  itemTypeHelp.addEventListener("click", function(){
+    if(UI.popOpen(itemTypeHelpPop)){ UI.closeAllPops(); return; }
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop";
+    el.innerHTML = itemTypeInfoHTML();
+    itemTypeHelpPop = el;
+    UI.openPop(el, itemTypeHelp, { align:"left", width:360, onClose:function(){ el.remove(); itemTypeHelpPop = null; } });
+  });
+}
+/* 「所属史诗」旁的 ! 图标：解释史诗（Epic）概念 */
+var epicHelp = $("iEpicHelp");
+var epicHelpPop = null;
+if(epicHelp){
+  epicHelp.innerHTML = icon("alertCircle", 13);
+  epicHelp.addEventListener("click", function(){
+    if(UI.popOpen(epicHelpPop)){ UI.closeAllPops(); return; }
+    var epicDesc = (ITEM_TYPE_DESCS.filter(function(o){ return o.key === "epic"; })[0] || {}).desc || "";
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop";
+    el.innerHTML = '<div class="menu-title">史诗（Epic）</div><div class="type-help-list">' +
+      '<div class="type-help-row"><span class="mini-tag type-epic">史诗</span>' +
+      '<span class="type-help-desc">' + esc(epicDesc) + '。任务、用户故事、缺陷都可挂到某个史诗下，也可不挂。</span></div></div>';
+    epicHelpPop = el;
+    UI.openPop(el, epicHelp, { align:"left", width:360, onClose:function(){ el.remove(); epicHelpPop = null; } });
+  });
+}
 /* 换项目时影响版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
-if(iReq) iReq.addEventListener("change", function(){ ensureVersion(""); ensureEpic(""); rt.formDemandId = null; });
+if(iReq) iReq.addEventListener("change", function(){
+  ensureVersion(""); ensureEpic("");
+  ensureBranch(($("iBranch") || {}).value, iReq.value);
+  rt.formDemandId = null;
+});
 if(iBlocked){
   iBlocked.addEventListener("change", function(){
     if(iBlockedReason){
@@ -577,7 +692,7 @@ taskForm.addEventListener("submit", function(e){
   var title = iTitle.value.trim();
   if(!title){
     fTitle.classList.add("invalid");
-    try{ iTitle.focus(); }catch(err){ /* noop */ }
+    focusField(iTitle);
     return;
   }
   var pendingTag = iTags.value.trim().replace(/[,，]/g, "");
@@ -585,7 +700,7 @@ taskForm.addEventListener("submit", function(e){
   /* 开始日期 ≤ 截止日期（服务端也有同样校验，这里先拦一道省一次往返） */
   if(iStart.value && iDue.value && iStart.value > iDue.value){
     toast("开始日期不能晚于截止日期", "bad");
-    try{ iStart.focus(); }catch(err){ /* noop */ }
+    focusField(iStart);
     return;
   }
   var owner = ownerPick();
@@ -606,7 +721,8 @@ taskForm.addEventListener("submit", function(e){
     reqId: iReq.value || null,
     /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
     reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
-    branchId: (branchSel && branchSel.options.length > 1) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
+    /* 分支按项目过滤后可能只剩占位项，不能用 options 数量判断是否加载完 */
+    branchId: (branchSel && branchSel.getAttribute("data-ready")) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
     itemType: (($("iItemType") || {}).value) || "task",
     /* 版本下拉 data-ready 由 phase 模块置位：没就绪说明选项还没回来，保留原绑定（null=不改）；
        就绪后空值是明确的「待规划」（空串=解绑），与后端口径一一对应 */
@@ -642,14 +758,12 @@ taskForm.addEventListener("submit", function(e){
   var seq = rt.taskFormSeq;
   var wasEdit = !!rt.editingId;
   var editId = rt.editingId;
-  btnSaveTask.disabled = true;
-  btnSaveTask.classList.add("loading");
+  setSaveLoading(true);
   var req = wasEdit
     ? API.put("/api/tasks/" + encodeURIComponent(editId), payload)
     : API.post("/api/tasks", payload);
   req.then(function(nt){
-    btnSaveTask.disabled = false;
-    btnSaveTask.classList.remove("loading");
+    setSaveLoading(false);
     if(seq !== rt.taskFormSeq) return;   // 抽屉已切换：界面由新的打开流程管理
     rt.formDirty = false;
     forceCloseTaskDrawer();
@@ -673,8 +787,7 @@ taskForm.addEventListener("submit", function(e){
     refreshGanttIfOpen();
     refreshAssociationViews();
   }).catch(function(ex){
-    btnSaveTask.disabled = false;
-    btnSaveTask.classList.remove("loading");
+    setSaveLoading(false);
     if(seq !== rt.taskFormSeq) return;
     toast(ex.message || "保存失败", "bad");
   });
@@ -874,7 +987,7 @@ iAttachFile.addEventListener("change", function(){
     headers:{ "X-XSRF-TOKEN": csrfCookie() },
     body: fd
   }).then(function(res){
-    if(res.status === 401){ window.location.href = "/login.html"; throw new Error("未登录"); }
+    if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
     return res.json().catch(function(){ return null; });
   }).then(function(json){
     attachList.classList.remove("busy");

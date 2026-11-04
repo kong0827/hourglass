@@ -44,7 +44,7 @@ var VIEWS = {
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
   portfolio: { title:"项目总览", sub:"全部项目的健康度、逾期与本周投入；点项目名进入项目看板", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目看板", sub:"单项目：周期、工时、任务分布、Epic 与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  project: { title:"项目看板", sub:"单项目：周期、工时、任务分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表中心", sub:"燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
@@ -77,7 +77,7 @@ function showView(name){
     s.classList.toggle("on", s.id === "view-" + name);
   });
   if(viewTitle) viewTitle.textContent = VIEWS[name].title;
-  document.title = VIEWS[name].title + " · 工作台";
+  document.title = VIEWS[name].title + " · 沙漏";
   updateBrand();
   UI.closeAllPops();
   syncViewHash(name);
@@ -90,7 +90,12 @@ function showView(name){
 function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
-  return (VIEWS[name] || legacy[name]) ? name : "board";
+  if(VIEWS[name] || legacy[name]) return name;
+  try{
+    var saved = localStorage.getItem("ds.view");
+    if(saved && (VIEWS[saved] || legacy[saved])) return saved;
+  }catch(e){ /* 隐私模式/受限环境忽略 */ }
+  return "mine";
 }
 var suppressHashSync = false;
 function syncViewHash(name){

@@ -386,7 +386,7 @@ function openSheet(opts){
   ensureVendor().catch(function(e){ vendorError = e; });
   fetch(downloadUrl(opts.attachment.id), { credentials: "same-origin" })
     .then(function(res){
-      if(res.status === 401){ window.location.href = "/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
       if(!res.ok) throw new Error("下载附件失败（HTTP " + res.status + "）");
       return res.arrayBuffer();
     })
@@ -458,7 +458,7 @@ function saveCurrent(){
       headers: { "X-XSRF-TOKEN": csrf() },
       body: fd
     }).then(function(res){
-      if(res.status === 401){ window.location.href = "/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
       return res.json().catch(function(){ return null; }).then(function(json){
         if(!json || json.code !== 0) throw new Error((json && json.message) || "保存失败");
         return json.data || {};

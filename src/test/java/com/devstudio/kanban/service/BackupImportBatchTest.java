@@ -93,7 +93,7 @@ class BackupImportBatchTest {
         docMapper = mock(RequirementDocMapper.class);
         when(docMapper.selectAllByWorkspace(anyString())).thenReturn(Collections.emptyList());
         DevBranchMapper branchMapper = mock(DevBranchMapper.class);
-        when(branchMapper.selectByWorkspace(anyString())).thenReturn(Collections.emptyList());
+        when(branchMapper.selectByWorkspace(anyString(), any())).thenReturn(Collections.emptyList());
 
         versionMapper = mock(ProjectVersionMapper.class);
         versionTaskMapper = mock(VersionTaskMapper.class);

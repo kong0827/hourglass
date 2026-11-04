@@ -11,6 +11,7 @@ import com.devstudio.kanban.dto.RequirementDeleteResult;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.WorkActivity;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
@@ -33,6 +34,7 @@ public class RequirementService {
     private final ProjectVersionService versionService;
     private final com.devstudio.kanban.mapper.ProjectVersionMapper versionMapper;
     private final com.devstudio.kanban.mapper.DemandMapper demandMapper;
+    private final DevBranchMapper branchMapper;
     private final ProjectAccessService projectAccess;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
@@ -40,6 +42,7 @@ public class RequirementService {
                               RequirementDocService docService, ProjectVersionService versionService,
                               com.devstudio.kanban.mapper.ProjectVersionMapper versionMapper,
                               com.devstudio.kanban.mapper.DemandMapper demandMapper,
+                              DevBranchMapper branchMapper,
                               ProjectAccessService projectAccess) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
@@ -50,6 +53,7 @@ public class RequirementService {
         this.versionService = versionService;
         this.versionMapper = versionMapper;
         this.demandMapper = demandMapper;
+        this.branchMapper = branchMapper;
         this.projectAccess = projectAccess;
     }
 
@@ -215,6 +219,8 @@ public class RequirementService {
         logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
                 "解除与已删除项目「" + r.getName() + "」的关联");
         taskMapper.clearReq(workspaceId, id);
+        /* 直接归属该项目的分支退回空间级公共分支（分支本身保留） */
+        branchMapper.clearReqIdByReq(workspaceId, id);
         /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);
         /* 版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */

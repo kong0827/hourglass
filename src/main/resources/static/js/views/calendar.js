@@ -5,13 +5,13 @@ import { $, iDue, unplannedBox, unplannedCount, unplannedList } from "../core/do
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
-import { calState, dueState, dueText, rt, taskById, taskCacheExtra } from "../core/state.js";
+import { calState, dueState, dueText, rt, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { addDays, fmtMD, iso, pad2, parseDate, weekdayCN } from "../lib/format.js";
-import { cardHTML } from "./board.js";
+import { cardHTML, loadBoard } from "./board.js";
 import { loadView } from "../core/view-loader.js";
 import { openReqDocAndJump } from "./requirements.js";
 
@@ -20,6 +20,8 @@ function enterCalendarView(){
   var now = new Date();
   if(calState.year === null){ calState.year = now.getFullYear(); calState.month = now.getMonth() + 1; }
   if(calState.selected === null) calState.selected = iso(rt.TODAY);
+  /* 启动时看板若未加载成功，筛选栏会没有选项：进日历时静默补拉一次 */
+  if(!state.board) loadBoard({silent:true});
   loadCalendar();
 }
 function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar({silent:true}); }
@@ -147,11 +149,11 @@ function loadUnplanned(){
       unplannedList.innerHTML = items.length
         ? items.slice(0, 50).map(function(t){ return cardHTML(t, 0); }).join("") +
           (items.length > 50 ? '<p class="foot-note">仅显示前 50 项，共 ' + items.length + ' 项未排期</p>' : "")
-        : '<div class="col-empty">本月没有未排期的任务：所有任务都已有截止日期。</div>';
+        : UI.colEmpty("本月没有未排期的任务：所有任务都已有截止日期。");
     }
   }).catch(function(){
     if(unplannedCount) unplannedCount.textContent = "—";
-    if(unplannedList) unplannedList.innerHTML = '<div class="col-empty">未排期任务加载失败（该接口需要后端支持）</div>';
+    if(unplannedList) unplannedList.innerHTML = UI.colEmpty("未排期任务加载失败（该接口需要后端支持）");
   });
 }
 function wireCardContainer(root){
@@ -196,7 +198,7 @@ function renderCalDayList(){
     '</div>';
   html += '<div class="cal-side-list">' + (openList.length
     ? openList.map(function(t){ return cardHTML(t, 0); }).join("")
-    : '<div class="col-empty">当日没有进行中的任务</div>');
+    : UI.colEmpty("当日没有进行中的任务", "inbox"));
   if(doneList.length){
     html += '<button class="btn sm ghost cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
       (showDone ? "收起已完成" : "展开 " + doneList.length + " 项已完成") + '</button>';

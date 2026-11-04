@@ -3,6 +3,7 @@
 import { API } from "../core/api.js";
 import { loadCategories, loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
+import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { catTag, rt, state, totalTaskCount } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
@@ -118,6 +119,100 @@ function roleOptions(selected, allowAdmin){
     return '<option value="' + r + '"' + (r === selected ? " selected" : "") + '>' + roleLabel(r) + '</option>';
   }).join("");
 }
+
+var ROLE_GUIDE_YES = '<span class="perm-mark yes" aria-label="允许">✓</span>';
+var ROLE_GUIDE_NO = '<span class="perm-mark no" aria-label="不允许">—</span>';
+function roleGuideRow(cells){
+  return "<tr>" + cells.map(function(c, i){
+    return i === 0 ? '<th scope="row">' + c + "</th>" : '<td class="perm-cell">' + c + "</td>";
+  }).join("") + "</tr>";
+}
+function roleGuideGroup(title){
+  return '<tr class="perm-group"><th colspan="5" scope="colgroup">' + title + "</th></tr>";
+}
+function roleGuideTable(head, body){
+  return '<div class="tbl-wrap"><table class="manager-tbl perm-matrix"><thead><tr>' +
+    head.map(function(c, i){ return '<th' + (i ? ' class="perm-cell"' : '') + ">" + c + "</th>"; }).join("") +
+    "</tr></thead><tbody>" + body + "</tbody></table></div>";
+}
+function openRoleGuide(){
+  var roleRows = [
+    roleGuideGroup("数据范围"),
+    roleGuideRow(["查看项目与任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "默认全部；设为「不可见」的项目不可见", ROLE_GUIDE_YES]),
+    roleGuideRow(["查看统计 / 报表 / 成员负载", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "按可见项目过滤", ROLE_GUIDE_YES]),
+    roleGuideGroup("工作项"),
+    roleGuideRow(["新建 / 编辑任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除任务（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["恢复回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["彻底删除回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["管理看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideGroup("成员与空间"),
+    roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["调整成员角色", "全部角色（可授予管理员）", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["移出成员", "除空间主外", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除共享空间", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO])
+  ].join("");
+
+  var menuRows = [
+    roleGuideRow(["我的任务、周回顾", "可见", "可见", "可见", "可见"]),
+    roleGuideRow(["项目、项目总览、需求池、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["看板、任务列表、日历、甘特图、分支", "可见", "可见", "可见（不可见项目的任务不出现）", "可见"]),
+    roleGuideRow(["分析、报表中心", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["版本阶段、成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["设置、个人设置", "可见", "可见", "可见（编辑项受角色限制）", "可见（只读）"])
+  ].join("");
+
+  var settingsRows = [
+    roleGuideRow(["空间 / 成员与角色 / 工作流 / 集成 / 数据 / 活动", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
+    roleGuideRow(["项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["账号（用户管理）", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"]),
+    roleGuideRow(["集成 → SMTP 邮件配置", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
+  ].join("");
+
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("aria-label", "角色权限说明");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML =
+    '<div class="sheet perm-guide-sheet">' +
+      '<div class="sheet-head">' +
+        '<div style="flex:1;min-width:0">' +
+          '<h2>角色权限说明</h2>' +
+          '<div class="desc">勾选表示允许，「—」表示不允许。能力口径与后端校验一致；成员的数据范围还会受项目可见范围影响。</div>' +
+        '</div>' +
+        '<button class="icon-btn sm" type="button" data-role-guide-close aria-label="关闭">' + icon("close", 15) + '</button>' +
+      '</div>' +
+      '<div class="sheet-body">' +
+        '<section class="perm-sect"><h4>空间角色权限</h4>' +
+          roleGuideTable(["能力", "空间主", "管理员", "成员", "查看者"], roleRows) +
+        '</section>' +
+        '<section class="perm-sect"><h4>可访问菜单</h4>' +
+          roleGuideTable(["菜单", "空间主", "管理员", "成员", "查看者"], menuRows) +
+          '<p class="perm-note">当前版本不按角色隐藏侧栏菜单：四种空间角色看到同一套 16 个菜单，差异体现在页面内按钮和数据范围。查看者可见全部菜单，但所有写操作都会被拒绝；成员可见全部菜单，但「不可见」项目的任务、文档和报表数据会被过滤。</p>' +
+        '</section>' +
+        '<section class="perm-sect"><h4>设置内入口差异</h4>' +
+          roleGuideTable(["入口", "空间主", "管理员", "成员", "查看者"], settingsRows) +
+          '<p class="perm-note">平台管理员额外可见「设置 → 账号（用户管理）」和「集成 → SMTP 邮件配置」，与空间角色无关。以上为界面展示口径，最终以后端校验为准。</p>' +
+        '</section>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-role-guide-close]")) UI.closeModal(layer);
+  });
+  UI.openModal(layer, "[data-role-guide-close]");
+}
+var btnRoleGuide = $("btnRoleGuide");
+if(btnRoleGuide){
+  btnRoleGuide.innerHTML = icon("infoCircle", 14) + "<span>角色权限说明</span>";
+  btnRoleGuide.addEventListener("click", openRoleGuide);
+}
 function enterSettingsView(){
   if(!rt.currentWs || !wsNameInput) return;
   rt.settingsReady = true;
@@ -126,6 +221,7 @@ function enterSettingsView(){
   var myRole = rt.currentWs.myRole || "member";
   var isManager = isOwner || myRole === "admin";
   var isPersonal = rt.currentWs.type === "personal";
+  if(btnRoleGuide) btnRoleGuide.hidden = isPersonal;
   $("wsTypeHint").textContent = isPersonal
     ? "个人空间 · 仅自己可见"
     : ("共享空间 · " + (isOwner ? "你是空间主" : "你是" + roleLabel(myRole)) + "（" + (rt.currentWs.memberCount || 0) + " 人）");
@@ -405,7 +501,7 @@ function renderInvites(){
   var listEl = $("inviteList");
   if(!listEl) return;
   if(!rt.inviteCache.length){
-    listEl.innerHTML = '<div class="col-empty">还没有邀请链接，点上方按钮生成</div>';
+    listEl.innerHTML = UI.colEmpty("还没有邀请链接，点上方按钮生成");
     return;
   }
   listEl.innerHTML = rt.inviteCache.map(function(v){
@@ -770,7 +866,7 @@ function loadActivity(){
 function renderActivity(list){
   if(actCount) actCount.textContent = list.length ? ("最近 " + list.length + " 条") : "";
   if(!list.length){
-    actList.innerHTML = '<div class="col-empty">还没有操作记录</div>';
+    actList.innerHTML = UI.colEmpty("还没有操作记录");
     return;
   }
   actList.innerHTML = list.map(function(a){
@@ -1056,7 +1152,7 @@ $("fileImport").addEventListener("change", function(e){
 $("btnExportCsv").addEventListener("click", function(){
   var csvUrl = "/api/export/csv" + (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
   fetch(csvUrl, { credentials:"same-origin" }).then(function(res){
-    if(res.status === 401){ window.location.href = "/login.html"; throw new Error("未登录"); }
+    if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
     if(!res.ok) throw new Error("请求失败（HTTP " + res.status + "）");
     return res.blob();
   }).then(function(blob){
@@ -1088,6 +1184,7 @@ btnReset.addEventListener("click", function(){
       state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
+      saveViewState();
       toast((n + m > 0)
         ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档、文档、版本与需求池）")
         : "任务数据已清空（分支、附件、时间线保留）", "warn");
@@ -1151,7 +1248,7 @@ function enterUsersView(){
 }
 function loadUsers(silent){
   if(!userListEl) return;
-  if(!silent) userListEl.innerHTML = UI.skeletonRows(3);
+  if(!silent) userListEl.innerHTML = '<div style="padding:12px 14px">' + UI.skeletonRows(3) + '</div>';
   API.get("/api/admin/users").then(function(list){
     renderUsers(list);
   }).catch(function(ex){
@@ -1163,69 +1260,132 @@ function loadUsers(silent){
     bindRetry(userListEl, function(){ loadUsers(false); });
   });
 }
+var userCache = [];
+var userAdminCount = 0;
 function renderUsers(list){
-  if(!list || !list.length){
-    userListEl.innerHTML = '<div class="foot-note">暂无用户</div>';
+  userCache = list || [];
+  userAdminCount = userCache.filter(function(u){ return u.role === "admin"; }).length;
+  if(!userCache.length){
+    userListEl.innerHTML = '<div class="foot-note" style="padding:12px 14px">暂无用户</div>';
     return;
   }
-  var adminCount = list.filter(function(u){ return u.role === "admin"; }).length;
-  userListEl.innerHTML = list.map(function(u){
-    var isMe = rt.currentUser && u.id === rt.currentUser.id;
-    var lastAdmin = u.role === "admin" && adminCount <= 1;
-    var delDisabled = isMe || lastAdmin;
-    var delTip = isMe ? "不能删除自己" : (lastAdmin ? "至少保留一名管理员" : "删除用户");
-    return '<div class="user-row" data-user-id="' + esc(u.id) + '">' +
-      avatarHTML(u.displayName, "xl") +
-      '<span class="mi">' +
-        '<span class="nm">' + esc(u.displayName) +
-          (isMe ? ' <span class="foot-note">（当前登录）</span>' : '') + '</span>' +
-        '<span class="sub">@' + esc(u.username) + '</span>' +
-      '</span>' +
-      '<span class="tag ' + (u.role === "admin" ? "tag-primary" : "tag-ghost") + '">' +
-        (u.role === "admin" ? "管理员" : "成员") + '</span>' +
-      '<span class="acts">' +
-        '<input class="input" type="text" value="' + esc(u.displayName) + '" maxlength="32" data-u-display placeholder="显示名" style="width:140px;height:30px" />' +
-        '<select class="mini-select" data-u-role aria-label="角色">' +
-          '<option value="user"' + (u.role === "user" ? " selected" : "") + '>成员</option>' +
-          '<option value="admin"' + (u.role === "admin" ? " selected" : "") + '>管理员</option>' +
-        '</select>' +
-        '<button class="btn sm" type="button" data-u-save>保存</button>' +
-        '<button class="btn sm" type="button" data-u-pass>重置密码</button>' +
-        '<button class="btn sm danger" type="button" data-u-del data-tip="' + esc(delTip) + '"' + (delDisabled ? " disabled" : "") + '>删除</button>' +
-      '</span>' +
-    '</div>';
-  }).join("");
-  UI.wireTooltips(userListEl);
+  userListEl.innerHTML =
+    '<table class="user-table">' +
+      '<thead><tr>' +
+        '<th scope="col">账号</th>' +
+        '<th scope="col">邮箱</th>' +
+        '<th scope="col">角色</th>' +
+        '<th scope="col" class="user-th-acts">操作</th>' +
+      '</tr></thead><tbody>' +
+      userCache.map(function(u){
+        var isMe = rt.currentUser && u.id === rt.currentUser.id;
+        return '<tr data-user-id="' + esc(u.id) + '">' +
+          '<td><div class="user-acct">' + avatarHTML(u.displayName, "xl") +
+            '<span class="mi"><span class="nm">' + esc(u.displayName) +
+              (isMe ? '<span class="self-tag">当前登录</span>' : '') + '</span>' +
+            '<span class="sub">@' + esc(u.username) + '</span></span>' +
+          '</div></td>' +
+          '<td class="user-email' + (u.email ? '' : ' empty') + '">' +
+            (u.email ? esc(u.email) : '未绑定') + '</td>' +
+          '<td><span class="tag ' + (u.role === "admin" ? "tag-primary" : "ghost") + '">' +
+            (u.role === "admin" ? "管理员" : "成员") + '</span></td>' +
+          '<td><div class="user-row-acts">' +
+            '<button class="btn sm" type="button" data-u-edit>编辑</button>' +
+            '<button class="btn sm ghost" type="button" data-u-more aria-haspopup="true" aria-expanded="false">更多</button>' +
+          '</div></td>' +
+        '</tr>';
+      }).join("") +
+    '</tbody></table>';
 }
-userListEl.addEventListener("click", function(e){
-  var row = e.target.closest("[data-user-id]");
-  if(!row) return;
-  var id = row.dataset.userId;
-  var display = row.querySelector("[data-u-display]").value.trim();
-  var role = row.querySelector("[data-u-role]").value;
-  if(e.target.closest("[data-u-save]")){
-    if(!display){ toast("显示名不能为空", "warn"); return; }
-    API.put("/api/admin/users/" + encodeURIComponent(id), { displayName: display, role: role }).then(function(){
-      toast("已保存用户「" + display + "」", "fs");
+function userDeleteGuard(u){
+  if(rt.currentUser && u.id === rt.currentUser.id) return "不能删除当前登录账号";
+  if(u.role === "admin" && userAdminCount <= 1) return "至少保留一名管理员";
+  return "";
+}
+function removeUser(u){
+  UI.showConfirm({
+    title:"删除用户",
+    msg:"删除用户「" + esc(u.displayName) + "」？该账号个人空间的任务/项目需已清空；个人空间剩余的文档、附件与配置会随账号一并删除，不可恢复。",
+    okText:"删除用户"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/admin/users/" + encodeURIComponent(u.id)).then(function(){
+      toast("已删除用户「" + u.displayName + "」", "fs");
       loadUsers();
-      loadBoard({silent:true});
-    }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
-    return;
-  }
-  if(e.target.closest("[data-u-pass]")){ openUserPwdDialog(id, display); return; }
-  if(e.target.closest("[data-u-del]")){
-    UI.showConfirm({
-      title:"删除用户",
-      msg:"删除用户「" + esc(display) + "」？该账号个人空间的任务/项目需已清空；个人空间剩余的文档、附件与配置会随账号一并删除，不可恢复。",
-      okText:"删除用户"
-    }).then(function(ok){
-      if(!ok) return;
-      API.del("/api/admin/users/" + encodeURIComponent(id)).then(function(){
-        toast("已删除用户「" + display + "」", "fs");
-        loadUsers();
-      }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
-    });
-  }
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+function openUserMenu(anchor, u){
+  var guard = userDeleteGuard(u);
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.innerHTML =
+    '<button class="menu-item" type="button" data-act="pass">' + icon("refresh", 14) + '重置密码</button>' +
+    (guard ? '<div class="menu-note">' + esc(guard) + '</div>' : '') +
+    '<button class="menu-item danger" type="button" data-act="del"' + (guard ? " disabled" : "") + '>' +
+      icon("trash", 14) + '删除账号</button>';
+  menu.addEventListener("click", function(ev){
+    var b = ev.target.closest("[data-act]");
+    if(!b || b.disabled) return;
+    UI.closeAllPops();
+    if(b.dataset.act === "pass") openUserPwdDialog(u.id, u.displayName);
+    else removeUser(u);
+  });
+  UI.openPop(menu, anchor, {
+    width:180,
+    onClose:function(){ if(menu.parentNode) menu.parentNode.removeChild(menu); }
+  });
+}
+var editingUserId = null;
+function openUserEdit(u){
+  editingUserId = u.id;
+  var lastAdmin = u.role === "admin" && userAdminCount <= 1;
+  $("dlgUserEditFor").textContent = "@" + u.username;
+  $("dlgUserName").value = u.displayName || "";
+  $("dlgUserEmail").value = u.email || "";
+  $("dlgUserRole").value = u.role === "admin" ? "admin" : "user";
+  $("dlgUserRole").disabled = lastAdmin;
+  $("dlgUserRoleHint").textContent = lastAdmin
+    ? "最后一名管理员不能降级为成员；如需调整，请先把其他账号设为管理员。"
+    : "成员只能管理自己的数据与参与的空间；管理员可管理全部账号。";
+  $("fDlgUserName").classList.remove("invalid");
+  $("fDlgUserEmail").classList.remove("invalid");
+  UI.openModal($("dlgUserEdit"));
+}
+$("dlgUserEditForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  if(!editingUserId) return;
+  var name = $("dlgUserName").value.trim();
+  var email = $("dlgUserEmail").value.trim();
+  var missingName = !name;
+  var badEmail = !!email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  $("fDlgUserName").classList.toggle("invalid", missingName);
+  $("fDlgUserEmail").classList.toggle("invalid", badEmail);
+  if(missingName || badEmail) return;
+  var btn = $("dlgUserEditOk");
+  btn.disabled = true;
+  API.put("/api/admin/users/" + encodeURIComponent(editingUserId), {
+    displayName: name, email: email || null, role: $("dlgUserRole").value
+  }).then(function(){
+    btn.disabled = false;
+    editingUserId = null;
+    UI.closeModal($("dlgUserEdit"));
+    toast("已保存用户「" + name + "」", "fs");
+    loadUsers();
+    loadBoard({silent:true});
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+userListEl.addEventListener("click", function(e){
+  var row = e.target.closest("tr[data-user-id]");
+  if(!row) return;
+  var u = userCache.filter(function(x){ return x.id === row.dataset.userId; })[0];
+  if(!u) return;
+  if(e.target.closest("[data-u-edit]")){ openUserEdit(u); return; }
+  var more = e.target.closest("[data-u-more]");
+  if(more) openUserMenu(more, u);
 });
 $("btnUserAdd").addEventListener("click", function(){
   var username = $("uNewName").value.trim();

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# DevStudio 任务看板 · 一键部署脚本
+# 沙漏 Hourglass · 一键部署脚本
 #
 # 用法（在项目根目录执行）：
 #   bash deploy/deploy.sh              自动判断改动范围后部署（推荐日常使用）
@@ -34,7 +34,7 @@ KEEP_DB_BAK=14                           # 部署前库备份保留天数（天�
 
 NGINX_PORT=8081                          # 对外 nginx 端口
 APP_PORT=8082                            # 应用内部端口（仅本机）
-PUBLIC_URL="http://${HOST}:${NGINX_PORT}"
+PUBLIC_URL="http://${HOST}:${NGINX_PORT}/hourglass"
 
 MVN="${MVN:-mvn}"
 
@@ -346,7 +346,7 @@ if [ "$DO_VERIFY" -eq 1 ]; then
 set +e
 B=http://127.0.0.1:${NGINX_PORT}
 
-echo "HEALTH \$(curl -s -m 10 \$B/api/health)"
+echo "HEALTH \$(curl -s -m 10 \$B/hourglass/api/health)"
 echo "LOCAL_JAR \$(sha256sum ${APP_DIR}/${JAR_NAME} | cut -c1-16)"
 echo "ERRORS \$(journalctl -u ${SERVICE} --no-pager -n 60 | grep -icE 'ERROR|Caused by' || true)"
 cd /tmp && rm -rf dv && mkdir dv && cd dv
@@ -361,9 +361,9 @@ DB_PW="\$(sed -n 's/^DB_PASSWORD=//p' ${ENV_FILE})"
 AU="\$(sed -n 's/^AUTH_USER=//p' ${ENV_FILE})"
 AP="\$(sed -n 's/^AUTH_PASSWORD=//p' ${ENV_FILE})"
 cd /tmp && rm -f dv.txt
-curl -s -c dv.txt -o /dev/null \$B/login.html
+curl -s -c dv.txt -o /dev/null \$B/hourglass/login.html
 T=\$(awk '/XSRF-TOKEN/{print \$NF}' dv.txt)
-echo "LOGIN \$(curl -s -b dv.txt -c dv.txt -H "X-XSRF-TOKEN: \$T" -d "username=\$AU&password=\$AP" \$B/api/auth/login)"
+echo "LOGIN \$(curl -s -b dv.txt -c dv.txt -H "X-XSRF-TOKEN: \$T" -d "username=\$AU&password=\$AP" \$B/hourglass/api/auth/login)"
 echo "MEM \$(systemctl show ${SERVICE} -p MemoryCurrent --value | awk '{printf "%.0f", \$1/1048576}')"
 rm -f /tmp/dv.txt
 REMOTE

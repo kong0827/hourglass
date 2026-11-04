@@ -10,10 +10,12 @@ import com.devstudio.kanban.dto.VersionOverviewResponse;
 import com.devstudio.kanban.dto.VersionStatsResponse;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Demand;
+import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -48,11 +50,12 @@ public class VersionPhaseService {
     private final TimeLogMapper timeLogMapper;
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
+    private final DevBranchMapper branchMapper;
 
     public VersionPhaseService(ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper,
                                RequirementMapper reqMapper, DemandMapper demandMapper,
                                TimeLogMapper timeLogMapper, UserMapper userMapper,
-                               ProjectAccessService projectAccess) {
+                               ProjectAccessService projectAccess, DevBranchMapper branchMapper) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.reqMapper = reqMapper;
@@ -60,6 +63,7 @@ public class VersionPhaseService {
         this.timeLogMapper = timeLogMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
+        this.branchMapper = branchMapper;
     }
 
     /** T1.3：按版本聚合（含待规划任务桶与需求池排期计数） */
@@ -71,12 +75,13 @@ public class VersionPhaseService {
         Requirement req = requireProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, reqId);
         return versionStats(workspaceId, req, versionMapper.selectByReq(workspaceId, reqId),
-                versionTaskMapper.selectStatsByReq(workspaceId, reqId));
+                versionTaskMapper.selectStatsByReq(workspaceId, reqId), branchBriefs(workspaceId));
     }
 
-    /** 总览复用：项目、版本、任务数据由调用方一次取好，避免逐视图重复查询 */
+    /** 总览复用：项目、版本、任务数据由调用方一次取好，避免逐视图重复查询；分支简表也由总览一次取好共用 */
     private VersionStatsResponse versionStats(String workspaceId, Requirement req,
-                                              List<ProjectVersion> versions, List<Task> tasks) {
+                                              List<ProjectVersion> versions, List<Task> tasks,
+                                              Map<String, DevBranch> branchBriefs) {
         String reqId = req.getId();
         LocalDate firstReleased = req.getFirstReleasedAt();
         /* 计划第 6 节：首版上线前未绑版本的任务自动归入最早已发布版本（通常是 V1.0） */
@@ -116,6 +121,7 @@ public class VersionPhaseService {
 
         VersionStatsResponse resp = new VersionStatsResponse();
         fillBucket(resp.getUnbound(), unbound);
+        resp.getUnbound().setBranches(branchStatsOf(unbound.tasks, branchBriefs));
         for (ProjectVersion version : versions) {
             VersionStatsResponse.VersionStat stat = new VersionStatsResponse.VersionStat();
             stat.setId(version.getId());
@@ -128,6 +134,7 @@ public class VersionPhaseService {
             Agg agg = aggOf(byVersion, version.getId());
             stat.setTaskCount(agg.tasks.size());
             fillDoneStats(stat, agg.tasks);
+            stat.setBranches(branchStatsOf(agg.tasks, branchBriefs));
             int[] c = demandCounts.get(version.getId());
             stat.setDemandCount(c == null ? 0 : c[0]);
             stat.setScheduledDemandCount(c == null ? 0 : c[1]);
@@ -213,8 +220,9 @@ public class VersionPhaseService {
         int mvpDevSum = 0, mvpDevN = 0, postDevSum = 0, postDevN = 0;
 
         java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
-        /* 成员名称跨项目复用缓存；每个项目的任务只查一次，阶段/版本两路统计共用 */
+        /* 成员名称跨项目复用缓存；每个项目的任务只查一次，阶段/版本两路统计共用；分支简表同理 */
         Map<String, String> userNameCache = new HashMap<String, String>();
+        Map<String, DevBranch> branchBriefs = branchBriefs(workspaceId);
         for (Requirement p : reqMapper.selectAll(workspaceId)) {
             if (hidden.contains(p.getId())) {
                 continue;
@@ -222,7 +230,7 @@ public class VersionPhaseService {
             List<Task> projectTasks = versionTaskMapper.selectStatsByReq(workspaceId, p.getId());
             PhaseStatsResponse ps = phaseStats(workspaceId, p, projectTasks, userId, userNameCache);
             VersionStatsResponse vs = versionStats(workspaceId, p,
-                    versionMapper.selectByReq(workspaceId, p.getId()), projectTasks);
+                    versionMapper.selectByReq(workspaceId, p.getId()), projectTasks, branchBriefs);
 
             VersionOverviewResponse.ProjectOverview po = new VersionOverviewResponse.ProjectOverview();
             po.setReqId(p.getId());
@@ -426,6 +434,62 @@ public class VersionPhaseService {
             byVersion.put(versionId, agg);
         }
         return agg;
+    }
+
+    /** 分支简表（id → 分支）：版本统计推导分支进度用，分支本身不绑版本 */
+    private Map<String, DevBranch> branchBriefs(String workspaceId) {
+        Map<String, DevBranch> map = new HashMap<String, DevBranch>();
+        for (DevBranch b : branchMapper.selectBriefsByWorkspace(workspaceId)) {
+            map.put(b.getId(), b);
+        }
+        return map;
+    }
+
+    /**
+     * 分支进度：按 task.branch_id 聚合当前口径下的任务数（上线前自动归入的任务同样计入，
+     * 与版本卡任务数同源）；按分支状态 dev → testing → merging → released 排序，未挂分支的任务忽略。
+     */
+    private List<VersionStatsResponse.BranchStat> branchStatsOf(List<Task> tasks,
+                                                                Map<String, DevBranch> branchBriefs) {
+        Map<String, Integer> counts = new java.util.LinkedHashMap<String, Integer>();
+        for (Task t : tasks) {
+            if (t.getBranchId() == null) {
+                continue;
+            }
+            Integer old = counts.get(t.getBranchId());
+            counts.put(t.getBranchId(), old == null ? 1 : old + 1);
+        }
+        List<VersionStatsResponse.BranchStat> out = new ArrayList<VersionStatsResponse.BranchStat>();
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            DevBranch b = branchBriefs.get(e.getKey());
+            if (b == null) {
+                continue;
+            }
+            VersionStatsResponse.BranchStat stat = new VersionStatsResponse.BranchStat();
+            stat.setBranchId(b.getId());
+            stat.setName(b.getName());
+            stat.setStatus(b.getStatus());
+            stat.setTaskCount(e.getValue());
+            out.add(stat);
+        }
+        Collections.sort(out, (a, b) -> {
+            int d = branchRank(a.getStatus()) - branchRank(b.getStatus());
+            return d != 0 ? d : String.valueOf(a.getName()).compareTo(String.valueOf(b.getName()));
+        });
+        return out;
+    }
+
+    private static int branchRank(String status) {
+        if ("dev".equals(status)) {
+            return 0;
+        }
+        if ("testing".equals(status)) {
+            return 1;
+        }
+        if ("merging".equals(status)) {
+            return 2;
+        }
+        return 3;
     }
 
     private void fillDoneStats(VersionStatsResponse.VersionStat stat, List<Task> tasks) {

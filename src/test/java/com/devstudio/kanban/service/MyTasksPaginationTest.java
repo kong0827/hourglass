@@ -7,6 +7,7 @@ import com.devstudio.kanban.dto.MyTasksQuery;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
@@ -36,7 +37,8 @@ class MyTasksPaginationTest {
     private TaskQueryService service() {
         WorkspaceMetaCache metaCache = mock(WorkspaceMetaCache.class);
         TaskSupport support = new TaskSupport(taskMapper, mock(TagMapper.class), metaCache);
-        return new TaskQueryService(taskMapper, mock(RequirementMapper.class), mock(TaskLogMapper.class),
+        return new TaskQueryService(taskMapper, mock(RequirementMapper.class), mock(ProjectVersionMapper.class),
+                mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
                 mock(ProjectAccessService.class));
@@ -87,7 +89,7 @@ class MyTasksPaginationTest {
                 .thenReturn(Collections.<MyTaskWorkspace>emptyList());
 
         BoardQuery query = BoardQuery.from(null, null, "P0", null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
         MyTasksPage page = service().myTasksPage("U1", "我", false, query, 0, 25);
 
         assertEquals(3, page.getTotal());

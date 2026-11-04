@@ -2,6 +2,7 @@
 
 import { API } from "./api.js";
 import { $ } from "./dom.js";
+import { reloadFilteredViews, restoreViewState } from "./filters-ui.js";
 import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, updateBellTitle } from "./notifications.js";
@@ -9,7 +10,7 @@ import { activeView, showView } from "./router.js";
 import { rt, state, taskById } from "./state.js";
 import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js";
 import { UI, esc, toast } from "./ui.js";
-import { avatarColor, initial } from "../lib/format.js";
+import { avatarColor, avatarColorIndex, initial } from "../lib/format.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
 import { askSwitchWorkspace, wsNameById } from "../views/mine.js";
 import { loadView } from "./view-loader.js";
@@ -30,8 +31,8 @@ function loadWorkspaces(meUser){
       if(nameEl) nameEl.textContent = target.name;
       var av = $("wsAvatar");
       if(av){
+        av.className = "avatar ws-avatar avatar-c" + avatarColorIndex(target.name || "空");
         av.textContent = target.name ? target.name.charAt(0) : "空";
-        av.style.setProperty("--a", avatarColor(target.name || "空"));
       }
       var kindEl = $("wsKind");
       if(kindEl) kindEl.textContent = target.type === "personal"
@@ -45,6 +46,7 @@ function loadWorkspaces(meUser){
     applyWsRoleGating();
     loadWsMembers();
     updateBrand();
+    if(restoreViewState()) reloadFilteredViews();
     /* 深链直达甘特图时，空间在首屏之后才确定：偏好与请求都要按新空间补跑一次 */
     if(activeView === "gantt"){
       loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });
@@ -143,7 +145,7 @@ function loadMe(){
 function renderSideUser(u){
   var name = (u && (u.displayName || u.username)) || "?";
   var av = $("sideUserAv"), nm = $("sideUserName");
-  if(av){ av.textContent = initial(name); av.style.setProperty("--a", avatarColor(name)); }
+  if(av){ av.className = "avatar avatar-c" + avatarColorIndex(name); av.textContent = initial(name); }
   if(nm) nm.textContent = name;
 }
 var lastCatLoad = 0;

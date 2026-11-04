@@ -6,8 +6,9 @@
 --       能看「这条分支卡在哪一步、卡了多久、上线了没」的地方。
 --
 -- 设计：
---   · dev_branch 是**空间级**的分支池（一个空间一个列表，不绑项目）——
---     同一份代码里往往主干、发布、feature 混着来，按项目切反而更乱；
+--   · dev_branch 是**空间级**的分支池，可选归属项目（req_id 空 = 空间级公共分支）——
+--     同一份代码里往往主干、发布、feature 混着来，不强制按项目切；
+--     建任务时按项目过滤分支（直接归属 + 公共分支），避免同名分支混在一起；
 --   · 四个状态时间点各存一列（dev_at / test_at / merge_at / released_at），
 --     记的是**首次进入**该状态的时间，用来算「多久发布」「卡在待测试几天」；
 --   · dev_branch_log 记每一次状态变更（谁、从哪到哪、什么时候），
@@ -26,6 +27,7 @@ USE devstudio;
 CREATE TABLE IF NOT EXISTS dev_branch (
   id            VARCHAR(32)  NOT NULL COMMENT '分支ID',
   workspace_id  VARCHAR(32)  NOT NULL COMMENT '归属空间ID',
+  req_id        VARCHAR(32)  DEFAULT NULL COMMENT '所属项目ID（requirement.id），空=空间级公共分支',
   name          VARCHAR(80)  NOT NULL COMMENT '分支名（如 feature/login，允许 / . - _ 等字符）',
   status        VARCHAR(16)  NOT NULL DEFAULT 'dev' COMMENT '状态：dev=开发中 / testing=待测试 / merging=待合并 / released=已发布',
   owner         VARCHAR(32)  DEFAULT NULL COMMENT '负责人显示名',
@@ -40,10 +42,11 @@ CREATE TABLE IF NOT EXISTS dev_branch (
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_ws_name (workspace_id, name),
+  UNIQUE KEY uk_ws_name (workspace_id, req_id, name),
   KEY idx_ws_status (workspace_id, status),
-  KEY idx_ws_updated (workspace_id, updated_at)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '分支（空间级分支池）';
+  KEY idx_ws_updated (workspace_id, updated_at),
+  KEY idx_branch_req (workspace_id, req_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '分支（空间级分支池，可归属项目）';
 
 CREATE TABLE IF NOT EXISTS dev_branch_log (
   id            VARCHAR(32)  NOT NULL COMMENT '日志ID',

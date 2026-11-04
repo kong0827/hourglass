@@ -42,6 +42,16 @@
     SELECT <include refid="cols"/> FROM app_user WHERE username = #{username}
   </select>
 
+  <!-- 邮箱登录回退：写入口已做唯一校验，历史脏数据按创建先后取第一条 -->
+  <select id="selectByEmail" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE email = #{email} ORDER BY created_at, id LIMIT 1
+  </select>
+
+  <select id="countByEmail" resultType="int">
+    SELECT COUNT(*) FROM app_user WHERE email = #{email}
+    <if test="excludeId != null and excludeId != ''"> AND id &lt;&gt; #{excludeId} </if>
+  </select>
+
   <select id="countAll" resultType="int">
     SELECT COUNT(*) FROM app_user
   </select>

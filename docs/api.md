@@ -210,7 +210,7 @@
  "baseline":[{"taskId":"K1","start":"2026-10-01","due":"2026-10-08"}],
  "baselineAt":"2026-10-28T18:00:00",
  "reqDocs":[{"id":"Dxxx","reqId":"Rxxx","title":"...","content":"<p>...</p>","status":"draft","owner":"我"}],
- "branches":[{"id":"Bxxx","name":"feature/login","status":"dev","owner":"我","targetBranch":"main"}]}
+ "branches":[{"id":"Bxxx","reqId":null,"name":"feature/login","status":"dev","owner":"我","targetBranch":"main"}]}
 ```
 
 返回 `{"tasks": 42, "reqs": 5, "comments": 18, "reqDocs": 3, "branches": 2}`。
@@ -935,11 +935,16 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 
 ## 附录 · 2026-10-26 分支管理（v3.2 增量）
 
-### 1. 为什么是「空间级分支池」
+### 1. 分支池：空间级公共分支 + 可选项目归属
 
-分支不挂项目。三层结构里「项目」偏业务交付（一批需求），而分支是代码维度的东西，
-一个空间里主干、发布、feature 混着来，再按项目切一刀反而更乱 —— 所以做成**空间级扁平列表**，
-任务关联分支时只校验「同空间」，不受任务所属项目影响。表：`dev_branch` / `dev_branch_log`（`sql/14_branch.sql`）。
+分支池按空间维护，同时支持两种归属（`sql/31_branch_project.sql` 增量迁移）：
+
+- `dev_branch.req_id` 为空 = **空间级公共分支**（历史数据默认落在这一档，行为与升级前一致）；
+- `dev_branch.req_id` 非空 = **项目级分支**，直接归属 `requirement.id` 对应的项目。
+
+不在分支上强制项目：主干、发布、跨项目的 feature 本来就会共用，强行切分会逼人重复建分支。
+建任务时「所属分支」按当前项目过滤：直接归属该项目的分支 + 空间级公共分支（再按任务推导归属兜底），
+避免不同项目的同名分支混在下拉里。表：`dev_branch` / `dev_branch_log`。
 
 ### 2. 状态与时间口径（两套，各管一件事）
 
@@ -958,18 +963,19 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /api/branches` | 分支列表。附带 `taskCount` / `doneCount`（子查询统计，排除回收站任务）；排序 `FIELD(status)` + `updated_at DESC` |
+| `GET /api/branches` | 分支列表。`?project=` 时返回「直接归属该项目 + 空间级公共分支」：公共分支按任务推导归属过滤，尚未关联任何任务的公共分支对所有项目可见；附带 `taskCount` / `doneCount`（排除回收站任务、只统计可见项目）与 `projects` 推导标签；排序 `FIELD(status)` + `updated_at DESC` |
 | `GET /api/branches/{id}` | 详情（同一个实体） |
 | `GET /api/branches/{id}/logs` | 状态变更时间线，倒序 |
 | `GET /api/branches/{id}/tasks` | 挂在分支上的未删除任务（未完成在前） |
-| `POST /api/branches` | 新建。body：`{name, status?, targetBranch?, owner?, ownerUserId?, note?}` |
-| `PUT /api/branches/{id}` | 改基础信息（名字 / 负责人 / 目标分支 / 备注）。**`status` 字段被忽略** |
+| `POST /api/branches` | 新建。body：`{name, status?, reqId?, targetBranch?, owner?, ownerUserId?, note?}`；`reqId` 空 = 空间级公共分支 |
+| `PUT /api/branches/{id}` | 改基础信息（名字 / 所属项目 / 负责人 / 目标分支 / 备注）。**`status` 字段被忽略**；`reqId` 传空串表示退回空间级公共分支，不传（`null`）表示不改 |
 | `POST /api/branches/{id}/status` | 改状态。body：`{status, note?}`。唯一会写时间点与时间线的入口 |
 | `DELETE /api/branches/{id}` | 删除：先解绑任务（`task.branch_id = NULL`，任务保留），再删时间线与分支 |
 
 校验口径：
 
-- 分支名 `^[\p{L}\p{N}._/-]{1,80}$`（字母含中文、数字、点、下划线、中划线、斜杠；空格与 `@{}~^:?*[\` 本来 git 也不接受），同空间内**唯一**；
+- 分支名 `^[\p{L}\p{N}._/-]{1,80}$`（字母含中文、数字、点、下划线、中划线、斜杠；空格与 `@{}~^:?*[\` 本来 git 也不接受），同一归属维度内**唯一**（同项目不允许同名，不同项目允许；空间级公共分支之间不允许同名）；
+- `reqId` 非空时必须是**本空间**的项目，否则 400「所属项目不存在」；
 - `targetBranch` ≤80、`note` ≤200；
 - 不填负责人 = 当前用户（与需求模块一致）。
 
@@ -982,6 +988,7 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 保存时校验「分支存在且同空间」，否则 400「所选分支不存在」。连带处理：
 
 - 删除分支 → 关联任务解绑（任务本身保留）；
+- 删除项目 → 直接归属该项目的分支退回空间级公共分支（`req_id = NULL`，分支与任务关联保留）；
 - 循环任务派生的下一次任务**继承** `branchId`（长期任务通常还在同一条分支上）；
 - 清空空间数据（`WorkspaceService.wipeData`）→ 分支与时间线一起清掉。
 
@@ -990,8 +997,10 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 侧栏新增「分支」（`data-view="branches"`），角标 = 还没发布的分支数（开发中 + 待测试 + 待合并）；
 - 视图顶部五个格子：四档状态计数（点击只看这一档，再点取消）+ 平均发布周期（已发布分支 `released_at - created_at` 的均值）；
 - 四列分组卡片：状态徽章点开浮层可切四档 + 编辑 / 删除；卡片右下角显示当前状态已停留多久（已发布的分支改显示总周期）；
-- 点卡片打开右侧抽屉：状态分段、四个状态时间点、目标分支 / 负责人 / 创建时间 / 任务进度、关联任务（点击打开任务抽屉）、操作记录时间线；
-- 任务抽屉新增「所属分支」下拉（按状态分 `optgroup`，值 = 分支 ID）；
+- 点卡片打开右侧抽屉：状态分段、四个状态时间点、目标分支 / 负责人 / 创建时间 / 任务进度、归属项目、关联任务（点击打开任务抽屉）、操作记录时间线；
+- 新建 / 编辑弹窗增加「所属项目」（空 = 空间级公共分支）；
+- 顶部项目过滤器（全部项目 + 本空间可见项目），支持按状态、按项目两种分组；项目分组优先用直接归属，历史分支回退到任务推导归属；
+- 任务抽屉「所属分支」下拉按当前项目过滤（直接归属 + 空间级公共分支），切换项目时随之刷新；
 - 看板卡片在分类/需求标签后显示分支名（`.tag.tag-branch`），只读展示，点击跳转留给「分支」页。
 
 自检：`node tools/check-branch.mjs`（CDP 真 Chrome，25 项：进视图、四列渲染、统计筛选、状态浮层、编辑弹窗、

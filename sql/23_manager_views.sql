@@ -14,19 +14,19 @@ USE devstudio;
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- T0.5 task：工作项类型 + Epic 关联
+-- T0.5 task：工作项类型 + 史诗（Epic）关联
 -- ---------------------------------------------------------------------------
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task' AND COLUMN_NAME = 'item_type');
 SET @s := IF(@x = 0,
-  'ALTER TABLE task ADD COLUMN item_type VARCHAR(16) NOT NULL DEFAULT ''task'' COMMENT ''工作项类型：story需求/task任务/bug缺陷/epic'' AFTER description',
+  'ALTER TABLE task ADD COLUMN item_type VARCHAR(16) NOT NULL DEFAULT ''task'' COMMENT ''工作项类型：story用户故事/task任务/bug缺陷/epic史诗'' AFTER description',
   'DO 0');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task' AND COLUMN_NAME = 'epic_id');
 SET @s := IF(@x = 0,
-  'ALTER TABLE task ADD COLUMN epic_id VARCHAR(32) DEFAULT NULL COMMENT ''所属Epic任务ID（item_type=epic 时为空）'' AFTER item_type',
+  'ALTER TABLE task ADD COLUMN epic_id VARCHAR(32) DEFAULT NULL COMMENT ''所属史诗（Epic）任务ID（item_type=epic 时为空）'' AFTER item_type',
   'DO 0');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 

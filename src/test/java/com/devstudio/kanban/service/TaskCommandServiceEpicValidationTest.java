@@ -62,7 +62,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("Epic 不能再挂到其他 Epic 下"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("史诗不能再挂到其他史诗下"), ex.getMessage());
     }
 
     @Test
@@ -72,7 +72,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("任务不能作为自己的 Epic"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("任务不能作为自己的史诗"), ex.getMessage());
     }
 
     @Test
@@ -83,7 +83,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("所属 Epic 不存在"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("所属史诗不存在"), ex.getMessage());
     }
 
     @Test
@@ -96,7 +96,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("所属 Epic 不存在"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("所属史诗不存在"), ex.getMessage());
     }
 
     @Test
@@ -108,7 +108,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("所选任务不是 Epic"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("所选任务不是史诗"), ex.getMessage());
     }
 
     @Test
@@ -119,7 +119,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("Epic 须与任务属于同一项目"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("史诗须与任务属于同一项目"), ex.getMessage());
     }
 
     @Test
@@ -130,7 +130,7 @@ class TaskCommandServiceEpicValidationTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
 
-        assertTrue(ex.getMessage().contains("不能形成循环的 Epic 归属"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("不能形成循环的史诗归属"), ex.getMessage());
     }
 
     @Test

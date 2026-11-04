@@ -250,7 +250,7 @@ public class TaskCommandService {
         if ("epic".equals(old.getItemType()) && !"epic".equals(t.getItemType())) {
             int cleared = taskMapper.clearEpicChildren(workspaceId, id);
             if (cleared > 0) {
-                changes.add("解除 " + cleared + " 项子任务的 Epic 归属");
+                changes.add("解除 " + cleared + " 项子任务的史诗归属");
             }
         }
         // 先落最终标签，再派生下一次任务：保证循环任务的后续任务继承本次保存后的标签
@@ -430,26 +430,26 @@ public class TaskCommandService {
             return null;
         }
         if (epicId.equals(self.getId())) {
-            throw AppException.badRequest("任务不能作为自己的 Epic");
+            throw AppException.badRequest("任务不能作为自己的史诗");
         }
         if ("epic".equals(self.getItemType())) {
-            throw AppException.badRequest("Epic 不能再挂到其他 Epic 下");
+            throw AppException.badRequest("史诗不能再挂到其他史诗下");
         }
         Task epic = taskMapper.selectById(epicId);
         if (epic == null || !workspaceId.equals(epic.getWorkspaceId()) || epic.getDeletedAt() != null) {
-            throw AppException.badRequest("所属 Epic 不存在：" + epicId);
+            throw AppException.badRequest("所属史诗不存在：" + epicId);
         }
         if (!"epic".equals(epic.getItemType())) {
-            throw AppException.badRequest("所选任务不是 Epic：" + epic.getTitle());
+            throw AppException.badRequest("所选任务不是史诗：" + epic.getTitle());
         }
         if (!java.util.Objects.equals(epic.getReqId(), self.getReqId())) {
-            throw AppException.badRequest("Epic 须与任务属于同一项目：" + epic.getTitle());
+            throw AppException.badRequest("史诗须与任务属于同一项目：" + epic.getTitle());
         }
         /* 历史数据可能已存在多级归属，沿祖先向上检查，防止 A→B→A 循环 */
         String cursor = epic.getEpicId();
         for (int depth = 0; cursor != null && depth < 32; depth++) {
             if (cursor.equals(self.getId())) {
-                throw AppException.badRequest("不能形成循环的 Epic 归属");
+                throw AppException.badRequest("不能形成循环的史诗归属");
             }
             Task parent = taskMapper.selectById(cursor);
             if (parent == null) {

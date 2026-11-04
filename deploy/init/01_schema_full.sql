@@ -1,7 +1,7 @@
 -- ============================================================================
 -- deploy/init/01_schema_full.sql · DevStudio 完整基线 DDL（MySQL 8，utf8mb4）
 --
--- 生成方式：在空库按序重放 sql/01-30 号升级脚本后导出（2026-11-04），与增量链等效。
+-- 生成方式：在空库按序重放 sql/01-31 号升级脚本后导出（2026-11-04），与增量链等效。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 < deploy/init/01_schema_full.sql
@@ -225,6 +225,7 @@ DROP TABLE IF EXISTS `dev_branch`;
 CREATE TABLE `dev_branch` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `req_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属项目ID（requirement.id），空=空间级公共分支',
   `name` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支名（如 feature/login，允许 / . - _ 等字符）',
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'dev' COMMENT '状态：dev=开发中 / testing=待测试 / merging=待合并 / released=已发布',
   `owner` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人显示名',
@@ -239,10 +240,11 @@ CREATE TABLE `dev_branch` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ws_name` (`workspace_id`,`name`),
+  UNIQUE KEY `uk_ws_name` (`workspace_id`,`req_id`,`name`),
   KEY `idx_ws_status` (`workspace_id`,`status`),
-  KEY `idx_ws_updated` (`workspace_id`,`updated_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支（空间级分支池）';
+  KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
+  KEY `idx_branch_req` (`workspace_id`,`req_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支（空间级分支池，可归属项目）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

@@ -8,14 +8,14 @@ Windows 上双击 `deploy\build.bat`（或命令行执行 `deploy\build.bat`）�
 `mvn -DskipTests clean package` → 收集 Jar/前端/配置 → 打出一个交付包：
 
 ```
-dist/DevStudio-<版本>/
+deploy/dist/Hourglass-<版本>/
   devstudio-server.jar             后端可执行包（前端静态资源已打入 jar）
   frontend/                        前端静态资源，独立留存
   config/application.yml           外置配置，与 jar 同级的 config 目录会自动加载
   config/devstudio.env.example     环境变量模板 → 复制为 /etc/devstudio.env
   deploy/                          devstudio.service、nginx 配置、backup.sh、本指南
   sql/                             建库脚本、种子数据、上线清单
-dist/DevStudio-<版本>.zip          同一交付包的压缩版
+deploy/dist/Hourglass-<版本>.zip    同一交付包的压缩版
 ```
 
 > 外置 `config/application.yml` 优先于 jar 内同名配置，改端口、连接池、附件目录不必重新打包。
@@ -42,9 +42,9 @@ which java
 date
 sudo timedatectl set-timezone Asia/Shanghai
 
-# 建库导表（全新部署执行 sql/01_schema.sql，含多用户/空间/邀请链接全部结构，可重复执行；
-# 已部署过的库升级时改为执行对应的增量脚本，如 02_invite.sql）
-mysql -uroot -p < 01_schema.sql
+# 建库导表（全新部署执行 sql/01_schema_full.sql，含多用户/空间/邀请链接全部结构，可重复执行；
+# 已部署过的库升级时改为执行 sql/ 下对应的增量脚本，如 31_branch_project.sql）
+mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema_full.sql
 
 # 建专用数据库账号（密码换成强密码，应用只从 localhost 连）
 mysql -uroot -p -e "CREATE USER 'devstudio'@'localhost' IDENTIFIED BY '更换为强密码'; GRANT ALL PRIVILEGES ON devstudio.* TO 'devstudio'@'localhost'; FLUSH PRIVILEGES;"
@@ -80,7 +80,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now devstudio
 systemctl status devstudio --no-pager        # 应 active (running)
 journalctl -u devstudio -n 50 --no-pager     # 启动日志
-curl -s http://127.0.0.1:8080/api/health     # 期望 "db":"up"
+curl -s http://127.0.0.1:8080/hourglass/api/health     # 期望 "db":"up"
 ```
 
 > **单实例约束**：成员关系（默认 60 秒 TTL）与空间 meta（列/分类/标签，版本号 + 300 秒兜底）都是**进程内缓存**，不跨实例共享。本部署方式是单实例 systemd 服务，可直接使用；如需多实例/多副本部署，必须去掉这两层缓存或改用共享缓存（如 Redis），否则成员权限变更与 meta 变更在其它实例上最多延迟一个 TTL 才生效。
@@ -93,7 +93,7 @@ sudo cp deploy/nginx-devstudio.conf /etc/nginx/conf.d/devstudio.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-浏览器访问 `http://服务器IP/` → 应跳转登录页，用第 3 步设置的账号登录。
+浏览器访问 `http://服务器IP/hourglass/` → 应跳转登录页，用第 3 步设置的账号登录。
 
 ## 6. 暴露面检查（重要）
 
@@ -154,7 +154,7 @@ NOTIFY_LINK=
 sudo systemctl restart devstudio
 ```
 
-验证：登录后在空间设置里确认 webhook 已填，然后 Apifox 登录态下 POST `http://127.0.0.1:8080/api/notify/test`，应立刻收到消息，返回 `"sent": true`。
+验证：登录后在空间设置里确认 webhook 已填，然后 Apifox 登录态下 POST `http://127.0.0.1:8080/hourglass/api/notify/test`，应立刻收到消息，返回 `"sent": true`。
 
 两种推送：每天 09:00 的汇总（只有存在**逾期或当天到期**任务时才推送）；任务里单独设置的**提醒时间**（每 5 分钟扫描一次）。共享空间的消息标题带空间名，内容含负责人。
 
@@ -163,12 +163,12 @@ sudo systemctl restart devstudio
 1. 若本次升级涉及数据库结构变化（看发布说明），先在服务器执行对应升级脚本（见 `sql/` 目录，均为幂等、可重复执行）。
 2. 替换 `/opt/devstudio/devstudio-server.jar` → `sudo systemctl restart devstudio`。
 
-> 例：升级到带「邀请链接」的版本，在已存在的库上执行一次：
-> `mysql -uroot -p < 02_invite.sql`（全新安装无需执行，`01_schema.sql` 已含 invite 表）。
+> 例：升级到分支支持项目归属的版本，在已存在的库上执行一次：
+> `mysql -uroot -p --default-character-set=utf8mb4 devstudio < 31_branch_project.sql`（全新安装无需执行，`01_schema_full.sql` 已含该结构）。
 
 ## 11. 验收清单
 
-- [ ] `curl http://127.0.0.1:8080/api/health` 返回 `"db":"up"`
+- [ ] `curl http://127.0.0.1:8080/hourglass/api/health` 返回 `"db":"up"`
 - [ ] 浏览器访问域名/IP 跳登录页；登录后手机保持 30 天免登录
 - [ ] 新增任务 → 拖拽移动 → 编辑查看「操作时间线」→ 筛选/搜索/回顾/导出全部可用
 - [ ] 任务弹窗可增删勾选子任务，卡片上出现 2/5 角标，时间线记录子任务变更（含操作人）

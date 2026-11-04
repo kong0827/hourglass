@@ -7,6 +7,7 @@ import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
@@ -41,9 +42,10 @@ class RequirementServiceTest {
     private final ProjectVersionService versionService = mock(ProjectVersionService.class);
     private final ProjectVersionMapper versions = mock(ProjectVersionMapper.class);
     private final DemandMapper demands = mock(DemandMapper.class);
+    private final DevBranchMapper branches = mock(DevBranchMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementService service = new RequirementService(reqs, tasks, logs, activity,
-            workActivity, docs, versionService, versions, demands, access);
+            workActivity, docs, versionService, versions, demands, branches, access);
 
     @Test
     void listBatchesVersionCountsAndFiltersHiddenProjects() {

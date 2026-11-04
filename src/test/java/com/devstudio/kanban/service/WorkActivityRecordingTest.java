@@ -72,7 +72,8 @@ class WorkActivityRecordingTest {
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(com.devstudio.kanban.mapper.ProjectVersionMapper.class),
-                mock(DemandMapper.class), mock(ProjectAccessService.class));
+                mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.DevBranchMapper.class),
+                mock(ProjectAccessService.class));
     }
 
     @Test

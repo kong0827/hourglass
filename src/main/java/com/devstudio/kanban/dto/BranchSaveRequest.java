@@ -30,6 +30,10 @@ public class BranchSaveRequest {
     @Size(max = 80, message = "目标分支不能超过 80 字")
     private String targetBranch;
 
+    /** 所属项目ID，空或空串 = 空间级公共分支 */
+    @Size(max = 32, message = "所属项目ID不合法")
+    private String reqId;
+
     @Size(max = 200, message = "备注不能超过 200 字")
     private String note;
 }

@@ -112,7 +112,7 @@ function onSseChanged(event){
 function sseConnect(){
   if(!window.EventSource) return;
   sseClose();
-  try{ sse.conn = new EventSource("/api/events"); }
+  try{ sse.conn = new EventSource("/hourglass/api/events"); }
   catch(e){ sseScheduleReconnect(); return; }
   sse.conn.addEventListener("changed", onSseChanged);
   sse.conn.addEventListener("ping", sseTick);

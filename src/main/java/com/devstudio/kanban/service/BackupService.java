@@ -337,9 +337,10 @@ public class BackupService {
         data.setReqDocs(reqDocs);
 
         List<BackupData.BackupBranch> branches = new ArrayList<BackupData.BackupBranch>();
-        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId)) {
+        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId, null)) {
             BackupData.BackupBranch bb = new BackupData.BackupBranch();
             bb.setId(br.getId());
+            bb.setReqId(br.getReqId());
             bb.setName(br.getName());
             bb.setStatus(br.getStatus());
             bb.setOwner(br.getOwner());
@@ -662,9 +663,15 @@ public class BackupService {
                 DevBranch br = new DevBranch();
                 br.setId(id);
                 br.setWorkspaceId(workspaceId);
+                String backupReqId = Texts.trimToNull(bb.getReqId());
+                String reqId = backupReqId == null ? null : reqIdMap.get(backupReqId);
+                if (reqId == null) {
+                    reqId = backupReqId;
+                }
+                br.setReqId(reqId != null && reqIds.contains(reqId) ? reqId : null);
                 br.setName(Texts.cut(title0, 80));
                 /* 同空间已有同名分支（手工改过的备份）时跳过，避免撞唯一键中断整次导入 */
-                if (devBranchMapper.countByName(workspaceId, br.getName(), null) > 0) {
+                if (devBranchMapper.countByName(workspaceId, br.getName(), br.getReqId(), null) > 0) {
                     continue;
                 }
                 br.setStatus(oneOf(bb.getStatus(), new String[]{"dev", "testing", "merging", "released"}, "dev"));
@@ -686,7 +693,7 @@ public class BackupService {
             }
         }
         /* 分支校验集合：分支被覆盖时是本次新导入的，未覆盖时是空间里原有的 */
-        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId)) {
+        for (DevBranch br : devBranchMapper.selectByWorkspace(workspaceId, null)) {
             st.branchIds.add(br.getId());
         }
 

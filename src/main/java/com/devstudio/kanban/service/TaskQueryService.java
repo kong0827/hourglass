@@ -23,6 +23,7 @@ import com.devstudio.kanban.entity.TaskFacetRow;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.entity.TimeAgg;
 import com.devstudio.kanban.mapper.AttachmentMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
@@ -60,6 +61,7 @@ public class TaskQueryService {
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
+    private final ProjectVersionMapper projectVersionMapper;
     private final TaskLogMapper logMapper;
     private final SubtaskMapper subtaskMapper;
     private final TagMapper tagMapper;
@@ -70,13 +72,15 @@ public class TaskQueryService {
     private final com.devstudio.kanban.mapper.VersionTaskMapper versionTaskMapper;
     private final ProjectAccessService projectAccess;
 
-    public TaskQueryService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
+    public TaskQueryService(TaskMapper taskMapper, RequirementMapper reqMapper, ProjectVersionMapper projectVersionMapper,
+                            TaskLogMapper logMapper,
                             SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                             AttachmentMapper attachmentMapper, WorkspaceMetaCache metaCache,
                             TaskSupport support, com.devstudio.kanban.mapper.VersionTaskMapper versionTaskMapper,
                             ProjectAccessService projectAccess) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
+        this.projectVersionMapper = projectVersionMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
         this.tagMapper = tagMapper;
@@ -123,6 +127,7 @@ public class TaskQueryService {
         pageQuery.setReqs(query.getReqs());
         pageQuery.setTags(query.getTags());
         pageQuery.setTypes(query.getTypes());
+        pageQuery.setVersions(query.getVersions());
         pageQuery.setBlocked(query.isBlocked());
         pageQuery.setDue(query.getDue());
         pageQuery.setFocus(query.isFocus());
@@ -174,6 +179,8 @@ public class TaskQueryService {
 
         /* 未完成列：SQL 直接按列取（board_column <> done），历史已完成任务不再进内存 */
         List<Task> open = taskMapper.selectOpenTasks(workspaceId, viewerId);
+        /* 版本筛选在内存 match() 里判定，未完成列需要先补版本绑定 */
+        mergeVersionInfo(workspaceId, open);
 
         /* 已完成列：计数与筛选下推 SQL，只取当前页；筛选口径复用 ganttWhere（与 match() 对齐） */
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
@@ -431,6 +438,7 @@ public class TaskQueryService {
         }
         /* 筛选要读项目名/标签等扩展字段：先补齐再按统一 match 过滤（月份已由 SQL 收窄，量可控） */
         mergeTaskExtras(workspaceId, tasks);
+        mergeVersionInfo(workspaceId, tasks);
         if (query != null) {
             List<Task> filtered = new ArrayList<Task>(tasks.size());
             for (Task t : tasks) {
@@ -541,6 +549,7 @@ public class TaskQueryService {
                 || !query.getReqs().isEmpty()
                 || !query.getTags().isEmpty()
                 || !query.getTypes().isEmpty()
+                || !query.getVersions().isEmpty()
                 || query.getDue() != null
                 || query.isFocus()
                 || query.isBlocked()
@@ -603,6 +612,18 @@ public class TaskQueryService {
         }
         if (!query.getTypes().isEmpty() && !query.getTypes().contains(t.getItemType())) {
             return false;
+        }
+        if (!query.getVersions().isEmpty()) {
+            boolean hit = false;
+            for (String value : query.getVersions()) {
+                if (Consts.REQ_NONE.equals(value) ? t.getVersionId() == null : value.equals(t.getVersionId())) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) {
+                return false;
+            }
         }
         if (query.getDue() != null) {
             String kind = TaskCalc.dueKind(t, today);
@@ -686,6 +707,7 @@ public class TaskQueryService {
             catCount.put(c.getName(), 0);
         }
         int unassigned = 0;
+        Map<String, Integer> versionCount = new LinkedHashMap<String, Integer>();
         for (TaskFacetRow t : facets) {
             ownerCount.merge(t.getOwner(), 1, Integer::sum);
             if (priCount.containsKey(t.getPriority())) {
@@ -699,6 +721,9 @@ public class TaskQueryService {
             }
             if (t.getReqId() == null) {
                 unassigned++;
+            }
+            if (t.getVersionId() != null) {
+                versionCount.merge(t.getVersionId(), 1, Integer::sum);
             }
         }
         for (Map.Entry<String, Integer> e : ownerCount.entrySet()) {
@@ -721,7 +746,12 @@ public class TaskQueryService {
                 reqCount.merge(t.getReqId(), 1, Integer::sum);
             }
         }
-        for (Requirement r : reqMapper.selectAll(workspaceId)) {
+        List<Requirement> reqs = reqMapper.selectAll(workspaceId);
+        Map<String, String> reqName = new HashMap<String, String>();
+        for (Requirement r : reqs) {
+            reqName.put(r.getId(), r.getName());
+        }
+        for (Requirement r : reqs) {
             if (hiddenReqs.contains(r.getId())) {
                 continue;
             }
@@ -733,7 +763,22 @@ public class TaskQueryService {
             rc.setCount(count == null ? 0 : count);
             meta.getReqs().add(rc);
         }
+        int versionUnassigned = 0;
+        for (TaskFacetRow t : facets) {
+            if (t.getVersionId() == null) {
+                versionUnassigned++;
+            }
+        }
+        for (com.devstudio.kanban.entity.ProjectVersion v : projectVersionMapper.selectByWorkspace(workspaceId)) {
+            if (hiddenReqs.contains(v.getReqId())) {
+                continue;
+            }
+            Integer count = versionCount.get(v.getId());
+            meta.getVersions().add(new BoardResponse.VersionCount(v.getId(), v.getName(),
+                    reqName.get(v.getReqId()), count == null ? 0 : count));
+        }
         meta.setUnassigned(unassigned);
+        meta.setVersionUnassigned(versionUnassigned);
         return meta;
     }
 

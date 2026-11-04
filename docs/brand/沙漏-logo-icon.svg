@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 沙漏外框 -->
+  <path d="M 110 90 L 402 90 L 256 250 L 402 422 L 110 422 L 256 250 Z"
+        fill="none"
+        stroke="#1E3A5F"
+        stroke-width="32"
+        stroke-linejoin="round"
+        stroke-linecap="round"/>
+
+  <!-- 上半部金沙面 -->
+  <path d="M 180 102 L 332 102 L 256 180 Z" fill="#C9A227"/>
+
+  <!-- 上半部三颗沙粒（任务阶段） -->
+  <circle cx="220" cy="140" r="14" fill="#C9A227"/>
+  <circle cx="256" cy="140" r="14" fill="#C9A227"/>
+  <circle cx="292" cy="140" r="14" fill="#C9A227"/>
+
+  <!-- 中间下落沙粒 -->
+  <circle cx="256" cy="280" r="10" fill="#C9A227"/>
+  <circle cx="256" cy="315" r="10" fill="#C9A227"/>
+  <circle cx="256" cy="350" r="10" fill="#C9A227"/>
+
+  <!-- 下半部金沙堆 -->
+  <path d="M 180 410 L 332 410 L 256 330 Z" fill="#C9A227"/>
+</svg>

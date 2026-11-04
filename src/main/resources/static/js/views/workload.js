@@ -2,6 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, searchInput, searchWrap } from "../core/dom.js";
+import { saveViewState } from "../core/filters-ui.js";
 import { showView } from "../core/router.js";
 import { reqNameById, state } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -23,7 +24,7 @@ function matrix(){
   var projects = (cache.projects || []).slice();
   var hasNone = (cache.members || []).some(function(m){return (m.projects||[]).some(function(p){return !p.reqId && p.remainingMinutes>0;});});
   if(hasNone) projects.push({id:"",name:"未归类"});
-  var head = '<tr><th>成员</th>' + projects.map(function(p){return '<th>'+esc(p.name)+'</th>';}).join("") + '<th>合计剩余</th><th>总负载</th><th>状态</th></tr>';
+  var head = '<tr><th>成员</th>' + projects.map(function(p){return '<th class="num">'+esc(p.name)+'</th>';}).join("") + '<th class="num">合计剩余</th><th>总负载</th><th>状态</th></tr>';
   var rows = (cache.members || []).map(function(m){
     var cells = projects.map(function(p){
       var group=(m.projects||[]).filter(function(x){return (x.reqId||"")===(p.id||"");})[0];
@@ -41,7 +42,7 @@ function weekTable(){
     var diff=(m.weekMinutes||0)-(m.lastWeekMinutes||0),cls=diff>0?"tag-warning":(diff<0?"tag-success":"tag-ghost");
     return '<tr><td><span class="manager-person">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></span></td>'+cells+'<td class="num"><b>'+fmtHours(m.weekMinutes)+'</b></td><td><span class="tag '+cls+'">'+(diff===0?'持平':((diff>0?'+':'−')+fmtHours(Math.abs(diff))))+'</span></td></tr>';
   }).join("")||'<tr><td colspan="10" class="manager-empty-cell">本周暂无计时记录</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时沉淀</b><span>与上周同口径对比</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>'+days.map(function(d){return '<th>'+d+'</th>';}).join("")+'<th>本周合计</th><th>上周对比</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时沉淀</b><span>与上周同口径对比</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>'+days.map(function(d){return '<th class="num">'+d+'</th>';}).join("")+'<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
 }
 function renderWorkload(){
   $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目任务合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button></div></div>'
@@ -59,6 +60,7 @@ if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){
   searchInput.value="";searchWrap.classList.remove("has");
   state.owners=[member.name];
   state.reqs=(!all&&req)?[req]:[];
+  saveViewState();
   applyListSavedView("all",{preset:"all",group:"none",sort:"default"});
   showView("list");
   loadBoard({animate:false});

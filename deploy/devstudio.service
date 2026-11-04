@@ -1,5 +1,5 @@
 [Unit]
-Description=DevStudio Kanban Server (开发工坊·任务看板)
+Description=沙漏 Hourglass Kanban Server (开发工坊·任务看板)
 After=network.target mysql.service
 Wants=mysql.service
 

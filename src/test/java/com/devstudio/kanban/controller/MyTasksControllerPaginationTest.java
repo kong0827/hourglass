@@ -64,7 +64,7 @@ class MyTasksControllerPaginationTest {
                         Collections.singletonList(ws), 1));
 
         ApiResult<Map<String, Object>> res = controller.myTasks(null, null, null, null, null, null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         Map<String, Object> data = res.getData();
         assertEquals(10, data.get("total"));
@@ -85,7 +85,7 @@ class MyTasksControllerPaginationTest {
                         Collections.<MyTaskWorkspace>emptyList(), 0));
 
         Map<String, Object> data = controller.myTasks(null, null, null, null, null, null,
-                null, null, null, null, -3, 9999).getData();
+                null, null, null, null, null, -3, 9999).getData();
 
         assertEquals(0, data.get("offset"));
         assertEquals(500, data.get("limit"));
@@ -100,7 +100,7 @@ class MyTasksControllerPaginationTest {
                         Collections.<MyTaskWorkspace>emptyList(), 0));
 
         Map<String, Object> data = controller.myTasks(null, null, null, null, null, null,
-                null, null, null, null, 4, 200).getData();
+                null, null, null, null, null, 4, 200).getData();
 
         assertEquals(Boolean.FALSE, data.get("hasMore"));
     }

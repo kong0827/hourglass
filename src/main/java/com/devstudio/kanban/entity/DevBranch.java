@@ -5,7 +5,8 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 分支：**空间级**的分支池（不绑项目），一条分支对应一次「拉分支 → 开发 → 测试 → 合并 → 发布」。
+ * 分支：一条分支对应一次「拉分支 → 开发 → 测试 → 合并 → 发布」。
+ * 可以是**空间级公共分支**（reqId 为空），也可以是**项目级分支**（reqId 指向 requirement.id）。
  *
  * <p>状态取值见 {@code BranchService}：
  * {@code dev}(开发中) / {@code testing}(待测试) / {@code merging}(待合并) / {@code released}(已发布)。
@@ -24,6 +25,8 @@ public class DevBranch {
 
     private String id;
     private String workspaceId;
+    /** 所属项目ID（requirement.id），空 = 空间级公共分支 */
+    private String reqId;
     /** 分支名，如 feature/login、hotfix/order-500 */
     private String name;
     /** dev / testing / merging / released */
@@ -48,4 +51,8 @@ public class DevBranch {
     private Integer taskCount;
     /** 其中已完成的任务数 */
     private Integer doneCount;
+    /** 影响版本标签（由该分支下任务所归的版本推导，见 BranchService#fillVersions） */
+    private java.util.List<com.devstudio.kanban.dto.BranchVersionTag> versions;
+    /** 归属项目标签（由该分支下任务所在的项目推导，见 BranchService#fillProjects） */
+    private java.util.List<com.devstudio.kanban.dto.BranchProjectTag> projects;
 }

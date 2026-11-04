@@ -19,6 +19,8 @@ public class MyTasksQuery {
     private List<String> reqs = Collections.emptyList();
     private List<String> tags = Collections.emptyList();
     private List<String> types = Collections.emptyList();
+    /** 影响版本ID列表，__none 表示待规划 */
+    private List<String> versions = Collections.emptyList();
     private boolean blocked;
     private String due;
     private boolean focus;
@@ -97,6 +99,14 @@ public class MyTasksQuery {
 
     public void setTypes(List<String> types) {
         this.types = types == null ? Collections.<String>emptyList() : types;
+    }
+
+    public List<String> getVersions() {
+        return versions;
+    }
+
+    public void setVersions(List<String> versions) {
+        this.versions = versions == null ? Collections.<String>emptyList() : versions;
     }
 
     public boolean isBlocked() {

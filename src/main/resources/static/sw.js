@@ -1,57 +1,58 @@
-/* 工作台 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
+/* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」） */
-var CACHE_NAME = "devstudio-shell-v76";
+var CACHE_NAME = "hourglass-shell-v84";
 var SHELL = [
-  "/",
-  "/index.html",
-  "/login.html",
-  "/join.html",
-  "/share.html",
-  "/css/tokens.css",
-  "/css/base.css",
-  "/css/layout.css",
-  "/css/components.css",
-  "/css/views.css",
-  "/css/gantt.css",
-  "/css/share.css",
-  "/css/auth.css",
-  "/js/core/api.js",
-  "/js/core/app.js",
-  "/js/core/dom.js",
-  "/js/core/filters-ui.js",
-  "/js/core/filters.js",
-  "/js/core/icons.js",
-  "/js/core/notifications.js",
-  "/js/core/realtime.js",
-  "/js/core/router.js",
-  "/js/core/shell.js",
-  "/js/core/shortcuts.js",
-  "/js/core/state.js",
-  "/js/core/task-actions.js",
-  "/js/core/task-drawer.js",
-  "/js/core/theme.js",
-  "/js/core/ui.js",
-  "/js/core/utils.js",
-  "/js/core/view-loader.js",
-  "/js/lib/download.js",
-  "/js/lib/format.js",
-  "/js/lib/gantt-shared.js",
-  "/js/main.js",
-  "/js/share.js",
-  "/js/views/analysis.js",
-  "/js/views/board.js",
-  "/js/views/branches.js",
-  "/js/views/calendar.js",
-  "/js/views/gantt.js",
-  "/js/views/list.js",
-  "/js/views/mine.js",
-  "/js/views/profile.js",
-  "/js/views/projects.js",
-  "/js/views/requirements.js",
-  "/js/views/review.js",
-  "/js/views/settings.js",
-  "/manifest.webmanifest",
-  "/icons/icon-1024.png"
+  "/hourglass/",
+  "/hourglass/index.html",
+  "/hourglass/login.html",
+  "/hourglass/join.html",
+  "/hourglass/share.html",
+  "/hourglass/css/tokens.css",
+  "/hourglass/css/base.css",
+  "/hourglass/css/layout.css",
+  "/hourglass/css/components.css",
+  "/hourglass/css/views.css",
+  "/hourglass/css/gantt.css",
+  "/hourglass/css/share.css",
+  "/hourglass/css/auth.css",
+  "/hourglass/js/core/api.js",
+  "/hourglass/js/core/app.js",
+  "/hourglass/js/core/dom.js",
+  "/hourglass/js/core/filters-ui.js",
+  "/hourglass/js/core/filters.js",
+  "/hourglass/js/core/icons.js",
+  "/hourglass/js/core/notifications.js",
+  "/hourglass/js/core/realtime.js",
+  "/hourglass/js/core/router.js",
+  "/hourglass/js/core/shell.js",
+  "/hourglass/js/core/shortcuts.js",
+  "/hourglass/js/core/state.js",
+  "/hourglass/js/core/task-actions.js",
+  "/hourglass/js/core/task-drawer.js",
+  "/hourglass/js/core/theme.js",
+  "/hourglass/js/core/ui.js",
+  "/hourglass/js/core/utils.js",
+  "/hourglass/js/core/view-loader.js",
+  "/hourglass/js/lib/download.js",
+  "/hourglass/js/lib/format.js",
+  "/hourglass/js/lib/gantt-shared.js",
+  "/hourglass/js/main.js",
+  "/hourglass/js/share.js",
+  "/hourglass/js/views/analysis.js",
+  "/hourglass/js/views/board.js",
+  "/hourglass/js/views/branches.js",
+  "/hourglass/js/views/calendar.js",
+  "/hourglass/js/views/gantt.js",
+  "/hourglass/js/views/list.js",
+  "/hourglass/js/views/mine.js",
+  "/hourglass/js/views/profile.js",
+  "/hourglass/js/views/projects.js",
+  "/hourglass/js/views/requirements.js",
+  "/hourglass/js/views/review.js",
+  "/hourglass/js/views/settings.js",
+  "/hourglass/manifest.webmanifest",
+  "/hourglass/icons/icon-1024.png",
+  "/hourglass/images/login-background.webp"
 ];
 
 self.addEventListener("install", function (event) {
@@ -83,7 +84,7 @@ self.addEventListener("fetch", function (event) {
   var url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   // 接口与登录相关请求一律走网络，不做缓存
-  if (url.pathname.indexOf("/api/") === 0) return;
+  if (url.pathname.indexOf("/hourglass/api/") === 0) return;
 
   event.respondWith(
     fetch(request).then(function (response) {
@@ -97,7 +98,7 @@ self.addEventListener("fetch", function (event) {
     }).catch(function () {
       return caches.match(request).then(function (hit) {
         if (hit) return hit;
-        if (request.mode === "navigate") return caches.match("/index.html");
+        if (request.mode === "navigate") return caches.match("/hourglass/index.html");
         return new Response("", { status: 503, statusText: "offline" });
       });
     })

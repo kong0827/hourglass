@@ -1,8 +1,17 @@
-/* 工作台 · API 封装：统一处理返回结构、CSRF 头与登录态 */
+/* 沙漏 · API 封装：统一处理返回结构、CSRF 头与登录态 */
 
   function readCookie(name) {
     var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
     return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  /* 后端根路径：与 application.yml 中的 server.servlet.context-path 保持一致 */
+  var API_BASE = "/hourglass";
+
+  function resolveRoot(url) {
+    if (!url || url.indexOf("http") === 0) return url;
+    if (url.indexOf("/") === 0 && url.indexOf(API_BASE) !== 0) return API_BASE + url;
+    return url;
   }
 
   /* 当前空间由 app.js 维护，所有请求自动携带 */
@@ -43,6 +52,7 @@
   var ETAG_MAX = 80;
 
   function request(method, url, body, isForm, skipWorkspace) {
+    url = resolveRoot(url);
     if (!skipWorkspace) url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
     if (method === "GET" && etagCache[url]) {
@@ -81,7 +91,7 @@
     }).then(function (res) {
       if (timer) { clearTimeout(timer); timer = null; }
       if (res.status === 401 && window.location.pathname.indexOf("login") === -1) {
-        window.location.href = "/login.html";
+        window.location.href = API_BASE + "/login.html";
         throw new Error("未登录或登录已过期");
       }
       if (res.status === 304 && etagCache[url]) {

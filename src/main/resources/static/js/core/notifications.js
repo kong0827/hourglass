@@ -108,7 +108,7 @@ function renderAlertPanel(){
     '</div>';
 
   if(rt.alertTab === "notice"){
-    if(notifyState.items.length){
+    if(unread > 0){
       html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-readall>全部标为已读</button></div>';
     }
   }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
@@ -125,11 +125,13 @@ function noticeListHTML(){
   }
   var unread = [], read = [];
   notifyState.items.forEach(function(x){ (x.readAt ? read : unread).push(x); });
-  var html = unread.map(noticeItemHTML).join("");
-  if(unread.length && read.length){
-    html += '<div class="ap-glabel" style="padding-left:14px">更早 ' + read.length + '</div>';
+  var html = "";
+  if(unread.length){
+    html += '<div class="ap-glabel">未读 ' + unread.length + '</div>' + unread.map(noticeItemHTML).join("");
   }
-  html += read.map(noticeItemHTML).join("");
+  if(read.length){
+    html += '<div class="ap-glabel" style="margin-top:6px">已读 ' + read.length + '</div>' + read.map(noticeItemHTML).join("");
+  }
   return html;
 }
 function noticeItemHTML(x){

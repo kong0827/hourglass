@@ -63,11 +63,30 @@ public class BoardResponse {
         private List<NameCount> cats = new ArrayList<NameCount>();
         /** 工作项类型计数（story/task/bug/epic 固定顺序） */
         private List<NameCount> types = new ArrayList<NameCount>();
+        /** 有任务绑定的影响版本及计数（含项目名，同名版本跨项目时用于区分） */
+        private List<VersionCount> versions = new ArrayList<VersionCount>();
         private List<ReqCount> reqs = new ArrayList<ReqCount>();
         /** 有任务关联的标签及计数 */
         private List<TagCount> tags = new ArrayList<TagCount>();
         /** 未归类任务数 */
         private int unassigned;
+        /** 未绑定版本（待规划）任务数 */
+        private int versionUnassigned;
+    }
+
+    @Data
+    public static class VersionCount {
+        private String id;
+        private String name;
+        private String projectName;
+        private int count;
+
+        public VersionCount(String id, String name, String projectName, int count) {
+            this.id = id;
+            this.name = name;
+            this.projectName = projectName;
+            this.count = count;
+        }
     }
 
     @Data

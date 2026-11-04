@@ -20,7 +20,7 @@
 .gantt-tools .cnt{
   min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);
   display:inline-grid;place-items:center;margin-left:5px;
-  background:var(--primary);color:#fff;font-size:10px;font-weight:700;
+  background:var(--primary);color:var(--text-inverse);font-size:10px;font-weight:700;
   font-variant-numeric:tabular-nums;
 }
 .gantt-tools .cnt[hidden]{display:none;}
@@ -60,6 +60,29 @@
 }
 .gantt-grid{position:relative;min-width:max-content;width:100%;}
 
+/* 行密度：舒适（默认）/ 紧凑 / 极简 */
+.gantt-grid.density-comfortable{
+  --gantt-row-h:54px;--gantt-group-h:32px;
+  --gantt-title-size:12.5px;--gantt-meta-size:10.5px;--gantt-info-size:10px;--gantt-group-head-size:12px;
+}
+.gantt-grid.density-compact{
+  --gantt-row-h:40px;--gantt-group-h:28px;
+  --gantt-title-size:12px;--gantt-meta-size:10px;--gantt-info-size:0px;--gantt-group-head-size:11.5px;
+}
+.gantt-grid.density-compact .gantt-info{display:none;}
+.gantt-grid.density-compact .gantt-row .gantt-label{padding-top:3px;padding-bottom:3px;}
+.gantt-grid.density-minimal{
+  --gantt-row-h:30px;--gantt-group-h:24px;
+  --gantt-title-size:11.5px;--gantt-meta-size:0px;--gantt-info-size:0px;--gantt-group-head-size:11px;
+}
+.gantt-grid.density-minimal .gantt-meta,
+.gantt-grid.density-minimal .gantt-info{display:none;}
+.gantt-grid.density-minimal .gantt-row .gantt-label{padding-top:2px;padding-bottom:2px;}
+.gantt-grid.density-minimal .gantt-bar{height:18px;top:6px;}
+.gantt-grid.density-minimal .gantt-bar-inner{padding:0 5px;}
+.gantt-grid.density-minimal .gantt-bar-label{font-size:10px;}
+.gantt-grid.density-minimal .gantt-milestone-wrap{top:6px;}
+
 /* 表头 */
 .gantt-head{position:sticky;top:0;z-index:20;display:flex;background:var(--surface);box-shadow:0 1px 0 var(--border);}
 .gantt-corner{
@@ -69,6 +92,15 @@
   font-size:12px;font-weight:650;color:var(--text-2);
 }
 .gantt-corner-meta{font-size:10.5px;font-weight:500;color:var(--text-3);}
+.gantt-resizer{
+  position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:23;
+  display:flex;align-items:center;justify-content:center;
+}
+.gantt-resizer::after{
+  content:"";width:2px;height:18px;border-radius:1px;background:var(--border-strong);
+  transition:background var(--dur-fast) var(--ease-out);
+}
+.gantt-resizer:hover::after,.gantt-resizer.dragging::after{background:var(--primary);}
 .gantt-axis{flex:0 0 auto;}
 .gantt-months{display:flex;height:28px;background:var(--surface-sunken);}
 .gantt-month{
@@ -98,12 +130,12 @@
 }
 .gantt-row:hover .gantt-label{background:var(--surface-hover);}
 .gantt-row.is-selected .gantt-label{background:var(--primary-soft);box-shadow:inset 3px 0 0 var(--primary);}
-.gantt-title{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
+.gantt-title{font-size:var(--gantt-title-size,12.5px);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
 .gantt-meta{
   display:flex;align-items:center;gap:5px;min-width:0;
-  font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;line-height:1.3;
+  font-size:var(--gantt-meta-size,10.5px);color:var(--text-3);white-space:nowrap;overflow:hidden;line-height:1.3;
 }
-.gantt-meta .pdot{font-size:10.5px;}
+.gantt-meta .pdot{font-size:var(--gantt-meta-size,10.5px);}
 /* .shrink 是该行唯一可截断项（主页面=项目名，分享页=负责人）：负责人、日期、状态徽标固定宽度，避免「吴俊」被压成「吴」 */
 .gantt-meta .shrink{flex:0 1 auto;}
 .gantt-meta > span:not(.shrink){flex:0 0 auto;}
@@ -112,7 +144,7 @@
 /* 第三行：估时/实际 + 子任务（有数据才出现） */
 .gantt-info{
   display:flex;align-items:center;gap:8px;min-width:0;
-  font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;line-height:1.3;
+  font-size:var(--gantt-info-size,10px);color:var(--text-3);white-space:nowrap;overflow:hidden;line-height:1.3;
   font-variant-numeric:tabular-nums;
 }
 .gantt-info .wk.over{color:var(--danger-fg);font-weight:650;}
@@ -120,13 +152,13 @@
 .gantt-info .sub{color:var(--text-3);}
 
 /* 分组头：不是任务，不生成甘特条 */
-.gantt-group{display:flex;height:32px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.gantt-group{display:flex;height:var(--gantt-group-h,32px);background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 .gantt-group-head{
   position:sticky;left:0;z-index:12;
   flex:0 0 var(--gantt-label-w,280px);width:var(--gantt-label-w,280px);
   display:flex;align-items:center;gap:7px;padding:0 12px;text-align:left;
   background:var(--surface-sunken);border-right:1px solid var(--border);
-  font-size:12px;font-weight:650;color:var(--text-2);
+  font-size:var(--gantt-group-head-size,12px);font-weight:650;color:var(--text-2);
 }
 .gantt-group-head:hover{background:var(--surface-hover);}
 .gantt-group-head:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
@@ -184,7 +216,7 @@
 }
 .gantt-bar-flag{
   position:absolute;right:3px;top:4px;z-index:2;width:12px;height:12px;border-radius:50%;
-  display:grid;place-items:center;background:var(--danger);color:#fff;
+  display:grid;place-items:center;background:var(--danger);color:var(--text-inverse);
   font-size:9px;font-weight:700;line-height:1;pointer-events:none;
 }
 .gantt-bar.is-blocked .gantt-bar-flag{background:var(--warning);}

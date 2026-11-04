@@ -32,6 +32,7 @@ var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
 var planDemandId = null;
 var formPri = "P2";
+var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
 function statusName(st){
@@ -165,7 +166,7 @@ function render(){
       return (PRI_ORDER[a.priority] || 9) - (PRI_ORDER[b.priority] || 9)
         || String(a.expectDate || "9999").localeCompare(String(b.expectDate || "9999"));
     });
-    return '<div class="bkl-col"><div class="bkl-head"><span class="bkl-title">'
+    return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title">'
       + '<span class="pdot" style="background:' + c[2] + '"></span>' + c[1] + '</span>'
       + '<span class="bkl-count">' + items.length + '</span></div>'
       + (items.map(cardHTML).join("") || '<p class="foot-note" style="padding:10px 2px">暂无需求</p>')
@@ -194,7 +195,10 @@ function demandActs(d){
 }
 function cardHTML(d){
   var acts = demandActs(d);
-  return '<div class="bkl-card">'
+  var drag = isOwner()
+    ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="拖到其他列流转状态"'
+    : "";
+  return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + '<span class="tag tag-info">' + esc(d.priority || "P2") + '</span></div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
@@ -248,7 +252,7 @@ function renderDemandTable(){
       || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
-    + '<thead><tr>' + cols.map(function(k){ return '<th>' + esc(labels[k] || k) + '</th>'; }).join("") + '<th>操作</th></tr></thead>'
+    + '<thead><tr>' + cols.map(function(k){ return '<th' + (numCols[k] ? ' class="num"' : '') + '>' + esc(labels[k] || k) + '</th>'; }).join("") + '<th>操作</th></tr></thead>'
     + '<tbody>' + rows.map(function(d){
       return '<tr>' + cols.map(function(k){
         return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
@@ -469,7 +473,7 @@ function loadDemandTasks(layer, id){
       return;
     }
     box.innerHTML = '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
-      + '<th>工作项</th><th>类型</th><th>负责人</th><th>预估</th><th>状态</th></tr></thead><tbody>'
+      + '<th>工作项</th><th>类型</th><th>负责人</th><th class="num">预估</th><th>状态</th></tr></thead><tbody>'
       + tasks.map(function(t){
         var done = t.boardColumn === "done";
         return '<tr data-open-task="' + esc(t.id) + '" title="打开任务详情">'
@@ -690,7 +694,7 @@ function showDemandDetail(id){
       headers:{ "X-XSRF-TOKEN": csrfCookie() },
       body: fd
     }).then(function(res){
-      if(res.status === 401){ window.location.href = "/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
       return res.json().catch(function(){ return null; });
     }).then(function(json){
       if(json && json.code === 0){
@@ -770,5 +774,58 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   var dl = e.target.closest("[data-dem-del]");
   if(dl){ deleteDemand(dl.dataset.demDel); return; }
 });
+
+/* ---------- 卡片拖动：跨列状态流转（仅空间主；状态机同按钮） ---------- */
+
+function allowedDrop(from, to){
+  if(from === "review") return to === "pass" || to === "rej";
+  if(from === "pass") return to === "plan";
+  if(from === "rej") return to === "review";
+  return false;
+}
+function clearColOver(){
+  demandBody.querySelectorAll(".bkl-col").forEach(function(c){ c.classList.remove("bkl-col-over"); });
+}
+function applyDrop(src, to){
+  if(src.status === "review" && to === "rej"){ rejectDemand(src.id); }
+  else if(src.status === "review" && to === "pass"){ passDemand(src.id); }
+  else if(src.status === "pass" && to === "plan"){ openPlanDialog(src.id); }
+  else if(src.status === "rej" && to === "review"){ reopenDemand(src.id); }
+}
+if(demandBody){
+  demandBody.addEventListener("dragstart", function(e){
+    var card = e.target.closest(".bkl-card");
+    if(!card || !isOwner()) return;
+    dragSrc = { id: card.dataset.cardId, status: card.dataset.cardStatus };
+    e.dataTransfer.setData("text/plain", dragSrc.id);
+    e.dataTransfer.effectAllowed = "move";
+    card.classList.add("bkl-dragging");
+  });
+  demandBody.addEventListener("dragover", function(e){
+    if(!dragSrc) return;
+    var col = e.target.closest(".bkl-col");
+    clearColOver();
+    if(!col || !allowedDrop(dragSrc.status, col.dataset.col)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    col.classList.add("bkl-col-over");
+  });
+  demandBody.addEventListener("drop", function(e){
+    var col = e.target.closest(".bkl-col");
+    clearColOver();
+    if(!dragSrc || !col) return;
+    var src = dragSrc;
+    dragSrc = null;
+    if(!allowedDrop(src.status, col.dataset.col)) return;
+    e.preventDefault();
+    applyDrop(src, col.dataset.col);
+  });
+  demandBody.addEventListener("dragend", function(e){
+    clearColOver();
+    var card = e.target.closest(".bkl-card");
+    if(card) card.classList.remove("bkl-dragging");
+    dragSrc = null;
+  });
+}
 
 export { enterDemandsView, loadDemands, render };

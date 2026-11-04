@@ -5,6 +5,7 @@ server:
   # 信任 nginx 传来的 X-Forwarded-*，HTTPS 下会话/CSRF Cookie 才会带 Secure
   forward-headers-strategy: native
   servlet:
+    context-path: ${CONTEXT_PATH:/hourglass}
     session:
       timeout: 30d
       cookie:
@@ -18,7 +19,7 @@ server:
 
 spring:
   application:
-    name: devstudio-kanban-server
+    name: hourglass
   servlet:
     multipart:
       max-file-size: 10MB
@@ -39,7 +40,7 @@ spring:
     username: ${DB_USER:devstudio}
     password: ${DB_PASSWORD:}
     hikari:
-      pool-name: devstudio-pool
+      pool-name: hourglass-pool
       maximum-pool-size: 10
       connection-timeout: 3000
 
@@ -80,7 +81,7 @@ app:
   ai:
     # 用户 AI Key 的加密密钥：生产部署请用环境变量 AI_CRYPTO_KEY 覆盖。
     # 换了它，已保存的 key 全部解不开 —— 不影响业务，用户到「个人设置 → AI 设置」重填一次即可。
-    crypto-key: ${AI_CRYPTO_KEY:devstudio-local-ai-key-change-me}
+    crypto-key: ${AI_CRYPTO_KEY:hourglass-local-ai-key-change-me}
   mail:
     # 数据库 outbox 扫描间隔；SMTP 主机、账号与密码统一由管理员接口保存，不走环境变量
     scan-ms: ${MAIL_SCAN_MS:30000}

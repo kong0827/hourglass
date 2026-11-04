@@ -39,19 +39,20 @@ public class BranchController {
         this.workspaceService = workspaceService;
     }
 
-    /** 分支列表（含关联任务数 / 已完成数；只统计查看人可见项目） */
+    /** 分支列表（含关联任务数 / 已完成数 / 归属项目；只统计查看人可见项目） */
     @GetMapping("/api/branches")
-    public ApiResult<List<DevBranch>> list(@RequestParam(required = false) String workspace) {
+    public ApiResult<List<DevBranch>> list(@RequestParam(required = false) String workspace,
+                                           @RequestParam(required = false) String project) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(branchService.list(ws.getId(), userId));
+        return ApiResult.ok(branchService.list(ws.getId(), userId, project));
     }
 
     @GetMapping("/api/branches/{id}")
     public ApiResult<DevBranch> get(@PathVariable String id,
                                     @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(branchService.get(ws.getId(), id));
+        return ApiResult.ok(branchService.getDetail(ws.getId(), CurrentUser.id(), id));
     }
 
     /** 状态变更时间线（倒序：最近的在前） */

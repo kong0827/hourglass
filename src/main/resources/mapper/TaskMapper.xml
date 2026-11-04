@@ -126,6 +126,21 @@
         AND t.item_type IN
         <foreach collection="types" item="tp" open="(" separator="," close=")">#{tp}</foreach>
       </if>
+      <if test="versions != null and versions.size() > 0">
+        AND (
+        <foreach collection="versions" item="v" separator=" OR ">
+          <choose>
+            <when test="v == '__none'">
+              NOT EXISTS (SELECT 1 FROM version_task vt WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+            </when>
+            <otherwise>
+              EXISTS (SELECT 1 FROM version_task vt
+                      WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id AND vt.version_id = #{v})
+            </otherwise>
+          </choose>
+        </foreach>
+        )
+      </if>
       <if test="blocked"> AND t.is_blocked = 1 </if>
       <if test="due != null">
         <choose>
@@ -500,6 +515,28 @@
       AND t.item_type IN
       <foreach collection="query.types" item="tp" open="(" separator="," close=")">#{tp}</foreach>
     </if>
+    <if test="query.versionNone">
+      <choose>
+        <when test="query.versionIds != null and query.versionIds.size() > 0">
+          AND (NOT EXISTS (SELECT 1 FROM version_task vt
+                           WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+               OR EXISTS (SELECT 1 FROM version_task vt
+                          WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+                            AND vt.version_id IN
+                          <foreach collection="query.versionIds" item="vid" open="(" separator="," close=")">#{vid}</foreach>))
+        </when>
+        <otherwise>
+          AND NOT EXISTS (SELECT 1 FROM version_task vt
+                          WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+        </otherwise>
+      </choose>
+    </if>
+    <if test="query.versionNone == false and query.versionIds != null and query.versionIds.size() > 0">
+      AND EXISTS (SELECT 1 FROM version_task vt
+                  WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+                    AND vt.version_id IN
+                  <foreach collection="query.versionIds" item="vid" open="(" separator="," close=")">#{vid}</foreach>)
+    </if>
     <if test="query.due != null">
       <choose>
         <when test="query.due == 'over'">
@@ -673,8 +710,9 @@
 
   <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
   <select id="selectBoardFacets" resultType="TaskFacetRow">
-    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, t.due_date, t.item_type
+    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, t.due_date, t.item_type, vt.version_id
     FROM task t
+    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
     ORDER BY t.board_column, t.sort_order, t.id

@@ -3,13 +3,13 @@
 <mapper namespace="com.devstudio.kanban.mapper.DevBranchMapper">
 
   <sql id="cols">
-    id, workspace_id, name, status, owner, owner_user_id, target_branch, note,
+    id, workspace_id, req_id, name, status, owner, owner_user_id, target_branch, note,
     dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at
   </sql>
 
   <!-- 列表：任务数用一次 GROUP BY 汇总，避免每条分支两个相关子查询 -->
   <select id="selectByWorkspace" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
+    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
            b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
@@ -23,11 +23,14 @@
       GROUP BY branch_id
     ) tc ON tc.branch_id = b.id
     WHERE b.workspace_id = #{workspaceId}
+    <if test="reqId != null and reqId != ''">
+      AND (b.req_id = #{reqId} OR b.req_id IS NULL)
+    </if>
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
 
   <select id="selectVisibleByWorkspace" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
+    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
            b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
@@ -46,6 +49,9 @@
       GROUP BY t.branch_id
     ) tc ON tc.branch_id = b.id
     WHERE b.workspace_id = #{workspaceId}
+    <if test="reqId != null and reqId != ''">
+      AND (b.req_id = #{reqId} OR b.req_id IS NULL)
+    </if>
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
 
@@ -53,16 +59,62 @@
     SELECT <include refid="cols"/> FROM dev_branch WHERE id = #{id}
   </select>
 
+  <!-- 影响版本标签：分支 → 任务 → version_task → project_version 推导（方案A，无独立绑定） -->
+  <select id="selectVersionTags" resultType="com.devstudio.kanban.dto.BranchVersionTag">
+    SELECT t.branch_id AS branchId, pv.id AS versionId, pv.name AS name, pv.status AS status,
+           pv.req_id AS reqId, r.name AS reqName
+    FROM task t
+    INNER JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+    INNER JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = t.workspace_id
+    LEFT JOIN requirement r ON r.id = pv.req_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+    <if test="viewerId != null and viewerId != ''">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
+    GROUP BY t.branch_id, pv.id, pv.name, pv.status, pv.req_id, r.name
+    ORDER BY r.name, pv.name
+  </select>
+
+  <!-- 归属项目标签：分支 → 任务 → 项目推导（方案A，无独立绑定） -->
+  <select id="selectProjectTags" resultType="com.devstudio.kanban.dto.BranchProjectTag">
+    SELECT t.branch_id AS branchId, r.id AS projectId, r.name AS projectName
+    FROM task t
+    INNER JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+      AND t.req_id IS NOT NULL
+    <if test="viewerId != null and viewerId != ''">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
+    GROUP BY t.branch_id, r.id, r.name
+    ORDER BY r.name
+  </select>
+
+  <!-- 分支简表：版本统计聚合分支进度用（只取 id/name/status/reqId） -->
+  <select id="selectBriefsByWorkspace" resultType="DevBranch">
+    SELECT id, workspace_id, req_id, name, status
+    FROM dev_branch
+    WHERE workspace_id = #{workspaceId}
+  </select>
+
   <select id="countByName" resultType="int">
     SELECT COUNT(*) FROM dev_branch
     WHERE workspace_id = #{workspaceId} AND name = #{name}
+      AND (req_id = #{reqId} OR (req_id IS NULL AND #{reqId} IS NULL))
     <if test="excludeId != null and excludeId != ''"> AND id &lt;&gt; #{excludeId} </if>
   </select>
 
   <insert id="insert">
-    INSERT INTO dev_branch (id, workspace_id, name, status, owner, owner_user_id, target_branch, note,
+    INSERT INTO dev_branch (id, workspace_id, req_id, name, status, owner, owner_user_id, target_branch, note,
                             dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
             #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt},
             COALESCE(#{sortOrder}, 0), COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -70,6 +122,7 @@
   <update id="update">
     UPDATE dev_branch SET
       name          = #{name},
+      req_id        = #{reqId},
       owner         = #{owner},
       owner_user_id = #{ownerUserId},
       target_branch = #{targetBranch},
@@ -88,6 +141,11 @@
       <if test="merging">, merge_at = COALESCE(merge_at, NOW())</if>
       <if test="released">, released_at = COALESCE(released_at, NOW())</if>
     WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="clearReqIdByReq">
+    UPDATE dev_branch SET req_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
   </update>
 
   <delete id="deleteById">

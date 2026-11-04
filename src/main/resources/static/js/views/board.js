@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { loadCategories, pruneStaleFilters, updateTagDatalist } from "../core/app.js";
 import { board, reqListEl } from "../core/dom.js";
-import { renderFilterChips } from "../core/filters-ui.js";
+import { renderFilterChips, saveViewState } from "../core/filters-ui.js";
 import { boardParams, updateBrand } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { renderAlertBar } from "../core/notifications.js";
@@ -50,8 +50,11 @@ function loadBoard(opts){
     syncColumns(data.columnDefs);
     updateTagDatalist();
     loadCategories();
-    if(pruneStaleFilters(data.meta)){ loadBoard({silent:true}); return; }
+    if(pruneStaleFilters(data.meta)){ saveViewState(); loadBoard({silent:true}); return; }
     board.classList.remove("busy");
+    /* 筛选栏与看板解耦：render() 在非看板视图会早退，此前筛选 chips 只在看板渲染，
+       直接进列表/日历等页面时负责人/优先级/类型/更多筛选全部空白 */
+    renderFilterChips();
     render({animate: !!opts.animate});
     /* 卡片上的「计时中」状态来自另一个接口；只有确实有运行中的计时才补一次渲染 */
     loadRunningTimer(function(rt){
@@ -309,7 +312,7 @@ function render(opts){
       if(filterOn()){ emptyText = "无匹配任务"; emptyIc = "filterOff"; }
       else if(c.done && state.doneScope === "week" && cd.allTotal){ emptyText = "本周还没有完成的任务"; emptyIc = "checkCircle"; }
       else { emptyText = "拖动卡片到这里"; emptyIc = "inbox"; }
-      body += '<div class="col-empty">' + icon(emptyIc, 18) + emptyText + '</div>';
+      body += UI.colEmpty(emptyText, emptyIc);
     }else{
       items.forEach(function(t, i){ body += cardHTML(t, i); });
     }
@@ -714,6 +717,7 @@ board.addEventListener("click", function(e){
   var sc = e.target.closest("[data-scope]");
   if(sc){
     state.doneScope = (state.doneScope === "week") ? "all" : "week";
+    saveViewState();
     loadBoard({animate:true}).then(function(){
       toast(state.doneScope === "week" ? "已完成列：仅显示本周" : "已完成列：显示全部记录");
     });

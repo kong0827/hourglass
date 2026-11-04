@@ -24,6 +24,12 @@ public interface UserMapper {
 
     AppUser selectByUsername(String username);
 
+    /** 按邮箱查账号（登录回退用；写入口有唯一校验，历史脏数据取最早一条） */
+    AppUser selectByEmail(@Param("email") String email);
+
+    /** 邮箱占用计数（excludeId 非空表示编辑时排除自己）；登录按邮箱取人，必须保证不重复 */
+    int countByEmail(@Param("email") String email, @Param("excludeId") String excludeId);
+
     int countAll();
 
     /**

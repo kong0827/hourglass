@@ -41,7 +41,25 @@ function devColor(v){
   return { ok:"success", warn:"warning", over:"danger" }[c] || "";
 }
 function typeName(itemType){
-  return { story:"用户故事", task:"任务", bug:"缺陷", epic:"Epic" }[itemType || "task"] || "任务";
+  return { story:"用户故事", task:"任务", bug:"缺陷", epic:"史诗" }[itemType || "task"] || "任务";
+}
+/* 分支模块四状态（与 branches.js 的 BRANCH_STATUS 同源）：版本卡分支进度行用 */
+var BRANCH_ST = {
+  dev:      { name:"开发中", cls:"br-st-dev" },
+  testing:  { name:"待测试", cls:"br-st-testing" },
+  merging:  { name:"待合并", cls:"br-st-merging" },
+  released: { name:"已发布", cls:"br-st-released" }
+};
+function branchChipsHTML(brs){
+  if(!brs || !brs.length) return "";
+  return '<div class="ver-branches">' + brs.map(function(b){
+    var st = BRANCH_ST[b.status] || { name: b.status || "未知", cls: "" };
+    var tip = "分支状态：" + st.name + " · 该版本 " + (b.taskCount || 0) + " 个任务挂在此分支";
+    return '<span class="ver-br" title="' + esc(tip) + '">' +
+      '<i class="br-dot ' + st.cls + '"></i>' + esc(b.name) +
+      ((b.taskCount || 0) > 1 ? '<span class="ver-br-n">×' + b.taskCount + '</span>' : '') +
+    '</span>';
+  }).join("") + '</div>';
 }
 function dateShort(s){
   if(!s) return "—";
@@ -292,7 +310,7 @@ function openDrillModal(scope, val, metric){
     + '<div class="desc">共 ' + rows.length + ' 项 · 点击任务行打开详情</div></div>'
     + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
-    + '<th>任务</th><th>类型</th><th>负责人</th><th>计划开始</th><th>计划结束</th><th>预估</th><th>实际</th><th>状态</th>'
+    + '<th>任务</th><th>类型</th><th>负责人</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>状态</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){
@@ -340,7 +358,7 @@ function openMemberDrill(userId, name){
       + ' · 按计时自然日归组，点击任务行打开详情</div></div>'
       + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
       + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
-      + '<th>任务</th><th>阶段</th><th>类型</th><th>计划开始</th><th>计划结束</th><th>预估</th><th>实际</th><th>状态</th>'
+      + '<th>任务</th><th>阶段</th><th>类型</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>状态</th>'
       + '</tr></thead><tbody>' + body + '</tbody></table></div></div></div>';
     document.body.appendChild(layer);
     layer.addEventListener("click", function(e){
@@ -440,8 +458,8 @@ function memberTable(){
   }).join("");
   return '<div class="panel"><div class="panel-head"><h3>按成员的阶段工时</h3>'
     + '<span class="meta-right">自动计时按任务完成日归入阶段 · 点击成员行查看明细</span></div>'
-    + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr><th style="width:160px">成员</th><th>首版开发</th>'
-    + '<th>迭代维护</th><th>合计</th><th>阶段重心</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
+    + '<div class="tbl-wrap"><table class="phase-tbl member-tbl"><thead><tr><th>成员</th><th class="num">首版开发</th>'
+    + '<th class="num">迭代维护</th><th class="num">合计</th><th>阶段重心</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 function taskTable(mode){
   var firstRel = cache.phase ? cache.phase.firstReleasedAt : null;
@@ -487,7 +505,7 @@ function taskTable(mode){
     + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开任务</span>' + seg + '</div>'
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr><th>任务</th>'
     + (mode === "phase" ? "<th>阶段</th>" : "<th>版本</th>")
-    + '<th>类型</th><th>计划开始</th><th>计划结束</th><th>预估</th><th>实际</th><th>偏差</th><th>状态</th></tr></thead>'
+    + '<th>类型</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>偏差</th><th>状态</th></tr></thead>'
     + '<tbody id="phaseTblBody">' + rows + '</tbody></table></div></div>';
 }
 function renderPhaseMode(){
@@ -576,6 +594,7 @@ function versionCardHTML(v){
   return '<div class="phase-card ' + cls + '"><div class="phase-card-head">'
     + '<span class="tag tag-primary">' + esc(v.name) + '</span>' + stTag
     + '<span class="phase-card-sub">' + esc(sub) + '</span></div>'
+    + branchChipsHTML(v.branches)
     + (v.description ? '<p class="foot-note" style="margin:0">' + esc(v.description) + '</p>' : '')
     + metricCells(cells, { scope: "version", val: v.id }) + acts + '</div>';
 }
@@ -588,6 +607,7 @@ function renderVersionMode(){
   var u = cache.vstats.unbound;
   var unboundCard = '<div class="phase-card ver-plan"><div class="phase-card-head">'
     + '<span class="tag ghost">待规划</span><span class="phase-card-sub">未绑定版本的任务</span></div>'
+    + branchChipsHTML(u.branches)
     + metricCells([
       [u.taskCount, "待规划任务", ""],
       [u.doneCount, "已完成", ""],
@@ -926,13 +946,13 @@ function ensureEpicOptions(keep, taskId){
   var reqId = $("iReq") ? $("iReq").value : "";
   sel.removeAttribute("data-ready");
   if(!reqId){
-    sel.innerHTML = '<option value="">无所属 Epic</option>';
+    sel.innerHTML = '<option value="">无所属史诗</option>';
     sel.setAttribute("data-ready", "1");
     return;
   }
-  sel.innerHTML = '<option value="">Epic 加载中…</option>';
+  sel.innerHTML = '<option value="">史诗加载中…</option>';
   fetchTaskOptions(reqId).then(function(rows){
-    var html = '<option value="">无所属 Epic</option>';
+    var html = '<option value="">无所属史诗</option>';
     rows.forEach(function(t){
       if(t.itemType === "epic" && t.id !== taskId){
         html += '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>';
@@ -953,7 +973,7 @@ function ensureEpicOptions(keep, taskId){
       pick("");
     }
   }).catch(function(){
-    sel.innerHTML = '<option value="">Epic 加载失败，保存时保留原关联</option>';
+    sel.innerHTML = '<option value="">史诗加载失败，保存时保留原关联</option>';
   });
 }
 

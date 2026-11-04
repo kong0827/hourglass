@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, listBulkBar } from "../core/dom.js";
-import { applyView, clearFilters, deleteView, promptSaveView } from "../core/filters-ui.js";
+import { applyView, clearFilters, deleteView, promptSaveView, saveViewState } from "../core/filters-ui.js";
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
@@ -12,7 +12,7 @@ import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../co
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, rgbaOf, typeBadgeHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, rgbaOf, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -26,7 +26,7 @@ var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", sort:"default", collapsed:{} };
 var LIST_GROUPS = ["none", "status", "owner", "priority", "project"];
 var LIST_SORTS = ["default", "due", "priority", "estimate", "actual", "updated"];
-var COL_WIDTHS = { title:"minmax(220px,1fr)", column:"100px", priority:"84px", owner:"110px", dueDate:"120px", progress:"128px", project:"140px", version:"110px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
+var COL_WIDTHS = { title:"minmax(220px,1fr)", type:"90px", column:"100px", priority:"84px", owner:"110px", dueDate:"120px", progress:"128px", project:"140px", version:"110px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
 
 function renderSmartTabs(){
   if(!smartTabs) return;
@@ -58,8 +58,10 @@ function activatePreset(id){
   syncSmartControls();
   /* 预置视图从干净条件开始；后续在全局筛选栏追加的条件仍与预置条件叠加。 */
   clearFilters();
+  saveViewState();
 }
 function currentListViewParams(){ return {preset:smart.preset, group:smart.group, sort:smart.sort}; }
+function currentListViewId(){ return smart.current; }
 function currentListViewName(){
   for(var i = 0; i < rt.savedViews.length; i++){
     if(String(rt.savedViews[i].id) === smart.current) return rt.savedViews[i].name;
@@ -73,6 +75,7 @@ function applyListSavedView(id, params){
   smart.sort = LIST_SORTS.indexOf(params.sort) !== -1 ? params.sort : "default";
   smart.collapsed = {};
   syncSmartControls();
+  saveViewState();
 }
 function markListViewSaved(id){
   smart.current = String(id);
@@ -88,14 +91,14 @@ function initSmartTable(){
   var toolbar = page.querySelector(".list-toolbar");
   smartBar = document.createElement("div");
   smartBar.className = "smart-list-bar";
-  smartBar.innerHTML = '<div class="smart-view-tabs" role="tablist" aria-label="任务视图"></div>' +
+  smartBar.innerHTML = '<div class="smart-view-tabs" role="tablist" aria-label="视图"></div>' +
     '<div class="smart-view-tools">' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
         '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
       '<span class="smart-list-sort"></span><span class="smart-view-spacer"></span>' +
       '<button class="btn sm" type="button" data-list-export>' + icon("download", 13) + ' 导出当前视图</button>' +
-      '<button class="btn sm primary" type="button" data-list-save>＋ 保存当前视图</button>' +
+      '<button class="btn sm primary" type="button" data-list-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(smartBar, toolbar);
   smartTabs = smartBar.querySelector(".smart-view-tabs");
@@ -124,6 +127,7 @@ function initSmartTable(){
     smart.collapsed = {};
     renderListItems(lastItems);
     updateListMeta(lastItems.length);
+    saveViewState();
   });
   smartBar.addEventListener("click", function(e){
     if(e.target.closest("[data-list-save]")) promptSaveView();
@@ -132,6 +136,8 @@ function initSmartTable(){
 }
 function enterListView(){
   initSmartTable();
+  /* 启动时看板若未加载成功，筛选栏会没有选项：进列表时静默补拉一次 */
+  if(!state.board) loadBoard({silent:true});
   listPrefs.load("task-list").then(function(){
     if(activeView !== "list") return;
     renderListHead();
@@ -202,8 +208,9 @@ function minutesText(value){
   if(!n) return "—";
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
-function taskCell(t, key){
-  if(key === "title") return '<span class="lr-task"><span class="lr-t">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</span></span>';
+function taskCell(t, key, hasTypeCol){
+  if(key === "title") return '<span class="lr-task"><span class="lr-t">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType)) + esc(t.title) + '</span></span>';
+  if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     return '<span class="cell"><span class="tag" style="background:' + rgbaOf(color,.10) + ';color:' + darken(color) + '">' + esc(colName(t.boardColumn)) + '</span></span>';
@@ -309,6 +316,7 @@ function csvCell(value){
 }
 function taskCsvValue(t, key){
   if(key === "title") return t.title || "";
+  if(key === "type") return typeName(t.itemType);
   if(key === "column") return colName(t.boardColumn);
   if(key === "priority") return t.priority || "";
   if(key === "owner") return t.owner || "";
@@ -355,12 +363,13 @@ function renderListItems(items){
     return;
   }
   var keepSelected = {}, visibleColumns = listPrefs.columns("task-list");
+  var hasTypeCol = visibleColumns.indexOf("type") !== -1;
   viewRows.forEach(function(t){ rt.listCache[t.id] = t; });
   function rowHTML(t){
     if(rt.listSelected[t.id]) keepSelected[t.id] = true;
     return '<div class="list-row" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
       '<span><input type="checkbox" class="cbx" data-row-check="' + esc(t.id) + '" aria-label="选择任务：' + esc(t.title) + '"' + (rt.listSelected[t.id] ? ' checked' : '') + ' /></span>' +
-      visibleColumns.map(function(key){ return taskCell(t, key); }).join("") +
+      visibleColumns.map(function(key){ return taskCell(t, key, hasTypeCol); }).join("") +
       '<span class="cell-act"><button class="icon-btn sm" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 15) + '</button></span></div>';
   }
   if(smart.group === "none"){
@@ -661,6 +670,7 @@ listSort.addEventListener("change", function(){
   smart.sort = listSort.value;
   if(smart.sort === "due" || smart.sort === "priority" || smart.sort === "updated") serverSort = smart.sort;
   loadList();
+  saveViewState();
 });
 
-export { applyListSavedView, currentListViewName, currentListViewParams, enterListView, listViewDeleted, loadList, markListViewSaved, refreshListIfOpen, renderSmartTabs };
+export { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, enterListView, listViewDeleted, loadList, markListViewSaved, refreshListIfOpen, renderSmartTabs };

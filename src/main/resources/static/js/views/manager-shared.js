@@ -67,7 +67,7 @@ function openTaskTable(title, tasks, description){
     + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + (tasks || []).length + " 项 · 点击任务行打开详情")) + '</div></div>'
     + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
-    + '<th>任务</th><th>项目</th><th>负责人</th><th>状态</th><th>截止</th><th>预估</th><th>实际</th>'
+    + '<th>任务</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){

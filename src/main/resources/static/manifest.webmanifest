@@ -1,16 +1,16 @@
 {
-  "name": "工作台 · 任务看板",
-  "short_name": "工作台",
+  "name": "沙漏 · 任务看板",
+  "short_name": "沙漏",
   "description": "任务看板：看板、项目、周回顾、日历与报表",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/hourglass",
+  "scope": "/hourglass",
   "display": "standalone",
   "background_color": "#F7F8FA",
   "theme_color": "#2563EB",
   "lang": "zh-CN",
   "icons": [
     {
-      "src": "/icons/icon-1024.png",
+      "src": "/hourglass/icons/icon-1024.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"

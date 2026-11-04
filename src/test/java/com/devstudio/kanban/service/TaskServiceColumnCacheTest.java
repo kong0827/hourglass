@@ -9,6 +9,7 @@ import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
@@ -48,7 +49,8 @@ class TaskServiceColumnCacheTest {
 
         TaskSupport support = new TaskSupport(mock(TaskMapper.class), mock(TagMapper.class), metaCache);
         TaskQueryService service = new TaskQueryService(
-                mock(TaskMapper.class), mock(RequirementMapper.class), mock(TaskLogMapper.class),
+                mock(TaskMapper.class), mock(RequirementMapper.class), mock(ProjectVersionMapper.class),
+                mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
                 mock(ProjectAccessService.class));

@@ -28,7 +28,7 @@ var PRIORITY_COLOR = {P0:"#F04438", P1:"#F79009", P2:"#2E90FA", P3:"#98A2B3"};
 var PALETTE = ["#2563EB","#12B76A","#F79009","#F04438","#7A5AF8","#0E9384","#DD2590","#98A2B3"];
 var AVATAR_COLORS = PALETTE.slice();
 var CAT_DEFAULT_COLOR = "#98A2B3";
-var BACKUP_NAME = "devstudio-kanban-backup.json";
+var BACKUP_NAME = "hourglass-backup.json";
 var DOC_TYPES = [
   {id:"requirement", name:"需求文档"},
   {id:"technical", name:"技术方案"},
@@ -107,13 +107,29 @@ function fmtSize(bytes){
   return (b/1024/1024).toFixed(1) + " MB";
 }
 function typeName(itemType){
-  return { story:"用户故事", task:"任务", bug:"缺陷", epic:"Epic" }[itemType || "task"] || "任务";
+  return { story:"用户故事", task:"任务", bug:"缺陷", epic:"史诗" }[itemType || "task"] || "任务";
 }
 /* 工作项类型徽标：task 是默认类型不亮徽标，避免满屏噪音 */
 function typeBadgeHTML(itemType){
   var cls = { story:"type-story", bug:"type-bug", epic:"type-epic" }[itemType];
   if(!cls) return "";
   return '<span class="mini-tag ' + cls + '">' + typeName(itemType) + '</span>';
+}
+/* 工作项类型的通用敏捷定义（「工作项类型」旁 ! 说明弹层的文案源） */
+var ITEM_TYPE_DESCS = [
+  { key:"task",  desc:"具体的工作单元，通常由需求/故事拆解而来，粒度小（约 1–2 天），面向执行" },
+  { key:"story", desc:"从用户视角描述的一条功能需求，惯用格式「作为〈角色〉，我希望〈功能〉，以便〈价值〉」，一个迭代内可交付" },
+  { key:"bug",   desc:"已交付功能与预期行为不符的问题，来自测试或使用反馈，需修复并验证" },
+  { key:"epic",  desc:"大粒度需求集合，即通用的 Epic 概念；一个迭代内做不完，需拆解为多个用户故事/任务后再排期" }
+];
+function itemTypeInfoHTML(){
+  var badgeCls = { story:"type-story", bug:"type-bug", epic:"type-epic" };
+  return '<div class="menu-title">类型区别说明</div><div class="type-help-list">' +
+    ITEM_TYPE_DESCS.map(function(o){
+      var cls = badgeCls[o.key] || "mute";
+      return '<div class="type-help-row"><span class="mini-tag ' + cls + '">' + typeName(o.key) + '</span>' +
+        '<span class="type-help-desc">' + esc(o.desc) + '</span></div>';
+    }).join("") + '</div>';
 }
 function recurLabel(type){
   if(type === "daily") return "每天";
@@ -134,9 +150,16 @@ function avatarColor(name){
   for(var i = 0; i < name.length; i++) h = (h*31 + name.charCodeAt(i)) % 9973;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
+function avatarColorIndex(name){
+  name = name || "?";
+  var h = 0;
+  for(var i = 0; i < name.length; i++) h = (h*31 + name.charCodeAt(i)) % 9973;
+  return (h % 8) + 1;
+}
 function initial(name){ return name ? String(name).charAt(0) : "?"; }
 function avatarHTML(name, cls){
-  return '<span class="avatar' + (cls ? " " + cls : "") + '" style="--a:' + avatarColor(name) + '" aria-hidden="true">' +
+  var idx = avatarColorIndex(name);
+  return '<span class="avatar avatar-c' + idx + (cls ? " " + cls : "") + '" aria-hidden="true">' +
     esc(initial(name)) + '</span>';
 }
 function colMeta(id){
@@ -163,4 +186,4 @@ function darken(hex, k){
   return "rgb("+Math.round(c.r*f)+","+Math.round(c.g*f)+","+Math.round(c.b*f)+")";
 }
 
-export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, PALETTE, PRIORITIES, PRIORITY_COLOR, docTypeName, addDays, avatarColor, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };
+export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, PRIORITY_COLOR, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };

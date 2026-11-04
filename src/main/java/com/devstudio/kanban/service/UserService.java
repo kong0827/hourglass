@@ -81,6 +81,10 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         AppUser u = userMapper.selectByUsername(username);
         if (u == null) {
+            // 邮箱登录：登录名查不到再按邮箱取（写入口有唯一校验，邮箱不会指向多个账号）
+            u = userMapper.selectByEmail(username);
+        }
+        if (u == null) {
             throw new UsernameNotFoundException("用户不存在");
         }
         return new LoginUser(u.getId(), u.getUsername(), u.getPasswordHash(), u.getDisplayName(), u.getRole());
@@ -148,7 +152,7 @@ public class UserService implements UserDetailsService {
         String newName = cleanName(req.getDisplayName(), oldName);
         u.setRole(null); // 只改显示名和邮箱：SQL 条件跳过 role 写入
         u.setDisplayName(newName);
-        u.setEmail(Texts.trimToNull(req.getEmail()));
+        u.setEmail(uniqueEmail(Texts.trimToNull(req.getEmail()), id));
         userMapper.update(u);
         syncTaskOwnerName(id, oldName, newName);
         return userMapper.selectById(id);
@@ -206,6 +210,8 @@ public class UserService implements UserDetailsService {
         String oldName = u.getDisplayName();
         String newName = cleanName(req.getDisplayName(), oldName);
         u.setDisplayName(newName);
+        // 邮箱是登录凭据之一，编辑与其他账号重复时直接拒绝，而不是静默落库造成登录歧义
+        u.setEmail(uniqueEmail(Texts.trimToNull(req.getEmail()), id));
         userMapper.update(u);
         syncTaskOwnerName(id, oldName, newName);
         return userMapper.selectById(id);
@@ -307,6 +313,17 @@ public class UserService implements UserDetailsService {
     private String cleanName(String raw, String fallback) {
         String name = raw == null ? "" : raw.replace(',', ' ').replace('，', ' ').trim();
         return name.isEmpty() ? fallback : Texts.cut(name, 32);
+    }
+
+    /** 邮箱可空（清除）；非空时校验未被其他账号占用（数据库按 CI 排序规则比较） */
+    private String uniqueEmail(String email, String selfId) {
+        if (email == null || email.isEmpty()) {
+            return null;
+        }
+        if (userMapper.countByEmail(email, selfId) > 0) {
+            throw AppException.badRequest("该邮箱已被其他账号使用：" + email);
+        }
+        return Texts.cut(email, 254);
     }
 
     private AppUser requireUser(String id) {

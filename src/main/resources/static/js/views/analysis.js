@@ -71,8 +71,7 @@ function renderCompletions(rows, month){
   }).join("");
 
   if(!n){
-    $("compWrap").innerHTML = '<div class="col-empty">' + esc(month) +
-      ' 还没有完成记录。把任务拖进「已完成」列就会自动归档到这里。</div>';
+    $("compWrap").innerHTML = UI.colEmpty(month + " 还没有完成记录。把任务拖进「已完成」列就会自动归档到这里。");
     return;
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
@@ -245,7 +244,7 @@ function renderStats(d){
   });
   var chart;
   if(!d.weeks || !d.weeks.length){
-    chart = '<div class="col-empty" style="margin:20px 0">暂无统计数据</div>';
+    chart = UI.colEmpty("暂无统计数据");
   }else{
     chart = '<div class="chart">' + d.weeks.map(function(w){
       var parts = w.start.split("-");
@@ -354,7 +353,7 @@ function renderFlowHealth(d){
       '<span class="fi-dot" aria-hidden="true"></span>' +
       '<div class="fi-main"><div class="fi-t">' + esc(x.title) + '</div>' +
       '<div class="fi-x">' + esc(x.text) + '</div></div></div>';
-  }).join("") : '<div class="col-empty" style="margin:16px 0">暂无结论</div>';
+  }).join("") : UI.colEmpty("暂无结论");
   $("flowCoverage").textContent = cov.note || "";
 
   /* ---- KPI ---- */
@@ -378,7 +377,7 @@ function renderFlowHealth(d){
 
   /* ---- 各列停留 ---- */
   if(!cols.length){
-    $("flowBars").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有看板列</div>';
+    $("flowBars").innerHTML = UI.colEmpty("当前空间还没有看板列");
   }else{
     var maxShare = 0;
     cols.forEach(function(c){ if((c.share || 0) > maxShare) maxShare = c.share; });
@@ -404,7 +403,7 @@ function renderFlowHealth(d){
 
   /* ---- 返工 ---- */
   if(!rw.totalMoves){
-    $("flowRework").innerHTML = '<div class="col-empty" style="margin:16px 0">这段时间没有跨列移动</div>';
+    $("flowRework").innerHTML = UI.colEmpty("这段时间没有跨列移动");
   }else{
     $("flowRework").innerHTML = '<div class="dist">' +
       flowRow("跨列移动", rw.totalMoves + " 次", 100, "var(--info)") +
@@ -418,7 +417,7 @@ function renderFlowHealth(d){
   /* ---- 优先级 ---- */
   var prio = d.priority || [];
   if(!prio.length){
-    $("flowPriority").innerHTML = '<div class="col-empty" style="margin:16px 0">还没有任务</div>';
+    $("flowPriority").innerHTML = UI.colEmpty("还没有任务");
   }else{
     var maxMv = 0;
     prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
@@ -433,7 +432,7 @@ function renderFlowHealth(d){
   /* ---- 文档 → 开工 ---- */
   if(!rs.total){
     $("flowReqMeta").textContent = "—";
-    $("flowReqs").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有文档</div>';
+    $("flowReqs").innerHTML = UI.colEmpty("当前空间还没有文档");
   }else{
     $("flowReqMeta").textContent = rs.withTasks + " / " + rs.total + " 份已开工";
     var html = '<div class="stat-grid" style="margin-bottom:14px">' +

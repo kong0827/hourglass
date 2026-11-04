@@ -17,4 +17,6 @@ public class TaskFacetRow {
     private String boardColumn;
     private LocalDate dueDate;
     private String itemType;
+    /** 影响版本ID（LEFT JOIN version_task，未绑定为 null） */
+    private String versionId;
 }

@@ -14,10 +14,11 @@
     ORDER BY (t.board_column = 'done'), t.board_column, t.sort_order, t.id
   </select>
 
-  <!-- M1 版本阶段统计：项目全部任务 + 绑定版本 + 累计实际工时，一次取回由服务层归组 -->
+  <!-- M1 版本阶段统计：项目全部任务 + 绑定版本 + 分支 + 累计实际工时，一次取回由服务层归组 -->
   <select id="selectStatsByReq" resultType="Task">
     SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
            t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+           t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
              WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
     FROM task t

@@ -7,10 +7,12 @@ import com.devstudio.kanban.dto.VersionOverviewResponse;
 import com.devstudio.kanban.dto.VersionStatsResponse;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Demand;
+import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
@@ -43,8 +45,9 @@ class VersionPhaseServiceTest {
     private final TimeLogMapper timeLogs = mock(TimeLogMapper.class);
     private final UserMapper users = mock(UserMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
+    private final DevBranchMapper branches = mock(DevBranchMapper.class);
     private final VersionPhaseService service = new VersionPhaseService(versions, versionTasks, reqs,
-            demands, timeLogs, users, access);
+            demands, timeLogs, users, access, branches);
 
     @Test
     void phaseStatsGroupsHoursByLogDayAndAveragesOnlyCompletedTaskWork() {
@@ -119,6 +122,49 @@ class VersionPhaseServiceTest {
     }
 
     @Test
+    void versionStatsDerivesBranchProgressFromTasks() {
+        when(reqs.selectById(REQ)).thenReturn(requirement(REQ, FIRST_RELEASE));
+        when(versions.selectByReq(WS, REQ)).thenReturn(Arrays.asList(
+                version("V1", "V1.0", "released", LocalDateTime.of(2026, 5, 1, 10, 0)),
+                version("V2", "V2.0", "active", null)));
+        Task fold = completed("T1", FIRST_RELEASE.minusDays(5), null, 100, null, "task");
+        fold.setBranchId("B1");
+        Task v2OnDevBranch = open("T3", FIRST_RELEASE.plusDays(30), 0, 60);
+        v2OnDevBranch.setVersionId("V2");
+        v2OnDevBranch.setBranchId("B1");
+        Task v2OnMergingBranch = open("T4", FIRST_RELEASE.plusDays(31), 0, 30);
+        v2OnMergingBranch.setVersionId("V2");
+        v2OnMergingBranch.setBranchId("B3");
+        Task unboundPost = completed("T2", FIRST_RELEASE.plusDays(20), null, 50, null, "task");
+        unboundPost.setBranchId("B2");
+        when(versionTasks.selectStatsByReq(WS, REQ)).thenReturn(Arrays.asList(fold, v2OnDevBranch,
+                v2OnMergingBranch, unboundPost));
+        when(demands.selectByReq(WS, REQ)).thenReturn(Collections.<Demand>emptyList());
+        when(branches.selectBriefsByWorkspace(WS)).thenReturn(Arrays.asList(
+                brief("B1", "feature/login", "dev"),
+                brief("B2", "hotfix/pay", "testing"),
+                brief("B3", "release/2.0", "merging")));
+
+        VersionStatsResponse response = service.versionStats(WS, REQ, "U9");
+
+        VersionStatsResponse.VersionStat v1 = response.getVersions().get(0);
+        assertEquals(1, v1.getBranches().size(), "上线前折叠任务的分支同样计入首版版本");
+        assertEquals("feature/login", v1.getBranches().get(0).getName());
+        assertEquals("dev", v1.getBranches().get(0).getStatus());
+        assertEquals(1, v1.getBranches().get(0).getTaskCount());
+
+        VersionStatsResponse.VersionStat v2 = response.getVersions().get(1);
+        assertEquals(2, v2.getBranches().size());
+        assertEquals("feature/login", v2.getBranches().get(0).getName(), "分支按状态 dev→merging 排序");
+        assertEquals("release/2.0", v2.getBranches().get(1).getName());
+
+        assertEquals(1, response.getUnbound().getBranches().size());
+        assertEquals("hotfix/pay", response.getUnbound().getBranches().get(0).getName(),
+                "待规划桶同样带分支进度");
+        assertEquals(1, response.getUnbound().getBranches().get(0).getTaskCount());
+    }
+
+    @Test
     void overviewQueriesTasksOncePerProjectAndCachesMemberNames() {
         when(reqs.selectAll(WS)).thenReturn(Arrays.asList(
                 requirement("R1", FIRST_RELEASE), requirement("R2", null)));
@@ -173,6 +219,15 @@ class VersionPhaseServiceTest {
         v.setStatus(status);
         v.setReleasedAt(releasedAt);
         return v;
+    }
+
+    private DevBranch brief(String id, String name, String status) {
+        DevBranch b = new DevBranch();
+        b.setId(id);
+        b.setWorkspaceId(WS);
+        b.setName(name);
+        b.setStatus(status);
+        return b;
     }
 
     private Task completed(String id, LocalDate completedAt, LocalDate dueDate, Integer totalMinutes,

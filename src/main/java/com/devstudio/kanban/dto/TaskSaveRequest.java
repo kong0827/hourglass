@@ -65,7 +65,7 @@ public class TaskSaveRequest {
     private String itemType;
 
     /** 所属 Epic 任务ID（须为同空间 item_type=epic 的任务）；空=清除归属（更新时不传保持原值） */
-    @Size(max = 32, message = "所属Epic不合法")
+    @Size(max = 32, message = "所属史诗不合法")
     private String epicId;
 
     /** 影响版本ID（project_version，须属于任务所选项目）；空=待规划（更新时不传保持原值） */

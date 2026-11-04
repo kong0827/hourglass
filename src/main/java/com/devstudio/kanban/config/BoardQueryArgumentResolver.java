@@ -34,6 +34,7 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 request.getParameter("reqs"),
                 request.getParameter("tags"),
                 request.getParameter("types"),
+                request.getParameter("versions"),
                 request.getParameter("due"),
                 bool(request.getParameter("focus")),
                 bool(request.getParameter("blocked")),
