@@ -9,10 +9,10 @@
 --   · 只 ADD COLUMN，老记录两列为 NULL（表格显示「—」）；
 --   · 用 information_schema 判断 + PREPARE 动态执行，可重复执行。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/08_completion_req_doc.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/08_completion_req_doc.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task_completion_record' AND COLUMN_NAME = 'req_doc_id');

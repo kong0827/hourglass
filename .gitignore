@@ -1,6 +1,7 @@
 # 构建产物
 target/
 dist/
+deploy/dz-hourglass/
 bin-debug/
 bin-release/
 [Oo]bj/

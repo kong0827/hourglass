@@ -29,8 +29,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 空间：个人空间（每账号一个）+ 共享空间（空间主按登录名添加成员）
@@ -86,7 +88,13 @@ public class WorkspaceService {
     /* ==================== 解析与校验 ==================== */
 
     public static String personalId(String userId) {
-        return PERSONAL_PREFIX + userId;
+        if (userId.length() < 32) {
+            return PERSONAL_PREFIX + userId;
+        }
+        // 满 32 位的历史用户 ID 无法再加前缀，使用确定性摘要保持映射稳定且不超过字段宽度
+        String digest = UUID.nameUUIDFromBytes(userId.getBytes(StandardCharsets.UTF_8))
+                .toString().replace("-", "");
+        return PERSONAL_PREFIX + digest.substring(0, 31);
     }
 
     /** 解析请求里的 workspace 参数：显式指定必须严格校验（失效即 404）；缺省时用上次空间、再退回个人空间 */
@@ -283,7 +291,7 @@ public class WorkspaceService {
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
-        userMapper.resetLastWorkspaceForAll(workspaceId, PERSONAL_PREFIX);
+        userMapper.resetLastWorkspaceForAll(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> {
             memberCache.evictWorkspace(workspaceId);
             metaCache.evict(workspaceId);

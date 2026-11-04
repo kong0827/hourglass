@@ -12,10 +12,10 @@
 --   3. access 取值：none（不可见）/ read（只读）/ pm、dev、qa（可参与编辑）。
 --
 -- 设计原则：纯增量、幂等、可重复执行；不重建表、不丢存量成员关系。
--- 执行：mysql -u root -p devstudio < sql/29_project_access.sql
+-- 执行：mysql -u root -p hourglass < sql/29_project_access.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 -- ---------------------------------------------------------------------------
 -- workspace_member：角色取值范围扩展（列宽不变，仅更新注释，幂等）

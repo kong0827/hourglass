@@ -9,10 +9,10 @@
 --       接口只返回掩码，永不回传明文。密钥丢了不影响系统，用户重填一次即可。
 --
 -- 设计原则：纯增量、幂等、向后兼容（照 sql/10 的写法）。
--- 执行：mysql -u devstudio -p devstudio < sql/12_ai_config.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/12_ai_config.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'app_user' AND COLUMN_NAME = 'ai_provider');

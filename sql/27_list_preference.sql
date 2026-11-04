@@ -1,4 +1,4 @@
-USE devstudio;
+USE hourglass;
 
 -- 任务列表 / 项目列表的视图模式与显示列偏好（按用户、空间、视图隔离）
 CREATE TABLE IF NOT EXISTS user_list_preference (

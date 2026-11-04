@@ -6,10 +6,10 @@
 --
 -- 设计原则：纯增量、幂等、向后兼容（老记录取默认 8）。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/11_daily_cap.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/11_daily_cap.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'app_user' AND COLUMN_NAME = 'work_max_hours');

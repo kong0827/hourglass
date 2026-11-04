@@ -19,7 +19,7 @@
 --   3) 需要回滚：UPDATE task SET owner_user_id = NULL;（谨慎，会清掉全部绑定）
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 -- ---------- 1) 排查：同一空间内是否存在同名显示名（有歧义的空间请手工处理） ----------
 SELECT w.name AS workspace_name, u.display_name AS owner_text, COUNT(DISTINCT u.id) AS same_name_accounts

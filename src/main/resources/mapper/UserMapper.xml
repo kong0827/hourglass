@@ -85,7 +85,7 @@
   </update>
 
   <update id="resetLastWorkspaceForAll">
-    UPDATE app_user SET last_workspace_id = CONCAT(#{personalPrefix}, id)
+    UPDATE app_user SET last_workspace_id = NULL
     WHERE last_workspace_id = #{workspaceId}
   </update>
 

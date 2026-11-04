@@ -1,4 +1,4 @@
-# DevStudio Workbench
+# Hourglass Workbench
 
 A personal Kanban board that answers three questions on one screen:
 **what am I doing now, how long did it take, and what did I actually ship this week?**
@@ -59,15 +59,20 @@ Requires **JDK 8**, **Maven**, **MySQL 8**.
 # 1. Create the schema (scripts are numbered and idempotent)
 for f in sql/0*.sql; do mysql -u root -p < "$f"; done
 
-# 2. Configure (every value can be overridden by an environment variable)
-export DB_USER=devstudio
+# 2. Create the app account (all privileges on the schema; root also works for local dev)
+#    For a fresh server deployment use sql/baseline/01_schema_full.sql instead:
+#    it creates the database, the account and all tables in one file.
+mysql -u root -p -e "CREATE USER IF NOT EXISTS 'hourglass'@'%' IDENTIFIED BY 'your-db-password'; GRANT ALL PRIVILEGES ON hourglass.* TO 'hourglass'@'%'; FLUSH PRIVILEGES;"
+
+# 3. Configure (every value can be overridden by an environment variable)
+export DB_USER=hourglass
 export DB_PASSWORD='your-db-password'
 export AUTH_USER=admin
 export AUTH_PASSWORD='your-login-password'
 
-# 3. Build and run
+# 4. Build and run
 mvn -DskipTests package
-java -jar target/devstudio-server.jar
+java -jar target/hourglass-server.jar
 ```
 
 Open <http://127.0.0.1:8080> and sign in with `AUTH_USER` / `AUTH_PASSWORD`.
@@ -85,8 +90,8 @@ Everything is injected through environment variables; the config file only holds
 | `SERVER_PORT` | `8080` | HTTP port |
 | `BIND_ADDR` | `127.0.0.1` | Loopback by default; expose through Nginx |
 | `DB_HOST` / `DB_PORT` | `127.0.0.1` / `3306` | MySQL address |
-| `DB_NAME` | `devstudio` | Schema name |
-| `DB_USER` / `DB_PASSWORD` | `devstudio` / empty | Database credentials |
+| `DB_NAME` | `hourglass` | Schema name |
+| `DB_USER` / `DB_PASSWORD` | `hourglass` / empty | Database credentials |
 | `AUTH_USER` / `AUTH_PASSWORD` | `admin` / empty | Admin account created on first start (left empty → not created) |
 | `ATTACH_DIR` | `./data/attachments` | Attachment storage |
 | `NOTIFY_TYPE` / `NOTIFY_ENABLED` | `webhook` / `false` | External notification channel |

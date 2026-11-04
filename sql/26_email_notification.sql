@@ -1,10 +1,10 @@
 -- ============================================================================
 -- 用户邮箱、个人事件通知偏好、SMTP 与持久化邮件 outbox
--- 执行：mysql -u devstudio -p devstudio < sql/26_email_notification.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/26_email_notification.sql
 -- 幂等：email 列先检查 information_schema；三张新表使用 IF NOT EXISTS。
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'app_user' AND COLUMN_NAME = 'email');

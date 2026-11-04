@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -53,6 +54,17 @@ class WorkspaceServiceMemberCacheTest {
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());
         when(memberMapper.selectMember(WS, OWNER)).thenReturn(member(OWNER, "owner"));
         when(memberMapper.selectMember(WS, MEMBER)).thenReturn(member(MEMBER, "member"));
+    }
+
+    @Test
+    void personalIdSupportsLegacyMaxLengthUserIds() {
+        String legacyUserId = "0123456789abcdef0123456789abcdef";
+        String personalId = WorkspaceService.personalId(legacyUserId);
+
+        assertEquals(32, personalId.length());
+        assertEquals(personalId, WorkspaceService.personalId(legacyUserId));
+        assertTrue(personalId.startsWith(WorkspaceService.PERSONAL_PREFIX));
+        assertEquals("WYyu01", WorkspaceService.personalId("Yyu01"));
     }
 
     @Test

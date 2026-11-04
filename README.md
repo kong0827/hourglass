@@ -58,15 +58,19 @@
 # 1. 建库建表：脚本按编号执行，全部幂等（可重复执行）
 for f in sql/*.sql; do mysql -u root -p < "$f"; done
 
-# 2. 配置（全部可用环境变量覆盖，见下表）
-export DB_USER=devstudio
+# 2. 建应用账号（库内全部权限；本地开发也可直接用 root 账号）
+#    服务端全新部署改用 sql/baseline/01_schema_full.sql，一步完成建库、建账号、建表
+mysql -u root -p -e "CREATE USER IF NOT EXISTS 'hourglass'@'%' IDENTIFIED BY '你的数据库密码'; GRANT ALL PRIVILEGES ON hourglass.* TO 'hourglass'@'%'; FLUSH PRIVILEGES;"
+
+# 3. 配置（全部可用环境变量覆盖，见下表）
+export DB_USER=hourglass
 export DB_PASSWORD='你的数据库密码'
 export AUTH_USER=admin
 export AUTH_PASSWORD='你的登录密码'
 
-# 3. 打包运行
+# 4. 打包运行
 mvn -DskipTests package
-java -jar target/devstudio-server.jar
+java -jar target/hourglass-server.jar
 ```
 
 打开 <http://127.0.0.1:8080/hourglass/>，用 `AUTH_USER` / `AUTH_PASSWORD` 登录。
@@ -83,8 +87,8 @@ java -jar target/devstudio-server.jar
 | `SERVER_PORT` | `8080` | 应用端口 |
 | `BIND_ADDR` | `127.0.0.1` | 默认只绑回环，对外统一走 Nginx |
 | `DB_HOST` / `DB_PORT` | `127.0.0.1` / `3306` | MySQL 地址 |
-| `DB_NAME` | `devstudio` | 库名 |
-| `DB_USER` / `DB_PASSWORD` | `devstudio` / 空 | 数据库账号 |
+| `DB_NAME` | `hourglass` | 库名 |
+| `DB_USER` / `DB_PASSWORD` | `hourglass` / 空 | 数据库账号 |
 | `AUTH_USER` / `AUTH_PASSWORD` | `admin` / 空 | 首次启动创建的管理员账号（密码留空则不创建，需自行初始化） |
 | `ATTACH_DIR` | `./data/attachments` | 附件存储目录 |
 | `NOTIFY_TYPE` / `NOTIFY_ENABLED` | `webhook` / `false` | 外部提醒渠道 |
@@ -107,6 +111,8 @@ src/main/resources/
 ├─ static/       前端（index / login / join + css/js + sw.js）
 └─ application.yml
 sql/             按编号执行的迁移脚本（幂等）
+├─ baseline/     全新部署完整基线（会删表重建）
+└─ seeds/        可选演示与部门种子数据
 deploy/          systemd、nginx 配置与部署脚本
 docs/            接口契约、UI 规范、代码审查记录、离线预览稿
 tools/           静态预览稿生成器（node tools/gen-preview.js）

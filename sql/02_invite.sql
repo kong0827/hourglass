@@ -1,7 +1,7 @@
 -- 工作台 · 任务看板 升级脚本 02：新增「空间邀请链接」表
 -- 适用：已部署旧版数据库的升级（全新安装直接执行 01_schema.sql，已含本表）。
 -- 可重复执行（IF NOT EXISTS）。执行方式：mysql -uroot -p < 02_invite.sql
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS invite (
   id           VARCHAR(16) NOT NULL COMMENT '邀请码（10 位大写字母数字）',

@@ -15,10 +15,10 @@
 --   · task 只 ADD COLUMN（req_doc_id），老数据为 NULL，行为与升级前一致；
 --   · 正文 content 存清洗后的 HTML（服务端 jsoup 白名单清洗，见 RequirementDocService）。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/07_requirement_doc.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/07_requirement_doc.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS requirement_doc (
   id            VARCHAR(32)  NOT NULL COMMENT '需求ID',

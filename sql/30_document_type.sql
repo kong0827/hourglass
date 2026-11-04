@@ -1,5 +1,5 @@
 -- 文档分类：纯增量、幂等；所有存量文档默认归入其他，不推测旧文档类型。
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requirement_doc' AND COLUMN_NAME = 'doc_type');

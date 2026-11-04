@@ -1,11 +1,11 @@
-// 生成 tools/seed_mock.sql：多空间 × 多项目的模拟数据（确定性随机，重复生成结果一致）
-// 用法：node tools/gen-mock-seed.mjs  → 再执行 mysql ... devstudio < tools/seed_mock.sql
+// 生成 sql/seeds/seed_mock.sql：多空间 × 多项目的模拟数据（确定性随机，重复生成结果一致）
+// 用法：node tools/gen-mock-seed.mjs  → 再执行 mysql ... hourglass < sql/seeds/seed_mock.sql
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const TODAY = '2026-11-03';
-const OUT = join(dirname(fileURLToPath(import.meta.url)), 'seed_mock.sql');
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'sql', 'seeds', 'seed_mock.sql');
 
 /* ---------------- 工具 ---------------- */
 let seed = 20261103;
@@ -759,18 +759,18 @@ const WS_TABLES = ['task_tag', 'subtask', 'task_comment', 'task_log', 'time_log'
 
 const out = [];
 out.push(`-- ============================================================================
--- tools/seed_mock.sql · 多空间模拟数据（由 tools/gen-mock-seed.mjs 生成，勿手改）
+-- sql/seeds/seed_mock.sql · 多空间模拟数据（由 tools/gen-mock-seed.mjs 生成，勿手改）
 --
 -- 内容：4 个共享空间 × ${rows.requirement.length} 个项目，${rows.app_user.length} 名成员；覆盖任务看板、版本、史诗/里程碑、甘特依赖与基线、
 --       需求池与评审流转、需求文档树、分支、工时、完成快照、评论、子任务、标签、通知、项目权限。
 --       另外为库里「没有任何任务」的现有项目各补 6 条基础任务。
 -- 幂等：先删除全部 Xm 前缀的模拟数据再重灌，不触碰真实数据。
 -- 前置：01-29 号升级脚本已执行；库里存在 role=admin 的账号（模拟成员沿用其密码）。
--- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 devstudio < tools/seed_mock.sql
+-- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 hourglass < sql/seeds/seed_mock.sql
 -- 登录：管理员为 4 个空间的空间主；成员账号见 app_user（zhangwei、liting 等），密码同管理员。
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 SET NAMES utf8mb4;
 
 SET @admin := (SELECT id FROM app_user WHERE role = 'admin' ORDER BY created_at, id LIMIT 1);

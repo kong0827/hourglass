@@ -13,7 +13,7 @@
 -- 幂等：先查 information_schema，再决定是否 ALTER，可重复执行。
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'workspace'

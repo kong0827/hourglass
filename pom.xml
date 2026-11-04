@@ -79,7 +79,7 @@
   </dependencies>
 
   <build>
-    <finalName>devstudio-server</finalName>
+    <finalName>hourglass-server</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>

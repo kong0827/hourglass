@@ -4,7 +4,7 @@
 -- 列改名后文本就对不上当前列，也无法可靠判断列的先后顺序（回退判定依赖顺序）。
 -- 这里补两列结构化字段：新数据由 TaskService.move 直接写入，历史数据按文本回填。
 
-USE devstudio;
+USE hourglass;
 
 -- 幂等：先查 information_schema 再决定是否 ALTER，重复执行安全（--sql-all 重放不会报错）
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS

@@ -1,5 +1,5 @@
 -- 项目与项目内需求文档的通用活动轨迹；仅新增表，不迁移历史日志。
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS work_activity (
   id            BIGINT       NOT NULL AUTO_INCREMENT,

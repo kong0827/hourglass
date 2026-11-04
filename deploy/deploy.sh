@@ -6,7 +6,7 @@
 #   bash deploy/deploy.sh              自动判断改动范围后部署（推荐日常使用）
 #   bash deploy/deploy.sh --dry-run    只检测改了什么、要走哪些步骤，不实际执行
 #   bash deploy/deploy.sh --force      即使没检测到改动也强制重新部署
-#   bash deploy/deploy.sh --sql-all     强制按顺序重放 sql/ 下所有脚本（幂等）
+#   bash deploy/deploy.sh --sql-all     强制按顺序重放 sql/ 根目录的增量脚本（幂等）
 #   bash deploy/deploy.sh --no-verify  跳过登录/哈希校验（快，但不推荐）
 #   bash deploy/deploy.sh --rollback   回滚到服务器上最近一次的 jar 备份
 #
@@ -24,10 +24,10 @@ HOST="${DEPLOY_HOST:-124.223.208.134}"
 SSH_USER="${DEPLOY_USER:-ubuntu}"
 SSH_PORT="${DEPLOY_PORT:-22}"
 
-APP_DIR="/opt/devstudio"                 # 服务器应用目录
-SERVICE="devstudio"                      # systemd 服务名
-JAR_NAME="devstudio-server.jar"
-ENV_FILE="/etc/devstudio.env"            # 服务器环境变量文件（含 DB/AUTH 凭据）
+APP_DIR="/opt/hourglass"                 # 服务器应用目录
+SERVICE="hourglass"                      # systemd 服务名
+JAR_NAME="hourglass-server.jar"
+ENV_FILE="/etc/hourglass.env"            # 服务器环境变量文件（含 DB/AUTH 凭据）
 BACKUP_DIR="${APP_DIR}/backup"
 KEEP_JAR_BAK=3                           # 服务器上保留最近 N 份 jar 备份
 KEEP_DB_BAK=14                           # 部署前库备份保留天数（天）
@@ -154,7 +154,7 @@ LATEST=\$(ls -1t ${JAR_NAME}.bak-* 2>/dev/null | head -1) || true
 if [ -z "\$LATEST" ]; then echo "NO_BACKUP"; exit 1; fi
 echo "使用备份：\$LATEST"
 cp -a "\$LATEST" ${JAR_NAME}
-chown devstudio:devstudio ${JAR_NAME}
+chown hourglass:hourglass ${JAR_NAME}
 systemctl restart ${SERVICE}
 sleep 8
 echo "状态: \$(systemctl is-active ${SERVICE})"
@@ -181,7 +181,8 @@ changed() {
   fi
 }
 
-CHANGED_ALL="$(changed src sql pom.xml || true)"
+# 完整基线会删表、种子会重灌演示数据，只允许手工执行，不纳入自动部署改动检测
+CHANGED_ALL="$(changed src sql pom.xml | grep -vE '^sql/(baseline|seeds)/' || true)"
 if [ -n "$CHANGED_ALL" ]; then
   printf '%s\n' "$CHANGED_ALL" | sed 's/^/      /'
 else
@@ -284,16 +285,16 @@ if [ "$NEED_DB" -eq 1 ]; then
 
   sudo_do <<'REMOTE'
 set -e
-DB_PW="$(sed -n 's/^DB_PASSWORD=//p' /etc/devstudio.env)"
-[ -n "$DB_PW" ] || { echo "无法从 /etc/devstudio.env 读取 DB_PASSWORD"; exit 1; }
-mkdir -p /opt/devstudio/backup
+DB_PW="$(sed -n 's/^DB_PASSWORD=//p' /etc/hourglass.env)"
+[ -n "$DB_PW" ] || { echo "无法从 /etc/hourglass.env 读取 DB_PASSWORD"; exit 1; }
+mkdir -p /opt/hourglass/backup
 TS="$(date +%Y%m%d-%H%M%S)"
-BK="/opt/devstudio/backup/devstudio-pre-deploy-${TS}.sql.gz"
+BK="/opt/hourglass/backup/hourglass-pre-deploy-${TS}.sql.gz"
 echo "  · 备份整库 → $BK"
-mysqldump -u devstudio -p"$DB_PW" --single-transaction --no-tablespaces --routines --triggers devstudio | gzip > "$BK"
+mysqldump -u hourglass -p"$DB_PW" --single-transaction --no-tablespaces --routines --triggers hourglass | gzip > "$BK"
 echo "    备份大小：$(du -h "$BK" | cut -f1)  表数：$(zcat "$BK" | grep -c 'CREATE TABLE' || true)"
 echo "  · 清理超过 14 天的库备份"
-find /opt/devstudio/backup -name 'devstudio-*.sql.gz' -mtime +14 -delete
+find /opt/hourglass/backup -name 'hourglass-*.sql.gz' -mtime +14 -delete
 REMOTE
   ok "整库备份完成"
 
@@ -303,10 +304,10 @@ REMOTE
     info "执行 ${base}"
     sudo_do <<REMOTE
 set -e
-DB_PW="\$(sed -n 's/^DB_PASSWORD=//p' /etc/devstudio.env)"
-mysql -u devstudio -p"\$DB_PW" devstudio < /tmp/deploy-sql-${base}
+DB_PW="\$(sed -n 's/^DB_PASSWORD=//p' /etc/hourglass.env)"
+mysql -u hourglass -p"\$DB_PW" hourglass < /tmp/deploy-sql-${base}
 rm -f /tmp/deploy-sql-${base}
-echo "    \$(mysql -u devstudio -p"\$DB_PW" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema="devstudio";') 张表"
+echo "    \$(mysql -u hourglass -p"\$DB_PW" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema="hourglass";') 张表"
 REMOTE
   done
   ok "数据库变更完成"
@@ -330,7 +331,7 @@ BAK="${JAR_NAME}.bak-\${TS}"
 cp -a ${JAR_NAME} "\$BAK"
 echo "    · 旧包已备份：\$BAK"
 mv /tmp/${JAR_NAME}.new ${JAR_NAME}
-chown devstudio:devstudio ${JAR_NAME}
+chown hourglass:hourglass ${JAR_NAME}
 echo "    · 新包大小：\$(ls -lh ${JAR_NAME} | awk '{print \$5}')"
 ls -1t ${JAR_NAME}.bak-* 2>/dev/null | tail -n +$((KEEP_JAR_BAK+1)) | while read f; do rm -f "\$f"; echo "    · 清理旧备份 \$(basename \$f)"; done
 systemctl restart ${SERVICE}

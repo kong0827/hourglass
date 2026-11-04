@@ -7,10 +7,10 @@
 --   3. 需求池里的需求可以关联具体文档（多对多），例如需求 → PRD / 技术方案 / 验收文档。
 --
 -- 设计原则：纯增量、幂等、可重复执行；不改旧字段语义，旧数据默认 format='html'、parent_id=NULL。
--- 执行：mysql -u root -p devstudio < sql/28_doc_tree_links.sql
+-- 执行：mysql -u root -p hourglass < sql/28_doc_tree_links.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 -- ---------------------------------------------------------------------------
 -- requirement_doc：父文档、正文格式、同级排序

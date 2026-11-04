@@ -11,7 +11,7 @@
 -- 建议业务低峰执行；大表加索引会短暂占用 IO。
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task' AND INDEX_NAME = 'idx_remind_scan');

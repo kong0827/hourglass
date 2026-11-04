@@ -17,10 +17,10 @@
 --   · 存量已完成任务**不回填**（没有完成瞬间的快照数据，硬造不准确）；
 --     如需补一份历史，可用下面的"回填"语句按当前状态粗略生成（见文件末尾，默认注释掉）。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/06_task_completion_record.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/06_task_completion_record.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS task_completion_record (
   id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录ID',

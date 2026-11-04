@@ -9,10 +9,10 @@
 --   · 只 ADD COLUMN，老记录取默认值 9 / 18；
 --   · 用 information_schema 判断 + PREPARE，可重复执行。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/10_work_hours.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/10_work_hours.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'app_user' AND COLUMN_NAME = 'work_start_hour');

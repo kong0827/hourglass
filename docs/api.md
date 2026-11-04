@@ -68,7 +68,7 @@
 应用 + 数据库连通检查。
 
 ```json
-{"code":0,"data":{"app":"devstudio-kanban-server","time":"2026-10-14 21:00:00","db":"up"}}
+{"code":0,"data":{"app":"hourglass","time":"2026-10-14 21:00:00","db":"up"}}
 ```
 
 ## 2. GET /api/board
@@ -1120,7 +1120,7 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 
 迁移：执行 `sql/17_perf_index.sql`（幂等）后再启动新 jar —— 需求列表依赖 `requirement_doc.content_brief` 列。
 
-> 部署提示：v6 备份可能包含需求文档正文（含内嵌图片），`deploy/nginx-devstudio.conf` 已给 `POST /api/import` 单独放宽到 128 MB；若自行改过 nginx 配置，请同时确认 `client_max_body_size` 与 `proxy_read_timeout`。
+> 部署提示：v6 备份可能包含需求文档正文（含内嵌图片），`deploy/nginx-hourglass.conf` 已给 `POST /api/import` 单独放宽到 128 MB；若自行改过 nginx 配置，请同时确认 `client_max_body_size` 与 `proxy_read_timeout`。
 
 ---
 

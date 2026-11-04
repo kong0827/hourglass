@@ -19,10 +19,10 @@
 --   · 新表 CREATE TABLE IF NOT EXISTS；
 --   · task 只 ADD COLUMN（branch_id），老数据为 NULL，行为与升级前一致。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/14_branch.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/14_branch.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS dev_branch (
   id            VARCHAR(32)  NOT NULL COMMENT '分支ID',

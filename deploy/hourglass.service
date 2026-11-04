@@ -5,13 +5,13 @@ Wants=mysql.service
 
 [Service]
 Type=simple
-User=devstudio
-Group=devstudio
-WorkingDirectory=/opt/devstudio
-EnvironmentFile=/etc/devstudio.env
+User=hourglass
+Group=hourglass
+WorkingDirectory=/opt/hourglass
+EnvironmentFile=/etc/hourglass.env
 # 固定时区：逾期判定、周回顾、报表分周、每日推送时间都依赖服务器时区
 Environment=TZ=Asia/Shanghai
-ExecStart=/usr/bin/java -Xms320m -Xmx320m -XX:MaxMetaspaceSize=128m -Xss512k -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/devstudio -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8 -jar /opt/devstudio/devstudio-server.jar
+ExecStart=/usr/bin/java -Xms320m -Xmx320m -XX:MaxMetaspaceSize=128m -Xss512k -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/hourglass -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8 -jar /opt/hourglass/hourglass-server.jar
 SuccessExitStatus=143
 Restart=on-failure
 RestartSec=5

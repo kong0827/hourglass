@@ -11,10 +11,10 @@
 -- 单位用**分钟**，和 time_log.minutes 同单位，避免浮点比较。
 --
 -- 设计原则：纯增量、幂等、向后兼容（照 sql/10 的写法）。
--- 执行：mysql -u devstudio -p devstudio < sql/13_task_estimate.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/13_task_estimate.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'task' AND COLUMN_NAME = 'estimate_minutes');

@@ -1,4 +1,4 @@
-USE devstudio;
+USE hourglass;
 
 CREATE TABLE IF NOT EXISTS project_version (
   id           VARCHAR(32)  NOT NULL COMMENT '版本ID',

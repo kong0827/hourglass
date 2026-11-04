@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""根据《运营研发项目看板.xlsx》生成 DevStudio 初始化种子 SQL（tools/seed_yunying.sql，勿手改产物）。
+"""根据《运营研发项目看板.xlsx》生成 沙漏 Hourglass 初始化种子 SQL（sql/seeds/seed_yunying.sql，勿手改产物）。
 
 映射口径（2026-11-04 与用户确认）：
 - 项目管理 9 行    → 共享空间「运营研发部」+ 项目 requirement（进行中→active、已完成→done、未启动→active）
@@ -18,24 +18,27 @@
 - plan 状态的需求必须挂同项目版本：优先取需求下已完成任务的实际归属版本；原表“已发版”的
   落到提出后首个发布版本；其余取项目计划版本，再退到最近一次已发布版本；项目没有任何版本时降级为 pass（待排期）；
 - requirement.first_released_at 取该项目最早一个已发布版本的日期，没有发版记录的保持 NULL；
-- completed_at 只在看板列为 done 的任务上写，其余任务即使原表有“实际完成时间”也留空。
+- completed_at 只在看板列为 done 的任务上写，其余任务即使原表有“实际完成时间”也留空；
+- 工作项均补齐起止日期；保留合理的原表日期，未完成且已逾期的按 2026-11-04 基准日重排到当前或未来。
 
 用法：python tools/gen_seed_yunying.py [Excel路径] [输出SQL路径]
 """
 
 import sys
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 import pandas as pd
 
 EXCEL = sys.argv[1] if len(sys.argv) > 1 else 'C:/Users/F2041/Downloads/运营研发项目看板.xlsx'
-OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/seed_yunying.sql'
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'sql/seeds/seed_yunying.sql'
 
 WS = 'SYy01'          # 共享空间
 WS_NAME = '运营研发部'
 USER_PREFIX = 'Yyu'   # 账号 / 个人空间为 W + 账号ID
 P_CREATED = '2026-06-01 09:00:00'   # 无日期数据时统一使用的创建时间
+SEED_TODAY = date(2026, 11, 4)      # 未完成任务排期的演示基准日
+DEFAULT_COMPLETED_DATE = date(2026, 8, 19)
 
 PRJ_STATUS = {'进行中': 'active', '已完成': 'done', '未启动': 'active'}
 PRIORITY = {'最高': 'P0', '高': 'P1', '中': 'P2', '低': 'P3', '最低': 'P3'}
@@ -106,6 +109,42 @@ def person(v):
 
 def d2dt(d, hhmm='09:00:00'):
     return '%s %s' % (d.isoformat(), hhmm) if d else None
+
+
+def normalize_task_dates(start, due, done, column, seq):
+    duration = 5 + (seq % 4) * 2
+    if start and due and start <= due and 1 <= (due - start).days <= 30:
+        duration = (due - start).days
+
+    if column == 'done':
+        done = done or due or DEFAULT_COMPLETED_DATE
+        start = start or done - timedelta(days=duration)
+        if start > done:
+            start = done - timedelta(days=duration)
+        due = due or done
+        if due < start:
+            due = start
+        return start, due, done
+
+    if due and due >= SEED_TODAY:
+        if not start or start > due:
+            start = due - timedelta(days=duration)
+        if column == 'backlog' and start < SEED_TODAY:
+            start = SEED_TODAY + timedelta(days=2 + seq % 10)
+            due = max(due, start + timedelta(days=duration))
+        return start, due, done
+
+    if start and not due and start + timedelta(days=duration) >= SEED_TODAY:
+        return start, start + timedelta(days=duration), done
+
+    if column == 'backlog':
+        start = SEED_TODAY + timedelta(days=2 + seq % 10)
+        due = start + timedelta(days=duration)
+    else:
+        start = SEED_TODAY - timedelta(days=3 + seq % 12)
+        due = max(start + timedelta(days=duration),
+                  SEED_TODAY + timedelta(days=2 + seq % 10))
+    return start, due, done
 
 
 def sq(v):
@@ -251,8 +290,8 @@ def main():
         owner = person(r.get('开发负责人'))
         start, due, done = (parse_date(r.get(c)) for c in
                             ('启动时间', '截止时间', '实际完成时间'))
-        if column == 'done' and not done:
-            done = due or date(2026, 8, 19)   # 无完成日期的已发布任务统一记为末次发版日
+        created = d2dt(start) or d2dt(due) or P_CREATED
+        start, due, done = normalize_task_dates(start, due, done, column, len(tasks))
         # completed_at 只在 done 列上有值，避免未完成任务被完成趋势统计计入
         completed = done if column == 'done' else None
         demand_id = sub_demand.get(title)
@@ -272,7 +311,7 @@ def main():
             'start': start, 'due': due, 'done': done, 'completed': completed,
             'req_id': req_id,
             'demand_id': demand_id, 'note': '', 'sort': col_counter[column] - 1,
-            'created': d2dt(start) or d2dt(due) or P_CREATED,
+            'created': created,
         })
 
     for _, r in bug_sheet.iterrows():
@@ -284,6 +323,7 @@ def main():
         owner = person(r.get('处理人'))
         created = parse_date(r.get('创建时间'))
         done = parse_date(r.get('结束时间')) or parse_date(r.get('修复时间'))
+        start, due, done = normalize_task_dates(created, None, done, column, len(tasks))
         desc = ' '.join(filter(None, [
             '复现环境：' + txt(r.get('复现环境')),
             '操作步骤：' + txt(r.get('操作步骤')),
@@ -297,7 +337,7 @@ def main():
             'priority': PRIORITY.get(txt(r.get('优先级')), 'P2'),
             'owner': owner, 'owner_uid': user_by_name.get(owner, {}).get('id'),
             'category': mod_first(r.get('关联模块')), 'column': column, 'progress': prog,
-            'start': None, 'due': None, 'done': done if column == 'done' else None,
+            'start': start, 'due': due, 'done': done if column == 'done' else None,
             'completed': done if column == 'done' else None,
             'req_id': mod_project_of(r.get('关联模块')), 'demand_id': None,
             'note': '已拒绝' if status == '拒绝' else '',
@@ -387,23 +427,70 @@ def main():
     out = []
     w = out.append
     w('-- ============================================================================')
-    w('-- tools/seed_yunying.sql · 运营研发部初始化种子数据（由 tools/gen_seed_yunying.py 生成，勿手改）')
+    w('-- sql/seeds/seed_yunying.sql · 运营研发部初始化种子数据（由 tools/gen_seed_yunying.py 生成，勿手改）')
     w('--')
     w('-- 来源：《运营研发项目看板.xlsx》；映射口径见生成脚本头部注释。')
     w('-- 幂等：先删除全部 Yy/SYy 前缀的种子数据再重灌，不触碰真实数据。')
-    w('-- 前置：01-30 号升级脚本已执行；库里存在 role=admin 的账号（成员沿用其密码）。')
-    w('-- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 devstudio < tools/seed_yunying.sql')
-    w('-- 口径：无完成日期的已发布任务统一记为末次发版日 2026-08-19；部门日报不导入；')
+    w('-- 前置：01-31 号升级脚本已执行。')
+    w('--       库中已有管理员时沿用其密码；没有管理员时用预设账号自动创建，无需先启动应用。')
+    w('--       初始账号 admin / Hourglass@2026（登录后请立即在「用户」管理中修改密码）。')
+    w('-- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 hourglass < sql/seeds/seed_yunying.sql')
+    w('-- 口径：工作项均补齐起止日期；未完成且已逾期的按 2026-11-04 重排到当前或未来；')
+    w('--       无完成日期的已发布任务统一记为末次发版日 2026-08-19；部门日报不导入；')
     w('--       需求表“负责人”列不导入（demand 无负责人字段，执行负责人见工作项）；')
     w('--       无项目信号的需求按标题关键词兜底（托管→主机托管、外接→外接模块、其余→流程引擎）。')
     w('-- ============================================================================')
     w('')
-    w('USE devstudio;')
-    w('SET NAMES utf8mb4;')
+    w('USE hourglass;')
+    w('-- 连接排序规则与库表保持一致（MySQL 8 默认 utf8mb4_0900_ai_ci 与用户变量比较时会报 collation 冲突）')
+    w('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;')
+    w('')
+    w('-- 管理员账号：优先沿用已有管理员；库中没有管理员时用下面的预设账号自动创建。')
+    w('-- 预设密码 Hourglass@2026 的 bcrypt 哈希（与应用同款 BCryptPasswordEncoder，strength 10）')
+    w("SET @seed_admin_user := 'admin';")
+    w("SET @seed_admin_pw_hash := '$2a$10$kV6ADVfSbVxSALkq.wbhK.gpD4zzeKRJOEHEzDynLkqlX5brVWslG';")
     w('')
     w("SET @admin := (SELECT id FROM app_user WHERE role = 'admin' ORDER BY created_at, id LIMIT 1);")
+    w('')
+    w('-- 没有任何管理员：同名账号不存在则新建（id 为 32 位无横线 UUID，与应用生成规则一致）')
+    w('INSERT INTO app_user (id, username, password_hash, display_name, role, created_at)')
+    w("SELECT REPLACE(UUID(), '-', ''), @seed_admin_user, @seed_admin_pw_hash, @seed_admin_user, 'admin', NOW()")
+    w('  FROM DUAL')
+    w(' WHERE @admin IS NULL')
+    w('   AND NOT EXISTS (SELECT 1 FROM app_user WHERE username = @seed_admin_user);')
+    w('SET @admin_created := ROW_COUNT();')
+    w('')
+    w('-- 同名账号已存在但不是管理员：提升为管理员；密码为空时补预设密码')
+    w('UPDATE app_user')
+    w("   SET role = 'admin',")
+    w("       password_hash = IF(password_hash IS NULL OR password_hash = '', @seed_admin_pw_hash, password_hash)")
+    w(' WHERE username = @seed_admin_user')
+    w('   AND @admin IS NULL;')
+    w('')
+    w("SET @admin := (SELECT id FROM app_user WHERE role = 'admin' ORDER BY created_at, id LIMIT 1);")
+    w('-- 已有管理员但密码哈希为空：补预设密码，避免成员沿用 NULL')
+    w('UPDATE app_user')
+    w('   SET password_hash = @seed_admin_pw_hash')
+    w(' WHERE id = @admin')
+    w("   AND (password_hash IS NULL OR password_hash = '');")
+    w('')
     w("SET @admin_name := (SELECT display_name FROM app_user WHERE id = @admin);")
     w("SET @pw := (SELECT password_hash FROM app_user WHERE id = @admin);")
+    w('')
+    w('-- 兜底校验：管理员或密码哈希仍缺失时直接报错，不把 NULL 写进成员账号')
+    w('DROP PROCEDURE IF EXISTS _seed_require_admin;')
+    w('DELIMITER $$')
+    w('CREATE PROCEDURE _seed_require_admin(IN v_admin VARCHAR(32), IN v_pw VARCHAR(255))')
+    w('BEGIN')
+    w('  IF v_admin IS NULL THEN')
+    w("    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '无法创建管理员账号：请检查 app_user 表写入权限或同名账号冲突';")
+    w('  ELSEIF v_pw IS NULL OR v_pw = \'\' THEN')
+    w("    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '管理员账号缺少密码哈希，请检查 app_user.password_hash';")
+    w('  END IF;')
+    w('END$$')
+    w('DELIMITER ;')
+    w('CALL _seed_require_admin(@admin, @pw);')
+    w('DROP PROCEDURE _seed_require_admin;')
     w('')
     w('START TRANSACTION;')
     w('')
@@ -532,6 +619,10 @@ def main():
     w(',\n'.join(rows) + ';')
     w('')
     w('COMMIT;')
+    w('')
+    w('-- 初始化结果提示：本次新建的管理员才需要用到预设密码')
+    w('SELECT CONCAT(\'种子导入完成；管理员账号 \', COALESCE(@admin_name, @seed_admin_user),')
+    w("              IF(@admin_created = 1, '（本次新建，初始密码 Hourglass@2026，请登录后立即修改）', '（沿用已有账号及密码）')) AS seed_note;")
     w('')
 
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:

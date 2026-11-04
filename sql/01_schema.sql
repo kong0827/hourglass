@@ -1,7 +1,7 @@
 -- 工作台 · 任务看板 数据库基线（MySQL 8，utf8mb4）
 -- 多用户 + 空间模型：每个账号有个人空间，可另建/加入共享空间；业务数据按空间隔离
-CREATE DATABASE IF NOT EXISTS devstudio DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE devstudio;
+CREATE DATABASE IF NOT EXISTS hourglass DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE hourglass;
 
 -- 用户（管理员创建下发，不开放注册；首次启动由环境变量引导创建管理员）
 CREATE TABLE IF NOT EXISTS app_user (

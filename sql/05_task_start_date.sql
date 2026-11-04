@@ -11,10 +11,10 @@
 --   · 老数据 start_date 为 NULL，行为与升级前完全一致；
 --   · 用 information_schema 判断 + PREPARE 动态执行（不依赖存储过程权限），可重复执行。
 --
--- 执行：mysql -u devstudio -p devstudio < sql/05_task_start_date.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/05_task_start_date.sql
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 -- ---------------------------------------------------------------------------
 -- task：开始日期

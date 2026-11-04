@@ -51,11 +51,16 @@ public class SecurityConfig {
             .and()
             .exceptionHandling()
                 .authenticationEntryPoint((req, res, ex) -> {
+                    /* getRequestURI 带 context-path（/hourglass/api/...），须先剥掉再判断 */
                     String uri = req.getRequestURI();
+                    String ctx = req.getContextPath();
+                    if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+                        uri = uri.substring(ctx.length());
+                    }
                     if (uri != null && uri.startsWith("/api/")) {
                         writeJson(res, 401, "{\"code\":401,\"message\":\"未登录或登录已过期\"}");
                     } else {
-                        res.sendRedirect("/login.html");
+                        res.sendRedirect(ctx + "/login.html");
                     }
                 })
                 .accessDeniedHandler((req, res, ex) -> writeJson(res, 200, "{\"code\":403,\"message\":\"没有权限执行该操作\"}"))

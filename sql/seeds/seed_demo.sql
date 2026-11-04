@@ -1,16 +1,16 @@
 -- ============================================================================
--- tools/seed_demo.sql · 演示种子数据（2026-11-03）
+-- sql/seeds/seed_demo.sql · 演示种子数据（2026-11-03）
 --
 -- 用途：本地/演示环境初始化「管理者视图」验收数据，对齐 docs/manager-view-preview.html
 --       的演示口径（结算中台 / 小程序商城 / 工作台 V2 改版 / 数据看板 / 移动端适配）。
 -- 注意：此文件不参与 deploy.sh 的 sql/*.sql 升级链，只在需要演示数据时手工执行；
 --       重复执行会追加重复数据，重灌前请先清库重放 01-23。
 --
--- 执行：mysql -u root -p --default-character-set=utf8mb4 devstudio < tools/seed_demo.sql
+-- 执行：mysql -u root -p --default-character-set=utf8mb4 hourglass < sql/seeds/seed_demo.sql
 -- 登录：admin / admin123；演示成员账号（林岚等）密码同为 admin123
 -- ============================================================================
 
-USE devstudio;
+USE hourglass;
 
 SET @ws := 'WUmvzynzoxzsgtbinc';
 SET @pw := (SELECT password_hash FROM app_user WHERE username = 'admin');

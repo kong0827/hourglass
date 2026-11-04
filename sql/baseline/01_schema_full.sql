@@ -1,14 +1,25 @@
 -- ============================================================================
--- deploy/init/01_schema_full.sql · DevStudio 完整基线 DDL（MySQL 8，utf8mb4）
+-- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
 --
 -- 生成方式：在空库按序重放 sql/01-31 号升级脚本后导出（2026-11-04），与增量链等效。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
--- 执行：mysql -u <用户> -p --default-character-set=utf8mb4 < deploy/init/01_schema_full.sql
+-- 执行（需 root 或具 CREATE USER / GRANT 权限的账号）：
+--   mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS devstudio DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE devstudio;
+-- 0. 建库 + 应用账号
+CREATE DATABASE IF NOT EXISTS hourglass DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 应用账号：host '%' 允许外部连接，库内全部权限（增删改查、建表/改表/删表、视图、触发器、导入导出等）。
+-- 上线前把占位密码换成强密码，并与 /etc/hourglass.env 的 DB_PASSWORD 保持一致；
+-- 账号已存在时 CREATE USER IF NOT EXISTS 不会覆盖密码，改密码请用 ALTER USER。
+-- 外部直连还需 MySQL 服务的 bind-address 非 127.0.0.1，且防火墙放行 3306。
+CREATE USER IF NOT EXISTS 'hourglass'@'%' IDENTIFIED BY 'ChangeMe_Hourglass_2026!';
+GRANT ALL PRIVILEGES ON hourglass.* TO 'hourglass'@'%';
+FLUSH PRIVILEGES;
+
+USE hourglass;
 
 -- MySQL dump 10.13  Distrib 8.2.0, for Win64 (x86_64)
 --
