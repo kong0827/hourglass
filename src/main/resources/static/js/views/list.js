@@ -21,6 +21,8 @@ var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort")
     btnListBulk = $("btnListBulk"), listHead = $("listHead");
 var lastItems = [];
 var listLoaded = false;
+var listHasMore = false, listLoadingMore = false;
+var LIST_PAGE_SIZE = 500;
 var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", sort:"default", collapsed:{} };
@@ -146,10 +148,10 @@ function enterListView(){
   loadList();
 }
 function refreshListIfOpen(){ if(activeView === "list") loadList(); }
-function listRequestParams(){
+function listRequestParams(offset){
   var requestSort = smart.sort === "default" ? serverSort : smart.sort;
   if(requestSort === "estimate" || requestSort === "actual") requestSort = serverSort;
-  var extra = {sort:requestSort};
+  var extra = {sort:requestSort, offset:offset || 0, limit:LIST_PAGE_SIZE};
   /* 能下推的预置条件下推，避免 500 条上限截断后本地预置结果偏少。 */
   if(smart.preset === "mine" && !state.owners.length && rt.currentUser){
     var myName = rt.currentUser.displayName || rt.currentUser.username;
@@ -161,18 +163,19 @@ function listRequestParams(){
 function updateListMeta(rawCount){
   var shown = currentViewRows().length;
   var hasLocalPreset = ["mine", "doing", "over"].indexOf(smart.preset) !== -1;
-  var text = (filterOn() || hasLocalPreset) ?
-    ("当前视图 " + shown + " 项 · 筛选结果共 " + rt.listTotal + " 项") : ("共 " + rt.listTotal + " 项");
+  var text = "已加载 " + lastItems.length + " / 共 " + rt.listTotal + " 项";
+  if(filterOn() || hasLocalPreset) text += " · 当前视图 " + shown + " 项";
   if(smart.group !== "none") text += " · " + currentViewGroups().length + " 组";
-  if(rt.listTotal > rawCount){
-    text += rt.listTotal > 500 ? "（仅加载前 500 项，请用筛选缩小范围）" : "（已截断）";
-  }
   listMeta.textContent = text;
 }
 function loadList(opts){
   opts = opts || {};
+  var append = !!(opts.more && lastItems.length);
+  var offset = append ? lastItems.length : 0;
   var seq = ++rt.listSeq;
-  if(!opts.silent){
+  listLoadingMore = append;
+  if(!append) listHasMore = false;
+  if(!opts.silent && !append){
     listBody.innerHTML = UI.skeletonRows(8);
     listMeta.textContent = "加载中…";
   }
@@ -180,14 +183,23 @@ function loadList(opts){
   /* 选中态不在重载时清空：批量操作后会重载，清空让人误以为操作没生效；
      真正失效的 id 在 renderListItems 里按可见行裁剪 */
   syncListSelectionUI();
-  API.get("/api/tasks/list", listRequestParams()).then(function(d){
+  API.get("/api/tasks/list", listRequestParams(offset)).then(function(d){
     if(seq !== rt.listSeq) return;
     rt.listTotal = d.total || 0;
+    listHasMore = !!d.hasMore;
+    listLoadingMore = false;
     listLoaded = true;
-    renderListItems(d.items || []);
-    updateListMeta((d.items || []).length);
+    var items = d.items || [];
+    renderListItems(append ? lastItems.concat(items) : items);
+    updateListMeta((append ? lastItems.length : items.length));
   }).catch(function(ex){
     if(seq !== rt.listSeq) return;
+    listLoadingMore = false;
+    if(append){
+      toast(ex.message || "加载更多失败", "bad");
+      renderListItems(lastItems);
+      return;
+    }
     listMeta.textContent = "";
     listBody.innerHTML = UI.errorState(ex.message);
     bindRetry(listBody, function(){ loadList(); });
@@ -360,6 +372,7 @@ function renderListItems(items){
       : UI.emptyState({ icon:"inbox", title:"这里还没有任务", textHtml:"新建一个任务；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建任务", compact:true })) + '</div>';
     bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else openTaskDrawer("backlog"); });
     syncListSelectionUI();
+    appendListMore();
     return;
   }
   var keepSelected = {}, visibleColumns = listPrefs.columns("task-list");
@@ -387,6 +400,15 @@ function renderListItems(items){
   /* 只保留当前展开行的选中态，避免隐藏任务被批量删除 */
   rt.listSelected = keepSelected;
   syncListSelectionUI();
+  appendListMore();
+}
+function appendListMore(){
+  if(!listHasMore) return;
+  var more = document.createElement("div");
+  more.style.cssText = "padding:14px;text-align:center;";
+  more.innerHTML = '<button class="btn" type="button" data-list-more' + (listLoadingMore ? " disabled" : "") + '>' +
+    (listLoadingMore ? "加载中…" : "加载更多（已 " + lastItems.length + " / 共 " + rt.listTotal + " 项）") + '</button>';
+  listBody.appendChild(more);
 }
 if($("btnListColumns")) $("btnListColumns").addEventListener("click", function(){
   listPrefs.openColumnSettings("task-list", function(){ renderListItems(lastItems); });
@@ -544,6 +566,10 @@ if(listBulkBar){
   });
 }
 listBody.addEventListener("click", function(e){
+  if(e.target.closest("[data-list-more]")){
+    if(!listLoadingMore) loadList({more:true});
+    return;
+  }
   var groupToggle = e.target.closest("[data-list-group-toggle]");
   if(groupToggle){
     var key = "$" + groupToggle.dataset.listGroupToggle;

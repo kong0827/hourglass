@@ -19,4 +19,12 @@
     ORDER BY id DESC
     LIMIT #{limit}
   </select>
+  <delete id="deleteByEntity">
+    DELETE FROM work_activity
+    WHERE workspace_id = #{workspaceId} AND entity_type = #{entityType} AND entity_id = #{entityId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM work_activity WHERE workspace_id = #{workspaceId}
+  </delete>
 </mapper>

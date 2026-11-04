@@ -1072,11 +1072,12 @@ function renderGanttAnalysisMenu(){
   if(!ganttAnalysisMenu) return;
   var hasBaseline = !!ganttState.baselineAt;
   var isOwner = !!(rt.currentWs && rt.currentWs.myRole === "owner");
+  var isManager = !!(rt.currentWs && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "admin"));
   ganttAnalysisMenu.innerHTML = '<div class="menu-title">分析</div>' +
     ganttAnalysisItem('data-gantt-critical', '关键路径高亮', ganttState.showCritical, '') +
     ganttAnalysisItem('data-gantt-baseline-toggle', '显示基线', ganttState.baselineOn, hasBaseline ? '' : '未设置') +
     '<div class="menu-sep"></div>' +
-    '<button class="menu-item" type="button" data-gantt-baseline-set>设为基线（当前计划）</button>' +
+    (isManager ? '<button class="menu-item" type="button" data-gantt-baseline-set>设为基线（当前计划）</button>' : '') +
     (isOwner ? '<button class="menu-item" type="button" data-gantt-baseline-clear"' + (hasBaseline ? '' : ' disabled') + '>清除基线</button>' : '') +
     '<div class="menu-sep"></div>' +
     ganttAnalysisItem('data-gantt-load', '资源负载面板', ganttState.showLoad, '') +
@@ -1111,6 +1112,10 @@ function ganttToggleBaseline(){
 }
 function ganttCaptureBaseline(){
   if(ganttReadOnly()){ toast("移动端只读，不能设置基线", "warn"); return; }
+  if(!(rt.currentWs && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "admin"))){
+    toast("仅空间主或管理员可设置基线", "warn");
+    return;
+  }
   API.post("/api/gantt/baseline").then(function(info){
     ganttApplyBaselineInfo(info);
     ganttState.baselineOn = !!ganttState.baselineAt;
@@ -1210,7 +1215,7 @@ function renderGanttLoad(){
 }
 function ganttShareUrl(token){
   if(location.protocol === "file:") return "share.html?token=" + token;
-  return location.origin + "/share.html?token=" + encodeURIComponent(token);
+  return location.origin + API.base + "/share.html?token=" + encodeURIComponent(token);
 }
 function ganttFillShare(token){
   var input = $("ganttShareUrl");

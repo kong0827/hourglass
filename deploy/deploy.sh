@@ -46,10 +46,13 @@ VERIFY_FILES=(
   "join.html"
   "manifest.webmanifest"
   "share.html"
+  "favicon.ico"
+  "icons/favicon-32.png"
   "sw.js"
   "js/main.js"
   "js/share.js"
   "js/core/api.js"
+  "js/core/activity-ui.js"
   "js/core/app.js"
   "js/core/dom.js"
   "js/core/filters-ui.js"
@@ -74,14 +77,22 @@ VERIFY_FILES=(
   "js/views/board.js"
   "js/views/branches.js"
   "js/views/calendar.js"
+  "js/views/demands.js"
   "js/views/gantt.js"
   "js/views/list.js"
+  "js/views/manager-shared.js"
   "js/views/mine.js"
+  "js/views/phase.js"
+  "js/views/portfolio.js"
   "js/views/profile.js"
+  "js/views/project.js"
   "js/views/projects.js"
+  "js/views/report.js"
   "js/views/requirements.js"
   "js/views/review.js"
+  "js/views/risks.js"
   "js/views/settings.js"
+  "js/views/workload.js"
   "css/app.css"
   "css/tokens.css"
   "css/base.css"
@@ -353,7 +364,7 @@ echo "ERRORS \$(journalctl -u ${SERVICE} --no-pager -n 60 | grep -icE 'ERROR|Cau
 cd /tmp && rm -rf dv && mkdir dv && cd dv
 for f in ${VERIFY_FILES[*]}; do
   o=\$(echo "\$f" | tr '/' '_')
-  curl -s -m 15 "\$B/\$f" -o "\$o"
+  curl -s -m 15 "\$B/hourglass/\$f" -o "\$o"
   echo "FILE \$f \$(wc -c < "\$o" | tr -d ' ') \$(sha256sum "\$o" | cut -c1-16)"
 done
 rm -rf /tmp/dv
@@ -361,6 +372,8 @@ rm -rf /tmp/dv
 DB_PW="\$(sed -n 's/^DB_PASSWORD=//p' ${ENV_FILE})"
 AU="\$(sed -n 's/^AUTH_USER=//p' ${ENV_FILE})"
 AP="\$(sed -n 's/^AUTH_PASSWORD=//p' ${ENV_FILE})"
+CRYPTO="\$(grep -c '^AI_CRYPTO_KEY=' ${ENV_FILE} 2>/dev/null || true)"
+echo "CRYPTO \${CRYPTO:-0}"
 cd /tmp && rm -f dv.txt
 curl -s -c dv.txt -o /dev/null \$B/hourglass/login.html
 T=\$(awk '/XSRF-TOKEN/{print \$NF}' dv.txt)
@@ -397,6 +410,13 @@ REMOTE
 
   ERRS="$(vget ERRORS | awk '{print $2}')"
   if [ "${ERRS:-0}" = "0" ]; then ok "启动日志无 ERROR"; else warn "启动日志有 ${ERRS} 行含 ERROR/Caused by，请核查：journalctl -u ${SERVICE} -n 100"; fi
+
+  CRYPTO="$(vget CRYPTO | awk '{print $2}')"
+  if [ "${CRYPTO:-0}" = "0" ]; then
+    warn "未配置 AI_CRYPTO_KEY：AI Key / SMTP 密码将使用公开默认密钥加密，请尽快在 ${ENV_FILE} 中设置"
+  else
+    ok "AI_CRYPTO_KEY 已配置"
+  fi
 
   MEM="$(vget MEM | awk '{print $2}')"
   info "应用内存占用：${MEM} MB"

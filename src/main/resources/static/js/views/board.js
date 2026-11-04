@@ -70,13 +70,19 @@ function loadBoard(opts){
     else toast("加载失败：" + (ex.message || "网络异常"), "bad");
   });
 }
+var reqLoadSeq = 0;
 function loadReqs(){
+  var seq = ++reqLoadSeq;
+  var wsId = rt.currentWs && rt.currentWs.id;
   return API.get("/api/reqs").then(function(list){
+    if(seq !== reqLoadSeq) return;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     rt.reqList = list || [];
     rt.reqsLoaded = true;
     populateReqSelect();
     if(activeView === "projects") loadView("projects").then(function(m){ m.renderReqList(); });
   }).catch(function(){
+    if(seq !== reqLoadSeq) return;
     if(activeView === "projects" && !rt.reqsLoaded && reqListEl){
       reqListEl.innerHTML = UI.errorState("项目加载失败，请稍后重试");
     }

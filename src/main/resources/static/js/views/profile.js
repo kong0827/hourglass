@@ -358,8 +358,8 @@ $("btnLogout").addEventListener("click", function(){
   UI.showConfirm({ title:"退出登录", msg:"确定退出当前账号？", okText:"退出", danger:false }).then(function(ok){
     if(!ok) return;
     API.post("/api/auth/logout", {}).then(function(){
-      window.location.href = "/hourglass/login.html";
-    }).catch(function(){ window.location.href = "/hourglass/login.html"; });
+      window.location.href = API.base + "/login.html";
+    }).catch(function(){ window.location.href = API.base + "/login.html"; });
   });
 });
 

@@ -36,6 +36,8 @@ public class RequirementService {
     private final com.devstudio.kanban.mapper.DemandMapper demandMapper;
     private final DevBranchMapper branchMapper;
     private final ProjectAccessService projectAccess;
+    private final AttachmentService attachmentService;
+    private final com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -43,7 +45,9 @@ public class RequirementService {
                               com.devstudio.kanban.mapper.ProjectVersionMapper versionMapper,
                               com.devstudio.kanban.mapper.DemandMapper demandMapper,
                               DevBranchMapper branchMapper,
-                              ProjectAccessService projectAccess) {
+                              ProjectAccessService projectAccess,
+                              AttachmentService attachmentService,
+                              com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -55,6 +59,8 @@ public class RequirementService {
         this.demandMapper = demandMapper;
         this.branchMapper = branchMapper;
         this.projectAccess = projectAccess;
+        this.attachmentService = attachmentService;
+        this.mailDeliveryMapper = mailDeliveryMapper;
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
@@ -212,7 +218,17 @@ public class RequirementService {
         int docs = docService.countByReq(workspaceId, id);
         /* 版本与需求池强归属项目，删除时一并清理：数量先统计，供确认提示与审计说明 */
         int versions = versionMapper.selectByReq(workspaceId, id).size();
-        int demands = demandMapper.selectByReq(workspaceId, id).size();
+        java.util.List<com.devstudio.kanban.entity.Demand> demandList = demandMapper.selectByReq(workspaceId, id);
+        int demands = demandList.size();
+        /* 需求池条目随项目删除，其附件和待发邮件也必须一起清 */
+        java.util.List<String> demandIds = new java.util.ArrayList<String>();
+        for (com.devstudio.kanban.entity.Demand d : demandList) {
+            demandIds.add(d.getId());
+            attachmentService.deleteByTarget(workspaceId, d.getId(), AttachmentService.KIND_DEMAND);
+        }
+        if (!demandIds.isEmpty()) {
+            mailDeliveryMapper.deleteByReferenceIds(demandIds);
+        }
         /* 统计口径含回收站任务（与 clearReq 解绑范围一致）；时间线用一条 INSERT ... SELECT
            批量补，避免把空间全量任务捞进内存逐条插 */
         int unlinked = taskMapper.countTasksByReq(workspaceId, id);
@@ -228,6 +244,7 @@ public class RequirementService {
         demandMapper.deleteLogsByReq(workspaceId, id);
         demandMapper.deleteByReq(workspaceId, id);
         projectAccess.clearProject(workspaceId, id);
+        workActivityService.deleteByEntity(workspaceId, WorkActivityService.PROJECT, id);
         reqMapper.deleteById(id);
         /* O-9：破坏性配置变更留审计（活动流可见） */
         activityService.logConfig(workspaceId,

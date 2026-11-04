@@ -48,7 +48,12 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         chain.doFilter(request, response);
 
+        /* getRequestURI 带 context-path（/hourglass/api/...），须先剥掉再判断 */
         String uri = request.getRequestURI();
+        String ctx = request.getContextPath();
+        if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+            uri = uri.substring(ctx.length());
+        }
         if (uri == null || !uri.startsWith("/api/")) {
             return;
         }

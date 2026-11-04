@@ -22,7 +22,8 @@ class TaskTrashServiceEpicCleanupTest {
     private final TaskAuditLogger audit = mock(TaskAuditLogger.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final TaskTrashService service = new TaskTrashService(tasks, support, cascade, timeLog, audit,
-            access, mock(PlatformTransactionManager.class));
+            access, mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+            mock(PlatformTransactionManager.class));
 
     @Test
     void softDeletingEpicClearsChildrenEpicRefs() {

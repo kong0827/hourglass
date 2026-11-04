@@ -18,6 +18,9 @@ public class AppUser {
     private String email;
     /** admin/user（只管账号，不等于空间权限） */
     private String role;
+    /** 会话代次：密码/角色变更时递增，旧会话失效（不输出给前端） */
+    @JsonIgnore
+    private Long sessionVersion;
     /** 每天几点开始计入工时（0-23，默认 9） */
     private Integer workStartHour;
     /** 每天几点之后不再计入（1-24，24=当天 24:00，默认 18） */

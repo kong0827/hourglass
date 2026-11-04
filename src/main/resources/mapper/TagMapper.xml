@@ -5,8 +5,8 @@
   <select id="selectAllWithCount" resultType="TagCount">
     SELECT t.name AS name, COUNT(tt.task_id) AS count
     FROM tag t
-    JOIN task_tag tt ON tt.tag_id = t.id
-    JOIN task tk ON tk.id = tt.task_id AND tk.deleted_at IS NULL
+    JOIN task_tag tt ON tt.tag_id = t.id AND tt.workspace_id = t.workspace_id
+    JOIN task tk ON tk.id = tt.task_id AND tk.workspace_id = t.workspace_id AND tk.deleted_at IS NULL
     WHERE t.workspace_id = #{workspaceId}
     GROUP BY t.id, t.name
     HAVING count > 0
@@ -17,8 +17,8 @@
   <select id="selectVisibleWithCount" resultType="TagCount">
     SELECT t.name AS name, COUNT(tt.task_id) AS count
     FROM tag t
-    JOIN task_tag tt ON tt.tag_id = t.id
-    JOIN task tk ON tk.id = tt.task_id AND tk.deleted_at IS NULL
+    JOIN task_tag tt ON tt.tag_id = t.id AND tt.workspace_id = t.workspace_id
+    JOIN task tk ON tk.id = tt.task_id AND tk.workspace_id = t.workspace_id AND tk.deleted_at IS NULL
     WHERE t.workspace_id = #{workspaceId}
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = tk.workspace_id

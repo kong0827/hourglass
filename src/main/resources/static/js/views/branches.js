@@ -741,7 +741,12 @@ function clearGroupOver(){
 })();
 
 function ensureBranchOptions(keep, projectId){
-  var run = function(){ populateBranchSelect(keep || "", projectId); };
+  var seq = rt.taskFormSeq;
+  var wantProject = projectId || "";
+  function stillCurrent(){
+    return seq === rt.taskFormSeq && (($("iReq") ? $("iReq").value : "") === wantProject);
+  }
+  var run = function(){ if(stillCurrent()) populateBranchSelect(keep || "", projectId); };
   if(branchesLoaded) run();
   else loadBranches().then(run).catch(function(){ /* 分支拉取失败时下拉保持空，不影响任务保存 */ });
 }

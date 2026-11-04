@@ -1183,7 +1183,12 @@ function populateReqDocSelect(keep){
 })();
 
 function ensureReqDocOptions(keep){
-  var run = function(){ populateReqDocSelect(keep || ""); };
+  var seq = rt.taskFormSeq;
+  var reqId = $("iReq") ? $("iReq").value : "";
+  function stillCurrent(){
+    return seq === rt.taskFormSeq && (($("iReq") ? $("iReq").value : "") === reqId);
+  }
+  var run = function(){ if(stillCurrent()) populateReqDocSelect(keep || ""); };
   if(reqDocsLoaded) run();
   else loadReqDocs().then(run).catch(run);
 }

@@ -71,6 +71,9 @@ class PermissionRulesTest {
                 60_000L, new AtomicLong(1_000_000L)::get);
         workspaceService = new WorkspaceService(workspaceMapper, memberMapper, mock(UserMapper.class),
                 mock(BoardColumnMapper.class), mock(CategoryMapper.class), mock(SavedViewMapper.class),
+                mock(com.devstudio.kanban.mapper.AppNotificationMapper.class),
+                mock(com.devstudio.kanban.mapper.UserListPreferenceMapper.class),
+                mock(WorkActivityService.class),
                 mock(InviteMapper.class), projectMemberMapper, mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
         projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);

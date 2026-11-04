@@ -96,7 +96,7 @@
                         WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
                           AND g.name LIKE CONCAT('%', #{q}, '%'))
              OR EXISTS (SELECT 1 FROM attachment a
-                        WHERE a.task_id = t.id AND a.workspace_id = t.workspace_id
+                        WHERE a.target_id = t.id AND a.target_kind = 'task' AND a.workspace_id = t.workspace_id
                           AND a.filename LIKE CONCAT('%', #{q}, '%')))
       </if>
       <if test="pris != null and pris.size() > 0">
@@ -252,6 +252,9 @@
       demand_id = #{demandId},
       updated_at = NOW()
     WHERE id = #{id}
+    <if test="versionCheck != null and versionCheck">
+      AND updated_at = #{updatedAt}
+    </if>
   </update>
 
   <!-- 需求详情「关联任务」透视：按 demand_id 反查（含列序：未完成在前） -->
@@ -260,6 +263,10 @@
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
     ORDER BY (board_column = 'done'), sort_order, id
   </select>
+
+  <update id="clearOwnerUser">
+    UPDATE task SET owner_user_id = NULL WHERE owner_user_id = #{userId}
+  </update>
 
   <update id="softDelete">
     UPDATE task SET deleted_at = NOW(), updated_at = NOW() WHERE id = #{id}
@@ -284,6 +291,7 @@
 
   <select id="selectPurgeable" resultType="Task">
     SELECT <include refid="cols"/> FROM task WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+    LIMIT #{limit}
   </select>
 
   <!-- 备份导入前预判任务 ID 冲突：本空间任务已清空，同 ID 只可能被其它空间占用 -->
@@ -419,7 +427,7 @@
 
   <select id="countChildRefs" resultType="int">
     SELECT
-      (SELECT COUNT(*) FROM attachment WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+      (SELECT COUNT(*) FROM attachment WHERE workspace_id = #{workspaceId} AND target_kind = 'task' AND target_id = #{taskId})
     + (SELECT COUNT(*) FROM task_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
     + (SELECT COUNT(*) FROM subtask    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
     + (SELECT COUNT(*) FROM time_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
@@ -474,7 +482,7 @@
                    WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
                      AND LOCATE(LOWER(#{query.q}), LOWER(g.name)) > 0)
         OR EXISTS (SELECT 1 FROM attachment a
-                   WHERE a.task_id = t.id AND a.workspace_id = t.workspace_id
+                   WHERE a.target_id = t.id AND a.target_kind = 'task' AND a.workspace_id = t.workspace_id
                      AND LOCATE(LOWER(#{query.q}), LOWER(a.filename)) > 0)
       )
     </if>
@@ -578,11 +586,16 @@
   </sql>
 
   <select id="selectGantt" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t
-    WHERE <include refid="ganttWhere"/>
-    <include refid="ganttScheduled"/>
-    ORDER BY t.gantt_start, t.gantt_end, t.id
-    LIMIT #{limit} OFFSET #{offset}
+    SELECT <include refid="cols"/> FROM task t2
+    JOIN (
+      SELECT t.id AS pid
+      FROM task t
+      WHERE <include refid="ganttWhere"/>
+      <include refid="ganttScheduled"/>
+      ORDER BY t.gantt_start, t.gantt_end, t.id
+      LIMIT #{limit} OFFSET #{offset}
+    ) gp ON gp.pid = t2.id
+    ORDER BY t2.gantt_start, t2.gantt_end, t2.id
   </select>
 
   <select id="countGantt" resultType="int">
@@ -693,7 +706,7 @@
         t.sort_order, t.board_column, t.id
       </otherwise>
     </choose>
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <!-- 日历候选：先把区间收敛到 due_date（走 idx_ws_due），精确的

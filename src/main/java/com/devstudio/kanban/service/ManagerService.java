@@ -296,6 +296,9 @@ public class ManagerService {
     }
 
     public Map<String, Object> nudges(String workspaceId, String userId, List<String> taskIds) {
+        if (!projectAccess.canManage(workspaceId, userId)) {
+            throw new AppException(403, "仅空间主或管理员可发起催办");
+        }
         if (taskIds == null || taskIds.isEmpty()) {
             throw AppException.badRequest("taskIds 不能为空");
         }
@@ -313,6 +316,9 @@ public class ManagerService {
         Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
         Map<String, Task> tasksById = new HashMap<String, Task>();
         for (Task task : emptyIfNull(taskMapper.selectAll(workspaceId))) {
+            if (task.getDeletedAt() != null) {
+                continue;
+            }
             if (task.getReqId() != null && hiddenReqs.contains(task.getReqId())) {
                 continue;
             }
@@ -345,6 +351,11 @@ public class ManagerService {
                 ownerUserId = userIdsByName.get(task.getOwner().trim());
             }
             if (ownerUserId == null) {
+                skipped++;
+                continue;
+            }
+            /* 接收人也必须当前可见该任务/项目，避免向被设为 none 的成员泄露标题与逾期原因 */
+            if (!projectAccess.canViewTask(workspaceId, ownerUserId, task)) {
                 skipped++;
                 continue;
             }
@@ -780,6 +791,9 @@ public class ManagerService {
         Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
         List<Task> tasks = new ArrayList<Task>();
         for (Task task : emptyIfNull(taskMapper.selectAll(workspaceId))) {
+            if (task.getDeletedAt() != null) {
+                continue;
+            }
             if (task.getReqId() == null || !hiddenReqs.contains(task.getReqId())) {
                 tasks.add(task);
             }

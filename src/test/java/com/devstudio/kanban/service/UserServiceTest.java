@@ -29,8 +29,10 @@ class UserServiceTest {
     private final UserService service = new UserService(users,
             mock(WorkspaceMapper.class), mock(WorkspaceMemberMapper.class),
             mock(ProjectMemberMapper.class), tasks, mock(RequirementMapper.class),
+            mock(com.devstudio.kanban.mapper.DevBranchMapper.class),
+            mock(com.devstudio.kanban.mapper.RequirementDocMapper.class),
             mock(WorkspaceService.class), mock(PasswordEncoder.class),
-            mock(WorkspaceMemberCache.class));
+            mock(WorkspaceMemberCache.class), mock(SessionEpochService.class));
 
     @Test
     void loginFallsBackToEmailWhenUsernameMisses() {

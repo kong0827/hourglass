@@ -2,6 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
+import { rt } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML } from "../lib/format.js";
@@ -19,10 +20,11 @@ function riskText(t,kind,today){
   if(kind==="stagnant")return "停滞 "+daysBetween(t.updatedAt,today)+" 天";
   return t.blockedReason||"等待解除阻塞";
 }
+function canManage(){ return !!(rt.currentWs && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "admin")); }
 function riskCard(t,kind,today){
   return '<article class="manager-risk-card '+kind+'"><button class="manager-risk-title" type="button" data-risk-open="'+esc(t.id)+'">'+esc(t.title)+'</button>'
     +'<div class="manager-risk-meta"><span>'+esc(t.reqName||"未归类")+'</span><span>'+esc(t.priority||"P2")+'</span><span>截止 '+esc(fmtDate(t.dueDate))+'</span></div>'
-    +'<div class="manager-risk-foot"><span class="manager-person">'+avatarHTML(t.owner||"未","sm")+esc(t.owner||"未指派")+'</span><span title="'+esc(riskText(t,kind,today))+'">'+esc(riskText(t,kind,today))+'</span><button class="btn sm" type="button" data-nudge="'+esc(t.id)+'">催办</button></div></article>';
+    +'<div class="manager-risk-foot"><span class="manager-person">'+avatarHTML(t.owner||"未","sm")+esc(t.owner||"未指派")+'</span><span title="'+esc(riskText(t,kind,today))+'">'+esc(riskText(t,kind,today))+'</span>'+(canManage()?'<button class="btn sm" type="button" data-nudge="'+esc(t.id)+'">催办</button>':'')+'</div></article>';
 }
 function riskColumn(kind,title,rows,today){
   return '<section class="manager-risk-col"><div class="manager-risk-head"><b>'+title+'</b><span>'+rows.length+'</span></div>'
@@ -34,7 +36,7 @@ function uniqueRiskTasks(){
 }
 function renderRisks(){
   var today=cache.today,all=uniqueRiskTasks(),over=cache.overloaded||[];
-  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div><button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button></div>'
+  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+'</div>'
     +(over.length?'<div class="manager-overload-note"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></div>':'')
     +'<div class="manager-risk-grid">'+riskColumn("overdue","逾期",cache.overdue||[],today)+riskColumn("blocked","被阻塞",cache.blocked||[],today)+riskColumn("stagnant","7 天未动",cache.stagnant||[],today)+'</div>';
 }
@@ -45,6 +47,7 @@ function postBatches(ids){
     .then(function(){return {sent:sent,skipped:skipped};});
 }
 function nudge(ids){
+  if(!canManage()){toast("仅空间主或管理员可发起催办","warn");return;}
   if(sending||!ids.length)return;sending=true;
   postBatches(ids).then(function(r){toast("已催办 "+r.sent+" 项"+(r.skipped?"，"+r.skipped+" 项未匹配负责人":""),r.sent?"fs":"warn");})
     .catch(function(ex){toast(ex.message||"催办失败","bad");}).then(function(){sending=false;});

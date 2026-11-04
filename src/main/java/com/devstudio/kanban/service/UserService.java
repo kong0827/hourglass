@@ -49,9 +49,12 @@ public class UserService implements UserDetailsService {
     private final com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper;
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
+    private final com.devstudio.kanban.mapper.DevBranchMapper devBranchMapper;
+    private final com.devstudio.kanban.mapper.RequirementDocMapper requirementDocMapper;
     private final WorkspaceService workspaceService;
     private final PasswordEncoder encoder;
     private final WorkspaceMemberCache memberCache;
+    private final SessionEpochService sessionEpochs;
 
     @Value("${app.auth.username:admin}")
     private String bootstrapUser;
@@ -62,17 +65,22 @@ public class UserService implements UserDetailsService {
     public UserService(UserMapper userMapper, WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                        com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper,
                        TaskMapper taskMapper, RequirementMapper reqMapper,
+                       com.devstudio.kanban.mapper.DevBranchMapper devBranchMapper,
+                       com.devstudio.kanban.mapper.RequirementDocMapper requirementDocMapper,
                        WorkspaceService workspaceService, PasswordEncoder encoder,
-                       WorkspaceMemberCache memberCache) {
+                       WorkspaceMemberCache memberCache, SessionEpochService sessionEpochs) {
         this.userMapper = userMapper;
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.projectMemberMapper = projectMemberMapper;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
+        this.devBranchMapper = devBranchMapper;
+        this.requirementDocMapper = requirementDocMapper;
         this.workspaceService = workspaceService;
         this.encoder = encoder;
         this.memberCache = memberCache;
+        this.sessionEpochs = sessionEpochs;
     }
 
     /* ==================== 登录 ==================== */
@@ -195,6 +203,8 @@ public class UserService implements UserDetailsService {
     @Transactional
     public AppUser update(String id, UserUpdateRequest req) {
         AppUser u = requireUser(id);
+        String oldRole = u.getRole();
+        boolean roleChanged = false;
         if (req.getRole() != null) {
             // 所有角色变更都在锁内按"锁定后的当前管理员列表"判断：
             // 不依赖此前读取的旧角色，避免"快照里是普通用户、随后被提升"的交错绕过约束
@@ -203,6 +213,7 @@ public class UserService implements UserDetailsService {
                 throw AppException.badRequest("至少保留一个管理员账号");
             }
             u.setRole(req.getRole());
+            roleChanged = !req.getRole().equals(oldRole);
         } else {
             // 仅改显示名：不写角色（SQL 条件跳过），否则会把旧快照角色回写，并发时可清掉管理员
             u.setRole(null);
@@ -213,6 +224,10 @@ public class UserService implements UserDetailsService {
         // 邮箱是登录凭据之一，编辑与其他账号重复时直接拒绝，而不是静默落库造成登录歧义
         u.setEmail(uniqueEmail(Texts.trimToNull(req.getEmail()), id));
         userMapper.update(u);
+        if (roleChanged) {
+            /* 登录态里缓存了平台角色，降权/升权都让旧会话重新登录，避免保留旧 ROLE_ADMIN */
+            sessionEpochs.bump(id);
+        }
         syncTaskOwnerName(id, oldName, newName);
         return userMapper.selectById(id);
     }
@@ -221,10 +236,11 @@ public class UserService implements UserDetailsService {
         requireUser(id);
         checkPasswordBytes(req.getPassword(), "密码");
         userMapper.updatePassword(id, encoder.encode(req.getPassword()));
-        // 说明：已登录的会话（30 天）不会因此失效，重置后建议提醒对方重新登录
+        sessionEpochs.bump(id);
+        // 旧会话在下一个请求校验代次时失效；被重置的人需要重新登录
     }
 
-    /** 修改自己的密码（校验旧密码）；已登录会话保持有效直到过期 */
+    /** 修改自己的密码（校验旧密码）；当前会话由控制器写入新代次，其他旧会话失效 */
     @Transactional
     public void changePassword(String userId, PasswordChangeRequest req) {
         AppUser u = requireUser(userId);
@@ -233,6 +249,7 @@ public class UserService implements UserDetailsService {
         }
         checkPasswordBytes(req.getNewPassword(), "新密码");
         userMapper.updatePassword(userId, encoder.encode(req.getNewPassword()));
+        sessionEpochs.bump(userId);
     }
 
     @Transactional
@@ -260,9 +277,15 @@ public class UserService implements UserDetailsService {
         // 退出所有共享空间 + 清空个人空间配置数据
         memberMapper.deleteAllByUser(id);
         projectMemberMapper.deleteAllByUser(id);
+        /* 账号删除后清掉业务表上的负责人引用，保留显示名文本作为历史快照 */
+        taskMapper.clearOwnerUser(id);
+        devBranchMapper.clearOwnerUser(id);
+        requirementDocMapper.clearOwnerUser(id);
+        workspaceService.deleteUserArtifacts(id);
         workspaceService.wipeData(personalId);
         workspaceMapper.deleteById(personalId);
         userMapper.deleteById(id);
+        sessionEpochs.bump(id);
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evictUser(id));
     }
 

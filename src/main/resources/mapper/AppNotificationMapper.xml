@@ -56,9 +56,10 @@
   </update>
 
   <update id="markAllRead">
-    UPDATE app_notification SET read_at = NOW()
-    WHERE user_id = #{userId} AND read_at IS NULL
-      <if test="workspaceId != null and workspaceId != ''"> AND workspace_id = #{workspaceId} </if>
+    UPDATE app_notification n SET read_at = NOW()
+    WHERE n.user_id = #{userId} AND n.read_at IS NULL
+      <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
+      <include refid="receiverProjectVisibility"/>
   </update>
 
   <select id="countRecent" resultType="int">
@@ -79,5 +80,9 @@
 
   <delete id="deleteAllByWorkspace">
     DELETE FROM app_notification WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM app_notification WHERE user_id = #{userId}
   </delete>
 </mapper>

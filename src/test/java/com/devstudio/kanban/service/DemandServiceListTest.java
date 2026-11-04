@@ -30,7 +30,8 @@ class DemandServiceListTest {
     private final DemandService service = new DemandService(demands, reqs,
             mock(ProjectVersionMapper.class), mock(TaskMapper.class),
             mock(NotificationEventService.class), mock(RequirementDocMapper.class),
-            mock(ProjectAccessService.class));
+            mock(ProjectAccessService.class), mock(AttachmentService.class),
+            mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
 
     @Test
     void listsWholeWorkspaceWithoutProjectAndComputesWsjf() {

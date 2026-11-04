@@ -4,11 +4,13 @@ import com.devstudio.kanban.common.AiClient;
 import com.devstudio.kanban.common.AiCrypto;
 import com.devstudio.kanban.common.AiProviders;
 import com.devstudio.kanban.common.AppException;
+import com.devstudio.kanban.common.OutboundUrlGuard;
 import com.devstudio.kanban.dto.AiConfig;
 import com.devstudio.kanban.dto.AiConfigRequest;
 import com.devstudio.kanban.dto.AiConfigView;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -26,6 +28,8 @@ public class AiConfigService {
     private final UserMapper userMapper;
     private final AiCrypto crypto;
     private final AiClient aiClient;
+    @Value("${app.ai.allow-private-network:false}")
+    private boolean allowPrivateNetwork;
 
     public AiConfigService(UserMapper userMapper, AiCrypto crypto, AiClient aiClient) {
         this.userMapper = userMapper;
@@ -111,8 +115,14 @@ public class AiConfigService {
 
         String baseUrl = AiProviders.baseUrlOr(provider, req.getBaseUrl());
         String model = AiProviders.modelOr(provider, req.getModel());
-        if (baseUrl != null && !baseUrl.isEmpty() && !baseUrl.startsWith("http")) {
-            throw AppException.badRequest("接口地址必须以 http:// 或 https:// 开头");
+        /* 只校验用户显式填写的地址；厂商预设地址是代码内常量，不因 DNS 抖动阻止保存 */
+        String customBase = req.getBaseUrl() == null ? null : req.getBaseUrl().trim();
+        if (customBase != null && !customBase.isEmpty()) {
+            try {
+                OutboundUrlGuard.validate(customBase, allowPrivateNetwork || "ollama".equals(provider));
+            } catch (IllegalArgumentException e) {
+                throw AppException.badRequest(e.getMessage());
+            }
         }
 
         String cipher;

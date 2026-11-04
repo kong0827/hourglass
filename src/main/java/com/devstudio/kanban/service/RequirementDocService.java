@@ -220,6 +220,7 @@ public class RequirementDocService {
         docMapper.deleteDemandLinksByDoc(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
         docMapper.delete(d.getId());
+        workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
     }
 
     /** 项目被删除时连带清理（由 RequirementService 调用） */
@@ -227,9 +228,11 @@ public class RequirementDocService {
     public int deleteByReq(String workspaceId, String reqId) {
         /* 需求没了，任务上的 req_doc_id 必须一起解绑；
            只删 requirement_doc 会留下悬空引用，任务详情里看不到但数据已经不一致。 */
+        docMapper.deleteDemandLinksByReq(workspaceId, reqId);
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
             docMapper.deleteDemandLinksByDoc(workspaceId, docId);
+            workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
         return docMapper.deleteByReq(workspaceId, reqId);
     }

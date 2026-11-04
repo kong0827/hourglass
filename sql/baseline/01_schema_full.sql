@@ -77,6 +77,7 @@ CREATE TABLE `app_user` (
   `display_name` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示名（负责人默认值）',
   `email` varchar(254) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '个人事件邮件收件地址',
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user' COMMENT '角色：admin/user（只管账号）',
+  `session_version` bigint NOT NULL DEFAULT '1' COMMENT '账号级会话代次；密码/角色变更时递增，旧会话失效',
   `work_start_hour` tinyint NOT NULL DEFAULT '9' COMMENT '每天几点开始计入工时（0-23）',
   `work_end_hour` tinyint NOT NULL DEFAULT '18' COMMENT '每天几点之后不再计入（1-24，24=当天24:00）',
   `work_max_hours` tinyint NOT NULL DEFAULT '8' COMMENT '每人每天最多计入几小时（1-24）',
@@ -124,7 +125,7 @@ DROP TABLE IF EXISTS `board_column`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `board_column` (
-  `id` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列ID',
+  `id` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `name` varchar(12) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列名',
   `color` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '#8a8578' COMMENT '列颜色',
@@ -237,6 +238,7 @@ CREATE TABLE `dev_branch` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `req_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属项目ID（requirement.id），空=空间级公共分支',
+  `req_key` varchar(32) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (ifnull(`req_id`,'')) STORED COMMENT '唯一性归一化：空间级分支用空串代替 NULL',
   `name` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支名（如 feature/login，允许 / . - _ 等字符）',
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'dev' COMMENT '状态：dev=开发中 / testing=待测试 / merging=待合并 / released=已发布',
   `owner` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人显示名',
@@ -251,7 +253,7 @@ CREATE TABLE `dev_branch` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ws_name` (`workspace_id`,`req_id`,`name`),
+  UNIQUE KEY `uk_ws_req_name` (`workspace_id`,`req_key`,`name`),
   KEY `idx_ws_status` (`workspace_id`,`status`),
   KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
   KEY `idx_branch_req` (`workspace_id`,`req_id`)
@@ -537,7 +539,7 @@ CREATE TABLE `task` (
   `owner` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '我' COMMENT '负责人（显示名文本，历史兼容）',
   `owner_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID（空=按显示名文本兼容）',
   `category` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '分类名（取值来自 category 表）',
-  `board_column` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'backlog' COMMENT '看板列 id',
+  `board_column` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'backlog' COMMENT '看板列 id',
   `start_date` date DEFAULT NULL COMMENT '开始日期（空=只在截止日出现在日历上）',
   `due_date` date DEFAULT NULL COMMENT '截止日期',
   `gantt_start` date GENERATED ALWAYS AS (least(coalesce(`start_date`,`due_date`),coalesce(`due_date`,`start_date`))) STORED COMMENT '有效开始日（min(start,due)，甘特区间索引用）',
@@ -622,7 +624,8 @@ CREATE TABLE `task_comment` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发表时间',
   PRIMARY KEY (`id`),
   KEY `idx_task` (`task_id`,`id`),
-  KEY `idx_ws` (`workspace_id`,`id`)
+  KEY `idx_ws` (`workspace_id`,`id`),
+  KEY `idx_ws_task` (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务评论';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

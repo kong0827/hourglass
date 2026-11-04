@@ -145,6 +145,9 @@
   }
 
   const API = {
+    /** 应用根路径：所有直链、FormData、下载和 SW 注册必须走这里 */
+    base: API_BASE,
+    url: resolveRoot,
     get: function (path, params) {
       return request("GET", path + buildQuery(params));
     },

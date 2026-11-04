@@ -13,6 +13,7 @@ import com.devstudio.kanban.dto.GanttShareResponse;
 import com.devstudio.kanban.entity.GanttShare;
 import com.devstudio.kanban.entity.TaskDependency;
 import com.devstudio.kanban.service.GanttService;
+import com.devstudio.kanban.service.WorkspaceService;
 import com.devstudio.kanban.service.WorkspaceVersionService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -44,10 +45,13 @@ public class GanttController {
 
     private final GanttService ganttService;
     private final WorkspaceVersionService versionService;
+    private final WorkspaceService workspaceService;
 
-    public GanttController(GanttService ganttService, WorkspaceVersionService versionService) {
+    public GanttController(GanttService ganttService, WorkspaceVersionService versionService,
+                           WorkspaceService workspaceService) {
         this.ganttService = ganttService;
         this.versionService = versionService;
+        this.workspaceService = workspaceService;
     }
 
     /** 任务分页 + 依赖 + 基线（依赖/基线只随第一页返回）；筛选参数与 /api/tasks/list 一致 */
@@ -104,9 +108,10 @@ public class GanttController {
         return ApiResult.ok(ganttService.baselineInfo(ctx.getWsId(), ctx.getUserId()));
     }
 
-    /** 把当前计划起止拍成基线（覆盖旧基线） */
+    /** 把当前计划起止拍成基线（覆盖旧基线）：基线是全空间共用口径，仅空间主/管理员可重拍 */
     @PostMapping("/api/gantt/baseline")
     public ApiResult<GanttResponse.BaselinePointMapHolder> captureBaseline(@CurrentWorkspace WorkspaceCtx ctx) {
+        workspaceService.requireManager(ctx.getUserId(), ctx.getWsId());
         return ApiResult.ok(ganttService.captureBaseline(ctx.getWsId(), ctx.getUserId()));
     }
 

@@ -143,6 +143,7 @@ public class BranchService {
     /** 分支详情（列表 + 抽屉共用实体）：带推导的影响版本标签与归属项目标签 */
     public DevBranch getDetail(String workspaceId, String userId, String id) {
         DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         fillVersions(workspaceId, viewerId, java.util.Collections.singletonList(b));
         fillProjects(workspaceId, viewerId, java.util.Collections.singletonList(b));
@@ -227,6 +228,7 @@ public class BranchService {
     public DevBranch create(String userId, String workspaceId, BranchSaveRequest req) {
         String name = normalizeName(req.getName());
         String reqId = normalizeReqId(workspaceId, req.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, reqId);
         if (branchMapper.countByName(workspaceId, name, reqId, null) > 0) {
             throw AppException.badRequest("分支「" + name + "」已存在");
         }
@@ -243,7 +245,11 @@ public class BranchService {
         b.setNote(Texts.cut(Texts.trimToNull(req.getNote()), 200));
         stampInitial(b, status);
 
-        branchMapper.insert(b);
+        try {
+            branchMapper.insert(b);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw AppException.badRequest("分支「" + name + "」已存在");
+        }
         log(userId, workspaceId, b.getId(), "create", null, status,
                 "创建分支（初始状态：" + label(status) + "）");
         return branchMapper.selectById(b.getId());
@@ -256,8 +262,11 @@ public class BranchService {
     @Transactional
     public DevBranch update(String userId, String workspaceId, String id, BranchSaveRequest req) {
         DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, b.getReqId());
         String name = req.getName() == null ? b.getName() : normalizeName(req.getName());
         String reqId = req.getReqId() == null ? b.getReqId() : normalizeReqId(workspaceId, req.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, reqId);
         if ((!name.equals(b.getName()) || !eq(reqId, b.getReqId()))
                 && branchMapper.countByName(workspaceId, name, reqId, id) > 0) {
             throw AppException.badRequest("分支「" + name + "」已存在");
@@ -294,7 +303,11 @@ public class BranchService {
         b.setReqId(reqId);
         b.setTargetBranch(target);
         b.setNote(note);
-        branchMapper.update(b);
+        try {
+            branchMapper.update(b);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw AppException.badRequest("分支「" + name + "」已存在");
+        }
         if (!changed.isEmpty()) {
             log(userId, workspaceId, id, "update", b.getStatus(), b.getStatus(), join(changed));
         }
@@ -308,6 +321,8 @@ public class BranchService {
     @Transactional
     public DevBranch changeStatus(String userId, String workspaceId, String id, BranchStatusRequest req) {
         DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, b.getReqId());
         String from = b.getStatus();
         String to = normalizeStatus(req.getStatus(), null);
         if (to == null) {
@@ -335,14 +350,16 @@ public class BranchService {
         branchMapper.deleteById(workspaceId, id);
     }
 
-    public List<DevBranchLog> logs(String workspaceId, String id) {
-        get(workspaceId, id);
+    public List<DevBranchLog> logs(String workspaceId, String userId, String id) {
+        DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
         return branchMapper.selectLogs(id);
     }
 
     /** 分支详情里的「关联任务」：未完成的排前面，同优先级按创建顺序；隐藏项目下的任务不返回 */
     public List<Task> tasks(String workspaceId, String userId, String id) {
-        get(workspaceId, id);
+        DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
         List<Task> list = taskMapper.selectByBranch(workspaceId, id);
         java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
         if (hidden.isEmpty()) {

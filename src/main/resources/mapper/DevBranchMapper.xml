@@ -171,6 +171,10 @@
     LIMIT 200
   </select>
 
+  <update id="clearOwnerUser">
+    UPDATE dev_branch SET owner_user_id = NULL WHERE owner_user_id = #{userId}
+  </update>
+
   <delete id="deleteLogsByBranch">
     DELETE FROM dev_branch_log WHERE branch_id = #{branchId}
   </delete>

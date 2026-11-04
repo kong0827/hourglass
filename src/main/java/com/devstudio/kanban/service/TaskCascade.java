@@ -5,6 +5,7 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
+import com.devstudio.kanban.mapper.MailDeliveryMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
@@ -102,6 +103,7 @@ public class TaskCascade {
     private final TaskDependencyMapper dependencyMapper;
     private final TaskBaselineMapper baselineMapper;
     private final GanttShareMapper ganttShareMapper;
+    private final MailDeliveryMapper mailDeliveryMapper;
     private final RequirementMapper reqMapper;
     private final RequirementDocMapper requirementDocMapper;
     private final TaskCompletionService completionService;
@@ -119,7 +121,7 @@ public class TaskCascade {
                        RequirementDocMapper requirementDocMapper,
                        TaskCompletionService completionService, DevBranchMapper devBranchMapper,
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
-                       DemandMapper demandMapper) {
+                       DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -138,6 +140,7 @@ public class TaskCascade {
         this.versionTaskMapper = versionTaskMapper;
         this.versionMapper = versionMapper;
         this.demandMapper = demandMapper;
+        this.mailDeliveryMapper = mailDeliveryMapper;
     }
 
     /**
@@ -198,6 +201,8 @@ public class TaskCascade {
         baselineMapper.deleteByTaskIds(workspaceId, taskIds);
         /* 版本绑定同理：任务行消失后 version_task 留存会让 ID 复用时误挂旧版本 */
         versionTaskMapper.deleteByTaskIds(workspaceId, taskIds);
+        /* 待发邮件引用了任务 ID：任务删除后必须取消，避免继续外发 */
+        mailDeliveryMapper.deleteByReferenceIds(taskIds);
     }
 
     /**
@@ -205,6 +210,8 @@ public class TaskCascade {
      * 不含操作时间线、附件文件、需求文档、分支：这些各场景口径不同，由下面两个方法补充。
      */
     public void purgeWorkspaceTaskData(String workspaceId, boolean clearSnapshots) {
+        /* 先取消引用本空间任务/需求的待发邮件，再删业务行 */
+        mailDeliveryMapper.deleteByWorkspaceReferences(workspaceId);
         /* 甘特图数据没有外键，任务删掉后必须显式清，避免空间 ID 残留 */
         dependencyMapper.deleteByWorkspace(workspaceId);
         baselineMapper.deleteByWorkspace(workspaceId);
@@ -257,6 +264,7 @@ public class TaskCascade {
             devBranchMapper.deleteByWorkspace(workspaceId);
         }
         if (clearDemands) {
+            requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
             demandMapper.deleteLogsByWorkspace(workspaceId);
             demandMapper.deleteByWorkspace(workspaceId);
         }

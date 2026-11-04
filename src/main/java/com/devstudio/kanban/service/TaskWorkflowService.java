@@ -155,7 +155,13 @@ public class TaskWorkflowService {
                 }
             }
         }
-        taskMapper.update(task);
+        if (task.getUpdatedAt() != null) {
+            task.setVersionCheck(Boolean.TRUE);
+        }
+        int updatedRows = taskMapper.update(task);
+        if (Boolean.TRUE.equals(task.getVersionCheck()) && updatedRows == 0) {
+            throw new com.devstudio.kanban.common.AppException(409, "任务已被其他人修改，请刷新后重试");
+        }
 
         /* 「任务清单」归档：完成时落快照，取消完成时删掉（重复完成会重新生成） */
         if (!from.equals(to)) {

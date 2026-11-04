@@ -2,9 +2,10 @@
 
 import { icon } from "./icons.js";
 import { esc, toast } from "./ui.js";
+import { API } from "./api.js";
 
-var VENDOR_BASE = "/vendor/univer/";
-var SHEETJS_URL = "/vendor/sheetjs/xlsx.full.min.js";
+var VENDOR_BASE = API.url("/vendor/univer/");
+var SHEETJS_URL = API.url("/vendor/sheetjs/xlsx.full.min.js");
 var CSS_FILES = ["css/design.css", "css/ui.css", "css/docs-ui.css", "css/sheets-ui.css",
   "css/sheets-formula-ui.css", "css/sheets-numfmt-ui.css"];
 /* 依赖顺序与官方 CDN 示例一致：react → jsx 桥 → rxjs/redi → 引擎 → 各功能包 → facade → 语言包 */
@@ -364,8 +365,8 @@ function setStatus(text){
 }
 
 function downloadUrl(id){
-  return "/api/attachments/" + encodeURIComponent(id) + "/download" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/download" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
 }
 
 /* ---------- 打开 / 关闭 ---------- */
@@ -386,7 +387,7 @@ function openSheet(opts){
   ensureVendor().catch(function(e){ vendorError = e; });
   fetch(downloadUrl(opts.attachment.id), { credentials: "same-origin" })
     .then(function(res){
-      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = API.base + "/login.html"; throw new Error("未登录"); }
       if(!res.ok) throw new Error("下载附件失败（HTTP " + res.status + "）");
       return res.arrayBuffer();
     })
@@ -451,14 +452,14 @@ function saveCurrent(){
     fd.append("file", new Blob([bytes],
       { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
       current.attachment.filename);
-    var url = "/api/attachments/" + encodeURIComponent(current.attachment.id) + "/content" +
-      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+    var url = API.url("/api/attachments/" + encodeURIComponent(current.attachment.id) + "/content" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
     return fetch(url, {
       method: "POST", credentials: "same-origin",
       headers: { "X-XSRF-TOKEN": csrf() },
       body: fd
     }).then(function(res){
-      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = API.base + "/login.html"; throw new Error("未登录"); }
       return res.json().catch(function(){ return null; }).then(function(json){
         if(!json || json.code !== 0) throw new Error((json && json.message) || "保存失败");
         return json.data || {};

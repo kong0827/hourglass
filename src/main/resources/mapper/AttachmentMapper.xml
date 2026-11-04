@@ -46,6 +46,11 @@
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
+  <delete id="deleteByTarget">
+    DELETE FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind} AND target_id = #{targetId}
+  </delete>
+
   <delete id="deleteAllByWorkspace">
     DELETE FROM attachment WHERE workspace_id = #{workspaceId}
   </delete>

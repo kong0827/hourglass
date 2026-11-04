@@ -10,6 +10,9 @@ import java.util.List;
 public class TaskListResponse {
 
     private List<Task> items = new ArrayList<Task>();
-    /** 筛选后总数（items 最多 500，超出时截断） */
+    /** 筛选后总数 */
     private int total;
+    private int offset;
+    private int limit;
+    private boolean hasMore;
 }

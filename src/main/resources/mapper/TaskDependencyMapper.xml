@@ -15,6 +15,10 @@
   <select id="selectVisibleByWorkspace" resultType="TaskDependency">
     SELECT <include refid="cols"/> FROM task_dependency d
     WHERE d.workspace_id = #{workspaceId}
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = d.from_task_id
+                  AND t.workspace_id = d.workspace_id AND t.deleted_at IS NULL)
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = d.to_task_id
+                  AND t.workspace_id = d.workspace_id AND t.deleted_at IS NULL)
     <if test="viewerId != null">
       AND NOT EXISTS (
         SELECT 1 FROM task t

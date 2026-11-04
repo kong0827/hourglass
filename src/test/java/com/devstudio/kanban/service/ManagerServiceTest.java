@@ -72,6 +72,21 @@ class ManagerServiceTest {
     }
 
     @Test
+    void portfolioIgnoresRecycleBinTasks() {
+        Requirement req = requirement("R1", "项目一");
+        Task active = openTask("T1", "R1", "custom", 100);
+        Task deleted = openTask("T2", "R1", "custom", 100);
+        deleted.setDeletedAt(TODAY.atStartOfDay());
+
+        ManagerService service = service(Arrays.asList(active, deleted),
+                Collections.singletonList(req), Collections.<TimeAgg>emptyList(),
+                Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
+        List<Map<String, Object>> projects = castList(service.portfolio(WORKSPACE, VIEWER).get("projects"));
+
+        assertEquals(1, project(projects, "R1").get("backlog"));
+    }
+
+    @Test
     void workloadUsesPerTaskRemainingAndLatestDueCapacity() {
         Requirement requirement = requirement("R1", "项目一");
         Task task = openTask("T1", "R1", Consts.COL_DOING, 600);

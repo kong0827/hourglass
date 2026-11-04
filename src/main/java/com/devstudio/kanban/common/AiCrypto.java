@@ -30,7 +30,7 @@ public class AiCrypto {
     private static final int TAG_BITS = 128;
 
     /** 与 application.yml 默认值一致；命中即说明部署时没配 AI_CRYPTO_KEY */
-    static final String DEFAULT_KEY = "devstudio-local-ai-key-change-me";
+    static final String DEFAULT_KEY = "hourglass-local-ai-key-change-me";
 
     private final SecretKeySpec key;
     private final SecureRandom random = new SecureRandom();

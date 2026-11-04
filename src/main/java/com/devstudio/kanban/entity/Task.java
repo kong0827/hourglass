@@ -45,6 +45,9 @@ public class Task {
     private Integer sortOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 非表字段：仅任务抽屉保存时要求按 updated_at 做并发校验 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Boolean versionCheck;
 
     /* ---- 2026-10-16 评估报告改造新增（见 sql/03_report_2026-10-16.sql） ---- */
     /** 负责人账号ID（N-2 身份绑定）；为空时业务回落 owner 显示名文本 */
@@ -68,6 +71,8 @@ public class Task {
     private Integer totalMinutes;
     /** 评论条数（非表字段，查询时合并填充） */
     private Integer commentCount;
+    /** 附件条数（非表字段，查询时合并填充） */
+    private Integer attachmentCount;
     /** 「我的任务」用：所属空间名（非表字段） */
     private String workspaceName;
     /**

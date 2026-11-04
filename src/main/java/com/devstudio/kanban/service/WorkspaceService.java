@@ -14,9 +14,11 @@ import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.ProjectMemberMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
+import com.devstudio.kanban.mapper.UserListPreferenceMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
@@ -50,6 +52,9 @@ public class WorkspaceService {
     private final BoardColumnMapper boardColumnMapper;
     private final CategoryMapper categoryMapper;
     private final SavedViewMapper savedViewMapper;
+    private final AppNotificationMapper appNotificationMapper;
+    private final UserListPreferenceMapper userListPreferenceMapper;
+    private final WorkActivityService workActivityService;
     private final InviteMapper inviteMapper;
     private final ProjectMemberMapper projectMemberMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
@@ -65,6 +70,9 @@ public class WorkspaceService {
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
                             CategoryMapper categoryMapper,
                             SavedViewMapper savedViewMapper,
+                            AppNotificationMapper appNotificationMapper,
+                            UserListPreferenceMapper userListPreferenceMapper,
+                            WorkActivityService workActivityService,
                             InviteMapper inviteMapper,
                             ProjectMemberMapper projectMemberMapper,
                             TaskCascade cascade,
@@ -77,6 +85,9 @@ public class WorkspaceService {
         this.boardColumnMapper = boardColumnMapper;
         this.categoryMapper = categoryMapper;
         this.savedViewMapper = savedViewMapper;
+        this.appNotificationMapper = appNotificationMapper;
+        this.userListPreferenceMapper = userListPreferenceMapper;
+        this.workActivityService = workActivityService;
         this.inviteMapper = inviteMapper;
         this.projectMemberMapper = projectMemberMapper;
         this.cascade = cascade;
@@ -304,10 +315,20 @@ public class WorkspaceService {
         cascade.wipeWorkspaceData(workspaceId);
         /* 看板列/分类/保存视图属于空间配置，不属于任务级联，清空空间时单独处理 */
         savedViewMapper.deleteAllByWorkspace(workspaceId);
+        userListPreferenceMapper.deleteAllByWorkspace(workspaceId);
+        workActivityService.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
+    }
+
+    /** 删除账号时清理跨空间仍残留的用户级数据 */
+    @Transactional
+    public void deleteUserArtifacts(String userId) {
+        savedViewMapper.deleteAllByUser(userId);
+        appNotificationMapper.deleteAllByUser(userId);
+        userListPreferenceMapper.deleteAllByUser(userId);
     }
 
     /* ==================== 成员 ==================== */

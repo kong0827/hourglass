@@ -27,4 +27,6 @@ public interface SavedViewMapper {
     int deleteById(String id);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    int deleteAllByUser(@Param("userId") String userId);
 }

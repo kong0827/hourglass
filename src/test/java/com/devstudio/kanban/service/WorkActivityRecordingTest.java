@@ -73,7 +73,8 @@ class WorkActivityRecordingTest {
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(com.devstudio.kanban.mapper.ProjectVersionMapper.class),
                 mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.DevBranchMapper.class),
-                mock(ProjectAccessService.class));
+                mock(ProjectAccessService.class), mock(AttachmentService.class),
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
     }
 
     @Test

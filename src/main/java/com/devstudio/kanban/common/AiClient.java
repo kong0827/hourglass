@@ -9,6 +9,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -51,6 +52,8 @@ public class AiClient {
 
     private final ObjectMapper om = new ObjectMapper();
     private final RestTemplate rt;
+    @Value("${app.ai.allow-private-network:false}")
+    private boolean allowPrivateNetwork;
 
     public AiClient(@Qualifier("aiRestTemplate") RestTemplate rt) {
         this.rt = rt;
@@ -73,6 +76,11 @@ public class AiClient {
             throw new IllegalStateException("AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
         }
         String url = endpoint(cfg.getBaseUrl());
+        try {
+            OutboundUrlGuard.validate(cfg.getBaseUrl(), allowPrivateNetwork || "ollama".equals(cfg.getProvider()));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(e.getMessage());
+        }
 
         if (!AI_SLOTS.tryAcquire()) {
             throw new IllegalStateException("AI 正忙（同时最多 2 个生成任务），请稍后再试");

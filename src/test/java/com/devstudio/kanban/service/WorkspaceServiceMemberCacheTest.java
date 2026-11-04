@@ -48,7 +48,11 @@ class WorkspaceServiceMemberCacheTest {
                 new AtomicLong(1_000_000L)::get);
         service = new WorkspaceService(workspaceMapper, memberMapper, userMapper,
                 mock(BoardColumnMapper.class), mock(CategoryMapper.class),
-                mock(SavedViewMapper.class), mock(InviteMapper.class), mock(ProjectMemberMapper.class), mock(TaskCascade.class),
+                mock(SavedViewMapper.class),
+                mock(com.devstudio.kanban.mapper.AppNotificationMapper.class),
+                mock(com.devstudio.kanban.mapper.UserListPreferenceMapper.class),
+                mock(WorkActivityService.class),
+                mock(InviteMapper.class), mock(ProjectMemberMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
 
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());

@@ -484,7 +484,7 @@ $("projectAccessWrap").addEventListener("change", function(e){
   });
 });
 function inviteLink(code){
-  return window.location.origin + "/join.html?code=" + encodeURIComponent(code);
+  return window.location.origin + API.base + "/join.html?code=" + encodeURIComponent(code);
 }
 function loadInvites(){
   var listEl = $("inviteList");
@@ -1150,9 +1150,9 @@ $("fileImport").addEventListener("change", function(e){
   });
 });
 $("btnExportCsv").addEventListener("click", function(){
-  var csvUrl = "/api/export/csv" + (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  var csvUrl = API.url("/api/export/csv" + (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
   fetch(csvUrl, { credentials:"same-origin" }).then(function(res){
-    if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
+    if(res.status === 401){ window.location.href = API.base + "/login.html"; throw new Error("未登录"); }
     if(!res.ok) throw new Error("请求失败（HTTP " + res.status + "）");
     return res.blob();
   }).then(function(blob){

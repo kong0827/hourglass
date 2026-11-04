@@ -60,7 +60,7 @@ public class BranchController {
     public ApiResult<List<DevBranchLog>> logs(@PathVariable String id,
                                               @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(branchService.logs(ws.getId(), id));
+        return ApiResult.ok(branchService.logs(ws.getId(), CurrentUser.id(), id));
     }
 
     /** 分支详情里的关联任务列表 */

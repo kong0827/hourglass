@@ -16,4 +16,12 @@
       columns_json = VALUES(columns_json),
       updated_at = CURRENT_TIMESTAMP
   </insert>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM user_list_preference WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM user_list_preference WHERE user_id = #{userId}
+  </delete>
 </mapper>

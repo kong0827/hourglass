@@ -140,6 +140,12 @@
     VALUES (#{workspaceId}, #{demandId}, #{docId}, #{userId})
   </insert>
 
+  <select id="selectAllDemandLinks" resultType="com.devstudio.kanban.entity.DemandDocLink">
+    SELECT workspace_id, demand_id, doc_id, created_by
+    FROM demand_doc_link
+    WHERE workspace_id = #{workspaceId}
+  </select>
+
   <delete id="unlinkDemand">
     DELETE FROM demand_doc_link
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND doc_id = #{docId}
@@ -166,6 +172,10 @@
   <update id="reparentChildren">
     UPDATE requirement_doc SET parent_id = #{parentId}, updated_at = NOW()
     WHERE workspace_id = #{workspaceId} AND parent_id = #{id}
+  </update>
+
+  <update id="clearOwnerUser">
+    UPDATE requirement_doc SET owner_user_id = NULL WHERE owner_user_id = #{userId}
   </update>
 
   <update id="updateParent">

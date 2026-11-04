@@ -22,7 +22,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,11 +74,36 @@ public class AttachmentService {
         return a;
     }
 
-    /** 下载/缩略图入口：按附件所属任务或需求校验项目可见性 */
+    /** 下载/缩略图入口：按附件所属任务或需求校验项目可见性；目标已删除时直接拒绝 */
     public Attachment getVisible(String workspaceId, String userId, String id) {
         Attachment a = get(workspaceId, id);
-        projectAccess.assertView(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
+        String projectId;
+        if (KIND_DEMAND.equals(a.getTargetKind())) {
+            Demand d = demandMapper.selectById(a.getTargetId());
+            if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
+                throw AppException.notFound("附件所属需求不存在或已删除");
+            }
+            projectId = d.getReqId();
+        } else {
+            Task t = taskMapper.selectById(a.getTargetId());
+            if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
+                throw AppException.notFound("附件所属任务不存在或已删除");
+            }
+            projectId = t.getReqId();
+        }
+        projectAccess.assertView(workspaceId, userId, projectId);
         return a;
+    }
+
+    /** 目标删除时级联：记录随业务事务删，磁盘文件提交后再删 */
+    @Transactional
+    public void deleteByTarget(String workspaceId, String targetId, String kind) {
+        List<Attachment> list = attachmentMapper.selectByTarget(workspaceId, targetId, kind);
+        if (list.isEmpty()) {
+            return;
+        }
+        attachmentMapper.deleteByTarget(workspaceId, targetId, kind);
+        deleteFilesAfterCommit(list);
     }
 
     public File fileOf(Attachment attachment) {
@@ -102,10 +131,13 @@ public class AttachmentService {
 
         String id = Ids.gen("A");
         String storedName = id + "." + ext;
+        File finalFile = new File(dir(), storedName).getAbsoluteFile();
+        File temp = new File(dir(), storedName + ".tmp-" + System.nanoTime());
         try {
             /* transferTo 传相对路径会被解析到 tomcat 上传临时目录，必须给绝对路径 */
-            file.transferTo(new File(dir(), storedName).getAbsoluteFile());
+            file.transferTo(temp);
         } catch (IOException e) {
+            temp.delete();
             log.warn("附件保存失败", e);
             throw new AppException(500, "文件保存失败");
         }
@@ -119,8 +151,14 @@ public class AttachmentService {
         a.setContentType(Texts.cut(file.getContentType(), 64));
         a.setSize(file.getSize());
         a.setStoredName(storedName);
-        attachmentMapper.insert(a);
-        logAction(userId, workspaceId, targetId, kind, "上传附件「" + original + "」");
+        try {
+            attachmentMapper.insert(a);
+            replaceFileAfterCommit(temp, finalFile);
+            logAction(userId, workspaceId, targetId, kind, "上传附件「" + original + "」");
+        } catch (RuntimeException e) {
+            temp.delete();
+            throw e;
+        }
         return attachmentMapper.selectById(id);
     }
 
@@ -128,8 +166,9 @@ public class AttachmentService {
     public void delete(String userId, String workspaceId, String id) {
         Attachment a = get(workspaceId, id);
         projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
-        deleteFile(a);
         attachmentMapper.deleteById(id);
+        /* 记录先删、文件等事务提交后再删；回滚时记录和文件都还在 */
+        deleteFilesAfterCommit(Collections.singletonList(a));
         logAction(userId, workspaceId, a.getTargetId(), a.getTargetKind(), "删除附件「" + a.getFilename() + "」");
     }
 
@@ -152,14 +191,18 @@ public class AttachmentService {
         if (oldExt == null || newExt == null || !oldExt.equals(newExt)) {
             throw AppException.badRequest("保存格式需为 " + (oldExt == null ? "与原件一致" : ("." + oldExt)));
         }
+        File target = fileOf(a).getAbsoluteFile();
+        File temp = new File(dir(), a.getStoredName() + ".tmp-" + System.nanoTime());
         try {
-            file.transferTo(fileOf(a).getAbsoluteFile());
+            file.transferTo(temp);
         } catch (IOException e) {
             log.warn("附件覆盖保存失败", e);
             throw new AppException(500, "文件保存失败");
         }
         a.setSize(file.getSize());
         a.setContentType(Texts.cut(file.getContentType(), 64));
+        /* 数据库提交成功后再替换原文件；失败则只丢弃临时文件，原内容不受影响 */
+        replaceFileAfterCommit(temp, target);
         attachmentMapper.updateContent(a);
         logAction(userId, workspaceId, a.getTargetId(), a.getTargetKind(), "在线编辑附件「" + a.getFilename() + "」");
         return attachmentMapper.selectById(id);
@@ -180,10 +223,42 @@ public class AttachmentService {
 
     /** 导入覆盖/清空空间数据时调用 */
     public void deleteAllWithFiles(String workspaceId) {
-        for (Attachment a : attachmentMapper.selectAllByWorkspace(workspaceId)) {
-            deleteFile(a);
-        }
+        List<Attachment> list = attachmentMapper.selectAllByWorkspace(workspaceId);
         attachmentMapper.deleteAllByWorkspace(workspaceId);
+        deleteFilesAfterCommit(list);
+    }
+
+    private void replaceFileAfterCommit(final File temp, final File target) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    moveTempIntoPlace(temp, target);
+                }
+
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) {
+                        temp.delete();
+                    }
+                }
+            });
+            return;
+        }
+        moveTempIntoPlace(temp, target);
+    }
+
+    private void moveTempIntoPlace(File temp, File target) {
+        try {
+            try {
+                Files.move(temp.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            log.warn("附件替换失败，临时文件保留：{}", temp.getAbsolutePath(), e);
+        }
     }
 
     private void deleteFilesAfterCommit(final List<Attachment> list) {

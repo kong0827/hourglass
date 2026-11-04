@@ -274,13 +274,13 @@
 
 ## 21. 列表视图
 
-`GET /api/tasks/list`，参数同看板（含 tags/focus），另加 `sort`：`column`（默认）/ `due` / `priority` / `updated`。返回：
+`GET /api/tasks/list`，参数同看板（含 tags/focus），另加 `sort`：`column`（默认）/ `due` / `priority` / `updated`，以及 `offset` / `limit` 分页（单页上限 500）。返回：
 
 ```json
-{"code":0,"data":{"items":[{...任务}],"total":128}}
+{"code":0,"data":{"items":[{...任务}],"total":128,"offset":0,"limit":500,"hasMore":false}}
 ```
 
-阈值 500 条（超出截断，返回的 `total` 为真实匹配数）。
+`hasMore=true` 时前端用 `offset=已加载条数` 继续加载；`total` 始终是筛选后的真实匹配数。
 
 ## 22. 看板列配置
 

@@ -37,11 +37,14 @@ public class DemandService {
     private final NotificationEventService notificationEvents;
     private final RequirementDocMapper docMapper;
     private final ProjectAccessService projectAccess;
+    private final AttachmentService attachmentService;
+    private final com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper;
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
                          ProjectVersionMapper versionMapper, TaskMapper taskMapper,
                          NotificationEventService notificationEvents, RequirementDocMapper docMapper,
-                         ProjectAccessService projectAccess) {
+                         ProjectAccessService projectAccess, AttachmentService attachmentService,
+                         com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -49,6 +52,8 @@ public class DemandService {
         this.notificationEvents = notificationEvents;
         this.docMapper = docMapper;
         this.projectAccess = projectAccess;
+        this.attachmentService = attachmentService;
+        this.mailDeliveryMapper = mailDeliveryMapper;
     }
 
     public List<Demand> list(String workspaceId, String reqId) {
@@ -219,6 +224,8 @@ public class DemandService {
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         requireDemand(workspaceId, id);
+        attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DEMAND);
+        mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         docMapper.deleteDemandLinksByDemand(workspaceId, id);
         /* 需求没了，任务上的 demand_id 必须一起解绑，否则编辑任务会被"关联需求不存在"拦住 */
         taskMapper.clearDemandRef(workspaceId, id);

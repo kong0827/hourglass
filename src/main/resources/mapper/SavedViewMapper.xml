@@ -36,4 +36,8 @@
   <delete id="deleteAllByWorkspace">
     DELETE FROM saved_view WHERE workspace_id = #{workspaceId}
   </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM saved_view WHERE user_id = #{userId}
+  </delete>
 </mapper>

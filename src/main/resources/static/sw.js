@@ -1,6 +1,6 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」） */
-var CACHE_NAME = "hourglass-shell-v84";
+var CACHE_NAME = "hourglass-shell-v85";
 var SHELL = [
   "/hourglass/",
   "/hourglass/index.html",
@@ -16,6 +16,7 @@ var SHELL = [
   "/hourglass/css/share.css",
   "/hourglass/css/auth.css",
   "/hourglass/js/core/api.js",
+  "/hourglass/js/core/activity-ui.js",
   "/hourglass/js/core/app.js",
   "/hourglass/js/core/dom.js",
   "/hourglass/js/core/filters-ui.js",
@@ -51,6 +52,8 @@ var SHELL = [
   "/hourglass/js/views/review.js",
   "/hourglass/js/views/settings.js",
   "/hourglass/manifest.webmanifest",
+  "/hourglass/icons/favicon-32.png",
+  "/hourglass/favicon.ico",
   "/hourglass/icons/icon-1024.png",
   "/hourglass/images/login-background.webp"
 ];

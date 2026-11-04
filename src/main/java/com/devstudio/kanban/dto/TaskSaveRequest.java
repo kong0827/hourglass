@@ -124,6 +124,9 @@ public class TaskSaveRequest {
     /** 选填：撤销删除恢复时一并重建的子任务 */
     private List<SubtaskItem> subtasks;
 
+    /** 保存时回传打开抽屉时的 updatedAt，用于检测并发覆盖（0 行更新返回 409） */
+    private LocalDateTime oldUpdatedAt;
+
     @lombok.Data
     public static class SubtaskItem {
         private String title;

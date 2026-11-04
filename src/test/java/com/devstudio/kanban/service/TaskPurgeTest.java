@@ -36,6 +36,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,10 +84,12 @@ class TaskPurgeTest {
                 mock(GanttShareMapper.class), mock(RequirementMapper.class),
                 mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
                 mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
-                mock(ProjectVersionMapper.class), mock(DemandMapper.class));
+                mock(ProjectVersionMapper.class), mock(DemandMapper.class),
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
-                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class), transactionManager);
+                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class),
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class), transactionManager);
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {
@@ -116,7 +119,8 @@ class TaskPurgeTest {
 
     @Test
     void purgeExpiredSplitsIntoBatchesOf100() {
-        when(taskMapper.selectPurgeable(any(LocalDateTime.class))).thenReturn(expiredTasks(250, "W1"));
+        when(taskMapper.selectPurgeable(any(LocalDateTime.class), anyInt()))
+                .thenReturn(expiredTasks(250, "W1")).thenReturn(new ArrayList<Task>());
 
         int purged = service.purgeExpired(LocalDateTime.now());
 
@@ -136,7 +140,8 @@ class TaskPurgeTest {
 
     @Test
     void failedBatchRollsBackAloneAndOthersContinue() {
-        when(taskMapper.selectPurgeable(any(LocalDateTime.class))).thenReturn(expiredTasks(250, "W1"));
+        when(taskMapper.selectPurgeable(any(LocalDateTime.class), anyInt()))
+                .thenReturn(expiredTasks(250, "W1")).thenReturn(new ArrayList<Task>());
         doThrow(new IllegalStateException("boom")).when(subtaskMapper)
                 .deleteByTaskIds(eq("W1"), argThat(batch -> batch != null && batch.contains("K150")));
 

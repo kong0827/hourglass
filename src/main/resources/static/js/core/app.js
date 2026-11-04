@@ -130,8 +130,9 @@ $("dlgWsCreateForm").addEventListener("submit", function(e){
     toast(ex.message || "创建失败", "bad");
   });
 });
-function loadMe(){
-  API.get("/api/auth/me").then(function(u){
+function loadMe(prefetched){
+  var p = prefetched ? Promise.resolve(prefetched) : API.get("/api/auth/me");
+  return p.then(function(u){
     rt.currentUser = u;
     if(u.displayName) rt.OWNER_DEFAULT = u.displayName;
     var tabAcc = $("setTabAccount");

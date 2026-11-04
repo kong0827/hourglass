@@ -72,4 +72,13 @@ public class WorkActivityService {
     public List<WorkActivity> listByEntity(String workspaceId, String entityType, String entityId) {
         return activityMapper.selectByEntity(workspaceId, entityType, entityId, LIST_LIMIT);
     }
+
+    /** 实体删除时清掉它的活动轨迹，避免同 ID 重建后混入旧历史。 */
+    public void deleteByEntity(String workspaceId, String entityType, String entityId) {
+        activityMapper.deleteByEntity(workspaceId, entityType, entityId);
+    }
+
+    public void deleteAllByWorkspace(String workspaceId) {
+        activityMapper.deleteAllByWorkspace(workspaceId);
+    }
 }

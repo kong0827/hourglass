@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>沙漏 · 登录</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/hourglass/icons/favicon-32.png" />
+<link rel="shortcut icon" href="/hourglass/favicon.ico" />
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/components.css" />
@@ -56,7 +58,7 @@
 
   <section class="login-panel" aria-label="账号登录">
     <div class="auth-card">
-      <form id="loginForm" autocomplete="on" novalidate>
+      <form id="loginForm" method="post" action="/hourglass/api/auth/login" autocomplete="on" novalidate>
         <div class="auth-brand">
           <h1>欢迎登录</h1>
           <p class="sub">登录沙漏，继续推进团队计划</p>
@@ -65,11 +67,11 @@
         <div class="stack" style="gap:16px">
           <div class="field" id="fUser">
             <label for="uName">账号</label>
-            <input id="uName" type="text" autocomplete="username" placeholder="登录名或邮箱" />
+            <input id="uName" name="username" type="text" autocomplete="username" placeholder="登录名或邮箱" />
           </div>
           <div class="field" id="fPass">
             <label for="uPass">密码</label>
-            <input id="uPass" type="password" autocomplete="current-password" placeholder="密码" />
+            <input id="uPass" name="password" type="password" autocomplete="current-password" placeholder="密码" />
           </div>
           <div class="auth-err" id="loginErr" hidden>
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/></svg>

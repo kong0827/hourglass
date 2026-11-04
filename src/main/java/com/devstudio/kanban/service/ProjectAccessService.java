@@ -86,10 +86,17 @@ public class ProjectAccessService {
     }
 
     public boolean canView(String workspaceId, String userId, String projectId) {
-        if (userId == null || projectId == null) {
+        if (userId == null) {
             return true;
         }
         String role = roleOf(workspaceId, userId);
+        if (role == null) {
+            /* 非空间成员一律不可见，避免调用方漏掉成员校验时默认放行 */
+            return false;
+        }
+        if (projectId == null) {
+            return true;
+        }
         if (isPrivileged(role) || isViewer(role)) {
             return true;
         }
@@ -100,11 +107,14 @@ public class ProjectAccessService {
         if (userId == null) {
             return true;
         }
+        String role = roleOf(workspaceId, userId);
+        if (role == null) {
+            return false;
+        }
         if (projectId == null) {
             // 未归类到项目的任务不受项目级范围限制；viewer 仍全局只读
-            return !isViewer(roleOf(workspaceId, userId));
+            return !isViewer(role);
         }
-        String role = roleOf(workspaceId, userId);
         if (isViewer(role)) {
             return false;
         }
@@ -178,6 +188,17 @@ public class ProjectAccessService {
 
     public List<ProjectMember> grants(String workspaceId) {
         return projectMemberMapper.selectByWorkspace(workspaceId);
+    }
+
+    /** 空间群机器人摘要用：只要某项目对任一成员显式 none，就不进入群消息，避免成员级隐藏内容外泄 */
+    public Set<String> projectsHiddenFromAnyMember(String workspaceId) {
+        Set<String> hidden = new HashSet<String>();
+        for (ProjectMember pm : projectMemberMapper.selectByWorkspace(workspaceId)) {
+            if (ACCESS_NONE.equals(pm.getAccess())) {
+                hidden.add(pm.getProjectId());
+            }
+        }
+        return hidden;
     }
 
     /**

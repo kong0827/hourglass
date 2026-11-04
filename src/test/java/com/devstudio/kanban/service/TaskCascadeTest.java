@@ -92,7 +92,8 @@ class TaskCascadeTest {
         cascade = new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper,
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
-                completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper);
+                completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
     }
 
     private static List<Task> tasks(String... workspaceAndIds) {

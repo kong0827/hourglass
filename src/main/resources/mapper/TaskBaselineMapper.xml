@@ -11,19 +11,23 @@
   <select id="selectVisibleByWorkspace" resultType="TaskBaseline">
     SELECT b.workspace_id, b.task_id, b.start_date, b.due_date, b.captured_at
     FROM task_baseline b
-    WHERE b.workspace_id = #{workspaceId}
+    JOIN task t ON t.id = b.task_id AND t.workspace_id = b.workspace_id
+    WHERE b.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <if test="viewerId != null">
       AND NOT EXISTS (
-        SELECT 1 FROM task t
-        JOIN project_member pm ON pm.workspace_id = t.workspace_id
-                              AND pm.project_id = t.req_id
-                              AND pm.user_id = #{viewerId}
-        WHERE t.id = b.task_id AND t.workspace_id = b.workspace_id AND pm.access = 'none')
+        SELECT 1 FROM project_member pm
+        WHERE pm.workspace_id = t.workspace_id
+          AND pm.project_id = t.req_id
+          AND pm.user_id = #{viewerId}
+          AND pm.access = 'none')
     </if>
   </select>
 
   <select id="selectCapturedAt" resultType="java.time.LocalDateTime">
-    SELECT MAX(captured_at) FROM task_baseline WHERE workspace_id = #{workspaceId}
+    SELECT MAX(b.captured_at)
+    FROM task_baseline b
+    JOIN task t ON t.id = b.task_id AND t.workspace_id = b.workspace_id
+    WHERE b.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
   </select>
 
   <delete id="deleteByWorkspace">

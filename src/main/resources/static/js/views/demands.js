@@ -26,6 +26,8 @@ var COLS = [
 ];
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3 };
+/* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
+function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
 var versions = [];           /* 当前项目的版本（目标版本展示/排期选择） */
 var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
@@ -59,7 +61,9 @@ function syncReqSel(){
   if(!rt.demandReqId && rt.reqList.length) rt.demandReqId = rt.reqList[0].id;
   if(rt.demandReqId) demandReq.value = rt.demandReqId;
 }
+var demandLoadSeq = 0;
 function loadDemands(){
+  var seq = ++demandLoadSeq;
   if(listPrefs.viewMode("demand-pool") === "table"){ loadAllDemands(); return; }
   if(!rt.demandReqId || !rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
@@ -70,17 +74,21 @@ function loadDemands(){
     return;
   }
   var reqId = rt.demandReqId;
+  var wsId = rt.currentWs && rt.currentWs.id;
   if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
   demandBody.innerHTML = UI.skeletonRows(2);
   Promise.all([
     API.get("/api/demands", { reqId: reqId }),
     API.get("/api/versions", { reqId: reqId })
   ]).then(function(rs){
-    if(rt.demandReqId !== reqId) return;
+    if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    if(listPrefs.viewMode("demand-pool") !== "board") return;
     demands = rs[0];
     versions = rs[1];
     render();
   }).catch(function(ex){
+    if(seq !== demandLoadSeq) return;
     demandBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
@@ -110,8 +118,12 @@ function loadAllDemands(){
     if(demandsMeta) demandsMeta.textContent = "";
     return;
   }
+  var seq = ++demandLoadSeq;
+  var wsId = rt.currentWs && rt.currentWs.id;
   demandBody.innerHTML = UI.skeletonRows(2);
   API.get("/api/demands").then(function(list){
+    if(seq !== demandLoadSeq) return null;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return null;
     demands = list || [];
     versions = [];
     var reqIds = [];
@@ -121,9 +133,12 @@ function loadAllDemands(){
         (vs || []).forEach(function(v){ versionNames[v.id] = v.name; });
       }).catch(function(){});
     }));
-  }).then(function(){
+  }).then(function(done){
+    if(done === null || seq !== demandLoadSeq) return;
+    if(listPrefs.viewMode("demand-pool") !== "table") return;
     render();
   }).catch(function(ex){
+    if(seq !== demandLoadSeq) return;
     demandBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
@@ -163,7 +178,7 @@ function render(){
   }
   demandBody.innerHTML = '<div class="bkl">' + COLS.map(function(c){
     var items = demands.filter(function(d){ return d.status === c[0]; }).sort(function(a, b){
-      return (PRI_ORDER[a.priority] || 9) - (PRI_ORDER[b.priority] || 9)
+      return priRank(a.priority) - priRank(b.priority)
         || String(a.expectDate || "9999").localeCompare(String(b.expectDate || "9999"));
     });
     return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title">'
@@ -248,7 +263,7 @@ function renderDemandTable(){
   var numCols = { expectDate:1, wsjf:1, createdAt:1 };
   var rows = demands.slice().sort(function(a, b){
     return (STATUS_ORDER[a.status] === undefined ? 9 : STATUS_ORDER[a.status]) - (STATUS_ORDER[b.status] === undefined ? 9 : STATUS_ORDER[b.status])
-      || (PRI_ORDER[a.priority] || 9) - (PRI_ORDER[b.priority] || 9)
+      || priRank(a.priority) - priRank(b.priority)
       || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
@@ -452,12 +467,12 @@ function csrfCookie(){
   return m ? decodeURIComponent(m[1]) : "";
 }
 function attUrl(id){
-  return "/api/attachments/" + encodeURIComponent(id) + "/download" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/download" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
 }
 function attThumbUrl(id){
-  return "/api/attachments/" + encodeURIComponent(id) + "/thumb" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/thumb" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
 }
 function extOfName(filename){
   var idx = String(filename || "").lastIndexOf(".");
@@ -686,15 +701,15 @@ function showDemandDetail(id){
     }
     var fd = new FormData();
     fd.append("file", f);
-    var url = "/api/demands/" + encodeURIComponent(id) + "/attachments" +
-      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+    var url = API.url("/api/demands/" + encodeURIComponent(id) + "/attachments" +
+      (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
     fetch(url, {
       method:"POST",
       credentials:"same-origin",
       headers:{ "X-XSRF-TOKEN": csrfCookie() },
       body: fd
     }).then(function(res){
-      if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
+      if(res.status === 401){ window.location.href = API.base + "/login.html"; throw new Error("未登录"); }
       return res.json().catch(function(){ return null; });
     }).then(function(json){
       if(json && json.code === 0){

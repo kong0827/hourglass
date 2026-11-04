@@ -274,19 +274,29 @@ public class TaskQueryService {
 
     /** 列表视图：筛选与 LIMIT 下推 SQL（上限 500），sort: due/priority/updated/column */
     public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort) {
+        return list(workspaceId, userId, query, sort, 0, LIST_LIMIT);
+    }
+
+    public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort,
+                                 int offset, int limit) {
         LocalDate today = LocalDate.now();
         GanttQuery gq = GanttQuery.from(query, today, null, null, true);
         gq.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         String s = "due".equals(sort) || "priority".equals(sort) || "updated".equals(sort) ? sort : "column";
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? LIST_LIMIT : Math.min(limit, LIST_LIMIT);
         int total = taskMapper.countTaskList(workspaceId, gq);
-        List<Task> items = total == 0 ? new ArrayList<Task>()
-                : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, LIST_LIMIT);
+        List<Task> items = total <= safeOffset || total == 0 ? new ArrayList<Task>()
+                : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, safeLimit, safeOffset);
         mergeTaskExtras(workspaceId, items);
         mergeVersionInfo(workspaceId, items);
 
         TaskListResponse resp = new TaskListResponse();
         resp.setTotal(total);
+        resp.setOffset(safeOffset);
+        resp.setLimit(safeLimit);
         resp.setItems(items);
+        resp.setHasMore(safeOffset + items.size() < total);
         return resp;
     }
 
@@ -323,8 +333,15 @@ public class TaskQueryService {
         List<Task> all = viewerId == null
                 ? taskMapper.selectAll(workspaceId)
                 : taskMapper.selectAllVisible(workspaceId, viewerId);
-        mergeTaskExtras(workspaceId, all);
-        return all;
+        /* selectAll 含回收站；公开分享/甘特数据源不能把软删除任务带出去 */
+        List<Task> active = new ArrayList<Task>(all.size());
+        for (Task t : all) {
+            if (t.getDeletedAt() == null) {
+                active.add(t);
+            }
+        }
+        mergeTaskExtras(workspaceId, active);
+        return active;
     }
 
     /** 甘特图分页后的扩展字段：只按本页 id 批量查，避免全空间聚合 */
@@ -357,6 +374,12 @@ public class TaskQueryService {
         for (TaskCountAgg agg : taskMapper.countCommentsByTaskIds(workspaceId, ids)) {
             commentMap.put(agg.getTaskId(), agg.getCnt());
         }
+        Map<String, Integer> attachmentMap = new HashMap<String, Integer>();
+        for (Attachment a : attachmentMapper.selectByTaskIds(workspaceId, ids)) {
+            String tid = a.getTargetId();
+            Integer n = attachmentMap.get(tid);
+            attachmentMap.put(tid, n == null ? 1 : n + 1);
+        }
         Map<String, String> reqNameMap = new HashMap<String, String>();
         Set<String> reqIds = new HashSet<String>();
         for (Task t : tasks) {
@@ -379,6 +402,8 @@ public class TaskQueryService {
             t.setTags(tags == null ? new ArrayList<String>() : tags);
             Integer cc = commentMap.get(t.getId());
             t.setCommentCount(cc == null ? 0 : cc);
+            Integer ac = attachmentMap.get(t.getId());
+            t.setAttachmentCount(ac == null ? 0 : ac);
             if (t.getReqId() != null) {
                 t.setSearchExtra(reqNameMap.get(t.getReqId()));
             }
@@ -505,12 +530,15 @@ public class TaskQueryService {
             }
         }
         Map<String, StringBuilder> attachMap = new HashMap<String, StringBuilder>();
+        Map<String, Integer> attachCounts = new HashMap<String, Integer>();
         for (Attachment a : attachmentMapper.selectByTaskIds(workspaceId, ids)) {
             StringBuilder sb = attachMap.get(a.getTargetId());
             if (sb == null) {
                 sb = new StringBuilder();
                 attachMap.put(a.getTargetId(), sb);
             }
+            Integer ac = attachCounts.get(a.getTargetId());
+            attachCounts.put(a.getTargetId(), ac == null ? 1 : ac + 1);
             if (a.getFilename() != null) {
                 sb.append(' ').append(a.getFilename());
             }
@@ -525,6 +553,8 @@ public class TaskQueryService {
             t.setTags(tags == null ? new ArrayList<String>() : tags);
             Integer cc = commentMap.get(t.getId());
             t.setCommentCount(cc == null ? 0 : cc);
+            Integer ac = attachCounts.get(t.getId());
+            t.setAttachmentCount(ac == null ? 0 : ac);
             StringBuilder extra = new StringBuilder();
             if (t.getReqId() != null) {
                 String rn = reqNameMap.get(t.getReqId());

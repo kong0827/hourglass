@@ -12,4 +12,8 @@ public interface UserListPreferenceMapper {
                               @Param("viewKey") String viewKey);
 
     int upsert(UserListPreference preference);
+
+    int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    int deleteAllByUser(@Param("userId") String userId);
 }

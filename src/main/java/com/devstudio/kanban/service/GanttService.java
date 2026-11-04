@@ -228,7 +228,9 @@ public class GanttService {
         /* 软删除任务上的历史边不参与环检测，否则会挡住正常依赖 */
         Set<String> active = new HashSet<String>();
         for (Task t : taskMapper.selectAll(workspaceId)) {
-            active.add(t.getId());
+            if (t.getDeletedAt() == null) {
+                active.add(t.getId());
+            }
         }
         Map<String, List<String>> adj = new HashMap<String, List<String>>();
         for (TaskDependency d : all) {
@@ -276,6 +278,9 @@ public class GanttService {
         LocalDateTime now = LocalDateTime.now();
         List<TaskBaseline> rows = new ArrayList<TaskBaseline>();
         for (Task t : all) {
+            if (t.getDeletedAt() != null) {
+                continue;
+            }
             if (t.getStartDate() == null && t.getDueDate() == null) {
                 continue;
             }

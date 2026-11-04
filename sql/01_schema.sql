@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS app_user (
   password_hash     VARCHAR(72) NOT NULL COMMENT 'bcrypt 密码哈希',
   display_name      VARCHAR(32) NOT NULL COMMENT '显示名（负责人默认值）',
   role              VARCHAR(16) NOT NULL DEFAULT 'user' COMMENT '角色：admin/user（只管账号）',
+  session_version   BIGINT      NOT NULL DEFAULT 1 COMMENT '账号级会话代次；密码/角色变更时递增',
   last_workspace_id VARCHAR(32) DEFAULT NULL COMMENT '上次使用的空间',
   created_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -65,7 +66,7 @@ CREATE TABLE IF NOT EXISTS task (
   owner        VARCHAR(32)      NOT NULL DEFAULT '我' COMMENT '负责人（显示名文本，历史兼容）',
   owner_user_id VARCHAR(32)     DEFAULT NULL COMMENT '负责人账号ID（空=按显示名文本兼容）',
   category     VARCHAR(16)      NOT NULL DEFAULT '' COMMENT '分类名（取值来自 category 表）',
-  board_column VARCHAR(16)      NOT NULL DEFAULT 'backlog' COMMENT '看板列 id',
+  board_column VARCHAR(24)      NOT NULL DEFAULT 'backlog' COMMENT '看板列 id',
   start_date   DATE             DEFAULT NULL COMMENT '开始日期（空=只在截止日出现在日历上）',
   due_date     DATE             DEFAULT NULL COMMENT '截止日期',
   req_id       VARCHAR(32)      DEFAULT NULL COMMENT '所属项目ID（requirement 表）',
@@ -183,7 +184,7 @@ CREATE TABLE IF NOT EXISTS subtask (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '子任务（检查清单）';
 
 CREATE TABLE IF NOT EXISTS board_column (
-  id           VARCHAR(16) NOT NULL COMMENT '列ID',
+  id           VARCHAR(24) NOT NULL COMMENT '列ID',
   workspace_id VARCHAR(32) NOT NULL COMMENT '归属空间ID',
   name         VARCHAR(12) NOT NULL COMMENT '列名',
   color        VARCHAR(16) NOT NULL DEFAULT '#8a8578' COMMENT '列颜色',

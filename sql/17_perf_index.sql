@@ -20,7 +20,9 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attachment' AND INDEX_NAME = 'idx_ws_task');
-SET @s := IF(@x = 0,
+SET @has_task_id := (SELECT COUNT(*) FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'attachment' AND COLUMN_NAME = 'task_id');
+SET @s := IF(@x = 0 AND @has_task_id > 0,
   'ALTER TABLE attachment ADD KEY idx_ws_task (workspace_id, task_id)',
   'DO 0');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

@@ -110,8 +110,9 @@ class BackupImportBatchTest {
                         mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
                         mock(RequirementMapper.class), docMapper, mock(TaskCompletionService.class),
                         branchMapper, mock(VersionTaskMapper.class), mock(ProjectVersionMapper.class),
-                        mock(DemandMapper.class)),
+                        mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class)),
                 mock(ActivityService.class),
+                mock(com.devstudio.kanban.mapper.WorkActivityMapper.class),
                 transactionManager);
     }
 
@@ -190,8 +191,9 @@ class BackupImportBatchTest {
         assertEquals(500, batches.getAllValues().get(0).size());
         assertEquals(1, batches.getAllValues().get(1).size());
         verify(taskMapper, never()).insert(any(Task.class));
-        // 阶段 1 + 两个任务批（没有依赖/基线/评论时阶段 3、4 不开启事务）
-        verify(transactionManager, times(3)).commit(any(TransactionStatus.class));
+        // 外层导入事务 + 阶段 1 + 两个任务批；mock 事务管理器不识别 REQUIRED 加入，
+        // 真实 DataSourceTransactionManager 下这些 execute 共用同一个提交。
+        verify(transactionManager, times(4)).commit(any(TransactionStatus.class));
     }
 
     @Test
@@ -239,7 +241,7 @@ class BackupImportBatchTest {
 
         BackupData exported = service.export("W1");
 
-        assertEquals(8, exported.getV());
+        assertEquals(9, exported.getV());
         assertEquals("2026-05-10", exported.getReqs().get(0).getFirstReleasedAt());
         BackupData.BackupTask exportedStory = null;
         for (BackupData.BackupTask task : exported.getTasks()) {

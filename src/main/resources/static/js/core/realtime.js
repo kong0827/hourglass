@@ -1,6 +1,7 @@
 /* core/realtime · SSE 实时同步与轮询兜底 */
 
 import { $, taskDrawer } from "./dom.js";
+import { API } from "./api.js";
 import { loadUnread } from "./notifications.js";
 import { refreshActiveView } from "./router.js";
 import { rt } from "./state.js";
@@ -101,18 +102,34 @@ function onSseChanged(event){
   }
   if(sse.debounce) clearTimeout(sse.debounce);
   sse.debounce = setTimeout(function(){
-    if(drag || pending) return;
-    if(UI.anyDialogOpen()) return;                                  // 弹窗打开时不打扰
-    if(taskDrawer.classList.contains("on") && rt.formDirty) return;     // 仅在「有未保存改动」时延迟刷新
-    if(Date.now() - sse.lastRefresh < 300) return;
+    if(drag || pending){ markSsePending(info.entity); return; }
+    if(UI.anyDialogOpen()){ markSsePending(info.entity); return; }              // 弹窗打开时不打扰，关闭后补刷
+    if(taskDrawer.classList.contains("on") && rt.formDirty){ markSsePending(info.entity); return; } // 有未保存改动时延迟
+    if(Date.now() - sse.lastRefresh < 300){ markSsePending(info.entity); return; }
     sse.lastRefresh = Date.now();
     refreshByEntity(info.entity);
   }, 300);
 }
+function markSsePending(entity){
+  sse.pending = true;
+  sse.pendingEntity = (sse.pendingEntity && sse.pendingEntity !== entity) ? "all" : (entity || "all");
+}
+/* 弹窗/拖拽/草稿阻塞结束后，把攒下的变更补刷一次，避免 SSE 健康时永久陈旧 */
+function flushSsePendingIfIdle(){
+  if(!sse.pending || document.hidden) return false;
+  if(drag || pending || UI.anyDialogOpen()) return false;
+  if(taskDrawer.classList.contains("on") && rt.formDirty) return false;
+  var ent = sse.pendingEntity || "all";
+  sse.pending = false;
+  sse.pendingEntity = "";
+  sse.lastRefresh = Date.now();
+  refreshByEntity(ent);
+  return true;
+}
 function sseConnect(){
   if(!window.EventSource) return;
   sseClose();
-  try{ sse.conn = new EventSource("/hourglass/api/events"); }
+  try{ sse.conn = new EventSource(API.base + "/api/events"); }
   catch(e){ sseScheduleReconnect(); return; }
   sse.conn.addEventListener("changed", onSseChanged);
   sse.conn.addEventListener("ping", sseTick);
@@ -140,6 +157,7 @@ function initSSE(){
     updateSseAlert();
     if(!sse.conn){ sseScheduleReconnect(); return; }
     if(Date.now() - sse.lastMsg > 60000){ sseClose(); sseScheduleReconnect(); }
+    flushSsePendingIfIdle();
   }, 5000);
 }
 function refreshIfDayChanged(){
@@ -158,6 +176,7 @@ setInterval(function(){
   if(UI.anyDialogOpen()) return;
   if(taskDrawer.classList.contains("on") && rt.formDirty) return;
   pollTick++;
+  flushSsePendingIfIdle();
   /* SSE 健康时不做数据轮询：事件驱动已经够用，只保留跨零点检查 */
   if(sseHealthy()){ refreshIfDayChanged(); return; }
   if(refreshIfDayChanged()) return;

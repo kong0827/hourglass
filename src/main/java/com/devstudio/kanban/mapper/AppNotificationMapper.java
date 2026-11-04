@@ -33,4 +33,6 @@ public interface AppNotificationMapper {
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    int deleteAllByUser(@Param("userId") String userId);
 }

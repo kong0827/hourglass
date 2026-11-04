@@ -354,6 +354,10 @@ public class NotificationService {
     /** 站内提醒不越过项目可见范围；校验异常按不可见处理，避免整轮扫描中断 */
     private boolean canReceiveInApp(Workspace ws, String userId, Task t) {
         try {
+            /* 已移除成员的历史任务仍可能绑定 owner_user_id，不能只按项目可见性放行 */
+            if (memberMapper.selectMember(ws.getId(), userId) == null) {
+                return false;
+            }
             return projectAccess.canView(ws.getId(), userId, t.getReqId());
         } catch (Exception e) {
             log.warn("校验通知接收人项目可见性失败（跳过站内提醒）：user={} workspace={}", userId, ws.getId(), e);
@@ -446,6 +450,10 @@ public class NotificationService {
         List<Task> over = new ArrayList<Task>();
         List<Task> todayDue = new ArrayList<Task>();
         for (Task t : taskMapper.selectAll(ws.getId())) {
+            /* selectAll 含回收站，汇总不能把已删除任务算成今天的待办 */
+            if (t.getDeletedAt() != null) {
+                continue;
+            }
             String kind = TaskCalc.dueKind(t, today);
             if ("over".equals(kind)) {
                 over.add(t);
@@ -479,7 +487,10 @@ public class NotificationService {
             return res;
         }
 
-        String content = buildDigestContent(ws, over, todayDue, today, force);
+        Set<String> hiddenAny = projectAccess.projectsHiddenFromAnyMember(ws.getId());
+        List<Task> externalOver = filterExternalDigest(over, hiddenAny);
+        List<Task> externalToday = filterExternalDigest(todayDue, hiddenAny);
+        String content = buildDigestContent(ws, externalOver, externalToday, today, force);
         boolean sent = sendContent(ws, content, hook);
         res.put("sent", sent);
         res.put("content", content);
@@ -547,6 +558,19 @@ public class NotificationService {
             byUser.put(uid, list);
         }
         list.add(t);
+    }
+
+    private List<Task> filterExternalDigest(List<Task> tasks, Set<String> hidden) {
+        if (tasks == null || tasks.isEmpty() || hidden == null || hidden.isEmpty()) {
+            return tasks == null ? Collections.<Task>emptyList() : tasks;
+        }
+        List<Task> out = new ArrayList<Task>();
+        for (Task t : tasks) {
+            if (t.getReqId() == null || !hidden.contains(t.getReqId())) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     private String workspaceTag(Workspace ws) {

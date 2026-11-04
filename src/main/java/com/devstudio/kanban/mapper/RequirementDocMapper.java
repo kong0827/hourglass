@@ -1,6 +1,7 @@
 package com.devstudio.kanban.mapper;
 
 import com.devstudio.kanban.dto.ReqDocView;
+import com.devstudio.kanban.entity.DemandDocLink;
 import com.devstudio.kanban.entity.RequirementDoc;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -14,6 +15,9 @@ public interface RequirementDocMapper {
     List<ReqDocView> selectViewByWorkspace(@Param("workspaceId") String workspaceId);
 
     RequirementDoc selectById(@Param("id") String id);
+
+    /** 账号删除后清理文档负责人引用 */
+    int clearOwnerUser(@Param("userId") String userId);
 
     int insert(RequirementDoc doc);
 
@@ -60,6 +64,8 @@ public interface RequirementDocMapper {
 
     int linkDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                    @Param("docId") String docId, @Param("userId") String userId);
+
+    List<DemandDocLink> selectAllDemandLinks(@Param("workspaceId") String workspaceId);
 
     int unlinkDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                      @Param("docId") String docId);

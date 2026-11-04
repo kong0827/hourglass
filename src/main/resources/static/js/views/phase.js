@@ -908,6 +908,13 @@ function ensureVersionOptions(keep, taskId){
   var sel = $("iVersion");
   if(!sel) return;
   var reqId = $("iReq") ? $("iReq").value : "";
+  var seq = rt.taskFormSeq;
+  var editingId = rt.editingId;
+  function stillCurrent(){
+    return seq === rt.taskFormSeq
+      && (rt.editingId || null) === (editingId || null)
+      && (($("iReq") ? $("iReq").value : "") === reqId);
+  }
   sel.removeAttribute("data-ready");
   if(!reqId){
     sel.innerHTML = '<option value="">待规划</option>';
@@ -915,10 +922,12 @@ function ensureVersionOptions(keep, taskId){
     return;
   }
   fetchVersions(reqId).then(function(vs){
+    if(!stillCurrent()) return;
     var html = '<option value="">待规划（不绑定版本）</option>';
     vs.forEach(function(v){ html += '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>'; });
     sel.innerHTML = html;
     function pick(v){
+      if(!stillCurrent()) return;
       var hit = false;
       Array.prototype.forEach.call(sel.options, function(o){ if(o.value === v) hit = true; });
       sel.value = hit ? v : "";
@@ -927,6 +936,7 @@ function ensureVersionOptions(keep, taskId){
     if(keep !== undefined && keep !== null){ pick(keep); return; }
     if(taskId){
       fetchTaskOptions(reqId).then(function(rows){
+        if(!stillCurrent()) return;
         var v = "";
         for(var i = 0; i < rows.length; i++){
           if(rows[i].id === taskId){ v = rows[i].versionId || ""; break; }
@@ -937,6 +947,7 @@ function ensureVersionOptions(keep, taskId){
       pick("");
     }
   }).catch(function(){
+    if(!stillCurrent()) return;
     sel.innerHTML = '<option value="">待规划</option>';
   });
 }
@@ -944,6 +955,13 @@ function ensureEpicOptions(keep, taskId){
   var sel = $("iEpic");
   if(!sel) return;
   var reqId = $("iReq") ? $("iReq").value : "";
+  var seq = rt.taskFormSeq;
+  var editingId = rt.editingId;
+  function stillCurrent(){
+    return seq === rt.taskFormSeq
+      && (rt.editingId || null) === (editingId || null)
+      && (($("iReq") ? $("iReq").value : "") === reqId);
+  }
   sel.removeAttribute("data-ready");
   if(!reqId){
     sel.innerHTML = '<option value="">无所属史诗</option>';
@@ -952,6 +970,7 @@ function ensureEpicOptions(keep, taskId){
   }
   sel.innerHTML = '<option value="">史诗加载中…</option>';
   fetchTaskOptions(reqId).then(function(rows){
+    if(!stillCurrent()) return;
     var html = '<option value="">无所属史诗</option>';
     rows.forEach(function(t){
       if(t.itemType === "epic" && t.id !== taskId){
@@ -960,6 +979,7 @@ function ensureEpicOptions(keep, taskId){
     });
     sel.innerHTML = html;
     function pick(value){
+      if(!stillCurrent()) return;
       var hit = false;
       Array.prototype.forEach.call(sel.options, function(o){ if(o.value === value) hit = true; });
       sel.value = hit ? value : "";
@@ -973,6 +993,7 @@ function ensureEpicOptions(keep, taskId){
       pick("");
     }
   }).catch(function(){
+    if(!stillCurrent()) return;
     sel.innerHTML = '<option value="">史诗加载失败，保存时保留原关联</option>';
   });
 }

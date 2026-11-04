@@ -185,7 +185,8 @@ import { GS } from "./lib/gantt-shared.js";
       scroll.innerHTML = '<div class="share-empty">链接缺少 token 参数，无法查看。</div>';
       return;
     }
-    fetch("/hourglass/api/share/gantt?token=" + encodeURIComponent(token), { credentials: "omit" })
+    var appBase = location.pathname.replace(/\/[^\/]*$/, "");
+    fetch(appBase + "/api/share/gantt?token=" + encodeURIComponent(token), { credentials: "omit" })
       .then(function (r) { return r.text(); })
       .then(function (txt) { return JSON.parse(txt); })
       .then(function (j) {

@@ -84,11 +84,13 @@ public class TaskController {
         return ApiResult.ok(queryService.donePage(ctx.getWsId(), ctx.getUserId(), query));
     }
 
-    /** 列表视图：筛选后的全量任务（上限 500），sort: due/priority/updated/column */
+    /** 列表视图：筛选后的分页任务，sort: due/priority/updated/column */
     @GetMapping("/api/tasks/list")
     public ResponseEntity<ApiResult<TaskListResponse>> list(@CurrentWorkspace WorkspaceCtx ctx,
                                             @BoardFilter BoardQuery query,
                                             @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Integer offset,
+                                            @RequestParam(required = false) Integer limit,
                                             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
                                             HttpServletRequest request) {
         String wsId = ctx.getWsId();
@@ -97,7 +99,8 @@ public class TaskController {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
-                .body(ApiResult.ok(queryService.list(wsId, ctx.getUserId(), query, sort)));
+                .body(ApiResult.ok(queryService.list(wsId, ctx.getUserId(), query, sort,
+                        offset == null ? 0 : offset, limit == null ? 0 : limit)));
     }
 
     /**

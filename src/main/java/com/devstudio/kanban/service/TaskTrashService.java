@@ -39,18 +39,22 @@ public class TaskTrashService {
     private final TimeLogService timeLogService;
     private final TaskAuditLogger audit;
     private final ProjectAccessService projectAccess;
+    private final com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
 
     public TaskTrashService(TaskMapper taskMapper, TaskSupport support, TaskCascade cascade,
                             TimeLogService timeLogService, TaskAuditLogger audit,
-                            ProjectAccessService projectAccess, PlatformTransactionManager transactionManager) {
+                            ProjectAccessService projectAccess,
+                            com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper,
+                            PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.support = support;
         this.cascade = cascade;
         this.timeLogService = timeLogService;
         this.audit = audit;
         this.projectAccess = projectAccess;
+        this.mailDeliveryMapper = mailDeliveryMapper;
         this.purgeTx = new TransactionTemplate(transactionManager);
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -77,6 +81,7 @@ public class TaskTrashService {
         projectAccess.assertViewTask(workspaceId, userId, t);
         projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         taskMapper.softDelete(id);
+        mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         /* Epic 进回收站后其子任务立即解除归属，避免指向已删除的任务 */
         taskMapper.clearEpicChildren(workspaceId, id);
         timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已移入回收站");
@@ -108,20 +113,30 @@ public class TaskTrashService {
      * 每 100 条一个独立事务：单批失败只回滚该批（任务留在回收站，下次再清），不影响其它批。
      */
     public int purgeExpired(LocalDateTime cutoff) {
-        List<Task> tasks = taskMapper.selectPurgeable(cutoff);
         int purged = 0;
-        for (int from = 0; from < tasks.size(); from += PURGE_BATCH_SIZE) {
-            final List<Task> batch = new ArrayList<Task>(
-                    tasks.subList(from, Math.min(from + PURGE_BATCH_SIZE, tasks.size())));
-            try {
-                purgeTx.execute(status -> {
-                    cascade.purgeTasks(batch);
-                    return null;
-                });
-                purged += batch.size();
-            } catch (Exception e) {
-                log.warn("回收站清理批次失败（{} 条），本批回滚，留待下次清理：{}",
-                        batch.size(), e.getMessage(), e);
+        while (true) {
+            List<Task> tasks = taskMapper.selectPurgeable(cutoff, PURGE_BATCH_SIZE);
+            if (tasks == null || tasks.isEmpty()) {
+                break;
+            }
+            boolean failed = false;
+            for (int from = 0; from < tasks.size(); from += PURGE_BATCH_SIZE) {
+                final List<Task> batch = new ArrayList<Task>(
+                        tasks.subList(from, Math.min(from + PURGE_BATCH_SIZE, tasks.size())));
+                try {
+                    purgeTx.execute(status -> {
+                        cascade.purgeTasks(batch);
+                        return null;
+                    });
+                    purged += batch.size();
+                } catch (Exception e) {
+                    log.warn("回收站清理批次失败（{} 条），本批回滚，留待下次清理：{}",
+                            batch.size(), e.getMessage(), e);
+                    failed = true;
+                }
+            }
+            if (failed || tasks.size() < PURGE_BATCH_SIZE) {
+                break;
             }
         }
         return purged;

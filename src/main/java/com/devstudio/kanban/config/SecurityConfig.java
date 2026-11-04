@@ -1,5 +1,7 @@
 package com.devstudio.kanban.config;
 
+import com.devstudio.kanban.common.LoginUser;
+import com.devstudio.kanban.service.SessionEpochService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -8,6 +10,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 import javax.servlet.http.HttpServletResponse;
@@ -27,8 +30,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, SessionEpochService epochs) throws Exception {
         http
+            .addFilterAfter(new SessionEpochFilter(epochs), UsernamePasswordAuthenticationFilter.class)
             .authorizeRequests()
                 .antMatchers("/api/health").permitAll()
                 // 邀请链接：访客可查看邀请信息（join 加入需登录，走下方 authenticated）
@@ -42,7 +46,14 @@ public class SecurityConfig {
             .formLogin()
                 .loginPage("/login.html")
                 .loginProcessingUrl("/api/auth/login")
-                .successHandler((req, res, auth) -> writeJson(res, 200, "{\"code\":0,\"message\":\"ok\"}"))
+                .successHandler((req, res, auth) -> {
+                    if (auth != null && auth.getPrincipal() instanceof LoginUser) {
+                        LoginUser user = (LoginUser) auth.getPrincipal();
+                        req.getSession(true).setAttribute(SessionEpochFilter.SESSION_KEY,
+                                epochs.current(user.getId()));
+                    }
+                    writeJson(res, 200, "{\"code\":0,\"message\":\"ok\"}");
+                })
                 .failureHandler((req, res, ex) -> writeJson(res, 200, "{\"code\":401,\"message\":\"用户名或密码错误\"}"))
             .and()
             .logout()

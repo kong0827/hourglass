@@ -20,4 +20,10 @@ public interface MailDeliveryMapper {
                           @Param("attempts") int attempts,
                           @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
                           @Param("lastError") String lastError);
+
+    /** 任务/需求删除时取消尚未发出的邮件，避免删除后继续外发 */
+    int deleteByReferenceIds(@Param("referenceIds") List<String> referenceIds);
+
+    /** 清空空间时按任务/需求引用取消待发邮件 */
+    int deleteByWorkspaceReferences(@Param("workspaceId") String workspaceId);
 }

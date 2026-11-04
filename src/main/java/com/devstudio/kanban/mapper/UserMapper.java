@@ -19,6 +19,11 @@ public interface UserMapper {
 
     AppUser selectById(String id);
 
+    /** 账号级会话代次（不存在返回 null） */
+    Long selectSessionVersion(@Param("id") String id);
+
+    int bumpSessionVersion(@Param("id") String id);
+
     /** 批量按 ID 查账号（通知里解析成员显示名用，避免逐个 selectById） */
     List<AppUser> selectByIds(@Param("ids") List<String> ids);
 

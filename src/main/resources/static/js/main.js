@@ -1,6 +1,7 @@
 /* main.js · 入口：核心与首屏模块同步加载，低频视图按需 import */
 
 import { loadMe } from "./core/app.js";
+import { API } from "./core/api.js";
 import { $, offlineBadge } from "./core/dom.js";
 import { loadViews } from "./core/filters-ui.js";
 import { loadUnread } from "./core/notifications.js";
@@ -43,7 +44,7 @@ function boot(){
   var startView = viewFromHash();
   try{ history.replaceState(null, "", "#/" + startView); }
   catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
-  showView(startView);
+  /* 视图初始化可能触发低频模块 import / 网络请求，等鉴权通过后再进入 */
 
   /* O-21：快捷键面板首次登录自动展开一次，之后尊重用户的折叠状态。
      注意 localStorage 在 file:// / 隐私模式下会抛错，因此把"读写 localStorage"与"DOM 展开"分开，
@@ -62,6 +63,15 @@ function boot(){
     }
   }catch(e){ /* noop */ }
 
+  /* 未登录时只允许先打这一次鉴权请求；401 由 API 层统一跳登录页，
+     其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
+  API.get("/api/auth/me").then(function(meUser){
+    startAuthenticatedApp(meUser, startView, deepTaskId);
+  }).catch(function(){ /* API 层已处理 401；网络异常也先停在这里 */ });
+}
+
+function startAuthenticatedApp(meUser, startView, deepTaskId){
+  showView(startView);
   showBoardSkeleton();
   loadBoard({animate:true}).then(function(){
     /* O-3：深链任务；跨空间时（从「我的任务」切过来）用 sessionStorage 接力 */
@@ -77,7 +87,7 @@ function boot(){
   loadReqs();
   loadBranches();
   loadViews();
-  loadMe();
+  loadMe(meUser);
   initSSE();
   /* R-1：未读角标。SSE 之外再兜一层低频轮询，SSE 断连时也能拿到新通知 */
   loadUnread(true);
@@ -89,7 +99,7 @@ function boot(){
   /* O-4：注册 Service Worker（离线只读：静态壳可离线打开，/api/ 永不缓存） */
   if("serviceWorker" in navigator){
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register("/sw.js").catch(function(){ /* http 直连不支持 SW，忽略 */ });
+      navigator.serviceWorker.register(API.base + "/sw.js").catch(function(){ /* http 直连不支持 SW，忽略 */ });
     });
   }
   updateOnlineBadge();

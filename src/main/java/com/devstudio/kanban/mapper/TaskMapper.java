@@ -53,7 +53,7 @@ public interface TaskMapper {
     /** 列表视图分页：筛选 + 排序 + LIMIT 都在 SQL 完成 */
     List<Task> selectTaskList(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
                               @Param("columnIds") List<String> columnIds, @Param("sort") String sort,
-                              @Param("limit") int limit);
+                              @Param("limit") int limit, @Param("offset") int offset);
 
     /** 日历：与月份区间有交集的候选任务（due_date 收敛区间，精确判定仍在 Java） */
     List<Task> selectCalendar(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
@@ -81,6 +81,9 @@ public interface TaskMapper {
 
     List<Task> selectDeleted(@Param("workspaceId") String workspaceId);
 
+    /** 账号删除后清理负责人引用，保留显示名快照 */
+    int clearOwnerUser(@Param("userId") String userId);
+
     Task selectById(String id);
 
     int insert(Task task);
@@ -105,7 +108,7 @@ public interface TaskMapper {
 
     int restore(String id);
 
-    List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff);
+    List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
 
     /** 全库到期未提醒的任务（跨空间一次取回，调用方按 workspace_id 分组） */
     List<Task> selectRemindDueAll(@Param("now") LocalDateTime now,

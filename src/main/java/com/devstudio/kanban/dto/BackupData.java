@@ -32,6 +32,8 @@ public class BackupData {
     private List<BackupVersion> versions;
     /** 需求池（v8 起纳入；旧备份没有该字段时保留空间现有需求池） */
     private List<BackupDemand> demands;
+    /** 需求池 ↔ 需求文档关联（v9；旧备份没有该字段时保留现状） */
+    private List<BackupDemandDocLink> demandDocLinks;
 
     @Data
     public static class BackupDependency {
@@ -162,6 +164,13 @@ public class BackupData {
         private String createdBy;
         private String createdAt;
         private String updatedAt;
+    }
+
+    @Data
+    public static class BackupDemandDocLink {
+        private String demandId;
+        private String docId;
+        private String createdBy;
     }
 
     @Data

@@ -9,6 +9,7 @@ import com.devstudio.kanban.dto.TaskTagRef;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
 import com.devstudio.kanban.entity.Demand;
+import com.devstudio.kanban.entity.DemandDocLink;
 import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.entity.DocumentType;
 import com.devstudio.kanban.entity.ProjectVersion;
@@ -110,6 +111,7 @@ public class BackupService {
     private final TransactionTemplate txTemplate;
     /** 配置审计（导入是破坏性覆盖操作，必须留痕） */
     private final ActivityService activityService;
+    private final com.devstudio.kanban.mapper.WorkActivityMapper workActivityMapper;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -128,6 +130,7 @@ public class BackupService {
                          TaskCompletionService completionService,
                          TaskCascade cascade,
                          ActivityService activityService,
+                         com.devstudio.kanban.mapper.WorkActivityMapper workActivityMapper,
                          PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
@@ -151,13 +154,15 @@ public class BackupService {
         this.completionService = completionService;
         this.cascade = cascade;
         this.activityService = activityService;
+        this.workActivityMapper = workActivityMapper;
         this.txTemplate = new TransactionTemplate(transactionManager);
-        this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        /* 覆盖导入必须整体成功或整体回滚：外层事务包住所有阶段，批次只做语句切分 */
+        this.txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
     }
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(8);
+        data.setV(9);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -401,6 +406,16 @@ public class BackupService {
             demands.add(bd);
         }
         data.setDemands(demands);
+
+        List<BackupData.BackupDemandDocLink> demandDocLinks = new ArrayList<BackupData.BackupDemandDocLink>();
+        for (DemandDocLink link : requirementDocMapper.selectAllDemandLinks(workspaceId)) {
+            BackupData.BackupDemandDocLink b = new BackupData.BackupDemandDocLink();
+            b.setDemandId(link.getDemandId());
+            b.setDocId(link.getDocId());
+            b.setCreatedBy(link.getCreatedBy());
+            demandDocLinks.add(b);
+        }
+        data.setDemandDocLinks(demandDocLinks);
         return data;
     }
 
@@ -417,37 +432,42 @@ public class BackupService {
         st.existingTaskIds = existingTaskIdsInOtherWorkspaces(workspaceId, data);
         st.memberIds = memberIdsOf(workspaceId);
 
-        // 阶段 1：清空旧数据 + 项目/分支/文档/分类/列/标签（一个短事务）
-        txTemplate.execute(status -> {
-            clearWorkspaceTaskData(workspaceId, data);
-            importReferenceData(data, st);
-            return null;
-        });
-        // 阶段 2：任务与子表，每 500 条一个事务
-        importTaskBatches(data, st);
-        // 阶段 3：依赖/基线/循环关联/评论，同样每 500 条一个事务
-        importLinks(data, st);
-        importComments(data, st);
-        // 阶段 4：完成归档重建（读工时汇总后 upsert，单独分批）
-        archiveDone(st);
+        return txTemplate.execute(txStatus -> {
+            // 阶段 1：清空旧数据 + 项目/分支/文档/分类/列/标签
+            txTemplate.execute(status -> {
+                clearWorkspaceTaskData(workspaceId, data);
+                importReferenceData(data, st);
+                return null;
+            });
+            // 阶段 2：任务与子表，按批执行语句，但同属外层事务
+            importTaskBatches(data, st);
+            // 阶段 3：依赖/基线/循环关联/评论
+            importLinks(data, st);
+            importDemandDocLinks(data, st);
+            importComments(data, st);
+            // 阶段 4：完成归档重建（读工时汇总后 upsert）
+            archiveDone(st);
 
-        BackupData.ImportResult result = new BackupData.ImportResult();
-        result.setTasks(st.taskCount);
-        result.setReqs(st.reqCount);
-        result.setComments(st.commentCount);
-        result.setReqDocs(st.reqDocCount);
-        result.setBranches(st.branchCount);
-        result.setVersions(st.versionCount);
-        result.setDemands(st.demandCount);
-        activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
-                + " / 项目 " + st.reqCount + " / 评论 " + st.commentCount
-                + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount
-                + " / 版本 " + st.versionCount + " / 需求池 " + st.demandCount + "）");
-        return result;
+            BackupData.ImportResult result = new BackupData.ImportResult();
+            result.setTasks(st.taskCount);
+            result.setReqs(st.reqCount);
+            result.setComments(st.commentCount);
+            result.setReqDocs(st.reqDocCount);
+            result.setBranches(st.branchCount);
+            result.setVersions(st.versionCount);
+            result.setDemands(st.demandCount);
+            activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
+                    + " / 项目 " + st.reqCount + " / 评论 " + st.commentCount
+                    + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount
+                    + " / 版本 " + st.versionCount + " / 需求池 " + st.demandCount + "）");
+            return result;
+        });
     }
 
     /** 阶段 1a：清空当前空间的任务类数据（附件/时间线保留） */
     private void clearWorkspaceTaskData(String workspaceId, BackupData data) {
+        /* 导入会替换项目/文档，旧实体的活动轨迹不能留下，否则同 ID 重建会混入旧历史 */
+        workActivityMapper.deleteAllByWorkspace(workspaceId);
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
         // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"。
         // v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状。
@@ -1218,6 +1238,29 @@ public class BackupService {
                 taskMapper.setRecurNext(link[0], link[1]);
             }
         });
+    }
+
+    /** 阶段 3b：需求池 ↔ 需求文档关联（按导入后的 demand/doc ID 重新挂接） */
+    private void importDemandDocLinks(BackupData data, ImportState st) {
+        if (data.getDemandDocLinks() == null) {
+            return;
+        }
+        for (BackupData.BackupDemandDocLink b : data.getDemandDocLinks()) {
+            if (b == null) {
+                continue;
+            }
+            String oldDemand = Texts.trimToNull(b.getDemandId());
+            String oldDoc = Texts.trimToNull(b.getDocId());
+            if (oldDemand == null || oldDoc == null) {
+                continue;
+            }
+            String demandId = st.demandIdMap.containsKey(oldDemand) ? st.demandIdMap.get(oldDemand) : oldDemand;
+            String docId = st.reqDocIdMap.containsKey(oldDoc) ? st.reqDocIdMap.get(oldDoc) : oldDoc;
+            if (!st.demandIds.contains(demandId) || requirementDocMapper.selectById(docId) == null) {
+                continue;
+            }
+            requirementDocMapper.linkDemand(st.workspaceId, demandId, docId, st.userId);
+        }
     }
 
     /** 阶段 3b：评论（任务 ID 可能因跨空间冲突被重映射，按 taskIdMap 回指） */

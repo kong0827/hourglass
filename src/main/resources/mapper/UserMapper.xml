@@ -3,7 +3,8 @@
 <mapper namespace="com.devstudio.kanban.mapper.UserMapper">
 
   <sql id="cols">
-    id, username, password_hash, display_name, email, role, work_start_hour, work_end_hour, work_max_hours,
+    id, username, password_hash, display_name, email, role, session_version,
+    work_start_hour, work_end_hour, work_max_hours,
     ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
     last_workspace_id, created_at, updated_at
   </sql>
@@ -37,6 +38,14 @@
   <select id="selectById" resultType="AppUser">
     SELECT <include refid="cols"/> FROM app_user WHERE id = #{id}
   </select>
+
+  <select id="selectSessionVersion" resultType="java.lang.Long">
+    SELECT session_version FROM app_user WHERE id = #{id}
+  </select>
+
+  <update id="bumpSessionVersion">
+    UPDATE app_user SET session_version = session_version + 1, updated_at = NOW() WHERE id = #{id}
+  </update>
 
   <select id="selectByUsername" resultType="AppUser">
     SELECT <include refid="cols"/> FROM app_user WHERE username = #{username}

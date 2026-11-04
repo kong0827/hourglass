@@ -245,7 +245,14 @@ public class TaskCommandService {
         List<String> changes = audit.diffParts(workspaceId, old, t, oldTags, req.getTags());
         /* T1.2：影响版本绑定变更并入审计（不传=不变；空串=解除；项目变更后旧绑定自动失效） */
         applyVersionBinding(workspaceId, id, t.getReqId(), req.getVersionId(), changes);
-        taskMapper.update(t);
+        if (req.getOldUpdatedAt() != null) {
+            t.setUpdatedAt(req.getOldUpdatedAt());
+            t.setVersionCheck(Boolean.TRUE);
+        }
+        int updatedRows = taskMapper.update(t);
+        if (Boolean.TRUE.equals(t.getVersionCheck()) && updatedRows == 0) {
+            throw new AppException(409, "任务已被其他人修改，请刷新后重新编辑");
+        }
         /* Epic 改成其他类型时，其下子任务一并解除归属，避免悬空的 epic_id */
         if ("epic".equals(old.getItemType()) && !"epic".equals(t.getItemType())) {
             int cleared = taskMapper.clearEpicChildren(workspaceId, id);

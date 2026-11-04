@@ -15,4 +15,10 @@ public interface WorkActivityMapper {
                                       @Param("entityType") String entityType,
                                       @Param("entityId") String entityId,
                                       @Param("limit") int limit);
+
+    int deleteByEntity(@Param("workspaceId") String workspaceId,
+                       @Param("entityType") String entityType,
+                       @Param("entityId") String entityId);
+
+    int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

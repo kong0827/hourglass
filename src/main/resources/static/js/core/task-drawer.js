@@ -53,21 +53,41 @@ function focusField(el){
   }catch(err){ /* noop */ }
 }
 
-function ensureReqDoc(v){ loadView("requirements").then(function(m){ m.ensureReqDocOptions(v); }); }
+function currentReqId(){ return $("iReq") ? ($("iReq").value || "") : ""; }
+function assocStillCurrent(seq, taskId, reqId){
+  return seq === rt.taskFormSeq
+    && (rt.editingId || null) === (taskId || null)
+    && currentReqId() === (reqId || "");
+}
+function ensureReqDoc(v){
+  var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
+  loadView("requirements").then(function(m){
+    if(assocStillCurrent(seq, taskId, reqId)) m.ensureReqDocOptions(v);
+  });
+}
 function ensureBranch(v, projectId){
   var sel = $("iBranch");
   if(sel) sel.removeAttribute("data-ready");
-  loadView("branches").then(function(m){ m.ensureBranchOptions(v, projectId); });
+  var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
+  loadView("branches").then(function(m){
+    if(assocStillCurrent(seq, taskId, reqId)) m.ensureBranchOptions(v, projectId);
+  });
 }
 function ensureVersion(keep, taskId){
   var sel = $("iVersion");
   if(sel) sel.removeAttribute("data-ready");
-  loadView("phase").then(function(m){ m.ensureVersionOptions(keep, taskId); });
+  var seq = rt.taskFormSeq, editingId = rt.editingId, reqId = currentReqId();
+  loadView("phase").then(function(m){
+    if(assocStillCurrent(seq, editingId, reqId)) m.ensureVersionOptions(keep, taskId);
+  });
 }
 function ensureEpic(keep, taskId){
   var sel = $("iEpic");
   if(sel) sel.removeAttribute("data-ready");
-  loadView("phase").then(function(m){ m.ensureEpicOptions(keep, taskId); });
+  var seq = rt.taskFormSeq, editingId = rt.editingId, reqId = currentReqId();
+  loadView("phase").then(function(m){
+    if(assocStillCurrent(seq, editingId, reqId)) m.ensureEpicOptions(keep, taskId);
+  });
 }
 function refreshAssociationViews(){
   var projects = viewModule("projects");
@@ -708,6 +728,7 @@ taskForm.addEventListener("submit", function(e){
   var current = rt.editingId ? taskCacheExtra[rt.editingId] : null;
   var docSel = $("iReqDoc"), branchSel = $("iBranch");
   var payload = {
+    oldUpdatedAt: current ? (current.updatedAt || null) : null,
     title: title,
     description: iDesc.value.trim(),
     priority: rt.formPri,
@@ -925,12 +946,12 @@ function extOfName(filename){
   return idx >= 0 ? String(filename).substring(idx + 1) : "";
 }
 function attUrl(id){
-  return "/api/attachments/" + encodeURIComponent(id) + "/download" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/download" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
 }
 function attThumbUrl(id){
-  return "/api/attachments/" + encodeURIComponent(id) + "/thumb" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/thumb" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
 }
 function loadAttachments(taskId){
   if(!fAttach) return;
@@ -979,15 +1000,15 @@ iAttachFile.addEventListener("change", function(){
   var fd = new FormData();
   fd.append("file", f);
   attachList.classList.add("busy");
-  var uploadUrl = "/api/tasks/" + encodeURIComponent(id) + "/attachments" +
-    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : "");
+  var uploadUrl = API.url("/api/tasks/" + encodeURIComponent(id) + "/attachments" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
   fetch(uploadUrl, {
     method:"POST",
     credentials:"same-origin",
     headers:{ "X-XSRF-TOKEN": csrfCookie() },
     body: fd
   }).then(function(res){
-    if(res.status === 401){ window.location.href = "/hourglass/login.html"; throw new Error("未登录"); }
+    if(res.status === 401){ window.location.href = API.base + "/login.html"; throw new Error("未登录"); }
     return res.json().catch(function(){ return null; });
   }).then(function(json){
     attachList.classList.remove("busy");

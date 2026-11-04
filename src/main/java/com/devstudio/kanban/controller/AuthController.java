@@ -3,6 +3,7 @@ package com.devstudio.kanban.controller;
 import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.common.LoginUser;
+import com.devstudio.kanban.config.SessionEpochFilter;
 import com.devstudio.kanban.dto.NotificationPreferenceUpdateRequest;
 import com.devstudio.kanban.dto.PasswordChangeRequest;
 import com.devstudio.kanban.dto.ProfileUpdateRequest;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,12 +29,15 @@ public class AuthController {
     private final UserMapper userMapper;
     private final UserService userService;
     private final UserNotificationPreferenceService preferenceService;
+    private final com.devstudio.kanban.service.SessionEpochService sessionEpochs;
 
     public AuthController(UserMapper userMapper, UserService userService,
-                          UserNotificationPreferenceService preferenceService) {
+                          UserNotificationPreferenceService preferenceService,
+                          com.devstudio.kanban.service.SessionEpochService sessionEpochs) {
         this.userMapper = userMapper;
         this.userService = userService;
         this.preferenceService = preferenceService;
+        this.sessionEpochs = sessionEpochs;
     }
 
     /** 当前登录用户信息（前端据此决定管理入口、上次空间、负责人默认名等） */
@@ -54,10 +59,13 @@ public class AuthController {
         return ApiResult.ok(data);
     }
 
-    /** 修改自己的密码（校验旧密码；已登录会话保持有效直到过期） */
+    /** 修改自己的密码（校验旧密码）；改完只保留当前会话，其他旧会话全部失效 */
     @PostMapping("/api/auth/password")
-    public ApiResult<Void> changePassword(@Valid @RequestBody PasswordChangeRequest req) {
-        userService.changePassword(CurrentUser.id(), req);
+    public ApiResult<Void> changePassword(@Valid @RequestBody PasswordChangeRequest req,
+                                          HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        userService.changePassword(userId, req);
+        request.getSession(true).setAttribute(SessionEpochFilter.SESSION_KEY, sessionEpochs.current(userId));
         return ApiResult.ok();
     }
 

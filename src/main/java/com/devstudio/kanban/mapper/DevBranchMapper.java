@@ -38,6 +38,9 @@ public interface DevBranchMapper {
 
     DevBranch selectById(@Param("id") String id);
 
+    /** 账号删除后清理分支负责人引用 */
+    int clearOwnerUser(@Param("userId") String userId);
+
     /**
      * 同名分支计数（excludeId 非空表示编辑时排除自己）。
      * reqId 维度：同一项目内分支名唯一；reqId 为空时只在空间级公共分支里判重。

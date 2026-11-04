@@ -25,7 +25,8 @@ class DemandServiceNotificationTest {
     private final NotificationEventService events = mock(NotificationEventService.class);
     private final DemandService service = new DemandService(demands, mock(RequirementMapper.class),
             versions, mock(TaskMapper.class), events, mock(RequirementDocMapper.class),
-            mock(ProjectAccessService.class));
+            mock(ProjectAccessService.class), mock(AttachmentService.class),
+            mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
 
     @Test
     void passNotifiesSubmitter() {

@@ -79,7 +79,7 @@ class TaskControllerResolveTest {
 
     @Test
     void boardFilterParsesCsvAndPaging() throws Exception {
-        when(taskService.list(eq("W1"), eq("U1"), any(BoardQuery.class), isNull()))
+        when(taskService.list(eq("W1"), eq("U1"), any(BoardQuery.class), isNull(), eq(0), eq(0)))
                 .thenReturn(new TaskListResponse());
 
         mvc.perform(get("/api/tasks/list")
@@ -94,7 +94,7 @@ class TaskControllerResolveTest {
                         && q.getOwners().contains("小明")
                         && q.getPris().size() == 2
                         && q.isFocus()
-                        && q.getDoneLimit() == 30), isNull());
+                        && q.getDoneLimit() == 30), isNull(), eq(0), eq(0));
     }
 
     @Test
