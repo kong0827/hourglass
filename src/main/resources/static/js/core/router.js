@@ -37,10 +37,17 @@ var VIEWS = {
   calendar: { title:"日历",     sub:"按 [开始日期, 实际结束日] 逐日铺开；点任务开详情，格子可新建", enter:enterCalendarView },
   gantt:    { title:"甘特图",   sub:"按开始/截止日期排布任务；拖动条改期，拖两端调起止", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:lazyEnter("projects", "enterProjectsView") },
-  requirements: { title:"需求", sub:"项目下的需求文档：在这里写清楚要做什么，任务可以关联到某份需求", enter:enterRequirementsLazy },
+  phase:    { title:"版本阶段", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
+  demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
+  requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目总览", sub:"全部项目的健康度、逾期与本周投入；点项目名进入项目看板", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目看板", sub:"单项目：周期、工时、任务分布、Epic 与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
+  risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
+  report: { title:"报表中心", sub:"燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsLazy },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:lazyEnter("profile", "enterProfileView") }
 };
@@ -56,13 +63,16 @@ function showView(name){
   activeView = name;
   document.body.dataset.view = name;
   var nav = $("sideNav");
+  var navKey = name === "project" ? "portfolio" : name;
   if(nav){
     nav.querySelectorAll("[data-view]").forEach(function(b){
-      var on = b.dataset.view === name;
+      var on = b.dataset.view === navKey;
       b.classList.toggle("on", on);
       if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
     });
   }
+  var sideSet = $("sideSettings");
+  if(sideSet) sideSet.classList.toggle("on", name === "settings");
   document.querySelectorAll(".view").forEach(function(s){
     s.classList.toggle("on", s.id === "view-" + name);
   });
@@ -72,9 +82,10 @@ function showView(name){
   UI.closeAllPops();
   syncViewHash(name);
   try{ localStorage.setItem("ds.view", name); }catch(e){ /* 隐私模式忽略 */ }
-  if(VIEWS[name].enter) VIEWS[name].enter();
+  var entered = VIEWS[name].enter ? VIEWS[name].enter() : null;
   /* 看板不在当前视图时只置脏，切回来再渲染一次 */
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
+  return entered;
 }
 function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
@@ -115,6 +126,13 @@ function refreshActiveView(){
   else if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); });
   else if(activeView === "analysis") loadView("analysis").then(function(m){ m.refreshAnalysisTab(true); });
   else if(activeView === "requirements") loadView("requirements").then(function(m){ m.loadReqDocs(); });
+  else if(activeView === "phase") loadView("phase").then(function(m){ m.enterPhaseView(); });
+  else if(activeView === "demands") loadView("demands").then(function(m){ m.enterDemandsView(); });
+  else if(activeView === "portfolio") loadView("portfolio").then(function(m){ m.loadPortfolio({silent:true}); });
+  else if(activeView === "project") loadView("project").then(function(m){ m.loadProject({silent:true}); });
+  else if(activeView === "workload") loadView("workload").then(function(m){ m.loadWorkload({silent:true}); });
+  else if(activeView === "risks") loadView("risks").then(function(m){ m.loadRisks({silent:true}); });
+  else if(activeView === "report") loadView("report").then(function(m){ m.loadReport({silent:true}); });
   else if(activeView === "settings"){
     loadView("settings").then(function(m){
       if(m.settingsTab === "data") m.loadTrash({silent:true});
@@ -128,6 +146,8 @@ $("sideNav").addEventListener("click", function(e){
   var b = e.target.closest("[data-view]");
   if(b) showView(b.dataset.view);
 });
+var sideSettingsBtn = $("sideSettings");
+if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 function openMobMore(){
   var btn = $("mobMore");
   var menu = $("mobMoreMenu");
@@ -136,7 +156,7 @@ function openMobMore(){
     menu = document.createElement("div");
     menu.className = "menu";
     menu.id = "mobMoreMenu";
-    menu.innerHTML = [["list","列表"],["gantt","甘特图"],["requirements","需求"],["projects","项目"],["branches","分支"],["analysis","分析"],["settings","设置"],["profile","个人设置"]]
+    menu.innerHTML = [["demands","需求池"],["list","任务列表"],["gantt","甘特图"],["analysis","分析"],["portfolio","项目总览"],["phase","版本阶段"],["workload","成员负载"],["risks","逾期与阻塞"],["report","报表中心"],["projects","项目"],["requirements","文档"],["branches","分支"],["settings","设置"],["profile","个人设置"]]
       .map(function(x){ return '<button class="menu-item" type="button" data-mob-view="' + x[0] + '">' + x[1] + '</button>'; }).join("");
     document.body.appendChild(menu);
     menu.addEventListener("click", function(ev){

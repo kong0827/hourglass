@@ -68,7 +68,7 @@ public class GanttController {
         if (etag.equals(inm)) {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
-        GanttResponse resp = ganttService.gantt(wsId, query, from, to,
+        GanttResponse resp = ganttService.gantt(wsId, ctx.getUserId(), query, from, to,
                 includeDone == null || includeDone,
                 offset == null ? 0 : offset, limit == null ? 0 : limit);
         /* includeDone 由服务端过滤；前端默认不传（true），切换「显示已完成」时本地过滤即可 */
@@ -77,37 +77,37 @@ public class GanttController {
 
     @GetMapping("/api/gantt/deps")
     public ApiResult<List<TaskDependency>> deps(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(ganttService.deps(ctx.getWsId()));
+        return ApiResult.ok(ganttService.deps(ctx.getWsId(), ctx.getUserId()));
     }
 
     @PostMapping("/api/gantt/deps")
     public ApiResult<TaskDependency> createDep(@CurrentWorkspace WorkspaceCtx ctx,
                                                @Valid @RequestBody GanttDepRequest req) {
-        return ApiResult.ok(ganttService.createDep(ctx.getWsId(), req));
+        return ApiResult.ok(ganttService.createDep(ctx.getWsId(), ctx.getUserId(), req));
     }
 
     @PutMapping("/api/gantt/deps/{id}")
     public ApiResult<TaskDependency> updateDep(@PathVariable String id,
                                                @CurrentWorkspace WorkspaceCtx ctx,
                                                @Valid @RequestBody GanttDepRequest req) {
-        return ApiResult.ok(ganttService.updateDep(ctx.getWsId(), id, req));
+        return ApiResult.ok(ganttService.updateDep(ctx.getWsId(), ctx.getUserId(), id, req));
     }
 
     @DeleteMapping("/api/gantt/deps/{id}")
     public ApiResult<Void> deleteDep(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        ganttService.deleteDep(ctx.getWsId(), id);
+        ganttService.deleteDep(ctx.getWsId(), ctx.getUserId(), id);
         return ApiResult.ok();
     }
 
     @GetMapping("/api/gantt/baseline")
     public ApiResult<GanttResponse.BaselinePointMapHolder> baseline(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(ganttService.baselineInfo(ctx.getWsId()));
+        return ApiResult.ok(ganttService.baselineInfo(ctx.getWsId(), ctx.getUserId()));
     }
 
     /** 把当前计划起止拍成基线（覆盖旧基线） */
     @PostMapping("/api/gantt/baseline")
     public ApiResult<GanttResponse.BaselinePointMapHolder> captureBaseline(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(ganttService.captureBaseline(ctx.getWsId()));
+        return ApiResult.ok(ganttService.captureBaseline(ctx.getWsId(), ctx.getUserId()));
     }
 
     /** 基线是团队共用的对照基准：拍摄成员可做，清除仅空间主 */
@@ -126,7 +126,7 @@ public class GanttController {
                                              @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                              @RequestParam(required = false)
                                              @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResult.ok(ganttService.load(ctx.getWsId(), query, from, to));
+        return ApiResult.ok(ganttService.load(ctx.getWsId(), ctx.getUserId(), query, from, to));
     }
 
     /* ==================== 只读分享 ==================== */

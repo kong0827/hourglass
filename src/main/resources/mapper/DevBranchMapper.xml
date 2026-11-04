@@ -26,6 +26,29 @@
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
 
+  <select id="selectVisibleByWorkspace" resultType="DevBranch">
+    SELECT b.id, b.workspace_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
+           b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
+           COALESCE(tc.task_count, 0) AS task_count,
+           COALESCE(tc.done_count, 0) AS done_count
+    FROM dev_branch b
+    LEFT JOIN (
+      SELECT t.branch_id,
+             COUNT(*) AS task_count,
+             SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = t.workspace_id
+                          AND pm.project_id = t.req_id
+                          AND pm.user_id = #{viewerId}
+                          AND pm.access = 'none')
+      GROUP BY t.branch_id
+    ) tc ON tc.branch_id = b.id
+    WHERE b.workspace_id = #{workspaceId}
+    ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
+  </select>
+
   <select id="selectById" resultType="DevBranch">
     SELECT <include refid="cols"/> FROM dev_branch WHERE id = #{id}
   </select>

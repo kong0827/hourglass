@@ -36,7 +36,10 @@ function loadWorkspaces(meUser){
       var kindEl = $("wsKind");
       if(kindEl) kindEl.textContent = target.type === "personal"
         ? "个人空间"
-        : ("共享 · " + (target.memberCount || 1) + " 人" + (target.myRole === "owner" ? " · 空间主" : ""));
+        : ("共享 · " + (target.memberCount || 1) + " 人" +
+            (target.myRole === "owner" ? " · 空间主"
+              : target.myRole === "admin" ? " · 管理员"
+              : target.myRole === "viewer" ? " · 查看者（只读）" : ""));
     }
     renderWsMenu();
     applyWsRoleGating();

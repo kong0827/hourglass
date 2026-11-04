@@ -19,6 +19,8 @@ public class BoardQuery {
     private List<String> reqs = new ArrayList<String>();
     /** 标签名列表（命中任意一个即匹配） */
     private List<String> tags = new ArrayList<String>();
+    /** 工作项类型列表（story/task/bug/epic） */
+    private List<String> types = new ArrayList<String>();
     /** over/today/soon */
     private String due;
     /** 今日聚焦：逾期 + 今天到期 + 进行中的 P0 */
@@ -34,11 +36,11 @@ public class BoardQuery {
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String due, Boolean focus, String doneScope, Integer doneLimit, Integer doneOffset) {
-        return from(q, owners, pris, cats, reqs, tags, due, focus, null, null, doneScope, doneLimit, doneOffset);
+        return from(q, owners, pris, cats, reqs, tags, null, due, focus, null, null, doneScope, doneLimit, doneOffset);
     }
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
-                                  String due, Boolean focus, Boolean blocked, Boolean noDue,
+                                  String types, String due, Boolean focus, Boolean blocked, Boolean noDue,
                                   String doneScope, Integer doneLimit, Integer doneOffset) {
         BoardQuery query = new BoardQuery();
         query.q = trimToNull(q);
@@ -47,6 +49,7 @@ public class BoardQuery {
         query.cats = splitCsv(cats);
         query.reqs = splitCsv(reqs);
         query.tags = splitCsv(tags);
+        query.types = splitCsv(types);
         query.due = trimToNull(due);
         query.focus = Boolean.TRUE.equals(focus);
         query.blocked = Boolean.TRUE.equals(blocked);

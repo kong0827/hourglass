@@ -56,11 +56,14 @@ public class BranchService {
     private final DevBranchMapper branchMapper;
     private final TaskMapper taskMapper;
     private final UserMapper userMapper;
+    private final ProjectAccessService projectAccess;
 
-    public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper) {
+    public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
+                         ProjectAccessService projectAccess) {
         this.branchMapper = branchMapper;
         this.taskMapper = taskMapper;
         this.userMapper = userMapper;
+        this.projectAccess = projectAccess;
     }
 
     public static String label(String status) {
@@ -68,8 +71,9 @@ public class BranchService {
         return s == null ? status : s;
     }
 
-    public List<DevBranch> list(String workspaceId) {
-        return branchMapper.selectByWorkspace(workspaceId);
+    public List<DevBranch> list(String workspaceId, String userId) {
+        return branchMapper.selectVisibleByWorkspace(workspaceId,
+                projectAccess.viewerScope(workspaceId, userId));
     }
 
     public DevBranch get(String workspaceId, String id) {
@@ -189,10 +193,21 @@ public class BranchService {
         return branchMapper.selectLogs(id);
     }
 
-    /** 分支详情里的「关联任务」：未完成的排前面，同优先级按创建顺序 */
-    public List<Task> tasks(String workspaceId, String id) {
+    /** 分支详情里的「关联任务」：未完成的排前面，同优先级按创建顺序；隐藏项目下的任务不返回 */
+    public List<Task> tasks(String workspaceId, String userId, String id) {
         get(workspaceId, id);
-        return taskMapper.selectByBranch(workspaceId, id);
+        List<Task> list = taskMapper.selectByBranch(workspaceId, id);
+        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        if (hidden.isEmpty()) {
+            return list;
+        }
+        List<Task> visible = new ArrayList<Task>();
+        for (Task t : list) {
+            if (t.getReqId() == null || !hidden.contains(t.getReqId())) {
+                visible.add(t);
+            }
+        }
+        return visible;
     }
 
     /* ==================== 内部 ==================== */

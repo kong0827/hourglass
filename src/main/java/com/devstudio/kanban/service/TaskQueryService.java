@@ -52,6 +52,8 @@ import java.util.Set;
 public class TaskQueryService {
 
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
+    /** 工作项类型固定顺序（与任务表单下拉一致） */
+    private static final String[] TASK_TYPES = {"task", "story", "bug", "epic"};
     private static final int LIST_LIMIT = 500;
     /** 我的任务分页上限（与 /api/tasks/list 的 500 上限一致） */
     public static final int MY_TASKS_MAX_LIMIT = 500;
@@ -65,11 +67,14 @@ public class TaskQueryService {
     private final AttachmentMapper attachmentMapper;
     private final WorkspaceMetaCache metaCache;
     private final TaskSupport support;
+    private final com.devstudio.kanban.mapper.VersionTaskMapper versionTaskMapper;
+    private final ProjectAccessService projectAccess;
 
     public TaskQueryService(TaskMapper taskMapper, RequirementMapper reqMapper, TaskLogMapper logMapper,
                             SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                             AttachmentMapper attachmentMapper, WorkspaceMetaCache metaCache,
-                            TaskSupport support) {
+                            TaskSupport support, com.devstudio.kanban.mapper.VersionTaskMapper versionTaskMapper,
+                            ProjectAccessService projectAccess) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.logMapper = logMapper;
@@ -79,6 +84,8 @@ public class TaskQueryService {
         this.attachmentMapper = attachmentMapper;
         this.metaCache = metaCache;
         this.support = support;
+        this.versionTaskMapper = versionTaskMapper;
+        this.projectAccess = projectAccess;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -89,9 +96,14 @@ public class TaskQueryService {
         if (t == null) {
             return null;
         }
+        if (!projectAccess.canViewTask(t.getWorkspaceId(), userId, t)) {
+            return null;
+        }
         if (t.getDeletedAt() == null) {
             mergeTaskExtras(t.getWorkspaceId(), Collections.singletonList(t));
         }
+        /* T1.2：任务详情带上影响版本（编辑表单回显用） */
+        t.setVersionId(versionTaskMapper.selectVersionIdByTask(t.getWorkspaceId(), id));
         return t;
     }
 
@@ -110,6 +122,7 @@ public class TaskQueryService {
         pageQuery.setCats(query.getCats());
         pageQuery.setReqs(query.getReqs());
         pageQuery.setTags(query.getTags());
+        pageQuery.setTypes(query.getTypes());
         pageQuery.setBlocked(query.isBlocked());
         pageQuery.setDue(query.getDue());
         pageQuery.setFocus(query.isFocus());
@@ -142,8 +155,9 @@ public class TaskQueryService {
 
     /* ==================== 查询 ==================== */
 
-    public BoardResponse board(String workspaceId, BoardQuery query) {
+    public BoardResponse board(String workspaceId, String userId, BoardQuery query) {
         LocalDate today = LocalDate.now();
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<BoardColumn> configCols = metaCache.columns(workspaceId);
         Map<String, List<Task>> byCol = new LinkedHashMap<String, List<Task>>();
         for (BoardColumn c : configCols) {
@@ -159,15 +173,16 @@ public class TaskQueryService {
         }
 
         /* 未完成列：SQL 直接按列取（board_column <> done），历史已完成任务不再进内存 */
-        List<Task> open = taskMapper.selectOpenTasks(workspaceId);
+        List<Task> open = taskMapper.selectOpenTasks(workspaceId, viewerId);
 
         /* 已完成列：计数与筛选下推 SQL，只取当前页；筛选口径复用 ganttWhere（与 match() 对齐） */
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate sunday = monday.plusDays(6);
         boolean scopeAll = "all".equals(query.getDoneScope());
         GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
-        int doneAll = taskMapper.countDoneAll(workspaceId);
-        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, monday, sunday);
+        doneQuery.setViewerId(viewerId);
+        int doneAll = taskMapper.countDoneAll(workspaceId, viewerId);
+        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, viewerId, monday, sunday);
         int doneMatched = hasFilters(query)
                 ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
                 : doneTotal;
@@ -217,20 +232,22 @@ public class TaskQueryService {
             resp.getColumns().put(col, data);
         }
 
-        List<TaskFacetRow> facets = taskMapper.selectBoardFacets(workspaceId);
+        List<TaskFacetRow> facets = taskMapper.selectBoardFacets(workspaceId, viewerId);
         resp.setCounts(countDue(facets, today));
-        resp.setMeta(buildMeta(workspaceId, facets));
+        resp.setMeta(buildMeta(workspaceId, facets, viewerId));
         return resp;
     }
 
-    public BoardResponse.ColumnData donePage(String workspaceId, BoardQuery query) {
+    public BoardResponse.ColumnData donePage(String workspaceId, String userId, BoardQuery query) {
         LocalDate today = LocalDate.now();
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate sunday = monday.plusDays(6);
         boolean scopeAll = "all".equals(query.getDoneScope());
         GanttQuery doneQuery = GanttQuery.from(query, today, null, null, true);
-        int doneAll = taskMapper.countDoneAll(workspaceId);
-        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, monday, sunday);
+        doneQuery.setViewerId(viewerId);
+        int doneAll = taskMapper.countDoneAll(workspaceId, viewerId);
+        int doneTotal = scopeAll ? doneAll : taskMapper.countDoneInScope(workspaceId, viewerId, monday, sunday);
         int doneMatched = hasFilters(query)
                 ? taskMapper.countDoneMatched(workspaceId, doneQuery, scopeAll, monday, sunday)
                 : doneTotal;
@@ -249,14 +266,16 @@ public class TaskQueryService {
     }
 
     /** 列表视图：筛选与 LIMIT 下推 SQL（上限 500），sort: due/priority/updated/column */
-    public TaskListResponse list(String workspaceId, BoardQuery query, String sort) {
+    public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort) {
         LocalDate today = LocalDate.now();
         GanttQuery gq = GanttQuery.from(query, today, null, null, true);
+        gq.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         String s = "due".equals(sort) || "priority".equals(sort) || "updated".equals(sort) ? sort : "column";
         int total = taskMapper.countTaskList(workspaceId, gq);
         List<Task> items = total == 0 ? new ArrayList<Task>()
                 : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, LIST_LIMIT);
         mergeTaskExtras(workspaceId, items);
+        mergeVersionInfo(workspaceId, items);
 
         TaskListResponse resp = new TaskListResponse();
         resp.setTotal(total);
@@ -264,11 +283,39 @@ public class TaskQueryService {
         return resp;
     }
 
+    /** 列表「影响版本」列：按本页任务 id 批量取 version_task 绑定（不绑定 = 待规划） */
+    private void mergeVersionInfo(String workspaceId, List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>(tasks.size());
+        for (Task t : tasks) {
+            ids.add(t.getId());
+        }
+        Map<String, Task> byId = new HashMap<String, Task>();
+        for (Task row : versionTaskMapper.selectVersionRowsByTaskIds(workspaceId, ids)) {
+            byId.put(row.getId(), row);
+        }
+        for (Task t : tasks) {
+            Task row = byId.get(t.getId());
+            if (row != null) {
+                t.setVersionId(row.getVersionId());
+                t.setVersionName(row.getVersionName());
+            }
+        }
+    }
+
     /* ---- 甘特图（V1.4）：复用看板的扩展字段与筛选口径，避免两套语义 ---- */
 
-    /** 全量任务 + 子任务/工时/标签/评论等扩展字段（甘特图数据源） */
+    /** 全量任务 + 子任务/工时/标签/评论等扩展字段（甘特图数据源 / 公开分享不做可见范围过滤） */
     public List<Task> allWithExtras(String workspaceId) {
-        List<Task> all = taskMapper.selectAll(workspaceId);
+        return allWithExtras(workspaceId, null);
+    }
+
+    public List<Task> allWithExtras(String workspaceId, String viewerId) {
+        List<Task> all = viewerId == null
+                ? taskMapper.selectAll(workspaceId)
+                : taskMapper.selectAllVisible(workspaceId, viewerId);
         mergeTaskExtras(workspaceId, all);
         return all;
     }
@@ -332,19 +379,25 @@ public class TaskQueryService {
     }
 
     public List<TaskLog> logs(String workspaceId, String taskId) {
+        return logs(workspaceId, null, taskId);
+    }
+
+    public List<TaskLog> logs(String workspaceId, String userId, String taskId) {
         /* 回收站任务的日志保留可读（与评论一致），因此显式 INCLUDE，而不是沿用"排除已删除"的默认 */
-        support.requireIncludingDeleted(workspaceId, taskId);
+        Task t = support.requireIncludingDeleted(workspaceId, taskId);
+        projectAccess.assertViewTask(workspaceId, userId, t);
         return logMapper.selectByTaskId(workspaceId, taskId);
     }
 
     /** 日历视图：与指定月份有交集的全部任务（默认当月）。
      *  区间口径：[start_date, due_date]；没填开始日期（或数据异常）时退化为"只占截止日那一格"，
      *  与升级前的行为一致。IA-4：支持与看板/列表相同的筛选（负责人、优先级、分类、项目、标签、关键词）。 */
-    public CalendarResponse calendar(String workspaceId, Integer year, Integer month) {
-        return calendar(workspaceId, year, month, new BoardQuery());
+    public CalendarResponse calendar(String workspaceId, String userId, Integer year, Integer month) {
+        return calendar(workspaceId, userId, year, month, new BoardQuery());
     }
 
-    public CalendarResponse calendar(String workspaceId, Integer year, Integer month, BoardQuery query) {
+    public CalendarResponse calendar(String workspaceId, String userId, Integer year, Integer month,
+                                     BoardQuery query) {
         LocalDate today = LocalDate.now();
         int y = year == null ? today.getYear() : year;
         int m = month == null ? today.getMonthValue() : month;
@@ -353,9 +406,10 @@ public class TaskQueryService {
         }
         LocalDate first = LocalDate.of(y, m, 1);
         LocalDate last = first.withDayOfMonth(first.lengthOfMonth());
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         /* SQL 先把区间收敛到 due_date（走 idx_ws_due）；「提前完成收敛到完成日」的精确判定仍在这里，口径不变 */
         List<Task> tasks = new ArrayList<Task>();
-        for (Task t : taskMapper.selectCalendar(workspaceId, first, last)) {
+        for (Task t : taskMapper.selectCalendar(workspaceId, viewerId, first, last)) {
             LocalDate end = t.getDueDate();
             if (end == null) {
                 // 没有截止日期的任务进「本月未排期」区，不占日历格
@@ -444,10 +498,10 @@ public class TaskQueryService {
         }
         Map<String, StringBuilder> attachMap = new HashMap<String, StringBuilder>();
         for (Attachment a : attachmentMapper.selectByTaskIds(workspaceId, ids)) {
-            StringBuilder sb = attachMap.get(a.getTaskId());
+            StringBuilder sb = attachMap.get(a.getTargetId());
             if (sb == null) {
                 sb = new StringBuilder();
-                attachMap.put(a.getTaskId(), sb);
+                attachMap.put(a.getTargetId(), sb);
             }
             if (a.getFilename() != null) {
                 sb.append(' ').append(a.getFilename());
@@ -486,6 +540,7 @@ public class TaskQueryService {
                 || !query.getCats().isEmpty()
                 || !query.getReqs().isEmpty()
                 || !query.getTags().isEmpty()
+                || !query.getTypes().isEmpty()
                 || query.getDue() != null
                 || query.isFocus()
                 || query.isBlocked()
@@ -545,6 +600,9 @@ public class TaskQueryService {
             if (!hit) {
                 return false;
             }
+        }
+        if (!query.getTypes().isEmpty() && !query.getTypes().contains(t.getItemType())) {
+            return false;
         }
         if (query.getDue() != null) {
             String kind = TaskCalc.dueKind(t, today);
@@ -608,14 +666,20 @@ public class TaskQueryService {
         return counts;
     }
 
-    private BoardResponse.Meta buildMeta(String workspaceId, List<TaskFacetRow> facets) {
+    private BoardResponse.Meta buildMeta(String workspaceId, List<TaskFacetRow> facets, String viewerId) {
         BoardResponse.Meta meta = new BoardResponse.Meta();
+        Set<String> hiddenReqs = viewerId == null ? Collections.<String>emptySet()
+                : projectAccess.hiddenProjectIds(workspaceId, viewerId);
 
         Map<String, Integer> ownerCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> priCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> catCount = new LinkedHashMap<String, Integer>();
+        Map<String, Integer> typeCount = new LinkedHashMap<String, Integer>();
         for (String p : PRIORITIES) {
             priCount.put(p, 0);
+        }
+        for (String tp : TASK_TYPES) {
+            typeCount.put(tp, 0);
         }
         List<Category> cats = metaCache.categories(workspaceId);
         for (Category c : cats) {
@@ -630,6 +694,9 @@ public class TaskQueryService {
             if (catCount.containsKey(t.getCategory())) {
                 catCount.merge(t.getCategory(), 1, Integer::sum);
             }
+            if (typeCount.containsKey(t.getItemType())) {
+                typeCount.merge(t.getItemType(), 1, Integer::sum);
+            }
             if (t.getReqId() == null) {
                 unassigned++;
             }
@@ -643,7 +710,10 @@ public class TaskQueryService {
         for (Map.Entry<String, Integer> e : catCount.entrySet()) {
             meta.getCats().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }
-        meta.setTags(metaCache.tags(workspaceId));
+        for (Map.Entry<String, Integer> e : typeCount.entrySet()) {
+            meta.getTypes().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
+        }
+        meta.setTags(metaCache.tags(workspaceId, viewerId));
 
         Map<String, Integer> reqCount = new LinkedHashMap<String, Integer>();
         for (TaskFacetRow t : facets) {
@@ -652,6 +722,9 @@ public class TaskQueryService {
             }
         }
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
+            if (hiddenReqs.contains(r.getId())) {
+                continue;
+            }
             BoardResponse.ReqCount rc = new BoardResponse.ReqCount();
             rc.setId(r.getId());
             rc.setName(r.getName());

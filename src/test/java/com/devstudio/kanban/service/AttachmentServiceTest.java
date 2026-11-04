@@ -1,12 +1,17 @@
 package com.devstudio.kanban.service;
 
+import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.entity.Attachment;
+import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.mapper.AttachmentMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -17,8 +22,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,7 +44,8 @@ class AttachmentServiceTest {
     }
 
     private AttachmentService service(AttachmentMapper mapper) throws Exception {
-        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class));
+        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
+                mock(DemandMapper.class), mock(ProjectAccessService.class));
         ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
         return svc;
     }
@@ -44,7 +53,8 @@ class AttachmentServiceTest {
     private Attachment attachment(String id, String storedName) {
         Attachment a = new Attachment();
         a.setId(id);
-        a.setTaskId("K1");
+        a.setTargetId("K1");
+        a.setTargetKind("task");
         a.setWorkspaceId("W1");
         a.setFilename(storedName);
         a.setStoredName(storedName);
@@ -106,5 +116,66 @@ class AttachmentServiceTest {
         for (TransactionSynchronization sync : syncs) {
             sync.afterCommit();
         }
+    }
+
+    @Test
+    void uploadAllowsXlsx() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        TaskLogMapper logMapper = mock(TaskLogMapper.class);
+        Task task = new Task();
+        task.setWorkspaceId("W1");
+        when(taskMapper.selectById("K1")).thenReturn(task);
+        AttachmentService svc = new AttachmentService(mapper, taskMapper, logMapper, mock(DemandMapper.class),
+                mock(ProjectAccessService.class));
+        ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
+
+        MockMultipartFile file = new MockMultipartFile("file", "计划.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[]{1, 2, 3});
+        svc.upload("U1", "W1", "K1", AttachmentService.KIND_TASK, file);
+
+        verify(mapper).insert(argThat(a -> a.getStoredName().endsWith(".xlsx") && "计划.xlsx".equals(a.getFilename())));
+        verify(logMapper).insert(argThat(l -> "上传附件「计划.xlsx」".equals(l.getDetail())));
+    }
+
+    @Test
+    void overwriteContentKeepsIdAndUpdatesSize() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        TaskLogMapper logMapper = mock(TaskLogMapper.class);
+        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), logMapper,
+                mock(DemandMapper.class), mock(ProjectAccessService.class));
+        ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
+
+        Attachment a = attachment("A9", "A9.xlsx");
+        a.setFilename("计划.xlsx");
+        when(mapper.selectById("A9")).thenReturn(a);
+        Files.write(dir.resolve("A9.xlsx"), new byte[]{1, 2});
+
+        byte[] body = new byte[]{9, 9, 9, 9};
+        MockMultipartFile file = new MockMultipartFile("file", "计划.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", body);
+        Attachment saved = svc.overwriteContent("U1", "W1", "A9", file);
+
+        assertTrue(Arrays.equals(body, Files.readAllBytes(dir.resolve("A9.xlsx"))), "磁盘内容应被覆盖");
+        assertEquals(Long.valueOf(body.length), saved.getSize());
+        verify(mapper).updateContent(argThat(x -> x.getId().equals("A9") && Long.valueOf(body.length).equals(x.getSize())));
+        verify(logMapper).insert(argThat(l -> l.getDetail().contains("在线编辑附件「计划.xlsx」")));
+    }
+
+    @Test
+    void overwriteContentRejectsMismatchedExt() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
+                mock(DemandMapper.class), mock(ProjectAccessService.class));
+        ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
+
+        Attachment a = attachment("A9", "A9.xlsx");
+        a.setFilename("计划.xlsx");
+        when(mapper.selectById("A9")).thenReturn(a);
+        Files.write(dir.resolve("A9.xlsx"), new byte[]{1, 2});
+
+        MockMultipartFile file = new MockMultipartFile("file", "改后缀.png", "image/png", new byte[]{9});
+        assertThrows(AppException.class, () -> svc.overwriteContent("U1", "W1", "A9", file));
+        assertTrue(Arrays.equals(new byte[]{1, 2}, Files.readAllBytes(dir.resolve("A9.xlsx"))), "拒绝时原件不动");
     }
 }

@@ -35,7 +35,7 @@ public class CompletionController {
                                                       @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(completionService.listByMonth(ws.getId(), parseMonth(month)));
+        return ApiResult.ok(completionService.listByMonth(ws.getId(), userId, parseMonth(month)));
     }
 
     private YearMonth parseMonth(String month) {

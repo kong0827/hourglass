@@ -5,6 +5,7 @@ import { loadUnread } from "./notifications.js";
 import { refreshActiveView } from "./router.js";
 import { rt } from "./state.js";
 import { showDrawerNotice } from "./task-drawer.js";
+import { viewModule } from "./view-loader.js";
 import { UI } from "./ui.js";
 import { iso, startOfDay } from "../lib/format.js";
 import { drag, loadBoard, loadReqs, pending, refreshBoardPreserving } from "../views/board.js";
@@ -13,7 +14,7 @@ import { loadBranches, renderBranches } from "../views/branches.js";
 var sse = {conn:null, lastMsg:0, retry:0, timer:null, debounce:null, lastRefresh:0,
   pending:false, pendingEntity:"", disconnectedAt:0};
 function parseSseData(raw){
-  var out = {ws:"", taskId:"", actor:"", clientId:"", entity:""};
+  var out = {ws:"", taskId:"", actor:"", clientId:"", entity:"", docId:""};
   if(!raw) return out;
   var s = String(raw);
   if(s.charAt(0) === "{"){
@@ -24,6 +25,7 @@ function parseSseData(raw){
       out.actor = o.a || o.actorName || "";
       out.clientId = o.c || "";
       out.entity = o.e || "";
+      out.docId = o.d || "";
       return out;
     }catch(e){ /* 解析失败则落回文本口径 */ }
   }
@@ -91,6 +93,11 @@ function onSseChanged(event){
   if(taskDrawer.classList.contains("on") && rt.editingId && info.taskId && info.taskId === rt.editingId){
     showDrawerNotice("此任务刚被" + (info.actor ? ("「" + info.actor + "」") : "他人") + "修改，点击刷新查看最新内容");
     return;
+  }
+  /* 需求文档正开着这篇且被他人改动 → 编辑器内轻提示（dirty 时带「查看最新内容」按钮） */
+  if(info.entity === "reqdoc" && info.docId){
+    var rq = viewModule("requirements");
+    if(rq && rq.notifyReqDocChanged) rq.notifyReqDocChanged(info.docId, info.actor);
   }
   if(sse.debounce) clearTimeout(sse.debounce);
   sse.debounce = setTimeout(function(){

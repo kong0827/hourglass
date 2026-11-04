@@ -50,10 +50,7 @@ public class InviteService {
     /* ==================== 空间主管理 ==================== */
 
     public Map<String, Object> create(String userId, String workspaceId) {
-        Workspace ws = workspaceService.requireOwner(userId, workspaceId);
-        if ("personal".equals(ws.getType())) {
-            throw AppException.badRequest("个人空间不可邀请成员，请先新建共享空间");
-        }
+        requireShared(userId, workspaceId);
         Invite inv = new Invite();
         inv.setId(generateCode());
         inv.setWorkspaceId(workspaceId);
@@ -67,12 +64,12 @@ public class InviteService {
     }
 
     public List<Invite> list(String userId, String workspaceId) {
-        workspaceService.requireOwner(userId, workspaceId);
+        requireShared(userId, workspaceId);
         return inviteMapper.selectByWorkspace(workspaceId);
     }
 
     public void revoke(String userId, String workspaceId, String inviteId) {
-        workspaceService.requireOwner(userId, workspaceId);
+        requireShared(userId, workspaceId);
         Invite inv = inviteMapper.selectById(inviteId);
         if (inv == null || !workspaceId.equals(inv.getWorkspaceId())) {
             throw AppException.notFound("邀请不存在或已被撤销");
@@ -113,6 +110,15 @@ public class InviteService {
     }
 
     /* ==================== 内部 ==================== */
+
+    /** 邀请只属于共享空间；个人空间不可邀请也不能查询/撤销邀请 */
+    private Workspace requireShared(String userId, String workspaceId) {
+        Workspace ws = workspaceService.requireManager(userId, workspaceId);
+        if ("personal".equals(ws.getType())) {
+            throw AppException.badRequest("个人空间不可邀请成员，请先新建共享空间");
+        }
+        return ws;
+    }
 
     private Invite requireValid(String code) {
         String c = Texts.trimToNull(code);

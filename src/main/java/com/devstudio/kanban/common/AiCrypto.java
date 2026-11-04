@@ -29,10 +29,18 @@ public class AiCrypto {
     private static final int IV_LEN = 12;
     private static final int TAG_BITS = 128;
 
+    /** 与 application.yml 默认值一致；命中即说明部署时没配 AI_CRYPTO_KEY */
+    static final String DEFAULT_KEY = "devstudio-local-ai-key-change-me";
+
     private final SecretKeySpec key;
     private final SecureRandom random = new SecureRandom();
 
-    public AiCrypto(@Value("${app.ai.crypto-key:devstudio-local-ai-key-change-me}") String raw) {
+    public AiCrypto(@Value("${app.ai.crypto-key:" + DEFAULT_KEY + "}") String raw) {
+        if (DEFAULT_KEY.equals(raw)) {
+            org.slf4j.LoggerFactory.getLogger(AiCrypto.class).warn(
+                    "AI 密钥使用默认值：数据库一旦导出，加密的 AI Key / SMTP 密码等于明文。"
+                            + "生产部署请用环境变量 AI_CRYPTO_KEY 覆盖");
+        }
         this.key = new SecretKeySpec(derive(raw), "AES");
     }
 

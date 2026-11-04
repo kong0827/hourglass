@@ -22,6 +22,8 @@ public class GanttQuery {
     private List<String> pris = new ArrayList<String>();
     private List<String> cats = new ArrayList<String>();
     private List<String> tags = new ArrayList<String>();
+    /** 工作项类型列表（story/task/bug/epic） */
+    private List<String> types = new ArrayList<String>();
     /** 非 __none 的项目ID */
     private List<String> reqIds = new ArrayList<String>();
     /** 是否包含「未归类」项目 */
@@ -35,6 +37,8 @@ public class GanttQuery {
     private LocalDate today;
     private LocalDate from;
     private LocalDate to;
+    /** 项目可见范围过滤：null 表示不过滤（owner/admin/viewer / 公开分享） */
+    private String viewerId;
 
     public static GanttQuery from(BoardQuery b, LocalDate today, LocalDate from, LocalDate to,
                                   boolean includeDone) {
@@ -44,6 +48,7 @@ public class GanttQuery {
         q.pris = new ArrayList<String>(b.getPris());
         q.cats = new ArrayList<String>(b.getCats());
         q.tags = new ArrayList<String>(b.getTags());
+        q.types = new ArrayList<String>(b.getTypes());
         for (String req : b.getReqs()) {
             if (Consts.REQ_NONE.equals(req)) {
                 q.reqNone = true;

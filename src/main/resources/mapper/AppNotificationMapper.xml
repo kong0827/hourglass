@@ -2,6 +2,30 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.devstudio.kanban.mapper.AppNotificationMapper">
 
+  <!--
+    接收人被设为项目「不可见」后，该项目下的历史通知也不应再出现在列表/未读数里。
+    owner/admin/viewer 不受项目级限制（防止成员升级后残留的旧 none 记录误伤）。
+    只隐藏"能确认不可见"的通知：任务已物理清理或未归属项目时保持可见。
+  -->
+  <sql id="receiverProjectVisibility">
+    AND NOT EXISTS (
+      SELECT 1
+      FROM task t
+      JOIN project_member pm
+        ON pm.workspace_id = t.workspace_id
+       AND pm.project_id = t.req_id
+       AND pm.user_id = n.user_id
+       AND pm.access = 'none'
+      WHERE t.id = n.ref_task_id
+        AND NOT EXISTS (
+          SELECT 1 FROM workspace_member wm
+          WHERE wm.workspace_id = t.workspace_id
+            AND wm.user_id = n.user_id
+            AND wm.role IN ('owner', 'admin', 'viewer')
+        )
+    )
+  </sql>
+
   <select id="selectByUser" resultType="AppNotification">
     SELECT n.id, n.user_id, n.workspace_id, n.type, n.title, n.body, n.ref_task_id, n.read_at, n.created_at,
            w.name AS workspace_name
@@ -9,14 +33,16 @@
     LEFT JOIN workspace w ON w.id = n.workspace_id
     WHERE n.user_id = #{userId}
       <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
+      <include refid="receiverProjectVisibility"/>
     ORDER BY n.id DESC
     LIMIT #{limit}
   </select>
 
   <select id="countUnread" resultType="int">
-    SELECT COUNT(*) FROM app_notification
-    WHERE user_id = #{userId} AND read_at IS NULL
-      <if test="workspaceId != null and workspaceId != ''"> AND workspace_id = #{workspaceId} </if>
+    SELECT COUNT(*) FROM app_notification n
+    WHERE n.user_id = #{userId} AND n.read_at IS NULL
+      <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
+      <include refid="receiverProjectVisibility"/>
   </select>
 
   <insert id="insert" useGeneratedKeys="true" keyProperty="id">

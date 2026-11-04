@@ -44,10 +44,13 @@ public class TaskWorkflowService {
     private final TaskCompletionService completionService;
     /** 审计日志与字段差异 */
     private final TaskAuditLogger audit;
+    private final NotificationEventService notificationEvents;
+    private final ProjectAccessService projectAccess;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
-                               TaskCompletionService completionService, TaskAuditLogger audit) {
+                               TaskCompletionService completionService, TaskAuditLogger audit,
+                               NotificationEventService notificationEvents, ProjectAccessService projectAccess) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -55,6 +58,8 @@ public class TaskWorkflowService {
         this.timeLogService = timeLogService;
         this.completionService = completionService;
         this.audit = audit;
+        this.notificationEvents = notificationEvents;
+        this.projectAccess = projectAccess;
     }
 
     /** 取前后两项之间的中值；返回 -1 表示间隔不够，需要整列重排 */
@@ -76,6 +81,8 @@ public class TaskWorkflowService {
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
         Task task = support.require(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
         String from = task.getBoardColumn();
         String to = req.getColumn();
         support.validateColumn(workspaceId, to);
@@ -165,6 +172,11 @@ public class TaskWorkflowService {
         /* 列内排序（from==to）不算流程事件，不写 from/to，免得把"停留"切成碎段 */
         audit.log(userId, workspaceId, id, "move", detail,
                 from.equals(to) ? null : from, from.equals(to) ? null : to);
+        if (!from.equals(to) && task.getOwnerUserId() != null && !task.getOwnerUserId().equals(userId)) {
+            notificationEvents.notify(task.getOwnerUserId(), workspaceId,
+                    UserNotificationPreferenceService.TASK_UPDATED,
+                    "任务更新：" + task.getTitle(), detail, id, task.getReqId());
+        }
 
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("task", taskMapper.selectById(id));

@@ -362,7 +362,8 @@ import { icon } from "./icons.js";
     var h = '<div class="empty-state' + (opts.compact ? " compact" : "") + '">' +
       '<span class="es-ic">' + icon(ic, 48) + '</span>' +
       '<h3>' + esc2(opts.title || "暂无数据") + '</h3>' +
-      (opts.text ? '<p>' + opts.text + '</p>' : "");
+      /* text 一律转义；需要富文本的调用方用 textHtml 显式声明，只允许静态字面量 */
+      (opts.textHtml ? '<p>' + opts.textHtml + '</p>' : (opts.text ? '<p>' + esc2(opts.text) + '</p>' : ""));
     if (opts.actionLabel) {
       h += '<button class="btn ' + (opts.actionKind || "") + '" type="button" data-empty-action="1">' + esc2(opts.actionLabel) + '</button>';
     }

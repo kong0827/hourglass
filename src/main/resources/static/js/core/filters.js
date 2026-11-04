@@ -12,6 +12,7 @@ var FILTER_KEYS = [
   { k: "cats", kind: "list", s: "cats" },
   { k: "reqs", kind: "list", s: "reqs" },
   { k: "tags", kind: "list", s: "tags" },
+  { k: "types", kind: "list", s: "types" },
   { k: "due", kind: "text" },
   { k: "focus", kind: "bool" },
   { k: "blocked", kind: "bool" },

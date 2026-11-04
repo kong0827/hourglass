@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.DemandMapper">
+
+  <sql id="cols">
+    id, workspace_id, req_id, title, description, source, item_kind, priority, status, expect_date,
+    accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
+    created_by, created_at, updated_at
+  </sql>
+
+  <!-- 需求池列表（M1 版本卡需求数 / M2 看板共用），已拒绝的排最后 -->
+  <select id="selectByReq" resultType="Demand">
+    SELECT <include refid="cols"/> FROM demand
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej'), created_at DESC, id
+  </select>
+
+  <select id="selectById" resultType="Demand">
+    SELECT <include refid="cols"/> FROM demand WHERE id = #{id}
+  </select>
+
+  <!-- 需求池列表模式：跨项目全量展示，不按项目切换 -->
+  <select id="selectByWorkspace" resultType="Demand">
+    SELECT <include refid="cols"/> FROM demand
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej'), created_at DESC, id
+  </select>
+
+  <!-- 发布说明：目标版本指向该版本的需求（不含已拒绝） -->
+  <select id="selectByVersion" resultType="Demand">
+    SELECT <include refid="cols"/> FROM demand
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status &lt;&gt; 'rej'
+    ORDER BY FIELD(status, 'plan', 'pass', 'review'), created_at, id
+  </select>
+
+  <insert id="insert">
+    INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, priority, status,
+                        expect_date, accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
+                        created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{description}, #{source}, #{itemKind}, #{priority}, #{status},
+            #{expectDate}, #{acceptText}, #{versionId}, #{reviewNote}, #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE demand SET
+      title = #{title},
+      description = #{description},
+      source = #{source},
+      item_kind = #{itemKind},
+      priority = #{priority},
+      status = #{status},
+      expect_date = #{expectDate},
+      accept_text = #{acceptText},
+      version_id = #{versionId},
+      review_note = #{reviewNote},
+      wsjf_business = #{wsjfBusiness},
+      wsjf_urgency = #{wsjfUrgency},
+      wsjf_risk = #{wsjfRisk},
+      wsjf_effort = #{wsjfEffort},
+      updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM demand WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM demand WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM demand WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteLogsByWorkspace">
+    DELETE FROM demand_log WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteLogsByDemand">
+    DELETE FROM demand_log WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </delete>
+
+  <insert id="insertLog">
+    INSERT INTO demand_log (workspace_id, demand_id, action, note, operator)
+    VALUES (#{workspaceId}, #{demandId}, #{action}, #{note}, #{operator})
+  </insert>
+
+  <select id="selectLogs" resultType="map">
+    SELECT dl.id, dl.demand_id AS demandId, dl.action, dl.note, dl.operator,
+           u.display_name AS operatorName, dl.created_at AS createdAt
+    FROM demand_log dl
+    LEFT JOIN app_user u ON u.id = dl.operator
+    WHERE dl.workspace_id = #{workspaceId} AND dl.demand_id = #{demandId}
+    ORDER BY dl.id DESC
+  </select>
+
+  <delete id="deleteLogsByReq">
+    DELETE dl FROM demand_log dl
+    INNER JOIN demand d ON d.id = dl.demand_id AND d.workspace_id = dl.workspace_id
+    WHERE dl.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+  </delete>
+
+  <update id="clearVersionRefsByWorkspace">
+    UPDATE demand SET version_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND version_id IS NOT NULL
+  </update>
+
+  <update id="clearVersionRefsByVersion">
+    UPDATE demand SET version_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </update>
+</mapper>

@@ -72,6 +72,8 @@ public class NotificationService {
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
     private final AppNotificationService appNotificationService;
+    /** 站内提醒按接收人的项目可见范围过滤，隐藏项目不推送 */
+    private final ProjectAccessService projectAccess;
     private final RestTemplate restTemplate;
     /** 有界发送池：不占用调度线程，同一时间最多 2 个 webhook 在飞 */
     private final ThreadPoolExecutor remindSender;
@@ -93,12 +95,14 @@ public class NotificationService {
     public NotificationService(TaskMapper taskMapper, WorkspaceMapper workspaceMapper,
                                WorkspaceMemberMapper memberMapper, UserMapper userMapper,
                                AppNotificationService appNotificationService,
+                               ProjectAccessService projectAccess,
                                @Qualifier("webhookRestTemplate") RestTemplate restTemplate) {
         this.taskMapper = taskMapper;
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.appNotificationService = appNotificationService;
+        this.projectAccess = projectAccess;
         /* OPS-2：webhook 与 AI 共用出站连接池；该 bean 连接 2s / 读 3s、不跟随重定向 */
         this.restTemplate = restTemplate;
         this.remindSender = new ThreadPoolExecutor(2, 2, 60L, TimeUnit.SECONDS,
@@ -340,9 +344,21 @@ public class NotificationService {
             body.append(" · 卡点：").append(Texts.cut(t.getBlockedReason(), 60));
         }
         for (String uid : targets) {
-            appNotificationService.push(uid, ws.getId(), "task_remind", title, body.toString(), t.getId());
+            if (canReceiveInApp(ws, uid, t)) {
+                appNotificationService.push(uid, ws.getId(), "task_remind", title, body.toString(), t.getId());
+            }
         }
         return true;
+    }
+
+    /** 站内提醒不越过项目可见范围；校验异常按不可见处理，避免整轮扫描中断 */
+    private boolean canReceiveInApp(Workspace ws, String userId, Task t) {
+        try {
+            return projectAccess.canView(ws.getId(), userId, t.getReqId());
+        } catch (Exception e) {
+            log.warn("校验通知接收人项目可见性失败（跳过站内提醒）：user={} workspace={}", userId, ws.getId(), e);
+            return false;
+        }
     }
 
     /**
@@ -370,9 +386,25 @@ public class NotificationService {
     /** 空间成员显示名 → 账号ID（每轮扫描只查一次，避免逐任务 N+1） */
     private Map<String, String> memberNameMap(String workspaceId) {
         Map<String, String> map = new java.util.HashMap<String, String>();
-        for (WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
-            AppUser u = userMapper.selectById(m.getUserId());
+        List<WorkspaceMember> members = memberMapper.selectByWorkspace(workspaceId);
+        List<String> ids = new ArrayList<String>(members.size());
+        for (WorkspaceMember m : members) {
+            if (m.getUserId() != null) {
+                ids.add(m.getUserId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return map;
+        }
+        Map<String, String> nameById = new java.util.HashMap<String, String>();
+        for (AppUser u : userMapper.selectByIds(ids)) {
             String name = u == null ? null : Texts.trimToNull(u.getDisplayName());
+            if (name != null) {
+                nameById.put(u.getId(), name);
+            }
+        }
+        for (WorkspaceMember m : members) {
+            String name = nameById.get(m.getUserId());
             if (name != null && !map.containsKey(name)) {
                 map.put(name, m.getUserId());
             }
@@ -465,10 +497,10 @@ public class NotificationService {
         Map<String, List<Task>> byUser = new LinkedHashMap<String, List<Task>>();
         Map<String, String> memberByName = memberNameMap(ws.getId());
         for (Task t : over) {
-            addDigestTarget(byUser, memberByName, t);
+            addDigestTarget(byUser, memberByName, ws, t);
         }
         for (Task t : todayDue) {
-            addDigestTarget(byUser, memberByName, t);
+            addDigestTarget(byUser, memberByName, ws, t);
         }
         LocalDate today = LocalDate.now();
         int sent = 0;
@@ -500,12 +532,13 @@ public class NotificationService {
         return sent;
     }
 
-    private void addDigestTarget(Map<String, List<Task>> byUser, Map<String, String> memberByName, Task t) {
+    private void addDigestTarget(Map<String, List<Task>> byUser, Map<String, String> memberByName,
+                                 Workspace ws, Task t) {
         String uid = Texts.trimToNull(t.getOwnerUserId());
         if (uid == null) {
             uid = matchMemberByName(memberByName, t.getOwner());
         }
-        if (uid == null) {
+        if (uid == null || !canReceiveInApp(ws, uid, t)) {
             return;
         }
         List<Task> list = byUser.get(uid);

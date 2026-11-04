@@ -2,8 +2,10 @@ package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -14,6 +16,7 @@ import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -45,7 +48,8 @@ public class TaskCascade {
             "attachment",
             "time_log",
             "task_dependency",
-            "task_baseline"));
+            "task_baseline",
+            "version_task"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.singletonList(
@@ -81,7 +85,11 @@ public class TaskCascade {
             "task_comment",
             "app_notification",
             "dev_branch_log",
-            "dev_branch"));
+            "dev_branch",
+            "version_task",
+            "project_version",
+            "demand_log",
+            "demand"));
 
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
@@ -98,6 +106,9 @@ public class TaskCascade {
     private final RequirementDocMapper requirementDocMapper;
     private final TaskCompletionService completionService;
     private final DevBranchMapper devBranchMapper;
+    private final VersionTaskMapper versionTaskMapper;
+    private final ProjectVersionMapper versionMapper;
+    private final DemandMapper demandMapper;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, AppNotificationMapper appNotificationMapper,
@@ -106,7 +117,9 @@ public class TaskCascade {
                        TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                        GanttShareMapper ganttShareMapper, RequirementMapper reqMapper,
                        RequirementDocMapper requirementDocMapper,
-                       TaskCompletionService completionService, DevBranchMapper devBranchMapper) {
+                       TaskCompletionService completionService, DevBranchMapper devBranchMapper,
+                       VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
+                       DemandMapper demandMapper) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -122,6 +135,9 @@ public class TaskCascade {
         this.requirementDocMapper = requirementDocMapper;
         this.completionService = completionService;
         this.devBranchMapper = devBranchMapper;
+        this.versionTaskMapper = versionTaskMapper;
+        this.versionMapper = versionMapper;
+        this.demandMapper = demandMapper;
     }
 
     /**
@@ -164,6 +180,8 @@ public class TaskCascade {
     }
 
     private void deleteTaskChildren(String workspaceId, List<String> taskIds) {
+        /* 被删任务若作为 Epic，其子任务先解除归属，避免任务行消失后留下悬空 epic_id */
+        taskMapper.clearEpicChildrenByTaskIds(workspaceId, taskIds);
         subtaskMapper.deleteByTaskIds(workspaceId, taskIds);
         tagMapper.deleteTaskTagsByTaskIds(workspaceId, taskIds);
         timeLogMapper.deleteByTaskIds(workspaceId, taskIds);
@@ -178,6 +196,8 @@ public class TaskCascade {
         /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
         dependencyMapper.deleteByTaskIds(workspaceId, taskIds);
         baselineMapper.deleteByTaskIds(workspaceId, taskIds);
+        /* 版本绑定同理：任务行消失后 version_task 留存会让 ID 复用时误挂旧版本 */
+        versionTaskMapper.deleteByTaskIds(workspaceId, taskIds);
     }
 
     /**
@@ -191,6 +211,9 @@ public class TaskCascade {
         ganttShareMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
         reqMapper.deleteAllByWorkspace(workspaceId);
+        /* 版本绑定跟着任务走；版本/需求池条目强归属项目，但备份导入会重建同名项目，
+           保留它们可延续绑定关系，只在整空间删除时清（wipeWorkspaceData） */
+        versionTaskMapper.deleteByWorkspace(workspaceId);
         if (clearSnapshots) {
             /* 完成归档是任务的派生物；整体替换时先清，再按导入后的任务重建 */
             completionService.clearWorkspace(workspaceId);
@@ -203,29 +226,43 @@ public class TaskCascade {
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
     }
 
-    /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档 + 分支时间线 */
+    /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档 + 分支时间线 + 版本/需求池 */
     public void wipeWorkspaceData(String workspaceId) {
         logMapper.deleteAllByWorkspace(workspaceId);
         purgeWorkspaceTaskData(workspaceId, true);
+        requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
         devBranchMapper.deleteByWorkspace(workspaceId);
+        versionMapper.deleteByWorkspace(workspaceId);
+        demandMapper.deleteLogsByWorkspace(workspaceId);
+        demandMapper.deleteByWorkspace(workspaceId);
     }
 
     /**
-     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支。
+     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支/版本/需求池。
      * 操作时间线、附件与空间配置保留，避免“导入丢得比恢复得多”。
      */
     public void clearWorkspaceDataForImport(String workspaceId, boolean clearRequirementDocs,
-                                            boolean clearBranches) {
+                                            boolean clearBranches, boolean clearVersions,
+                                            boolean clearDemands) {
         purgeWorkspaceTaskData(workspaceId, true);
         if (clearRequirementDocs) {
+            requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {
             devBranchMapper.deleteLogsByWorkspace(workspaceId);
             devBranchMapper.deleteByWorkspace(workspaceId);
+        }
+        if (clearDemands) {
+            demandMapper.deleteLogsByWorkspace(workspaceId);
+            demandMapper.deleteByWorkspace(workspaceId);
+        }
+        /* 版本必须在需求池之后删：需求池通过 version_id 指向版本 */
+        if (clearVersions) {
+            versionMapper.deleteByWorkspace(workspaceId);
         }
     }
 }

@@ -39,11 +39,12 @@ public class BranchController {
         this.workspaceService = workspaceService;
     }
 
-    /** 分支列表（含关联任务数 / 已完成数） */
+    /** 分支列表（含关联任务数 / 已完成数；只统计查看人可见项目） */
     @GetMapping("/api/branches")
     public ApiResult<List<DevBranch>> list(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(branchService.list(ws.getId()));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(branchService.list(ws.getId(), userId));
     }
 
     @GetMapping("/api/branches/{id}")
@@ -65,8 +66,9 @@ public class BranchController {
     @GetMapping("/api/branches/{id}/tasks")
     public ApiResult<List<com.devstudio.kanban.entity.Task>> tasks(@PathVariable String id,
                                                                   @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(branchService.tasks(ws.getId(), id));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(branchService.tasks(ws.getId(), userId, id));
     }
 
     @PostMapping("/api/branches")
@@ -74,6 +76,7 @@ public class BranchController {
                                        @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(branchService.create(userId, ws.getId(), req));
     }
 
@@ -83,6 +86,7 @@ public class BranchController {
                                        @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(branchService.update(userId, ws.getId(), id, req));
     }
 
@@ -93,6 +97,7 @@ public class BranchController {
                                              @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(branchService.changeStatus(userId, ws.getId(), id, req));
     }
 

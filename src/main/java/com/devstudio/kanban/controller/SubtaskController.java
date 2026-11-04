@@ -33,8 +33,9 @@ public class SubtaskController {
     @GetMapping("/api/tasks/{taskId}/subtasks")
     public ApiResult<List<Subtask>> list(@PathVariable String taskId,
                                          @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(subtaskService.list(ws.getId(), taskId));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(subtaskService.list(ws.getId(), userId, taskId));
     }
 
     @PostMapping("/api/tasks/{taskId}/subtasks")

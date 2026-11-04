@@ -57,12 +57,13 @@ class MetricsServiceTest {
 
         TaskBucketRow buckets = new TaskBucketRow();
         buckets.setBacklog(3);
-        when(taskMapper.countBuckets(eq("W1"), any(LocalDate.class))).thenReturn(buckets);
-        assertEquals(3, m.buckets("W1", LocalDate.now()).getBacklog());
+        when(taskMapper.countBuckets(eq("W1"), eq("U1"), any(LocalDate.class))).thenReturn(buckets);
+        assertEquals(3, m.buckets("W1", "U1", LocalDate.now()).getBacklog());
 
         WorkSumRow work = new WorkSumRow();
         work.setTotalMine(120);
-        when(timeLogMapper.sumWork(eq("W1"), eq("U1"), any(LocalDateTime.class), eq(null))).thenReturn(work);
-        assertEquals(120, m.workMinutes("W1", "U1", LocalDateTime.now()).getTotalMine());
+        when(timeLogMapper.sumWork(eq("W1"), eq("U1"), any(LocalDateTime.class), eq(null), eq("U9")))
+                .thenReturn(work);
+        assertEquals(120, m.workMinutes("W1", "U1", LocalDateTime.now(), "U9").getTotalMine());
     }
 }

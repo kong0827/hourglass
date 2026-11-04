@@ -74,10 +74,11 @@ public interface TimeLogMapper {
                                   @Param("from") LocalDateTime from,
                                   @Param("to") LocalDateTime to);
 
-    /** 本空间 [from, to) 区间按成员分组的工时（分钟） */
+    /** 本空间 [from, to) 区间按成员分组的工时（分钟）；viewerId 非空时排除不可见项目 */
     List<TimeAgg> sumBetweenByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId,
                                                    @Param("from") LocalDateTime from,
-                                                   @Param("to") LocalDateTime to);
+                                                   @Param("to") LocalDateTime to,
+                                                   @Param("viewerId") String viewerId);
 
     /** 本空间 [from, to) 区间的计时原始记录（甘特负载用，按 started_at 走索引） */
     List<com.devstudio.kanban.entity.TimeLog> selectByWorkspaceBetween(
@@ -97,11 +98,24 @@ public interface TimeLogMapper {
     com.devstudio.kanban.dto.WorkSumRow sumWork(@Param("workspaceId") String workspaceId,
                                                 @Param("userId") String userId,
                                                 @Param("from") LocalDateTime from,
-                                                @Param("to") LocalDateTime to);
+                                                @Param("to") LocalDateTime to,
+                                                @Param("viewerId") String viewerId);
 
     /** 甘特负载：限定任务集合，按时计人 + 周聚合实际工时（不再拉原始记录） */
     List<com.devstudio.kanban.dto.UserWeekRow> sumUserWeeklyMinutes(
             @Param("workspaceId") String workspaceId,
             @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
             @Param("taskIds") List<String> taskIds);
+
+    /** M1 阶段统计：项目内工时按「计时人 × 自然日」聚合（归组由服务层按首版上线日完成） */
+    List<com.devstudio.kanban.dto.UserDayRow> sumUserDayMinutesByReq(
+            @Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /**
+     * 成员阶段工时下钻：按「任务 × 阶段」聚合该成员自己的计时，
+     * 阶段按计时自然日 vs 首版上线日判定（与阶段卡 memberHours 同口径）。
+     */
+    List<com.devstudio.kanban.dto.PhaseMemberTask> sumMemberTaskPhaseByReq(
+            @Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+            @Param("userId") String userId);
 }

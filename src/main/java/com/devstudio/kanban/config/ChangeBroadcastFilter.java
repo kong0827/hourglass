@@ -31,6 +31,8 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(ChangeBroadcastFilter.class);
     /** 从 /api/tasks/{id}/... 取出任务ID（list/done 等字面量路径不会被非 GET 请求命中） */
     private static final Pattern TASK_PATH = Pattern.compile("^/api/tasks/([A-Za-z0-9_-]{1,32})(/.*)?$");
+    /** 从 /api/req-docs/{id}/... 取出文档ID，前端据此判断"是不是我打开着的这篇" */
+    private static final Pattern REQ_DOC_PATH = Pattern.compile("^/api/req-docs/([A-Za-z0-9_-]{1,32})(/.*)?$");
 
     private final SseService sseService;
     private final com.devstudio.kanban.service.WorkspaceVersionService versionService;
@@ -81,6 +83,8 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
             String workspace = request.getParameter("workspace");
             Matcher m = TASK_PATH.matcher(uri);
             String taskId = m.matches() ? m.group(1) : null;
+            Matcher rm = REQ_DOC_PATH.matcher(uri);
+            String docId = rm.matches() ? rm.group(1) : null;
             String actor = currentDisplayName();
             String clientId = request.getHeader("X-Client-Id");
             if (clientId != null && clientId.length() > 64) {
@@ -88,7 +92,7 @@ public class ChangeBroadcastFilter extends OncePerRequestFilter {
             }
             /* 读缓存版本号：写成功后递增，下一次 GET 的 ETag 必然变化 */
             versionService.bump(workspace);
-            sseService.broadcast("changed", workspace, taskId, actor, clientId, entityOf(uri));
+            sseService.broadcast("changed", workspace, taskId, actor, clientId, entityOf(uri), docId);
         } catch (Exception e) {
             log.warn("SSE 广播异常（业务请求已成功，仅影响刷新通知）", e);
         }

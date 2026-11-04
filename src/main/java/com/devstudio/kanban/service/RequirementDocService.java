@@ -6,10 +6,16 @@ import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.ReqDocSaveRequest;
 import com.devstudio.kanban.dto.ReqDocView;
 import com.devstudio.kanban.entity.AppUser;
+import com.devstudio.kanban.entity.Demand;
+import com.devstudio.kanban.entity.DocumentType;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
+import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.WorkActivity;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
+import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -18,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 需求（项目下的需求文档）。
@@ -69,62 +77,147 @@ public class RequirementDocService {
     private final RequirementDocMapper docMapper;
     private final RequirementMapper reqMapper;
     private final UserMapper userMapper;
+    private final TaskMapper taskMapper;
+    private final WorkActivityService workActivityService;
+    private final DemandMapper demandMapper;
+    private final ProjectAccessService projectAccess;
 
-    public RequirementDocService(RequirementDocMapper docMapper, RequirementMapper reqMapper, UserMapper userMapper) {
+    public RequirementDocService(RequirementDocMapper docMapper, RequirementMapper reqMapper, UserMapper userMapper,
+                                 TaskMapper taskMapper, WorkActivityService workActivityService,
+                                 DemandMapper demandMapper, ProjectAccessService projectAccess) {
         this.docMapper = docMapper;
         this.reqMapper = reqMapper;
         this.userMapper = userMapper;
+        this.taskMapper = taskMapper;
+        this.workActivityService = workActivityService;
+        this.demandMapper = demandMapper;
+        this.projectAccess = projectAccess;
     }
 
     public List<ReqDocView> list(String workspaceId) {
+        return list(workspaceId, null);
+    }
+
+    public List<ReqDocView> list(String workspaceId, String userId) {
         List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId);
+        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
+        List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>();
         for (ReqDocView v : rows) {
+            if (hiddenReqs.contains(v.getReqId())) {
+                continue;
+            }
             v.setExcerpt(excerptOf(v.getContentBrief()));
             v.setContentBrief(null);
+            visible.add(v);
         }
-        return rows;
+        return visible;
     }
 
     public RequirementDoc get(String workspaceId, String id) {
         RequirementDoc d = docMapper.selectById(id);
         if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
-            throw AppException.notFound("需求不存在：" + id);
+            throw AppException.notFound("文档不存在：" + id);
         }
         return d;
+    }
+
+    /** 读取前校验项目可见范围（不可见按不存在处理） */
+    public RequirementDoc getVisible(String workspaceId, String userId, String id) {
+        RequirementDoc d = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        return d;
+    }
+
+    public List<Task> tasks(String workspaceId, String id) {
+        get(workspaceId, id);
+        return taskMapper.selectByReqDoc(workspaceId, id);
     }
 
     @Transactional
     public RequirementDoc create(String userId, String workspaceId, ReqDocSaveRequest req) {
         String reqId = ensureProject(workspaceId, req.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, reqId);
         RequirementDoc d = new RequirementDoc();
         d.setId(Ids.gen("D"));
         d.setWorkspaceId(workspaceId);
         apply(d, reqId, req, userId);
         docMapper.insert(d);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, d.getId(), userId,
+                "create", "创建了文档「" + d.getTitle() + "」");
         return docMapper.selectById(d.getId());
     }
 
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
         RequirementDoc d = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        /* 乐观锁：打开文档时的 updatedAt 原样带回，与库内当前版本不一致说明他人先保存过 */
+        java.time.LocalDateTime oldUpdatedAt = parseUpdatedAt(req.getUpdatedAt());
         String oldReqId = d.getReqId();
+        String oldParentId = d.getParentId();
+        String oldTitle = d.getTitle();
+        DocumentType oldDocType = DocumentType.parseOrOther(d.getDocType());
+        String oldContent = d.getContent();
+        String oldStatus = d.getStatus();
+        String oldOwner = d.getOwner();
+        String oldOwnerUserId = d.getOwnerUserId();
         String reqId = ensureProject(workspaceId, req.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, reqId);
         apply(d, reqId, req, userId);
-        docMapper.update(d);
+        if (docMapper.update(d, oldUpdatedAt) == 0) {
+            throw AppException.conflict("文档已被他人修改，请刷新查看最新内容后再保存");
+        }
+        recordChange(userId, workspaceId, id, "标题", oldTitle, d.getTitle());
+        recordChange(userId, workspaceId, id, "分类", oldDocType.getLabel(),
+                DocumentType.parseOrOther(d.getDocType()).getLabel());
+        if (!java.util.Objects.equals(oldContent, d.getContent())) {
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
+                    "update", "更新了正文");
+        }
+        recordChange(userId, workspaceId, id, "状态", oldStatus, d.getStatus());
+        if (!java.util.Objects.equals(oldOwner, d.getOwner())
+                || !java.util.Objects.equals(oldOwnerUserId, d.getOwnerUserId())) {
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                    "负责人：" + display(oldOwner) + " → " + display(d.getOwner()));
+        }
+        if (!java.util.Objects.equals(oldReqId, reqId)) {
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                    "所属项目：" + projectDisplay(oldReqId) + " → " + projectDisplay(reqId));
+        }
         /* 需求换项目后，仍挂在旧项目下的任务会指向别的项目的文档：解掉这些关联 */
         if (oldReqId != null && !oldReqId.equals(reqId)) {
             docMapper.clearTaskRefExceptReq(workspaceId, d.getId(), reqId);
+            /* 旧项目的需求关联同样失效（关联要求同项目），避免需求详情里看到别的项目的文档 */
+            docMapper.deleteDemandLinksByDoc(workspaceId, d.getId());
+            /* 子文档留在旧项目，提升到本文档原来的父级，避免跨项目形成断掉的子树 */
+            docMapper.reparentChildren(workspaceId, d.getId(), oldParentId);
         }
         return docMapper.selectById(id);
+    }
+
+    /** 需求文档活动查询前复用详情接口的空间归属校验。 */
+    public List<WorkActivity> activities(String workspaceId, String id) {
+        get(workspaceId, id);
+        return workActivityService.listByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
     }
 
     /**
      * 删除需求：任务上的关联解绑（任务本身不动），然后删需求。
      * 任务保留原项目，所以不会连带删任务。
      */
-    @Transactional
     public void delete(String workspaceId, String id) {
+        delete(null, workspaceId, id);
+    }
+
+    @Transactional
+    public void delete(String userId, String workspaceId, String id) {
         RequirementDoc d = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        /* 子文档提升到被删文档的父级，避免整棵子树变成孤儿 */
+        docMapper.reparentChildren(workspaceId, id, d.getParentId());
+        docMapper.deleteDemandLinksByDoc(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
         docMapper.delete(d.getId());
     }
@@ -136,8 +229,71 @@ public class RequirementDocService {
            只删 requirement_doc 会留下悬空引用，任务详情里看不到但数据已经不一致。 */
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
+            docMapper.deleteDemandLinksByDoc(workspaceId, docId);
         }
         return docMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    /* ---------------- 需求池 ↔ 文档 ---------------- */
+
+    public List<ReqDocView> docsOfDemand(String workspaceId, String demandId) {
+        return docsOfDemand(workspaceId, demandId, null);
+    }
+
+    public List<ReqDocView> docsOfDemand(String workspaceId, String demandId, String userId) {
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
+            throw AppException.notFound("需求不存在：" + demandId);
+        }
+        projectAccess.assertView(workspaceId, userId, demand.getReqId());
+        List<ReqDocView> rows = docMapper.selectByDemand(workspaceId, demandId);
+        List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>(rows.size());
+        for (ReqDocView v : rows) {
+            /* 历史关联可能跨项目（文档曾被移动）：按查看人可见范围过滤，避免泄露别的项目的内容 */
+            if (userId != null && !projectAccess.canView(workspaceId, userId, v.getReqId())) {
+                continue;
+            }
+            v.setExcerpt(excerptOf(v.getContentBrief()));
+            v.setContentBrief(null);
+            visible.add(v);
+        }
+        return visible;
+    }
+
+    public List<Map<String, Object>> demandsOfDoc(String workspaceId, String id) {
+        get(workspaceId, id);
+        return docMapper.selectDemandsByDoc(workspaceId, id);
+    }
+
+    /** 只允许关联同一项目下的文档，避免需求详情里出现别的项目的规格 */
+    @Transactional
+    public void linkDemand(String workspaceId, String demandId, String docId, String userId) {
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
+            throw AppException.notFound("需求不存在：" + demandId);
+        }
+        projectAccess.assertWrite(workspaceId, userId, demand.getReqId());
+        RequirementDoc doc = get(workspaceId, docId);
+        if (!Objects.equals(demand.getReqId(), doc.getReqId())) {
+            throw AppException.badRequest("只能关联同一项目下的文档");
+        }
+        docMapper.linkDemand(workspaceId, demandId, docId, userId);
+    }
+
+    @Transactional
+    public void unlinkDemand(String workspaceId, String demandId, String docId, String userId) {
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
+            throw AppException.notFound("需求不存在：" + demandId);
+        }
+        projectAccess.assertWrite(workspaceId, userId, demand.getReqId());
+        docMapper.unlinkDemand(workspaceId, demandId, docId);
+    }
+
+    /** 需求池条目被删除时清理关联（由 DemandService 调用） */
+    @Transactional
+    public void unlinkAllForDemand(String workspaceId, String demandId) {
+        docMapper.deleteDemandLinksByDemand(workspaceId, demandId);
     }
 
     /** 某项目下的需求文档数（项目列表展示 / 删除前提示用） */
@@ -239,11 +395,28 @@ public class RequirementDocService {
     }
 
     private void apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {
+        String code = Texts.trimToNull(req.getDocType());
+        /* 省略分类时编辑沿用原值；新建及旧文档缺省归入其他。显式非法分类必须拒绝。 */
+        DocumentType docType = code == null ? DocumentType.parseOrOther(d.getDocType()) : DocumentType.parse(code);
+        if (docType == null) {
+            throw AppException.badRequest("文档分类不合法");
+        }
+        d.setDocType(docType.getCode());
         d.setReqId(reqId);
+        d.setParentId(validateParent(d, reqId, req.getParentId()));
         d.setTitle(Texts.cut(Texts.trimToNull(req.getTitle()), 100));
-        d.setContent(sanitize(req.getContent()));
+        String format = Texts.trimToNull(req.getFormat());
+        if (format == null) {
+            /* 新建默认 Markdown；编辑未显式传格式时沿用原格式，避免把旧 HTML 文档误判 */
+            format = d.getFormat() == null ? "markdown" : d.getFormat();
+        }
+        d.setFormat(format);
+        d.setContent(contentOf(format, req.getContent()));
+        if (d.getSortOrder() == null) {
+            d.setSortOrder(0);
+        }
         /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
-        d.setContentBrief(excerptOf(d.getContent()));
+        d.setContentBrief("markdown".equals(format) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
         d.setStatus(status == null ? "draft" : status);
         String owner = Texts.trimToNull(req.getOwner());
@@ -258,6 +431,61 @@ public class RequirementDocService {
         }
     }
 
+    /** 父文档必须存在、同项目，且不能形成环 */
+    private String validateParent(RequirementDoc d, String reqId, String rawParentId) {
+        String parentId = Texts.trimToNull(rawParentId);
+        if (parentId == null) {
+            return null;
+        }
+        if (parentId.equals(d.getId())) {
+            throw AppException.badRequest("上级文档不能是当前文档");
+        }
+        RequirementDoc parent = docMapper.selectById(parentId);
+        if (parent == null || !d.getWorkspaceId().equals(parent.getWorkspaceId())) {
+            throw AppException.badRequest("上级文档不存在：" + parentId);
+        }
+        if (!reqId.equals(parent.getReqId())) {
+            throw AppException.badRequest("上级文档必须属于同一项目");
+        }
+        String cursor = parent.getParentId();
+        int guard = 0;
+        while (cursor != null && guard++ < 100) {
+            if (cursor.equals(d.getId())) {
+                throw AppException.badRequest("上级文档不能是当前文档的子文档");
+            }
+            RequirementDoc p = docMapper.selectById(cursor);
+            cursor = p == null ? null : p.getParentId();
+        }
+        return parentId;
+    }
+
+    /**
+     * 解析前端带回的文档版本时间。为空表示旧客户端跳过乐观锁；
+     * 格式非法直接拒绝，避免静默放过拼错的版本号。
+     */
+    private static java.time.LocalDateTime parseUpdatedAt(String raw) {
+        String s = Texts.trimToNull(raw);
+        if (s == null) {
+            return null;
+        }
+        try {
+            return java.time.LocalDateTime.parse(s, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw AppException.badRequest("文档版本不合法");
+        }
+    }
+
+    /** 按格式落库正文：Markdown 原样保存，HTML 走白名单清洗 */
+    public static String contentOf(String format, String content) {
+        if ("markdown".equals(format)) {
+            if (content == null || content.trim().isEmpty()) {
+                return null;
+            }
+            return content.length() > CONTENT_MAX ? content.substring(0, CONTENT_MAX) : content;
+        }
+        return sanitize(content);
+    }
+
     private String ensureProject(String workspaceId, String reqId) {
         String rid = Texts.trimToNull(reqId);
         if (rid == null) {
@@ -268,6 +496,46 @@ public class RequirementDocService {
             throw AppException.badRequest("所属项目不存在：" + rid);
         }
         return rid;
+    }
+
+    private void recordChange(String userId, String workspaceId, String id,
+                              String field, Object oldValue, Object newValue) {
+        if (!java.util.Objects.equals(oldValue, newValue)) {
+            workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                    field + "：" + display(oldValue) + " → " + display(newValue));
+        }
+    }
+
+    private String projectDisplay(String reqId) {
+        Requirement project = reqId == null ? null : reqMapper.selectById(reqId);
+        return project == null || Texts.trimToNull(project.getName()) == null ? display(reqId) : project.getName();
+    }
+
+    private static String display(Object value) {
+        return value == null ? "（空）" : String.valueOf(value);
+    }
+
+    /** 从 Markdown 抽纯文本摘要（列表用） */
+    public static String excerptOfMarkdown(String markdown) {
+        if (markdown == null || markdown.trim().isEmpty()) {
+            return null;
+        }
+        String text = markdown
+                .replaceAll("(?s)```.*?```", " ")
+                .replaceAll("(?m)^\\s*#{1,6}\\s*", "")
+                .replaceAll("(?m)^\\s*>\\s?", "")
+                .replaceAll("(?m)^\\s*[-*+]\\s+", "")
+                .replaceAll("(?m)^\\s*\\d+\\.\\s+", "")
+                .replaceAll("!\\[([^\\]]*)\\]\\([^)]*\\)", "$1")
+                .replaceAll("\\[([^\\]]*)\\]\\([^)]*\\)", "$1")
+                .replaceAll("[`*_~]", "")
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        return text.length() <= EXCERPT_MAX ? text : text.substring(0, EXCERPT_MAX) + "…";
     }
 
     /** 从 HTML 片段抽纯文本摘要（列表与备份导入共用） */

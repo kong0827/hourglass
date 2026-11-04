@@ -24,7 +24,7 @@ class EstimateServiceTest {
     }
 
     private static EstimateStats compute(int estimate, int actual) {
-        EstimateService svc = new EstimateService(null);
+        EstimateService svc = new EstimateService(null, null);
         List<Task> tasks = new ArrayList<Task>();
         tasks.add(done("K1", estimate, "后端"));
         Map<String, Integer> actualMap = new HashMap<String, Integer>();

@@ -13,7 +13,16 @@ public interface SavedViewMapper {
 
     SavedView selectById(String id);
 
+    SavedView selectByName(@Param("userId") String userId,
+                           @Param("workspaceId") String workspaceId,
+                           @Param("name") String name);
+
     int insert(SavedView view);
+
+    int updateParams(@Param("id") String id,
+                     @Param("userId") String userId,
+                     @Param("workspaceId") String workspaceId,
+                     @Param("params") String params);
 
     int deleteById(String id);
 

@@ -49,14 +49,18 @@ public class ColumnController {
     @PostMapping("/api/columns")
     public ApiResult<BoardColumn> create(@Valid @RequestBody ColumnRequest req,
                                          @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(boardColumnService.create(ws.getId(), req));
     }
 
     @PutMapping("/api/columns/{id}")
     public ApiResult<BoardColumn> update(@PathVariable String id, @Valid @RequestBody ColumnRequest req,
                                          @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(boardColumnService.update(ws.getId(), id, req));
     }
 
@@ -73,7 +77,9 @@ public class ColumnController {
     @PutMapping("/api/columns/order")
     public ApiResult<Void> order(@Valid @RequestBody ColumnOrderRequest req,
                                  @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         boardColumnService.order(ws.getId(), req.getIds());
         return ApiResult.ok();
     }

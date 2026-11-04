@@ -13,7 +13,7 @@ import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleT
 import { deleteTask, openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITY_COLOR, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, recurLabel, syncColumns } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, recurLabel, syncColumns, typeBadgeHTML } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -124,18 +124,19 @@ function cardHTML(t, idx){
   var blocked = !!t.blocked;
   /* 只有"我自己"正在计时的任务才高亮；别人的计时在卡上不体现（工时是个人口径） */
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
+  /* 色条只表达状态：完成绿、阻塞琥珀、逾期红、其余中性；优先级已在卡片头部用 P 标签表达 */
   var stripe = isDone ? "var(--success)"
-    : (blocked ? "var(--warning)" : (PRIORITY_COLOR[t.priority] || "var(--border-strong)"));
+    : (blocked ? "var(--warning)" : (s.kind === "over" ? "var(--danger)" : "var(--border-strong)"));
   var tip = t.dueDate ? ("截止 " + fmtFull(parseDate(t.dueDate))) : "未设置截止日期";
   if(isDone && t.completedAt) tip += " · 完成于 " + fmtFull(parseDate(t.completedAt));
 
   var tagsHTML = catTag(t.category);
-  /* 关联需求：点一下跳到需求正文（不打开任务抽屉，所以单独用 data-open-reqdoc） */
+  /* 关联文档：点一下跳到正文（不打开任务抽屉，所以单独用 data-open-reqdoc） */
   if(t.reqDocId){
     var docTitle = reqDocNameById(t.reqDocId);
     if(docTitle){
       tagsHTML += '<button type="button" class="tag tag-doc" data-open-reqdoc="' + esc(t.reqDocId) + '"' +
-        ' title="打开需求：' + esc(docTitle) + '">' + esc(docTitle) + '</button>';
+        ' title="打开文档：' + esc(docTitle) + '">' + esc(docTitle) + '</button>';
     }
   }
   if(t.branchId){
@@ -222,7 +223,7 @@ function cardHTML(t, idx){
       '<span class="pri-mark">' +
         '<span class="card-tickwrap">' +
           (isDone
-            ? '<span class="pdot-ico" style="color:var(--success)">' + icon("check", 13) + '</span>'
+            ? '<span class="pdot-ico" style="color:var(--success-fg)">' + icon("check", 13) + '</span>'
             : '<span class="pdot ' + esc(t.priority) + '"><i></i></span>') +
           '<button class="card-tick" type="button" data-done-toggle="' + esc(t.id) + '"' +
             ' title="' + (isDone ? "取消完成（快捷键 X）" : "标记完成（快捷键 X）") + '"' +
@@ -231,7 +232,7 @@ function cardHTML(t, idx){
         '</span>' +
         (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '">' + esc(t.priority) + '</span>') +
       '</span>' +
-      '<h3 class="card-title">' + esc(t.title) + '</h3>' +
+      '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</h3>' +
     '</div>' +
     (t.description ? '<p class="card-desc">' + mdLite(t.description) + '</p>' : '') +
     ((tagsHTML || blockedTag) ? '<div class="card-tags">' + blockedTag + tagsHTML + '</div>' : '') +
@@ -271,7 +272,7 @@ function render(opts){
       UI.emptyState({
         icon:"board",
         title:"看板还是空的",
-        text:"新建一个任务，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。",
+        textHtml:"新建一个任务，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。",
         actionLabel:"新建第一项任务"
       }) + '</div>';
     bindRetry(board, function(){ openTaskDrawer("backlog"); });

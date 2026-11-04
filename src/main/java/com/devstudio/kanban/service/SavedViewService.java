@@ -33,12 +33,20 @@ public class SavedViewService {
 
     @Transactional
     public SavedView create(String userId, String workspaceId, SavedViewRequest req) {
+        String name = req.getName().trim();
+        String params = normalizeParams(req.getParams());
+        SavedView existing = savedViewMapper.selectByName(userId, workspaceId, name);
+        if (existing != null) {
+            /* 同名保存只更新当前用户、当前空间下的参数，ID 与归属字段均不可变。 */
+            savedViewMapper.updateParams(existing.getId(), userId, workspaceId, params);
+            return savedViewMapper.selectById(existing.getId());
+        }
         SavedView v = new SavedView();
         v.setId(Ids.gen("V"));
         v.setUserId(userId);
         v.setWorkspaceId(workspaceId);
-        v.setName(req.getName().trim());
-        v.setParams(normalizeParams(req.getParams()));
+        v.setName(name);
+        v.setParams(params);
         savedViewMapper.insert(v);
         return savedViewMapper.selectById(v.getId());
     }
@@ -70,11 +78,15 @@ public class SavedViewService {
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
         copyString(root, out, "doneScope", 16);
+        copyEnum(root, out, "preset", "all", "mine", "doing", "over");
+        copyEnum(root, out, "group", "none", "status", "owner", "priority", "project");
+        copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated");
         copyStringArray(root, out, "owners");
         copyStringArray(root, out, "pris");
         copyStringArray(root, out, "cats");
         copyStringArray(root, out, "reqs");
         copyStringArray(root, out, "tags");
+        copyStringArray(root, out, "types");
         JsonNode focus = root.get("focus");
         if (focus != null && !focus.isNull()) {
             if (!focus.isBoolean()) {
@@ -106,6 +118,24 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数不合法：" + key + " 应为字符串");
         }
         out.put(key, Texts.cut(node.asText(), maxLen));
+    }
+
+    private void copyEnum(JsonNode root, ObjectNode out, String key, String... allowed) {
+        JsonNode node = root.get(key);
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (!node.isTextual()) {
+            throw AppException.badRequest("视图参数不合法：" + key + " 应为字符串");
+        }
+        String value = node.asText();
+        for (String item : allowed) {
+            if (item.equals(value)) {
+                out.put(key, value);
+                return;
+            }
+        }
+        throw AppException.badRequest("视图参数不合法：" + key + " 不在允许范围内");
     }
 
     private void copyStringArray(JsonNode root, ObjectNode out, String key) {

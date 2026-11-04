@@ -9,7 +9,9 @@ import java.util.List;
 @Mapper
 public interface AttachmentMapper {
 
-    List<Attachment> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    /** 按目标取附件（target_kind：task / demand） */
+    List<Attachment> selectByTarget(@Param("workspaceId") String workspaceId,
+                                    @Param("targetId") String targetId, @Param("targetKind") String targetKind);
 
     List<Attachment> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
 
@@ -20,6 +22,8 @@ public interface AttachmentMapper {
     Attachment selectById(String id);
 
     int insert(Attachment attachment);
+
+    int updateContent(Attachment attachment);
 
     int deleteById(String id);
 

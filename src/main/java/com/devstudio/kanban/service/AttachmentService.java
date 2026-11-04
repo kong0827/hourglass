@@ -4,9 +4,11 @@ import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.entity.Attachment;
+import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.mapper.AttachmentMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import org.slf4j.Logger;
@@ -30,24 +32,34 @@ public class AttachmentService {
 
     private static final Logger log = LoggerFactory.getLogger(AttachmentService.class);
     private static final Set<String> ALLOWED_EXT = new HashSet<String>(
-            Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip"));
+            Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx"));
+
+    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 */
+    public static final String KIND_TASK = "task";
+    public static final String KIND_DEMAND = "demand";
 
     private final AttachmentMapper attachmentMapper;
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
+    private final DemandMapper demandMapper;
+    private final ProjectAccessService projectAccess;
 
     @Value("${app.attach.dir:./data/attachments}")
     private String attachDir;
 
-    public AttachmentService(AttachmentMapper attachmentMapper, TaskMapper taskMapper, TaskLogMapper logMapper) {
+    public AttachmentService(AttachmentMapper attachmentMapper, TaskMapper taskMapper,
+                             TaskLogMapper logMapper, DemandMapper demandMapper,
+                             ProjectAccessService projectAccess) {
         this.attachmentMapper = attachmentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
+        this.demandMapper = demandMapper;
+        this.projectAccess = projectAccess;
     }
 
-    public List<Attachment> list(String workspaceId, String taskId) {
-        ensureTask(workspaceId, taskId);
-        return attachmentMapper.selectByTaskId(workspaceId, taskId);
+    public List<Attachment> list(String workspaceId, String userId, String targetId, String kind) {
+        projectAccess.assertView(workspaceId, userId, ensureTarget(workspaceId, targetId, kind));
+        return attachmentMapper.selectByTarget(workspaceId, targetId, kind);
     }
 
     public Attachment get(String workspaceId, String id) {
@@ -58,13 +70,20 @@ public class AttachmentService {
         return a;
     }
 
+    /** 下载/缩略图入口：按附件所属任务或需求校验项目可见性 */
+    public Attachment getVisible(String workspaceId, String userId, String id) {
+        Attachment a = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
+        return a;
+    }
+
     public File fileOf(Attachment attachment) {
         return new File(dir(), attachment.getStoredName());
     }
 
     @Transactional
-    public Attachment upload(String userId, String workspaceId, String taskId, MultipartFile file) {
-        ensureTask(workspaceId, taskId);
+    public Attachment upload(String userId, String workspaceId, String targetId, String kind, MultipartFile file) {
+        projectAccess.assertWrite(workspaceId, userId, ensureTarget(workspaceId, targetId, kind));
         if (file == null || file.isEmpty()) {
             throw AppException.badRequest("请选择文件");
         }
@@ -84,7 +103,8 @@ public class AttachmentService {
         String id = Ids.gen("A");
         String storedName = id + "." + ext;
         try {
-            file.transferTo(new File(dir(), storedName));
+            /* transferTo 传相对路径会被解析到 tomcat 上传临时目录，必须给绝对路径 */
+            file.transferTo(new File(dir(), storedName).getAbsoluteFile());
         } catch (IOException e) {
             log.warn("附件保存失败", e);
             throw new AppException(500, "文件保存失败");
@@ -92,23 +112,57 @@ public class AttachmentService {
 
         Attachment a = new Attachment();
         a.setId(id);
-        a.setTaskId(taskId);
+        a.setTargetId(targetId);
+        a.setTargetKind(kind);
         a.setWorkspaceId(workspaceId);
         a.setFilename(original);
         a.setContentType(Texts.cut(file.getContentType(), 64));
         a.setSize(file.getSize());
         a.setStoredName(storedName);
         attachmentMapper.insert(a);
-        log(userId, workspaceId, taskId, "上传附件「" + original + "」");
+        logAction(userId, workspaceId, targetId, kind, "上传附件「" + original + "」");
         return attachmentMapper.selectById(id);
     }
 
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         Attachment a = get(workspaceId, id);
+        projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
         deleteFile(a);
         attachmentMapper.deleteById(id);
-        log(userId, workspaceId, a.getTaskId(), "删除附件「" + a.getFilename() + "」");
+        logAction(userId, workspaceId, a.getTargetId(), a.getTargetKind(), "删除附件「" + a.getFilename() + "」");
+    }
+
+    /**
+     * 在线编辑后整体覆盖保存（智能表格回写）：保留附件 id/文件名/记录，
+     * 只换磁盘内容与 size；格式必须与原件一致（storedName = id.ext，扩展名不能变）。
+     */
+    @Transactional
+    public Attachment overwriteContent(String userId, String workspaceId, String id, MultipartFile file) {
+        Attachment a = get(workspaceId, id);
+        projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
+        if (file == null || file.isEmpty()) {
+            throw AppException.badRequest("文件内容为空");
+        }
+        if (file.getSize() > 10L * 1024 * 1024) {
+            throw AppException.badRequest("文件不能超过 10MB");
+        }
+        String oldExt = extOf(a.getFilename());
+        String newExt = file.getOriginalFilename() == null ? null : extOf(file.getOriginalFilename());
+        if (oldExt == null || newExt == null || !oldExt.equals(newExt)) {
+            throw AppException.badRequest("保存格式需为 " + (oldExt == null ? "与原件一致" : ("." + oldExt)));
+        }
+        try {
+            file.transferTo(fileOf(a).getAbsoluteFile());
+        } catch (IOException e) {
+            log.warn("附件覆盖保存失败", e);
+            throw new AppException(500, "文件保存失败");
+        }
+        a.setSize(file.getSize());
+        a.setContentType(Texts.cut(file.getContentType(), 64));
+        attachmentMapper.updateContent(a);
+        logAction(userId, workspaceId, a.getTargetId(), a.getTargetKind(), "在线编辑附件「" + a.getFilename() + "」");
+        return attachmentMapper.selectById(id);
     }
 
     /**
@@ -163,11 +217,30 @@ public class AttachmentService {
         }
     }
 
-    private void ensureTask(String workspaceId, String taskId) {
-        Task t = taskMapper.selectById(taskId);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
-            throw AppException.notFound("任务不存在：" + taskId);
+    /** 附件目标存在性校验，返回其所属项目 id 供可见性判断 */
+    private String ensureTarget(String workspaceId, String targetId, String kind) {
+        if (KIND_DEMAND.equals(kind)) {
+            Demand d = demandMapper.selectById(targetId);
+            if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
+                throw AppException.notFound("需求不存在：" + targetId);
+            }
+            return d.getReqId();
         }
+        Task t = taskMapper.selectById(targetId);
+        if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
+            throw AppException.notFound("任务不存在：" + targetId);
+        }
+        return t.getReqId();
+    }
+
+    /** 已存在的附件反查所属项目；任务在回收站中也允许追溯 */
+    private String targetReqId(String workspaceId, String targetId, String kind) {
+        if (KIND_DEMAND.equals(kind)) {
+            Demand d = demandMapper.selectById(targetId);
+            return d == null || !workspaceId.equals(d.getWorkspaceId()) ? null : d.getReqId();
+        }
+        Task t = taskMapper.selectById(targetId);
+        return t == null || !workspaceId.equals(t.getWorkspaceId()) ? null : t.getReqId();
     }
 
     private String extOf(String filename) {
@@ -186,9 +259,14 @@ public class AttachmentService {
         return d;
     }
 
-    private void log(String userId, String workspaceId, String taskId, String detail) {
+    /** 任务附件写 task_log，需求附件写 demand_log（update 动作） */
+    private void logAction(String userId, String workspaceId, String targetId, String kind, String detail) {
+        if (KIND_DEMAND.equals(kind)) {
+            demandMapper.insertLog(workspaceId, targetId, "update", detail, userId);
+            return;
+        }
         TaskLog taskLog = new TaskLog();
-        taskLog.setTaskId(taskId);
+        taskLog.setTaskId(targetId);
         taskLog.setWorkspaceId(workspaceId);
         taskLog.setActorId(userId);
         taskLog.setAction("update");

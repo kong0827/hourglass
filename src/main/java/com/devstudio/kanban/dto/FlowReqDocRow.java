@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class FlowReqDocRow {
 
     private String id;
+    private String reqId;
     private String title;
     private String status;
     private LocalDateTime createdAt;

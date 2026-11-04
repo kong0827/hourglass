@@ -12,6 +12,26 @@
     ORDER BY created_at, id
   </select>
 
+  <select id="selectVisibleByWorkspace" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency d
+    WHERE d.workspace_id = #{workspaceId}
+    <if test="viewerId != null">
+      AND NOT EXISTS (
+        SELECT 1 FROM task t
+        JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                              AND pm.project_id = t.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t.id = d.from_task_id AND t.workspace_id = d.workspace_id AND pm.access = 'none')
+      AND NOT EXISTS (
+        SELECT 1 FROM task t
+        JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                              AND pm.project_id = t.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t.id = d.to_task_id AND t.workspace_id = d.workspace_id AND pm.access = 'none')
+    </if>
+    ORDER BY d.created_at, d.id
+  </select>
+
   <select id="selectById" resultType="TaskDependency">
     SELECT <include refid="cols"/> FROM task_dependency WHERE id = #{id}
   </select>

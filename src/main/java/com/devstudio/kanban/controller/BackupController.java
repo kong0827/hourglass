@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.BackupData;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.BackupService;
+import com.devstudio.kanban.service.ProjectAccessService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -23,10 +24,13 @@ public class BackupController {
 
     private final BackupService backupService;
     private final WorkspaceService workspaceService;
+    private final ProjectAccessService projectAccess;
 
-    public BackupController(BackupService backupService, WorkspaceService workspaceService) {
+    public BackupController(BackupService backupService, WorkspaceService workspaceService,
+                            ProjectAccessService projectAccess) {
         this.backupService = backupService;
         this.workspaceService = workspaceService;
+        this.projectAccess = projectAccess;
     }
 
     /** 导出当前空间的全部数据（仅空间主：包含全量任务/评论/依赖/基线） */
@@ -41,8 +45,9 @@ public class BackupController {
     /** 导出当前空间 CSV（Excel 可直接打开） */
     @GetMapping("/api/export/csv")
     public ResponseEntity<byte[]> exportCsv(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        byte[] bytes = backupService.exportCsv(ws.getId());
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        byte[] bytes = backupService.exportCsv(ws.getId(), projectAccess.hiddenProjectIds(ws.getId(), userId));
         String filename = "workbench-tasks-" + LocalDate.now() + ".csv";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")

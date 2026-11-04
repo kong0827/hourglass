@@ -74,14 +74,14 @@ public class TaskController {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
-                .body(ApiResult.ok(queryService.board(wsId, query)));
+                .body(ApiResult.ok(queryService.board(wsId, ctx.getUserId(), query)));
     }
 
     /** 已完成列分页（「加载更多」） */
     @GetMapping("/api/tasks/done")
     public ApiResult<BoardResponse.ColumnData> done(@CurrentWorkspace WorkspaceCtx ctx,
                                                     @BoardFilter BoardQuery query) {
-        return ApiResult.ok(queryService.donePage(ctx.getWsId(), query));
+        return ApiResult.ok(queryService.donePage(ctx.getWsId(), ctx.getUserId(), query));
     }
 
     /** 列表视图：筛选后的全量任务（上限 500），sort: due/priority/updated/column */
@@ -97,7 +97,7 @@ public class TaskController {
             return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
-                .body(ApiResult.ok(queryService.list(wsId, query, sort)));
+                .body(ApiResult.ok(queryService.list(wsId, ctx.getUserId(), query, sort)));
     }
 
     /**
@@ -118,7 +118,7 @@ public class TaskController {
     /** 回收站 */
     @GetMapping("/api/trash")
     public ApiResult<List<Task>> trash(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(trashService.trash(ctx.getWsId()));
+        return ApiResult.ok(trashService.trash(ctx.getWsId(), ctx.getUserId()));
     }
 
     @PostMapping("/api/tasks/{id}/restore")
@@ -177,7 +177,7 @@ public class TaskController {
     /** 任务操作时间线（含操作人） */
     @GetMapping("/api/tasks/{id}/logs")
     public ApiResult<List<TaskLog>> logs(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(queryService.logs(ctx.getWsId(), id));
+        return ApiResult.ok(queryService.logs(ctx.getWsId(), ctx.getUserId(), id));
     }
 
     /** 日历视图：按 [开始日, 实际结束日] 取整月任务（IA-4：接入与看板相同的筛选） */
@@ -186,6 +186,6 @@ public class TaskController {
                                                 @BoardFilter BoardQuery query,
                                                 @RequestParam(required = false) Integer year,
                                                 @RequestParam(required = false) Integer month) {
-        return ApiResult.ok(queryService.calendar(ctx.getWsId(), year, month, query));
+        return ApiResult.ok(queryService.calendar(ctx.getWsId(), ctx.getUserId(), year, month, query));
     }
 }

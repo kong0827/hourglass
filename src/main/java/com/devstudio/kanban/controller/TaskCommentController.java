@@ -34,7 +34,7 @@ public class TaskCommentController {
     public ApiResult<List<TaskComment>> list(@PathVariable String id,
                                              @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(commentService.list(ws.getId(), id));
+        return ApiResult.ok(commentService.list(ws.getId(), CurrentUser.id(), id));
     }
 
     @PostMapping("/api/tasks/{id}/comments")

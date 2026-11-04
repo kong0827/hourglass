@@ -22,4 +22,8 @@ public class AppException extends RuntimeException {
     public static AppException notFound(String message) {
         return new AppException(404, message);
     }
+
+    public static AppException conflict(String message) {
+        return new AppException(409, message);
+    }
 }

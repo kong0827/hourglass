@@ -29,15 +29,18 @@ public class TaskCommentService {
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final UserMapper userMapper;
-    private final AppNotificationService notificationService;
+    private final NotificationEventService notificationEvents;
+    private final ProjectAccessService projectAccess;
 
     public TaskCommentService(TaskCommentMapper commentMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                              UserMapper userMapper, AppNotificationService notificationService) {
+                              UserMapper userMapper, NotificationEventService notificationEvents,
+                              ProjectAccessService projectAccess) {
         this.commentMapper = commentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.userMapper = userMapper;
-        this.notificationService = notificationService;
+        this.notificationEvents = notificationEvents;
+        this.projectAccess = projectAccess;
     }
 
     /** 读评论：允许回收站中的任务（保留可读） */
@@ -49,12 +52,22 @@ public class TaskCommentService {
         return commentMapper.selectByTaskId(workspaceId, taskId);
     }
 
+    public List<TaskComment> list(String workspaceId, String userId, String taskId) {
+        Task t = taskMapper.selectById(taskId);
+        if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
+            throw AppException.notFound("任务不存在：" + taskId);
+        }
+        projectAccess.assertViewTask(workspaceId, userId, t);
+        return commentMapper.selectByTaskId(workspaceId, taskId);
+    }
+
     @Transactional
     public TaskComment create(String userId, String workspaceId, String taskId, String content) {
         Task t = taskMapper.selectById(taskId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
         }
+        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         if (t.getDeletedAt() != null) {
             throw AppException.badRequest("任务在回收站中，不能发表评论（可先恢复）");
         }
@@ -84,9 +97,10 @@ public class TaskCommentService {
 
         // 定向通知负责人本人（不是自己发的才通知）
         if (t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
-            notificationService.push(t.getOwnerUserId(), workspaceId, "task_comment",
+            notificationEvents.notify(t.getOwnerUserId(), workspaceId,
+                    UserNotificationPreferenceService.TASK_COMMENT,
                     "「" + t.getTitle() + "」有新评论",
-                    author + "：" + Texts.cut(text, 160), taskId);
+                    author + "：" + Texts.cut(text, 160), taskId, t.getReqId());
         }
         return c;
     }
@@ -99,6 +113,10 @@ public class TaskCommentService {
         }
         if (!userId.equals(c.getAuthorId())) {
             throw new AppException(403, "只能删除自己的评论");
+        }
+        Task t = taskMapper.selectById(c.getTaskId());
+        if (t != null) {
+            projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         }
         commentMapper.deleteById(id);
     }

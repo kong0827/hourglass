@@ -4,6 +4,7 @@ import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
+import com.devstudio.kanban.mapper.ProjectMemberMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
@@ -46,7 +47,7 @@ class WorkspaceServiceMemberCacheTest {
                 new AtomicLong(1_000_000L)::get);
         service = new WorkspaceService(workspaceMapper, memberMapper, userMapper,
                 mock(BoardColumnMapper.class), mock(CategoryMapper.class),
-                mock(SavedViewMapper.class), mock(InviteMapper.class), mock(TaskCascade.class),
+                mock(SavedViewMapper.class), mock(InviteMapper.class), mock(ProjectMemberMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
 
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());
@@ -59,12 +60,13 @@ class WorkspaceServiceMemberCacheTest {
         assertEquals("member", service.requireMember(MEMBER, WS).getMyRole());
         verify(memberMapper, times(1)).selectMember(WS, MEMBER);
 
-        when(memberMapper.selectMember(WS, MEMBER)).thenReturn(null);
         service.removeMember(OWNER, WS, MEMBER);
+        /* 移除后目标成员从库里消失：缓存已失效，再读即重新查库 */
+        when(memberMapper.selectMember(WS, MEMBER)).thenReturn(null);
 
         assertThrows(AppException.class, () -> service.requireMember(MEMBER, WS));
         verify(memberMapper).delete(WS, MEMBER);
-        verify(memberMapper, times(2)).selectMember(WS, MEMBER);
+        verify(memberMapper, times(3)).selectMember(WS, MEMBER);
     }
 
     @Test

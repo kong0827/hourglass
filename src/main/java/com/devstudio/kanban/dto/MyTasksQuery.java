@@ -18,6 +18,7 @@ public class MyTasksQuery {
     private List<String> cats = Collections.emptyList();
     private List<String> reqs = Collections.emptyList();
     private List<String> tags = Collections.emptyList();
+    private List<String> types = Collections.emptyList();
     private boolean blocked;
     private String due;
     private boolean focus;
@@ -88,6 +89,14 @@ public class MyTasksQuery {
 
     public void setTags(List<String> tags) {
         this.tags = tags == null ? Collections.<String>emptyList() : tags;
+    }
+
+    public List<String> getTypes() {
+        return types;
+    }
+
+    public void setTypes(List<String> types) {
+        this.types = types == null ? Collections.<String>emptyList() : types;
     }
 
     public boolean isBlocked() {

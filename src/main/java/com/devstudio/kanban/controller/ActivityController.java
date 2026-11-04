@@ -27,7 +27,8 @@ public class ActivityController {
     @GetMapping("/api/activity")
     public ApiResult<List<TaskLog>> activity(@RequestParam(required = false) String workspace,
                                              @RequestParam(required = false) Integer limit) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(activityService.activity(ws.getId(), limit));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(activityService.activity(ws.getId(), userId, limit));
     }
 }

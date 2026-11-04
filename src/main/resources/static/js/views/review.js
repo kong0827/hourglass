@@ -60,7 +60,7 @@ function navWeek(delta){
 function buildSummary(d){
   var list = d.completed || [];
   var n = list.length;
-  var label = d.label || "该周期";
+  var label = esc(d.label || "该周期");
   var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   var progTasks = d.progressTasks || [];
   if(!n && !progTasks.length && !d.doing && !d.backlog){

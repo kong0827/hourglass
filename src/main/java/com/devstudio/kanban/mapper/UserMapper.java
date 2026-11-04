@@ -1,5 +1,6 @@
 package com.devstudio.kanban.mapper;
 
+import com.devstudio.kanban.dto.MemberCandidate;
 import com.devstudio.kanban.entity.AppUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,7 +12,15 @@ public interface UserMapper {
 
     List<AppUser> selectAll();
 
+    /** 按登录名/显示名模糊搜索尚未加入该空间的账号（添加成员用，最多 20 条） */
+    List<MemberCandidate> searchCandidates(@Param("workspaceId") String workspaceId,
+                                           @Param("q") String q,
+                                           @Param("limit") int limit);
+
     AppUser selectById(String id);
+
+    /** 批量按 ID 查账号（通知里解析成员显示名用，避免逐个 selectById） */
+    List<AppUser> selectByIds(@Param("ids") List<String> ids);
 
     AppUser selectByUsername(String username);
 

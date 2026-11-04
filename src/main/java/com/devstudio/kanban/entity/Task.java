@@ -75,4 +75,18 @@ public class Task {
      * 不落库，只在查询时由 mergeTaskExtras 填充。
      */
     private String searchExtra;
+
+    /** 工作项类型：story/task/bug/epic（sql/23；存量任务默认 task） */
+    private String itemType;
+    /** 所属 Epic 任务ID（仅 story/task/bug 可挂 Epic） */
+    private String epicId;
+    /** 关联需求池需求ID（sql/24，demand 表；基于需求创建任务时写入） */
+    private String demandId;
+
+    /** 绑定版本ID（非表字段，version_task 查询填充） */
+    private String versionId;
+    /** 影响版本名（非表字段，列表/详情展示用） */
+    private String versionName;
+    /** 上线前未绑版本、自动归入首版的标记（非表字段，发布说明标注用） */
+    private Boolean preLaunchFold;
 }

@@ -45,14 +45,17 @@ public class FlowHealthService {
 
     private final FlowHealthMapper flowHealthMapper;
     private final BoardColumnMapper columnMapper;
+    private final ProjectAccessService projectAccess;
 
-    public FlowHealthService(FlowHealthMapper flowHealthMapper, BoardColumnMapper columnMapper) {
+    public FlowHealthService(FlowHealthMapper flowHealthMapper, BoardColumnMapper columnMapper,
+                             ProjectAccessService projectAccess) {
         this.flowHealthMapper = flowHealthMapper;
         this.columnMapper = columnMapper;
+        this.projectAccess = projectAccess;
     }
 
     /** 默认看近 90 天：太短看不出瓶颈，太长会把几个月前的旧习惯混进来 */
-    public FlowHealthResponse flowHealth(String workspaceId, Integer days) {
+    public FlowHealthResponse flowHealth(String workspaceId, String userId, Integer days) {
         int range = (days == null || days <= 0) ? 90 : Math.min(days, 730);
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime since = now.minusDays(range);
@@ -60,7 +63,43 @@ public class FlowHealthService {
         List<FlowMoveRow> moves = flowHealthMapper.selectMoves(workspaceId, since);
         List<FlowTaskRow> tasks = flowHealthMapper.selectTasks(workspaceId);
         List<FlowReqDocRow> reqDocs = flowHealthMapper.selectReqDocs(workspaceId);
+        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        if (!hidden.isEmpty()) {
+            moves = filterMoves(moves, hidden);
+            tasks = filterTasks(tasks, hidden);
+            reqDocs = filterReqDocs(reqDocs, hidden);
+        }
         return compute(columns, moves, tasks, reqDocs, range, since, now);
+    }
+
+    private List<FlowMoveRow> filterMoves(List<FlowMoveRow> list, java.util.Set<String> hidden) {
+        List<FlowMoveRow> out = new ArrayList<FlowMoveRow>();
+        for (FlowMoveRow r : list) {
+            if (r.getReqId() == null || !hidden.contains(r.getReqId())) {
+                out.add(r);
+            }
+        }
+        return out;
+    }
+
+    private List<FlowTaskRow> filterTasks(List<FlowTaskRow> list, java.util.Set<String> hidden) {
+        List<FlowTaskRow> out = new ArrayList<FlowTaskRow>();
+        for (FlowTaskRow r : list) {
+            if (r.getReqId() == null || !hidden.contains(r.getReqId())) {
+                out.add(r);
+            }
+        }
+        return out;
+    }
+
+    private List<FlowReqDocRow> filterReqDocs(List<FlowReqDocRow> list, java.util.Set<String> hidden) {
+        List<FlowReqDocRow> out = new ArrayList<FlowReqDocRow>();
+        for (FlowReqDocRow r : list) {
+            if (r.getReqId() == null || !hidden.contains(r.getReqId())) {
+                out.add(r);
+            }
+        }
+        return out;
     }
 
     // ==================== 纯计算（无 Spring 依赖，可直接单测） ====================

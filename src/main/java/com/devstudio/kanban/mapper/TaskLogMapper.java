@@ -17,8 +17,10 @@ public interface TaskLogMapper {
     /** 该任务最近一次“移入已完成列”之前所在的列；没有结构化日志时返回 null */
     String selectLastDoneFromColumn(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
-    /** 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG），倒序取 limit 条 */
-    List<TaskLog> selectByWorkspace(@Param("workspaceId") String workspaceId, @Param("limit") int limit);
+    /** 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG），倒序取 limit 条；viewerId 非空时过滤隐藏项目 */
+    List<TaskLog> selectByWorkspace(@Param("workspaceId") String workspaceId,
+                                    @Param("viewerId") String viewerId,
+                                    @Param("limit") int limit);
 
     /**
      * 某个时间段内"有活动"的任务 ID（去重）。
@@ -30,6 +32,10 @@ public interface TaskLogMapper {
                                      @Param("to") java.time.LocalDate to);
 
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
+
+    /** 删除项目时给仍挂在该项目下的任务（含回收站）批量补「解除关联」时间线，一条 INSERT ... SELECT */
+    int insertUnlinkReqLogs(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                            @Param("actorId") String actorId, @Param("detail") String detail);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

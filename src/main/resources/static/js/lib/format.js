@@ -29,6 +29,16 @@ var PALETTE = ["#2563EB","#12B76A","#F79009","#F04438","#7A5AF8","#0E9384","#DD2
 var AVATAR_COLORS = PALETTE.slice();
 var CAT_DEFAULT_COLOR = "#98A2B3";
 var BACKUP_NAME = "devstudio-kanban-backup.json";
+var DOC_TYPES = [
+  {id:"requirement", name:"需求文档"},
+  {id:"technical", name:"技术方案"},
+  {id:"acceptance", name:"测试验收"},
+  {id:"other", name:"其他"}
+];
+function docTypeName(type){
+  var item = DOC_TYPES.find(function(t){ return t.id === type; });
+  return item ? item.name : (type || "其他");
+}
 var REQ_STATUS = [
   {id:"active", name:"进行中"},
   {id:"done",   name:"已交付"},
@@ -96,6 +106,15 @@ function fmtSize(bytes){
   if(b < 1024*1024) return (b/1024).toFixed(0) + " KB";
   return (b/1024/1024).toFixed(1) + " MB";
 }
+function typeName(itemType){
+  return { story:"用户故事", task:"任务", bug:"缺陷", epic:"Epic" }[itemType || "task"] || "任务";
+}
+/* 工作项类型徽标：task 是默认类型不亮徽标，避免满屏噪音 */
+function typeBadgeHTML(itemType){
+  var cls = { story:"type-story", bug:"type-bug", epic:"type-epic" }[itemType];
+  if(!cls) return "";
+  return '<span class="mini-tag ' + cls + '">' + typeName(itemType) + '</span>';
+}
 function recurLabel(type){
   if(type === "daily") return "每天";
   if(type === "weekly") return "每周";
@@ -144,4 +163,4 @@ function darken(hex, k){
   return "rgb("+Math.round(c.r*f)+","+Math.round(c.g*f)+","+Math.round(c.b*f)+")";
 }
 
-export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, PALETTE, PRIORITIES, PRIORITY_COLOR, addDays, avatarColor, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, startOfDay, startPresetDate, syncColumns, weekdayCN };
+export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, PALETTE, PRIORITIES, PRIORITY_COLOR, docTypeName, addDays, avatarColor, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };

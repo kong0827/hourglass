@@ -14,7 +14,7 @@ body{background:var(--bg-app);}
 .share-empty,.share-error{
   padding:32px 20px;font-size:13px;color:var(--text-3);
 }
-.share-error{color:var(--danger);}
+.share-error{color:var(--danger-fg);}
 @media (max-width:900px){
   #view-gantt{padding:0 10px 10px;}
   .share-title h1{font-size:16px;}

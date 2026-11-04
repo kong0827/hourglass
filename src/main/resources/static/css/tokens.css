@@ -31,6 +31,8 @@
   --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89;
   --danger:#F04438;  --danger-soft:#FEF3F2;  --danger-border:#FDA29B;
   --info:#2E90FA;    --info-soft:#EFF8FF;    --info-border:#B2DDFF;
+  /* 语义前景色：文字/图标用，浅底对比度 ≥4.5:1；原色只用于背景、圆点、进度条 */
+  --success-fg:#067647; --warning-fg:#B54708; --danger-fg:#B42318; --info-fg:#175CD3;
   --plum:#7A5AF8;    --plum-soft:#F4F3FF;    --plum-border:#D9D6FE;
 
   /* ---- 优先级专色 ---- */
@@ -63,7 +65,7 @@
   /* ---- 布局尺寸 ---- */
   --sidebar-w:240px;
   --sidebar-w-rail:64px;
-  --topbar-h:60px;
+  --topbar-h:68px;
   --filterbar-h:48px;
   --app-foot-h:26px;
   --content-pad:24px;
@@ -130,6 +132,8 @@ html[data-theme="dark"]{
   --danger:#F97066;  --danger-soft:#2B1615;  --danger-border:#5C2A26;
   --info:#53B1FD;    --info-soft:#10202F;    --info-border:#1F4468;
   --plum:#9B8AFB;    --plum-soft:#1D1933;    --plum-border:#3B3266;
+
+  --success-fg:#75E0A7; --warning-fg:#FEC84B; --danger-fg:#FDA29B; --info-fg:#84CAFF;
 
   --p0:#F97066; --p0-soft:#2B1615;
   --p1:#FDB022; --p1-soft:#2A2110;

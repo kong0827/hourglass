@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.VersionTaskMapper">
+
+  <!-- 任务明细表 + 任务抽屉版本回填共用：带日期/类型/预估/实际工时 -->
+  <select id="selectOptionsByReq" resultType="Task">
+    SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
+           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+           (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
+    FROM task t
+    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
+    ORDER BY (t.board_column = 'done'), t.board_column, t.sort_order, t.id
+  </select>
+
+  <!-- M1 版本阶段统计：项目全部任务 + 绑定版本 + 累计实际工时，一次取回由服务层归组 -->
+  <select id="selectStatsByReq" resultType="Task">
+    SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
+           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+           (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+             WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
+    FROM task t
+    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
+    ORDER BY (t.board_column = 'done'), t.completed_at, t.id
+  </select>
+
+  <select id="selectVersionIdByTask" resultType="string">
+    SELECT version_id FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
+  <!-- 列表视图「影响版本」列：按本页任务 id 批量取绑定版本ID与名称 -->
+  <select id="selectVersionRowsByTaskIds" resultType="Task">
+    SELECT vt.task_id AS id, vt.version_id AS versionId, pv.name AS versionName
+    FROM version_task vt
+    LEFT JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = vt.workspace_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </select>
+
+  <!-- 备份导出：整空间绑定，按 taskId 挂回任务 -->
+  <select id="selectBindingsByWorkspace" resultType="Task">
+    SELECT task_id AS id, version_id AS versionId
+    FROM version_task
+    WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <delete id="deleteByTaskId">
+    DELETE FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <insert id="insertBatch">
+    INSERT INTO version_task (task_id, workspace_id, version_id) VALUES
+    <foreach collection="taskIds" item="taskId" separator=",">
+      (#{taskId}, #{workspaceId}, #{versionId})
+    </foreach>
+  </insert>
+
+  <delete id="deleteByVersion">
+    DELETE FROM version_task WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM version_task WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE vt FROM version_task vt
+    INNER JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = vt.workspace_id
+    WHERE vt.workspace_id = #{workspaceId} AND pv.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM version_task WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

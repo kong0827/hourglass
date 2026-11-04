@@ -14,6 +14,7 @@ import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,8 @@ class TaskServiceColumnCacheTest {
         TaskQueryService service = new TaskQueryService(
                 mock(TaskMapper.class), mock(RequirementMapper.class), mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
-                mock(AttachmentMapper.class), metaCache, support);
+                mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
+                mock(ProjectAccessService.class));
 
         assertEquals("待处理", support.columnName(WS, "C1"));
         assertEquals("进行中", support.columnName(WS, "C2"));

@@ -141,9 +141,11 @@ tools/           静态预览稿生成器（node tools/gen-preview.js）
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/项目介绍.md`](docs/项目介绍.md) | 项目介绍：背景与定位、信息模型、模块地图、核心机制与边界取舍 |
 | [`docs/api.md`](docs/api.md) | 接口契约，含全部口径附录（工时、日历、回顾、归档的历次修订） |
 | [`docs/ui-redesign-spec.md`](docs/ui-redesign-spec.md) | UI 规范：布局、组件、交互与状态 |
 | [`docs/ui-preview.html`](docs/ui-preview.html) | 离线预览稿（单文件，直接双击打开） |
+| [`docs/manager-view-preview.html`](docs/manager-view-preview.html) | 管理者视图交互原型（含看板 / 我的任务 / 日历 / 甘特 / 需求池 / 多规划迭代 Sprint / 版本阶段 / 报表中心 / 权限设计；支持提需求、评审排期、创建与分配任务、拖拽流转、CSV/JSON/PNG 导入导出、4 角色切换与查看者只读，单文件离线） |
 | [`deploy/README.md`](deploy/README.md) | 部署指南：服务器准备、systemd、Nginx、备份与回滚 |
 
 ---

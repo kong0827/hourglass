@@ -17,7 +17,12 @@ public interface RequirementDocMapper {
 
     int insert(RequirementDoc doc);
 
-    int update(RequirementDoc doc);
+    /**
+     * 整篇更新；oldUpdatedAt 非空时作为乐观锁条件（WHERE updated_at = ?），
+     * 返回 0 表示版本已被他人改变，调用方转 409
+     */
+    int update(@Param("doc") RequirementDoc doc,
+               @Param("oldUpdatedAt") java.time.LocalDateTime oldUpdatedAt);
 
     int delete(@Param("id") String id);
 
@@ -45,4 +50,33 @@ public interface RequirementDocMapper {
 
     /** 备份导出：读取全部需求（含正文） */
     List<RequirementDoc> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 需求池需求关联的文档（带项目名、任务数、摘要） */
+    List<ReqDocView> selectByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+
+    /** 文档关联的需求池需求（id / title / status / priority） */
+    List<java.util.Map<String, Object>> selectDemandsByDoc(@Param("workspaceId") String workspaceId,
+                                                          @Param("docId") String docId);
+
+    int linkDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                   @Param("docId") String docId, @Param("userId") String userId);
+
+    int unlinkDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                     @Param("docId") String docId);
+
+    int deleteDemandLinksByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+
+    int deleteDemandLinksByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+
+    int deleteDemandLinksByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    int deleteDemandLinksByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 删除文档时把子文档提升到它的父级 */
+    int reparentChildren(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                         @Param("parentId") String parentId);
+
+    /** 备份恢复：补齐父文档引用 */
+    int updateParent(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                     @Param("parentId") String parentId);
 }

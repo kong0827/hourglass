@@ -92,7 +92,7 @@ import { GS } from "./lib/gantt-shared.js";
       var off = dayDiff(x.s, range.start), span = Math.max(1, dayDiff(x.e, x.s) + 1);
       var left = off * dayW, width = span * dayW;
       var meta = '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>';
-      if (t.owner) meta += '<span class="ellipsis">' + esc(t.owner) + '</span>';
+      if (t.owner) meta += '<span class="ellipsis shrink">' + esc(t.owner) + '</span>';
       meta += '<span>' + fmtMD(x.s) + '→' + fmtMD(x.e) + '</span>';
       var p = done ? 100 : (Number(t.progress) || 0);
       var bar;

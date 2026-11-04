@@ -38,30 +38,47 @@ public class TaskTrashService {
     /** 计时口径统一收在 TimeLogService，这里只负责在删除时触发关闭 */
     private final TimeLogService timeLogService;
     private final TaskAuditLogger audit;
+    private final ProjectAccessService projectAccess;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
 
     public TaskTrashService(TaskMapper taskMapper, TaskSupport support, TaskCascade cascade,
                             TimeLogService timeLogService, TaskAuditLogger audit,
-                            PlatformTransactionManager transactionManager) {
+                            ProjectAccessService projectAccess, PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.support = support;
         this.cascade = cascade;
         this.timeLogService = timeLogService;
         this.audit = audit;
+        this.projectAccess = projectAccess;
         this.purgeTx = new TransactionTemplate(transactionManager);
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    public List<Task> trash(String workspaceId) {
-        return taskMapper.selectDeleted(workspaceId);
+    public List<Task> trash(String workspaceId, String userId) {
+        List<Task> list = taskMapper.selectDeleted(workspaceId);
+        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
+        if (hiddenReqs.isEmpty()) {
+            return list;
+        }
+        List<Task> visible = new ArrayList<Task>();
+        for (Task t : list) {
+            if (t.getReqId() == null || !hiddenReqs.contains(t.getReqId())) {
+                visible.add(t);
+            }
+        }
+        return visible;
     }
 
     /** 软删除：进回收站，30 天后由定时任务清理 */
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         Task t = support.require(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, t);
+        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         taskMapper.softDelete(id);
+        /* Epic 进回收站后其子任务立即解除归属，避免指向已删除的任务 */
+        taskMapper.clearEpicChildren(workspaceId, id);
         timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已移入回收站");
         audit.log(userId, workspaceId, id, "delete", "移入回收站「" + t.getTitle() + "」（30 天后自动清理）");
     }
@@ -69,6 +86,8 @@ public class TaskTrashService {
     @Transactional
     public void restore(String userId, String workspaceId, String id) {
         Task t = support.requireDeleted(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, t);
+        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         taskMapper.restore(id);
         /* O-26：把"刚删就撤销"和"从回收站恢复"在时间线上区分开，让"这条任务为什么又回来了"可解释 */
         boolean undo = t.getDeletedAt() != null

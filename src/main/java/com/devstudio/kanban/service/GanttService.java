@@ -68,11 +68,13 @@ public class GanttService {
     private final TimeLogMapper timeLogMapper;
     private final UserMapper userMapper;
     private final WorkspaceMapper workspaceMapper;
+    private final ProjectAccessService projectAccess;
 
     public GanttService(TaskQueryService taskService, TaskMapper taskMapper,
                         TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                         GanttShareMapper shareMapper, TimeLogMapper timeLogMapper,
-                        UserMapper userMapper, WorkspaceMapper workspaceMapper) {
+                        UserMapper userMapper, WorkspaceMapper workspaceMapper,
+                        ProjectAccessService projectAccess) {
         this.taskService = taskService;
         this.taskMapper = taskMapper;
         this.dependencyMapper = dependencyMapper;
@@ -81,15 +83,19 @@ public class GanttService {
         this.timeLogMapper = timeLogMapper;
         this.userMapper = userMapper;
         this.workspaceMapper = workspaceMapper;
+        this.projectAccess = projectAccess;
     }
 
     /* ==================== 任务分页 ==================== */
 
-    public GanttResponse gantt(String workspaceId, BoardQuery query, LocalDate from, LocalDate to,
+    public GanttResponse gantt(String workspaceId, String userId, BoardQuery query,
+                               LocalDate from, LocalDate to,
                                boolean includeDone, int offset, int limit) {
         int safeOffset = Math.max(0, offset);
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         GanttQuery gq = GanttQuery.from(query, LocalDate.now(), from, to, includeDone);
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        gq.setViewerId(viewerId);
 
         GanttResponse resp = new GanttResponse();
         int total = taskMapper.countGantt(workspaceId, gq);
@@ -112,8 +118,8 @@ public class GanttService {
             List<Task> unscheduled = taskMapper.selectGanttUnscheduled(workspaceId, gq, UNSCHEDULED_LIMIT);
             taskService.mergeGanttExtras(workspaceId, unscheduled);
             resp.setUnscheduled(unscheduled);
-            resp.setDeps(dependencyMapper.selectByWorkspace(workspaceId));
-            resp.setBaseline(baselineMap(workspaceId));
+            resp.setDeps(dependencyMapper.selectVisibleByWorkspace(workspaceId, viewerId));
+            resp.setBaseline(baselineMap(workspaceId, viewerId));
             resp.setBaselineAt(baselineMapper.selectCapturedAt(workspaceId));
         }
         return resp;
@@ -133,12 +139,13 @@ public class GanttService {
 
     /* ==================== 依赖 ==================== */
 
-    public List<TaskDependency> deps(String workspaceId) {
-        return dependencyMapper.selectByWorkspace(workspaceId);
+    public List<TaskDependency> deps(String workspaceId, String userId) {
+        return dependencyMapper.selectVisibleByWorkspace(workspaceId,
+                projectAccess.viewerScope(workspaceId, userId));
     }
 
     @Transactional
-    public TaskDependency createDep(String workspaceId, GanttDepRequest req) {
+    public TaskDependency createDep(String workspaceId, String userId, GanttDepRequest req) {
         String from = req.getFromTaskId();
         String to = req.getToTaskId();
         if (from == null || to == null || from.equals(to)) {
@@ -150,6 +157,9 @@ public class GanttService {
                 || !workspaceId.equals(a.getWorkspaceId()) || !workspaceId.equals(b.getWorkspaceId())) {
             throw AppException.badRequest("依赖任务不存在或不属于当前空间");
         }
+        /* 依赖两端都必须可写：项目只读成员不能新增连线 */
+        projectAccess.assertWrite(workspaceId, userId, a.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, b.getReqId());
         if (dependencyMapper.countByWorkspace(workspaceId) >= MAX_DEPS) {
             throw AppException.badRequest("依赖数量已达上限（" + MAX_DEPS + "），请先清理");
         }
@@ -174,11 +184,12 @@ public class GanttService {
     }
 
     @Transactional
-    public TaskDependency updateDep(String workspaceId, String id, GanttDepRequest req) {
+    public TaskDependency updateDep(String workspaceId, String userId, String id, GanttDepRequest req) {
         TaskDependency dep = dependencyMapper.selectById(id);
         if (dep == null || !workspaceId.equals(dep.getWorkspaceId())) {
             throw AppException.notFound("依赖不存在：" + id);
         }
+        assertDepWritable(workspaceId, userId, dep);
         String type = req.getDepType() == null ? dep.getDepType() : req.getDepType();
         if (!"FS".equals(type) && !"SS".equals(type) && !"FF".equals(type) && !"SF".equals(type)) {
             throw AppException.badRequest("依赖类型不合法：" + type);
@@ -190,9 +201,24 @@ public class GanttService {
     }
 
     @Transactional
-    public void deleteDep(String workspaceId, String id) {
+    public void deleteDep(String workspaceId, String userId, String id) {
+        TaskDependency dep = dependencyMapper.selectById(id);
+        if (dep == null || !workspaceId.equals(dep.getWorkspaceId())) {
+            throw AppException.notFound("依赖不存在：" + id);
+        }
+        assertDepWritable(workspaceId, userId, dep);
         if (dependencyMapper.deleteById(id, workspaceId) == 0) {
             throw AppException.notFound("依赖不存在：" + id);
+        }
+    }
+
+    /** 依赖两端都必须是可写项目；任务已被物理清理时不再追溯 */
+    private void assertDepWritable(String workspaceId, String userId, TaskDependency dep) {
+        for (String taskId : new String[]{dep.getFromTaskId(), dep.getToTaskId()}) {
+            Task t = taskMapper.selectById(taskId);
+            if (t != null) {
+                projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+            }
         }
     }
 
@@ -236,15 +262,15 @@ public class GanttService {
 
     /* ==================== 基线 ==================== */
 
-    public GanttResponse.BaselinePointMapHolder baselineInfo(String workspaceId) {
+    public GanttResponse.BaselinePointMapHolder baselineInfo(String workspaceId, String userId) {
         GanttResponse.BaselinePointMapHolder holder = new GanttResponse.BaselinePointMapHolder();
-        holder.setBaseline(baselineMap(workspaceId));
+        holder.setBaseline(baselineMap(workspaceId, projectAccess.viewerScope(workspaceId, userId)));
         holder.setBaselineAt(baselineMapper.selectCapturedAt(workspaceId));
         return holder;
     }
 
     @Transactional
-    public GanttResponse.BaselinePointMapHolder captureBaseline(String workspaceId) {
+    public GanttResponse.BaselinePointMapHolder captureBaseline(String workspaceId, String userId) {
         /* 基线只要计划日期，不需要子任务/工时等扩展字段 */
         List<Task> all = taskMapper.selectAll(workspaceId);
         LocalDateTime now = LocalDateTime.now();
@@ -265,7 +291,7 @@ public class GanttService {
         if (!rows.isEmpty()) {
             baselineMapper.insertBatch(rows);
         }
-        return baselineInfo(workspaceId);
+        return baselineInfo(workspaceId, userId);
     }
 
     @Transactional
@@ -273,9 +299,9 @@ public class GanttService {
         baselineMapper.deleteByWorkspace(workspaceId);
     }
 
-    private Map<String, GanttResponse.BaselinePoint> baselineMap(String workspaceId) {
+    private Map<String, GanttResponse.BaselinePoint> baselineMap(String workspaceId, String viewerId) {
         Map<String, GanttResponse.BaselinePoint> map = new LinkedHashMap<String, GanttResponse.BaselinePoint>();
-        for (TaskBaseline b : baselineMapper.selectByWorkspace(workspaceId)) {
+        for (TaskBaseline b : baselineMapper.selectVisibleByWorkspace(workspaceId, viewerId)) {
             GanttResponse.BaselinePoint p = new GanttResponse.BaselinePoint();
             p.setStartDate(b.getStartDate());
             p.setDueDate(b.getDueDate());
@@ -286,7 +312,8 @@ public class GanttService {
 
     /* ==================== 资源负载 ==================== */
 
-    public GanttLoadResponse load(String workspaceId, BoardQuery query, LocalDate from, LocalDate to) {
+    public GanttLoadResponse load(String workspaceId, String userId, BoardQuery query,
+                                  LocalDate from, LocalDate to) {
         LocalDate rangeFrom = from == null ? LocalDate.now().withDayOfMonth(1) : from;
         LocalDate rangeTo = to == null ? rangeFrom.plusMonths(1).minusDays(1) : to;
         if (rangeTo.isBefore(rangeFrom)) {
@@ -305,6 +332,7 @@ public class GanttService {
         Map<String, GanttLoadResponse.Member> members = new LinkedHashMap<String, GanttLoadResponse.Member>();
         Map<String, String> nameByKey = new HashMap<String, String>();
         GanttQuery gq = GanttQuery.from(query, LocalDate.now(), rangeFrom, rangeTo, true);
+        gq.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         List<Task> tasks = taskMapper.selectGantt(workspaceId, gq, 0, LOAD_MAX_TASKS);
         for (Task t : tasks) {
             if (t.getEstimateMinutes() == null || t.getEstimateMinutes() <= 0) {
@@ -540,7 +568,7 @@ public class GanttService {
             }
         }
         Map<String, GanttResponse.BaselinePoint> baseline = new LinkedHashMap<String, GanttResponse.BaselinePoint>();
-        for (Map.Entry<String, GanttResponse.BaselinePoint> e : baselineMap(share.getWorkspaceId()).entrySet()) {
+        for (Map.Entry<String, GanttResponse.BaselinePoint> e : baselineMap(share.getWorkspaceId(), null).entrySet()) {
             if (visibleIds.contains(e.getKey())) {
                 baseline.put(e.getKey(), e.getValue());
             }

@@ -4,12 +4,18 @@ import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.MemberAddRequest;
+import com.devstudio.kanban.dto.MemberCandidate;
 import com.devstudio.kanban.dto.WorkspaceCreateRequest;
 import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
 import com.devstudio.kanban.entity.AppUser;
+import com.devstudio.kanban.entity.ProjectMember;
+import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
+import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.service.ActivityService;
+import com.devstudio.kanban.service.ProjectAccessService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,10 +23,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 空间：个人空间 + 共享空间。成员通过邀请链接加入（对方确认）；按登录名直接加人仅平台管理员可用。
@@ -30,10 +39,19 @@ public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
     private final UserMapper userMapper;
+    private final ProjectAccessService projectAccessService;
+    private final RequirementMapper requirementMapper;
+    private final ActivityService activityService;
 
-    public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper) {
+    public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper,
+                               ProjectAccessService projectAccessService,
+                               RequirementMapper requirementMapper,
+                               ActivityService activityService) {
         this.workspaceService = workspaceService;
         this.userMapper = userMapper;
+        this.projectAccessService = projectAccessService;
+        this.requirementMapper = requirementMapper;
+        this.activityService = activityService;
     }
 
     /** 我参与的空间（个人空间排前） */
@@ -79,6 +97,17 @@ public class WorkspaceController {
      * 普通空间主不能这么干 —— 那等于不经对方同意就把人拉进空间（对方的「我的任务」/通知里
      * 会突然出现这个空间的内容）。普通空间主请改用「邀请链接」：对方打开链接、确认后才加入。
      */
+    /** 添加成员时的候选搜索：与直接加人同一权限（平台管理员 + 空间主），只返回选人字段 */
+    @GetMapping("/api/workspaces/{id}/member-candidates")
+    public ApiResult<List<MemberCandidate>> memberCandidates(@PathVariable String id,
+                                                             @RequestParam(required = false) String q) {
+        AppUser me = userMapper.selectById(CurrentUser.id());
+        if (me == null || !"admin".equals(me.getRole())) {
+            throw new AppException(403, "共享空间成员需通过邀请链接加入：请生成邀请链接发给对方，对方确认后才会成为成员");
+        }
+        return ApiResult.ok(workspaceService.searchMemberCandidates(CurrentUser.id(), id, q));
+    }
+
     @PostMapping("/api/workspaces/{id}/members")
     public ApiResult<Void> addMember(@PathVariable String id, @Valid @RequestBody MemberAddRequest req) {
         AppUser me = userMapper.selectById(CurrentUser.id());
@@ -94,5 +123,119 @@ public class WorkspaceController {
     public ApiResult<Void> removeMember(@PathVariable String id, @PathVariable String userId) {
         workspaceService.removeMember(CurrentUser.id(), id, userId);
         return ApiResult.ok();
+    }
+
+    /** 调整成员空间角色：owner / admin / member / viewer（仅空间主可操作） */
+    @PutMapping("/api/workspaces/{id}/members/{userId}/role")
+    public ApiResult<Void> updateMemberRole(@PathVariable String id, @PathVariable String userId,
+                                            @RequestBody MemberRoleRequest req) {
+        workspaceService.updateMemberRole(CurrentUser.id(), id, userId, req == null ? null : req.getRole());
+        return ApiResult.ok();
+    }
+
+    /** 项目可见范围矩阵：成员 × 项目 + 现有显式配置（仅空间主/管理员可见） */
+    @GetMapping("/api/workspaces/{id}/project-access")
+    public ApiResult<Map<String, Object>> projectAccess(@PathVariable String id) {
+        String me = CurrentUser.id();
+        Workspace ws = workspaceService.requireMember(me, id);
+        projectAccessService.requireManage(id, me);
+        requireSharedWorkspace(ws, "项目可见范围");
+
+        List<WorkspaceMember> members = workspaceService.members(me, id);
+        List<Requirement> projects = requirementMapper.selectAll(id);
+        List<ProjectMember> grants = projectAccessService.grants(id);
+
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("myRole", ws.getMyRole());
+        result.put("members", members);
+        result.put("projects", projects);
+        result.put("grants", grants);
+        return ApiResult.ok(result);
+    }
+
+    /** 保存单个「成员 × 项目」可见范围；access 为空/default 表示恢复默认参与 */
+    @PutMapping("/api/workspaces/{id}/project-access")
+    public ApiResult<Void> saveProjectAccess(@PathVariable String id,
+                                             @RequestBody ProjectAccessRequest req) {
+        String me = CurrentUser.id();
+        Workspace ws = workspaceService.requireMember(me, id);
+        projectAccessService.requireManage(id, me);
+        requireSharedWorkspace(ws, "项目可见范围");
+        if (req == null || req.getUserId() == null || req.getProjectId() == null) {
+            throw AppException.badRequest("请选择成员和项目");
+        }
+        WorkspaceMember target = null;
+        for (WorkspaceMember m : workspaceService.members(me, id)) {
+            if (req.getUserId().equals(m.getUserId())) {
+                target = m;
+                break;
+            }
+        }
+        if (target == null) {
+            throw AppException.notFound("成员不存在：" + req.getUserId());
+        }
+        if (!ProjectAccessService.ROLE_MEMBER.equals(target.getRole())) {
+            throw AppException.badRequest(ProjectAccessService.isPrivileged(target.getRole())
+                    ? "空间主/管理员天然拥有全部项目，无需单独配置"
+                    : "查看者对整个空间只读，无需配置项目可见范围");
+        }
+        Requirement project = requirementMapper.selectById(req.getProjectId());
+        if (project == null || !id.equals(project.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在或不属于当前空间：" + req.getProjectId());
+        }
+        projectAccessService.saveGrant(id, req.getUserId(), req.getProjectId(), req.getAccess());
+        String access = ProjectAccessService.normalizeAccess(req.getAccess());
+        activityService.logConfig(id, me,
+                "调整项目可见范围「" + project.getName() + "」→ " + (access.isEmpty() ? "default" : access));
+        return ApiResult.ok();
+    }
+
+    /** 个人空间只有空间主自己，成员可见范围与邀请链接都不适用 */
+    private void requireSharedWorkspace(Workspace ws, String action) {
+        if ("personal".equals(ws.getType())) {
+            throw AppException.badRequest("个人空间不支持" + action);
+        }
+    }
+
+    public static class MemberRoleRequest {
+        private String role;
+
+        public String getRole() {
+            return role;
+        }
+
+        public void setRole(String role) {
+            this.role = role;
+        }
+    }
+
+    public static class ProjectAccessRequest {
+        private String userId;
+        private String projectId;
+        private String access;
+
+        public String getUserId() {
+            return userId;
+        }
+
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+
+        public String getProjectId() {
+            return projectId;
+        }
+
+        public void setProjectId(String projectId) {
+            this.projectId = projectId;
+        }
+
+        public String getAccess() {
+            return access;
+        }
+
+        public void setAccess(String access) {
+            this.access = access;
+        }
     }
 }

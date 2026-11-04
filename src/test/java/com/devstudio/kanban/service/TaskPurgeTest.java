@@ -5,6 +5,9 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.AttachmentMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
@@ -79,10 +82,11 @@ class TaskPurgeTest {
                 tagMapper, timeLogMapper, attachmentService, dependencyMapper, baselineMapper,
                 mock(GanttShareMapper.class), mock(RequirementMapper.class),
                 mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
-                mock(DevBranchMapper.class));
+                mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
+                mock(ProjectVersionMapper.class), mock(DemandMapper.class));
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
-                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), transactionManager);
+                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class), transactionManager);
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {
@@ -94,6 +98,20 @@ class TaskPurgeTest {
             list.add(t);
         }
         return list;
+    }
+
+    @Test
+    void movingEpicToTrashClearsChildEpicRefs() {
+        Task epic = new Task();
+        epic.setId("K1");
+        epic.setWorkspaceId("W1");
+        epic.setTitle("epic");
+        when(taskMapper.selectById("K1")).thenReturn(epic);
+
+        service.delete("U1", "W1", "K1");
+
+        verify(taskMapper).softDelete("K1");
+        verify(taskMapper).clearEpicChildren("W1", "K1");
     }
 
     @Test

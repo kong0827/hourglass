@@ -5,6 +5,8 @@ import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.ReqDocSaveRequest;
 import com.devstudio.kanban.dto.ReqDocView;
 import com.devstudio.kanban.entity.RequirementDoc;
+import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.WorkActivity;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.RequirementDocService;
 import com.devstudio.kanban.service.WorkspaceService;
@@ -38,16 +40,45 @@ public class RequirementDocController {
     /** 需求列表（含所属项目名、关联任务数、正文摘要），不含完整正文 */
     @GetMapping("/api/req-docs")
     public ApiResult<List<ReqDocView>> list(@RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(docService.list(ws.getId()));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.list(ws.getId(), userId));
     }
 
     /** 需求详情（含正文 HTML） */
     @GetMapping("/api/req-docs/{id}")
     public ApiResult<RequirementDoc> get(@PathVariable String id,
                                         @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.getVisible(ws.getId(), userId, id));
+    }
+
+    /** 文档关联的需求池需求（id / title / status / priority） */
+    @GetMapping("/api/req-docs/{id}/demands")
+    public ApiResult<List<java.util.Map<String, Object>>> demands(@PathVariable String id,
+                                                                  @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(docService.get(ws.getId(), id));
+        docService.getVisible(ws.getId(), CurrentUser.id(), id);
+        return ApiResult.ok(docService.demandsOfDoc(ws.getId(), id));
+    }
+
+    @GetMapping("/api/req-docs/{id}/tasks")
+    public ApiResult<List<Task>> tasks(@PathVariable String id,
+                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        docService.getVisible(ws.getId(), userId, id);
+        return ApiResult.ok(docService.tasks(ws.getId(), id));
+    }
+
+    /** 需求文档活动轨迹：沿用空间成员权限，并校验文档属于该空间。 */
+    @GetMapping("/api/req-docs/{id}/activities")
+    public ApiResult<List<WorkActivity>> activities(@PathVariable String id,
+                                                    @RequestParam(required = false) String workspace) {
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        docService.getVisible(ws.getId(), CurrentUser.id(), id);
+        return ApiResult.ok(docService.activities(ws.getId(), id));
     }
 
     @PostMapping("/api/req-docs")
@@ -71,7 +102,7 @@ public class RequirementDocController {
     public ApiResult<Void> delete(@PathVariable String id,
                                   @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        docService.delete(ws.getId(), id);
+        docService.delete(CurrentUser.id(), ws.getId(), id);
         return ApiResult.ok(null);
     }
 }

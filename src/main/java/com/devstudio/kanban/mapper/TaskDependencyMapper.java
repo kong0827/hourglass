@@ -11,6 +11,10 @@ public interface TaskDependencyMapper {
 
     List<TaskDependency> selectByWorkspace(@Param("workspaceId") String workspaceId);
 
+    /** 甘特读接口：viewerId 非空时跳过任一端位于隐藏项目的依赖 */
+    List<TaskDependency> selectVisibleByWorkspace(@Param("workspaceId") String workspaceId,
+                                                  @Param("viewerId") String viewerId);
+
     TaskDependency selectById(@Param("id") String id);
 
     int countEdge(@Param("fromTaskId") String fromTaskId, @Param("toTaskId") String toTaskId);

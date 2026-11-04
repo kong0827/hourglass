@@ -3,11 +3,13 @@ package com.devstudio.kanban.controller;
 import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.common.LoginUser;
+import com.devstudio.kanban.dto.NotificationPreferenceUpdateRequest;
 import com.devstudio.kanban.dto.PasswordChangeRequest;
 import com.devstudio.kanban.dto.ProfileUpdateRequest;
 import com.devstudio.kanban.dto.WorkHoursRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.service.UserNotificationPreferenceService;
 import com.devstudio.kanban.service.UserService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,10 +26,13 @@ public class AuthController {
 
     private final UserMapper userMapper;
     private final UserService userService;
+    private final UserNotificationPreferenceService preferenceService;
 
-    public AuthController(UserMapper userMapper, UserService userService) {
+    public AuthController(UserMapper userMapper, UserService userService,
+                          UserNotificationPreferenceService preferenceService) {
         this.userMapper = userMapper;
         this.userService = userService;
+        this.preferenceService = preferenceService;
     }
 
     /** 当前登录用户信息（前端据此决定管理入口、上次空间、负责人默认名等） */
@@ -39,6 +44,7 @@ public class AuthController {
         data.put("id", u.getId());
         data.put("username", u.getUsername());
         data.put("displayName", u.getDisplayName());
+        data.put("email", db == null ? null : db.getEmail());
         data.put("role", db != null ? db.getRole() : u.getRole());
         data.put("lastWorkspaceId", db == null ? null : db.getLastWorkspaceId());
         /* 计时设置：只有工作时段内累计、每天有上限（没配置过就是 9-18 / 8 小时） */
@@ -61,6 +67,23 @@ public class AuthController {
         AppUser u = userService.updateProfile(CurrentUser.id(), req);
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("displayName", u.getDisplayName());
+        data.put("email", u.getEmail());
+        return ApiResult.ok(data);
+    }
+
+    /** 固定四类事件完整返回；未保存过的事件使用 inApp=true、email=false。 */
+    @GetMapping("/api/auth/notification-preferences")
+    public ApiResult<Map<String, Object>> notificationPreferences() {
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("preferences", preferenceService.list(CurrentUser.id()));
+        return ApiResult.ok(data);
+    }
+
+    @PutMapping("/api/auth/notification-preferences")
+    public ApiResult<Map<String, Object>> updateNotificationPreferences(
+            @Valid @RequestBody NotificationPreferenceUpdateRequest req) {
+        Map<String, Object> data = new LinkedHashMap<String, Object>();
+        data.put("preferences", preferenceService.update(CurrentUser.id(), req));
         return ApiResult.ok(data);
     }
 

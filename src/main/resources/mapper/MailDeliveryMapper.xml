@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.MailDeliveryMapper">
+
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO mail_delivery
+      (recipient, subject, body, event_type, reference_id, status, attempts, next_attempt_at)
+    VALUES
+      (#{recipient}, #{subject}, #{body}, #{eventType}, #{referenceId}, 'pending', 0, NOW())
+  </insert>
+
+  <select id="selectDue" resultType="MailDelivery">
+    SELECT id, recipient, subject, body, event_type, reference_id, status,
+           attempts, next_attempt_at, last_error, created_at, sent_at
+    FROM mail_delivery
+    WHERE status = 'pending' AND attempts &lt; 3 AND next_attempt_at &lt;= #{now}
+    ORDER BY id
+    LIMIT #{limit}
+  </select>
+
+  <update id="markSent">
+    UPDATE mail_delivery
+    SET status = 'sent', attempts = attempts + 1, sent_at = #{sentAt}, last_error = NULL
+    WHERE id = #{id} AND status = 'pending'
+  </update>
+
+  <update id="markAttemptFailed">
+    UPDATE mail_delivery
+    SET status = #{status}, attempts = #{attempts}, next_attempt_at = #{nextAttemptAt},
+        last_error = #{lastError}
+    WHERE id = #{id} AND status = 'pending'
+  </update>
+</mapper>

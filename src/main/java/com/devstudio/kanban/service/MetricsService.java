@@ -63,12 +63,12 @@ public class MetricsService {
     }
 
     /** 当前各列计数 + 逾期（看板/报表/流程体检共用） */
-    public TaskBucketRow buckets(String workspaceId, LocalDate today) {
-        return taskMapper.countBuckets(workspaceId, today);
+    public TaskBucketRow buckets(String workspaceId, String viewerId, LocalDate today) {
+        return taskMapper.countBuckets(workspaceId, viewerId, today);
     }
 
-    /** 工时汇总：累计 / 本周期 × 全空间 / 我（一次 SQL） */
-    public WorkSumRow workMinutes(String workspaceId, String userId, LocalDateTime from) {
-        return timeLogMapper.sumWork(workspaceId, userId, from, null);
+    /** 工时汇总：累计 / 本周期 × 全空间 / 我（一次 SQL；viewerId 非空时排除不可见项目） */
+    public WorkSumRow workMinutes(String workspaceId, String userId, LocalDateTime from, String viewerId) {
+        return timeLogMapper.sumWork(workspaceId, userId, from, null, viewerId);
     }
 }

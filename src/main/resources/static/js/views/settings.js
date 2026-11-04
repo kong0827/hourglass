@@ -108,14 +108,27 @@ var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
     wsMemberList = $("wsMemberList"), wsMemberName = $("wsMemberName"),
     catCfgList = $("catCfgList"), catNewName = $("catNewName"), catNewColor = $("catNewColor"),
     colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor");
+/* 成员搜索选择器：用户先从候选列表选中，再点「添加成员」 */
+var wsMemberSelected = null, wsMemberCandidates = {}, wsMemberTimer = null, wsMemberSeq = 0;
+var ROLE_LABELS = { owner:"空间主", admin:"管理员", member:"成员", viewer:"查看者" };
+function roleLabel(role){ return ROLE_LABELS[role] || ROLE_LABELS.member; }
+function roleOptions(selected, allowAdmin){
+  var roles = allowAdmin === false ? ["member","viewer"] : ["admin","member","viewer"];
+  return roles.map(function(r){
+    return '<option value="' + r + '"' + (r === selected ? " selected" : "") + '>' + roleLabel(r) + '</option>';
+  }).join("");
+}
 function enterSettingsView(){
   if(!rt.currentWs || !wsNameInput) return;
   rt.settingsReady = true;
+  if(rt.projectAccessCache && rt.projectAccessCache.wsId !== rt.currentWs.id) rt.projectAccessCache = null;
   var isOwner = rt.currentWs.myRole === "owner";
+  var myRole = rt.currentWs.myRole || "member";
+  var isManager = isOwner || myRole === "admin";
   var isPersonal = rt.currentWs.type === "personal";
   $("wsTypeHint").textContent = isPersonal
     ? "个人空间 · 仅自己可见"
-    : ("共享空间 · " + (isOwner ? "你是空间主" : "你是成员") + "（" + (rt.currentWs.memberCount || 0) + " 人）");
+    : ("共享空间 · " + (isOwner ? "你是空间主" : "你是" + roleLabel(myRole)) + "（" + (rt.currentWs.memberCount || 0) + " 人）");
   wsNameInput.value = rt.currentWs.name;
   wsNameInput.disabled = isPersonal || !isOwner;
   wsWebhook.value = rt.currentWs.notifyWebhook || "";
@@ -135,9 +148,14 @@ function enterSettingsView(){
   /* 按登录名直接加人只有平台管理员可用；普通空间主只能走邀请链接（对方确认后加入） */
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
   $("wsMemberAdd").hidden = !(isOwner && isAdmin);
-  if($("wsMemberHint")) $("wsMemberHint").hidden = !(isOwner && !isPersonal && !isAdmin);
-  var canInvite = !isPersonal && isOwner;
+  resetMemberPicker();
+  if($("wsMemberHint")) $("wsMemberHint").hidden = isPersonal || isAdmin;
+  var canInvite = !isPersonal && isManager;
   $("inviteBox").hidden = !canInvite;
+  if($("inviteHint")) $("inviteHint").textContent = isAdmin
+    ? "把链接发给已有账号的同事：对方登录后打开链接即可一键加入；新同事请先在你的「用户管理」里创建账号。链接 7 天有效，可随时撤销。"
+    : "把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。";
+  if($("setTabAccess")) $("setTabAccess").hidden = !isManager || isPersonal;
   if(isPersonal){
     wsMemberList.innerHTML = '<div class="foot-note">个人空间没有其他成员。</div>';
     $("wsMemberCount").textContent = "";
@@ -160,7 +178,10 @@ function enterSettingsView(){
 var settingsTab = "space";
 function setSettingsTab(tab){
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
+  var myRole = rt.currentWs && rt.currentWs.myRole;
+  var isManager = myRole === "owner" || myRole === "admin";
   if(tab === "account" && !isAdmin) tab = "space";
+  if(tab === "access" && !isManager) tab = "space";
   settingsTab = tab;
   document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
     var on = b.dataset.setTab === tab;
@@ -170,7 +191,11 @@ function setSettingsTab(tab){
   document.querySelectorAll("#view-settings [data-set-pane]").forEach(function(p){
     p.hidden = p.dataset.setPane !== tab;
   });
+  /* SMTP 配置在「集成」页里，仅平台管理员可见 */
+  if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
+  if(tab === "access") loadProjectAccess();
+  if(tab === "integration" && isAdmin) loadMailSettings();
   if(tab === "account") enterUsersView();
 }
 function initSetTabs(){
@@ -184,27 +209,184 @@ function initSetTabs(){
 }
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members").then(function(list){
-    rt.wsMembersCache = list || [];
+  var wsId = encodeURIComponent(rt.currentWs.id);
+  var myRole = rt.currentWs.myRole;
+  var isOwner = myRole === "owner";
+  var isManager = isOwner || myRole === "admin";
+  var render = function(){
     $("wsMemberCount").textContent = "共 " + rt.wsMembersCache.length + " 人";
-    var isOwner = rt.currentWs.myRole === "owner";
     wsMemberList.innerHTML = rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
-      var canRemove = isOwner ? m.role !== "owner" : isSelf;
+      var role = m.role || "member";
+      /* 管理员只能调整/移除成员与查看者；管理员本人与空间主仅空间主可处理 */
+      var canManageRow = isOwner || (isManager && role !== "admin" && role !== "owner");
+      var canRemove = isSelf ? role !== "owner" : (canManageRow && role !== "owner");
+      var roleCell = canManageRow
+        ? '<select class="mini-select" data-member-role aria-label="空间角色" title="调整空间角色">' +
+            roleOptions(role, isOwner) + '</select>'
+        : '<span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' +
+            roleLabel(role) + '</span>';
+      var sub = "@" + esc(m.username);
+      var vis = memberVisibilityText(m);
+      if(vis) sub += ' · ' + vis;
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
         '<span class="mi"><span class="nm">' + esc(m.displayName) + '</span>' +
-          '<span class="sub">@' + esc(m.username) + '</span></span>' +
-        '<span class="tag ' + (m.role === "owner" ? "tag-primary" : "tag-ghost") + '">' +
-          (m.role === "owner" ? "空间主" : "成员") + '</span>' +
+          '<span class="sub">' + sub + '</span></span>' +
+        roleCell +
         (canRemove ? '<span class="acts"><button class="btn sm danger" type="button" data-mid-del="' +
           esc(m.userId) + '">' + (isSelf ? "退出" : "移出") + '</button></span>' : '') +
       '</div>';
     }).join("");
+  };
+  API.get("/api/workspaces/" + wsId + "/members").then(function(list){
+    rt.wsMembersCache = list || [];
+    /* 可见项目数来自矩阵接口：只有管理者能读，读不到就不显示这一项 */
+    if(isManager && !rt.projectAccessCache){
+      API.get("/api/workspaces/" + wsId + "/project-access").then(function(data){
+        rt.projectAccessCache = data || {};
+        rt.projectAccessCache.wsId = rt.currentWs.id;
+        render();
+      }).catch(render);
+      return;
+    }
+    render();
   }).catch(function(ex){
     wsMemberList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
+function memberVisibilityText(m){
+  var data = rt.projectAccessCache;
+  if(!data || !(data.projects || []).length) return "";
+  var projects = data.projects || [];
+  var role = m.role || "member";
+  if(role !== "member") return "可见全部 " + projects.length + " 个项目";
+  var hidden = 0;
+  (data.grants || []).forEach(function(g){
+    if(g.userId === m.userId && g.projectId && g.access === "none") hidden++;
+  });
+  return "可见 " + (projects.length - hidden) + "/" + projects.length + " 个项目";
+}
+wsMemberList.addEventListener("change", function(e){
+  var sel = e.target.closest("[data-member-role]");
+  if(!sel) return;
+  var row = sel.closest("[data-mid]");
+  if(!row) return;
+  var userId = row.dataset.mid;
+  var role = sel.value;
+  sel.disabled = true;
+  API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
+    encodeURIComponent(userId) + "/role", { role: role }).then(function(){
+    toast("角色已改为「" + roleLabel(role) + "」", "fs");
+    loadWsMemberList();
+    if(settingsTab === "access") loadProjectAccess();
+  }).catch(function(ex){
+    sel.disabled = false;
+    sel.value = (rt.wsMembersCache || []).reduce(function(prev, m){
+      return m.userId === userId ? (m.role || "member") : prev;
+    }, "member");
+    toast(ex.message || "角色修改失败", "bad");
+  });
+});
+/* ---------- 项目可见范围矩阵 ---------- */
+var ACCESS_OPTIONS = [
+  { value:"default", label:"默认（参与）" },
+  { value:"read", label:"只读" },
+  { value:"none", label:"不可见" }
+];
+/* 历史数据可能残留 pm/dev/qa：小团队不区分项目内角色，统一按默认参与展示 */
+function normalizeAccess(value){
+  return (value === "read" || value === "none") ? value : "default";
+}
+function accessOptions(selected){
+  return ACCESS_OPTIONS.map(function(o){
+    return '<option value="' + o.value + '"' + (o.value === selected ? " selected" : "") + '>' + o.label + '</option>';
+  }).join("");
+}
+function isPrivilegedRole(role){ return role === "owner" || role === "admin"; }
+function accessKey(userId, projectId){ return userId + "|" + projectId; }
+function loadProjectAccess(){
+  var box = $("projectAccessWrap");
+  if(!box || !rt.currentWs) return;
+  box.innerHTML = '<div class="foot-note">加载中…</div>';
+  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access").then(function(data){
+    rt.projectAccessCache = data || {};
+    rt.projectAccessCache.wsId = rt.currentWs.id;
+    renderProjectAccess();
+  }).catch(function(ex){
+    box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function renderProjectAccess(){
+  var box = $("projectAccessWrap");
+  var data = rt.projectAccessCache;
+  if(!box || !data) return;
+  var members = data.members || [];
+  var projects = data.projects || [];
+  var grants = data.grants || [];
+  var summary = $("accessSummary");
+  if(summary) summary.textContent = members.length + " 位成员 · " + projects.length + " 个项目";
+  if(!projects.length){
+    box.innerHTML = UI.emptyState({
+      icon:"folder", title:"还没有项目", text:"先在项目中创建项目，再回来配置成员的可见范围。"
+    });
+    return;
+  }
+  var grantMap = {};
+  grants.forEach(function(g){
+    if(g && g.userId && g.projectId) grantMap[accessKey(g.userId, g.projectId)] = g.access;
+  });
+  var head = '<thead><tr><th class="access-sticky">成员</th><th>角色</th>' +
+    projects.map(function(p){ return '<th title="' + esc(p.name) + '">' + esc(p.name) + '</th>'; }).join("") +
+    '</tr></thead>';
+  var body = members.map(function(m){
+    var role = m.role || "member";
+    var cells;
+    if(isPrivilegedRole(role)){
+      cells = '<td class="access-all" colspan="' + projects.length + '">全部项目</td>';
+    }else if(role === "viewer"){
+      cells = '<td class="access-all" colspan="' + projects.length + '">全部项目（只读）</td>';
+    }else{
+      cells = projects.map(function(p){
+        var value = normalizeAccess(grantMap[accessKey(m.userId, p.id)] || "default");
+        return '<td><select class="mini-select access-select" data-access-user="' + esc(m.userId) +
+          '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
+          accessOptions(value) + '</select></td>';
+      }).join("");
+    }
+    return '<tr data-access-mid="' + esc(m.userId) + '">' +
+      '<td class="access-sticky"><span class="access-name">' + esc(m.displayName || m.username || m.userId) + '</span>' +
+        '<span class="access-sub">@' + esc(m.username || "") + '</span></td>' +
+      '<td><span class="tag ' + (role === "owner" ? "tag-primary" : "tag-ghost") + '">' + roleLabel(role) + '</span></td>' +
+      cells + '</tr>';
+  }).join("");
+  box.innerHTML = '<table class="manager-tbl access-matrix">' + head + '<tbody>' + body + '</tbody></table>';
+}
+$("projectAccessWrap").addEventListener("change", function(e){
+  var sel = e.target.closest("[data-access-user]");
+  if(!sel) return;
+  var userId = sel.dataset.accessUser;
+  var projectId = sel.dataset.accessProject;
+  var access = sel.value === "default" ? "" : sel.value;
+  sel.disabled = true;
+  API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access", {
+    userId: userId, projectId: projectId, access: access
+  }).then(function(){
+    if(rt.projectAccessCache){
+      rt.projectAccessCache.grants = rt.projectAccessCache.grants || [];
+      rt.projectAccessCache.grants = rt.projectAccessCache.grants.filter(function(g){
+        return !(g.userId === userId && g.projectId === projectId);
+      });
+      if(access) rt.projectAccessCache.grants.push({ userId:userId, projectId:projectId, access:access });
+    }
+    toast(access ? "可见范围已更新" : "已恢复默认参与", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "保存失败", "bad");
+    loadProjectAccess();
+  }).then(function(){
+    sel.disabled = false;
+  });
+});
 function inviteLink(code){
   return window.location.origin + "/join.html?code=" + encodeURIComponent(code);
 }
@@ -457,19 +639,19 @@ function renderNotifyStatus(){
   var d = rt.notifyInfo || {};
   var parts = [];
   if(d.enabled){
-    parts.push('服务端推送总开关：<b style="color:var(--success)">已开启</b>');
+    parts.push('服务端推送总开关：<b style="color:var(--success-fg)">已开启</b>');
   }else{
-    parts.push('服务端推送总开关：<b style="color:var(--warning)">未开启</b>（定时提醒不会发送）');
+    parts.push('服务端推送总开关：<b style="color:var(--warning-fg)">未开启</b>（定时提醒不会发送）');
   }
   parts.push('<span class="sep">|</span>渠道：' + esc(CHANNEL_LABEL[d.channel] || d.channel || "未配置"));
   if(d.workspaceHasAddress === false){
-    parts.push('<span class="sep">|</span><b style="color:var(--warning)">本空间还没填地址</b>');
+    parts.push('<span class="sep">|</span><b style="color:var(--warning-fg)">本空间还没填地址</b>');
   }
   if(d.lastAttemptAt){
     parts.push('<span class="sep">|</span>上次推送：' + esc(fmtTs(d.lastAttemptAt)) + ' ' +
       (d.lastResult === "success"
-        ? '<b style="color:var(--success)">成功</b>'
-        : '<b style="color:var(--danger)">失败</b>' + (d.lastError ? '（' + esc(d.lastError) + '）' : '')));
+        ? '<b style="color:var(--success-fg)">成功</b>'
+        : '<b style="color:var(--danger-fg)">失败</b>' + (d.lastError ? '（' + esc(d.lastError) + '）' : '')));
   }else{
     parts.push('<span class="sep">|</span>还没有推送记录');
   }
@@ -640,12 +822,95 @@ $("btnNotifyTest").addEventListener("click", function(){
     toast(ex.message || "推送失败", "bad");
   });
 });
+function memberOptionsEl(){ return $("wsMemberOptions"); }
+function setMemberOptionsOpen(open){
+  var box = memberOptionsEl();
+  if(box) box.hidden = !open;
+  if(wsMemberName) wsMemberName.setAttribute("aria-expanded", open ? "true" : "false");
+}
+function resetMemberPicker(){
+  wsMemberSelected = null;
+  wsMemberCandidates = {};
+  wsMemberSeq++;
+  if(wsMemberName) wsMemberName.value = "";
+  if($("btnWsMemberAdd")) $("btnWsMemberAdd").disabled = true;
+  var box = memberOptionsEl();
+  if(box) box.innerHTML = "";
+  setMemberOptionsOpen(false);
+}
+function renderMemberOptions(list){
+  var box = memberOptionsEl();
+  if(!box) return;
+  wsMemberCandidates = {};
+  (list || []).forEach(function(u){ wsMemberCandidates[u.id] = u; });
+  if(!list || !list.length){
+    box.innerHTML = '<div class="member-option-empty">没有匹配的账号（账号需先由平台管理员创建）</div>';
+    setMemberOptionsOpen(true);
+    return;
+  }
+  box.innerHTML = list.map(function(u){
+    return '<button class="member-option" type="button" role="option" data-cid="' + esc(u.id) + '">' +
+      '<span class="nm">' + esc(u.displayName || u.username) + '</span>' +
+      '<span class="sub">@' + esc(u.username) + '</span></button>';
+  }).join("");
+  setMemberOptionsOpen(true);
+}
+function searchMemberCandidates(){
+  if(!rt.currentWs) return;
+  var q = wsMemberName.value.trim();
+  var box = memberOptionsEl();
+  if(box) box.innerHTML = '<div class="member-option-empty">搜索中…</div>';
+  var seq = ++wsMemberSeq;
+  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) +
+    "/member-candidates?q=" + encodeURIComponent(q)).then(function(list){
+    if(seq !== wsMemberSeq) return;
+    renderMemberOptions(list);
+  }).catch(function(ex){
+    if(seq !== wsMemberSeq) return;
+    if(box) box.innerHTML = '<div class="member-option-empty">搜索失败：' + esc(ex.message || "网络异常") + '</div>';
+    setMemberOptionsOpen(true);
+  });
+}
+wsMemberName.addEventListener("input", function(){
+  wsMemberSelected = null;
+  $("btnWsMemberAdd").disabled = true;
+  wsMemberSeq++;
+  clearTimeout(wsMemberTimer);
+  if(!wsMemberName.value.trim()){ setMemberOptionsOpen(false); return; }
+  wsMemberTimer = setTimeout(searchMemberCandidates, 250);
+});
+wsMemberName.addEventListener("focus", function(){
+  if(!wsMemberName.value.trim()) searchMemberCandidates();
+});
+wsMemberName.addEventListener("keydown", function(e){
+  if(e.key === "Escape"){ setMemberOptionsOpen(false); return; }
+  if(e.key === "Enter"){
+    e.preventDefault();
+    if(wsMemberSelected){ $("btnWsMemberAdd").click(); return; }
+    var first = memberOptionsEl() && memberOptionsEl().querySelector("[data-cid]");
+    if(first) first.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  }
+});
+$("wsMemberOptions").addEventListener("mousedown", function(e){
+  var opt = e.target.closest("[data-cid]");
+  if(!opt) return;
+  e.preventDefault();
+  var u = wsMemberCandidates[opt.dataset.cid];
+  if(!u) return;
+  wsMemberSelected = u;
+  wsMemberName.value = (u.displayName || u.username) + " (@" + u.username + ")";
+  $("btnWsMemberAdd").disabled = false;
+  setMemberOptionsOpen(false);
+});
+document.addEventListener("click", function(e){
+  if(!e.target || !e.target.closest || !e.target.closest("#wsMemberAdd")) setMemberOptionsOpen(false);
+});
 $("btnWsMemberAdd").addEventListener("click", function(){
-  var un = wsMemberName.value.trim();
-  if(!un){ toast("请输入成员登录名", "warn"); return; }
+  if(!wsMemberSelected){ toast("请先从搜索结果中选择成员", "warn"); return; }
+  var un = wsMemberSelected.username;
   API.post("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members", { username: un }).then(function(){
     toast("已添加成员 @" + un, "fs");
-    wsMemberName.value = "";
+    resetMemberPicker();
     loadWsMemberList();
     loadWorkspaces(rt.currentUser);
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
@@ -748,7 +1013,7 @@ $("inviteList").addEventListener("click", function(e){
 $("btnExport").addEventListener("click", function(){
   API.get("/api/export").then(function(data){
     triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线/需求文档/分支）", "fs");
+    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线/文档/分支/版本/需求池）", "fs");
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
@@ -760,7 +1025,7 @@ $("fileImport").addEventListener("change", function(e){
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的任务、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按任务重建完成归档；同时清空任务通知。已选文件：<b>" +
       esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
-      "<br><br>v6 备份会连同<b>需求文档与分支</b>一起覆盖恢复；旧备份不含这两类数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
+      "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本任务绑定、需求池与首版上线日</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
     if(!ok) return;
@@ -774,8 +1039,10 @@ $("fileImport").addEventListener("change", function(e){
       }
       API.post("/api/import", data).then(function(res){
         toast("已从备份恢复 " + res.tasks + " 项任务 / " + res.reqs + " 项项目" +
-          (res.reqDocs ? " / " + res.reqDocs + " 份需求文档" : "") +
+          (res.reqDocs ? " / " + res.reqDocs + " 份文档" : "") +
           (res.branches ? " / " + res.branches + " 个分支" : "") +
+          (res.versions ? " / " + res.versions + " 个版本" : "") +
+          (res.demands ? " / " + res.demands + " 条需求池" : "") +
           (res.comments ? " / " + res.comments + " 条评论" : ""), "fs");
         ganttState.undo = [];
         syncGanttUndoUI();
@@ -809,20 +1076,20 @@ function disarmReset(){
   if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
   btnReset.classList.remove("armed");
   resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档、需求文档（随项目）、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
+  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档、文档（随项目）、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){
   if(rt.resetArmed){
     disarmReset();
     var n = totalTaskCount(), m = rt.reqList.length;
-    API.post("/api/import", {v:6, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[]}).then(function(){
+    API.post("/api/import", {v:8, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[]}).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
-      state.tags = []; state.due = null; state.focus = false;
+      state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档与需求文档）")
+        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档、文档、版本与需求池）")
         : "任务数据已清空（分支、附件、时间线保留）", "warn");
       ganttState.undo = [];
       syncGanttUndoUI();
@@ -834,7 +1101,7 @@ btnReset.addEventListener("click", function(){
   }
   btnReset.classList.add("armed");
   resetLabel.textContent = "再次点击清空任务数据";
-  toast("再次点击确认：删除任务/回收站/项目/评论/甘特依赖与基线/任务通知/完成归档/需求文档，分享链接失效；分支、附件、时间线保留", "warn");
+  toast("再次点击确认：删除任务/回收站/项目/评论/甘特依赖与基线/任务通知/完成归档/文档/版本与需求池，分享链接失效；分支、附件、时间线保留", "warn");
   rt.resetArmed = setTimeout(disarmReset, 3500);
 });
 var SHORTCUT_ROWS = [
@@ -949,7 +1216,7 @@ userListEl.addEventListener("click", function(e){
   if(e.target.closest("[data-u-del]")){
     UI.showConfirm({
       title:"删除用户",
-      msg:"删除用户「" + esc(display) + "」？该账号个人空间的任务/项目需已清空；个人空间剩余的需求文档、附件与配置会随账号一并删除，不可恢复。",
+      msg:"删除用户「" + esc(display) + "」？该账号个人空间的任务/项目需已清空；个人空间剩余的文档、附件与配置会随账号一并删除，不可恢复。",
       okText:"删除用户"
     }).then(function(ok){
       if(!ok) return;
@@ -1001,6 +1268,70 @@ $("dlgUserPwdForm").addEventListener("submit", function(e){
   }).catch(function(ex){
     btn.disabled = false;
     toast(ex.message || "重置失败", "bad");
+  });
+});
+function renderMailSettings(d){
+  if(!$("mailHost")) return;
+  d = d || {};
+  $("mailEnabled").checked = !!d.enabled;
+  $("mailHost").value = d.host || "";
+  $("mailPort").value = d.port || 587;
+  $("mailUsername").value = d.username || "";
+  $("mailPassword").value = "";
+  $("mailFrom").value = d.fromEmail || "";
+  $("mailPasswordHint").textContent = d.passwordSet ? "已保存密码，留空表示不修改" : "尚未保存密码";
+}
+function loadMailSettings(){
+  if(!$("mailHost")) return;
+  API.get("/api/admin/mail-settings").then(renderMailSettings).catch(function(ex){
+    if($("mailResult")){
+      $("mailResult").hidden = false;
+      $("mailResult").textContent = "SMTP 配置加载失败：" + (ex.message || "未知错误");
+    }
+  });
+}
+function mailSettingsBody(){
+  return {
+    enabled: $("mailEnabled").checked,
+    host: $("mailHost").value.trim(),
+    port: Number($("mailPort").value),
+    username: $("mailUsername").value.trim(),
+    password: $("mailPassword").value,
+    fromEmail: $("mailFrom").value.trim()
+  };
+}
+function saveMailSettings(){
+  return API.put("/api/admin/mail-settings", mailSettingsBody()).then(function(d){
+    renderMailSettings(d);
+    return d;
+  });
+}
+if($("mailSave")) $("mailSave").addEventListener("click", function(){
+  var btn = this;
+  btn.disabled = true;
+  saveMailSettings().then(function(){
+    btn.disabled = false;
+    toast("SMTP 配置已保存", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
+if($("mailTest")) $("mailTest").addEventListener("click", function(){
+  var btn = this;
+  btn.disabled = true;
+  if($("mailResult")){
+    $("mailResult").hidden = false;
+    $("mailResult").textContent = "正在保存并发送测试邮件…";
+  }
+  saveMailSettings().then(function(){ return API.post("/api/admin/mail-settings/test", {}); }).then(function(d){
+    btn.disabled = false;
+    $("mailResult").textContent = "测试邮件已发送至 " + (d.recipient || "当前管理员邮箱");
+    toast("测试邮件发送成功", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    if($("mailResult")) $("mailResult").textContent = "测试失败：" + (ex.message || "未知错误");
+    toast(ex.message || "测试失败", "bad");
   });
 });
 

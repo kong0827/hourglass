@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 public class FlowMoveRow {
 
     private String taskId;
+    /** 任务所属项目（任务已彻底删除时为 null，不过滤） */
+    private String reqId;
     private String fromColumn;
     private String toColumn;
     private String detail;

@@ -83,7 +83,7 @@ public class TaskAuditLogger {
             parts.add("所属项目 " + reqName(workspaceId, old.getReqId()) + "→" + reqName(workspaceId, t.getReqId()));
         }
         if (!Objects.equals(old.getReqDocId(), t.getReqDocId())) {
-            parts.add("关联需求变更");
+            parts.add("关联文档变更");
         }
         if (!Objects.equals(old.getBranchId(), t.getBranchId())) {
             parts.add("所属分支变更");

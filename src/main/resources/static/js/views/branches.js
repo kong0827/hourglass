@@ -157,8 +157,8 @@ function branchCardHTML(b){
   var sm = branchStatusMeta(b.status);
   var stay = branchStay(b);
   var taskTxt = b.taskCount
-    ? ((b.doneCount || 0) + "/" + b.taskCount + " 任务")
-    : "无关联任务";
+    ? ((b.doneCount || 0) + "/" + b.taskCount + " 工作项")
+    : "无关联工作项";
   return '<article class="br-card" data-branch="' + esc(b.id) + '" tabindex="0" role="button"' +
       ' aria-label="' + esc(b.name) + '，' + esc(sm.name) + '">' +
     '<div class="br-card-top">' +
@@ -360,11 +360,11 @@ function renderBranchDrawer(b){
       '<div><span>目标分支</span><b>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</b></div>' +
       '<div><span>负责人</span><b>' + (b.owner ? esc(b.owner) : "—") + '</b></div>' +
       '<div><span>创建时间</span><b>' + esc(fmtTs(b.createdAt)) + '</b></div>' +
-      '<div><span>关联任务</span><b>' + (b.taskCount ? ((b.doneCount || 0) + " / " + b.taskCount + " 已完成") : "—") + '</b></div>' +
+      '<div><span>关联工作项</span><b>' + (b.taskCount ? ((b.doneCount || 0) + " / " + b.taskCount + " 已完成") : "—") + '</b></div>' +
     '</div>' +
     (b.note ? '<p class="br-drawer-note">' + esc(b.note) + '</p>' : '') +
     '<div class="br-sect"><h4>状态时间</h4><div class="br-times">' + times + '</div></div>' +
-    '<div class="br-sect"><h4>关联任务</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
+    '<div class="br-sect"><h4>关联工作项</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
       (rt.currentWs && rt.currentWs.myRole === "owner"
@@ -414,7 +414,7 @@ function loadBranchTasks(id){
     }).join("");
   }).catch(function(){
     var box = $("brTaskList");
-    if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">关联任务加载失败</div>';
+    if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">关联工作项加载失败</div>';
   });
 }
 function populateBranchSelect(keep){

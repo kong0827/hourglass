@@ -40,19 +40,22 @@ public class EstimateService {
     private static final double RISK_AT = 0.8;
 
     private final TaskMapper taskMapper;
+    private final ProjectAccessService projectAccess;
 
-    public EstimateService(TaskMapper taskMapper) {
+    public EstimateService(TaskMapper taskMapper, ProjectAccessService projectAccess) {
         this.taskMapper = taskMapper;
+        this.projectAccess = projectAccess;
     }
 
-    public EstimateStats stats(String workspaceId) {
+    public EstimateStats stats(String workspaceId, String userId) {
         /* 只取填了预估的任务（窄列）并一次 JOIN 出各自工时，不再加载全部历史任务 */
-        List<Task> tasks = taskMapper.selectEstimateTasks(workspaceId);
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<Task> tasks = taskMapper.selectEstimateTasks(workspaceId, viewerId);
         Map<String, Integer> actual = new HashMap<String, Integer>();
         for (Task t : tasks) {
             actual.put(t.getId(), t.getTotalMinutes() == null ? 0 : t.getTotalMinutes());
         }
-        return compute(tasks, actual, taskMapper.countLive(workspaceId));
+        return compute(tasks, actual, taskMapper.countLive(workspaceId, viewerId));
     }
 
     // ==================== 纯计算（无 Spring 依赖，可直接单测） ====================

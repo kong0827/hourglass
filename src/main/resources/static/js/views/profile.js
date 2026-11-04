@@ -40,6 +40,7 @@ function enterProfileView(){
     $("meNameInput").value = rt.currentUser.displayName || "";
     $("fMeName").classList.remove("invalid");
   }
+  if($("meEmail")) $("meEmail").value = rt.currentUser.email || "";
   fillMeSelects();
   ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
   ["fMeNewPwd","fMeAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.classList.remove("invalid"); });
@@ -47,7 +48,56 @@ function enterProfileView(){
   updateMePreview();
   /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
   loadAiConfig();
+  loadNotificationPreferences();
 }
+var NOTIFY_EVENTS = {
+  task_assigned: ["任务指派", "任务创建或负责人变更后指派给我"],
+  task_updated: ["任务变动", "我负责的任务字段发生变更"],
+  task_comment: ["任务评论", "我负责的任务收到新评论"],
+  demand_status: ["需求池状态", "我提交的需求通过、拒绝、排期或重开"]
+};
+function loadNotificationPreferences(){
+  var box = $("meNotificationPrefs");
+  if(!box) return;
+  box.innerHTML = '<div class="foot-note">加载中…</div>';
+  API.get("/api/auth/notification-preferences").then(function(d){
+    renderNotificationPreferences((d && d.preferences) || []);
+  }).catch(function(ex){
+    box.innerHTML = '<div class="foot-note">通知设置加载失败：' + esc(ex.message || "未知错误") + '</div>';
+  });
+}
+function renderNotificationPreferences(items){
+  var box = $("meNotificationPrefs");
+  if(!box) return;
+  box.innerHTML = '<div class="notification-pref-head"><span>事件</span><span>站内通知</span><span>邮件通知</span></div>' + items.map(function(p){
+    var meta = NOTIFY_EVENTS[p.eventType] || [p.eventType, ""];
+    return '<div class="notification-pref-row" data-notify-event="' + esc(p.eventType) + '">' +
+      '<span><b>' + esc(meta[0]) + '</b><small>' + esc(meta[1]) + '</small></span>' +
+      '<label><input type="checkbox" data-notify-inapp ' + (p.inApp ? "checked" : "") + ' /><span>接收</span></label>' +
+      '<label><input type="checkbox" data-notify-email ' + (p.email ? "checked" : "") + ' /><span>接收</span></label></div>';
+  }).join("");
+}
+if($("meNotificationSave")) $("meNotificationSave").addEventListener("click", function(){
+  var btn = this;
+  var preferences = [];
+  $("meNotificationPrefs").querySelectorAll("[data-notify-event]").forEach(function(row){
+    preferences.push({
+      eventType: row.dataset.notifyEvent,
+      inApp: row.querySelector("[data-notify-inapp]").checked,
+      email: row.querySelector("[data-notify-email]").checked
+    });
+  });
+  if(!preferences.length) return;
+  btn.disabled = true;
+  API.put("/api/auth/notification-preferences", { preferences: preferences }).then(function(d){
+    btn.disabled = false;
+    renderNotificationPreferences((d && d.preferences) || preferences);
+    toast("通知设置已保存", "fs");
+  }).catch(function(ex){
+    btn.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+});
 function fillMeSelects(){
   var s = $("meStart"), e = $("meEnd"), m = $("meMax");
   if(!s || !e || !m) return;
@@ -115,18 +165,20 @@ function wireMeAnchor(){
 $("sideUserBtn").addEventListener("click", function(){ showView("profile"); });
 $("meNameSave") && $("meNameSave").addEventListener("click", function(){
   var name = $("meNameInput").value.trim();
+  var email = $("meEmail") ? $("meEmail").value.trim() : "";
   if(!name){ $("fMeName").classList.add("invalid"); toast("请填写显示名", "warn"); return; }
-  if(rt.currentUser && name === rt.currentUser.displayName){ toast("显示名没有变化"); return; }
+  if(rt.currentUser && name === rt.currentUser.displayName && email === (rt.currentUser.email || "")){ toast("基本信息没有变化"); return; }
   var btn = $("meNameSave");
   btn.disabled = true;
-  API.put("/api/auth/profile", { displayName: name }).then(function(res){
+  API.put("/api/auth/profile", { displayName: name, email: email }).then(function(res){
     btn.disabled = false;
     rt.currentUser.displayName = (res && res.displayName) || name;
+    rt.currentUser.email = res ? res.email : email;
     rt.OWNER_DEFAULT = rt.currentUser.displayName;
     renderSideUser(rt.currentUser);
     refreshOwnerSelect();
     enterProfileView();
-    toast("显示名已更新为「" + rt.currentUser.displayName + "」", "fs");
+    toast("基本信息已保存", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
     btn.disabled = false;

@@ -16,4 +16,5 @@ public class TaskFacetRow {
     private String reqId;
     private String boardColumn;
     private LocalDate dueDate;
+    private String itemType;
 }

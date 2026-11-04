@@ -14,6 +14,8 @@ public class AppUser {
     @JsonIgnore
     private String passwordHash;
     private String displayName;
+    /** 个人邮箱：事件邮件收件地址；未填写时只发站内通知 */
+    private String email;
     /** admin/user（只管账号，不等于空间权限） */
     private String role;
     /** 每天几点开始计入工时（0-23，默认 9） */

@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class FlowTaskRow {
 
     private String id;
+    private String reqId;
     private String title;
     private String priority;
     private String boardColumn;

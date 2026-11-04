@@ -12,6 +12,7 @@ import com.devstudio.kanban.mapper.TagMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -37,7 +38,8 @@ class MyTasksPaginationTest {
         TaskSupport support = new TaskSupport(taskMapper, mock(TagMapper.class), metaCache);
         return new TaskQueryService(taskMapper, mock(RequirementMapper.class), mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
-                mock(AttachmentMapper.class), metaCache, support);
+                mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
+                mock(ProjectAccessService.class));
     }
 
     @Test
@@ -85,7 +87,7 @@ class MyTasksPaginationTest {
                 .thenReturn(Collections.<MyTaskWorkspace>emptyList());
 
         BoardQuery query = BoardQuery.from(null, null, "P0", null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         MyTasksPage page = service().myTasksPage("U1", "我", false, query, 0, 25);
 
         assertEquals(3, page.getTotal());

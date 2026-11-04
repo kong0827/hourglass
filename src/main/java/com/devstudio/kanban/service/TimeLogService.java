@@ -32,14 +32,17 @@ public class TimeLogService {
     private final TaskLogMapper logMapper;
     private final WorkspaceMapper workspaceMapper;
     private final UserMapper userMapper;
+    private final ProjectAccessService projectAccess;
 
     public TimeLogService(TimeLogMapper timeLogMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                          WorkspaceMapper workspaceMapper, UserMapper userMapper) {
+                          WorkspaceMapper workspaceMapper, UserMapper userMapper,
+                          ProjectAccessService projectAccess) {
         this.timeLogMapper = timeLogMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.workspaceMapper = workspaceMapper;
         this.userMapper = userMapper;
+        this.projectAccess = projectAccess;
     }
 
     /**
@@ -60,7 +63,8 @@ public class TimeLogService {
         res.put("startedAt", r.getStartedAt().toString());
         res.put("elapsedMinutes", effectiveMinutes(r.getStartedAt(), userId));
         Task task = taskMapper.selectById(r.getTaskId());
-        if (task != null) {
+        /* 项目可见范围可能已被收回：不可见时只保留计时本身，不回传任务标题 */
+        if (task != null && projectAccess.canView(r.getWorkspaceId(), userId, task.getReqId())) {
             res.put("taskTitle", task.getTitle());
         }
         Workspace ws = workspaceMapper.selectById(r.getWorkspaceId());
@@ -71,7 +75,11 @@ public class TimeLogService {
     }
 
     public Map<String, Object> status(String workspaceId, String taskId, String userId) {
-        ensureTask(workspaceId, taskId);
+        projectAccess.assertViewTask(workspaceId, userId, ensureTask(workspaceId, taskId));
+        return statusOf(workspaceId, taskId, userId);
+    }
+
+    private Map<String, Object> statusOf(String workspaceId, String taskId, String userId) {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         TimeLog running = timeLogMapper.selectRunningByTaskAndUser(taskId, userId);
         res.put("running", running != null);
@@ -87,6 +95,7 @@ public class TimeLogService {
     @Transactional
     public Map<String, Object> start(String userId, String workspaceId, String taskId) {
         Task task = ensureTask(workspaceId, taskId);
+        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
         if (timeLogMapper.selectRunningByTaskAndUser(taskId, userId) == null) {
             // 个人计时：开始新计时前自动停止"我自己"其他任务上运行中的计时
             // （无锁先查后插，同账号跨设备极端并发窗口见 api.md「已接受的现状口径」）
@@ -120,6 +129,7 @@ public class TimeLogService {
     @Transactional
     public Map<String, Object> startManual(String userId, String workspaceId, String taskId) {
         Task task = ensureTask(workspaceId, taskId);
+        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
         if (Consts.COL_BACKLOG.equals(task.getBoardColumn()) || Consts.COL_DONE.equals(task.getBoardColumn())) {
             throw AppException.badRequest("只有「进行中」的任务才能计时，请先把任务移到进行中");
         }
@@ -153,7 +163,7 @@ public class TimeLogService {
             boolean mine = t.getOwnerUserId() != null
                     ? userId.equals(t.getOwnerUserId())
                     : (myName != null && myName.equals(t.getOwner()));
-            if (mine) {
+            if (mine && projectAccess.canWrite(workspaceId, userId, t.getReqId())) {
                 start(userId, workspaceId, t.getId());
                 return t;
             }
@@ -177,7 +187,8 @@ public class TimeLogService {
         int minutes = effectiveMinutes(running.getStartedAt(), userId);
         timeLogMapper.closeRunning(taskId, userId, minutes);
         log(userId, workspaceId, taskId, "停止计时，本次计入 " + minutes + " 分钟" + capNote(wallMinutes, minutes));
-        return status(workspaceId, taskId, userId);
+        /* 停自己的表不受项目可见范围影响：可见范围被收回后仍要能关掉计时 */
+        return statusOf(workspaceId, taskId, userId);
     }
 
     /**

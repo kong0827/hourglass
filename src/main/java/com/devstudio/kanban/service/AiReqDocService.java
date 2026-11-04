@@ -26,11 +26,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * AI 辅助需求：拆成任务草稿、体检完成度。
+ * AI 辅助文档：拆成任务草稿、体检完成度。
  *
  * <p>三条原则（改这里之前先读一遍）：
  * <ol>
- *   <li><b>AI 只做语义，程序做判定。</b>模型负责"读懂需求、拆成点、找对应任务"，
+ *   <li><b>AI 只做语义，程序做判定。</b>模型负责"读懂文档、拆成点、找对应任务"，
  *       覆盖率、结论、优先级合法值全部由服务端算 —— 让模型直接打分给不出可解释的数字。</li>
  *   <li><b>AI 产出永不直接落库。</b>拆分结果是草稿，用户勾选确认后才创建任务。</li>
  *   <li><b>只用调用者自己的额度。</b>配置从 {@link AiConfigService#resolve} 取，
@@ -51,25 +51,28 @@ public class AiReqDocService {
     private final AiConfigService configService;
     private final AiClient client;
     private final TaskCommandService taskService;
+    private final ProjectAccessService projectAccess;
     private final ObjectMapper om = new ObjectMapper();
 
     public AiReqDocService(RequirementDocService docService, TaskMapper taskMapper,
-                           AiConfigService configService, AiClient client, TaskCommandService taskService) {
+                           AiConfigService configService, AiClient client, TaskCommandService taskService,
+                           ProjectAccessService projectAccess) {
         this.docService = docService;
         this.taskMapper = taskMapper;
         this.configService = configService;
         this.client = client;
         this.taskService = taskService;
+        this.projectAccess = projectAccess;
     }
 
     // ==================== 拆分成任务草稿 ====================
 
     public AiSplitResponse split(String userId, String workspaceId, String docId, Integer maxTasks) {
         AiConfig cfg = configService.resolve(userId);
-        RequirementDoc doc = docService.get(workspaceId, docId);
-        String text = htmlToText(doc.getContent());
+        RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
+        String text = docText(doc);
         if (text.trim().isEmpty()) {
-            throw AppException.badRequest("需求正文还是空的，先写点内容再拆");
+            throw AppException.badRequest("文档正文还是空的，先写点内容再拆");
         }
 
         String fewShot = fewShotTitles(workspaceId, doc);
@@ -78,24 +81,24 @@ public class AiReqDocService {
 
         int cap = maxTasks == null ? 8 : Math.max(1, Math.min(maxTasks, MAX_DRAFT_TASKS));
 
-        String system = "你是资深软件工程师，负责把一份中文需求文档拆成可执行的任务清单。\n"
+        String system = "你是资深软件工程师，负责把一份中文文档拆成可执行的任务清单。\n"
                 + "硬性要求：\n"
                 + "1. 只拆文档里明确写了的内容，绝不补充文档没提到的功能。文档没写清的地方不要臆造。\n"
                 + "2. 每个任务是一个能在一个工作日内完成的工作单元（0.5~2 天）。粒度太大就拆开，太小就合并。\n"
                 + "3. 标题不超过 30 个字，动词开头，必须包含具体对象（例：\"实现次席出金接口的幂等校验\"）。"
                 + "禁止\"优化\"\"完善\"\"处理\"这类没有信息量的写法。\n"
                 + "4. 按依赖顺序排列：前置任务在前，用 dependsOnIndex 指向它直接依赖的任务下标（无依赖填 -1）。\n"
-                + "5. priority 按需求里的紧迫程度判断：P0 阻塞主流程，P1 核心功能，P2 常规，P3 可选。\n"
+                + "5. priority 按文档里的紧迫程度判断：P0 阻塞主流程，P1 核心功能，P2 常规，P3 可选。\n"
                 + "6. description 写清\"做什么 + 怎么算完成\"，不超过 80 字。\n"
                 + "7. 任务数量控制在 3~" + cap + " 个，宁少勿滥。\n"
                 + "只输出 JSON，不要任何解释文字。";
 
         StringBuilder u = new StringBuilder();
-        u.append("需求标题：").append(doc.getTitle()).append("\n");
+        u.append("文档标题：").append(doc.getTitle()).append("\n");
         if (truncated) {
             u.append("（正文过长，以下只保留了前 ").append(MAX_DOC_CHARS).append(" 字）\n");
         }
-        u.append("\n需求正文：\n---\n").append(body).append("\n---\n");
+        u.append("\n文档正文：\n---\n").append(body).append("\n---\n");
         if (!fewShot.isEmpty()) {
             u.append("\n项目里已有的任务标题（只用来参考命名风格，不要照抄，也不要重复它们）：\n")
                     .append(fewShot);
@@ -161,10 +164,10 @@ public class AiReqDocService {
 
     public AiAuditResponse audit(String userId, String workspaceId, String docId) {
         AiConfig cfg = configService.resolve(userId);
-        RequirementDoc doc = docService.get(workspaceId, docId);
-        String text = htmlToText(doc.getContent());
+        RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
+        String text = docText(doc);
         if (text.trim().isEmpty()) {
-            throw AppException.badRequest("需求正文还是空的，没有可检查的内容");
+            throw AppException.badRequest("文档正文还是空的，没有可检查的内容");
         }
 
         List<Task> mine = taskMapper.selectByReqDoc(workspaceId, docId);
@@ -172,7 +175,7 @@ public class AiReqDocService {
         String body = text.length() > MAX_DOC_CHARS ? text.substring(0, MAX_DOC_CHARS) : text;
         StringBuilder taskList = new StringBuilder();
         if (mine.isEmpty()) {
-            taskList.append("（这个需求下还没有任何任务）\n");
+            taskList.append("（这份文档还没有关联工作项）\n");
         } else {
             for (int i = 0; i < mine.size(); i++) {
                 Task t = mine.get(i);
@@ -186,21 +189,21 @@ public class AiReqDocService {
             }
         }
 
-        String system = "你是资深研发负责人，负责审计\"需求是否真的做完了\"。\n"
+        String system = "你是资深研发负责人，负责审计\"文档中的工作是否真的做完了\"。\n"
                 + "方法：\n"
-                + "1. 把需求正文拆成若干「可验证的功能点」——每个点都必须能被回答\"做了还是没做\"。"
+                + "1. 把文档正文拆成若干「可验证的功能点」——每个点都必须能被回答\"做了还是没做\"。"
                 + "典型颗粒度：一个接口、一个字段、一条业务规则、一种异常处理、一个页面元素。\n"
                 + "2. 对每个功能点，在给定任务里找覆盖它的任务。判断依据是任务标题+描述+状态，不要只看关键词像不像。\n"
                 + "3. 任务确实覆盖了这个点才 covered=true。有任务但没做完，status 记 doing 或 todo。\n"
                 + "4. 找不到对应任务的，status=missing —— 这是最重要的输出，不要为了让结果好看而放过。\n"
-                + "5. 不要臆造需求里没有的功能点，也不要因为任务数量多就认为已经覆盖。\n"
+                + "5. 不要臆造文档里没有的功能点，也不要因为任务数量多就认为已经覆盖。\n"
                 + "status 只能用这四个值：done / doing / todo / missing。\n"
                 + "只输出 JSON，不要任何解释文字。";
 
         StringBuilder u = new StringBuilder();
-        u.append("需求标题：").append(doc.getTitle()).append("\n");
-        u.append("\n需求正文：\n---\n").append(body).append("\n---\n");
-        u.append("\n该需求下的任务（共 ").append(mine.size()).append(" 条）：\n").append(taskList);
+        u.append("文档标题：").append(doc.getTitle()).append("\n");
+        u.append("\n文档正文：\n---\n").append(body).append("\n---\n");
+        u.append("\n该文档关联的工作项（共 ").append(mine.size()).append(" 条）：\n").append(taskList);
         u.append("\n请输出 JSON：{\"summary\":\"一句话结论\",\"nextStep\":\"下一步最该做什么\","
                 + "\"points\":[{\"point\":\"\",\"covered\":true,\"taskTitle\":\"\","
                 + "\"status\":\"done\",\"note\":\"\"}]}");
@@ -244,7 +247,7 @@ public class AiReqDocService {
             res.getPoints().add(pt);
         }
         if (res.getPoints().isEmpty()) {
-            throw new IllegalStateException("AI 没有拆出任何功能点，请补充需求细节后再试");
+            throw new IllegalStateException("AI 没有拆出任何功能点，请补充文档细节后再试");
         }
 
         /* ---- 分数与结论由程序算，不用模型给的口径 ---- */
@@ -293,9 +296,10 @@ public class AiReqDocService {
         if (drafts == null || drafts.isEmpty()) {
             throw AppException.badRequest("没有选中的任务");
         }
-        RequirementDoc doc = docService.get(workspaceId, docId);
+        RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
         Set<String> titles = new HashSet<String>();
-        for (String title : taskMapper.selectTitles(workspaceId)) {
+        for (String title : taskMapper.selectTitles(workspaceId,
+                projectAccess.viewerScope(workspaceId, userId))) {
             if (title != null) {
                 titles.add(title.trim());
             }
@@ -330,6 +334,14 @@ public class AiReqDocService {
     }
 
     // ==================== 工具 ====================
+
+    /** Markdown 正文本身就是纯文本，直接给模型；HTML 文档先抽纯文本 */
+    static String docText(RequirementDoc doc) {
+        String content = doc.getContent();
+        return "markdown".equals(doc.getFormat())
+                ? (content == null ? "" : content)
+                : htmlToText(content);
+    }
 
     /**
      * 富文本转纯文本。直接 {@code text()} 会把整张表格压成一行，

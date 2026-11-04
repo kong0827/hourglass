@@ -40,14 +40,18 @@ public class CategoryController {
     @PostMapping("/api/categories")
     public ApiResult<Category> create(@Valid @RequestBody CategoryRequest req,
                                       @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(categoryService.create(ws.getId(), req));
     }
 
     @PutMapping("/api/categories/{id}")
     public ApiResult<Category> update(@PathVariable String id, @Valid @RequestBody CategoryRequest req,
                                       @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         return ApiResult.ok(categoryService.update(ws.getId(), id, req));
     }
 
@@ -64,7 +68,9 @@ public class CategoryController {
     @PutMapping("/api/categories/order")
     public ApiResult<Void> order(@Valid @RequestBody ColumnOrderRequest req,
                                  @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
         categoryService.order(ws.getId(), req.getIds());
         return ApiResult.ok();
     }

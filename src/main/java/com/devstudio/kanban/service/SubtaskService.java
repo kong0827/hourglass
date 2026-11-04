@@ -20,21 +20,24 @@ public class SubtaskService {
     private final SubtaskMapper subtaskMapper;
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
+    private final ProjectAccessService projectAccess;
 
-    public SubtaskService(SubtaskMapper subtaskMapper, TaskMapper taskMapper, TaskLogMapper logMapper) {
+    public SubtaskService(SubtaskMapper subtaskMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
+                          ProjectAccessService projectAccess) {
         this.subtaskMapper = subtaskMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
+        this.projectAccess = projectAccess;
     }
 
-    public List<Subtask> list(String workspaceId, String taskId) {
-        ensureTask(workspaceId, taskId);
+    public List<Subtask> list(String workspaceId, String userId, String taskId) {
+        projectAccess.assertViewTask(workspaceId, userId, ensureTask(workspaceId, taskId));
         return subtaskMapper.selectByTaskId(workspaceId, taskId);
     }
 
     @Transactional
     public Subtask create(String userId, String workspaceId, String taskId, SubtaskRequest req) {
-        ensureTask(workspaceId, taskId);
+        projectAccess.assertWrite(workspaceId, userId, ensureTask(workspaceId, taskId).getReqId());
         String title = Texts.trimToNull(req.getTitle());
         if (title == null) {
             throw AppException.badRequest("请填写子任务内容");
@@ -55,7 +58,8 @@ public class SubtaskService {
         if (s == null || !workspaceId.equals(s.getWorkspaceId())) {
             throw AppException.notFound("子任务不存在：" + id);
         }
-        ensureTask(workspaceId, s.getTaskId()); // 父任务须仍有效（回收站中的任务不可再改清单）
+        Task parent = ensureTask(workspaceId, s.getTaskId()); // 父任务须仍有效（回收站中的任务不可再改清单）
+        projectAccess.assertWrite(workspaceId, userId, parent.getReqId());
         String title = Texts.trimToNull(req.getTitle());
         if (title != null && !title.equals(s.getTitle())) {
             log(userId, workspaceId, s.getTaskId(), "重命名子任务「" + s.getTitle() + "」→「" + Texts.cut(title, 60) + "」");
@@ -76,7 +80,8 @@ public class SubtaskService {
         if (s == null || !workspaceId.equals(s.getWorkspaceId())) {
             throw AppException.notFound("子任务不存在：" + id);
         }
-        ensureTask(workspaceId, s.getTaskId()); // 与修改一致：父任务无效（回收站中）不可删清单
+        Task parent = ensureTask(workspaceId, s.getTaskId()); // 与修改一致：父任务无效（回收站中）不可删清单
+        projectAccess.assertWrite(workspaceId, userId, parent.getReqId());
         subtaskMapper.deleteById(id);
         log(userId, workspaceId, s.getTaskId(), "删除子任务「" + s.getTitle() + "」");
     }

@@ -15,6 +15,10 @@ public interface TaskMapper {
 
     List<Task> selectAll(@Param("workspaceId") String workspaceId);
 
+    /** 全量任务，但排除 viewer 被显式设为不可见的项目（viewerId 为 null 时等同 selectAll） */
+    List<Task> selectAllVisible(@Param("workspaceId") String workspaceId,
+                                @Param("viewerId") String viewerId);
+
     /** 只取某一列的任务（拖拽排序用，避免整空间 selectAll） */
     List<Task> selectColumnTasks(@Param("workspaceId") String workspaceId,
                                  @Param("column") String column);
@@ -22,13 +26,14 @@ public interface TaskMapper {
     /* ---- 看板 / 列表 / 日历：筛选与分页下推（BE-Q-1） ---- */
 
     /** 看板未完成列（board_column <> done），走 idx_board */
-    List<Task> selectOpenTasks(@Param("workspaceId") String workspaceId);
+    List<Task> selectOpenTasks(@Param("workspaceId") String workspaceId,
+                               @Param("viewerId") String viewerId);
 
     /** 已完成列：全部条数（不受 doneScope / 筛选影响） */
-    int countDoneAll(@Param("workspaceId") String workspaceId);
+    int countDoneAll(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
 
     /** 已完成列：当前 doneScope（仅本周 / 全部）内的条数 */
-    int countDoneInScope(@Param("workspaceId") String workspaceId,
+    int countDoneInScope(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
                          @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);
 
     /** 已完成列：doneScope + 看板筛选后的条数（ganttWhere 与 TaskQueryService.match 同口径） */
@@ -51,11 +56,12 @@ public interface TaskMapper {
                               @Param("limit") int limit);
 
     /** 日历：与月份区间有交集的候选任务（due_date 收敛区间，精确判定仍在 Java） */
-    List<Task> selectCalendar(@Param("workspaceId") String workspaceId,
+    List<Task> selectCalendar(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
                               @Param("first") LocalDate first, @Param("last") LocalDate last);
 
     /** 看板 meta 与到期计数用的窄列投影（顺序与 selectAll 一致） */
-    List<TaskFacetRow> selectBoardFacets(@Param("workspaceId") String workspaceId);
+    List<TaskFacetRow> selectBoardFacets(@Param("workspaceId") String workspaceId,
+                                         @Param("viewerId") String viewerId);
 
     /* ---- 甘特图：SQL 区间过滤 + 稳定排序 + 分页 ---- */
 
@@ -118,16 +124,39 @@ public interface TaskMapper {
 
     int updateSortOrder(@Param("id") String id, @Param("sortOrder") int sortOrder);
 
+    /** 备份导入：全部任务落库后按映射回填 Epic 归属 */
+    int setEpic(@Param("id") String id, @Param("epicId") String epicId);
+
     Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("boardColumn") String boardColumn);
 
     int clearReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 某项目下挂着的任务数（含回收站，与 clearReq 的解绑范围一致；删除项目前统计用） */
+    int countTasksByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** Epic 改为普通类型 / 删除时，解除其子任务归属（任务本身保留） */
+    int clearEpicChildren(@Param("workspaceId") String workspaceId, @Param("epicId") String epicId);
+
+    /** 批量彻底删除前，解除被删任务作为 Epic 的子任务归属 */
+    int clearEpicChildrenByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
+
     /** 分支被删除时，把挂在它上面的任务解绑（任务本身保留） */
     int clearBranchRef(@Param("workspaceId") String workspaceId, @Param("branchId") String branchId);
+
+    /** 需求池条目被删除时，把关联任务上的 demand_id 解绑（任务本身保留） */
+    int clearDemandRef(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
     /** 分支详情：挂在某条分支上的未删除任务（未完成的排前面） */
     List<com.devstudio.kanban.entity.Task> selectByBranch(@Param("workspaceId") String workspaceId,
                                                           @Param("branchId") String branchId);
+
+    /** 项目详情：直接查看项目下的全部未删除任务 */
+    List<Task> selectByReq(@Param("workspaceId") String workspaceId,
+                           @Param("reqId") String reqId);
+
+    /** 需求详情「关联任务」透视：挂在某条需求池需求上的未删除任务 */
+    List<Task> selectByDemand(@Param("workspaceId") String workspaceId,
+                              @Param("demandId") String demandId);
 
     int countByWorkspace(@Param("workspaceId") String workspaceId);
 
@@ -168,50 +197,57 @@ public interface TaskMapper {
 
     /** 近 N 周新增 / 完成：一次扫描按周聚合（UNION ALL + GROUP BY） */
     List<com.devstudio.kanban.dto.WeekCountRow> countCreatedCompletedByWeek(
-            @Param("workspaceId") String workspaceId,
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 区间内完成项按分类分布（顺序与旧 selectAll 首次出现一致） */
     List<com.devstudio.kanban.dto.NameCountRow> countCompletedByCategory(
-            @Param("workspaceId") String workspaceId,
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 区间内完成项按负责人文本分布 */
     List<com.devstudio.kanban.dto.NameCountRow> countCompletedByOwner(
-            @Param("workspaceId") String workspaceId,
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
             @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 当前各列计数与逾期（含自定义列） */
     com.devstudio.kanban.dto.TaskBucketRow countBuckets(@Param("workspaceId") String workspaceId,
+                                                        @Param("viewerId") String viewerId,
                                                         @Param("today") LocalDate today);
 
     /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
-    LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId);
+    LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
+                                      @Param("viewerId") String viewerId);
 
     /** 指定周内的已完成任务（按完成时间倒序） */
     List<Task> selectCompletedBetween(@Param("workspaceId") String workspaceId,
+                                      @Param("viewerId") String viewerId,
                                       @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 进度 100% 但不在已完成列的任务 */
-    List<Task> selectPendingDone(@Param("workspaceId") String workspaceId);
+    List<Task> selectPendingDone(@Param("workspaceId") String workspaceId,
+                                 @Param("viewerId") String viewerId);
 
     /**
      * 周回顾「进行中」：非待处理 / 非已完成且进度 &lt; 100。
      * history=true 时再收敛到「该周有日志活动」且「周结束前已创建」。
      */
     List<Task> selectProgressTasks(@Param("workspaceId") String workspaceId,
+                                   @Param("viewerId") String viewerId,
                                    @Param("from") LocalDate from, @Param("before") LocalDate before,
                                    @Param("history") boolean history);
 
     /** 周回顾：未完成任务计数与到期分布 */
     com.devstudio.kanban.dto.ReviewCountRow countReviewStatus(@Param("workspaceId") String workspaceId,
+                                                              @Param("viewerId") String viewerId,
                                                               @Param("today") LocalDate today);
 
     /** 未删除任务总数（估时统计的分母） */
-    int countLive(@Param("workspaceId") String workspaceId);
+    int countLive(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
 
     /** 估时统计：只取填了预估的任务及其累计工时 */
-    List<Task> selectEstimateTasks(@Param("workspaceId") String workspaceId);
+    List<Task> selectEstimateTasks(@Param("workspaceId") String workspaceId,
+                                   @Param("viewerId") String viewerId);
 
     /** AI 拆分 few-shot：同项目若干条已有标题（保持旧 selectAll 顺序） */
     List<String> selectTitlesByReq(@Param("workspaceId") String workspaceId,
@@ -221,8 +257,9 @@ public interface TaskMapper {
     List<Task> selectByReqDoc(@Param("workspaceId") String workspaceId,
                               @Param("reqDocId") String reqDocId);
 
-    /** AI 落库去重：空间内已有任务标题 */
-    List<String> selectTitles(@Param("workspaceId") String workspaceId);
+    /** AI 落库去重：空间内当前用户可见的任务标题（viewerId 非空时排除隐藏项目） */
+    List<String> selectTitles(@Param("workspaceId") String workspaceId,
+                              @Param("viewerId") String viewerId);
 
     /** 项目进度：一次 GROUP BY 汇总各项目的任务数 / 完成数 / 进度和 */
     List<com.devstudio.kanban.dto.ReqTaskAggRow> countByReq(@Param("workspaceId") String workspaceId);

@@ -7,13 +7,36 @@ import { rt, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { COLUMNS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, parseDate, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
-import { loadView } from "./view-loader.js";
+import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { refreshListIfOpen } from "../views/list.js";
 
 
 function ensureReqDoc(v){ loadView("requirements").then(function(m){ m.ensureReqDocOptions(v); }); }
 function ensureBranch(v){ loadView("branches").then(function(m){ m.ensureBranchOptions(v); }); }
+function ensureVersion(keep, taskId){
+  var sel = $("iVersion");
+  if(sel) sel.removeAttribute("data-ready");
+  loadView("phase").then(function(m){ m.ensureVersionOptions(keep, taskId); });
+}
+function ensureEpic(keep, taskId){
+  var sel = $("iEpic");
+  if(sel) sel.removeAttribute("data-ready");
+  loadView("phase").then(function(m){ m.ensureEpicOptions(keep, taskId); });
+}
+function refreshAssociationViews(){
+  var projects = viewModule("projects");
+  if(projects) projects.refreshExpandedProjectTasks();
+  var requirements = viewModule("requirements");
+  if(requirements) requirements.refreshReqDocTasksIfOpen();
+  var phase = viewModule("phase");
+  if(phase){
+    phase.invalidateTaskOptionsCache();
+    phase.reloadView();
+  }
+  var project = viewModule("project");
+  if(project) project.loadProject({silent:true});
+}
 function openDrawer(){ taskDrawer.classList.add("on"); }
 function closeDrawer(){ taskDrawer.classList.remove("on"); rt.formDirty = false; }
 function buildFormControls(){
@@ -187,6 +210,11 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
     iCol.value = task.boardColumn || "backlog";
     populateReqSelect();
     iReq.value = task.reqId || "";
+    if($("iItemType")) $("iItemType").value = task.itemType || "task";
+    /* versionId 只有深链取回的任务带；看板缓存里没有，交给 phase 模块查项目任务表回填 */
+    ensureVersion(task.versionId, task.id);
+    ensureEpic(task.epicId, task.id);
+    rt.formDemandId = task.demandId || null;
     ensureReqDoc(task.reqDocId || "");
     ensureBranch(task.branchId || "");
     origProgress = (typeof task.progress === "number") ? task.progress : 0;
@@ -230,8 +258,18 @@ function openTaskDrawer(colId, task, defaults){  rt.taskFormSeq++;
     populateColSelect();
     iCol.value = colId || "backlog";
     populateReqSelect();
-    iReq.value = "";
-    ensureReqDoc("");
+    /* 基于需求池需求创建工作项（需求详情入口）：锁定需求所在项目、预选目标版本为影响版本 */
+    iReq.value = (defaults && defaults.reqId) || "";
+    if(defaults && defaults.demandId){
+      taskDrawerTitle.textContent = "基于需求创建工作项";
+      rt.formDemandId = defaults.demandId;
+    }else{
+      rt.formDemandId = null;
+    }
+    if($("iItemType")) $("iItemType").value = "task";
+    ensureVersion((defaults && defaults.versionId) || "");
+    ensureEpic((defaults && defaults.epicId) || "");
+    ensureReqDoc((defaults && defaults.reqDocId) || "");
     ensureBranch("");
     origProgress = 0;
     iProg.value = 0;
@@ -361,6 +399,8 @@ taskForm.addEventListener("change", function(e){
   if(!inTaskAuxSection(e.target)) rt.formDirty = true;
 });
 iCol.addEventListener("change", function(){ syncProgByCol(); rt.formDirty = true; });
+/* 换项目时影响版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
+if(iReq) iReq.addEventListener("change", function(){ ensureVersion(""); ensureEpic(""); rt.formDemandId = null; });
 if(iBlocked){
   iBlocked.addEventListener("change", function(){
     if(iBlockedReason){
@@ -517,7 +557,8 @@ $("taskMoreMenu").addEventListener("click", function(e){
   UI.closeAllPops();
   var t = rt.editingId ? taskById(rt.editingId) : null;
   if(kind === "copy-link"){
-    copyToClipboard(window.location.origin + "/#/board", "任务链接已复制到剪贴板");
+    if(!t) return;
+    copyToClipboard(window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(t.id), "任务链接已复制到剪贴板");
     return;
   }
   if(kind === "copy-title"){
@@ -566,6 +607,21 @@ taskForm.addEventListener("submit", function(e){
     /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
     reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
     branchId: (branchSel && branchSel.options.length > 1) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
+    itemType: (($("iItemType") || {}).value) || "task",
+    /* 版本下拉 data-ready 由 phase 模块置位：没就绪说明选项还没回来，保留原绑定（null=不改）；
+       就绪后空值是明确的「待规划」（空串=解绑），与后端口径一一对应 */
+    versionId: (function(){
+      var vs = $("iVersion");
+      if(vs && vs.getAttribute("data-ready")) return vs.value || "";
+      return current ? (current.versionId || null) : null;
+    })(),
+    epicId: (function(){
+      var es = $("iEpic");
+      if(es && es.getAttribute("data-ready")) return es.value || "";
+      return current ? (current.epicId || null) : null;
+    })(),
+    /* 关联需求池需求：由需求拆分时携带；编辑未变更时与后端「null=保持原值」口径一致 */
+    demandId: rt.formDemandId || null,
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
     /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
@@ -615,6 +671,7 @@ taskForm.addEventListener("submit", function(e){
     refreshCalendarIfOpen();
     refreshListIfOpen();
     refreshGanttIfOpen();
+    refreshAssociationViews();
   }).catch(function(ex){
     btnSaveTask.disabled = false;
     btnSaveTask.classList.remove("loading");
@@ -659,6 +716,7 @@ function deleteTask(id){
       refreshCalendarIfOpen();
       refreshListIfOpen();
       refreshGanttIfOpen();
+      refreshAssociationViews();
       toastAction("已移入回收站「" + t.title + "」", "撤销", function(){
         API.post("/api/tasks/" + encodeURIComponent(id) + "/restore", {}).then(function(){
           toast("已恢复「" + t.title + "」", "fs");
@@ -667,6 +725,7 @@ function deleteTask(id){
           refreshCalendarIfOpen();
           refreshListIfOpen();
           refreshGanttIfOpen();
+          refreshAssociationViews();
         }).catch(function(ex){ toast("恢复失败：" + (ex.message || "网络异常"), "bad"); });
       }, "", 8000);
     }).catch(function(ex){
@@ -772,11 +831,12 @@ function loadAttachments(taskId){
 function renderAttachments(list){
   if(attachCount) attachCount.textContent = (list && list.length) ? list.length + " 个" : "";
   if(!list || !list.length){
-    attachList.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、txt、md、zip，单个 ≤10MB）</div>';
+    attachList.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Excel、txt、md、zip，单个 ≤10MB）</div>';
     return;
   }
   attachList.innerHTML = list.map(function(a){
     var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
+    var isXlsx = /\.xlsx$/i.test(a.filename || "");
     var url = attUrl(a.id);
     var head = isImg
       ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
@@ -785,6 +845,7 @@ function renderAttachments(list){
       '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
       '<span class="att-size">' + fmtSize(a.size) + '</span>' +
       '<span class="att-acts">' +
+        (isXlsx ? '<button class="icon-btn sm" type="button" data-att-sheet="' + esc(a.id) + '" title="打开表格" aria-label="打开表格">' + icon("table", 14) + '</button>' : '') +
         '<a class="icon-btn sm" href="' + url + '" download title="下载" aria-label="下载附件">' + icon("download", 14) + '</a>' +
         '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>' +
       '</span>' +
@@ -797,8 +858,8 @@ iAttachFile.addEventListener("change", function(){
   iAttachFile.value = "";
   if(!f || !rt.editingId) return;
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，未上传", "warn"); return; }
-  if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip)$/i.test(f.name)){
-    toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip）", "warn");
+  if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|xlsx)$/i.test(f.name)){
+    toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/xlsx）", "warn");
     return;
   }
   var id = rt.editingId;
@@ -830,15 +891,39 @@ iAttachFile.addEventListener("change", function(){
   });
 });
 attachList.addEventListener("click", function(e){
+  var sheetBtn = e.target.closest("[data-att-sheet]");
+  if(sheetBtn && rt.editingId){
+    e.preventDefault();
+    var attId = sheetBtn.dataset.attSheet;
+    API.get("/api/tasks/" + encodeURIComponent(rt.editingId) + "/attachments").then(function(list){
+      var att = (list || []).find(function(a){ return a.id === attId; });
+      if(!att){ toast("附件不存在或已删除", "warn"); loadAttachments(rt.editingId); return; }
+      return import("./sheet-viewer.js").then(function(m){
+        m.openSheet({
+          attachment: att,
+          canEdit: !(rt.currentWs && rt.currentWs.myRole === "viewer"),
+          onSaved: function(){ loadAttachments(rt.editingId); loadBoard({silent:true}); }
+        });
+      });
+    }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+    return;
+  }
   var del = e.target.closest("[data-att-del]");
   if(!del || !rt.editingId) return;
   e.preventDefault();
   var id = rt.editingId;
-  API.del("/api/attachments/" + encodeURIComponent(del.dataset.attDel)).then(function(){
-    toast("附件已删除", "fs");
-    loadAttachments(id);
-    loadBoard({silent:true});
-  }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  UI.showConfirm({
+    title: "删除附件",
+    msg: "附件删除后不可恢复，确定删除？",
+    okText: "删除"
+  }).then(function(yes){
+    if(!yes) return;
+    API.del("/api/attachments/" + encodeURIComponent(del.dataset.attDel)).then(function(){
+      toast("附件已删除", "fs");
+      loadAttachments(id);
+      loadBoard({silent:true});
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
 });
 var workTick = null, workSeq = 0, workBusy = false;
 function clearWorkTick(){ if(workTick){ clearInterval(workTick); workTick = null; } }

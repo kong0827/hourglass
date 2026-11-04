@@ -43,6 +43,17 @@ public class WorkspaceArgumentResolver implements HandlerMethodArgumentResolver 
                 && !"owner".equals(ws.getMyRole())) {
             throw new com.devstudio.kanban.common.AppException(403, "仅空间主可执行该操作");
         }
+        /* 查看者全局只读：所有带空间上下文的写请求统一拦截，避免各接口各写一遍 */
+        if ("viewer".equals(ws.getMyRole()) && isWriteRequest(request)) {
+            throw new com.devstudio.kanban.common.AppException(403, "你在此空间是查看者，只能查看不能修改");
+        }
         return new WorkspaceCtx(userId, ws);
+    }
+
+    private static boolean isWriteRequest(NativeWebRequest request) {
+        javax.servlet.http.HttpServletRequest raw = request.getNativeRequest(javax.servlet.http.HttpServletRequest.class);
+        String method = raw == null ? null : raw.getMethod();
+        return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                || "PATCH".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
     }
 }

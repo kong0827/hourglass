@@ -28,6 +28,10 @@ public class BackupData {
     private List<BackupBaseline> baseline;
     /** 基线快照时间 */
     private String baselineAt;
+    /** 项目版本（v8 起纳入；旧备份没有该字段时保留空间现有版本） */
+    private List<BackupVersion> versions;
+    /** 需求池（v8 起纳入；旧备份没有该字段时保留空间现有需求池） */
+    private List<BackupDemand> demands;
 
     @Data
     public static class BackupDependency {
@@ -89,6 +93,14 @@ public class BackupData {
         private String deletedAt;
         /** 里程碑（v5 起；旧备份没有该字段按普通任务处理） */
         private Boolean isMilestone;
+        /** 工作项类型 task/story/bug/epic（v8 起；旧备份按 task 处理） */
+        private String itemType;
+        /** Epic 归属（v8 起；导入时按任务 ID 映射回指） */
+        private String epicId;
+        /** 关联需求池需求（v8 起；导入时按需求 ID 映射回指） */
+        private String demandId;
+        /** 所属版本（v8 起；一个任务最多归属一个版本） */
+        private String versionId;
     }
 
     @Data
@@ -111,6 +123,45 @@ public class BackupData {
         private String desc;
         private String status;
         private String createdAt;
+        /** 首版上线日（v8 起；阶段统计的归组锚点） */
+        private String firstReleasedAt;
+    }
+
+    @Data
+    public static class BackupVersion {
+        private String id;
+        private String reqId;
+        private String name;
+        private String desc;
+        /** planned/active/released */
+        private String status;
+        private String targetDate;
+        private String releasedAt;
+        private String createdAt;
+        private String updatedAt;
+    }
+
+    @Data
+    public static class BackupDemand {
+        private String id;
+        private String reqId;
+        private String title;
+        private String desc;
+        private String source;
+        private String itemKind;
+        private String priority;
+        private String status;
+        private String expectDate;
+        private String acceptText;
+        private String versionId;
+        private String reviewNote;
+        private Integer wsjfBusiness;
+        private Integer wsjfUrgency;
+        private Integer wsjfRisk;
+        private Integer wsjfEffort;
+        private String createdBy;
+        private String createdAt;
+        private String updatedAt;
     }
 
     @Data
@@ -126,11 +177,18 @@ public class BackupData {
     public static class BackupReqDoc {
         private String id;
         private String reqId;
+        /** 上级文档（v7 起；导入时按旧 id 映射到新 id） */
+        private String parentId;
         private String title;
+        /** 文档分类；旧备份缺省归入其他 */
+        private String docType;
+        /** html=已清洗 HTML；markdown=Markdown 原文 */
         private String content;
+        private String format;
         private String status;
         private String owner;
         private String ownerUserId;
+        private Integer sortOrder;
         private String createdAt;
         private String updatedAt;
     }
@@ -162,5 +220,9 @@ public class BackupData {
         private int reqDocs;
         /** v6：重建的分支数 */
         private int branches;
+        /** v8：重建的项目版本数 */
+        private int versions;
+        /** v8：重建的需求池条目数 */
+        private int demands;
     }
 }

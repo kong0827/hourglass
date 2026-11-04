@@ -4,15 +4,22 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 需求列表项：不带完整正文，只给纯文本摘要 + 项目名 + 关联任务数 */
+/** 文档列表项：不带完整正文，只给纯文本摘要 + 项目名 + 关联任务数 */
 @Data
 public class ReqDocView {
 
     private String id;
     private String reqId;
+    /** 父文档 ID（空 = 根文档） */
+    private String parentId;
     /** 所属项目名 */
     private String reqName;
     private String title;
+    /** 分类代码，见 DocumentType */
+    private String docType;
+    /** 正文格式：html / markdown */
+    private String format;
+    private Integer sortOrder;
     private String status;
     private String owner;
     /** 正文纯文本摘要（服务端从 HTML 抽出来，最长 80 字） */

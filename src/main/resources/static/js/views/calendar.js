@@ -111,7 +111,9 @@ function renderCalendar(){
         (t.boardColumn === "done" ? " done" : "") + (kind === "over" ? " over" : "") +
         (it.isEnd ? "" : " span") +
         '" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + tip) + '">' +
-        '<i class="cbar"></i>' + esc(t.title) + '</button>';
+        '<i class="cbar"></i><span class="cal-t">' + esc(t.title) + '</span>' +
+        (t.owner ? '<span class="cal-own" aria-label="负责人 ' + esc(t.owner) + '">' + esc(t.owner.slice(-1)) + '</span>' : '') +
+        '</button>';
     }
     if(visible.length > 3) chips += '<span class="cal-more">+' + (visible.length - 3) + ' 更多</span>';
     if(doneItems.length && !expanded){

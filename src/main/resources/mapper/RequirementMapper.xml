@@ -3,7 +3,7 @@
 <mapper namespace="com.devstudio.kanban.mapper.RequirementMapper">
 
   <sql id="cols">
-    id, workspace_id, name, description, status, created_at, updated_at
+    id, workspace_id, name, description, status, first_released_at, created_at, updated_at
   </sql>
 
   <select id="selectAll" resultType="Requirement">
@@ -23,8 +23,8 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO requirement (id, workspace_id, name, description, status)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{status})
+    INSERT INTO requirement (id, workspace_id, name, description, status, first_released_at)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{status}, #{firstReleasedAt})
   </insert>
 
   <update id="update">
@@ -34,6 +34,12 @@
       status = #{status},
       updated_at = NOW()
     WHERE id = #{id}
+  </update>
+
+  <!-- 标记首版上线：只写 first_released_at，不触碰其余字段（历史任务归组不重算） -->
+  <update id="markFirstReleased">
+    UPDATE requirement SET first_released_at = #{date}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
   <delete id="deleteById">

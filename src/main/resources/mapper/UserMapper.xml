@@ -3,13 +3,35 @@
 <mapper namespace="com.devstudio.kanban.mapper.UserMapper">
 
   <sql id="cols">
-    id, username, password_hash, display_name, role, work_start_hour, work_end_hour, work_max_hours,
+    id, username, password_hash, display_name, email, role, work_start_hour, work_end_hour, work_max_hours,
     ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
     last_workspace_id, created_at, updated_at
   </sql>
 
   <select id="selectAll" resultType="AppUser">
     SELECT <include refid="cols"/> FROM app_user ORDER BY created_at, id
+  </select>
+
+  <select id="selectByIds" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user
+    WHERE id IN
+    <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
+  <!-- 添加成员时的候选搜索：排除已在空间内的账号，只取选人所需字段 -->
+  <select id="searchCandidates" resultType="com.devstudio.kanban.dto.MemberCandidate">
+    SELECT u.id, u.username, u.display_name
+    FROM app_user u
+    WHERE NOT EXISTS (
+      SELECT 1 FROM workspace_member m
+      WHERE m.workspace_id = #{workspaceId} AND m.user_id = u.id
+    )
+    <if test="q != null">
+      AND (LOCATE(LOWER(#{q}), LOWER(u.username)) > 0
+           OR LOCATE(LOWER(#{q}), LOWER(u.display_name)) > 0)
+    </if>
+    ORDER BY u.username
+    LIMIT #{limit}
   </select>
 
   <select id="selectById" resultType="AppUser">
@@ -34,10 +56,11 @@
     VALUES (#{id}, #{username}, #{passwordHash}, #{displayName}, #{role}, #{lastWorkspaceId})
   </insert>
 
-  <!-- role 为空时不更新角色：仅改显示名不携带角色，避免把读取时的旧角色回写 -->
+  <!-- role 为空时不更新角色：仅改显示名/邮箱不携带角色，避免把读取时的旧角色回写 -->
   <update id="update">
     UPDATE app_user SET
       display_name = #{displayName},
+      email = #{email},
       <if test="role != null">role = #{role},</if>
       updated_at = NOW()
     WHERE id = #{id}

@@ -13,6 +13,10 @@ public interface TagMapper {
 
     List<TagCount> selectAllWithCount(@Param("workspaceId") String workspaceId);
 
+    /** 按项目可见范围统计标签：被显式隐藏的项目不计入名称与计数 */
+    List<TagCount> selectVisibleWithCount(@Param("workspaceId") String workspaceId,
+                                          @Param("viewerId") String viewerId);
+
     /** 备份导入：一次取回空间内全部标签，避免逐个 selectByName */
     List<Tag> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
 

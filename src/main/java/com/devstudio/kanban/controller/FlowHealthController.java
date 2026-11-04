@@ -29,7 +29,8 @@ public class FlowHealthController {
     @GetMapping("/api/flow-health")
     public ApiResult<FlowHealthResponse> flowHealth(@RequestParam(required = false) String workspace,
                                                     @RequestParam(required = false) Integer days) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(flowHealthService.flowHealth(ws.getId(), days));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(flowHealthService.flowHealth(ws.getId(), userId, days));
     }
 }

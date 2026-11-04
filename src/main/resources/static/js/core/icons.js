@@ -90,6 +90,8 @@
     tag: function (s) { return svg(s, '<path d="M3.6 8.6V4.4a.8.8 0 0 1 .8-.8h4.2l7.8 7.8-5 5Z"/><circle cx="6.8" cy="6.8" r="1.1" fill="currentColor" stroke="none"/>'); },
     comment: function (s) { return svg(s, '<path d="M3.6 6.2A2.2 2.2 0 0 1 5.8 4h8.4a2.2 2.2 0 0 1 2.2 2.2v4.6a2.2 2.2 0 0 1-2.2 2.2H8.6L4.9 16.2v-3.2H5.8a2.2 2.2 0 0 1-2.2-2.2Z"/>'); },
     eye: function (s) { return svg(s, '<path d="M2.6 10S5.4 4.8 10 4.8 17.4 10 17.4 10 14.6 15.2 10 15.2 2.6 10 2.6 10Z"/><circle cx="10" cy="10" r="2.4"/>'); },
+    /* 电子表格：外框 + 表头分隔 + 行线 */
+    table: function (s) { return svg(s, '<rect x="3.4" y="4" width="13.2" height="12" rx="1.6"/><path d="M3.4 7.6h13.2M8.2 7.6v8.4M13 7.6v8.4"/>'); },
 
     /* ---- 播放 / 暂停 ---- */
     play: function (s) { return fillSvg(s, '<path d="M6.4 4.2 15 10l-8.6 5.8Z"/>'); },

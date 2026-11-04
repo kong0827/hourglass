@@ -10,7 +10,7 @@ import com.devstudio.kanban.dto.ReqSaveRequest;
 import com.devstudio.kanban.dto.RequirementDeleteResult;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.Task;
-import com.devstudio.kanban.entity.TaskLog;
+import com.devstudio.kanban.entity.WorkActivity;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
@@ -27,19 +27,34 @@ public class RequirementService {
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final ActivityService activityService;
+    private final WorkActivityService workActivityService;
     /** 项目删除时连带清理它下面的需求 */
     private final RequirementDocService docService;
+    private final ProjectVersionService versionService;
+    private final com.devstudio.kanban.mapper.ProjectVersionMapper versionMapper;
+    private final com.devstudio.kanban.mapper.DemandMapper demandMapper;
+    private final ProjectAccessService projectAccess;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                              ActivityService activityService, RequirementDocService docService) {
+                              ActivityService activityService, WorkActivityService workActivityService,
+                              RequirementDocService docService, ProjectVersionService versionService,
+                              com.devstudio.kanban.mapper.ProjectVersionMapper versionMapper,
+                              com.devstudio.kanban.mapper.DemandMapper demandMapper,
+                              ProjectAccessService projectAccess) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.activityService = activityService;
+        this.workActivityService = workActivityService;
         this.docService = docService;
+        this.versionService = versionService;
+        this.versionMapper = versionMapper;
+        this.demandMapper = demandMapper;
+        this.projectAccess = projectAccess;
     }
 
-    public List<ReqProgress> list(String workspaceId) {
+    public List<ReqProgress> list(String workspaceId, String userId) {
+        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
         /* 一次 GROUP BY 汇总各项目，避免为整页进度加载全部任务 */
         java.util.Map<String, com.devstudio.kanban.dto.ReqTaskAggRow> aggByReq =
                 new java.util.HashMap<String, com.devstudio.kanban.dto.ReqTaskAggRow>();
@@ -49,13 +64,35 @@ public class RequirementService {
             }
         }
         java.util.Map<String, Integer> docCounts = docService.countByReqMap(workspaceId);
+        /* 版本数供删除确认框提示：一次 GROUP BY 汇总，避免逐项目查询 */
+        java.util.Map<String, Integer> versionCounts = new java.util.HashMap<String, Integer>();
+        for (java.util.Map<String, Object> row : versionMapper.countGroupByReq(workspaceId)) {
+            Object k = row.get("reqId");
+            Object v = row.get("cnt");
+            if (k != null && v instanceof Number) {
+                versionCounts.put(String.valueOf(k), ((Number) v).intValue());
+            }
+        }
+        java.util.Map<String, Integer> demandCounts = new java.util.HashMap<String, Integer>();
+        for (com.devstudio.kanban.entity.Demand d : demandMapper.selectByWorkspace(workspaceId)) {
+            if (d.getReqId() != null) {
+                demandCounts.merge(d.getReqId(), 1, Integer::sum);
+            }
+        }
+        List<Requirement> reqs = reqMapper.selectAll(workspaceId);
         List<ReqProgress> out = new ArrayList<ReqProgress>();
-        for (Requirement r : reqMapper.selectAll(workspaceId)) {
+        for (Requirement r : reqs) {
+            if (hidden.contains(r.getId())) {
+                continue;
+            }
             ReqProgress p = new ReqProgress();
             p.setId(r.getId());
             p.setName(r.getName());
             p.setDescription(r.getDescription());
             p.setStatus(r.getStatus());
+            p.setFirstReleasedAt(r.getFirstReleasedAt());
+            p.setCreatedAt(r.getCreatedAt());
+            p.setUpdatedAt(r.getUpdatedAt());
 
             com.devstudio.kanban.dto.ReqTaskAggRow agg = aggByReq.get(r.getId());
             int count = agg == null ? 0 : agg.getTotal();
@@ -63,6 +100,10 @@ public class RequirementService {
             p.setDoneCount(agg == null ? 0 : agg.getDone());
             Integer dc = docCounts.get(r.getId());
             p.setDocCount(dc == null ? 0 : dc);
+            Integer vc = versionCounts.get(r.getId());
+            p.setVersionCount(vc == null ? 0 : vc);
+            Integer dmc = demandCounts.get(r.getId());
+            p.setDemandCount(dmc == null ? 0 : dmc);
             p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) agg.getProgressSum() / count));
             out.add(p);
         }
@@ -70,12 +111,14 @@ public class RequirementService {
     }
 
     @Transactional
-    public Requirement create(String workspaceId, ReqSaveRequest req) {
+    public Requirement create(String workspaceId, String userId, ReqSaveRequest req) {
+        projectAccess.assertWrite(workspaceId, userId, null);
         String id = Ids.sanitize(Texts.trimToNull(req.getId()));
         if (id == null) {
             id = Ids.gen("R");
         } else if (reqMapper.selectById(id) != null) {
-            throw new AppException(409, "项目ID已存在：" + id);
+            /* ID 主键全局唯一，可能被其它空间占用：不提示“已存在”，避免跨空间探测 */
+            throw new AppException(409, "该ID已被占用，请更换或留空由系统生成：" + id);
         }
         Requirement r = new Requirement();
         r.setId(id);
@@ -84,15 +127,18 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         reqMapper.insert(r);
+        workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id,
+                "create", "创建了项目「" + r.getName() + "」");
         return reqMapper.selectById(id);
     }
 
     @Transactional
-    public Requirement update(String workspaceId, String id, ReqSaveRequest req) {
+    public Requirement update(String workspaceId, String userId, String id, ReqSaveRequest req) {
         Requirement old = reqMapper.selectById(id);
         if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
+        projectAccess.assertWrite(workspaceId, userId, id);
         Requirement r = new Requirement();
         r.setId(id);
         r.setWorkspaceId(workspaceId);
@@ -100,7 +146,56 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         reqMapper.update(r);
+        recordChange(workspaceId, id, "名称", old.getName(), r.getName());
+        recordChange(workspaceId, id, "描述", old.getDescription(), r.getDescription());
+        recordChange(workspaceId, id, "状态", old.getStatus(), r.getStatus());
         return reqMapper.selectById(id);
+    }
+
+    /** 项目活动查询前必须验证项目归属，避免凭实体 ID 跨空间读取。 */
+    public List<WorkActivity> activities(String workspaceId, String userId, String id) {
+        Requirement r = reqMapper.selectById(id);
+        if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        projectAccess.assertView(workspaceId, userId, id);
+        return workActivityService.listByEntity(workspaceId, WorkActivityService.PROJECT, id);
+    }
+
+    public List<Task> tasks(String workspaceId, String userId, String id) {
+        Requirement r = reqMapper.selectById(id);
+        if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        projectAccess.assertView(workspaceId, userId, id);
+        return taskMapper.selectByReq(workspaceId, id);
+    }
+
+    /**
+     * 标记首版上线日（T0.2）：阶段归组的口径锚点。
+     * 只写 first_released_at，不重算任何历史数据；重复标记等于调整口径。
+     */
+    @Transactional
+    public Requirement markFirstRelease(String workspaceId, String id, java.time.LocalDate date) {
+        Requirement old = reqMapper.selectById(id);
+        if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        reqMapper.markFirstReleased(workspaceId, id, date);
+        workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id,
+                "first_release", "首版上线日期：" + display(old.getFirstReleasedAt()) + " → " + display(date));
+        return reqMapper.selectById(id);
+    }
+
+    private void recordChange(String workspaceId, String id, String field, Object oldValue, Object newValue) {
+        if (!java.util.Objects.equals(oldValue, newValue)) {
+            workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id, "update",
+                    field + "：" + display(oldValue) + " → " + display(newValue));
+        }
+    }
+
+    private static String display(Object value) {
+        return value == null ? "（空）" : String.valueOf(value);
     }
 
     /** @return 解绑任务数 + 连带删除的需求文档数 */
@@ -111,30 +206,34 @@ public class RequirementService {
             throw AppException.notFound("项目不存在：" + id);
         }
         int docs = docService.countByReq(workspaceId, id);
-        int unlinked = 0;
-        for (Task t : taskMapper.selectAll(workspaceId)) {
-            if (id.equals(t.getReqId())) {
-                unlinked++;
-                TaskLog taskLog = new TaskLog();
-                taskLog.setTaskId(t.getId());
-                taskLog.setWorkspaceId(workspaceId);
-                taskLog.setActorId(userId);
-                taskLog.setAction("update");
-                taskLog.setDetail("解除与已删除项目「" + r.getName() + "」的关联");
-                logMapper.insert(taskLog);
-            }
-        }
+        /* 版本与需求池强归属项目，删除时一并清理：数量先统计，供确认提示与审计说明 */
+        int versions = versionMapper.selectByReq(workspaceId, id).size();
+        int demands = demandMapper.selectByReq(workspaceId, id).size();
+        /* 统计口径含回收站任务（与 clearReq 解绑范围一致）；时间线用一条 INSERT ... SELECT
+           批量补，避免把空间全量任务捞进内存逐条插 */
+        int unlinked = taskMapper.countTasksByReq(workspaceId, id);
+        logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
+                "解除与已删除项目「" + r.getName() + "」的关联");
         taskMapper.clearReq(workspaceId, id);
         /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);
+        /* 版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */
+        versionService.deleteByReq(workspaceId, id);
+        demandMapper.deleteLogsByReq(workspaceId, id);
+        demandMapper.deleteByReq(workspaceId, id);
+        projectAccess.clearProject(workspaceId, id);
         reqMapper.deleteById(id);
         /* O-9：破坏性配置变更留审计（活动流可见） */
         activityService.logConfig(workspaceId,
                 "删除项目「" + r.getName() + "」，解除关联 " + unlinked + " 项任务" +
-                        (docs > 0 ? "，连带删除 " + docs + " 份需求文档" : ""));
+                        (docs > 0 ? "，连带删除 " + docs + " 份文档" : "") +
+                        (versions > 0 ? "，" + versions + " 个版本" : "") +
+                        (demands > 0 ? "，" + demands + " 条需求池记录" : ""));
         RequirementDeleteResult result = new RequirementDeleteResult();
         result.setUnlinked(unlinked);
         result.setDocs(docs);
+        result.setVersions(versions);
+        result.setDemands(demands);
         return result;
     }
 }

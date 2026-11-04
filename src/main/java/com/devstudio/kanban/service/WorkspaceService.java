@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.Consts;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.common.Webhooks;
+import com.devstudio.kanban.dto.MemberCandidate;
 import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.BoardColumn;
@@ -14,6 +15,7 @@ import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
+import com.devstudio.kanban.mapper.ProjectMemberMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
@@ -27,6 +29,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -46,6 +49,7 @@ public class WorkspaceService {
     private final CategoryMapper categoryMapper;
     private final SavedViewMapper savedViewMapper;
     private final InviteMapper inviteMapper;
+    private final ProjectMemberMapper projectMemberMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
     /** 配置审计日志 */
@@ -60,6 +64,7 @@ public class WorkspaceService {
                             CategoryMapper categoryMapper,
                             SavedViewMapper savedViewMapper,
                             InviteMapper inviteMapper,
+                            ProjectMemberMapper projectMemberMapper,
                             TaskCascade cascade,
                             com.devstudio.kanban.service.ActivityService activityService,
                             WorkspaceMemberCache memberCache,
@@ -71,6 +76,7 @@ public class WorkspaceService {
         this.categoryMapper = categoryMapper;
         this.savedViewMapper = savedViewMapper;
         this.inviteMapper = inviteMapper;
+        this.projectMemberMapper = projectMemberMapper;
         this.cascade = cascade;
         this.activityService = activityService;
         this.memberCache = memberCache;
@@ -122,6 +128,25 @@ public class WorkspaceService {
         Workspace ws = requireMember(userId, workspaceId);
         if (!"owner".equals(ws.getMyRole())) {
             throw new AppException(403, "仅空间主可执行该操作");
+        }
+        return ws;
+    }
+
+    /** 空间管理操作（邀请/移除成员、调整成员与查看者角色）：空间主或管理员 */
+    public Workspace requireManager(String userId, String workspaceId) {
+        Workspace ws = requireMember(userId, workspaceId);
+        String role = ws.getMyRole();
+        if (!"owner".equals(role) && !"admin".equals(role)) {
+            throw new AppException(403, "仅空间主或管理员可执行该操作");
+        }
+        return ws;
+    }
+
+    /** 空间内的写入基线：查看者只能读，任何写配置/数据都走这一层 */
+    public Workspace requireWriter(String userId, String workspaceId) {
+        Workspace ws = requireMember(userId, workspaceId);
+        if ("viewer".equals(ws.getMyRole())) {
+            throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
         }
         return ws;
     }
@@ -255,6 +280,7 @@ public class WorkspaceService {
         }
         wipeData(workspaceId);
         memberMapper.deleteAllByWorkspace(workspaceId);
+        projectMemberMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
         userMapper.resetLastWorkspaceForAll(workspaceId, PERSONAL_PREFIX);
@@ -272,6 +298,7 @@ public class WorkspaceService {
         savedViewMapper.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
+        projectMemberMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
@@ -303,6 +330,15 @@ public class WorkspaceService {
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, u.getId()));
     }
 
+    /** 添加成员时的候选搜索：排除已在空间内的账号，关键词为空则取前 20 个 */
+    public List<MemberCandidate> searchMemberCandidates(String operatorId, String workspaceId, String keyword) {
+        Workspace ws = requireOwner(operatorId, workspaceId);
+        if ("personal".equals(ws.getType())) {
+            return Collections.emptyList();
+        }
+        return userMapper.searchCandidates(workspaceId, Texts.trimToNull(keyword), 20);
+    }
+
     /** 通过邀请链接加入共享空间（不校验操作者，由 InviteService 校验邀请有效性后调用） */
     @Transactional
     public void joinByInvite(String workspaceId, String userId) {
@@ -318,6 +354,38 @@ public class WorkspaceService {
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, userId));
     }
 
+    /** 调整成员的空间角色（空间主可调整全部；管理员只能调整成员/查看者，不能授予管理员） */
+    @Transactional
+    public void updateMemberRole(String operatorId, String workspaceId, String targetUserId, String role) {
+        Workspace ws = requireManager(operatorId, workspaceId);
+        if ("personal".equals(ws.getType())) {
+            throw AppException.badRequest("个人空间没有角色可调整");
+        }
+        if (!ProjectAccessService.isValidRole(role)) {
+            throw AppException.badRequest("角色只能是 admin / member / viewer");
+        }
+        WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
+        if (target == null) {
+            throw AppException.notFound("成员不存在：" + targetUserId);
+        }
+        if ("owner".equals(target.getRole())) {
+            throw AppException.badRequest("不能修改空间主的角色");
+        }
+        if (!"owner".equals(ws.getMyRole())) {
+            if ("admin".equals(target.getRole())) {
+                throw new AppException(403, "仅空间主可调整管理员角色");
+            }
+            if ("admin".equals(role)) {
+                throw new AppException(403, "仅空间主可授予管理员角色");
+            }
+        }
+        memberMapper.updateRole(workspaceId, targetUserId, role);
+        AppUser u = userMapper.selectById(targetUserId);
+        activityService.logConfig(workspaceId, operatorId, "调整成员角色「"
+                + (u == null || u.getDisplayName() == null ? targetUserId : u.getDisplayName()) + "」→ " + role);
+        CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
+    }
+
     @Transactional
     public void removeMember(String userId, String workspaceId, String targetUserId) {
         Workspace ws = requireMember(userId, workspaceId);
@@ -330,18 +398,27 @@ public class WorkspaceService {
                 throw AppException.badRequest("空间主不能退出自己的空间，可直接删除空间");
             }
             memberMapper.delete(workspaceId, targetUserId);
+            projectMemberMapper.deleteByUser(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
             CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
             return;
         }
-        // 移除他人：仅空间主（个人空间允许清理历史遗留的非法成员）
-        if (!"owner".equals(ws.getMyRole())) {
-            throw new AppException(403, "仅空间主可移除成员");
+        // 移除他人：空间主可移除全部；管理员只能移除成员/查看者
+        if (!ProjectAccessService.isPrivileged(ws.getMyRole())) {
+            throw new AppException(403, "仅空间主或管理员可移除成员");
         }
         if (targetUserId.equals(ws.getOwnerId())) {
             throw AppException.badRequest("不能移除空间主");
         }
+        WorkspaceMember targetMember = memberMapper.selectMember(workspaceId, targetUserId);
+        if (targetMember == null) {
+            throw AppException.notFound("成员不存在：" + targetUserId);
+        }
+        if (!"owner".equals(ws.getMyRole()) && "admin".equals(targetMember.getRole())) {
+            throw new AppException(403, "仅空间主可移除管理员");
+        }
         memberMapper.delete(workspaceId, targetUserId);
+        projectMemberMapper.deleteByUser(workspaceId, targetUserId);
         AppUser target = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, userId, "移除成员「"
                 + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");

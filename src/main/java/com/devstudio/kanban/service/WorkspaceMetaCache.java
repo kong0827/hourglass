@@ -124,6 +124,14 @@ public class WorkspaceMetaCache {
         return copyTags(loaded);
     }
 
+    /** 按查看人过滤的标签统计：owner/admin/viewer 无可见范围限制，直接复用空间级缓存 */
+    public List<TagCount> tags(String workspaceId, String viewerId) {
+        if (workspaceId == null || viewerId == null) {
+            return tags(workspaceId);
+        }
+        return copyTags(tagMapper.selectVisibleWithCount(workspaceId, viewerId));
+    }
+
     public void evictColumns(String workspaceId) {
         if (workspaceId != null) {
             columns.remove(workspaceId);

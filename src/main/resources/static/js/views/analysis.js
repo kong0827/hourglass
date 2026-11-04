@@ -77,7 +77,7 @@ function renderCompletions(rows, month){
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
      计时的首次/最后时间属于内部数据，不展示 */
-  var head = "<tr><th>任务</th><th>项目</th><th>需求</th><th>负责人</th><th>分类</th>" +
+  var head = "<tr><th>任务</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
@@ -98,20 +98,20 @@ function renderCompletions(rows, month){
 }
 function compDocCell(r){
   if(!r.reqDocTitle) return '<span class="comp-dim">—</span>';
-  /* 需求列表还没加载完（reqDocList 为空）时不要急着判定"已删除"，否则点了没反应 */
+  /* 文档列表还没加载完（reqDocList 为空）时不要急着判定"已删除"，否则点了没反应 */
   var loaded = reqDocList.length > 0;
   var alive = r.reqDocId && (!loaded || reqDocNameById(r.reqDocId));
   if(alive){
     return '<button type="button" class="link-cell" data-open-reqdoc="' + esc(r.reqDocId) + '"' +
-      ' title="打开需求：' + esc(r.reqDocTitle) + '">' + esc(r.reqDocTitle) + '</button>';
+      ' title="打开文档：' + esc(r.reqDocTitle) + '">' + esc(r.reqDocTitle) + '</button>';
   }
-  return '<span class="comp-dim" title="该需求已被删除">' + esc(r.reqDocTitle) + '</span>';
+  return '<span class="comp-dim" title="该文档已被删除">' + esc(r.reqDocTitle) + '</span>';
 }
 function exportCompCSV(){
   var rows = compRowsCache || [];
   if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
   var month = currentCompMonth();
-  var lines = [["任务名称","详情","归属项目","关联需求","负责人","分类","优先级",
+  var lines = [["任务名称","详情","归属项目","关联文档","负责人","分类","优先级",
     "开始时间","结束时间","总耗时(分钟)","总耗时"]];
   rows.forEach(function(r){
     lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
@@ -369,7 +369,7 @@ function renderFlowHealth(d){
       passCls) +
     flowCard("回退率", rw.totalMoves ? fmtPct(rw.backRate) +
       '<small> · ' + rw.backMoves + "/" + rw.totalMoves + ' 次</small>' : "—", backCls) +
-    flowCard("需求开工延迟", leadP.n === "—" ? "—" :
+    flowCard("文档开工延迟", leadP.n === "—" ? "—" :
       leadP.n + '<small> ' + leadP.u + '</small>', "");
   if($("flowKpi").children[0] && d.bottleneckName){
     $("flowKpi").children[0].querySelector(".v").insertAdjacentHTML("beforeend",
@@ -430,16 +430,16 @@ function renderFlowHealth(d){
       '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，P0 应该<b>更少</b>被来回拖。</p>';
   }
 
-  /* ---- 需求 → 开工 ---- */
+  /* ---- 文档 → 开工 ---- */
   if(!rs.total){
     $("flowReqMeta").textContent = "—";
-    $("flowReqs").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有需求文档</div>';
+    $("flowReqs").innerHTML = '<div class="col-empty" style="margin:16px 0">当前空间还没有文档</div>';
   }else{
     $("flowReqMeta").textContent = rs.withTasks + " / " + rs.total + " 份已开工";
     var html = '<div class="stat-grid" style="margin-bottom:14px">' +
-      flowCard("需求总数", rs.total + '<small>份</small>', "") +
-      flowCard("已拆出任务", rs.withTasks + '<small>份</small>', "") +
-      flowCard("还没拆任务", rs.noTask + '<small>份</small>', rs.noTask ? "warn" : "good") +
+      flowCard("文档总数", rs.total + '<small>份</small>', "") +
+      flowCard("已拆出工作项", rs.withTasks + '<small>份</small>', "") +
+      flowCard("还没拆工作项", rs.noTask + '<small>份</small>', rs.noTask ? "warn" : "good") +
       flowCard("平均开工延迟", leadP.n === "—" ? "—" : leadP.n + '<small>' + leadP.u + '</small>', "") +
       '</div>';
     if(rs.noTaskList && rs.noTaskList.length){

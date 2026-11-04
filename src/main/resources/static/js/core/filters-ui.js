@@ -1,17 +1,17 @@
 /* core/filters-ui · 筛选栏、搜索、保存视图 */
 
 import { API } from "./api.js";
-import { $, chipsOwner, chipsPri, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
+import { $, chipsOwner, chipsPri, chipsType, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
 import { currentFilterParams, toggleFilterValue } from "./filters.js";
 import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { filterOn, rt, selectedFilterCount, state } from "./state.js";
 import { UI, esc, toast, toastAction } from "./ui.js";
-import { PRIORITIES, PRIORITY_COLOR, avatarHTML } from "../lib/format.js";
+import { PRIORITIES, PRIORITY_COLOR, avatarHTML, typeName } from "../lib/format.js";
 import { loadBoard } from "../views/board.js";
 import { loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { loadView } from "./view-loader.js";
-import { refreshListIfOpen } from "../views/list.js";
+import { applyListSavedView, currentListViewName, currentListViewParams, listViewDeleted, markListViewSaved, refreshListIfOpen, renderSmartTabs } from "../views/list.js";
 import { loadMine } from "../views/mine.js";
 
 function metaCount(list, name){
@@ -19,52 +19,80 @@ function metaCount(list, name){
   for(var i = 0; i < list.length; i++) if(list[i].name === name) return list[i].count;
   return 0;
 }
-function overflowChipHTML(kind, n){
-  return '<button class="chip" type="button" data-overflow="' + kind + '" aria-haspopup="true" aria-expanded="false" title="展开其余选项">＋' + n + '</button>';
+/* 负责人 / 优先级选项可能很多：不再铺 chip，改为单个下拉按钮 + 可勾选列表 */
+function ownerItems(meta){
+  var items = [];
+  (meta.owners || []).forEach(function(o){
+    var on = state.owners.indexOf(o.name) !== -1;
+    if(o.count === 0 && !on) return;
+    items.push({name:o.name, count:o.count, on:on});
+  });
+  return items;
 }
-function renderOwnerChips(meta){
-  var owners = meta.owners || [];
-  var only = owners.length <= 1 ? ((owners[0] && owners[0].name) || rt.OWNER_DEFAULT) : null;
-  var html = "", shown = 0, items = [];
-  if(only){
-    var n0 = owners.length ? owners[0].count : 0;
-    if(n0 > 0){
-      html = '<span class="chip" style="cursor:default">' + avatarHTML(only, "sm") + esc(only) +
-        ' <span class="n">' + n0 + '</span></span>';
-      shown = 1;
-    }
-  }else{
-    owners.forEach(function(o){
-      var on = state.owners.indexOf(o.name) !== -1;
-      if(o.count === 0 && !on) return;
-      items.push({name:o.name, count:o.count, on:on});
-    });
-    items.slice(0, 3).forEach(function(o){
-      html += '<button class="chip" type="button" data-owner="' + esc(o.name) + '" aria-pressed="' + o.on + '">' +
-        avatarHTML(o.name, "sm") + esc(o.name) + ' <span class="n">' + o.count + '</span></button>';
-      shown++;
-    });
-    if(items.length > 3) html += overflowChipHTML("owner", items.length - 3);
-  }
-  chipsOwner.innerHTML = html;
-  $("fgOwner").hidden = shown === 0 && items.length === 0;
-}
-function renderPriChips(meta){
-  var html = "", shown = 0, items = [];
+function priItems(meta){
+  var items = [];
   PRIORITIES.forEach(function(p){
     var on = state.pris.indexOf(p) !== -1;
     var n = metaCount(meta.pris, p);
     if(n === 0 && !on) return;
     items.push({name:p, count:n, on:on});
   });
-  items.slice(0, 3).forEach(function(o){
-    html += '<button class="chip ' + o.name.toLowerCase() + '" type="button" data-pri="' + o.name + '" aria-pressed="' + o.on + '">' +
-      '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>' + o.name + ' <span class="n">' + o.count + '</span></button>';
-    shown++;
+  return items;
+}
+var TYPE_ORDER = ["task", "story", "bug", "epic"];
+function typeItems(meta){
+  var items = [];
+  TYPE_ORDER.forEach(function(t){
+    var on = state.types.indexOf(t) !== -1;
+    var n = metaCount(meta.types, t);
+    if(n === 0 && !on) return;
+    items.push({name:t, count:n, on:on});
   });
-  if(items.length > 3) html += overflowChipHTML("pri", items.length - 3);
-  chipsPri.innerHTML = html;
-  $("fgPri").hidden = shown === 0 && items.length === 0;
+  return items;
+}
+function ddCount(items, selected){
+  var n = 0;
+  items.forEach(function(o){
+    if(!selected.length || selected.indexOf(o.name) !== -1) n += o.count || 0;
+  });
+  return n;
+}
+function ddButtonHTML(kind, selected, items){
+  var first = kind === "type" ? typeName(selected[0]) : selected[0];
+  var label = !selected.length ? "全部"
+    : (selected.length === 1 ? first : first + " +" + (selected.length - 1));
+  var title = kind === "owner" ? "负责人" : (kind === "type" ? "类型" : "优先级");
+  return '<button class="chip' + (selected.length ? "" : " ghost") + '" type="button" data-dd="' + kind +
+    '" aria-haspopup="true" aria-expanded="false" title="选择' + title + '（可多选）">' +
+    esc(label) + ' <span class="n">' + ddCount(items, selected) + '</span>' + icon("caretDown", 12) + '</button>';
+}
+function renderOwnerChips(meta){
+  var owners = meta.owners || [];
+  var only = owners.length <= 1 ? ((owners[0] && owners[0].name) || rt.OWNER_DEFAULT) : null;
+  if(only){
+    var n0 = owners.length ? owners[0].count : 0;
+    chipsOwner.innerHTML = n0 > 0
+      ? '<span class="chip" style="cursor:default">' + avatarHTML(only, "sm") + esc(only) + ' <span class="n">' + n0 + '</span></span>'
+      : "";
+    $("fgOwner").hidden = n0 === 0;
+    return;
+  }
+  var items = ownerItems(meta);
+  chipsOwner.innerHTML = ddButtonHTML("owner", state.owners, items);
+  $("fgOwner").hidden = items.length === 0 && state.owners.length === 0;
+  reopenDropdown("owner");
+}
+function renderPriChips(meta){
+  var items = priItems(meta);
+  chipsPri.innerHTML = ddButtonHTML("pri", state.pris, items);
+  $("fgPri").hidden = items.length === 0 && state.pris.length === 0;
+  reopenDropdown("pri");
+}
+function renderTypeChips(meta){
+  var items = typeItems(meta);
+  chipsType.innerHTML = ddButtonHTML("type", state.types, items);
+  $("fgType").hidden = items.length === 0 && state.types.length === 0;
+  reopenDropdown("type");
 }
 function renderMoreFilter(meta){
   var cats = (meta.cats || []).filter(function(c){ return c.count > 0 || state.cats.indexOf(c.name) !== -1; });
@@ -140,6 +168,7 @@ function renderViews(){
       '</span>';
   }).join("");
   $("viewGroup").hidden = rt.savedViews.length === 0;
+  renderSmartTabs();
   updateFilterActions();
 }
 function updateFilterActions(){
@@ -153,13 +182,16 @@ function renderFilterChips(){
   if(meta){
     renderOwnerChips(meta);
     renderPriChips(meta);
+    renderTypeChips(meta);
     renderMoreFilter(meta);
   }else{
     chipsOwner.innerHTML = "";
     chipsPri.innerHTML = "";
+    chipsType.innerHTML = "";
     moreFilterMenu.innerHTML = "";
     $("fgOwner").hidden = true;
     $("fgPri").hidden = true;
+    $("fgType").hidden = true;
   }
   renderBlockedChip();
   renderQueryChip();
@@ -223,7 +255,7 @@ $("chipFocus").addEventListener("click", function(){
 });
 function clearFilters(){
   state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
-  state.tags = []; state.due = null; state.focus = false; state.blocked = false;
+  state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
   searchInput.value = "";
   searchWrap.classList.remove("has");
   reloadFilteredViews();
@@ -253,8 +285,12 @@ $("filterbar").addEventListener("click", function(e){
   if(r){ toggleFilterValue("reqs", r.dataset.req); return; }
   var t = e.target.closest("[data-tag]");
   if(t){ toggleFilterValue("tags", t.dataset.tag); return; }
-  var ov = e.target.closest("[data-overflow]");
-  if(ov){ openOverflowPop(ov); return; }
+  var dd = e.target.closest("[data-dd]");
+  if(dd){
+    if(ddPop && ddPop.anchor === dd){ UI.closeAllPops(); return; }
+    openFilterDropdown(dd);
+    return;
+  }
   if(e.target.closest("[data-mf-reset]")){
     state.cats = []; state.tags = []; state.reqs = []; state.blocked = false;
     reloadFilteredViews();
@@ -272,33 +308,57 @@ $("filterbar").addEventListener("click", function(e){
     return;
   }
 });
-function openOverflowPop(anchor){
-  var kind = anchor.dataset.overflow;
+var ddPop = null;
+function openFilterDropdown(anchor){
+  var kind = anchor.dataset.dd;
   var meta = state.board ? state.board.meta : null;
   if(!meta) return;
-  var html = '<div class="menu-title">' + (kind === "owner" ? "全部负责人" : "全部优先级") +
-    '</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">';
-  if(kind === "owner"){
-    (meta.owners || []).forEach(function(o){
-      var on = state.owners.indexOf(o.name) !== -1;
-      if(o.count === 0 && !on) return;
-      html += '<button class="chip" type="button" data-owner="' + esc(o.name) + '" aria-pressed="' + on + '">' +
-        avatarHTML(o.name, "sm") + esc(o.name) + ' <span class="n">' + o.count + '</span></button>';
-    });
-  }else{
-    PRIORITIES.forEach(function(pp){
-      var on = state.pris.indexOf(pp) !== -1;
-      var n = metaCount(meta.pris, pp);
-      if(n === 0 && !on) return;
-      html += '<button class="chip ' + pp.toLowerCase() + '" type="button" data-pri="' + pp + '" aria-pressed="' + on + '">' +
-        '<i class="cdot" style="background:' + PRIORITY_COLOR[pp] + '"></i>' + pp + ' <span class="n">' + n + '</span></button>';
-    });
-  }
-  html += '</div></div>';
   var el = document.createElement("div");
-  el.className = "menu popover";
-  el.innerHTML = html;
-  UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
+  el.className = "menu popover filter-dd";
+  function rows(){
+    var items = kind === "owner" ? ownerItems(meta) : (kind === "type" ? typeItems(meta) : priItems(meta));
+    var sel = kind === "owner" ? state.owners : (kind === "type" ? state.types : state.pris);
+    var title = kind === "owner" ? "负责人（可多选）" : (kind === "type" ? "类型（可多选）" : "优先级（可多选）");
+    var html = '<div class="menu-title">' + title +
+      '</div><div class="dd-list">';
+    html += items.length ? items.map(function(o){
+      var on = sel.indexOf(o.name) !== -1;
+      var lead = kind === "owner"
+        ? avatarHTML(o.name, "sm")
+        : (kind === "type" ? "" : '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>');
+      return '<button class="dd-row" type="button" data-dd-val="' + esc(o.name) + '" aria-pressed="' + on + '">' +
+        '<span class="tick">' + (on ? icon("check", 12) : "") + '</span>' + lead +
+        '<span class="dd-name">' + (kind === "type" ? esc(typeName(o.name)) : esc(o.name)) + '</span>' +
+        '<span class="n">' + o.count + '</span></button>';
+    }).join("") : '<p class="foot-note" style="margin:0;padding:8px">暂无可选项</p>';
+    html += '</div>';
+    if(sel.length){
+      html += '<div class="menu-foot"><button class="btn sm" type="button" data-dd-clear>清空选择</button></div>';
+    }
+    return html;
+  }
+  el.innerHTML = rows();
+  el.addEventListener("click", function(e){
+    if(e.target.closest("[data-dd-clear]")){
+      if(kind === "owner") state.owners = []; else if(kind === "type") state.types = []; else state.pris = [];
+      reloadFilteredViews();
+      el.innerHTML = rows();
+      return;
+    }
+    var row = e.target.closest("[data-dd-val]");
+    if(!row) return;
+    toggleFilterValue(kind === "owner" ? "owners" : (kind === "type" ? "types" : "pris"), row.dataset.ddVal);
+    el.innerHTML = rows();
+  });
+  ddPop = { anchor: anchor, el: el, kind: kind };
+  UI.openPop(el, anchor, {align:"left", onClose:function(){ el.remove(); ddPop = null; }});
+}
+/* 筛选后 chip 会整体重绘，旧锚点被移除：把浮层重新挂到新按钮上，多选时不中断 */
+function reopenDropdown(kind){
+  if(!ddPop || ddPop.kind !== kind) return;
+  UI.closeAllPops();
+  var anchor = document.querySelector('[data-dd="' + kind + '"]');
+  if(anchor) openFilterDropdown(anchor);
 }
 $("btnMoreFilter").addEventListener("click", function(){
   if(UI.popOpen(moreFilterMenu)){ UI.closeAllPops(); return; }
@@ -319,18 +379,28 @@ function parseViewParams(p){
     return v.slice();
   }
   var owners = strArr(p.owners), pris = strArr(p.pris), cats = strArr(p.cats),
-      reqs = strArr(p.reqs), tags = strArr(p.tags);
-  if(!owners || !pris || !cats || !reqs || !tags) return null;
+      reqs = strArr(p.reqs), tags = strArr(p.tags), types = strArr(p.types);
+  if(!owners || !pris || !cats || !reqs || !tags || !types) return null;
   if(p.q !== undefined && p.q !== null && typeof p.q !== "string") return null;
   if(p.focus !== undefined && p.focus !== null && typeof p.focus !== "boolean") return null;
   if(p.blocked !== undefined && p.blocked !== null && typeof p.blocked !== "boolean") return null;
+  var preset = (p.preset === undefined || p.preset === null) ? "all" : p.preset;
+  var group = (p.group === undefined || p.group === null) ? "none" : p.group;
+  var sort = (p.sort === undefined || p.sort === null) ? "default" : p.sort;
+  if(["all", "mine", "doing", "over"].indexOf(preset) === -1) return null;
+  if(["none", "status", "owner", "priority", "project"].indexOf(group) === -1) return null;
+  if(["default", "due", "priority", "estimate", "actual", "updated"].indexOf(sort) === -1) return null;
   return {
     q: p.q || "",
-    owners: owners, pris: pris, cats: cats, reqs: reqs, tags: tags,
+    owners: owners, pris: pris, cats: cats, reqs: reqs, tags: tags, types: types,
     due: (p.due === "over" || p.due === "today" || p.due === "soon") ? p.due : null,
     focus: p.focus === true,
     blocked: p.blocked === true,
-    doneScope: p.doneScope === "all" ? "all" : "week"
+    doneScope: p.doneScope === "all" ? "all" : "week",
+    preset: preset,
+    group: group,
+    sort: sort,
+    listConfig: p.preset !== undefined || p.group !== undefined || p.sort !== undefined
   };
 }
 function applyView(v){
@@ -340,13 +410,30 @@ function applyView(v){
   var f = parseViewParams(p);
   if(!f){ toast("视图参数不合法，无法应用（可删除后重新保存）", "bad"); return; }
   state.q = f.q; state.owners = f.owners; state.pris = f.pris; state.cats = f.cats;
-  state.reqs = f.reqs; state.tags = f.tags; state.due = f.due; state.focus = f.focus;
+  state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.due = f.due; state.focus = f.focus;
   state.blocked = f.blocked;
   state.doneScope = f.doneScope;
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
-  reloadFilteredViews();
+  if(f.listConfig || activeView === "list"){
+    applyListSavedView(v.id, f);
+    loadBoard({animate:false});
+    if(activeView === "list") refreshListIfOpen();
+    else showView("list");
+  }else{
+    reloadFilteredViews();
+  }
   toast("已应用视图「" + v.name + "」", "fs");
+}
+function deleteView(id){
+  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响任务数据。", okText:"删除" }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/views/" + encodeURIComponent(id)).then(function(){
+      toast("视图已删除", "fs");
+      listViewDeleted(id);
+      loadViews();
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
 }
 viewBox.addEventListener("click", function(e){
   var ap = e.target.closest("[data-view-apply]");
@@ -357,20 +444,15 @@ viewBox.addEventListener("click", function(e){
     return;
   }
   var dl = e.target.closest("[data-view-del]");
-  if(dl){
-    UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响任务数据。", okText:"删除" }).then(function(ok){
-      if(!ok) return;
-      API.del("/api/views/" + encodeURIComponent(dl.dataset.viewDel)).then(function(){
-        toast("视图已删除", "fs");
-        loadViews();
-      }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
-    });
-  }
+  if(dl) deleteView(dl.dataset.viewDel);
 });
 function promptSaveView(){
-  if(!filterOn()){ toast("当前没有筛选条件，先设置筛选再保存", "warn"); return; }
-  $("dlgViewInput").value = "";
+  var forList = activeView === "list";
+  if(!forList && !filterOn()){ toast("当前没有筛选条件，先设置筛选再保存", "warn"); return; }
+  $("dlgViewInput").value = forList ? currentListViewName() : "";
   $("fDlgViewName").classList.remove("invalid");
+  var desc = $("dlgViewName").querySelector(".desc");
+  if(desc) desc.textContent = forList ? "保存当前筛选、分组与排序；同名保存将覆盖原视图" : "保存当前全部筛选条件，可跨设备应用";
   UI.openModal($("dlgViewName"));
 }
 $("btnSaveView").addEventListener("click", promptSaveView);
@@ -379,12 +461,25 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
   var name = $("dlgViewInput").value.trim();
   if(!name){ $("fDlgViewName").classList.add("invalid"); return; }
   if(name.length > 20) name = name.slice(0, 20);
-  API.post("/api/views", { name: name, params: JSON.stringify(currentFilterParams()) }).then(function(){
+  var forList = activeView === "list";
+  var params = currentFilterParams();
+  if(forList){
+    var listParams = currentListViewParams();
+    params.preset = listParams.preset;
+    params.group = listParams.group;
+    params.sort = listParams.sort;
+  }
+  var overwrite = rt.savedViews.some(function(v){ return v.name === name; });
+  var submitBtn = $("dlgViewNameOk");
+  submitBtn.disabled = true;
+  API.post("/api/views", { name: name, params: JSON.stringify(params) }).then(function(saved){
+    submitBtn.disabled = false;
     UI.closeModal($("dlgViewName"));
-    toast("已保存视图「" + name + "」", "fs");
+    if(forList && saved) markListViewSaved(saved.id);
+    toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
     loadViews();
     if(activeView === "gantt") loadView("gantt").then(function(m){ m.renderGanttViewsMenu(); });
-  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  }).catch(function(ex){ submitBtn.disabled = false; toast(ex.message || "保存失败", "bad"); });
 });
 
-export { applyView, clearFilters, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, toggleIn };
+export { applyView, clearFilters, deleteView, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, toggleIn };

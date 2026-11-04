@@ -105,7 +105,9 @@
           }
           return json.data;
         }
-        throw new Error(json.message || "请求失败");
+        var err = new Error(json.message || "请求失败");
+        err.code = json.code;
+        throw err;
       });
     });
   }

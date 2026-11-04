@@ -86,46 +86,79 @@ function visit(name) {
   for (const spec of importsOf(codeOf.get(name))) visit(resolve(name, spec));
   order.push(name);
 }
-visit("main.js");
-for (const m of modules) if (!seen.has(m)) order.push(m);
+/* 低频视图也要先访问依赖再入队，否则 manager-shared / list-preferences 可能晚于使用方执行 */
+for (const m of modules) visit(m);
 
-function stripModule(code) {
-  code = code.replace(/^\s*import\s+[^;]*?from\s+"[^"]+";\s*$/gm, "");
-  code = code.replace(/^\s*import\s+"[^"]+";\s*$/gm, "");
-  code = code.replace(/^export\s*\{([^}]*)\};\s*$/gm, function (m, inner) {
-    const aliases = [];
-    inner.split(",").map(x => x.trim()).filter(Boolean).forEach(function (part) {
-      const mm = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
-      if (mm) aliases.push("var " + mm[2] + " = " + mm[1] + ";");
+/* 真实 ESM 每个文件一个作用域；平铺拼接会把各模块顶层的 const cache / render /
+   statusName 等同名声明挤进同一作用域（const 重名直接 SyntaxError，函数重名则互相覆盖）。
+   因此：被 import 引用的共享模块与低频视图各自包一层 IIFE，导出放进 __NS[路径]，
+   依赖方从 __NS 解构取用；其余模块保持平铺（导出仍以原标识符对外可见）。 */
+const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
+  "phase", "demands", "portfolio", "project", "workload", "risks", "report"];
+const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
+  .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js"]));
+
+/** 剥掉 import/export 并记录导出名；依赖被包装模块时改为从 __NS 取 */
+function transformModule(name, code) {
+  const exported = {};
+  code = code.replace(/^\s*export\s*\{([\s\S]*?)\};\s*$/gm, function (m, inner) {
+    inner.split(",").map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (part) {
+      const alias = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+      if (alias) exported[alias[2]] = alias[1];
+      else exported[part] = part;
     });
-    return aliases.join("\n");
+    return "";
   });
-  return code.replace(/^export\s+/gm, "");
+  code = code.replace(/^export\s+(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
+    function (m, kind, id) { exported[id] = id; return kind + " " + id; });
+  code = code.replace(/^\s*import\s+([\s\S]*?)\s+from\s+"([^"]+)";\s*$/gm, function (m, clause, spec) {
+    const target = resolve(name, spec);
+    if (!WRAPPED.has(target)) return "";   // 平铺模块的声明本来就在外层作用域
+    clause = clause.trim();
+    const ns = clause.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)$/);
+    if (ns) return "var " + ns[1] + " = __NS[" + JSON.stringify(target) + "];";
+    const names = clause.replace(/^\{|\}$/g, "").split(",").map(function (x) { return x.trim(); })
+      .filter(Boolean).map(function (part) {
+        const alias = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+        return alias ? (alias[2] + ": " + alias[1]) : part;
+      });
+    /* 用 var 而不是 const：多个平铺模块可能 import 同一个被包装模块的同一批名字，
+       平铺到同一作用域后 const 会重复声明报错；var 重复声明只是再次赋值。 */
+    return "var { " + names.join(", ") + " } = __NS[" + JSON.stringify(target) + "];";
+  });
+  /* 动态 import 在单文件预览里没有可加载路径，改成直接取已注册的命名空间 */
+  code = code.replace(/import\(\s*"([^"]+)"\s*\)/g, function (m, spec) {
+    const target = resolve(name, spec);
+    return WRAPPED.has(target) ? "Promise.resolve(__NS[" + JSON.stringify(target) + "])" : m;
+  });
+  return { code: code, exported: exported };
 }
 
-/* 低频视图在预览稿里没有可 import 的文件路径：把它们的导出注册到 window.__DS_MODULES__，
-   core/view-loader 会优先从这里同步取模块（真实部署仍然走原生 dynamic import）。 */
-const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile"];
-const registry = LAZY_VIEWS.map(function (name) {
-  const code = codeOf.get("views/" + name + ".js") || "";
-  const mm = code.match(/^export\s*\{([^}]*)\};/m);
-  if (!mm) return "";
-  const props = mm[1].split(",").map(x => x.trim()).filter(Boolean).map(function (part) {
-    const alias = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
-    return alias ? (alias[2] + ": " + alias[1]) : (part + ": " + part);
-  });
-  return "window.__DS_MODULES__[" + JSON.stringify(name) + "] = {" + props.join(", ") + "};";
-}).filter(Boolean).join("\n");
-
-const bundle = "window.__DS_MODULES__ = window.__DS_MODULES__ || {};\n" + registry + "\n" + order.map(function (m) {
-  const code = stripModule(codeOf.get(m));
+const chunks = order.map(function (m) {
+  const t = transformModule(m, codeOf.get(m) || "");
   /* gantt-shared 内部也有 startOfDay / addDays / iso 等同名函数：单独包一层作用域，
      否则拼接后与 lib/format 的同名函数互相覆盖（真实 ESM 各自有独立作用域，没有这个问题）。 */
   if (m === "lib/gantt-shared.js") {
-    return "/* ---- " + m + " ---- */\nconst GS = (function(){\n" + code + "\nreturn GS;\n})();";
+    return "/* ---- " + m + " ---- */\nconst GS = (function(){\n" + t.code + "\nreturn GS;\n})();";
   }
-  return "/* ---- " + m + " ---- */\n" + code;
+  if (WRAPPED.has(m)) {
+    const props = Object.keys(t.exported).map(function (k) { return k + ": " + t.exported[k]; });
+    return "/* ---- " + m + " ---- */\n__NS[" + JSON.stringify(m) + "] = (function(){\n" + t.code +
+      "\nreturn {" + props.join(", ") + "};\n})();";
+  }
+  return "/* ---- " + m + " ---- */\n" + t.code;
 }).join("\n");
+
+/* 低频视图在预览稿里没有可 import 的文件路径：把它们的导出注册到 window.__DS_MODULES__，
+   core/view-loader 会优先从这里同步取模块（真实部署仍然走原生 dynamic import）。
+   注册必须在模块代码之后执行，否则拿不到 IIFE 的返回值。 */
+const registry = LAZY_VIEWS.map(function (name) {
+  return "window.__DS_MODULES__[" + JSON.stringify(name) + "] = __NS[" +
+    JSON.stringify("views/" + name + ".js") + "];";
+}).join("\n");
+
+const bundle = "window.__DS_MODULES__ = window.__DS_MODULES__ || {};\nvar __NS = {};\n" +
+  chunks + "\n" + registry;
 
 const MOCK = fs.readFileSync(path.join(__dirname, "preview-mock.js"), "utf8");
 html = html.replace(/<link[^>]*rel="modulepreload"[^>]*>/g, "");

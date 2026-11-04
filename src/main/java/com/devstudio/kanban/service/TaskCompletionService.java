@@ -31,13 +31,16 @@ public class TaskCompletionService {
     private final TimeLogMapper timeLogMapper;
     private final RequirementMapper reqMapper;
     private final RequirementDocMapper requirementDocMapper;
+    private final ProjectAccessService projectAccess;
 
     public TaskCompletionService(TaskCompletionRecordMapper recordMapper, TimeLogMapper timeLogMapper,
-                                 RequirementMapper reqMapper, RequirementDocMapper requirementDocMapper) {
+                                 RequirementMapper reqMapper, RequirementDocMapper requirementDocMapper,
+                                 ProjectAccessService projectAccess) {
         this.recordMapper = recordMapper;
         this.timeLogMapper = timeLogMapper;
         this.reqMapper = reqMapper;
         this.requirementDocMapper = requirementDocMapper;
+        this.projectAccess = projectAccess;
     }
 
     /**
@@ -94,11 +97,22 @@ public class TaskCompletionService {
         recordMapper.deleteByTaskId(workspaceId, taskId);
     }
 
-    /** 按月查询（month 为 null 时取当月） */
-    public List<TaskCompletionRecord> listByMonth(String workspaceId, YearMonth month) {
+    /** 按月查询（month 为 null 时取当月）；不可见项目的快照不返回 */
+    public List<TaskCompletionRecord> listByMonth(String workspaceId, String userId, YearMonth month) {
         YearMonth ym = month == null ? YearMonth.now() : month;
         LocalDate from = ym.atDay(1);
-        return recordMapper.selectByRange(workspaceId, from, from.plusMonths(1));
+        List<TaskCompletionRecord> list = recordMapper.selectByRange(workspaceId, from, from.plusMonths(1));
+        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        if (hidden.isEmpty()) {
+            return list;
+        }
+        List<TaskCompletionRecord> visible = new java.util.ArrayList<TaskCompletionRecord>();
+        for (TaskCompletionRecord r : list) {
+            if (r.getReqId() == null || !hidden.contains(r.getReqId())) {
+                visible.add(r);
+            }
+        }
+        return visible;
     }
 
     /** 清空空间 / 覆盖导入前清空完成归档，避免旧快照挂在新任务上 */

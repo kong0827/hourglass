@@ -46,6 +46,7 @@ public class UserService implements UserDetailsService {
     private final UserMapper userMapper;
     private final WorkspaceMapper workspaceMapper;
     private final WorkspaceMemberMapper memberMapper;
+    private final com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper;
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
     private final WorkspaceService workspaceService;
@@ -59,12 +60,14 @@ public class UserService implements UserDetailsService {
     private String bootstrapPassword;
 
     public UserService(UserMapper userMapper, WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
+                       com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper,
                        TaskMapper taskMapper, RequirementMapper reqMapper,
                        WorkspaceService workspaceService, PasswordEncoder encoder,
                        WorkspaceMemberCache memberCache) {
         this.userMapper = userMapper;
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
+        this.projectMemberMapper = projectMemberMapper;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.workspaceService = workspaceService;
@@ -93,7 +96,9 @@ public class UserService implements UserDetailsService {
                 String password;
                 if (raw.isEmpty()) {
                     password = randomPassword();
-                    log.warn("首次启动：未配置 AUTH_PASSWORD，已创建管理员 {}，临时密码：{} （登录后请在用户管理中重置）", username, password);
+                    /* 密码只走标准输出一次性展示，不进日志文件，避免被日志采集系统带走 */
+                    log.warn("首次启动：未配置 AUTH_PASSWORD，已创建管理员 {}，临时密码见控制台输出（登录后请在用户管理中重置）", username);
+                    System.out.println("[DevStudio] 管理员 " + username + " 的临时密码：" + password + "（仅本次启动显示，登录后请重置）");
                 } else {
                     password = raw;
                     log.info("首次启动：已创建管理员账号 {}", username);
@@ -141,8 +146,9 @@ public class UserService implements UserDetailsService {
         AppUser u = requireUser(id);
         String oldName = u.getDisplayName();
         String newName = cleanName(req.getDisplayName(), oldName);
-        u.setRole(null); // 只改显示名：SQL 条件跳过 role 写入
+        u.setRole(null); // 只改显示名和邮箱：SQL 条件跳过 role 写入
         u.setDisplayName(newName);
+        u.setEmail(Texts.trimToNull(req.getEmail()));
         userMapper.update(u);
         syncTaskOwnerName(id, oldName, newName);
         return userMapper.selectById(id);
@@ -247,6 +253,7 @@ public class UserService implements UserDetailsService {
         }
         // 退出所有共享空间 + 清空个人空间配置数据
         memberMapper.deleteAllByUser(id);
+        projectMemberMapper.deleteAllByUser(id);
         workspaceService.wipeData(personalId);
         workspaceMapper.deleteById(personalId);
         userMapper.deleteById(id);

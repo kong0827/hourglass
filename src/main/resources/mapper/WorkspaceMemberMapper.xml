@@ -8,7 +8,13 @@
     FROM workspace_member m
     JOIN app_user u ON u.id = m.user_id
     WHERE m.workspace_id = #{workspaceId}
-    ORDER BY CASE WHEN m.role = 'owner' THEN 0 ELSE 1 END, u.display_name, u.id
+    ORDER BY CASE m.role
+               WHEN 'owner' THEN 0
+               WHEN 'admin' THEN 1
+               WHEN 'member' THEN 2
+               ELSE 3
+             END,
+             u.display_name, u.id
   </select>
 
   <select id="selectUserIds" resultType="string">
@@ -24,6 +30,11 @@
   <insert id="insert">
     INSERT INTO workspace_member (workspace_id, user_id, role) VALUES (#{workspaceId}, #{userId}, #{role})
   </insert>
+
+  <update id="updateRole">
+    UPDATE workspace_member SET role = #{role}
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </update>
 
   <delete id="delete">
     DELETE FROM workspace_member WHERE workspace_id = #{workspaceId} AND user_id = #{userId}

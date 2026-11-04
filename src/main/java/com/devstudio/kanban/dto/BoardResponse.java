@@ -61,6 +61,8 @@ public class BoardResponse {
         private List<NameCount> owners = new ArrayList<NameCount>();
         private List<NameCount> pris = new ArrayList<NameCount>();
         private List<NameCount> cats = new ArrayList<NameCount>();
+        /** 工作项类型计数（story/task/bug/epic 固定顺序） */
+        private List<NameCount> types = new ArrayList<NameCount>();
         private List<ReqCount> reqs = new ArrayList<ReqCount>();
         /** 有任务关联的标签及计数 */
         private List<TagCount> tags = new ArrayList<TagCount>();

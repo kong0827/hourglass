@@ -18,6 +18,9 @@ public interface WorkspaceMemberMapper {
 
     int insert(WorkspaceMember member);
 
+    int updateRole(@Param("workspaceId") String workspaceId, @Param("userId") String userId,
+                   @Param("role") String role);
+
     int delete(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

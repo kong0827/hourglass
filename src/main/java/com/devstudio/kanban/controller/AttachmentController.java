@@ -3,6 +3,8 @@ package com.devstudio.kanban.controller;
 import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.CurrentUser;
+import com.devstudio.kanban.common.CurrentWorkspace;
+import com.devstudio.kanban.config.WorkspaceCtx;
 import com.devstudio.kanban.entity.Attachment;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.service.AttachmentService;
@@ -54,6 +56,7 @@ public class AttachmentController {
         EXT_MIME.put("txt", "text/plain");
         EXT_MIME.put("md", "text/plain");
         EXT_MIME.put("zip", "application/zip");
+        EXT_MIME.put("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
     private final AttachmentService attachmentService;
@@ -67,8 +70,9 @@ public class AttachmentController {
     @GetMapping("/api/tasks/{taskId}/attachments")
     public ApiResult<List<Attachment>> list(@PathVariable String taskId,
                                             @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(attachmentService.list(ws.getId(), taskId));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.list(ws.getId(), userId, taskId, AttachmentService.KIND_TASK));
     }
 
     @PostMapping("/api/tasks/{taskId}/attachments")
@@ -76,14 +80,32 @@ public class AttachmentController {
                                         @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), taskId, file));
+        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), taskId, AttachmentService.KIND_TASK, file));
+    }
+
+    /** T2.1 / T2.3：需求池需求附件（attachment 泛化 target=demand） */
+    @GetMapping("/api/demands/{demandId}/attachments")
+    public ApiResult<List<Attachment>> listDemand(@PathVariable String demandId,
+                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.list(ws.getId(), userId, demandId, AttachmentService.KIND_DEMAND));
+    }
+
+    @PostMapping("/api/demands/{demandId}/attachments")
+    public ApiResult<Attachment> uploadDemand(@PathVariable String demandId, @RequestParam("file") MultipartFile file,
+                                              @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), demandId, AttachmentService.KIND_DEMAND, file));
     }
 
     @GetMapping("/api/attachments/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable String id,
                                              @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        Attachment a = attachmentService.get(ws.getId(), id);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        Attachment a = attachmentService.getVisible(ws.getId(), userId, id);
         File file = attachmentService.fileOf(a);
         if (!file.exists()) {
             throw AppException.notFound("附件文件不存在：" + a.getFilename());
@@ -105,8 +127,9 @@ public class AttachmentController {
     @GetMapping("/api/attachments/{id}/thumb")
     public ResponseEntity<?> thumb(@PathVariable String id,
                                    @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        Attachment a = attachmentService.get(ws.getId(), id);
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        Attachment a = attachmentService.getVisible(ws.getId(), userId, id);
         File file = attachmentService.fileOf(a);
         if (!file.exists()) {
             throw AppException.notFound("附件文件不存在：" + a.getFilename());
@@ -192,6 +215,14 @@ public class AttachmentController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         attachmentService.delete(userId, ws.getId(), id);
         return ApiResult.ok();
+    }
+
+    /** 在线编辑整体覆盖保存（智能表格回写）：保留附件 id/文件名 */
+    @PostMapping("/api/attachments/{id}/content")
+    public ApiResult<Attachment> overwriteContent(@CurrentWorkspace WorkspaceCtx ctx,
+                                                  @PathVariable String id,
+                                                  @RequestParam("file") MultipartFile file) {
+        return ApiResult.ok(attachmentService.overwriteContent(ctx.getUserId(), ctx.getWsId(), id, file));
     }
 
     private MediaType mediaTypeOf(String storedName) {

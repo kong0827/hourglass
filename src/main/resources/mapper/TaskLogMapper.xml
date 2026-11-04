@@ -7,6 +7,13 @@
     VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail}, #{fromColumn}, #{toColumn})
   </insert>
 
+  <insert id="insertUnlinkReqLogs">
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail)
+    SELECT t.id, t.workspace_id, #{actorId}, 'update', #{detail}
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId}
+  </insert>
+
   <select id="selectByTaskId" resultType="TaskLog">
     SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
            l.from_column, l.to_column, l.created_at,
@@ -41,6 +48,16 @@
     LEFT JOIN app_user u ON u.id = l.actor_id
     LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
     WHERE l.workspace_id = #{workspaceId}
+    <if test="viewerId != null">
+      AND (l.task_id = 'CFG' OR NOT EXISTS (
+        SELECT 1 FROM task t2
+        JOIN project_member pm ON pm.workspace_id = t2.workspace_id
+                              AND pm.project_id = t2.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t2.id = l.task_id
+          AND t2.workspace_id = l.workspace_id
+          AND pm.access = 'none'))
+    </if>
     ORDER BY l.id DESC
     LIMIT #{limit}
   </select>

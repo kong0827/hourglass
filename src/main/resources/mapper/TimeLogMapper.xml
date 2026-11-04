@@ -121,11 +121,20 @@
   </select>
 
   <select id="sumBetweenByWorkspaceGroupByUser" resultType="TimeAgg">
-    SELECT user_id AS user_id, SUM(minutes) AS total_minutes FROM time_log
-    WHERE workspace_id = #{workspaceId}
-      AND ended_at IS NOT NULL
-      AND started_at &gt;= #{from} AND started_at &lt; #{to}
-    GROUP BY user_id
+    SELECT l.user_id AS user_id, SUM(l.minutes) AS total_minutes FROM time_log l
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.ended_at IS NOT NULL
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{to}
+    <if test="viewerId != null">
+      <!-- 成员被设为不可见的项目，其工时同样不计入成员贡献 -->
+      AND NOT EXISTS (SELECT 1 FROM task t
+                      JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none'
+                      WHERE t.id = l.task_id)
+    </if>
+    GROUP BY l.user_id
   </select>
 
   <select id="selectByWorkspaceBetween" resultType="TimeLog">
@@ -155,16 +164,25 @@
 
   <!-- 一次扫描返回「累计 / 区间」×「全空间 / 我」四个数；区间上界可选 -->
   <select id="sumWork" resultType="com.devstudio.kanban.dto.WorkSumRow">
-    SELECT COALESCE(SUM(minutes), 0) AS total_all,
-           COALESCE(SUM(CASE WHEN started_at &gt;= #{from}
-             <if test="to != null"> AND started_at &lt; #{to}</if>
-             THEN minutes ELSE 0 END), 0) AS week_all,
-           COALESCE(SUM(CASE WHEN user_id = #{userId} THEN minutes ELSE 0 END), 0) AS total_mine,
-           COALESCE(SUM(CASE WHEN user_id = #{userId} AND started_at &gt;= #{from}
-             <if test="to != null"> AND started_at &lt; #{to}</if>
-             THEN minutes ELSE 0 END), 0) AS week_mine
-    FROM time_log
-    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    SELECT COALESCE(SUM(l.minutes), 0) AS total_all,
+           COALESCE(SUM(CASE WHEN l.started_at &gt;= #{from}
+             <if test="to != null"> AND l.started_at &lt; #{to}</if>
+             THEN l.minutes ELSE 0 END), 0) AS week_all,
+           COALESCE(SUM(CASE WHEN l.user_id = #{userId} THEN l.minutes ELSE 0 END), 0) AS total_mine,
+           COALESCE(SUM(CASE WHEN l.user_id = #{userId} AND l.started_at &gt;= #{from}
+             <if test="to != null"> AND l.started_at &lt; #{to}</if>
+             THEN l.minutes ELSE 0 END), 0) AS week_mine
+    FROM time_log l
+    WHERE l.workspace_id = #{workspaceId} AND l.ended_at IS NOT NULL
+    <if test="viewerId != null">
+      <!-- 成员被设为不可见的项目，其工时不计入任何汇总 -->
+      AND NOT EXISTS (SELECT 1 FROM task t
+                      JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none'
+                      WHERE t.id = l.task_id)
+    </if>
   </select>
 
   <!-- 甘特负载：只聚合区间内、且属于本次任务集合的工时（按计时人 × 周） -->
@@ -180,5 +198,46 @@
       <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
     GROUP BY user_id, week_start
     ORDER BY MIN(started_at), user_id
+  </select>
+
+  <!-- M1 阶段统计：项目内工时按「计时人 × 自然日」聚合，服务层再按首版上线日归入首版/迭代 -->
+  <select id="sumUserDayMinutesByReq" resultType="com.devstudio.kanban.dto.UserDayRow">
+    SELECT tl.user_id AS user_id,
+           DATE(COALESCE(tl.ended_at, tl.started_at)) AS day,
+           SUM(tl.minutes) AS total_minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    WHERE tl.workspace_id = #{workspaceId}
+      AND tl.minutes IS NOT NULL
+      AND t.req_id = #{reqId}
+      AND t.deleted_at IS NULL
+    GROUP BY tl.user_id, DATE(COALESCE(tl.ended_at, tl.started_at))
+  </select>
+
+  <!-- 成员阶段工时下钻：任务 × 阶段，阶段判定与 sumUserDayMinutesByReq / 阶段卡完全同口径 -->
+  <select id="sumMemberTaskPhaseByReq" resultType="com.devstudio.kanban.dto.PhaseMemberTask">
+    SELECT t.id AS taskId,
+           t.title,
+           t.item_type AS itemType,
+           t.owner,
+           t.start_date AS startDate,
+           t.due_date AS dueDate,
+           t.estimate_minutes AS estimateMinutes,
+           t.board_column AS boardColumn,
+           CASE WHEN r.first_released_at IS NOT NULL
+                     AND DATE(COALESCE(tl.ended_at, tl.started_at)) &gt; r.first_released_at
+                THEN 'post' ELSE 'mvp' END AS phase,
+           SUM(tl.minutes) AS minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    INNER JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE tl.workspace_id = #{workspaceId}
+      AND tl.minutes IS NOT NULL
+      AND t.req_id = #{reqId}
+      AND t.deleted_at IS NULL
+      AND tl.user_id = #{userId}
+    GROUP BY t.id, t.title, t.item_type, t.owner, t.start_date, t.due_date,
+             t.estimate_minutes, t.board_column, phase
+    ORDER BY (phase = 'post'), t.id
   </select>
 </mapper>

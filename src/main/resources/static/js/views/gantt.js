@@ -12,7 +12,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, PRIORITY_COLOR, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate } from "../lib/format.js";
+import { PRIORITIES, PRIORITY_COLOR, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
@@ -40,15 +40,10 @@ var GANTT_LABEL_W_NARROW = 170;
 var GANTT_PAGE = 500;
 var GANTT_MAX_LOAD = 3000;
 var GANTT_MAX_DAYS = 740;
-var GANTT_BC = {
-  P0:{c:"var(--p0)", soft:"var(--p0-soft)", bd:"var(--danger-border)"},
-  P1:{c:"var(--p1)", soft:"var(--p1-soft)", bd:"var(--warning-border)"},
-  P2:{c:"var(--p2)", soft:"var(--p2-soft)", bd:"var(--info-border)"},
-  P3:{c:"var(--p3)", soft:"var(--p3-soft)", bd:"var(--border-strong)"}
-};
 var GANTT_DONE    = {c:"var(--success)", soft:"var(--success-soft)", bd:"var(--success-border)"};
 var GANTT_BLOCKED = {c:"var(--warning)", soft:"var(--warning-soft)", bd:"var(--warning-border)"};
 var GANTT_OVERDUE = {c:"var(--danger)",  soft:"var(--danger-soft)",  bd:"var(--danger-border)"};
+var GANTT_DOING   = {c:"var(--primary)", soft:"var(--primary-soft)", bd:"var(--primary-border)"};
 var ganttTipEl = null, ganttDropEl = null;
 var ganttSuppressUnplannedClick = 0;
 var ganttState = {
@@ -412,7 +407,7 @@ function ganttStatusOf(t){
     badge: days ? ("阻塞 · 逾期 " + days + " 天") : "阻塞"
   };
   if(days > 0) return { key: "overdue", color: GANTT_OVERDUE, days: days, badge: "逾期 " + days + " 天" };
-  return { key: "doing", color: GANTT_BC[t.priority] || GANTT_BC.P2, days: 0, badge: "" };
+  return { key: "doing", color: GANTT_DOING, days: 0, badge: "" };
 }
 function ganttGroupFieldValue(t, field){
   if(field === "project"){
@@ -582,13 +577,25 @@ function ganttRowHTML(x, range, dayW, totalW){
   var rn = t.reqId ? reqNameById(t.reqId) : "";
   if(rn === "无") rn = "";
   var meta = '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>';
-  if(ganttState.cols.project && rn) meta += '<span class="ellipsis">' + esc(rn) + '</span>';
+  if(ganttState.cols.project && rn) meta += '<span class="ellipsis shrink">' + esc(rn) + '</span>';
   if(ganttState.cols.owner && t.owner) meta += '<span class="ellipsis">' + esc(t.owner) + '</span>';
   var realS = parseDate(t.startDate) || parseDate(t.dueDate);
   var realE = parseDate(t.dueDate) || parseDate(t.startDate) || realS;
-  var rangeText = (t.startDate && t.dueDate)
-    ? fmtShortMD(realS) + '→' + fmtShortMD(realE)
-    : (t.startDate ? '开始 ' + fmtShortMD(realS) : '截止 ' + fmtShortMD(realE));
+  /* 里程碑是单日节点，只显示一个日期；普通区间跨年时给后端点补年份，避免「11-13→02-08」看不出是明年 */
+  var rangeText;
+  if(isMs){
+    rangeText = fmtShortMD(realS);
+  }else if(t.startDate && t.dueDate){
+    rangeText = fmtShortMD(realS) + '→' +
+      (realS.getFullYear() !== realE.getFullYear()
+        ? (realE.getFullYear() + '-' + fmtShortMD(realE))
+        : fmtShortMD(realE));
+  }else{
+    var one = t.startDate ? realS : realE;
+    var oneTxt = fmtShortMD(one);
+    if(one.getFullYear() !== rt.TODAY.getFullYear()) oneTxt = one.getFullYear() + '-' + oneTxt;
+    rangeText = (t.startDate ? '开始 ' : '截止 ') + oneTxt;
+  }
   if(ganttState.cols.dates) meta += '<span>' + rangeText + '</span>';
   if(isMs) meta += '<span class="meta">里程碑</span>';
   if(st.key === "overdue"){
@@ -1753,6 +1760,9 @@ function renderGanttFilterMenu(){
       '<i class="cdot" style="background:' + PRIORITY_COLOR[p] + '"></i>' + p,
       state.pris.indexOf(p) !== -1);
   }).join("");
+  var typeHTML = ["task", "story", "bug", "epic"].map(function(t){
+    return ganttFilterChip("data-gantt-type", t, esc(typeName(t)), state.types.indexOf(t) !== -1);
+  }).join("");
   var projHTML = rt.reqList.map(function(r){
     return ganttFilterChip("data-gantt-req", r.id, esc(r.name), state.reqs.indexOf(r.id) !== -1);
   }).join("");
@@ -1773,6 +1783,7 @@ function renderGanttFilterMenu(){
     '<div class="menu-field"><input class="input" type="search" id="ganttFilterQ" placeholder="关键词：标题 / 项目 / 标签" aria-label="关键词筛选" value="' + esc(state.q) + '" /></div>' +
     ganttFilterSection("负责人", ownerHTML || '<span class="foot-note">当前空间没有负责人可选</span>') +
     ganttFilterSection("优先级", priHTML) +
+    ganttFilterSection("类型", typeHTML) +
     ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
     (catHTML ? ganttFilterSection("分类", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
@@ -2352,6 +2363,16 @@ if(ganttRangeModeEl){
     if(b) ganttSetRangeMode(b.getAttribute("data-gantt-range"));
   });
 }
+/* 「更多」是 details 弹层：点外部收起；选中内部操作后也收起 */
+var ganttMoreEl = $("ganttMore");
+if(ganttMoreEl){
+  document.addEventListener("click", function(e){
+    if(ganttMoreEl.open && !ganttMoreEl.contains(e.target)) ganttMoreEl.open = false;
+  });
+  ganttMoreEl.addEventListener("click", function(e){
+    if(e.target.closest(".gantt-range-mode button")) ganttMoreEl.open = false;
+  });
+}
 if(ganttPrevMonthEl) ganttPrevMonthEl.addEventListener("click", function(){ ganttShiftMonth(-1); });
 if(ganttNextMonthEl) ganttNextMonthEl.addEventListener("click", function(){ ganttShiftMonth(1); });
 if(ganttFilterBtn){
@@ -2371,6 +2392,8 @@ if(ganttFilterMenu){
     if(o){ toggleFilterValue("owners", o.getAttribute("data-gantt-owner")); afterGanttFilterChange(); return; }
     var p = e.target.closest("[data-gantt-pri]");
     if(p){ toggleFilterValue("pris", p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
+    var tp = e.target.closest("[data-gantt-type]");
+    if(tp){ toggleFilterValue("types", tp.getAttribute("data-gantt-type")); afterGanttFilterChange(); return; }
     var r = e.target.closest("[data-gantt-req]");
     if(r){ toggleFilterValue("reqs", r.getAttribute("data-gantt-req")); afterGanttFilterChange(); return; }
     var c = e.target.closest("[data-gantt-cat]");

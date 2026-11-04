@@ -8,7 +8,7 @@
     FROM task_comment c
     LEFT JOIN app_user u ON u.id = c.author_id
     WHERE c.workspace_id = #{workspaceId} AND c.task_id = #{taskId}
-    ORDER BY c.id ASC
+    ORDER BY c.created_at ASC, c.id ASC
   </select>
 
   <select id="selectAllByWorkspace" resultType="TaskComment">

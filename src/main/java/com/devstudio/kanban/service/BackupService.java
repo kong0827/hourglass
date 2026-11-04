@@ -8,7 +8,10 @@ import com.devstudio.kanban.dto.BackupData;
 import com.devstudio.kanban.dto.TaskTagRef;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
+import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.DevBranch;
+import com.devstudio.kanban.entity.DocumentType;
+import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Subtask;
@@ -23,8 +26,10 @@ import com.devstudio.kanban.entity.TimeLog;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -34,6 +39,7 @@ import com.devstudio.kanban.mapper.TaskCommentMapper;
 import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -94,6 +100,9 @@ public class BackupService {
     private final TaskDependencyMapper dependencyMapper;
     private final TaskBaselineMapper baselineMapper;
     private final GanttShareMapper ganttShareMapper;
+    private final ProjectVersionMapper versionMapper;
+    private final VersionTaskMapper versionTaskMapper;
+    private final DemandMapper demandMapper;
     private final TaskCompletionService completionService;
     /** 覆盖导入前清空任务类数据的清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
@@ -113,6 +122,9 @@ public class BackupService {
                          TaskDependencyMapper dependencyMapper,
                          TaskBaselineMapper baselineMapper,
                          GanttShareMapper ganttShareMapper,
+                         ProjectVersionMapper versionMapper,
+                         VersionTaskMapper versionTaskMapper,
+                         DemandMapper demandMapper,
                          TaskCompletionService completionService,
                          TaskCascade cascade,
                          ActivityService activityService,
@@ -133,6 +145,9 @@ public class BackupService {
         this.dependencyMapper = dependencyMapper;
         this.baselineMapper = baselineMapper;
         this.ganttShareMapper = ganttShareMapper;
+        this.versionMapper = versionMapper;
+        this.versionTaskMapper = versionTaskMapper;
+        this.demandMapper = demandMapper;
         this.completionService = completionService;
         this.cascade = cascade;
         this.activityService = activityService;
@@ -142,7 +157,7 @@ public class BackupService {
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(6);
+        data.setV(8);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -153,6 +168,14 @@ public class BackupService {
             ids.add(t.getId());
         }
         Map<String, List<String>> tagMap = tagsOf(workspaceId, ids);
+
+        /* v8：任务→版本是 1:1（version_task 以 task_id 为主键），直接挂回任务 */
+        Map<String, String> versionByTask = new HashMap<String, String>();
+        for (Task binding : versionTaskMapper.selectBindingsByWorkspace(workspaceId)) {
+            if (binding != null && binding.getId() != null) {
+                versionByTask.put(binding.getId(), binding.getVersionId());
+            }
+        }
 
         Map<String, List<BackupData.BackupSubtask>> subMap = new LinkedHashMap<String, List<BackupData.BackupSubtask>>();
         for (Subtask s : subtaskMapper.selectAll(workspaceId)) {
@@ -214,6 +237,10 @@ public class BackupService {
             b.setTimeLogs(timeMap.get(t.getId()));
             b.setCreatedAt(t.getCreatedAt() == null ? null : t.getCreatedAt().format(ISO_TS));
             b.setDeletedAt(t.getDeletedAt() == null ? null : t.getDeletedAt().format(ISO_TS));
+            b.setItemType(t.getItemType());
+            b.setEpicId(t.getEpicId());
+            b.setDemandId(t.getDemandId());
+            b.setVersionId(versionByTask.get(t.getId()));
             tasks.add(b);
         }
         data.setTasks(tasks);
@@ -236,6 +263,7 @@ public class BackupService {
             b.setDesc(r.getDescription());
             b.setStatus(r.getStatus());
             b.setCreatedAt(r.getCreatedAt() == null ? null : r.getCreatedAt().toLocalDate().toString());
+            b.setFirstReleasedAt(r.getFirstReleasedAt() == null ? null : r.getFirstReleasedAt().toString());
             reqs.add(b);
         }
         data.setReqs(reqs);
@@ -293,11 +321,15 @@ public class BackupService {
             BackupData.BackupReqDoc bd = new BackupData.BackupReqDoc();
             bd.setId(d.getId());
             bd.setReqId(d.getReqId());
+            bd.setParentId(d.getParentId());
             bd.setTitle(d.getTitle());
+            bd.setDocType(DocumentType.parseOrOther(d.getDocType()).getCode());
             bd.setContent(d.getContent());
+            bd.setFormat(d.getFormat() == null ? "html" : d.getFormat());
             bd.setStatus(d.getStatus());
             bd.setOwner(d.getOwner());
             bd.setOwnerUserId(d.getOwnerUserId());
+            bd.setSortOrder(d.getSortOrder());
             bd.setCreatedAt(d.getCreatedAt() == null ? null : d.getCreatedAt().format(ISO_TS));
             bd.setUpdatedAt(d.getUpdatedAt() == null ? null : d.getUpdatedAt().format(ISO_TS));
             reqDocs.add(bd);
@@ -324,6 +356,50 @@ public class BackupService {
             branches.add(bb);
         }
         data.setBranches(branches);
+
+        /* v8：项目版本与需求池。版本只归属项目，需求池通过 req_id / version_id 关联；
+           需求流转日志属于审计记录，与分支时间线同口径不随备份迁移 */
+        List<BackupData.BackupVersion> versions = new ArrayList<BackupData.BackupVersion>();
+        for (ProjectVersion v : versionMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupVersion bv = new BackupData.BackupVersion();
+            bv.setId(v.getId());
+            bv.setReqId(v.getReqId());
+            bv.setName(v.getName());
+            bv.setDesc(v.getDescription());
+            bv.setStatus(v.getStatus());
+            bv.setTargetDate(v.getTargetDate() == null ? null : v.getTargetDate().toString());
+            bv.setReleasedAt(v.getReleasedAt() == null ? null : v.getReleasedAt().format(ISO_TS));
+            bv.setCreatedAt(v.getCreatedAt() == null ? null : v.getCreatedAt().format(ISO_TS));
+            bv.setUpdatedAt(v.getUpdatedAt() == null ? null : v.getUpdatedAt().format(ISO_TS));
+            versions.add(bv);
+        }
+        data.setVersions(versions);
+
+        List<BackupData.BackupDemand> demands = new ArrayList<BackupData.BackupDemand>();
+        for (Demand d : demandMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupDemand bd = new BackupData.BackupDemand();
+            bd.setId(d.getId());
+            bd.setReqId(d.getReqId());
+            bd.setTitle(d.getTitle());
+            bd.setDesc(d.getDescription());
+            bd.setSource(d.getSource());
+            bd.setItemKind(d.getItemKind());
+            bd.setPriority(d.getPriority());
+            bd.setStatus(d.getStatus());
+            bd.setExpectDate(d.getExpectDate() == null ? null : d.getExpectDate().toString());
+            bd.setAcceptText(d.getAcceptText());
+            bd.setVersionId(d.getVersionId());
+            bd.setReviewNote(d.getReviewNote());
+            bd.setWsjfBusiness(d.getWsjfBusiness());
+            bd.setWsjfUrgency(d.getWsjfUrgency());
+            bd.setWsjfRisk(d.getWsjfRisk());
+            bd.setWsjfEffort(d.getWsjfEffort());
+            bd.setCreatedBy(d.getCreatedBy());
+            bd.setCreatedAt(d.getCreatedAt() == null ? null : d.getCreatedAt().format(ISO_TS));
+            bd.setUpdatedAt(d.getUpdatedAt() == null ? null : d.getUpdatedAt().format(ISO_TS));
+            demands.add(bd);
+        }
+        data.setDemands(demands);
         return data;
     }
 
@@ -360,9 +436,12 @@ public class BackupService {
         result.setComments(st.commentCount);
         result.setReqDocs(st.reqDocCount);
         result.setBranches(st.branchCount);
+        result.setVersions(st.versionCount);
+        result.setDemands(st.demandCount);
         activityService.logConfig(workspaceId, userId, "导入覆盖备份（任务 " + st.taskCount
                 + " / 项目 " + st.reqCount + " / 评论 " + st.commentCount
-                + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount + "）");
+                + " / 需求 " + st.reqDocCount + " / 分支 " + st.branchCount
+                + " / 版本 " + st.versionCount + " / 需求池 " + st.demandCount + "）");
         return result;
     }
 
@@ -371,8 +450,14 @@ public class BackupService {
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
         // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"。
         // v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状。
+        // v8：版本/需求池同口径——只有备份确实包含该字段才覆盖，旧备份不误删。
         cascade.clearWorkspaceDataForImport(workspaceId,
-                data.getReqDocs() != null, data.getBranches() != null);
+                data.getReqDocs() != null, data.getBranches() != null,
+                data.getVersions() != null, data.getDemands() != null);
+        /* 版本被覆盖但需求池未随备份恢复时，旧 version_id 已指向不存在的版本 */
+        if (data.getVersions() != null && data.getDemands() == null) {
+            demandMapper.clearVersionRefsByWorkspace(workspaceId);
+        }
     }
 
     /** 阶段 1b：项目/分支/需求文档/分类/看板列/标签先落库，供任务引用 */
@@ -411,8 +496,138 @@ public class BackupService {
                 req.setName(name == null ? "未命名项目" : Texts.cut(name, 40));
                 req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 160));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
+                req.setFirstReleasedAt(parseDate(r.getFirstReleasedAt()));
                 reqMapper.insert(req);
                 st.reqCount++;
+            }
+        }
+
+        /* v8：版本先落库（需求池的 version_id、任务的 version_task 都依赖它） */
+        Map<String, String> versionIdMap = st.versionIdMap;
+        if (data.getVersions() != null) {
+            Set<String> seenVersionIds = new HashSet<String>();
+            for (BackupData.BackupVersion bv : data.getVersions()) {
+                if (bv == null) {
+                    continue;
+                }
+                String versionName = Texts.trimToNull(bv.getName());
+                if (versionName == null) {
+                    continue;
+                }
+                String backupReqId = Texts.trimToNull(bv.getReqId());
+                String reqId = backupReqId == null ? null : reqIdMap.get(backupReqId);
+                if (reqId == null) {
+                    reqId = backupReqId;
+                }
+                if (reqId == null || !reqIds.contains(reqId)) {
+                    continue;
+                }
+                String original = Ids.sanitize(Texts.trimToNull(bv.getId()));
+                if (original != null && !seenVersionIds.add(original)) {
+                    continue;
+                }
+                String id;
+                if (original == null) {
+                    id = Ids.gen("V");
+                } else if (versionMapper.selectById(original) != null) {
+                    id = Ids.gen("V");
+                } else {
+                    id = original;
+                }
+                ProjectVersion version = new ProjectVersion();
+                version.setId(id);
+                version.setWorkspaceId(workspaceId);
+                version.setReqId(reqId);
+                version.setName(Texts.cut(versionName, 40));
+                if (versionMapper.countByName(workspaceId, reqId, version.getName(), null) > 0) {
+                    continue; // 备份内同名版本：跳过，避免撞唯一键中断整次导入
+                }
+                version.setDescription(Texts.cut(Texts.trimToNull(bv.getDesc()), 500));
+                version.setStatus(oneOf(bv.getStatus(), new String[]{"planned", "active", "released"}, "planned"));
+                version.setTargetDate(parseDate(bv.getTargetDate()));
+                version.setReleasedAt(parseTs(bv.getReleasedAt()));
+                version.setCreatedAt(parseTs(bv.getCreatedAt()));
+                version.setUpdatedAt(parseTs(bv.getUpdatedAt()));
+                versionMapper.insert(version);
+                st.versionReqId.put(id, reqId);
+                st.versionIds.add(id);
+                if (original != null && !versionIdMap.containsKey(original)) {
+                    versionIdMap.put(original, id);
+                }
+                st.versionCount++;
+            }
+        }
+
+        /* v8：需求池依赖项目映射与版本映射；项目不存在的条目直接跳过（req_id 非空） */
+        Map<String, String> demandIdMap = st.demandIdMap;
+        if (data.getDemands() != null) {
+            Set<String> seenDemandIds = new HashSet<String>();
+            for (BackupData.BackupDemand bd : data.getDemands()) {
+                if (bd == null) {
+                    continue;
+                }
+                String demandTitle = Texts.trimToNull(bd.getTitle());
+                if (demandTitle == null) {
+                    continue;
+                }
+                String backupReqId = Texts.trimToNull(bd.getReqId());
+                String reqId = backupReqId == null ? null : reqIdMap.get(backupReqId);
+                if (reqId == null) {
+                    reqId = backupReqId;
+                }
+                if (reqId == null || !reqIds.contains(reqId)) {
+                    continue;
+                }
+                String original = Ids.sanitize(Texts.trimToNull(bd.getId()));
+                if (original != null && !seenDemandIds.add(original)) {
+                    continue;
+                }
+                String id;
+                if (original == null) {
+                    id = Ids.gen("D");
+                } else if (demandMapper.selectById(original) != null) {
+                    id = Ids.gen("D");
+                    demandIdMap.put(original, id);
+                } else {
+                    id = original;
+                }
+                Demand demand = new Demand();
+                demand.setId(id);
+                demand.setWorkspaceId(workspaceId);
+                demand.setReqId(reqId);
+                demand.setTitle(Texts.cut(demandTitle, 80));
+                demand.setDescription(Texts.cut(Texts.trimToNull(bd.getDesc()), 2000));
+                demand.setSource(Texts.cut(Texts.trimToNull(bd.getSource()), 40));
+                demand.setItemKind(oneOf(bd.getItemKind(),
+                        new String[]{"新功能", "体验优化", "缺陷", "其他"}, "新功能"));
+                demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
+                demand.setStatus(oneOf(bd.getStatus(),
+                        new String[]{"review", "pass", "plan", "rej"}, "review"));
+                demand.setExpectDate(parseDate(bd.getExpectDate()));
+                demand.setAcceptText(Texts.cut(Texts.trimToNull(bd.getAcceptText()), 2000));
+                String versionId = Texts.trimToNull(bd.getVersionId());
+                if (versionId != null && versionIdMap.containsKey(versionId)) {
+                    versionId = versionIdMap.get(versionId);
+                }
+                /* 目标版本必须属于需求所在项目 */
+                demand.setVersionId(versionId != null && reqId.equals(st.versionReqId.get(versionId))
+                        ? versionId : null);
+                demand.setReviewNote(Texts.cut(Texts.trimToNull(bd.getReviewNote()), 500));
+                demand.setWsjfBusiness(clampWsjf(bd.getWsjfBusiness()));
+                demand.setWsjfUrgency(clampWsjf(bd.getWsjfUrgency()));
+                demand.setWsjfRisk(clampWsjf(bd.getWsjfRisk()));
+                demand.setWsjfEffort(clampWsjfEffort(bd.getWsjfEffort()));
+                String createdBy = Texts.trimToNull(bd.getCreatedBy());
+                demand.setCreatedBy(createdBy != null && st.memberIds.contains(createdBy) ? createdBy : null);
+                demand.setCreatedAt(parseTs(bd.getCreatedAt()));
+                demand.setUpdatedAt(parseTs(bd.getUpdatedAt()));
+                demandMapper.insert(demand);
+                st.demandReqId.put(id, reqId);
+                st.demandIds.add(id);
+                if (original != null && !demandIdMap.containsKey(original)) {
+                    demandIdMap.put(original, id);
+                }
+                st.demandCount++;
             }
         }
 
@@ -478,6 +693,10 @@ public class BackupService {
         /* v6：需求文档依赖项目映射；不存在的项目直接跳过，避免悬空引用 */
         boolean withReqDocs = data.getReqDocs() != null;
         Map<String, String> reqDocIdMap = st.reqDocIdMap;
+        /* v7：层级按旧 id 映射到新 id，落库第二遍再补父引用 */
+        Map<String, String> docIdByOriginal = new HashMap<String, String>();
+        Map<String, String> docParentByOriginal = new HashMap<String, String>();
+        Map<String, String> docReqIdByOriginal = new HashMap<String, String>();
         if (withReqDocs) {
             Set<String> seenDocIds = new HashSet<String>();
             for (BackupData.BackupReqDoc bd : data.getReqDocs()) {
@@ -509,22 +728,54 @@ public class BackupService {
                 } else {
                     id = original;
                 }
+                String format = oneOf(bd.getFormat(), new String[]{"html", "markdown"}, "html");
                 RequirementDoc doc = new RequirementDoc();
                 doc.setId(id);
                 doc.setWorkspaceId(workspaceId);
                 doc.setReqId(reqId);
                 doc.setTitle(Texts.cut(title0, 100));
-                doc.setContent(RequirementDocService.sanitize(bd.getContent()));
-                doc.setContentBrief(RequirementDocService.excerptOf(doc.getContent()));
+                doc.setDocType(DocumentType.parseOrOther(bd.getDocType()).getCode());
+                doc.setFormat(format);
+                doc.setContent(RequirementDocService.contentOf(format, bd.getContent()));
+                doc.setContentBrief("markdown".equals(format)
+                        ? RequirementDocService.excerptOfMarkdown(doc.getContent())
+                        : RequirementDocService.excerptOf(doc.getContent()));
                 doc.setStatus(oneOf(bd.getStatus(), new String[]{"draft", "active", "done"}, "draft"));
                 doc.setOwner(Texts.cut(Texts.trimToNull(bd.getOwner()), 32));
                 String ownerUserId = Texts.trimToNull(bd.getOwnerUserId());
                 doc.setOwnerUserId(ownerUserId != null && st.memberIds.contains(ownerUserId)
                         ? ownerUserId : null);
+                doc.setSortOrder(bd.getSortOrder() == null ? 0 : bd.getSortOrder());
                 doc.setCreatedAt(parseTs(bd.getCreatedAt()));
                 doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
                 requirementDocMapper.insert(doc);
                 st.reqDocCount++;
+                if (original != null) {
+                    docIdByOriginal.put(original, id);
+                    String parentOriginal = Texts.trimToNull(bd.getParentId());
+                    if (parentOriginal != null) {
+                        docParentByOriginal.put(original, parentOriginal);
+                    }
+                    docReqIdByOriginal.put(original, reqId);
+                }
+            }
+            /* 第二遍补父文档：只接受同项目、且不成环的引用 */
+            for (Map.Entry<String, String> e : docParentByOriginal.entrySet()) {
+                String childOriginal = e.getKey();
+                String parentOriginal = e.getValue();
+                String childId = docIdByOriginal.get(childOriginal);
+                String parentId = docIdByOriginal.get(parentOriginal);
+                if (childId == null || parentId == null || childId.equals(parentId)) {
+                    continue;
+                }
+                String reqId = docReqIdByOriginal.get(childOriginal);
+                if (reqId == null || !reqId.equals(docReqIdByOriginal.get(parentOriginal))) {
+                    continue;
+                }
+                if (wouldCycle(childOriginal, docParentByOriginal)) {
+                    continue;
+                }
+                requirementDocMapper.updateParent(workspaceId, childId, parentId);
             }
         }
         /* 关联需求校验集合：id → 所属项目（覆盖导入时是本次新写入的） */
@@ -677,6 +928,33 @@ public class BackupService {
                 }
             }
             t.setReqId(reqId != null && st.reqIds.contains(reqId) ? reqId : null);
+            /* v8：工作项类型 / Epic 归属 / 关联需求 / 所属版本。Epic 与版本绑定要等全部任务落库，先收集 */
+            String itemType = oneOf(b.getItemType(), new String[]{"task", "story", "bug", "epic"}, "task");
+            t.setItemType(itemType);
+            String epicOriginal = Texts.trimToNull(b.getEpicId());
+            if (epicOriginal != null && !"epic".equals(itemType)) {
+                st.epicLinks.add(new String[]{id, epicOriginal});
+            }
+            String demandId = Texts.trimToNull(b.getDemandId());
+            if (demandId != null && st.demandIdMap.containsKey(demandId)) {
+                demandId = st.demandIdMap.get(demandId);
+            }
+            if (demandId != null && (!st.demandIds.contains(demandId) || t.getReqId() == null
+                    || !t.getReqId().equals(st.demandReqId.get(demandId)))) {
+                demandId = null;
+            }
+            t.setDemandId(demandId);
+            String versionId = Texts.trimToNull(b.getVersionId());
+            if (versionId != null && st.versionIdMap.containsKey(versionId)) {
+                versionId = st.versionIdMap.get(versionId);
+            }
+            if (versionId != null && (!st.versionIds.contains(versionId) || t.getReqId() == null
+                    || !t.getReqId().equals(st.versionReqId.get(versionId)))) {
+                versionId = null;
+            }
+            if (versionId != null) {
+                st.versionLinks.add(new String[]{id, versionId});
+            }
             /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
             String reqDocId = Texts.trimToNull(b.getReqDocId());
             if (reqDocId != null && st.reqDocIdMap.containsKey(reqDocId)) {
@@ -889,6 +1167,36 @@ public class BackupService {
             eachChunk(baselineRows, baselineMapper::insertBatch);
         }
 
+        // v8：Epic 归属要等全部任务落库后按映射回指；目标不存在则保持无归属
+        List<String[]> epicRows = new ArrayList<String[]>();
+        for (String[] link : st.epicLinks) {
+            String epicId = taskIdMap.get(link[1]);
+            if (epicId == null || epicId.equals(link[0]) || !taskIds.contains(epicId)) {
+                continue;
+            }
+            epicRows.add(new String[]{link[0], epicId});
+        }
+        eachChunk(epicRows, batch -> {
+            for (String[] row : batch) {
+                taskMapper.setEpic(row[0], row[1]);
+            }
+        });
+
+        // v8：版本绑定（version_task 以 task_id 为主键，任务已去重，直接写）
+        Map<String, List<String>> tasksByVersion = new LinkedHashMap<String, List<String>>();
+        for (String[] link : st.versionLinks) {
+            List<String> list = tasksByVersion.get(link[1]);
+            if (list == null) {
+                list = new ArrayList<String>();
+                tasksByVersion.put(link[1], list);
+            }
+            list.add(link[0]);
+        }
+        for (Map.Entry<String, List<String>> entry : tasksByVersion.entrySet()) {
+            eachChunk(entry.getValue(), batch ->
+                    versionTaskMapper.insertBatch(workspaceId, entry.getKey(), batch));
+        }
+
         // 恢复循环派生关联：等到全部任务落库后，按 ID 映射校验目标存在性再写回（旧备份无此字段则跳过）
         List<String[]> links = new ArrayList<String[]>();
         for (String[] link : st.recurLinks) {
@@ -953,8 +1261,8 @@ public class BackupService {
     }
 
     /** CSV 导出（Excel 可直接打开，带 BOM） */
-    public byte[] exportCsv(String workspaceId) {
-        List<Task> tasks = taskMapper.selectAll(workspaceId);
+    public byte[] exportCsv(String workspaceId, java.util.Set<String> hiddenProjects) {
+        List<Task> tasks = visibleTasks(hiddenProjects, taskMapper.selectAll(workspaceId));
         Map<String, String> reqNames = new HashMap<String, String>();
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
             reqNames.put(r.getId(), r.getName());
@@ -1007,6 +1315,20 @@ public class BackupService {
         return sb.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    /** CSV 是给当前用户看的导出：按项目可见范围过滤，不把隐藏项目的任务带出去 */
+    private List<Task> visibleTasks(java.util.Set<String> hidden, List<Task> tasks) {
+        if (hidden == null || hidden.isEmpty()) {
+            return tasks;
+        }
+        List<Task> out = new ArrayList<Task>();
+        for (Task t : tasks) {
+            if (t.getReqId() == null || !hidden.contains(t.getReqId())) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
     /* ==================== 导入批次工具 ==================== */
 
     private static final class ImportState {
@@ -1031,11 +1353,24 @@ public class BackupService {
         final Map<String, String> taskIdMap = new HashMap<String, String>();
         final Map<String, String> branchIdMap = new HashMap<String, String>();
         final Map<String, String> reqDocIdMap = new HashMap<String, String>();
+        /** v8：备份版本 id → 落库版本 id，以及版本所属项目 */
+        final Map<String, String> versionIdMap = new HashMap<String, String>();
+        final Map<String, String> versionReqId = new HashMap<String, String>();
+        final Set<String> versionIds = new HashSet<String>();
+        /** v8：备份需求池 id → 落库需求 id，以及需求所属项目 */
+        final Map<String, String> demandIdMap = new HashMap<String, String>();
+        final Map<String, String> demandReqId = new HashMap<String, String>();
+        final Set<String> demandIds = new HashSet<String>();
+        /** v8：阶段 2 收集、阶段 3 统一回指 [任务id, 旧epicId/落库versionId] */
+        final List<String[]> epicLinks = new ArrayList<String[]>();
+        final List<String[]> versionLinks = new ArrayList<String[]>();
         final List<String[]> recurLinks = new ArrayList<String[]>();
         final List<Task> importedDone = new ArrayList<Task>();
         int reqCount;
         int branchCount;
         int reqDocCount;
+        int versionCount;
+        int demandCount;
         int taskCount;
         int commentCount;
 
@@ -1265,6 +1600,19 @@ public class BackupService {
         return false;
     }
 
+    /** 备份里的父子引用可能互为上级：沿已有父链上溯，遇到自己就算成环 */
+    private static boolean wouldCycle(String child, Map<String, String> parentByOriginal) {
+        String cur = parentByOriginal.get(child);
+        Set<String> seen = new HashSet<String>();
+        while (cur != null && seen.add(cur)) {
+            if (cur.equals(child)) {
+                return true;
+            }
+            cur = parentByOriginal.get(cur);
+        }
+        return false;
+    }
+
     private String oneOf(String value, String[] allowed, String fallback) {
         if (value != null) {
             for (String item : allowed) {
@@ -1298,5 +1646,13 @@ public class BackupService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private Integer clampWsjf(Integer value) {
+        return value == null ? null : Math.max(0, Math.min(10, value));
+    }
+
+    private Integer clampWsjfEffort(Integer value) {
+        return value == null ? null : Math.max(1, Math.min(10, value));
     }
 }

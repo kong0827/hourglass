@@ -28,6 +28,6 @@ public class EstimateController {
     @GetMapping("/api/estimate/stats")
     public ApiResult<EstimateStats> stats(@RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(estimateService.stats(ws.getId()));
+        return ApiResult.ok(estimateService.stats(ws.getId(), CurrentUser.id()));
     }
 }

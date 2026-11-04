@@ -2,8 +2,10 @@ package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
+import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
+import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -14,6 +16,7 @@ import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
+import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -61,6 +64,9 @@ class TaskCascadeTest {
     private RequirementDocMapper requirementDocMapper;
     private TaskCompletionService completionService;
     private DevBranchMapper devBranchMapper;
+    private VersionTaskMapper versionTaskMapper;
+    private ProjectVersionMapper versionMapper;
+    private DemandMapper demandMapper;
     private TaskCascade cascade;
 
     @BeforeEach
@@ -80,10 +86,13 @@ class TaskCascadeTest {
         requirementDocMapper = mock(RequirementDocMapper.class);
         completionService = mock(TaskCompletionService.class);
         devBranchMapper = mock(DevBranchMapper.class);
+        versionTaskMapper = mock(VersionTaskMapper.class);
+        versionMapper = mock(ProjectVersionMapper.class);
+        demandMapper = mock(DemandMapper.class);
         cascade = new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper,
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
-                completionService, devBranchMapper);
+                completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper);
     }
 
     private static List<Task> tasks(String... workspaceAndIds) {
@@ -103,6 +112,7 @@ class TaskCascadeTest {
 
         cascade.purgeTasks(WS, ids);
 
+        verify(taskMapper).clearEpicChildrenByTaskIds(WS, ids);
         verify(subtaskMapper).deleteByTaskIds(WS, ids);
         verify(tagMapper).deleteTaskTagsByTaskIds(WS, ids);
         verify(timeLogMapper).deleteByTaskIds(WS, ids);
@@ -112,6 +122,7 @@ class TaskCascadeTest {
         verify(notificationMapper).deleteByTaskIds(WS, ids);
         verify(dependencyMapper).deleteByTaskIds(WS, ids);
         verify(baselineMapper).deleteByTaskIds(WS, ids);
+        verify(versionTaskMapper).deleteByTaskIds(WS, ids);
         verify(taskMapper).clearRecurNextByTaskIds(ids);
         verify(taskMapper).deleteByIds(ids);
         // BUG-6 A：完成快照不随任务物理删除
@@ -154,11 +165,15 @@ class TaskCascadeTest {
         verify(notificationMapper).deleteAllByWorkspace(WS);
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);
+        verify(versionTaskMapper).deleteByWorkspace(WS);
+        verify(versionMapper).deleteByWorkspace(WS);
+        verify(demandMapper).deleteLogsByWorkspace(WS);
+        verify(demandMapper).deleteByWorkspace(WS);
     }
 
     @Test
     void importClearingKeepsAuditLogsAttachmentsAndOptionalData() {
-        cascade.clearWorkspaceDataForImport(WS, false, false);
+        cascade.clearWorkspaceDataForImport(WS, false, false, false, false);
 
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
@@ -168,19 +183,24 @@ class TaskCascadeTest {
         verify(attachmentService, never()).deleteAllWithFiles(WS);
         verify(requirementDocMapper, never()).deleteAllByWorkspace(WS);
         verify(devBranchMapper, never()).deleteByWorkspace(WS);
+        verify(versionMapper, never()).deleteByWorkspace(WS);
+        verify(demandMapper, never()).deleteByWorkspace(WS);
 
-        cascade.clearWorkspaceDataForImport(WS, true, true);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true);
 
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);
+        verify(versionMapper).deleteByWorkspace(WS);
+        verify(demandMapper).deleteLogsByWorkspace(WS);
+        verify(demandMapper).deleteByWorkspace(WS);
     }
 
     @Test
     void registeredChildTablesMatchSnapshot() {
         assertEquals(Arrays.asList(
                 "task_log", "task_comment", "app_notification", "subtask", "task_tag",
-                "attachment", "time_log", "task_dependency", "task_baseline"),
+                "attachment", "time_log", "task_dependency", "task_baseline", "version_task"),
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Collections.singletonList("task_completion_record"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
@@ -193,7 +213,8 @@ class TaskCascadeTest {
                 "task_log", "task_dependency", "task_baseline", "gantt_share", "task",
                 "requirement", "requirement_doc", "task_completion_record", "subtask",
                 "task_tag", "tag", "time_log", "attachment", "task_comment",
-                "app_notification", "dev_branch_log", "dev_branch"),
+                "app_notification", "dev_branch_log", "dev_branch",
+                "version_task", "project_version", "demand_log", "demand"),
                 TaskCascade.WORKSPACE_TASK_TABLES);
     }
 

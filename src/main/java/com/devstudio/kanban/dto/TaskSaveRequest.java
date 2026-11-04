@@ -53,12 +53,28 @@ public class TaskSaveRequest {
     private String reqId;
 
     /** 关联需求 ID（requirement_doc）；需求必须属于上面那个项目 */
-    @Size(max = 32, message = "关联需求ID不合法")
+    @Size(max = 32, message = "关联文档ID不合法")
     private String reqDocId;
 
     /** 关联分支 ID（dev_branch，空间级）；为空表示不关联分支 */
     @Size(max = 32, message = "关联分支ID不合法")
     private String branchId;
+
+    /** 工作项类型：story/task/bug/epic；空=默认 task（更新时不传保持原值） */
+    @Pattern(regexp = "story|task|bug|epic|", message = "工作项类型不合法")
+    private String itemType;
+
+    /** 所属 Epic 任务ID（须为同空间 item_type=epic 的任务）；空=清除归属（更新时不传保持原值） */
+    @Size(max = 32, message = "所属Epic不合法")
+    private String epicId;
+
+    /** 影响版本ID（project_version，须属于任务所选项目）；空=待规划（更新时不传保持原值） */
+    @Size(max = 32, message = "影响版本不合法")
+    private String versionId;
+
+    /** 关联需求池需求ID（demand，须属于任务所选项目）；空=解除关联（更新时不传保持原值） */
+    @Size(max = 32, message = "关联需求不合法")
+    private String demandId;
 
     @Min(value = 0, message = "进度不能小于 0")
     @Max(value = 100, message = "进度不能大于 100")

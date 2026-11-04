@@ -26,9 +26,11 @@ public class ActivityService {
     public static final String CONFIG_TASK_ID = "CFG";
 
     private final TaskLogMapper logMapper;
+    private final ProjectAccessService projectAccess;
 
-    public ActivityService(TaskLogMapper logMapper) {
+    public ActivityService(TaskLogMapper logMapper, ProjectAccessService projectAccess) {
         this.logMapper = logMapper;
+        this.projectAccess = projectAccess;
     }
 
     /** 记录一条配置类变更（失败只记日志，不影响主流程） */
@@ -59,8 +61,8 @@ public class ActivityService {
     }
 
     /** 空间活动流（倒序，最多 limit 条；排除配置哨兵以外的噪音由调用方决定） */
-    public List<TaskLog> activity(String workspaceId, Integer limit) {
+    public List<TaskLog> activity(String workspaceId, String userId, Integer limit) {
         int n = limit == null ? 200 : Math.max(1, Math.min(500, limit));
-        return logMapper.selectByWorkspace(workspaceId, n);
+        return logMapper.selectByWorkspace(workspaceId, projectAccess.viewerScope(workspaceId, userId), n);
     }
 }

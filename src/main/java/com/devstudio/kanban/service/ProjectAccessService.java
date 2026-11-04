@@ -1,0 +1,224 @@
+package com.devstudio.kanban.service;
+
+import com.devstudio.kanban.common.AppException;
+import com.devstudio.kanban.entity.ProjectMember;
+import com.devstudio.kanban.entity.WorkspaceMember;
+import com.devstudio.kanban.mapper.ProjectMemberMapper;
+import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
+import org.springframework.stereotype.Service;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * 项目级可见范围。
+ *
+ * <p>口径：owner/admin 天然全量；viewer 全局只读；member 按 project_member 配置。
+ * <b>没有配置记录 = 默认参与</b>，这样升级前所有成员仍能看到全部项目，收紧范围时才需要显式配置。</p>
+ */
+@Service
+public class ProjectAccessService {
+
+    public static final String ACCESS_NONE = "none";
+    public static final String ACCESS_READ = "read";
+    public static final String ACCESS_PM = "pm";
+    public static final String ACCESS_DEV = "dev";
+    public static final String ACCESS_QA = "qa";
+
+    public static final String ROLE_OWNER = "owner";
+    public static final String ROLE_ADMIN = "admin";
+    public static final String ROLE_MEMBER = "member";
+    public static final String ROLE_VIEWER = "viewer";
+
+    /** 当前可持久化的取值；pm/dev/qa 只作为历史数据兼容读取，不再写入 */
+    private static final Set<String> ACCESS_VALUES = new HashSet<String>();
+
+    static {
+        ACCESS_VALUES.add(ACCESS_NONE);
+        ACCESS_VALUES.add(ACCESS_READ);
+    }
+
+    private final ProjectMemberMapper projectMemberMapper;
+    private final WorkspaceMemberMapper memberMapper;
+
+    public ProjectAccessService(ProjectMemberMapper projectMemberMapper,
+                                WorkspaceMemberMapper memberMapper) {
+        this.projectMemberMapper = projectMemberMapper;
+        this.memberMapper = memberMapper;
+    }
+
+    public static boolean isValidRole(String role) {
+        return ROLE_ADMIN.equals(role) || ROLE_MEMBER.equals(role) || ROLE_VIEWER.equals(role);
+    }
+
+    public static boolean isPrivileged(String role) {
+        return ROLE_OWNER.equals(role) || ROLE_ADMIN.equals(role);
+    }
+
+    public static boolean isViewer(String role) {
+        return ROLE_VIEWER.equals(role);
+    }
+
+    /** 空间角色：owner/admin 才可管理成员可见范围 */
+    public String roleOf(String workspaceId, String userId) {
+        WorkspaceMember m = memberMapper.selectMember(workspaceId, userId);
+        return m == null ? null : m.getRole();
+    }
+
+    public boolean canManage(String workspaceId, String userId) {
+        return isPrivileged(roleOf(workspaceId, userId));
+    }
+
+    public void requireManage(String workspaceId, String userId) {
+        if (!canManage(workspaceId, userId)) {
+            throw new AppException(403, "仅空间主或管理员可配置项目可见范围");
+        }
+    }
+
+    /** 显式配置；null 表示没有配置（默认参与） */
+    public String configuredAccess(String workspaceId, String projectId, String userId) {
+        if (projectId == null) {
+            return null;
+        }
+        ProjectMember pm = projectMemberMapper.selectOne(workspaceId, projectId, userId);
+        return pm == null ? null : pm.getAccess();
+    }
+
+    public boolean canView(String workspaceId, String userId, String projectId) {
+        if (userId == null || projectId == null) {
+            return true;
+        }
+        String role = roleOf(workspaceId, userId);
+        if (isPrivileged(role) || isViewer(role)) {
+            return true;
+        }
+        return !ACCESS_NONE.equals(configuredAccess(workspaceId, projectId, userId));
+    }
+
+    public boolean canWrite(String workspaceId, String userId, String projectId) {
+        if (userId == null) {
+            return true;
+        }
+        if (projectId == null) {
+            // 未归类到项目的任务不受项目级范围限制；viewer 仍全局只读
+            return !isViewer(roleOf(workspaceId, userId));
+        }
+        String role = roleOf(workspaceId, userId);
+        if (isViewer(role)) {
+            return false;
+        }
+        if (isPrivileged(role)) {
+            return true;
+        }
+        String access = configuredAccess(workspaceId, projectId, userId);
+        return !ACCESS_NONE.equals(access) && !ACCESS_READ.equals(access);
+    }
+
+    /** 读校验：不可见按"不存在"处理，避免泄露项目是否存在 */
+    public void assertView(String workspaceId, String userId, String projectId) {
+        if (!canView(workspaceId, userId, projectId)) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+        }
+    }
+
+    public void assertWrite(String workspaceId, String userId, String projectId) {
+        if (projectId == null) {
+            if (isViewer(roleOf(workspaceId, userId))) {
+                throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
+            }
+            return;
+        }
+        /* 与读校验同口径：完全不可见的项目按"不存在"处理，不能用 403 反推项目存在 */
+        if (!canView(workspaceId, userId, projectId)) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+        }
+        if (!canWrite(workspaceId, userId, projectId)) {
+            throw new AppException(403, "你对该项目只有查看权限");
+        }
+    }
+
+    /**
+     * 需要按项目可见范围过滤时的 viewerId：owner/admin/viewer 返回 null（全量可见）。
+     * viewer 是全局只读角色，不做项目级隐藏。
+     */
+    public String viewerScope(String workspaceId, String userId) {
+        if (userId == null) {
+            return null;
+        }
+        String role = roleOf(workspaceId, userId);
+        return isPrivileged(role) || isViewer(role) ? null : userId;
+    }
+
+    /** 任务所在项目是否对该成员可见（无项目归属的任务不受项目级限制） */
+    public boolean canViewTask(String workspaceId, String userId, com.devstudio.kanban.entity.Task task) {
+        return task != null && canView(workspaceId, userId, task.getReqId());
+    }
+
+    public void assertViewTask(String workspaceId, String userId, com.devstudio.kanban.entity.Task task) {
+        if (task != null) {
+            assertView(workspaceId, userId, task.getReqId());
+        }
+    }
+
+    /** 该成员被显式设为"不可见"的项目集合（owner/admin/viewer 恒为空） */
+    public Set<String> hiddenProjectIds(String workspaceId, String userId) {
+        Set<String> hidden = new HashSet<String>();
+        String role = roleOf(workspaceId, userId);
+        if (isPrivileged(role) || isViewer(role) || role == null) {
+            return hidden;
+        }
+        for (ProjectMember pm : projectMemberMapper.selectByUser(workspaceId, userId)) {
+            if (ACCESS_NONE.equals(pm.getAccess())) {
+                hidden.add(pm.getProjectId());
+            }
+        }
+        return hidden;
+    }
+
+    public List<ProjectMember> grants(String workspaceId) {
+        return projectMemberMapper.selectByWorkspace(workspaceId);
+    }
+
+    /**
+     * 提交值归一化：历史 pm/dev/qa 与空/default 都是"默认参与"，统一返回空串。
+     * 小团队不区分项目内角色，这样审计日志与落库口径保持一致。
+     */
+    public static String normalizeAccess(String access) {
+        String value = access == null ? "" : access.trim().toLowerCase();
+        if (value.isEmpty() || "default".equals(value)
+                || ACCESS_PM.equals(value) || ACCESS_DEV.equals(value) || ACCESS_QA.equals(value)) {
+            return "";
+        }
+        return value;
+    }
+
+    /**
+     * 保存单个单元格。归一化后为空表示删除记录，回到默认参与。
+     * 历史弹窗可能仍提交 pm/dev/qa，一律收敛为默认参与。
+     */
+    public void saveGrant(String workspaceId, String userId, String projectId, String access) {
+        if (projectId == null) {
+            throw AppException.badRequest("请选择项目");
+        }
+        String value = normalizeAccess(access);
+        if (value.isEmpty()) {
+            projectMemberMapper.deleteOne(workspaceId, projectId, userId);
+            return;
+        }
+        if (!ACCESS_VALUES.contains(value)) {
+            throw AppException.badRequest("可见范围取值不合法：" + access);
+        }
+        ProjectMember pm = new ProjectMember();
+        pm.setWorkspaceId(workspaceId);
+        pm.setProjectId(projectId);
+        pm.setUserId(userId);
+        pm.setAccess(value);
+        projectMemberMapper.upsert(pm);
+    }
+
+    /** 项目删除时清理它的可见范围配置 */
+    public void clearProject(String workspaceId, String projectId) {
+        projectMemberMapper.deleteByProject(workspaceId, projectId);
+    }
+}

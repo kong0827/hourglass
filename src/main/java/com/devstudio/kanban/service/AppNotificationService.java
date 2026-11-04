@@ -29,6 +29,29 @@ public class AppNotificationService {
         this.mapper = mapper;
     }
 
+    /**
+     * 业务事件通知不使用提醒的 6 小时去重窗口；每次真实事件都应可见。
+     * 定时提醒仍调用 {@link #push(String, String, String, String, String, String)}。
+     */
+    public void pushImmediate(String userId, String workspaceId, String type,
+                              String title, String body, String refTaskId) {
+        if (userId == null || workspaceId == null || title == null) {
+            return;
+        }
+        try {
+            AppNotification n = new AppNotification();
+            n.setUserId(userId);
+            n.setWorkspaceId(workspaceId);
+            n.setType(type);
+            n.setTitle(cut(title, MAX_TITLE));
+            n.setBody(cut(body, MAX_BODY));
+            n.setRefTaskId(refTaskId);
+            mapper.insert(n);
+        } catch (Exception e) {
+            log.warn("事件站内通知写入失败（不影响主流程）：user={} type={}", userId, type, e);
+        }
+    }
+
     /** 推一条应用内通知（幂等窗口内去重；任何异常都只记日志） */
     public void push(String userId, String workspaceId, String type, String title, String body, String refTaskId) {
         if (userId == null || workspaceId == null || title == null) {

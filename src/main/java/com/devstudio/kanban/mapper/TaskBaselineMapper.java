@@ -12,6 +12,10 @@ public interface TaskBaselineMapper {
 
     List<TaskBaseline> selectByWorkspace(@Param("workspaceId") String workspaceId);
 
+    /** 甘特读接口：viewerId 非空时跳过隐藏项目的基线 */
+    List<TaskBaseline> selectVisibleByWorkspace(@Param("workspaceId") String workspaceId,
+                                                @Param("viewerId") String viewerId);
+
     /** 最近一次快照时间；没有基线时返回 null */
     LocalDateTime selectCapturedAt(@Param("workspaceId") String workspaceId);
 

@@ -3,12 +3,12 @@
 <mapper namespace="com.devstudio.kanban.mapper.AttachmentMapper">
 
   <sql id="cols">
-    id, task_id, workspace_id, filename, content_type, size, stored_name, created_at
+    id, target_id, target_kind, workspace_id, filename, content_type, size, stored_name, created_at
   </sql>
 
-  <select id="selectByTaskId" resultType="Attachment">
+  <select id="selectByTarget" resultType="Attachment">
     SELECT <include refid="cols"/> FROM attachment
-    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY id
+    WHERE workspace_id = #{workspaceId} AND target_id = #{targetId} AND target_kind = #{targetKind} ORDER BY id
   </select>
 
   <select id="selectAllByWorkspace" resultType="Attachment">
@@ -18,10 +18,10 @@
   <!-- 只按本次可见任务 id 批量取（拼搜索字段用），不再整空间加载 -->
   <select id="selectByTaskIds" resultType="Attachment">
     SELECT <include refid="cols"/> FROM attachment
-    WHERE workspace_id = #{workspaceId}
-      AND task_id IN
+    WHERE workspace_id = #{workspaceId} AND target_kind = 'task'
+      AND target_id IN
       <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
-    ORDER BY task_id, id
+    ORDER BY target_id, id
   </select>
 
   <select id="selectById" resultType="Attachment">
@@ -29,16 +29,20 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO attachment (id, task_id, workspace_id, filename, content_type, size, stored_name)
-    VALUES (#{id}, #{taskId}, #{workspaceId}, #{filename}, #{contentType}, #{size}, #{storedName})
+    INSERT INTO attachment (id, target_id, target_kind, workspace_id, filename, content_type, size, stored_name)
+    VALUES (#{id}, #{targetId}, #{targetKind}, #{workspaceId}, #{filename}, #{contentType}, #{size}, #{storedName})
   </insert>
+
+  <update id="updateContent">
+    UPDATE attachment SET size = #{size}, content_type = #{contentType} WHERE id = #{id}
+  </update>
 
   <delete id="deleteById">
     DELETE FROM attachment WHERE id = #{id}
   </delete>
 
   <delete id="deleteByTaskIds">
-    DELETE FROM attachment WHERE workspace_id = #{workspaceId} AND task_id IN
+    DELETE FROM attachment WHERE workspace_id = #{workspaceId} AND target_kind = 'task' AND target_id IN
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
