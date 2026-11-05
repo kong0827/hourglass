@@ -1362,6 +1362,14 @@
 .set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);}
 #view-settings [data-set-pane][hidden]{display:none;}
 
+/* 活动分区：列表占满视口剩余高度，避免面板下方留下整块空白 */
+#view-settings.set-fill.on{display:flex;flex-direction:column;}
+#view-settings.set-fill .set-layout{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;align-items:stretch;}
+#view-settings.set-fill .set-tabs{flex:0 0 auto;}
+#view-settings.set-fill .set-panels{flex:1 1 auto;min-height:0;}
+#view-settings.set-fill #set-activity{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
+#view-settings.set-fill #set-activity .act-list{flex:1 1 auto;min-height:240px;max-height:none;overflow-y:auto;}
+
 /* IA-7：分支列头即筛选入口（顶部状态格子已删除，避免与列头计数重复） */
 .br-group-head{cursor:pointer;border-radius:var(--r-sm);}
 .br-group-head:hover{background:var(--surface-hover);}

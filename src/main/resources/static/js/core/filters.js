@@ -80,8 +80,10 @@ function updateBrand(){
     parts.push(viewMeta.sub);
   }
   brandSub.classList.add("breadcrumb");
+  /* 每段都带 title：被省略号截断时悬停可看全文；分隔符悬停显示完整路径 */
+  brandSub.title = parts.join(" / ");
   brandSub.innerHTML = parts.map(function(p, i, arr){
-    return '<span>' + esc(p) + '</span>' + (i < arr.length - 1 ? '<span class="sep">/</span>' : '');
+    return '<span title="' + esc(p) + '">' + esc(p) + '</span>' + (i < arr.length - 1 ? '<span class="sep">/</span>' : '');
   }).join("");
 }
 

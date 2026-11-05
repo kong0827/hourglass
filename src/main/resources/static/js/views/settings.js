@@ -279,6 +279,9 @@ function setSettingsTab(tab){
   if(tab === "account" && !isAdmin) tab = "space";
   if(tab === "access" && !isManager) tab = "space";
   settingsTab = tab;
+  /* 活动分区需要占满视口剩余高度：切换时给设置页打标记，其他分区保持原布局 */
+  var viewEl = document.getElementById("view-settings");
+  if(viewEl) viewEl.classList.toggle("set-fill", tab === "activity");
   document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
     var on = b.dataset.setTab === tab;
     b.classList.toggle("on", on);
