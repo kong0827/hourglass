@@ -2,8 +2,11 @@
 
 import { $ } from "./dom.js";
 import { icon } from "./icons.js";
+import { isMobile } from "./layout.js";
 
 function toggleRail(){
+  /* 手机档位侧栏整体隐藏，rail 切换无意义，也不该写进桌面偏好 */
+  if(isMobile()) return;
   var on = document.body.classList.toggle("side-rail");
   try{ localStorage.setItem("ds.rail", on ? "1" : "0"); }catch(err){ /* 隐私模式忽略 */ }
 }

@@ -3,6 +3,8 @@
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
+import { isMobile } from "../core/layout.js";
+import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
@@ -377,10 +379,23 @@ function deleteDemand(id){
 function passDemand(id){
   var d = findDemand(id);
   if(!d) return;
-  API.post("/api/demands/" + encodeURIComponent(id) + "/pass", {}).then(function(){
-    toast("已通过「" + d.title + "」，可排期进入版本", "fs");
-    loadDemands();
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  function doPass(){
+    API.post("/api/demands/" + encodeURIComponent(id) + "/pass", {}).then(function(){
+      toast("已通过「" + d.title + "」，可排期进入版本", "fs");
+      loadDemands();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  }
+  /* 手机端评审通过需二次确认；桌面端保持原有一键通过 */
+  if(isMobile() && MOBILE_APPROVALS.review.confirmOnApprove){
+    UI.showConfirm({
+      title:"确认通过需求",
+      msg:"通过后「" + d.title + "」将进入已通过，可排期进入版本。确定继续？",
+      okText:"通过",
+      cancelText:"取消"
+    }).then(function(ok){ if(ok) doPass(); });
+    return;
+  }
+  doPass();
 }
 function rejectDemand(id){
   var d = findDemand(id);

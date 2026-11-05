@@ -377,6 +377,20 @@ import { icon } from "./icons.js";
       '<button class="btn" type="button" data-empty-action="1">重试</button>' +
       '</div>';
   }
+  function noPermState(opts) {
+    opts = opts || {};
+    var h = '<div class="empty-state no-perm">' +
+      '<span class="es-ic es-ic-block">' + icon("shield", 48) + '</span>' +
+      '<h3>' + esc2(opts.title || "当前角色无权查看") + '</h3>' +
+      '<p>' + esc2(opts.desc || "该数据仅对空间管理员开放，请联系空间主调整成员角色。") + '</p>';
+    if (opts.actionLabel) {
+      h += '<button class="btn" type="button" data-empty-action="1">' + esc2(opts.actionLabel) + '</button>';
+    }
+    if (opts.adminName) {
+      h += '<p class="no-perm-admin">管理员：' + esc2(opts.adminName) + '</p>';
+    }
+    return h + '</div>';
+  }
   function colEmpty(text, iconName) {
     var ic = iconName ? '<span class="ce-ic">' + icon(iconName, 18) + '</span>' : "";
     return '<div class="col-empty">' + ic + '<b>' + esc2(text || "暂无数据") + '</b></div>';
@@ -469,6 +483,7 @@ import { icon } from "./icons.js";
     wireTooltips: wireTooltips,
     emptyState: emptyState,
     errorState: errorState,
+    noPermState: noPermState,
     colEmpty: colEmpty,
     skeletonCards: skeletonCards,
     skeletonRows: skeletonRows,

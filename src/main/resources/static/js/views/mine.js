@@ -5,12 +5,14 @@ import { btnMineRefresh, mineBody, mineMeta, mineSpaceFilter } from "../core/dom
 import { clearFilters } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
+import { isMobile } from "../core/layout.js";
+import { currentMode, saveMode } from "../core/mobile-rules.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { catTag, dueState, dueText, progressOf, rt, state, tagChip } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { addDays, colName, duePresetDate, fmtFull, parseDate } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, addDays, colMeta, colName, duePresetDate, fmtFull, iso, parseDate } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 
@@ -48,6 +50,7 @@ function askSwitchWorkspace(wsId, wsName, opts){
 }
 function enterMineView(){
   syncMineFilters();
+  if(isMobile() && currentMineMode() === "team"){ renderTeam(); return; }
   loadMine();
 }
 function mineFiltered(items){
@@ -83,7 +86,10 @@ function rerenderMine(){
 }
 function loadMine(opts){
   opts = opts || {};
-  if(!mineBody || mineLoading) return;
+  if(!mineBody) return;
+  /* 团队模式下搜索/筛选仍可能走到这里：不要用 my-tasks 骨架覆盖团队面板 */
+  if(isMobile() && currentMineMode() === "team"){ renderTeam({silent:true}); return; }
+  if(mineLoading) return;
   var append = !!opts.append;
   mineLoading = true;
   var seq = ++mineSeq;
@@ -153,7 +159,205 @@ function mineRowHTML(t){
     '</span>' +
   '</div>';
 }
+var mineModeEl = document.getElementById("mineMode");
+var teamSeq = 0;
+var teamLoading = false;
+var teamQueued = false;
+
+function currentMineMode(){
+  var ws = rt.currentWs;
+  return currentMode(ws ? ws.id : "", ws && ws.myRole);
+}
+function syncMineModeUI(){
+  if(!mineModeEl) return;
+  var mode = currentMineMode();
+  mineModeEl.querySelectorAll("[data-mine-mode]").forEach(function(b){
+    b.setAttribute("aria-pressed", String(b.dataset.mineMode === mode));
+  });
+  document.body.classList.toggle("mine-team", isMobile() && mode === "team");
+}
+function setMineMode(mode){
+  var ws = rt.currentWs;
+  saveMode(ws ? ws.id : "", mode);
+  syncMineModeUI();
+  if(mode === "team"){ renderTeam(); return; }
+  if(!mineAll.length) loadMine(); else rerenderMine();
+}
+function hm(minutes){
+  var h = (Number(minutes) || 0) / 60;
+  return (Math.round(h * 10) / 10) + "h";
+}
+function teamWeekRange(){
+  var dow = (rt.TODAY.getDay() + 6) % 7;
+  var from = addDays(rt.TODAY, -dow);
+  var to = addDays(from, 6);
+  return {from: iso(from), to: iso(to)};
+}
+function teamSectionError(err, title){
+  if(err && err.code === 4030){
+    return UI.noPermState({ title: title || "当前角色无权查看", desc: "该区块仅对空间管理员开放，请联系空间主调整成员角色。" });
+  }
+  return UI.errorState(err && err.message ? err.message : "网络异常，请稍后重试");
+}
+function renderTeam(opts){
+  opts = opts || {};
+  syncMineModeUI();
+  if(mineMeta) mineMeta.textContent = "团队视图 · 本周";
+  if(!mineBody) return;
+  /* 刷新途中收到新的进入/刷新请求：只保留尾随一次，避免旧响应覆盖新模式 */
+  if(teamLoading){ teamQueued = true; return; }
+  if(!opts.silent) mineBody.innerHTML = UI.skeletonRows(6);
+  teamLoading = true;
+  var seq = ++teamSeq;
+  var range = teamWeekRange();
+  Promise.all([
+    API.get("/api/mobile/team-overview", range),
+    API.get("/api/mobile/workload").catch(function(err){ return {__err: err}; }),
+    API.get("/api/mobile/risks").catch(function(err){ return {__err: err}; })
+  ]).then(function(res){
+    teamLoading = false;
+    if(teamQueued){
+      teamQueued = false;
+      if(isMobile() && currentMineMode() === "team") renderTeam({silent:true});
+      return;
+    }
+    if(seq !== teamSeq || !isMobile() || currentMineMode() !== "team") return;
+    var overview = res[0] || {};
+    var workload = res[1] || {};
+    var risks = res[2] || {};
+    var h = overview.health || {};
+    var pending = overview.pending || {};
+    var riskList = (overview.risks || []).slice();
+    if(!riskList.length && !risks.__err){
+      riskList = (risks.overdue || []).concat(risks.blocked || []).slice(0, 5);
+    }
+
+    var rate = Math.round((Number(h.doneRate) || 0) * 100);
+    var delta = Math.round((Number(h.deltaWeek) || 0) * 100);
+    var html = '<div class="team-panel">' +
+      '<section class="team-hero">' +
+        '<div class="th-main"><b>' + rate + '%</b><span>本周完成率</span>' +
+          '<em class="' + (delta >= 0 ? "up" : "down") + '">' +
+            (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
+        '<div class="th-grid">' +
+          '<div><b>' + (h.doneCount || 0) + '/' + (h.planCount || 0) + '</b><span>完成 / 计划</span></div>' +
+          '<div class="danger"><b>' + (h.overdue || 0) + '</b><span>已逾期</span></div>' +
+          '<div class="warn"><b>' + (h.blocked || 0) + '</b><span>被阻塞</span></div>' +
+        '</div>' +
+      '</section>' +
+      '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>' +
+        '<div class="team-pending">' +
+          '<button type="button" data-team-go="demands"><b>' + (pending.review || 0) + '</b><span>待评审</span></button>' +
+          '<button type="button" data-team-go="branches"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
+          '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
+        '</div></section>';
+
+    html += '<section class="team-card"><div class="tc-head"><h3>风险任务</h3><span class="foot-note">' + riskList.length + ' 项</span></div>' +
+      (riskList.length ? '<div class="team-risks">' + riskList.map(function(r){
+        var lv = r.level === "high" ? "high" : "mid";
+        return '<div class="team-risk ' + lv + '" data-team-task="' + esc(r.taskId) + '" role="button" tabindex="0">' +
+          '<i class="tr-dot"></i>' +
+          '<div class="tr-main"><b>' + esc(r.title || "未命名任务") + '</b>' +
+            '<span>' + esc(r.ownerName || "未指派") + ' · ' + esc(r.reason || "") + '</span></div>' +
+          (r.dayCount ? '<span class="tr-days">' + r.dayCount + ' 天</span>' : '') +
+        '</div>';
+      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"本周没有风险任务", compact:true})) +
+      '</section>';
+
+    if(workload.__err){
+      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3></div>' + teamSectionError(workload.__err, "成员负载不可见") + '</section>';
+    } else {
+      var members = workload.members || [];
+      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">本周计时 / 周容量</span></div>' +
+        (members.length ? '<div class="team-load">' + members.map(function(m){
+          var pct = Math.round((Number(m.percent) || 0) * 100);
+          var cls = pct > 100 ? "over" : (pct >= 90 ? "near" : "");
+          return '<div class="tl-row">' +
+            '<div class="tl-top"><b>' + esc(m.name || "—") + '</b><span>' + hm(m.actualMinutes) + ' / ' + hm(m.plannedMinutes) + '</span></div>' +
+            '<div class="tl-bar"><i class="' + cls + '" style="width:' + Math.min(pct, 100) + '%"></i></div>' +
+            '<span class="tl-pct ' + cls + '">' + pct + '%</span>' +
+          '</div>';
+        }).join("") + '</div>' : UI.emptyState({icon:"inbox", title:"本周还没有成员计时", compact:true})) +
+        '</section>';
+    }
+    html += '</div>';
+    mineBody.innerHTML = html;
+    var retry = mineBody.querySelector("[data-empty-action]");
+    if(retry) retry.addEventListener("click", function(){ renderTeam(); });
+    mineBody.querySelectorAll("[data-team-task]").forEach(function(el){
+      el.addEventListener("click", function(){ openTaskById(el.dataset.teamTask); });
+      el.addEventListener("keydown", function(ev){
+        if(ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); el.click(); }
+      });
+    });
+    mineBody.querySelectorAll("[data-team-go]").forEach(function(el){
+      el.addEventListener("click", function(){
+        /* 走侧栏既有的 data-view 入口，避免 mine → router 的循环依赖 */
+        var nav = document.querySelector('#sideNav [data-view="' + el.dataset.teamGo + '"]');
+        if(nav) nav.click();
+      });
+    });
+  }).catch(function(err){
+    teamLoading = false;
+    if(teamQueued){
+      teamQueued = false;
+      if(isMobile() && currentMineMode() === "team") renderTeam({silent:true});
+      return;
+    }
+    if(seq !== teamSeq || !isMobile() || currentMineMode() !== "team") return;
+    if(mineMeta) mineMeta.textContent = "";
+    mineBody.innerHTML = (err && err.code === 4030)
+      ? UI.noPermState({title:"当前角色无权查看团队数据", desc:"团队视图仅对空间主、管理员开放。"})
+      : UI.errorState(err && err.message ? err.message : "网络异常，请稍后重试");
+    var retry = mineBody.querySelector("[data-empty-action]");
+    if(retry) retry.addEventListener("click", function(){ renderTeam(); });
+  });
+}
+
+function mobileMineCardHTML(t){
+  var st = dueState(t);
+  var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
+  var col = colMeta(t.boardColumn) || {};
+  var colColor = col.color || CAT_DEFAULT_COLOR;
+  var pri = t.priority || "P2";
+  return '<article class="mob-task-card" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
+      ' tabindex="0" role="row">' +
+    '<div class="mtc-top">' +
+      '<span class="pdot ' + esc(pri) + '"><i></i>' + esc(pri) + '</span>' +
+      '<span class="mtc-chip" style="--c:' + esc(colColor) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
+      (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') +
+      '<span class="sp"></span>' +
+      '<button class="mtc-ico' + (running ? " on" : "") + '" type="button" data-mine-timer title="' +
+        (running ? "停止计时" : "开始计时") + '" aria-label="开始或停止计时">' + icon("clock", 15) + '</button>' +
+    '</div>' +
+    '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
+    '<div class="mtc-meta">' +
+      '<span class="mtc-path">' + esc(t.workspaceName || "—") + ' · ' + esc(colName(t.boardColumn)) + '</span>' +
+      '<span class="mtc-due ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' +
+        esc(dueText(t)) + '</span>' +
+    '</div>' +
+    '<div class="mtc-swipe">' +
+      '<button class="mtc-act done" type="button" data-mine-done>完成</button>' +
+      '<button class="mtc-act" type="button" data-mine-due>改期</button>' +
+    '</div>' +
+  '</article>';
+}
+function renderMobileMine(groups){
+  var html = '<div class="mob-groups">';
+  MINE_GROUPS.forEach(function(g){
+    var rows = groups[g.k];
+    if(!rows.length) return;
+    html += '<section class="mob-group" data-mine-group="' + g.k + '">' +
+      '<div class="mob-group-head"><h3 class="' + (g.k === "over" ? "over" : "") + '">' + g.label + '</h3>' +
+        '<span class="mob-group-n">' + rows.length + '</span></div>' +
+      '<div class="mob-card-list">' + rows.map(mobileMineCardHTML).join("") + '</div>' +
+    '</section>';
+  });
+  html += '</div>' + mineMoreHTML();
+  mineBody.innerHTML = html;
+}
 function renderMine(d, append){
+  if(isMobile() && currentMineMode() === "team"){ syncMineModeUI(); return; }
   var incoming = d.items || [];
   var spaces = d.spaces || [];
   mineSpaces = spaces;
@@ -188,8 +392,11 @@ function renderMine(d, append){
   if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({
       icon:"checkCircle", title:"没有分派给你的任务",
-      text:"被指派到你账号的任务会汇总在这里（跨你参与的全部空间）。若老数据只填了显示名、没有绑定账号，请先在任务里重新指定负责人。"
+      text:"被指派到你账号的任务会汇总在这里（跨你参与的全部空间）。若老数据只填了显示名、没有绑定账号，请先在任务里重新指定负责人。",
+      actionLabel:"刷新"
     });
+    var emptyRefresh = mineBody.querySelector("[data-empty-action]");
+    if(emptyRefresh) emptyRefresh.addEventListener("click", function(){ loadMine(); });
     return;
   }
   if(!items.length){
@@ -209,6 +416,7 @@ function renderMine(d, append){
   var groups = {};
   MINE_GROUPS.forEach(function(g){ groups[g.k] = []; });
   items.forEach(function(t){ groups[mineGroupOf(t)].push(t); });
+  if(isMobile()){ renderMobileMine(groups); return; }
   var html = '<div class="mine-groups">';
   MINE_GROUPS.forEach(function(g){
     var rows = groups[g.k];
@@ -332,5 +540,25 @@ if(mineSpaceFilter){
   });
 }
 if(btnMineRefresh) btnMineRefresh.addEventListener("click", function(){ loadMine(); });
+if(mineModeEl){
+  mineModeEl.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mine-mode]");
+    if(b) setMineMode(b.dataset.mineMode);
+  });
+}
+/* 跨断点重排：手机卡片 / 桌面表格共用同一份数据 */
+window.addEventListener("ds:layout", function(){
+  if(!rt.currentWs || document.body.dataset.view !== "mine") return;
+  syncMineModeUI();
+  if(isMobile() && currentMineMode() === "team"){ renderTeam(); return; }
+  /* 从手机团队模式切回桌面时，我的任务可能从未加载过 */
+  if(mineAll.length) rerenderMine(); else loadMine();
+});
+/* 下拉刷新走统一入口：团队模式刷新团队面板，我的模式刷新任务列表 */
+window.addEventListener("ds:refresh-mine", function(){
+  if(isMobile() && currentMineMode() === "team") renderTeam({silent:true});
+  else loadMine({silent:true});
+});
+syncMineModeUI();
 
 export { askSwitchWorkspace, enterMineView, loadMine, wsNameById };

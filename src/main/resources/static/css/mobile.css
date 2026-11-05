@@ -1,0 +1,590 @@
+/* ==========================================================================
+   mobile.css · 手机档位（≤639px）与平板收窄
+   加载顺序在 views.css 之后；每条规则仍写全 [data-layout="mobile"] 前缀，
+   不依赖导入顺序。桌面分支保持原样。
+   ========================================================================== */
+
+[data-layout="mobile"]{
+  --content-pad: 16px;
+  --radius-card: 14px;
+  --tabbar-h: 62px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  /* 底栏实际占高 = 12 上内边距 + 62 胶囊 + 21 下内边距 */
+  --tabbar-space: calc(var(--tabbar-h) + var(--safe-b) + 33px);
+  --topbar-h: 52px;
+}
+
+/* ===================== 内容区 ===================== */
+[data-layout="mobile"] .app{overflow:hidden;}
+[data-layout="mobile"] .main{width:100%;}
+[data-layout="mobile"] .view{
+  padding: 0 16px var(--tabbar-space);
+}
+[data-layout="mobile"] .view.view-flush{padding:0;overflow:auto;}
+[data-layout="mobile"] .view-page{
+  padding:0;
+  padding-top:12px;
+  max-width:100%;
+  gap:12px;
+}
+[data-layout="mobile"] .app-foot,
+[data-layout="mobile"] .narrow-hint{display:none !important;}
+
+/* ===================== 底部 Tab ===================== */
+[data-layout="mobile"] .tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:110;
+  display:flex;justify-content:center;
+  padding:12px 21px calc(21px + var(--safe-b));
+  background:linear-gradient(to top, var(--bg-app) 62%, transparent);
+}
+[data-layout="mobile"] .tabbar[hidden]{display:none !important;}
+[data-layout="mobile"] .tabbar-pill{
+  display:flex;width:100%;height:var(--tabbar-h);
+  padding:4px;gap:0;
+  background:var(--surface);border:1px solid var(--border);border-radius:36px;
+  box-shadow:var(--shadow-md);
+}
+[data-layout="mobile"] .tabbar .tab{
+  position:relative;
+  flex:1 1 0;min-width:0;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;border:0;border-radius:26px;background:transparent;
+  color:var(--text-3);font-size:10px;font-weight:600;
+}
+[data-layout="mobile"] .tabbar .tab.on{background:var(--primary);color:#fff;}
+[data-layout="mobile"] .tabbar .tab.on svg{stroke:#fff;}
+[data-layout="mobile"] .tab-dot{
+  position:absolute;top:9px;right:18px;width:7px;height:7px;border-radius:50%;
+  background:var(--danger);
+}
+
+/* ===================== 侧栏：手机档位整体隐藏 ===================== */
+[data-layout="mobile"] .sidebar{display:none !important;}
+[data-layout="mobile"] .mob-more{display:none !important;}
+/* #mobMore 只在平板档位保留（桌面/手机都收掉） */
+[data-layout="desktop"] .mob-more{display:none;}
+
+/* ===================== 顶栏降级 ===================== */
+[data-layout="mobile"] .topbar{
+  height:52px;padding:0 12px;gap:8px;
+}
+[data-layout="mobile"] .tb-sub,
+[data-layout="mobile"] .gs-kbd,
+[data-layout="mobile"] .narrow-hint,
+[data-layout="mobile"] .app-foot{display:none !important;}
+[data-layout="mobile"] #btnHelp,
+[data-layout="mobile"] a[href="help.html"],
+[data-layout="mobile"] #btnTheme{display:none !important;}
+[data-layout="mobile"] .tb-left{flex:0 1 auto;min-width:0;max-width:42%;}
+[data-layout="mobile"] .tb-title{font-size:16px;line-height:22px;}
+[data-layout="mobile"] .tb-right{flex:1 1 auto;justify-content:flex-end;gap:6px;min-width:0;}
+[data-layout="mobile"] .global-search{flex:1 1 88px;min-width:56px;}
+[data-layout="mobile"] .global-search input{width:100%;min-width:0;height:34px;font-size:16px;padding:0 30px 0 30px;}
+[data-layout="mobile"] .global-search input:focus{width:100%;box-shadow:none;}
+[data-layout="mobile"] .global-search > svg{left:9px;}
+[data-layout="mobile"] .timer-pill{max-width:132px;}
+[data-layout="mobile"] .timer-pill .tp-name{max-width:56px;}
+[data-layout="mobile"] .bell{width:34px;height:34px;}
+
+/* 新建 → 右下 FAB */
+[data-layout="mobile"] #btnNew{
+  position:fixed;right:16px;bottom:calc(var(--tabbar-h) + var(--safe-b) + 34px);
+  z-index:105;width:48px;height:48px;padding:0;border-radius:50%;
+  font-size:0;gap:0;justify-content:center;
+  box-shadow:var(--shadow-lg);
+}
+[data-layout="mobile"] #btnNew svg:first-child{width:20px;height:20px;}
+[data-layout="mobile"] #btnNew svg:last-child{display:none;}
+/* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
+
+/* ===================== 筛选栏 ===================== */
+[data-layout="mobile"] .filterbar{
+  height:auto;min-height:44px;padding:8px 12px;
+  overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+[data-layout="mobile"] .fb-main,.fb-right{flex-wrap:nowrap;}
+[data-layout="mobile"] .filterbar::-webkit-scrollbar{height:0;}
+
+/* ===================== 层级 ===================== */
+[data-layout="mobile"] .toast-layer{
+  left:12px;right:12px;bottom:calc(var(--tabbar-space) + 62px);
+  z-index:230;align-items:stretch;
+}
+[data-layout="mobile"] .toast{width:auto;min-width:0;max-width:none;}
+
+/* ===================== 任务抽屉（全屏） ===================== */
+[data-layout="mobile"] .drawer-layer{z-index:200;}
+[data-layout="mobile"] .drawer{
+  width:100%;max-width:none;top:12px;bottom:0;left:0;right:0;
+  border-left:0;border-radius:20px 20px 0 0;
+  transform:translateY(24px);
+}
+[data-layout="mobile"] .drawer#taskForm{width:100%;}
+[data-layout="mobile"] .drawer-layer.on .drawer{transform:none;}
+[data-layout="mobile"] .drawer.is-create{
+  top:auto;height:78vh;border-radius:24px 24px 0 0;
+}
+[data-layout="mobile"] .drawer-head{height:52px;padding:0 16px;position:sticky;top:0;background:var(--surface);z-index:2;}
+[data-layout="mobile"] .drawer-body{padding:16px 16px 96px;}
+[data-layout="mobile"] .drawer-status{
+  overflow-x:auto;overflow-y:hidden;padding:8px 16px;gap:8px;
+  -webkit-overflow-scrolling:touch;
+}
+[data-layout="mobile"] .drawer-foot{
+  position:sticky;bottom:0;height:72px;padding:0 16px;
+  background:var(--surface);box-shadow:0 -6px 16px -6px rgba(16,24,40,.08);
+  z-index:3;
+}
+[data-layout="mobile"] .drawer-foot .hint{display:none;}
+[data-layout="mobile"] .task-detail-layout{grid-template-columns:1fr !important;display:block;}
+.sheet-grab{display:none;}
+[data-layout="mobile"] .sheet-grab{
+  display:block;width:38px;height:4px;border-radius:2px;background:var(--border-strong);
+  margin:8px auto 0;flex:0 0 auto;
+}
+[data-layout="mobile"] #btnDrawerStatus{display:inline-flex;}
+.drawer-foot #btnDrawerStatus{display:none;}
+
+/* ===================== 手机任务卡（我的任务 / 列表 / 看板共用） ===================== */
+[data-layout="mobile"] .mob-card-list{display:flex;flex-direction:column;gap:10px;}
+[data-layout="mobile"] .mob-groups{display:flex;flex-direction:column;gap:18px;padding-bottom:24px;}
+[data-layout="mobile"] .mob-group-head{display:flex;align-items:center;gap:8px;margin:0 0 8px;}
+[data-layout="mobile"] .mob-group-head h3{
+  margin:0;font-size:14px;font-weight:700;color:var(--text);
+}
+[data-layout="mobile"] .mob-group-head h3.over{color:var(--danger-fg);}
+[data-layout="mobile"] .mob-group-n{
+  min-width:22px;height:20px;padding:0 6px;border-radius:999px;
+  display:inline-grid;place-items:center;background:var(--surface-sunken);
+  color:var(--text-3);font-size:11.5px;font-weight:700;
+}
+[data-layout="mobile"] .mob-group-caret{margin-left:auto;color:var(--text-3);transition:transform .18s ease;}
+[data-layout="mobile"] .mob-group-caret.open{transform:rotate(180deg);}
+[data-layout="mobile"] .mob-list-group{margin-bottom:14px;}
+[data-layout="mobile"] button.mob-group-head{
+  width:100%;border:0;background:transparent;padding:0;text-align:left;
+}
+
+[data-layout="mobile"] .mob-task-card{
+  position:relative;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
+  padding:12px 14px;box-shadow:var(--shadow-xs);
+  display:flex;flex-direction:column;cursor:pointer;
+  touch-action:pan-y;
+  transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out),border-color .18s var(--ease-out);
+}
+[data-layout="mobile"] .mob-task-card:active{border-color:var(--border-strong);}
+[data-layout="mobile"] .mtc-top{display:flex;align-items:center;gap:6px;min-height:30px;}
+[data-layout="mobile"] .mtc-top .sp{flex:1 1 auto;}
+[data-layout="mobile"] .mtc-chip{
+  display:inline-flex;align-items:center;gap:4px;max-width:46%;
+  height:20px;padding:0 8px;border-radius:999px;
+  background:var(--surface-sunken);color:var(--text-2);
+  font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-layout="mobile"] .mtc-chip i{width:6px;height:6px;border-radius:50%;background:var(--c,var(--text-3));flex:0 0 auto;}
+[data-layout="mobile"] .mtc-chip.ghost{background:transparent;border:1px solid var(--border);color:var(--text-3);}
+[data-layout="mobile"] .mtc-ico{
+  width:30px;height:30px;border-radius:50%;flex:0 0 auto;
+  display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-3);
+}
+[data-layout="mobile"] .mtc-ico.on{background:var(--success-soft);color:var(--success-fg);}
+[data-layout="mobile"] .mtc-title{
+  margin:8px 0 0;font-size:14.5px;line-height:21px;font-weight:600;color:var(--text);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  letter-spacing:-.01em;word-break:break-word;
+}
+[data-layout="mobile"] .mtc-meta{
+  display:flex;align-items:center;gap:8px;margin-top:8px;min-width:0;
+}
+[data-layout="mobile"] .mtc-path{
+  font-size:11.5px;color:var(--text-3);min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-layout="mobile"] .mtc-due{
+  margin-left:auto;flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--text-3);
+}
+[data-layout="mobile"] .mtc-due.today{color:var(--warning-fg);}
+[data-layout="mobile"] .mtc-due.over{color:var(--danger-fg);}
+[data-layout="mobile"] .mtc-foot{
+  display:flex;align-items:center;gap:10px;margin-top:10px;
+}
+[data-layout="mobile"] .mtc-foot .progress{flex:1 1 auto;}
+[data-layout="mobile"] .mtc-owner{display:inline-flex;flex:0 0 auto;}
+[data-layout="mobile"] .mtc-owner .avatar{width:22px;height:22px;font-size:10px;}
+
+/* 左滑露出的操作条：默认藏在卡片下沿，swiped 时展开 */
+[data-layout="mobile"] .mtc-swipe{
+  display:none;align-items:center;gap:8px;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--border);
+}
+[data-layout="mobile"] .mob-task-card.swiped .mtc-swipe{display:flex;}
+[data-layout="mobile"] .mtc-act{
+  flex:1 1 0;height:34px;border-radius:var(--r-sm);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);
+  font-size:12.5px;font-weight:650;
+}
+[data-layout="mobile"] .mtc-act.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+
+/* 我的任务页头 */
+[data-layout="mobile"] .mob-groups .mine-more{padding-top:8px;}
+[data-layout="mobile"] #view-mine .page-toolbar,
+[data-layout="mobile"] #view-list .list-toolbar{
+  flex-wrap:wrap;gap:8px;padding-top:0;
+}
+[data-layout="mobile"] #view-mine .toolbar-right,
+[data-layout="mobile"] #view-list .toolbar-right{margin-left:0;flex-wrap:wrap;gap:8px;}
+
+/* 列表：手机不显示表头与字段设置，卡片流 */
+[data-layout="mobile"] .list-head{display:none !important;}
+[data-layout="mobile"] .list-scroll{
+  background:transparent;border:0;border-radius:0;overflow:visible;
+}
+[data-layout="mobile"] .list-body{display:flex;flex-direction:column;gap:10px;}
+[data-layout="mobile"] #btnListColumns{display:none;}
+[data-layout="mobile"] .list-row{min-width:0;}
+[data-layout="mobile"] #listBulkBar .bulk-bar{flex-wrap:wrap;height:auto;padding:8px 10px;gap:6px;}
+
+/* ===================== 看板：状态分段器 + 单列卡片流 ===================== */
+[data-layout="mobile"] .board{
+  display:block;height:auto;overflow:visible;padding:0;
+}
+[data-layout="mobile"] .mob-board{
+  display:flex;flex-direction:column;
+  padding:0 16px var(--tabbar-space);
+}
+[data-layout="mobile"] .mob-col-seg{
+  position:sticky;top:0;z-index:8;
+  display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;
+  margin:12px 0 10px;padding:3px;
+  background:var(--surface-sunken);border-radius:14px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+[data-layout="mobile"] .mob-col-seg::-webkit-scrollbar{display:none;}
+[data-layout="mobile"] .mob-col-btn{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+  height:34px;padding:0 12px;border:0;border-radius:10px;
+  background:transparent;color:var(--text-2);font-size:12.5px;font-weight:600;white-space:nowrap;
+}
+[data-layout="mobile"] .mob-col-btn i{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+[data-layout="mobile"] .mob-col-btn b{
+  min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  display:inline-grid;place-items:center;background:var(--surface-active);
+  color:var(--text-3);font-size:10.5px;font-weight:700;
+}
+[data-layout="mobile"] .mob-col-btn.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+[data-layout="mobile"] .mob-col-btn.on b{background:var(--primary-soft);color:var(--primary-fg);}
+[data-layout="mobile"] .mob-board-list{
+  display:flex;flex-direction:column;gap:10px;
+}
+[data-layout="mobile"] .mob-board-list > .card{
+  border-radius:var(--radius-card);padding:12px 14px 12px 16px;
+}
+[data-layout="mobile"] .mob-board-list .card-add{
+  height:42px;border-radius:var(--radius-card);background:var(--surface);
+}
+[data-layout="mobile"] .mob-load-more{height:38px;border:dashed 1px var(--border-strong);background:transparent;}
+[data-layout="mobile"] .mob-board .empty-state{
+  padding:28px 12px;margin-top:8px;
+}
+
+/* ===================== 日历：周列表 ===================== */
+[data-layout="mobile"] #view-calendar{padding:0 16px var(--tabbar-space);}
+[data-layout="mobile"] .cal-layout{display:block;padding-top:12px;}
+[data-layout="mobile"] .cal-side{display:none;}
+[data-layout="mobile"] .cal-head{display:none;}
+[data-layout="mobile"] .cal-card{
+  background:transparent;border:0;border-radius:0;overflow:visible;margin-top:0 !important;
+}
+[data-layout="mobile"] .cal-grid.cal-week{
+  display:flex;flex-direction:column;gap:10px;
+}
+[data-layout="mobile"] .cal-week-day{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
+  padding:10px 12px;
+}
+[data-layout="mobile"] .cal-week-day.today{border-color:var(--primary-border);background:var(--primary-soft);}
+[data-layout="mobile"] .cal-week-day.sel{border-color:var(--primary);}
+[data-layout="mobile"] .cwd-head{display:flex;align-items:center;gap:8px;}
+[data-layout="mobile"] .cwd-dn{font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .cwd-dw{font-size:12px;font-weight:600;color:var(--text-3);}
+[data-layout="mobile"] .cwd-n{font-size:11.5px;color:var(--text-3);margin-left:auto;}
+[data-layout="mobile"] .cwd-head .cal-add{
+  position:static;width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-2);
+}
+[data-layout="mobile"] .cwd-tasks{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+[data-layout="mobile"] .cwd-task{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:34px;
+  padding:6px 9px;border-radius:9px;background:var(--surface-sunken);
+  text-align:left;font-size:12.5px;color:var(--text);
+}
+[data-layout="mobile"] .cwd-task .cbar{width:3px;height:18px;border-radius:2px;background:var(--border-strong);flex:0 0 auto;}
+[data-layout="mobile"] .cwd-task.p-P0 .cbar{background:var(--p0);}
+[data-layout="mobile"] .cwd-task.p-P1 .cbar{background:var(--p1);}
+[data-layout="mobile"] .cwd-task.p-P2 .cbar{background:var(--p2);}
+[data-layout="mobile"] .cwd-task.done{opacity:.65;}
+[data-layout="mobile"] .cwd-task.over{color:var(--danger-fg);}
+[data-layout="mobile"] .cwd-t{
+  min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-layout="mobile"] .cwd-span{flex:0 0 auto;font-size:10.5px;color:var(--text-3);}
+[data-layout="mobile"] .unplanned-box{margin-top:12px;}
+[data-layout="mobile"] .unplanned-box .unplanned-list .card{margin-bottom:8px;}
+
+/* ===================== 手势 / 下拉刷新 ===================== */
+[data-layout="mobile"] .mob-task-card,
+[data-layout="mobile"] .card{touch-action:pan-y;}
+[data-layout="mobile"] .mtc-swipe{animation:ds-pop-in .14s var(--ease-out) both;}
+.ptr-indicator{
+  position:absolute;left:0;right:0;top:0;height:44px;z-index:9;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:600;color:var(--text-3);
+  background:linear-gradient(to bottom, var(--bg-app) 55%, transparent);
+  opacity:0;pointer-events:none;transition:opacity .12s ease;
+}
+.ptr-indicator.on{opacity:1;}
+[data-layout="mobile"] .view{overscroll-behavior-y:contain;}
+
+/* 抽屉操作条状态按钮 */
+[data-layout="mobile"] .drawer-foot #btnDrawerStatus{
+  display:inline-flex;width:44px;height:44px;flex:0 0 auto;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--text-2);
+}
+[data-layout="mobile"] .drawer-foot .btn{min-height:40px;}
+[data-layout="mobile"] .drawer-notice{margin:0 16px;}
+[data-layout="mobile"] .drawer-status{
+  position:sticky;top:52px;z-index:2;background:var(--surface);
+  border-bottom:1px solid var(--border);
+}
+[data-layout="mobile"] .drawer.is-create .drawer-body{padding-bottom:24px;}
+[data-layout="mobile"] .drawer.is-create .drawer-foot{position:sticky;}
+
+/* ===================== 我的 / 团队模式 ===================== */
+[data-layout="mobile"] .mine-mode{display:inline-flex;}
+.mine-mode{display:none !important;}
+[data-layout="mobile"] .mine-mode{
+  display:inline-flex !important;
+  height:32px;
+}
+[data-layout="mobile"] .mine-mode button{min-width:52px;height:28px;}
+[data-layout="mobile"] .mine-mode button[aria-pressed="true"]{background:var(--primary);color:#fff;box-shadow:none;}
+
+[data-layout="mobile"] .team-panel{display:flex;flex-direction:column;gap:12px;padding-bottom:24px;}
+[data-layout="mobile"] .team-hero{
+  background:linear-gradient(145deg,var(--primary),var(--primary-active));
+  color:#fff;border-radius:18px;padding:18px 18px 14px;box-shadow:var(--shadow-md);
+}
+[data-layout="mobile"] .th-main{display:flex;align-items:flex-end;gap:8px;}
+[data-layout="mobile"] .th-main b{font-size:34px;line-height:1;font-weight:750;letter-spacing:-.02em;}
+[data-layout="mobile"] .th-main span{font-size:12px;font-weight:600;opacity:.86;padding-bottom:3px;}
+[data-layout="mobile"] .th-main em{
+  margin-left:auto;font-style:normal;font-size:12px;font-weight:700;
+  padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.18);
+}
+[data-layout="mobile"] .th-main em.down{background:rgba(240,68,56,.35);}
+[data-layout="mobile"] .th-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;
+  padding-top:14px;border-top:1px solid rgba(255,255,255,.2);
+}
+[data-layout="mobile"] .th-grid div{display:flex;flex-direction:column;gap:2px;}
+[data-layout="mobile"] .th-grid b{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .th-grid span{font-size:11px;opacity:.82;}
+[data-layout="mobile"] .th-grid .danger b{color:#FEE4E2;}
+[data-layout="mobile"] .th-grid .warn b{color:#FEF0C7;}
+
+[data-layout="mobile"] .team-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
+  padding:14px;box-shadow:var(--shadow-xs);
+}
+[data-layout="mobile"] .tc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+[data-layout="mobile"] .tc-head h3{margin:0;font-size:14px;font-weight:700;color:var(--text);}
+[data-layout="mobile"] .tc-head .foot-note{margin-left:auto;}
+[data-layout="mobile"] .team-pending{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+[data-layout="mobile"] .team-pending > *{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:10px 4px;border:0;border-radius:12px;background:var(--surface-sunken);
+  font:inherit;color:inherit;
+}
+[data-layout="mobile"] .team-pending b{font-size:20px;font-weight:750;color:var(--text);font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .team-pending span{font-size:11px;color:var(--text-3);}
+
+[data-layout="mobile"] .team-risks{display:flex;flex-direction:column;gap:4px;}
+[data-layout="mobile"] .team-risk{
+  display:flex;align-items:flex-start;gap:9px;padding:9px 8px;border-radius:10px;
+  cursor:pointer;transition:background var(--dur-fast) var(--ease-out);
+}
+[data-layout="mobile"] .team-risk:hover{background:var(--surface-hover);}
+[data-layout="mobile"] .tr-dot{
+  width:8px;height:8px;border-radius:50%;flex:0 0 auto;margin-top:6px;
+  background:var(--warning);
+}
+[data-layout="mobile"] .team-risk.high .tr-dot{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
+[data-layout="mobile"] .tr-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
+[data-layout="mobile"] .tr-main b{
+  font-size:13px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-layout="mobile"] .tr-main span{font-size:11.5px;color:var(--text-3);line-height:1.45;}
+[data-layout="mobile"] .tr-days{
+  flex:0 0 auto;font-size:11px;font-weight:700;color:var(--danger-fg);
+  background:var(--danger-soft);border-radius:999px;padding:2px 7px;
+}
+
+[data-layout="mobile"] .team-load{display:flex;flex-direction:column;gap:12px;}
+[data-layout="mobile"] .tl-row{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;column-gap:10px;row-gap:5px;}
+[data-layout="mobile"] .tl-top{display:flex;align-items:center;gap:8px;min-width:0;grid-column:1/-1;}
+[data-layout="mobile"] .tl-top b{font-size:13px;font-weight:600;color:var(--text);}
+[data-layout="mobile"] .tl-top span{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .tl-bar{height:7px;border-radius:99px;background:var(--surface-sunken);overflow:hidden;}
+[data-layout="mobile"] .tl-bar i{display:block;height:100%;border-radius:99px;background:var(--info);}
+[data-layout="mobile"] .tl-bar i.near{background:var(--warning);}
+[data-layout="mobile"] .tl-bar i.over{background:var(--danger);}
+[data-layout="mobile"] .tl-pct{text-align:right;font-size:11.5px;font-weight:700;color:var(--info-fg);font-variant-numeric:tabular-nums;}
+[data-layout="mobile"] .tl-pct.near{color:var(--warning-fg);}
+[data-layout="mobile"] .tl-pct.over{color:var(--danger-fg);}
+[data-layout="mobile"] .no-perm .es-ic-block{background:var(--surface-sunken);color:var(--text-3);border-radius:18px;}
+[data-layout="mobile"] .no-perm-admin{font-size:11px;color:var(--text-3);}
+
+/* ===================== 其余视图收窄（390px 不横向滚动） ===================== */
+[data-layout="mobile"] .view-page,
+[data-layout="mobile"] .view-page.wide{max-width:100%;}
+[data-layout="mobile"] .set-layout,
+[data-layout="mobile"] .proj-layout,
+[data-layout="mobile"] .cal-layout{grid-template-columns:1fr;}
+[data-layout="mobile"] #view-settings .set-layout{display:block;}
+[data-layout="mobile"] .set-anchor{display:none;}
+[data-layout="mobile"] .set-grid,
+[data-layout="mobile"] .set-grid.three,
+[data-layout="mobile"] .form-grid,
+[data-layout="mobile"] .field-row,
+[data-layout="mobile"] .phase-duo,
+[data-layout="mobile"] .reqdoc-mdsplit,
+[data-layout="mobile"] .channel-cards,
+[data-layout="mobile"] .manager-kpis,
+[data-layout="mobile"] .manager-two-col,
+[data-layout="mobile"] .manager-chart-grid,
+[data-layout="mobile"] .manager-risk-grid,
+[data-layout="mobile"] .manager-project-grid,
+[data-layout="mobile"] .manager-project-stats,
+[data-layout="mobile"] .ver-grid,
+[data-layout="mobile"] .bkl,
+[data-layout="mobile"] .wsjf-grid{grid-template-columns:1fr;}
+[data-layout="mobile"] .field-row{flex-direction:column;}
+[data-layout="mobile"] .br-groups,
+[data-layout="mobile"] .br-flow{grid-template-columns:1fr;}
+[data-layout="mobile"] .br-kv,
+[data-layout="mobile"] .br-dlg-2col{grid-template-columns:1fr;}
+[data-layout="mobile"] .user-add{grid-template-columns:1fr;}
+[data-layout="mobile"] .activity-item{grid-template-columns:1fr;gap:2px;}
+[data-layout="mobile"] .notification-pref-head,
+[data-layout="mobile"] .notification-pref-row{grid-template-columns:minmax(0,1fr) 72px 72px;gap:8px;padding:8px 10px;}
+[data-layout="mobile"] .page-toolbar{gap:8px;}
+[data-layout="mobile"] .toolbar-right{margin-left:0;flex-wrap:wrap;gap:8px;}
+[data-layout="mobile"] .duo{grid-template-columns:1fr;}
+
+/* 甘特图允许表格内横向滚动；页面本身不滚 */
+[data-layout="mobile"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
+[data-layout="mobile"] .gantt-grid{min-width:max-content;}
+[data-layout="mobile"] .access-matrix{overflow-x:auto;}
+
+/* 暗色下手机卡片/底栏统一用语义令牌，禁止写死 hex */
+html[data-theme="dark"] [data-layout="mobile"] .team-hero{box-shadow:none;}
+html[data-theme="dark"] [data-layout="mobile"] .tabbar-pill{box-shadow:var(--shadow-lg);}
+
+/* ===================== 平板（640–1023）：rail + 内容内部滚动 ===================== */
+[data-layout="tablet"] .view-page{max-width:100%;}
+[data-layout="tablet"] .list-scroll,
+[data-layout="tablet"] .access-matrix{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+[data-layout="tablet"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
+[data-layout="tablet"] .mob-more{display:flex;}
+
+/* ===================== 我的（个人设置）快捷入口 ===================== */
+.mob-only{display:none !important;}
+[data-layout="mobile"] .mob-only{display:block !important;}
+[data-layout="mobile"] #view-profile .set-layout{display:block;}
+[data-layout="mobile"] .mob-me-actions{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+[data-layout="mobile"] .mob-me-actions button{
+  min-height:44px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface);color:var(--text-2);font-size:13px;font-weight:600;
+}
+[data-layout="mobile"] .mob-me-actions button:active{background:var(--surface-hover);}
+[data-layout="mobile"] .mob-me-actions button.danger{color:var(--danger-fg);border-color:var(--danger-border);}
+[data-layout="mobile"] .ws-menu-pop .ws-check{margin-right:6px;color:var(--primary);font-weight:700;}
+
+[data-layout="mobile"] body.mine-team #view-mine .toolbar-right{display:none;}
+[data-layout="mobile"] body.mine-team #view-mine .page-toolbar{flex-wrap:nowrap;}
+
+/* 看板卡片：右上只保留计时/更多，标题让出操作区 */
+[data-layout="mobile"] .mob-board-list .card-act[data-due-pop]{display:none;}
+[data-layout="mobile"] .mob-board-list .card-head{padding-right:66px;}
+[data-layout="mobile"] .mob-board-list .card-acts{top:8px;right:8px;gap:4px;}
+[data-layout="mobile"] .mob-board-list .card-act{width:26px;height:26px;}
+
+/* 刘海屏安全区（viewport-fit=cover 后生效） */
+[data-layout="mobile"] .app{padding-top:env(safe-area-inset-top, 0px);}
+[data-layout="mobile"] .drawer{top:calc(12px + env(safe-area-inset-top, 0px));}
+[data-layout="mobile"] .drawer.is-create{top:auto;}
+
+/* 通知面板限制在视口内，避免 320~360px 宽度下溢出 */
+[data-layout="mobile"] #alertPanel{
+  width:calc(100vw - 24px) !important;
+  max-width:calc(100vw - 24px);
+}
+
+/* 暗色下团队头图用一层暗色叠加，保证白色小字对比度 */
+html[data-theme="dark"] [data-layout="mobile"] .team-hero{
+  background:
+    linear-gradient(rgba(0,0,0,.22), rgba(0,0,0,.22)),
+    linear-gradient(145deg, var(--primary), var(--primary-active));
+}
+
+/* 抽屉底部操作条避开 iPhone Home 指示条 */
+[data-layout="mobile"] .drawer-foot{
+  height:calc(72px + var(--safe-b));
+  padding-bottom:var(--safe-b);
+}
+
+/* 抽屉里的菜单需要盖过 drawer（200），否则打开在抽屉后面 */
+[data-layout="mobile"] .menu{z-index:260;}
+
+/* 顶栏「更多视图」入口 */
+.mob-views-btn{display:none !important;}
+[data-layout="mobile"] .mob-views-btn{
+  display:grid !important;width:34px;height:34px;
+  place-items:center;border-radius:var(--r-sm);color:var(--text-2);flex:0 0 auto;
+}
+[data-layout="mobile"] .mob-views-btn:active{background:var(--surface-hover);}
+
+/* 顶栏在加入「更多视图」后进一步压缩，360px 下不换行 */
+[data-layout="mobile"] .tb-left{max-width:24%;}
+[data-layout="mobile"] .global-search{flex:1 1 56px;min-width:40px;}
+[data-layout="mobile"] .timer-pill{max-width:104px;}
+[data-layout="mobile"] .timer-pill .tp-name{display:none;}
+@media (max-width:379px){
+  [data-layout="mobile"] .tb-left{display:none;}
+}
+
+/* 团队视图不套用任务筛选栏（只在该页生效，别把看板/列表的筛选条一起藏掉） */
+[data-layout="mobile"] body.mine-team[data-view="mine"] .filterbar{display:none !important;}
+
+/* 平板：隐藏「建议 ≥1280」提示，并压缩顶栏，640–767 不挤爆 */
+[data-layout="tablet"] .narrow-hint{display:none !important;}
+[data-layout="tablet"] .global-search input{width:180px;}
+[data-layout="tablet"] .global-search input:focus{width:240px;}
+[data-layout="tablet"] #btnHelp,
+[data-layout="tablet"] a[href="help.html"]{display:none;}
+
+[data-layout="mobile"] .team-risk:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+
+/* 顶栏离线/SSE 提示在手机上只留图标，文案交给 title/aria-label */
+[data-layout="mobile"] .offline-badge,
+[data-layout="mobile"] .tb-alert{
+  font-size:0;gap:0;padding:0 6px;
+}
+[data-layout="mobile"] .offline-badge svg,
+[data-layout="mobile"] .tb-alert svg{width:16px;height:16px;}

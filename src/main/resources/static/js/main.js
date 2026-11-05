@@ -1,5 +1,7 @@
 /* main.js · 入口：核心与首屏模块同步加载，低频视图按需 import */
 
+import { initMobileGestures } from "./core/gestures.js";
+import { initLayout, isMobile } from "./core/layout.js";
 import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
 import { $, offlineBadge } from "./core/dom.js";
@@ -16,6 +18,8 @@ import { initTheme } from "./core/theme.js";
 
 function boot(){
   function autoRail(){
+    /* 手机档位由底部 Tab 承载，rail 折叠态在手机上没有意义 */
+    if(isMobile()){ document.body.classList.remove("side-rail"); return; }
     var w = window.innerWidth;
     var saved = null;
     try{ saved = localStorage.getItem("ds.rail"); }catch(e){ saved = null; }
@@ -27,6 +31,8 @@ function boot(){
     if(w < 1440) document.body.classList.add("side-rail");
     else document.body.classList.remove("side-rail");
   }
+  initLayout();
+  initMobileGestures();
   autoRail();
   window.addEventListener("resize", autoRail);
 

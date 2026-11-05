@@ -6,11 +6,11 @@ import { rt } from "./state.js";
 import { handleDeepLink } from "./task-actions.js";
 import { UI } from "./ui.js";
 import { loadView, viewModule } from "./view-loader.js";
-import { loadReqs, render } from "../views/board.js";
+import { loadBoard, loadReqs, render } from "../views/board.js";
 import { enterBranchesView, loadBranches, renderBranches } from "../views/branches.js";
 import { enterCalendarView, loadCalendar } from "../views/calendar.js";
 import { enterListView, loadList } from "../views/list.js";
-import { enterMineView, loadMine } from "../views/mine.js";
+import { enterMineView } from "../views/mine.js";
 
 var activeView = "board";
 /* 低频视图：第一次进入时才拉取模块（视图代码已按 views/*.js 拆分） */
@@ -51,6 +51,35 @@ var VIEWS = {
   settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsLazy },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:lazyEnter("profile", "enterProfileView") }
 };
+var TAB_OF = {
+  mine: "mine",
+  board: "board", list: "board", calendar: "board", gantt: "board", branches: "board",
+  projects: "projects", requirements: "projects", demands: "projects",
+  portfolio: "projects", project: "projects",
+  settings: "me", profile: "me", review: "me", analysis: "me", phase: "me",
+  report: "me", workload: "me", risks: "me"
+};
+function syncTab(name){
+  var bar = document.getElementById("tabBar");
+  if(!bar) return;
+  var want = TAB_OF[name] || "mine";
+  bar.querySelectorAll("[data-tab]").forEach(function(b){
+    var on = b.dataset.tab === want;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+}
+var scrollMemo = Object.create(null);
+function saveScroll(){
+  var cur = document.querySelector(".view.on");
+  if(cur) scrollMemo[cur.id] = cur.scrollTop || 0;
+}
+function restoreScroll(name){
+  var el = document.getElementById("view-" + name);
+  if(!el) return;
+  el.scrollTop = scrollMemo["view-" + name] || 0;
+  requestAnimationFrame(function(){ el.scrollTop = scrollMemo["view-" + name] || 0; });
+}
 function showView(name){
   /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
   if(name === "trash"){ settingsTabPending = "data"; showView("settings"); return; }
@@ -60,8 +89,10 @@ function showView(name){
     rt.analysisTab = name; showView("analysis"); return;
   }
   if(!VIEWS[name]) return;
+  saveScroll();
   activeView = name;
   document.body.dataset.view = name;
+  syncTab(name);
   var nav = $("sideNav");
   var navKey = name === "project" ? "portfolio" : name;
   if(nav){
@@ -76,6 +107,7 @@ function showView(name){
   document.querySelectorAll(".view").forEach(function(s){
     s.classList.toggle("on", s.id === "view-" + name);
   });
+  restoreScroll(name);
   if(viewTitle) viewTitle.textContent = VIEWS[name].title;
   document.title = VIEWS[name].title + " · 沙漏";
   updateBrand();
@@ -122,11 +154,13 @@ window.addEventListener("popstate", function(){
   /* 返回到带 ?task= 的历史项时直接打开对应任务 */
   handleDeepLink();
 });
-function refreshActiveView(){
-  if(activeView === "calendar") loadCalendar({silent:true});
+function refreshActiveView(opts){
+  /* 看板在 SSE 流程里已由 refreshBoardPreserving 刷新，这里只在手动下拉刷新时兜底 */
+  if(activeView === "board"){ if(opts && opts.manual) loadBoard({silent:true}); }
+  else if(activeView === "calendar") loadCalendar({silent:true});
   else if(activeView === "list") loadList({silent:true});
   else if(activeView === "projects") loadReqs();
-  else if(activeView === "mine") loadMine({silent:true});
+  else if(activeView === "mine") window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
   else if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); });
   else if(activeView === "analysis") loadView("analysis").then(function(m){ m.refreshAnalysisTab(true); });
@@ -153,16 +187,26 @@ $("sideNav").addEventListener("click", function(e){
 });
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
-function openMobMore(){
-  var btn = $("mobMore");
+/* 底栏已覆盖的视图 + 需要项目上下文的详情页，不放进「更多视图」 */
+var TABS_COVERED = { mine:1, board:1, projects:1, profile:1, project:1 };
+function moreMenuHTML(){
+  return Object.keys(VIEWS).filter(function(name){
+    return !TABS_COVERED[name];
+  }).map(function(name){
+    return '<button class="menu-item" type="button" data-mob-view="' + name + '">' +
+      UI.esc(VIEWS[name].title) + '</button>';
+  }).join("");
+}
+function openMobMore(anchor){
+  var btn = anchor || $("mobMore");
+  if(!btn) return;
   var menu = $("mobMoreMenu");
   if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
   if(!menu){
     menu = document.createElement("div");
     menu.className = "menu";
     menu.id = "mobMoreMenu";
-    menu.innerHTML = [["demands","需求池"],["list","任务列表"],["gantt","甘特图"],["analysis","分析"],["portfolio","项目总览"],["phase","版本阶段"],["workload","成员负载"],["risks","逾期与阻塞"],["report","报表中心"],["projects","项目"],["requirements","文档"],["branches","分支"],["settings","设置"],["profile","个人设置"]]
-      .map(function(x){ return '<button class="menu-item" type="button" data-mob-view="' + x[0] + '">' + x[1] + '</button>'; }).join("");
+    menu.innerHTML = moreMenuHTML();
     document.body.appendChild(menu);
     menu.addEventListener("click", function(ev){
       var mb = ev.target.closest("[data-mob-view]");
@@ -173,5 +217,21 @@ function openMobMore(){
   }
   UI.openPop(menu, btn, {align:"right"});
 }
+/* 手机顶栏「更多视图」：复用平板的视图菜单 */
+var mobViewsBtn = $("btnMobViews");
+if(mobViewsBtn) mobViewsBtn.addEventListener("click", function(){ openMobMore(mobViewsBtn); });
+
+/* 移动端底部 Tab：messages 过渡为打开现有通知面板；me 落个人设置 */
+window.addEventListener("ds:tab", function(e){
+  var tab = e.detail && e.detail.tab;
+  if(!tab) return;
+  if(tab === "messages"){
+    var bell = document.getElementById("btnAlert");
+    if(bell) bell.click();
+    return;
+  }
+  if(tab === "me"){ showView("profile"); return; }
+  showView(tab);
+});
 
 export { VIEWS, activeView, refreshActiveView, showView, viewFromHash };

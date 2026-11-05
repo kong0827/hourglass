@@ -5,6 +5,7 @@ import { $, listBulkBar } from "../core/dom.js";
 import { applyView, clearFilters, deleteView, promptSaveView, saveViewState } from "../core/filters-ui.js";
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
+import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { catTag, dueState, dueText, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
@@ -358,6 +359,49 @@ function exportListCsv(){
   triggerDownload(name + "-" + rt.TODAY_ISO + ".csv", csv, "text/csv;charset=utf-8;");
   toast("已导出当前视图 " + rows.length + " 项", "fs");
 }
+function mobileListCardHTML(t){
+  var st = dueState(t);
+  var col = colMeta(t.boardColumn) || {};
+  var p = progressOf(t);
+  var projectName = t.reqId ? reqNameById(t.reqId) : "";
+  return '<article class="mob-task-card" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
+    '<div class="mtc-top">' +
+      '<span class="pdot ' + esc(t.priority || "P2") + '"><i></i>' + esc(t.priority || "P2") + '</span>' +
+      '<span class="mtc-chip" style="--c:' + esc(col.color || CAT_DEFAULT_COLOR) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
+      (t.itemType && t.itemType !== "task" ? '<span class="mtc-chip ghost">' + esc(typeName(t.itemType)) + '</span>' : '') +
+      '<span class="sp"></span>' +
+      '<button class="mtc-ico" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 16) + '</button>' +
+    '</div>' +
+    '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
+    '<div class="mtc-meta">' +
+      '<span class="mtc-path">' + esc(projectName || "未关联项目") + '</span>' +
+      '<span class="mtc-due ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(dueText(t)) + '</span>' +
+    '</div>' +
+    '<div class="mtc-foot">' +
+      '<span class="progress mini' + (p >= 100 ? " full" : "") + '"><span class="bar"><i style="width:' + p + '%"></i></span>' +
+        '<span class="pv">' + p + '%</span></span>' +
+      '<span class="mtc-owner" title="负责人：' + esc(t.owner || "—") + '">' + avatarHTML(t.owner || "—") + '</span>' +
+    '</div>' +
+    '<div class="mtc-swipe">' +
+      '<button class="mtc-act done" type="button" data-mob-done="' + esc(t.id) + '">完成</button>' +
+      '<button class="mtc-act" type="button" data-mob-timer="' + esc(t.id) + '">计时</button>' +
+    '</div>' +
+  '</article>';
+}
+function renderMobileListItems(viewRows, groups){
+  var cards = function(rows){ return rows.map(mobileListCardHTML).join(""); };
+  if(smart.group === "none" || !groups || !groups.length){
+    listBody.innerHTML = cards(viewRows);
+    return;
+  }
+  listBody.innerHTML = groups.map(function(g){
+    var collapsed = !!smart.collapsed["$" + g.key];
+    return '<div class="mob-list-group"><button class="mob-group-head" type="button" data-list-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
+      '<h3>' + esc(g.label) + '</h3><span class="mob-group-n">' + g.rows.length + '</span>' +
+      '<span class="mob-group-caret' + (collapsed ? "" : " open") + '">' + icon("caretDown", 14) + '</span></button>' +
+      (collapsed ? "" : '<div class="mob-card-list">' + cards(g.rows) + '</div>') + '</div>';
+  }).join("");
+}
 function renderListItems(items){
   lastItems = items || [];
   rt.listCache = {};
@@ -378,6 +422,13 @@ function renderListItems(items){
   var keepSelected = {}, visibleColumns = listPrefs.columns("task-list");
   var hasTypeCol = visibleColumns.indexOf("type") !== -1;
   viewRows.forEach(function(t){ rt.listCache[t.id] = t; });
+  if(isMobile()){
+    renderMobileListItems(viewRows, groups);
+    rt.listSelected = {};
+    syncListSelectionUI();
+    appendListMore();
+    return;
+  }
   function rowHTML(t){
     if(rt.listSelected[t.id]) keepSelected[t.id] = true;
     return '<div class="list-row" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
@@ -578,6 +629,10 @@ listBody.addEventListener("click", function(e){
     return;
   }
   if(e.target.closest("input[type=checkbox]")) return;
+  var mobDone = e.target.closest("[data-mob-done]");
+  if(mobDone){ toggleTaskDone(mobDone.dataset.mobDone); return; }
+  var mobTimer = e.target.closest("[data-mob-timer]");
+  if(mobTimer){ toggleTaskTimer(mobTimer.dataset.mobTimer); return; }
   var menuBtn = e.target.closest("[data-row-menu]");
   if(menuBtn){ openRowMenu(menuBtn, menuBtn.dataset.rowMenu); return; }
   var row = e.target.closest("[data-list-id]");
@@ -697,6 +752,9 @@ listSort.addEventListener("change", function(){
   if(smart.sort === "due" || smart.sort === "priority" || smart.sort === "updated") serverSort = smart.sort;
   loadList();
   saveViewState();
+});
+window.addEventListener("ds:layout", function(){
+  if(lastItems && lastItems.length) renderListItems(lastItems);
 });
 
 export { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, enterListView, listViewDeleted, loadList, markListViewSaved, refreshListIfOpen, renderSmartTabs };

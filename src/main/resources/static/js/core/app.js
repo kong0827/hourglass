@@ -5,6 +5,8 @@ import { $ } from "./dom.js";
 import { reloadFilteredViews, restoreViewState } from "./filters-ui.js";
 import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
+import { isMobile } from "./layout.js";
+import { currentMode } from "./mobile-rules.js";
 import { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, updateBellTitle } from "./notifications.js";
 import { activeView, showView } from "./router.js";
 import { rt, state, taskById } from "./state.js";
@@ -17,6 +19,7 @@ import { loadView } from "./view-loader.js";
 
 var wsMenuEl = $("wsMenu"), wsListEl = $("wsList"), wsSwitchBtn = $("wsSwitch");
 function loadWorkspaces(meUser){
+  var hadWorkspace = !!rt.currentWs;
   return API.get("/api/workspaces").then(function(list){
     rt.allWorkspaces = list || [];
     var target = null;
@@ -52,6 +55,9 @@ function loadWorkspaces(meUser){
       loadView("gantt").then(function(m){ m.loadGanttPrefs(); m.syncGanttControls(); m.loadGantt(); });
     }
     if(activeView === "settings" && !rt.settingsReady) loadView("settings").then(function(m){ m.enterSettingsView(); });
+    /* 空间就绪前 mine 已经进过一次：只有确实要落团队模式才需要按角色补进一次，避免普通成员重复拉 my-tasks */
+    if(!hadWorkspace && isMobile() && activeView === "mine" &&
+        currentMode(target ? target.id : "", target && target.myRole) === "team") showView("mine");
     return target;
   }).catch(function(){ return null; });
 }
