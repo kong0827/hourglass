@@ -29,6 +29,10 @@ public interface RequirementDocMapper {
     int update(@Param("doc") RequirementDoc doc,
                @Param("oldUpdatedAt") java.time.LocalDateTime oldUpdatedAt);
 
+    /** 发布/收回草稿：只动 published_at，不触碰正文与乐观锁 */
+    int updatePublished(@Param("id") String id,
+                        @Param("publishedAt") java.time.LocalDateTime publishedAt);
+
     int delete(@Param("id") String id);
 
     /** 某项目下的需求数（删除项目前拦一下） */

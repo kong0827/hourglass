@@ -107,7 +107,7 @@ class TaskCommentServiceNotificationTest {
         service.create("U-author", "W1", "K1", "@Bob 请看一下");
 
         verify(events).notify(eq("U-bob"), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
+                eq(UserNotificationPreferenceService.TASK_COMMENT),
                 eq("「Task」提到了你"), anyString(), eq("K1"), isNull());
         verify(events).notify(eq("U-owner"), eq("W1"),
                 eq(UserNotificationPreferenceService.TASK_COMMENT),
@@ -122,12 +122,9 @@ class TaskCommentServiceNotificationTest {
 
         service.create("U-author", "W1", "K1", "@Owner 请确认");
 
-        verify(events).notify(eq("U-owner"), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
-                eq("「Task」提到了你"), anyString(), eq("K1"), isNull());
-        verify(events, never()).notify(eq("U-owner"), eq("W1"),
+        verify(events, times(1)).notify(eq("U-owner"), eq("W1"),
                 eq(UserNotificationPreferenceService.TASK_COMMENT),
-                anyString(), anyString(), eq("K1"), isNull());
+                eq("「Task」提到了你"), anyString(), eq("K1"), isNull());
     }
 
     @Test
@@ -142,7 +139,7 @@ class TaskCommentServiceNotificationTest {
                 eq(UserNotificationPreferenceService.TASK_COMMENT),
                 anyString(), anyString(), eq("K1"), isNull());
         verify(events, never()).notify(eq("U-author"), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
+                eq(UserNotificationPreferenceService.TASK_COMMENT),
                 anyString(), anyString(), eq("K1"), isNull());
     }
 
@@ -154,9 +151,9 @@ class TaskCommentServiceNotificationTest {
 
         service.create("U-author", "W1", "K1", "@NotAMember 看下");
 
-        verify(events, never()).notify(anyString(), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
-                anyString(), anyString(), anyString(), isNull());
+        verify(events, times(1)).notify(eq("U-owner"), eq("W1"),
+                eq(UserNotificationPreferenceService.TASK_COMMENT),
+                anyString(), anyString(), eq("K1"), isNull());
     }
 
     @Test
@@ -168,7 +165,7 @@ class TaskCommentServiceNotificationTest {
         service.create("U-author", "W1", "K1", "请看一下", Collections.singletonList("U-bob"));
 
         verify(events).notify(eq("U-bob"), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
+                eq(UserNotificationPreferenceService.TASK_COMMENT),
                 eq("「Task」提到了你"), anyString(), eq("K1"), isNull());
     }
 
@@ -193,7 +190,7 @@ class TaskCommentServiceNotificationTest {
         service.create("U-author", "W1", "K1", "@Bob 看一下", Collections.singletonList("U-bob"));
 
         verify(events, times(1)).notify(eq("U-bob"), eq("W1"),
-                eq(UserNotificationPreferenceService.TASK_MENTION),
+                eq(UserNotificationPreferenceService.TASK_COMMENT),
                 anyString(), anyString(), eq("K1"), isNull());
     }
 

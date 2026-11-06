@@ -16,6 +16,7 @@ public class ProjectVersion {
     private String description;
     /** planned/active/released */
     private String status;
+    private LocalDate startDate;
     private LocalDate targetDate;
     private LocalDateTime releasedAt;
     private LocalDateTime createdAt;

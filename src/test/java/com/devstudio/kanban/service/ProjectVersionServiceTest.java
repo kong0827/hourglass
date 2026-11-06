@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -81,7 +82,7 @@ class ProjectVersionServiceTest {
 
         service.publish(USER, WS, "V1");
 
-        verify(notifications).notify("U2", WS, UserNotificationPreferenceService.VERSION_RELEASED,
+        verify(notifications).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "版本「V1」已发布", "你负责的 2 项任务已随该版本发布", null, "R1");
         verify(notifications, never()).notify(eq("U3"), anyString(), anyString(),
                 anyString(), anyString(), any(), anyString());
@@ -105,7 +106,7 @@ class ProjectVersionServiceTest {
         order.verify(versionTasks).deleteByVersion(WS, "V1");
         order.verify(demands).clearVersionRefsByVersion(WS, "V1");
         order.verify(versions).deleteById(WS, "V1");
-        order.verify(notifications).notify("U2", WS, UserNotificationPreferenceService.VERSION_DELETED,
+        order.verify(notifications).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "版本「V1」已删除", "你负责的 2 项任务已随该版本解绑", null, "R1");
     }
 
@@ -140,6 +141,61 @@ class ProjectVersionServiceTest {
 
         assertEquals(400, error.getCode());
         verify(versions, never()).insert(any(ProjectVersion.class));
+    }
+
+    @Test
+    void startMovesPlannedToActiveAndFillsMissingStartDate() {
+        ProjectVersion planned = version("V1", "R1");
+        planned.setStatus("planned");
+        planned.setStartDate(null);
+        when(versions.selectById("V1")).thenReturn(planned);
+
+        ProjectVersion result = service.start(USER, WS, "V1");
+
+        assertSame(planned, result);
+        assertEquals("active", planned.getStatus());
+        assertNotNull(planned.getStartDate());
+        verify(versions).update(planned);
+        verify(access).assertWrite(WS, USER, "R1");
+    }
+
+    @Test
+    void startKeepsExistingStartDateAndSkipsUpdateWhenAlreadyActive() {
+        ProjectVersion active = version("V1", "R1");
+        when(versions.selectById("V1")).thenReturn(active);
+
+        service.start(USER, WS, "V1");
+
+        verify(versions, never()).update(any(ProjectVersion.class));
+    }
+
+    @Test
+    void startRejectsReleasedVersion() {
+        ProjectVersion released = version("V1", "R1");
+        released.setStatus("released");
+        when(versions.selectById("V1")).thenReturn(released);
+
+        AppException error = assertThrows(AppException.class, () -> service.start(USER, WS, "V1"));
+
+        assertEquals(400, error.getCode());
+        verify(versions, never()).update(any(ProjectVersion.class));
+    }
+
+    @Test
+    void updateRejectsReleasedVersion() {
+        ProjectVersion released = version("V1", "R1");
+        released.setStatus("released");
+        when(versions.selectById("V1")).thenReturn(released);
+        when(versions.countByName(WS, "R1", "V1", "V1")).thenReturn(0);
+
+        ProjectVersionSaveRequest request = new ProjectVersionSaveRequest();
+        request.setReqId("R1");
+        request.setName("V1");
+
+        AppException error = assertThrows(AppException.class, () -> service.update(USER, WS, "V1", request));
+
+        assertEquals(400, error.getCode());
+        verify(versions, never()).update(any(ProjectVersion.class));
     }
 
     private ProjectVersion version(String id, String reqId) {

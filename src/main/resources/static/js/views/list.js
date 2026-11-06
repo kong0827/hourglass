@@ -13,7 +13,7 @@ import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../co
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, rgbaOf, typeBadgeHTML, typeName } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -222,8 +222,8 @@ function minutesText(value){
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
 function taskCell(t, key, hasTypeCol){
-  if(key === "title") return '<span class="lr-task"><span class="lr-t">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType)) + esc(t.title) + '</span></span>';
-  if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + '</span>';
+  if(key === "title") return '<span class="lr-task"><span class="lr-t">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title) + '</span></span>';
+  if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     return '<span class="cell"><span class="tag" style="background:' + rgbaOf(color,.10) + ';color:' + darken(color) + '">' + esc(colName(t.boardColumn)) + '</span></span>';

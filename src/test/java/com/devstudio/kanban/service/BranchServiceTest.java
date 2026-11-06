@@ -138,7 +138,7 @@ class BranchServiceTest {
 
         service.changeStatus("U1", WS, "B1", req);
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.BRANCH_STATUS,
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "分支「B1」状态变更", "开发中 → 待测试", "B1", "R1");
     }
 
@@ -165,7 +165,7 @@ class BranchServiceTest {
 
         service.delete("U1", WS, "B1");
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.BRANCH_STATUS,
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", null, "R1");
         verify(branchMapper).deleteById(WS, "B1");
     }

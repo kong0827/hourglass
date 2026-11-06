@@ -22,6 +22,10 @@ public class ReqDocView {
     private Integer sortOrder;
     private String status;
     private String owner;
+    /** 负责人账号 ID（草稿可见性按作者判定） */
+    private String ownerUserId;
+    /** 发布时间（空 = 草稿） */
+    private LocalDateTime publishedAt;
     /** 正文纯文本摘要（服务端从 HTML 抽出来，最长 80 字） */
     private String excerpt;
     private Integer taskCount;

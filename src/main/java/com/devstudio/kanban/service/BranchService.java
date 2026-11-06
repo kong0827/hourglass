@@ -399,7 +399,7 @@ public class BranchService {
             return;
         }
         notificationEvents.notify(owner, b.getWorkspaceId(),
-                UserNotificationPreferenceService.BRANCH_STATUS, title, body, referenceId, b.getReqId());
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body, referenceId, b.getReqId());
     }
 
     /** 新建时按初始状态盖上第一个时间点（其余留空，等真正进入再写） */

@@ -85,6 +85,16 @@ public class Task {
 
     /** 工作项类型：story/task/bug/epic（sql/23；存量任务默认 task） */
     private String itemType;
+    /** 缺陷严重度 blocker/critical/major/minor（仅 item_type=bug；sql/38） */
+    private String severity;
+    /** 发现环境（仅缺陷） */
+    private String environment;
+    /** 复现步骤（仅缺陷） */
+    private String reproduceSteps;
+    /** 发现版本ID（project_version，仅缺陷） */
+    private String foundVersionId;
+    /** 回归状态 pending/passed/failed（仅缺陷） */
+    private String regressionStatus;
     /** 所属 Epic 任务ID（仅 story/task/bug 可挂 Epic） */
     private String epicId;
     /** 关联需求池需求ID（sql/24，demand 表；基于需求创建任务时写入） */

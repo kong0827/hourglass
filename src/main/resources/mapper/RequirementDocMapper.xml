@@ -3,14 +3,14 @@
 <mapper namespace="com.devstudio.kanban.mapper.RequirementDocMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, parent_id, title, doc_type, content, format, content_brief, status, sort_order,
+    id, workspace_id, req_id, parent_id, title, doc_type, content, format, content_brief, status, published_at, sort_order,
     owner, owner_user_id, created_at, updated_at
   </sql>
 
   <!-- 列表：不读正文，只读 content_brief；任务数一次 GROUP BY 汇总 -->
   <select id="selectViewByWorkspace" resultType="com.devstudio.kanban.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.title, d.doc_type, d.format, d.sort_order,
-           d.status, d.owner, d.created_at, d.updated_at,
+           d.status, d.owner, d.owner_user_id, d.published_at, d.created_at, d.updated_at,
            r.name AS req_name,
            d.content_brief AS content_brief,
            COALESCE(tc.task_count, 0) AS task_count,
@@ -26,12 +26,22 @@
       GROUP BY req_doc_id
     ) tc ON tc.req_doc_id = d.id
     WHERE d.workspace_id = #{workspaceId}
-    <if test="keyword != null and keyword != ''">
-      AND (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
-           OR d.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
-    </if>
-    ORDER BY (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\') DESC,
-             d.req_id, d.sort_order, d.created_at
+    <choose>
+      <when test="keyword != null and keyword != '' and keyword.length() >= 2">
+        AND MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE)
+        ORDER BY MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE) DESC,
+                 d.updated_at DESC
+      </when>
+      <when test="keyword != null and keyword != ''">
+        AND (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+             OR d.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+        ORDER BY (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\') DESC,
+                 d.updated_at DESC
+      </when>
+      <otherwise>
+        ORDER BY d.req_id, d.sort_order, d.created_at
+      </otherwise>
+    </choose>
   </select>
 
   <select id="selectById" resultType="RequirementDoc">
@@ -46,9 +56,9 @@
 
   <insert id="insert">
     INSERT INTO requirement_doc (id, workspace_id, req_id, parent_id, title, doc_type, content, format, content_brief,
-                                 status, sort_order, owner, owner_user_id, created_at, updated_at)
+                                 status, published_at, sort_order, owner, owner_user_id, created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{parentId}, #{title}, #{docType}, #{content}, #{format}, #{contentBrief},
-            #{status}, COALESCE(#{sortOrder}, 0), #{owner}, #{ownerUserId},
+            #{status}, #{publishedAt}, COALESCE(#{sortOrder}, 0), #{owner}, #{ownerUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -62,6 +72,7 @@
       format        = #{doc.format},
       content_brief = #{doc.contentBrief},
       status        = #{doc.status},
+      published_at  = #{doc.publishedAt},
       sort_order    = COALESCE(#{doc.sortOrder}, 0),
       owner         = #{doc.owner},
       owner_user_id = #{doc.ownerUserId},
@@ -70,6 +81,11 @@
     <if test="oldUpdatedAt != null">
       AND updated_at = #{oldUpdatedAt}
     </if>
+  </update>
+
+  <update id="updatePublished">
+    UPDATE requirement_doc SET published_at = #{publishedAt}, updated_at = NOW()
+    WHERE id = #{id}
   </update>
 
   <delete id="delete">
@@ -112,7 +128,7 @@
   <!-- 需求池需求 → 文档：列表字段与 selectViewByWorkspace 保持一致 -->
   <select id="selectByDemand" resultType="com.devstudio.kanban.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.title, d.doc_type, d.format, d.sort_order,
-           d.status, d.owner, d.created_at, d.updated_at,
+           d.status, d.owner, d.owner_user_id, d.published_at, d.created_at, d.updated_at,
            r.name AS req_name,
            d.content_brief AS content_brief,
            COALESCE(tc.task_count, 0) AS task_count,

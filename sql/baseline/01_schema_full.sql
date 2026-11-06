@@ -401,6 +401,7 @@ CREATE TABLE `project_version` (
   `name` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '版本名称',
   `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '版本说明与发布摘要',
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned' COMMENT 'planned/active/released',
+  `start_date` date DEFAULT NULL COMMENT '计划开始日期',
   `target_date` date DEFAULT NULL COMMENT '计划发布日期',
   `released_at` datetime DEFAULT NULL COMMENT '实际发布时间',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -450,6 +451,7 @@ CREATE TABLE `requirement_doc` (
   `format` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'html' COMMENT '正文格式：html 富文本 / markdown',
   `content_brief` varchar(400) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '纯文本摘要（列表用）',
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft' COMMENT '状态：draft/active/done',
+  `published_at` datetime DEFAULT NULL COMMENT '发布时间（空=草稿，仅作者与空间管理员可见）',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '同级排序（小的在前）',
   `owner` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人显示名',
   `owner_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID',
@@ -459,7 +461,8 @@ CREATE TABLE `requirement_doc` (
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_req` (`req_id`),
   KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
-  KEY `idx_doc_parent` (`workspace_id`,`req_id`,`parent_id`)
+  KEY `idx_doc_parent` (`workspace_id`,`req_id`,`parent_id`),
+  FULLTEXT KEY `ft_doc_fulltext` (`title`,`content_brief`,`content`) /*!50100 WITH PARSER `ngram` */
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求（项目下的需求文档）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -485,6 +488,45 @@ CREATE TABLE `requirement_doc_history` (
   KEY `idx_history_doc` (`doc_id`,`version_no`),
   KEY `idx_history_ws` (`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档历史快照（查看与恢复旧版本）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `req_doc_comment`
+--
+
+DROP TABLE IF EXISTS `req_doc_comment`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `req_doc_comment` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `doc_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
+  `user_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论人账号ID',
+  `content` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论正文',
+  `quote_text` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '引用的正文片段（批注上下文）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_doc_created` (`doc_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档评论';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `req_doc_share`
+--
+
+DROP TABLE IF EXISTS `req_doc_share`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `req_doc_share` (
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间',
+  `doc_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
+  `token` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分享令牌（URL 参数）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `expires_at` datetime DEFAULT NULL COMMENT '过期时间（空=长期有效）',
+  PRIMARY KEY (`workspace_id`,`doc_id`),
+  UNIQUE KEY `uk_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求文档只读分享';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -559,6 +601,11 @@ CREATE TABLE `task` (
   `item_type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'task' COMMENT '工作项类型：story用户故事/task任务/bug缺陷/epic史诗',
   `epic_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属史诗（Epic）任务ID（item_type=epic 时为空）',
   `demand_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联需求池需求ID（demand 表）',
+  `severity` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '缺陷严重度：blocker阻断/critical严重/major一般/minor轻微',
+  `environment` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '缺陷发现环境（浏览器/版本/设备等）',
+  `reproduce_steps` text COLLATE utf8mb4_unicode_ci COMMENT '缺陷复现步骤',
+  `found_version_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '缺陷发现版本ID（project_version）',
+  `regression_status` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '回归状态：pending待回归/passed通过/failed不通过',
   `priority` varchar(4) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'P2' COMMENT '优先级 P0/P1/P2/P3',
   `owner` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '我' COMMENT '负责人（显示名文本，历史兼容）',
   `owner_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID（空=按显示名文本兼容）',
@@ -767,6 +814,57 @@ CREATE TABLE `task_watch` (
   KEY `idx_watch_user` (`user_id`,`workspace_id`),
   KEY `idx_watch_ws_task` (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务关注人';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `test_case`
+--
+
+DROP TABLE IF EXISTS `test_case`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `test_case` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `req_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID（requirement.id）',
+  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例标题',
+  `precondition` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '前置条件',
+  `steps` mediumtext COLLATE utf8mb4_unicode_ci COMMENT '执行步骤 JSON：[{"action":"操作","expected":"预期结果"}]',
+  `latest_status` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行结果：passed/failed/blocked，空=未执行',
+  `latest_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行备注',
+  `latest_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行人显示名',
+  `latest_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行人账号ID',
+  `latest_at` datetime DEFAULT NULL COMMENT '最近执行时间',
+  `latest_bug_task_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近失败转出的缺陷任务ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`),
+  KEY `idx_bug` (`latest_bug_task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例（项目下，展示最近一轮执行结果）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `test_case_run`
+--
+
+DROP TABLE IF EXISTS `test_case_run`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `test_case_run` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行记录ID',
+  `case_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID（test_case.id）',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行结果：passed/failed/blocked',
+  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行备注（失败原因等）',
+  `bug_task_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '由本次失败转出的缺陷任务ID',
+  `executed_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行人显示名',
+  `executed_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行人账号ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '执行时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_case` (`case_id`,`id`),
+  KEY `idx_ws` (`workspace_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用例执行流水（每次执行一行）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

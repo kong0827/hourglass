@@ -180,11 +180,17 @@ import { GS } from "./lib/gantt-shared.js";
 
   function boot() {
     var token = "";
-    try { token = new URLSearchParams(location.search).get("token") || ""; } catch (e) { token = ""; }
+    var kind = "";
+    try {
+      var q = new URLSearchParams(location.search);
+      token = q.get("token") || "";
+      kind = q.get("kind") || "";
+    } catch (e) { token = ""; }
     if (!token) {
-      scroll.innerHTML = '<div class="share-empty">链接缺少 token 参数，无法查看。</div>';
+      scroll.innerHTML = '<div class="share-error">链接缺少 token 参数，无法查看。</div>';
       return;
     }
+    if (kind === "doc") { bootDoc(token); return; }
     var appBase = location.pathname.replace(/\/[^\/]*$/, "");
     fetch(appBase + "/api/share/gantt?token=" + encodeURIComponent(token), { credentials: "omit" })
       .then(function (r) { return r.text(); })
@@ -199,6 +205,71 @@ import { GS } from "./lib/gantt-shared.js";
       .catch(function (ex) {
         scroll.innerHTML = '<div class="share-error">无法打开分享：' + esc(ex.message || "网络异常") + '</div>';
       });
+  }
+
+  /* 文档分享：kind=doc，只渲染正文（markdown 在本地渲染，仍走 DOMPurify 消毒） */
+  var mdLibPromise = null;
+  function loadMdLib() {
+    if (typeof window.marked !== "undefined" && window.DOMPurify) return Promise.resolve();
+    if (mdLibPromise) return mdLibPromise;
+    var loadScript = function (src) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = src;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error("Markdown 渲染组件加载失败")); };
+        document.head.appendChild(s);
+      });
+    };
+    mdLibPromise = loadScript("vendor/markdown/marked.min.js")
+      .then(function () { return loadScript("vendor/markdown/purify.min.js"); })
+      .catch(function (ex) { mdLibPromise = null; throw ex; });
+    return mdLibPromise;
+  }
+  function bootDoc(token) {
+    var body = $("docShareBody");
+    var appBase = location.pathname.replace(/\/[^\/]*$/, "");
+    fetch(appBase + "/api/share/docs?token=" + encodeURIComponent(token), { credentials: "omit" })
+      .then(function (r) { return r.text(); })
+      .then(function (txt) { return JSON.parse(txt); })
+      .then(function (j) {
+        if (!j || j.code !== 0) throw new Error((j && j.message) || "链接无效或已过期");
+        renderDoc(j.data);
+      })
+      .catch(function (ex) {
+        body.innerHTML = '<div class="share-error">无法打开分享：' + esc(ex.message || "网络异常") + '</div>';
+      });
+  }
+  function renderDoc(d) {
+    $("view-gantt").classList.remove("on");
+    $("view-doc").classList.add("on");
+    $("docShareTitle").textContent = d.title || "文档";
+    document.title = (d.title || "文档") + " · 只读分享";
+    var meta = [];
+    if (d.workspaceName) meta.push(d.workspaceName);
+    if (d.owner) meta.push(d.owner);
+    meta.push(d.updatedAt ? ("更新于 " + String(d.updatedAt).replace("T", " ").substring(0, 16)) : "更新时间未知");
+    $("docShareMeta").textContent = meta.join(" · ");
+    $("docShareFoot").textContent = "生成时间 " + (d.generatedAt ? String(d.generatedAt).replace("T", " ").substring(0, 16) : "—") +
+      " · 只读链接，仅含文档正文";
+    var body = $("docShareBody");
+    body.innerHTML = '<div class="share-empty">加载正文…</div>';
+    loadMdLib().then(function () {
+      var html;
+      if (d.format === "markdown") {
+        try { html = window.marked.parse(d.content || "", { gfm: true, breaks: false }); } catch (e) { html = ""; }
+      } else {
+        html = d.content || "";
+      }
+      body.innerHTML = window.DOMPurify.sanitize(html);
+      var links = body.querySelectorAll("a[href]");
+      for (var i = 0; i < links.length; i++) {
+        links[i].setAttribute("target", "_blank");
+        links[i].setAttribute("rel", "noopener noreferrer");
+      }
+    }).catch(function (ex) {
+      body.innerHTML = '<div class="share-error">' + esc(ex.message || "正文渲染失败") + '</div>';
+    });
   }
 
   $("shareScale").addEventListener("change", function () {

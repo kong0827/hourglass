@@ -33,7 +33,9 @@ class ReqDocOptimisticLockTest {
     private final RequirementDocService service = new RequirementDocService(docs,
             mock(RequirementDocHistoryMapper.class), reqs,
             mock(UserMapper.class), mock(TaskMapper.class), activities,
-            mock(DemandMapper.class), access, mock(NotificationEventService.class));
+            mock(DemandMapper.class), access, mock(NotificationEventService.class),
+            mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
+            mock(com.devstudio.kanban.mapper.WorkspaceMapper.class));
 
     @Test
     void staleVersionIsRejectedWithConflict() {
@@ -101,6 +103,7 @@ class ReqDocOptimisticLockTest {
         d.setDocType("other");
         d.setSortOrder(0);
         d.setStatus("draft");
+        d.setPublishedAt(java.time.LocalDateTime.now());
         return d;
     }
 

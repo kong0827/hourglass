@@ -89,6 +89,32 @@ function ensureEpic(keep, taskId){
     if(assocStillCurrent(seq, editingId, reqId)) m.ensureEpicOptions(keep, taskId);
   });
 }
+function ensureFoundVersion(keep){
+  var sel = $("iFoundVersion");
+  if(sel) sel.removeAttribute("data-ready");
+  var seq = rt.taskFormSeq, editingId = rt.editingId, reqId = currentReqId();
+  loadView("phase").then(function(m){
+    if(assocStillCurrent(seq, editingId, reqId)) m.ensureFoundVersionOptions(keep || "");
+  });
+}
+var fDefect = $("fDefect"), iItemType = $("iItemType"), iSeverity = $("iSeverity");
+var iEnvironment = $("iEnvironment"), iReproSteps = $("iReproSteps"), iRegression = $("iRegression");
+function syncDefectFields(){
+  var isBug = !!(iItemType && iItemType.value === "bug");
+  if(fDefect) fDefect.hidden = !isBug;
+  var fs = $("fSeverity");
+  if(fs && (!isBug || (iSeverity && iSeverity.value))) fs.classList.remove("invalid");
+}
+if(iSeverity) iSeverity.addEventListener("change", function(){
+  var fs = $("fSeverity");
+  if(fs && iSeverity.value) fs.classList.remove("invalid");
+});
+function clearDefectFields(){
+  if(iSeverity) iSeverity.value = "";
+  if(iEnvironment) iEnvironment.value = "";
+  if(iReproSteps) iReproSteps.value = "";
+  if(iRegression) iRegression.value = "";
+}
 function refreshAssociationViews(){
   var projects = viewModule("projects");
   if(projects) projects.refreshExpandedProjectTasks();
@@ -349,9 +375,14 @@ function openTaskDrawer(colId, task, defaults){
     iCol.value = task.boardColumn || "backlog";
     populateReqSelect();
     iReq.value = task.reqId || "";
-    if($("iItemType")) $("iItemType").value = task.itemType || "task";
+    if(iItemType) iItemType.value = task.itemType || "task";
+    if(iSeverity) iSeverity.value = task.severity || "";
+    if(iEnvironment) iEnvironment.value = task.environment || "";
+    if(iReproSteps) iReproSteps.value = task.reproduceSteps || "";
+    if(iRegression) iRegression.value = task.regressionStatus || "";
     /* versionId 只有深链取回的任务带；看板缓存里没有，交给 phase 模块查项目任务表回填 */
     ensureVersion(task.versionId, task.id);
+    ensureFoundVersion(task.foundVersionId || "");
     ensureEpic(task.epicId, task.id);
     rt.formDemandId = task.demandId || null;
     ensureReqDoc(task.reqDocId || "");
@@ -406,8 +437,10 @@ function openTaskDrawer(colId, task, defaults){
     }else{
       rt.formDemandId = null;
     }
-    if($("iItemType")) $("iItemType").value = "task";
+    if(iItemType) iItemType.value = "task";
+    clearDefectFields();
     ensureVersion((defaults && defaults.versionId) || "");
+    ensureFoundVersion("");
     ensureEpic((defaults && defaults.epicId) || "");
     ensureReqDoc((defaults && defaults.reqDocId) || "");
     ensureBranch("", (defaults && defaults.reqId) || "");
@@ -430,6 +463,7 @@ function openTaskDrawer(colId, task, defaults){
     if(commentCount) commentCount.textContent = "";
     closeMention();
   }
+  syncDefectFields();
   syncProgVal();
   syncProgByCol();
   fTitle.classList.remove("invalid");
@@ -615,9 +649,16 @@ if(epicHelp){
 }
 /* 换项目时影响版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
 if(iReq) iReq.addEventListener("change", function(){
-  ensureVersion(""); ensureEpic("");
+  ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
   ensureBranch(($("iBranch") || {}).value, iReq.value);
   rt.formDemandId = null;
+});
+if(iItemType) iItemType.addEventListener("change", function(){
+  syncDefectFields();
+  if(iItemType.value === "bug" && iSeverity && !iSeverity.value){
+    try{ iSeverity.focus(); }catch(e){ /* noop */ }
+  }
+  rt.formDirty = true;
 });
 if(iBlocked){
   iBlocked.addEventListener("change", function(){
@@ -1012,10 +1053,18 @@ taskForm.addEventListener("submit", function(e){
     focusField(iStart);
     return;
   }
+  var itemTypeValue = (iItemType && iItemType.value) || "task";
+  if(itemTypeValue === "bug" && !(iSeverity && iSeverity.value)){
+    toast("缺陷必须选择严重度", "bad");
+    var severityField = $("fSeverity");
+    if(severityField) severityField.classList.add("invalid");
+    focusField(iSeverity);
+    return;
+  }
   var owner = ownerPick();
   var stillDone = (iCol.value || "backlog") === "done";
   var current = rt.editingId ? taskCacheExtra[rt.editingId] : null;
-  var docSel = $("iReqDoc"), branchSel = $("iBranch");
+  var docSel = $("iReqDoc"), branchSel = $("iBranch"), foundSel = $("iFoundVersion");
   var payload = {
     oldUpdatedAt: current ? (current.updatedAt || null) : null,
     title: title,
@@ -1033,7 +1082,18 @@ taskForm.addEventListener("submit", function(e){
     reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
     /* 分支按项目过滤后可能只剩占位项，不能用 options 数量判断是否加载完 */
     branchId: (branchSel && branchSel.getAttribute("data-ready")) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
-    itemType: (($("iItemType") || {}).value) || "task",
+    itemType: itemTypeValue,
+    /* 缺陷字段：type 不是 bug 时后端会清空；bug 时空串表示明确清除文本/解绑，
+       null 仅用于「下拉未就绪」以保留原值 */
+    severity: itemTypeValue === "bug" ? (iSeverity ? iSeverity.value : "") : null,
+    environment: itemTypeValue === "bug" ? (iEnvironment ? iEnvironment.value.trim() : "") : null,
+    reproduceSteps: itemTypeValue === "bug" ? (iReproSteps ? iReproSteps.value.trim() : "") : null,
+    foundVersionId: (function(){
+      if(itemTypeValue !== "bug") return null;
+      if(foundSel && foundSel.getAttribute("data-ready")) return foundSel.value || "";
+      return current ? (current.foundVersionId || null) : null;
+    })(),
+    regressionStatus: itemTypeValue === "bug" ? (iRegression ? (iRegression.value || "") : "") : null,
     /* 版本下拉 data-ready 由 phase 模块置位：没就绪说明选项还没回来，保留原绑定（null=不改）；
        就绪后空值是明确的「待规划」（空串=解绑），与后端口径一一对应 */
     versionId: (function(){

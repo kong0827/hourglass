@@ -96,6 +96,11 @@ public class ProjectVersionController {
         return ApiResult.ok(versionService.publish(ctx.getUserId(), ctx.getWsId(), id));
     }
 
+    @PostMapping("/api/versions/{id}/start")
+    public ApiResult<ProjectVersion> start(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(versionService.start(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
     @RequireRole
     @DeleteMapping("/api/versions/{id}")
     public ApiResult<Void> delete(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {

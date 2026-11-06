@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TestCaseRunMapper">
+
+  <insert id="insert">
+    INSERT INTO test_case_run
+      (id, case_id, workspace_id, status, note, bug_task_id,
+       executed_by, executed_by_user_id, created_at)
+    VALUES
+      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{bugTaskId},
+       #{executedBy}, #{executedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <select id="selectLatestByCase" resultType="com.devstudio.kanban.entity.TestCaseRun">
+    SELECT * FROM test_case_run
+    WHERE case_id = #{caseId}
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  </select>
+
+  <update id="updateBugTask">
+    UPDATE test_case_run SET bug_task_id = #{bugTaskId} WHERE id = #{id}
+  </update>
+
+  <delete id="deleteByCase">
+    DELETE FROM test_case_run WHERE workspace_id = #{workspaceId} AND case_id = #{caseId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM test_case_run
+    WHERE workspace_id = #{workspaceId}
+      AND case_id IN (SELECT id FROM test_case WHERE workspace_id = #{workspaceId} AND req_id = #{reqId})
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM test_case_run WHERE workspace_id = #{workspaceId}
+  </delete>
+
+</mapper>

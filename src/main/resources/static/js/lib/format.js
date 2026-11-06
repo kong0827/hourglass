@@ -115,6 +115,12 @@ function typeBadgeHTML(itemType){
   if(!cls) return "";
   return '<span class="mini-tag ' + cls + '">' + typeName(itemType) + '</span>';
 }
+var SEVERITY_LABELS = { blocker:"阻断", critical:"严重", major:"一般", minor:"轻微" };
+function severityBadgeHTML(severity){
+  var label = SEVERITY_LABELS[severity];
+  if(!label) return "";
+  return '<span class="mini-tag sev-' + severity + '">' + label + '</span>';
+}
 /* 工作项类型的通用敏捷定义（「工作项类型」旁 ! 说明弹层的文案源） */
 var ITEM_TYPE_DESCS = [
   { key:"task",  desc:"具体的工作单元，通常由需求/故事拆解而来，粒度小（约 1–2 天），面向执行" },
@@ -186,4 +192,4 @@ function darken(hex, k){
   return "rgb("+Math.round(c.r*f)+","+Math.round(c.g*f)+","+Math.round(c.b*f)+")";
 }
 
-export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, PRIORITY_COLOR, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };
+export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, PRIORITY_COLOR, SEVERITY_LABELS, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };

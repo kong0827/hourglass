@@ -38,6 +38,7 @@ public class RequirementService {
     private final ProjectAccessService projectAccess;
     private final AttachmentService attachmentService;
     private final com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper;
+    private final TestCaseService caseService;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -47,7 +48,8 @@ public class RequirementService {
                               DevBranchMapper branchMapper,
                               ProjectAccessService projectAccess,
                               AttachmentService attachmentService,
-                              com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper) {
+                              com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper,
+                              TestCaseService caseService) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -61,6 +63,7 @@ public class RequirementService {
         this.projectAccess = projectAccess;
         this.attachmentService = attachmentService;
         this.mailDeliveryMapper = mailDeliveryMapper;
+        this.caseService = caseService;
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
@@ -247,6 +250,8 @@ public class RequirementService {
         branchMapper.clearReqIdByReq(workspaceId, id);
         /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);
+        /* 测试用例同样强归属项目：用例与执行流水一并清理 */
+        int cases = caseService.deleteByReq(workspaceId, id);
         /* 版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */
         versionService.deleteByReq(workspaceId, id);
         demandMapper.deleteLogsByReq(workspaceId, id);
@@ -259,7 +264,8 @@ public class RequirementService {
                 "删除项目「" + r.getName() + "」，解除关联 " + unlinked + " 项任务" +
                         (docs > 0 ? "，连带删除 " + docs + " 份文档" : "") +
                         (versions > 0 ? "，" + versions + " 个版本" : "") +
-                        (demands > 0 ? "，" + demands + " 条需求池记录" : ""));
+                        (demands > 0 ? "，" + demands + " 条需求池记录" : "") +
+                        (cases > 0 ? "，" + cases + " 条测试用例" : ""));
         RequirementDeleteResult result = new RequirementDeleteResult();
         result.setUnlinked(unlinked);
         result.setDocs(docs);

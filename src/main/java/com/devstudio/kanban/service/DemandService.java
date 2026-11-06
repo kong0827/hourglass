@@ -261,6 +261,7 @@ public class DemandService {
         d.setWsjfUrgency(req.getWsjfUrgency());
         d.setWsjfRisk(req.getWsjfRisk());
         d.setWsjfEffort(req.getWsjfEffort());
+        fillWsjf(d);
     }
 
     private Requirement requireProject(String workspaceId, String reqId) {
@@ -314,6 +315,9 @@ public class DemandService {
                 && d.getWsjfRisk() != null && d.getWsjfEffort() != null && d.getWsjfEffort() > 0) {
             d.setWsjfScore(Math.round((d.getWsjfBusiness() + d.getWsjfUrgency() + d.getWsjfRisk())
                     * 10f / d.getWsjfEffort()) / 10d);
+        } else {
+            /* 字段被清空时同步清分，避免旧分数残留 */
+            d.setWsjfScore(null);
         }
     }
 

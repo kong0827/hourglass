@@ -314,10 +314,10 @@ function openDemandDialog(d){
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
-  dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : 5;
-  dWsjfU.value = d && d.wsjfUrgency != null ? d.wsjfUrgency : 5;
-  dWsjfR.value = d && d.wsjfRisk != null ? d.wsjfRisk : 5;
-  dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : 5;
+  dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
+  dWsjfU.value = d && d.wsjfUrgency != null ? d.wsjfUrgency : "";
+  dWsjfR.value = d && d.wsjfRisk != null ? d.wsjfRisk : "";
+  dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : "";
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
   btnSaveDemand.textContent = d ? "保存修改" : "提交评审";
@@ -332,8 +332,11 @@ function saveDemand(){
     return;
   }
   if(!canEditReq(dReq.value)){ denyDemandReadOnly(); return; }
-  function num(el, min){
-    var v = Number(el.value);
+  /* WSJF 可选：留空发 null，服务端只在四项都填时才计分 */
+  function wsNum(el, min){
+    var raw = String(el.value == null ? "" : el.value).trim();
+    if(raw === "") return null;
+    var v = Number(raw);
     if(isNaN(v)) v = min;
     return Math.max(min, Math.min(10, v));
   }
@@ -346,10 +349,10 @@ function saveDemand(){
     itemKind: dKind.value,
     priority: formPri,
     expectDate: dExpect.value || null,
-    wsjfBusiness: num(dWsjfB, 0),
-    wsjfUrgency: num(dWsjfU, 0),
-    wsjfRisk: num(dWsjfR, 0),
-    wsjfEffort: num(dWsjfE, 1)
+    wsjfBusiness: wsNum(dWsjfB, 0),
+    wsjfUrgency: wsNum(dWsjfU, 0),
+    wsjfRisk: wsNum(dWsjfR, 0),
+    wsjfEffort: wsNum(dWsjfE, 1)
   };
   btnSaveDemand.disabled = true;
   var p = editingDemandId

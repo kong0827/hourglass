@@ -31,7 +31,9 @@ class RequirementDocServiceNotificationTest {
     private final RequirementDocService service = new RequirementDocService(docs,
             mock(RequirementDocHistoryMapper.class), reqs, users,
             mock(TaskMapper.class), activities, mock(DemandMapper.class),
-            mock(ProjectAccessService.class), events);
+            mock(ProjectAccessService.class), events,
+            mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
+            mock(com.devstudio.kanban.mapper.WorkspaceMapper.class));
 
     @Test
     void updateByOtherUserKeepsOwnerAndNotifies() {
@@ -43,7 +45,7 @@ class RequirementDocServiceNotificationTest {
         service.update("U1", WS, "D1", request("<p>new</p>"));
 
         assertEquals("U2", d.getOwnerUserId(), "未带负责人时编辑不能把负责人换成操作者");
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DOC_CHANGED,
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "文档「文档」已更新", "文档内容或属性有更新", "D1", "R1");
     }
 
@@ -65,7 +67,7 @@ class RequirementDocServiceNotificationTest {
 
         service.delete("U1", WS, "D1");
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DOC_CHANGED,
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "文档「文档」已被删除", "需求文档已删除，关联任务已解绑", null, "R1");
     }
 
@@ -81,6 +83,7 @@ class RequirementDocServiceNotificationTest {
         d.setStatus("draft");
         d.setOwner("Alice");
         d.setOwnerUserId("U2");
+        d.setPublishedAt(java.time.LocalDateTime.now());
         return d;
     }
 

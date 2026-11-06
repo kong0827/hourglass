@@ -163,13 +163,35 @@ function deliveryChart(d){
       return '<div data-chart-tip="' + tip + '"><span>' + esc(b.label) + '</span><span class="progress"><i style="width:' + Math.min(100, b.pct) + '%"></i></span><b>' + b.count + ' 项 · ' + b.pct + '%</b></div>';
     }).join("") + '</div><p class="manager-note">从开始日期（空则创建日期）到完成日期；平均 ' + (d.averageDays === null ? "—" : d.averageDays + " 天") + '。</p></section>';
 }
+function defectChart(d){
+  var weeks = d.weeks || [], max = 1;
+  weeks.forEach(function(w){ max = Math.max(max, w.opened, w.closed, w.open); });
+  var step = weeks.length > 1 ? 488 / (weeks.length - 1) : 0;
+  var bars = weeks.map(function(w, i){
+    var x = 36 + i * step;
+    var openedH = Math.round(w.opened / max * 148), closedH = Math.round(w.closed / max * 148);
+    var tip = esc(w.start) + '：新增 ' + w.opened + ' / 关闭 ' + w.closed + ' / 存量 ' + w.open;
+    return '<g data-chart-tip="' + tip + '">'
+      + '<rect x="' + (x - 12) + '" y="' + (184 - openedH) + '" width="11" height="' + openedH + '" rx="2" class="defect-opened" />'
+      + '<rect x="' + (x + 1) + '" y="' + (184 - closedH) + '" width="11" height="' + closedH + '" rx="2" class="defect-closed" />'
+      + (i % 2 === 0 ? '<text x="' + x.toFixed(1) + '" y="208" text-anchor="middle">' + esc(fmtDate(w.start)) + '</text>' : '')
+      + '</g>';
+  }).join("");
+  var openPoints = weeks.map(function(w, i){
+    return (36 + i * step).toFixed(1) + ',' + (184 - (w.open / max * 148)).toFixed(1);
+  }).join(" ");
+  return '<section class="manager-chart-panel" data-chart="defects"><div class="manager-panel-head"><b>缺陷趋势</b><span>当前存量 ' + (d.openCount || 0) + ' 个</span></div>'
+    + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近8周缺陷趋势图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/><line x1="36" y1="36" x2="36" y2="184" class="axis"/>'
+    + bars + '<polyline points="' + openPoints + '" fill="none" class="defect-open-line" />' + '</svg>'
+    + '<div class="manager-chart-legend"><span><i class="defect-opened-block"></i>新增</span><span><i class="defect-closed-block"></i>关闭</span><span><i class="defect-open-line"></i>存量</span></div></section>';
+}
 function projectOptions(){
   return '<option value="">全部项目</option>' + rt.reqList.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join("");
 }
 function renderReport(){
   $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>报表中心</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button></div></div>'
-    + caliberHTML('燃尽 = 总预估 − 截至当日已完成任务实际工时；速度按完成时间归周；所有图表与任务、计时数据同源。')
-    + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + '</div>';
+    + caliberHTML('燃尽 = 总预估 − 截至当日已完成任务实际工时；速度按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与任务、计时数据同源。')
+    + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
 }
 function exportCsv(){
@@ -183,14 +205,16 @@ function exportCsv(){
   ((cache.flow || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.backlog,w.doing,w.done]); });
   rows.push([],["交付周期","任务数","占比"]);
   ((cache.delivery || {}).buckets || []).forEach(function(b){ rows.push([b.label,b.count,b.pct + "%"]); });
+  rows.push([],["缺陷周开始","新增","关闭","周末存量"]);
+  ((cache.defects || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.opened,w.closed,w.open]); });
   downloadCsv("管理报表.csv", rows); toast("已导出报表 CSV", "fs");
 }
 function exportPng(){
   if(!cache) return;
   var c = reportThemeColors();
-  var canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1000;
+  var canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1400;
   var ctx = canvas.getContext("2d");
-  ctx.fillStyle = c.bg; ctx.fillRect(0,0,1400,1000);
+  ctx.fillStyle = c.bg; ctx.fillRect(0,0,1400,1400);
   ctx.fillStyle = c.text; ctx.font = "bold 28px sans-serif"; ctx.fillText("沙漏 管理报表", 40, 52);
   ctx.font = "15px sans-serif"; ctx.fillStyle = c.text3; ctx.fillText("数据来自当前项目范围 · " + new Date().toLocaleString(), 40, 80);
   function panel(x,y,title){ ctx.fillStyle=c.surface;ctx.fillRect(x,y,640,390);ctx.fillStyle=c.text;ctx.font="bold 20px sans-serif";ctx.fillText(title,x+24,y+36); }
@@ -206,6 +230,15 @@ function exportPng(){
   [["done",c.success,0],["doing",c.info,1],["backlog",c.text3,2]].forEach(function(s){ctx.fillStyle=s[1];flow.forEach(function(w,i){var lower=s[2]===0?0:(s[2]===1?w.done:w.done+w.doing),h=w[s[0]]/fmax*210,x=80+i*560/Math.max(1,flow.length-1),base=850-lower/fmax*210;ctx.fillRect(x,base-h,Math.max(8,560/Math.max(1,flow.length-1)),h);});});
   panel(720,550,"交付周期分布"); var buckets=(cache.delivery||{}).buckets||[];
   buckets.forEach(function(b,i){var y=640+i*65;ctx.fillStyle=c.text3;ctx.font="16px sans-serif";ctx.fillText(b.label,750,y);ctx.fillStyle=c.border;ctx.fillRect(850,y-18,350,20);ctx.fillStyle=c.primary;ctx.fillRect(850,y-18,350*Math.min(100,b.pct)/100,20);ctx.fillStyle=c.text;ctx.fillText(b.count+" 项 · "+b.pct+"%",1210,y);});
+  panel(40,990,"缺陷趋势 · 近 8 周"); axes(40,990);
+  var defect=(cache.defects||{}), dweeks=defect.weeks||[], dmax=1; dweeks.forEach(function(w){dmax=Math.max(dmax,w.opened,w.closed,w.open);});
+  dweeks.forEach(function(w,i){
+    var x=80+i*560/Math.max(1,dweeks.length-1);
+    var oh=w.opened/dmax*230; ctx.fillStyle=c.warning; ctx.fillRect(x-12,1290-oh,9,oh);
+    var ch=w.closed/dmax*230; ctx.fillStyle=c.success; ctx.fillRect(x+1,1290-ch,9,ch);
+  });
+  ctx.strokeStyle=c.text3;ctx.lineWidth=2;ctx.beginPath();dweeks.forEach(function(w,i){var x=80+i*560/Math.max(1,dweeks.length-1),y=1290-w.open/dmax*230;if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});ctx.stroke();
+  ctx.fillStyle=c.text3;ctx.font="14px sans-serif";ctx.fillText("当前存量 " + (defect.openCount||0) + " 个（橙=新增 / 绿=关闭 / 灰线=存量）",80,1330);
   canvas.toBlob(function(blob){
     if(!blob){ toast("PNG 生成失败", "bad"); return; }
     var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="管理报表.png";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1500);toast("已导出报表 PNG","fs");

@@ -40,6 +40,7 @@ var VIEWS = {
   phase:    { title:"版本阶段", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
+  testcases: { title:"测试用例", sub:"用例库与执行结果：逐条标记通过/失败，失败可一键转缺陷", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
@@ -54,7 +55,7 @@ var VIEWS = {
 var TAB_OF = {
   mine: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board",
-  projects: "projects", requirements: "projects", demands: "projects",
+  projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
   portfolio: "projects", project: "projects",
   settings: "me", profile: "me", review: "me", analysis: "me", phase: "me",
   report: "me", workload: "me", risks: "me"
@@ -165,6 +166,7 @@ function refreshActiveView(opts){
   else if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); });
   else if(activeView === "analysis") loadView("analysis").then(function(m){ m.refreshAnalysisTab(true); });
   else if(activeView === "requirements") loadView("requirements").then(function(m){ m.loadReqDocs(); });
+  else if(activeView === "testcases") loadView("testcases").then(function(m){ m.enterTestCasesView(); });
   else if(activeView === "phase") loadView("phase").then(function(m){ m.enterPhaseView(); });
   else if(activeView === "demands") loadView("demands").then(function(m){ m.enterDemandsView(); });
   else if(activeView === "portfolio") loadView("portfolio").then(function(m){ m.loadPortfolio({silent:true}); });

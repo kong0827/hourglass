@@ -130,7 +130,7 @@ public class TaskTrashService {
             skip = Collections.singletonList(owner);
         }
         watchService.notifyWatchers(workspaceId, task.getId(), actorId,
-                UserNotificationPreferenceService.TASK_UPDATED, title, body, task.getReqId(), skip);
+                UserNotificationPreferenceService.TASK_WATCH, title, body, task.getReqId(), skip);
     }
 
     /**

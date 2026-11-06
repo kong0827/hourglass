@@ -88,7 +88,10 @@ class TaskPurgeTest {
                 mock(TaskCompletionService.class),
                 mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
                 mock(ProjectVersionMapper.class), mock(DemandMapper.class),
-                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+                mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
+                mock(com.devstudio.kanban.mapper.TestCaseMapper.class),
+                mock(com.devstudio.kanban.mapper.TestCaseRunMapper.class));
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
                 new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class),

@@ -4,13 +4,16 @@ import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.dto.ReqDocView;
 import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.ReqDocShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.mapper.WorkspaceMapper;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -37,7 +40,8 @@ class RequirementDocServiceVisibilityTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
             mock(RequirementDocHistoryMapper.class), reqs, users, tasks,
-            activities, demands, access, mock(NotificationEventService.class));
+            activities, demands, access, mock(NotificationEventService.class),
+            mock(ReqDocShareMapper.class), mock(WorkspaceMapper.class));
 
     @Test
     void docsOfDemandFiltersProjectsInvisibleToViewer() {
@@ -80,6 +84,7 @@ class RequirementDocServiceVisibilityTest {
         v.setId(id);
         v.setReqId(reqId);
         v.setContentBrief("<p>正文</p>");
+        v.setPublishedAt(LocalDateTime.now());
         return v;
     }
 }

@@ -12,7 +12,7 @@ import { colName, fmtMinutesShort } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 
 var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBody"),
-    vName = $("vName"), vTarget = $("vTarget"), vDesc = $("vDesc"),
+    vName = $("vName"), vStart = $("vStart"), vTarget = $("vTarget"), vDesc = $("vDesc"),
     fVerName = $("fVerName"), btnSaveVer = $("btnSaveVer"), verFormTitle = $("verFormTitle");
 
 var editingVerId = null;
@@ -543,19 +543,27 @@ function renderPhaseMode(){
 
 /* ===== 按版本 ===== */
 
+/* 版本周期窗口：开始–目标，如「11/10–11/24」；无开始只有目标时返回空（调用处另行展示目标日） */
+function cycleWindow(v){
+  if(!v || !v.startDate) return "";
+  if(v.targetDate && v.targetDate !== v.startDate) return dateShort(v.startDate) + "–" + dateShort(v.targetDate);
+  return dateShort(v.startDate) + " 起";
+}
+
 function versionCardHTML(v){
   var st = v.status;
   var stTag = st === "released" ? '<span class="tag tag-success">已发布</span>'
     : (st === "active" ? '<span class="tag tag-info">开发中</span>' : '<span class="tag ghost">待规划</span>');
   var cls = st === "released" ? "ver-rel" : (st === "active" ? "ver-doing" : "ver-plan");
   var sub;
+  var win = cycleWindow(v);
   if(st === "released"){
     sub = (v.preLaunchCount > 0)
       ? dateShort(v.releasedAt) + " · 首版（上线前投入自动归入）"
-      : dateShort(v.releasedAt) + " 发布" + (v.targetDate ? (" · 目标 " + dateShort(v.targetDate)) : "");
+      : (win ? win + " · " : "") + dateShort(v.releasedAt) + " 发布" + (!win && v.targetDate ? (" · 目标 " + dateShort(v.targetDate)) : "");
   }
-  else if(st === "active") sub = "开发中" + (v.targetDate ? (" · 计划发布 " + dateShort(v.targetDate)) : "");
-  else sub = "待规划" + (v.targetDate ? (" · 目标 " + dateShort(v.targetDate)) : "") + (v.scheduledDemandCount ? (" · 需求池已排 " + v.scheduledDemandCount + " 项") : "");
+  else if(st === "active") sub = win + " · 开发中" + (!win && v.targetDate ? (" · 计划发布 " + dateShort(v.targetDate)) : "");
+  else sub = (win ? win + " · 待规划" : "待规划") + (!win && v.targetDate ? (" · 目标 " + dateShort(v.targetDate)) : "") + (v.scheduledDemandCount ? (" · 需求池已排 " + v.scheduledDemandCount + " 项") : "");
   var cells;
   if(st === "released"){
     cells = [
@@ -577,7 +585,7 @@ function versionCardHTML(v){
     ];
   }else{
     cells = [
-      [v.scheduledDemandCount, "待规划需求", "", false],
+      [v.scheduledDemandCount, "已排期需求", "", false],
       [fmtMinutesShort(v.estimateMinutes), "预估工时", ""],
       [v.taskCount ? v.taskCount : "—", "已拆解任务", ""],
       [fmtMinutesShort(v.workMinutes), "已投入工时", ""]
@@ -588,9 +596,10 @@ function versionCardHTML(v){
   if(st === "released"){
     acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">发布说明</button>';
   }else if(writable){
+    if(st === "planned"){
+      acts += '<button class="btn sm" type="button" data-ver-start="' + esc(v.id) + '">开始开发</button>';
+    }
     acts += '<button class="btn sm primary" type="button" data-ver-release="' + esc(v.id) + '">发布</button>';
-  }
-  if(writable){
     acts += '<button class="btn sm ghost" type="button" data-ver-tasks="' + esc(v.id) + '">管理任务</button>';
     acts += '<button class="btn sm ghost" type="button" data-ver-edit="' + esc(v.id) + '">编辑</button>';
   }
@@ -612,6 +621,11 @@ function renderVersionMode(){
   }
   var cards = cache.vstats.versions.map(versionCardHTML).join("");
   var u = cache.vstats.unbound;
+  var unboundTasks = cache.tasks.filter(function(t){ return !t.versionId; });
+  var writableVer = cache.versions.some(function(v){ return v.status !== "released"; });
+  var unboundAssign = (canWritePhase() && unboundTasks.length && writableVer)
+    ? '<div class="phase-acts"><button class="btn sm" type="button" data-unbound-assign>分配任务到版本</button></div>'
+    : "";
   var unboundCard = '<div class="phase-card ver-plan"><div class="phase-card-head">'
     + '<span class="tag ghost">待规划</span><span class="phase-card-sub">未绑定版本的任务</span></div>'
     + branchChipsHTML(u.branches)
@@ -620,7 +634,7 @@ function renderVersionMode(){
       [u.doneCount, "已完成", ""],
       [fmtMinutesShort(u.estimateMinutes), "预估工时", ""],
       [fmtMinutesShort(u.remainingMinutes), "剩余预估", ""]
-    ], { scope: "version", val: "" }) + '</div>';
+    ], { scope: "version", val: "" }) + unboundAssign + '</div>';
   var relCount = cache.versions.filter(function(v){ return v.status === "released"; }).length;
   var caliber = '<p class="foot-note" style="margin:0">任务按「影响版本」归组，需求按「目标版本」规划；'
     + '首版上线前未绑版本的任务自动归入最早已发布版本，其余未绑任务归「待规划」；已发布 '
@@ -648,6 +662,7 @@ function openVersionDialog(id){
   editingVerId = id || null;
   var v = id ? findVersion(id) : null;
   vName.value = v ? v.name : "";
+  vStart.value = v ? (v.startDate || "") : "";
   vTarget.value = v ? (v.targetDate || "") : "";
   vDesc.value = v ? (v.description || "") : "";
   fVerName.classList.remove("invalid");
@@ -668,8 +683,9 @@ function saveVersion(){
     reqId: rt.phaseReqId,
     name: name,
     description: vDesc.value.trim() || null,
+    startDate: vStart.value || null,
     targetDate: vTarget.value || null,
-    /* 编辑时保持原状态（released 服务端会忽略），新建一律 planned */
+    /* 编辑时保持原状态；新建一律 planned；已发布版本的编辑入口已隐藏（服务端亦拒绝） */
     status: editing && editing.status === "active" ? "active" : "planned"
   };
   btnSaveVer.disabled = true;
@@ -701,6 +717,22 @@ function publishVersion(id){
       toast("已发布「" + v.name + "」", "fs");
       reloadView();
     }).catch(function(ex){ toast(ex.message || "发布失败", "bad"); });
+  });
+}
+function startVersion(id){
+  var v = findVersion(id);
+  if(!v) return;
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
+  UI.showConfirm({
+    title:"开始开发",
+    msg:"将「" + esc(v.name) + "」转为开发中？" + (v.startDate ? "" : "该版本尚无开始日期，将自动记为今天。"),
+    okText:"开始开发", danger:false
+  }).then(function(ok){
+    if(!ok) return;
+    API.post("/api/versions/" + encodeURIComponent(id) + "/start", {}).then(function(){
+      toast("已开始开发「" + v.name + "」", "fs");
+      reloadView();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
   });
 }
 function deleteVersion(id){
@@ -792,6 +824,8 @@ function openVersionTasks(id){
       reqId: v.reqId,
       name: v.name,
       description: v.description || null,
+      /* 全量覆盖语义：必须回传当前开始日期，否则保存任务关联会清掉它 */
+      startDate: v.startDate || null,
       targetDate: v.targetDate || null,
       status: v.status === "active" ? "active" : "planned",
       taskIds: taskIds
@@ -802,6 +836,99 @@ function openVersionTasks(id){
     }).catch(function(ex){
       save.disabled = false;
       toast(ex.message || "保存任务关联失败", "bad");
+    });
+  });
+  UI.openModal(layer);
+}
+/* 待规划卡片入口：把未绑定版本的任务批量分配到一个未发布版本（并入该版本已有任务） */
+function openUnboundTasks(){
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
+  var targets = cache.versions.filter(function(v){ return v.status !== "released"; });
+  var unbound = cache.tasks.filter(function(t){ return !t.versionId; })
+    .slice().sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || ""), "zh-CN"); });
+  if(!unbound.length || !targets.length) return;
+  var firstActive = targets.find(function(v){ return v.status === "active"; });
+  var selected = {}, query = "";
+  unbound.forEach(function(t){ selected[t.id] = true; });
+  var opts = targets.map(function(v){
+    return '<option value="' + esc(v.id) + '"' + (v === (firstActive || targets[0]) ? " selected" : "") + '>'
+      + esc(v.name) + (v.status === "active" ? "（开发中）" : "（待规划）") + '</option>';
+  }).join("");
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML = '<div class="sheet version-task-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
+    + '<h2>分配任务到版本</h2>'
+    + '<div class="desc">把未绑定版本的任务批量归入所选版本；已发布的版本不可选。</div></div>'
+    + '<button class="icon-btn sm" type="button" data-unbound-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="version-task-tools">'
+    + '<select aria-label="目标版本" data-unbound-ver>' + opts + '</select>'
+    + '<input type="search" placeholder="搜索任务标题或负责人…" aria-label="搜索待分配任务" data-unbound-search />'
+    + '<span class="version-task-count"></span></div><div class="version-task-list"></div></div>'
+    + '<div class="sheet-foot"><span style="flex:1"></span><button class="btn" type="button" data-unbound-cancel>取消</button>'
+    + '<button class="btn primary" type="button" data-unbound-save>分配所选任务</button></div></div>';
+  function selVer(){ return targets.find(function(v){ return v.id === layer.querySelector("[data-unbound-ver]").value; }) || targets[0]; }
+  function selectedIds(){ return unbound.filter(function(t){ return selected[t.id]; }).map(function(t){ return t.id; }); }
+  function renderList(){
+    var list = layer.querySelector(".version-task-list");
+    var visible = unbound.filter(function(t){
+      if(!query) return true;
+      return (String(t.title || "") + " " + String(t.owner || "")).toLowerCase().indexOf(query) !== -1;
+    });
+    layer.querySelector(".version-task-count").textContent = "已选 " + selectedIds().length + " / 共 " + unbound.length + " 项";
+    list.innerHTML = visible.length ? visible.map(function(t){
+      var meta = typeName(t.itemType) + " · " + (t.owner || "未指派") + " · "
+        + (t.boardColumn === "done" ? "已完成" : colName(t.boardColumn));
+      return '<label class="version-task-row"><input type="checkbox" data-unbound-check="' + esc(t.id) + '"'
+        + (selected[t.id] ? " checked" : "") + ' /><span class="version-task-main"><b>' + esc(t.title) + '</b>'
+        + '<small>' + esc(meta) + '</small></span></label>';
+    }).join("") : '<div class="tl-empty">没有匹配的任务</div>';
+  }
+  document.body.appendChild(layer);
+  renderList();
+  layer.addEventListener("input", function(e){
+    if(e.target.closest("[data-unbound-search]")){
+      query = e.target.value.trim().toLowerCase();
+      renderList();
+    }
+  });
+  layer.addEventListener("change", function(e){
+    var check = e.target.closest("[data-unbound-check]");
+    if(!check) return;
+    selected[check.dataset.unboundCheck] = check.checked;
+    layer.querySelector(".version-task-count").textContent = "已选 " + selectedIds().length + " / 共 " + unbound.length + " 项";
+  });
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-unbound-x], [data-unbound-cancel]")){ UI.closeModal(layer); return; }
+    var save = e.target.closest("[data-unbound-save]");
+    if(!save) return;
+    var target = selVer();
+    var picked = selectedIds();
+    if(!picked.length){ toast("请至少勾选一个任务", "warn"); return; }
+    /* 并入目标版本已有绑定，避免覆盖丢关联 */
+    var bound = {};
+    cache.tasks.forEach(function(t){ if(t.versionId === target.id) bound[t.id] = true; });
+    picked.forEach(function(taskId){ bound[taskId] = true; });
+    var taskIds = Object.keys(bound);
+    if(taskIds.length > 500){ toast("单个版本最多关联 500 个任务", "warn"); return; }
+    save.disabled = true;
+    API.put("/api/versions/" + encodeURIComponent(target.id), {
+      reqId: target.reqId,
+      name: target.name,
+      description: target.description || null,
+      startDate: target.startDate || null,
+      targetDate: target.targetDate || null,
+      status: target.status === "active" ? "active" : "planned",
+      taskIds: taskIds
+    }).then(function(){
+      UI.closeModal(layer);
+      toast("已将 " + picked.length + " 项任务分配到「" + target.name + "」", "fs");
+      reloadView();
+    }).catch(function(ex){
+      save.disabled = false;
+      toast(ex.message || "分配失败", "bad");
     });
   });
   UI.openModal(layer);
@@ -962,6 +1089,40 @@ function ensureVersionOptions(keep, taskId){
     sel.innerHTML = '<option value="">待规划</option>';
   });
 }
+/* 「发现版本」与「影响版本」共用同一份项目版本列表，但语义独立：
+   未就绪时保留原值，就绪后空串表示明确「暂未定位」。 */
+function ensureFoundVersionOptions(keep){
+  var sel = $("iFoundVersion");
+  if(!sel) return;
+  var reqId = $("iReq") ? $("iReq").value : "";
+  var seq = rt.taskFormSeq;
+  var editingId = rt.editingId;
+  function stillCurrent(){
+    return seq === rt.taskFormSeq
+      && (rt.editingId || null) === (editingId || null)
+      && (($("iReq") ? $("iReq").value : "") === reqId);
+  }
+  sel.removeAttribute("data-ready");
+  if(!reqId){
+    sel.innerHTML = '<option value="">暂未定位</option>';
+    sel.setAttribute("data-ready", "1");
+    return;
+  }
+  sel.innerHTML = '<option value="">版本加载中…</option>';
+  fetchVersions(reqId).then(function(vs){
+    if(!stillCurrent()) return;
+    var html = '<option value="">暂未定位</option>';
+    vs.forEach(function(v){ html += '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>'; });
+    sel.innerHTML = html;
+    var hit = false;
+    Array.prototype.forEach.call(sel.options, function(o){ if(o.value === keep) hit = true; });
+    sel.value = hit ? keep : "";
+    sel.setAttribute("data-ready", "1");
+  }).catch(function(){
+    if(!stillCurrent()) return;
+    sel.innerHTML = '<option value="">暂未定位</option>';
+  });
+}
 function ensureEpicOptions(keep, taskId){
   var sel = $("iEpic");
   if(!sel) return;
@@ -1072,6 +1233,8 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(launch){ markFirstRelease(); return; }
   var rel = e.target.closest("[data-ver-release]");
   if(rel){ publishVersion(rel.dataset.verRelease); return; }
+  var st = e.target.closest("[data-ver-start]");
+  if(st){ startVersion(st.dataset.verStart); return; }
   var manageTasks = e.target.closest("[data-ver-tasks]");
   if(manageTasks){ openVersionTasks(manageTasks.dataset.verTasks); return; }
   var ed = e.target.closest("[data-ver-edit]");
@@ -1080,6 +1243,8 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(dl){ deleteVersion(dl.dataset.verDel); return; }
   var nt = e.target.closest("[data-ver-note]");
   if(nt){ showReleaseNote(nt.dataset.verNote); return; }
+  var ua = e.target.closest("[data-unbound-assign]");
+  if(ua){ openUnboundTasks(); return; }
 });
 
-export { enterPhaseView, ensureEpicOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView };
+export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView };

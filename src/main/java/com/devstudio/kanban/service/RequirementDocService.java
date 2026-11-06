@@ -4,21 +4,26 @@ import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.ReqDocSaveRequest;
+import com.devstudio.kanban.dto.ReqDocShareResponse;
 import com.devstudio.kanban.dto.ReqDocView;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.DocumentType;
+import com.devstudio.kanban.entity.ReqDocShare;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.RequirementDocHistory;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.WorkActivity;
+import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.ReqDocShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.mapper.WorkspaceMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.safety.Safelist;
@@ -88,12 +93,15 @@ public class RequirementDocService {
     private final DemandMapper demandMapper;
     private final ProjectAccessService projectAccess;
     private final NotificationEventService notificationEvents;
+    private final ReqDocShareMapper shareMapper;
+    private final WorkspaceMapper workspaceMapper;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
                                  RequirementMapper reqMapper, UserMapper userMapper,
                                  TaskMapper taskMapper, WorkActivityService workActivityService,
                                  DemandMapper demandMapper, ProjectAccessService projectAccess,
-                                 NotificationEventService notificationEvents) {
+                                 NotificationEventService notificationEvents,
+                                 ReqDocShareMapper shareMapper, WorkspaceMapper workspaceMapper) {
         this.docMapper = docMapper;
         this.historyMapper = historyMapper;
         this.reqMapper = reqMapper;
@@ -103,6 +111,8 @@ public class RequirementDocService {
         this.demandMapper = demandMapper;
         this.projectAccess = projectAccess;
         this.notificationEvents = notificationEvents;
+        this.shareMapper = shareMapper;
+        this.workspaceMapper = workspaceMapper;
     }
 
     public List<ReqDocView> list(String workspaceId, String userId) {
@@ -112,9 +122,14 @@ public class RequirementDocService {
     public List<ReqDocView> list(String workspaceId, String userId, String keyword) {
         List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId, likePattern(Texts.trimToNull(keyword)));
         java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
+        String role = projectAccess.roleOf(workspaceId, userId);
         List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>();
         for (ReqDocView v : rows) {
             if (hiddenReqs.contains(v.getReqId())) {
+                continue;
+            }
+            /* 草稿（未发布）只对作者与空间 owner/admin 可见，其余成员按不存在处理 */
+            if (!canSeeDraft(v.getOwnerUserId(), v.getPublishedAt(), userId, role)) {
                 continue;
             }
             v.setExcerpt(excerptOf(v.getContentBrief()));
@@ -122,6 +137,21 @@ public class RequirementDocService {
             visible.add(v);
         }
         return visible;
+    }
+
+    /**
+     * 草稿可见性：已发布（publishedAt 非空）按项目可见范围走；草稿仅作者与空间 owner/admin 可见。
+     * 静态工具供评论服务复用，保持同一口径。
+     */
+    public static boolean canSeeDraft(String ownerUserId, java.time.LocalDateTime publishedAt,
+                                      String userId, String role) {
+        if (publishedAt != null) {
+            return true;
+        }
+        if (userId != null && userId.equals(ownerUserId)) {
+            return true;
+        }
+        return ProjectAccessService.isPrivileged(role);
     }
 
     public RequirementDoc get(String workspaceId, String id) {
@@ -132,10 +162,14 @@ public class RequirementDocService {
         return d;
     }
 
-    /** 读取前校验项目可见范围（不可见按不存在处理） */
+    /** 读取前校验项目可见范围与草稿可见性（不可见一律按不存在处理） */
     public RequirementDoc getVisible(String workspaceId, String userId, String id) {
         RequirementDoc d = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
+        if (!canSeeDraft(d.getOwnerUserId(), d.getPublishedAt(), userId,
+                projectAccess.roleOf(workspaceId, userId))) {
+            throw AppException.notFound("文档不存在：" + id);
+        }
         return d;
     }
 
@@ -160,8 +194,7 @@ public class RequirementDocService {
 
     @Transactional
     public RequirementDoc update(String userId, String workspaceId, String id, ReqDocSaveRequest req) {
-        RequirementDoc d = get(workspaceId, id);
-        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        RequirementDoc d = getVisible(workspaceId, userId, id);
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         /* 乐观锁：打开文档时的 updatedAt 原样带回，与库内当前版本不一致说明他人先保存过 */
         java.time.LocalDateTime oldUpdatedAt = parseUpdatedAt(req.getUpdatedAt());
@@ -234,14 +267,14 @@ public class RequirementDocService {
 
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
-        RequirementDoc d = get(workspaceId, id);
-        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        RequirementDoc d = getVisible(workspaceId, userId, id);
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         /* 子文档提升到被删文档的父级，避免整棵子树变成孤儿 */
         docMapper.reparentChildren(workspaceId, id, d.getParentId());
         docMapper.deleteDemandLinksByDoc(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
         historyMapper.deleteByDoc(workspaceId, id);
+        shareMapper.deleteByDoc(workspaceId, id);
         docMapper.delete(d.getId());
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已被删除",
@@ -258,6 +291,7 @@ public class RequirementDocService {
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
             docMapper.deleteDemandLinksByDoc(workspaceId, docId);
+            shareMapper.deleteByDoc(workspaceId, docId);
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
         return docMapper.deleteByReq(workspaceId, reqId);
@@ -284,8 +318,7 @@ public class RequirementDocService {
     /** 恢复到指定历史版本：恢复前先把当前正文留一版快照（恢复本身可再撤销） */
     @Transactional
     public RequirementDoc restore(String userId, String workspaceId, String docId, String historyId) {
-        RequirementDoc d = get(workspaceId, docId);
-        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        RequirementDoc d = getVisible(workspaceId, userId, docId);
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         RequirementDocHistory h = historyMapper.selectById(historyId);
         if (h == null || !docId.equals(h.getDocId()) || !workspaceId.equals(h.getWorkspaceId())) {
@@ -302,6 +335,107 @@ public class RequirementDocService {
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已恢复到历史版本",
                 "文档已恢复到第 " + h.getVersionNo() + " 版，请确认内容", docId);
         return docMapper.selectById(docId);
+    }
+
+    /**
+     * 发布（published=true）或收回发布（false）。
+     * 权限：作者或项目可写者（含空间 owner/admin）；草稿对其他人不可见，按 404 处理。
+     * 发布不触碰正文与历史，只改 published_at。
+     */
+    @Transactional
+    public RequirementDoc publish(String userId, String workspaceId, String id, boolean published) {
+        RequirementDoc d = getVisible(workspaceId, userId, id);
+        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
+            throw new AppException(403, "只有文档作者或项目可写者可发布/收回发布");
+        }
+        if (published == (d.getPublishedAt() != null)) {
+            return d;
+        }
+        docMapper.updatePublished(id, published ? java.time.LocalDateTime.now() : null);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
+                published ? "发布了文档「" + d.getTitle() + "」，成员可见"
+                        : "收回了文档「" + d.getTitle() + "」的发布，转为草稿");
+        return docMapper.selectById(id);
+    }
+
+    /* ---------------- 只读分享 ---------------- */
+
+    private static final int SHARE_DAYS = 30;
+
+    /** 生成/重置分享链接：仅已发布文档可分享；权限同发布（作者或项目可写者） */
+    @Transactional
+    public ReqDocShare createShare(String userId, String workspaceId, String docId) {
+        RequirementDoc d = getVisible(workspaceId, userId, docId);
+        if (d.getPublishedAt() == null) {
+            throw AppException.badRequest("文档尚未发布，发布后才能生成分享链接");
+        }
+        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
+            throw new AppException(403, "只有文档作者或项目可写者可生成分享链接");
+        }
+        ReqDocShare share = new ReqDocShare();
+        share.setWorkspaceId(workspaceId);
+        share.setDocId(docId);
+        share.setToken(Ids.genToken());
+        share.setCreatedAt(java.time.LocalDateTime.now());
+        share.setExpiresAt(java.time.LocalDateTime.now().plusDays(SHARE_DAYS));
+        shareMapper.upsert(share);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId, "share",
+                "生成了文档「" + d.getTitle() + "」的只读分享链接");
+        return shareMapper.selectByDoc(workspaceId, docId);
+    }
+
+    /** 查看现有分享链接（能看文档即可）；已过期按无链接处理 */
+    public ReqDocShare shareInfo(String userId, String workspaceId, String docId) {
+        getVisible(workspaceId, userId, docId);
+        ReqDocShare share = shareMapper.selectByDoc(workspaceId, docId);
+        if (share != null && share.getExpiresAt() != null
+                && share.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            return null;
+        }
+        return share;
+    }
+
+    @Transactional
+    public void revokeShare(String userId, String workspaceId, String docId) {
+        RequirementDoc d = getVisible(workspaceId, userId, docId);
+        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
+            throw new AppException(403, "只有文档作者或项目可写者可撤销分享链接");
+        }
+        shareMapper.deleteByDoc(workspaceId, docId);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId, "share",
+                "撤销了文档「" + d.getTitle() + "」的只读分享链接");
+    }
+
+    /** 公开只读：按 token 返回文档；token 无效、过期或文档已收回发布一律 404 */
+    public ReqDocShareResponse publicShare(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            throw AppException.notFound("分享链接无效或已过期");
+        }
+        ReqDocShare share = shareMapper.selectByToken(token.trim());
+        if (share == null || (share.getExpiresAt() != null
+                && share.getExpiresAt().isBefore(java.time.LocalDateTime.now()))) {
+            throw AppException.notFound("分享链接无效或已过期");
+        }
+        RequirementDoc d = docMapper.selectById(share.getDocId());
+        if (d == null || !share.getWorkspaceId().equals(d.getWorkspaceId()) || d.getPublishedAt() == null) {
+            throw AppException.notFound("分享链接无效或已过期");
+        }
+        Workspace ws = workspaceMapper.selectById(share.getWorkspaceId());
+        if (ws == null) {
+            throw AppException.notFound("分享链接无效或已过期");
+        }
+        ReqDocShareResponse resp = new ReqDocShareResponse();
+        resp.setWorkspaceName(ws.getName());
+        resp.setDocId(d.getId());
+        resp.setTitle(d.getTitle());
+        resp.setDocType(d.getDocType());
+        resp.setFormat(d.getFormat());
+        resp.setContent(d.getContent());
+        resp.setStatus(d.getStatus());
+        resp.setOwner(d.getOwner());
+        resp.setUpdatedAt(d.getUpdatedAt());
+        resp.setGeneratedAt(java.time.LocalDateTime.now());
+        return resp;
     }
 
     /** 保存人当前正文为一版快照，并把每文档保留版数截断到 HISTORY_KEEP */
@@ -334,10 +468,14 @@ public class RequirementDocService {
         }
         projectAccess.assertView(workspaceId, userId, demand.getReqId());
         List<ReqDocView> rows = docMapper.selectByDemand(workspaceId, demandId);
+        String role = projectAccess.roleOf(workspaceId, userId);
         List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>(rows.size());
         for (ReqDocView v : rows) {
             /* 历史关联可能跨项目（文档曾被移动）：按查看人可见范围过滤，避免泄露别的项目的内容 */
             if (userId != null && !projectAccess.canView(workspaceId, userId, v.getReqId())) {
+                continue;
+            }
+            if (!canSeeDraft(v.getOwnerUserId(), v.getPublishedAt(), userId, role)) {
                 continue;
             }
             v.setExcerpt(excerptOf(v.getContentBrief()));
@@ -360,7 +498,7 @@ public class RequirementDocService {
             throw AppException.notFound("需求不存在：" + demandId);
         }
         projectAccess.assertWrite(workspaceId, userId, demand.getReqId());
-        RequirementDoc doc = get(workspaceId, docId);
+        RequirementDoc doc = getVisible(workspaceId, userId, docId);
         if (!Objects.equals(demand.getReqId(), doc.getReqId())) {
             throw AppException.badRequest("只能关联同一项目下的文档");
         }
@@ -487,7 +625,7 @@ public class RequirementDocService {
         if (owner == null || owner.equals(actorId)) {
             return;
         }
-        notificationEvents.notify(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DOC_CHANGED,
+        notificationEvents.notify(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DEMAND_STATUS,
                 title, body, referenceId, d.getReqId());
     }
 

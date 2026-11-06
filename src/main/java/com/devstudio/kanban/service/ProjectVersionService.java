@@ -114,6 +114,7 @@ public class ProjectVersionService {
         version.setName(name);
         version.setDescription(Texts.trimToNull(req.getDescription()));
         version.setStatus(normalizeStatus(req.getStatus()));
+        version.setStartDate(req.getStartDate());
         version.setTargetDate(req.getTargetDate());
         versionMapper.insert(version);
         if (req.getTaskIds() != null) {
@@ -132,12 +133,14 @@ public class ProjectVersionService {
         projectAccess.assertWrite(workspaceId, userId, old.getReqId());
         String name = normalizeName(req.getName());
         requireUniqueName(workspaceId, old.getReqId(), name, id);
+        if ("released".equals(old.getStatus())) {
+            throw AppException.badRequest("已发布的版本不能编辑");
+        }
         old.setName(name);
         old.setDescription(Texts.trimToNull(req.getDescription()));
+        old.setStartDate(req.getStartDate());
         old.setTargetDate(req.getTargetDate());
-        if (!"released".equals(old.getStatus())) {
-            old.setStatus(normalizeStatus(req.getStatus()));
-        }
+        old.setStatus(normalizeStatus(req.getStatus()));
         versionMapper.update(old);
         if (req.getTaskIds() != null) {
             applyTasks(old, req.getTaskIds());
@@ -154,6 +157,25 @@ public class ProjectVersionService {
         if (releasing) {
             versionMapper.release(workspaceId, id);
             notifyReleased(version, userId);
+        }
+        return get(workspaceId, id);
+    }
+
+    /** 开始开发：待规划 → 开发中；缺开始日期时补今天，让版本周期窗口完整展示 */
+    @Transactional
+    public ProjectVersion start(String userId, String workspaceId, String id) {
+        ProjectVersion version = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, version.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, version.getReqId());
+        if ("released".equals(version.getStatus())) {
+            throw AppException.badRequest("已发布的版本不能重新开始开发");
+        }
+        if (!"active".equals(version.getStatus())) {
+            if (version.getStartDate() == null) {
+                version.setStartDate(java.time.LocalDate.now());
+            }
+            version.setStatus("active");
+            versionMapper.update(version);
         }
         return get(workspaceId, id);
     }
@@ -181,7 +203,7 @@ public class ProjectVersionService {
     private void notifyReleased(ProjectVersion version, String actorId) {
         for (Map.Entry<String, Integer> entry : taskCountByOwner(version, actorId).entrySet()) {
             notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
-                    UserNotificationPreferenceService.VERSION_RELEASED,
+                    UserNotificationPreferenceService.DEMAND_STATUS,
                     "版本「" + version.getName() + "」已发布",
                     "你负责的 " + entry.getValue() + " 项任务已随该版本发布",
                     null, version.getReqId());
@@ -193,7 +215,7 @@ public class ProjectVersionService {
                                Map<String, Integer> taskCountByOwner) {
         for (Map.Entry<String, Integer> entry : taskCountByOwner.entrySet()) {
             notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
-                    UserNotificationPreferenceService.VERSION_DELETED,
+                    UserNotificationPreferenceService.DEMAND_STATUS,
                     "版本「" + version.getName() + "」已删除",
                     "你负责的 " + entry.getValue() + " 项任务已随该版本解绑",
                     null, version.getReqId());

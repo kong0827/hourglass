@@ -45,6 +45,7 @@ public class ManagerService {
     private static final int BURNDOWN_DAYS = 14;
     private static final int VELOCITY_WEEKS = 4;
     private static final int FLOW_WEEKS = 8;
+    private static final int DEFECT_WEEKS = 8;
     private static final int PROJECT_WEEKS = 8;
     private static final int WEEK_DAYS = 7;
     private static final int STAGNANT_DAYS = 7;
@@ -185,6 +186,7 @@ public class ManagerService {
         result.put("velocity", velocity(tasks, today));
         result.put("flow", flow(tasks, today));
         result.put("delivery", delivery(tasks));
+        result.put("defects", defects(tasks, today));
         return result;
     }
 
@@ -677,6 +679,46 @@ public class ManagerService {
             weeks.add(week);
         }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("weeks", weeks);
+        return result;
+    }
+
+    /** 缺陷趋势：按周统计新增、关闭与周末存量，只看 item_type=bug 的任务。 */
+    private Map<String, Object> defects(List<Task> tasks, LocalDate today) {
+        LocalDate currentWeek = mondayOf(today);
+        List<Map<String, Object>> weeks = new ArrayList<Map<String, Object>>();
+        for (int index = DEFECT_WEEKS - 1; index >= 0; index--) {
+            LocalDate start = currentWeek.minusWeeks(index);
+            LocalDate end = start.plusDays(WEEK_DAYS - 1L);
+            int opened = 0;
+            int closed = 0;
+            int open = 0;
+            for (Task task : tasks) {
+                if (!"bug".equals(task.getItemType())) {
+                    continue;
+                }
+                LocalDate created = date(task.getCreatedAt());
+                LocalDate completed = task.getCompletedAt();
+                if (created != null && !created.isBefore(start) && !created.isAfter(end)) {
+                    opened++;
+                }
+                if (completed != null && !completed.isBefore(start) && !completed.isAfter(end)) {
+                    closed++;
+                }
+                if (created != null && !created.isAfter(end)
+                        && (completed == null || completed.isAfter(end))) {
+                    open++;
+                }
+            }
+            Map<String, Object> week = new LinkedHashMap<String, Object>();
+            week.put("start", start);
+            week.put("opened", opened);
+            week.put("closed", closed);
+            week.put("open", open);
+            weeks.add(week);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("openCount", weeks.get(weeks.size() - 1).get("open"));
         result.put("weeks", weeks);
         return result;
     }

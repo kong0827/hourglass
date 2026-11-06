@@ -103,6 +103,16 @@ public class BackupData {
         private String demandId;
         /** 所属版本（v8 起；一个任务最多归属一个版本） */
         private String versionId;
+        /** 缺陷严重度 blocker/critical/major/minor（v9 起） */
+        private String severity;
+        /** 发现环境（v9 起） */
+        private String environment;
+        /** 复现步骤（v9 起） */
+        private String reproduceSteps;
+        /** 发现版本ID（v9 起） */
+        private String foundVersionId;
+        /** 回归状态 pending/passed/failed（v9 起） */
+        private String regressionStatus;
     }
 
     @Data
@@ -195,6 +205,8 @@ public class BackupData {
         private String content;
         private String format;
         private String status;
+        /** 发布时间（空=草稿）；旧备份没有该字段，导入时按已发布回填（同 sql/42 迁移口径） */
+        private String publishedAt;
         private String owner;
         private String ownerUserId;
         private Integer sortOrder;

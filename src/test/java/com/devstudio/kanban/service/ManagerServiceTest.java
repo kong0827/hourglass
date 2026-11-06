@@ -232,6 +232,47 @@ class ManagerServiceTest {
         assertNull(member(members, "U2"), "仅有隐藏项目计时的成员不应进入工作量视图");
     }
 
+    @Test
+    void defectTrendCountsOpenedClosedAndOpenByWeek() {
+        Task openBug = openTask("T1", "R1", Consts.COL_DOING, 100);
+        openBug.setItemType("bug");
+        openBug.setCreatedAt(TODAY.minusDays(1).atStartOfDay());
+        openBug.setSeverity("major");
+
+        Task closedBug = openTask("T2", "R1", Consts.COL_DONE, 100);
+        closedBug.setItemType("bug");
+        closedBug.setCreatedAt(LocalDate.of(2026, 10, 6).atStartOfDay());
+        closedBug.setCompletedAt(TODAY.minusDays(1));
+
+        Task oldClosedBug = openTask("T3", "R1", Consts.COL_DONE, 100);
+        oldClosedBug.setItemType("bug");
+        oldClosedBug.setCreatedAt(LocalDate.of(2026, 10, 21).atStartOfDay());
+        oldClosedBug.setCompletedAt(LocalDate.of(2026, 10, 22));
+
+        Task story = openTask("T4", "R1", Consts.COL_BACKLOG, 100);
+        story.setItemType("story");
+        story.setCreatedAt(TODAY.minusDays(1).atStartOfDay());
+
+        ManagerService service = service(Arrays.asList(openBug, closedBug, oldClosedBug, story),
+                Collections.singletonList(requirement("R1", "项目一")), Collections.<TimeAgg>emptyList(),
+                Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
+        Map<String, Object> defects = castMap(service.reports(WORKSPACE, null, VIEWER).get("defects"));
+
+        List<Map<String, Object>> weeks = castList(defects.get("weeks"));
+        assertEquals(8, weeks.size());
+        assertEquals(1, defects.get("openCount"), "存量只统计最后一周周末仍未关闭的缺陷");
+
+        Map<String, Object> current = week(weeks, LocalDate.of(2026, 11, 9));
+        assertEquals(1, current.get("opened"), "本周新增只算 bug");
+        assertEquals(1, current.get("closed"), "本周关闭只算 bug");
+        assertEquals(1, current.get("open"));
+
+        Map<String, Object> historical = week(weeks, LocalDate.of(2026, 10, 19));
+        assertEquals(1, historical.get("opened"));
+        assertEquals(1, historical.get("closed"));
+        assertEquals(1, historical.get("open"), "当周即关闭的缺陷不计入周末存量（否则为 2）");
+    }
+
     private ManagerService service(List<Task> tasks, List<Requirement> requirements, List<TimeAgg> actual,
                                    List<TimeLog> logs, List<WorkspaceMember> members) {
         return service(tasks, requirements, actual, logs, members, mock(ProjectAccessService.class));
@@ -298,6 +339,15 @@ class ManagerServiceTest {
             }
         }
         throw new AssertionError("项目不存在：" + reqId);
+    }
+
+    private Map<String, Object> week(List<Map<String, Object>> weeks, LocalDate start) {
+        for (Map<String, Object> week : weeks) {
+            if (start.equals(week.get("start"))) {
+                return week;
+            }
+        }
+        throw new AssertionError("周不存在：" + start);
     }
 
     private Map<String, Object> member(List<Map<String, Object>> members, String key) {

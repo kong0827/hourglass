@@ -7,6 +7,7 @@ import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.MailDeliveryMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
+import com.devstudio.kanban.mapper.ReqDocShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
@@ -18,6 +19,8 @@ import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TaskWatchMapper;
+import com.devstudio.kanban.mapper.TestCaseMapper;
+import com.devstudio.kanban.mapper.TestCaseRunMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
@@ -78,8 +81,11 @@ public class TaskCascade {
             "task_baseline",
             "gantt_share",
             "task",
+            "test_case_run",
+            "test_case",
             "requirement",
             "requirement_doc",
+            "req_doc_share",
             "task_completion_record",
             "subtask",
             "task_tag",
@@ -111,12 +117,15 @@ public class TaskCascade {
     private final MailDeliveryMapper mailDeliveryMapper;
     private final RequirementMapper reqMapper;
     private final RequirementDocMapper requirementDocMapper;
+    private final ReqDocShareMapper reqDocShareMapper;
     private final TaskCompletionService completionService;
     private final DevBranchMapper devBranchMapper;
     private final VersionTaskMapper versionTaskMapper;
     private final ProjectVersionMapper versionMapper;
     private final DemandMapper demandMapper;
     private final RequirementDocHistoryMapper docHistoryMapper;
+    private final TestCaseMapper testCaseMapper;
+    private final TestCaseRunMapper testCaseRunMapper;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
@@ -129,7 +138,9 @@ public class TaskCascade {
                        RequirementDocHistoryMapper docHistoryMapper,
                        TaskCompletionService completionService, DevBranchMapper devBranchMapper,
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
-                       DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper) {
+                       DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
+                       ReqDocShareMapper reqDocShareMapper,
+                       TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -151,6 +162,9 @@ public class TaskCascade {
         this.versionMapper = versionMapper;
         this.demandMapper = demandMapper;
         this.mailDeliveryMapper = mailDeliveryMapper;
+        this.reqDocShareMapper = reqDocShareMapper;
+        this.testCaseMapper = testCaseMapper;
+        this.testCaseRunMapper = testCaseRunMapper;
     }
 
     /**
@@ -228,6 +242,9 @@ public class TaskCascade {
         baselineMapper.deleteByWorkspace(workspaceId);
         ganttShareMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
+        /* 用例强归属项目：先清流水与用例，再删项目，避免空间级清理留下孤儿 */
+        testCaseRunMapper.deleteByWorkspace(workspaceId);
+        testCaseMapper.deleteByWorkspace(workspaceId);
         reqMapper.deleteAllByWorkspace(workspaceId);
         /* 版本绑定跟着任务走；版本/需求池条目强归属项目，但备份导入会重建同名项目，
            保留它们可延续绑定关系，只在整空间删除时清（wipeWorkspaceData） */
@@ -251,6 +268,7 @@ public class TaskCascade {
         purgeWorkspaceTaskData(workspaceId, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
         docHistoryMapper.deleteAllByWorkspace(workspaceId);
+        reqDocShareMapper.deleteByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
@@ -271,6 +289,7 @@ public class TaskCascade {
         if (clearRequirementDocs) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
             docHistoryMapper.deleteAllByWorkspace(workspaceId);
+            reqDocShareMapper.deleteByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {

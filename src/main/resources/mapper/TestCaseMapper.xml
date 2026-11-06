@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.TestCaseMapper">
+
+  <insert id="insert">
+    INSERT INTO test_case
+      (id, workspace_id, req_id, title, precondition, steps,
+       latest_status, latest_note, latest_by, latest_by_user_id, latest_at, latest_bug_task_id,
+       created_at, updated_at)
+    VALUES
+      (#{id}, #{workspaceId}, #{reqId}, #{title}, #{precondition}, #{steps},
+       #{latestStatus}, #{latestNote}, #{latestBy}, #{latestByUserId}, #{latestAt}, #{latestBugTaskId},
+       COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE test_case
+    SET req_id = #{reqId},
+        title = #{title},
+        precondition = #{precondition},
+        steps = #{steps}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateLatest">
+    UPDATE test_case
+    SET latest_status = #{status},
+        latest_note = #{note},
+        latest_by = #{by},
+        latest_by_user_id = #{byUserId},
+        latest_at = CURRENT_TIMESTAMP
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateLatestBug">
+    UPDATE test_case
+    SET latest_bug_task_id = #{bugTaskId}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <select id="selectById" resultType="com.devstudio.kanban.entity.TestCase">
+    SELECT * FROM test_case WHERE id = #{id}
+  </select>
+
+  <select id="selectViewByReq" resultType="com.devstudio.kanban.dto.TestCaseView">
+    SELECT c.id, c.req_id, c.title, c.precondition, c.steps AS steps_json,
+           c.latest_status, c.latest_note, c.latest_by, c.latest_at,
+           c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           c.created_at, c.updated_at
+    FROM test_case c
+    LEFT JOIN task t ON t.id = c.latest_bug_task_id
+    WHERE c.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+    ORDER BY c.created_at DESC, c.id DESC
+  </select>
+
+  <select id="countGroupByStatus" resultType="java.util.HashMap">
+    SELECT latest_status AS status, COUNT(*) AS cnt
+    FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND latest_status IS NOT NULL
+    GROUP BY latest_status
+  </select>
+
+  <delete id="delete">
+    DELETE FROM test_case WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByReq" resultType="int">
+    SELECT COUNT(*) FROM test_case WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <delete id="deleteByReq">
+    DELETE FROM test_case WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM test_case WHERE workspace_id = #{workspaceId}
+  </delete>
+
+</mapper>

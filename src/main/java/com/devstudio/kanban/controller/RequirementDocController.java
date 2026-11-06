@@ -2,9 +2,12 @@ package com.devstudio.kanban.controller;
 
 import com.devstudio.kanban.common.ApiResult;
 import com.devstudio.kanban.common.CurrentUser;
+import com.devstudio.kanban.dto.ReqDocPublishRequest;
 import com.devstudio.kanban.dto.ReqDocRestoreRequest;
 import com.devstudio.kanban.dto.ReqDocSaveRequest;
+import com.devstudio.kanban.dto.ReqDocShareResponse;
 import com.devstudio.kanban.dto.ReqDocView;
+import com.devstudio.kanban.entity.ReqDocShare;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.RequirementDocHistory;
 import com.devstudio.kanban.entity.Task;
@@ -130,11 +133,57 @@ public class RequirementDocController {
         return ApiResult.ok(docService.restore(userId, ws.getId(), id, req.getHistoryId()));
     }
 
+    /** 发布 / 收回发布：草稿仅作者与空间管理员可见，发布后按项目可见范围对成员开放 */
+    @PutMapping("/api/req-docs/{id}/publish")
+    public ApiResult<RequirementDoc> publish(@PathVariable String id,
+                                             @RequestBody ReqDocPublishRequest req,
+                                             @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        boolean published = req != null && Boolean.TRUE.equals(req.getPublished());
+        return ApiResult.ok(docService.publish(userId, ws.getId(), id, published));
+    }
+
     @DeleteMapping("/api/req-docs/{id}")
     public ApiResult<Void> delete(@PathVariable String id,
                                   @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         docService.delete(CurrentUser.id(), ws.getId(), id);
         return ApiResult.ok(null);
+    }
+
+    /* ---------------- 只读分享 ---------------- */
+
+    /** 查看文档的分享链接（能看文档即可；已过期按无链接处理） */
+    @GetMapping("/api/req-docs/{id}/share")
+    public ApiResult<ReqDocShare> shareInfo(@PathVariable String id,
+                                            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.shareInfo(userId, ws.getId(), id));
+    }
+
+    /** 生成/重置分享链接（作者或项目可写者；文档须已发布） */
+    @PostMapping("/api/req-docs/{id}/share")
+    public ApiResult<ReqDocShare> createShare(@PathVariable String id,
+                                              @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.createShare(userId, ws.getId(), id));
+    }
+
+    @DeleteMapping("/api/req-docs/{id}/share")
+    public ApiResult<Void> revokeShare(@PathVariable String id,
+                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        docService.revokeShare(userId, ws.getId(), id);
+        return ApiResult.ok(null);
+    }
+
+    /** 公开只读：不需要登录，按 token 取数（SecurityConfig 已放行 GET /api/share/**） */
+    @GetMapping("/api/share/docs")
+    public ApiResult<ReqDocShareResponse> publicShare(@RequestParam(required = false) String token) {
+        return ApiResult.ok(docService.publicShare(token));
     }
 }

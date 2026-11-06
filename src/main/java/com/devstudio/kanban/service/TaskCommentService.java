@@ -121,7 +121,7 @@ public class TaskCommentService {
         List<String> mentioned = mentionTargets(text, structuredMentionIds, workspaceId, userId);
         for (String mentionedUserId : mentioned) {
             notificationEvents.notify(mentionedUserId, workspaceId,
-                    UserNotificationPreferenceService.TASK_MENTION,
+                    UserNotificationPreferenceService.TASK_COMMENT,
                     "「" + t.getTitle() + "」提到了你",
                     author + "：" + Texts.cut(text, PREVIEW_LEN), taskId, t.getReqId());
         }
@@ -141,7 +141,7 @@ public class TaskCommentService {
             skip.add(t.getOwnerUserId());
         }
         watchService.notifyWatchers(workspaceId, taskId, userId,
-                UserNotificationPreferenceService.TASK_COMMENT,
+                UserNotificationPreferenceService.TASK_WATCH,
                 "「" + t.getTitle() + "」有新评论",
                 author + "：" + Texts.cut(text, PREVIEW_LEN), t.getReqId(), skip);
         return c;

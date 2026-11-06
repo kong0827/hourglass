@@ -71,13 +71,15 @@ class WorkActivityRecordingTest {
         docService = new RequirementDocService(docMapper, mock(RequirementDocHistoryMapper.class),
                 reqMapper, userMapper, taskMapper,
                 workActivityService, demandMapper, mock(ProjectAccessService.class),
-                mock(NotificationEventService.class));
+                mock(NotificationEventService.class),
+                mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
+                mock(com.devstudio.kanban.mapper.WorkspaceMapper.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(com.devstudio.kanban.mapper.ProjectVersionMapper.class),
                 mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.DevBranchMapper.class),
                 mock(ProjectAccessService.class), mock(AttachmentService.class),
-                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class), mock(TestCaseService.class));
     }
 
     @Test
@@ -116,6 +118,7 @@ class WorkActivityRecordingTest {
         old.setStatus("draft");
         old.setOwner("Alice");
         old.setOwnerUserId("U2");
+        old.setPublishedAt(java.time.LocalDateTime.now());
         when(docMapper.selectById("D1")).thenReturn(old);
         when(reqMapper.selectById("R1")).thenReturn(project("R1", WS, "旧项目", null, "active"));
         when(reqMapper.selectById("R2")).thenReturn(project("R2", WS, "新项目", null, "active"));
@@ -350,6 +353,7 @@ class WorkActivityRecordingTest {
         doc.setContent("**正文**");
         doc.setStatus("draft");
         doc.setOwner("Alice");
+        doc.setPublishedAt(java.time.LocalDateTime.now());
         return doc;
     }
 

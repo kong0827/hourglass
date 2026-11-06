@@ -2,6 +2,7 @@ package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.common.Consts;
+import com.devstudio.kanban.common.DefectMeta;
 import com.devstudio.kanban.common.Ids;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.TaskSaveRequest;
@@ -121,6 +122,7 @@ public class TaskCommandService {
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, null);
         projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+        applyDefectFields(workspaceId, t, req, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);
         t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
@@ -242,6 +244,8 @@ public class TaskCommandService {
             t.setSortOrder(old.getSortOrder());
             t.setCompletedAt(old.getCompletedAt());
         }
+        /* 缺陷专属字段：未传保留原值；类型改为非缺陷时一并清空 */
+        applyDefectFields(workspaceId, t, req, old);
         List<String> changes = audit.diffParts(workspaceId, old, t, oldTags, req.getTags());
         /* T1.2：影响版本绑定变更并入审计（不传=不变；空串=解除；项目变更后旧绑定自动失效） */
         applyVersionBinding(workspaceId, id, t.getReqId(), req.getVersionId(), changes);
@@ -423,6 +427,56 @@ public class TaskCommandService {
         t.setEpicId(validateEpic(workspaceId, t, Texts.trimToNull(req.getEpicId())));
     }
 
+    /** 缺陷专属字段：仅 item_type=bug 保留；未传=保持原值，空串=清空，换类型=整体清空。 */
+    private void applyDefectFields(String workspaceId, Task t, TaskSaveRequest req, Task old) {
+        if (!"bug".equals(t.getItemType())) {
+            t.setSeverity(null);
+            t.setEnvironment(null);
+            t.setReproduceSteps(null);
+            t.setFoundVersionId(null);
+            t.setRegressionStatus(null);
+            return;
+        }
+        String severity = Texts.trimToNull(req.getSeverity());
+        if (severity == null && old != null) {
+            severity = old.getSeverity();
+        }
+        if (severity == null) {
+            throw AppException.badRequest("缺陷必须选择严重度");
+        }
+        if (!DefectMeta.isSeverity(severity)) {
+            throw AppException.badRequest("缺陷严重度不合法：" + severity);
+        }
+        t.setSeverity(severity);
+        t.setEnvironment(defectText(req.getEnvironment(), old == null ? null : old.getEnvironment()));
+        t.setReproduceSteps(defectText(req.getReproduceSteps(), old == null ? null : old.getReproduceSteps()));
+        String foundVersion = req.getFoundVersionId();
+        if (foundVersion == null && old != null) {
+            foundVersion = old.getFoundVersionId();
+        }
+        foundVersion = Texts.trimToNull(foundVersion);
+        if (foundVersion != null && !targetBelongsToReq(workspaceId, foundVersion, t.getReqId())) {
+            throw AppException.badRequest("发现版本不属于任务所属项目");
+        }
+        t.setFoundVersionId(foundVersion);
+        String regression = req.getRegressionStatus();
+        if (regression == null && old != null) {
+            regression = old.getRegressionStatus();
+        }
+        regression = Texts.trimToNull(regression);
+        if (regression != null && !DefectMeta.isRegressionStatus(regression)) {
+            throw AppException.badRequest("回归状态不合法：" + regression);
+        }
+        t.setRegressionStatus(regression);
+    }
+
+    private String defectText(String incoming, String oldValue) {
+        if (incoming == null) {
+            return oldValue;
+        }
+        return Texts.trimToNull(incoming);
+    }
+
     private String defaultOwner(String userId) {
         AppUser u = userMapper.selectById(userId);
         return u == null || Texts.trimToNull(u.getDisplayName()) == null ? "我" : u.getDisplayName();
@@ -509,8 +563,11 @@ public class TaskCommandService {
     }
 
     private boolean targetBelongsToReq(String workspaceId, String versionId, String reqId) {
+        if (reqId == null) {
+            return false;
+        }
         ProjectVersion v = versionMapper.selectById(versionId);
-        return v != null && workspaceId.equals(v.getWorkspaceId()) && v.getReqId().equals(reqId);
+        return v != null && workspaceId.equals(v.getWorkspaceId()) && reqId.equals(v.getReqId());
     }
 
     private String versionDisplayName(String workspaceId, String versionId) {

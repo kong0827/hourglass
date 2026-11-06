@@ -245,6 +245,11 @@ public class BackupService {
             b.setItemType(t.getItemType());
             b.setEpicId(t.getEpicId());
             b.setDemandId(t.getDemandId());
+            b.setSeverity(t.getSeverity());
+            b.setEnvironment(t.getEnvironment());
+            b.setReproduceSteps(t.getReproduceSteps());
+            b.setFoundVersionId(t.getFoundVersionId());
+            b.setRegressionStatus(t.getRegressionStatus());
             b.setVersionId(versionByTask.get(t.getId()));
             tasks.add(b);
         }
@@ -332,6 +337,7 @@ public class BackupService {
             bd.setContent(d.getContent());
             bd.setFormat(d.getFormat() == null ? "html" : d.getFormat());
             bd.setStatus(d.getStatus());
+            bd.setPublishedAt(d.getPublishedAt() == null ? null : d.getPublishedAt().format(ISO_TS));
             bd.setOwner(d.getOwner());
             bd.setOwnerUserId(d.getOwnerUserId());
             bd.setSortOrder(d.getSortOrder());
@@ -775,6 +781,14 @@ public class BackupService {
                 doc.setSortOrder(bd.getSortOrder() == null ? 0 : bd.getSortOrder());
                 doc.setCreatedAt(parseTs(bd.getCreatedAt()));
                 doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
+                String publishedAt = Texts.trimToNull(bd.getPublishedAt());
+                if (publishedAt == null) {
+                    /* 旧备份没有发布时间：按已发布回填（同 sql/42 迁移口径），
+                       避免覆盖导入后文档全部变草稿、成员不可见 */
+                    doc.setPublishedAt(doc.getCreatedAt() == null ? java.time.LocalDateTime.now() : doc.getCreatedAt());
+                } else {
+                    doc.setPublishedAt(parseTs(publishedAt));
+                }
                 requirementDocMapper.insert(doc);
                 st.reqDocCount++;
                 if (original != null) {
@@ -981,6 +995,24 @@ public class BackupService {
             }
             if (versionId != null) {
                 st.versionLinks.add(new String[]{id, versionId});
+            }
+            /* v9：缺陷专属字段；非缺陷或引用失效时清空，避免脏数据 */
+            if ("bug".equals(itemType)) {
+                t.setSeverity(oneOf(b.getSeverity(),
+                        new String[]{"blocker", "critical", "major", "minor"}, null));
+                t.setEnvironment(Texts.trimToNull(b.getEnvironment()));
+                t.setReproduceSteps(Texts.trimToNull(b.getReproduceSteps()));
+                String foundVersionId = Texts.trimToNull(b.getFoundVersionId());
+                if (foundVersionId != null && st.versionIdMap.containsKey(foundVersionId)) {
+                    foundVersionId = st.versionIdMap.get(foundVersionId);
+                }
+                if (foundVersionId != null && (!st.versionIds.contains(foundVersionId) || t.getReqId() == null
+                        || !t.getReqId().equals(st.versionReqId.get(foundVersionId)))) {
+                    foundVersionId = null;
+                }
+                t.setFoundVersionId(foundVersionId);
+                t.setRegressionStatus(oneOf(b.getRegressionStatus(),
+                        new String[]{"pending", "passed", "failed"}, null));
             }
             /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
             String reqDocId = Texts.trimToNull(b.getReqDocId());

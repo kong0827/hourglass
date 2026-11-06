@@ -53,22 +53,36 @@ function enterProfileView(){
 }
 var NOTIFY_EVENTS = {
   task_assigned: ["任务指派", "任务创建或负责人变更后指派给我"],
-  task_updated: ["任务变动", "我负责的任务字段变更、移入回收站或恢复"],
-  task_comment: ["任务评论", "我负责的任务收到新评论"],
-  task_mention: ["评论提及", "有人在任务评论中 @ 我"],
-  demand_status: ["需求池变动", "我提交的需求被编辑、删除或状态变化"],
-  doc_changed: ["需求文档", "我负责的文档被他人编辑或删除"],
-  branch_status: ["分支变动", "我负责的分支被指派或状态变更"],
-  version_released: ["版本发布", "我负责的任务所在版本发布"],
-  version_deleted: ["版本删除", "我负责的任务所在版本被删除"],
+  task_comment: ["评论与@", "我负责的任务有新评论，或评论中被 @ 提及"],
+  task_watch: ["我关注的任务", "关注的任务有新评论、移入回收站或恢复"],
+  task_updated: ["任务变更与提醒", "我负责的任务字段变更、移列、移入回收站或恢复"],
+  demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
   daily_digest: ["每日任务汇总", "每天 09:00 汇总我负责的逾期/今日到期任务（仅站内）"]
 };
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
-  { title: "任务", types: ["task_assigned", "task_updated", "task_comment", "task_mention"] },
-  { title: "项目协作", types: ["demand_status", "doc_changed", "branch_status", "version_released", "version_deleted"] },
+  { title: "任务", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
+  { title: "项目协作", types: ["demand_status"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
+/* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */
+var NOTIFY_PRESET = {
+  inApp: ["task_assigned", "task_comment", "task_watch", "daily_digest"],
+  email: []
+};
+function applyNotifyPreset(){
+  var box = $("meNotificationPrefs");
+  if(!box) return;
+  box.querySelectorAll("[data-notify-event]").forEach(function(row){
+    var type = row.dataset.notifyEvent;
+    var inAppEl = row.querySelector("[data-notify-inapp]");
+    var emailEl = row.querySelector("[data-notify-email]");
+    if(inAppEl) inAppEl.checked = NOTIFY_PRESET.inApp.indexOf(type) >= 0;
+    if(emailEl) emailEl.checked = NOTIFY_PRESET.email.indexOf(type) >= 0;
+  });
+  toast("已应用「仅重要事件」预设，点保存后生效", "fs");
+}
+if($("meNotificationPreset")) $("meNotificationPreset").addEventListener("click", applyNotifyPreset);
 function loadNotificationPreferences(){
   var box = $("meNotificationPrefs");
   if(!box) return;

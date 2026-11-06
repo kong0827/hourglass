@@ -113,7 +113,10 @@ class BackupImportBatchTest {
                         mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
                         mock(TaskCompletionService.class),
                         branchMapper, mock(VersionTaskMapper.class), mock(ProjectVersionMapper.class),
-                        mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class)),
+                        mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+                        mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
+                        mock(com.devstudio.kanban.mapper.TestCaseMapper.class),
+                        mock(com.devstudio.kanban.mapper.TestCaseRunMapper.class)),
                 mock(ActivityService.class),
                 mock(com.devstudio.kanban.mapper.WorkActivityMapper.class),
                 transactionManager);
@@ -147,6 +150,8 @@ class BackupImportBatchTest {
         source.setDocType(type.getCode());
         source.setFormat("markdown");
         source.setContent("# 正文");
+        source.setPublishedAt(java.time.LocalDateTime.of(2026, 11, 5, 10, 30));
+        source.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 1, 9, 0));
         when(docMapper.selectAllByWorkspace("W1")).thenReturn(Collections.singletonList(source));
 
         BackupData exported = service.export("W1");
@@ -157,6 +162,8 @@ class BackupImportBatchTest {
         ArgumentCaptor<RequirementDoc> imported = ArgumentCaptor.forClass(RequirementDoc.class);
         verify(docMapper).insert(imported.capture());
         assertEquals(type.getCode(), imported.getValue().getDocType());
+        /* 发布时间随备份往返，导入后不能丢成草稿 */
+        assertEquals(source.getPublishedAt(), imported.getValue().getPublishedAt());
     }
 
     @ParameterizedTest
@@ -181,6 +188,8 @@ class BackupImportBatchTest {
         ArgumentCaptor<RequirementDoc> imported = ArgumentCaptor.forClass(RequirementDoc.class);
         verify(docMapper).insert(imported.capture());
         assertEquals(DocumentType.OTHER.getCode(), imported.getValue().getDocType());
+        /* 旧备份没有发布时间：按已发布回填，避免导入后全员不可见 */
+        org.junit.jupiter.api.Assertions.assertNotNull(imported.getValue().getPublishedAt());
     }
 
     @Test

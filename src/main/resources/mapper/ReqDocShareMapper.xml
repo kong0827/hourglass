@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.devstudio.kanban.mapper.ReqDocShareMapper">
+
+  <select id="selectByDoc" resultType="ReqDocShare">
+    SELECT workspace_id, doc_id, token, created_at, expires_at FROM req_doc_share
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </select>
+
+  <select id="selectByToken" resultType="ReqDocShare">
+    SELECT workspace_id, doc_id, token, created_at, expires_at FROM req_doc_share WHERE token = #{token}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO req_doc_share (workspace_id, doc_id, token, created_at, expires_at)
+    VALUES (#{workspaceId}, #{docId}, #{token}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), #{expiresAt})
+    ON DUPLICATE KEY UPDATE token = VALUES(token), created_at = VALUES(created_at), expires_at = VALUES(expires_at)
+  </insert>
+
+  <delete id="deleteByDoc">
+    DELETE FROM req_doc_share WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM req_doc_share WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

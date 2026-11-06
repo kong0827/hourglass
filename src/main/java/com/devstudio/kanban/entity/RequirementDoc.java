@@ -27,6 +27,8 @@ public class RequirementDoc {
     private String contentBrief;
     /** 状态：draft / active / done */
     private String status;
+    /** 发布时间（空 = 草稿，仅作者与空间管理员可见） */
+    private LocalDateTime publishedAt;
     private String owner;
     private String ownerUserId;
     private LocalDateTime createdAt;

@@ -3,7 +3,7 @@
 <mapper namespace="com.devstudio.kanban.mapper.ProjectVersionMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, name, description, status, target_date, released_at, created_at, updated_at
+    id, workspace_id, req_id, name, description, status, start_date, target_date, released_at, created_at, updated_at
   </sql>
 
   <select id="selectByReq" resultType="ProjectVersion">
@@ -35,9 +35,9 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO project_version (id, workspace_id, req_id, name, description, status, target_date,
+    INSERT INTO project_version (id, workspace_id, req_id, name, description, status, start_date, target_date,
                                  released_at, created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{description}, #{status}, #{targetDate},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{description}, #{status}, #{startDate}, #{targetDate},
             #{releasedAt}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -46,6 +46,7 @@
       name = #{name},
       description = #{description},
       status = #{status},
+      start_date = #{startDate},
       target_date = #{targetDate},
       updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId}

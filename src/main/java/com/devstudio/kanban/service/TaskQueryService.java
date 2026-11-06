@@ -807,7 +807,7 @@ public class TaskQueryService {
             }
             Integer count = versionCount.get(v.getId());
             meta.getVersions().add(new BoardResponse.VersionCount(v.getId(), v.getName(),
-                    reqName.get(v.getReqId()), count == null ? 0 : count));
+                    reqName.get(v.getReqId()), v.getStatus(), count == null ? 0 : count));
         }
         meta.setUnassigned(unassigned);
         meta.setVersionUnassigned(versionUnassigned);

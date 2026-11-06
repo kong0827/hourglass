@@ -25,6 +25,8 @@ public class ProjectVersionSaveRequest {
     @Pattern(regexp = "planned|active", message = "版本状态不合法")
     private String status = "planned";
 
+    private LocalDate startDate;
+
     private LocalDate targetDate;
 
     @Size(max = 500, message = "单个版本最多关联 500 个任务")

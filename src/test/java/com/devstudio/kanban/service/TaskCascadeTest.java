@@ -6,6 +6,7 @@ import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
+import com.devstudio.kanban.mapper.ReqDocShareMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -16,6 +17,8 @@ import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TaskWatchMapper;
+import com.devstudio.kanban.mapper.TestCaseMapper;
+import com.devstudio.kanban.mapper.TestCaseRunMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,11 +67,14 @@ class TaskCascadeTest {
     private GanttShareMapper ganttShareMapper;
     private RequirementMapper reqMapper;
     private RequirementDocMapper requirementDocMapper;
+    private ReqDocShareMapper reqDocShareMapper;
     private TaskCompletionService completionService;
     private DevBranchMapper devBranchMapper;
     private VersionTaskMapper versionTaskMapper;
     private ProjectVersionMapper versionMapper;
     private DemandMapper demandMapper;
+    private TestCaseMapper testCaseMapper;
+    private TestCaseRunMapper testCaseRunMapper;
     private TaskCascade cascade;
 
     @BeforeEach
@@ -87,17 +93,21 @@ class TaskCascadeTest {
         ganttShareMapper = mock(GanttShareMapper.class);
         reqMapper = mock(RequirementMapper.class);
         requirementDocMapper = mock(RequirementDocMapper.class);
+        reqDocShareMapper = mock(ReqDocShareMapper.class);
         completionService = mock(TaskCompletionService.class);
         devBranchMapper = mock(DevBranchMapper.class);
         versionTaskMapper = mock(VersionTaskMapper.class);
         versionMapper = mock(ProjectVersionMapper.class);
         demandMapper = mock(DemandMapper.class);
+        testCaseMapper = mock(TestCaseMapper.class);
+        testCaseRunMapper = mock(TestCaseRunMapper.class);
         cascade = new TaskCascade(taskMapper, logMapper, commentMapper, watchMapper, notificationMapper,
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
                 mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
                 completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
-                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+                reqDocShareMapper, testCaseMapper, testCaseRunMapper);
     }
 
     private static List<Task> tasks(String... workspaceAndIds) {
@@ -159,8 +169,11 @@ class TaskCascadeTest {
         verify(baselineMapper).deleteByWorkspace(WS);
         verify(ganttShareMapper).deleteByWorkspace(WS);
         verify(taskMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper).deleteByWorkspace(WS);
+        verify(testCaseMapper).deleteByWorkspace(WS);
         verify(reqMapper).deleteAllByWorkspace(WS);
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(reqDocShareMapper).deleteByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(subtaskMapper).deleteAllByWorkspace(WS);
         verify(tagMapper).deleteAllTaskTagsByWorkspace(WS);
@@ -183,6 +196,8 @@ class TaskCascadeTest {
         cascade.clearWorkspaceDataForImport(WS, false, false, false, false);
 
         verify(taskMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper).deleteByWorkspace(WS);
+        verify(testCaseMapper).deleteByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(commentMapper).deleteAllByWorkspace(WS);
         verify(watchMapper).deleteAllByWorkspace(WS);
@@ -197,6 +212,7 @@ class TaskCascadeTest {
         cascade.clearWorkspaceDataForImport(WS, true, true, true, true);
 
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(reqDocShareMapper).deleteByWorkspace(WS);
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);
         verify(versionMapper).deleteByWorkspace(WS);
@@ -219,7 +235,8 @@ class TaskCascadeTest {
 
         assertEquals(Arrays.asList(
                 "task_log", "task_dependency", "task_baseline", "gantt_share", "task",
-                "requirement", "requirement_doc", "task_completion_record", "subtask",
+                "test_case_run", "test_case",
+                "requirement", "requirement_doc", "req_doc_share", "task_completion_record", "subtask",
                 "task_tag", "tag", "time_log", "attachment", "task_comment", "task_watch",
                 "app_notification", "dev_branch_log", "dev_branch",
                 "version_task", "project_version", "demand_log", "demand"),

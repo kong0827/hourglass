@@ -1,0 +1,42 @@
+package com.devstudio.kanban.mapper;
+
+import com.devstudio.kanban.dto.TestCaseView;
+import com.devstudio.kanban.entity.TestCase;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+import java.util.Map;
+
+@Mapper
+public interface TestCaseMapper {
+
+    TestCase selectById(@Param("id") String id);
+
+    /** 项目下用例列表：带转出缺陷任务标题，按创建时间倒序（新的在前） */
+    List<TestCaseView> selectViewByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 项目用例概览：latest_status 计数（未执行不在此列，由调用方按总数反推） */
+    List<Map<String, Object>> countGroupByStatus(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    int insert(TestCase testCase);
+
+    int update(TestCase testCase);
+
+    int updateLatest(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                     @Param("status") String status, @Param("note") String note,
+                     @Param("by") String by, @Param("byUserId") String byUserId);
+
+    int updateLatestBug(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                        @Param("bugTaskId") String bugTaskId);
+
+    int delete(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    /** 项目删除级联：用例数（确认提示用）与整项目用例清理 */
+    int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 空间级清理：删除/清空空间与覆盖导入共用 */
+    int deleteByWorkspace(@Param("workspaceId") String workspaceId);
+}

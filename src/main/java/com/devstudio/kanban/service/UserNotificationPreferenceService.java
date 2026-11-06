@@ -23,19 +23,17 @@ public class UserNotificationPreferenceService {
 
     public static final String TASK_ASSIGNED = "task_assigned";
     public static final String TASK_UPDATED = "task_updated";
+    /** 评论与@共用：任务新评论、评论中被 @ 提及 */
     public static final String TASK_COMMENT = "task_comment";
-    public static final String TASK_MENTION = "task_mention";
+    /** 我关注的任务：新评论、移入回收站/恢复（独立于评论与任务变更开关） */
+    public static final String TASK_WATCH = "task_watch";
+    /** 需求与版本动态：需求状态、需求文档、分支状态、版本发布/删除合并为一个开关 */
     public static final String DEMAND_STATUS = "demand_status";
-    public static final String DOC_CHANGED = "doc_changed";
-    public static final String BRANCH_STATUS = "branch_status";
-    public static final String VERSION_RELEASED = "version_released";
-    public static final String VERSION_DELETED = "version_deleted";
     /** 每日站内汇总开关（只影响 task_due 汇总，不影响任务级提醒） */
     public static final String DAILY_DIGEST = "daily_digest";
 
     public static final List<String> EVENT_TYPES = Collections.unmodifiableList(Arrays.asList(
-            TASK_ASSIGNED, TASK_UPDATED, TASK_COMMENT, TASK_MENTION, DEMAND_STATUS,
-            DOC_CHANGED, BRANCH_STATUS, VERSION_RELEASED, VERSION_DELETED, DAILY_DIGEST));
+            TASK_ASSIGNED, TASK_COMMENT, TASK_WATCH, TASK_UPDATED, DEMAND_STATUS, DAILY_DIGEST));
     private static final Set<String> EVENT_SET = Collections.unmodifiableSet(new HashSet<String>(EVENT_TYPES));
 
     private final UserNotificationPreferenceMapper mapper;

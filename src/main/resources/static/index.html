@@ -102,6 +102,10 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4M7 11h6M7 14h4"/></svg>
         <span class="nl">文档</span>
       </button>
+      <button class="nav-item" type="button" data-view="testcases">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="13.6" height="13.6" rx="2.4"/><path d="M6.6 6.2h6.8v2H6.6zM6.6 10.4h3.2M6.6 13.6h3.2"/><path d="M12.6 10.4l1.6 1.6 2-2.4"/></svg>
+        <span class="nl">测试用例</span>
+      </button>
 
       <span class="nav-sec">工作项</span>
       <button class="nav-item on" type="button" data-view="board">
@@ -634,6 +638,11 @@
                 <span class="err">请填写版本名称</span>
               </div>
               <div class="field">
+                <label for="vStart">计划开始日期</label>
+                <input id="vStart" type="date" />
+                <span class="hint">选填：与目标发布日期构成版本周期窗口，如 11/10–11/24</span>
+              </div>
+              <div class="field">
                 <label for="vTarget">目标发布日期</label>
                 <input id="vTarget" type="date" />
                 <span class="hint">发布时记录实际发布时间；这里先定目标</span>
@@ -721,14 +730,14 @@
                 <input id="dExpect" type="date" />
               </div>
               <div class="field">
-                <label>WSJF 评分</label>
+                <label>WSJF 评分（可选）</label>
                 <div class="wsjf-grid">
-                  <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" value="5" /></span>
-                  <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" value="5" /></span>
-                  <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" value="5" /></span>
-                  <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" value="5" /></span>
+                  <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
+                  <span class="wsjf-item"><label for="dWsjfU">紧迫程度</label><input id="dWsjfU" type="number" min="0" max="10" placeholder="0-10" /></span>
+                  <span class="wsjf-item"><label for="dWsjfR">风险缓解</label><input id="dWsjfR" type="number" min="0" max="10" placeholder="0-10" /></span>
+                  <span class="wsjf-item"><label for="dWsjfE">工作量</label><input id="dWsjfE" type="number" min="1" max="10" placeholder="1-10" /></span>
                 </div>
-                <span class="hint">前三项 0-10，工作量 1-10；WSJF =（业务 + 紧迫 + 风险）÷ 工作量，服务端计算</span>
+                <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
               </div>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
@@ -815,6 +824,12 @@
                 <span data-icon="download"></span>&nbsp;导出
               </button>
               <button class="btn sm ghost" type="button" id="reqDocCopy"><span data-icon="copy"></span>&nbsp;复制</button>
+              <button class="btn sm ghost" type="button" id="reqDocPublish" title="草稿仅作者与空间管理员可见；发布后项目成员可见">
+                <span data-icon="eye"></span>&nbsp;发布
+              </button>
+              <button class="btn sm ghost" type="button" id="reqDocShare" title="生成只读分享链接（需先发布）">
+                <span data-icon="link"></span>&nbsp;分享
+              </button>
               <button class="btn sm ghost" type="button" id="reqDocDelete">删除</button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
@@ -870,6 +885,25 @@
             <summary>活动轨迹</summary>
             <div class="activity-list" id="reqDocActivityList"></div>
           </details>
+          <section class="reqdoc-comments" id="reqDocCommentsPanel" aria-labelledby="reqDocCommentsTitle">
+            <div class="reqdoc-tasks-head">
+              <h3 id="reqDocCommentsTitle">文档评论 <span id="reqDocCommentsCount"></span></h3>
+              <span class="reqdoc-tasks-hint">针对文档整体或正文片段发表意见</span>
+            </div>
+            <div class="reqdoc-comment-list" id="reqDocCommentList"></div>
+            <div class="reqdoc-comment-form" id="reqDocCommentForm">
+              <div class="reqdoc-comment-quotechip" id="reqDocCommentQuoteChip" hidden>
+                <span data-icon="quote"></span>
+                <span class="qc-text" id="reqDocCommentQuoteText"></span>
+                <button class="qc-x" type="button" id="reqDocCommentQuoteClear" title="移除引用" aria-label="移除引用">×</button>
+              </div>
+              <textarea id="reqDocCommentInput" rows="2" placeholder="写下你的评论…"></textarea>
+              <div class="reqdoc-comment-actions">
+                <button class="btn sm soft" type="button" id="reqDocCommentQuoteBtn" title="先在正文中选中内容，再点这里引用为批注上下文"><span data-icon="quote"></span>&nbsp;引用选中</button>
+                <button class="btn sm primary" type="button" id="reqDocCommentSend">发表评论</button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <!-- 新增文档：先选项目、填标题，确认后进编辑页 -->
@@ -969,13 +1003,132 @@
               <div class="reqdoc-history-preview">
                 <div class="reqdoc-history-preview-head">
                   <span class="rh-ver-title" id="reqDocHistoryVerTitle"></span>
-                  <button class="btn sm primary" type="button" id="reqDocHistoryRestore">恢复此版本</button>
+                  <span class="rh-actions">
+                    <button class="btn sm ghost" type="button" id="reqDocHistoryCompare">与当前对比</button>
+                    <button class="btn sm ghost" type="button" id="reqDocHistoryTextDiff">文本差异</button>
+                    <button class="btn sm primary" type="button" id="reqDocHistoryRestore">恢复此版本</button>
+                  </span>
                 </div>
                 <div class="reqdoc-history-content markdown-body" id="reqDocHistoryContent"></div>
+                <div class="reqdoc-history-compare" id="reqDocHistoryCompareWrap" hidden>
+                  <div class="reqdoc-history-compare-col">
+                    <div class="reqdoc-history-compare-title">当前版本</div>
+                    <div class="reqdoc-history-content markdown-body" id="reqDocHistoryCompareCurrent"></div>
+                  </div>
+                  <div class="reqdoc-history-compare-col">
+                    <div class="reqdoc-history-compare-title">所选历史版本</div>
+                    <div class="reqdoc-history-content markdown-body" id="reqDocHistoryCompareHistory"></div>
+                  </div>
+                </div>
+                <div class="reqdoc-history-diff" id="reqDocHistoryDiffWrap" hidden>
+                  <div class="reqdoc-history-diff-content" id="reqDocHistoryDiffContent"></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ===== 测试用例 ===== -->
+      <section class="view" id="view-testcases" aria-label="测试用例">
+        <div class="view-page tc-page">
+          <div class="page-toolbar">
+            <span class="toolbar-title">测试用例</span>
+            <span class="toolbar-meta" id="tcMeta"></span>
+            <span class="toolbar-right">
+              <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
+                <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
+                <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
+                <button type="button" data-tc-status="passed" aria-pressed="false">通过</button>
+                <button type="button" data-tc-status="failed" aria-pressed="false">失败</button>
+                <button type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
+              </div>
+              <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+              <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新增用例</button>
+            </span>
+          </div>
+          <div class="tc-stats" id="tcStats"></div>
+          <div class="tc-list" id="tcList"></div>
+        </div>
+
+        <!-- 新增 / 编辑用例 -->
+        <div class="modal-layer" id="dlgCase" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="caseFormTitle">新增用例</h3><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <div class="field" id="fCaseTitle">
+                <label for="cTitle">用例标题 <span class="req">*</span></label>
+                <input id="cTitle" type="text" maxlength="100" placeholder="一句话说清验证什么" autocomplete="off" />
+                <span class="err">请填写用例标题</span>
+              </div>
+              <div class="field">
+                <label for="cPrecondition">前置条件</label>
+                <textarea id="cPrecondition" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
+              </div>
+              <div class="field">
+                <label>执行步骤</label>
+                <div class="tc-steps" id="tcSteps"></div>
+                <button class="btn sm ghost" type="button" id="btnCaseAddStep"><span data-icon="plus"></span>&nbsp;添加步骤</button>
+              </div>
+              <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
+              <div class="row row-gap" id="caseSaveRow">
+                <button class="btn primary" type="button" id="btnSaveCase">保存</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 记录执行结果 -->
+        <div class="modal-layer" id="dlgCaseRun" role="dialog" aria-modal="true" aria-labelledby="runFormTitle"><div class="sheet xs"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="runFormTitle">记录执行结果</h3><button class="icon-btn sm" type="button" id="dlgCaseRunX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <div class="field">
+                <label>执行结果 <span class="req">*</span></label>
+                <div class="seg" id="segCaseRun">
+                  <button type="button" data-run-status="passed" aria-pressed="true">通过</button>
+                  <button type="button" data-run-status="failed" aria-pressed="false">失败</button>
+                  <button type="button" data-run-status="blocked" aria-pressed="false">阻塞</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="runNote">备注</label>
+                <textarea id="runNote" maxlength="500" placeholder="选填：失败原因、阻塞点…"></textarea>
+              </div>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnDoRun">记录</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 执行失败转出缺陷 -->
+        <div class="modal-layer" id="dlgCaseDefect" role="dialog" aria-modal="true" aria-labelledby="defectFormTitle"><div class="sheet xs"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="defectFormTitle">转出缺陷</h3><button class="icon-btn sm" type="button" id="dlgCaseDefectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note" id="caseDefectDesc"></p>
+              <div class="field" id="fDefectSeverity">
+                <label for="defectSeverity">严重度 <span class="req">*</span></label>
+                <select id="defectSeverity">
+                  <option value="">请选择</option>
+                  <option value="blocker">阻断</option>
+                  <option value="critical">严重</option>
+                  <option value="major">一般</option>
+                  <option value="minor">轻微</option>
+                </select>
+                <span class="err">缺陷必须选择严重度</span>
+              </div>
+              <div class="field">
+                <label for="defectEnvironment">发现环境</label>
+                <input id="defectEnvironment" type="text" maxlength="120" placeholder="选填：浏览器 / 版本 / 设备…" autocomplete="off" />
+              </div>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnDoDefect">创建缺陷</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
       </section>
 
       <!-- ===== 分支管理 ===== -->
@@ -1664,6 +1817,7 @@
               <p class="set-hint">任务指派、任务变动、评论和需求池状态变化可分别选择站内或邮件通知；自己的操作不会通知自己。</p>
               <div class="notification-prefs" id="meNotificationPrefs"></div>
               <div class="set-actions">
+                <button class="btn ghost" type="button" id="meNotificationPreset" title="只保留指派、评论与@、关注与每日汇总的站内通知">仅重要事件</button>
                 <button class="btn primary" type="button" id="meNotificationSave">保存通知设置</button>
               </div>
             </div>
@@ -1858,6 +2012,45 @@
               <input id="iTags" type="text" maxlength="16" placeholder="输入后回车添加…" autocomplete="off" list="tagOptions" aria-label="添加标签" />
             </div>
             <datalist id="tagOptions"></datalist>
+          </div>
+        </div>
+
+        <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
+        <div class="drawer-field-group" id="fDefect" hidden>
+          <div class="form-grid">
+            <div class="field" id="fSeverity">
+              <label for="iSeverity">严重度 <span class="req">*</span></label>
+              <select id="iSeverity">
+                <option value="">请选择</option>
+                <option value="blocker">阻断</option>
+                <option value="critical">严重</option>
+                <option value="major">一般</option>
+                <option value="minor">轻微</option>
+              </select>
+              <span class="err">缺陷必须选择严重度</span>
+            </div>
+            <div class="field">
+              <label for="iFoundVersion">发现版本</label>
+              <select id="iFoundVersion"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="iEnvironment">发现环境</label>
+            <input id="iEnvironment" type="text" maxlength="120" placeholder="例如：生产环境 / Chrome 120 / Windows 11" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="iReproSteps">复现步骤</label>
+            <textarea id="iReproSteps" maxlength="2000" placeholder="1. 进入…&#10;2. 点击…&#10;3. 期望…实际…" style="min-height:88px"></textarea>
+          </div>
+          <div class="field">
+            <label for="iRegression">回归状态</label>
+            <select id="iRegression">
+              <option value="">未开始</option>
+              <option value="pending">待回归</option>
+              <option value="passed">回归通过</option>
+              <option value="failed">回归失败</option>
+            </select>
+            <span class="hint">修复完成后由测试同学回填，管理报表按此口径统计缺陷关闭</span>
           </div>
         </div>
 
@@ -2297,6 +2490,24 @@
             </div>
           </div>
         </div>
+<!-- 文档分享：只读链接（30 天有效，需先发布） -->
+        <div class="modal-layer" id="dlgReqDocShare" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocShareTitle">
+          <div class="sheet">
+            <h3 class="reqdoc-dlg-title" id="dlgReqDocShareTitle">分享文档</h3>
+            <p class="reqdoc-dlg-msg">拿到链接的人无需登录即可查看文档正文（不含评论与历史）；链接 30 天有效，可随时停止分享。文档需先发布。</p>
+            <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>只读链接</span>
+                <input id="reqDocShareUrl" type="text" readonly placeholder="点击下方「生成链接」" />
+              </label>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn danger" type="button" id="reqDocShareRevoke">停止分享</button>
+              <button class="btn" type="button" id="reqDocShareClose">关闭</button>
+              <button class="btn primary" type="button" id="reqDocShareCopy">复制链接</button>
+            </div>
+          </div>
+        </div>
 <!-- 快捷键与录入语法帮助（?） -->
         <div class="modal-layer" id="dlgHelp" role="dialog" aria-modal="true" aria-labelledby="dlgHelpTitle">
           <div class="sheet">
@@ -2347,6 +2558,7 @@
 <link rel="modulepreload" href="js/views/mine.js" />
 <link rel="modulepreload" href="js/views/branches.js" />
 <link rel="modulepreload" href="js/views/requirements.js" />
+<link rel="modulepreload" href="js/views/testcases.js" />
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

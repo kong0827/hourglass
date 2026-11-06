@@ -6,7 +6,8 @@
     id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
-    item_type AS itemType, epic_id AS epicId, demand_id AS demandId
+    item_type AS itemType, epic_id AS epicId, demand_id AS demandId,
+    severity, environment, reproduce_steps, found_version_id, regression_status
   </sql>
 
   <!--
@@ -196,10 +197,12 @@
   <insert id="insert">
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
-                      recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, epic_id, demand_id, created_at)
+                      recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
     VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{epicId}, #{demandId},
+            #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -208,7 +211,8 @@
     INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
                       is_blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, remind_at,
-                      remind_target, remind_sent, sort_order, item_type, epic_id, demand_id, created_at, deleted_at)
+                      remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      severity, environment, reproduce_steps, found_version_id, regression_status, created_at, deleted_at)
     VALUES
     <foreach collection="list" item="t" separator=",">
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
@@ -216,6 +220,7 @@
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
        #{t.note}, #{t.completedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.epicId}, #{t.demandId},
+       #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
        COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
     </foreach>
   </insert>
@@ -250,6 +255,11 @@
       item_type = COALESCE(#{itemType}, 'task'),
       epic_id = #{epicId},
       demand_id = #{demandId},
+      severity = #{severity},
+      environment = #{environment},
+      reproduce_steps = #{reproduceSteps},
+      found_version_id = #{foundVersionId},
+      regression_status = #{regressionStatus},
       updated_at = NOW()
     WHERE id = #{id}
     <if test="versionCheck != null and versionCheck">

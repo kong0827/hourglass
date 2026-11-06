@@ -50,18 +50,22 @@ function typeItems(meta){
   });
   return items;
 }
-/* 版本按 ID 筛选：同名版本跨项目存在，展示时用项目名消歧 */
+/* 版本按 ID 筛选：同名版本跨项目存在，展示时用项目名消歧；进行中版本置顶并标记 */
 function versionItems(meta){
-  var vs = meta.versions || [];
+  var vs = (meta.versions || []).slice().sort(function(a, b){
+    if((a.status === "active") !== (b.status === "active")) return a.status === "active" ? -1 : 1;
+    return 0;
+  });
   var nameCount = {};
   vs.forEach(function(v){ nameCount[v.name] = (nameCount[v.name] || 0) + 1; });
   var items = [];
   vs.forEach(function(v){
     var on = state.versions.indexOf(v.id) !== -1;
-    if(v.count === 0 && !on) return;
+    /* 进行中版本是当前迭代锚点，即使暂无任务也保留在筛选里并高亮 */
+    if(v.count === 0 && !on && v.status !== "active") return;
     var label = v.name;
     if(nameCount[v.name] > 1 && v.projectName) label = v.name + "（" + v.projectName + "）";
-    items.push({id:v.id, name:label, count:v.count, on:on});
+    items.push({id:v.id, name:label, count:v.count, on:on, active:v.status === "active"});
   });
   var noneOn = state.versions.indexOf("__none") !== -1;
   if((meta.versionUnassigned || 0) > 0 || noneOn){
@@ -435,9 +439,10 @@ function openFilterDropdown(anchor){
       var lead = kind === "owner"
         ? avatarHTML(o.name, "sm")
         : (kind === "type" || kind === "version" ? "" : '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>');
-      return '<button class="dd-row" type="button" data-dd-val="' + esc(itemVal(o)) + '" aria-pressed="' + on + '">' +
+      return '<button class="dd-row' + (o.active ? " dd-active" : "") + '" type="button" data-dd-val="' + esc(itemVal(o)) + '" aria-pressed="' + on + '">' +
         '<span class="tick">' + (on ? icon("check", 12) : "") + '</span>' + lead +
         '<span class="dd-name">' + (kind === "type" ? esc(typeName(o.name)) : esc(o.name)) + '</span>' +
+        (o.active ? '<span class="tag tag-info">开发中</span>' : '') +
         '<span class="n">' + o.count + '</span></button>';
     }).join("") : '<p class="foot-note" style="margin:0;padding:8px">暂无可选项</p>';
     html += '</div>';

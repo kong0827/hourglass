@@ -46,7 +46,8 @@ class RequirementServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementService service = new RequirementService(reqs, tasks, logs, activity,
             workActivity, docs, versionService, versions, demands, branches, access,
-            mock(AttachmentService.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
+            mock(AttachmentService.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+            mock(TestCaseService.class));
 
     @Test
     void listBatchesVersionCountsAndFiltersHiddenProjects() {

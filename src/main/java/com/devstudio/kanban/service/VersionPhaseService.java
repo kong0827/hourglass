@@ -128,6 +128,7 @@ public class VersionPhaseService {
             stat.setName(version.getName());
             stat.setDescription(version.getDescription());
             stat.setStatus(version.getStatus());
+            stat.setStartDate(version.getStartDate());
             stat.setTargetDate(version.getTargetDate());
             stat.setReleasedAt(version.getReleasedAt());
             stat.setPreLaunchCount(version.getId().equals(preLaunchVersionId) ? preLaunchCount : 0);

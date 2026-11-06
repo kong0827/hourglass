@@ -3526,3 +3526,6 @@ WHERE w.id LIKE 'SXm%'
 GROUP BY w.id, w.name ORDER BY w.id;
 
 SELECT COUNT(DISTINCT req_id) AS 补数据的现有项目, COUNT(*) AS 补充任务 FROM task WHERE id LIKE 'Xmf%';
+
+-- 文档「草稿/发布」：种子数据一律视为已发布（新建文档默认草稿，由产品内发布）
+UPDATE requirement_doc SET published_at = created_at WHERE published_at IS NULL;

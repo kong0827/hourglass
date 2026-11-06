@@ -31,7 +31,7 @@ public class NotificationEventService {
             UserNotificationPreferenceService.TASK_ASSIGNED,
             UserNotificationPreferenceService.TASK_UPDATED,
             UserNotificationPreferenceService.TASK_COMMENT,
-            UserNotificationPreferenceService.TASK_MENTION)));
+            UserNotificationPreferenceService.TASK_WATCH)));
 
     /** 站点根地址（含 context-path，如 https://host/hourglass/）；为空时邮件不附链接 */
     @Value("${app.mail.base-url:}")

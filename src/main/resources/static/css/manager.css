@@ -113,6 +113,12 @@
 .manager-chart .burn-point:hover{filter:brightness(1.1);}
 .manager-chart .flow-hover{fill:transparent;cursor:pointer;}
 .manager-chart .flow-hover:hover{fill:var(--surface-hover);opacity:.25;}
+.manager-chart .defect-opened{fill:var(--warning);opacity:.82;}
+.manager-chart .defect-closed{fill:var(--success);opacity:.7;}
+.manager-chart .defect-open-line{stroke:var(--text-3);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+.manager-chart-legend i.defect-opened-block{background:var(--warning)}
+.manager-chart-legend i.defect-closed-block{background:var(--success)}
+.manager-chart-legend i.defect-open-line{height:2px;width:14px;background:var(--text-3)}
 .manager-delivery{display:flex;flex-direction:column;gap:11px;padding:24px 4px 16px;}
 .manager-delivery>div{display:grid;grid-template-columns:58px minmax(100px,1fr) 100px;align-items:center;gap:12px;font-size:12.5px;cursor:pointer;border-radius:var(--r-xs);transition:background var(--dur-fast) var(--ease-out);padding:4px;}
 .manager-delivery>div:hover{background:var(--surface-hover);}

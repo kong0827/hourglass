@@ -79,12 +79,15 @@ public class BoardResponse {
         private String id;
         private String name;
         private String projectName;
+        /** 版本状态：planned/active/released（active 在筛选中高亮为进行中） */
+        private String status;
         private int count;
 
-        public VersionCount(String id, String name, String projectName, int count) {
+        public VersionCount(String id, String name, String projectName, String status, int count) {
             this.id = id;
             this.name = name;
             this.projectName = projectName;
+            this.status = status;
             this.count = count;
         }
     }

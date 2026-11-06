@@ -14,7 +14,7 @@ import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleT
 import { deleteTask, openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, recurLabel, syncColumns, typeBadgeHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -255,7 +255,7 @@ function cardHTML(t, idx){
         '</span>' +
         (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '">' + esc(t.priority) + '</span>') +
       '</span>' +
-      '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</h3>' +
+      '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity) + esc(t.title) + '</h3>' +
     '</div>' +
     (t.description ? '<p class="card-desc">' + mdLite(t.description) + '</p>' : '') +
     ((tagsHTML || blockedTag || !editable)

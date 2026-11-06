@@ -511,6 +511,25 @@ verdict  = coverage>=95 且 missing==0 → done
   `backlog` 里的任务还没开工（实际 0），预警没有意义。
 - `estimate_minutes` 为 `null` 或 `0` 一律视为"没估"，不参与任何统计；保存时也统一存 `NULL`。
 
+## 33. 测试用例（/api/test-cases）
+
+层级：空间 → 项目（`/api/reqs`）→ 用例 → 执行流水。读接口仅需项目可见（viewer 可看），
+写接口（创建/更新/删除/执行/转缺陷）需项目写权限（viewer 返回 403「你对该项目只有查看权限」）。
+所有接口均可带可选参数 `workspace`（缺省用会话上次空间）。用例列表带最近一轮执行结果与转出缺陷标题。
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/test-cases?reqId=` | 项目用例列表（`steps` 已解析为 `[{action,expected}]` 数组） |
+| `GET /api/test-cases/stats?reqId=` | 执行概览 `{total, passed, failed, blocked, untested}`（未执行由总数反推） |
+| `POST /api/test-cases` | 新建用例（`reqId/title/precondition/steps[]`，标题 ≤100，步骤 ≤30 条） |
+| `PUT /api/test-cases/{id}` | 保存用例（可换项目，新旧项目均需写权限） |
+| `DELETE /api/test-cases/{id}` | 删除用例（执行流水一并删除；转出的缺陷任务保留） |
+| `POST /api/test-cases/{id}/runs` | 记录一次执行：`{status: passed|failed|blocked, note?}`，最近结果冗余回用例 |
+| `POST /api/test-cases/{id}/defect` | 失败转缺陷：`{severity: blocker|critical|major|minor, environment?}`，生成 bug 任务并回填用例/流水引用；仅最近结果为 `failed` 时可用 |
+
+转出缺陷的标题/描述按任务口径（60/200 字）截断，完整步骤与失败备注保留在用例本体；描述拼装为
+「前置条件 + 执行步骤（含预期）+ 失败备注」。删除项目会级联清理用例与流水；删除/清空空间与备份覆盖导入同样清理。
+
 ## 已接受的现状口径（按设计如此，非缺陷）
 
 以下行为是当前版本有意保留的设计边界，使用/验收时按此预期判断：
@@ -1086,7 +1105,7 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - `DELETE /api/gantt/share` → 停止分享（仅空间主）
 - `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，任务走白名单 DTO（id/标题/负责人/优先级/列/起止/进度/里程碑/阻塞/估时/实际工时），依赖与基线只返回可见任务之间的；token 由 `SecureRandom` 生成（32 位 base64url），无效或过期返回 404。
 
-页面：`/share.html?token=...`（独立只读甘特页，无写操作）。
+页面：`/share.html?token=...`（独立只读甘特页，无写操作）；文档分享为 `/share.html?token=...&kind=doc`。
 
 ---
 
@@ -1238,15 +1257,23 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 
 ### 2. 通知偏好事件
 
-`GET/PUT /api/auth/notification-preferences` 的事件类型新增：
+`GET/PUT /api/auth/notification-preferences` 按**事件类型 × 投递通道**配置：每类事件有站内、邮件两个开关，缺省站内开启、邮件关闭；投递时逐人逐类校验，关闭的通道不再投递。
 
-- `task_mention`：评论中 @ 我。
-- `doc_changed` / `branch_status` / `version_released` / `version_deleted`：需求文档、分支、版本相关事件。
-- `daily_digest`：每日站内汇总开关，**只有站内一种投递方式**（设置页邮件列显示 `—`）。关闭后，每日汇总不再给该用户写站内通知；任务级提醒不受影响。
+| 事件类型 | 含义 | 邮件 |
+| --- | --- | --- |
+| `task_assigned` | 任务创建或负责人变更后指派给我 | 可开 |
+| `task_comment` | 我负责的任务有新评论，或评论中被 @ 提及（评论与 @ 合并为一个开关） | 可开 |
+| `task_watch` | 我关注的任务有新评论、移入回收站或恢复 | 可开 |
+| `task_updated` | 我负责的任务字段变更、移列、移入回收站或恢复 | 可开 |
+| `demand_status` | 需求与版本动态：我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除（合并为一个开关） | 可开 |
+| `daily_digest` | 每日站内任务汇总，**只有站内一种投递方式**（设置页邮件列显示 `—`）；关闭后每日汇总不再写站内通知，任务级提醒不受影响 | 不可 |
+
+- 系统/安全通知（`member_role`、`member_removed`、`project_access`）不受个人偏好控制，站内必投。
+- 早期的细粒度类型（`task_mention`、`doc_changed`、`branch_status`、`version_released`、`version_deleted`）已合并为 `task_comment` 与 `demand_status`；前端仍保留旧类型图标映射，历史通知记录可正常展示。
 
 ### 3. 行为变化
 
-1. **评论通知分层**：被 @ 的人优先收到 `task_mention`；负责人若已被 @ 就不再重复收评论通知；任务关注者收到评论、移入回收站/恢复通知。字段编辑与移列不再单独通知关注者（每次保存都会产生，属于高频打扰），操作者本人永远不会收到自己触发的通知。
+1. **评论通知分层**：被 @ 的人优先收到 `task_comment` 通知；负责人若已被 @ 就不再重复收评论通知；任务关注者收到评论、移入回收站/恢复通知。字段编辑与移列不再单独通知关注者（每次保存都会产生，属于高频打扰），操作者本人永远不会收到自己触发的通知。
 2. **通知中心聚合**：前端把**同一任务 + 同一类型**的连续通知合并为一条（显示 `×N`），点击时整组标为已读；接口仍返回原始通知列表，聚合只发生在前端。
 3. **站内通知保留期**：每天 03:20 清理超期 `app_notification`，默认 90 天，可用 `app.notification.retain-days`（环境变量 `NOTIFICATION_RETAIN_DAYS`）调整；跨空间统一执行，不影响 `task_log` 审计记录。
 4. **邮件深链**：配置 `app.mail.base-url`（含 context-path，如 `https://host/hourglass/`）后，任务类通知邮件正文追加 `#/board?task=<id>` 深链；新建账号的欢迎邮件追加登录地址。未配置时不附链接，避免出现半截地址。
@@ -1261,3 +1288,66 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - 通知聚合不做服务端合并，接口返回条数上限不变。
 - @提及候选接口一次读取项目可见范围配置后在内存判定，不再逐成员回查。
 - 本附录取代此前「评论不做 @提及与提及通知」「评论仍不做 @提及」的边界说明。
+
+## 附录 · 文档模块增强（评论 / 版本对比 / 全文检索）
+
+### 1. 新增接口
+
+- `GET /api/req-docs/{docId}/comments`：文档评论列表（按时间正序）。
+- `POST /api/req-docs/{docId}/comments`：发表评论；`content` 必填，`quoteText` 可选（批注上下文）。
+  - 权限：能查看文档且空间角色不是 `viewer` 即可发表。
+  - 删除：`DELETE /api/req-docs/{docId}/comments/{commentId}`，仅评论作者或项目可写者可删。
+- 历史版本弹层增加「与当前对比」与「文本差异」：纯前端能力，左侧渲染当前文档正文，右侧渲染选中的历史版本正文；文本差异按行高亮新增/删除内容（上限 1200 行）。
+
+### 2. 全文检索
+
+- `GET /api/req-docs?keyword=...` 列表搜索升级：
+  - 关键词长度 ≥ 2 时走 MySQL `FULLTEXT INDEX ft_doc_fulltext(title, content_brief, content) WITH PARSER ngram`，按相关度排序。
+  - 单字符关键词仍回退到 `LIKE` 标题与正文，避免 ngram 无法命中。
+- 新增迁移 `sql/40_doc_fulltext.sql`（幂等：information_schema 判断 + PREPARE 动态执行，可重复跑）。
+
+### 3. 数据库
+
+- 新增 `sql/39_doc_comments.sql`：`req_doc_comment(id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at)`，索引 `(doc_id, created_at)`。
+- `sql/baseline/01_schema_full.sql` 同步包含 `req_doc_comment` 表与 `requirement_doc.ft_doc_fulltext` 全文索引。
+
+### 4. 未做 / 边界
+
+- 评论支持「引用选中」批注：在正文中选中内容后点「引用选中」，随评论携带 `quoteText`（≤500 字，前端截断）作为批注上下文；评论列表以引用块展示。暂不支持 @提及、图片附件与锚定段落级的批注定位（引用是选中时的文本副本，不随正文修改联动）。
+- 文本差异按行对比，未做行内字符级高亮；超过 1200 行时降级为提示。
+- 全文检索依赖 MySQL ngram 解析器；若部署环境未启用 ngram，需先确认 `SHOW PLUGINS` 中 ngram 状态。
+
+## 附录 · 文档草稿/发布与只读分享（2026-11-06）
+
+### 1. 可见性模型（两态）
+
+- `requirement_doc.published_at` 非空 = **已发布**，按项目可见范围对成员开放；为空 = **草稿**，仅文档作者与空间 owner/admin 可见，其余人一律按 404 处理（不泄露存在性）。
+- 新建文档默认草稿；存量文档由迁移回填为 `created_at`，线上行为不回退。
+- 校验口径收敛在 `RequirementDocService.canSeeDraft`（静态方法，评论等旁路共用同一口径）；列表、详情、评论、活动、历史全部走草稿过滤。
+
+### 2. 新增接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `PUT /api/req-docs/{id}/publish` | 发布 / 收回发布。body：`{published: true/false}`；仅文档作者或项目可写者，其余 403 |
+| `GET /api/req-docs/{id}/share` | 查看现有分享链接（能看文档即可）；已过期按无链接返回 `null` |
+| `POST /api/req-docs/{id}/share` | 生成/重置分享链接（30 天有效）；文档须已发布（否则 400），权限同发布 |
+| `DELETE /api/req-docs/{id}/share` | 撤销分享链接（立即失效） |
+| `GET /api/share/docs?token=...` | **公开、无需登录**（`GET /api/share/**` 已放行）；只返回白名单 DTO（正文与展示字段，不含评论/历史/内部 ID）；token 无效、过期或文档已收回发布 → 404 |
+
+### 3. 数据库
+
+- 新增 `sql/42_doc_publish_share.sql`（幂等）：
+  - `requirement_doc` 加 `published_at DATETIME NULL`；回填 `= created_at` 绑定在列创建事件上（`@x = 0` 守卫），重复执行不会把已收回的草稿重新发布。
+  - `req_doc_share(workspace_id, doc_id, token, created_at, expires_at)`，主键 `(workspace_id, doc_id)`（每文档一条），`UNIQUE KEY uk_token(token)`；沿用"零外键"约定。
+- `sql/baseline/01_schema_full.sql` 同步列与表；两个种子脚本尾部把种子文档回填为已发布。
+- 清理点：文档删除、项目删除（连带）、空间清空/覆盖导入都会删 `req_doc_share`（TaskCascade 注册表已同步，快照测试覆盖）。
+
+### 4. 未做 / 边界
+
+- 分享只含正文快照，不含评论、历史版本与工作项关联；正文在分享页仍走 DOMPurify 清洗后渲染（markdown 本地渲染）。
+- 分享令牌 30 天固定有效，可随时重置/撤销；不做密码、按次访问或只读快照冻结。
+- 收回发布后已生成的分享链接立即失效（公开接口校验 `published_at`）；重新发布会恢复同一 token 的有效性，如需彻底作废请点「停止分享」。
+- 草稿可见性不做按成员白名单（评估后放弃）：只做作者 + 空间管理员两档，保持权限模型简单。
+- 草稿的「作者」指 `owner_user_id`（创建时落当前用户）。通过 API 保存时若把负责人改为无账号绑定的名字，草稿将只有空间 owner/admin 可见（界面无此入口）。
+- 备份/覆盖导入携带 `published_at` 往返；旧备份文件没有该字段，导入时按已发布回填（同 sql/42 迁移口径），分享 token 不随备份迁移（导入后需重新生成）。

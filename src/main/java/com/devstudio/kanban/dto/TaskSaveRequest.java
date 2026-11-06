@@ -64,6 +64,26 @@ public class TaskSaveRequest {
     @Pattern(regexp = "story|task|bug|epic|", message = "工作项类型不合法")
     private String itemType;
 
+    /** 缺陷严重度：blocker/critical/major/minor；仅 itemType=bug 时必填（更新时不传保持原值） */
+    @Pattern(regexp = "blocker|critical|major|minor|", message = "缺陷严重度不合法")
+    private String severity;
+
+    /** 发现环境（仅缺陷；更新时不传保持原值，空串=清空） */
+    @Size(max = 120, message = "发现环境不能超过 120 字")
+    private String environment;
+
+    /** 复现步骤（仅缺陷；更新时不传保持原值，空串=清空） */
+    @Size(max = 2000, message = "复现步骤不能超过 2000 字")
+    private String reproduceSteps;
+
+    /** 发现版本ID（仅缺陷，须属于任务所选项目；更新时不传保持原值，空串=清空） */
+    @Size(max = 32, message = "发现版本不合法")
+    private String foundVersionId;
+
+    /** 回归状态：pending/passed/failed（仅缺陷；更新时不传保持原值，空串=清空） */
+    @Pattern(regexp = "pending|passed|failed|", message = "回归状态不合法")
+    private String regressionStatus;
+
     /** 所属 Epic 任务ID（须为同空间 item_type=epic 的任务）；空=清除归属（更新时不传保持原值） */
     @Size(max = 32, message = "所属史诗不合法")
     private String epicId;
