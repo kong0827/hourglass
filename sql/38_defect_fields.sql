@@ -41,3 +41,7 @@ SET @s := IF(@x = 0,
   'ALTER TABLE task ADD COLUMN regression_status VARCHAR(16) NULL COMMENT ''回归状态：pending待回归/passed通过/failed不通过'' AFTER found_version_id',
   'DO 0');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+-- 存量缺陷任务补默认严重度：新代码要求 bug 必须有 severity，
+-- 不回填会导致历史缺陷在编辑任意字段时被「缺陷必须选择严重度」拦住。
+UPDATE task SET severity = 'major' WHERE item_type = 'bug' AND severity IS NULL;

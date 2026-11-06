@@ -1,4 +1,6 @@
 -- 文档评论
+USE hourglass;
+
 CREATE TABLE IF NOT EXISTS `req_doc_comment` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',

@@ -69,6 +69,7 @@ class WorkActivityRecordingTest {
         /* 乐观锁：这些用例只关心活动记录，默认按更新成功返回 */
         when(docMapper.update(any(RequirementDoc.class), any())).thenReturn(1);
         docService = new RequirementDocService(docMapper, mock(RequirementDocHistoryMapper.class),
+                mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
                 reqMapper, userMapper, taskMapper,
                 workActivityService, demandMapper, mock(ProjectAccessService.class),
                 mock(NotificationEventService.class),

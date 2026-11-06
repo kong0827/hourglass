@@ -151,7 +151,7 @@ public class DemandService {
         demandMapper.update(d);
         demandMapper.insertLog(workspaceId, id, "update", null, userId);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
-                "需求内容有更新（仍处于待评审）", d.getId());
+                "需求内容有更新（仍处于待评审）");
         return get(workspaceId, id);
     }
 
@@ -235,7 +235,7 @@ public class DemandService {
         demandMapper.deleteLogsByDemand(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被删除",
-                "需求已从需求池删除，关联任务已解绑", null);
+                "需求已从需求池删除，关联任务已解绑");
     }
 
     /* ------------------------------------------------------------------ */
@@ -298,16 +298,17 @@ public class DemandService {
         notificationEvents.notify(d.getCreatedBy(), d.getWorkspaceId(),
                 UserNotificationPreferenceService.DEMAND_STATUS,
                 "需求「" + d.getTitle() + "」" + action,
-                detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400), d.getId(), d.getReqId());
+                detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400), null, d.getReqId());
     }
 
     /** 编辑/删除：提交人不是操作者时告知，避免自己的需求被改动却毫不知情 */
-    private void notifyCreator(Demand d, String actorId, String title, String body, String referenceId) {
+    private void notifyCreator(Demand d, String actorId, String title, String body) {
         if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
             return;
         }
+        /* 需求 ID 不是任务 ID：通知中心不能按任务打开 */
         notificationEvents.notify(d.getCreatedBy(), d.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS, title, body, referenceId, d.getReqId());
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body, null, d.getReqId());
     }
 
     private void fillWsjf(Demand d) {

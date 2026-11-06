@@ -27,6 +27,12 @@ var NOTIFY_ICON = {
   member_role: "user",
   member_removed: "users"
 };
+/* 只有任务类通知的 refTaskId 才是任务 ID；历史需求/文档/分支通知可能残留旧引用 */
+var TASK_REF_TYPES = {
+  task_remind: 1, task_due: 1, task_assigned: 1,
+  task_comment: 1, task_mention: 1, task_watch: 1, task_updated: 1
+};
+function isTaskRef(type){ return !!TASK_REF_TYPES[type]; }
 var notifyState = {unread:0, items:[], loading:false};
 var bubbleTimer = null;
 var lastBubbleId = 0;
@@ -185,7 +191,7 @@ function noticeItemHTML(g){
   var ic = NOTIFY_ICON[x.type] || "bell";
   return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
-    (x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
+    (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
     (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
     ' title="' + esc(x.title) + '">' +
     '<span class="apn-ic">' + icon(ic, 13) + '</span>' +

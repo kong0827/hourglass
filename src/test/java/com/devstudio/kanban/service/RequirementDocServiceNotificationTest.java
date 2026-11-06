@@ -29,7 +29,8 @@ class RequirementDocServiceNotificationTest {
     private final WorkActivityService activities = mock(WorkActivityService.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
-            mock(RequirementDocHistoryMapper.class), reqs, users,
+            mock(RequirementDocHistoryMapper.class), mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
+            reqs, users,
             mock(TaskMapper.class), activities, mock(DemandMapper.class),
             mock(ProjectAccessService.class), events,
             mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),
@@ -46,7 +47,7 @@ class RequirementDocServiceNotificationTest {
 
         assertEquals("U2", d.getOwnerUserId(), "未带负责人时编辑不能把负责人换成操作者");
         verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "文档「文档」已更新", "文档内容或属性有更新", "D1", "R1");
+                "文档「文档」已更新", "文档内容或属性有更新", null, "R1");
     }
 
     @Test

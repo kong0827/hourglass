@@ -1,5 +1,5 @@
 -- 版本补计划开始日期：与目标发布日期共同构成版本周期窗口（版本即迭代，承载双周/月度更新节奏）。
--- 执行：mysql -u hourglass -p hourglass < sql/38_version_start_date.sql
+-- 执行：mysql -u hourglass -p hourglass < sql/43_version_start_date.sql
 -- 幂等：先探测列再添加，重复执行安全。
 USE hourglass;
 

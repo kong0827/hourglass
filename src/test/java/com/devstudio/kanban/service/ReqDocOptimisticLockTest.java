@@ -31,7 +31,7 @@ class ReqDocOptimisticLockTest {
     private final WorkActivityService activities = mock(WorkActivityService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
-            mock(RequirementDocHistoryMapper.class), reqs,
+            mock(RequirementDocHistoryMapper.class), mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class), reqs,
             mock(UserMapper.class), mock(TaskMapper.class), activities,
             mock(DemandMapper.class), access, mock(NotificationEventService.class),
             mock(com.devstudio.kanban.mapper.ReqDocShareMapper.class),

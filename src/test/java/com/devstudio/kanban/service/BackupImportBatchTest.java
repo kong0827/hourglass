@@ -102,7 +102,11 @@ class BackupImportBatchTest {
         demandMapper = mock(DemandMapper.class);
         service = new BackupService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, columnMapper, categoryMapper, mock(WorkspaceService.class), memberMapper,
-                mock(TaskCommentMapper.class), mock(AppNotificationMapper.class), docMapper, branchMapper,
+                mock(TaskCommentMapper.class),
+                mock(com.devstudio.kanban.mapper.TestCaseMapper.class),
+                mock(com.devstudio.kanban.mapper.TestCaseRunMapper.class),
+                mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
+                mock(AppNotificationMapper.class), docMapper, branchMapper,
                 mock(TaskDependencyMapper.class), mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
                 versionMapper, versionTaskMapper, demandMapper,
                 mock(TaskCompletionService.class),
@@ -113,6 +117,7 @@ class BackupImportBatchTest {
                         mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
                         mock(RequirementMapper.class), docMapper,
                         mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
+                        mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
                         mock(TaskCompletionService.class),
                         branchMapper, mock(VersionTaskMapper.class), mock(ProjectVersionMapper.class),
                         mock(DemandMapper.class), mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
@@ -255,7 +260,7 @@ class BackupImportBatchTest {
 
         BackupData exported = service.export("W1");
 
-        assertEquals(9, exported.getV());
+        assertEquals(10, exported.getV());
         assertEquals("2026-05-10", exported.getReqs().get(0).getFirstReleasedAt());
         BackupData.BackupTask exportedStory = null;
         for (BackupData.BackupTask task : exported.getTasks()) {

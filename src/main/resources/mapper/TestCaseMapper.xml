@@ -42,6 +42,12 @@
     SELECT * FROM test_case WHERE id = #{id}
   </select>
 
+  <select id="selectByWorkspace" resultType="com.devstudio.kanban.entity.TestCase">
+    SELECT * FROM test_case
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at ASC, id ASC
+  </select>
+
   <select id="selectViewByReq" resultType="com.devstudio.kanban.dto.TestCaseView">
     SELECT c.id, c.req_id, c.title, c.precondition, c.steps AS steps_json,
            c.latest_status, c.latest_note, c.latest_by, c.latest_at,
@@ -59,6 +65,18 @@
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND latest_status IS NOT NULL
     GROUP BY latest_status
   </select>
+
+  <update id="clearBugTaskRefs">
+    UPDATE test_case
+    SET latest_bug_task_id = NULL
+    WHERE workspace_id = #{workspaceId}
+      AND latest_bug_task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </update>
+
+  <update id="clearAllBugTaskRefs">
+    UPDATE test_case SET latest_bug_task_id = NULL WHERE workspace_id = #{workspaceId}
+  </update>
 
   <delete id="delete">
     DELETE FROM test_case WHERE id = #{id} AND workspace_id = #{workspaceId}

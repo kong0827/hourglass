@@ -85,6 +85,7 @@ class TaskPurgeTest {
                 mock(GanttShareMapper.class), mock(RequirementMapper.class),
                 mock(RequirementDocMapper.class),
                 mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
+                mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
                 mock(TaskCompletionService.class),
                 mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
                 mock(ProjectVersionMapper.class), mock(DemandMapper.class),

@@ -34,6 +34,12 @@ public class BackupData {
     private List<BackupDemand> demands;
     /** 需求池 ↔ 需求文档关联（v9；旧备份没有该字段时保留现状） */
     private List<BackupDemandDocLink> demandDocLinks;
+    /** 测试用例（v10；旧备份没有该字段时保留现有用例） */
+    private List<BackupTestCase> testCases;
+    /** 测试用例执行流水（v10；依赖 testCases 的 ID 映射） */
+    private List<BackupTestCaseRun> testCaseRuns;
+    /** 需求文档评论（v10；旧备份没有该字段时保留现有评论） */
+    private List<BackupDocComment> docComments;
 
     @Data
     public static class BackupDependency {
@@ -188,6 +194,46 @@ public class BackupData {
     }
 
     @Data
+    public static class BackupTestCase {
+        private String id;
+        private String reqId;
+        private String title;
+        private String precondition;
+        /** 步骤 JSON 原文 */
+        private String steps;
+        private String latestStatus;
+        private String latestNote;
+        private String latestBy;
+        private String latestByUserId;
+        private String latestAt;
+        private String latestBugTaskId;
+        private String createdAt;
+        private String updatedAt;
+    }
+
+    @Data
+    public static class BackupTestCaseRun {
+        private String id;
+        private String caseId;
+        private String status;
+        private String note;
+        private String bugTaskId;
+        private String executedBy;
+        private String executedByUserId;
+        private String createdAt;
+    }
+
+    @Data
+    public static class BackupDocComment {
+        private String id;
+        private String docId;
+        private String userId;
+        private String content;
+        private String quoteText;
+        private String createdAt;
+    }
+
+    @Data
     public static class BackupComment {
         private String taskId;
         private String authorId;
@@ -250,5 +296,9 @@ public class BackupData {
         private int versions;
         /** v8：重建的需求池条目数 */
         private int demands;
+        /** v10：重建的测试用例数 */
+        private int testCases;
+        /** v10：重建的文档评论数 */
+        private int docComments;
     }
 }

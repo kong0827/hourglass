@@ -8,6 +8,7 @@ import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.MailDeliveryMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.ReqDocShareMapper;
+import com.devstudio.kanban.mapper.RequirementDocCommentMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
@@ -124,6 +125,7 @@ public class TaskCascade {
     private final ProjectVersionMapper versionMapper;
     private final DemandMapper demandMapper;
     private final RequirementDocHistoryMapper docHistoryMapper;
+    private final RequirementDocCommentMapper docCommentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
 
@@ -136,6 +138,7 @@ public class TaskCascade {
                        GanttShareMapper ganttShareMapper, RequirementMapper reqMapper,
                        RequirementDocMapper requirementDocMapper,
                        RequirementDocHistoryMapper docHistoryMapper,
+                       RequirementDocCommentMapper docCommentMapper,
                        TaskCompletionService completionService, DevBranchMapper devBranchMapper,
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
                        DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
@@ -156,6 +159,7 @@ public class TaskCascade {
         this.reqMapper = reqMapper;
         this.requirementDocMapper = requirementDocMapper;
         this.docHistoryMapper = docHistoryMapper;
+        this.docCommentMapper = docCommentMapper;
         this.completionService = completionService;
         this.devBranchMapper = devBranchMapper;
         this.versionTaskMapper = versionTaskMapper;
@@ -228,13 +232,17 @@ public class TaskCascade {
         versionTaskMapper.deleteByTaskIds(workspaceId, taskIds);
         /* 待发邮件引用了任务 ID：任务删除后必须取消，避免继续外发 */
         mailDeliveryMapper.deleteByReferenceIds(taskIds);
+        /* 用例转出的缺陷任务被彻底删除后，用例与流水上的缺陷引用同步解除，
+           否则列表会继续展示一个打不开的缺陷入口 */
+        testCaseMapper.clearBugTaskRefs(workspaceId, taskIds);
+        testCaseRunMapper.clearBugTaskRefs(workspaceId, taskIds);
     }
 
     /**
      * 清空空间/覆盖导入共用的任务类数据（任务、项目、任务子表、分享 token）。
      * 不含操作时间线、附件文件、需求文档、分支：这些各场景口径不同，由下面两个方法补充。
      */
-    public void purgeWorkspaceTaskData(String workspaceId, boolean clearSnapshots) {
+    public void purgeWorkspaceTaskData(String workspaceId, boolean clearSnapshots, boolean clearTestCases) {
         /* 先取消引用本空间任务/需求的待发邮件，再删业务行 */
         mailDeliveryMapper.deleteByWorkspaceReferences(workspaceId);
         /* 甘特图数据没有外键，任务删掉后必须显式清，避免空间 ID 残留 */
@@ -242,9 +250,16 @@ public class TaskCascade {
         baselineMapper.deleteByWorkspace(workspaceId);
         ganttShareMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
-        /* 用例强归属项目：先清流水与用例，再删项目，避免空间级清理留下孤儿 */
-        testCaseRunMapper.deleteByWorkspace(workspaceId);
-        testCaseMapper.deleteByWorkspace(workspaceId);
+        /* 任务整体清空后，用例上的缺陷任务引用一定失效；先解除再决定是否删用例。
+           旧备份保留用例时也要解除，避免列表继续展示打不开的缺陷入口。 */
+        testCaseMapper.clearAllBugTaskRefs(workspaceId);
+        testCaseRunMapper.clearAllBugTaskRefs(workspaceId);
+        /* 用例强归属项目：先清流水与用例，再删项目，避免空间级清理留下孤儿。
+           旧备份没有用例字段时不清理，避免导入把现有用例误删。 */
+        if (clearTestCases) {
+            testCaseRunMapper.deleteByWorkspace(workspaceId);
+            testCaseMapper.deleteByWorkspace(workspaceId);
+        }
         reqMapper.deleteAllByWorkspace(workspaceId);
         /* 版本绑定跟着任务走；版本/需求池条目强归属项目，但备份导入会重建同名项目，
            保留它们可延续绑定关系，只在整空间删除时清（wipeWorkspaceData） */
@@ -265,8 +280,9 @@ public class TaskCascade {
     /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档（含历史快照）+ 分支时间线 + 版本/需求池 */
     public void wipeWorkspaceData(String workspaceId) {
         logMapper.deleteAllByWorkspace(workspaceId);
-        purgeWorkspaceTaskData(workspaceId, true);
+        purgeWorkspaceTaskData(workspaceId, true, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
+        docCommentMapper.deleteByWorkspace(workspaceId);
         docHistoryMapper.deleteAllByWorkspace(workspaceId);
         reqDocShareMapper.deleteByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
@@ -279,15 +295,19 @@ public class TaskCascade {
     }
 
     /**
-     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支/版本/需求池。
+     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支/版本/需求池/用例/文档评论。
      * 操作时间线、附件与空间配置保留，避免“导入丢得比恢复得多”。
      */
     public void clearWorkspaceDataForImport(String workspaceId, boolean clearRequirementDocs,
                                             boolean clearBranches, boolean clearVersions,
-                                            boolean clearDemands) {
-        purgeWorkspaceTaskData(workspaceId, true);
+                                            boolean clearDemands, boolean clearTestCases,
+                                            boolean clearDocComments) {
+        purgeWorkspaceTaskData(workspaceId, true, clearTestCases);
         if (clearRequirementDocs) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
+            if (clearDocComments) {
+                docCommentMapper.deleteByWorkspace(workspaceId);
+            }
             docHistoryMapper.deleteAllByWorkspace(workspaceId);
             reqDocShareMapper.deleteByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);

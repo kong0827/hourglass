@@ -18,6 +18,7 @@ import com.devstudio.kanban.entity.WorkActivity;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.ReqDocShareMapper;
+import com.devstudio.kanban.mapper.RequirementDocCommentMapper;
 import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
@@ -86,6 +87,7 @@ public class RequirementDocService {
 
     private final RequirementDocMapper docMapper;
     private final RequirementDocHistoryMapper historyMapper;
+    private final RequirementDocCommentMapper commentMapper;
     private final RequirementMapper reqMapper;
     private final UserMapper userMapper;
     private final TaskMapper taskMapper;
@@ -97,6 +99,7 @@ public class RequirementDocService {
     private final WorkspaceMapper workspaceMapper;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
+                                 RequirementDocCommentMapper commentMapper,
                                  RequirementMapper reqMapper, UserMapper userMapper,
                                  TaskMapper taskMapper, WorkActivityService workActivityService,
                                  DemandMapper demandMapper, ProjectAccessService projectAccess,
@@ -104,6 +107,7 @@ public class RequirementDocService {
                                  ReqDocShareMapper shareMapper, WorkspaceMapper workspaceMapper) {
         this.docMapper = docMapper;
         this.historyMapper = historyMapper;
+        this.commentMapper = commentMapper;
         this.reqMapper = reqMapper;
         this.userMapper = userMapper;
         this.taskMapper = taskMapper;
@@ -203,6 +207,7 @@ public class RequirementDocService {
         String oldTitle = d.getTitle();
         DocumentType oldDocType = DocumentType.parseOrOther(d.getDocType());
         String oldContent = d.getContent();
+        String oldFormat = d.getFormat();
         String oldStatus = d.getStatus();
         String oldOwner = d.getOwner();
         String oldOwnerUserId = d.getOwnerUserId();
@@ -216,8 +221,10 @@ public class RequirementDocService {
         recordChange(userId, workspaceId, id, "分类", oldDocType.getLabel(),
                 DocumentType.parseOrOther(d.getDocType()).getLabel());
         if (!java.util.Objects.equals(oldContent, d.getContent())) {
-            /* 正文有变化才留快照（乐观锁已通过，此时写入的必是最新一版） */
-            snapshot(userId, d);
+            /* 快照的是修改前正文：历史版本用来恢复旧内容，不能存成修改后的新版本 */
+            if (Texts.trimToNull(oldContent) != null) {
+                snapshot(userId, d, oldTitle, oldContent, oldFormat);
+            }
             workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
                     "update", "更新了正文");
         }
@@ -246,7 +253,7 @@ public class RequirementDocService {
                 || !Objects.equals(oldReqId, d.getReqId());
         if (changed) {
             notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已更新",
-                    "文档内容或属性有更新", id);
+                    "文档内容或属性有更新");
         }
         return docMapper.selectById(id);
     }
@@ -273,12 +280,13 @@ public class RequirementDocService {
         docMapper.reparentChildren(workspaceId, id, d.getParentId());
         docMapper.deleteDemandLinksByDoc(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
+        commentMapper.deleteByDoc(workspaceId, id);
         historyMapper.deleteByDoc(workspaceId, id);
         shareMapper.deleteByDoc(workspaceId, id);
         docMapper.delete(d.getId());
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已被删除",
-                "需求文档已删除，关联任务已解绑", null);
+                "需求文档已删除，关联任务已解绑");
     }
 
     /** 项目被删除时连带清理（由 RequirementService 调用） */
@@ -287,6 +295,7 @@ public class RequirementDocService {
         /* 需求没了，任务上的 req_doc_id 必须一起解绑；
            只删 requirement_doc 会留下悬空引用，任务详情里看不到但数据已经不一致。 */
         docMapper.deleteDemandLinksByReq(workspaceId, reqId);
+        commentMapper.deleteByReq(workspaceId, reqId);
         historyMapper.deleteByReq(workspaceId, reqId);
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
@@ -333,7 +342,7 @@ public class RequirementDocService {
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
                 "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
         notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已恢复到历史版本",
-                "文档已恢复到第 " + h.getVersionNo() + " 版，请确认内容", docId);
+                "文档已恢复到第 " + h.getVersionNo() + " 版，请确认内容");
         return docMapper.selectById(docId);
     }
 
@@ -438,16 +447,21 @@ public class RequirementDocService {
         return resp;
     }
 
-    /** 保存人当前正文为一版快照，并把每文档保留版数截断到 HISTORY_KEEP */
+    /** 把当前正文留一版快照（恢复历史版本前调用） */
     private void snapshot(String userId, RequirementDoc d) {
+        snapshot(userId, d, d.getTitle(), d.getContent(), d.getFormat());
+    }
+
+    /** 保存指定正文快照，并把每文档保留版数截断到 HISTORY_KEEP */
+    private void snapshot(String userId, RequirementDoc d, String title, String content, String format) {
         RequirementDocHistory h = new RequirementDocHistory();
         h.setId(Ids.gen("DH"));
         h.setDocId(d.getId());
         h.setWorkspaceId(d.getWorkspaceId());
         h.setVersionNo(historyMapper.maxVersionNo(d.getId()) + 1);
-        h.setTitle(d.getTitle());
-        h.setContent(d.getContent());
-        h.setFormat(d.getFormat());
+        h.setTitle(title);
+        h.setContent(content);
+        h.setFormat(format);
         AppUser me = userMapper.selectById(userId);
         h.setSavedBy(me == null ? null : Texts.cut(me.getDisplayName(), 32));
         h.setSavedByUserId(userId);
@@ -620,13 +634,14 @@ public class RequirementDocService {
     }
 
     /** 文档负责人不是操作者时才通知，避免自己改自己的文档还收到站内信 */
-    private void notifyDocOwner(RequirementDoc d, String actorId, String title, String body, String referenceId) {
+    private void notifyDocOwner(RequirementDoc d, String actorId, String title, String body) {
         String owner = Texts.trimToNull(d.getOwnerUserId());
         if (owner == null || owner.equals(actorId)) {
             return;
         }
+        /* 文档 ID 不是任务 ID：不能写进 refTaskId，否则通知中心点击会按任务打开并报不存在 */
         notificationEvents.notify(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DEMAND_STATUS,
-                title, body, referenceId, d.getReqId());
+                title, body, null, d.getReqId());
     }
 
     private void apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {
