@@ -2,6 +2,7 @@ package com.devstudio.kanban.dto;
 
 import lombok.Data;
 
+import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 import java.util.List;
@@ -21,6 +22,7 @@ public class TestCaseSaveRequest {
     @Size(max = 1000, message = "前置条件最多 1000 字")
     private String precondition;
 
+    @Valid
     @Size(max = 30, message = "步骤最多 30 条")
     private List<StepItem> steps;
 

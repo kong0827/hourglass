@@ -39,7 +39,8 @@ class RequirementDocServiceVisibilityTest {
     private final DemandMapper demands = mock(DemandMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
-            mock(RequirementDocHistoryMapper.class), reqs, users, tasks,
+            mock(RequirementDocHistoryMapper.class), mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
+            reqs, users, tasks,
             activities, demands, access, mock(NotificationEventService.class),
             mock(ReqDocShareMapper.class), mock(WorkspaceMapper.class));
 

@@ -139,7 +139,7 @@ class BranchServiceTest {
         service.changeStatus("U1", WS, "B1", req);
 
         verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "分支「B1」状态变更", "开发中 → 待测试", "B1", "R1");
+                "分支「B1」状态变更", "开发中 → 待测试", null, "R1");
     }
 
     @Test

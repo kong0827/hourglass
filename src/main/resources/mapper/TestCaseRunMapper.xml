@@ -11,6 +11,20 @@
        #{executedBy}, #{executedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
+  <select id="selectByWorkspace" resultType="com.devstudio.kanban.entity.TestCaseRun">
+    SELECT * FROM test_case_run
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at ASC, id ASC
+  </select>
+
+  <update id="clearBugTaskRefs">
+    UPDATE test_case_run
+    SET bug_task_id = NULL
+    WHERE workspace_id = #{workspaceId}
+      AND bug_task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </update>
+
   <select id="selectLatestByCase" resultType="com.devstudio.kanban.entity.TestCaseRun">
     SELECT * FROM test_case_run
     WHERE case_id = #{caseId}

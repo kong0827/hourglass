@@ -4,15 +4,24 @@ import com.devstudio.kanban.entity.TestCaseRun;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 @Mapper
 public interface TestCaseRunMapper {
 
     int insert(TestCaseRun run);
 
+    /** 备份导出：空间下全部执行流水 */
+    List<TestCaseRun> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
     TestCaseRun selectLatestByCase(@Param("caseId") String caseId);
 
     /** 最近失败转出缺陷时回填该轮流水（仅当该轮为 failed 时由服务层判断） */
     int updateBugTask(@Param("id") String id, @Param("bugTaskId") String bugTaskId);
+
+    /** 缺陷任务被彻底删除时解除引用 */
+    int clearBugTaskRefs(@Param("workspaceId") String workspaceId,
+                         @Param("taskIds") List<String> taskIds);
 
     int deleteByCase(@Param("workspaceId") String workspaceId, @Param("caseId") String caseId);
 

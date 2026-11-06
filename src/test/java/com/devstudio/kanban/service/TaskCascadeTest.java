@@ -7,6 +7,7 @@ import com.devstudio.kanban.mapper.DevBranchMapper;
 import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.ReqDocShareMapper;
+import com.devstudio.kanban.mapper.RequirementDocCommentMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
@@ -67,6 +68,7 @@ class TaskCascadeTest {
     private GanttShareMapper ganttShareMapper;
     private RequirementMapper reqMapper;
     private RequirementDocMapper requirementDocMapper;
+    private RequirementDocCommentMapper docCommentMapper;
     private ReqDocShareMapper reqDocShareMapper;
     private TaskCompletionService completionService;
     private DevBranchMapper devBranchMapper;
@@ -93,6 +95,7 @@ class TaskCascadeTest {
         ganttShareMapper = mock(GanttShareMapper.class);
         reqMapper = mock(RequirementMapper.class);
         requirementDocMapper = mock(RequirementDocMapper.class);
+        docCommentMapper = mock(RequirementDocCommentMapper.class);
         reqDocShareMapper = mock(ReqDocShareMapper.class);
         completionService = mock(TaskCompletionService.class);
         devBranchMapper = mock(DevBranchMapper.class);
@@ -105,7 +108,7 @@ class TaskCascadeTest {
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
                 mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
-                completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
+                docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
                 mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
                 reqDocShareMapper, testCaseMapper, testCaseRunMapper);
     }
@@ -139,6 +142,8 @@ class TaskCascadeTest {
         verify(dependencyMapper).deleteByTaskIds(WS, ids);
         verify(baselineMapper).deleteByTaskIds(WS, ids);
         verify(versionTaskMapper).deleteByTaskIds(WS, ids);
+        verify(testCaseMapper).clearBugTaskRefs(WS, ids);
+        verify(testCaseRunMapper).clearBugTaskRefs(WS, ids);
         verify(taskMapper).clearRecurNextByTaskIds(ids);
         verify(taskMapper).deleteByIds(ids);
         // BUG-6 A：完成快照不随任务物理删除
@@ -153,6 +158,10 @@ class TaskCascadeTest {
         verify(subtaskMapper).deleteByTaskIds(eq("W2"), eq(Collections.singletonList("K2")));
         verify(commentMapper).deleteByTaskIds(eq("W1"), eq(Arrays.asList("K1", "K3")));
         verify(commentMapper).deleteByTaskIds(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(testCaseMapper).clearBugTaskRefs(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(testCaseMapper).clearBugTaskRefs(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(testCaseRunMapper).clearBugTaskRefs(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(testCaseRunMapper).clearBugTaskRefs(eq("W2"), eq(Collections.singletonList("K2")));
         verify(taskMapper).deleteByIds(Arrays.asList("K1", "K3"));
         verify(taskMapper).deleteByIds(Collections.singletonList("K2"));
         // 循环派生关联跨空间一次清完
@@ -173,6 +182,7 @@ class TaskCascadeTest {
         verify(testCaseMapper).deleteByWorkspace(WS);
         verify(reqMapper).deleteAllByWorkspace(WS);
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(docCommentMapper).deleteByWorkspace(WS);
         verify(reqDocShareMapper).deleteByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(subtaskMapper).deleteAllByWorkspace(WS);
@@ -193,11 +203,12 @@ class TaskCascadeTest {
 
     @Test
     void importClearingKeepsAuditLogsAttachmentsAndOptionalData() {
-        cascade.clearWorkspaceDataForImport(WS, false, false, false, false);
+        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false, false);
 
         verify(taskMapper).deleteAllByWorkspace(WS);
-        verify(testCaseRunMapper).deleteByWorkspace(WS);
-        verify(testCaseMapper).deleteByWorkspace(WS);
+        verify(testCaseRunMapper, never()).deleteByWorkspace(WS);
+        verify(testCaseMapper, never()).deleteByWorkspace(WS);
+        verify(docCommentMapper, never()).deleteByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(commentMapper).deleteAllByWorkspace(WS);
         verify(watchMapper).deleteAllByWorkspace(WS);
@@ -209,9 +220,12 @@ class TaskCascadeTest {
         verify(versionMapper, never()).deleteByWorkspace(WS);
         verify(demandMapper, never()).deleteByWorkspace(WS);
 
-        cascade.clearWorkspaceDataForImport(WS, true, true, true, true);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
 
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper).deleteByWorkspace(WS);
+        verify(testCaseMapper).deleteByWorkspace(WS);
+        verify(docCommentMapper).deleteByWorkspace(WS);
         verify(reqDocShareMapper).deleteByWorkspace(WS);
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);

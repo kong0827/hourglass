@@ -13,6 +13,9 @@ public interface TestCaseMapper {
 
     TestCase selectById(@Param("id") String id);
 
+    /** 备份导出：空间下全部用例 */
+    List<TestCase> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
     /** 项目下用例列表：带转出缺陷任务标题，按创建时间倒序（新的在前） */
     List<TestCaseView> selectViewByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
@@ -29,6 +32,10 @@ public interface TestCaseMapper {
 
     int updateLatestBug(@Param("workspaceId") String workspaceId, @Param("id") String id,
                         @Param("bugTaskId") String bugTaskId);
+
+    /** 缺陷任务被彻底删除时解除引用，避免列表显示失效缺陷 */
+    int clearBugTaskRefs(@Param("workspaceId") String workspaceId,
+                         @Param("taskIds") List<String> taskIds);
 
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

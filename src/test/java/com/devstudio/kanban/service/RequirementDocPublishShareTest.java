@@ -43,7 +43,8 @@ class RequirementDocPublishShareTest {
     private final WorkspaceMapper workspaces = mock(WorkspaceMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementDocService service = new RequirementDocService(docs,
-            mock(RequirementDocHistoryMapper.class), mock(RequirementMapper.class), mock(UserMapper.class),
+            mock(RequirementDocHistoryMapper.class), mock(com.devstudio.kanban.mapper.RequirementDocCommentMapper.class),
+            mock(RequirementMapper.class), mock(UserMapper.class),
             mock(TaskMapper.class), mock(WorkActivityService.class), mock(DemandMapper.class), access,
             mock(NotificationEventService.class), shares, workspaces);
 

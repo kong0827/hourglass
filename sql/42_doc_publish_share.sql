@@ -10,6 +10,8 @@
 --       存量回填仅在新列首次创建时发生（@x = 0），重跑不会把用户主动收回的草稿重新发布。
 -- ============================================================================
 
+USE hourglass;
+
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requirement_doc' AND COLUMN_NAME = 'published_at');
 SET @s := IF(@x = 0,

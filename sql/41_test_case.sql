@@ -1,4 +1,6 @@
 -- 测试用例：用例实体 + 执行流水（最近一轮结果冗余在 test_case 便于列表展示）
+USE hourglass;
+
 CREATE TABLE IF NOT EXISTS `test_case` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',

@@ -256,7 +256,7 @@ public class BranchService {
         log(userId, workspaceId, b.getId(), "create", null, status,
                 "创建分支（初始状态：" + label(status) + "）");
         notifyOwner(b, userId, "分支「" + b.getName() + "」已指派给你",
-                "你成为该分支的负责人", b.getId());
+                "你成为该分支的负责人");
         return branchMapper.selectById(b.getId());
     }
 
@@ -319,7 +319,7 @@ public class BranchService {
         }
         if (ownerGiven && !eq(oldOwnerUserId, b.getOwnerUserId())) {
             notifyOwner(b, userId, "分支「" + b.getName() + "」已指派给你",
-                    "你成为该分支的负责人", b.getId());
+                    "你成为该分支的负责人");
         }
         return branchMapper.selectById(id);
     }
@@ -349,7 +349,7 @@ public class BranchService {
                         ? (label(from) + " → " + label(to))
                         : (label(from) + " → " + label(to) + "：" + note));
         notifyOwner(b, userId, "分支「" + b.getName() + "」状态变更",
-                label(from) + " → " + label(to) + (note == null ? "" : "：" + note), b.getId());
+                label(from) + " → " + label(to) + (note == null ? "" : "：" + note));
         return branchMapper.selectById(id);
     }
 
@@ -360,7 +360,7 @@ public class BranchService {
         projectAccess.assertView(workspaceId, userId, b.getReqId());
         projectAccess.assertWrite(workspaceId, userId, b.getReqId());
         notifyOwner(b, userId, "分支「" + b.getName() + "」已被删除",
-                "分支及其时间线已被删除，关联任务已解绑", null);
+                "分支及其时间线已被删除，关联任务已解绑");
         taskMapper.clearBranchRef(workspaceId, id);
         branchMapper.deleteLogsByBranch(id);
         branchMapper.deleteById(workspaceId, id);
@@ -393,13 +393,14 @@ public class BranchService {
     /* ==================== 内部 ==================== */
 
     /** 分支负责人不是操作者时才通知 */
-    private void notifyOwner(DevBranch b, String actorId, String title, String body, String referenceId) {
+    private void notifyOwner(DevBranch b, String actorId, String title, String body) {
         String owner = Texts.trimToNull(b.getOwnerUserId());
         if (owner == null || owner.equals(actorId)) {
             return;
         }
+        /* 分支 ID 不是任务 ID：不能写进 refTaskId，否则通知中心点击会按任务打开并报不存在 */
         notificationEvents.notify(owner, b.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS, title, body, referenceId, b.getReqId());
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body, null, b.getReqId());
     }
 
     /** 新建时按初始状态盖上第一个时间点（其余留空，等真正进入再写） */
