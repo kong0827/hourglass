@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { reqNameById, rt } from "../core/state.js";
+import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { colName, fmtMinutesShort } from "../lib/format.js";
@@ -24,6 +24,9 @@ var versionOptionsCache = {};
 var taskOptionsCache = {};
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
+/* 版本写入口跟随所选项目的可写性（成员在只读项目下不应看到发布/编辑/管理任务） */
+function canWritePhase(){ return !!rt.phaseReqId && canEditReq(rt.phaseReqId); }
+function denyPhaseReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function fmtPct(v){ return (v === null || v === undefined) ? "—" : ((v > 0 ? "+" : "") + v + "%"); }
 function devCls(v){
   if(v === null || v === undefined) return "mute";
@@ -228,7 +231,7 @@ function syncModeSeg(){
   /* 总览口径是全部项目：隐藏单项目选择与新建版本 */
   var ov = viewMode === "overview";
   if(phaseReq) phaseReq.style.display = ov ? "none" : "";
-  if($("btnVerNew")) $("btnVerNew").style.display = ov ? "none" : "";
+  if($("btnVerNew")) $("btnVerNew").style.display = (ov || !canWritePhase()) ? "none" : "";
 }
 function metricCells(cells, drill){
   return '<div class="pgrid">' + cells.map(function(c){
@@ -371,6 +374,7 @@ function openMemberDrill(userId, name){
 }
 
 function renderPhaseView(){
+  syncModeSeg();
   if(viewMode === "overview"){ renderOverviewMode(); return; }
   if(!cache) return;
   if(viewMode === "version") renderVersionMode();
@@ -580,13 +584,16 @@ function versionCardHTML(v){
     ];
   }
   var acts = '<div class="phase-acts">';
+  var writable = canWritePhase();
   if(st === "released"){
     acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">发布说明</button>';
-  }else{
+  }else if(writable){
     acts += '<button class="btn sm primary" type="button" data-ver-release="' + esc(v.id) + '">发布</button>';
   }
-  acts += '<button class="btn sm ghost" type="button" data-ver-tasks="' + esc(v.id) + '">管理任务</button>';
-  acts += '<button class="btn sm ghost" type="button" data-ver-edit="' + esc(v.id) + '">编辑</button>';
+  if(writable){
+    acts += '<button class="btn sm ghost" type="button" data-ver-tasks="' + esc(v.id) + '">管理任务</button>';
+    acts += '<button class="btn sm ghost" type="button" data-ver-edit="' + esc(v.id) + '">编辑</button>';
+  }
   if(isOwner()){
     acts += '<button class="btn sm ghost danger" type="button" data-ver-del="' + esc(v.id) + '">删除</button>';
   }
@@ -637,6 +644,7 @@ function findVersion(id){
   return null;
 }
 function openVersionDialog(id){
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   editingVerId = id || null;
   var v = id ? findVersion(id) : null;
   vName.value = v ? v.name : "";
@@ -648,6 +656,7 @@ function openVersionDialog(id){
   UI.openModal($("dlgVersion"), "input");
 }
 function saveVersion(){
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   var name = vName.value.trim();
   if(!name){
     fVerName.classList.add("invalid");
@@ -681,6 +690,7 @@ function saveVersion(){
 function publishVersion(id){
   var v = findVersion(id);
   if(!v) return;
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   UI.showConfirm({
     title:"发布版本",
     msg:"发布「" + esc(v.name) + "」？发布后记录实际发布时间，状态变为「已发布」。",
@@ -712,6 +722,7 @@ function deleteVersion(id){
 function openVersionTasks(id){
   var v = findVersion(id);
   if(!v) return;
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   var selected = {}, query = "";
   cache.tasks.forEach(function(t){ if(t.versionId === id) selected[t.id] = true; });
   var versionNames = {};
@@ -1020,6 +1031,7 @@ if($("phaseModeSeg")) $("phaseModeSeg").addEventListener("click", function(e){
 });
 if($("btnVerNew")) $("btnVerNew").addEventListener("click", function(){
   if(!rt.phaseReqId){ toast("先选择项目，再新建版本", "warn"); return; }
+  if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   openVersionDialog(null);
 });
 if($("dlgVersionX")) $("dlgVersionX").addEventListener("click", function(){ UI.closeModal($("dlgVersion")); });

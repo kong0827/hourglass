@@ -10,6 +10,7 @@ import com.devstudio.kanban.dto.ProfileUpdateRequest;
 import com.devstudio.kanban.dto.WorkHoursRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.service.AccountSecurityMailService;
 import com.devstudio.kanban.service.UserNotificationPreferenceService;
 import com.devstudio.kanban.service.UserService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,14 +31,17 @@ public class AuthController {
     private final UserService userService;
     private final UserNotificationPreferenceService preferenceService;
     private final com.devstudio.kanban.service.SessionEpochService sessionEpochs;
+    private final AccountSecurityMailService securityMail;
 
     public AuthController(UserMapper userMapper, UserService userService,
                           UserNotificationPreferenceService preferenceService,
-                          com.devstudio.kanban.service.SessionEpochService sessionEpochs) {
+                          com.devstudio.kanban.service.SessionEpochService sessionEpochs,
+                          AccountSecurityMailService securityMail) {
         this.userMapper = userMapper;
         this.userService = userService;
         this.preferenceService = preferenceService;
         this.sessionEpochs = sessionEpochs;
+        this.securityMail = securityMail;
     }
 
     /** 当前登录用户信息（前端据此决定管理入口、上次空间、负责人默认名等） */
@@ -66,13 +70,18 @@ public class AuthController {
         String userId = CurrentUser.id();
         userService.changePassword(userId, req);
         request.getSession(true).setAttribute(SessionEpochFilter.SESSION_KEY, sessionEpochs.current(userId));
+        securityMail.passwordChanged(userMapper.selectById(userId));
         return ApiResult.ok();
     }
 
     /** 修改自己的显示名（负责人默认值与成员列表展示随之更新；历史任务上的负责人名保留快照） */
     @PutMapping("/api/auth/profile")
     public ApiResult<Map<String, Object>> updateProfile(@Valid @RequestBody ProfileUpdateRequest req) {
+        AppUser before = userMapper.selectById(CurrentUser.id());
         AppUser u = userService.updateProfile(CurrentUser.id(), req);
+        if (before != null && !java.util.Objects.equals(before.getEmail(), u.getEmail())) {
+            securityMail.emailChanged(before.getEmail(), u.getEmail());
+        }
         Map<String, Object> data = new LinkedHashMap<String, Object>();
         data.put("displayName", u.getDisplayName());
         data.put("email", u.getEmail());

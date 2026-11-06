@@ -34,4 +34,6 @@ public class Workspace {
     private String myRole;
     /** 非表字段：成员数 */
     private Integer memberCount;
+    /** 非表字段：当前用户的项目级范围 projectId → read/none；无记录即默认可见可写 */
+    private java.util.Map<String, String> projectAccess;
 }

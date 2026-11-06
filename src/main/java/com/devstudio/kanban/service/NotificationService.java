@@ -74,6 +74,8 @@ public class NotificationService {
     private final AppNotificationService appNotificationService;
     /** 站内提醒按接收人的项目可见范围过滤，隐藏项目不推送 */
     private final ProjectAccessService projectAccess;
+    /** 个人偏好：每日汇总可按人关闭 */
+    private final UserNotificationPreferenceService preferenceService;
     private final RestTemplate restTemplate;
     /** 有界发送池：不占用调度线程，同一时间最多 2 个 webhook 在飞 */
     private final ThreadPoolExecutor remindSender;
@@ -96,6 +98,7 @@ public class NotificationService {
                                WorkspaceMemberMapper memberMapper, UserMapper userMapper,
                                AppNotificationService appNotificationService,
                                ProjectAccessService projectAccess,
+                               UserNotificationPreferenceService preferenceService,
                                @Qualifier("webhookRestTemplate") RestTemplate restTemplate) {
         this.taskMapper = taskMapper;
         this.workspaceMapper = workspaceMapper;
@@ -103,6 +106,7 @@ public class NotificationService {
         this.userMapper = userMapper;
         this.appNotificationService = appNotificationService;
         this.projectAccess = projectAccess;
+        this.preferenceService = preferenceService;
         /* OPS-2：webhook 与 AI 共用出站连接池；该 bean 连接 2s / 读 3s、不跟随重定向 */
         this.restTemplate = restTemplate;
         this.remindSender = new ThreadPoolExecutor(2, 2, 60L, TimeUnit.SECONDS,
@@ -516,6 +520,9 @@ public class NotificationService {
         LocalDate today = LocalDate.now();
         int sent = 0;
         for (Map.Entry<String, List<Task>> e : byUser.entrySet()) {
+            if (!preferenceService.inAppEnabled(e.getKey(), UserNotificationPreferenceService.DAILY_DIGEST)) {
+                continue;
+            }
             int overN = 0;
             int todayN = 0;
             for (Task t : e.getValue()) {

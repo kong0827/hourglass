@@ -48,6 +48,7 @@ public class UserService implements UserDetailsService {
     private final WorkspaceMemberMapper memberMapper;
     private final com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper;
     private final TaskMapper taskMapper;
+    private final com.devstudio.kanban.mapper.TaskWatchMapper taskWatchMapper;
     private final RequirementMapper reqMapper;
     private final com.devstudio.kanban.mapper.DevBranchMapper devBranchMapper;
     private final com.devstudio.kanban.mapper.RequirementDocMapper requirementDocMapper;
@@ -64,7 +65,9 @@ public class UserService implements UserDetailsService {
 
     public UserService(UserMapper userMapper, WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                        com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper,
-                       TaskMapper taskMapper, RequirementMapper reqMapper,
+                       TaskMapper taskMapper,
+                       com.devstudio.kanban.mapper.TaskWatchMapper taskWatchMapper,
+                       RequirementMapper reqMapper,
                        com.devstudio.kanban.mapper.DevBranchMapper devBranchMapper,
                        com.devstudio.kanban.mapper.RequirementDocMapper requirementDocMapper,
                        WorkspaceService workspaceService, PasswordEncoder encoder,
@@ -74,6 +77,7 @@ public class UserService implements UserDetailsService {
         this.memberMapper = memberMapper;
         this.projectMemberMapper = projectMemberMapper;
         this.taskMapper = taskMapper;
+        this.taskWatchMapper = taskWatchMapper;
         this.reqMapper = reqMapper;
         this.devBranchMapper = devBranchMapper;
         this.requirementDocMapper = requirementDocMapper;
@@ -115,7 +119,7 @@ public class UserService implements UserDetailsService {
                     password = raw;
                     log.info("首次启动：已创建管理员账号 {}", username);
                 }
-                createAccount(username, password, username, "admin", true);
+                createAccount(username, password, username, "admin", null, true);
             }
             ensurePersonalSpaces();
         } catch (Exception e) {
@@ -148,7 +152,8 @@ public class UserService implements UserDetailsService {
         String displayName = Texts.trimToNull(req.getDisplayName());
         AppUser u = createAccount(username, req.getPassword(),
                 displayName == null ? username : Texts.cut(displayName, 32),
-                req.getRole() == null ? "user" : req.getRole(), false);
+                req.getRole() == null ? "user" : req.getRole(),
+                Texts.trimToNull(req.getEmail()), false);
         return u;
     }
 
@@ -279,6 +284,8 @@ public class UserService implements UserDetailsService {
         projectMemberMapper.deleteAllByUser(id);
         /* 账号删除后清掉业务表上的负责人引用，保留显示名文本作为历史快照 */
         taskMapper.clearOwnerUser(id);
+        /* 关注关系跨空间保留在任务上，账号删除后必须一并清掉 */
+        taskWatchMapper.deleteAllByUser(id);
         devBranchMapper.clearOwnerUser(id);
         requirementDocMapper.clearOwnerUser(id);
         workspaceService.deleteUserArtifacts(id);
@@ -296,7 +303,7 @@ public class UserService implements UserDetailsService {
 
     /** 创建账号 + 个人空间（先建空间再插用户：任一步失败都不留"无空间的账号"，重启由自愈逻辑兜底） */
     private AppUser createAccount(String username, String rawPassword, String displayName, String role,
-                                  boolean allowEncodedHash) {
+                                  String email, boolean allowEncodedHash) {
         String id = Ids.gen("U");
         workspaceService.createPersonal(id);
         AppUser u = new AppUser();
@@ -314,6 +321,7 @@ public class UserService implements UserDetailsService {
         u.setPasswordHash(hash);
         u.setDisplayName(cleanName(displayName, username));
         u.setRole(role);
+        u.setEmail(uniqueEmail(email, id));
         u.setLastWorkspaceId(WorkspaceService.personalId(id));
         userMapper.insert(u);
         return userMapper.selectById(id);

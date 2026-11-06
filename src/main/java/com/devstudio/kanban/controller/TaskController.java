@@ -18,6 +18,7 @@ import com.devstudio.kanban.entity.TaskLog;
 import com.devstudio.kanban.service.TaskCommandService;
 import com.devstudio.kanban.service.TaskQueryService;
 import com.devstudio.kanban.service.TaskTrashService;
+import com.devstudio.kanban.service.TaskWatchService;
 import com.devstudio.kanban.service.TaskWorkflowService;
 import com.devstudio.kanban.service.WorkspaceVersionService;
 import org.springframework.http.HttpHeaders;
@@ -51,15 +52,17 @@ public class TaskController {
     private final TaskWorkflowService workflowService;
     private final TaskTrashService trashService;
     private final WorkspaceVersionService versionService;
+    private final TaskWatchService watchService;
 
     public TaskController(TaskQueryService queryService, TaskCommandService commandService,
                           TaskWorkflowService workflowService, TaskTrashService trashService,
-                          WorkspaceVersionService versionService) {
+                          WorkspaceVersionService versionService, TaskWatchService watchService) {
         this.queryService = queryService;
         this.commandService = commandService;
         this.workflowService = workflowService;
         this.trashService = trashService;
         this.versionService = versionService;
+        this.watchService = watchService;
     }
 
     /** 看板聚合：列数据 + 列定义 + 提醒计数 + 筛选元数据 */
@@ -69,11 +72,13 @@ public class TaskController {
                                           @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
                                           HttpServletRequest request) {
         String wsId = ctx.getWsId();
-        String etag = versionService.etag(wsId, request.getQueryString(), versionService.version(wsId));
+        String etag = versionService.etag(wsId, ctx.getUserId(), request.getQueryString(), versionService.version(wsId));
         if (etag.equals(inm)) {
-            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-cache").build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-cache")
                 .body(ApiResult.ok(queryService.board(wsId, ctx.getUserId(), query)));
     }
 
@@ -94,11 +99,13 @@ public class TaskController {
                                             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
                                             HttpServletRequest request) {
         String wsId = ctx.getWsId();
-        String etag = versionService.etag(wsId, request.getQueryString(), versionService.version(wsId));
+        String etag = versionService.etag(wsId, ctx.getUserId(), request.getQueryString(), versionService.version(wsId));
         if (etag.equals(inm)) {
-            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-cache").build();
         }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-cache")
                 .body(ApiResult.ok(queryService.list(wsId, ctx.getUserId(), query, sort,
                         offset == null ? 0 : offset, limit == null ? 0 : limit)));
     }
@@ -175,6 +182,25 @@ public class TaskController {
     public ApiResult<Void> delete(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
         trashService.delete(ctx.getUserId(), ctx.getWsId(), id);
         return ApiResult.ok();
+    }
+
+    /** 任务关注状态（任何能查看该任务的人都可以关注） */
+    @GetMapping("/api/tasks/{id}/watch")
+    public ApiResult<Map<String, Object>> watchStatus(@CurrentWorkspace WorkspaceCtx ctx,
+                                                      @PathVariable String id) {
+        return ApiResult.ok(watchService.status(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    @PostMapping("/api/tasks/{id}/watch")
+    public ApiResult<Map<String, Object>> watch(@CurrentWorkspace WorkspaceCtx ctx,
+                                                @PathVariable String id) {
+        return ApiResult.ok(watchService.watch(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    @DeleteMapping("/api/tasks/{id}/watch")
+    public ApiResult<Map<String, Object>> unwatch(@CurrentWorkspace WorkspaceCtx ctx,
+                                                  @PathVariable String id) {
+        return ApiResult.ok(watchService.unwatch(ctx.getUserId(), ctx.getWsId(), id));
     }
 
     /** 任务操作时间线（含操作人） */

@@ -1,6 +1,7 @@
 package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.dto.DemandActionRequest;
+import com.devstudio.kanban.dto.DemandSaveRequest;
 import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.mapper.DemandMapper;
@@ -80,6 +81,31 @@ class DemandServiceNotificationTest {
 
         verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
                 eq("需求「Demand」重新打开"), anyString(), eq("D1"), eq("R1"));
+    }
+
+    @Test
+    void updateNotifiesSubmitter() {
+        Demand d = demand("review");
+        when(demands.selectById("D1")).thenReturn(d);
+        DemandSaveRequest req = new DemandSaveRequest();
+        req.setReqId("R1");
+        req.setTitle("Demand2");
+
+        service.update("admin", "W1", "D1", req);
+
+        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand2」已被编辑"), eq("需求内容有更新（仍处于待评审）"), eq("D1"), eq("R1"));
+    }
+
+    @Test
+    void deleteNotifiesSubmitter() {
+        Demand d = demand("review");
+        when(demands.selectById("D1")).thenReturn(d);
+
+        service.delete("admin", "W1", "D1");
+
+        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」已被删除"), anyString(), isNull(), eq("R1"));
     }
 
     @Test

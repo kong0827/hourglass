@@ -26,7 +26,12 @@
       GROUP BY req_doc_id
     ) tc ON tc.req_doc_id = d.id
     WHERE d.workspace_id = #{workspaceId}
-    ORDER BY d.req_id, d.sort_order, d.created_at
+    <if test="keyword != null and keyword != ''">
+      AND (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+           OR d.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+    </if>
+    ORDER BY (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\') DESC,
+             d.req_id, d.sort_order, d.created_at
   </select>
 
   <select id="selectById" resultType="RequirementDoc">

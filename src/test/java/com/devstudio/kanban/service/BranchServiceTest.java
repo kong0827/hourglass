@@ -1,6 +1,7 @@
 package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.dto.BranchProjectTag;
+import com.devstudio.kanban.dto.BranchStatusRequest;
 import com.devstudio.kanban.dto.BranchVersionTag;
 import com.devstudio.kanban.entity.DevBranch;
 import com.devstudio.kanban.mapper.DevBranchMapper;
@@ -16,6 +17,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class BranchServiceTest {
@@ -27,8 +30,9 @@ class BranchServiceTest {
     private final UserMapper userMapper = mock(UserMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper requirementMapper = mock(RequirementMapper.class);
+    private final NotificationEventService events = mock(NotificationEventService.class);
     private final BranchService service = new BranchService(branchMapper, taskMapper, userMapper, access,
-            requirementMapper);
+            requirementMapper, events);
 
     @Test
     void listFillsDerivedVersionTagsSortedByVersionLifecycle() {
@@ -121,6 +125,62 @@ class BranchServiceTest {
 
         assertEquals(1, out.size());
         assertEquals("B2", out.get(0).getId());
+    }
+
+    @Test
+    void statusChangeNotifiesOwner() {
+        DevBranch b = branch("B1");
+        b.setReqId("R1");
+        b.setOwnerUserId("U2");
+        when(branchMapper.selectById("B1")).thenReturn(b);
+        BranchStatusRequest req = new BranchStatusRequest();
+        req.setStatus(BranchService.ST_TESTING);
+
+        service.changeStatus("U1", WS, "B1", req);
+
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.BRANCH_STATUS,
+                "分支「B1」状态变更", "开发中 → 待测试", "B1", "R1");
+    }
+
+    @Test
+    void statusChangeByOwnerDoesNotNotifySelf() {
+        DevBranch b = branch("B1");
+        b.setReqId("R1");
+        b.setOwnerUserId("U2");
+        when(branchMapper.selectById("B1")).thenReturn(b);
+        BranchStatusRequest req = new BranchStatusRequest();
+        req.setStatus(BranchService.ST_TESTING);
+
+        service.changeStatus("U2", WS, "B1", req);
+
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void deleteNotifiesOwner() {
+        DevBranch b = branch("B1");
+        b.setReqId("R1");
+        b.setOwnerUserId("U2");
+        when(branchMapper.selectById("B1")).thenReturn(b);
+
+        service.delete("U1", WS, "B1");
+
+        verify(events).notify("U2", WS, UserNotificationPreferenceService.BRANCH_STATUS,
+                "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", null, "R1");
+        verify(branchMapper).deleteById(WS, "B1");
+    }
+
+    @Test
+    void deleteByOwnerDoesNotNotifySelf() {
+        DevBranch b = branch("B1");
+        b.setReqId("R1");
+        b.setOwnerUserId("U2");
+        when(branchMapper.selectById("B1")).thenReturn(b);
+
+        service.delete("U2", WS, "B1");
+
+        verifyNoInteractions(events);
+        verify(branchMapper).deleteById(WS, "B1");
     }
 
     private DevBranch branch(String id) {

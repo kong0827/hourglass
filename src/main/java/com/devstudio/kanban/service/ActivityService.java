@@ -63,6 +63,9 @@ public class ActivityService {
     /** 空间活动流（倒序，最多 limit 条；排除配置哨兵以外的噪音由调用方决定） */
     public List<TaskLog> activity(String workspaceId, String userId, Integer limit) {
         int n = limit == null ? 200 : Math.max(1, Math.min(500, limit));
-        return logMapper.selectByWorkspace(workspaceId, projectAccess.viewerScope(workspaceId, userId), n);
+        /* 配置审计文案会点名项目/成员，只在空间主与管理员之间可见 */
+        boolean includeConfig = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
+        return logMapper.selectByWorkspace(workspaceId, projectAccess.viewerScope(workspaceId, userId),
+                includeConfig, n);
     }
 }

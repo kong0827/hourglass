@@ -5,6 +5,7 @@ import com.devstudio.kanban.common.CurrentUser;
 import com.devstudio.kanban.dto.TaskCommentRequest;
 import com.devstudio.kanban.entity.TaskComment;
 import com.devstudio.kanban.entity.Workspace;
+import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.service.TaskCommentService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,7 +44,17 @@ public class TaskCommentController {
                                          @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(commentService.create(userId, ws.getId(), id, req.getContent()));
+        return ApiResult.ok(commentService.create(userId, ws.getId(), id, req.getContent(),
+                req.getMentionUserIds()));
+    }
+
+    /** @提及候选：只返回对该任务所在项目可见的空间成员 */
+    @GetMapping("/api/tasks/{id}/mention-candidates")
+    public ApiResult<List<WorkspaceMember>> mentionCandidates(@PathVariable String id,
+                                                              @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(commentService.mentionCandidates(userId, ws.getId(), id));
     }
 
     @DeleteMapping("/api/comments/{id}")

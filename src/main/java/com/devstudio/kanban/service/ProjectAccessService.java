@@ -2,13 +2,17 @@ package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.common.AppException;
 import com.devstudio.kanban.entity.ProjectMember;
+import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.ProjectMemberMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -171,6 +175,61 @@ public class ProjectAccessService {
         }
     }
 
+    /**
+     * 当前用户在该空间的显式项目范围（projectId → read/none）。
+     * owner/admin/viewer 与非成员返回空表：前者全量可写、后者全局只读，
+     * 都不靠项目级配置解释权限，前端据此只对 member 叠加只读态。
+     */
+    public Map<String, String> userGrants(String workspaceId, String userId) {
+        Map<String, String> grants = new HashMap<String, String>();
+        String role = roleOf(workspaceId, userId);
+        if (role == null || isPrivileged(role) || isViewer(role)) {
+            return grants;
+        }
+        for (ProjectMember pm : projectMemberMapper.selectByUser(workspaceId, userId)) {
+            String value = normalizeAccess(pm.getAccess());
+            if (!value.isEmpty()) {
+                grants.put(pm.getProjectId(), value);
+            }
+        }
+        return grants;
+    }
+
+    /**
+     * 批量标记任务的可写性（跨空间「我的任务」用）：按空间缓存角色与项目范围，
+     * 避免逐条任务查库。结果写入 Task.access = write/read，与 canWrite 同口径。
+     */
+    public void markWritable(String userId, List<Task> tasks) {
+        Map<String, String> roles = new HashMap<String, String>();
+        Map<String, Map<String, String>> grants = new HashMap<String, Map<String, String>>();
+        for (Task t : tasks) {
+            String wsId = t.getWorkspaceId();
+            String role;
+            if (roles.containsKey(wsId)) {
+                role = roles.get(wsId);
+            } else {
+                String r = roleOf(wsId, userId);
+                role = r == null ? "" : r;
+                roles.put(wsId, role);
+            }
+            boolean writable;
+            if (role.isEmpty() || isViewer(role)) {
+                writable = false;
+            } else if (isPrivileged(role) || t.getReqId() == null) {
+                writable = true;
+            } else {
+                Map<String, String> g = grants.get(wsId);
+                if (g == null) {
+                    g = userGrants(wsId, userId);
+                    grants.put(wsId, g);
+                }
+                String access = g.get(t.getReqId());
+                writable = !ACCESS_READ.equals(access) && !ACCESS_NONE.equals(access);
+            }
+            t.setAccess(writable ? "write" : "read");
+        }
+    }
+
     /** 该成员被显式设为"不可见"的项目集合（owner/admin/viewer 恒为空） */
     public Set<String> hiddenProjectIds(String workspaceId, String userId) {
         Set<String> hidden = new HashSet<String>();
@@ -184,6 +243,47 @@ public class ProjectAccessService {
             }
         }
         return hidden;
+    }
+
+    /**
+     * 批量过滤对某项目可见的空间成员（@提及候选用）：一次读出项目范围配置，
+     * 不再逐人回查角色与可见范围，判定口径与 canView 一致。
+     */
+    public List<WorkspaceMember> filterVisibleMembers(String workspaceId, List<WorkspaceMember> members,
+                                                      String projectId) {
+        List<WorkspaceMember> visible = new ArrayList<WorkspaceMember>();
+        if (members == null || members.isEmpty()) {
+            return visible;
+        }
+        Map<String, Set<String>> hidden = new HashMap<String, Set<String>>();
+        if (projectId != null) {
+            for (ProjectMember pm : projectMemberMapper.selectByWorkspace(workspaceId)) {
+                if (!ACCESS_NONE.equals(pm.getAccess())) {
+                    continue;
+                }
+                Set<String> projects = hidden.get(pm.getUserId());
+                if (projects == null) {
+                    projects = new HashSet<String>();
+                    hidden.put(pm.getUserId(), projects);
+                }
+                projects.add(pm.getProjectId());
+            }
+        }
+        for (WorkspaceMember m : members) {
+            String userId = m.getUserId();
+            if (userId == null || m.getRole() == null) {
+                continue;
+            }
+            if (projectId == null || isPrivileged(m.getRole()) || isViewer(m.getRole())) {
+                visible.add(m);
+                continue;
+            }
+            Set<String> projects = hidden.get(userId);
+            if (projects == null || !projects.contains(projectId)) {
+                visible.add(m);
+            }
+        }
+        return visible;
     }
 
     public List<ProjectMember> grants(String workspaceId) {

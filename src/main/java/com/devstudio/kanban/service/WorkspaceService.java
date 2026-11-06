@@ -10,6 +10,7 @@ import com.devstudio.kanban.dto.WorkspaceUpdateRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.BoardColumn;
 import com.devstudio.kanban.entity.Category;
+import com.devstudio.kanban.entity.ProjectMember;
 import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
@@ -18,6 +19,7 @@ import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.ProjectMemberMapper;
 import com.devstudio.kanban.mapper.SavedViewMapper;
+import com.devstudio.kanban.mapper.TaskWatchMapper;
 import com.devstudio.kanban.mapper.UserListPreferenceMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
@@ -33,7 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -57,6 +61,7 @@ public class WorkspaceService {
     private final WorkActivityService workActivityService;
     private final InviteMapper inviteMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final TaskWatchMapper taskWatchMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
     /** 配置审计日志 */
@@ -75,6 +80,7 @@ public class WorkspaceService {
                             WorkActivityService workActivityService,
                             InviteMapper inviteMapper,
                             ProjectMemberMapper projectMemberMapper,
+                            TaskWatchMapper taskWatchMapper,
                             TaskCascade cascade,
                             com.devstudio.kanban.service.ActivityService activityService,
                             WorkspaceMemberCache memberCache,
@@ -90,6 +96,7 @@ public class WorkspaceService {
         this.workActivityService = workActivityService;
         this.inviteMapper = inviteMapper;
         this.projectMemberMapper = projectMemberMapper;
+        this.taskWatchMapper = taskWatchMapper;
         this.cascade = cascade;
         this.activityService = activityService;
         this.memberCache = memberCache;
@@ -193,8 +200,28 @@ public class WorkspaceService {
         List<Workspace> list = workspaceMapper.selectByUser(userId);
         for (Workspace ws : list) {
             maskWebhook(ws);
+            ws.setProjectAccess(grantsFor(ws, userId));
         }
         return list;
+    }
+
+    /**
+     * 当前用户的项目级范围（projectId → read/none）。
+     * 只有 member 需要它：owner/admin 全量可写、viewer 全局只读，
+     * 下发空表让前端按角色判定，避免两份口径互相打架。
+     */
+    private Map<String, String> grantsFor(Workspace ws, String userId) {
+        Map<String, String> grants = new LinkedHashMap<String, String>();
+        if (!ProjectAccessService.ROLE_MEMBER.equals(ws.getMyRole())) {
+            return grants;
+        }
+        for (ProjectMember pm : projectMemberMapper.selectByUser(ws.getId(), userId)) {
+            String value = ProjectAccessService.normalizeAccess(pm.getAccess());
+            if (!value.isEmpty()) {
+                grants.put(pm.getProjectId(), value);
+            }
+        }
+        return grants;
     }
 
     @Transactional
@@ -409,9 +436,16 @@ public class WorkspaceService {
             }
         }
         memberMapper.updateRole(workspaceId, targetUserId, role);
+        /* 角色一变，旧的按项目配置就失去语义：管理员/查看者不看它，退回成员时也不该继承
+           （否则界面上看不到、行为上却仍在生效）。统一回到「默认全部可见可写」。 */
+        boolean grantsReset = !role.equals(target.getRole());
+        if (grantsReset) {
+            projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+        }
         AppUser u = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, operatorId, "调整成员角色「"
-                + (u == null || u.getDisplayName() == null ? targetUserId : u.getDisplayName()) + "」→ " + role);
+                + (u == null || u.getDisplayName() == null ? targetUserId : u.getDisplayName()) + "」→ " + role
+                + (grantsReset ? "（项目可见范围已重置）" : ""));
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
     }
 
@@ -428,6 +462,8 @@ public class WorkspaceService {
             }
             memberMapper.delete(workspaceId, targetUserId);
             projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+            /* 关注关系只在本空间有效，退出后清理，重新加入需重新关注 */
+            taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
             CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
             return;
@@ -448,6 +484,8 @@ public class WorkspaceService {
         }
         memberMapper.delete(workspaceId, targetUserId);
         projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+        /* 关注关系只在本空间有效，移除后清理，重新加入需重新关注 */
+        taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
         AppUser target = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, userId, "移除成员「"
                 + (target == null || target.getDisplayName() == null ? targetUserId : target.getDisplayName()) + "」");

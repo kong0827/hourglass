@@ -23,4 +23,6 @@ public class ReqProgress {
     private int demandCount;
     private java.time.LocalDateTime createdAt;
     private java.time.LocalDateTime updatedAt;
+    /** 当前用户对该项目的写权限：read=只读，write=可编辑；前端据此收敛写入口 */
+    private String access;
 }

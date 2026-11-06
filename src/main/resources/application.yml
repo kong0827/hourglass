@@ -84,10 +84,15 @@ app:
     crypto-key: ${AI_CRYPTO_KEY:hourglass-local-ai-key-change-me}
     # 默认禁止自定义 AI 地址访问内网/回环；本地 Ollama 或局域网中转需显式置 true
     allow-private-network: ${AI_ALLOW_PRIVATE_NETWORK:false}
+  notification:
+    # 站内通知保留天数；每天 03:20 清理超期记录
+    retain-days: ${NOTIFICATION_RETAIN_DAYS:90}
   mail:
     # 数据库 outbox 扫描间隔；SMTP 主机、账号与密码统一由管理员接口保存，不走环境变量
     scan-ms: ${MAIL_SCAN_MS:30000}
     initial-delay-ms: ${MAIL_INITIAL_DELAY_MS:10000}
+    # 站点根地址，含 context-path（如 https://host/hourglass/）；用于通知邮件里的任务/登录链接，留空则不附链接
+    base-url: ${MAIL_BASE_URL:}
 
 logging:
   level:

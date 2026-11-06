@@ -23,6 +23,7 @@ class TaskTrashServiceEpicCleanupTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final TaskTrashService service = new TaskTrashService(tasks, support, cascade, timeLog, audit,
             access, mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+            mock(NotificationEventService.class), mock(TaskWatchService.class),
             mock(PlatformTransactionManager.class));
 
     @Test

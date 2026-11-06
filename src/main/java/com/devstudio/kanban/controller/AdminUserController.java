@@ -8,6 +8,7 @@ import com.devstudio.kanban.dto.UserCreateRequest;
 import com.devstudio.kanban.dto.UserUpdateRequest;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.service.AccountSecurityMailService;
 import com.devstudio.kanban.service.UserService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,10 +31,13 @@ public class AdminUserController {
 
     private final UserService userService;
     private final UserMapper userMapper;
+    private final AccountSecurityMailService securityMail;
 
-    public AdminUserController(UserService userService, UserMapper userMapper) {
+    public AdminUserController(UserService userService, UserMapper userMapper,
+                               AccountSecurityMailService securityMail) {
         this.userService = userService;
         this.userMapper = userMapper;
+        this.securityMail = securityMail;
     }
 
     /** 以数据库实时角色为准（登录时写入会话的角色可能已过期） */
@@ -53,7 +57,9 @@ public class AdminUserController {
     @PostMapping("/api/admin/users")
     public ApiResult<AppUser> create(@Valid @RequestBody UserCreateRequest req) {
         requireAdmin();
-        return ApiResult.ok(userService.create(req));
+        AppUser u = userService.create(req);
+        securityMail.welcome(u);
+        return ApiResult.ok(u);
     }
 
     @PutMapping("/api/admin/users/{id}")
@@ -66,6 +72,7 @@ public class AdminUserController {
     public ApiResult<Void> resetPassword(@PathVariable String id, @Valid @RequestBody PasswordResetRequest req) {
         requireAdmin();
         userService.resetPassword(id, req);
+        securityMail.passwordReset(userMapper.selectById(id));
         return ApiResult.ok();
     }
 

@@ -754,7 +754,7 @@
             <span class="toolbar-title">文档</span>
             <span class="toolbar-right">
               <span class="reqdoc-search">
-                <input type="search" id="reqDocSearch" placeholder="搜索文档标题…" aria-label="搜索文档">
+                <input type="search" id="reqDocSearch" placeholder="搜索标题或正文…" aria-label="搜索文档">
               </span>
               <button class="btn primary sm" type="button" id="reqDocNew">
                 <span data-icon="plus"></span>&nbsp;新增文档
@@ -788,6 +788,9 @@
               </button>
               <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查文档里的功能点是否都有工作项覆盖">
                 完成度检查
+              </button>
+              <button class="btn sm ghost" type="button" id="reqDocHistory" title="查看历史版本并恢复">
+                <span data-icon="clock"></span>&nbsp;历史版本
               </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
@@ -932,6 +935,31 @@
             <div class="ai-usage" id="aiAuditUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgAiAuditClose">关闭</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 历史版本：左侧版本列表，右侧预览，可恢复 -->
+        <div class="modal-layer" id="dlgReqDocHistory" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocHistoryTitle">
+          <div class="sheet wide reqdoc-history-dlg">
+            <div class="sheet-head">
+              <div style="flex:1;min-width:0">
+                <h2 id="dlgReqDocHistoryTitle">历史版本</h2>
+                <div class="desc">正文每次保存留一版快照，最多保留最近 20 版；恢复前当前内容会先留档</div>
+              </div>
+              <button class="icon-btn sm" type="button" id="dlgReqDocHistoryX" aria-label="关闭">
+                <span data-icon="close"></span>
+              </button>
+            </div>
+            <div class="sheet-body reqdoc-history-body">
+              <div class="reqdoc-history-list" id="reqDocHistoryList"></div>
+              <div class="reqdoc-history-preview">
+                <div class="reqdoc-history-preview-head">
+                  <span class="rh-ver-title" id="reqDocHistoryVerTitle"></span>
+                  <button class="btn sm primary" type="button" id="reqDocHistoryRestore">恢复此版本</button>
+                </div>
+                <div class="reqdoc-history-content markdown-body" id="reqDocHistoryContent"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1698,6 +1726,10 @@
   <form class="drawer" id="taskForm" novalidate>
     <div class="drawer-head">
       <h2 id="taskDrawerTitle">新建任务</h2>
+      <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
+        <span id="taskWatchLabel">关注</span>
+      </button>
       <button class="icon-btn" type="button" id="btnCloseTask" aria-label="关闭">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
       </button>
@@ -1988,7 +2020,8 @@
           <div class="drawer-sect-body">
             <div class="comment-list" id="commentList"></div>
             <div class="comment-form">
-              <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（Ctrl/⌘ + Enter 发送）"></textarea>
+              <div class="comment-mention" id="commentMention" hidden></div>
+              <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
               <button class="btn primary" type="button" id="btnCommentSend">发送</button>
             </div>
           </div>

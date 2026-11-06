@@ -79,17 +79,21 @@ class TaskPurgeTest {
         TransactionStatus status = new SimpleTransactionStatus();
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(status);
 
-        TaskCascade cascade = new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper, subtaskMapper,
+        TaskCascade cascade = new TaskCascade(taskMapper, logMapper, commentMapper,
+                mock(com.devstudio.kanban.mapper.TaskWatchMapper.class), notificationMapper, subtaskMapper,
                 tagMapper, timeLogMapper, attachmentService, dependencyMapper, baselineMapper,
                 mock(GanttShareMapper.class), mock(RequirementMapper.class),
-                mock(RequirementDocMapper.class), mock(TaskCompletionService.class),
+                mock(RequirementDocMapper.class),
+                mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
+                mock(TaskCompletionService.class),
                 mock(DevBranchMapper.class), mock(VersionTaskMapper.class),
                 mock(ProjectVersionMapper.class), mock(DemandMapper.class),
                 mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
                 new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class),
-                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class), transactionManager);
+                mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class),
+                mock(NotificationEventService.class), mock(TaskWatchService.class), transactionManager);
     }
 
     private static List<Task> expiredTasks(int count, String workspaceId) {

@@ -74,7 +74,8 @@ class PermissionRulesTest {
                 mock(com.devstudio.kanban.mapper.AppNotificationMapper.class),
                 mock(com.devstudio.kanban.mapper.UserListPreferenceMapper.class),
                 mock(WorkActivityService.class),
-                mock(InviteMapper.class), projectMemberMapper, mock(TaskCascade.class),
+                mock(InviteMapper.class), projectMemberMapper,
+                mock(com.devstudio.kanban.mapper.TaskWatchMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
         projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);
     }

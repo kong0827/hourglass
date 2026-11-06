@@ -5,6 +5,7 @@ import com.devstudio.kanban.dto.ReqDocView;
 import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
+import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
@@ -34,8 +35,9 @@ class RequirementDocServiceVisibilityTest {
     private final WorkActivityService activities = mock(WorkActivityService.class);
     private final DemandMapper demands = mock(DemandMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
-    private final RequirementDocService service = new RequirementDocService(docs, reqs, users, tasks,
-            activities, demands, access);
+    private final RequirementDocService service = new RequirementDocService(docs,
+            mock(RequirementDocHistoryMapper.class), reqs, users, tasks,
+            activities, demands, access, mock(NotificationEventService.class));
 
     @Test
     void docsOfDemandFiltersProjectsInvisibleToViewer() {

@@ -1,18 +1,41 @@
 package com.devstudio.kanban.service;
 
+import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.dto.NotificationPreferenceItem;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /** 同一业务事件按个人偏好同时投递站内通知与邮件 outbox。 */
 @Service
 public class NotificationEventService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationEventService.class);
+
+    /** 系统/安全通知：不受个人偏好控制，始终尝试投递站内与邮件 */
+    public static final String PROJECT_ACCESS = "project_access";
+    public static final String MEMBER_ROLE = "member_role";
+    public static final String MEMBER_REMOVED = "member_removed";
+
+    /** 只有任务类事件能拼出可用的深链（需求/文档/分支的详情路由不同） */
+    private static final Set<String> TASK_LINK_EVENTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            UserNotificationPreferenceService.TASK_ASSIGNED,
+            UserNotificationPreferenceService.TASK_UPDATED,
+            UserNotificationPreferenceService.TASK_COMMENT,
+            UserNotificationPreferenceService.TASK_MENTION)));
+
+    /** 站点根地址（含 context-path，如 https://host/hourglass/）；为空时邮件不附链接 */
+    @Value("${app.mail.base-url:}")
+    private String mailBaseUrl;
 
     private final UserNotificationPreferenceService preferenceService;
     private final AppNotificationService inAppService;
@@ -77,14 +100,53 @@ public class NotificationEventService {
             inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body, referenceId);
         }
         if (Boolean.TRUE.equals(preference.getEmail())) {
-            try {
-                AppUser user = userMapper.selectById(recipientUserId);
-                if (user != null) {
-                    mailDeliveryService.enqueue(user.getEmail(), title, body, eventType, referenceId);
-                }
-            } catch (Exception e) {
-                log.warn("事件邮件入队失败（不影响主业务）：user={} event={}", recipientUserId, eventType, e);
-            }
+            enqueueMail(recipientUserId, eventType, title, body, referenceId);
         }
+    }
+
+    /**
+     * 系统/安全通知：用于「收件人刚被移出空间」或「项目可见范围刚被收回」这类场景。
+     * 不能复用 {@link #notify}——成员校验与项目可见性校验会把通知本身拦掉。
+     * 不经个人偏好开关，站内必投；邮件在收件人有邮箱且 SMTP 已启用时投递。
+     */
+    public void notifySystem(String recipientUserId, String workspaceId, String eventType,
+                             String title, String body, String referenceId) {
+        if (recipientUserId == null || workspaceId == null) {
+            return;
+        }
+        try {
+            inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body, referenceId);
+        } catch (Exception e) {
+            log.warn("系统站内通知写入失败（不影响主业务）：user={} event={}", recipientUserId, eventType, e);
+        }
+        enqueueMail(recipientUserId, eventType, title, body, referenceId);
+    }
+
+    private void enqueueMail(String recipientUserId, String eventType,
+                             String title, String body, String referenceId) {
+        try {
+            AppUser user = userMapper.selectById(recipientUserId);
+            if (user != null) {
+                mailDeliveryService.enqueue(user.getEmail(), title,
+                        withTaskLink(body, eventType, referenceId), eventType, referenceId);
+            }
+        } catch (Exception e) {
+            log.warn("事件邮件入队失败（不影响主业务）：user={} event={}", recipientUserId, eventType, e);
+        }
+    }
+
+    /** 邮件里直接给出任务深链；未配置 base-url 时保持纯文本，避免出现半截地址 */
+    private String withTaskLink(String body, String eventType, String referenceId) {
+        if (referenceId == null || !TASK_LINK_EVENTS.contains(eventType)) {
+            return body;
+        }
+        String base = Texts.trimToNull(mailBaseUrl);
+        if (base == null) {
+            return body;
+        }
+        if (!base.endsWith("/")) {
+            base = base + "/";
+        }
+        return body + "\n\n打开任务：" + base + "#/board?task=" + referenceId;
     }
 }

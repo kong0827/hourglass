@@ -5,7 +5,7 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, taskById, taskCacheExtra } from "./state.js";
+import { state, canEditTask, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
 import { UI, copyToClipboard, esc, toast } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
@@ -58,6 +58,7 @@ function handleDeepLink(){
 function openDuePopover(anchor, taskId){
   var t = taskById(taskId);
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var el = document.createElement("div");
   el.className = "menu due-pop";
   el.innerHTML =
@@ -93,6 +94,7 @@ function openDuePopover(anchor, taskId){
 function setTaskDue(taskId, dueDate){
   var t = taskById(taskId);
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var before = t.dueDate || null;
   t.dueDate = dueDate;                                  // 乐观更新
   if(state.board && activeView === "board") render({animate:false});
@@ -146,6 +148,8 @@ function toggleTaskTimer(taskId){
   var prev = state.runningTimer;
   var on = !!(prev && prev.taskId === taskId);
   var t = taskById(taskId);
+  /* 停止自己已开始的计时始终允许（避免降权后计时卡死）；开始新计时需要项目写权限 */
+  if(!on && t && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var name = t ? t.title : ((prev && prev.taskTitle) || "任务");
   var url = "/api/tasks/" + encodeURIComponent(taskId) + "/timer/" + (on ? "stop" : "start");
   API.post(url, {}).then(function(d){
@@ -196,6 +200,7 @@ setInterval(function(){
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var isDone = t.boardColumn === "done";
   /* 取消完成 = 回到「完成前所在列」，由后端按最后一次进入已完成列的移动日志还原；
      不是固定回「进行中」。 */
@@ -230,17 +235,24 @@ function openCardMenu(anchor, taskId){
   var t = taskById(taskId);
   if(!t) return;
   var isDone = t.boardColumn === "done";
+  var editable = canEditTask(t);
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
-  var html =
-    '<button class="menu-item" type="button" data-cm="open">' + icon("edit", 14) + '打开详情</button>' +
-    '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' +
-    '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "undo" : "check", 14) +
-      (isDone ? "取消完成" : "标记完成") + '<span class="k">X</span></button>' +
-    '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
-      (running ? "停止计时" : "开始计时") + '</button>' +
+  var html = '<button class="menu-item" type="button" data-cm="open">' + icon("edit", 14) + '打开详情</button>';
+  if(editable){
+    html +=
+      '<button class="menu-item" type="button" data-cm="due">' + icon("calSmall", 14) + '改期<span class="k">D</span></button>' +
+      '<button class="menu-item" type="button" data-cm="done">' + icon(isDone ? "undo" : "check", 14) +
+        (isDone ? "取消完成" : "标记完成") + '<span class="k">X</span></button>';
+  }
+  if(editable || running){
+    /* 停止自己已开始的计时不受只读限制（与后端口径一致） */
+    html += '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
+      (running ? "停止计时" : "开始计时") + '</button>';
+  }
+  html +=
     '<button class="menu-item" type="button" data-cm="copy">' + icon("copy", 14) + '复制标题</button>' +
     '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制任务链接</button>';
-  var others = COLUMNS.filter(function(c){ return c.id !== t.boardColumn; });
+  var others = editable ? COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }) : [];
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
     others.forEach(function(c){
@@ -249,8 +261,10 @@ function openCardMenu(anchor, taskId){
         esc(c.name) + '</button>';
     });
   }
-  html += '<div class="menu-sep"></div>' +
-    '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
+  if(editable){
+    html += '<div class="menu-sep"></div>' +
+      '<button class="menu-item danger" type="button" data-cm="del">' + icon("trash", 14) + '移到回收站</button>';
+  }
   var el = document.createElement("div");
   el.className = "menu";
   el.innerHTML = html;

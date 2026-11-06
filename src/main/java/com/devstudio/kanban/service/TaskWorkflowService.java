@@ -183,7 +183,6 @@ public class TaskWorkflowService {
                     UserNotificationPreferenceService.TASK_UPDATED,
                     "任务更新：" + task.getTitle(), detail, id, task.getReqId());
         }
-
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("task", taskMapper.selectById(id));
         res.put("from", from);

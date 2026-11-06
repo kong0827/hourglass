@@ -15,6 +15,7 @@ import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.service.ActivityService;
+import com.devstudio.kanban.service.NotificationEventService;
 import com.devstudio.kanban.service.ProjectAccessService;
 import com.devstudio.kanban.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,16 +43,19 @@ public class WorkspaceController {
     private final ProjectAccessService projectAccessService;
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
+    private final NotificationEventService notificationEvents;
 
     public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper,
                                ProjectAccessService projectAccessService,
                                RequirementMapper requirementMapper,
-                               ActivityService activityService) {
+                               ActivityService activityService,
+                               NotificationEventService notificationEvents) {
         this.workspaceService = workspaceService;
         this.userMapper = userMapper;
         this.projectAccessService = projectAccessService;
         this.requirementMapper = requirementMapper;
         this.activityService = activityService;
+        this.notificationEvents = notificationEvents;
     }
 
     /** 我参与的空间（个人空间排前） */
@@ -121,7 +125,15 @@ public class WorkspaceController {
     /** 移除成员（空间主）/ 退出空间（成员自己） */
     @DeleteMapping("/api/workspaces/{id}/members/{userId}")
     public ApiResult<Void> removeMember(@PathVariable String id, @PathVariable String userId) {
-        workspaceService.removeMember(CurrentUser.id(), id, userId);
+        String me = CurrentUser.id();
+        workspaceService.removeMember(me, id, userId);
+        /* 被移除的人已不是成员，普通通知的成员校验会拦掉，必须走系统通道 */
+        if (!me.equals(userId)) {
+            Workspace ws = workspaceService.requireMember(me, id);
+            notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_REMOVED,
+                    "你已被移出空间「" + ws.getName() + "」",
+                    "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主", null);
+        }
         return ApiResult.ok();
     }
 
@@ -129,7 +141,15 @@ public class WorkspaceController {
     @PutMapping("/api/workspaces/{id}/members/{userId}/role")
     public ApiResult<Void> updateMemberRole(@PathVariable String id, @PathVariable String userId,
                                             @RequestBody MemberRoleRequest req) {
-        workspaceService.updateMemberRole(CurrentUser.id(), id, userId, req == null ? null : req.getRole());
+        String me = CurrentUser.id();
+        String role = req == null ? null : req.getRole();
+        workspaceService.updateMemberRole(me, id, userId, role);
+        if (!me.equals(userId)) {
+            Workspace ws = workspaceService.requireMember(me, id);
+            notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_ROLE,
+                    "空间角色已调整：「" + ws.getName() + "」",
+                    "你在空间「" + ws.getName() + "」中的角色已调整为「" + roleLabel(role) + "」", null);
+        }
         return ApiResult.ok();
     }
 
@@ -183,11 +203,43 @@ public class WorkspaceController {
         if (project == null || !id.equals(project.getWorkspaceId())) {
             throw AppException.notFound("项目不存在或不属于当前空间：" + req.getProjectId());
         }
+        String previous = ProjectAccessService.normalizeAccess(
+                projectAccessService.configuredAccess(id, req.getProjectId(), req.getUserId()));
         projectAccessService.saveGrant(id, req.getUserId(), req.getProjectId(), req.getAccess());
         String access = ProjectAccessService.normalizeAccess(req.getAccess());
         activityService.logConfig(id, me,
                 "调整项目可见范围「" + project.getName() + "」→ " + (access.isEmpty() ? "default" : access));
+        if (!me.equals(req.getUserId()) && !previous.equals(access)) {
+            notificationEvents.notifySystem(req.getUserId(), id, NotificationEventService.PROJECT_ACCESS,
+                    "项目可见范围已调整：「" + project.getName() + "」",
+                    "你在空间「" + ws.getName() + "」中对该项目的可见范围已调整为「" + accessLabel(access) + "」", null);
+        }
         return ApiResult.ok();
+    }
+
+    /** 角色展示名：通知里不出现 owner/admin 这类码值 */
+    private static String roleLabel(String role) {
+        if (ProjectAccessService.ROLE_OWNER.equals(role)) {
+            return "空间主";
+        }
+        if (ProjectAccessService.ROLE_ADMIN.equals(role)) {
+            return "管理员";
+        }
+        if (ProjectAccessService.ROLE_VIEWER.equals(role)) {
+            return "查看者";
+        }
+        return "成员";
+    }
+
+    /** 项目可见范围展示名：空串表示没有显式配置（默认参与） */
+    private static String accessLabel(String access) {
+        if (ProjectAccessService.ACCESS_NONE.equals(access)) {
+            return "不可见";
+        }
+        if (ProjectAccessService.ACCESS_READ.equals(access)) {
+            return "只读";
+        }
+        return "默认参与（可查看、可编辑）";
     }
 
     /** 个人空间只有空间主自己，成员可见范围与邀请链接都不适用 */

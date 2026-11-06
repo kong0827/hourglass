@@ -15,6 +15,7 @@ import com.devstudio.kanban.mapper.TaskCommentMapper;
 import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
+import com.devstudio.kanban.mapper.TaskWatchMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class TaskCascadeTest {
     private TaskMapper taskMapper;
     private TaskLogMapper logMapper;
     private TaskCommentMapper commentMapper;
+    private TaskWatchMapper watchMapper;
     private AppNotificationMapper notificationMapper;
     private SubtaskMapper subtaskMapper;
     private TagMapper tagMapper;
@@ -74,6 +76,7 @@ class TaskCascadeTest {
         taskMapper = mock(TaskMapper.class);
         logMapper = mock(TaskLogMapper.class);
         commentMapper = mock(TaskCommentMapper.class);
+        watchMapper = mock(TaskWatchMapper.class);
         notificationMapper = mock(AppNotificationMapper.class);
         subtaskMapper = mock(SubtaskMapper.class);
         tagMapper = mock(TagMapper.class);
@@ -89,9 +92,10 @@ class TaskCascadeTest {
         versionTaskMapper = mock(VersionTaskMapper.class);
         versionMapper = mock(ProjectVersionMapper.class);
         demandMapper = mock(DemandMapper.class);
-        cascade = new TaskCascade(taskMapper, logMapper, commentMapper, notificationMapper,
+        cascade = new TaskCascade(taskMapper, logMapper, commentMapper, watchMapper, notificationMapper,
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
+                mock(com.devstudio.kanban.mapper.RequirementDocHistoryMapper.class),
                 completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
                 mock(com.devstudio.kanban.mapper.MailDeliveryMapper.class));
     }
@@ -120,6 +124,7 @@ class TaskCascadeTest {
         verify(attachmentService).deleteByTasks(WS, ids);
         verify(logMapper).deleteByTaskIds(WS, ids);
         verify(commentMapper).deleteByTaskIds(WS, ids);
+        verify(watchMapper).deleteByTaskIds(WS, ids);
         verify(notificationMapper).deleteByTaskIds(WS, ids);
         verify(dependencyMapper).deleteByTaskIds(WS, ids);
         verify(baselineMapper).deleteByTaskIds(WS, ids);
@@ -163,6 +168,7 @@ class TaskCascadeTest {
         verify(timeLogMapper).deleteAllByWorkspace(WS);
         verify(attachmentService).deleteAllWithFiles(WS);
         verify(commentMapper).deleteAllByWorkspace(WS);
+        verify(watchMapper).deleteAllByWorkspace(WS);
         verify(notificationMapper).deleteAllByWorkspace(WS);
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);
@@ -179,6 +185,7 @@ class TaskCascadeTest {
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(commentMapper).deleteAllByWorkspace(WS);
+        verify(watchMapper).deleteAllByWorkspace(WS);
         verify(notificationMapper).deleteAllByWorkspace(WS);
         verify(logMapper, never()).deleteAllByWorkspace(WS);
         verify(attachmentService, never()).deleteAllWithFiles(WS);
@@ -200,7 +207,7 @@ class TaskCascadeTest {
     @Test
     void registeredChildTablesMatchSnapshot() {
         assertEquals(Arrays.asList(
-                "task_log", "task_comment", "app_notification", "subtask", "task_tag",
+                "task_log", "task_comment", "task_watch", "app_notification", "subtask", "task_tag",
                 "attachment", "time_log", "task_dependency", "task_baseline", "version_task"),
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Collections.singletonList("task_completion_record"),
@@ -213,7 +220,7 @@ class TaskCascadeTest {
         assertEquals(Arrays.asList(
                 "task_log", "task_dependency", "task_baseline", "gantt_share", "task",
                 "requirement", "requirement_doc", "task_completion_record", "subtask",
-                "task_tag", "tag", "time_log", "attachment", "task_comment",
+                "task_tag", "tag", "time_log", "attachment", "task_comment", "task_watch",
                 "app_notification", "dev_branch_log", "dev_branch",
                 "version_task", "project_version", "demand_log", "demand"),
                 TaskCascade.WORKSPACE_TASK_TABLES);

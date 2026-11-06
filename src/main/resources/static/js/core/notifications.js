@@ -12,7 +12,17 @@ var NOTIFY_ICON = {
   task_remind: "clock",
   task_due: "alert",
   task_assigned: "user",
-  task_comment: "comment"
+  task_comment: "comment",
+  task_mention: "users",
+  task_updated: "edit",
+  demand_status: "list",
+  doc_changed: "projects",
+  branch_status: "branch",
+  version_released: "tag",
+  version_deleted: "trash",
+  project_access: "shield",
+  member_role: "user",
+  member_removed: "users"
 };
 var notifyState = {unread:0, items:[], loading:false};
 var deadlineGroups = {over:[], today:[], soon:[]};
@@ -127,25 +137,43 @@ function noticeListHTML(){
   notifyState.items.forEach(function(x){ (x.readAt ? read : unread).push(x); });
   var html = "";
   if(unread.length){
-    html += '<div class="ap-glabel">未读 ' + unread.length + '</div>' + unread.map(noticeItemHTML).join("");
+    html += '<div class="ap-glabel">未读 ' + unread.length + '</div>' + noticeGroupsHTML(unread);
   }
   if(read.length){
-    html += '<div class="ap-glabel" style="margin-top:6px">已读 ' + read.length + '</div>' + read.map(noticeItemHTML).join("");
+    html += '<div class="ap-glabel" style="margin-top:6px">已读 ' + read.length + '</div>' + noticeGroupsHTML(read);
   }
   return html;
 }
-function noticeItemHTML(x){
+/* 连续的同任务 + 同类型通知合并为一条：避免一次编辑/关注刷出十几条近似消息 */
+function noticeGroupsHTML(items){
+  var groups = [];
+  items.forEach(function(x){
+    var last = groups[groups.length - 1];
+    if(last && x.refTaskId && last.lead.refTaskId === x.refTaskId && last.lead.type === x.type){
+      last.items.push(x);
+      return;
+    }
+    groups.push({lead:x, items:[x]});
+  });
+  return groups.map(noticeItemHTML).join("");
+}
+function noticeItemHTML(g){
+  var x = g.lead;
+  var count = g.items.length;
+  var ids = g.items.map(function(n){ return n.id; }).join(",");
   var ic = NOTIFY_ICON[x.type] || "bell";
   return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
-    ' data-apn="' + esc(x.id) + '"' +
+    ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
     (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
     ' title="' + esc(x.title) + '">' +
     '<span class="apn-ic">' + icon(ic, 13) + '</span>' +
     '<span class="apn-main">' +
-      '<span class="apn-title">' + esc(x.title) + '</span>' +
+      '<span class="apn-title">' + esc(x.title) +
+        (count > 1 ? ' <span class="apn-count">×' + count + '</span>' : "") + '</span>' +
       (x.body ? '<span class="apn-body">' + esc(x.body) + '</span>' : "") +
       '<span class="apn-meta">' + esc(relTime(x.createdAt)) +
+        (count > 1 ? " · 共 " + count + " 条同类通知" : "") +
         (x.workspaceName ? " · " + esc(x.workspaceName) : "") + '</span>' +
     '</span>' +
     (x.readAt ? "" : '<i class="apn-dot"></i>') +
@@ -209,20 +237,30 @@ function loadDeadlineGroups(){
   });
 }
 function openFromNotification(ds){
-  var nid = Number(ds.apn);
   var taskId = ds.apnTask || "";
   var wsId = ds.apnWs || "";
+  var ids = String(ds.apnIds || ds.apn || "").split(",").map(Number).filter(function(n){ return n > 0; });
   var item = null;
-  for(var i = 0; i < notifyState.items.length; i++){
-    if(notifyState.items[i].id === nid){ item = notifyState.items[i]; break; }
-  }
-  if(item && !item.readAt){
-    item.readAt = new Date().toISOString();
-    notifyState.unread = Math.max(0, notifyState.unread - 1);
+  var marked = 0;
+  /* 聚合条目一次标掉组内全部通知，避免点开任务后还剩一串未读 */
+  ids.forEach(function(nid){
+    for(var i = 0; i < notifyState.items.length; i++){
+      var n = notifyState.items[i];
+      if(n.id !== nid) continue;
+      if(!item) item = n;
+      if(!n.readAt){
+        n.readAt = new Date().toISOString();
+        marked++;
+        API.postGlobal("/api/notifications/" + nid + "/read").catch(function(){ /* 已读失败不阻断打开 */ });
+      }
+      break;
+    }
+  });
+  if(marked > 0){
+    notifyState.unread = Math.max(0, notifyState.unread - marked);
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();
-    API.postGlobal("/api/notifications/" + nid + "/read").catch(function(){ /* 已读失败不阻断打开 */ });
   }
   if(!taskId){
     toast(item && item.body ? item.body : (item ? item.title : "已读"));

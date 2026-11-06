@@ -10,9 +10,11 @@ import com.devstudio.kanban.entity.Demand;
 import com.devstudio.kanban.entity.DocumentType;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
+import com.devstudio.kanban.entity.RequirementDocHistory;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.WorkActivity;
 import com.devstudio.kanban.mapper.DemandMapper;
+import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
@@ -40,6 +42,9 @@ public class RequirementDocService {
 
     /** 正文上限：粘贴截图会以 base64 内联，200KB 会把图片截断，放宽到 12MB（列是 MEDIUMTEXT，上限 16MB） */
     private static final int CONTENT_MAX = 12_000_000;
+
+    /** 每篇文档保留的历史快照版数上限 */
+    private static final int HISTORY_KEEP = 20;
 
     /** 摘要长度 */
     private static final int EXCERPT_MAX = 80;
@@ -75,31 +80,37 @@ public class RequirementDocService {
             java.util.regex.Pattern.compile("^[#a-zA-Z0-9(),.%\\s-]{1,60}$");
 
     private final RequirementDocMapper docMapper;
+    private final RequirementDocHistoryMapper historyMapper;
     private final RequirementMapper reqMapper;
     private final UserMapper userMapper;
     private final TaskMapper taskMapper;
     private final WorkActivityService workActivityService;
     private final DemandMapper demandMapper;
     private final ProjectAccessService projectAccess;
+    private final NotificationEventService notificationEvents;
 
-    public RequirementDocService(RequirementDocMapper docMapper, RequirementMapper reqMapper, UserMapper userMapper,
+    public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
+                                 RequirementMapper reqMapper, UserMapper userMapper,
                                  TaskMapper taskMapper, WorkActivityService workActivityService,
-                                 DemandMapper demandMapper, ProjectAccessService projectAccess) {
+                                 DemandMapper demandMapper, ProjectAccessService projectAccess,
+                                 NotificationEventService notificationEvents) {
         this.docMapper = docMapper;
+        this.historyMapper = historyMapper;
         this.reqMapper = reqMapper;
         this.userMapper = userMapper;
         this.taskMapper = taskMapper;
         this.workActivityService = workActivityService;
         this.demandMapper = demandMapper;
         this.projectAccess = projectAccess;
-    }
-
-    public List<ReqDocView> list(String workspaceId) {
-        return list(workspaceId, null);
+        this.notificationEvents = notificationEvents;
     }
 
     public List<ReqDocView> list(String workspaceId, String userId) {
-        List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId);
+        return list(workspaceId, userId, null);
+    }
+
+    public List<ReqDocView> list(String workspaceId, String userId, String keyword) {
+        List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId, likePattern(Texts.trimToNull(keyword)));
         java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
         List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>();
         for (ReqDocView v : rows) {
@@ -172,6 +183,8 @@ public class RequirementDocService {
         recordChange(userId, workspaceId, id, "分类", oldDocType.getLabel(),
                 DocumentType.parseOrOther(d.getDocType()).getLabel());
         if (!java.util.Objects.equals(oldContent, d.getContent())) {
+            /* 正文有变化才留快照（乐观锁已通过，此时写入的必是最新一版） */
+            snapshot(userId, d);
             workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId,
                     "update", "更新了正文");
         }
@@ -192,6 +205,15 @@ public class RequirementDocService {
             docMapper.deleteDemandLinksByDoc(workspaceId, d.getId());
             /* 子文档留在旧项目，提升到本文档原来的父级，避免跨项目形成断掉的子树 */
             docMapper.reparentChildren(workspaceId, d.getId(), oldParentId);
+        }
+        boolean changed = !Objects.equals(oldTitle, d.getTitle())
+                || !Objects.equals(oldContent, d.getContent())
+                || !Objects.equals(oldStatus, d.getStatus())
+                || oldDocType != DocumentType.parseOrOther(d.getDocType())
+                || !Objects.equals(oldReqId, d.getReqId());
+        if (changed) {
+            notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已更新",
+                    "文档内容或属性有更新", id);
         }
         return docMapper.selectById(id);
     }
@@ -219,8 +241,11 @@ public class RequirementDocService {
         docMapper.reparentChildren(workspaceId, id, d.getParentId());
         docMapper.deleteDemandLinksByDoc(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
+        historyMapper.deleteByDoc(workspaceId, id);
         docMapper.delete(d.getId());
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
+        notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已被删除",
+                "需求文档已删除，关联任务已解绑", null);
     }
 
     /** 项目被删除时连带清理（由 RequirementService 调用） */
@@ -229,12 +254,71 @@ public class RequirementDocService {
         /* 需求没了，任务上的 req_doc_id 必须一起解绑；
            只删 requirement_doc 会留下悬空引用，任务详情里看不到但数据已经不一致。 */
         docMapper.deleteDemandLinksByReq(workspaceId, reqId);
+        historyMapper.deleteByReq(workspaceId, reqId);
         for (String docId : docMapper.selectIdsByReq(workspaceId, reqId)) {
             docMapper.clearTaskRef(workspaceId, docId);
             docMapper.deleteDemandLinksByDoc(workspaceId, docId);
             workActivityService.deleteByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId);
         }
         return docMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    /* ---------------- 历史版本 ---------------- */
+
+    /** 版本列表（不含正文）：读取前校验项目可见范围 */
+    public List<RequirementDocHistory> history(String workspaceId, String userId, String docId) {
+        getVisible(workspaceId, userId, docId);
+        return historyMapper.selectByDoc(workspaceId, docId);
+    }
+
+    /** 单个版本（含正文）：读取前校验项目可见范围 */
+    public RequirementDocHistory historyVersion(String workspaceId, String userId, String docId, String historyId) {
+        getVisible(workspaceId, userId, docId);
+        RequirementDocHistory h = historyMapper.selectById(historyId);
+        if (h == null || !docId.equals(h.getDocId()) || !workspaceId.equals(h.getWorkspaceId())) {
+            throw AppException.notFound("历史版本不存在：" + historyId);
+        }
+        return h;
+    }
+
+    /** 恢复到指定历史版本：恢复前先把当前正文留一版快照（恢复本身可再撤销） */
+    @Transactional
+    public RequirementDoc restore(String userId, String workspaceId, String docId, String historyId) {
+        RequirementDoc d = get(workspaceId, docId);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        RequirementDocHistory h = historyMapper.selectById(historyId);
+        if (h == null || !docId.equals(h.getDocId()) || !workspaceId.equals(h.getWorkspaceId())) {
+            throw AppException.notFound("历史版本不存在：" + historyId);
+        }
+        snapshot(userId, d);
+        d.setTitle(h.getTitle());
+        d.setContent(h.getContent());
+        d.setFormat(h.getFormat());
+        d.setContentBrief("markdown".equals(d.getFormat()) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
+        docMapper.update(d, null);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
+                "restore", "恢复到第 " + h.getVersionNo() + " 版（" + h.getTitle() + "）");
+        notifyDocOwner(d, userId, "文档「" + d.getTitle() + "」已恢复到历史版本",
+                "文档已恢复到第 " + h.getVersionNo() + " 版，请确认内容", docId);
+        return docMapper.selectById(docId);
+    }
+
+    /** 保存人当前正文为一版快照，并把每文档保留版数截断到 HISTORY_KEEP */
+    private void snapshot(String userId, RequirementDoc d) {
+        RequirementDocHistory h = new RequirementDocHistory();
+        h.setId(Ids.gen("DH"));
+        h.setDocId(d.getId());
+        h.setWorkspaceId(d.getWorkspaceId());
+        h.setVersionNo(historyMapper.maxVersionNo(d.getId()) + 1);
+        h.setTitle(d.getTitle());
+        h.setContent(d.getContent());
+        h.setFormat(d.getFormat());
+        AppUser me = userMapper.selectById(userId);
+        h.setSavedBy(me == null ? null : Texts.cut(me.getDisplayName(), 32));
+        h.setSavedByUserId(userId);
+        historyMapper.insert(h);
+        historyMapper.deleteOld(d.getId(), HISTORY_KEEP);
     }
 
     /* ---------------- 需求池 ↔ 文档 ---------------- */
@@ -397,6 +481,16 @@ public class RequirementDocService {
         }
     }
 
+    /** 文档负责人不是操作者时才通知，避免自己改自己的文档还收到站内信 */
+    private void notifyDocOwner(RequirementDoc d, String actorId, String title, String body, String referenceId) {
+        String owner = Texts.trimToNull(d.getOwnerUserId());
+        if (owner == null || owner.equals(actorId)) {
+            return;
+        }
+        notificationEvents.notify(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DOC_CHANGED,
+                title, body, referenceId, d.getReqId());
+    }
+
     private void apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {
         String code = Texts.trimToNull(req.getDocType());
         /* 省略分类时编辑沿用原值；新建及旧文档缺省归入其他。显式非法分类必须拒绝。 */
@@ -423,14 +517,15 @@ public class RequirementDocService {
         String status = Texts.trimToNull(req.getStatus());
         d.setStatus(status == null ? "draft" : status);
         String owner = Texts.trimToNull(req.getOwner());
-        if (owner == null) {
-            /* 不填负责人 = 默认当前用户 */
+        if (owner != null) {
+            d.setOwner(Texts.cut(owner, 32));
+            d.setOwnerUserId(null);
+        } else if (Texts.trimToNull(d.getOwner()) == null && Texts.trimToNull(d.getOwnerUserId()) == null) {
+            /* 未指定负责人且文档还没有负责人（新建/历史数据）才落到当前用户；
+               编辑时保留原负责人，避免「谁最后保存谁就变成负责人」 */
             AppUser me = userMapper.selectById(userId);
             d.setOwner(me == null ? null : Texts.cut(me.getDisplayName(), 32));
             d.setOwnerUserId(userId);
-        } else {
-            d.setOwner(Texts.cut(owner, 32));
-            d.setOwnerUserId(null);
         }
     }
 
@@ -516,6 +611,14 @@ public class RequirementDocService {
 
     private static String display(Object value) {
         return value == null ? "（空）" : String.valueOf(value);
+    }
+
+    /** LIKE 通配符转义：用户输入里的 % _ \ 按字面匹配（SQL 侧 ESCAPE '\'） */
+    private static String likePattern(String kw) {
+        if (kw == null || kw.isEmpty()) {
+            return null;
+        }
+        return kw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     /** 从 Markdown 抽纯文本摘要（列表用） */

@@ -48,6 +48,9 @@
     LEFT JOIN app_user u ON u.id = l.actor_id
     LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
     WHERE l.workspace_id = #{workspaceId}
+    <if test="!includeConfig">
+      AND l.task_id &lt;&gt; 'CFG'
+    </if>
     <if test="viewerId != null">
       AND (l.task_id = 'CFG' OR NOT EXISTS (
         SELECT 1 FROM task t2

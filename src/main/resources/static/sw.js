@@ -1,6 +1,6 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」） */
-var CACHE_NAME = "hourglass-shell-v86";
+var CACHE_NAME = "hourglass-shell-v93";
 var SHELL = [
   "/hourglass/",
   "/hourglass/index.html",

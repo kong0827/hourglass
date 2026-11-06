@@ -464,6 +464,30 @@ CREATE TABLE `requirement_doc` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `requirement_doc_history`
+--
+
+DROP TABLE IF EXISTS `requirement_doc_history`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `requirement_doc_history` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '快照ID',
+  `doc_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `version_no` int NOT NULL COMMENT '同一文档内从 1 递增的版本号',
+  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '快照时的文档标题',
+  `content` mediumtext COLLATE utf8mb4_unicode_ci COMMENT '快照时的正文（与 requirement_doc.content 同口径）',
+  `format` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'markdown' COMMENT '正文格式：html / markdown',
+  `saved_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '保存人显示名',
+  `saved_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '保存人账号ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '快照时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_history_doc` (`doc_id`,`version_no`),
+  KEY `idx_history_ws` (`workspace_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档历史快照（查看与恢复旧版本）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `saved_view`
 --
 
@@ -725,6 +749,24 @@ CREATE TABLE `task_tag` (
   KEY `idx_tag` (`tag_id`),
   KEY `idx_ws_task` (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务-标签关联';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `task_watch`
+--
+
+DROP TABLE IF EXISTS `task_watch`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `task_watch` (
+  `task_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `user_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '关注人用户ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关注时间',
+  PRIMARY KEY (`task_id`,`user_id`),
+  KEY `idx_watch_user` (`user_id`,`workspace_id`),
+  KEY `idx_watch_ws_task` (`workspace_id`,`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务关注人';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

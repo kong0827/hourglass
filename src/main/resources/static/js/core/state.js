@@ -145,4 +145,42 @@ function reqNameById(id){
   return "无";
 }
 
-export { calState, catColor, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, reqNameById, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+/* ---- 项目级写权限：与后端 ProjectAccessService 同口径 ---- */
+function currentRole(){
+  return rt.currentWs && rt.currentWs.myRole ? rt.currentWs.myRole : "";
+}
+/** 查看者全局只读；其余角色按项目判定 */
+function roleReadOnly(){
+  return currentRole() === "viewer";
+}
+/**
+ * write / read。判定顺序：查看者 → 空间主/管理员 → 空间下发的 projectAccess
+ * → 已加载的 reqList.access；无法判定时按可写，避免误伤默认参与的项目。
+ */
+function projectAccess(reqId){
+  if(roleReadOnly()) return "read";
+  var role = currentRole();
+  if(role === "owner" || role === "admin") return "write";
+  if(reqId){
+    var map = rt.currentWs && rt.currentWs.projectAccess;
+    if(map && map[reqId]){
+      /* none 的项目本应被列表过滤；万一漏到前端也按只读处理，不能按可写放行 */
+      return map[reqId] === "read" || map[reqId] === "none" ? "read" : "write";
+    }
+    for(var i = 0; i < rt.reqList.length; i++){
+      if(rt.reqList[i].id === reqId && rt.reqList[i].access === "read") return "read";
+    }
+  }
+  return "write";
+}
+function canEditReq(reqId){
+  return projectAccess(reqId) === "write";
+}
+function canEditTask(t){
+  if(!t) return false;
+  /* 跨空间「我的任务」由后端逐条下发 write/read，优先采用（rt.currentWs 未必是任务所属空间） */
+  if(t.access === "write" || t.access === "read") return t.access === "write";
+  return projectAccess(t.reqId) === "write";
+}
+
+export { calState, canEditReq, canEditTask, catColor, catTag, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

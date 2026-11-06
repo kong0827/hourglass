@@ -150,6 +150,8 @@ public class DemandService {
         applyFields(d, req);
         demandMapper.update(d);
         demandMapper.insertLog(workspaceId, id, "update", null, userId);
+        notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
+                "需求内容有更新（仍处于待评审）", d.getId());
         return get(workspaceId, id);
     }
 
@@ -223,7 +225,7 @@ public class DemandService {
 
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
-        requireDemand(workspaceId, id);
+        Demand d = requireDemand(workspaceId, id);
         attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DEMAND);
         mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         docMapper.deleteDemandLinksByDemand(workspaceId, id);
@@ -232,6 +234,8 @@ public class DemandService {
         /* 条目本身要删，留着它自己的流转日志只会变成查不到主人的孤儿行 */
         demandMapper.deleteLogsByDemand(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);
+        notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被删除",
+                "需求已从需求池删除，关联任务已解绑", null);
     }
 
     /* ------------------------------------------------------------------ */
@@ -294,6 +298,15 @@ public class DemandService {
                 UserNotificationPreferenceService.DEMAND_STATUS,
                 "需求「" + d.getTitle() + "」" + action,
                 detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400), d.getId(), d.getReqId());
+    }
+
+    /** 编辑/删除：提交人不是操作者时告知，避免自己的需求被改动却毫不知情 */
+    private void notifyCreator(Demand d, String actorId, String title, String body, String referenceId) {
+        if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
+            return;
+        }
+        notificationEvents.notify(d.getCreatedBy(), d.getWorkspaceId(),
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body, referenceId, d.getReqId());
     }
 
     private void fillWsjf(Demand d) {

@@ -52,10 +52,22 @@ function enterProfileView(){
 }
 var NOTIFY_EVENTS = {
   task_assigned: ["任务指派", "任务创建或负责人变更后指派给我"],
-  task_updated: ["任务变动", "我负责的任务字段发生变更"],
+  task_updated: ["任务变动", "我负责的任务字段变更、移入回收站或恢复"],
   task_comment: ["任务评论", "我负责的任务收到新评论"],
-  demand_status: ["需求池状态", "我提交的需求通过、拒绝、排期或重开"]
+  task_mention: ["评论提及", "有人在任务评论中 @ 我"],
+  demand_status: ["需求池变动", "我提交的需求被编辑、删除或状态变化"],
+  doc_changed: ["需求文档", "我负责的文档被他人编辑或删除"],
+  branch_status: ["分支变动", "我负责的分支被指派或状态变更"],
+  version_released: ["版本发布", "我负责的任务所在版本发布"],
+  version_deleted: ["版本删除", "我负责的任务所在版本被删除"],
+  daily_digest: ["每日任务汇总", "每天 09:00 汇总我负责的逾期/今日到期任务（仅站内）"]
 };
+/* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
+var NOTIFY_GROUPS = [
+  { title: "任务", types: ["task_assigned", "task_updated", "task_comment", "task_mention"] },
+  { title: "项目协作", types: ["demand_status", "doc_changed", "branch_status", "version_released", "version_deleted"] },
+  { title: "每日汇总", types: ["daily_digest"] }
+];
 function loadNotificationPreferences(){
   var box = $("meNotificationPrefs");
   if(!box) return;
@@ -69,22 +81,42 @@ function loadNotificationPreferences(){
 function renderNotificationPreferences(items){
   var box = $("meNotificationPrefs");
   if(!box) return;
-  box.innerHTML = '<div class="notification-pref-head"><span>事件</span><span>站内通知</span><span>邮件通知</span></div>' + items.map(function(p){
-    var meta = NOTIFY_EVENTS[p.eventType] || [p.eventType, ""];
-    return '<div class="notification-pref-row" data-notify-event="' + esc(p.eventType) + '">' +
-      '<span><b>' + esc(meta[0]) + '</b><small>' + esc(meta[1]) + '</small></span>' +
-      '<label><input type="checkbox" data-notify-inapp ' + (p.inApp ? "checked" : "") + ' /><span>接收</span></label>' +
-      '<label><input type="checkbox" data-notify-email ' + (p.email ? "checked" : "") + ' /><span>接收</span></label></div>';
-  }).join("");
+  var byType = {};
+  items.forEach(function(p){ byType[p.eventType] = p; });
+  var consumed = {};
+  var html = '<div class="notification-pref-head"><span>事件</span><span>站内通知</span><span>邮件通知</span></div>';
+  NOTIFY_GROUPS.forEach(function(group){
+    var rows = group.types.filter(function(type){ return byType[type]; }).map(function(type){
+      consumed[type] = true;
+      return notificationPrefRow(byType[type]);
+    });
+    if(!rows.length) return;
+    html += '<div class="notification-pref-group">' + esc(group.title) + '</div>' + rows.join("");
+  });
+  var rest = items.filter(function(p){ return !consumed[p.eventType]; });
+  if(rest.length) html += rest.map(notificationPrefRow).join("");
+  box.innerHTML = html;
+}
+function notificationPrefRow(p){
+  var meta = NOTIFY_EVENTS[p.eventType] || [p.eventType, ""];
+  /* daily_digest 只有站内一种投递方式，邮件列留空而不是给个假开关 */
+  var emailCell = p.eventType === "daily_digest"
+    ? '<span class="foot-note">—</span>'
+    : '<label><input type="checkbox" data-notify-email ' + (p.email ? "checked" : "") + ' /><span>接收</span></label>';
+  return '<div class="notification-pref-row" data-notify-event="' + esc(p.eventType) + '">' +
+    '<span><b>' + esc(meta[0]) + '</b><small>' + esc(meta[1]) + '</small></span>' +
+    '<label><input type="checkbox" data-notify-inapp ' + (p.inApp ? "checked" : "") + ' /><span>接收</span></label>' +
+    emailCell + '</div>';
 }
 if($("meNotificationSave")) $("meNotificationSave").addEventListener("click", function(){
   var btn = this;
   var preferences = [];
   $("meNotificationPrefs").querySelectorAll("[data-notify-event]").forEach(function(row){
+    var emailEl = row.querySelector("[data-notify-email]");
     preferences.push({
       eventType: row.dataset.notifyEvent,
       inApp: row.querySelector("[data-notify-inapp]").checked,
-      email: row.querySelector("[data-notify-email]").checked
+      email: emailEl ? emailEl.checked : false
     });
   });
   if(!preferences.length) return;

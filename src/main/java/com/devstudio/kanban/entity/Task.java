@@ -75,6 +75,8 @@ public class Task {
     private Integer attachmentCount;
     /** 「我的任务」用：所属空间名（非表字段） */
     private String workspaceName;
+    /** 「我的任务」用：当前用户对该任务的可写性 write/read（非表字段，跨空间批量填充） */
+    private String access;
     /**
      * 扩展检索文本（非表字段，O-8）：项目名 + 附件文件名拼接，让全局搜索能命中它们。
      * 不落库，只在查询时由 mergeTaskExtras 填充。

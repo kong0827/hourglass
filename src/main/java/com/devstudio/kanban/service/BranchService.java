@@ -63,14 +63,17 @@ public class BranchService {
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
     private final RequirementMapper requirementMapper;
+    private final NotificationEventService notificationEvents;
 
     public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
-                         ProjectAccessService projectAccess, RequirementMapper requirementMapper) {
+                         ProjectAccessService projectAccess, RequirementMapper requirementMapper,
+                         NotificationEventService notificationEvents) {
         this.branchMapper = branchMapper;
         this.taskMapper = taskMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
         this.requirementMapper = requirementMapper;
+        this.notificationEvents = notificationEvents;
     }
 
     public static String label(String status) {
@@ -252,6 +255,8 @@ public class BranchService {
         }
         log(userId, workspaceId, b.getId(), "create", null, status,
                 "创建分支（初始状态：" + label(status) + "）");
+        notifyOwner(b, userId, "分支「" + b.getName() + "」已指派给你",
+                "你成为该分支的负责人", b.getId());
         return branchMapper.selectById(b.getId());
     }
 
@@ -292,6 +297,7 @@ public class BranchService {
            否则「只改备注」会被当成"清空负责人"处理 */
         boolean ownerGiven = req.getOwner() != null || req.getOwnerUserId() != null;
         String oldOwner = b.getOwner();
+        String oldOwnerUserId = b.getOwnerUserId();
         if (ownerGiven) {
             applyOwner(b, userId, req.getOwner(), req.getOwnerUserId());
             if (!eq(oldOwner, b.getOwner())) {
@@ -310,6 +316,10 @@ public class BranchService {
         }
         if (!changed.isEmpty()) {
             log(userId, workspaceId, id, "update", b.getStatus(), b.getStatus(), join(changed));
+        }
+        if (ownerGiven && !eq(oldOwnerUserId, b.getOwnerUserId())) {
+            notifyOwner(b, userId, "分支「" + b.getName() + "」已指派给你",
+                    "你成为该分支的负责人", b.getId());
         }
         return branchMapper.selectById(id);
     }
@@ -338,13 +348,19 @@ public class BranchService {
                 note == null
                         ? (label(from) + " → " + label(to))
                         : (label(from) + " → " + label(to) + "：" + note));
+        notifyOwner(b, userId, "分支「" + b.getName() + "」状态变更",
+                label(from) + " → " + label(to) + (note == null ? "" : "：" + note), b.getId());
         return branchMapper.selectById(id);
     }
 
     /** 删除分支：先把挂在它上面的任务解绑（任务保留），再删时间线与分支本身。 */
     @Transactional
-    public void delete(String workspaceId, String id) {
-        get(workspaceId, id);
+    public void delete(String userId, String workspaceId, String id) {
+        DevBranch b = get(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, b.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, b.getReqId());
+        notifyOwner(b, userId, "分支「" + b.getName() + "」已被删除",
+                "分支及其时间线已被删除，关联任务已解绑", null);
         taskMapper.clearBranchRef(workspaceId, id);
         branchMapper.deleteLogsByBranch(id);
         branchMapper.deleteById(workspaceId, id);
@@ -375,6 +391,16 @@ public class BranchService {
     }
 
     /* ==================== 内部 ==================== */
+
+    /** 分支负责人不是操作者时才通知 */
+    private void notifyOwner(DevBranch b, String actorId, String title, String body, String referenceId) {
+        String owner = Texts.trimToNull(b.getOwnerUserId());
+        if (owner == null || owner.equals(actorId)) {
+            return;
+        }
+        notificationEvents.notify(owner, b.getWorkspaceId(),
+                UserNotificationPreferenceService.BRANCH_STATUS, title, body, referenceId, b.getReqId());
+    }
 
     /** 新建时按初始状态盖上第一个时间点（其余留空，等真正进入再写） */
     private void stampInitial(DevBranch b, String status) {

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,15 +31,18 @@ public class ProjectVersionService {
     private final RequirementMapper reqMapper;
     private final DemandMapper demandMapper;
     private final ProjectAccessService projectAccess;
+    private final NotificationEventService notificationEvents;
 
     public ProjectVersionService(ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper,
-                                 ProjectAccessService projectAccess) {
+                                 ProjectAccessService projectAccess,
+                                 NotificationEventService notificationEvents) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.reqMapper = reqMapper;
         this.demandMapper = demandMapper;
         this.projectAccess = projectAccess;
+        this.notificationEvents = notificationEvents;
     }
 
     public List<ProjectVersion> list(String workspaceId, String reqId) {
@@ -146,8 +150,10 @@ public class ProjectVersionService {
         ProjectVersion version = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, version.getReqId());
         projectAccess.assertWrite(workspaceId, userId, version.getReqId());
-        if (!"released".equals(version.getStatus())) {
+        boolean releasing = !"released".equals(version.getStatus());
+        if (releasing) {
             versionMapper.release(workspaceId, id);
+            notifyReleased(version, userId);
         }
         return get(workspaceId, id);
     }
@@ -157,16 +163,57 @@ public class ProjectVersionService {
         ProjectVersion version = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, version.getReqId());
         projectAccess.assertWrite(workspaceId, userId, version.getReqId());
+        Map<String, Integer> taskCountByOwner = taskCountByOwner(version, userId);
         versionTaskMapper.deleteByVersion(workspaceId, id);
         /* 需求池的「目标版本」指向该版本：删版本时同步解绑，避免排期悬挂 */
         demandMapper.clearVersionRefsByVersion(workspaceId, id);
         versionMapper.deleteById(workspaceId, id);
+        notifyDeleted(version, userId, taskCountByOwner);
     }
 
     @Transactional
     public void deleteByReq(String workspaceId, String reqId) {
         versionTaskMapper.deleteByReq(workspaceId, reqId);
         versionMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    /** 版本发布：按负责人聚合版本内任务，每人一条通知（操作者本人跳过） */
+    private void notifyReleased(ProjectVersion version, String actorId) {
+        for (Map.Entry<String, Integer> entry : taskCountByOwner(version, actorId).entrySet()) {
+            notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
+                    UserNotificationPreferenceService.VERSION_RELEASED,
+                    "版本「" + version.getName() + "」已发布",
+                    "你负责的 " + entry.getValue() + " 项任务已随该版本发布",
+                    null, version.getReqId());
+        }
+    }
+
+    /** 版本删除：在解绑任务前收集负责人，删除后每人一条通知 */
+    private void notifyDeleted(ProjectVersion version, String actorId,
+                               Map<String, Integer> taskCountByOwner) {
+        for (Map.Entry<String, Integer> entry : taskCountByOwner.entrySet()) {
+            notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
+                    UserNotificationPreferenceService.VERSION_DELETED,
+                    "版本「" + version.getName() + "」已删除",
+                    "你负责的 " + entry.getValue() + " 项任务已随该版本解绑",
+                    null, version.getReqId());
+        }
+    }
+
+    private Map<String, Integer> taskCountByOwner(ProjectVersion version, String actorId) {
+        Map<String, Integer> taskCountByOwner = new LinkedHashMap<String, Integer>();
+        for (Task task : versionTaskMapper.selectOptionsByReq(version.getWorkspaceId(), version.getReqId())) {
+            if (!version.getId().equals(task.getVersionId())) {
+                continue;
+            }
+            String owner = Texts.trimToNull(task.getOwnerUserId());
+            if (owner == null || owner.equals(actorId)) {
+                continue;
+            }
+            Integer count = taskCountByOwner.get(owner);
+            taskCountByOwner.put(owner, count == null ? 1 : count + 1);
+        }
+        return taskCountByOwner;
     }
 
     private ProjectVersion get(String workspaceId, String id) {

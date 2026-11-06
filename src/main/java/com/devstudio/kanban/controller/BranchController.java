@@ -109,7 +109,7 @@ public class BranchController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         /* 删除分支会清掉操作记录并解除任务关联：仅空间主可执行 */
         workspaceService.requireOwner(userId, ws.getId());
-        branchService.delete(ws.getId(), id);
+        branchService.delete(userId, ws.getId(), id);
         return ApiResult.ok(null);
     }
 }

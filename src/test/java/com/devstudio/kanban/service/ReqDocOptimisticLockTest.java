@@ -6,6 +6,7 @@ import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
+import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
@@ -29,9 +30,10 @@ class ReqDocOptimisticLockTest {
     private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final WorkActivityService activities = mock(WorkActivityService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
-    private final RequirementDocService service = new RequirementDocService(docs, reqs,
+    private final RequirementDocService service = new RequirementDocService(docs,
+            mock(RequirementDocHistoryMapper.class), reqs,
             mock(UserMapper.class), mock(TaskMapper.class), activities,
-            mock(DemandMapper.class), access);
+            mock(DemandMapper.class), access, mock(NotificationEventService.class));
 
     @Test
     void staleVersionIsRejectedWithConflict() {

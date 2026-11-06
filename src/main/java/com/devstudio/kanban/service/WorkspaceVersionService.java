@@ -34,9 +34,14 @@ public class WorkspaceVersionService {
         versions.computeIfAbsent(workspaceId, k -> new AtomicLong()).incrementAndGet();
     }
 
-    /** 弱 ETag：空间 + 启动批次 + 版本 + 查询串哈希 */
-    public String etag(String workspaceId, String queryString, long version) {
+    /**
+     * 弱 ETag：空间 + 用户 + 启动批次 + 版本 + 查询串哈希。
+     * 必须带用户维度：响应体按项目可见范围裁剪，同一浏览器切换账号后
+     * 不能复用上一个用户的 304 缓存。
+     */
+    public String etag(String workspaceId, String userId, String queryString, long version) {
         int qh = queryString == null ? 0 : queryString.hashCode();
-        return "W/\"" + workspaceId + "-" + BOOT_ID + "-" + version + "-" + Integer.toHexString(qh) + "\"";
+        return "W/\"" + workspaceId + "-" + userId + "-" + BOOT_ID + "-" + version + "-"
+                + Integer.toHexString(qh) + "\"";
     }
 }

@@ -8,7 +8,7 @@ import { boardParams, updateBrand } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView } from "../core/router.js";
-import { catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
+import { canEditReq, canEditTask, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -131,6 +131,8 @@ function cardHTML(t, idx){
   var s = dueState(t);
   var isDone = t.boardColumn === "done";
   var blocked = !!t.blocked;
+  /* 只读项目：隐藏写操作，但保留「更多」以打开详情/复制链接 */
+  var editable = canEditTask(t);
   /* 只有"我自己"正在计时的任务才高亮；别人的计时在卡上不体现（工时是个人口径） */
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 色条只表达状态：完成绿、阻塞琥珀、逾期红、其余中性；优先级已在卡片头部用 P 标签表达 */
@@ -218,13 +220,15 @@ function cardHTML(t, idx){
     '<div class="card-acts">' +
       /* 「开始计时」放动作区（hover 出现）；已在计时时不放 —— 停止入口在 meta 行的胶囊里，
          否则常驻的绿色按钮会盖住卡片标题 */
-      ((!running && timerAllowed(t))
+      (editable && !running && timerAllowed(t)
         ? '<button class="card-act low" type="button" data-timer-toggle="' + esc(t.id) + '"' +
             ' title="开始计时（会自动暂停其他任务的计时）" aria-label="开始计时：' + esc(t.title) + '">' +
             icon("timer", 13) + '</button>'
         : '') +
-      '<button class="card-act low" type="button" data-due-pop="' + esc(t.id) + '" title="改期（快捷键 D）" aria-label="改期：' + esc(t.title) + '">' +
-        icon("calSmall", 13) + '</button>' +
+      (editable
+        ? '<button class="card-act low" type="button" data-due-pop="' + esc(t.id) + '" title="改期（快捷键 D）" aria-label="改期：' + esc(t.title) + '">' +
+            icon("calSmall", 13) + '</button>'
+        : '') +
       '<button class="card-act always" type="button" data-card-menu="' + esc(t.id) + '" title="更多操作" aria-haspopup="true" aria-label="更多操作：' + esc(t.title) + '">' +
         icon("more", 14) + '</button>' +
     '</div>' +
@@ -234,17 +238,23 @@ function cardHTML(t, idx){
           (isDone
             ? '<span class="pdot-ico" style="color:var(--success-fg)">' + icon("check", 13) + '</span>'
             : '<span class="pdot ' + esc(t.priority) + '"><i></i></span>') +
-          '<button class="card-tick" type="button" data-done-toggle="' + esc(t.id) + '"' +
-            ' title="' + (isDone ? "取消完成（快捷键 X）" : "标记完成（快捷键 X）") + '"' +
-            ' aria-label="' + (isDone ? "取消完成" : "标记完成") + '：' + esc(t.title) + '">' +
-            icon(isDone ? "undo" : "check", 11) + '</button>' +
+          (editable
+            ? '<button class="card-tick" type="button" data-done-toggle="' + esc(t.id) + '"' +
+                ' title="' + (isDone ? "取消完成（快捷键 X）" : "标记完成（快捷键 X）") + '"' +
+                ' aria-label="' + (isDone ? "取消完成" : "标记完成") + '：' + esc(t.title) + '">' +
+                icon(isDone ? "undo" : "check", 11) + '</button>'
+            : '') +
         '</span>' +
         (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '">' + esc(t.priority) + '</span>') +
       '</span>' +
       '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</h3>' +
     '</div>' +
     (t.description ? '<p class="card-desc">' + mdLite(t.description) + '</p>' : '') +
-    ((tagsHTML || blockedTag) ? '<div class="card-tags">' + blockedTag + tagsHTML + '</div>' : '') +
+    ((tagsHTML || blockedTag || !editable)
+      ? '<div class="card-tags">' +
+          (editable ? '' : '<span class="tag tag-ghost" title="你对该项目只有查看权限">' + icon("eye", 11) + '只读</span>') +
+          blockedTag + tagsHTML + '</div>'
+      : '') +
     (metaHTML ? '<div class="card-meta">' + metaHTML + '</div>' : '') +
     '<div class="card-foot">' + progHTML +
       '<span title="负责人：' + esc(owner) + '">' + avatarHTML(owner) + '</span>' +
@@ -435,6 +445,10 @@ function openInlineAdd(colId, preset, focusIt){
 }
 function inlineAddCreate(colId, title, input){
   var q = parseQuickAdd(title);
+  if(q.reqId && !canEditReq(q.reqId)){
+    toast("「" + q.reqName + "」只有查看权限，无法新增任务", "warn");
+    return;
+  }
   var payload = {
     title: q.title || title,
     priority: q.priority || "P2",
@@ -474,6 +488,8 @@ function onPointerDown(e){
   if(!cardEl) return;
   if(e.pointerType === "mouse" && e.button !== 0) return;
   if(e.target.closest("button,input,textarea,select,a")) return;
+  /* 只读项目不允许拖动改列：不动卡片位置，也不进入 pending 态 */
+  if(!canEditTask(taskById(cardEl.dataset.id))) return;
   pending = {
     el: cardEl, id: cardEl.dataset.id,
     x0: e.clientX, y0: e.clientY,

@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { catTag, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canEditTask, catTag, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -596,6 +596,7 @@ function ganttRowHTML(x, range, dayW, totalW){
   var bc = st.color;
   var selected = !!ganttState.sel[t.id];
   var isMs = !!t.isMilestone;
+  var editable = canEditTask(t);
   var critical = !!(ganttState.showCritical && ganttState.critical && ganttState.critical[t.id]);
   var rn = t.reqId ? reqNameById(t.reqId) : "";
   if(rn === "无") rn = "";
@@ -647,10 +648,10 @@ function ganttRowHTML(x, range, dayW, totalW){
   if(dev !== null) barTitle += " · 基线" + (dev === 0 ? "一致" : (dev > 0 ? "推迟 " + dev + " 天" : "提前 " + Math.abs(dev) + " 天"));
   var aria = t.title + "，" + fullRange + "，进度 " + p + "%，状态：" + statusText +
     (selected ? "，已选中" : "") + "。按 Enter 打开详情";
-  var handles = (!isMs && t.startDate && t.dueDate)
+  var handles = (!isMs && t.startDate && t.dueDate && editable)
     ? '<span class="gantt-handle l" data-gantt-handle="l"></span><span class="gantt-handle r" data-gantt-handle="r"></span>'
     : "";
-  var linkDot = ganttReadOnly() ? "" :
+  var linkDot = (ganttReadOnly() || !editable) ? "" :
     '<span class="gantt-link-dot" data-gantt-link="' + esc(t.id) + '" title="拖到另一条任务上建立依赖"></span>';
   var ghost = ganttBaselineHTML(t, range, dayW);
   var rowClass = "gantt-row" + (selected ? " is-selected" : "");
@@ -1291,10 +1292,15 @@ function openGanttDepMenu(depId, anchorEl){
     toast("旧版依赖暂不支持编辑，请删除后重新连线", "warn");
     return;
   }
+  /* 依赖两端都必须可写（与后端 GanttService 同口径）；未知任务交给后端判定 */
+  var fromT = ganttState.byId[dep.fromTaskId], toT = ganttState.byId[dep.toTaskId];
+  if((fromT && !canEditTask(fromT)) || (toT && !canEditTask(toT))){
+    toast("依赖关联的任务所在项目只有查看权限", "warn");
+    return;
+  }
   if(!ganttDepMenu) return;
   UI.closeAllPops();
   var type = dep.depType || "FS";
-  var fromT = ganttState.byId[dep.fromTaskId], toT = ganttState.byId[dep.toTaskId];
   ganttDepMenu.innerHTML = '<div class="menu-title">依赖：' +
       esc(fromT ? fromT.title : dep.fromTaskId) + ' → ' + esc(toT ? toT.title : dep.toTaskId) + '</div>' +
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">类型</div>' +
@@ -1330,7 +1336,8 @@ function onGanttLinkDown(e){
   var bar = dot.closest("[data-gantt-bar]");
   if(!bar || !ganttState.range) return;
   var fromId = dot.getAttribute("data-gantt-link");
-  if(!ganttState.byId[fromId]) return;
+  var fromTask = ganttState.byId[fromId];
+  if(!fromTask || !canEditTask(fromTask)) return;
   var grid = ganttScroll.querySelector(".gantt-grid");
   var start = ganttLinkPoint(fromId);
   if(!grid || !start) return;
@@ -1356,7 +1363,11 @@ function ganttLinkTargetAt(clientX, clientY, fromId){
   var bar = el && el.closest ? el.closest("[data-gantt-bar]") : null;
   if(!bar) return null;
   var id = bar.getAttribute("data-gantt-bar");
-  return id && id !== fromId ? bar : null;
+  if(!id || id === fromId) return null;
+  var target = ganttState.byId[id];
+  /* 端点项目只读时不能建立依赖（后端两端都要写权限） */
+  if(target && !canEditTask(target)) return null;
+  return bar;
 }
 function onGanttLinkMove(e){
   var d = ganttState.depDrag;
@@ -2062,6 +2073,8 @@ function onGanttPointerDown(e){
   if(e.pointerType === "mouse" && e.button !== 0) return;
   var t = ganttState.byId[bar.dataset.ganttBar];
   if(!t || !ganttState.range) return;
+  /* 只读项目：不进入拖拽；单击由 click 分支打开详情 */
+  if(!canEditTask(t)) return;
 
   /* Ctrl/⌘ 点选、Shift 连选：只改选择，不开始拖动 */
   if(e.ctrlKey || e.metaKey){ e.preventDefault(); ganttToggleSelection(t.id); return; }
@@ -2081,7 +2094,7 @@ function onGanttPointerDown(e){
     var ids = ganttState.sel[t.id] ? Object.keys(ganttState.sel) : [t.id];
     ids.forEach(function(id){
       var tt = ganttState.byId[id];
-      if(!tt) return;
+      if(!tt || !canEditTask(tt)) return;
       var ss = parseDate(tt.startDate) || parseDate(tt.dueDate);
       var ee = parseDate(tt.dueDate) || ss;
       if(!ss || !ee) return;   // 未排期任务不参与批量平移
@@ -2270,7 +2283,7 @@ function onGanttUnplannedPointerDown(e){
   if(!row) return;
   if(e.pointerType === "mouse" && e.button !== 0) return;
   var t = ganttState.byId[row.dataset.ganttOpen];
-  if(!t) return;
+  if(!t || !canEditTask(t)) return;
   ganttState.unplannedDrag = {
     task: t, row: row, x0: e.clientX, y0: e.clientY,
     lastX: e.clientX, lastY: e.clientY,
@@ -2388,9 +2401,15 @@ if(ganttScroll){
     if(grp){ ganttToggleGroup(grp.dataset.ganttGroupToggle); return; }
     var dep = e.target.closest("[data-gantt-dep]");
     if(dep){ openGanttDepMenu(dep.getAttribute("data-gantt-dep"), dep); return; }
-    /* 移动端只读：点条直接看详情（不启动拖拽） */
+    /* 移动端只读 / 只读项目的条：点条直接看详情（不启动拖拽） */
     var barEl = e.target.closest ? e.target.closest("[data-gantt-bar]") : null;
-    if(ganttReadOnly() && barEl){ openTaskById(barEl.getAttribute("data-gantt-bar")); return; }
+    if(barEl){
+      var barTask = ganttState.byId[barEl.getAttribute("data-gantt-bar")];
+      if(ganttReadOnly() || (barTask && !canEditTask(barTask))){
+        openTaskById(barEl.getAttribute("data-gantt-bar"));
+        return;
+      }
+    }
     var open = e.target.closest("[data-gantt-open]");
     if(open){ openTaskById(open.dataset.ganttOpen); return; }
     /* 点空白处取消多选 */

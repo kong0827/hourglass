@@ -1,5 +1,6 @@
 package com.devstudio.kanban.service;
 
+import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.TaskMapper;
 import org.slf4j.Logger;
@@ -40,6 +41,8 @@ public class TaskTrashService {
     private final TaskAuditLogger audit;
     private final ProjectAccessService projectAccess;
     private final com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper;
+    private final NotificationEventService notificationEvents;
+    private final TaskWatchService watchService;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
 
@@ -47,6 +50,7 @@ public class TaskTrashService {
                             TimeLogService timeLogService, TaskAuditLogger audit,
                             ProjectAccessService projectAccess,
                             com.devstudio.kanban.mapper.MailDeliveryMapper mailDeliveryMapper,
+                            NotificationEventService notificationEvents, TaskWatchService watchService,
                             PlatformTransactionManager transactionManager) {
         this.taskMapper = taskMapper;
         this.support = support;
@@ -55,6 +59,8 @@ public class TaskTrashService {
         this.audit = audit;
         this.projectAccess = projectAccess;
         this.mailDeliveryMapper = mailDeliveryMapper;
+        this.notificationEvents = notificationEvents;
+        this.watchService = watchService;
         this.purgeTx = new TransactionTemplate(transactionManager);
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -86,6 +92,9 @@ public class TaskTrashService {
         taskMapper.clearEpicChildren(workspaceId, id);
         timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已移入回收站");
         audit.log(userId, workspaceId, id, "delete", "移入回收站「" + t.getTitle() + "」（30 天后自动清理）");
+        /* 软删除后任务已不可打开，通知不带任务引用，避免通知中心点进去 404 */
+        notifyParticipants(workspaceId, userId, t, "任务移入回收站：「" + t.getTitle() + "」",
+                "任务已被移入回收站，30 天后自动清理；可由空间成员在回收站恢复", null);
     }
 
     @Transactional
@@ -100,12 +109,28 @@ public class TaskTrashService {
         audit.log(userId, workspaceId, id, "restore", undo
                 ? "撤销删除：「" + t.getTitle() + "」回到看板"
                 : "从回收站恢复「" + t.getTitle() + "」");
+        notifyParticipants(workspaceId, userId, t, "任务已恢复：「" + t.getTitle() + "」",
+                "任务已从回收站恢复到看板", id);
     }
 
     @Transactional
     public void purge(String workspaceId, String id) {
         support.requireDeleted(workspaceId, id);
         cascade.purgeTasks(workspaceId, Collections.singletonList(id));
+    }
+
+    /** 删除/恢复通知负责人与关注者；操作者不做打扰，负责人已单独通知时不重复 */
+    private void notifyParticipants(String workspaceId, String actorId, Task task,
+                                    String title, String body, String referenceId) {
+        String owner = Texts.trimToNull(task.getOwnerUserId());
+        List<String> skip = Collections.emptyList();
+        if (owner != null && !owner.equals(actorId)) {
+            notificationEvents.notify(owner, workspaceId, UserNotificationPreferenceService.TASK_UPDATED,
+                    title, body, referenceId, task.getReqId());
+            skip = Collections.singletonList(owner);
+        }
+        watchService.notifyWatchers(workspaceId, task.getId(), actorId,
+                UserNotificationPreferenceService.TASK_UPDATED, title, body, task.getReqId(), skip);
     }
 
     /**

@@ -65,6 +65,12 @@ public class RequirementService {
 
     public List<ReqProgress> list(String workspaceId, String userId) {
         java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        /* 只读态一次算清：查看者与非成员全局只读，成员仅在显式 read 的项目上只读 */
+        String role = projectAccess.roleOf(workspaceId, userId);
+        boolean globalRead = role == null || ProjectAccessService.isViewer(role);
+        java.util.Map<String, String> grants = globalRead
+                ? java.util.Collections.<String, String>emptyMap()
+                : projectAccess.userGrants(workspaceId, userId);
         /* 一次 GROUP BY 汇总各项目，避免为整页进度加载全部任务 */
         java.util.Map<String, com.devstudio.kanban.dto.ReqTaskAggRow> aggByReq =
                 new java.util.HashMap<String, com.devstudio.kanban.dto.ReqTaskAggRow>();
@@ -103,6 +109,8 @@ public class RequirementService {
             p.setFirstReleasedAt(r.getFirstReleasedAt());
             p.setCreatedAt(r.getCreatedAt());
             p.setUpdatedAt(r.getUpdatedAt());
+            p.setAccess(!globalRead && !ProjectAccessService.ACCESS_READ.equals(grants.get(r.getId()))
+                    ? "write" : "read");
 
             com.devstudio.kanban.dto.ReqTaskAggRow agg = aggByReq.get(r.getId());
             int count = agg == null ? 0 : agg.getTotal();

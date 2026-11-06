@@ -52,7 +52,7 @@ class TaskControllerResolveTest {
         workspaceService = mock(WorkspaceService.class);
         WorkspaceVersionService versionService = mock(WorkspaceVersionService.class);
         when(versionService.version("W1")).thenReturn(1L);
-        when(versionService.etag(any(), any(), anyLong())).thenReturn("x");
+        when(versionService.etag(any(), any(), any(), anyLong())).thenReturn("x");
 
         Workspace ws = new Workspace();
         ws.setId("W1");
@@ -61,7 +61,7 @@ class TaskControllerResolveTest {
         ws.setMyRole("owner");
         when(workspaceService.resolve(eq("U1"), any())).thenReturn(ws);
 
-        mvc = MockMvcBuilders.standaloneSetup(new TaskController(taskService, mock(TaskCommandService.class), mock(TaskWorkflowService.class), trashService, versionService))
+        mvc = MockMvcBuilders.standaloneSetup(new TaskController(taskService, mock(TaskCommandService.class), mock(TaskWorkflowService.class), trashService, versionService, mock(com.devstudio.kanban.service.TaskWatchService.class)))
                 .setCustomArgumentResolvers(new WorkspaceArgumentResolver(workspaceService),
                         new BoardQueryArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())

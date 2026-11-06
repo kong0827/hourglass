@@ -135,6 +135,48 @@ class ProjectAccessServiceTest {
         assertEquals(ProjectAccessService.ACCESS_NONE, ProjectAccessService.normalizeAccess("none"));
     }
 
+    @Test
+    void filterVisibleMembersMatchesCanViewWithoutPerMemberQueries() {
+        WorkspaceMember owner = rawMember("U9", ProjectAccessService.ROLE_OWNER);
+        WorkspaceMember viewer = rawMember("U8", ProjectAccessService.ROLE_VIEWER);
+        WorkspaceMember hidden = rawMember("U2", ProjectAccessService.ROLE_MEMBER);
+        WorkspaceMember plain = rawMember("U3", ProjectAccessService.ROLE_MEMBER);
+        when(grants.selectByWorkspace(WS))
+                .thenReturn(Collections.singletonList(grant("R1", "U2", ProjectAccessService.ACCESS_NONE)));
+
+        java.util.List<WorkspaceMember> visible = service.filterVisibleMembers(WS,
+                Arrays.asList(owner, viewer, hidden, plain), "R1");
+
+        assertEquals(3, visible.size());
+        assertEquals("U9", visible.get(0).getUserId());
+        assertEquals("U8", visible.get(1).getUserId());
+        assertEquals("U3", visible.get(2).getUserId());
+        verify(grants, times(1)).selectByWorkspace(WS);
+        verify(members, never()).selectMember(anyString(), anyString());
+    }
+
+    @Test
+    void filterVisibleMembersKeepsAllWhenTaskHasNoProject() {
+        WorkspaceMember owner = rawMember("U9", ProjectAccessService.ROLE_OWNER);
+        WorkspaceMember hidden = rawMember("U2", ProjectAccessService.ROLE_MEMBER);
+        when(grants.selectByWorkspace(WS))
+                .thenReturn(Collections.singletonList(grant("R1", "U2", ProjectAccessService.ACCESS_NONE)));
+
+        java.util.List<WorkspaceMember> visible = service.filterVisibleMembers(WS,
+                Arrays.asList(owner, hidden), null);
+
+        assertEquals(2, visible.size());
+        verify(grants, never()).selectByWorkspace(WS);
+    }
+
+    private WorkspaceMember rawMember(String userId, String role) {
+        WorkspaceMember m = new WorkspaceMember();
+        m.setWorkspaceId(WS);
+        m.setUserId(userId);
+        m.setRole(role);
+        return m;
+    }
+
     private void member(String userId, String role) {
         WorkspaceMember m = new WorkspaceMember();
         m.setWorkspaceId(WS);

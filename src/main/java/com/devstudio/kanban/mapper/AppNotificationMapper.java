@@ -35,4 +35,7 @@ public interface AppNotificationMapper {
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 
     int deleteAllByUser(@Param("userId") String userId);
+
+    /** 清理窗口外的历史通知，避免 app_notification 无限增长 */
+    int deleteOlderThan(@Param("cutoff") java.time.LocalDateTime cutoff);
 }

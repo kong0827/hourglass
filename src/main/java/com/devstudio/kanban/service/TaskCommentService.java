@@ -1,19 +1,29 @@
 package com.devstudio.kanban.service;
 
 import com.devstudio.kanban.common.AppException;
+import com.devstudio.kanban.common.Mentions;
 import com.devstudio.kanban.common.Texts;
 import com.devstudio.kanban.entity.AppUser;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.entity.TaskComment;
 import com.devstudio.kanban.entity.TaskLog;
+import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.TaskCommentMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.UserMapper;
+import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 任务评论 / 讨论（N-6）。
@@ -23,24 +33,31 @@ import java.util.List;
 @Service
 public class TaskCommentService {
 
+    private static final Logger log = LoggerFactory.getLogger(TaskCommentService.class);
     private static final int MAX_LEN = 500;
+    private static final int PREVIEW_LEN = 160;
 
     private final TaskCommentMapper commentMapper;
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final UserMapper userMapper;
+    private final WorkspaceMemberMapper memberMapper;
     private final NotificationEventService notificationEvents;
     private final ProjectAccessService projectAccess;
+    private final TaskWatchService watchService;
 
     public TaskCommentService(TaskCommentMapper commentMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
-                              UserMapper userMapper, NotificationEventService notificationEvents,
-                              ProjectAccessService projectAccess) {
+                              UserMapper userMapper, WorkspaceMemberMapper memberMapper,
+                              NotificationEventService notificationEvents,
+                              ProjectAccessService projectAccess, TaskWatchService watchService) {
         this.commentMapper = commentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.userMapper = userMapper;
+        this.memberMapper = memberMapper;
         this.notificationEvents = notificationEvents;
         this.projectAccess = projectAccess;
+        this.watchService = watchService;
     }
 
     /** 读评论：允许回收站中的任务（保留可读） */
@@ -61,8 +78,14 @@ public class TaskCommentService {
         return commentMapper.selectByTaskId(workspaceId, taskId);
     }
 
-    @Transactional
+    /** 不传结构化提及时的兼容入口（仅解析正文里的 @名字） */
     public TaskComment create(String userId, String workspaceId, String taskId, String content) {
+        return create(userId, workspaceId, taskId, content, null);
+    }
+
+    @Transactional
+    public TaskComment create(String userId, String workspaceId, String taskId, String content,
+                              List<String> structuredMentionIds) {
         Task t = taskMapper.selectById(taskId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
@@ -95,14 +118,76 @@ public class TaskCommentService {
         taskLog.setDetail(Texts.cut(author + " 发表评论：" + Texts.cut(text, 80), 250));
         logMapper.insert(taskLog);
 
-        // 定向通知负责人本人（不是自己发的才通知）
-        if (t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
+        List<String> mentioned = mentionTargets(text, structuredMentionIds, workspaceId, userId);
+        for (String mentionedUserId : mentioned) {
+            notificationEvents.notify(mentionedUserId, workspaceId,
+                    UserNotificationPreferenceService.TASK_MENTION,
+                    "「" + t.getTitle() + "」提到了你",
+                    author + "：" + Texts.cut(text, PREVIEW_LEN), taskId, t.getReqId());
+        }
+        // 定向通知负责人本人；已在 @ 提及里通知过的人不再重复
+        boolean ownerNotified = false;
+        if (t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)
+                && !mentioned.contains(t.getOwnerUserId())) {
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_COMMENT,
                     "「" + t.getTitle() + "」有新评论",
-                    author + "：" + Texts.cut(text, 160), taskId, t.getReqId());
+                    author + "：" + Texts.cut(text, PREVIEW_LEN), taskId, t.getReqId());
+            ownerNotified = true;
         }
+        /* 关注者：被 @ 或身为负责人的已经收到更具体的通知，不再重复 */
+        java.util.Set<String> skip = new java.util.HashSet<String>(mentioned);
+        if (ownerNotified) {
+            skip.add(t.getOwnerUserId());
+        }
+        watchService.notifyWatchers(workspaceId, taskId, userId,
+                UserNotificationPreferenceService.TASK_COMMENT,
+                "「" + t.getTitle() + "」有新评论",
+                author + "：" + Texts.cut(text, PREVIEW_LEN), t.getReqId(), skip);
         return c;
+    }
+
+    /**
+     * 正文 @名字 与前端选中的成员合并去重；结构化 ID 只接受空间成员，
+     * 这样重名成员也能精确通知，同时避免伪造 ID 跨空间打扰他人。
+     */
+    private List<String> mentionTargets(String text, List<String> structuredIds,
+                                        String workspaceId, String authorId) {
+        List<WorkspaceMember> members;
+        try {
+            members = memberMapper.selectByWorkspace(workspaceId);
+        } catch (Exception e) {
+            log.warn("评论 @提及解析失败（不影响评论本身）：workspace={}", workspaceId, e);
+            return Collections.emptyList();
+        }
+        Set<String> targets = new LinkedHashSet<String>(Mentions.mentionedUserIds(text, members));
+        if (structuredIds != null) {
+            Set<String> memberIds = new HashSet<String>();
+            for (WorkspaceMember m : members) {
+                if (m.getUserId() != null) {
+                    memberIds.add(m.getUserId());
+                }
+            }
+            for (String id : structuredIds) {
+                String candidate = Texts.trimToNull(id);
+                if (candidate != null && memberIds.contains(candidate)) {
+                    targets.add(candidate);
+                }
+            }
+        }
+        targets.remove(authorId);
+        return new ArrayList<String>(targets);
+    }
+
+    /** @提及候选：只返回对该任务所在项目可见的空间成员 */
+    public List<WorkspaceMember> mentionCandidates(String userId, String workspaceId, String taskId) {
+        Task t = taskMapper.selectById(taskId);
+        if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
+            throw AppException.notFound("任务不存在：" + taskId);
+        }
+        projectAccess.assertViewTask(workspaceId, userId, t);
+        return projectAccess.filterVisibleMembers(workspaceId,
+                memberMapper.selectByWorkspace(workspaceId), t.getReqId());
     }
 
     @Transactional

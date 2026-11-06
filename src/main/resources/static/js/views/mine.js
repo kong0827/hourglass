@@ -6,7 +6,7 @@ import { clearFilters } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { catTag, dueState, dueText, progressOf, rt, state, tagChip } from "../core/state.js";
+import { canEditTask, catTag, dueState, dueText, progressOf, rt, state, tagChip } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -132,6 +132,8 @@ function mineRowHTML(t){
   var st = dueState(t);
   var p = progressOf(t);
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
+  /* 跨空间任务的可写性由后端下发；只读项目只保留「停止计时」这一条合法入口 */
+  var editable = canEditTask(t);
   return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
       ' tabindex="0" role="row" style="grid-template-columns:minmax(0,1fr) 140px 96px 92px 84px 128px 108px">' +
     '<span class="lr-task"><span class="lr-t">' + esc(t.title) + '</span>' +
@@ -146,10 +148,10 @@ function mineRowHTML(t){
     '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span>' +
       '<span class="pv">' + p + '%</span></span></span>' +
     '<span class="mine-acts">' +
-      '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' +
-      '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer title="' +
-        (running ? "停止计时" : "开始计时") + '" aria-label="开始或停止计时">' + icon("clock", 14) + '</button>' +
-      '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' +
+      (editable ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
+      ((editable || running) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer title="' +
+        (running ? "停止计时" : "开始计时") + '" aria-label="开始或停止计时">' + icon("clock", 14) + '</button>' : '') +
+      (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
     '</span>' +
   '</div>';
 }
@@ -238,6 +240,7 @@ function mineTaskFromRow(row){
 }
 function mineComplete(t){
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/move", {column:"done"}).then(function(){
     toast("已完成「" + t.title + "」", "fs");
     loadMine({silent:true});
@@ -248,6 +251,8 @@ function mineComplete(t){
 function mineToggleTimer(t){
   if(!t) return;
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
+  /* 停止自己的计时不受项目可见范围限制（与后端一致），只拦「开始」 */
+  if(!running && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
       toast(running ? ("已停止「" + t.title + "」计时") : ("已开始「" + t.title + "」计时"), "fs");
@@ -257,6 +262,7 @@ function mineToggleTimer(t){
 }
 function mineReschedule(anchor, t){
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var el = document.createElement("div");
   el.className = "menu due-pop";
   el.innerHTML =

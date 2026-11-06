@@ -4,6 +4,8 @@ import com.devstudio.kanban.entity.AppNotification;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -22,6 +24,10 @@ public class AppNotificationService {
     private static final int DEDUP_HOURS = 6;
     private static final int MAX_TITLE = 120;
     private static final int MAX_BODY = 500;
+
+    /** 站内通知保留天数：超出后每天自动清理，避免表无限增长；字段初始化保留默认值，便于脱离 Spring 的单元测试 */
+    @Value("${app.notification.retain-days:90}")
+    private int retainDays = 90;
 
     private final AppNotificationMapper mapper;
 
@@ -92,6 +98,19 @@ public class AppNotificationService {
 
     public void markAllRead(String userId, String workspaceId) {
         mapper.markAllRead(userId, workspaceId);
+    }
+
+    /** 每天 03:20 清理超过保留期的站内通知 */
+    @Scheduled(cron = "0 20 3 * * *")
+    public void purgeExpired() {
+        try {
+            int count = mapper.deleteOlderThan(LocalDateTime.now().minusDays(retainDays));
+            if (count > 0) {
+                log.info("清理站内通知 {} 条（超过 {} 天）", count, retainDays);
+            }
+        } catch (Exception e) {
+            log.warn("站内通知清理失败", e);
+        }
     }
 
     private String cut(String s, int max) {

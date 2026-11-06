@@ -17,17 +17,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** 固定四类个人事件偏好。缺省：站内开启、邮件关闭。 */
+/** 个人事件偏好。缺省：站内开启、邮件关闭。 */
 @Service
 public class UserNotificationPreferenceService {
 
     public static final String TASK_ASSIGNED = "task_assigned";
     public static final String TASK_UPDATED = "task_updated";
     public static final String TASK_COMMENT = "task_comment";
+    public static final String TASK_MENTION = "task_mention";
     public static final String DEMAND_STATUS = "demand_status";
+    public static final String DOC_CHANGED = "doc_changed";
+    public static final String BRANCH_STATUS = "branch_status";
+    public static final String VERSION_RELEASED = "version_released";
+    public static final String VERSION_DELETED = "version_deleted";
+    /** 每日站内汇总开关（只影响 task_due 汇总，不影响任务级提醒） */
+    public static final String DAILY_DIGEST = "daily_digest";
 
     public static final List<String> EVENT_TYPES = Collections.unmodifiableList(Arrays.asList(
-            TASK_ASSIGNED, TASK_UPDATED, TASK_COMMENT, DEMAND_STATUS));
+            TASK_ASSIGNED, TASK_UPDATED, TASK_COMMENT, TASK_MENTION, DEMAND_STATUS,
+            DOC_CHANGED, BRANCH_STATUS, VERSION_RELEASED, VERSION_DELETED, DAILY_DIGEST));
     private static final Set<String> EVENT_SET = Collections.unmodifiableSet(new HashSet<String>(EVENT_TYPES));
 
     private final UserNotificationPreferenceMapper mapper;
@@ -75,6 +83,15 @@ public class UserNotificationPreferenceService {
         return new NotificationPreferenceItem(eventType,
                 p == null || p.getInAppEnabled() == null || Boolean.TRUE.equals(p.getInAppEnabled()),
                 p != null && Boolean.TRUE.equals(p.getEmailEnabled()));
+    }
+
+    /** 读不到偏好时按开启处理：汇总属于低频增强，不应因一次读失败静默丢失 */
+    public boolean inAppEnabled(String userId, String eventType) {
+        try {
+            return Boolean.TRUE.equals(get(userId, eventType).getInApp());
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     public static void requireSupported(String eventType) {

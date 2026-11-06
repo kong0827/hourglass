@@ -68,15 +68,18 @@ public class GanttController {
                                           @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
                                           HttpServletRequest request) {
         String wsId = ctx.getWsId();
-        String etag = versionService.etag(wsId, request.getQueryString(), versionService.version(wsId));
+        String etag = versionService.etag(wsId, ctx.getUserId(), request.getQueryString(), versionService.version(wsId));
         if (etag.equals(inm)) {
-            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag).build();
+            return ResponseEntity.status(304).header(HttpHeaders.ETAG, etag)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-cache").build();
         }
         GanttResponse resp = ganttService.gantt(wsId, ctx.getUserId(), query, from, to,
                 includeDone == null || includeDone,
                 offset == null ? 0 : offset, limit == null ? 0 : limit);
         /* includeDone 由服务端过滤；前端默认不传（true），切换「显示已完成」时本地过滤即可 */
-        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag).body(ApiResult.ok(resp));
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-cache")
+                .body(ApiResult.ok(resp));
     }
 
     @GetMapping("/api/gantt/deps")

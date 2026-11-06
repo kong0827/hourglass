@@ -38,12 +38,14 @@ class WorkspaceServiceMemberCacheTest {
     private UserMapper userMapper;
     private WorkspaceService service;
     private WorkspaceMemberCache memberCache;
+    private com.devstudio.kanban.mapper.TaskWatchMapper taskWatchMapper;
 
     @BeforeEach
     void setUp() {
         workspaceMapper = mock(WorkspaceMapper.class);
         memberMapper = mock(WorkspaceMemberMapper.class);
         userMapper = mock(UserMapper.class);
+        taskWatchMapper = mock(com.devstudio.kanban.mapper.TaskWatchMapper.class);
         memberCache = new WorkspaceMemberCache(workspaceMapper, memberMapper, 60_000L,
                 new AtomicLong(1_000_000L)::get);
         service = new WorkspaceService(workspaceMapper, memberMapper, userMapper,
@@ -52,7 +54,8 @@ class WorkspaceServiceMemberCacheTest {
                 mock(com.devstudio.kanban.mapper.AppNotificationMapper.class),
                 mock(com.devstudio.kanban.mapper.UserListPreferenceMapper.class),
                 mock(WorkActivityService.class),
-                mock(InviteMapper.class), mock(ProjectMemberMapper.class), mock(TaskCascade.class),
+                mock(InviteMapper.class), mock(ProjectMemberMapper.class),
+                taskWatchMapper, mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
 
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());
@@ -82,6 +85,7 @@ class WorkspaceServiceMemberCacheTest {
 
         assertThrows(AppException.class, () -> service.requireMember(MEMBER, WS));
         verify(memberMapper).delete(WS, MEMBER);
+        verify(taskWatchMapper).deleteByWorkspaceUser(WS, MEMBER);
         verify(memberMapper, times(3)).selectMember(WS, MEMBER);
     }
 

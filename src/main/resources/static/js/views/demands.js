@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { reqNameById, rt } from "../core/state.js";
+import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
@@ -37,6 +37,10 @@ var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
+/* 需求写权限跟随所属项目：成员在只读项目下不显示/不放行任何写入口 */
+function canWriteDemand(d){ return !!d && canEditReq(d.reqId); }
+function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
+function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
 function statusName(st){
   for(var i = 0; i < COLS.length; i++) if(COLS[i][0] === st) return COLS[i][1];
   return st;
@@ -160,6 +164,9 @@ function syncModeUI(mode){
   if(demandReq) demandReq.hidden = mode === "table";
   var bc = $("btnDemandColumns");
   if(bc) bc.hidden = mode !== "table";
+  /* 只读项目不显示「提需求」；列表模式全空间，只要有一个可写项目即可 */
+  var bn = $("btnDemandNew");
+  if(bn) bn.style.display = (writableReqs().length && (mode === "table" || canEditReq(rt.demandReqId))) ? "" : "none";
 }
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
@@ -289,11 +296,15 @@ function findDemand(id){
   return null;
 }
 function openDemandDialog(d){
+  if(d && !canWriteDemand(d)){ denyDemandReadOnly(); return; }
+  if(!rt.reqList.length){ toast("先在「项目」里创建项目", "warn"); return; }
+  var opts = writableReqs();
+  if(!opts.length){ toast("你在当前空间没有可写项目，无法提需求", "warn"); return; }
   editingDemandId = d ? d.id : null;
-  dReq.innerHTML = rt.reqList.map(function(r){
+  dReq.innerHTML = opts.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
   }).join("");
-  dReq.value = d ? d.reqId : (rt.demandReqId || (rt.reqList.length ? rt.reqList[0].id : ""));
+  dReq.value = d ? d.reqId : (canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
@@ -318,6 +329,7 @@ function saveDemand(){
     try{ dTitle.focus(); }catch(e){ /* noop */ }
     return;
   }
+  if(!canEditReq(dReq.value)){ denyDemandReadOnly(); return; }
   function num(el, min){
     var v = Number(el.value);
     if(isNaN(v)) v = min;
@@ -359,6 +371,7 @@ function saveDemand(){
 function deleteDemand(id){
   var d = findDemand(id);
   if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   UI.showConfirm({
     title:"删除需求",
     msg:"删除「" + esc(d.title) + "」？该需求会从需求池移除，操作不可恢复。",
@@ -377,6 +390,7 @@ function deleteDemand(id){
 function passDemand(id){
   var d = findDemand(id);
   if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   API.post("/api/demands/" + encodeURIComponent(id) + "/pass", {}).then(function(){
     toast("已通过「" + d.title + "」，可排期进入版本", "fs");
     loadDemands();
@@ -385,6 +399,7 @@ function passDemand(id){
 function rejectDemand(id){
   var d = findDemand(id);
   if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   UI.showPrompt({
     title:"拒绝需求",
     desc:"拒绝原因会记录在需求时间线，需求进入「已拒绝」，可重新打开再评审。",
@@ -402,6 +417,7 @@ function rejectDemand(id){
 function reopenDemand(id){
   var d = findDemand(id);
   if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   API.post("/api/demands/" + encodeURIComponent(id) + "/reopen", {}).then(function(){
     toast("已重新打开「" + d.title + "」，回到待评审", "fs");
     loadDemands();
@@ -410,6 +426,7 @@ function reopenDemand(id){
 function openPlanDialog(id){
   var d = findDemand(id);
   if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   planDemandId = id;
   fDemandPlanVer.classList.remove("invalid");
   dpNote.value = "";
@@ -439,6 +456,7 @@ function fillPlanVersions(d, list){
 }
 function doPlan(){
   if(!planDemandId) return;
+  if(!canWriteDemand(findDemand(planDemandId))){ denyDemandReadOnly(); return; }
   var verId = dpVersion.value;
   if(!verId){
     fDemandPlanVer.classList.add("invalid");
@@ -505,7 +523,7 @@ function loadDemandTasks(layer, id){
     if(layer.isConnected) box.innerHTML = '<div class="attach-empty">关联工作项加载失败</div>';
   });
 }
-function loadDemandAttachments(layer, id){
+function loadDemandAttachments(layer, id, writable){
   var box = layer.querySelector("#demAtts");
   if(!box) return;
   API.get("/api/demands/" + encodeURIComponent(id) + "/attachments").then(function(list){
@@ -525,7 +543,7 @@ function loadDemandAttachments(layer, id){
         '<span class="att-size">' + fmtSize(a.size) + '</span>' +
         '<span class="att-acts">' +
           '<a class="icon-btn sm" href="' + url + '" download title="下载" aria-label="下载附件">' + icon("download", 14) + '</a>' +
-          '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>' +
+          (writable ? '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>' : '') +
         '</span>' +
       '</div>';
     }).join("");
@@ -534,7 +552,7 @@ function loadDemandAttachments(layer, id){
   });
 }
 
-function loadDemandDocs(layer, id, reqId){
+function loadDemandDocs(layer, id, reqId, writable){
   var box = layer.querySelector("#demDocs");
   var pick = layer.querySelector("#demDocPick");
   if(!box) return;
@@ -553,9 +571,11 @@ function loadDemandDocs(layer, id, reqId){
         + '<span class="att-icon">' + (md ? "MD" : "HTML") + '</span>'
         + '<span class="att-name"><button class="link-cell" type="button" data-dem-doc-open="' + esc(doc.id) + '">' + esc(doc.title) + '</button></span>'
         + '<span class="att-size">' + esc(docTypeName(doc.docType)) + '</span>'
-        + '<span class="att-acts"><button class="icon-btn sm danger" type="button" data-dem-doc-unlink="' + esc(doc.id) + '" title="取消关联" aria-label="取消关联">' + icon("close", 13) + '</button></span>'
+        + '<span class="att-acts">' + (writable
+          ? '<button class="icon-btn sm danger" type="button" data-dem-doc-unlink="' + esc(doc.id) + '" title="取消关联" aria-label="取消关联">' + icon("close", 13) + '</button>'
+          : '') + '</span>'
         + '</div>';
-    }).join("") : '<div class="attach-empty">还没有关联文档；从下方选择当前项目的文档。</div>';
+    }).join("") : '<div class="attach-empty">' + (writable ? "还没有关联文档；从下方选择当前项目的文档。" : "还没有关联文档。") + '</div>';
     if(!pick) return;
     var opts = all.filter(function(r){ return !linkedIds[r.id]; });
     if(!all.length){
@@ -578,6 +598,7 @@ function loadDemandDocs(layer, id, reqId){
 function showDemandDetail(id){
   var d = findDemand(id);
   if(!d) return;
+  var writable = canWriteDemand(d);
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
@@ -611,17 +632,17 @@ function showDemandDetail(id){
     + wsjf
     + '<div class="detail-section"><span class="section-title">关联文档</span>'
     + '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
-    + '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
-    + '<button class="btn sm ghost" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>'
+    + (writable ? '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
+      + '<button class="btn sm ghost" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">关联工作项</span>'
     + '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
-    + '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>'
+    + (writable ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">附件</span>'
     + '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
-    + '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
-    + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx"></div>'
+    + (writable ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
+      + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx"></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">流转时间线</span><ul class="dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul></div>'
     + '</div></div>';
@@ -634,6 +655,7 @@ function showDemandDetail(id){
     var ro = e.target.closest("[data-dem-reopen]"); if(ro){ UI.closeModal(layer); reopenDemand(ro.dataset.demReopen); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
+      if(!writable){ denyDemandReadOnly(); return; }
       UI.closeModal(layer);
       openTaskDrawer("backlog", null, {
         reqId: d.reqId, demandId: d.id, versionId: d.versionId, dueDate: d.expectDate
@@ -641,25 +663,27 @@ function showDemandDetail(id){
       return;
     }
     var up = e.target.closest("[data-dem-attup]");
-    if(up){ var fi = layer.querySelector("#demAttFile"); if(fi) fi.click(); return; }
+    if(up){ if(!writable){ denyDemandReadOnly(); return; } var fi = layer.querySelector("#demAttFile"); if(fi) fi.click(); return; }
     var dl = e.target.closest("[data-dem-doc-link]");
     if(dl){
+      if(!writable){ denyDemandReadOnly(); return; }
       var pick = layer.querySelector("#demDocPick");
       var docId = pick && pick.value;
       if(!docId){ toast("先选择要关联的文档", "warn"); return; }
       dl.disabled = true;
       API.post("/api/demands/" + encodeURIComponent(id) + "/docs", { docId: docId }).then(function(){
         toast("已关联文档", "fs");
-        loadDemandDocs(layer, id, d.reqId);
+        loadDemandDocs(layer, id, d.reqId, writable);
       }).catch(function(ex){ dl.disabled = false; toast(ex.message || "关联失败", "bad"); });
       return;
     }
     var du = e.target.closest("[data-dem-doc-unlink]");
     if(du){
+      if(!writable){ denyDemandReadOnly(); return; }
       du.disabled = true;
       API.del("/api/demands/" + encodeURIComponent(id) + "/docs/" + encodeURIComponent(du.dataset.demDocUnlink)).then(function(){
         toast("已取消关联", "fs");
-        loadDemandDocs(layer, id, d.reqId);
+        loadDemandDocs(layer, id, d.reqId, writable);
       }).catch(function(ex){ du.disabled = false; toast(ex.message || "取消失败", "bad"); });
       return;
     }
@@ -674,6 +698,7 @@ function showDemandDetail(id){
     if(ot){ UI.closeModal(layer); openTaskById(ot.dataset.openTask); return; }
     var ad = e.target.closest("[data-att-del]");
     if(ad){
+      if(!writable){ denyDemandReadOnly(); return; }
       UI.showConfirm({
         title: "删除附件",
         msg: "附件删除后不可恢复，确定删除？",
@@ -683,7 +708,7 @@ function showDemandDetail(id){
         ad.disabled = true;
         API.del("/api/attachments/" + encodeURIComponent(ad.dataset.attDel)).then(function(){
           toast("附件已删除", "fs");
-          loadDemandAttachments(layer, id);
+          loadDemandAttachments(layer, id, writable);
         }).catch(function(ex){ ad.disabled = false; toast(ex.message || "删除失败", "bad"); });
       });
       return;
@@ -714,7 +739,7 @@ function showDemandDetail(id){
     }).then(function(json){
       if(json && json.code === 0){
         toast("附件已上传", "fs");
-        loadDemandAttachments(layer, id);
+        loadDemandAttachments(layer, id, writable);
       }else{
         toast((json && json.message) || "上传失败", "bad");
       }
@@ -722,8 +747,8 @@ function showDemandDetail(id){
   });
   UI.openModal(layer);
   loadDemandTasks(layer, id);
-  loadDemandDocs(layer, id, d.reqId);
-  loadDemandAttachments(layer, id);
+  loadDemandDocs(layer, id, d.reqId, writable);
+  loadDemandAttachments(layer, id, writable);
   API.get("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     if(!ul) return;

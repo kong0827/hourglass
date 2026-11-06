@@ -78,6 +78,62 @@ class NotificationEventServiceTest {
     }
 
     @Test
+    void systemNotificationSkipsMembershipAndPreferenceChecks() {
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+
+        service.notifySystem("U1", "W1", NotificationEventService.MEMBER_REMOVED,
+                "removed", "body", null);
+
+        verify(inApp).pushImmediate("U1", "W1", NotificationEventService.MEMBER_REMOVED,
+                "removed", "body", null);
+        verify(deliveries).enqueue("u1@example.com", "removed", "body",
+                NotificationEventService.MEMBER_REMOVED, null);
+        verifyNoInteractions(preferences, projectAccess, members);
+    }
+
+    @Test
+    void emailCarriesTaskDeepLinkWhenBaseUrlConfigured() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "mailBaseUrl", "https://host/hourglass");
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_COMMENT))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_COMMENT, false, true));
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_COMMENT,
+                "comment", "body", "K1");
+
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(deliveries).enqueue(org.mockito.ArgumentMatchers.eq("u1@example.com"),
+                org.mockito.ArgumentMatchers.eq("comment"), body.capture(),
+                org.mockito.ArgumentMatchers.eq(UserNotificationPreferenceService.TASK_COMMENT),
+                org.mockito.ArgumentMatchers.eq("K1"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.getValue()
+                .endsWith("打开任务：https://host/hourglass/#/board?task=K1"));
+    }
+
+    @Test
+    void emailWithoutBaseUrlKeepsPlainBody() {
+        when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
+        when(projectAccess.canView(anyString(), anyString(), any())).thenReturn(true);
+        when(preferences.get("U1", UserNotificationPreferenceService.TASK_COMMENT))
+                .thenReturn(new NotificationPreferenceItem(UserNotificationPreferenceService.TASK_COMMENT, false, true));
+        AppUser user = new AppUser();
+        user.setEmail("u1@example.com");
+        when(users.selectById("U1")).thenReturn(user);
+
+        service.notify("U1", "W1", UserNotificationPreferenceService.TASK_COMMENT,
+                "comment", "body", "K1");
+
+        verify(deliveries).enqueue("u1@example.com", "comment", "body",
+                UserNotificationPreferenceService.TASK_COMMENT, "K1");
+    }
+
+    @Test
     void immediateInAppEventsBypassReminderDeduplication() {
         AppNotificationMapper mapper = mock(AppNotificationMapper.class);
         AppNotificationService notifications = new AppNotificationService(mapper);

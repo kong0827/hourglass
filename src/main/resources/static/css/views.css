@@ -345,6 +345,8 @@
 .notification-pref-row > span:first-child{display:flex;flex-direction:column;gap:3px;}
 .notification-pref-row small{font-size:12px;color:var(--text-3);}
 .notification-pref-row label{display:flex;align-items:center;gap:6px;color:var(--text-2);}
+.notification-pref-group{padding:12px 14px 6px;border-top:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-3);letter-spacing:.02em;}
+.notification-pref-group + .notification-pref-row{border-top:0;}
 .column-pref-list{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;}
 .column-pref-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--r-sm);}
 .column-pref-row label{display:flex;align-items:center;gap:8px;font-size:13px;}
@@ -609,12 +611,27 @@
 .comment-item.mine .ci-body{background:var(--primary-soft);border-color:var(--primary-border);color:var(--text);}
 .comment-item .ci-del{margin-left:auto;font-size:11.5px;color:var(--text-3);flex:0 0 auto;}
 .comment-item .ci-del:hover{color:var(--danger-fg);}
-.comment-form{display:flex;gap:8px;align-items:flex-end;margin-top:10px;}
+.comment-form{position:relative;display:flex;gap:8px;align-items:flex-end;margin-top:10px;}
 .comment-form textarea{
   flex:1 1 auto;min-height:40px;max-height:140px;padding:8px 10px;font-size:13.5px;line-height:20px;
   border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);resize:vertical;
 }
 .comment-form textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.comment-mention{
+  position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:20;padding:4px;
+  max-height:220px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);box-shadow:var(--shadow-md);
+}
+.comment-mention[hidden]{display:none;}
+.cm-item{
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:var(--r-xs);
+  background:transparent;color:var(--text);font-size:13px;text-align:left;cursor:pointer;
+}
+.cm-item .cm-name{flex:1 1 auto;min-width:0;}
+.cm-item .cm-user{font-size:11.5px;color:var(--text-3);flex:0 0 auto;}
+.cm-item:hover,.cm-item.on{background:var(--primary-soft);}
+.cm-empty{padding:9px 10px;font-size:12.5px;color:var(--text-3);text-align:center;user-select:none;}
+.cm-empty[data-cm-retry]{color:var(--primary);cursor:pointer;}
 
 /* ===================== 阻塞 / 卡点字段（N-4） ===================== */
 .blocked-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -1011,6 +1028,25 @@
 }
 .reqdoc-dlg-field select:focus,.reqdoc-dlg-field input:focus{outline:none;border-color:var(--border-strong);}
 .reqdoc-dlg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+
+/* 历史版本弹层：左侧版本列表，右侧预览 */
+.reqdoc-history-body{flex-direction:row;align-items:stretch;gap:14px;padding-top:14px;min-height:340px;max-height:62vh;}
+.reqdoc-history-list{flex:none;width:250px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+.reqdoc-history-preview{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;}
+.reqdoc-history-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;}
+.rh-ver-title{font-size:12.5px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.reqdoc-history-content{flex:1;min-height:240px;overflow:auto;border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;background:var(--surface);font-size:13px;line-height:1.7;}
+.reqdoc-history-content img{max-width:100%;}
+.rh-row{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:1px solid transparent;
+  border-radius:8px;background:none;text-align:left;cursor:pointer;font:inherit;}
+.rh-row:hover{background:var(--surface-hover);}
+.rh-row.active{background:var(--surface-active);border-color:var(--border);}
+.rh-ver{flex:none;font-size:11.5px;font-weight:600;color:var(--primary);}
+.rh-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.rh-t{font-size:13px;font-weight:550;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rh-m{font-size:11.5px;color:var(--text-3);}
+.rh-empty{padding:16px 8px;font-size:12.5px;color:var(--text-3);text-align:center;}
 
 /* ===== 流程体检（v1） ===== */
 /* 结论条：一眼看到"哪里不对"，所以放在整个页面最上面，颜色只用来表达严重度 */

@@ -8,6 +8,7 @@ import com.devstudio.kanban.mapper.GanttShareMapper;
 import com.devstudio.kanban.mapper.MailDeliveryMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
+import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.SubtaskMapper;
 import com.devstudio.kanban.mapper.TagMapper;
@@ -16,6 +17,7 @@ import com.devstudio.kanban.mapper.TaskCommentMapper;
 import com.devstudio.kanban.mapper.TaskDependencyMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
+import com.devstudio.kanban.mapper.TaskWatchMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class TaskCascade {
     public static final List<String> TASK_CHILD_TABLES = Collections.unmodifiableList(Arrays.asList(
             "task_log",
             "task_comment",
+            "task_watch",
             "app_notification",
             "subtask",
             "task_tag",
@@ -84,6 +87,7 @@ public class TaskCascade {
             "time_log",
             "attachment",
             "task_comment",
+            "task_watch",
             "app_notification",
             "dev_branch_log",
             "dev_branch",
@@ -95,6 +99,7 @@ public class TaskCascade {
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final TaskCommentMapper commentMapper;
+    private final TaskWatchMapper watchMapper;
     private final AppNotificationMapper appNotificationMapper;
     private final SubtaskMapper subtaskMapper;
     private final TagMapper tagMapper;
@@ -111,20 +116,24 @@ public class TaskCascade {
     private final VersionTaskMapper versionTaskMapper;
     private final ProjectVersionMapper versionMapper;
     private final DemandMapper demandMapper;
+    private final RequirementDocHistoryMapper docHistoryMapper;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
-                       TaskCommentMapper commentMapper, AppNotificationMapper appNotificationMapper,
+                       TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
+                       AppNotificationMapper appNotificationMapper,
                        SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                        AttachmentService attachmentService,
                        TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                        GanttShareMapper ganttShareMapper, RequirementMapper reqMapper,
                        RequirementDocMapper requirementDocMapper,
+                       RequirementDocHistoryMapper docHistoryMapper,
                        TaskCompletionService completionService, DevBranchMapper devBranchMapper,
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
                        DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
+        this.watchMapper = watchMapper;
         this.appNotificationMapper = appNotificationMapper;
         this.subtaskMapper = subtaskMapper;
         this.tagMapper = tagMapper;
@@ -135,6 +144,7 @@ public class TaskCascade {
         this.ganttShareMapper = ganttShareMapper;
         this.reqMapper = reqMapper;
         this.requirementDocMapper = requirementDocMapper;
+        this.docHistoryMapper = docHistoryMapper;
         this.completionService = completionService;
         this.devBranchMapper = devBranchMapper;
         this.versionTaskMapper = versionTaskMapper;
@@ -195,6 +205,7 @@ public class TaskCascade {
         /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清，否则已删除的任务 ID
            会被 countChildRefs 永久锁死，同 ID 还原时旧评论还会挂到新任务上。 */
         commentMapper.deleteByTaskIds(workspaceId, taskIds);
+        watchMapper.deleteByTaskIds(workspaceId, taskIds);
         appNotificationMapper.deleteByTaskIds(workspaceId, taskIds);
         /* 甘特图：依赖与基线跟着任务一起清理，避免 ID 复用后把旧关系挂到新任务上 */
         dependencyMapper.deleteByTaskIds(workspaceId, taskIds);
@@ -230,14 +241,16 @@ public class TaskCascade {
         tagMapper.deleteTagsByWorkspace(workspaceId);
         timeLogMapper.deleteAllByWorkspace(workspaceId);
         commentMapper.deleteAllByWorkspace(workspaceId);
+        watchMapper.deleteAllByWorkspace(workspaceId);
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
     }
 
-    /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档 + 分支时间线 + 版本/需求池 */
+    /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档（含历史快照）+ 分支时间线 + 版本/需求池 */
     public void wipeWorkspaceData(String workspaceId) {
         logMapper.deleteAllByWorkspace(workspaceId);
         purgeWorkspaceTaskData(workspaceId, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
+        docHistoryMapper.deleteAllByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
@@ -257,6 +270,7 @@ public class TaskCascade {
         purgeWorkspaceTaskData(workspaceId, true);
         if (clearRequirementDocs) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
+            docHistoryMapper.deleteAllByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {

@@ -360,11 +360,14 @@ function memberVisibilityText(m){
   var projects = data.projects || [];
   var role = m.role || "member";
   if(role !== "member") return "可见全部 " + projects.length + " 个项目";
-  var hidden = 0;
+  var hidden = 0, readOnly = 0;
   (data.grants || []).forEach(function(g){
-    if(g.userId === m.userId && g.projectId && g.access === "none") hidden++;
+    if(g.userId !== m.userId || !g.projectId) return;
+    if(g.access === "none") hidden++;
+    else if(g.access === "read") readOnly++;
   });
-  return "可见 " + (projects.length - hidden) + "/" + projects.length + " 个项目";
+  return "可见 " + (projects.length - hidden) + "/" + projects.length + " 个项目" +
+    (readOnly ? ("（其中 " + readOnly + " 个只读）") : "");
 }
 wsMemberList.addEventListener("change", function(e){
   var sel = e.target.closest("[data-member-role]");

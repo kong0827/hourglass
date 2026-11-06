@@ -5,7 +5,7 @@ import { $, reqExpanded, reqListEl, searchInput, searchWrap } from "../core/dom.
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
-import { reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -97,6 +97,7 @@ function renderReqList(){
   reqListEl.className = "req-list";
   reqListEl.innerHTML = rt.reqList.map(function(r){
     var open = !!reqExpanded[r.id];
+    var readOnly = r.access === "read";
     var docs = (reqDocList || []).filter(function(d){ return d.reqId === r.id; });
     var docHTML = docs.length ? docs.map(function(d){
       return '<button class="req-expand-doc" type="button" data-reqdoc-open="' + esc(d.id) + '">' +
@@ -112,9 +113,10 @@ function renderReqList(){
         '<span class="req-name">' + esc(r.name) + '</span>' +
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
+        (readOnly ? '<span class="tag tag-ghost" title="你对该项目只有查看权限">只读</span>' : '') +
         '<span class="req-acts">' +
           '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
-          '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>' +
+          (readOnly ? '' : '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
           (rt.currentWs && rt.currentWs.myRole === "owner"
             ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>'
             : '') +
@@ -128,21 +130,21 @@ function renderReqList(){
         '<span>' + r.taskCount + ' 工作项 · ' + r.doneCount + ' 完成' +
           (Number(r.docCount) ? (' · ' + r.docCount + ' 文档') : '') + '</span>' +
       '</div>' +
-      '<div class="req-taskbar">' +
+      (readOnly ? '' : '<div class="req-taskbar">' +
         '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
           ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
         '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
           icon("edit", 14) + '</button>' +
-      '</div>' +
+      '</div>') +
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
-            '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增文档</button></div>' +
+            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增文档</button>') + '</div>' +
           docHTML +
         '</section>' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>工作项</span>' +
-            '<button class="btn sm ghost" type="button" data-req-open="' + esc(r.id) + '">+ 新建工作项</button></div>' +
+            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-req-open="' + esc(r.id) + '">+ 新建工作项</button>') + '</div>' +
           '<div class="req-expand-tasks">' + projectTasksHTML(r.id) + '</div>' +
         '</section>' +
         '<div class="req-expand-acts">' +
@@ -171,13 +173,16 @@ function projectCell(r, key){
   return '<span class="project-cell">—</span>';
 }
 function projectActions(r){
+  var readOnly = r.access === "read";
   return '<span class="project-row-acts">' +
-    '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
-    '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新增文档" aria-label="新增文档">' + icon("projects", 14) + '</button>' +
+    (readOnly ? '' :
+      '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新增文档" aria-label="新增文档">' + icon("projects", 14) + '</button>') +
     '<button class="icon-btn sm" type="button" data-req-board="' + esc(r.id) + '" title="在看板中查看" aria-label="在看板中查看">' + icon("board", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-docs="' + esc(r.id) + '" title="管理文档" aria-label="管理文档">' + icon("folder", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
-    '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>' +
+    (readOnly ? '' :
+      '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
     (rt.currentWs && rt.currentWs.myRole === "owner" ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>' : '') +
   '</span>';
 }
@@ -332,6 +337,7 @@ reqListEl.addEventListener("click", function(e){
   }
   var openNew = e.target.closest("[data-req-open]");
   if(openNew){
+    if(!canEditReq(openNew.dataset.reqOpen)){ toast("你对该项目只有查看权限", "warn"); return; }
     openTaskDrawer("backlog", null, { reqId: openNew.dataset.reqOpen });
     return;
   }
@@ -341,6 +347,7 @@ reqListEl.addEventListener("click", function(e){
   if(taskRetry){ loadProjectTasks(taskRetry.dataset.projectTaskRetry, true).catch(function(){}); return; }
   var ed = e.target.closest("[data-edit-req]");
   if(ed){
+    if(!canEditReq(ed.dataset.editReq)){ toast("你对该项目只有查看权限", "warn"); return; }
     var r = null;
     for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === ed.dataset.editReq) r = rt.reqList[i];
     if(r){
@@ -367,7 +374,11 @@ reqListEl.addEventListener("click", function(e){
     return;
   }
   var docNew = e.target.closest("[data-doc-new]");
-  if(docNew){ openNewReqDocDialog(docNew.dataset.docNew); return; }
+  if(docNew){
+    if(!canEditReq(docNew.dataset.docNew)){ toast("你对该项目只有查看权限", "warn"); return; }
+    openNewReqDocDialog(docNew.dataset.docNew);
+    return;
+  }
   var docOpen = e.target.closest("[data-reqdoc-open]");
   if(docOpen){ openReqDocAndJump(docOpen.dataset.reqdocOpen); return; }
   var toBoard = e.target.closest("[data-req-board]");
@@ -396,6 +407,7 @@ reqListEl.addEventListener("keydown", function(e){
   if(!v) return;
   e.preventDefault();
   var reqId = inp.dataset.reqNewInput;
+  if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
   inp.disabled = true;
   API.post("/api/tasks", {
     title: v.slice(0, 60), boardColumn: "backlog", priority: "P2", progress: 0, reqId: reqId

@@ -1,9 +1,9 @@
 /* core/task-drawer · 任务详情抽屉、评论、检查清单、附件、工时 */
 
 import { API } from "./api.js";
-import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask, btnTimer, commentCount, commentList, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, timelineBox, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask, btnTaskWatch, btnTimer, commentCount, commentList, commentMention, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { rt, taskById, taskCacheExtra } from "./state.js";
+import { canEditReq, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, parseDate, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
@@ -104,6 +104,48 @@ function refreshAssociationViews(){
 }
 function openDrawer(){ taskDrawer.classList.add("on"); }
 function closeDrawer(){ taskDrawer.classList.remove("on"); rt.formDirty = false; }
+/**
+ * 只读项目：整张表单（含评论/检查清单/附件）不可写，保存与删除入口收起。
+ * 恢复时按各字段原有禁用条件还原，不能一律 disabled=false —— 进度列与阻塞原因有自己的状态。
+ */
+function applyDrawerReadOnly(readOnly){
+  rt.drawerReadOnly = !!readOnly;
+  var root = taskDrawer.querySelector(".drawer");
+  if(root) root.classList.toggle("readonly", !!readOnly);
+  var fields = taskForm.querySelectorAll("input,select,textarea");
+  for(var i = 0; i < fields.length; i++){
+    var f = fields[i];
+    if(readOnly){ f.disabled = true; continue; }
+    if(f.id === "iProg"){ syncProgByCol(); continue; }
+    if(f.id === "iBlockedReason"){ f.disabled = !(iBlocked && iBlocked.checked); continue; }
+    f.disabled = false;
+  }
+  if(btnAttach) btnAttach.hidden = !!readOnly;
+  if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
+  if(btnDeleteTask) btnDeleteTask.hidden = !!readOnly || !rt.editingId;
+  if(iSubNew){
+    iSubNew.disabled = !!readOnly;
+    iSubNew.placeholder = readOnly ? "只读项目不可新增检查项" : "添加一项，回车确认";
+  }
+  if(iComment){
+    iComment.disabled = !!readOnly;
+    iComment.placeholder = readOnly
+      ? "你对该项目只有查看权限，无法评论"
+      : "写下讨论、结论或卡点…（Ctrl/⌘ + Enter 发送）";
+  }
+  if(btnCommentSend) btnCommentSend.hidden = !!readOnly;
+  if(btnTimer) btnTimer.hidden = !!readOnly;
+  var hint = $("taskFormHint");
+  if(hint && !rt.formDirty){
+    hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "保存后可拖动卡片调整状态与顺序";
+  }
+}
+/** 只读抽屉里仍在视图上的写控件（分段按钮、快捷日期等）：拦下并给出反馈 */
+function denyReadOnly(){
+  if(!rt.drawerReadOnly) return false;
+  toast("你对该项目只有查看权限", "warn");
+  return true;
+}
 function buildFormControls(){
   segPri.innerHTML = PRIORITIES.map(function(p){
     return '<button type="button" class="' + p.toLowerCase() + '" data-fpri="' + p + '" aria-pressed="false">' + p + '</button>';
@@ -247,12 +289,41 @@ function renderActualEstimate(actualMinutes, estimateMinutes){
   }
   iActual.innerHTML = html;
 }
+/* 关注人：抽屉头部的开关只负责本任务，状态由后端按（任务, 当前用户）返回 */
+var watchTaskId = null;
+function renderWatchButton(res){
+  if(!btnTaskWatch) return;
+  var watching = !!(res && res.watching);
+  btnTaskWatch.hidden = !watchTaskId;
+  btnTaskWatch.setAttribute("aria-pressed", watching ? "true" : "false");
+  if(taskWatchLabel) taskWatchLabel.textContent = watching ? "已关注" : "关注";
+  btnTaskWatch.title = watching
+    ? "已关注：新评论、移入回收站或恢复时会通知你（点击取消）"
+    : "关注后，该任务的新评论、移入回收站或恢复会通知你";
+}
+function loadWatchStatus(taskId){
+  watchTaskId = taskId || null;
+  renderWatchButton(null);
+  if(!watchTaskId) return;
+  API.get("/api/tasks/" + encodeURIComponent(watchTaskId) + "/watch").then(function(res){
+    if(watchTaskId === taskId) renderWatchButton(res);
+  }).catch(function(){
+    /* 读不到状态时隐藏开关，避免展示错误的关注态 */
+    if(watchTaskId === taskId && btnTaskWatch) btnTaskWatch.hidden = true;
+  });
+}
 function openTaskDrawer(colId, task, defaults){
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
   rt.taskFormSeq++;
   rt.editingId = task ? task.id : null;
   rt.formDirty = false;
+  mentionPicked = [];
+  /* 换任务后候选可能属于上一个项目，先清掉再按需重拉 */
+  mentionCandidateTask = null;
+  mentionCandidates = [];
+  closeMention();
+  var readOnly = task ? !canEditTask(task) : !canEditReq(defaults && defaults.reqId);
   if(task) taskCacheExtra[task.id] = task;
   if(drawerNotice) drawerNotice.hidden = true;
   /* 分支 / 需求下拉改为按需加载：首次打开抽屉时才拉取对应视图模块，不拖首屏。
@@ -305,6 +376,7 @@ function openTaskDrawer(colId, task, defaults){
     loadAttachments(task.id);
     loadSubtasks(task.id);
     loadComments(task.id);
+    loadWatchStatus(task.id);
     timelineBox.innerHTML = '<div class="tl-empty">加载中…</div>';
     API.get("/api/tasks/" + encodeURIComponent(task.id) + "/logs").then(function(logs){
       if(rt.editingId === task.id) renderTimeline(logs);
@@ -353,13 +425,16 @@ function openTaskDrawer(colId, task, defaults){
     fWork.hidden = true; fAttach.hidden = true; fSubtasks.hidden = true; fTimeline.hidden = true;
     if(fComments) fComments.hidden = true;
     commentsCache = [];
+    loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
     if(commentCount) commentCount.textContent = "";
+    closeMention();
   }
   syncProgVal();
   syncProgByCol();
   fTitle.classList.remove("invalid");
   syncFormSegs();
+  applyDrawerReadOnly(readOnly);
   openDrawer();
   UI.wireTooltips(taskDrawer);
   setTimeout(function(){ try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ } }, 60);
@@ -437,18 +512,22 @@ function wireSegKeyboard(seg){
 }
 segPri.addEventListener("click", function(e){
   var b = e.target.closest("[data-fpri]"); if(!b) return;
+  if(denyReadOnly()) return;
   rt.formPri = b.dataset.fpri; syncFormSegs(); rt.formDirty = true;
 });
 segCat.addEventListener("click", function(e){
   var b = e.target.closest("[data-fcat]"); if(!b) return;
+  if(denyReadOnly()) return;
   rt.formCat = b.dataset.fcat; syncFormSegs(); rt.formDirty = true;
 });
 segRecur.addEventListener("click", function(e){
   var b = e.target.closest("[data-recur]"); if(!b) return;
+  if(denyReadOnly()) return;
   rt.formRecur = b.dataset.recur; syncFormSegs(); rt.formDirty = true;
 });
 segDue.addEventListener("click", function(e){
   var b = e.target.closest("[data-due]"); if(!b) return;
+  if(denyReadOnly()) return;
   iDue.value = duePresetDate(b.dataset.due) || "";
   syncDateBounds();
   rt.formDirty = true;
@@ -470,6 +549,7 @@ if(iDue) iDue.addEventListener("change", function(){ syncDateBounds(); rt.formDi
 if(segStart) segStart.addEventListener("click", function(e){
   var b = e.target.closest("[data-start]");
   if(!b) return;
+  if(denyReadOnly()) return;
   iStart.value = startPresetDate(b.dataset.start) || "";
   syncDateBounds();
   /* 快捷按钮可能把开始日期推到截止日期之后（例如截止还停在上周，点了「本周一」）：
@@ -483,6 +563,7 @@ if(segStart) segStart.addEventListener("click", function(e){
 });
 segProg.addEventListener("click", function(e){
   var b = e.target.closest("[data-prog]"); if(!b) return;
+  if(denyReadOnly()) return;
   iProg.value = b.dataset.prog; syncProgVal(); rt.formDirty = true;
 });
 [segPri, segCat, segRecur, segDue, segStart, segProg].forEach(wireSegKeyboard);
@@ -570,7 +651,7 @@ function renderComments(list){
       '<span class="ci-main">' +
         '<span class="ci-head"><span class="ci-who">' + esc(c.authorName || "未知") + '</span>' +
           '<span class="ci-time">' + esc(fmtTs(c.createdAt)) + '</span>' +
-          (mine ? '<button class="ci-del" type="button" data-comment-del="' + esc(c.id) + '">删除</button>' : '') +
+          (mine && !rt.drawerReadOnly ? '<button class="ci-del" type="button" data-comment-del="' + esc(c.id) + '">删除</button>' : '') +
         '</span>' +
         '<span class="ci-body">' + esc(c.content) + '</span>' +
       '</span>' +
@@ -579,18 +660,25 @@ function renderComments(list){
 }
 function sendComment(){
   if(!rt.editingId || !iComment || rt.commentSending) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var text = iComment.value.trim();
   if(!text) return;
   if(text.length > 500){ toast("评论最多 500 字", "warn"); return; }
   var id = rt.editingId;
   rt.commentSending = true;
   btnCommentSend.disabled = true;
-  API.post("/api/tasks/" + encodeURIComponent(id) + "/comments", {content: text}).then(function(){
+  API.post("/api/tasks/" + encodeURIComponent(id) + "/comments", {
+    content: text,
+    /* 从候选里点选过的成员精确带上 ID：正文重名时也能通知到被选中的那位 */
+    mentionUserIds: pickedMentionIds(text)
+  }).then(function(){
     rt.commentSending = false;
     btnCommentSend.disabled = false;
     /* 发送期间切到了别的任务：不要把新任务抽屉里的草稿清掉 */
     if(rt.editingId !== id) return;
     iComment.value = "";
+    closeMention();
+    mentionPicked = [];
     loadComments(id);
   }).catch(function(ex){
     rt.commentSending = false;
@@ -599,9 +687,178 @@ function sendComment(){
   });
 }
 if(btnCommentSend) btnCommentSend.addEventListener("click", sendComment);
+
+/* ==================== 评论 @提及 ==================== */
+var mentionState = {open:false, items:[], index:0, start:0, end:0};
+var mentionMembersLoading = false;
+/* 候选拉取失败后短暂退避，避免断网时每次输入都重试 */
+var mentionMembersFailedAt = 0;
+var MENTION_RETRY_MS = 30000;
+/* 候选只含对该任务所在项目可见的成员；按任务缓存，避免把隐藏项目的成员点进去 */
+var mentionCandidateTask = null;
+var mentionCandidates = [];
+var mentionPicked = [];
+/* idle / loading / ready / error：@ 后候选区据此展示加载与失败提示，避免静默无反应 */
+var mentionLoadState = "idle";
+/* @ 后不出现空白，视为一次提及输入；"a@b.com" 这类邮箱不会被识别。
+   候选最多渲染 50 条并在框内滚动，避免成员多时“只能靠输入名字才找得到人” */
+var MENTION_MAX_ITEMS = 50;
+function currentMentionMembers(){
+  return mentionCandidates.filter(function(m){
+    return m && m.userId && m.displayName && (!rt.currentUser || m.userId !== rt.currentUser.id);
+  });
+}
+function ensureMentionMembers(force){
+  var taskId = rt.editingId;
+  if(!taskId || mentionMembersLoading || mentionCandidateTask === taskId) return;
+  if(!force && mentionMembersFailedAt && Date.now() - mentionMembersFailedAt < MENTION_RETRY_MS) return;
+  mentionMembersLoading = true;
+  mentionLoadState = "loading";
+  if(mentionState.open){ mentionState.notice = "正在加载成员…"; renderMention(); }
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/mention-candidates").then(function(list){
+    mentionMembersLoading = false;
+    mentionMembersFailedAt = 0;
+    mentionLoadState = "ready";
+    if(rt.editingId !== taskId) return;
+    mentionCandidateTask = taskId;
+    mentionCandidates = list || [];
+    if(document.activeElement === iComment) detectMention();
+  }).catch(function(){
+    mentionMembersLoading = false;
+    mentionMembersFailedAt = Date.now();
+    mentionLoadState = "error";
+    if(document.activeElement === iComment) detectMention();
+  });
+}
+function rememberMention(m){
+  for(var i = 0; i < mentionPicked.length; i++){
+    if(mentionPicked[i].userId === m.userId) return;
+  }
+  mentionPicked.push({userId: m.userId, displayName: m.displayName});
+}
+/* 与后端 Mentions 同口径：字母/数字/下划线视为名字的延续，中文按字母处理 */
+function isMentionWordChar(ch){
+  return !!ch && (/[A-Za-z0-9_]/.test(ch) || ch.charCodeAt(0) > 127);
+}
+function hasMentionToken(text, name){
+  var token = "@" + name;
+  var from = 0;
+  while(true){
+    var at = text.indexOf(token, from);
+    if(at < 0) return false;
+    if(!isMentionWordChar(text.charAt(at + token.length))) return true;
+    from = at + 1;
+  }
+}
+/* 只把仍留在正文里的点选成员发给后端：删掉 @名字 后不应再通知 */
+function pickedMentionIds(text){
+  return mentionPicked.filter(function(p){
+    return hasMentionToken(text, p.displayName);
+  }).map(function(p){ return p.userId; });
+}
+function closeMention(){
+  mentionState.open = false;
+  if(commentMention) commentMention.hidden = true;
+}
+/* 中文没有词边界，"请@张三" 是自然写法；只有 ASCII 字母/数字/下划线前的 @ 视为邮箱 */
+function isMentionStartBlocked(ch){
+  return !!ch && /[A-Za-z0-9_]/.test(ch);
+}
+/* 中文输入法常打出全角 ＠，统一成半角，否则前端不触发、后端也解析不到 */
+function normalizeFullWidthMention(){
+  if(!iComment || iComment.value.indexOf("＠") < 0) return;
+  var caret = iComment.selectionStart;
+  iComment.value = iComment.value.replace(/＠/g, "@");
+  try{ iComment.setSelectionRange(caret, caret); }catch(e){ /* noop */ }
+}
+function detectMention(){
+  if(!iComment || rt.drawerReadOnly){ closeMention(); return; }
+  normalizeFullWidthMention();
+  ensureMentionMembers();
+  var caret = iComment.selectionStart;
+  var before = iComment.value.slice(0, caret);
+  var at = before.lastIndexOf("@");
+  if(at < 0){ closeMention(); return; }
+  if(isMentionStartBlocked(before.charAt(at - 1))){ closeMention(); return; }
+  var query = before.slice(at + 1);
+  if(/\s/.test(query)){ closeMention(); return; }
+  var q = query.toLowerCase();
+  var items = currentMentionMembers().filter(function(m){
+    return (m.displayName || "").toLowerCase().indexOf(q) >= 0
+      || (m.username || "").toLowerCase().indexOf(q) >= 0;
+  }).slice(0, MENTION_MAX_ITEMS);
+  var notice = "";
+  if(mentionLoadState !== "ready"){
+    notice = mentionLoadState === "error" ? "成员加载失败，点击重试" : "正在加载成员…";
+  }else if(!items.length && !q){
+    notice = "暂无可提及的成员";
+  }
+  if(!items.length && !notice){ closeMention(); return; }
+  mentionState = {open:true, items:items, index:0, start:at, end:caret, notice:notice};
+  renderMention();
+}
+function renderMention(){
+  if(!commentMention) return;
+  commentMention.hidden = !mentionState.open;
+  if(!mentionState.open) return;
+  if(!mentionState.items.length){
+    commentMention.innerHTML = '<div class="cm-empty"' +
+      (mentionLoadState === "error" ? ' data-cm-retry="1" role="button" tabindex="0"' : '') +
+      '>' + esc(mentionState.notice || "") + '</div>';
+    return;
+  }
+  commentMention.innerHTML = mentionState.items.map(function(m, i){
+    return '<button type="button" class="cm-item' + (i === mentionState.index ? " on" : "") + '" data-cm-idx="' + i + '">' +
+      avatarHTML(m.displayName, "sm") +
+      '<span class="cm-name ellipsis">' + esc(m.displayName) + '</span>' +
+      (m.username ? '<span class="cm-user">@' + esc(m.username) + '</span>' : '') +
+    '</button>';
+  }).join("");
+  var on = commentMention.querySelector(".cm-item.on");
+  if(on && on.scrollIntoView) on.scrollIntoView({block:"nearest"});
+}
+function pickMention(idx){
+  var m = mentionState.items[idx];
+  if(!m) return;
+  rememberMention(m);
+  var insert = "@" + m.displayName + " ";
+  iComment.value = iComment.value.slice(0, mentionState.start) + insert + iComment.value.slice(mentionState.end);
+  var caret = mentionState.start + insert.length;
+  closeMention();
+  try{
+    iComment.focus();
+    iComment.setSelectionRange(caret, caret);
+  }catch(e){ /* noop */ }
+}
+function moveMention(step){
+  var n = mentionState.items.length;
+  if(!n) return;
+  mentionState.index = (mentionState.index + step + n) % n;
+  renderMention();
+}
+function mentionKeydown(e){
+  if(!mentionState.open) return false;
+  if(e.key === "ArrowDown"){ e.preventDefault(); e.stopPropagation(); moveMention(1); return true; }
+  if(e.key === "ArrowUp"){ e.preventDefault(); e.stopPropagation(); moveMention(-1); return true; }
+  /* 只有真正有候选时才把 Enter 交给选择，加载/失败提示态下回车仍按普通换行处理 */
+  if((e.key === "Enter" || e.key === "Tab") && mentionState.items.length){
+    e.preventDefault();
+    e.stopPropagation();
+    pickMention(mentionState.index);
+    return true;
+  }
+  if(e.key === "Escape"){ e.stopPropagation(); closeMention(); return true; }
+  return false;
+}
 if(iComment){
+  /* 聚焦评论框即预载候选，真正敲 @ 时下拉可直接出现，不必等接口 */
+  iComment.addEventListener("focus", function(){ ensureMentionMembers(); });
+  iComment.addEventListener("input", detectMention);
+  iComment.addEventListener("click", detectMention);
+  iComment.addEventListener("blur", function(){ setTimeout(closeMention, 120); });
   iComment.addEventListener("keydown", function(e){
     if(e.isComposing || e.keyCode === 229) return;
+    if(mentionKeydown(e)) return;
     if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
       e.preventDefault();
       /* 阻止冒泡：否则文档级 Ctrl+Enter 会把评论当成“保存任务”，跟着提交并关闭抽屉 */
@@ -610,10 +867,20 @@ if(iComment){
     }
   });
 }
+if(commentMention){
+  /* 按下时不让 textarea 失焦，否则 blur 先关掉候选框，click 无法命中 */
+  commentMention.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  commentMention.addEventListener("click", function(e){
+    if(e.target.closest("[data-cm-retry]")){ ensureMentionMembers(true); return; }
+    var b = e.target.closest("[data-cm-idx]");
+    if(b) pickMention(Number(b.dataset.cmIdx));
+  });
+}
 if(commentList){
   commentList.addEventListener("click", function(e){
     var del = e.target.closest("[data-comment-del]");
     if(!del || !rt.editingId) return;
+    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
     var id = rt.editingId;
     API.del("/api/comments/" + encodeURIComponent(del.dataset.commentDel)).then(function(){
       toast("评论已删除", "fs");
@@ -666,6 +933,7 @@ iTags.addEventListener("blur", function(){
 tagWrap.addEventListener("click", function(e){
   var d = e.target.closest("[data-tag-del]");
   if(!d) return;
+  if(denyReadOnly()) return;
   rt.tagsCache.splice(Number(d.dataset.tagDel), 1);
   renderTagChips();
   rt.formDirty = true;
@@ -684,6 +952,24 @@ taskDrawer.querySelectorAll(".drawer-sect-head").forEach(function(h){
 $("btnTaskMore").addEventListener("click", function(){
   if(UI.popOpen($("taskMoreMenu"))){ UI.closeAllPops(); return; }
   UI.openPop($("taskMoreMenu"), $("btnTaskMore"), {align:"left"});
+});
+if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){
+  var taskId = watchTaskId;
+  if(!taskId || btnTaskWatch.disabled) return;
+  var watching = btnTaskWatch.getAttribute("aria-pressed") === "true";
+  btnTaskWatch.disabled = true;
+  var req = watching
+    ? API.del("/api/tasks/" + encodeURIComponent(taskId) + "/watch")
+    : API.post("/api/tasks/" + encodeURIComponent(taskId) + "/watch");
+  req.then(function(res){
+    btnTaskWatch.disabled = false;
+    if(watchTaskId !== taskId) return;
+    renderWatchButton(res);
+    toast(watching ? "已取消关注" : "已关注：该任务的评论与回收站操作会通知你");
+  }, function(e){
+    btnTaskWatch.disabled = false;
+    if(!e || !e.silent) toast((e && e.message) || "操作失败", "bad");
+  });
 });
 $("taskMoreMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-task-more]");
@@ -709,6 +995,7 @@ $("taskMoreMenu").addEventListener("click", function(e){
 });
 taskForm.addEventListener("submit", function(e){
   e.preventDefault();
+  if(rt.drawerReadOnly) return;
   var title = iTitle.value.trim();
   if(!title){
     fTitle.classList.add("invalid");
@@ -837,6 +1124,7 @@ taskDrawer.addEventListener("keydown", function(e){
 function deleteTask(id){
   var t = taskById(id);
   if(!t) return;
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   UI.showConfirm({
     title:"移到回收站",
     msg:"「" + esc(t.title) + "」将移入回收站（30 天内可恢复）。确定删除？",
@@ -879,10 +1167,12 @@ function renderSubtasks(list){
   subList.innerHTML = rt.subtasksCache.map(function(s){
     return '<div class="sub-item' + (s.done ? " done" : "") + '">' +
       '<input type="checkbox" class="cbx" data-sub-toggle="' + s.id + '"' + (s.done ? " checked" : "") +
+        (rt.drawerReadOnly ? " disabled" : "") +
         ' aria-label="' + esc(s.title) + '" />' +
       '<span class="sub-txt">' + esc(s.title) + '</span>' +
-      '<button type="button" class="sub-del" data-sub-del="' + s.id + '" title="删除检查项" aria-label="删除检查项">' +
-        icon("close", 12) + '</button>' +
+      (rt.drawerReadOnly ? '' :
+        '<button type="button" class="sub-del" data-sub-del="' + s.id + '" title="删除检查项" aria-label="删除检查项">' +
+          icon("close", 12) + '</button>') +
     '</div>';
   }).join("");
 }
@@ -898,6 +1188,7 @@ function loadSubtasks(taskId){
 subList.addEventListener("change", function(e){
   var cb = e.target.closest("[data-sub-toggle]");
   if(!cb || !rt.editingId) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var id = rt.editingId;
   subList.classList.add("busy");
   API.put("/api/subtasks/" + cb.dataset.subToggle, {done: cb.checked}).then(function(){
@@ -915,6 +1206,7 @@ subList.addEventListener("click", function(e){
   if(!del || !rt.editingId) return;
   e.preventDefault();
   e.stopPropagation();
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var id = rt.editingId;
   API.del("/api/subtasks/" + del.dataset.subDel).then(function(){
     loadSubtasks(id);
@@ -925,6 +1217,7 @@ iSubNew.addEventListener("keydown", function(e){
   if(e.key !== "Enter") return;
   if(e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var value = iSubNew.value.trim();
   if(!value || !rt.editingId) return;
   var id = rt.editingId;
@@ -981,7 +1274,8 @@ function renderAttachments(list){
       '<span class="att-acts">' +
         (isXlsx ? '<button class="icon-btn sm" type="button" data-att-sheet="' + esc(a.id) + '" title="打开表格" aria-label="打开表格">' + icon("table", 14) + '</button>' : '') +
         '<a class="icon-btn sm" href="' + url + '" download title="下载" aria-label="下载附件">' + icon("download", 14) + '</a>' +
-        '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>' +
+        (rt.drawerReadOnly ? '' :
+          '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>') +
       '</span>' +
     '</div>';
   }).join("");
@@ -991,6 +1285,7 @@ iAttachFile.addEventListener("change", function(){
   var f = iAttachFile.files && iAttachFile.files[0];
   iAttachFile.value = "";
   if(!f || !rt.editingId) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，未上传", "warn"); return; }
   if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|xlsx)$/i.test(f.name)){
     toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/xlsx）", "warn");
@@ -1035,7 +1330,7 @@ attachList.addEventListener("click", function(e){
       return import("./sheet-viewer.js").then(function(m){
         m.openSheet({
           attachment: att,
-          canEdit: !(rt.currentWs && rt.currentWs.myRole === "viewer"),
+          canEdit: !rt.drawerReadOnly,
           onSaved: function(){ loadAttachments(rt.editingId); loadBoard({silent:true}); }
         });
       });
@@ -1045,6 +1340,7 @@ attachList.addEventListener("click", function(e){
   var del = e.target.closest("[data-att-del]");
   if(!del || !rt.editingId) return;
   e.preventDefault();
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var id = rt.editingId;
   UI.showConfirm({
     title: "删除附件",
@@ -1100,6 +1396,7 @@ btnTimer.addEventListener("click", function(){
   if(!rt.editingId || btnTimer.disabled) return;
   var taskId = rt.editingId;
   var running = btnTimer.textContent.indexOf("停止") !== -1;
+  if(!running && rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   workSeq++;
   workBusy = true;
   var opSeq = workSeq;

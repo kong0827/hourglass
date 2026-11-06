@@ -10,6 +10,7 @@ import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.RequirementDocMapper;
+import com.devstudio.kanban.mapper.RequirementDocHistoryMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
 import com.devstudio.kanban.mapper.TaskLogMapper;
 import com.devstudio.kanban.mapper.TaskMapper;
@@ -67,8 +68,10 @@ class WorkActivityRecordingTest {
         workActivityService = mock(WorkActivityService.class);
         /* 乐观锁：这些用例只关心活动记录，默认按更新成功返回 */
         when(docMapper.update(any(RequirementDoc.class), any())).thenReturn(1);
-        docService = new RequirementDocService(docMapper, reqMapper, userMapper, taskMapper,
-                workActivityService, demandMapper, mock(ProjectAccessService.class));
+        docService = new RequirementDocService(docMapper, mock(RequirementDocHistoryMapper.class),
+                reqMapper, userMapper, taskMapper,
+                workActivityService, demandMapper, mock(ProjectAccessService.class),
+                mock(NotificationEventService.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(com.devstudio.kanban.mapper.ProjectVersionMapper.class),

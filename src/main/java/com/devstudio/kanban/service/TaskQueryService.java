@@ -152,6 +152,8 @@ public class TaskQueryService {
                 mergeTaskExtras(e.getKey(), e.getValue());
             }
         }
+        /* 跨空间收件箱：逐条下发 write/read，前端据此收敛完成/计时/改期等入口 */
+        projectAccess.markWritable(userId, list);
         /* 仅按显示名匹配的条数：同一 WHERE 再叠加 owner_user_id IS NULL，覆盖全量而非本页 */
         pageQuery.setNameOnly(true);
         int nameOnly = taskMapper.countMyTasks(pageQuery);

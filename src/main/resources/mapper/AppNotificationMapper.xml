@@ -85,4 +85,8 @@
   <delete id="deleteAllByUser">
     DELETE FROM app_notification WHERE user_id = #{userId}
   </delete>
+
+  <delete id="deleteOlderThan">
+    DELETE FROM app_notification WHERE created_at &lt; #{cutoff}
+  </delete>
 </mapper>
