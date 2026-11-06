@@ -250,6 +250,10 @@ public class TaskCascade {
         baselineMapper.deleteByWorkspace(workspaceId);
         ganttShareMapper.deleteByWorkspace(workspaceId);
         taskMapper.deleteAllByWorkspace(workspaceId);
+        /* 任务整体清空后，用例上的缺陷任务引用一定失效；先解除再决定是否删用例。
+           旧备份保留用例时也要解除，避免列表继续展示打不开的缺陷入口。 */
+        testCaseMapper.clearAllBugTaskRefs(workspaceId);
+        testCaseRunMapper.clearAllBugTaskRefs(workspaceId);
         /* 用例强归属项目：先清流水与用例，再删项目，避免空间级清理留下孤儿。
            旧备份没有用例字段时不清理，避免导入把现有用例误删。 */
         if (clearTestCases) {

@@ -180,6 +180,8 @@ class TaskCascadeTest {
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper).deleteByWorkspace(WS);
         verify(testCaseMapper).deleteByWorkspace(WS);
+        verify(testCaseRunMapper).clearAllBugTaskRefs(WS);
+        verify(testCaseMapper).clearAllBugTaskRefs(WS);
         verify(reqMapper).deleteAllByWorkspace(WS);
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
         verify(docCommentMapper).deleteByWorkspace(WS);
@@ -208,6 +210,8 @@ class TaskCascadeTest {
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper, never()).deleteByWorkspace(WS);
         verify(testCaseMapper, never()).deleteByWorkspace(WS);
+        verify(testCaseRunMapper).clearAllBugTaskRefs(WS);
+        verify(testCaseMapper).clearAllBugTaskRefs(WS);
         verify(docCommentMapper, never()).deleteByWorkspace(WS);
         verify(completionService).clearWorkspace(WS);
         verify(commentMapper).deleteAllByWorkspace(WS);

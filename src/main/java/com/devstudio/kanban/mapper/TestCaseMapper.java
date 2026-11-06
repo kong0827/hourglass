@@ -37,6 +37,9 @@ public interface TestCaseMapper {
     int clearBugTaskRefs(@Param("workspaceId") String workspaceId,
                          @Param("taskIds") List<String> taskIds);
 
+    /** 空间内任务整体清空时解除全部缺陷引用（旧备份保留用例时也不会留下悬空缺陷） */
+    int clearAllBugTaskRefs(@Param("workspaceId") String workspaceId);
+
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     /** 项目删除级联：用例数（确认提示用）与整项目用例清理 */

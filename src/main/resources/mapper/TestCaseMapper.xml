@@ -74,6 +74,10 @@
       <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </update>
 
+  <update id="clearAllBugTaskRefs">
+    UPDATE test_case SET latest_bug_task_id = NULL WHERE workspace_id = #{workspaceId}
+  </update>
+
   <delete id="delete">
     DELETE FROM test_case WHERE id = #{id} AND workspace_id = #{workspaceId}
   </delete>

@@ -23,6 +23,9 @@ public interface TestCaseRunMapper {
     int clearBugTaskRefs(@Param("workspaceId") String workspaceId,
                          @Param("taskIds") List<String> taskIds);
 
+    /** 空间内任务整体清空时解除全部缺陷引用 */
+    int clearAllBugTaskRefs(@Param("workspaceId") String workspaceId);
+
     int deleteByCase(@Param("workspaceId") String workspaceId, @Param("caseId") String caseId);
 
     /** 项目删除级联：按所属项目清流水 */

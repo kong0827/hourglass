@@ -1115,7 +1115,7 @@ $("inviteList").addEventListener("click", function(e){
 $("btnExport").addEventListener("click", function(){
   API.get("/api/export").then(function(data){
     triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
-    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线/文档/分支/版本/需求池）", "fs");
+    toast("已导出任务备份（含任务/项目/评论/甘特依赖与基线/文档/分支/版本/需求池/测试用例/文档评论）", "fs");
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
 });
 $("btnImport").addEventListener("click", function(){ $("fileImport").click(); });
@@ -1127,7 +1127,7 @@ $("fileImport").addEventListener("change", function(e){
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的任务、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按任务重建完成归档；同时清空任务通知。已选文件：<b>" +
       esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
-      "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本任务绑定、需求池与首版上线日</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
+      "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本任务绑定、需求池与首版上线日</b>，v10 备份还会恢复<b>测试用例、执行流水与文档评论</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
     if(!ok) return;
@@ -1145,6 +1145,8 @@ $("fileImport").addEventListener("change", function(e){
           (res.branches ? " / " + res.branches + " 个分支" : "") +
           (res.versions ? " / " + res.versions + " 个版本" : "") +
           (res.demands ? " / " + res.demands + " 条需求池" : "") +
+          (res.testCases ? " / " + res.testCases + " 条用例" : "") +
+          (res.docComments ? " / " + res.docComments + " 条文档评论" : "") +
           (res.comments ? " / " + res.comments + " 条评论" : ""), "fs");
         ganttState.undo = [];
         syncGanttUndoUI();
@@ -1178,21 +1180,21 @@ function disarmReset(){
   if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
   btnReset.classList.remove("armed");
   resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档、文档（随项目）、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
+  btnReset.title = "删除任务、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、任务通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){
   if(rt.resetArmed){
     disarmReset();
     var n = totalTaskCount(), m = rt.reqList.length;
-    API.post("/api/import", {v:8, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[]}).then(function(){
+    API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]}).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       saveViewState();
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档、文档、版本与需求池）")
+        ? ("已清空 " + n + " 项任务与 " + m + " 个项目（含回收站、评论、任务通知、完成归档、文档、文档评论、测试用例、版本与需求池）")
         : "任务数据已清空（分支、附件、时间线保留）", "warn");
       ganttState.undo = [];
       syncGanttUndoUI();
