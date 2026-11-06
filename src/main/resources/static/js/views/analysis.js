@@ -6,7 +6,7 @@ import { catTag, rt, state } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { avatarColor, fmtMinutesShort, pad2 } from "../lib/format.js";
+import { avatarColor, fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
 import { distHTML } from "./review.js";
@@ -86,7 +86,7 @@ function renderCompletions(rows, month){
       "<td>" + compDocCell(r) + "</td>" +
       "<td>" + esc(r.owner || "—") + "</td>" +
       "<td>" + (r.category ? catTag(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
-      '<td><span class="pdot ' + esc(r.priority || "P2") + '"><i></i>' + esc(r.priority || "") + "</span></td>" +
+      '<td>' + priTagHTML(r.priority) + '</td>' +
       '<td class="nowrap" title="任务开始日期">' + esc(r.startDate || "—") + "</td>" +
       '<td class="nowrap" title="任务完成日期">' + esc(r.completedAt || "—") + "</td>" +
       '<td class="nowrap"><b>' + (fmtMinutesShort(r.totalMinutes) || "—") + "</b></td>" +
@@ -422,11 +422,10 @@ function renderFlowHealth(d){
     var maxMv = 0;
     prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
     $("flowPriority").innerHTML = '<div class="dist">' + prio.map(function(p){
-      return flowRow(p.priority + " · " + p.tasks + " 项", p.avgMoves + " 次",
-        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0,
-        p.priority === "P0" ? "var(--danger)" : (p.priority === "P1" ? "var(--warning)" : "var(--text-3)"));
+      return flowRow(priName(p.priority) + " · " + p.tasks + " 项", p.avgMoves + " 次",
+        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0, priColor(p.priority));
     }).join("") + '</div>' +
-      '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，P0 应该<b>更少</b>被来回拖。</p>';
+      '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，' + esc(priName("P0")) + ' 应该<b>更少</b>被来回拖。</p>';
   }
 
   /* ---- 文档 → 开工 ---- */

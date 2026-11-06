@@ -1663,6 +1663,20 @@
               </div>
             </div>
 
+            <div class="panel" data-set-pane="workflow" id="set-priorities">
+              <div class="panel-head">
+                <h3>优先级</h3>
+                <span class="meta-right">固定四档 · 仅改显示</span>
+              </div>
+              <p class="set-hint">P0–P3 是数据档位，保持现有筛选、排序与导出口径；这里只配置各档在当前空间中的显示名和颜色。</p>
+              <div class="cfg-list" id="priorityCfgList"></div>
+              <div class="set-actions">
+                <button class="btn primary" type="button" id="btnPrioritySave">保存优先级</button>
+                <button class="btn" type="button" id="btnPriorityReset">恢复默认</button>
+                <span class="foot-note" id="priorityCfgHint"></span>
+              </div>
+            </div>
+
             <div class="panel" data-set-pane="data" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
@@ -1684,7 +1698,7 @@
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按任务与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类设置。</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按任务与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
@@ -2233,7 +2247,11 @@
             <div class="work-row">
               <span class="work-val" id="workVal">—</span>
               <button class="btn sm" type="button" id="btnTimer">开始计时</button>
+              <button class="btn sm ghost" type="button" id="btnTimerAdd" title="手工补记一条实际工时（忘开表、加班等）">
+                <span data-icon="plus"></span>&nbsp;补记
+              </button>
             </div>
+            <div class="work-log" id="workLogList"></div>
           </div>
         </div>
 
@@ -2508,6 +2526,35 @@
             </div>
           </div>
         </div>
+<!-- 手工补记工时 -->
+        <div class="modal-layer" id="dlgTimeAdd" role="dialog" aria-modal="true" aria-labelledby="dlgTimeAddTitle">
+          <div class="sheet">
+            <h3 class="reqdoc-dlg-title" id="dlgTimeAddTitle">补记工时</h3>
+            <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入任务与报表；可在下方记录列表删除或作废。</p>
+            <div class="reqdoc-dlg-form">
+              <label class="reqdoc-dlg-field">
+                <span>成员</span>
+                <select id="iTimeUser"></select>
+              </label>
+              <label class="reqdoc-dlg-field">
+                <span>日期</span>
+                <input id="iTimeDate" type="date" />
+              </label>
+              <label class="reqdoc-dlg-field">
+                <span>时长（小时）</span>
+                <input id="iTimeHours" type="number" min="0.5" max="24" step="0.5" placeholder="例如 1.5" />
+              </label>
+              <label class="reqdoc-dlg-field">
+                <span>备注（选填）</span>
+                <input id="iTimeNote" type="text" maxlength="200" placeholder="例如 联调支持" />
+              </label>
+            </div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn" type="button" id="dlgTimeAddCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgTimeAddOk">保存</button>
+            </div>
+          </div>
+        </div>
 <!-- 快捷键与录入语法帮助（?） -->
         <div class="modal-layer" id="dlgHelp" role="dialog" aria-modal="true" aria-labelledby="dlgHelpTitle">
           <div class="sheet">
@@ -2527,6 +2574,16 @@
             </div>
           </div>
         </div>
+<div class="unread-bubble" id="unreadBubble" hidden>
+  <button class="ub-main" type="button" id="unreadBubbleMain" title="打开通知中心">
+    <span class="ub-ic" id="unreadBubbleIcon"></span>
+    <span class="ub-body">
+      <span class="ub-title" id="unreadBubbleTitle"></span>
+      <span class="ub-meta" id="unreadBubbleMeta"></span>
+    </span>
+  </button>
+  <button class="ub-x" type="button" id="unreadBubbleX" aria-label="关闭新通知提醒">×</button>
+</div>
 <div class="toast-layer" id="toastWrap" aria-live="polite"></div>
 
 <link rel="modulepreload" href="js/main.js" />

@@ -14,12 +14,14 @@ import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.TimeLogMapper;
 import com.devstudio.kanban.mapper.UserMapper;
 import com.devstudio.kanban.mapper.WorkspaceMapper;
+import com.devstudio.kanban.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,22 +29,33 @@ import java.util.Map;
 @Service
 public class TimeLogService {
 
+    /** 记录来源码值：计时器产生 / 手工补记 */
+    private static final String ORIGIN_TIMER = "timer";
+    private static final String ORIGIN_MANUAL = "manual";
+    /** 手工补记单条上限：24 小时 */
+    private static final int MANUAL_MAX_MINUTES = 24 * 60;
+
     private final TimeLogMapper timeLogMapper;
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final WorkspaceMapper workspaceMapper;
     private final UserMapper userMapper;
+    private final WorkspaceMemberMapper memberMapper;
     private final ProjectAccessService projectAccess;
+    private final TaskCompletionService completionService;
 
     public TimeLogService(TimeLogMapper timeLogMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                           WorkspaceMapper workspaceMapper, UserMapper userMapper,
-                          ProjectAccessService projectAccess) {
+                          WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess,
+                          TaskCompletionService completionService) {
         this.timeLogMapper = timeLogMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.workspaceMapper = workspaceMapper;
         this.userMapper = userMapper;
+        this.memberMapper = memberMapper;
         this.projectAccess = projectAccess;
+        this.completionService = completionService;
     }
 
     /**
@@ -189,6 +202,132 @@ public class TimeLogService {
         log(userId, workspaceId, taskId, "停止计时，本次计入 " + minutes + " 分钟" + capNote(wallMinutes, minutes));
         /* 停自己的表不受项目可见范围影响：可见范围被收回后仍要能关掉计时 */
         return statusOf(workspaceId, taskId, userId);
+    }
+
+    /**
+     * 手工补记工时：项目可写者可补任何人（须为空间成员）。
+     * 补记不经过「工作时段 / 8 小时上限」的计时裁剪——用户主动填多少就是多少（如加班、忘开表），
+     * 只做范围校验（1 分钟 ~ 24 小时、日期不晚于今天）；日期落在当天仍会占用该用户的计时日额度。
+     */
+    @Transactional
+    public Map<String, Object> addManual(String userId, String workspaceId, String taskId,
+                                         String forUserId, LocalDate date, int minutes, String note) {
+        Task task = ensureTask(workspaceId, taskId);
+        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+        String targetUserId = Texts.trimToNull(forUserId);
+        if (targetUserId == null) {
+            targetUserId = userId;
+        }
+        if (!userId.equals(targetUserId) && memberMapper.selectMember(workspaceId, targetUserId) == null) {
+            throw AppException.badRequest("只能为空间成员补记工时");
+        }
+        if (date == null) {
+            throw AppException.badRequest("请选择补记日期");
+        }
+        if (date.isAfter(LocalDate.now())) {
+            throw AppException.badRequest("补记日期不能晚于今天");
+        }
+        if (minutes < 1 || minutes > MANUAL_MAX_MINUTES) {
+            throw AppException.badRequest("单条补记范围 1 分钟 ~ 24 小时");
+        }
+        String noteText = Texts.cut(Texts.trimToNull(note), 200);
+        LocalDateTime at = date.atTime(12, 0);
+        TimeLog tl = new TimeLog();
+        tl.setTaskId(taskId);
+        tl.setWorkspaceId(workspaceId);
+        tl.setUserId(targetUserId);
+        tl.setStartedAt(at);
+        tl.setEndedAt(at);
+        tl.setMinutes(minutes);
+        tl.setOrigin(ORIGIN_MANUAL);
+        tl.setNote(noteText);
+        timeLogMapper.insertCompleted(tl);
+        log(userId, workspaceId, taskId, "补记工时：为「" + displayNameOf(targetUserId) + "」补记 "
+                + minutes + " 分钟（" + date + "）" + (noteText == null ? "" : "，" + noteText));
+        refreshCompletion(task);
+        return status(workspaceId, taskId, userId);
+    }
+
+    /**
+     * 作废一条已结束的工时记录（计时记录与手工补记都可作废）。
+     *
+     * <p>物理删除、时间线留痕：删掉后所有统计（任务累计、报表、每日额度、甘特负载等）
+     * 都直接读 time_log，自动按实际工时重新计算；已完成任务的完成快照在这里同步重算。
+     * 正在运行的计时不能作废，须先停止。权限与补记一致：项目可写者。
+     */
+    @Transactional
+    public Map<String, Object> deleteRecord(String userId, String workspaceId, String taskId, Long logId) {
+        TimeLog tl = timeLogMapper.selectById(logId);
+        if (tl == null || !workspaceId.equals(tl.getWorkspaceId()) || !taskId.equals(tl.getTaskId())) {
+            throw AppException.notFound("工时记录不存在：" + logId);
+        }
+        if (tl.getEndedAt() == null) {
+            throw AppException.badRequest("正在计时的记录不能作废，请先停止计时");
+        }
+        Task task = ensureTask(workspaceId, tl.getTaskId());
+        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+        timeLogMapper.deleteById(logId, workspaceId);
+        String who = displayNameOf(tl.getUserId());
+        if (ORIGIN_MANUAL.equals(tl.getOrigin())) {
+            String date = tl.getStartedAt() == null ? "" : tl.getStartedAt().toLocalDate().toString();
+            log(userId, workspaceId, tl.getTaskId(), "删除补记工时：「" + who + "」的 "
+                    + tl.getMinutes() + " 分钟（" + date + "）" + (tl.getNote() == null ? "" : "，" + tl.getNote()));
+        } else {
+            log(userId, workspaceId, tl.getTaskId(), "作废计时记录：「" + who + "」的 "
+                    + tl.getMinutes() + " 分钟（" + rangeText(tl) + "）");
+        }
+        refreshCompletion(task);
+        return status(workspaceId, tl.getTaskId(), userId);
+    }
+
+    /** 已完成任务的快照随实际工时重算（只动工时三列）；未完成任务没有快照，无需处理 */
+    private void refreshCompletion(Task task) {
+        if (task != null && task.getCompletedAt() != null) {
+            completionService.refreshWork(task);
+        }
+    }
+
+    /** 时间线文案用：2026-11-05 08:00 → 2026-11-06 18:00 */
+    private static String rangeText(TimeLog tl) {
+        return timeText(tl.getStartedAt()) + " → " + timeText(tl.getEndedAt());
+    }
+
+    private static String timeText(LocalDateTime t) {
+        if (t == null) {
+            return "";
+        }
+        return String.format("%04d-%02d-%02d %02d:%02d",
+                t.getYear(), t.getMonthValue(), t.getDayOfMonth(), t.getHour(), t.getMinute());
+    }
+
+    /** 任务抽屉的工时记录列表：已结束的计时 + 手工补记，按时间倒序（最多 50 条） */
+    public List<Map<String, Object>> records(String workspaceId, String taskId, String userId) {
+        projectAccess.assertViewTask(workspaceId, userId, ensureTask(workspaceId, taskId));
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        for (TimeLog tl : timeLogMapper.selectRecordsByTask(workspaceId, taskId, 50)) {
+            Map<String, Object> m = new LinkedHashMap<String, Object>();
+            m.put("id", tl.getId());
+            m.put("userId", tl.getUserId());
+            m.put("userName", displayNameOf(tl.getUserId()));
+            m.put("origin", ORIGIN_MANUAL.equals(tl.getOrigin()) ? ORIGIN_MANUAL : ORIGIN_TIMER);
+            m.put("minutes", tl.getMinutes());
+            m.put("date", tl.getStartedAt() == null ? null : tl.getStartedAt().toLocalDate().toString());
+            m.put("startedAt", tl.getStartedAt() == null ? null : tl.getStartedAt().toString());
+            m.put("endedAt", tl.getEndedAt() == null ? null : tl.getEndedAt().toString());
+            m.put("note", tl.getNote());
+            m.put("mine", userId.equals(tl.getUserId()));
+            out.add(m);
+        }
+        return out;
+    }
+
+    private String displayNameOf(String uid) {
+        AppUser u = uid == null ? null : userMapper.selectById(uid);
+        if (u == null) {
+            return uid;
+        }
+        String dn = Texts.trimToNull(u.getDisplayName());
+        return dn == null ? u.getUsername() : dn;
     }
 
     /**

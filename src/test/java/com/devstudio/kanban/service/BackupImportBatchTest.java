@@ -7,6 +7,7 @@ import com.devstudio.kanban.entity.ProjectVersion;
 import com.devstudio.kanban.entity.Requirement;
 import com.devstudio.kanban.entity.RequirementDoc;
 import com.devstudio.kanban.entity.Task;
+import com.devstudio.kanban.entity.TimeLog;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
@@ -46,6 +47,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -283,5 +285,35 @@ class BackupImportBatchTest {
         assertEquals("V1", demandCaptor.getValue().getVersionId());
         verify(versionTaskMapper).insertBatch(eq("W1"), eq("V1"), anyList());
         verify(taskMapper).setEpic("T1", "T9");
+    }
+
+    @Test
+    void manualTimeLogRoundTripKeepsOriginAndNoteAndFallsBackToTimer() {
+        BackupData data = backup(1);
+        BackupData.BackupTimeLog manual = new BackupData.BackupTimeLog();
+        manual.setUserId("U9");
+        manual.setStartedAt("2026-11-05T12:00:00");
+        manual.setMinutes(75);
+        manual.setOrigin("manual");
+        manual.setNote("加班联调");
+        BackupData.BackupTimeLog legacy = new BackupData.BackupTimeLog();
+        legacy.setUserId("U9");
+        legacy.setStartedAt("2026-11-04T09:00:00");
+        legacy.setMinutes(60);
+        data.getTasks().get(0).setTimeLogs(Arrays.asList(manual, legacy));
+
+        service.importData("U1", "W1", data);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TimeLog>> saved = ArgumentCaptor.forClass(List.class);
+        verify(timeLogMapper).insertCompletedBatch(saved.capture());
+        List<TimeLog> logs = saved.getValue();
+        assertEquals(2, logs.size());
+        assertEquals("manual", logs.get(0).getOrigin());
+        assertEquals("加班联调", logs.get(0).getNote());
+        assertEquals(Integer.valueOf(75), logs.get(0).getMinutes());
+        /* 旧备份没有 origin：按计时器回填，避免补记统计口径错乱 */
+        assertEquals("timer", logs.get(1).getOrigin());
+        assertNull(logs.get(1).getNote());
     }
 }

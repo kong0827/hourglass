@@ -120,6 +120,10 @@ public class BackupData {
         private String userId;
         private String startedAt;
         private Integer minutes;
+        /** timer=计时器；manual=手工补记。旧备份缺该字段，导入时按计时器处理 */
+        private String origin;
+        /** 手工补记备注 */
+        private String note;
     }
 
     @Data

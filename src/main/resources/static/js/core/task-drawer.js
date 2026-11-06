@@ -1,11 +1,11 @@
 /* core/task-drawer · 任务详情抽屉、评论、检查清单、附件、工时 */
 
 import { API } from "./api.js";
-import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask, btnTaskWatch, btnTimer, commentCount, commentList, commentMention, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, parseDate, startPresetDate } from "../lib/format.js";
+import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
@@ -161,6 +161,7 @@ function applyDrawerReadOnly(readOnly){
   }
   if(btnCommentSend) btnCommentSend.hidden = !!readOnly;
   if(btnTimer) btnTimer.hidden = !!readOnly;
+  if(btnTimerAdd) btnTimerAdd.hidden = !!readOnly;
   var hint = $("taskFormHint");
   if(hint && !rt.formDirty){
     hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "保存后可拖动卡片调整状态与顺序";
@@ -174,7 +175,8 @@ function denyReadOnly(){
 }
 function buildFormControls(){
   segPri.innerHTML = PRIORITIES.map(function(p){
-    return '<button type="button" class="' + p.toLowerCase() + '" data-fpri="' + p + '" aria-pressed="false">' + p + '</button>';
+    return '<button type="button" class="' + p.toLowerCase() + '" data-fpri="' + p + '" aria-pressed="false" style="--' +
+      p.toLowerCase() + ':' + esc(priColor(p)) + '">' + esc(priName(p)) + '</button>';
   }).join("");
   segRecur.innerHTML = [{v:"", n:"无"},{v:"daily", n:"每天"},{v:"weekly", n:"每周"},{v:"monthly", n:"每月"}]
     .map(function(o){
@@ -1443,10 +1445,12 @@ function fetchTimer(taskId, seq){
 function loadWorkStatus(taskId){
   if(!fWork) return;
   workSeq++;
+  recSeq++;
   workBusy = false;
   if(workVal){ workVal.textContent = "加载中…"; workVal.classList.remove("running"); }
   if(btnTimer){ btnTimer.textContent = "开始计时"; btnTimer.disabled = true; }
   fetchTimer(taskId, workSeq);
+  loadWorkRecords(taskId, recSeq);
   clearWorkTick();
   workTick = setInterval(function(){
     if(!taskDrawer.classList.contains("on") || !rt.editingId){ clearWorkTick(); return; }
@@ -1473,6 +1477,8 @@ btnTimer.addEventListener("click", function(){
     renderWork(d);
     toast(running ? ("已停止计时，累计 " + fmtMinutes(d.totalMinutes)) : "开始计时", "fs");
     loadBoard({silent:true});
+    recSeq++;
+    loadWorkRecords(taskId, recSeq);
   }).catch(function(ex){
     if(opSeq !== workSeq || rt.editingId !== taskId) return;
     workBusy = false;
@@ -1480,6 +1486,143 @@ btnTimer.addEventListener("click", function(){
     toast(ex.message || "操作失败", "bad");
   });
 });
+
+/* ---- 手工补记实际工时（忘开表、加班等）；工时记录可作废后按天重补 ---- */
+var recSeq = 0;
+var workRecCache = {};
+function loadWorkRecords(taskId, seq){
+  if(!workLogList) return;
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer/records").then(function(list){
+    if(seq !== recSeq || rt.editingId !== taskId) return;
+    renderWorkRecords(list);
+  }).catch(function(){
+    if(seq !== recSeq || rt.editingId !== taskId) return;
+    if(workLogList) workLogList.innerHTML = '<div class="wl-empty">工时记录加载失败</div>';
+  });
+}
+function renderWorkRecords(list){
+  if(!workLogList) return;
+  list = list || [];
+  workRecCache = {};
+  if(!list.length){
+    workLogList.innerHTML = '<div class="wl-empty">还没有工时记录：拖入进行中自动计时，或点右上「补记」手工添加</div>';
+    return;
+  }
+  var html = "";
+  list.forEach(function(r){
+    var manual = r.origin === "manual";
+    workRecCache[String(r.id)] = r;
+    var del = !rt.drawerReadOnly
+      ? '<button class="wl-del' + (manual ? "" : " hint") + '" type="button" data-wl-del="' + r.id
+        + '" data-wl-kind="' + (manual ? "manual" : "timer") + '" title="'
+        + (manual ? "删除这条补记" : "作废这条计时记录") + '">' + (manual ? "删除" : "作废") + '</button>' : "";
+    var meta;
+    if(manual || !r.startedAt){
+      meta = esc(r.date || "") + (r.note ? ('<span class="wl-note"> · ' + esc(r.note) + '</span>') : "");
+    } else {
+      var cross = String(r.startedAt).slice(0, 10) !== String(r.endedAt || "").slice(0, 10);
+      meta = esc(fmtTs(r.startedAt)) + ' → ' + esc(fmtTs(r.endedAt))
+        + (cross ? '<span class="wl-note"> · 跨天，按每天上限计</span>' : "");
+    }
+    html += '<div class="wl-item' + (manual ? " manual" : "") + '">'
+      + '<span class="wl-ic">' + icon(manual ? "edit" : "clock", 14) + '</span>'
+      + '<div class="wl-main">'
+      + '<div class="wl-line1"><span class="wl-name">' + esc(r.userName || r.userId || "成员") + '</span>'
+      + '<span class="wl-mins">' + fmtMinutesShort(r.minutes) + '</span>'
+      + (manual ? '<span class="wl-tag">补记</span>' : "")
+      + '</div>'
+      + '<div class="wl-meta">' + meta + '</div>'
+      + '</div>'
+      + del
+      + '</div>';
+  });
+  workLogList.innerHTML = html;
+}
+function openTimeAddDialog(){
+  if(!dlgTimeAdd) return;
+  if(!rt.currentUser || !rt.currentUser.id){ toast("当前账号信息缺失，无法补记", "warn"); return; }
+  var html = "";
+  ownerOptions().forEach(function(o){
+    html += '<option value="' + esc(o.id) + '">' + esc(o.name) + '</option>';
+  });
+  if(iTimeUser) iTimeUser.innerHTML = html;
+  if(iTimeDate && rt.TODAY) iTimeDate.value = rt.TODAY.getFullYear() + "-" + pad2(rt.TODAY.getMonth() + 1) + "-" + pad2(rt.TODAY.getDate());
+  if(iTimeHours) iTimeHours.value = "";
+  if(iTimeNote) iTimeNote.value = "";
+  UI.openModal(dlgTimeAdd, "#iTimeHours");
+}
+if(btnTimerAdd){
+  btnTimerAdd.addEventListener("click", function(){
+    if(!rt.editingId) return;
+    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+    openTimeAddDialog();
+  });
+}
+if(dlgTimeAddCancel){
+  dlgTimeAddCancel.addEventListener("click", function(){ UI.closeModal(dlgTimeAdd); });
+}
+if(dlgTimeAddOk){
+  dlgTimeAddOk.addEventListener("click", function(){
+    var taskId = rt.editingId;
+    if(!taskId || dlgTimeAddOk.disabled) return;
+    var date = (iTimeDate.value || "").trim();
+    var hours = Number(iTimeHours.value);
+    var note = (iTimeNote.value || "").trim();
+    if(!date){ toast("请选择补记日期", "warn"); try { iTimeDate.focus(); } catch (e) { /* noop */ } return; }
+    if(!hours || hours < 0.5 || hours > 24){ toast("时长需在 0.5 ~ 24 小时之间", "warn"); try { iTimeHours.focus(); } catch (e) { /* noop */ } return; }
+    var minutes = Math.round(hours * 60);
+    var url = "/api/tasks/" + encodeURIComponent(taskId) + "/timer/manual"
+      + "?forUserId=" + encodeURIComponent(iTimeUser.value)
+      + "&date=" + encodeURIComponent(date)
+      + "&minutes=" + minutes
+      + (note ? ("&note=" + encodeURIComponent(note)) : "");
+    dlgTimeAddOk.disabled = true;
+    API.post(url, {}).then(function(){
+      toast("已补记 " + fmtMinutes(minutes), "fs");
+      UI.closeModal(dlgTimeAdd);
+      recSeq++;
+      loadWorkRecords(taskId, recSeq);
+      fetchTimer(taskId, workSeq);
+      loadBoard({silent:true});
+    }).catch(function(ex){
+      toast(ex.message || "补记失败", "bad");
+    }).then(function(){ dlgTimeAddOk.disabled = false; });
+  });
+}
+if(workLogList){
+  workLogList.addEventListener("click", function(e){
+    var t = e.target;
+    var btn = t && t.closest ? t.closest("[data-wl-del]") : null;
+    if(!btn) return;
+    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+    var taskId = rt.editingId;
+    var logId = btn.getAttribute("data-wl-del");
+    var manual = btn.getAttribute("data-wl-kind") === "manual";
+    if(!taskId || !logId) return;
+    var rec = workRecCache[String(logId)] || {};
+    var title = manual ? "删除补记" : "作废这条工时记录？";
+    var msg;
+    if(manual){
+      msg = "删除后这条实际工时将从任务与报表中移除，确定？";
+    } else {
+      var when = rec.startedAt ? (fmtTs(rec.startedAt) + " → " + fmtTs(rec.endedAt)) : (rec.date || "");
+      msg = esc(rec.userName || rec.userId || "成员") + " · <b>" + fmtMinutes(rec.minutes) + "</b><br>"
+        + esc(when) + ' <span style="color:var(--text-3)">计时记录</span><br><br>'
+        + "作废后这条记录不再计入任务、报表与每人每天额度；操作会保留在任务时间线。"
+        + "请用「补记」按天重新录入实际工时。";
+    }
+    UI.showConfirm({ title:title, msg:msg, okText: manual ? "删除" : "作废并移除", danger:true }).then(function(ok){
+      if(!ok) return;
+      API.del("/api/tasks/" + encodeURIComponent(taskId) + "/timer/records/" + encodeURIComponent(logId)).then(function(){
+        toast(manual ? "已删除" : "已作废", "fs");
+        recSeq++;
+        loadWorkRecords(taskId, recSeq);
+        fetchTimer(taskId, workSeq);
+        loadBoard({silent:true});
+      }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+    });
+  });
+}
 
 /* 里程碑只占一天：勾选后把另一端补齐；已勾选时改任一端，另一端跟随（抽屉预加载，不依赖甘特） */
 if($("iMilestone")){

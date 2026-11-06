@@ -10,7 +10,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, typeBadgeHTML } from "../lib/format.js";
+import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
@@ -224,7 +224,7 @@ function cardHTML(d){
     : "";
   return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
-    + '<span class="tag tag-info">' + esc(d.priority || "P2") + '</span></div>'
+    + priTagHTML(d.priority || "P2") + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
     + '<div class="bkl-tags">'
@@ -249,7 +249,7 @@ function statusTag(st){
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>';
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
-  if(key === "priority") return '<span class="tag tag-info">' + esc(d.priority || "P2") + '</span>';
+  if(key === "priority") return priTagHTML(d.priority || "P2");
   if(key === "status") return statusTag(d.status);
   if(key === "project") return esc(reqNameById(d.reqId) || "—");
   if(key === "version") return esc(versionName(d.versionId) || "—");
@@ -290,7 +290,11 @@ function renderDemandTable(){
 function syncPriSeg(){
   var seg = $("segDemandPri");
   if(seg) seg.querySelectorAll("[data-dpri]").forEach(function(b){
-    b.setAttribute("aria-pressed", b.dataset.dpri === formPri);
+    var code = b.dataset.dpri;
+    b.className = code.toLowerCase();
+    b.style.setProperty("--" + code.toLowerCase(), priColor(code));
+    b.textContent = priName(code);
+    b.setAttribute("aria-pressed", code === formPri);
   });
 }
 function findDemand(id){
@@ -620,7 +624,7 @@ function showDemandDetail(id){
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
-    ["优先级", d.priority || "P2"],
+    ["优先级", priName(d.priority || "P2")],
     ["目标版本", versionName(d.versionId) || "待规划"],
     ["期望交付", d.expectDate || "待评估"],
     ["需求来源", d.source || "—"]

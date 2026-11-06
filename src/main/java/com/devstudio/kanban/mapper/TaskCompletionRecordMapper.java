@@ -18,6 +18,12 @@ public interface TaskCompletionRecordMapper {
 
     int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
+    /** 只刷新工时三列（补记 / 作废后重算），快照不存在时不插入 */
+    int updateWork(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId,
+                   @Param("totalMinutes") int totalMinutes,
+                   @Param("firstStartedAt") java.time.LocalDateTime firstStartedAt,
+                   @Param("lastEndedAt") java.time.LocalDateTime lastEndedAt);
+
     /** 该 ID 是否还有历史完成快照（彻底删除后快照会保留，ID 不可复用） */
     int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 

@@ -48,6 +48,10 @@
   - `PUT /api/categories/{id}`（改名会同步历史任务上的分类名）
   - `DELETE /api/categories/{id}`（仅空间主；其下任务改到第一个分类，至少保留一个）
   - `PUT /api/categories/order`，body `{"ids":[...]}`
+- 优先级显示配置（每空间固定 P0/P1/P2/P3 四档，只改显示名与颜色，不改变存储、筛选、排序和导出 code）：
+  - `GET /api/priorities` → 固定顺序返回四档 `[{workspaceId,code,name,color,...}]`；未配置的档位返回内置默认「紧急/高/中/低」，不写库
+  - `PUT /api/priorities/{code}`，body `{"name":"高","color":"#F79009"}` → 修改单档显示配置；查看者 403
+  - `DELETE /api/priorities` → 清除当前空间的自定义配置，四档全部恢复内置默认；查看者 403
 - 任务保存的 `category` 必须是当前空间已有分类；不传则落在第一个分类（迁移数据自动保留原分类名与配色）
 
 ## 通用查询参数（看板 / 已完成列表）
@@ -215,7 +219,7 @@
 
 返回 `{"tasks": 42, "reqs": 5, "comments": 18, "reqDocs": 3, "branches": 2}`。
 
-**覆盖语义（重要）**：导入清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**、**甘特依赖与基线**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；v6 备份还会覆盖 **需求文档与分支**（含正文/状态/负责人，分支操作时间线清空）；旧备份没有这两个字段时保留现状。**保留**附件文件与记录、操作时间线、保存视图、看板列与分类设置。跨空间复制导入时任务/项目/需求文档/分支 ID 冲突会自动重新生成并同步迁移引用（依赖端点按任务 ID 映射回指，自环/重复/成环边会被跳过）；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。导入会清除当前空间的只读分享令牌（旧链接立即失效），需要重新生成。
+**覆盖语义（重要）**：导入清空并重建"任务类数据"——任务、回收站（保留原删除时间）、项目、子任务、标签、工时、**任务评论**、**甘特依赖与基线**与**完成归档**（完成归档按导入后的任务与工时重建，历史快照里的旧项目名/负责人名以备份数据为准）；v6 备份还会覆盖 **需求文档与分支**（含正文/状态/负责人，分支操作时间线清空）；旧备份没有这两个字段时保留现状。**保留**附件文件与记录、操作时间线、保存视图、看板列、分类与优先级显示设置。跨空间复制导入时任务/项目/需求文档/分支 ID 冲突会自动重新生成并同步迁移引用（依赖端点按任务 ID 映射回指，自环/重复/成环边会被跳过）；看板列按备份补齐（跳过保留列 id=done 与超过 16 位的 id）、任务列按"列 id → 列名"两级映射落位。工时的计时人随备份恢复（`timeLogs[].userId`）；计时人不在目标空间（跨空间导入）时，该条工时归导入者。仅空间主可执行。导入会清除当前空间的只读分享令牌（旧链接立即失效），需要重新生成。
 
 **旧备份兼容**：v3 及更早备份没有 comments 字段，v4 及更早没有依赖/基线字段，v5 及更早没有需求文档/分支字段；导入后会清空本空间对应的评论、依赖与基线（前端确认框已明确提示），需求文档/分支保持不变；新增任务字段缺失时按空值处理。
 
@@ -315,7 +319,12 @@ params 为前端筛选状态序列化：`{q, owners, pris, cats, reqs, tags, due
 
 - `GET /api/tasks/{id}/timer` → `{"running":false,"startedAt":null,"elapsedMinutes":0,"totalMinutes":45,"myTotalMinutes":30}`（`running/elapsedMinutes` 为"当前登录人"在该任务的计时状态；`totalMinutes` 为该任务全部成员的累计）
 - `POST /api/tasks/{id}/timer/start` / `POST /api/tasks/{id}/timer/stop`（开始/停止仅作用于"我自己"；任务整体结算见下）
-- 计时按**人**归属（`time_log.user_id` = 计时人）：开始新计时只自动停止"我自己"其他任务上已可见的运行中计时，不影响他人；**单次计时上限 12 小时**（忘停时按上限计入并在时间线注明）；任务完成（移入已完成）或删除时自动停止并结算**该任务上全部成员**的计时；统计报表的工时只统计"我"在当前空间的记录
+- `GET /api/tasks/{id}/timer/records` → 该任务的工时记录（已结束的计时 + 手工补记，按时间倒序最多 50 条）：`[{id,userId,userName,origin,minutes,date,startedAt,endedAt,note,mine}]`，`origin` 为 `timer`/`manual`；`startedAt/endedAt` 为原始起止时间（跨天计时据此判断，`minutes` 已按工作时段与每日上限裁剪）
+- `POST /api/tasks/{id}/timer/manual?forUserId=&date=yyyy-MM-dd&minutes=&note=` → 手工补记一条实际工时（忘开表、加班等）。项目可写者可补**任何人**（`forUserId` 空则补自己，非空须为空间成员）；补记不经过工作时段/8 小时上限的计时裁剪，只做范围校验（1 分钟 ~ 24 小时、日期不晚于今天），`started_at=ended_at=所选日期 12:00`，落库 `origin=manual`；日期落在当天仍占用该用户的计时日额度
+- `DELETE /api/tasks/{id}/timer/records/{logId}` → **作废**一条已结束的工时记录（计时记录与手工补记都可作废；运行中的计时须先停止）。权限与补记一致：项目可写者。记录物理删除，任务时间线留下"作废计时记录 / 删除补记工时"的审计文字
+- 作废后所有统计直接读 `time_log` 自动按实际工时重算；任务若已有完成快照，服务端同步重算 `total_minutes / first_started_at / last_ended_at`（历史快照用 `sql/46_refresh_completion_minutes.sql` 一次性对齐）
+- 计时按**人**归属（`time_log.user_id` = 计时人）：开始新计时只自动停止"我自己"其他任务上已可见的运行中计时，不影响他人；单次计时按「每个工作日的工作时段 + 每人每天上限（默认 8 小时）」折算，忘停表时不会把夜间与周末计入，也不会超过当天剩余额度；任务完成（移入已完成）或删除时自动停止并结算**该任务上全部成员**的计时；统计报表的工时只统计"我"在当前空间的记录
+- 备份往返：`BackupTimeLog` 含 `origin`/`note`；旧备份缺 `origin` 的按 `timer` 回填
 
 ## 27. 实时变更事件（SSE）
 
@@ -1103,7 +1112,7 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 - `GET /api/gantt/share` → 当前分享 `{token, expiresAt}` 或 `null`（**仅空间主**：token 本身就能公开读取，不能发给普通成员）
 - `POST /api/gantt/share` → 生成/重置（30 天有效，**仅空间主**）
 - `DELETE /api/gantt/share` → 停止分享（仅空间主）
-- `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，任务走白名单 DTO（id/标题/负责人/优先级/列/起止/进度/里程碑/阻塞/估时/实际工时），依赖与基线只返回可见任务之间的；token 由 `SecureRandom` 生成（32 位 base64url），无效或过期返回 404。
+- `GET /api/share/gantt?token=...` → **公开、无需登录**；只读快照，任务走白名单 DTO（id/标题/负责人/优先级/列/起止/进度/里程碑/阻塞/估时/实际工时），并返回该空间的四档优先级显示配置；依赖与基线只返回可见任务之间的；token 由 `SecureRandom` 生成（32 位 base64url），无效或过期返回 404。
 
 页面：`/share.html?token=...`（独立只读甘特页，无写操作）；文档分享为 `/share.html?token=...&kind=doc`。
 
@@ -1123,7 +1132,7 @@ WHERE user_id = #{userId} AND ended_at IS NOT NULL AND DATE(started_at) = #{date
 | 需求文档增删改 | `/api/req-docs/**` | ✓ | ✓ |
 | 分支增改、状态流转 | `/api/branches/**`（除 DELETE） | ✓ | ✓ |
 | **删除分支** | `DELETE /api/branches/{id}` | ✓ | 403 |
-| 看板列/分类增改 | `/api/columns`、`/api/categories` | ✓ | ✓ |
+| 看板列/分类/优先级显示配置增改 | `/api/columns`、`/api/categories`、`/api/priorities` | ✓ | ✓ |
 | 删除看板列/分类 | `DELETE /api/columns/{id}`、`/api/categories/{id}` | ✓ | 403 |
 | 甘特依赖增删改、基线拍摄 | `/api/gantt/deps*`、`POST /api/gantt/baseline` | ✓ | ✓ |
 | **清除基线** | `DELETE /api/gantt/baseline` | ✓ | 403 |

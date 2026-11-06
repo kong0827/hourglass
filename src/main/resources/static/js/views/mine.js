@@ -7,12 +7,13 @@ import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { currentMode, saveMode } from "../core/mobile-rules.js";
+import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { canEditTask, catTag, dueState, dueText, progressOf, rt, state, tagChip } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, addDays, colMeta, colName, duePresetDate, fmtFull, iso, parseDate } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, addDays, colMeta, colName, duePresetDate, fmtFull, iso, parseDate, priTagHTML } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 
@@ -104,8 +105,11 @@ function loadMine(opts){
   delete params.owners;      // 负责人维度天然是我
   API.getGlobal("/api/my-tasks", params).then(function(d){
     if(seq !== mineSeq) return;
-    mineLoading = false;
-    renderMine(d || {}, append);
+    return loadPrioritySpaces(d && d.spaces).then(function(){
+      if(seq !== mineSeq) return;
+      mineLoading = false;
+      renderMine(d || {}, append);
+    });
   }).catch(function(ex){
     if(seq !== mineSeq) return;
     mineLoading = false;
@@ -148,7 +152,7 @@ function mineRowHTML(t){
         (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') + '</span></span>' +
     '<span class="cell">' + esc(t.workspaceName || "—") + '</span>' +
     '<span class="cell">' + esc(colName(t.boardColumn)) + '</span>' +
-    '<span><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span></span>' +
+    '<span>' + priTagHTML(t.priority, t.workspaceId) + '</span>' +
     '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' +
       esc(dueText(t)) + '</span>' +
     '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span>' +
@@ -325,7 +329,7 @@ function mobileMineCardHTML(t){
   return '<article class="mob-task-card" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
       ' tabindex="0" role="row">' +
     '<div class="mtc-top">' +
-      '<span class="pdot ' + esc(pri) + '"><i></i>' + esc(pri) + '</span>' +
+      priTagHTML(pri, t.workspaceId) +
       '<span class="mtc-chip" style="--c:' + esc(colColor) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
       (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') +
       '<span class="sp"></span>' +

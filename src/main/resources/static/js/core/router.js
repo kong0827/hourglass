@@ -2,6 +2,8 @@
 
 import { $, viewTitle } from "./dom.js";
 import { updateBrand } from "./filters.js";
+import { syncDocTitle } from "./notifications.js";
+import { loadPriorities } from "./priorities.js";
 import { rt } from "./state.js";
 import { handleDeepLink } from "./task-actions.js";
 import { UI } from "./ui.js";
@@ -111,11 +113,14 @@ function showView(name){
   restoreScroll(name);
   if(viewTitle) viewTitle.textContent = VIEWS[name].title;
   document.title = VIEWS[name].title + " · 沙漏";
+  syncDocTitle();
   updateBrand();
   UI.closeAllPops();
   syncViewHash(name);
   try{ localStorage.setItem("ds.view", name); }catch(e){ /* 隐私模式忽略 */ }
-  var entered = VIEWS[name].enter ? VIEWS[name].enter() : null;
+  var entered = loadPriorities().then(function(){
+    return VIEWS[name].enter ? VIEWS[name].enter() : null;
+  });
   /* 看板不在当前视图时只置脏，切回来再渲染一次 */
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
   return entered;

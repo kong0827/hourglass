@@ -95,10 +95,9 @@ function startAuthenticatedApp(meUser, startView, deepTaskId){
   loadViews();
   loadMe(meUser);
   initSSE();
-  /* R-1：未读角标。SSE 之外再兜一层低频轮询，SSE 断连时也能拿到新通知 */
+  /* R-1：未读角标。SSE 之外再兜一层低频轮询；后台也拉，保证标签页标题计数实时 */
   loadUnread(true);
   setInterval(function(){
-    if(document.hidden) return;
     loadUnread();
   }, 60000);
 

@@ -46,12 +46,15 @@ public class GanttController {
     private final GanttService ganttService;
     private final WorkspaceVersionService versionService;
     private final WorkspaceService workspaceService;
+    private final com.devstudio.kanban.service.PriorityService priorityService;
 
     public GanttController(GanttService ganttService, WorkspaceVersionService versionService,
-                           WorkspaceService workspaceService) {
+                           WorkspaceService workspaceService,
+                           com.devstudio.kanban.service.PriorityService priorityService) {
         this.ganttService = ganttService;
         this.versionService = versionService;
         this.workspaceService = workspaceService;
+        this.priorityService = priorityService;
     }
 
     /** 任务分页 + 依赖 + 基线（依赖/基线只随第一页返回）；筛选参数与 /api/tasks/list 一致 */
@@ -163,7 +166,9 @@ public class GanttController {
     /** 公开只读：不需要登录 */
     @GetMapping("/api/share/gantt")
     public ApiResult<GanttShareResponse> publicShare(@RequestParam(required = false) String token) {
-        return ApiResult.ok(ganttService.publicShare(token));
+        GanttShareResponse resp = ganttService.publicShare(token);
+        resp.setPriorities(priorityService.list(resp.getWorkspaceId()));
+        return ApiResult.ok(resp);
     }
 
 }

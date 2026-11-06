@@ -15,6 +15,7 @@ import com.devstudio.kanban.entity.Workspace;
 import com.devstudio.kanban.entity.WorkspaceMember;
 import com.devstudio.kanban.mapper.BoardColumnMapper;
 import com.devstudio.kanban.mapper.CategoryMapper;
+import com.devstudio.kanban.mapper.WorkspacePriorityMapper;
 import com.devstudio.kanban.mapper.AppNotificationMapper;
 import com.devstudio.kanban.mapper.InviteMapper;
 import com.devstudio.kanban.mapper.ProjectMemberMapper;
@@ -55,6 +56,7 @@ public class WorkspaceService {
     private final UserMapper userMapper;
     private final BoardColumnMapper boardColumnMapper;
     private final CategoryMapper categoryMapper;
+    private final WorkspacePriorityMapper workspacePriorityMapper;
     private final SavedViewMapper savedViewMapper;
     private final AppNotificationMapper appNotificationMapper;
     private final UserListPreferenceMapper userListPreferenceMapper;
@@ -74,6 +76,7 @@ public class WorkspaceService {
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
                             CategoryMapper categoryMapper,
+                            WorkspacePriorityMapper workspacePriorityMapper,
                             SavedViewMapper savedViewMapper,
                             AppNotificationMapper appNotificationMapper,
                             UserListPreferenceMapper userListPreferenceMapper,
@@ -90,6 +93,7 @@ public class WorkspaceService {
         this.userMapper = userMapper;
         this.boardColumnMapper = boardColumnMapper;
         this.categoryMapper = categoryMapper;
+        this.workspacePriorityMapper = workspacePriorityMapper;
         this.savedViewMapper = savedViewMapper;
         this.appNotificationMapper = appNotificationMapper;
         this.userListPreferenceMapper = userListPreferenceMapper;
@@ -345,6 +349,7 @@ public class WorkspaceService {
         userListPreferenceMapper.deleteAllByWorkspace(workspaceId);
         workActivityService.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
+        workspacePriorityMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));

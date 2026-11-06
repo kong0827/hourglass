@@ -206,6 +206,8 @@ public class BackupService {
             item.setUserId(tl.getUserId());
             item.setStartedAt(tl.getStartedAt().format(ISO_TS));
             item.setMinutes(tl.getMinutes());
+            item.setOrigin(tl.getOrigin());
+            item.setNote(tl.getNote());
             list.add(item);
         }
 
@@ -1130,6 +1132,9 @@ public class BackupService {
                     tl.setStartedAt(started);
                     tl.setEndedAt(started.plusMinutes(mins));
                     tl.setMinutes(mins);
+                    /* 旧备份没有 origin：按计时器回填（同 sql/44 迁移口径） */
+                    tl.setOrigin("manual".equals(item.getOrigin()) ? "manual" : "timer");
+                    tl.setNote(Texts.cut(Texts.trimToNull(item.getNote()), 200));
                     timeLogs.add(tl);
                 }
             }

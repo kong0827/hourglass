@@ -8,7 +8,7 @@ import { rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { ownerOptions } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarHTML, fmtTs } from "../lib/format.js";
+import { avatarHTML, fmtTs, priColor, priName } from "../lib/format.js";
 import { loadReqs, render } from "./board.js";
 
 var BRANCH_STATUS = [
@@ -538,7 +538,7 @@ function loadBranchTasks(id){
       return '<button class="br-task" type="button" data-br-task="' + esc(t.id) + '">' +
         '<span class="bt-dot' + (done ? " done" : "") + '"></span>' +
         '<span class="bt-title' + (done ? " done" : "") + '">' + esc(t.title) + '</span>' +
-        '<span class="bt-pri ' + esc(t.priority || "") + '">' + esc(t.priority || "") + '</span>' +
+        '<span class="bt-pri ' + esc(t.priority || "") + '" style="color:' + esc(priColor(t.priority)) + '">' + esc(priName(t.priority)) + '</span>' +
       '</button>';
     }).join("");
   }).catch(function(){

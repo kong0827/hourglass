@@ -33,7 +33,7 @@ class GanttDependencyAccessTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final GanttService service = new GanttService(mock(TaskQueryService.class), tasks, deps,
             mock(TaskBaselineMapper.class), mock(GanttShareMapper.class), mock(TimeLogMapper.class),
-            mock(UserMapper.class), mock(WorkspaceMapper.class), access);
+            mock(UserMapper.class), mock(WorkspaceMapper.class), access, mock(PriorityService.class));
 
     @Test
     void createRejectsReadOnlyEndpoint() {

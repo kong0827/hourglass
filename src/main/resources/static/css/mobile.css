@@ -104,6 +104,8 @@
   -webkit-overflow-scrolling:touch;
 }
 [data-layout="mobile"] .fb-main,.fb-right{flex-wrap:nowrap;}
+/* 「筛选条件」标签不参与压缩，否则 390px 下被挤成竖排 */
+[data-layout="mobile"] .fb-section-label{flex:0 0 auto;white-space:nowrap;}
 [data-layout="mobile"] .filterbar::-webkit-scrollbar{height:0;}
 
 /* ===================== 层级 ===================== */
@@ -489,6 +491,15 @@
 [data-layout="mobile"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
 [data-layout="mobile"] .gantt-grid{min-width:max-content;}
 [data-layout="mobile"] .access-matrix{overflow-x:auto;}
+
+/* 测试用例视图：行内操作区整行左排；步骤行改网格，操作/预期各占整行 */
+[data-layout="mobile"] .tc-row{flex-wrap:wrap;gap:8px;padding:12px;}
+[data-layout="mobile"] .tc-row .mini-tag{margin-top:0;}
+[data-layout="mobile"] .tc-acts{width:100%;justify-content:flex-start;}
+[data-layout="mobile"] .tc-step-row{display:grid;grid-template-columns:22px 1fr 28px;row-gap:6px;}
+[data-layout="mobile"] .tc-step-row .tc-step-no{grid-column:1;grid-row:1;}
+[data-layout="mobile"] .tc-step-row > button{grid-column:3;grid-row:1;}
+[data-layout="mobile"] .tc-step-row input{grid-column:1/-1;width:100%;flex:none;}
 
 /* 暗色下手机卡片/底栏统一用语义令牌，禁止写死 hex */
 html[data-theme="dark"] [data-layout="mobile"] .team-hero{box-shadow:none;}

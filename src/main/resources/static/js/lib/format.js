@@ -24,7 +24,47 @@ function syncColumns(defs){
   rebuildColIndex();
 }
 var PRIORITIES = ["P0","P1","P2","P3"];
-var PRIORITY_COLOR = {P0:"#F04438", P1:"#F79009", P2:"#2E90FA", P3:"#98A2B3"};
+var PRIORITY_DEFAULTS = {
+  P0:{name:"紧急", color:"#F04438"},
+  P1:{name:"高", color:"#F79009"},
+  P2:{name:"中", color:"#2E90FA"},
+  P3:{name:"低", color:"#98A2B3"}
+};
+var CURRENT_PRIORITIES = {};
+var WORKSPACE_PRIORITIES = {};
+function buildPriorityMeta(defs){
+  var meta = {};
+  PRIORITIES.forEach(function(code){
+    meta[code] = {name:PRIORITY_DEFAULTS[code].name, color:PRIORITY_DEFAULTS[code].color};
+  });
+  (defs || []).forEach(function(d){
+    if(!d || !meta[d.code]) return;
+    var name = String(d.name == null ? "" : d.name).trim();
+    var color = String(d.color || "");
+    meta[d.code] = {
+      name:name || PRIORITY_DEFAULTS[d.code].name,
+      color:/^#[0-9a-fA-F]{6}$/.test(color) ? color : PRIORITY_DEFAULTS[d.code].color
+    };
+  });
+  return meta;
+}
+function syncPriorities(defs, workspaceId){
+  var meta = buildPriorityMeta(defs);
+  if(workspaceId) WORKSPACE_PRIORITIES[workspaceId] = meta;
+  if(!workspaceId || (rt.currentWs && rt.currentWs.id === workspaceId)) CURRENT_PRIORITIES = meta;
+}
+function priMeta(code, workspaceId){
+  var meta = workspaceId ? WORKSPACE_PRIORITIES[workspaceId] : CURRENT_PRIORITIES;
+  return (meta && meta[code]) || PRIORITY_DEFAULTS[code] || {name:code || "", color:"#98A2B3"};
+}
+function priName(code, workspaceId){ return priMeta(code, workspaceId).name; }
+function priColor(code, workspaceId){ return priMeta(code, workspaceId).color; }
+function priTagHTML(code, workspaceId, dotOnly){
+  var p = code || "P2";
+  return '<span class="pdot ' + esc(p) + '" style="color:' + esc(priColor(p, workspaceId)) + '"><i></i>' +
+    (dotOnly ? "" : esc(priName(p, workspaceId))) + '</span>';
+}
+CURRENT_PRIORITIES = buildPriorityMeta();
 var PALETTE = ["#2563EB","#12B76A","#F79009","#F04438","#7A5AF8","#0E9384","#DD2590","#98A2B3"];
 var AVATAR_COLORS = PALETTE.slice();
 var CAT_DEFAULT_COLOR = "#98A2B3";
@@ -192,4 +232,4 @@ function darken(hex, k){
   return "rgb("+Math.round(c.r*f)+","+Math.round(c.g*f)+","+Math.round(c.b*f)+")";
 }
 
-export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, PRIORITY_COLOR, SEVERITY_LABELS, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, typeBadgeHTML, typeName, weekdayCN };
+export { BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, weekdayCN };

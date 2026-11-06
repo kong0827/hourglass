@@ -9,12 +9,13 @@ import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView } from "../core/router.js";
+import { loadPriorities } from "../core/priorities.js";
 import { canEditReq, canEditTask, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
-import { deleteTask, openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
+import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -49,13 +50,16 @@ function loadBoard(opts){
     if(!state.board) showBoardSkeleton();
     else { board.classList.add("busy"); UI.syncBusy(true); opts._busy = true; }
   }
-  return API.get("/api/board", boardParams()).then(function(data){
+  return Promise.all([API.get("/api/board", boardParams()), loadPriorities()]).then(function(rs){
+    var data = rs[0];
     if(opts._busy) UI.syncBusy(false);
     if(seq !== state.loadSeq) return;
     state.board = data;
     state.doneExtra = [];
     state.boardGen++;
     syncColumns(data.columnDefs);
+    buildFormControls();
+    syncFormSegs();
     updateTagDatalist();
     loadCategories();
     if(pruneStaleFilters(data.meta)){ saveViewState(); loadBoard({silent:true}); return; }
@@ -245,7 +249,7 @@ function cardHTML(t, idx){
         '<span class="card-tickwrap">' +
           (isDone
             ? '<span class="pdot-ico" style="color:var(--success-fg)">' + icon("check", 13) + '</span>'
-            : '<span class="pdot ' + esc(t.priority) + '"><i></i></span>') +
+            : priTagHTML(t.priority, null, true)) +
           (editable
             ? '<button class="card-tick" type="button" data-done-toggle="' + esc(t.id) + '"' +
                 ' title="' + (isDone ? "取消完成（快捷键 X）" : "标记完成（快捷键 X）") + '"' +
@@ -253,7 +257,7 @@ function cardHTML(t, idx){
                 icon(isDone ? "undo" : "check", 11) + '</button>'
             : '') +
         '</span>' +
-        (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '">' + esc(t.priority) + '</span>') +
+        (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '" style="color:' + esc(priColor(t.priority)) + '">' + esc(priName(t.priority)) + '</span>') +
       '</span>' +
       '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity) + esc(t.title) + '</h3>' +
     '</div>' +
@@ -553,7 +557,7 @@ function inlineAddCreate(colId, title, input){
     state.inlineAdd = {col: colId, value: ""};
     var tip = "已创建「" + nt.title + "」到「" + colName(colId) + "」";
     if(nt.dueDate) tip += " · 截止 " + nt.dueDate;
-    if(q.priority) tip += " · " + q.priority;
+    if(q.priority) tip += " · " + priName(q.priority);
     if(q.owner) tip += " · 负责人 " + q.owner;
     if(q.tags && q.tags.length) tip += " · 标签 " + q.tags.join("/");
     if(q.recurType) tip += " · " + (RECUR_LABEL[q.recurType] || "循环");

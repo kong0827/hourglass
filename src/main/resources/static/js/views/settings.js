@@ -5,11 +5,12 @@ import { loadCategories, loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
-import { catTag, rt, state, totalTaskCount } from "../core/state.js";
+import { loadPriorities } from "../core/priorities.js";
+import { catTag, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs, startOfDay } from "../lib/format.js";
+import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs, priTagHTML, startOfDay } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { ganttState, syncGanttUndoUI } from "./gantt.js";
 import { loadReqDocs } from "./requirements.js";
@@ -52,7 +53,7 @@ function renderTrash(list){
       '<span class="ti-main">' +
         '<span class="ti-t">' + esc(t.title) + '</span>' +
         '<span class="ti-m' + (rem <= 3 ? " urgent" : "") + '">' +
-          '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+          priTagHTML(t.priority) +
           catTag(t.category) +
           '<span>删除于 ' + esc(fmtTs(t.deletedAt)) + ' · ' +
             (rem <= 3
@@ -266,6 +267,7 @@ function enterSettingsView(){
     : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
   loadColCfg();
   loadCatCfg();
+  loadPriorityCfg();
   loadNotifyStatus();
   loadActivity();
   initSetTabs();
@@ -704,6 +706,83 @@ $("btnCatAdd").addEventListener("click", function(){
     loadCategories(true);
     loadBoard({silent:true});
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+});
+var priorityCfgCache = [];
+var priorityCfgBusy = false;
+function setPriorityCfgBusy(busy){
+  priorityCfgBusy = busy;
+  var readOnly = roleReadOnly();
+  $("btnPrioritySave").disabled = busy || readOnly;
+  $("btnPriorityReset").disabled = busy || readOnly;
+  $("priorityCfgList").querySelectorAll("input").forEach(function(input){
+    input.disabled = busy || readOnly;
+  });
+}
+function renderPriorityCfg(){
+  var readOnly = roleReadOnly();
+  $("priorityCfgList").innerHTML = priorityCfgCache.map(function(p){
+    return '<div class="cfg-row" data-priority-code="' + esc(p.code) + '">' +
+      '<span class="tag tag-ghost">' + esc(p.code) + '</span>' +
+      '<input type="color" value="' + esc(p.color) + '" data-priority-color aria-label="' + esc(p.code) + ' 颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(p.name) + '" maxlength="12" data-priority-name aria-label="' + esc(p.code) + ' 显示名"' + (readOnly ? " disabled" : "") + ' />' +
+    '</div>';
+  }).join("");
+  $("priorityCfgHint").textContent = readOnly ? "查看者只能查看，不能修改配置" : "保存后同步到任务、需求、筛选与报表";
+  setPriorityCfgBusy(priorityCfgBusy);
+}
+function loadPriorityCfg(){
+  $("priorityCfgList").innerHTML = UI.skeletonRows(2);
+  API.get("/api/priorities").then(function(defs){
+    priorityCfgCache = defs || [];
+    renderPriorityCfg();
+  }).catch(function(ex){
+    $("priorityCfgList").innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+    $("btnPrioritySave").disabled = true;
+    $("btnPriorityReset").disabled = true;
+  });
+}
+function afterPriorityCfgChange(message){
+  return loadPriorities(null, true).then(function(){
+    loadPriorityCfg();
+    loadBoard({silent:true});
+    toast(message, "fs");
+  });
+}
+$("btnPrioritySave").addEventListener("click", function(){
+  if(roleReadOnly() || priorityCfgBusy) return;
+  var rows = Array.prototype.slice.call($("priorityCfgList").querySelectorAll("[data-priority-code]"));
+  for(var i = 0; i < rows.length; i++){
+    if(!rows[i].querySelector("[data-priority-name]").value.trim()){
+      toast("优先级显示名不能为空", "warn");
+      rows[i].querySelector("[data-priority-name]").focus();
+      return;
+    }
+  }
+  setPriorityCfgBusy(true);
+  Promise.all(rows.map(function(row){
+    return API.put("/api/priorities/" + encodeURIComponent(row.dataset.priorityCode), {
+      name: row.querySelector("[data-priority-name]").value.trim(),
+      color: row.querySelector("[data-priority-color]").value
+    });
+  })).then(function(){
+    setPriorityCfgBusy(false);
+    return afterPriorityCfgChange("优先级显示配置已保存");
+  }).catch(function(ex){
+    setPriorityCfgBusy(false);
+    toast(ex.message || "保存失败", "bad");
+    loadPriorityCfg();
+  });
+});
+$("btnPriorityReset").addEventListener("click", function(){
+  if(roleReadOnly() || priorityCfgBusy) return;
+  setPriorityCfgBusy(true);
+  API.del("/api/priorities").then(function(){
+    setPriorityCfgBusy(false);
+    return afterPriorityCfgChange("已恢复为紧急 / 高 / 中 / 低");
+  }).catch(function(ex){
+    setPriorityCfgBusy(false);
+    toast(ex.message || "恢复默认失败", "bad");
+  });
 });
 var CHANNEL_LABEL = { webhook:"企业微信 / 钉钉 webhook", serverchan:"Server 酱", pushplus:"PushPlus" };
 function loadNotifyStatus(){

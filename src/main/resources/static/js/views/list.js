@@ -13,7 +13,7 @@ import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../co
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -228,7 +228,7 @@ function taskCell(t, key, hasTypeCol){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     return '<span class="cell"><span class="tag" style="background:' + rgbaOf(color,.10) + ';color:' + darken(color) + '">' + esc(colName(t.boardColumn)) + '</span></span>';
   }
-  if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>') + '</span>';
+  if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
   if(key === "owner") return '<span class="cell">' + esc(t.owner || "—") + '</span>';
   if(key === "dueDate"){
     var st = dueState(t), txt = t.boardColumn === "done" ? (t.completedAt ? ("完成于 " + fmtShortMD(parseDate(t.completedAt))) : "已完成") : dueText(t);
@@ -290,7 +290,7 @@ function sortedTasks(rows){
 function groupInfo(t){
   if(smart.group === "status") return {key:t.boardColumn || "unknown", label:colName(t.boardColumn) || "未设置状态"};
   if(smart.group === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
-  if(smart.group === "priority") return {key:t.priority || "unknown", label:t.priority || "未设置优先级"};
+  if(smart.group === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
   if(smart.group === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
   return null;
 }
@@ -366,7 +366,7 @@ function mobileListCardHTML(t){
   var projectName = t.reqId ? reqNameById(t.reqId) : "";
   return '<article class="mob-task-card" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
     '<div class="mtc-top">' +
-      '<span class="pdot ' + esc(t.priority || "P2") + '"><i></i>' + esc(t.priority || "P2") + '</span>' +
+      priTagHTML(t.priority || "P2") +
       '<span class="mtc-chip" style="--c:' + esc(col.color || CAT_DEFAULT_COLOR) + '"><i></i>' + esc(colName(t.boardColumn)) + '</span>' +
       (t.itemType && t.itemType !== "task" ? '<span class="mtc-chip ghost">' + esc(typeName(t.itemType)) + '</span>' : '') +
       '<span class="sp"></span>' +
@@ -551,7 +551,7 @@ function openBulkMenu(anchor, kind){
   if(kind === "pri"){
     html = '<div class="menu-title">改为优先级</div>' + PRIORITIES.map(function(p){
       return '<button class="menu-item" type="button" data-bv="pri" data-v="' + p + '">' +
-        '<span class="pdot ' + p + '"><i></i>' + p + '</span></button>';
+        priTagHTML(p) + '</button>';
     }).join("");
   }else if(kind === "owner"){
     html = '<div class="menu-title">改为负责人</div>' + ownerOptions().map(function(o){

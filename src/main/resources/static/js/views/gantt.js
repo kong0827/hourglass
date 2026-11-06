@@ -12,7 +12,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, PRIORITY_COLOR, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, typeName } from "../lib/format.js";
+import { PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
@@ -444,7 +444,7 @@ function ganttGroupFieldValue(t, field){
     return { v: st.key, name: nm };
   }
   if(field === "category") return { v: t.category || "__none", name: t.category || "未分类" };
-  if(field === "priority") return { v: t.priority || "P2", name: t.priority || "P2" };
+  if(field === "priority") return { v: t.priority || "P2", name: priName(t.priority || "P2") };
   return { v: "__all", name: "" };
 }
 function ganttBuildGroups(rows){
@@ -600,7 +600,7 @@ function ganttRowHTML(x, range, dayW, totalW){
   var critical = !!(ganttState.showCritical && ganttState.critical && ganttState.critical[t.id]);
   var rn = t.reqId ? reqNameById(t.reqId) : "";
   if(rn === "无") rn = "";
-  var meta = '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>';
+  var meta = priTagHTML(t.priority);
   if(ganttState.cols.project && rn) meta += '<span class="ellipsis shrink">' + esc(rn) + '</span>';
   if(ganttState.cols.owner && t.owner) meta += '<span class="ellipsis">' + esc(t.owner) + '</span>';
   var realS = parseDate(t.startDate) || parseDate(t.dueDate);
@@ -1452,7 +1452,7 @@ function renderGanttUnplanned(list, openIt){
     meta.push(esc(colName(t.boardColumn)));
     var cat = catTag(t.category);
     return '<button class="gantt-unplanned-row" type="button" data-gantt-open="' + esc(t.id) + '" title="拖到时间轴即可排期">' +
-      '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+      priTagHTML(t.priority) +
       '<span class="gantt-unplanned-main">' +
         '<span class="gantt-unplanned-t">' + esc(t.title) + '</span>' +
         '<span class="gantt-unplanned-m">' + (cat ? cat + ' · ' : '') + meta.join(" · ") + '</span>' +
@@ -1815,7 +1815,7 @@ function renderGanttFilterMenu(){
   }).join("");
   var priHTML = PRIORITIES.map(function(p){
     return ganttFilterChip("data-gantt-pri", p,
-      '<i class="cdot" style="background:' + PRIORITY_COLOR[p] + '"></i>' + p,
+      '<i class="cdot" style="background:' + esc(priColor(p)) + '"></i>' + esc(priName(p)),
       state.pris.indexOf(p) !== -1);
   }).join("");
   var typeHTML = ["task", "story", "bug", "epic"].map(function(t){

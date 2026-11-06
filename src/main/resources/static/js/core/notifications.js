@@ -1,12 +1,13 @@
 /* core/notifications · 通知中心与到期提醒 */
 
 import { API } from "./api.js";
-import { $ } from "./dom.js";
+import { $, taskDrawer } from "./dom.js";
 import { icon } from "./icons.js";
 import { dueText, rt, state, taskCacheExtra } from "./state.js";
 import { openTaskById } from "./task-actions.js";
 import { UI, esc, toast } from "./ui.js";
 import { askSwitchWorkspace, wsNameById } from "../views/mine.js";
+import { priTagHTML } from "../lib/format.js";
 
 var NOTIFY_ICON = {
   task_remind: "clock",
@@ -27,6 +28,9 @@ var NOTIFY_ICON = {
   member_removed: "users"
 };
 var notifyState = {unread:0, items:[], loading:false};
+var bubbleTimer = null;
+var lastBubbleId = 0;
+try{ lastBubbleId = parseInt(sessionStorage.getItem("ds.lastUnreadId") || "0", 10) || 0; }catch(e){ /* 受限环境忽略 */ }
 var deadlineGroups = {over:[], today:[], soon:[]};
 try{ rt.alertTab = localStorage.getItem("ds.alertTab") === "due" ? "due" : "notice"; }
 catch(e){ rt.alertTab = "notice"; }
@@ -66,6 +70,14 @@ function renderBellBadge(){
   }
   var tabDot = document.getElementById("tabMsgDot");
   if(tabDot) tabDot.hidden = n <= 0;
+  syncDocTitle();
+}
+/* 标题栏未读计数：切到别的标签页也能扫到；导航换标题后由 router 重新同步 */
+function syncDocTitle(){
+  var base = (document.title || "").replace(/^\(\d+\+?\)\s*/, "");
+  if(!base) base = "沙漏";
+  var n = notifyState.unread;
+  document.title = (n > 0 ? "(" + (n > 99 ? "99+" : n) + ") " : "") + base;
 }
 function updateBellTitle(){
   var c = state.board ? state.board.counts : {over:0, today:0, soon:0};
@@ -99,11 +111,15 @@ function loadUnread(force){
   unreadFetchedAt = now;
   return API.getGlobal("/api/notifications/unread").then(function(d){
     var n = (d && d.unread) || 0;
-    var changed = n !== notifyState.unread;
+    var prev = notifyState.unread;
+    var changed = n !== prev;
     notifyState.unread = n;
     renderBellBadge();
     updateBellTitle();
-    if(changed && !$("alertPanel").hidden && rt.alertTab === "notice") loadNoticeList();
+    if(changed){
+      if(!$("alertPanel").hidden && rt.alertTab === "notice") loadNoticeList();
+      if(n > prev) maybeUnreadBubble();
+    }
   }).catch(function(){ /* 通知是增强能力：失败静默，不打扰用户 */ });
 }
 function renderAlertPanel(){
@@ -193,7 +209,7 @@ function dueGroupsHTML(){
     html += '<div class="ap-group ' + cls + '"><div class="ap-glabel"><i></i>' + label + ' ' + list.length + '</div>';
     list.forEach(function(t){
       html += '<button class="ap-item" type="button" data-ap-task="' + esc(t.id) + '">' +
-        '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+        priTagHTML(t.priority) +
         '<span class="apt">' + esc(t.title) + '</span>' +
         '<span class="' + (cls === "over" ? "meta over" : (cls === "today" ? "meta today" : "meta ok")) + '">' + esc(dueText(t)) + '</span>' +
       '</button>';
@@ -241,6 +257,54 @@ function loadDeadlineGroups(){
     renderAlertPanel();
   });
 }
+/* 未读数增加且前台空闲时，右上角浮出最新一条通知（点击进通知中心） */
+function maybeUnreadBubble(){
+  if(document.hidden) return;
+  if(UI.anyDialogOpen()) return;
+  if(!$("alertPanel") || !$("alertPanel").hidden) return;
+  if(taskDrawer && taskDrawer.classList.contains("on")) return;
+  API.getGlobal("/api/notifications", {limit:1}).then(function(d){
+    var it = d && d.items && d.items[0];
+    if(!it || it.readAt || it.id === lastBubbleId) return;
+    lastBubbleId = it.id;
+    try{ sessionStorage.setItem("ds.lastUnreadId", String(it.id)); }catch(e){ /* 受限环境忽略 */ }
+    showUnreadBubble(it);
+  }).catch(function(){ /* 气泡是增强能力：失败静默 */ });
+}
+function showUnreadBubble(it){
+  var b = $("unreadBubble");
+  if(!b) return;
+  $("unreadBubbleIcon").innerHTML = icon(NOTIFY_ICON[it.type] || "bell", 14);
+  $("unreadBubbleTitle").textContent = it.title || "收到新通知";
+  $("unreadBubbleMeta").textContent = relTime(it.createdAt) + (it.workspaceName ? " · " + it.workspaceName : "");
+  b.classList.remove("leaving");
+  b.hidden = false;
+  if(bubbleTimer){ clearTimeout(bubbleTimer); bubbleTimer = null; }
+  bubbleTimer = setTimeout(hideUnreadBubble, 6000);
+}
+function hideUnreadBubble(){
+  var b = $("unreadBubble");
+  if(!b) return;
+  if(bubbleTimer){ clearTimeout(bubbleTimer); bubbleTimer = null; }
+  b.classList.add("leaving");
+  bubbleTimer = setTimeout(function(){
+    if(!$("unreadBubble")) return;
+    b.hidden = true;
+    b.classList.remove("leaving");
+  }, 260);
+}
+function openAlertCenterFromBubble(){
+  var panel = $("alertPanel"), bell = $("btnAlert");
+  if(!panel || !bell || UI.popOpen(panel)) return;
+  if(rt.alertTab !== "notice"){
+    rt.alertTab = "notice";
+    try{ localStorage.setItem("ds.alertTab", "notice"); }catch(e){ /* 受限环境忽略 */ }
+  }
+  renderAlertPanel();
+  loadAlertPanel();
+  loadUnread();
+  UI.openPop(panel, bell, {align:"left"});
+}
 function openFromNotification(ds){
   var taskId = ds.apnTask || "";
   var wsId = ds.apnWs || "";
@@ -284,4 +348,14 @@ function openFromNotification(ds){
   openTaskById(taskId);
 }
 
-export { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertBar, renderAlertPanel, renderBellBadge, updateBellTitle };
+(function(){
+  var b = $("unreadBubble");
+  if(!b) return;
+  $("unreadBubbleMain").addEventListener("click", function(){
+    hideUnreadBubble();
+    openAlertCenterFromBubble();
+  });
+  $("unreadBubbleX").addEventListener("click", hideUnreadBubble);
+})();
+
+export { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertBar, renderAlertPanel, renderBellBadge, syncDocTitle, updateBellTitle };

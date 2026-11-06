@@ -18,10 +18,24 @@ import { GS } from "./lib/gantt-shared.js";
   /* 分享页沿用 MM-DD 口径（主页面的 fmtMD 是 M月D日，两者不要混用） */
   var fmtMD = GS.fmtDashMD;
   function today() { return GS.startOfDay(new Date()); }
+  function priorityDef(p) {
+    var defs = state.data && state.data.priorities || [];
+    for (var i = 0; i < defs.length; i++) if (defs[i].code === (p || "P2")) return defs[i];
+    return null;
+  }
+  function priorityName(p) {
+    var def = priorityDef(p);
+    return def && def.name || { P0: "紧急", P1: "高", P2: "中", P3: "低" }[p || "P2"] || "中";
+  }
   function priorityColor(p) {
-    return { P0: "var(--p0)", P1: "var(--p1)", P2: "var(--p2)", P3: "var(--p3)" }[p] || "var(--p2)";
+    var def = priorityDef(p);
+    return def && def.color || { P0: "var(--p0)", P1: "var(--p1)", P2: "var(--p2)", P3: "var(--p3)" }[p] || "var(--p2)";
   }
   function prioritySoft(p) {
+    var color = priorityColor(p);
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return "rgba(" + parseInt(color.slice(1, 3), 16) + "," + parseInt(color.slice(3, 5), 16) + "," + parseInt(color.slice(5, 7), 16) + ",0.12)";
+    }
     return { P0: "var(--p0-soft)", P1: "var(--p1-soft)", P2: "var(--p2-soft)", P3: "var(--p3-soft)" }[p] || "var(--p2-soft)";
   }
 
@@ -91,7 +105,7 @@ import { GS } from "./lib/gantt-shared.js";
       var t = x.t, st = statusOf(t), done = t.boardColumn === "done";
       var off = dayDiff(x.s, range.start), span = Math.max(1, dayDiff(x.e, x.s) + 1);
       var left = off * dayW, width = span * dayW;
-      var meta = '<span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>';
+      var meta = '<span class="pdot ' + esc(t.priority) + '" style="color:' + esc(priorityColor(t.priority)) + '"><i></i>' + esc(priorityName(t.priority)) + '</span>';
       if (t.owner) meta += '<span class="ellipsis shrink">' + esc(t.owner) + '</span>';
       meta += '<span>' + fmtMD(x.s) + '→' + fmtMD(x.e) + '</span>';
       var p = done ? 100 : (Number(t.progress) || 0);

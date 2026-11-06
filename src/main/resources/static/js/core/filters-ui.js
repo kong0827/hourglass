@@ -7,7 +7,7 @@ import { icon } from "./icons.js";
 import { activeView, showView } from "./router.js";
 import { filterOn, rt, selectedFilterCount, state } from "./state.js";
 import { UI, esc, toast, toastAction } from "./ui.js";
-import { PRIORITIES, PRIORITY_COLOR, avatarHTML, typeName } from "../lib/format.js";
+import { PRIORITIES, avatarHTML, priColor, priName, typeName } from "../lib/format.js";
 import { loadBoard } from "../views/board.js";
 import { loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { loadView } from "./view-loader.js";
@@ -88,7 +88,7 @@ function ddButtonHTML(kind, selected, items){
     for(var i = 0; i < items.length; i++) if(itemVal(items[i]) === selected[0]) f0 = items[i];
     first = f0 ? f0.name : selected[0];
   }else{
-    first = kind === "type" ? typeName(selected[0]) : selected[0];
+    first = kind === "type" ? typeName(selected[0]) : (kind === "pri" ? priName(selected[0]) : selected[0]);
   }
   var label = !selected.length ? "全部"
     : (selected.length === 1 ? first : first + " +" + (selected.length - 1));
@@ -438,10 +438,10 @@ function openFilterDropdown(anchor){
       var on = sel.indexOf(itemVal(o)) !== -1;
       var lead = kind === "owner"
         ? avatarHTML(o.name, "sm")
-        : (kind === "type" || kind === "version" ? "" : '<i class="cdot" style="background:' + PRIORITY_COLOR[o.name] + '"></i>');
+        : (kind === "type" || kind === "version" ? "" : '<i class="cdot" style="background:' + esc(priColor(o.name)) + '"></i>');
       return '<button class="dd-row' + (o.active ? " dd-active" : "") + '" type="button" data-dd-val="' + esc(itemVal(o)) + '" aria-pressed="' + on + '">' +
         '<span class="tick">' + (on ? icon("check", 12) : "") + '</span>' + lead +
-        '<span class="dd-name">' + (kind === "type" ? esc(typeName(o.name)) : esc(o.name)) + '</span>' +
+        '<span class="dd-name">' + (kind === "type" ? esc(typeName(o.name)) : (kind === "pri" ? esc(priName(o.name)) : esc(o.name))) + '</span>' +
         (o.active ? '<span class="tag tag-info">开发中</span>' : '') +
         '<span class="n">' + o.count + '</span></button>';
     }).join("") : '<p class="foot-note" style="margin:0;padding:8px">暂无可选项</p>';

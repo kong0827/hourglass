@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import { catColor, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
-import { avatarHTML, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, weekdayCN } from "../lib/format.js";
+import { avatarHTML, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
 import { loadReqs, pending } from "./board.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
@@ -75,7 +75,7 @@ function buildSummary(d){
       ? "，完成项均未设置截止日期"
       : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期交付");
     parts.push("<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项任务" + rateTxt +
-      (p0 ? "，其中紧急 P0 <b>" + p0 + "</b> 项。" : "。"));
+      (p0 ? "，其中" + esc(priName("P0")) + " <b>" + p0 + "</b> 项。" : "。"));
   }else{
     parts.push("<b>" + label + "（" + rangeTxt + "）</b>没有已交付的任务记录。");
   }
@@ -104,7 +104,7 @@ function buildSummary(d){
   }
   var c = d.counts || {over:0, today:0};
   if(d.openP0 || c.over){
-    parts.push("需关注：" + (d.openP0 ? "<b>" + d.openP0 + "</b> 项 P0 未关闭" : "") +
+    parts.push("需关注：" + (d.openP0 ? "<b>" + d.openP0 + "</b> 项 " + esc(priName("P0")) + " 未关闭" : "") +
       (c.over ? (d.openP0 ? "，" : "") + "<b>" + c.over + "</b> 项已逾期" : "") +
       (c.today ? "、<b>" + c.today + "</b> 项今日到期" : "") + "，建议优先处理。");
   }
@@ -169,7 +169,7 @@ function renderReview(d){
         return '<div class="done-item">' + avatarHTML(t.owner) +
           '<span class="di-main">' +
             '<span class="di-t">' + esc(t.title) + '</span>' +
-            '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+            '<span class="di-m">' + priTagHTML(t.priority) + '' +
               catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
           '</span>' +
           '<span class="di-d">' + esc(colName(t.boardColumn)) + ' · 进度 ' + progressOf(t) + '%</span>' +
@@ -201,7 +201,7 @@ function renderReview(d){
       '<span class="meta full">' + icon("check", 15) + '</span>' +
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
-        '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+        '<span class="di-m">' + priTagHTML(t.priority) + '' +
           catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
       '</span>' +
       '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
@@ -215,7 +215,7 @@ function renderReview(d){
     return '<div class="done-item">' + avatarHTML(t.owner) +
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
-        '<span class="di-m"><span class="pdot ' + esc(t.priority) + '"><i></i>' + esc(t.priority) + '</span>' +
+        '<span class="di-m">' + priTagHTML(t.priority) + '' +
           catTag(t.category) + (t.reqId ? tagChip(reqNameById(t.reqId)) : '') +
           '<span>进度 ' + progressOf(t) + '%</span></span>' +
         (t.note ? '<span class="di-note">备注：' + esc(t.note) + '</span>' : '') +

@@ -882,6 +882,8 @@ CREATE TABLE `time_log` (
   `started_at` datetime NOT NULL COMMENT '开始时间',
   `ended_at` datetime DEFAULT NULL COMMENT '结束时间',
   `minutes` int DEFAULT NULL COMMENT '时长（分钟）',
+  `origin` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'timer' COMMENT '记录来源：timer=计时器，manual=手工补记',
+  `note` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '手工补记备注',
   PRIMARY KEY (`id`),
   KEY `idx_task` (`task_id`,`ended_at`),
   KEY `idx_ws` (`workspace_id`,`ended_at`),
@@ -1008,6 +1010,25 @@ CREATE TABLE `workspace_member` (
   PRIMARY KEY (`workspace_id`,`user_id`),
   KEY `idx_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间成员';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `workspace_priority`
+--
+
+DROP TABLE IF EXISTS `workspace_priority`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `workspace_priority` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '配置ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `code` varchar(8) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '固定档位：P0/P1/P2/P3',
+  `name` varchar(12) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示名',
+  `color` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示颜色 #RRGGBB',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

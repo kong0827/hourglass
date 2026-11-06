@@ -320,7 +320,7 @@ function restoreScroll(name){
 [data-layout="mobile"] .timer-pill .tp-name{ max-width: 56px; }
 ```
 
-「新建」按钮 → 圆形 FAB（44px，右下、Tab 上方 16px），选择器 `#btnNew`，样式只改形态不改菜单逻辑（`#newMenu` 已经存在）。
+「新建」按钮 → 圆形 FAB（实现取 48px，比原稿 44px 点击区更大；右下、Tab 上方），选择器 `#btnNew`，样式只改形态不改菜单逻辑（`#newMenu` 已经存在）。
 
 ### 3.8 L1 验收（逐条可断言）
 
@@ -391,7 +391,7 @@ function render(opts){
 
 1. 顶部状态分段器：横向滚动，每段 = `列名 + 数量`，激活段白底 + `--text` 600，容器底色 `--surface-sunken`、radius 14、padding 3。列定义来自 **`js/lib/format.js` 的 `COLUMNS`**，每列数据在 **`state.board.columns[colId]`**（结构 `{items, matched, total, allTotal, hasMore}`，见 `board.js:293`）。
 2. 下方单列纵向卡片流，卡片复用 4.3.1 的结构，额外多一行：`标签组`（分类 / 需求编号）。
-3. 列头吸顶：分段器用 `position:sticky; top:52px`。
+3. 列头吸顶：分段器用 `position:sticky; top:0`（实现修正：顶栏在文档流中不固定、`.view` 内部滚动，`top:52px` 会在吸顶时留缝，故取 0）。
 4. 空列：`UI.emptyState({title:"这一列还没有任务", desc:"从下面新建，或把别的列拖过来"})`。
 5. 换列手势：分段器点击切换（**不做横向 swipe 换列**，避免和卡片左滑冲突）。
 6. 拖卡换列：只在 `mobile` 下用长按进入拖动（`gestures.attachLongPress`），松开时按落点在分段器上的列落位；L2 可以先不做，留 TODO。
@@ -454,7 +454,7 @@ export function attachPullToRefresh(scroller, { threshold = 64, onRefresh } = {}
 - 用 `pointerdown / pointermove / pointerup`，`pointerType === "mouse"` 时直接忽略。
 - 元素上设 `touch-action: pan-y`（横向手势自己接管，纵向交给浏览器）。
 - 事件委托挂一次：`document.getElementById("views").addEventListener("pointerdown", ...)`，用 `e.target.closest("[data-task-id]")` 找目标，**不要给每张卡单独绑**（列表 200 行会卡）。
-- `onSwipeLeft` 触发后要给卡片加 `transform: translateX(-72px)` 过渡并露出右侧操作区（完成 / 计时），点击其它位置收起。
+- `onSwipeLeft` 触发后露出操作区（完成 / 计时），点击其它位置收起。实现形式（2026-11-06 回写）：我的任务/列表用 `.swiped` 类展开卡片内操作条；看板卡片无操作条，左滑直接完成（已完成卡片改为打开菜单，避免误撤销），右滑打开快捷菜单；未采用 `translateX(-72px)` 侧露方案。
 
 ### 5.2 任务详情：复用抽屉，不新建页面
 
@@ -562,7 +562,7 @@ DOM 只需加两处（`index.html` 的 `#taskDrawer` 内）：
 
 ### 6.4 权限
 
-- 三个接口都要求调用者是**该空间成员**；`workload` 与 `risks` 额外要求角色 ∈ `owner | admin | projectLead`。
+- 三个接口都要求调用者是**该空间成员**；`workload` 与 `risks` 额外要求管理角色（实现口径 ∈ `owner | admin`，即 `ProjectAccessService.isPrivileged`；本系统无 projectLead 角色）。
 - 无权限时返回 `{ "code": 4030, "msg": "当前角色无权查看该数据" }`（沿用现有业务码风格），前端据此渲染「无权限态」。
 - **复用现有空间角色校验工具**，不要新写一套判断。
 
@@ -583,10 +583,11 @@ DOM 只需加两处（`index.html` 的 `#taskDrawer` 内）：
 ### 7.1 默认落点与记忆
 
 ```js
-/* 默认：owner/admin/projectLead → team；其余 → mine */
+/* 默认：owner/admin → team；其余 → mine（实现口径：本系统无 projectLead 角色，
+   管理角色 = ProjectAccessService.isPrivileged = owner|admin，前后端一致） */
 /* 记忆：只记当前空间，key = "ds.mode." + workspaceId，值 "mine" | "team" */
 function defaultMode(role){
-  return ["owner","admin","projectLead"].indexOf(role) >= 0 ? "team" : "mine";
+  return (role === "owner" || role === "admin") ? "team" : "mine";
 }
 function currentMode(wsId, role){
   try { return localStorage.getItem("ds.mode." + wsId) || defaultMode(role); }
@@ -687,7 +688,7 @@ node tools/shot-mobile.mjs            # 375×812、deviceScaleFactor 2、touch e
 3. **`views.css` 在 `layout.css` 之后加载**，会把 `layout` 的宽度/内边距改回去。所有手机覆盖写进 `mobile.css`（最后 import）且带 `[data-layout="mobile"]`。
 4. **`sw.js`**：`CACHE_NAME` 必须 +1（`hourglass-shell-v86` → `v87`），`mobile.css`、`gestures.js` 等新文件必须进 `SHELL`，否则老用户离线会白屏且不会自动恢复。
 5. **`tools/gen-preview.js`** 里替换 `</body>` 必须用 `lastIndexOf`（历史坑），新增模块要能被它收集。
-6. **z-index 打架**：`#tabBar` = 110，`drawer` 手机档位 = 200，`toast-layer` 要在两者之间（建议 150）。
+6. **z-index 打架**：`#tabBar` = 110，`drawer` 手机档位 = 200，`toast-layer` 实现取 230（高于抽屉：抽屉内保存/失败的反馈必须可见，原建议 150 会把提示压在抽屉后面）；抽屉内菜单 `.menu` = 260。
 7. **`touch-action`**：看板卡片设 `pan-y`，否则横向手势和浏览器回退手势互相抢。
 8. **暗色模式**：`tokens.css` 已有 `html[data-theme="dark"]`，新增卡片/底部栏必须用语义令牌（`--surface`、`--border`、`--primary`），**禁止写死 hex**，否则暗色下会瞎。
 

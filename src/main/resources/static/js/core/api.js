@@ -154,6 +154,9 @@
     getGlobal: function (path, params) {
       return withoutWorkspace(function () { return request("GET", path + buildQuery(params)); });
     },
+    getWs: function (wsId, path, params) {
+      return request("GET", withWs(path + buildQuery(params), wsId), null, false, true);
+    },
     postGlobal: function (path, body) {
       return withoutWorkspace(function () { return request("POST", path, body); });
     },

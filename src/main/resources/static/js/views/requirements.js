@@ -9,7 +9,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import * as activityUI from "../core/activity-ui.js";
-import { DOC_TYPES, colName, docTypeName, fmtTs, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, colName, docTypeName, fmtTs, priColor, priName, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs, render } from "./board.js";
 
 var reqDocList = [];
@@ -402,7 +402,7 @@ function loadReqDocDemands(id){
     list.innerHTML = rows.map(function(d){
       return '<div class="req-expand-doc dem-doc-readonly">'
         + '<span class="rd-title">' + esc(d.title) + '</span>'
-        + '<span class="rd-meta">' + esc(demandStatusName(d.status)) + ' · ' + esc(d.priority || "P2") + '</span></div>';
+        + '<span class="rd-meta">' + esc(demandStatusName(d.status)) + ' · ' + esc(priName(d.priority)) + '</span></div>';
     }).join("");
   }).catch(function(ex){
     if(editingDocId === id) list.innerHTML = UI.errorState(ex.message || "关联需求加载失败");
@@ -561,7 +561,7 @@ function renderAiSplit(d){
         '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="任务标题">' +
         (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
         '<div class="ai-meta">' +
-          '<span class="ai-tag ' + pcls + '">' + esc(p) + '</span>' +
+          '<span class="ai-tag ' + pcls + '" style="color:' + esc(priColor(p)) + '">' + esc(priName(p)) + '</span>' +
           (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '') +
           (t.reason ? '<span class="ai-reason">' + esc(t.reason) + '</span>' : '') +
         '</div>' +

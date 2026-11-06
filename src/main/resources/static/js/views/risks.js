@@ -5,7 +5,7 @@ import { $ } from "../core/dom.js";
 import { rt } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { avatarHTML } from "../lib/format.js";
+import { avatarHTML, priTagHTML } from "../lib/format.js";
 import { daysBetween, fmtDate } from "./manager-shared.js";
 
 var cache=null,seq=0,sending=false;
@@ -23,7 +23,7 @@ function riskText(t,kind,today){
 function canManage(){ return !!(rt.currentWs && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "admin")); }
 function riskCard(t,kind,today){
   return '<article class="manager-risk-card '+kind+'"><button class="manager-risk-title" type="button" data-risk-open="'+esc(t.id)+'">'+esc(t.title)+'</button>'
-    +'<div class="manager-risk-meta"><span>'+esc(t.reqName||"未归类")+'</span><span>'+esc(t.priority||"P2")+'</span><span>截止 '+esc(fmtDate(t.dueDate))+'</span></div>'
+    +'<div class="manager-risk-meta"><span>'+esc(t.reqName||"未归类")+'</span><span>'+priTagHTML(t.priority)+'</span><span>截止 '+esc(fmtDate(t.dueDate))+'</span></div>'
     +'<div class="manager-risk-foot"><span class="manager-person">'+avatarHTML(t.owner||"未","sm")+esc(t.owner||"未指派")+'</span><span title="'+esc(riskText(t,kind,today))+'">'+esc(riskText(t,kind,today))+'</span>'+(canManage()?'<button class="btn sm" type="button" data-nudge="'+esc(t.id)+'">催办</button>':'')+'</div></article>';
 }
 function riskColumn(kind,title,rows,today){

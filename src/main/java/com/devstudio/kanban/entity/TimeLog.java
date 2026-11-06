@@ -15,4 +15,8 @@ public class TimeLog {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
     private Integer minutes;
+    /** timer = 计时器产生；manual = 手工补记（实际工时 = 两类总和） */
+    private String origin;
+    /** 手工补记备注（计时记录为空） */
+    private String note;
 }

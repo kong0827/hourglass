@@ -38,6 +38,16 @@ public interface TimeLogMapper {
     /** 备份导入：按批多值写入已完成的工时 */
     int insertCompletedBatch(@Param("list") List<TimeLog> list);
 
+    /** 工时记录列表（任务抽屉展示：已结束的计时 + 手工补记，按时间倒序） */
+    List<TimeLog> selectRecordsByTask(@Param("workspaceId") String workspaceId,
+                                      @Param("taskId") String taskId,
+                                      @Param("limit") int limit);
+
+    TimeLog selectById(@Param("id") Long id);
+
+    /** 删除单条工时记录（服务层保证只删已结束的记录） */
+    int deleteById(@Param("id") Long id, @Param("workspaceId") String workspaceId);
+
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

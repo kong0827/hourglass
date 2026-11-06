@@ -1,6 +1,7 @@
 package com.devstudio.kanban.dto;
 
 import com.devstudio.kanban.entity.TaskDependency;
+import com.devstudio.kanban.entity.WorkspacePriority;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -13,10 +14,12 @@ import java.util.Map;
 @Data
 public class GanttShareResponse {
 
+    private String workspaceId;
     private String workspaceName;
     private LocalDateTime generatedAt;
     private LocalDateTime baselineAt;
     private List<PublicGanttTask> tasks = new ArrayList<PublicGanttTask>();
+    private List<WorkspacePriority> priorities = new ArrayList<WorkspacePriority>();
     private List<TaskDependency> deps = new ArrayList<TaskDependency>();
     private Map<String, GanttResponse.BaselinePoint> baseline = new LinkedHashMap<String, GanttResponse.BaselinePoint>();
 }

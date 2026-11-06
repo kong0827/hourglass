@@ -69,12 +69,13 @@ public class GanttService {
     private final UserMapper userMapper;
     private final WorkspaceMapper workspaceMapper;
     private final ProjectAccessService projectAccess;
+    private final PriorityService priorityService;
 
     public GanttService(TaskQueryService taskService, TaskMapper taskMapper,
                         TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                         GanttShareMapper shareMapper, TimeLogMapper timeLogMapper,
                         UserMapper userMapper, WorkspaceMapper workspaceMapper,
-                        ProjectAccessService projectAccess) {
+                        ProjectAccessService projectAccess, PriorityService priorityService) {
         this.taskService = taskService;
         this.taskMapper = taskMapper;
         this.dependencyMapper = dependencyMapper;
@@ -84,6 +85,7 @@ public class GanttService {
         this.userMapper = userMapper;
         this.workspaceMapper = workspaceMapper;
         this.projectAccess = projectAccess;
+        this.priorityService = priorityService;
     }
 
     /* ==================== 任务分页 ==================== */
@@ -579,12 +581,16 @@ public class GanttService {
             }
         }
         GanttShareResponse resp = new GanttShareResponse();
+        resp.setWorkspaceId(share.getWorkspaceId());
         resp.setWorkspaceName(ws.getName());
         resp.setGeneratedAt(LocalDateTime.now());
         resp.setBaselineAt(baselineMapper.selectCapturedAt(share.getWorkspaceId()));
         resp.setTasks(tasks);
         resp.setDeps(deps);
         resp.setBaseline(baseline);
+        if (priorityService != null) {
+            resp.setPriorities(priorityService.list(share.getWorkspaceId()));
+        }
         return resp;
     }
 

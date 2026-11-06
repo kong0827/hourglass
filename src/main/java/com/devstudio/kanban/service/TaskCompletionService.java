@@ -89,6 +89,22 @@ public class TaskCompletionService {
         recordMapper.upsert(r);
     }
 
+    /**
+     * 只刷新快照的「总工时 / 首次开始 / 最后结束」三列。
+     * 补记或作废工时记录后调用；名称、归属等历史快照字段保持完成时的原值。
+     * 任务尚未完成（没有快照）时 UPDATE 影响 0 行，不会凭空插入。
+     */
+    public void refreshWork(Task t) {
+        if (t == null || t.getId() == null || t.getWorkspaceId() == null) {
+            return;
+        }
+        Integer total = timeLogMapper.sumByTaskId(t.getWorkspaceId(), t.getId());
+        TimeBounds bounds = timeLogMapper.selectBoundsByTask(t.getWorkspaceId(), t.getId());
+        recordMapper.updateWork(t.getWorkspaceId(), t.getId(), total == null ? 0 : total,
+                bounds == null ? null : bounds.getFirstStartedAt(),
+                bounds == null ? null : bounds.getLastEndedAt());
+    }
+
     /** 取消完成时删掉该任务的记录（再次完成会重新生成） */
     public void remove(String workspaceId, String taskId) {
         if (workspaceId == null || taskId == null) {

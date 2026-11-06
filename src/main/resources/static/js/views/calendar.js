@@ -11,7 +11,7 @@ import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from ".
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { addDays, fmtMD, iso, pad2, parseDate, weekdayCN } from "../lib/format.js";
+import { addDays, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
 import { cardHTML, loadBoard } from "./board.js";
 import { loadView } from "../core/view-loader.js";
 import { openReqDocAndJump } from "./requirements.js";
@@ -133,7 +133,7 @@ function renderMobileCalendar(){
       return '<button class="cwd-task p-' + esc(t.priority) +
         (t.boardColumn === "done" ? " done" : "") + (kind === "over" ? " over" : "") +
         '" type="button" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + dueText(t)) + '">' +
-        '<i class="cbar"></i><span class="cwd-t">' + esc(t.title) + '</span>' +
+        '<i class="cbar" style="background:' + esc(priColor(t.priority)) + '"></i><span class="cwd-t">' + esc(t.title) + '</span>' +
         (span ? '<span class="cwd-span">' + esc(span) + '</span>' : '') + '</button>';
     }).join("");
     html += '<section class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
@@ -201,6 +201,7 @@ function renderCalendar(){
       chips += '<button type="button" class="cal-chip p-' + esc(t.priority) +
         (t.boardColumn === "done" ? " done" : "") + (kind === "over" ? " over" : "") +
         (it.isEnd ? "" : " span") +
+        '" style="color:' + esc(priColor(t.priority)) + ';background:' + esc(rgbaOf(priColor(t.priority), .10)) +
         '" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + tip) + '">' +
         '<i class="cbar"></i><span class="cal-t">' + esc(t.title) + '</span>' +
         (t.owner ? '<span class="cal-own" aria-label="负责人 ' + esc(t.owner) + '">' + esc(t.owner.slice(-1)) + '</span>' : '') +

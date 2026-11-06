@@ -30,6 +30,15 @@
       total_minutes    = VALUES(total_minutes)
   </insert>
 
+  <!-- 只刷新工时三列：补记 / 作废后快照的工时随实际记录重算，名称等历史字段保持不变 -->
+  <update id="updateWork">
+    UPDATE task_completion_record
+    SET total_minutes    = #{totalMinutes},
+        first_started_at = #{firstStartedAt},
+        last_ended_at    = #{lastEndedAt}
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </update>
+
   <delete id="deleteByTaskId">
     DELETE FROM task_completion_record
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}

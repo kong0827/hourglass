@@ -3,7 +3,7 @@
 <mapper namespace="com.devstudio.kanban.mapper.TimeLogMapper">
 
   <sql id="cols">
-    id, task_id, workspace_id, user_id, started_at, ended_at, minutes
+    id, task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note
   </sql>
 
   <select id="selectRunningByTaskAndUser" resultType="TimeLog">
@@ -49,17 +49,34 @@
   </insert>
 
   <insert id="insertCompleted">
-    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes)
-    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt}, #{endedAt}, #{minutes})
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note)
+    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt}, #{endedAt}, #{minutes},
+            COALESCE(#{origin}, 'timer'), #{note})
   </insert>
 
   <insert id="insertCompletedBatch">
-    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes)
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note)
     VALUES
     <foreach collection="list" item="t" separator=",">
-      (#{t.taskId}, #{t.workspaceId}, #{t.userId}, #{t.startedAt}, #{t.endedAt}, #{t.minutes})
+      (#{t.taskId}, #{t.workspaceId}, #{t.userId}, #{t.startedAt}, #{t.endedAt}, #{t.minutes},
+       COALESCE(#{t.origin}, 'timer'), #{t.note})
     </foreach>
   </insert>
+
+  <select id="selectRecordsByTask" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
+    ORDER BY started_at DESC, id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectById" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log WHERE id = #{id}
+  </select>
+
+  <delete id="deleteById">
+    DELETE FROM time_log WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
 
   <delete id="deleteByTaskIds">
     DELETE FROM time_log WHERE workspace_id = #{workspaceId} AND task_id IN

@@ -79,7 +79,9 @@ function onSseChanged(event){
   var info = parseSseData(event && event.data);
   /* F-NET-1：发起者自己的写请求会收到回声，直接忽略，避免同一操作刷新两遍 */
   if(info.clientId && info.clientId === window.DS_CLIENT_ID) return;
-  /* 后台标签页不刷新：只记一笔，切回来时补一次 */
+  /* R-1：未读角标是跨空间的，且与"是否刷新当前看板"无关；后台也更新（标题计数） */
+  loadUnread();
+  /* 后台标签页不刷新看板：只记一笔，切回来时补一次 */
   if(document.hidden){
     sse.pending = true;
     var ent = info.entity || "all";
@@ -87,8 +89,6 @@ function onSseChanged(event){
     sse.pendingEntity = (sse.pendingEntity && sse.pendingEntity !== ent) ? "all" : ent;
     return;
   }
-  /* R-1：未读角标是跨空间的，且与"是否刷新当前看板"无关，因此放在空间判断之前 */
-  loadUnread();
   if(info.ws && window.CURRENT_WORKSPACE && info.ws !== window.CURRENT_WORKSPACE) return;
   /* O-11：抽屉正开着这条任务 → 只给轻提示，不自动刷新、不覆盖未保存草稿 */
   if(taskDrawer.classList.contains("on") && rt.editingId && info.taskId && info.taskId === rt.editingId){
@@ -186,6 +186,7 @@ setInterval(function(){
 }, 30000);
 document.addEventListener("visibilitychange", function(){
   if(document.hidden) return;
+  loadUnread();
   if(UI.anyDialogOpen() || drag || pending) return;
   if(taskDrawer.classList.contains("on") && rt.formDirty) return;
   if(refreshIfDayChanged()) return;
