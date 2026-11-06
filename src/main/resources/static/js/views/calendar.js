@@ -4,6 +4,7 @@ import { API } from "../core/api.js";
 import { $, iDue, unplannedBox, unplannedCount, unplannedList } from "../core/dom.js";
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
+import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { calState, dueState, dueText, rt, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
@@ -16,6 +17,7 @@ import { loadView } from "../core/view-loader.js";
 import { openReqDocAndJump } from "./requirements.js";
 
 var calGrid = $("calGrid"), calLabel = $("calLabel"), calDayList = $("calDayList");
+var calLayout = null;
 function enterCalendarView(){
   var now = new Date();
   if(calState.year === null){ calState.year = now.getFullYear(); calState.month = now.getMonth() + 1; }
@@ -27,10 +29,32 @@ function enterCalendarView(){
 function refreshCalendarIfOpen(){ if(activeView === "calendar") loadCalendar({silent:true}); }
 function refreshGanttIfOpen(){ if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); }); }
 function calShift(delta){
+  if(isMobile()){
+    var base = calState.selected ? parseDate(calState.selected) : rt.TODAY;
+    var next = addDays(base, delta * 7);
+    calState.selected = iso(next);
+    calState.year = next.getFullYear();
+    calState.month = next.getMonth() + 1;
+    loadCalendar();
+    return;
+  }
   calState.month += delta;
   if(calState.month < 1){ calState.month = 12; calState.year--; }
   if(calState.month > 12){ calState.month = 1; calState.year++; }
   loadCalendar();
+}
+/* 手机周视图可能跨月：同时取本周起止所在的两个月，合并后去重 */
+function calendarRequestMonths(){
+  if(!isMobile() || !calState.selected){
+    return [{year: calState.year, month: calState.month}];
+  }
+  var anchor = parseDate(calState.selected);
+  var start = addDays(anchor, -((anchor.getDay() + 6) % 7));
+  var end = addDays(start, 6);
+  var a = {year: start.getFullYear(), month: start.getMonth() + 1};
+  var b = {year: end.getFullYear(), month: end.getMonth() + 1};
+  if(a.year === b.year && a.month === b.month) return [a];
+  return [a, b];
 }
 function loadCalendar(opts){
   opts = opts || {};
@@ -41,11 +65,23 @@ function loadCalendar(opts){
     calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
   }
   /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 关键词 / 到期） */
-  API.get("/api/calendar", boardParams({year: calState.year, month: calState.month})).then(function(d){
+  var months = calendarRequestMonths();
+  Promise.all(months.map(function(m){
+    return API.get("/api/calendar", boardParams({year: m.year, month: m.month}));
+  })).then(function(pages){
     if(seq !== calState.seq) return;
-    calState.year = d.year;
-    calState.month = d.month;
-    calState.tasks = d.tasks || [];
+    var first = pages[0] || {};
+    if(first.year) calState.year = first.year;
+    if(first.month) calState.month = first.month;
+    var seen = {}, tasks = [];
+    pages.forEach(function(d){
+      (d && d.tasks ? d.tasks : []).forEach(function(t){
+        if(!t || seen[t.id]) return;
+        seen[t.id] = true;
+        tasks.push(t);
+      });
+    });
+    calState.tasks = tasks;
     renderCalendar();
   }).catch(function(ex){
     if(seq !== calState.seq) return;
@@ -65,7 +101,60 @@ function calRangeOf(t){
   var begin = (t.startDate && t.startDate <= end) ? t.startDate : end;
   return {begin: begin, end: end};
 }
+function renderMobileCalendar(){
+  var anchor = calState.selected ? parseDate(calState.selected) : rt.TODAY;
+  var dow = (anchor.getDay() + 6) % 7;
+  var start = addDays(anchor, -dow);
+  var end = addDays(start, 6);
+  var sameYear = start.getFullYear() === end.getFullYear();
+  calLabel.textContent = (sameYear ? "" : start.getFullYear() + " 年 ") + fmtMD(start) +
+    " – " + (sameYear ? "" : end.getFullYear() + " 年 ") + fmtMD(end);
+  $("calPrev").setAttribute("aria-label", "上一周");
+  $("calNext").setAttribute("aria-label", "下一周");
+  calGrid.classList.add("cal-week");
+
+  var html = "";
+  for(var i = 0; i < 7; i++){
+    var day = addDays(start, i);
+    var dateIso = iso(day);
+    var list = [];
+    calState.tasks.forEach(function(t){
+      var range = calRangeOf(t);
+      if(range && dateIso >= range.begin && dateIso <= range.end) list.push({t:t, range:range});
+    });
+    var cls = "cal-week-day";
+    if(dateIso === rt.TODAY_ISO) cls += " today";
+    if(dateIso === calState.selected) cls += " sel";
+    var rows = list.map(function(it){
+      var t = it.t;
+      var kind = dueState(t).kind;
+      var span = it.range.begin === it.range.end ? "" :
+        (fmtMD(parseDate(it.range.begin)) + " – " + fmtMD(parseDate(it.range.end)));
+      return '<button class="cwd-task p-' + esc(t.priority) +
+        (t.boardColumn === "done" ? " done" : "") + (kind === "over" ? " over" : "") +
+        '" type="button" data-cal-id="' + esc(t.id) + '" title="' + esc(t.title + " · " + dueText(t)) + '">' +
+        '<i class="cbar"></i><span class="cwd-t">' + esc(t.title) + '</span>' +
+        (span ? '<span class="cwd-span">' + esc(span) + '</span>' : '') + '</button>';
+    }).join("");
+    html += '<section class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
+      '<div class="cwd-head">' +
+        '<span class="cwd-dn">' + day.getDate() + '</span>' +
+        '<span class="cwd-dw">' + weekdayCN(day) + '</span>' +
+        '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无任务") + '</span>' +
+        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' + icon("plus", 12) + '</button>' +
+      '</div>' +
+      (rows ? '<div class="cwd-tasks">' + rows + '</div>' : '') +
+    '</section>';
+  }
+  calGrid.innerHTML = html;
+  calDayList.innerHTML = "";
+  loadUnplanned();
+}
 function renderCalendar(){
+  if(isMobile()) return renderMobileCalendar();
+  calGrid.classList.remove("cal-week");
+  $("calPrev").setAttribute("aria-label", "上个月");
+  $("calNext").setAttribute("aria-label", "下个月");
   calLabel.textContent = calState.year + " 年 " + calState.month + " 月";
   var first = new Date(calState.year, calState.month - 1, 1);
   var startOffset = (first.getDay() + 6) % 7;
@@ -267,5 +356,20 @@ calDayList.addEventListener("click", function(e){
   if(t) openTaskDrawer(null, t);
 });
 if(unplannedList) wireCardContainer(unplannedList);
+window.addEventListener("ds:layout", function(e){
+  var next = e.detail && e.detail.layout;
+  if(rt.currentWs && activeView === "calendar"){
+    /* 桌面翻月不更新 selected；切到手机周视图时，若选中日不在当前月，跟随当前显示月 */
+    if(next === "mobile" && calLayout && calLayout !== "mobile" && calState.selected && calState.year){
+      var sel = parseDate(calState.selected);
+      if(sel.getFullYear() !== calState.year || sel.getMonth() + 1 !== calState.month){
+        calState.selected = iso(new Date(calState.year, calState.month - 1, 1));
+      }
+    }
+    /* 断点切换会改变取数范围（月 ↔ 周），直接重拉，避免用旧月份数据画新视图 */
+    loadCalendar({silent:true});
+  }
+  calLayout = next;
+});
 
 export { enterCalendarView, loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen, renderCalendar };

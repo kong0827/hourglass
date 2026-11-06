@@ -57,10 +57,13 @@ function renderAlertBar(){
 }
 function renderBellBadge(){
   var dot = $("alertDot");
-  if(!dot) return;
   var n = notifyState.unread;
-  dot.hidden = n <= 0;
-  dot.textContent = n > 99 ? "99+" : n;
+  if(dot){
+    dot.hidden = n <= 0;
+    dot.textContent = n > 99 ? "99+" : n;
+  }
+  var tabDot = document.getElementById("tabMsgDot");
+  if(tabDot) tabDot.hidden = n <= 0;
 }
 function updateBellTitle(){
   var c = state.board ? state.board.counts : {over:0, today:0, soon:0};

@@ -89,7 +89,7 @@ class ManagerServiceTest {
     @Test
     void workloadUsesPerTaskRemainingAndLatestDueCapacity() {
         Requirement requirement = requirement("R1", "项目一");
-        Task task = openTask("T1", "R1", Consts.COL_DOING, 600);
+        Task task = openTask("T1", "R1", Consts.COL_DOING, 700);
         task.setOwnerUserId("U1");
         task.setDueDate(TODAY);
         Task done = openTask("T2", "R1", Consts.COL_DONE, 10000);
@@ -113,10 +113,10 @@ class ManagerServiceTest {
         List<Map<String, Object>> members = castList(workload.get("members"));
         Map<String, Object> alice = member(members, "U1");
 
-        assertEquals(480, alice.get("remainingMinutes"), "剩余=max(预估-实际,0)");
+        assertEquals(580, alice.get("remainingMinutes"), "剩余=max(预估-实际,0)");
         assertEquals(1, alice.get("workdays"));
-        assertEquals(360, alice.get("capacityMinutes"));
-        assertEquals(133, alice.get("loadPct"));
+        assertEquals(480, alice.get("capacityMinutes"));
+        assertEquals(121, alice.get("loadPct"));
         assertEquals(true, alice.get("overloaded"));
         assertEquals(60, alice.get("weekMinutes"));
         assertEquals(30, alice.get("lastWeekMinutes"));

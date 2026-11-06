@@ -2,13 +2,17 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>沙漏 · 任务看板</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/hourglass/icons/favicon-32.png" />
 <link rel="shortcut icon" href="/hourglass/favicon.ico" />
 <script>
 /* 首屏前应用主题，避免深色模式闪白 */
-(function(){try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();
+(function(){
+  try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}
+  var w=window.innerWidth||0;
+  document.documentElement.setAttribute("data-layout", w<=639?"mobile":(w<=1023?"tablet":"desktop"));
+})();
 </script>
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/base.css" />
@@ -19,6 +23,7 @@
 <link rel="stylesheet" href="css/manager.css" />
 <link rel="stylesheet" href="css/smart-table.css" />
 <link rel="stylesheet" href="css/auth.css" />
+<link rel="stylesheet" href="css/mobile.css" />
 <link rel="manifest" href="/hourglass/manifest.webmanifest" />
 <meta name="theme-color" content="#2563EB" />
 <link rel="apple-touch-icon" href="/hourglass/icons/icon-1024.png" />
@@ -177,11 +182,11 @@
       </div>
 
       <div class="tb-right">
-        <span class="offline-badge" id="offlineBadge" hidden>
+        <span class="offline-badge" id="offlineBadge" hidden title="离线（只读）" aria-label="离线（只读）">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.4 8.6a8.3 8.3 0 0 1 13.2 0"/><path d="M6.4 12a4.6 4.6 0 0 1 7.2 0"/><path d="M10 15.4h.01"/></svg>
           离线（只读）
         </span>
-        <span class="tb-alert" id="sseAlert" hidden>
+        <span class="tb-alert" id="sseAlert" hidden title="实时连接已断开，正在重连…" aria-label="实时连接已断开，正在重连…">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/><circle cx="10" cy="10" r="7.6"/></svg>
           实时连接已断开，正在重连…
         </span>
@@ -243,6 +248,10 @@
             </svg>
           </button>
         </div>
+
+        <button class="icon-btn mob-views-btn" id="btnMobViews" type="button" aria-label="更多视图" title="更多视图" aria-haspopup="true" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg>
+        </button>
 
         <div style="position:relative">
           <button class="bell" id="btnAlert" type="button" aria-label="通知中心" aria-haspopup="true" aria-expanded="false" title="通知中心">
@@ -317,6 +326,10 @@
       <section class="view" id="view-mine" aria-label="我的任务">
         <div class="view-page wide">
           <div class="page-toolbar">
+            <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="我的 / 团队">
+              <button type="button" data-mine-mode="mine" aria-pressed="true">我的</button>
+              <button type="button" data-mine-mode="team" aria-pressed="false">团队</button>
+            </div>
             <span class="toolbar-meta" id="mineMeta">—</span>
             <span class="toolbar-right">
               <label class="row row-gap" style="gap:6px">
@@ -1574,6 +1587,20 @@
           </nav>
 
           <div class="set-panels">
+            <div class="panel mob-only" id="meMobile">
+              <div class="panel-head">
+                <h3>快捷入口</h3>
+                <span class="meta-right" id="mobMeWs"></span>
+              </div>
+              <div class="mob-me-actions">
+                <button type="button" data-mob-me="space">切换空间</button>
+                <button type="button" data-mob-me="settings">空间设置</button>
+                <button type="button" data-mob-me="theme">深色 / 浅色</button>
+                <button type="button" data-mob-me="help">快捷键帮助</button>
+                <button type="button" data-mob-me="manual">使用手册</button>
+                <button type="button" class="danger" data-mob-me="logout">退出登录</button>
+              </div>
+            </div>
             <div class="panel" id="me-basic">
               <div class="panel-head">
                 <h3>基本信息</h3>
@@ -1720,10 +1747,38 @@
   <span class="af-ga" id="ga-record"></span>
 </footer>
 
+<!-- ==================== 移动端底部导航 ==================== -->
+<nav class="tabbar" id="tabBar" aria-label="主导航（移动端）" hidden>
+  <div class="tabbar-pill">
+    <button class="tab" type="button" data-tab="mine" aria-label="我的任务">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="4"/><path d="M6.9 10.2 9.2 12.5 13.2 8.1"/></svg>
+      <span>任务</span>
+    </button>
+    <button class="tab" type="button" data-tab="board" aria-label="看板">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
+      <span>看板</span>
+    </button>
+    <button class="tab" type="button" data-tab="projects" aria-label="项目">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 6.4a1.8 1.8 0 0 1 1.8-1.8h3.2l1.6 1.9h6a1.8 1.8 0 0 1 1.8 1.8v6.9a1.8 1.8 0 0 1-1.8 1.8H4.6a1.8 1.8 0 0 1-1.8-1.8Z"/></svg>
+      <span>项目</span>
+    </button>
+    <button class="tab" type="button" data-tab="messages" aria-label="消息">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.7 4.7 0 0 1 4.7 4.7v3l1.1 2.2H4.2l1.1-2.2v-3A4.7 4.7 0 0 1 10 3.2Z"/><path d="M8.1 16.1a2.1 2.1 0 0 0 3.8 0"/></svg>
+      <span>消息</span>
+      <i class="tab-dot" id="tabMsgDot" hidden></i>
+    </button>
+    <button class="tab" type="button" data-tab="me" aria-label="我的">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3.1"/><path d="M3.9 16.5c.6-3.2 2.6-4.9 6.1-4.9s5.5 1.7 6.1 4.9"/></svg>
+      <span>我的</span>
+    </button>
+  </div>
+</nav>
+
 <!-- ==================== 任务详情抽屉（§7.1） ==================== -->
 <div class="drawer-layer" id="taskDrawer" role="dialog" aria-modal="true" aria-labelledby="taskDrawerTitle">
   <div class="drawer-scrim" id="taskScrim"></div>
   <form class="drawer" id="taskForm" novalidate>
+    <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
       <h2 id="taskDrawerTitle">新建任务</h2>
       <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
@@ -1917,7 +1972,7 @@
             <input id="iNote" type="text" maxlength="80" placeholder="选填：本次推进到哪一步、卡点在哪里…" autocomplete="off" />
           </div>
 
-          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+          <div class="form-grid three">
             <div class="field">
               <label>循环</label>
               <div class="seg grid4" id="segRecur"></div>
@@ -2031,6 +2086,9 @@
     </div>
 
     <div class="drawer-foot">
+      <button class="icon-btn" type="button" id="btnDrawerStatus" aria-label="切换任务状态" title="切换任务状态">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
+      </button>
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
@@ -2263,6 +2321,7 @@
 <link rel="modulepreload" href="js/main.js" />
 <link rel="modulepreload" href="js/core/state.js" />
 <link rel="modulepreload" href="js/core/dom.js" />
+<link rel="modulepreload" href="js/core/layout.js" />
 <link rel="modulepreload" href="js/core/router.js" />
 <link rel="modulepreload" href="js/core/filters.js" />
 <link rel="modulepreload" href="js/core/filters-ui.js" />

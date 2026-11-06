@@ -1,5 +1,6 @@
 package com.devstudio.kanban.mapper;
 
+import com.devstudio.kanban.dto.TaskBlockedAt;
 import com.devstudio.kanban.entity.TaskLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,6 +14,10 @@ public interface TaskLogMapper {
 
     /** 查询/删除一律带空间条件：任务 ID 跨空间复用时防止误读误删 */
     List<TaskLog> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    /** 一批任务最近一次「标记为被阻塞」的时间；没有日志的阻塞任务不返回。 */
+    List<TaskBlockedAt> selectLastBlockedAt(@Param("workspaceId") String workspaceId,
+                                            @Param("taskIds") List<String> taskIds);
 
     /** 该任务最近一次“移入已完成列”之前所在的列；没有结构化日志时返回 null */
     String selectLastDoneFromColumn(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);

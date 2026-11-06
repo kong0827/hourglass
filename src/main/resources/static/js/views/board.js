@@ -6,6 +6,7 @@ import { board, reqListEl } from "../core/dom.js";
 import { renderFilterChips, saveViewState } from "../core/filters-ui.js";
 import { boardParams, updateBrand } from "../core/filters.js";
 import { icon } from "../core/icons.js";
+import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView } from "../core/router.js";
 import { canEditReq, canEditTask, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
@@ -20,6 +21,13 @@ import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.j
 
 function showBoardSkeleton(){
   board.classList.remove("busy");
+  if(isMobile()){
+    board.innerHTML = '<div class="mob-board">' +
+      '<div class="mob-col-seg"><span class="skel" style="width:120px;height:34px;border-radius:10px"></span>' +
+        '<span class="skel" style="width:90px;height:34px;border-radius:10px"></span></div>' +
+      '<div class="mob-board-list">' + UI.skeletonCards(3) + '</div></div>';
+    return;
+  }
   var h = "";
   for(var i = 0; i < 3; i++){
     h += '<div class="board-col"><div class="board-col-head">' +
@@ -265,7 +273,81 @@ function cardAddHTML(colId){
   return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增任务">' +
     icon("plus", 13) + ' 添加任务</button>';
 }
+var mobCol = null;
+function mobileColId(){
+  for(var i = 0; i < COLUMNS.length; i++) if(COLUMNS[i].id === mobCol) return mobCol;
+  mobCol = COLUMNS.length ? COLUMNS[0].id : "backlog";
+  return mobCol;
+}
+function renderMobileBoard(opts){
+  opts = opts || {};
+  updateBrand();
+  if(activeView !== "board"){
+    rt.boardDirty = true;
+    return;
+  }
+  rt.boardDirty = false;
+  UI.hideTip();
+  if(!state.board) return;
+
+  board.classList.add("board-mobile");
+  if(totalTaskCount() === 0 && !filterOn()){
+    board.innerHTML = '<div class="mob-board">' +
+      UI.emptyState({
+        icon:"board",
+        title:"看板还是空的",
+        text:"点击右下角「新建」创建第一个任务，数据会实时同步到其他端。",
+        actionLabel:"新建第一项任务"
+      }) + '</div>';
+    bindRetry(board, function(){ openTaskDrawer("backlog"); });
+    renderAlertBar(); renderFilterChips();
+    return;
+  }
+
+  var active = mobileColId();
+  var seg = '<div class="mob-col-seg" role="tablist" aria-label="看板列">' + COLUMNS.map(function(c){
+    var cd = state.board.columns[c.id] || {};
+    var n = filterOn() ? ((cd.matched || 0) + "/" + (cd.total || 0)) : (cd.total || 0);
+    return '<button class="mob-col-btn' + (c.id === active ? " on" : "") + '" type="button" role="tab" ' +
+      'aria-selected="' + (c.id === active) + '" data-mob-col="' + esc(c.id) + '">' +
+      '<i style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"></i>' +
+      '<span class="mob-col-name">' + esc(c.name) + '</span><b>' + esc(n) + '</b></button>';
+  }).join("") + '</div>';
+
+  var cd = state.board.columns[active] || {items:[], matched:0, total:0, allTotal:0, hasMore:false};
+  var items = (cd.items || []).slice();
+  if(active === "done" && state.doneExtra.length) items = items.concat(state.doneExtra);
+  var listHTML;
+  if(!items.length){
+    var emptyTitle = filterOn() ? "无匹配任务" : "这一列还没有任务";
+    var emptyDesc = filterOn() ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
+    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建任务", compact:true });
+  }else{
+    listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
+  }
+  if(active === "done" && cd.hasMore){
+    listHTML += '<button class="btn mob-load-more" type="button" data-more="1">加载更多（还有 ' +
+      Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
+  }
+
+  board.innerHTML = '<div class="mob-board">' + seg +
+    '<div class="mob-board-list" role="list">' + listHTML + cardAddHTML(active) + '</div></div>';
+
+  var emptyBtn = board.querySelector(".empty-state [data-empty-action]");
+  if(emptyBtn) emptyBtn.addEventListener("click", function(){ openTaskDrawer(active); });
+
+  var movedId = opts.movedId;
+  if(movedId){
+    var el = board.querySelector('.card[data-id="' + movedId + '"]');
+    if(el && el.scrollIntoView) el.scrollIntoView({block:"nearest"});
+  }
+  renderAlertBar();
+  renderFilterChips();
+  UI.wireTooltips(board);
+}
 function render(opts){
+  if(isMobile()) return renderMobileBoard(opts);
+  board.classList.remove("board-mobile");
   opts = opts || {};
   updateBrand();
   /* 不在看板视图时只置脏：避免甘特/列表视图下后台反复重建整块 DOM */
@@ -376,6 +458,8 @@ function render(opts){
   UI.wireTooltips(board);
 }
 function openInlineAdd(colId, preset, focusIt){
+  /* 手机单列模式没有 .board-col 容器，直接开抽屉，复用同一套新建表单 */
+  if(isMobile()){ state.inlineAdd = null; openTaskDrawer(colId); return; }
   var col = board.querySelector('.board-col[data-col="' + colId + '"]');
   if(!col) return;
   var addBtn = col.querySelector(".card-add");
@@ -484,6 +568,8 @@ function inlineAddCreate(colId, title, input){
 }
 var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null, dragRaf = 0;
 function onPointerDown(e){
+  /* 手机档位不做拖拽换列（单列流 + 长按拖动留待下期），横向手势交给 cards 左滑 */
+  if(isMobile()) return;
   var cardEl = e.target.closest ? e.target.closest(".card") : null;
   if(!cardEl) return;
   if(e.pointerType === "mouse" && e.button !== 0) return;
@@ -721,6 +807,8 @@ document.addEventListener("pointermove", onPointerMove, {passive:false});
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", onPointerCancel);
 board.addEventListener("click", function(e){
+  var mobTab = e.target.closest("[data-mob-col]");
+  if(mobTab){ mobCol = mobTab.dataset.mobCol; render({animate:false}); return; }
   var fold = e.target.closest("[data-col-fold]");
   if(fold){
     var cid = fold.dataset.colFold;
@@ -865,5 +953,12 @@ function saveColColor(colId, color){
     loadBoard({silent:true});
   }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
 }
+
+window.addEventListener("ds:layout", function(){
+  if(!state.board) return;
+  /* 看板没有 enter 回调：断点时不在看板也要置脏，否则切回来仍是旧档位的 DOM */
+  if(activeView === "board") render({animate:false});
+  else rt.boardDirty = true;
+});
 
 export { cancelDrag, cardHTML, drag, loadBoard, loadReqs, openInlineAdd, pending, refreshBoardPreserving, render, showBoardSkeleton };

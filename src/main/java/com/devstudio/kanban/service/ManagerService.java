@@ -36,7 +36,8 @@ import java.util.Set;
 @Service
 public class ManagerService {
 
-    public static final int DAILY_CAPACITY_MINUTES = 360;
+    /** 与 WorkTime 的每日上限统一：默认 8 小时 × 标准工作日 */
+    public static final int DAILY_CAPACITY_MINUTES = WorkTime.MAX_MINUTES_PER_DAY;
 
     private static final int DEFAULT_WORKDAYS = 5;
     private static final int MIN_WORKDAYS = 1;
@@ -218,8 +219,19 @@ public class ManagerService {
     }
 
     public Map<String, Object> risks(String workspaceId, String userId) {
-        LocalDate today = today();
+        return risksFromSnapshot(load(workspaceId, null, null, userId), today());
+    }
+
+    /** 手机团队页一次加载任务与风险，避免同一请求内重复全量查询。 */
+    public Map<String, Object> mobileTeamSnapshot(String workspaceId, String userId) {
         Snapshot snapshot = load(workspaceId, null, null, userId);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("tasks", snapshot.tasks);
+        result.put("risks", risksFromSnapshot(snapshot, today()));
+        return result;
+    }
+
+    private Map<String, Object> risksFromSnapshot(Snapshot snapshot, LocalDate today) {
         Map<String, String> reqNames = requirementNames(snapshot.requirements);
         List<Task> overdue = new ArrayList<Task>();
         List<Task> blocked = new ArrayList<Task>();

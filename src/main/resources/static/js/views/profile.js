@@ -6,13 +6,13 @@ import { $ } from "../core/dom.js";
 import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { loadRunningTimer } from "../core/task-actions.js";
+import { loadView } from "../core/view-loader.js";
 import { refreshOwnerSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarColor, avatarColorIndex, initial, pad2 } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 
-var meReadyCbs = [];
-function afterMeReady(fn){
+var meReadyCbs = [];function afterMeReady(fn){
   if(rt.currentUser){ fn(); return; }
   meReadyCbs.push(fn);
 }
@@ -28,6 +28,7 @@ function enterProfileView(){
     afterMeReady(enterProfileView);
     return;
   }
+  if($("mobMeWs")) $("mobMeWs").textContent = rt.currentWs ? (rt.currentWs.name || "") : "";
   var name = rt.currentUser.displayName || rt.currentUser.username || "?";
   if($("meAvatar")){
     $("meAvatar").className = "avatar me-avatar avatar-c" + avatarColorIndex(name);
@@ -394,5 +395,55 @@ $("btnLogout").addEventListener("click", function(){
     }).catch(function(){ window.location.href = API.base + "/login.html"; });
   });
 });
+
+/* 手机端「我的」页承接桌面侧栏的入口：切换空间 / 设置 / 主题 / 帮助 / 退出 */
+function openSpacePicker(anchor){
+  var el = document.createElement("div");
+  el.className = "menu ws-menu-pop";
+  el.innerHTML = (rt.allWorkspaces || []).map(function(ws){
+    var on = rt.currentWs && ws.id === rt.currentWs.id;
+    return '<button class="menu-item" type="button" data-mob-ws="' + esc(ws.id) + '">' +
+      (on ? '<span class="ws-check">✓</span>' : '') + esc(ws.name || ws.id) + '</button>';
+  }).join("");
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mob-ws]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(rt.currentWs && b.dataset.mobWs === rt.currentWs.id) return;
+    var target = null;
+    (rt.allWorkspaces || []).forEach(function(ws){ if(ws.id === b.dataset.mobWs) target = ws; });
+    UI.showConfirm({
+      title: "切换空间",
+      msg: "切换到「" + esc(target ? (target.name || target.id) : b.dataset.mobWs) +
+        "」会重新加载页面，当前未保存的改动不会保留。",
+      okText: "切换",
+      cancelText: "取消"
+    }).then(function(ok){
+      if(!ok) return;
+      API.post("/api/workspaces/" + encodeURIComponent(b.dataset.mobWs) + "/select", {}).then(function(){
+        window.location.reload();
+      }).catch(function(ex){ toast(ex.message || "切换空间失败", "bad"); });
+    });
+  });
+  UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
+}
+var meMobile = $("meMobile");
+if(meMobile){
+  meMobile.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mob-me]");
+    if(!b) return;
+    var act = b.dataset.mobMe;
+    if(act === "space"){ openSpacePicker(b); return; }
+    if(act === "settings"){ showView("settings"); return; }
+    if(act === "theme"){ var t = $("btnTheme"); if(t) t.click(); return; }
+    if(act === "help"){
+      /* 快捷键帮助由懒加载的 settings 模块提供，不能依赖尚未绑定的隐藏按钮 */
+      loadView("settings").then(function(m){ m.openHelp(); });
+      return;
+    }
+    if(act === "manual"){ window.open("help.html", "_blank", "noopener"); return; }
+    if(act === "logout"){ var l = $("btnLogout"); if(l) l.click(); }
+  });
+}
 
 export { enterProfileView, flushMeReady };

@@ -435,6 +435,8 @@ function openTaskDrawer(colId, task, defaults){
   fTitle.classList.remove("invalid");
   syncFormSegs();
   applyDrawerReadOnly(readOnly);
+  /* 手机端新建走半屏抽屉，编辑走全屏；桌面端样式不区分 */
+  taskForm.classList.toggle("is-create", !task);
   openDrawer();
   UI.wireTooltips(taskDrawer);
   setTimeout(function(){ try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ } }, 60);
@@ -1432,6 +1434,30 @@ if($("iMilestone")){
   });
   iDue.addEventListener("change", function(){
     if($("iMilestone").checked && iDue.value){ iStart.value = iDue.value; syncDateBounds(); }
+  });
+}
+
+/* 手机端操作条左侧状态入口：自建列菜单，避免依赖移动端不响应脚本 click 的原生 select */
+var btnDrawerStatus = document.getElementById("btnDrawerStatus");
+if(btnDrawerStatus){
+  btnDrawerStatus.addEventListener("click", function(){
+    if(!iCol) return;
+    var el = document.createElement("div");
+    el.className = "menu";
+    el.innerHTML = COLUMNS.map(function(c){
+      var on = iCol.value === c.id;
+      return '<button class="menu-item" type="button" data-drawer-col="' + esc(c.id) + '">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + esc(c.color || "#98A2B3") + '"></span>' +
+        esc(c.name) + (on ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("");
+    el.addEventListener("click", function(e){
+      var b = e.target.closest("[data-drawer-col]");
+      if(!b) return;
+      iCol.value = b.dataset.drawerCol;
+      iCol.dispatchEvent(new Event("change", { bubbles: true }));
+      UI.closeAllPops();
+    });
+    UI.openPop(el, btnDrawerStatus, { align: "left", onClose: function(){ el.remove(); } });
   });
 }
 
