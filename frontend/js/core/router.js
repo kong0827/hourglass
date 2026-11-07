@@ -117,7 +117,6 @@ function showView(name){
   updateBrand();
   UI.closeAllPops();
   syncViewHash(name);
-  try{ localStorage.setItem("ds.view", name); }catch(e){ /* 隐私模式忽略 */ }
   var entered = loadPriorities().then(function(){
     return VIEWS[name].enter ? VIEWS[name].enter() : null;
   });
@@ -129,10 +128,7 @@ function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
-  try{
-    var saved = localStorage.getItem("ds.view");
-    if(saved && (VIEWS[saved] || legacy[saved])) return saved;
-  }catch(e){ /* 隐私模式/受限环境忽略 */ }
+  /* 无 hash（登录后首次进入）统一落「我的任务」，不沿用上次停留的视图 */
   return "mine";
 }
 var suppressHashSync = false;

@@ -4,6 +4,7 @@ import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocPublishRequest;
+import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocRestoreRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
@@ -161,6 +162,16 @@ public class RequirementDocController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(docService.changeStatus(userId, ws.getId(), id, req.getStatus()));
+    }
+
+    /** 阅读/树拖拽排序：批量调整 sort_order 与 parent_id，不携带正文也不走整篇乐观锁 */
+    @PostMapping("/api/req-docs/reorder")
+    public ApiResult<Void> reorder(@Valid @RequestBody ReqDocReorderRequest req,
+                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        docService.reorder(userId, ws.getId(), req);
+        return ApiResult.ok(null);
     }
 
     @DeleteMapping("/api/req-docs/{id}")

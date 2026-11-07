@@ -94,6 +94,15 @@
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
+  <!-- 阅读/树拖拽排序：只动 sort_order 与 parent_id，不触碰正文与乐观锁 -->
+  <update id="updateSortOrder">
+    UPDATE requirement_doc
+    SET sort_order = COALESCE(#{sortOrder}, sort_order),
+        parent_id = #{parentId},
+        updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
   <delete id="delete">
     DELETE FROM requirement_doc WHERE id = #{id}
   </delete>

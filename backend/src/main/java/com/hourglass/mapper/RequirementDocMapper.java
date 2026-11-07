@@ -38,6 +38,12 @@ public interface RequirementDocMapper {
                      @Param("id") String id,
                      @Param("status") String status);
 
+    /** 阅读/树拖拽排序：只动 sort_order 与 parent_id，不触碰正文与乐观锁 */
+    int updateSortOrder(@Param("workspaceId") String workspaceId,
+                        @Param("id") String id,
+                        @Param("sortOrder") Integer sortOrder,
+                        @Param("parentId") String parentId);
+
     int delete(@Param("id") String id);
 
     /** 某项目下的需求数（删除项目前拦一下） */

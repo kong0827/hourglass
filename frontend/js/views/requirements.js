@@ -223,10 +223,15 @@ function reqDocRowHTML(r, depth, hasChild, collapsed){
   var caret = hasChild
     ? '<span class="rr-caret' + (collapsed ? " collapsed" : "") + '" data-toggle-doc="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 13) + '</span>'
     : '<span class="rr-caret"></span>';
-  return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" data-reqdoc="' + esc(r.id) + '">' +
-    caret +
+  var drag = canEditReq(r.reqId)
+    ? '<span class="rr-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 13) + '</span>'
+    : '';
+  return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-reqdoc="' + esc(r.id) + '"' +
+    ' data-rr-reqid="' + esc(r.reqId || "") + '" data-rr-parent="' + esc(r.parentId || "") + '"' +
+    ' data-rr-depth="' + depth + '" data-rr-sort="' + (r.sortOrder || 0) + '">' +
+    caret + drag +
     '<span class="rr-main">' +
-      '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') + '</span>' +
+      '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>') + '</span>' +
       '<span class="rr-meta">' + meta.join(" · ") + '</span>' +
       (r.excerpt ? '<span class="rr-excerpt">' + esc(r.excerpt) + '</span>' : '') +
     '</span>' +
@@ -281,6 +286,10 @@ function renderReqDocTree(){
   /* 没有可写项目就不显示「新增文档」；项目列表未加载时不判定（加载完成后会重渲染修正） */
   var nb = $("reqDocNew");
   if(nb) nb.style.display = (!rt.reqsLoaded || rt.reqList.some(function(r){ return canEditReq(r.id); })) ? "" : "none";
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(4);
+    return;
+  }
   if(!reqDocList.length){
     box.innerHTML = '<div class="reqdoc-empty2">还没有文档。点右上角「新增文档」，先选项目再填文档名称。</div>';
     return;
@@ -327,6 +336,7 @@ var RD_STATUS = [
 var reqDocMode = reqDocModePref();
 var splitDocId = null;
 var splitDocSeq = 0;
+var readerExportSeq = 0;
 var feedSeq = 0;
 var draggingReqDocId = null;
 
@@ -385,8 +395,9 @@ function reqDocKanbanCard(d){
       }).join("")
       + '</select>'
     : '<span class="rk-status-label st ' + st + '"><i></i>' + reqDocStatusLabel(d.status) + '</span>';
+  var pub = d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>';
   return '<div class="rk-card" data-rkdoc="' + esc(d.id) + '"' + (editable ? ' draggable="true"' : '') + '>' +
-    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + (d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') + '</span></div>' +
+    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + pub + '</span></div>' +
     '<div class="rk-meta">' + meta.join(" · ") + '</div>' +
     '<div class="rk-foot">' + statusCtl + tasks + '</div>' +
   '</div>';
@@ -394,6 +405,10 @@ function reqDocKanbanCard(d){
 function renderReqDocKanban(){
   var box = $("reqDocKanban");
   if(!box) return;
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(3);
+    return;
+  }
   var rows = reqDocSearchList || reqDocList;
   if(!rows.length){
     box.innerHTML = reqDocEmptyHTML();
@@ -452,10 +467,16 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
   var fmt = r.format === "markdown"
     ? '<span class="rr-fmt md">MD</span>'
     : '<span class="rr-fmt">HTML</span>';
-  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" data-rs-doc="' + esc(r.id) + '">' +
-    caret + fmt +
+  var pub = r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published" title="已发布，项目成员可见">已发布</span>';
+  var drag = canEditReq(r.reqId)
+    ? '<span class="rs-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 12) + '</span>'
+    : '';
+  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '"' +
+    ' data-rs-reqid="' + esc(r.reqId || "") + '" data-rs-parent="' + esc(r.parentId || "") + '"' +
+    ' data-rs-depth="' + depth + '" data-rs-sort="' + (r.sortOrder || 0) + '">' +
+    caret + fmt + drag +
     '<span class="rs-title">' + esc(r.title) + '</span>' +
-    (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') +
+    pub +
   '</button>';
 }
 function renderReqDocSplitNodes(nodes, children, depth){
@@ -472,7 +493,11 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
-    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>';
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div><div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div></div>';
+  }
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(4);
+    return;
   }
   var rows = reqDocSearchList || reqDocList;
   if(!rows.length){
@@ -522,14 +547,20 @@ function reqDocReaderOpenLinks(body){
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  var pubBadge = doc.publishedAt == null
+    ? '<span class="rr-draft">草稿</span>'
+    : '<span class="rr-published" title="已发布，项目成员可见">已发布</span>';
   var meta = [esc(docTypeName(doc.docType)), "负责人 " + esc(doc.owner || "—"), reqDocStatusLabel(doc.status)];
   if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
   if(doc.taskCount) meta.push(doc.doneCount + "/" + doc.taskCount + " 工作项");
   box.innerHTML =
     '<div class="rrd-head">' +
       '<div class="rrd-title-row">' +
-        '<h3>' + esc(doc.title) + '</h3>' +
-        '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+        '<h3>' + esc(doc.title) + pubBadge + '</h3>' +
+        '<span class="rrd-acts">' +
+          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+        '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
     '</div>' +
@@ -549,6 +580,302 @@ function renderReqDocReader(doc){
     reqDocReaderOpenLinks(body);
   }).catch(function(ex){
     if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
+  });
+}
+
+/* ---------- 阅读树拖拽排序 ---------- */
+
+var rsDragId = null;
+var rsDragSource = null;
+var rsDropLine = null;
+var rsDroppedInside = false;
+function ensureRsDropLine(){
+  if(rsDropLine) return rsDropLine;
+  rsDropLine = document.createElement("div");
+  rsDropLine.className = "rs-drop-line";
+  return rsDropLine;
+}
+function removeRsDropLine(){
+  if(rsDropLine && rsDropLine.parentNode) rsDropLine.parentNode.removeChild(rsDropLine);
+}
+function rsNodeSiblings(node){
+  /* 返回与 node 同项目、同父级、同层深的兄弟节点（按 DOM 顺序） */
+  var container = node.parentNode;
+  if(!container) return [];
+  var reqId = node.dataset.rsReqid;
+  var parentId = node.dataset.rsParent || "";
+  var depth = node.dataset.rsDepth;
+  return Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("rs-node")
+      && el.dataset.rsReqid === reqId
+      && (el.dataset.rsParent || "") === parentId
+      && el.dataset.rsDepth === depth;
+  });
+}
+function rsHitInfo(e){
+  /* 返回 {node, after: bool}：after=true 表示落在节点下半区，应插到它之后 */
+  var st = $("reqDocSplitTree");
+  if(!st) return null;
+  var y = e.clientY;
+  var nodes = Array.from(st.querySelectorAll(".rs-node")).filter(function(n){ return n !== rsDragSource; });
+  var best = null, bestDist = Infinity;
+  for(var i = 0; i < nodes.length; i++){
+    var r = nodes[i].getBoundingClientRect();
+    if(y < r.top || y > r.bottom) continue;
+    var mid = r.top + r.height / 2;
+    var dist = Math.abs(y - mid);
+    if(dist < bestDist){
+      bestDist = dist;
+      best = { node: nodes[i], after: y >= mid };
+    }
+  }
+  return best;
+}
+function rsCanDrop(targetNode){
+  if(!rsDragSource || !targetNode) return false;
+  if(targetNode === rsDragSource) return false;
+  /* 只允许同项目、同父级（同级兄弟）之间排序，避免跨项目/跨层级破坏树结构 */
+  return targetNode.dataset.rsReqid === rsDragSource.dataset.rsReqid
+    && (targetNode.dataset.rsParent || "") === (rsDragSource.dataset.rsParent || "");
+}
+function rsCommitReorder(){
+  if(!rsDragSource) return;
+  var line = ensureRsDropLine();
+  var container = line.parentNode;
+  if(!container || !container.contains(rsDragSource)){
+    removeRsDropLine();
+    rsDragSource = null;
+    rsDragId = null;
+    return;
+  }
+  /* 把被拖节点插到占位线位置，再按 DOM 顺序重算 sortOrder */
+  container.insertBefore(rsDragSource, line);
+  removeRsDropLine();
+  var reqId = rsDragSource.dataset.rsReqid;
+  var parentId = rsDragSource.dataset.rsParent || "";
+  var depth = rsDragSource.dataset.rsDepth;
+  var siblings = Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("rs-node")
+      && el.dataset.rsReqid === reqId
+      && (el.dataset.rsParent || "") === parentId
+      && el.dataset.rsDepth === depth;
+  });
+  var items = [];
+  for(var i = 0; i < siblings.length; i++){
+    items.push({ id: siblings[i].dataset.rsDoc, sortOrder: i * 10, parentId: parentId || null });
+  }
+  rsDragSource = null;
+  rsDragId = null;
+  if(!canEditReq(reqId)){
+    toast("你对该项目只有查看权限", "warn");
+    renderReqDocSplit();
+    return;
+  }
+  API.post("/api/req-docs/reorder", { items: items }).then(function(){
+    /* 本地同步 sortOrder，避免重新拉取前顺序回跳 */
+    items.forEach(function(it){
+      var d = reqDocById(it.id);
+      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
+    });
+    renderReqDocSplit();
+    toast("顺序已保存", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "排序保存失败", "bad");
+    renderReqDocSplit();
+  });
+}
+function initReqDocSplitDrag(){
+  var st = $("reqDocSplitTree");
+  if(!st) return;
+  st.addEventListener("dragstart", function(e){
+    var handle = e.target.closest ? e.target.closest(".rs-drag") : null;
+    if(!handle){
+      e.preventDefault();
+      return;
+    }
+    var node = handle.closest(".rs-node");
+    if(!node){ e.preventDefault(); return; }
+    var d = reqDocById(node.dataset.rsDoc);
+    if(!d || !canEditReq(d.reqId)){
+      e.preventDefault();
+      return;
+    }
+    rsDragId = node.dataset.rsDoc;
+    rsDragSource = node;
+    rsDroppedInside = false;
+    node.classList.add("dragging");
+    try{
+      e.dataTransfer.setData("text/plain", rsDragId);
+      e.dataTransfer.effectAllowed = "move";
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(node, 0, 0);
+    }catch(err){ /* 旧浏览器忽略 */ }
+  });
+  st.addEventListener("dragend", function(e){
+    var node = e.target.closest ? e.target.closest(".rs-node") : null;
+    if(node) node.classList.remove("dragging");
+    if(rsDragSource && rsDragSource.classList.contains("dragging")) rsDragSource.classList.remove("dragging");
+    if(rsDroppedInside){
+      rsDroppedInside = false;
+    }else{
+      removeRsDropLine();
+      rsDragSource = null;
+      rsDragId = null;
+    }
+  });
+  st.addEventListener("dragover", function(e){
+    if(!rsDragSource){ return; }
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    var hit = rsHitInfo(e);
+    var line = ensureRsDropLine();
+    if(hit && rsCanDrop(hit.node)){
+      var container = hit.node.parentNode;
+      if(hit.after){
+        container.insertBefore(line, hit.node.nextSibling);
+      }else{
+        container.insertBefore(line, hit.node);
+      }
+    }else{
+      removeRsDropLine();
+    }
+  });
+  st.addEventListener("dragleave", function(e){
+    if(!rsDragSource) return;
+    var stBox = $("reqDocSplitTree");
+    if(stBox && !stBox.contains(e.relatedTarget)) removeRsDropLine();
+  });
+  st.addEventListener("drop", function(e){
+    if(!rsDragSource) return;
+    e.preventDefault();
+    rsDroppedInside = true;
+    rsCommitReorder();
+  });
+}
+
+/* ---------- 列表树拖拽排序（与阅读树共用同一套逻辑，仅选择器不同） ---------- */
+
+var rrDragSource = null;
+var rrDroppedInside = false;
+function rrHitInfo(e){
+  var tree = $("reqDocTree");
+  if(!tree) return null;
+  var y = e.clientY;
+  var rows = Array.from(tree.querySelectorAll(".reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
+  var best = null, bestDist = Infinity;
+  for(var i = 0; i < rows.length; i++){
+    var r = rows[i].getBoundingClientRect();
+    if(y < r.top || y > r.bottom) continue;
+    var mid = r.top + r.height / 2;
+    var dist = Math.abs(y - mid);
+    if(dist < bestDist){
+      bestDist = dist;
+      best = { node: rows[i], after: y >= mid };
+    }
+  }
+  return best;
+}
+function rrCanDrop(targetNode){
+  if(!rrDragSource || !targetNode) return false;
+  if(targetNode === rrDragSource) return false;
+  return targetNode.dataset.rrReqid === rrDragSource.dataset.rrReqid
+    && (targetNode.dataset.rrParent || "") === (rrDragSource.dataset.rrParent || "");
+}
+function rrCommitReorder(){
+  if(!rrDragSource) return;
+  var line = ensureRsDropLine();
+  var container = line.parentNode;
+  if(!container || !container.contains(rrDragSource)){
+    removeRsDropLine();
+    rrDragSource = null;
+    return;
+  }
+  container.insertBefore(rrDragSource, line);
+  removeRsDropLine();
+  var reqId = rrDragSource.dataset.rrReqid;
+  var parentId = rrDragSource.dataset.rrParent || "";
+  var depth = rrDragSource.dataset.rrDepth;
+  var siblings = Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("reqdoc-row")
+      && el.dataset.rrReqid === reqId
+      && (el.dataset.rrParent || "") === parentId
+      && el.dataset.rrDepth === depth;
+  });
+  var items = [];
+  for(var i = 0; i < siblings.length; i++){
+    items.push({ id: siblings[i].dataset.reqdoc, sortOrder: i * 10, parentId: parentId || null });
+  }
+  rrDragSource = null;
+  if(!canEditReq(reqId)){
+    toast("你对该项目只有查看权限", "warn");
+    renderReqDocTree();
+    return;
+  }
+  API.post("/api/req-docs/reorder", { items: items }).then(function(){
+    items.forEach(function(it){
+      var d = reqDocById(it.id);
+      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
+    });
+    renderReqDocTree();
+    toast("顺序已保存", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "排序保存失败", "bad");
+    renderReqDocTree();
+  });
+}
+function initReqDocTreeDrag(){
+  var tree = $("reqDocTree");
+  if(!tree) return;
+  tree.addEventListener("dragstart", function(e){
+    var handle = e.target.closest ? e.target.closest(".rr-drag") : null;
+    if(!handle){ e.preventDefault(); return; }
+    var row = handle.closest(".reqdoc-row");
+    if(!row){ e.preventDefault(); return; }
+    var d = reqDocById(row.dataset.reqdoc);
+    if(!d || !canEditReq(d.reqId)){ e.preventDefault(); return; }
+    rrDragSource = row;
+    rrDroppedInside = false;
+    row.classList.add("dragging");
+    try{
+      e.dataTransfer.setData("text/plain", row.dataset.reqdoc);
+      e.dataTransfer.effectAllowed = "move";
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 0, 0);
+    }catch(err){}
+  });
+  tree.addEventListener("dragend", function(e){
+    var row = e.target.closest ? e.target.closest(".reqdoc-row") : null;
+    if(row) row.classList.remove("dragging");
+    if(rrDragSource && rrDragSource.classList.contains("dragging")) rrDragSource.classList.remove("dragging");
+    if(rrDroppedInside){
+      rrDroppedInside = false;
+    }else{
+      removeRsDropLine();
+      rrDragSource = null;
+    }
+  });
+  tree.addEventListener("dragover", function(e){
+    if(!rrDragSource) return;
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    var hit = rrHitInfo(e);
+    var line = ensureRsDropLine();
+    if(hit && rrCanDrop(hit.node)){
+      var container = hit.node.parentNode;
+      if(hit.after) container.insertBefore(line, hit.node.nextSibling);
+      else container.insertBefore(line, hit.node);
+    }else{
+      removeRsDropLine();
+    }
+  });
+  tree.addEventListener("dragleave", function(e){
+    if(!rrDragSource) return;
+    var t = $("reqDocTree");
+    if(t && !t.contains(e.relatedTarget)) removeRsDropLine();
+  });
+  tree.addEventListener("drop", function(e){
+    if(!rrDragSource) return;
+    e.preventDefault();
+    rrDroppedInside = true;
+    rrCommitReorder();
   });
 }
 
@@ -1042,8 +1369,9 @@ function setDocFormatUI(format){
     badge.textContent = md ? "Markdown" : "富文本";
     badge.className = "reqdoc-fmt " + (md ? "md" : "html");
   }
-  showEl($("reqDocImport"), md);
-  showEl($("reqDocExport"), md);
+  var imp = $("reqDocImport"), exp = $("reqDocExport");
+  if(imp) imp.title = md ? "导入 Markdown 文件" : "导入 HTML 文件";
+  if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
 }
 function fillMarkdownEditor(doc){
   if($("reqDocMdCanvas")) $("reqDocMdCanvas").value = doc.content || "";
@@ -1655,35 +1983,47 @@ function deleteReqDoc(){
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
-function importReqDocMarkdown(){
+function importReqDoc(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导入", "warn"); return; }
   var input = $("reqDocImportFile");
-  if(input) input.click();
+  if(input){
+    input.accept = isMarkdownDoc() ? ".md,.markdown,.txt" : ".html,.htm";
+    input.click();
+  }
 }
 function onReqDocImportFile(e){
   var input = e.target;
   var f = input.files && input.files[0];
   input.value = "";
   if(!f) return;
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导入", "warn"); return; }
+  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
   var reader = new FileReader();
   reader.onload = function(){
-    if(!isMarkdownDoc() || !$("reqDocMdCanvas")) return;
-    $("reqDocMdCanvas").value = String(reader.result || "");
-    markReqDocDirty();
-    renderMarkdownPreview();
+    var text = String(reader.result || "");
+    if(isMarkdownDoc()){
+      if(!$("reqDocMdCanvas")) return;
+      $("reqDocMdCanvas").value = text;
+      markReqDocDirty();
+      renderMarkdownPreview();
+    }else{
+      if(!reqEditor) return;
+      reqEditor.setContents(text);
+      markReqDocDirty();
+    }
     toast("已导入「" + f.name + "」，记得保存", "fs");
   };
   reader.onerror = function(){ toast("读取文件失败", "bad"); };
   reader.readAsText(f, "utf-8");
 }
-function exportReqDocMarkdown(){
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导出", "warn"); return; }
-  var text = $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
-  var name = (editingMeta.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ".md";
-  var blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+function exportReqDoc(){
+  var md = isMarkdownDoc();
+  var text = md ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
+                : (reqEditor ? reqEditor.getContents(true) : "");
+  var ext = md ? ".md" : ".html";
+  var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
+  var name = (editingMeta.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
+  var blob = new Blob([text || ""], { type: mime });
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
   a.href = url;
@@ -1692,6 +2032,28 @@ function exportReqDocMarkdown(){
   a.click();
   setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
   toast("已导出 " + name, "fs");
+}
+function exportReqDocFromReader(docId){
+  var doc = reqDocById(docId);
+  if(!doc){ toast("文档信息未加载", "bad"); return; }
+  var seq = ++readerExportSeq;
+  API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
+    if(seq !== readerExportSeq) return;
+    var md = full.format === "markdown";
+    var text = full.content || "";
+    var ext = md ? ".md" : ".html";
+    var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
+    var name = (full.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+    toast("已导出 " + name, "fs");
+  }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
 /* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见 */
 function refreshReqDocPublishBtn(){
@@ -1822,6 +2184,7 @@ function populateReqDocSelect(keep){
       var row = e.target.closest("[data-reqdoc]");
       if(row){ openReqDocEditor(row.dataset.reqdoc); }
     });
+    initReqDocTreeDrag();
   }
   /* 列表 / 看板 / 阅读 / 动态：展示方式切换 */
   var rdModeBtns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
@@ -1899,12 +2262,15 @@ function populateReqDocSelect(keep){
       var node = e.target.closest("[data-rs-doc]");
       if(node) loadReqDocSplitDoc(node.dataset.rsDoc);
     });
+    initReqDocSplitDrag();
   }
   var rd = $("reqDocReader");
   if(rd){
     rd.addEventListener("click", function(e){
       var b = e.target.closest("[data-rrd-edit]");
-      if(b) openReqDocEditor(b.dataset.rrdEdit);
+      if(b){ openReqDocEditor(b.dataset.rrdEdit); return; }
+      var ex = e.target.closest("[data-rrd-export]");
+      if(ex) exportReqDocFromReader(ex.dataset.rrdExport);
     });
   }
   /* 动态：点条目打开对应文档 */
@@ -1979,8 +2345,8 @@ function populateReqDocSelect(keep){
   }
   if($("reqDocSave")) $("reqDocSave").addEventListener("click", saveReqDoc);
   if($("reqDocDelete")) $("reqDocDelete").addEventListener("click", deleteReqDoc);
-  if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDocMarkdown);
-  if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDocMarkdown);
+  if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDoc);
+  if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDoc);
   if($("reqDocImportFile")) $("reqDocImportFile").addEventListener("change", onReqDocImportFile);
   if($("reqDocParent")) $("reqDocParent").addEventListener("change", function(){ markReqDocDirty(); });
   $("reqDocType").addEventListener("change", markReqDocDirty);

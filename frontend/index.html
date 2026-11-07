@@ -232,6 +232,12 @@
           </div>
         </div>
 
+        <a class="icon-btn" href="https://github.com/kong0827/hourglass" target="_blank" rel="noopener" aria-label="GitHub 仓库" title="GitHub 仓库">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M10 1.9a8.1 8.1 0 0 0-2.56 15.78c.4.07.56-.18.56-.38v-1.35c-2.27.49-2.75-1.1-2.75-1.1-.37-.94-.9-1.19-.9-1.19-.74-.5.06-.49.06-.49.81.06 1.24.84 1.24.84.72 1.24 1.9.88 2.36.67.07-.52.28-.88.51-1.08-1.81-.21-3.71-.91-3.71-4.04 0-.89.32-1.62.84-2.19-.08-.21-.36-1.05.08-2.19 0 0 .69-.22 2.25.84a7.82 7.82 0 0 1 4.08 0c1.56-1.06 2.25-.84 2.25-.84.44 1.14.16 1.98.08 2.19.52.57.84 1.3.84 2.19 0 3.14-1.9 3.83-3.72 4.04.29.25.55.74.55 1.49v2.2c0 .21.15.46.56.38A8.1 8.1 0 0 0 10 1.9Z"/>
+          </svg>
+        </a>
+
         <a class="icon-btn" href="help.html" target="_blank" rel="noopener" aria-label="帮助中心（使用手册、快速上手、常见问题等）" title="帮助中心（使用手册、快速上手、常见问题等）">
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3.4 4.2A2.2 2.2 0 0 1 5.6 2h3.2a1.2 1.2 0 0 1 1.2 1.2v13.6a2.2 2.2 0 0 0-2.2-2.2H3.4Z"/><path d="M16.6 4.2A2.2 2.2 0 0 0 14.4 2h-3.2a1.2 1.2 0 0 0-1.2 1.2v13.6a2.2 2.2 0 0 1 2.2-2.2h4.4Z"/>
@@ -797,7 +803,10 @@
           <div class="reqdoc-split" id="reqDocSplit" hidden>
             <div class="reqdoc-split-tree" id="reqDocSplitTree"></div>
             <div class="reqdoc-reader" id="reqDocReader">
-              <div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>
+              <div class="rrd-empty">
+                <div class="rrd-empty-title">从左侧选择文档阅读</div>
+                <div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div>
+              </div>
             </div>
           </div>
           <!-- 最近动态：空间内全部文档的创建/更新/流转记录 -->
@@ -851,7 +860,7 @@
               <button class="btn sm ghost" type="button" id="reqDocDelete">删除</button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
-            <input type="file" id="reqDocImportFile" hidden accept=".md,.markdown,.txt">
+            <input type="file" id="reqDocImportFile" hidden accept=".md,.markdown,.txt,.html,.htm">
           </div>
 
           <div class="reqdoc-editwrap">

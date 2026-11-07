@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
 import com.hourglass.dto.ReqDocActivityView;
@@ -284,6 +285,73 @@ public class RequirementDocService {
             visible.add(row);
         }
         return visible;
+    }
+
+    /**
+     * 阅读/树拖拽排序：批量调整同一空间内若干文档的 sort_order 与 parent_id。
+     * 校验每篇文档的写权限，并阻止跨项目拖拽（reqId 必须相同）。
+     */
+    @Transactional
+    public void reorder(String userId, String workspaceId, ReqDocReorderRequest req) {
+        if (req == null || req.getItems() == null || req.getItems().isEmpty()) {
+            return;
+        }
+        // 先按 id 查出文档，校验权限与项目一致性
+        java.util.Map<String, RequirementDoc> docs = new java.util.HashMap<String, RequirementDoc>();
+        String commonReqId = null;
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
+            RequirementDoc d = get(workspaceId, item.getId());
+            projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+            if (commonReqId == null) {
+                commonReqId = d.getReqId();
+            } else if (!commonReqId.equals(d.getReqId())) {
+                throw AppException.badRequest("只能对同一项目下的文档排序");
+            }
+            docs.put(d.getId(), d);
+        }
+        // 落库
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
+            RequirementDoc d = docs.get(item.getId());
+            String newParentId = item.getParentId();
+            // 父文档必须同项目；空表示根级
+            if (newParentId != null && !newParentId.isEmpty()) {
+                RequirementDoc parent = docMapper.selectById(newParentId);
+                if (parent == null || !workspaceId.equals(parent.getWorkspaceId())) {
+                    throw AppException.badRequest("父文档不存在：" + newParentId);
+                }
+                if (!commonReqId.equals(parent.getReqId())) {
+                    throw AppException.badRequest("父文档必须属于同一项目");
+                }
+                // 不能形成环：新父级不能是当前文档本身或其任何后代
+                if (item.getId().equals(newParentId) || isDescendant(item.getId(), newParentId, docs)) {
+                    throw AppException.badRequest("不能将文档放到自己的子文档下");
+                }
+            }
+            docMapper.updateSortOrder(workspaceId, item.getId(),
+                    item.getSortOrder() == null ? 0 : item.getSortOrder(),
+                    newParentId == null || newParentId.isEmpty() ? null : newParentId);
+        }
+        // 记录一条活动：用第一个文档的标题代表这次排序操作
+        RequirementDoc first = docs.get(req.getItems().get(0).getId());
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, first.getId(), userId,
+                "update", "调整了文档「" + first.getTitle() + "」的顺序/层级");
+    }
+
+    /** 判断 descendant 是否是 ancestor 的后代（仅用于排序时防环） */
+    private boolean isDescendant(String ancestorId, String descendantId, java.util.Map<String, RequirementDoc> cache) {
+        String cursor = descendantId;
+        int guard = 0;
+        while (cursor != null && guard++ < 100) {
+            RequirementDoc d = cache.get(cursor);
+            if (d == null) {
+                d = docMapper.selectById(cursor);
+                if (d != null) cache.put(cursor, d);
+            }
+            if (d == null) return false;
+            if (ancestorId.equals(d.getParentId())) return true;
+            cursor = d.getParentId();
+        }
+        return false;
     }
 
     /**
