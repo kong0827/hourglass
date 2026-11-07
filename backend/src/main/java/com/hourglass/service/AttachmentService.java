@@ -328,7 +328,8 @@ public class AttachmentService {
     }
 
     private File dir() {
-        File d = new File(attachDir);
+        /* 必须是绝对路径：MultipartFile.transferTo 会把相对路径解析到 Tomcat 上传临时目录 */
+        File d = new File(attachDir).getAbsoluteFile();
         if (!d.exists() && !d.mkdirs()) {
             log.warn("附件目录创建失败：{}", d.getAbsolutePath());
         }

@@ -15,9 +15,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -26,7 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -136,6 +142,39 @@ class AttachmentServiceTest {
 
         verify(mapper).insert(argThat(a -> a.getStoredName().endsWith(".xlsx") && "计划.xlsx".equals(a.getFilename())));
         verify(logMapper).insert(argThat(l -> "上传附件「计划.xlsx」".equals(l.getDetail())));
+    }
+
+    @Test
+    void uploadUsesAbsolutePathForTransferTo() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        Task task = new Task();
+        task.setWorkspaceId("W1");
+        when(taskMapper.selectById("K1")).thenReturn(task);
+        when(mapper.selectById(anyString())).thenReturn(attachment("A1", "A1.md"));
+
+        AttachmentService svc = new AttachmentService(mapper, taskMapper, mock(TaskLogMapper.class),
+                mock(DemandMapper.class), mock(ProjectAccessService.class));
+        /* 相对目录正是线上故障配置：transferTo 会把它解析到 Tomcat 上传临时目录 */
+        ReflectionTestUtils.setField(svc, "attachDir", "./target/test-attach-relative");
+
+        final List<File> transferred = new ArrayList<File>();
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getSize()).thenReturn(2L);
+        when(file.getOriginalFilename()).thenReturn("说明.md");
+        when(file.getContentType()).thenReturn("text/markdown");
+        doAnswer(inv -> {
+            File dest = inv.getArgument(0);
+            transferred.add(dest);
+            Files.write(dest.toPath(), new byte[]{1, 2});
+            return null;
+        }).when(file).transferTo(any(File.class));
+
+        svc.upload("U1", "W1", "K1", AttachmentService.KIND_TASK, file);
+
+        assertEquals(1, transferred.size());
+        assertTrue(transferred.get(0).isAbsolute(), "transferTo 必须传绝对路径");
     }
 
     @Test
