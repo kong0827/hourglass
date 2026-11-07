@@ -75,14 +75,17 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数必须是 JSON 对象");
         }
         ObjectNode out = JSON.createObjectNode();
+        /* scope 区分任务视图（不存该字段）与需求池视图（demand），两类视图的 preset/group/sort 枚举不同 */
+        copyEnum(root, out, "scope", "demand");
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
         copyString(root, out, "doneScope", 16);
-        copyEnum(root, out, "preset", "all", "mine", "doing", "over");
-        copyEnum(root, out, "group", "none", "status", "owner", "priority", "project");
-        copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated");
+        copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "rej");
+        copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "kind");
+        copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created");
         copyStringArray(root, out, "owners");
         copyStringArray(root, out, "pris");
+        copyStringArray(root, out, "kinds");
         copyStringArray(root, out, "cats");
         copyStringArray(root, out, "reqs");
         copyStringArray(root, out, "tags");

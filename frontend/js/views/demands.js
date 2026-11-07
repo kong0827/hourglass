@@ -1,7 +1,9 @@
 /* views/demands · 需求池：评审状态机看板（待评审 → 已通过 → 已排期；拒绝可重新打开） */
 
 import { API } from "../core/api.js";
+import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
+import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
@@ -10,7 +12,9 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { bindRetry } from "../core/utils.js";
 import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
 
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
@@ -101,6 +105,10 @@ function loadDemands(){
   });
 }
 function enterDemandsView(){
+  initDemSmartBar();
+  restoreDemState();
+  syncDemControls();
+  loadViews().then(renderDemTabs);
   listPrefs.load("demand-pool").then(function(){
     if(rt.reqsLoaded){
       syncReqSel();
@@ -166,6 +174,8 @@ function syncModeUI(mode){
   if(demandReq) demandReq.hidden = mode === "table";
   var bc = $("btnDemandColumns");
   if(bc) bc.hidden = mode !== "table";
+  /* 智能视图条只在列表模式出现：看板模式保持评审状态机的原貌 */
+  if(demSmartBar) demSmartBar.hidden = mode !== "table";
   /* 只读项目不显示「提需求」；列表模式全空间，只要有一个可写项目即可 */
   var bn = $("btnDemandNew");
   if(bn) bn.style.display = (writableReqs().length && (mode === "table" || canEditReq(rt.demandReqId))) ? "" : "none";
@@ -217,10 +227,16 @@ function demandActs(d){
     ? '<button class="btn sm ghost danger" type="button" data-dem-del="' + esc(d.id) + '">删除</button>' : "";
   return acts + editBtn + delBtn;
 }
+function dragHint(status){
+  if(status === "review") return "可拖到「已通过」或「已拒绝」";
+  if(status === "pass") return "可拖到「已排期」选择目标版本";
+  if(status === "rej") return "可拖回「待评审」重新打开";
+  return "拖到其他列流转状态";
+}
 function cardHTML(d){
   var acts = demandActs(d);
   var drag = isOwner()
-    ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="拖到其他列流转状态"'
+    ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
   return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
@@ -259,8 +275,386 @@ function demandCell(d, key){
   if(key === "createdAt") return esc(fmtTs(d.createdAt) || "—");
   return "—";
 }
+/* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
+
+var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["rej","已拒绝"]];
+var DEM_GROUPS = ["none","status","priority","project","kind"];
+var DEM_SORTS = ["default","priority","expect","wsjf","created"];
+var DEM_STATE_KEY = "ds.demandView.v1";
+var demSmart = { current:"all", preset:"all", group:"none", sort:"default", pris:[], kinds:[], reqs:[], q:"", collapsed:{} };
+var demSmartBar = null, demTabsBox = null, demSearchInput = null, demQTimer = null;
+
+function demBaseRows(){
+  return demands.filter(function(d){
+    if(demSmart.preset !== "all" && d.status !== demSmart.preset) return false;
+    if(demSmart.pris.length && demSmart.pris.indexOf(d.priority || "P2") === -1) return false;
+    if(demSmart.kinds.length && demSmart.kinds.indexOf(d.itemKind || "其他") === -1) return false;
+    if(demSmart.reqs.length && demSmart.reqs.indexOf(d.reqId) === -1) return false;
+    if(demSmart.q){
+      var hay = ((d.title || "") + "\n" + (d.description || "") + "\n" + (d.source || "")).toLowerCase();
+      if(hay.indexOf(demSmart.q.toLowerCase()) === -1) return false;
+    }
+    return true;
+  });
+}
+function demCompare(a, b){
+  if(demSmart.sort === "priority") return priRank(a.priority) - priRank(b.priority)
+    || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  if(demSmart.sort === "expect") return String(a.expectDate || "9999").localeCompare(String(b.expectDate || "9999"));
+  if(demSmart.sort === "wsjf") return (Number(b.wsjfScore) || 0) - (Number(a.wsjfScore) || 0);
+  if(demSmart.sort === "created") return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  return (STATUS_ORDER[a.status] === undefined ? 9 : STATUS_ORDER[a.status]) - (STATUS_ORDER[b.status] === undefined ? 9 : STATUS_ORDER[b.status])
+    || priRank(a.priority) - priRank(b.priority)
+    || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+}
+function demSorted(rows){
+  return rows.slice().sort(demCompare);
+}
+function demGroupInfo(d){
+  if(demSmart.group === "status") return {key:d.status, label:statusName(d.status)};
+  if(demSmart.group === "priority") return {key:d.priority || "P2", label:priName(d.priority || "P2")};
+  if(demSmart.group === "project") return {key:d.reqId || "__none", label:d.reqId ? (reqNameById(d.reqId) || "未归类") : "未归类"};
+  if(demSmart.group === "kind") return {key:d.itemKind || "其他", label:d.itemKind || "其他"};
+  return null;
+}
+function demGroups(){
+  if(demSmart.group === "none") return [];
+  var groups = [];
+  demBaseRows().forEach(function(d){
+    var info = demGroupInfo(d), group = null;
+    for(var i = 0; i < groups.length; i++) if(groups[i].key === info.key){ group = groups[i]; break; }
+    if(!group){ group = {key:info.key, label:info.label, rows:[]}; groups.push(group); }
+    group.rows.push(d);
+  });
+  groups.forEach(function(g){ g.rows = demSorted(g.rows); });
+  groups.sort(function(a, b){
+    if(demSmart.group === "status")
+      return (STATUS_ORDER[a.key] === undefined ? 9 : STATUS_ORDER[a.key]) - (STATUS_ORDER[b.key] === undefined ? 9 : STATUS_ORDER[b.key]);
+    if(demSmart.group === "priority") return priRank(a.key) - priRank(b.key);
+    return a.label.localeCompare(b.label, "zh-CN");
+  });
+  return groups;
+}
+function demViewRows(){
+  if(demSmart.group === "none") return demSorted(demBaseRows());
+  return demGroups().reduce(function(all, g){ return all.concat(g.rows); }, []);
+}
+function demFilterCount(){
+  return demSmart.pris.length + demSmart.kinds.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
+}
+function renderDemTabs(){
+  if(!demTabsBox) return;
+  var html = DEM_PRESETS.map(function(p){
+    var on = demSmart.current === p[0];
+    return '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-dem-preset="' + p[0] + '">' + p[1] + '</button>';
+  }).join("");
+  html += savedViewsFor("demand").map(function(v){
+    var id = String(v.id), on = demSmart.current === id;
+    return '<span class="smart-view-custom">' +
+      '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-dem-view="' + esc(id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +
+      '<button class="smart-view-del" type="button" data-dem-view-del="' + esc(id) + '" title="删除视图" aria-label="删除视图：' + esc(v.name) + '">' + icon("close", 11) + '</button></span>';
+  }).join("");
+  demTabsBox.innerHTML = html;
+}
+function syncDemControls(){
+  if(demSmartBar){
+    var g = demSmartBar.querySelector("[data-dem-group]");
+    if(g) g.value = demSmart.group;
+    var s = demSmartBar.querySelector("[data-dem-sort]");
+    if(s) s.value = demSmart.sort;
+    if(demSearchInput) demSearchInput.value = demSmart.q;
+    var fc = demSmartBar.querySelector("[data-dem-fcount]");
+    if(fc){ var n = demFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
+  }
+  renderDemTabs();
+}
+function saveDemState(){
+  var ws = rt.currentWs && rt.currentWs.id;
+  if(!ws) return;
+  try{
+    localStorage.setItem(DEM_STATE_KEY, JSON.stringify({
+      wsId: ws,
+      view: {
+        current: demSmart.current, preset: demSmart.preset, group: demSmart.group, sort: demSmart.sort,
+        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(), reqs: demSmart.reqs.slice()
+      }
+    }));
+  }catch(e){ /* 隐私模式/受限环境忽略 */ }
+}
+function demStrArr(v){
+  if(!Array.isArray(v)) return [];
+  return v.filter(function(x){ return typeof x === "string"; });
+}
+function restoreDemState(){
+  if(!rt.currentWs) return;
+  var snap;
+  try{ snap = JSON.parse(localStorage.getItem(DEM_STATE_KEY) || "null"); }
+  catch(e){ return; }
+  if(!snap || snap.wsId !== rt.currentWs.id || !snap.view) return;
+  var v = snap.view;
+  demSmart.current = typeof v.current === "string" ? v.current : "all";
+  demSmart.preset = DEM_PRESETS.some(function(p){ return p[0] === v.preset; }) ? v.preset : "all";
+  demSmart.group = DEM_GROUPS.indexOf(v.group) !== -1 ? v.group : "none";
+  demSmart.sort = DEM_SORTS.indexOf(v.sort) !== -1 ? v.sort : "default";
+  demSmart.pris = demStrArr(v.pris);
+  demSmart.kinds = demStrArr(v.kinds);
+  demSmart.reqs = demStrArr(v.reqs);
+  demSmart.q = typeof v.q === "string" ? v.q : "";
+}
+function demStateChanged(){
+  syncDemControls();
+  render();
+  saveDemState();
+}
+function activateDemPreset(id){
+  var ok = false;
+  DEM_PRESETS.forEach(function(p){ if(p[0] === id) ok = true; });
+  if(!ok) return;
+  UI.closeAllPops();
+  demSmart.current = id;
+  demSmart.preset = id;
+  demSmart.group = "none";
+  demSmart.sort = "default";
+  demSmart.pris = []; demSmart.kinds = []; demSmart.reqs = []; demSmart.q = "";
+  demSmart.collapsed = {};
+  demStateChanged();
+}
+function applyDemView(v){
+  var p;
+  try{ p = JSON.parse(v.params); }
+  catch(e){ toast("视图参数损坏，无法应用", "bad"); return; }
+  if(!p || p.scope !== "demand"){ toast("视图参数不合法，无法应用（可删除后重新保存）", "bad"); return; }
+  UI.closeAllPops();
+  demSmart.current = String(v.id);
+  demSmart.preset = DEM_PRESETS.some(function(x){ return x[0] === p.preset; }) ? p.preset : "all";
+  demSmart.group = DEM_GROUPS.indexOf(p.group) !== -1 ? p.group : "none";
+  demSmart.sort = DEM_SORTS.indexOf(p.sort) !== -1 ? p.sort : "default";
+  demSmart.pris = demStrArr(p.pris);
+  demSmart.kinds = demStrArr(p.kinds);
+  demSmart.reqs = demStrArr(p.reqs);
+  demSmart.q = typeof p.q === "string" ? p.q : "";
+  demSmart.collapsed = {};
+  demStateChanged();
+  toast("已应用视图「" + v.name + "」", "fs");
+}
+function demPresetName(id){
+  for(var i = 0; i < DEM_PRESETS.length; i++) if(DEM_PRESETS[i][0] === id) return DEM_PRESETS[i][1];
+  return "";
+}
+function currentDemViewName(){
+  var id = String(demSmart.current);
+  var views = savedViewsFor("demand");
+  for(var i = 0; i < views.length; i++) if(String(views[i].id) === id) return views[i].name;
+  return "";
+}
+function saveDemView(){
+  UI.showPrompt({
+    title:"保存自定义视图",
+    desc:"保存需求池当前的筛选、分组与排序；同名保存将覆盖原视图",
+    label:"视图名称（≤20 字）",
+    maxLength:20,
+    okText:"保存"
+  }).then(function(name){
+    if(name === null) return;
+    name = String(name).trim().slice(0, 20);
+    if(!name){ toast("请填写视图名称", "warn"); return; }
+    var overwrite = savedViewsFor("demand").some(function(v){ return v.name === name; });
+    var params = JSON.stringify({
+      scope:"demand",
+      preset:demSmart.preset, group:demSmart.group, sort:demSmart.sort,
+      q:demSmart.q, pris:demSmart.pris.slice(), kinds:demSmart.kinds.slice(), reqs:demSmart.reqs.slice()
+    });
+    API.post("/api/views", { name:name, params:params }).then(function(saved){
+      toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
+      loadViews().then(function(){
+        if(saved) demSmart.current = String(saved.id);
+        renderDemTabs();
+        saveDemState();
+      });
+    }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  });
+}
+function deleteDemView(id){
+  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响需求数据。", okText:"删除" }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/views/" + encodeURIComponent(id)).then(function(){
+      toast("视图已删除", "fs");
+      if(demSmart.current === String(id)) activateDemPreset("all");
+      loadViews().then(renderDemTabs);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+function demFilterMenuHTML(){
+  var base = demands.filter(function(d){ return demSmart.preset === "all" || d.status === demSmart.preset; });
+  var counts = { pris:{}, kinds:{}, reqs:{} };
+  base.forEach(function(d){
+    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none";
+    counts.pris[p] = (counts.pris[p] || 0) + 1;
+    counts.kinds[k] = (counts.kinds[k] || 0) + 1;
+    counts.reqs[r] = (counts.reqs[r] || 0) + 1;
+  });
+  function section(title, inner){
+    if(!inner) return "";
+    return '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">' + title + '</div>' +
+      '<div class="row row-gap" style="flex-wrap:wrap;gap:6px">' + inner + '</div></div>';
+  }
+  var priInner = Object.keys(PRI_ORDER).map(function(p){
+    var on = demSmart.pris.indexOf(p) !== -1;
+    if(!(counts.pris[p] > 0) && !on) return "";
+    return '<button class="chip" type="button" data-dem-f="pris" data-dem-fv="' + esc(p) + '" aria-pressed="' + on + '">' +
+      esc(priName(p)) + ' <span class="n">' + (counts.pris[p] || 0) + '</span></button>';
+  }).join("");
+  var kindNames = ["新功能","体验优化","缺陷","其他"];
+  Object.keys(counts.kinds).forEach(function(k){ if(kindNames.indexOf(k) === -1) kindNames.push(k); });
+  var kindInner = kindNames.map(function(k){
+    var on = demSmart.kinds.indexOf(k) !== -1;
+    if(!(counts.kinds[k] > 0) && !on) return "";
+    return '<button class="chip" type="button" data-dem-f="kinds" data-dem-fv="' + esc(k) + '" aria-pressed="' + on + '">' +
+      esc(k) + ' <span class="n">' + (counts.kinds[k] || 0) + '</span></button>';
+  }).join("");
+  var reqInner = rt.reqList.map(function(r){
+    var on = demSmart.reqs.indexOf(r.id) !== -1;
+    if(!(counts.reqs[r.id] > 0) && !on) return "";
+    return '<button class="chip" type="button" data-dem-f="reqs" data-dem-fv="' + esc(r.id) + '" aria-pressed="' + on + '">' +
+      esc(r.name) + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
+  }).join("");
+  var html = '<div class="menu-title">筛选需求</div>' +
+    section("优先级", priInner) + section("类型", kindInner) + section("项目", reqInner);
+  if(!priInner && !kindInner && !reqInner){
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
+  }
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>重置筛选</button></div>';
+  return html;
+}
+function openDemFilterPop(anchor){
+  var el = document.createElement("div");
+  el.className = "menu popover filter-dd";
+  el.innerHTML = demFilterMenuHTML();
+  el.addEventListener("click", function(e){
+    if(e.target.closest("[data-dem-f-reset]")){
+      demSmart.pris = []; demSmart.kinds = []; demSmart.reqs = [];
+      el.innerHTML = demFilterMenuHTML();
+      demStateChanged();
+      return;
+    }
+    var b = e.target.closest("[data-dem-f]");
+    if(!b) return;
+    var arr = demSmart[b.dataset.demF], i = arr.indexOf(b.dataset.demFv);
+    if(i === -1) arr.push(b.dataset.demFv); else arr.splice(i, 1);
+    el.innerHTML = demFilterMenuHTML();
+    demStateChanged();
+  });
+  UI.openPop(el, anchor, {align:"left", width:320, onClose:function(){ el.remove(); }});
+}
+function demCsvCell(value){
+  var s = value === null || value === undefined ? "" : String(value);
+  if(!/^-?\d+(\.\d+)?$/.test(s) && /^\s*[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function demCsvValue(d, key){
+  if(key === "title") return d.title || "";
+  if(key === "kind") return d.itemKind || "";
+  if(key === "priority") return d.priority || "";
+  if(key === "status") return statusName(d.status);
+  if(key === "project") return reqNameById(d.reqId) || "";
+  if(key === "version") return versionName(d.versionId) || "";
+  if(key === "expectDate") return d.expectDate ? String(d.expectDate).substring(0, 10) : "";
+  if(key === "wsjf") return (d.wsjfScore === null || d.wsjfScore === undefined) ? "" : (Math.round(d.wsjfScore * 10) / 10);
+  if(key === "source") return d.source || "";
+  if(key === "createdAt") return d.createdAt ? fmtTs(d.createdAt) : "";
+  return "";
+}
+function exportDemCsv(){
+  var rows = demViewRows();
+  if(!rows.length){ toast("当前视图没有可导出的需求", "warn"); return; }
+  var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
+  var lines = [cols.map(function(key){ return labels[key]; })];
+  rows.forEach(function(d){ lines.push(cols.map(function(key){ return demCsvValue(d, key); })); });
+  var csv = "\uFEFF" + lines.map(function(line){ return line.map(demCsvCell).join(","); }).join("\r\n");
+  var name = currentDemViewName() || demPresetName(demSmart.preset) || "需求池列表";
+  name = name.replace(/[\\/:*?"<>|]/g, "-");
+  triggerDownload(name + "-" + rt.TODAY_ISO + ".csv", csv, "text/csv;charset=utf-8;");
+  toast("已导出当前视图 " + rows.length + " 项", "fs");
+}
+function initDemSmartBar(){
+  if(demSmartBar) return;
+  var page = $("demandsPage");
+  if(!page || !demandBody) return;
+  demSmartBar = document.createElement("div");
+  demSmartBar.className = "smart-list-bar";
+  demSmartBar.hidden = true;
+  demSmartBar.innerHTML =
+    '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
+    '<div class="smart-view-tools">' +
+      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索需求 / 描述 / 来源" aria-label="搜索需求" />' +
+      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+      '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
+        '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
+        '<option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
+      '<label class="smart-view-control"><span>排序</span><select class="mini-select" data-dem-sort aria-label="排序方式">' +
+        '<option value="default">默认顺序（状态→优先级）</option><option value="priority">按优先级</option>' +
+        '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
+      '<span class="smart-view-spacer"></span>' +
+      '<button class="btn sm" type="button" data-dem-export>' + icon("download", 13) + ' 导出当前视图</button>' +
+      '<button class="btn sm primary" type="button" data-dem-save>＋ 保存视图</button>' +
+    '</div>';
+  page.insertBefore(demSmartBar, demandBody);
+  demTabsBox = demSmartBar.querySelector(".smart-view-tabs");
+  demSearchInput = demSmartBar.querySelector("[data-dem-q]");
+  demSmartBar.addEventListener("click", function(e){
+    var del = e.target.closest("[data-dem-view-del]");
+    if(del){ deleteDemView(del.dataset.demViewDel); return; }
+    var preset = e.target.closest("[data-dem-preset]");
+    if(preset){ activateDemPreset(preset.dataset.demPreset); return; }
+    var sv = e.target.closest("[data-dem-view]");
+    if(sv){
+      var views = savedViewsFor("demand");
+      for(var i = 0; i < views.length; i++){
+        if(String(views[i].id) === sv.dataset.demView){ applyDemView(views[i]); return; }
+      }
+      return;
+    }
+    if(e.target.closest("[data-dem-save]")){ saveDemView(); return; }
+    if(e.target.closest("[data-dem-export]")){ exportDemCsv(); return; }
+    var fb = e.target.closest("[data-dem-filter]");
+    if(fb){ openDemFilterPop(fb); return; }
+  });
+  demSmartBar.addEventListener("change", function(e){
+    var g = e.target.closest("[data-dem-group]");
+    if(g){
+      if(DEM_GROUPS.indexOf(g.value) === -1) return;
+      demSmart.group = g.value;
+      demSmart.collapsed = {};
+      demStateChanged();
+      return;
+    }
+    var s = e.target.closest("[data-dem-sort]");
+    if(s){
+      if(DEM_SORTS.indexOf(s.value) === -1) return;
+      demSmart.sort = s.value;
+      demStateChanged();
+    }
+  });
+  if(demSearchInput) demSearchInput.addEventListener("input", function(){
+    if(demQTimer) clearTimeout(demQTimer);
+    demQTimer = setTimeout(function(){
+      demQTimer = null;
+      demSmart.q = demSearchInput.value.trim();
+      demStateChanged();
+    }, 300);
+  });
+  syncDemControls();
+}
+
 function renderDemandTable(){
-  if(demandsMeta) demandsMeta.textContent = demands.length ? ("全空间 · 共 " + demands.length + " 条") : "全空间";
+  var rows = demViewRows(), groups = demGroups();
+  var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
+  if(demandsMeta){
+    var text = demands.length ? ("全空间 · 共 " + demands.length + " 条") : "全空间";
+    if(hasCond && rows.length !== demands.length) text += " · 当前视图 " + rows.length + " 条";
+    if(demSmart.group !== "none") text += " · " + groups.length + " 组";
+    demandsMeta.textContent = text;
+  }
   if(!demands.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"inbox", title:"需求池还是空的",
@@ -268,21 +662,42 @@ function renderDemandTable(){
     });
     return;
   }
+  if(!rows.length){
+    demandBody.innerHTML = '<div style="padding:8px">' + UI.emptyState({
+      icon:"filterOff", title:"没有符合当前视图条件的需求",
+      text:"切换视图，或调整、清空筛选条件后重试。",
+      actionLabel:"查看全部需求", compact:true
+    }) + '</div>';
+    bindRetry(demandBody, function(){ activateDemPreset("all"); });
+    return;
+  }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
   var numCols = { expectDate:1, wsjf:1, createdAt:1 };
-  var rows = demands.slice().sort(function(a, b){
-    return (STATUS_ORDER[a.status] === undefined ? 9 : STATUS_ORDER[a.status]) - (STATUS_ORDER[b.status] === undefined ? 9 : STATUS_ORDER[b.status])
-      || priRank(a.priority) - priRank(b.priority)
-      || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-  });
+  function rowHTML(d){
+    return '<tr>' + cols.map(function(k){
+      return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
+    }).join("")
+      + '<td><span class="demand-row-acts">' + demandActs(d) + '</span></td></tr>';
+  }
+  var colspan = cols.length + 1;
+  function groupHead(g){
+    var collapsed = !!demSmart.collapsed["$" + g.key];
+    return '<tr class="dem-group-row"><td colspan="' + colspan + '"><button type="button" class="dem-group-toggle" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
+      '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>' +
+      '<span class="dem-group-name">' + esc(g.label) + '</span>' +
+      '<span class="dem-group-count">' + g.rows.length + ' 项</span></button></td></tr>';
+  }
+  var body = "";
+  if(demSmart.group === "none"){
+    body = rows.map(rowHTML).join("");
+  }else{
+    body = groups.map(function(g){
+      return groupHead(g) + (demSmart.collapsed["$" + g.key] ? "" : g.rows.map(rowHTML).join(""));
+    }).join("");
+  }
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
     + '<thead><tr>' + cols.map(function(k){ return '<th' + (numCols[k] ? ' class="num"' : '') + '>' + esc(labels[k] || k) + '</th>'; }).join("") + '<th>操作</th></tr></thead>'
-    + '<tbody>' + rows.map(function(d){
-      return '<tr>' + cols.map(function(k){
-        return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
-      }).join("")
-        + '<td><span class="demand-row-acts">' + demandActs(d) + '</span></td></tr>';
-    }).join("") + '</tbody></table></div></section>';
+    + '<tbody>' + body + '</tbody></table></div></section>';
 }
 
 /* ---------- 需求弹窗 ---------- */
@@ -550,12 +965,15 @@ function loadDemandAttachments(layer, id, writable){
   if(!box) return;
   API.get("/api/demands/" + encodeURIComponent(id) + "/attachments").then(function(list){
     if(!layer.isConnected) return;
-    if(!list || !list.length){
-      box.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Excel、txt、md、zip，单个 ≤10MB）</div>';
+    box.__attList = list || [];
+    if(!box.__attList.length){
+      box.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）</div>';
       return;
     }
-    box.innerHTML = list.map(function(a){
+    box.innerHTML = box.__attList.map(function(a){
       var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
+      var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+      var canPrev = previewable(a.filename);
       var url = attUrl(a.id);
       var head = isImg
         ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
@@ -564,6 +982,8 @@ function loadDemandAttachments(layer, id, writable){
         '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
         '<span class="att-size">' + fmtSize(a.size) + '</span>' +
         '<span class="att-acts">' +
+          (canPrev ? '<button class="icon-btn sm" type="button" data-att-prev="' + esc(a.id) + '" title="在线预览" aria-label="在线预览">' + icon("eye", 14) + '</button>' : '') +
+          (isSheet ? '<button class="icon-btn sm" type="button" data-att-sheet="' + esc(a.id) + '" title="打开表格" aria-label="打开表格">' + icon("table", 14) + '</button>' : '') +
           '<a class="icon-btn sm" href="' + url + '" download title="下载" aria-label="下载附件">' + icon("download", 14) + '</a>' +
           (writable ? '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>' : '') +
         '</span>' +
@@ -643,6 +1063,7 @@ function showDemandDetail(id){
   layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(d.title) + '</h2>'
     + '<div class="desc">' + esc(reqNameById(d.reqId)) + ' · 提交于 ' + esc(fmtTs(d.createdAt) || "—") + '</div></div>'
+    + (writable ? '<button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
     + '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body phase-note">'
     + '<div class="detail-grid">' + grid.map(function(g){
@@ -664,7 +1085,7 @@ function showDemandDetail(id){
     + '<div class="detail-section"><span class="section-title">附件</span>'
     + '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
     + (writable ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
-      + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx"></div>' : '')
+      + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.xls,.doc,.docx,.ppt,.pptx"></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">流转时间线</span><ul class="dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul></div>'
     + '</div></div>';
@@ -718,6 +1139,28 @@ function showDemandDetail(id){
     }
     var ot = e.target.closest("[data-open-task]");
     if(ot){ UI.closeModal(layer); openTaskById(ot.dataset.openTask); return; }
+    var pv = e.target.closest("[data-att-prev]");
+    if(pv){
+      var boxP = layer.querySelector("#demAtts");
+      var attP = ((boxP && boxP.__attList) || []).find(function(a){ return a.id === pv.dataset.attPrev; });
+      if(attP) openAttPreview({ attachment: attP });
+      return;
+    }
+    var sh = e.target.closest("[data-att-sheet]");
+    if(sh){
+      var boxS = layer.querySelector("#demAtts");
+      var attS = ((boxS && boxS.__attList) || []).find(function(a){ return a.id === sh.dataset.attSheet; });
+      if(!attS) return;
+      /* xls 由 SheetJS 只读解析（保存回写只支持 xlsx） */
+      import("../core/sheet-viewer.js").then(function(m){
+        m.openSheet({
+          attachment: attS,
+          canEdit: writable && /\.xlsx$/i.test(attS.filename || ""),
+          onSaved: function(){ loadDemandAttachments(layer, id, writable); }
+        });
+      }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+      return;
+    }
     var ad = e.target.closest("[data-att-del]");
     if(ad){
       if(!writable){ denyDemandReadOnly(); return; }
@@ -742,8 +1185,8 @@ function showDemandDetail(id){
     fi.value = "";
     if(!f) return;
     if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，未上传", "warn"); return; }
-    if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|xlsx)$/i.test(f.name)){
-      toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/xlsx）", "warn");
+    if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i.test(f.name)){
+      toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/doc/docx/xls/xlsx/ppt/pptx）", "warn");
       return;
     }
     var fd = new FormData();
@@ -821,6 +1264,13 @@ if($("btnDemandColumns")) $("btnDemandColumns").addEventListener("click", functi
   listPrefs.openColumnSettings("demand-pool", function(){ render(); });
 });
 if(demandBody) demandBody.addEventListener("click", function(e){
+  var gt = e.target.closest("[data-dem-group-toggle]");
+  if(gt){
+    var gkey = "$" + gt.dataset.demGroupToggle;
+    demSmart.collapsed[gkey] = !demSmart.collapsed[gkey];
+    render();
+    return;
+  }
   var dt = e.target.closest("[data-dem-detail]");
   if(dt){ showDemandDetail(dt.dataset.demDetail); return; }
   var p = e.target.closest("[data-dem-pass]");
@@ -846,7 +1296,24 @@ function allowedDrop(from, to){
   return false;
 }
 function clearColOver(){
-  demandBody.querySelectorAll(".bkl-col").forEach(function(c){ c.classList.remove("bkl-col-over"); });
+  demandBody.querySelectorAll(".bkl-col").forEach(function(c){
+    c.classList.remove("bkl-col-over");
+    c.classList.remove("bkl-col-can");
+    c.classList.remove("bkl-col-no");
+  });
+}
+/* 拖动一开始就把所有合法目标列点亮，避免长距离拖动时误以为不支持 */
+function markCanDrop(from){
+  demandBody.querySelectorAll(".bkl-col").forEach(function(c){
+    if(allowedDrop(from, c.dataset.col)) c.classList.add("bkl-col-can");
+  });
+}
+/* 不合法落点给出明确文案，而不是静默吞掉 */
+function dropDenied(status){
+  if(status === "pass") toast("已通过的需求只能拖到「已排期」", "warn");
+  else if(status === "plan") toast("已排期的需求在版本里管理，不能拖拽改状态", "warn");
+  else if(status === "rej") toast("已拒绝的需求只能拖回「待评审」重新打开", "warn");
+  else toast("待评审的需求可以拖到「已通过」或「已拒绝」", "warn");
 }
 function applyDrop(src, to){
   if(src.status === "review" && to === "rej"){ rejectDemand(src.id); }
@@ -862,12 +1329,20 @@ if(demandBody){
     e.dataTransfer.setData("text/plain", dragSrc.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("bkl-dragging");
+    markCanDrop(dragSrc.status);
   });
   demandBody.addEventListener("dragover", function(e){
     if(!dragSrc) return;
     var col = e.target.closest(".bkl-col");
-    clearColOver();
-    if(!col || !allowedDrop(dragSrc.status, col.dataset.col)) return;
+    demandBody.querySelectorAll(".bkl-col-over,.bkl-col-no").forEach(function(c){
+      c.classList.remove("bkl-col-over");
+      c.classList.remove("bkl-col-no");
+    });
+    if(!col) return;
+    if(!allowedDrop(dragSrc.status, col.dataset.col)){
+      col.classList.add("bkl-col-no");
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     col.classList.add("bkl-col-over");
@@ -878,7 +1353,7 @@ if(demandBody){
     if(!dragSrc || !col) return;
     var src = dragSrc;
     dragSrc = null;
-    if(!allowedDrop(src.status, col.dataset.col)) return;
+    if(!allowedDrop(src.status, col.dataset.col)){ dropDenied(src.status); return; }
     e.preventDefault();
     applyDrop(src, col.dataset.col);
   });

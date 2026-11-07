@@ -131,6 +131,42 @@ class TaskCommandServiceNotificationTest {
         verifyNoInteractions(events);
     }
 
+    @Test
+    void columnChangeWithFieldsMergesIntoSingleUpdateEvent() {
+        Task old = oldTask("U1");
+        TaskSaveRequest req = request("U1");
+        req.setBoardColumn("doing");
+        prepareUpdate(old, req);
+        when(tasks.maxSortOrder("W1", "doing")).thenReturn(1024);
+        when(support.columnName("W1", "backlog")).thenReturn("待处理");
+        when(support.columnName("W1", "doing")).thenReturn("进行中");
+
+        service.update("U2", "W1", "K1", req);
+
+        verify(events).notify(eq("U1"), eq("W1"), eq(UserNotificationPreferenceService.TASK_UPDATED),
+                eq("任务更新：new title"), eq("从「待处理」移动到「进行中」；标题；截止日期"), eq("K1"), isNull());
+        verifyNoMoreInteractions(events);
+    }
+
+    @Test
+    void columnChangeOnlyNotifiesOwnerOfMove() {
+        Task old = oldTask("U1");
+        TaskSaveRequest req = request("U1");
+        req.setBoardColumn("doing");
+        prepareUpdate(old, req);
+        when(audit.diffParts(eq("W1"), eq(old), any(Task.class), anyList(), any()))
+                .thenReturn(new ArrayList<String>());
+        when(tasks.maxSortOrder("W1", "doing")).thenReturn(1024);
+        when(support.columnName("W1", "backlog")).thenReturn("待处理");
+        when(support.columnName("W1", "doing")).thenReturn("进行中");
+
+        service.update("U2", "W1", "K1", req);
+
+        verify(events).notify(eq("U1"), eq("W1"), eq(UserNotificationPreferenceService.TASK_UPDATED),
+                eq("任务更新：new title"), eq("从「待处理」移动到「进行中」"), eq("K1"), isNull());
+        verifyNoMoreInteractions(events);
+    }
+
     private void prepareUpdate(Task old, TaskSaveRequest req) {
         when(support.require("W1", "K1")).thenReturn(old);
         when(support.tagNames("W1", "K1")).thenReturn(Collections.emptyList());

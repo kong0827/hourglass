@@ -9,7 +9,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import * as activityUI from "../core/activity-ui.js";
-import { DOC_TYPES, colName, docTypeName, fmtTs, priColor, priName, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, colName, docTypeName, fmtTs, pad2, priColor, priName, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs, render } from "./board.js";
 
 var reqDocList = [];
@@ -160,7 +160,7 @@ function fetchReqDocs(kw){
       reqDocSearchList = null;
     }
     reqDocsLoaded = true;
-    if(activeView === "requirements") renderReqDocTree();
+    if(activeView === "requirements") renderReqDocMode();
     populateReqDocSelect();
     if(state.board) render({animate:false});
   }).catch(function(){ /* 需求模块不可用时静默降级 */ });
@@ -174,10 +174,11 @@ function enterRequirementsView(){
   loadReqs().then(function(){
     fillReqDocProjectSelect();
     /* 项目列表到位后重算「新增文档」按钮可见性（树可能先于 reqs 渲染过） */
-    if(reqDocsLoaded) renderReqDocTree();
+    if(reqDocsLoaded) renderReqDocMode();
   });
   showReqDocList();
-  loadReqDocs().then(function(){ renderReqDocTree(); });
+  setReqDocMode(reqDocMode);
+  loadReqDocs().then(function(){ renderReqDocMode(); });
 }
 function showReqDocList(){
   reqDocOpenSeq++;
@@ -243,6 +244,37 @@ function renderReqDocNodes(nodes, children, depth, seen){
       (kids.length && !collapsed ? renderReqDocNodes(kids, children, depth + 1, seen) : "");
   }).join("");
 }
+function reqDocGroupByProject(rows){
+  var groups = [], index = {};
+  rows.forEach(function(r){
+    var key = r.reqId || "__none";
+    if(!index[key]){
+      index[key] = { key: key, reqId: r.reqId, name: r.reqName || "未归属项目", items: [] };
+      groups.push(index[key]);
+    }
+    index[key].items.push(r);
+  });
+  /* 按「项目」里的顺序排，未在列表中的排最后 */
+  var order = {};
+  rt.reqList.forEach(function(r, i){ order[r.id] = i; });
+  groups.sort(function(a, b){
+    var oa = order[a.reqId] == null ? 9999 : order[a.reqId];
+    var ob = order[b.reqId] == null ? 9999 : order[b.reqId];
+    return oa - ob;
+  });
+  groups.forEach(function(g){
+    var byId = {}, children = {};
+    g.items.forEach(function(r){ byId[r.id] = r; });
+    g.items.forEach(function(r){
+      if(r.parentId && byId[r.parentId] && r.parentId !== r.id){
+        (children[r.parentId] = children[r.parentId] || []).push(r);
+      }
+    });
+    g.children = children;
+    g.roots = g.items.filter(function(r){ return !(r.parentId && byId[r.parentId] && r.parentId !== r.id); });
+  });
+  return groups;
+}
 function renderReqDocTree(){
   var box = $("reqDocTree");
   if(!box) return;
@@ -262,39 +294,12 @@ function renderReqDocTree(){
     return;
   }
 
-  var groups = [], index = {};
-  rows.forEach(function(r){
-    var key = r.reqId || "__none";
-    if(!index[key]){
-      index[key] = { key: key, reqId: r.reqId, name: r.reqName || "未归属项目", items: [] };
-      groups.push(index[key]);
-    }
-    index[key].items.push(r);
-  });
-  /* 按「项目」里的顺序排，未在列表中的排最后 */
-  var order = {};
-  rt.reqList.forEach(function(r, i){ order[r.id] = i; });
-  groups.sort(function(a, b){
-    var oa = order[a.reqId] == null ? 9999 : order[a.reqId];
-    var ob = order[b.reqId] == null ? 9999 : order[b.reqId];
-    return oa - ob;
-  });
-
-  box.innerHTML = groups.map(function(g){
+  box.innerHTML = reqDocGroupByProject(rows).map(function(g){
     var collapsed = !!reqCollapsed[g.key];
-    var byId = {};
-    g.items.forEach(function(r){ byId[r.id] = r; });
-    var children = {};
-    g.items.forEach(function(r){
-      if(r.parentId && byId[r.parentId] && r.parentId !== r.id){
-        (children[r.parentId] = children[r.parentId] || []).push(r);
-      }
-    });
-    var roots = g.items.filter(function(r){ return !(r.parentId && byId[r.parentId] && r.parentId !== r.id); });
     /* 搜索时平铺展示命中项，不做层级缩进 */
     var body = kw
       ? g.items.slice().sort(reqDocSort).map(function(r){ return reqDocRowHTML(r, 0, false, false); }).join("")
-      : renderReqDocNodes(roots, children, 0);
+      : renderReqDocNodes(g.roots, g.children, 0);
     return '<div class="reqdoc-proj' + (collapsed ? " collapsed" : "") + '">' +
       '<button class="reqdoc-proj-head" type="button" data-toggle-proj="' + esc(g.key) + '"' +
         ' aria-expanded="' + (collapsed ? "false" : "true") + '">' +
@@ -309,6 +314,293 @@ function renderReqDocTree(){
 function toggleReqProj(key){
   reqCollapsed[key] = !reqCollapsed[key];
   renderReqDocTree();
+}
+
+/* ---------- 列表 / 看板 / 阅读 / 最近动态：同一份数据的四种展示 ---------- */
+
+var RD_MODES = ["tree", "kanban", "read", "feed"];
+var RD_STATUS = [
+  { id: "draft", name: "草稿" },
+  { id: "active", name: "进行中" },
+  { id: "done", name: "已完成" }
+];
+var reqDocMode = reqDocModePref();
+var splitDocId = null;
+var splitDocSeq = 0;
+var feedSeq = 0;
+var draggingReqDocId = null;
+
+function reqDocModePref(){
+  try{
+    var v = localStorage.getItem("ds.reqDocMode");
+    return RD_MODES.indexOf(v) >= 0 ? v : "tree";
+  }catch(e){ return "tree"; }
+}
+function setReqDocMode(mode){
+  reqDocMode = RD_MODES.indexOf(mode) >= 0 ? mode : "tree";
+  try{ localStorage.setItem("ds.reqDocMode", reqDocMode); }catch(e){ /* 隐私模式忽略 */ }
+  var btns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
+  for(var i = 0; i < btns.length; i++){
+    btns[i].setAttribute("aria-selected", btns[i].dataset.rdmode === reqDocMode ? "true" : "false");
+  }
+  showEl($("reqDocTree"), reqDocMode === "tree");
+  showEl($("reqDocKanban"), reqDocMode === "kanban");
+  showEl($("reqDocSplit"), reqDocMode === "read");
+  showEl($("reqDocFeed"), reqDocMode === "feed");
+  renderReqDocMode();
+}
+function renderReqDocMode(){
+  if(reqDocMode === "kanban") renderReqDocKanban();
+  else if(reqDocMode === "read") renderReqDocSplit();
+  else if(reqDocMode === "feed") renderReqDocFeed();
+  else renderReqDocTree();
+}
+function reqDocById(id){
+  for(var i = 0; i < reqDocList.length; i++) if(reqDocList[i].id === id) return reqDocList[i];
+  return null;
+}
+function reqDocEmptyHTML(){
+  var kw = (($("reqDocSearch") || {}).value || "").trim();
+  return '<div class="reqdoc-empty2">' + (kw ? "没有找到匹配的文档" : "还没有文档。点右上角「新增文档」，先选项目再填文档名称。") + '</div>';
+}
+
+/* ---------- 看板：按状态分列，拖拽卡片流转状态 ---------- */
+
+function reqDocKanbanCard(d){
+  var editable = canEditReq(d.reqId);
+  var fmt = d.format === "markdown"
+    ? '<span class="rr-fmt md">MD</span>'
+    : '<span class="rr-fmt">HTML</span>';
+  var meta = [esc(reqDocProjectName(d.reqId)), esc(d.owner || "—") + " 创建"];
+  if(d.updatedAt) meta.push("更新 " + esc(fmtTs(d.updatedAt)));
+  var tasks = d.taskCount
+    ? '<span class="rk-tasks" title="关联工作项完成度">' + d.doneCount + "/" + d.taskCount + " 工作项</span>"
+    : "";
+  /* 状态下拉是拖拽之外的兜底入口（触屏/键盘也能流转）；只读项目只显示文字 */
+  var st = d.status === "done" ? "done" : (d.status === "active" ? "doing" : "draft");
+  var statusCtl = editable
+    ? '<select class="rk-status" data-rkstatus="' + esc(d.id) + '" aria-label="文档状态">'
+      + RD_STATUS.map(function(s){
+        return '<option value="' + s.id + '"' + (s.id === (d.status || "draft") ? " selected" : "") + '>' + s.name + '</option>';
+      }).join("")
+      + '</select>'
+    : '<span class="rk-status-label st ' + st + '"><i></i>' + reqDocStatusLabel(d.status) + '</span>';
+  return '<div class="rk-card" data-rkdoc="' + esc(d.id) + '"' + (editable ? ' draggable="true"' : '') + '>' +
+    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + (d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') + '</span></div>' +
+    '<div class="rk-meta">' + meta.join(" · ") + '</div>' +
+    '<div class="rk-foot">' + statusCtl + tasks + '</div>' +
+  '</div>';
+}
+function renderReqDocKanban(){
+  var box = $("reqDocKanban");
+  if(!box) return;
+  var rows = reqDocSearchList || reqDocList;
+  if(!rows.length){
+    box.innerHTML = reqDocEmptyHTML();
+    return;
+  }
+  box.innerHTML = RD_STATUS.map(function(col){
+    var cards = rows.filter(function(d){ return (d.status || "draft") === col.id; }).sort(reqDocSort);
+    return '<div class="rk-col rk-' + col.id + '" data-rkcol="' + col.id + '">' +
+      '<div class="rk-col-head"><span class="rk-dot" aria-hidden="true"></span>' + col.name +
+        '<span class="rk-count">' + cards.length + '</span></div>' +
+      '<div class="rk-col-body">' +
+        (cards.length ? cards.map(reqDocKanbanCard).join("") : '<div class="rk-empty">暂无文档</div>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+function reqDocChangeStatus(id, status){
+  var d = reqDocById(id);
+  if(!d) return;
+  if((d.status || "draft") === status) return;
+  if(!canEditReq(d.reqId)){
+    toast("你对该项目只有查看权限", "warn");
+    renderReqDocKanban();
+    return;
+  }
+  API.put("/api/req-docs/" + encodeURIComponent(id) + "/status", { status: status }).then(function(doc){
+    [reqDocList, reqDocSearchList].forEach(function(list){
+      if(!list) return;
+      for(var i = 0; i < list.length; i++){
+        if(list[i].id === id){
+          list[i].status = doc.status;
+          list[i].updatedAt = doc.updatedAt;
+        }
+      }
+    });
+    renderReqDocKanban();
+    toast("「" + d.title + "」已流转为「" + reqDocStatusLabel(status) + "」", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "状态流转失败", "bad");
+    renderReqDocKanban();
+  });
+}
+function reqDocKanbanClearDrop(){
+  var kb = $("reqDocKanban");
+  if(!kb) return;
+  var cols = kb.querySelectorAll(".rk-col.drop-active");
+  for(var i = 0; i < cols.length; i++) cols[i].classList.remove("drop-active");
+}
+
+/* ---------- 阅读：左侧文档树 + 右侧正文 ---------- */
+
+function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
+  var caret = hasChild
+    ? '<span class="rs-caret' + (collapsed ? " collapsed" : "") + '" data-rs-toggle="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 12) + '</span>'
+    : '<span class="rs-caret"></span>';
+  var fmt = r.format === "markdown"
+    ? '<span class="rr-fmt md">MD</span>'
+    : '<span class="rr-fmt">HTML</span>';
+  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" data-rs-doc="' + esc(r.id) + '">' +
+    caret + fmt +
+    '<span class="rs-title">' + esc(r.title) + '</span>' +
+    (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') +
+  '</button>';
+}
+function renderReqDocSplitNodes(nodes, children, depth){
+  return nodes.slice().sort(reqDocSort).map(function(r){
+    var kids = children[r.id] || [];
+    var collapsed = !!reqDocCollapsedDocs[r.id];
+    return reqDocSplitNodeHTML(r, depth, kids.length > 0, collapsed) +
+      (kids.length && !collapsed ? renderReqDocSplitNodes(kids, children, depth + 1) : "");
+  }).join("");
+}
+function renderReqDocSplit(){
+  var box = $("reqDocSplitTree");
+  if(!box) return;
+  /* 选中的文档已被删除：回到占位提示 */
+  if(splitDocId && !reqDocById(splitDocId)){
+    splitDocId = null;
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>';
+  }
+  var rows = reqDocSearchList || reqDocList;
+  if(!rows.length){
+    box.innerHTML = reqDocEmptyHTML();
+    return;
+  }
+  var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
+  box.innerHTML = reqDocGroupByProject(rows).map(function(g){
+    var collapsed = !!reqCollapsed[g.key];
+    /* 搜索时平铺展示命中项，不做层级缩进 */
+    var body = kw
+      ? g.items.slice().sort(reqDocSort).map(function(r){ return reqDocSplitNodeHTML(r, 0, false, false); }).join("")
+      : renderReqDocSplitNodes(g.roots, g.children, 0);
+    return '<div class="rs-proj' + (collapsed ? " collapsed" : "") + '">' +
+      '<button class="rs-proj-head" type="button" data-rs-proj="' + esc(g.key) + '"' +
+        ' aria-expanded="' + (collapsed ? "false" : "true") + '">' +
+        '<span class="rp-caret">' + icon("down", 12) + '</span>' +
+        '<span class="rp-name">' + esc(g.name) + '</span>' +
+        '<span class="rp-count">' + g.items.length + '</span>' +
+      '</button>' +
+      '<div class="rs-proj-body">' + body + '</div>' +
+    '</div>';
+  }).join("");
+}
+function loadReqDocSplitDoc(id){
+  splitDocId = id;
+  renderReqDocSplit();
+  var box = $("reqDocReader");
+  if(!box) return;
+  var seq = ++splitDocSeq;
+  box.innerHTML = '<div class="rrd-empty">加载中…</div>';
+  API.get("/api/req-docs/" + encodeURIComponent(id)).then(function(doc){
+    if(seq !== splitDocSeq || splitDocId !== id) return;
+    renderReqDocReader(doc);
+  }).catch(function(ex){
+    if(seq !== splitDocSeq || splitDocId !== id) return;
+    box.innerHTML = UI.errorState(ex.message || "文档加载失败");
+  });
+}
+function reqDocReaderOpenLinks(body){
+  var links = body.querySelectorAll("a[href]");
+  for(var i = 0; i < links.length; i++){
+    links[i].setAttribute("target", "_blank");
+    links[i].setAttribute("rel", "noopener noreferrer");
+  }
+}
+function renderReqDocReader(doc){
+  var box = $("reqDocReader");
+  if(!box) return;
+  var meta = [esc(docTypeName(doc.docType)), "负责人 " + esc(doc.owner || "—"), reqDocStatusLabel(doc.status)];
+  if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
+  if(doc.taskCount) meta.push(doc.doneCount + "/" + doc.taskCount + " 工作项");
+  box.innerHTML =
+    '<div class="rrd-head">' +
+      '<div class="rrd-title-row">' +
+        '<h3>' + esc(doc.title) + '</h3>' +
+        '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+      '</div>' +
+      '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
+    '</div>' +
+    '<div class="rrd-body markdown-body" id="reqDocReaderBody"></div>';
+  var body = $("reqDocReaderBody");
+  var id = doc.id;
+  loadMarkdownLib().then(function(){
+    if(splitDocId !== id) return;
+    if(doc.format === "markdown"){
+      var html = "";
+      try{ html = window.marked.parse(doc.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
+      body.innerHTML = window.DOMPurify.sanitize(html);
+    }else{
+      /* 服务端已按白名单清洗过，这里再过一道 DOMPurify（双保险） */
+      body.innerHTML = window.DOMPurify.sanitize(doc.content || "");
+    }
+    reqDocReaderOpenLinks(body);
+  }).catch(function(ex){
+    if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
+  });
+}
+
+/* ---------- 最近动态：空间内全部文档的创建/更新/流转记录 ---------- */
+
+function reqDocFeedDayLabel(day){
+  if(!day) return "更早";
+  var today = new Date();
+  var t = today.getFullYear() + "-" + pad2(today.getMonth() + 1) + "-" + pad2(today.getDate());
+  var yest = new Date(today.getTime() - 86400000);
+  var y = yest.getFullYear() + "-" + pad2(yest.getMonth() + 1) + "-" + pad2(yest.getDate());
+  if(day === t) return "今天";
+  if(day === y) return "昨天";
+  return day.substring(5).replace("-", "月") + "日";
+}
+function reqDocFeedItemHTML(r){
+  return '<button class="rf-item" type="button" data-rf-doc="' + esc(r.docId) + '" title="打开文档「' + esc(r.docTitle || "") + '」">' +
+    '<span class="rf-actor">' + esc(r.actorName || "—") + '</span>' +
+    '<span class="rf-detail">' + esc(r.detail || r.action || "") + '</span>' +
+    '<span class="rf-doc">' + esc(r.docTitle || "已删除的文档") + '</span>' +
+    '<span class="rf-time">' + esc(String(r.createdAt || "").substring(11, 16)) + '</span>' +
+  '</button>';
+}
+function renderReqDocFeed(){
+  var box = $("reqDocFeed");
+  if(!box) return;
+  var seq = ++feedSeq;
+  box.innerHTML = '<div class="reqdoc-empty2">加载中…</div>';
+  API.get("/api/req-docs/activities").then(function(rows){
+    if(seq !== feedSeq) return;
+    rows = rows || [];
+    if(!rows.length){
+      box.innerHTML = '<div class="reqdoc-empty2">还没有文档动态：创建、编辑或流转文档后，这里会按时间汇总展示。</div>';
+      return;
+    }
+    var groups = [], byDay = {};
+    rows.forEach(function(r){
+      var day = r.createdAt ? String(r.createdAt).substring(0, 10) : "";
+      if(!byDay[day]){
+        byDay[day] = { day: day, items: [] };
+        groups.push(byDay[day]);
+      }
+      byDay[day].items.push(r);
+    });
+    box.innerHTML = groups.map(function(g){
+      return '<div class="rf-day"><h4>' + esc(reqDocFeedDayLabel(g.day)) + '</h4>' +
+        g.items.map(reqDocFeedItemHTML).join("") + '</div>';
+    }).join("");
+  }).catch(function(ex){
+    if(seq !== feedSeq) return;
+    box.innerHTML = UI.errorState(ex.message || "动态加载失败");
+  });
 }
 function reqDocParentCandidates(reqId, excludeId){
   var banned = excludeId ? reqDocDescendants(excludeId) : {};
@@ -485,7 +777,9 @@ function closeReqDocEditor(){
   if($("reqDocListPage")) $("reqDocListPage").hidden = false;
   editingDocId = null;
   reqDirtyReset();
-  renderReqDocTree();
+  renderReqDocMode();
+  /* 阅读视图里刚编辑过：右侧正文可能是旧的，重新拉一次 */
+  if(reqDocMode === "read" && splitDocId) loadReqDocSplitDoc(splitDocId);
 }
 function reqDirtyReset(){
   reqDocDirty = false;
@@ -1420,7 +1714,7 @@ function toggleReqDocPublish(){
     for(var i = 0; i < reqDocList.length; i++){
       if(reqDocList[i].id === editingDocId) reqDocList[i].publishedAt = editingMeta.publishedAt;
     }
-    renderReqDocTree();
+    renderReqDocMode();
     toast(published ? "已收回发布，文档转为草稿" : "已发布，项目成员现在可以查看", "fs");
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); })
     .then(function(){ if(btn) btn.disabled = false; });
@@ -1527,6 +1821,98 @@ function populateReqDocSelect(keep){
       }
       var row = e.target.closest("[data-reqdoc]");
       if(row){ openReqDocEditor(row.dataset.reqdoc); }
+    });
+  }
+  /* 列表 / 看板 / 阅读 / 动态：展示方式切换 */
+  var rdModeBtns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
+  for(var mi = 0; mi < rdModeBtns.length; mi++){
+    (function(btn){
+      btn.addEventListener("click", function(){ setReqDocMode(btn.dataset.rdmode); });
+    })(rdModeBtns[mi]);
+  }
+  /* 看板：点卡片进编辑页；状态下拉兜底流转；拖拽卡片换列 */
+  var kb = $("reqDocKanban");
+  if(kb){
+    kb.addEventListener("click", function(e){
+      if(e.target.closest(".rk-status")) return;
+      var card = e.target.closest("[data-rkdoc]");
+      if(card) openReqDocEditor(card.dataset.rkdoc);
+    });
+    kb.addEventListener("change", function(e){
+      var sel = e.target.closest("[data-rkstatus]");
+      if(sel) reqDocChangeStatus(sel.dataset.rkstatus, sel.value);
+    });
+    kb.addEventListener("dragstart", function(e){
+      var card = e.target.closest ? e.target.closest("[data-rkdoc]") : null;
+      if(!card){ e.preventDefault(); return; }
+      var d = reqDocById(card.dataset.rkdoc);
+      if(!d || !canEditReq(d.reqId)){ e.preventDefault(); return; }
+      draggingReqDocId = card.dataset.rkdoc;
+      card.classList.add("dragging");
+      try{
+        e.dataTransfer.setData("text/plain", draggingReqDocId);
+        e.dataTransfer.effectAllowed = "move";
+      }catch(err){ /* 旧浏览器忽略 */ }
+    });
+    kb.addEventListener("dragend", function(e){
+      draggingReqDocId = null;
+      reqDocKanbanClearDrop();
+      var card = e.target.closest ? e.target.closest("[data-rkdoc]") : null;
+      if(card) card.classList.remove("dragging");
+      renderReqDocKanban();
+    });
+    kb.addEventListener("dragover", function(e){
+      if(!draggingReqDocId) return;
+      var col = e.target.closest ? e.target.closest("[data-rkcol]") : null;
+      if(!col) return;
+      e.preventDefault();
+      try{ e.dataTransfer.dropEffect = "move"; }catch(err){ /* 忽略 */ }
+      reqDocKanbanClearDrop();
+      col.classList.add("drop-active");
+    });
+    kb.addEventListener("drop", function(e){
+      var col = e.target.closest ? e.target.closest("[data-rkcol]") : null;
+      if(!col || !draggingReqDocId) return;
+      e.preventDefault();
+      var id = draggingReqDocId;
+      draggingReqDocId = null;
+      reqDocKanbanClearDrop();
+      reqDocChangeStatus(id, col.dataset.rkcol);
+    });
+  }
+  /* 阅读视图：左树选文档，右文阅读/编辑 */
+  var st = $("reqDocSplitTree");
+  if(st){
+    st.addEventListener("click", function(e){
+      var proj = e.target.closest("[data-rs-proj]");
+      if(proj){
+        reqCollapsed[proj.dataset.rsProj] = !reqCollapsed[proj.dataset.rsProj];
+        renderReqDocSplit();
+        return;
+      }
+      var caret = e.target.closest("[data-rs-toggle]");
+      if(caret){
+        reqDocCollapsedDocs[caret.dataset.rsToggle] = !reqDocCollapsedDocs[caret.dataset.rsToggle];
+        renderReqDocSplit();
+        return;
+      }
+      var node = e.target.closest("[data-rs-doc]");
+      if(node) loadReqDocSplitDoc(node.dataset.rsDoc);
+    });
+  }
+  var rd = $("reqDocReader");
+  if(rd){
+    rd.addEventListener("click", function(e){
+      var b = e.target.closest("[data-rrd-edit]");
+      if(b) openReqDocEditor(b.dataset.rrdEdit);
+    });
+  }
+  /* 动态：点条目打开对应文档 */
+  var fd = $("reqDocFeed");
+  if(fd){
+    fd.addEventListener("click", function(e){
+      var item = e.target.closest("[data-rf-doc]");
+      if(item) openReqDocEditor(item.dataset.rfDoc);
     });
   }
   if($("reqDocNew")) $("reqDocNew").addEventListener("click", function(){ openNewReqDocDialog(); });

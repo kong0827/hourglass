@@ -33,6 +33,11 @@ public interface RequirementDocMapper {
     int updatePublished(@Param("id") String id,
                         @Param("publishedAt") java.time.LocalDateTime publishedAt);
 
+    /** 看板拖拽状态流转：只动 status，不触碰正文与乐观锁 */
+    int updateStatus(@Param("workspaceId") String workspaceId,
+                     @Param("id") String id,
+                     @Param("status") String status);
+
     int delete(@Param("id") String id);
 
     /** 某项目下的需求数（删除项目前拦一下） */

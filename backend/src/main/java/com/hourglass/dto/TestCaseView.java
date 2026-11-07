@@ -13,8 +13,12 @@ public class TestCaseView {
 
     private String id;
     private String reqId;
+    private String demandId;
+    private String demandTitle;
     private String title;
     private String precondition;
+    private String module;
+    private String priority;
     private List<Map<String, String>> steps;
     private String latestStatus;
     private String latestNote;

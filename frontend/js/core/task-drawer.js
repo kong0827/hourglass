@@ -1,7 +1,8 @@
 /* core/task-drawer · 任务详情抽屉、评论、检查清单、附件、工时 */
 
 import { API } from "./api.js";
-import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnSaveTask, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { openAttPreview, previewable } from "./att-preview.js";
+import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -362,6 +363,7 @@ function openTaskDrawer(colId, task, defaults){
     startedDone = isDone;
     taskDrawerTitle.textContent = task.title || "任务详情";
     btnDeleteTask.hidden = false;
+    if(btnTaskNew) btnTaskNew.hidden = false;
     iTitle.value = task.title || "";
     iDesc.value = task.description || "";
     iStart.value = task.startDate || "";
@@ -417,6 +419,7 @@ function openTaskDrawer(colId, task, defaults){
   }else{
     taskDrawerTitle.textContent = "新建任务";
     btnDeleteTask.hidden = true;
+    if(btnTaskNew) btnTaskNew.hidden = true;
     startedDone = false;
     iTitle.value = ""; iDesc.value = "";
     /* 甘特图双击空白处新建时预填起止日期；普通入口保持为空 */
@@ -1016,6 +1019,18 @@ if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){
     if(!e || !e.silent) toast((e && e.message) || "操作失败", "bad");
   });
 });
+/* 任务详情内新建任务：沿用当前任务的项目/版本/史诗，抽屉切换为新建模式 */
+if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
+  if(!rt.editingId) return;
+  if(rt.formDirty){ toast("当前任务有未保存的改动，请先保存再新建", "warn"); return; }
+  var t = taskCacheExtra[rt.editingId] || {};
+  var vSel = $("iVersion"), eSel = $("iEpic");
+  openTaskDrawer(t.boardColumn || "backlog", null, {
+    reqId: currentReqId() || t.reqId || "",
+    versionId: (vSel && vSel.value) || "",
+    epicId: (eSel && eSel.value) || ""
+  });
+});
 $("taskMoreMenu").addEventListener("click", function(e){
   var b = e.target.closest("[data-task-more]");
   if(!b) return;
@@ -1319,15 +1334,18 @@ function loadAttachments(taskId){
     if(rt.editingId === taskId) attachList.innerHTML = '<div class="attach-empty">加载失败</div>';
   });
 }
+var lastAttList = [];
 function renderAttachments(list){
-  if(attachCount) attachCount.textContent = (list && list.length) ? list.length + " 个" : "";
-  if(!list || !list.length){
-    attachList.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Excel、txt、md、zip，单个 ≤10MB）</div>';
+  lastAttList = list || [];
+  if(attachCount) attachCount.textContent = lastAttList.length ? lastAttList.length + " 个" : "";
+  if(!lastAttList.length){
+    attachList.innerHTML = '<div class="attach-empty">暂无附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）</div>';
     return;
   }
-  attachList.innerHTML = list.map(function(a){
+  attachList.innerHTML = lastAttList.map(function(a){
     var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
-    var isXlsx = /\.xlsx$/i.test(a.filename || "");
+    var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+    var canPrev = previewable(a.filename);
     var url = attUrl(a.id);
     var head = isImg
       ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
@@ -1336,7 +1354,8 @@ function renderAttachments(list){
       '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
       '<span class="att-size">' + fmtSize(a.size) + '</span>' +
       '<span class="att-acts">' +
-        (isXlsx ? '<button class="icon-btn sm" type="button" data-att-sheet="' + esc(a.id) + '" title="打开表格" aria-label="打开表格">' + icon("table", 14) + '</button>' : '') +
+        (canPrev ? '<button class="icon-btn sm" type="button" data-att-prev="' + esc(a.id) + '" title="在线预览" aria-label="在线预览">' + icon("eye", 14) + '</button>' : '') +
+        (isSheet ? '<button class="icon-btn sm" type="button" data-att-sheet="' + esc(a.id) + '" title="打开表格" aria-label="打开表格">' + icon("table", 14) + '</button>' : '') +
         '<a class="icon-btn sm" href="' + url + '" download title="下载" aria-label="下载附件">' + icon("download", 14) + '</a>' +
         (rt.drawerReadOnly ? '' :
           '<button class="icon-btn sm danger" type="button" data-att-del="' + esc(a.id) + '" title="删除附件" aria-label="删除附件">' + icon("trash", 14) + '</button>') +
@@ -1351,8 +1370,8 @@ iAttachFile.addEventListener("change", function(){
   if(!f || !rt.editingId) return;
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，未上传", "warn"); return; }
-  if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|xlsx)$/i.test(f.name)){
-    toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/xlsx）", "warn");
+  if(!/\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i.test(f.name)){
+    toast("不支持的文件类型（jpg/png/gif/webp/pdf/txt/md/zip/doc/docx/xls/xlsx/ppt/pptx）", "warn");
     return;
   }
   var id = rt.editingId;
@@ -1384,19 +1403,26 @@ iAttachFile.addEventListener("change", function(){
   });
 });
 attachList.addEventListener("click", function(e){
+  var prevBtn = e.target.closest("[data-att-prev]");
+  if(prevBtn){
+    e.preventDefault();
+    var att = lastAttList.find(function(a){ return a.id === prevBtn.dataset.attPrev; });
+    if(!att){ toast("附件不存在或已删除", "warn"); loadAttachments(rt.editingId); return; }
+    openAttPreview({ attachment: att });
+    return;
+  }
   var sheetBtn = e.target.closest("[data-att-sheet]");
   if(sheetBtn && rt.editingId){
     e.preventDefault();
     var attId = sheetBtn.dataset.attSheet;
-    API.get("/api/tasks/" + encodeURIComponent(rt.editingId) + "/attachments").then(function(list){
-      var att = (list || []).find(function(a){ return a.id === attId; });
-      if(!att){ toast("附件不存在或已删除", "warn"); loadAttachments(rt.editingId); return; }
-      return import("./sheet-viewer.js").then(function(m){
-        m.openSheet({
-          attachment: att,
-          canEdit: !rt.drawerReadOnly,
-          onSaved: function(){ loadAttachments(rt.editingId); loadBoard({silent:true}); }
-        });
+    var att2 = lastAttList.find(function(a){ return a.id === attId; });
+    if(!att2){ toast("附件不存在或已删除", "warn"); loadAttachments(rt.editingId); return; }
+    /* xls 由 SheetJS 只读解析（保存回写只支持 xlsx） */
+    import("./sheet-viewer.js").then(function(m){
+      m.openSheet({
+        attachment: att2,
+        canEdit: !rt.drawerReadOnly && /\.xlsx$/i.test(att2.filename || ""),
+        onSaved: function(){ loadAttachments(rt.editingId); loadBoard({silent:true}); }
       });
     }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
     return;

@@ -18,6 +18,12 @@
 - 用户手册：[`docs/用户使用手册.md`](docs/用户使用手册.md)
 - 接口契约：[`docs/接口契约.md`](docs/接口契约.md)
 
+## 在线体验
+
+- 地址：http://43.156.155.204/hourglass/
+- 游客账号：`visitor` / `Visitor@2026`
+- 说明：演示环境数据可能被重置，请勿存放真实业务数据
+
 ---
 
 ## 这个项目是怎么来的
@@ -154,6 +160,14 @@ java -jar backend/target/hourglass-server.jar
 | 多人实时协同编辑表格 | 在线表格定位是附件查看与快速修改，以覆盖保存为最终稿 |
 | 预测型统计与 AI 评分 | 度量只做可回溯统计，不引入无法解释的模型输出 |
 | 从其他平台迁移 | 不提供 Jira / 禅道等外部系统的迁移工具，内部备份按空间独立恢复 |
+
+## 联合开发
+
+本项目前身为 [chc2](https://gitee.com/chc2)（chenghongchang）发起的个人看板项目 **wokstudio**，后升级为面向小团队的私有化研发协作工作台 **沙漏（Hourglass）**，目前由 chc2 持续维护、完善。
+
+主要贡献者：
+
+- [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责 wokstudio 最初的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
 
 ## 许可
 

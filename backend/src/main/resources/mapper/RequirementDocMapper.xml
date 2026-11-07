@@ -88,6 +88,12 @@
     WHERE id = #{id}
   </update>
 
+  <!-- 看板拖拽的轻量状态流转：只动状态与更新时间，不走整篇乐观锁 -->
+  <update id="updateStatus">
+    UPDATE requirement_doc SET status = #{status}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
   <delete id="delete">
     DELETE FROM requirement_doc WHERE id = #{id}
   </delete>

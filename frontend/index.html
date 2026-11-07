@@ -38,7 +38,7 @@
 
   <!-- ==================== 侧边栏 240px ==================== -->
   <aside class="sidebar">
-    <div class="side-brand">
+    <button class="side-brand" type="button" id="sideBrand" title="返回首页" aria-label="返回首页">
       <span class="brand-mark" aria-hidden="true">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
           <path d="M5 3.5h10M5 16.5h10M6 3.5c0 3.2 1.3 4.8 4 6.5-2.7 1.7-4 3.3-4 6.5M14 3.5c0 3.2-1.3 4.8-4 6.5 2.7 1.7 4 3.3 4 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -46,7 +46,7 @@
         </svg>
       </span>
       <span class="side-brand-name">沙漏</span>
-    </div>
+    </button>
     <button class="rail-btn" type="button" id="btnRail" title="收起侧边栏（Ctrl+B）" aria-label="收起 / 展开侧边栏">
       <span data-icon="rail"></span>
     </button>
@@ -232,7 +232,7 @@
           </div>
         </div>
 
-        <a class="icon-btn" href="help.html" target="_blank" rel="noopener" aria-label="使用手册（在线预览与下载）" title="使用手册（在线预览与下载）">
+        <a class="icon-btn" href="help.html" target="_blank" rel="noopener" aria-label="帮助中心（使用手册、快速上手、常见问题等）" title="帮助中心（使用手册、快速上手、常见问题等）">
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3.4 4.2A2.2 2.2 0 0 1 5.6 2h3.2a1.2 1.2 0 0 1 1.2 1.2v13.6a2.2 2.2 0 0 0-2.2-2.2H3.4Z"/><path d="M16.6 4.2A2.2 2.2 0 0 0 14.4 2h-3.2a1.2 1.2 0 0 0-1.2 1.2v13.6a2.2 2.2 0 0 1 2.2-2.2h4.4Z"/>
           </svg>
@@ -775,6 +775,12 @@
         <div class="view-page reqdoc-listpage" id="reqDocListPage">
           <div class="page-toolbar">
             <span class="toolbar-title">文档</span>
+            <span class="reqdoc-modes" role="tablist" aria-label="文档展示方式">
+              <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="true">列表</button>
+              <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
+              <button class="rm-btn" type="button" role="tab" data-rdmode="read" aria-selected="false">阅读</button>
+              <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
+            </span>
             <span class="toolbar-right">
               <span class="reqdoc-search">
                 <input type="search" id="reqDocSearch" placeholder="搜索标题或正文…" aria-label="搜索文档">
@@ -785,6 +791,17 @@
             </span>
           </div>
           <div class="reqdoc-tree" id="reqDocTree"></div>
+          <!-- 看板：按状态分列，拖拽卡片流转状态 -->
+          <div class="reqdoc-kanban" id="reqDocKanban" hidden></div>
+          <!-- 阅读：左树右文，树上选文档右侧直接读 -->
+          <div class="reqdoc-split" id="reqDocSplit" hidden>
+            <div class="reqdoc-split-tree" id="reqDocSplitTree"></div>
+            <div class="reqdoc-reader" id="reqDocReader">
+              <div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>
+            </div>
+          </div>
+          <!-- 最近动态：空间内全部文档的创建/更新/流转记录 -->
+          <div class="reqdoc-feed" id="reqDocFeed" hidden></div>
         </div>
 
         <!-- 编辑页：从列表点进来，顶部可返回 -->
@@ -1037,6 +1054,11 @@
             <span class="toolbar-title">测试用例</span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
+              <input id="tcSearch" type="search" class="tc-search" placeholder="搜索用例 / 前置 / 步骤…" aria-label="搜索测试用例" />
+              <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
+              <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
+              <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
+              <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false">有缺陷</button>
               <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
                 <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
                 <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
@@ -1053,7 +1075,7 @@
         </div>
 
         <!-- 新增 / 编辑用例 -->
-        <div class="modal-layer" id="dlgCase" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+        <div class="modal-layer" id="dlgCase" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="caseFormTitle">新增用例</h3><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
@@ -1063,13 +1085,28 @@
                 <span class="err">请填写用例标题</span>
               </div>
               <div class="field">
+                <label for="cDemand">关联需求 <small class="tc-optional">选填 · 仅本项目需求池条目</small></label>
+                <select id="cDemand" aria-label="关联需求（选填）"></select>
+              </div>
+              <div class="row row-gap">
+                <div class="field" style="flex:1 1 55%">
+                  <label for="cModule">功能模块 <small class="tc-optional">选填 · 列表筛选用</small></label>
+                  <input id="cModule" type="text" maxlength="50" list="tcModuleList" placeholder="如：登录 / 订单 / 支付" autocomplete="off" />
+                  <datalist id="tcModuleList"></datalist>
+                </div>
+                <div class="field" style="flex:1 1 30%">
+                  <label for="cPri">优先级 <small class="tc-optional">选填</small></label>
+                  <select id="cPri" aria-label="优先级（选填）"></select>
+                </div>
+              </div>
+              <div class="field">
                 <label for="cPrecondition">前置条件</label>
                 <textarea id="cPrecondition" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
               </div>
               <div class="field">
                 <label>执行步骤</label>
                 <div class="tc-steps" id="tcSteps"></div>
-                <button class="btn sm ghost" type="button" id="btnCaseAddStep"><span data-icon="plus"></span>&nbsp;添加步骤</button>
+                <button class="btn sm ghost" type="button" id="btnCaseAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行"><span data-icon="plus"></span>&nbsp;添加步骤</button>
               </div>
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="row row-gap" id="caseSaveRow">
@@ -1765,7 +1802,7 @@
                 <button type="button" data-mob-me="settings">空间设置</button>
                 <button type="button" data-mob-me="theme">深色 / 浅色</button>
                 <button type="button" data-mob-me="help">快捷键帮助</button>
-                <button type="button" data-mob-me="manual">使用手册</button>
+                <button type="button" data-mob-me="manual">帮助中心</button>
                 <button type="button" class="danger" data-mob-me="logout">退出登录</button>
               </div>
             </div>
@@ -1950,6 +1987,10 @@
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
       <h2 id="taskDrawerTitle">新建任务</h2>
+      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前任务所属项目新建任务">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+        新建任务
+      </button>
       <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
         <span id="taskWatchLabel">关注</span>
@@ -2232,7 +2273,7 @@
             <div class="attach-list" id="attachList"></div>
             <div class="row row-gap" style="margin-top:8px">
               <button class="btn sm" type="button" id="btnAttach">上传文件（≤10MB）</button>
-              <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx</span>
+              <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx</span>
               <input type="file" id="iAttachFile" hidden />
             </div>
           </div>

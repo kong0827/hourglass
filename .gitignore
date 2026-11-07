@@ -28,3 +28,6 @@ deploy/部署记录-*.md
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 本地联调凭据（含密码，仅限本地）
+backend/local.env

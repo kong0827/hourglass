@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, iDue, iStart, searchInput, searchWrap } from "../core/dom.js";
-import { applyView, clearFilters, promptSaveView, reloadFilteredViews } from "../core/filters-ui.js";
+import { applyView, clearFilters, promptSaveView, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
@@ -1872,11 +1872,12 @@ function ganttSetQuery(kw){
 }
 function renderGanttViewsMenu(){
   if(!ganttViewsMenu) return;
+  var views = savedViewsFor("task");
   var html = '<div class="menu-title">保存的视图</div>';
-  if(!rt.savedViews.length){
+  if(!views.length){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的视图；先设置筛选，再保存。</p></div>';
   }else{
-    html += rt.savedViews.map(function(v){
+    html += views.map(function(v){
       return '<button class="menu-item" type="button" data-gantt-view="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' +
         esc(v.name) + '</button>';
     }).join("");

@@ -21,9 +21,10 @@ class TaskWorkflowServiceNotificationTest {
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final TaskSupport support = mock(TaskSupport.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
+    private final TaskWatchService watchers = mock(TaskWatchService.class);
     private final TaskWorkflowService service = new TaskWorkflowService(tasks, mock(TaskLogMapper.class),
             mock(SubtaskMapper.class), support, mock(TimeLogService.class),
-            mock(TaskCompletionService.class), mock(TaskAuditLogger.class), events,
+            mock(TaskCompletionService.class), mock(TaskAuditLogger.class), events, watchers,
             mock(ProjectAccessService.class));
 
     @Test
@@ -32,6 +33,16 @@ class TaskWorkflowServiceNotificationTest {
 
         verify(events).notify(eq("U1"), eq("W1"), eq(UserNotificationPreferenceService.TASK_UPDATED),
                 eq("任务更新：Task"), eq("从「进行中」移动到「待处理」"), eq("K1"), isNull());
+    }
+
+    @Test
+    void moveToAnotherColumnNotifiesWatchers() {
+        move("U2", "doing", "backlog");
+
+        verify(watchers).notifyWatchers(eq("W1"), eq("K1"), eq("U2"),
+                eq(UserNotificationPreferenceService.TASK_WATCH),
+                eq("「Task」已流转"), eq("从「进行中」移动到「待处理」"), isNull(),
+                eq(Collections.singletonList("U1")));
     }
 
     @Test
@@ -46,6 +57,28 @@ class TaskWorkflowServiceNotificationTest {
         move("U2", "doing", "doing");
 
         verifyNoInteractions(events);
+        verifyNoInteractions(watchers);
+    }
+
+    @Test
+    void editColumnChangeNotifiesWatchersOnly() {
+        Task task = new Task();
+        task.setId("K1");
+        task.setWorkspaceId("W1");
+        task.setTitle("Task");
+        task.setOwnerUserId("U1");
+        task.setBoardColumn("done");
+        when(support.columnName("W1", "doing")).thenReturn("进行中");
+        when(support.columnName("W1", "done")).thenReturn("已完成");
+
+        service.afterEditColumnChange("U2", "W1", task, "doing");
+
+        // 负责人由编辑入口合并成一条 task_updated，这里不发；关注者照常，负责人进 skip
+        verifyNoInteractions(events);
+        verify(watchers).notifyWatchers(eq("W1"), eq("K1"), eq("U2"),
+                eq(UserNotificationPreferenceService.TASK_WATCH),
+                eq("「Task」已流转"), eq("从「进行中」移动到「已完成」"), isNull(),
+                eq(Collections.singletonList("U1")));
     }
 
     private void move(String actorId, String from, String to) {

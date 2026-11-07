@@ -5,6 +5,7 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
+import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Demand;
@@ -262,6 +263,44 @@ public class RequirementDocService {
     public List<WorkActivity> activities(String workspaceId, String id) {
         get(workspaceId, id);
         return workActivityService.listByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
+    }
+
+    /** 空间级文档动态流：按查看人过滤隐藏项目与他人草稿，最多返回 limit 条 */
+    public List<ReqDocActivityView> feedActivities(String workspaceId, String userId, int limit) {
+        List<ReqDocActivityView> rows = workActivityService.docActivities(workspaceId, limit);
+        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
+        String role = projectAccess.roleOf(workspaceId, userId);
+        List<ReqDocActivityView> visible = new java.util.ArrayList<ReqDocActivityView>(rows.size());
+        for (ReqDocActivityView row : rows) {
+            /* 文档已被删除（理论上活动随文档清理，保险起见跳过）或项目不可见：不外泄 */
+            if (row.getDocId() == null || hiddenReqs.contains(row.getReqId())) {
+                continue;
+            }
+            if (!canSeeDraft(row.getOwnerUserId(), row.getPublishedAt(), userId, role)) {
+                continue;
+            }
+            row.setOwnerUserId(null);
+            row.setPublishedAt(null);
+            visible.add(row);
+        }
+        return visible;
+    }
+
+    /**
+     * 看板拖拽等轻量状态流转：只改状态，不碰正文、不建历史快照、不走整篇乐观锁。
+     */
+    @Transactional
+    public RequirementDoc changeStatus(String userId, String workspaceId, String id, String status) {
+        RequirementDoc d = getVisible(workspaceId, userId, id);
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        if (!"draft".equals(status) && !"active".equals(status) && !"done".equals(status)) {
+            throw AppException.badRequest("文档状态不合法");
+        }
+        if (!status.equals(d.getStatus())) {
+            docMapper.updateStatus(workspaceId, id, status);
+            recordChange(userId, workspaceId, id, "状态", d.getStatus(), status);
+        }
+        return docMapper.selectById(id);
     }
 
     /**

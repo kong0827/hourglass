@@ -14,6 +14,12 @@ Progress, work hours, member workload, overdue risks, and delivery reports are a
 - User manual: [`docs/用户使用手册.md`](docs/用户使用手册.md) (Chinese)
 - API contract: [`docs/接口契约.md`](docs/接口契约.md) (Chinese)
 
+## Live Demo
+
+- URL: http://43.156.155.204/hourglass/
+- Guest account: `visitor` / `Visitor@2026`
+- Note: demo data may be reset; do not store real business data
+
 ---
 
 ## Why This Project Exists
@@ -142,6 +148,14 @@ For the deeper information model, unified metric rules, the role-permission matr
 | Real-time collaborative spreadsheet editing | The online spreadsheet is for viewing attachments and quick edits; last-write-wins on save |
 | Predictive statistics and AI scoring | Metrics are retrospective and traceable only; no unexplainable model outputs |
 | Migration from other platforms | No Jira / ZenTao importers; internal backups restore per workspace |
+
+## Collaboration
+
+This project evolved from **wokstudio**, a personal kanban project started by [chc2](https://gitee.com/chc2) (chenghongchang), and was later upgraded into **Hourglass**, a self-hosted R&D collaboration workbench for small teams. It is now maintained by chc2 and continuously improved.
+
+Key contributors:
+
+- [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; original wokstudio design and core implementation; continues to develop and expand Hourglass
 
 ## License
 

@@ -8,6 +8,7 @@ import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.entity.Attachment;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.AttachmentService;
+import com.hourglass.service.DocPreviewService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -57,13 +58,21 @@ public class AttachmentController {
         EXT_MIME.put("md", "text/plain");
         EXT_MIME.put("zip", "application/zip");
         EXT_MIME.put("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        EXT_MIME.put("doc", "application/msword");
+        EXT_MIME.put("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        EXT_MIME.put("xls", "application/vnd.ms-excel");
+        EXT_MIME.put("ppt", "application/vnd.ms-powerpoint");
+        EXT_MIME.put("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
     }
 
     private final AttachmentService attachmentService;
+    private final DocPreviewService docPreviewService;
     private final WorkspaceService workspaceService;
 
-    public AttachmentController(AttachmentService attachmentService, WorkspaceService workspaceService) {
+    public AttachmentController(AttachmentService attachmentService, DocPreviewService docPreviewService,
+                                WorkspaceService workspaceService) {
         this.attachmentService = attachmentService;
+        this.docPreviewService = docPreviewService;
         this.workspaceService = workspaceService;
     }
 
@@ -121,6 +130,20 @@ public class AttachmentController {
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
                 .contentType(mediaTypeOf(a.getStoredName()))
                 .body(new FileSystemResource(file));
+    }
+
+    /** 附件在线预览：doc/docx 服务端转 HTML（md/txt/xls/xlsx 由前端渲染） */
+    @GetMapping("/api/attachments/{id}/preview")
+    public ApiResult<Map<String, String>> preview(@PathVariable String id,
+                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        Attachment a = attachmentService.getVisible(ws.getId(), userId, id);
+        File file = attachmentService.fileOf(a);
+        if (!file.exists()) {
+            throw AppException.notFound("附件文件不存在：" + a.getFilename());
+        }
+        return ApiResult.ok(docPreviewService.preview(file, extOfStored(a.getStoredName())));
     }
 
     /** 缩略图：小尺寸预览用，避免移动端为 34px 缩略图全量下载原图 */

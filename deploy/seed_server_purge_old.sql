@@ -48,7 +48,6 @@ DELETE FROM task_watch           WHERE workspace_id = @ws;
 DELETE FROM task                 WHERE workspace_id = @ws;
 DELETE FROM requirement         WHERE workspace_id = @ws;
 DELETE FROM invite              WHERE workspace_id = @ws;
-DELETE FROM mail_delivery        WHERE user_id LIKE 'Useed%';
 DELETE FROM tag                  WHERE id LIKE 'Gseed%';
 DELETE FROM category            WHERE id LIKE 'Cseed%';
 DELETE FROM workspace_member    WHERE workspace_id = @ws AND user_id LIKE 'Useed%';

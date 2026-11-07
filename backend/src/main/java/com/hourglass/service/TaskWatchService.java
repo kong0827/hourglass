@@ -15,7 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 任务关注人：关注后新评论、移入回收站/恢复等事件会通知关注者（字段编辑与移列不打扰）。 */
+/** 任务关注人：关注后新评论、列流转、移入回收站/恢复等事件会通知关注者（字段编辑不打扰）。 */
 @Service
 public class TaskWatchService {
 

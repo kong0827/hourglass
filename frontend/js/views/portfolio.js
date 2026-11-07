@@ -7,6 +7,7 @@ import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML } from "../lib/format.js";
+import { icon } from "../core/icons.js";
 import { caliberHTML, downloadCsv, fmtHours, openTaskTable } from "./manager-shared.js";
 
 var cache = null, seq = 0;
@@ -140,6 +141,39 @@ function exportPortfolio(){
   downloadCsv("项目周报-" + cache.today + ".csv", rows);
   toast("已导出项目周报", "fs");
 }
+/* KPI「进行中项目」下钻：列出进行中项目的进度与负载，点项目名进项目看板 */
+function openActiveProjects(){
+  var projects = (cache.projects || []).filter(function(p){ return p.status === "active"; });
+  var rows = projects.map(function(p){
+    var healthName = p.health === "green" ? "正常" : "需关注";
+    var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
+    return '<tr>'
+      + '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目看板">' + esc(p.name) + '</button></td>'
+      + '<td><span class="tag ' + tagCls + '">' + healthName + '</span></td>'
+      + '<td class="num">' + (p.progressPct || 0) + '%</td>'
+      + '<td class="num">' + (p.backlog || 0) + '</td><td class="num">' + (p.doing || 0) + '</td><td class="num">' + (p.done || 0) + '</td>'
+      + '<td class="num"' + (p.overdue ? ' style="color:var(--danger-fg)"' : "") + '>' + (p.overdue || 0) + '</td>'
+      + '<td><span class="manager-avatars">' + (p.members || []).slice(0, 4).map(function(n){ return avatarHTML(n, "sm"); }).join("") + '</span></td></tr>';
+  }).join("") || '<tr><td colspan="8" class="manager-empty-cell">当前没有进行中的项目</td></tr>';
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
+    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目看板，卡片下钻可见任务明细</div></div>'
+    + '<button class="icon-btn sm" type="button" data-kpi-projects-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
+    + '<th>项目</th><th>健康度</th><th class="num">进度</th><th class="num">待处理</th><th class="num">进行中</th><th class="num">已完成</th><th class="num">逾期</th><th>成员</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-kpi-projects-close]")){ UI.closeModal(layer); return; }
+    var open = e.target.closest("[data-open-project]");
+    if(open){ UI.closeModal(layer); rt.managerProjectId = open.dataset.openProject; showView("project"); }
+  });
+  UI.openModal(layer);
+}
 function onClick(e){
   var pfMode = e.target.closest("[data-pf-mode]");
   if(pfMode){
@@ -169,8 +203,7 @@ function onClick(e){
   if(!k || !cache) return;
   var kind = k.dataset.kpi;
   if(kind === "projects"){
-    var grid = $("portfolioProjects");
-    if(grid) grid.scrollIntoView({behavior:"smooth", block:"start"});
+    openActiveProjects();
   }else if(kind === "hours"){
     var byTask = cache.weekWorkByTask || {};
     var rows = (cache.tasks || []).filter(function(t){ return byTask[t.id] > 0; }).map(function(t){

@@ -12,8 +12,14 @@ public class TestCase {
     private String workspaceId;
     /** 所属项目 ID（requirement.id） */
     private String reqId;
+    /** 关联需求 ID（demand.id，选填） */
+    private String demandId;
     private String title;
     private String precondition;
+    /** 功能模块：自由填写，列表筛选用 */
+    private String module;
+    /** 优先级档位：P0/P1/P2/P3，空 = 未设置 */
+    private String priority;
     /** 执行步骤 JSON：[{"action":"操作","expected":"预期结果"}] */
     private String steps;
     /** 最近执行结果：passed / failed / blocked，空 = 未执行 */

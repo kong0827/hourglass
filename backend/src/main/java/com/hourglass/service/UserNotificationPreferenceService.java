@@ -25,7 +25,7 @@ public class UserNotificationPreferenceService {
     public static final String TASK_UPDATED = "task_updated";
     /** 评论与@共用：任务新评论、评论中被 @ 提及 */
     public static final String TASK_COMMENT = "task_comment";
-    /** 我关注的任务：新评论、移入回收站/恢复（独立于评论与任务变更开关） */
+    /** 我关注的任务：新评论、列流转、移入回收站/恢复（独立于评论与任务变更开关） */
     public static final String TASK_WATCH = "task_watch";
     /** 需求与版本动态：需求状态、需求文档、分支状态、版本发布/删除合并为一个开关 */
     public static final String DEMAND_STATUS = "demand_status";

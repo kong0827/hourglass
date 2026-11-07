@@ -4,11 +4,11 @@
 
   <insert id="insert">
     INSERT INTO test_case
-      (id, workspace_id, req_id, title, precondition, steps,
+      (id, workspace_id, req_id, demand_id, title, precondition, module, priority, steps,
        latest_status, latest_note, latest_by, latest_by_user_id, latest_at, latest_bug_task_id,
        created_at, updated_at)
     VALUES
-      (#{id}, #{workspaceId}, #{reqId}, #{title}, #{precondition}, #{steps},
+      (#{id}, #{workspaceId}, #{reqId}, #{demandId}, #{title}, #{precondition}, #{module}, #{priority}, #{steps},
        #{latestStatus}, #{latestNote}, #{latestBy}, #{latestByUserId}, #{latestAt}, #{latestBugTaskId},
        COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -16,8 +16,11 @@
   <update id="update">
     UPDATE test_case
     SET req_id = #{reqId},
+        demand_id = #{demandId},
         title = #{title},
         precondition = #{precondition},
+        module = #{module},
+        priority = #{priority},
         steps = #{steps}
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
@@ -49,11 +52,13 @@
   </select>
 
   <select id="selectViewByReq" resultType="com.hourglass.dto.TestCaseView">
-    SELECT c.id, c.req_id, c.title, c.precondition, c.steps AS steps_json,
+    SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title,
+           c.title, c.precondition, c.module, c.priority, c.steps AS steps_json,
            c.latest_status, c.latest_note, c.latest_by, c.latest_at,
            c.latest_bug_task_id, t.title AS latest_bug_task_title,
            c.created_at, c.updated_at
     FROM test_case c
+    LEFT JOIN demand d ON d.id = c.demand_id
     LEFT JOIN task t ON t.id = c.latest_bug_task_id
     WHERE c.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
     ORDER BY c.created_at DESC, c.id DESC
@@ -76,6 +81,12 @@
 
   <update id="clearAllBugTaskRefs">
     UPDATE test_case SET latest_bug_task_id = NULL WHERE workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 需求删除级联：解绑用例上的关联，避免悬空引用 -->
+  <update id="clearDemandRefs">
+    UPDATE test_case SET demand_id = NULL
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
   </update>
 
   <delete id="delete">

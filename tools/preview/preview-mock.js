@@ -218,6 +218,7 @@
     { id: "D1", reqId: "R1", reqName: "流程引擎", title: "权限校验需求", status: "active",
       owner: "我", excerpt: "统一入口校验：先鉴权再进业务，覆盖角色与数据权限",
       taskCount: 3, doneCount: 1, createdAt: ts(-6, 10, 20), updatedAt: ts(-1, 17, 20),
+      format: "html", docType: "requirement", parentId: null, publishedAt: ts(-6, 11, 0),
       content: '<h1>一、背景与目标</h1>' +
         '<h2>1.1 现状与问题</h2>' +
         '<p>所有对外接口各自判断权限，<b>先鉴权再进业务</b>的约定只写在文档里，实际有不少接口漏判。</p>' +
@@ -240,18 +241,37 @@
     { id: "D3", reqId: "R2", reqName: "结算改造", title: "日终批处理拆分", status: "active",
       owner: "我", excerpt: "把跑批拆成三个阶段，失败可单段重跑",
       taskCount: 2, doneCount: 0, createdAt: ts(-4, 9, 30), updatedAt: ts(-1, 11, 0),
+      format: "html", docType: "solution", parentId: null, publishedAt: ts(-4, 10, 0),
       content: '<h1>目标</h1><p>把日终跑批拆成"取数 / 核对 / 落账"三段。</p>' +
         '<h2>拆分后的好处</h2><ul><li>某一段失败可以只重跑那一段</li><li>取数阶段能提前开始</li></ul>' },
     { id: "D4", reqId: "R2", reqName: "结算改造", title: "对账差异回溯", status: "draft",
       owner: "陈工", excerpt: null, taskCount: 0, doneCount: 0,
       createdAt: ts(-3, 14, 10), updatedAt: ts(-3, 14, 10),
-      content: '<p>待补充：差异明细怎么存档、保留多久。</p>' },
+      format: "markdown", docType: "other", parentId: "D3", publishedAt: null,
+      content: "## 待补充\n\n- 差异明细怎么存档\n- 保留多久\n" },
 
-    { id: "D2", reqId: "R1", reqName: "流程引擎", title: "对账落库需求", status: "draft",
+    { id: "D2", reqId: "R1", reqName: "流程引擎", title: "对账落库需求", status: "done",
       owner: "我", excerpt: "异常明细单独建表，附原流水号便于回溯",
       taskCount: 0, doneCount: 0, createdAt: ts(-5, 15, 0), updatedAt: ts(-2, 18, 0),
+      format: "html", docType: "requirement", parentId: "D1", publishedAt: ts(-5, 16, 0),
       content: '<h1>背景</h1><p>对账失败的单子目前只在日志里，查起来很痛苦。</p>' +
         '<h2>做法</h2><ul><li>异常明细单独建表</li><li>保留原流水号与失败原因</li></ul>' }
+  ];
+
+  /* 文档最近动态：按天倒序，覆盖创建/更新/状态流转/发布几类操作 */
+  var docActivities = [
+    { id: 1, docId: "D1", docTitle: "权限校验需求", reqId: "R1", actorName: "我",
+      action: "update", detail: "状态：进行中 → 已完成", createdAt: ts(0, 10, 12) },
+    { id: 2, docId: "D4", docTitle: "对账差异回溯", reqId: "R2", actorName: "陈工",
+      action: "create", detail: "创建了文档「对账差异回溯」", createdAt: ts(0, 9, 2) },
+    { id: 3, docId: "D1", docTitle: "权限校验需求", reqId: "R1", actorName: "我",
+      action: "update", detail: "更新了正文", createdAt: ts(-1, 17, 20) },
+    { id: 4, docId: "D2", docTitle: "对账落库需求", reqId: "R1", actorName: "我",
+      action: "update", detail: "状态：草稿 → 已完成", createdAt: ts(-2, 18, 0) },
+    { id: 5, docId: "D1", docTitle: "权限校验需求", reqId: "R1", actorName: "我",
+      action: "update", detail: "发布了文档「权限校验需求」，成员可见", createdAt: ts(-6, 11, 0) },
+    { id: 6, docId: "D3", docTitle: "日终批处理拆分", reqId: "R2", actorName: "我",
+      action: "create", detail: "创建了文档「日终批处理拆分」", createdAt: ts(-4, 9, 30) }
   ];
 
   /* 任务清单：任务完成快照（月度统计） */
@@ -509,9 +529,13 @@
     if (clean === "/api/req-docs") {      return reqDocs.map(function (d) {
         return { id: d.id, reqId: d.reqId, reqName: d.reqName, title: d.title, status: d.status,
                  owner: d.owner, excerpt: d.excerpt, taskCount: d.taskCount, doneCount: d.doneCount,
-                 createdAt: d.createdAt, updatedAt: d.updatedAt };
+                 createdAt: d.createdAt, updatedAt: d.updatedAt,
+                 format: d.format || "html", docType: d.docType || "other",
+                 parentId: d.parentId || null, publishedAt: d.publishedAt || null };
       });
     }
+    /* 动态流要在单 id 正则之前判断，否则 "activities" 会被当成文档 id */
+    if (clean === "/api/req-docs/activities") { return docActivities; }
     if (/^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
       var did = clean.split("/").pop();
       for (var di = 0; di < reqDocs.length; di++) if (reqDocs[di].id === did) return reqDocs[di];
@@ -643,6 +667,10 @@
   window.fetch = function (url, opts) {
     var method = (opts && opts.method) || "GET";
     var u = String(url), clean = u.split("?")[0];
+    /* 预览稿里 config.js 拿不到 currentScript.src，apiBase 回退成 "/hourglass"，
+       请求会带这个前缀；路由表统一按 "/api/…" 登记，这里把前缀剥掉再匹配 */
+    var apiAt = clean.indexOf("/api/");
+    if (apiAt > 0) clean = clean.slice(apiAt);
     var reqBody = null;
     if (opts && opts.body) { try { reqBody = JSON.parse(opts.body); } catch (e) { reqBody = null; } }
     var data;
@@ -663,6 +691,16 @@
         for (var pk in reqBody) if (Object.prototype.hasOwnProperty.call(reqBody, pk)) hit[pk] = reqBody[pk];
       }
       data = hit || {};
+    } else if (method === "PUT" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/status$/.test(clean)) {
+      /* 看板拖拽：状态写回内存数组，界面能看到卡片真的换了列 */
+      var sId = clean.split("/")[3], sDoc = null;
+      for (var si = 0; si < reqDocs.length; si++) if (reqDocs[si].id === sId) { sDoc = reqDocs[si]; break; }
+      if (sDoc && reqBody) {
+        sDoc.status = reqBody.status;
+        var now = new Date();
+        sDoc.updatedAt = ts(0, now.getHours(), now.getMinutes());
+      }
+      data = sDoc || {};
     } else if (clean === "/api/gantt") {
       data = mockGantt(u);
     } else if (clean === "/api/gantt/deps" && method === "GET") {

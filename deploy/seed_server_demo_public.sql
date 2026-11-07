@@ -16,7 +16,7 @@
 -- ============================================================================
 
 USE hourglass;
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 体验账号 demo / hourglassdemo：本文件所有 mock 数据挂到 du00（demo）名下，与你现有账号隔离
 SET @admin := 'Umw5tt2nqz9s9b8sq';
@@ -69,7 +69,6 @@ DELETE FROM workspace WHERE id LIKE 'SXm%' OR id LIKE 'WXmu%';
 DELETE FROM user_notification_preference WHERE user_id LIKE 'Xmu%';
 DELETE FROM app_user WHERE id LIKE 'Xmu%';
 
-ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), display_name=VALUES(display_name), last_workspace_id='SXm01';
 
 -- app_user（14 行）
 INSERT INTO app_user (id, username, password_hash, display_name, email, role, last_workspace_id, created_at) VALUES

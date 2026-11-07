@@ -73,6 +73,11 @@ public class WorkActivityService {
         return activityMapper.selectByEntity(workspaceId, entityType, entityId, LIST_LIMIT);
     }
 
+    /** 空间级文档动态流（联出文档标题等展示字段），草稿/隐藏项目过滤由文档服务按查看人做 */
+    public List<com.hourglass.dto.ReqDocActivityView> docActivities(String workspaceId, int limit) {
+        return activityMapper.selectDocActivities(workspaceId, REQUIREMENT_DOC, limit);
+    }
+
     /** 实体删除时清掉它的活动轨迹，避免同 ID 重建后混入旧历史。 */
     public void deleteByEntity(String workspaceId, String entityType, String entityId) {
         activityMapper.deleteByEntity(workspaceId, entityType, entityId);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light" />
-  <title>沙漏 · 用户使用手册</title>
+  <title>沙漏 · 帮助中心</title>
   <style>
     :root{--primary:#3370ff;--primary-soft:#eef4ff;--text:#1f2329;--text-2:#51565f;--text-3:#838894;--border:#e4e7ed;--surface:#fff;--background:#f5f7fa;--shadow:0 4px 18px rgba(31,35,41,.06)}
     *{box-sizing:border-box}
@@ -23,9 +23,11 @@
     .layout{width:min(1240px,100%);margin:0 auto;display:grid;grid-template-columns:236px minmax(0,1fr);gap:28px;padding:28px 32px 56px}
     .sidebar{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 112px);overflow:auto;padding:16px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
     .toc-title{padding:0 10px 8px;color:var(--text-3);font-size:12px;font-weight:600}
-    .toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--text-2);font-size:13px;line-height:1.5}
+    .sidebar .doc-nav + .toc-title{margin-top:12px;padding-top:16px;border-top:1px solid var(--border)}
+    .sidebar a{display:block;padding:5px 10px;border-radius:6px;color:var(--text-2);font-size:13px;line-height:1.5}
+    .sidebar a.active{background:var(--primary-soft);color:var(--primary);font-weight:600}
     .toc a.level-3{padding-left:24px;font-size:12.5px;color:var(--text-3)}
-    .toc a:hover{background:var(--primary-soft);color:var(--primary);text-decoration:none}
+    .sidebar a:hover{background:var(--primary-soft);color:var(--primary);text-decoration:none}
     .manual{min-width:0;padding:38px 48px 52px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
     .manual h1{margin:0 0 20px;font-size:30px;line-height:1.35;letter-spacing:-.02em}
     .manual h2{margin:42px 0 16px;padding-top:12px;border-top:1px solid var(--border);font-size:22px;line-height:1.45}
@@ -56,29 +58,59 @@
       <span class="mark" aria-hidden="true">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M7 3c0 5 2 6 5 9-3 3-5 4-5 9M17 3c0 5-2 6-5 9 3 3 5 4 5 9"/></svg>
       </span>
-      <div><div class="title">沙漏 · 用户使用手册</div><div class="subtitle">小而美，美而精的研发协作工具</div></div>
+      <div><div class="title" id="docTitle">沙漏 · 帮助中心</div><div class="subtitle" id="docSubtitle">小而美，美而精的研发协作工具</div></div>
     </div>
-    <a class="download" href="user-guide.md" download="沙漏-用户使用手册.md">
+    <a class="download" id="download" href="user-guide.md" download="沙漏-用户使用手册.md">
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
       下载 Markdown
     </a>
   </header>
   <div class="layout">
-    <nav class="sidebar" aria-label="手册目录"><div class="toc-title">目录</div><div class="toc" id="toc"></div></nav>
-    <main class="manual" id="manual"><div class="loading">正在加载使用手册…</div></main>
+    <nav class="sidebar" aria-label="帮助中心导航">
+      <div class="toc-title">文档</div>
+      <div class="doc-nav" id="docNav"></div>
+      <div class="toc-title">本页目录</div>
+      <div class="toc" id="toc"></div>
+    </nav>
+    <main class="manual" id="manual"><div class="loading">正在加载文档…</div></main>
   </div>
   <script src="vendor/markdown/marked.min.js"></script>
   <script src="vendor/markdown/purify.min.js"></script>
   <script>
-    fetch("user-guide.md").then(function(response){
-      if(!response.ok) throw new Error("HTTP " + response.status);
-      return response.text();
-    }).then(function(markdown){
+    var DOCS = [
+      {id:"manual",     file:"user-guide.md",  name:"用户使用手册", subtitle:"小而美，美而精的研发协作工具",             download:"沙漏-用户使用手册.md"},
+      {id:"quickstart", file:"快速上手指南.md", name:"快速上手指南", subtitle:"15 分钟跑通需求 → 任务 → 计时 → 周回顾", download:"沙漏-快速上手指南.md"},
+      {id:"faq",        file:"常见问题.md",     name:"常见问题",     subtitle:"数据口径、计时规则与高频疑问",           download:"沙漏-常见问题.md"},
+      {id:"product",    file:"产品说明.md",     name:"产品说明",     subtitle:"定位、信息模型、用户旅程与架构总览",     download:"沙漏-产品说明.md"},
+      {id:"admin",      file:"管理员指南.md",   name:"管理员指南",   subtitle:"部署、账号管理、备份与升级",             download:"沙漏-管理员指南.md"},
+      {id:"intro",      file:"项目介绍.md",     name:"项目介绍",     subtitle:"背景、信息模型与机制取舍",               download:"沙漏-项目介绍.md"}
+    ];
+    var byId = {};
+    var byFile = {};
+    DOCS.forEach(function(doc){ byId[doc.id] = doc; byFile[doc.file] = doc; });
+    // 文档内链接可能写作「用户使用手册.md」，与前端实际文件名 user-guide.md 指向同一份手册
+    byFile["用户使用手册.md"] = byId["manual"];
+
+    var docNav = document.getElementById("docNav");
+    DOCS.forEach(function(doc){
+      var link = document.createElement("a");
+      link.href = "#/" + doc.id;
+      link.textContent = doc.name;
+      link.dataset.doc = doc.id;
+      docNav.appendChild(link);
+    });
+
+    function currentDocId(){
+      var id = location.hash.replace(/^#\/?/, "");
+      return byId[id] ? id : "manual";
+    }
+
+    function render(markdown){
       var manual = document.getElementById("manual");
       manual.innerHTML = DOMPurify.sanitize(marked.parse(markdown, {gfm:true, breaks:false}));
-      var headings = manual.querySelectorAll("h2,h3");
       var toc = document.getElementById("toc");
-      headings.forEach(function(heading,index){
+      toc.textContent = "";
+      manual.querySelectorAll("h2,h3").forEach(function(heading, index){
         heading.id = "section-" + index;
         var link = document.createElement("a");
         link.href = "#" + heading.id;
@@ -90,9 +122,45 @@
         link.target = "_blank";
         link.rel = "noopener noreferrer";
       });
-    }).catch(function(){
-      document.getElementById("manual").innerHTML = '<div class="error">手册加载失败，请刷新页面重试，或点击右上角下载 Markdown。</div>';
+      // 文档之间的 .md 链接在页内直接切换，不再跳出为纯文本
+      manual.querySelectorAll("a[href$='.md']").forEach(function(link){
+        var file = decodeURIComponent(link.getAttribute("href").split(/[?#]/)[0]).replace(/^\.?\//, "");
+        if(byFile[file]){ link.href = "#/" + byFile[file].id; }
+      });
+      window.scrollTo(0, 0);
+    }
+
+    var loadedId = null;
+    function load(){
+      var id = currentDocId();
+      if(id === loadedId) return;
+      loadedId = id;
+      var doc = byId[id];
+      document.title = "沙漏 · " + doc.name;
+      document.getElementById("docTitle").textContent = "沙漏 · " + doc.name;
+      document.getElementById("docSubtitle").textContent = doc.subtitle;
+      var download = document.getElementById("download");
+      download.href = doc.file;
+      download.setAttribute("download", doc.download);
+      docNav.querySelectorAll("a").forEach(function(link){
+        link.classList.toggle("active", link.dataset.doc === id);
+      });
+      var manual = document.getElementById("manual");
+      manual.innerHTML = '<div class="loading">正在加载' + doc.name + '…</div>';
+      fetch(doc.file, {cache:"no-cache"}).then(function(response){
+        if(!response.ok) throw new Error("HTTP " + response.status);
+        return response.text();
+      }).then(render).catch(function(){
+        manual.innerHTML = '<div class="error">文档加载失败，请刷新页面重试，或点击右上角下载 Markdown。</div>';
+      });
+    }
+
+    window.addEventListener("hashchange", function(){
+      // #/doc-id 切换文档；#section-n 是文档内锚点，不整页重载
+      if(location.hash.indexOf("/") === -1) return;
+      load();
     });
+    load();
   </script>
 </body>
 </html>

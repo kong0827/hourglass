@@ -6,18 +6,25 @@ import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { canEditReq, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { fmtTs } from "../lib/format.js";
+import { PRIORITIES, fmtTs, priName, priTagHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 
 var cases = [];
 var stats = { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
 var caseReqId = null;
 var statusFilter = "all";
+var modFilter = "all";
+var priFilter = "all";
+var ownerFilter = "all";
+var bugOnly = false;
+var searchText = "";
 var editingCase = null;
 var runningCaseId = null;
 var defectCaseId = null;
 var runStatus = "passed";
 var loadSeq = 0;
+/* 项目需求池条目缓存：填充「关联需求」下拉，避免每次开弹窗都请求 */
+var demandOptions = { reqId: null, list: [], loading: null };
 
 var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞" };
 function statusBadgeHTML(s){
@@ -44,6 +51,8 @@ function syncReqSel(){
 function loadCases(){
   var seq = ++loadSeq;
   if(!caseReqId || !rt.reqList.length){
+    cases = [];
+    syncFilterOptions();
     $("tcList").innerHTML = UI.emptyState({
       icon: "folder", title: "还没有项目",
       text: "先在「项目」里创建项目，测试用例按项目收纳。"
@@ -87,12 +96,19 @@ function enterTestCasesView(){
 function render(){
   syncModeUI();
   renderStats();
-  var rows = cases.filter(matchStatus);
+  syncFilterOptions();
+  var rows = cases.filter(matchStatus).filter(matchSearch)
+    .filter(matchModule).filter(matchPri).filter(matchOwner).filter(matchBug);
+  $("tcMeta").textContent = (stats && stats.total)
+    ? (rows.length === stats.total ? "共 " + stats.total + " 条用例" : "筛选出 " + rows.length + " / " + stats.total + " 条用例")
+    : "";
   if(!rows.length){
+    var anyFilter = statusFilter !== "all" || modFilter !== "all" || priFilter !== "all"
+      || ownerFilter !== "all" || bugOnly || !!searchText;
     $("tcList").innerHTML = UI.emptyState({
-      icon: cases.length ? "filterOff" : "checklist",
-      title: cases.length ? "没有符合条件的用例" : "还没有测试用例",
-      text: cases.length ? "换个执行结果筛选试试" : "点右上角「新增用例」录入第一条，执行后按结果统计。"
+      icon: anyFilter ? "filterOff" : "checklist",
+      title: searchText ? "没有匹配的用例" : (cases.length ? "没有符合条件的用例" : "还没有测试用例"),
+      text: searchText ? "换个关键词或清空搜索试试" : (cases.length ? "换个筛选条件试试" : "点右上角「新增用例」录入第一条，执行后按结果统计。")
     });
     return;
   }
@@ -102,6 +118,79 @@ function matchStatus(c){
   if(statusFilter === "all") return true;
   if(statusFilter === "untested") return !c.latestStatus;
   return c.latestStatus === statusFilter;
+}
+function matchModule(c){
+  if(modFilter === "all") return true;
+  if(modFilter === "__none") return !c.module;
+  return c.module === modFilter;
+}
+function matchPri(c){
+  if(priFilter === "all") return true;
+  if(priFilter === "__none") return !c.priority;
+  return c.priority === priFilter;
+}
+function matchOwner(c){
+  if(ownerFilter === "all") return true;
+  return c.latestBy === ownerFilter;
+}
+function matchBug(c){
+  return !bugOnly || !!c.latestBugTaskId;
+}
+function matchSearch(c){
+  if(!searchText) return true;
+  var hay = [c.title, c.module, c.precondition, c.latestNote, c.latestBugTaskTitle, c.demandTitle]
+    .concat((c.steps || []).map(function(s){ return [s.action, s.expected].join(" "); }))
+    .join("\n").toLowerCase();
+  return hay.indexOf(searchText) !== -1;
+}
+/* 筛选下拉选项由已加载用例动态生成；当前选中值失效时回落到「全部」 */
+function uniqValues(list, pick){
+  var seen = {};
+  var out = [];
+  (list || []).forEach(function(c){
+    var v = pick(c);
+    if(!v || seen[v]) return;
+    seen[v] = true;
+    out.push(v);
+  });
+  return out;
+}
+function fillFilterSelect(id, allLabel, values, noneLabel, state){
+  var sel = $(id);
+  var html = '<option value="all">' + allLabel + '</option>';
+  values.forEach(function(v){
+    html += '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+  });
+  if(noneLabel){
+    html += '<option value="__none">' + noneLabel + '</option>';
+  }
+  sel.innerHTML = html;
+  var valid = state() === "all" || state() === "__none" || values.indexOf(state()) !== -1;
+  if(!valid) state("all");
+  sel.value = state();
+}
+function syncFilterOptions(){
+  var modules = uniqValues(cases, function(c){ return c.module; });
+  var owners = uniqValues(cases, function(c){ return c.latestBy; });
+  var prisEmpty = cases.some(function(c){ return !c.priority; });
+  var modsEmpty = cases.some(function(c){ return !c.module; });
+  fillFilterSelect("tcModule", "模块：全部", modules, modsEmpty ? "未填模块" : null, function(v){
+    if(v === undefined) return modFilter;
+    modFilter = v;
+  });
+  fillFilterSelect("tcOwner", "执行人：全部", owners, null, function(v){
+    if(v === undefined) return ownerFilter;
+    ownerFilter = v;
+  });
+  fillFilterSelect("tcPri", "优先级：全部", PRIORITIES, prisEmpty ? "未设置" : null, function(v){
+    if(v === undefined) return priFilter;
+    priFilter = v;
+  });
+  $("tcModuleList").innerHTML = modules.map(function(m){
+    return '<option value="' + esc(m) + '"></option>';
+  }).join("");
+  $("tcBug").classList.toggle("primary", bugOnly);
+  $("tcBug").setAttribute("aria-pressed", bugOnly ? "true" : "false");
 }
 function renderStats(){
   var s = stats || {};
@@ -115,7 +204,6 @@ function renderStats(){
   $("tcStats").innerHTML = items.map(function(it){
     return '<span class="tc-stat ' + it[2] + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
   }).join("");
-  $("tcMeta").textContent = (stats && stats.total) ? ("共 " + stats.total + " 条用例") : "";
 }
 function syncModeUI(){
   var bn = $("btnCaseNew");
@@ -129,6 +217,8 @@ function syncModeUI(){
 function caseRowHTML(c){
   var meta = [];
   var stepCount = (c.steps || []).length;
+  if(c.module) meta.push(c.module);
+  if(c.demandTitle) meta.push("需求：" + cut(c.demandTitle, 30));
   meta.push(stepCount ? (stepCount + " 步") : "无步骤");
   if(c.precondition) meta.push("前置：" + cut(c.precondition, 36));
   if(c.latestStatus){
@@ -146,13 +236,15 @@ function caseRowHTML(c){
     acts += '<button class="btn sm ghost danger" type="button" data-tc-defect="' + esc(c.id) + '">转缺陷</button>';
   }
   if(w){
-    acts += '<button class="btn sm ghost" type="button" data-tc-edit="' + esc(c.id) + '">' + icon("edit", 13) + ' 编辑</button>';
-    acts += '<button class="icon-btn sm" type="button" data-tc-del="' + esc(c.id) + '" aria-label="删除用例">' + icon("trash", 14) + '</button>';
+    acts += '<span class="tc-secondary">'
+      + '<button class="btn sm ghost" type="button" data-tc-edit="' + esc(c.id) + '">' + icon("edit", 13) + ' 编辑</button>'
+      + '<button class="icon-btn sm" type="button" data-tc-del="' + esc(c.id) + '" aria-label="删除用例">' + icon("trash", 14) + '</button>'
+      + '</span>';
   }
   return '<div class="tc-row" data-tc-open="' + esc(c.id) + '">'
     + statusBadgeHTML(c.latestStatus)
     + '<div class="tc-main">'
-    +   '<div class="tc-title">' + esc(c.title) + '</div>'
+    +   '<div class="tc-title">' + esc(c.title) + (c.priority ? ' <span class="tc-pri">' + priTagHTML(c.priority) + '</span>' : "") + '</div>'
     +   '<div class="tc-meta">' + meta.map(esc).join(" · ") + '</div>'
     +   (c.latestNote ? '<div class="tc-note">' + esc(c.latestNote) + '</div>' : "")
     + '</div>'
@@ -166,11 +258,64 @@ function cut(s, n){
 
 /* ---------- 用例编辑 ---------- */
 
+function demandStatusLabel(st){
+  return { review:"待评审", pass:"已通过", plan:"已排期", rej:"已拒绝" }[st] || st || "";
+}
+function demandPickLabel(d){
+  var tag = demandStatusLabel(d.status);
+  return d.title + (tag ? "（" + tag + "）" : "");
+}
+function loadDemandOptions(reqId){
+  if(!reqId) return Promise.resolve([]);
+  if(demandOptions.reqId === reqId && demandOptions.list.length) return Promise.resolve(demandOptions.list);
+  if(demandOptions.reqId === reqId && demandOptions.loading) return demandOptions.loading;
+  demandOptions.reqId = reqId;
+  demandOptions.list = [];
+  demandOptions.loading = API.get("/api/demands", { reqId: reqId }).then(function(list){
+    if(demandOptions.reqId === reqId){
+      demandOptions.list = list || [];
+    }
+    demandOptions.loading = null;
+    return demandOptions.list;
+  }).catch(function(){
+    demandOptions.loading = null;
+    return [];
+  });
+  return demandOptions.loading;
+}
+function fillDemandSelect(selected){
+  var sel = $("cDemand");
+  var list = (demandOptions.reqId === caseReqId && demandOptions.list) ? demandOptions.list : [];
+  var valid = selected && list.some(function(d){ return d.id === selected; });
+  sel.innerHTML = '<option value="">不关联</option>'
+    + list.map(function(d){
+      return '<option value="' + esc(d.id) + '">' + esc(demandPickLabel(d)) + '</option>';
+    }).join("");
+  sel.value = valid ? selected : "";
+  if(selected && !valid && list.length) sel.value = "";
+}
+function setDemandLoading(){
+  $("cDemand").innerHTML = '<option value="">需求加载中…</option>';
+  $("cDemand").value = "";
+}
+/* 优先级档位固定 P0-P3，显示名随空间优先级配置变化，开弹窗时刷新 */
+function syncPriOptions(){
+  $("cPri").innerHTML = '<option value="">不设置</option>'
+    + PRIORITIES.map(function(p){
+      return '<option value="' + p + '">' + p + ' · ' + esc(priName(p)) + '</option>';
+    }).join("");
+}
+
 function openNewDialog(){
   editingCase = { id: null, steps: [{ action: "", expected: "" }] };
   $("caseFormTitle").textContent = "新增用例";
   $("cTitle").value = "";
+  $("cModule").value = "";
+  syncPriOptions();
+  $("cPri").value = "";
   $("cPrecondition").value = "";
+  setDemandLoading();
+  loadDemandOptions(caseReqId).then(function(){ if(editingCase && !editingCase.id) fillDemandSelect(""); });
   renderStepRows();
   applyReadOnly(!isWritable());
   UI.openModal($("dlgCase"), "input");
@@ -180,11 +325,19 @@ function openEditDialog(id){
   if(!c) return;
   editingCase = {
     id: id,
+    demandId: c.demandId || "",
     steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
   };
   $("caseFormTitle").textContent = isWritable() ? "编辑用例" : "查看用例";
   $("cTitle").value = c.title || "";
+  $("cModule").value = c.module || "";
+  syncPriOptions();
+  $("cPri").value = c.priority || "";
   $("cPrecondition").value = c.precondition || "";
+  setDemandLoading();
+  loadDemandOptions(caseReqId).then(function(){
+    if(editingCase && editingCase.id === id) fillDemandSelect(editingCase.demandId);
+  });
   renderStepRows();
   applyReadOnly(!isWritable());
   UI.openModal($("dlgCase"), "input");
@@ -195,16 +348,21 @@ function renderStepRows(){
     ? rows.map(function(s, i){
       return '<div class="tc-step-row">'
         + '<span class="tc-step-no">' + (i + 1) + '</span>'
-        + '<input type="text" maxlength="200" placeholder="操作步骤（必填）" value="' + esc(s.action) + '" aria-label="步骤 ' + (i + 1) + ' 操作" />'
-        + '<input type="text" maxlength="500" placeholder="预期结果（选填）" value="' + esc(s.expected) + '" aria-label="步骤 ' + (i + 1) + ' 预期" />'
+        + '<textarea rows="1" maxlength="200" placeholder="操作步骤（必填）" aria-label="步骤 ' + (i + 1) + ' 操作">' + esc(s.action) + '</textarea>'
+        + '<textarea rows="1" maxlength="500" placeholder="预期结果（选填）" aria-label="步骤 ' + (i + 1) + ' 预期">' + esc(s.expected) + '</textarea>'
         + '<button class="icon-btn sm" type="button" data-step-del="' + i + '" aria-label="删除该步骤">' + icon("trash", 14) + '</button>'
         + '</div>';
     }).join("")
-    : '<p class="foot-note">还没有步骤，点下方「添加步骤」录入操作与预期结果。</p>';
+    : '<p class="foot-note">还没有步骤，点下方「添加步骤」录入操作与预期结果，或在步骤里按 Ctrl+Enter 快捷插入新行。</p>';
+}
+function focusStep(i){
+  var row = $("tcSteps").querySelectorAll(".tc-step-row")[i];
+  var ta = row && row.querySelector("textarea");
+  if(ta) ta.focus();
 }
 function applyReadOnly(on){
-  ["cTitle", "cPrecondition"].forEach(function(id){ $(id).disabled = on; });
-  $("tcSteps").querySelectorAll("input").forEach(function(inp){ inp.disabled = on; });
+  ["cTitle", "cPrecondition", "cDemand", "cModule", "cPri"].forEach(function(id){ $(id).disabled = on; });
+  $("tcSteps").querySelectorAll("textarea").forEach(function(inp){ inp.disabled = on; });
   $("tcSteps").querySelectorAll("[data-step-del]").forEach(function(b){ b.style.display = on ? "none" : ""; });
   $("btnCaseAddStep").style.display = on ? "none" : "";
   $("caseSaveRow").style.display = on ? "none" : "";
@@ -213,9 +371,9 @@ function applyReadOnly(on){
 function collectSteps(){
   var rows = [];
   $("tcSteps").querySelectorAll(".tc-step-row").forEach(function(row){
-    var inputs = row.querySelectorAll("input");
-    var a = inputs[0].value.trim();
-    var e = inputs[1].value.trim();
+    var tas = row.querySelectorAll("textarea");
+    var a = tas[0].value.trim();
+    var e = tas[1].value.trim();
     if(!a && !e) return;
     rows.push({ action: a, expected: e });
   });
@@ -225,10 +383,10 @@ function syncStepsFromDom(){
   if(!editingCase) return;
   editingCase.steps = [];
   $("tcSteps").querySelectorAll(".tc-step-row").forEach(function(row){
-    var inputs = row.querySelectorAll("input");
+    var tas = row.querySelectorAll("textarea");
     editingCase.steps.push({
-      action: inputs[0].value.trim(),
-      expected: (inputs[1].value || "").trim()
+      action: tas[0].value.trim(),
+      expected: (tas[1].value || "").trim()
     });
   });
 }
@@ -243,10 +401,13 @@ function saveCase(){
     reqId: caseReqId,
     title: title,
     precondition: $("cPrecondition").value.trim() || null,
+    module: $("cModule").value.trim() || null,
+    priority: $("cPri").value || null,
+    demandId: $("cDemand").value || null,
     steps: collectSteps()
   };
   var p = editingCase.id
-    ? API.put("/api/test-cases/" + editingCase.id, body)
+    ? API.put("/api/test-cases/" + encodeURIComponent(editingCase.id), body)
     : API.post("/api/test-cases", body);
   p.then(function(){
     UI.closeModal($("dlgCase"));
@@ -257,7 +418,7 @@ function saveCase(){
 function removeCase(id){
   var c = caseById(id);
   if(!window.confirm("删除用例「" + (c ? c.title : id) + "」？其执行记录将一并删除。")) return;
-  API.del("/api/test-cases/" + id).then(function(){
+  API.del("/api/test-cases/" + encodeURIComponent(id)).then(function(){
     toast("用例已删除");
     loadCases();
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
@@ -282,7 +443,7 @@ function syncRunSeg(){
   });
 }
 function doRun(){
-  API.post("/api/test-cases/" + runningCaseId + "/runs", {
+  API.post("/api/test-cases/" + encodeURIComponent(runningCaseId) + "/runs", {
     status: runStatus,
     note: $("runNote").value.trim() || null
   }).then(function(){
@@ -310,7 +471,7 @@ function doDefect(){
     toast("缺陷必须选择严重度", "warn");
     return;
   }
-  API.post("/api/test-cases/" + defectCaseId + "/defect", {
+  API.post("/api/test-cases/" + encodeURIComponent(defectCaseId) + "/defect", {
     severity: severity,
     environment: $("defectEnvironment").value.trim() || null
   }).then(function(task){
@@ -326,6 +487,22 @@ function doDefect(){
 $("tcReq").addEventListener("change", function(){
   caseReqId = $("tcReq").value;
   loadCases();
+});
+["tcModule", "tcPri", "tcOwner"].forEach(function(id){
+  $(id).addEventListener("change", function(){
+    modFilter = $("tcModule").value;
+    priFilter = $("tcPri").value;
+    ownerFilter = $("tcOwner").value;
+    render();
+  });
+});
+$("tcBug").addEventListener("click", function(){
+  bugOnly = !bugOnly;
+  render();
+});
+$("tcSearch").addEventListener("input", function(){
+  searchText = this.value.trim().toLowerCase();
+  render();
 });
 $("tcStatusSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-tc-status]");
@@ -354,6 +531,7 @@ $("btnCaseAddStep").addEventListener("click", function(){
   syncStepsFromDom();
   editingCase.steps.push({ action: "", expected: "" });
   renderStepRows();
+  focusStep(editingCase.steps.length - 1);
 });
 $("tcSteps").addEventListener("click", function(e){
   var d = e.target.closest("[data-step-del]");
@@ -361,6 +539,20 @@ $("tcSteps").addEventListener("click", function(e){
   syncStepsFromDom();
   editingCase.steps.splice(Number(d.dataset.stepDel), 1);
   renderStepRows();
+});
+/* Ctrl/Cmd+Enter 在当前步骤下方插入新行，长步骤输入不受干扰 */
+$("tcSteps").addEventListener("keydown", function(e){
+  if(e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || !editingCase) return;
+  if(editingCase.steps.length >= 30){ toast("步骤最多 30 条", "warn"); return; }
+  e.preventDefault();
+  syncStepsFromDom();
+  var row = e.target.closest(".tc-step-row");
+  var idx = row
+    ? Array.prototype.indexOf.call($("tcSteps").querySelectorAll(".tc-step-row"), row)
+    : editingCase.steps.length - 1;
+  editingCase.steps.splice(idx + 1, 0, { action: "", expected: "" });
+  renderStepRows();
+  focusStep(idx + 1);
 });
 $("btnSaveCase").addEventListener("click", saveCase);
 $("cTitle").addEventListener("input", function(){ $("fCaseTitle").classList.remove("invalid"); });

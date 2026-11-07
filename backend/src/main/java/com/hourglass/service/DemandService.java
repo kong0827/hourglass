@@ -39,12 +39,14 @@ public class DemandService {
     private final ProjectAccessService projectAccess;
     private final AttachmentService attachmentService;
     private final com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper;
+    private final com.hourglass.mapper.TestCaseMapper caseMapper;
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
                          ProjectVersionMapper versionMapper, TaskMapper taskMapper,
                          NotificationEventService notificationEvents, RequirementDocMapper docMapper,
                          ProjectAccessService projectAccess, AttachmentService attachmentService,
-                         com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper) {
+                         com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
+                         com.hourglass.mapper.TestCaseMapper caseMapper) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -54,6 +56,7 @@ public class DemandService {
         this.projectAccess = projectAccess;
         this.attachmentService = attachmentService;
         this.mailDeliveryMapper = mailDeliveryMapper;
+        this.caseMapper = caseMapper;
     }
 
     public List<Demand> list(String workspaceId, String reqId) {
@@ -231,6 +234,8 @@ public class DemandService {
         docMapper.deleteDemandLinksByDemand(workspaceId, id);
         /* 需求没了，任务上的 demand_id 必须一起解绑，否则编辑任务会被"关联需求不存在"拦住 */
         taskMapper.clearDemandRef(workspaceId, id);
+        /* 测试用例上的选填关联同样解绑 */
+        caseMapper.clearDemandRefs(workspaceId, id);
         /* 条目本身要删，留着它自己的流转日志只会变成查不到主人的孤儿行 */
         demandMapper.deleteLogsByDemand(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);

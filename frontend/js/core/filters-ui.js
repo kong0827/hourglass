@@ -196,22 +196,30 @@ function renderBlockedChip(){
     '<i class="cdot" style="background:var(--warning)"></i>仅看被阻塞' + icon("close", 12) + '</button>';
   $("fgBlocked").hidden = false;
 }
+/* 保存视图按 scope 隔离：任务视图（无 scope）与需求池视图（scope=demand）共用一张表，展示/应用时互不可见 */
+function viewScopeOf(v){
+  try{ return (JSON.parse(v.params || "{}").scope) || "task"; }
+  catch(e){ return "task"; }
+}
+function savedViewsFor(scope){
+  return (rt.savedViews || []).filter(function(v){ return viewScopeOf(v) === scope; });
+}
 function renderViews(){
   if(!viewBox) return;
-  viewBox.innerHTML = rt.savedViews.map(function(v){
+  viewBox.innerHTML = savedViewsFor("task").map(function(v){
     return '<span class="view-chip">' +
       '<button class="vname" type="button" data-view-apply="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +
       '<button class="vx" type="button" data-view-del="' + esc(v.id) + '" title="删除视图" aria-label="删除视图">' + icon("close", 11) + '</button>' +
       '</span>';
   }).join("");
-  $("viewGroup").hidden = rt.savedViews.length === 0;
+  $("viewGroup").hidden = savedViewsFor("task").length === 0;
   renderSmartTabs();
   updateFilterActions();
 }
 function updateFilterActions(){
   var n = selectedFilterCount();
   /* 列表视图由 Smart Bar 承载「视图」入口，筛选栏只保留清空与已选摘要 */
-  var showActions = n > 0 || (activeView !== "list" && rt.savedViews.length > 0);
+  var showActions = n > 0 || (activeView !== "list" && savedViewsFor("task").length > 0);
   filterActions.hidden = !showActions;
   selectedSummary.hidden = n === 0;
   selectedSummary.innerHTML = '已选 ' + n + ' 项 ' + icon("close", 12);
@@ -489,6 +497,7 @@ function loadViews(){
 }
 function parseViewParams(p){
   if(!p || typeof p !== "object" || Array.isArray(p)) return null;
+  if(p.scope === "demand") return null;
   function strArr(v){
     if(v === undefined || v === null) return [];
     if(!Array.isArray(v)) return null;
@@ -587,7 +596,7 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
     params.group = listParams.group;
     params.sort = listParams.sort;
   }
-  var overwrite = rt.savedViews.some(function(v){ return v.name === name; });
+  var overwrite = savedViewsFor("task").some(function(v){ return v.name === name; });
   var submitBtn = $("dlgViewNameOk");
   submitBtn.disabled = true;
   API.post("/api/views", { name: name, params: JSON.stringify(params) }).then(function(saved){
@@ -600,4 +609,4 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
   }).catch(function(ex){ submitBtn.disabled = false; toast(ex.message || "保存失败", "bad"); });
 });
 
-export { applyView, clearFilters, deleteView, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, toggleIn };
+export { applyView, clearFilters, deleteView, loadViews, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn };

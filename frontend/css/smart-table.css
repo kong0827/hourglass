@@ -1,32 +1,45 @@
-/* 列表智能表格：视图、分组与排序 */
-#view-list .smart-list-bar{
+/* 列表智能表格：视图、分组与排序（任务列表 + 需求池列表共用） */
+#view-list .smart-list-bar,
+#view-demands .smart-list-bar{
   display:flex;flex-direction:column;margin-bottom:10px;overflow:hidden;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
 }
-#view-list .smart-view-tabs{
+#view-list .smart-view-tabs,
+#view-demands .smart-view-tabs{
   display:flex;align-items:center;gap:4px;min-height:44px;padding:6px 8px;
   overflow-x:auto;border-bottom:1px solid var(--border);
 }
-#view-list .smart-view-tab{
+#view-list .smart-view-tab,
+#view-demands .smart-view-tab{
   flex:0 0 auto;min-height:30px;padding:5px 11px;border:0;border-radius:var(--r-md);
   background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;cursor:pointer;
   white-space:nowrap;transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
 }
-#view-list .smart-view-tab:hover{background:var(--surface-hover);color:var(--text);}
-#view-list .smart-view-tab.on{background:var(--primary-soft);color:var(--primary);font-weight:600;}
-#view-list .smart-view-custom{display:inline-flex;align-items:center;flex:0 0 auto;border-radius:var(--r-md);}
-#view-list .smart-view-custom .smart-view-tab{padding-right:5px;}
-#view-list .smart-view-del{
+#view-list .smart-view-tab:hover,
+#view-demands .smart-view-tab:hover{background:var(--surface-hover);color:var(--text);}
+#view-list .smart-view-tab.on,
+#view-demands .smart-view-tab.on{background:var(--primary-soft);color:var(--primary);font-weight:600;}
+#view-list .smart-view-custom,
+#view-demands .smart-view-custom{display:inline-flex;align-items:center;flex:0 0 auto;border-radius:var(--r-md);}
+#view-list .smart-view-custom .smart-view-tab,
+#view-demands .smart-view-custom .smart-view-tab{padding-right:5px;}
+#view-list .smart-view-del,
+#view-demands .smart-view-del{
   display:inline-flex;align-items:center;justify-content:center;width:24px;height:26px;margin-right:3px;
   padding:0;border:0;border-radius:var(--r-sm);background:transparent;color:var(--text-3);cursor:pointer;
 }
-#view-list .smart-view-del:hover{background:var(--surface-hover);color:var(--danger-fg);}
-#view-list .smart-view-tools{
+#view-list .smart-view-del:hover,
+#view-demands .smart-view-del:hover{background:var(--surface-hover);color:var(--danger-fg);}
+#view-list .smart-view-tools,
+#view-demands .smart-view-tools{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;
 }
-#view-list .smart-view-control{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-size:12px;}
-#view-list .smart-view-control .mini-select{min-width:112px;}
-#view-list .smart-view-spacer{flex:1 1 auto;}
+#view-list .smart-view-control,
+#view-demands .smart-view-control{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-size:12px;}
+#view-list .smart-view-control .mini-select,
+#view-demands .smart-view-control .mini-select{min-width:112px;}
+#view-list .smart-view-spacer,
+#view-demands .smart-view-spacer{flex:1 1 auto;}
 #view-list .list-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 #view-list .list-group-row > button{
   display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:7px 16px;border:0;
@@ -37,8 +50,25 @@
 #view-list .list-group-caret.open{transform:rotate(90deg);}
 #view-list .list-group-name{font-size:12.5px;font-weight:600;color:var(--text);}
 #view-list .list-group-count{font-size:12px;color:var(--text-3);}
+/* 需求池列表：搜索框 + 表格内分组行 */
+#view-demands .dem-search{min-width:170px;max-width:230px;padding:5px 10px;font-size:12.5px;}
+#view-demands .dem-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+#view-demands .dem-group-row > td{padding:6px 10px;}
+#view-demands .dem-group-toggle{
+  display:inline-flex;align-items:center;gap:8px;padding:2px 4px;border:0;
+  background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;cursor:pointer;
+}
+#view-demands .dem-group-toggle:hover{color:var(--text);}
+#view-demands .dem-group-caret{display:inline-block;color:var(--text-3);font-size:10px;transition:transform var(--dur-fast) var(--ease-out);}
+#view-demands .dem-group-caret.open{transform:rotate(90deg);}
+#view-demands .dem-group-name{font-weight:600;color:var(--text);}
+#view-demands .dem-group-count{font-size:12px;color:var(--text-3);}
 @media (max-width:767px){
-  #view-list .smart-view-tools{align-items:stretch;}
-  #view-list .smart-view-spacer{display:none;}
-  #view-list .smart-view-tools > .btn{flex:1 1 auto;}
+  #view-list .smart-view-tools,
+  #view-demands .smart-view-tools{align-items:stretch;}
+  #view-list .smart-view-spacer,
+  #view-demands .smart-view-spacer{display:none;}
+  #view-list .smart-view-tools > .btn,
+  #view-demands .smart-view-tools > .btn{flex:1 1 auto;}
+  #view-demands .dem-search{max-width:none;flex:1 1 100%;}
 }

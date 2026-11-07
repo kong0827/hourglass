@@ -27,7 +27,7 @@ class DemandServiceNotificationTest {
     private final DemandService service = new DemandService(demands, mock(RequirementMapper.class),
             versions, mock(TaskMapper.class), events, mock(RequirementDocMapper.class),
             mock(ProjectAccessService.class), mock(AttachmentService.class),
-            mock(com.hourglass.mapper.MailDeliveryMapper.class));
+            mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class));
 
     @Test
     void passNotifiesSubmitter() {

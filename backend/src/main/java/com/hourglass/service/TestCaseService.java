@@ -11,10 +11,12 @@ import com.hourglass.dto.CaseStatsView;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.dto.TestCaseSaveRequest;
 import com.hourglass.dto.TestCaseView;
+import com.hourglass.entity.Demand;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TestCase;
 import com.hourglass.entity.TestCaseRun;
+import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TestCaseMapper;
 import com.hourglass.mapper.TestCaseRunMapper;
@@ -44,15 +46,17 @@ public class TestCaseService {
     private final TaskCommandService taskCommandService;
     private final ProjectAccessService projectAccess;
     private final RequirementMapper reqMapper;
+    private final DemandMapper demandMapper;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
-                           RequirementMapper reqMapper) {
+                           RequirementMapper reqMapper, DemandMapper demandMapper) {
         this.caseMapper = caseMapper;
         this.runMapper = runMapper;
         this.taskCommandService = taskCommandService;
         this.projectAccess = projectAccess;
         this.reqMapper = reqMapper;
+        this.demandMapper = demandMapper;
     }
 
     /* ---------- 查询 ---------- */
@@ -167,6 +171,8 @@ public class TestCaseService {
         tReq.setSeverity(req.getSeverity());
         tReq.setEnvironment(Texts.trimToNull(req.getEnvironment()));
         tReq.setReqId(c.getReqId());
+        /* 用例关联了需求时，缺陷任务沿用该关联，保持追溯链一致 */
+        tReq.setDemandId(c.getDemandId());
         tReq.setDescription(Texts.cut(buildDefectDescription(c), 200));
         Task task = taskCommandService.create(userId, workspaceId, tReq);
         caseMapper.updateLatestBug(workspaceId, id, task.getId());
@@ -192,9 +198,25 @@ public class TestCaseService {
 
     private void apply(TestCase c, String reqId, TestCaseSaveRequest req) {
         c.setReqId(reqId);
+        c.setDemandId(resolveDemand(c.getWorkspaceId(), reqId, req.getDemandId()));
         c.setTitle(Texts.cut(req.getTitle().trim(), 100));
         c.setPrecondition(Texts.trimToNull(req.getPrecondition()));
+        c.setModule(Texts.trimToNull(req.getModule()));
+        c.setPriority(Texts.trimToNull(req.getPriority()));
         c.setSteps(serializeSteps(req.getSteps()));
+    }
+
+    /** 关联需求选填：填了就必须是本空间、且与用例同一项目下的需求池条目 */
+    private String resolveDemand(String workspaceId, String reqId, String rawDemandId) {
+        String demandId = Texts.trimToNull(rawDemandId);
+        if (demandId == null) {
+            return null;
+        }
+        Demand d = demandMapper.selectById(demandId);
+        if (d == null || !workspaceId.equals(d.getWorkspaceId()) || !reqId.equals(d.getReqId())) {
+            throw AppException.badRequest("关联需求不存在或不属于该项目：" + demandId);
+        }
+        return demandId;
     }
 
     private String ensureProject(String workspaceId, String rawReqId) {

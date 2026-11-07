@@ -16,7 +16,9 @@
 }
 
 /* 品牌区 56px */
-.side-brand{display:flex;align-items:center;gap:10px;height:56px;flex:0 0 auto;padding:0 16px;}
+.side-brand{display:flex;align-items:center;gap:10px;width:100%;height:56px;flex:0 0 auto;padding:0 16px;
+  background:transparent;border:none;border-radius:0;color:inherit;text-align:left;cursor:pointer;}
+.side-brand:hover{background:var(--surface-hover);}
 .brand-mark{
   width:32px;height:32px;border-radius:var(--r-sm);flex:0 0 auto;
   background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);

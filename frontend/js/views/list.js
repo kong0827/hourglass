@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, listBulkBar } from "../core/dom.js";
-import { applyView, clearFilters, deleteView, promptSaveView, saveViewState } from "../core/filters-ui.js";
+import { applyView, clearFilters, deleteView, promptSaveView, saveViewState, savedViewsFor } from "../core/filters-ui.js";
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -38,7 +38,7 @@ function renderSmartTabs(){
     var on = smart.current === p[0];
     return '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-list-preset="' + p[0] + '">' + p[1] + '</button>';
   }).join("");
-  html += rt.savedViews.map(function(v){
+  html += savedViewsFor("task").map(function(v){
     var id = String(v.id), on = smart.current === id;
     return '<span class="smart-view-custom">' +
       '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-list-saved="' + esc(id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +

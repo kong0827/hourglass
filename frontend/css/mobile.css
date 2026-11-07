@@ -453,6 +453,9 @@
 /* ===================== 其余视图收窄（390px 不横向滚动） ===================== */
 [data-layout="mobile"] .view-page,
 [data-layout="mobile"] .view-page.wide{max-width:100%;}
+[data-layout="mobile"] .reqdoc-split-tree{max-height:44vh;}
+[data-layout="mobile"] .rf-detail{max-width:140px;}
+[data-layout="mobile"] .rf-doc{flex:none;max-width:130px;}
 [data-layout="mobile"] .set-layout,
 [data-layout="mobile"] .proj-layout,
 [data-layout="mobile"] .cal-layout{grid-template-columns:1fr;}
@@ -464,6 +467,8 @@
 [data-layout="mobile"] .field-row,
 [data-layout="mobile"] .phase-duo,
 [data-layout="mobile"] .reqdoc-mdsplit,
+[data-layout="mobile"] .reqdoc-kanban,
+[data-layout="mobile"] .reqdoc-split,
 [data-layout="mobile"] .channel-cards,
 [data-layout="mobile"] .manager-kpis,
 [data-layout="mobile"] .manager-two-col,
@@ -499,7 +504,8 @@
 [data-layout="mobile"] .tc-step-row{display:grid;grid-template-columns:22px 1fr 28px;row-gap:6px;}
 [data-layout="mobile"] .tc-step-row .tc-step-no{grid-column:1;grid-row:1;}
 [data-layout="mobile"] .tc-step-row > button{grid-column:3;grid-row:1;}
-[data-layout="mobile"] .tc-step-row input{grid-column:1/-1;width:100%;flex:none;}
+[data-layout="mobile"] .tc-step-row input,[data-layout="mobile"] .tc-step-row textarea{grid-column:1/-1;width:100%;flex:none;}
+[data-layout="mobile"] .tc-acts .tc-secondary{opacity:1;}
 
 /* 暗色下手机卡片/底栏统一用语义令牌，禁止写死 hex */
 html[data-theme="dark"] [data-layout="mobile"] .team-hero{box-shadow:none;}

@@ -36,7 +36,8 @@ public class AttachmentService {
 
     private static final Logger log = LoggerFactory.getLogger(AttachmentService.class);
     private static final Set<String> ALLOWED_EXT = new HashSet<String>(
-            Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx"));
+            Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx",
+                    "doc", "docx", "xls", "ppt", "pptx"));
 
     /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 */
     public static final String KIND_TASK = "task";

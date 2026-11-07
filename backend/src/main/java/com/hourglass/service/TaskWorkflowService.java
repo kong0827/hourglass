@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,12 +46,14 @@ public class TaskWorkflowService {
     /** 审计日志与字段差异 */
     private final TaskAuditLogger audit;
     private final NotificationEventService notificationEvents;
+    private final TaskWatchService watchService;
     private final ProjectAccessService projectAccess;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
                                TaskCompletionService completionService, TaskAuditLogger audit,
-                               NotificationEventService notificationEvents, ProjectAccessService projectAccess) {
+                               NotificationEventService notificationEvents, TaskWatchService watchService,
+                               ProjectAccessService projectAccess) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -59,6 +62,7 @@ public class TaskWorkflowService {
         this.completionService = completionService;
         this.audit = audit;
         this.notificationEvents = notificationEvents;
+        this.watchService = watchService;
         this.projectAccess = projectAccess;
     }
 
@@ -178,10 +182,8 @@ public class TaskWorkflowService {
         /* 列内排序（from==to）不算流程事件，不写 from/to，免得把"停留"切成碎段 */
         audit.log(userId, workspaceId, id, "move", detail,
                 from.equals(to) ? null : from, from.equals(to) ? null : to);
-        if (!from.equals(to) && task.getOwnerUserId() != null && !task.getOwnerUserId().equals(userId)) {
-            notificationEvents.notify(task.getOwnerUserId(), workspaceId,
-                    UserNotificationPreferenceService.TASK_UPDATED,
-                    "任务更新：" + task.getTitle(), detail, id, task.getReqId());
+        if (!from.equals(to)) {
+            notifyColumnMove(workspaceId, userId, task, detail, true);
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("task", taskMapper.selectById(id));
@@ -288,9 +290,29 @@ public class TaskWorkflowService {
         }
         /* 抽屉里改列也是“移动”：流程体检只读 action=move 的日志，
            只记 update 会让这些移动在停留时长/返工率里凭空消失。 */
-        audit.log(userId, workspaceId, task.getId(), "move",
-                "从「" + support.columnName(workspaceId, from) + "」移动到「" + support.columnName(workspaceId, task.getBoardColumn()) + "」",
-                from, task.getBoardColumn());
+        String detail = "从「" + support.columnName(workspaceId, from) + "」移动到「" + support.columnName(workspaceId, task.getBoardColumn()) + "」";
+        audit.log(userId, workspaceId, task.getId(), "move", detail, from, task.getBoardColumn());
+        /* 拖拽是独立动作，负责人在此即时通知；抽屉改列由编辑入口合并成一条，这里只发关注者 */
+        notifyColumnMove(workspaceId, userId, task, detail, false);
+    }
+
+    /**
+     * 列流转通知：关注者走关注开关。负责人不是操作者时必有单独通知——
+     * 拖拽路径（notifyOwner=true）在此发出；抽屉路径由 {@link TaskCommandService} 与字段变更合并为一条，
+     * 这里只把负责人放进 skip，避免同一次保存发两条。
+     */
+    private void notifyColumnMove(String workspaceId, String actorId, Task task, String detail, boolean notifyOwner) {
+        String owner = Texts.trimToNull(task.getOwnerUserId());
+        boolean skipOwner = owner != null && !owner.equals(actorId);
+        if (notifyOwner && skipOwner) {
+            notificationEvents.notify(owner, workspaceId,
+                    UserNotificationPreferenceService.TASK_UPDATED,
+                    "任务更新：" + task.getTitle(), detail, task.getId(), task.getReqId());
+        }
+        watchService.notifyWatchers(workspaceId, task.getId(), actorId,
+                UserNotificationPreferenceService.TASK_WATCH,
+                "「" + task.getTitle() + "」已流转", detail, task.getReqId(),
+                skipOwner ? Collections.singletonList(owner) : Collections.<String>emptyList());
     }
 
     /** 完成时生成下一次循环任务，返回新生成的截止日期（不循环或复用已有后续任务返回 null） */

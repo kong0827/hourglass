@@ -2,10 +2,12 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocPublishRequest;
 import com.hourglass.dto.ReqDocRestoreRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.dto.ReqDocShareResponse;
+import com.hourglass.dto.ReqDocStatusRequest;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.entity.ReqDocShare;
 import com.hourglass.entity.RequirementDoc;
@@ -87,6 +89,13 @@ public class RequirementDocController {
         return ApiResult.ok(docService.activities(ws.getId(), id));
     }
 
+    /** 文档最近动态（空间级）：全部文档的创建/更新/状态流转/发布等活动，按查看人过滤可见性 */
+    @GetMapping("/api/req-docs/activities")
+    public ApiResult<List<ReqDocActivityView>> docActivities(@RequestParam(required = false) String workspace) {
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        return ApiResult.ok(docService.feedActivities(ws.getId(), CurrentUser.id(), 120));
+    }
+
     @PostMapping("/api/req-docs")
     public ApiResult<RequirementDoc> create(@Valid @RequestBody ReqDocSaveRequest req,
                                             @RequestParam(required = false) String workspace) {
@@ -142,6 +151,16 @@ public class RequirementDocController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         boolean published = req != null && Boolean.TRUE.equals(req.getPublished());
         return ApiResult.ok(docService.publish(userId, ws.getId(), id, published));
+    }
+
+    /** 看板拖拽状态流转：轻量接口，只改状态，不携带正文也不走整篇乐观锁 */
+    @PutMapping("/api/req-docs/{id}/status")
+    public ApiResult<RequirementDoc> changeStatus(@PathVariable String id,
+                                                  @Valid @RequestBody ReqDocStatusRequest req,
+                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.changeStatus(userId, ws.getId(), id, req.getStatus()));
     }
 
     @DeleteMapping("/api/req-docs/{id}")

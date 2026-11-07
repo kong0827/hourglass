@@ -827,8 +827,11 @@ CREATE TABLE `test_case` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `req_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID（requirement.id）',
+  `demand_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联需求ID（demand.id，选填）',
   `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例标题',
   `precondition` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '前置条件',
+  `module` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '功能模块（自由填写，筛选用）',
+  `priority` varchar(8) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '优先级档位：P0/P1/P2/P3，空=未设置',
   `steps` mediumtext COLLATE utf8mb4_unicode_ci COMMENT '执行步骤 JSON：[{"action":"操作","expected":"预期结果"}]',
   `latest_status` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行结果：passed/failed/blocked，空=未执行',
   `latest_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近执行备注',
@@ -840,6 +843,7 @@ CREATE TABLE `test_case` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
+  KEY `idx_demand` (`demand_id`),
   KEY `idx_bug` (`latest_bug_task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例（项目下，展示最近一轮执行结果）';
 /*!40101 SET character_set_client = @saved_cs_client */;

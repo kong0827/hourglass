@@ -53,7 +53,7 @@ class TestCaseServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final TestCaseService service =
-            new TestCaseService(cases, runs, taskCommand, access, reqs);
+            new TestCaseService(cases, runs, taskCommand, access, reqs, mock(com.hourglass.mapper.DemandMapper.class));
 
     @BeforeEach
     void setUp() {

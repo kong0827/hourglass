@@ -31,7 +31,7 @@ let html = fs.readFileSync(path.join(STATIC, "index.html"), "utf8");
 /* 运行时配置内联：预览稿是单文件，不能依赖同目录的 config.js */
 const configSrc = fs.readFileSync(path.join(STATIC, "config.js"), "utf8");
 html = html.replace(/<script src="config\.js"><\/script>/,
-  "<script>\n" + configSrc + "\n</script>");
+  function () { return "<script>\n" + configSrc + "\n</script>"; });
 
 /* 1) 样式内联 */
 html = html.replace(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/g, function (m, href) {
@@ -92,6 +92,10 @@ function visit(name) {
   order.push(name);
 }
 /* 低频视图也要先访问依赖再入队，否则 manager-shared / list-preferences 可能晚于使用方执行 */
+/* main.js 必须最先访问：它才对应真实 ESM 的求值顺序。若按目录序先走别的模块，
+   format↔state 循环依赖会让 state.js（顶层就调 startOfDay）排到 lib/gantt-shared
+   的 const GS 之前，整包直接 TDZ 报错 */
+visit("main.js");
 for (const m of modules) visit(m);
 
 /* 真实 ESM 每个文件一个作用域；平铺拼接会把各模块顶层的 const cache / render /
@@ -166,9 +170,19 @@ const bundle = "window.__DS_MODULES__ = window.__DS_MODULES__ || {};\nvar __NS =
   chunks + "\n" + registry;
 
 const MOCK = fs.readFileSync(path.join(__dirname, "preview-mock.js"), "utf8");
+/* 阅读视图 / Markdown 预览按需加载 vendor/markdown/*（相对路径）：单文件预览下
+   404，这里直接内联，loadMarkdownLib 见 window.marked 已存在会立即返回 */
+const mdLibs = ["marked.min.js", "purify.min.js"].map(function (f) {
+  return "<script>\n" + fs.readFileSync(path.join(STATIC, "vendor", "markdown", f), "utf8") + "\n</" + "script>";
+}).join("\n");
 html = html.replace(/<link[^>]*rel="modulepreload"[^>]*>/g, "");
+/* ⚠️ 替换内容必须走函数形式：minified 代码里有 $& / $' 之类的串，字符串替换会当成
+  特殊模式展开，把内联脚本炸掉 */
 html = html.replace(/<script[^>]*type="module"[^>]*src="js\/main\.js"[^>]*><\/script>/,
-  "<script>\n" + MOCK + "\n(function(){\"use strict\";\n" + bundle + "\n})();\n</" + "script>");
+  function () {
+    return "<script>\n" + MOCK + "\n</" + "script>\n" + mdLibs +
+      "\n<script>\n(function(){\"use strict\";\n" + bundle + "\n})();\n</" + "script>";
+  });
 
 /* 3) 底部说明条
    ⚠️ 不能用 html.replace("</body>", …)：replace 只换第一个匹配，而 SunEditor 的

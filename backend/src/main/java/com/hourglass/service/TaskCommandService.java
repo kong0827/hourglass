@@ -280,11 +280,18 @@ public class TaskCommandService {
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_ASSIGNED,
                     "任务负责人变更：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
-        } else if (!ownerChanged && !changes.isEmpty() && t.getOwnerUserId() != null
+        } else if (!ownerChanged && (columnChanged || !changes.isEmpty()) && t.getOwnerUserId() != null
                 && !t.getOwnerUserId().equals(userId)) {
+            // 同一次保存即使还改了标题、日期等，也只合并为一条通知（改列与字段变更同样合并）。
+            String detail = Texts.cut(String.join("；", changes), 400);
+            if (columnChanged) {
+                String move = "从「" + support.columnName(workspaceId, old.getBoardColumn()) + "」移动到「"
+                        + support.columnName(workspaceId, t.getBoardColumn()) + "」";
+                detail = changes.isEmpty() ? move : move + "；" + detail;
+            }
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
                     UserNotificationPreferenceService.TASK_UPDATED,
-                    "任务更新：" + t.getTitle(), Texts.cut(String.join("；", changes), 400), id, t.getReqId());
+                    "任务更新：" + t.getTitle(), detail, id, t.getReqId());
         }
         Task result = taskMapper.selectById(id);
         result.setTags(support.tagNames(workspaceId, id));

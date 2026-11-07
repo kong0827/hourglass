@@ -194,6 +194,8 @@ $("sideNav").addEventListener("click", function(e){
 });
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
+var sideBrandBtn = $("sideBrand");
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("board"); });
 /* 底栏已覆盖的视图 + 需要项目上下文的详情页，不放进「更多视图」 */
 var TABS_COVERED = { mine:1, board:1, projects:1, profile:1, project:1 };
 function moreMenuHTML(){
