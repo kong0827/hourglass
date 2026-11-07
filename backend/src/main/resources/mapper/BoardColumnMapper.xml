@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.BoardColumnMapper">
+
+  <select id="selectAll" resultType="BoardColumn">
+    SELECT id, workspace_id, name, color, sort_order, created_at FROM board_column
+    WHERE workspace_id = #{workspaceId} ORDER BY sort_order, id
+  </select>
+
+  <select id="selectById" resultType="BoardColumn">
+    SELECT id, workspace_id, name, color, sort_order, created_at FROM board_column
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO board_column (id, workspace_id, name, color, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{color}, #{sortOrder})
+  </insert>
+
+  <update id="update">
+    UPDATE board_column SET name = #{name}, color = #{color}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM board_column WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM board_column WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <update id="updateSortOrder">
+    UPDATE board_column SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="moveTasks">
+    UPDATE task SET board_column = #{target}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND board_column = #{source}
+  </update>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM board_column WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

@@ -1,0 +1,28 @@
+# 构建产物
+target/
+dist/
+deploy/dz-hourglass/
+bin-debug/
+bin-release/
+[Oo]bj/
+[Bb]in/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+
+# 运行期数据与日志
+*.log
+logs/
+data/
+deploy/.last-deploy.stamp
+deploy/.pending-deploy.stamp
+deploy/dist/
+
+# 系统文件
+.DS_Store
+Thumbs.db

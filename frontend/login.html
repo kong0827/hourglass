@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>沙漏 · 登录</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/auth.css" />
+<script src="config.js"></script>
+</head>
+<body class="auth-body login-body">
+<main class="login-shell">
+  <section class="login-hero" aria-label="沙漏产品介绍">
+    <div class="login-hero-inner">
+      <div class="login-product">
+        <span class="login-product-mark" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+            <path d="M8 5h16M8 27h16M10 5c0 5 2.2 8 6 11-3.8 3-6 6-6 11M22 5c0 5-2.2 8-6 11 3.8 3 6 6 6 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 23h8l-4 3Z" fill="currentColor" opacity=".35"/>
+            <circle cx="16" cy="18.5" r=".9" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="login-product-name">沙漏</span>
+        <span class="login-product-en">HOURGLASS</span>
+      </div>
+
+      <div class="login-hero-copy">
+        <p class="login-eyebrow">团队项目协作与交付管理</p>
+        <h2>让计划落地，<br />让时间更有价值。</h2>
+        <p>从需求到交付，把任务、进度与团队协作放在同一条时间线上。</p>
+      </div>
+
+      <ul class="login-features">
+        <li>
+          <span class="login-feature-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="m6.5 10 2.2 2.2 4.8-5"/></svg>
+          </span>
+          <div><strong>任务协同</strong><span>需求、任务与里程碑集中管理</span></div>
+        </li>
+        <li>
+          <span class="login-feature-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h8M7 10h10M3 15h8"/><circle cx="13" cy="5" r="1.5"/><circle cx="5" cy="10" r="1.5"/><circle cx="13" cy="15" r="1.5"/></svg>
+          </span>
+          <div><strong>进度可控</strong><span>甘特排期、版本阶段与风险跟踪</span></div>
+        </li>
+        <li>
+          <span class="login-feature-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V3M3 17h14"/><path d="m6 13 3-3 2.5 2 4.5-6"/></svg>
+          </span>
+          <div><strong>持续交付</strong><span>工时统计、成员负载与项目复盘</span></div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="login-panel" aria-label="账号登录">
+    <div class="auth-card">
+      <form id="loginForm" method="post" action="api/auth/login" autocomplete="on" novalidate>
+        <div class="auth-brand">
+          <h1>欢迎登录</h1>
+          <p class="sub">登录沙漏，继续推进团队计划</p>
+        </div>
+
+        <div class="stack" style="gap:16px">
+          <div class="field" id="fUser">
+            <label for="uName">账号</label>
+            <input id="uName" name="username" type="text" autocomplete="username" placeholder="登录名或邮箱" />
+          </div>
+          <div class="field" id="fPass">
+            <label for="uPass">密码</label>
+            <input id="uPass" name="password" type="password" autocomplete="current-password" placeholder="密码" />
+          </div>
+          <div class="auth-err" id="loginErr" hidden>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/></svg>
+            <span id="loginErrMsg"></span>
+          </div>
+          <button class="btn primary lg" type="submit" id="btnLogin">登 录</button>
+        </div>
+        <p class="auth-tip">登录状态保持 30 天，浏览器无需反复登录。账号由管理员创建下发。</p>
+      </form>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { API } from "./js/core/api.js";
+(function () {
+  "use strict";
+  var card = document.querySelector(".auth-card");
+  var form = document.getElementById("loginForm");
+  var err = document.getElementById("loginErr");
+  var errMsg = document.getElementById("loginErrMsg");
+  var btn = document.getElementById("btnLogin");
+  var fUser = document.getElementById("fUser");
+  var fPass = document.getElementById("fPass");
+
+  function showError(msg) {
+    errMsg.textContent = msg;
+    err.hidden = false;
+    card.classList.remove("shake");
+    void card.offsetWidth;              // 强制重排以重启抖动动画
+    card.classList.add("shake");
+  }
+  function clearError() {
+    err.hidden = true;
+    fUser.classList.remove("invalid");
+    fPass.classList.remove("invalid");
+  }
+  ["uName", "uPass"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", clearError);
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    clearError();
+    var u = document.getElementById("uName").value.trim();
+    var p = document.getElementById("uPass").value;
+    if (!u || !p) {
+      if (!u) fUser.classList.add("invalid");
+      if (!p) fPass.classList.add("invalid");
+      showError("请输入用户名和密码");
+      return;
+    }
+    btn.disabled = true;
+    btn.classList.add("loading");
+    btn.textContent = "登录中…";
+    API.postForm("/api/auth/login",
+        "username=" + encodeURIComponent(u) + "&password=" + encodeURIComponent(p))
+      .then(function () {
+        var base = API.appBase;
+        var next = null;
+        try { next = new URLSearchParams(window.location.search).get("next"); } catch (e2) { /* 忽略 */ }
+        // 仅允许站内相对路径回跳，防开放重定向（反斜杠会被浏览器当作斜杠）
+        if (next && next.charAt(0) === "/" && next.charAt(1) !== "/" && next.indexOf("\\") === -1) {
+          window.location.href = (next.indexOf(base) === 0 ? "" : base) + next;
+          return;
+        }
+        window.location.href = base + "/";
+      })
+      .catch(function (ex) {
+        showError(ex.message || "登录失败");
+        btn.disabled = false;
+        btn.classList.remove("loading");
+        btn.textContent = "登 录";
+      });
+  });
+})();
+</script>
+</body>
+</html>

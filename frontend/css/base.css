@@ -1,0 +1,99 @@
+/* ==========================================================================
+   base.css · 重置 / 排版 / 工具类 / 滚动条（ui-redesign-spec §2.4 尾、§3.4、附录A）
+   ========================================================================== */
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;height:100dvh;overflow:hidden;
+  /* 竖向 flex：.app 吃掉剩余高度，底部页脚（备案号）占自己那一行，谁也不盖谁 */
+  display:flex;flex-direction:column;
+  background:var(--bg-app);color:var(--text);
+  font-family:var(--font-sans);font-size:14px;line-height:1.571;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em;}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;}
+input,textarea,select{font:inherit;color:inherit;}
+a{color:var(--primary-fg);text-decoration:none;}
+a:hover{text-decoration:underline;}
+[hidden]{display:none !important;}
+
+/* 全局禁用 outline 后必须补回焦点可见性（无障碍硬要求） */
+/* 键盘焦点必须看得见：淡色 ring 在浅背景上对比不足 */
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:var(--ring-focus);}
+:focus:not(:focus-visible){outline:none;}
+
+/* ---------- 字号阶梯 ---------- */
+.t-display{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em;}
+.t-h1{font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.01em;}
+.t-h2{font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.01em;}
+.t-h3{font-size:14px;line-height:22px;font-weight:600;}
+.t-body{font-size:14px;line-height:22px;}
+.t-sm{font-size:13px;line-height:20px;}
+.t-caption{font-size:12px;line-height:18px;font-weight:500;}
+.t-micro{font-size:11px;line-height:16px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+
+/* ---------- 工具类（附录 A） ---------- */
+.row{display:flex;align-items:center;}
+.row-gap{gap:8px;}
+.col{display:flex;flex-direction:column;}
+.grow{flex:1 1 auto;min-width:0;}
+.ml-auto{margin-left:auto;}
+.muted{color:var(--text-3);}
+.sub{color:var(--text-2);font-size:13px;}
+.strong{font-weight:600;}
+.num,.tnum{font-variant-numeric:tabular-nums;}
+.ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.sect-title{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+.foot-note{font-size:12px;color:var(--text-3);line-height:20px;margin:0;}
+.divider{height:1px;background:var(--border);}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* 分组小标签（大写字母间距） */
+.group-label{
+  font-size:11px;line-height:16px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--text-3);
+}
+
+/* ---------- 滚动条（§3.4） ---------- */
+.view::-webkit-scrollbar,.board::-webkit-scrollbar,
+.board-col-body::-webkit-scrollbar,.drawer-body::-webkit-scrollbar,
+.menu::-webkit-scrollbar,.ws-list::-webkit-scrollbar,.side-nav::-webkit-scrollbar{width:10px;height:10px;}
+.view::-webkit-scrollbar-thumb,.board::-webkit-scrollbar-thumb,
+.board-col-body::-webkit-scrollbar-thumb,.drawer-body::-webkit-scrollbar-thumb,
+.menu::-webkit-scrollbar-thumb,.ws-list::-webkit-scrollbar-thumb,.side-nav::-webkit-scrollbar-thumb{
+  background:var(--border-strong);border-radius:999px;border:3px solid transparent;background-clip:content-box;}
+.view::-webkit-scrollbar-thumb:hover,.board::-webkit-scrollbar-thumb:hover,
+.board-col-body::-webkit-scrollbar-thumb:hover,.drawer-body::-webkit-scrollbar-thumb:hover,
+.menu::-webkit-scrollbar-thumb:hover,.ws-list::-webkit-scrollbar-thumb:hover,.side-nav::-webkit-scrollbar-thumb:hover{
+  background:var(--text-3);background-clip:content-box;}
+.view::-webkit-scrollbar-track,.board::-webkit-scrollbar-track,
+.board-col-body::-webkit-scrollbar-track,.drawer-body::-webkit-scrollbar-track,
+.menu::-webkit-scrollbar-track,.ws-list::-webkit-scrollbar-track,.side-nav::-webkit-scrollbar-track{background:transparent;}
+
+/* ---------- 通用动画 ---------- */
+@keyframes ds-spin{to{transform:rotate(360deg);}}
+@keyframes ds-fade-in{from{opacity:0;}to{opacity:1;}}
+@keyframes ds-pop-in{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+@keyframes ds-sheet-in{from{opacity:0;transform:scale(.98);}to{opacity:1;transform:none;}}
+@keyframes ds-shimmer{0%{opacity:1;}50%{opacity:.45;}100%{opacity:1;}}
+@keyframes ds-flash{0%{box-shadow:0 0 0 0 rgba(37,99,235,.42);}40%{box-shadow:0 0 0 5px rgba(37,99,235,.14);}100%{box-shadow:var(--shadow-xs);}}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+
+/* ===================== 细滚动条 ===================== */
+/* 默认很淡、悬停加深，接近 macOS 的 overlay 观感（用户要求去掉笨重的灰色滚动条） */
+*{scrollbar-width:thin;scrollbar-color:rgba(120,130,145,.32) transparent;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{
+  background:rgba(120,130,145,.26);
+  border:3px solid transparent;border-radius:999px;
+  background-clip:content-box;
+}
+::-webkit-scrollbar-thumb:hover{background:rgba(120,130,145,.48);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}

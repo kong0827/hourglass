@@ -1,0 +1,296 @@
+package com.hourglass.service;
+
+import com.hourglass.entity.Task;
+import com.hourglass.mapper.AppNotificationMapper;
+import com.hourglass.mapper.DemandMapper;
+import com.hourglass.mapper.DevBranchMapper;
+import com.hourglass.mapper.GanttShareMapper;
+import com.hourglass.mapper.ProjectVersionMapper;
+import com.hourglass.mapper.ReqDocShareMapper;
+import com.hourglass.mapper.RequirementDocCommentMapper;
+import com.hourglass.mapper.RequirementDocMapper;
+import com.hourglass.mapper.RequirementMapper;
+import com.hourglass.mapper.SubtaskMapper;
+import com.hourglass.mapper.TagMapper;
+import com.hourglass.mapper.TaskBaselineMapper;
+import com.hourglass.mapper.TaskCommentMapper;
+import com.hourglass.mapper.TaskDependencyMapper;
+import com.hourglass.mapper.TaskLogMapper;
+import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.TaskWatchMapper;
+import com.hourglass.mapper.TestCaseMapper;
+import com.hourglass.mapper.TestCaseRunMapper;
+import com.hourglass.mapper.TimeLogMapper;
+import com.hourglass.mapper.VersionTaskMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@SuppressWarnings("unchecked")
+class TaskCascadeTest {
+
+    private static final String WS = "W1";
+
+    private TaskMapper taskMapper;
+    private TaskLogMapper logMapper;
+    private TaskCommentMapper commentMapper;
+    private TaskWatchMapper watchMapper;
+    private AppNotificationMapper notificationMapper;
+    private SubtaskMapper subtaskMapper;
+    private TagMapper tagMapper;
+    private TimeLogMapper timeLogMapper;
+    private AttachmentService attachmentService;
+    private TaskDependencyMapper dependencyMapper;
+    private TaskBaselineMapper baselineMapper;
+    private GanttShareMapper ganttShareMapper;
+    private RequirementMapper reqMapper;
+    private RequirementDocMapper requirementDocMapper;
+    private RequirementDocCommentMapper docCommentMapper;
+    private ReqDocShareMapper reqDocShareMapper;
+    private TaskCompletionService completionService;
+    private DevBranchMapper devBranchMapper;
+    private VersionTaskMapper versionTaskMapper;
+    private ProjectVersionMapper versionMapper;
+    private DemandMapper demandMapper;
+    private TestCaseMapper testCaseMapper;
+    private TestCaseRunMapper testCaseRunMapper;
+    private TaskCascade cascade;
+
+    @BeforeEach
+    void setUp() {
+        taskMapper = mock(TaskMapper.class);
+        logMapper = mock(TaskLogMapper.class);
+        commentMapper = mock(TaskCommentMapper.class);
+        watchMapper = mock(TaskWatchMapper.class);
+        notificationMapper = mock(AppNotificationMapper.class);
+        subtaskMapper = mock(SubtaskMapper.class);
+        tagMapper = mock(TagMapper.class);
+        timeLogMapper = mock(TimeLogMapper.class);
+        attachmentService = mock(AttachmentService.class);
+        dependencyMapper = mock(TaskDependencyMapper.class);
+        baselineMapper = mock(TaskBaselineMapper.class);
+        ganttShareMapper = mock(GanttShareMapper.class);
+        reqMapper = mock(RequirementMapper.class);
+        requirementDocMapper = mock(RequirementDocMapper.class);
+        docCommentMapper = mock(RequirementDocCommentMapper.class);
+        reqDocShareMapper = mock(ReqDocShareMapper.class);
+        completionService = mock(TaskCompletionService.class);
+        devBranchMapper = mock(DevBranchMapper.class);
+        versionTaskMapper = mock(VersionTaskMapper.class);
+        versionMapper = mock(ProjectVersionMapper.class);
+        demandMapper = mock(DemandMapper.class);
+        testCaseMapper = mock(TestCaseMapper.class);
+        testCaseRunMapper = mock(TestCaseRunMapper.class);
+        cascade = new TaskCascade(taskMapper, logMapper, commentMapper, watchMapper, notificationMapper,
+                subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
+                baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
+                mock(com.hourglass.mapper.RequirementDocHistoryMapper.class),
+                docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
+                mock(com.hourglass.mapper.MailDeliveryMapper.class),
+                reqDocShareMapper, testCaseMapper, testCaseRunMapper);
+    }
+
+    private static List<Task> tasks(String... workspaceAndIds) {
+        List<Task> list = new ArrayList<Task>();
+        for (int i = 0; i < workspaceAndIds.length; i += 2) {
+            Task t = new Task();
+            t.setWorkspaceId(workspaceAndIds[i]);
+            t.setId(workspaceAndIds[i + 1]);
+            list.add(t);
+        }
+        return list;
+    }
+
+    @Test
+    void purgeTasksDeletesEveryRegisteredChildTableInOneBatch() {
+        List<String> ids = Arrays.asList("K1", "K2");
+
+        cascade.purgeTasks(WS, ids);
+
+        verify(taskMapper).clearEpicChildrenByTaskIds(WS, ids);
+        verify(subtaskMapper).deleteByTaskIds(WS, ids);
+        verify(tagMapper).deleteTaskTagsByTaskIds(WS, ids);
+        verify(timeLogMapper).deleteByTaskIds(WS, ids);
+        verify(attachmentService).deleteByTasks(WS, ids);
+        verify(logMapper).deleteByTaskIds(WS, ids);
+        verify(commentMapper).deleteByTaskIds(WS, ids);
+        verify(watchMapper).deleteByTaskIds(WS, ids);
+        verify(notificationMapper).deleteByTaskIds(WS, ids);
+        verify(dependencyMapper).deleteByTaskIds(WS, ids);
+        verify(baselineMapper).deleteByTaskIds(WS, ids);
+        verify(versionTaskMapper).deleteByTaskIds(WS, ids);
+        verify(testCaseMapper).clearBugTaskRefs(WS, ids);
+        verify(testCaseRunMapper).clearBugTaskRefs(WS, ids);
+        verify(taskMapper).clearRecurNextByTaskIds(ids);
+        verify(taskMapper).deleteByIds(ids);
+        // BUG-6 A：完成快照不随任务物理删除
+        verify(completionService, never()).clearWorkspace(WS);
+    }
+
+    @Test
+    void purgeTasksGroupsByWorkspace() {
+        cascade.purgeTasks(tasks("W1", "K1", "W2", "K2", "W1", "K3"));
+
+        verify(subtaskMapper).deleteByTaskIds(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(subtaskMapper).deleteByTaskIds(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(commentMapper).deleteByTaskIds(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(commentMapper).deleteByTaskIds(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(testCaseMapper).clearBugTaskRefs(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(testCaseMapper).clearBugTaskRefs(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(testCaseRunMapper).clearBugTaskRefs(eq("W1"), eq(Arrays.asList("K1", "K3")));
+        verify(testCaseRunMapper).clearBugTaskRefs(eq("W2"), eq(Collections.singletonList("K2")));
+        verify(taskMapper).deleteByIds(Arrays.asList("K1", "K3"));
+        verify(taskMapper).deleteByIds(Collections.singletonList("K2"));
+        // 循环派生关联跨空间一次清完
+        verify(taskMapper).clearRecurNextByTaskIds(Arrays.asList("K1", "K2", "K3"));
+        verify(completionService, never()).clearWorkspace(WS);
+    }
+
+    @Test
+    void wipeClearsEveryRegisteredWorkspaceTable() {
+        cascade.wipeWorkspaceData(WS);
+
+        verify(logMapper).deleteAllByWorkspace(WS);
+        verify(dependencyMapper).deleteByWorkspace(WS);
+        verify(baselineMapper).deleteByWorkspace(WS);
+        verify(ganttShareMapper).deleteByWorkspace(WS);
+        verify(taskMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper).deleteByWorkspace(WS);
+        verify(testCaseMapper).deleteByWorkspace(WS);
+        verify(testCaseRunMapper).clearAllBugTaskRefs(WS);
+        verify(testCaseMapper).clearAllBugTaskRefs(WS);
+        verify(reqMapper).deleteAllByWorkspace(WS);
+        verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(docCommentMapper).deleteByWorkspace(WS);
+        verify(reqDocShareMapper).deleteByWorkspace(WS);
+        verify(completionService).clearWorkspace(WS);
+        verify(subtaskMapper).deleteAllByWorkspace(WS);
+        verify(tagMapper).deleteAllTaskTagsByWorkspace(WS);
+        verify(tagMapper).deleteTagsByWorkspace(WS);
+        verify(timeLogMapper).deleteAllByWorkspace(WS);
+        verify(attachmentService).deleteAllWithFiles(WS);
+        verify(commentMapper).deleteAllByWorkspace(WS);
+        verify(watchMapper).deleteAllByWorkspace(WS);
+        verify(notificationMapper).deleteAllByWorkspace(WS);
+        verify(devBranchMapper).deleteLogsByWorkspace(WS);
+        verify(devBranchMapper).deleteByWorkspace(WS);
+        verify(versionTaskMapper).deleteByWorkspace(WS);
+        verify(versionMapper).deleteByWorkspace(WS);
+        verify(demandMapper).deleteLogsByWorkspace(WS);
+        verify(demandMapper).deleteByWorkspace(WS);
+    }
+
+    @Test
+    void importClearingKeepsAuditLogsAttachmentsAndOptionalData() {
+        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false, false);
+
+        verify(taskMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper, never()).deleteByWorkspace(WS);
+        verify(testCaseMapper, never()).deleteByWorkspace(WS);
+        verify(testCaseRunMapper).clearAllBugTaskRefs(WS);
+        verify(testCaseMapper).clearAllBugTaskRefs(WS);
+        verify(docCommentMapper, never()).deleteByWorkspace(WS);
+        verify(completionService).clearWorkspace(WS);
+        verify(commentMapper).deleteAllByWorkspace(WS);
+        verify(watchMapper).deleteAllByWorkspace(WS);
+        verify(notificationMapper).deleteAllByWorkspace(WS);
+        verify(logMapper, never()).deleteAllByWorkspace(WS);
+        verify(attachmentService, never()).deleteAllWithFiles(WS);
+        verify(requirementDocMapper, never()).deleteAllByWorkspace(WS);
+        verify(devBranchMapper, never()).deleteByWorkspace(WS);
+        verify(versionMapper, never()).deleteByWorkspace(WS);
+        verify(demandMapper, never()).deleteByWorkspace(WS);
+
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
+
+        verify(requirementDocMapper).deleteAllByWorkspace(WS);
+        verify(testCaseRunMapper).deleteByWorkspace(WS);
+        verify(testCaseMapper).deleteByWorkspace(WS);
+        verify(docCommentMapper).deleteByWorkspace(WS);
+        verify(reqDocShareMapper).deleteByWorkspace(WS);
+        verify(devBranchMapper).deleteLogsByWorkspace(WS);
+        verify(devBranchMapper).deleteByWorkspace(WS);
+        verify(versionMapper).deleteByWorkspace(WS);
+        verify(demandMapper).deleteLogsByWorkspace(WS);
+        verify(demandMapper).deleteByWorkspace(WS);
+    }
+
+    @Test
+    void registeredChildTablesMatchSnapshot() {
+        assertEquals(Arrays.asList(
+                "task_log", "task_comment", "task_watch", "app_notification", "subtask", "task_tag",
+                "attachment", "time_log", "task_dependency", "task_baseline", "version_task"),
+                TaskCascade.TASK_CHILD_TABLES);
+        assertEquals(Collections.singletonList("task_completion_record"),
+                TaskCascade.PRESERVED_TASK_REF_TABLES);
+
+        List<String> ref = new ArrayList<String>(TaskCascade.TASK_CHILD_TABLES);
+        ref.addAll(TaskCascade.PRESERVED_TASK_REF_TABLES);
+        assertEquals(ref, TaskCascade.TASK_REF_TABLES);
+
+        assertEquals(Arrays.asList(
+                "task_log", "task_dependency", "task_baseline", "gantt_share", "task",
+                "test_case_run", "test_case",
+                "requirement", "requirement_doc", "req_doc_share", "task_completion_record", "subtask",
+                "task_tag", "tag", "time_log", "attachment", "task_comment", "task_watch",
+                "app_notification", "dev_branch_log", "dev_branch",
+                "version_task", "project_version", "demand_log", "demand"),
+                TaskCascade.WORKSPACE_TASK_TABLES);
+    }
+
+    /** 离线扫描 sql/ 的建表语句：新增带 task_id 的表却忘了登记时，这里会失败 */
+    @Test
+    void everyTableWithTaskColumnInSqlIsRegistered() throws IOException {
+        Path sqlDir = Paths.get("sql");
+        if (!Files.isDirectory(sqlDir)) {
+            sqlDir = Paths.get("../sql");
+        }
+        assertTrue(Files.isDirectory(sqlDir), "找不到 sql/ 目录：" + sqlDir.toAbsolutePath());
+
+        Set<String> found = new TreeSet<String>();
+        Pattern createTable = Pattern.compile(
+                "(?is)CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([a-z0-9_]+)`?\\s*\\((.*?)\\)\\s*ENGINE");
+        Pattern taskColumn = Pattern.compile("(?im)^\\s*(?:from_|to_|ref_)?task_id\\s");
+
+        DirectoryStream<Path> files = Files.newDirectoryStream(sqlDir, "*.sql");
+        try {
+            for (Path file : files) {
+                String sql = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                Matcher m = createTable.matcher(sql);
+                while (m.find()) {
+                    if (taskColumn.matcher(m.group(2)).find()) {
+                        found.add(m.group(1));
+                    }
+                }
+            }
+        } finally {
+            files.close();
+        }
+
+        assertEquals(new TreeSet<String>(TaskCascade.TASK_REF_TABLES), found,
+                "sql/ 中带 task_id 的表必须登记到 TaskCascade.TASK_REF_TABLES");
+    }
+}

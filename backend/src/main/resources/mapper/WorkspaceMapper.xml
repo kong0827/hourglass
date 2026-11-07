@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WorkspaceMapper">
+
+  <sql id="cols">
+    w.id, w.name, w.type, w.notify_webhook, w.notify_channel, w.notify_enabled,
+    w.notify_in_app_enabled, w.notify_token,
+    w.notify_last_at, w.notify_last_status, w.owner_id, w.created_at, w.updated_at
+  </sql>
+
+  <sql id="plainCols">
+    id, name, type, notify_webhook, notify_channel, notify_enabled, notify_in_app_enabled, notify_token,
+    notify_last_at, notify_last_status, owner_id, created_at, updated_at
+  </sql>
+
+  <select id="selectByUser" resultType="Workspace">
+    SELECT <include refid="cols"/>, m.role AS my_role,
+           (SELECT COUNT(*) FROM workspace_member m2 WHERE m2.workspace_id = w.id) AS member_count
+    FROM workspace w
+    JOIN workspace_member m ON m.workspace_id = w.id
+    WHERE m.user_id = #{userId}
+    ORDER BY CASE WHEN w.type = 'personal' THEN 0 ELSE 1 END, w.created_at, w.id
+  </select>
+
+  <select id="selectAll" resultType="Workspace">
+    SELECT <include refid="plainCols"/> FROM workspace
+  </select>
+
+  <select id="selectById" resultType="Workspace">
+    SELECT <include refid="plainCols"/> FROM workspace WHERE id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO workspace (id, name, type, notify_webhook, owner_id)
+    VALUES (#{id}, #{name}, #{type}, #{notifyWebhook}, #{ownerId})
+  </insert>
+
+  <!-- notify_enabled 为 null 表示"跟随全局"，故用 <if>；渠道与 token 前端每次都会提交，直接覆盖 -->
+  <update id="update">
+    UPDATE workspace
+    <set>
+      name = #{name},
+      notify_webhook = #{notifyWebhook},
+      notify_channel = #{notifyChannel},
+      notify_token = #{notifyToken},
+      <if test="notifyEnabled != null">notify_enabled = #{notifyEnabled},</if>
+      <if test="notifyInAppEnabled != null">notify_in_app_enabled = #{notifyInAppEnabled},</if>
+      updated_at = NOW()
+    </set>
+    WHERE id = #{id}
+  </update>
+
+  <!-- 推送结果回写（设置页「上次推送：成功/失败」的依据） -->
+  <update id="updateNotifyResult">
+    UPDATE workspace SET notify_last_at = NOW(), notify_last_status = #{status} WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM workspace WHERE id = #{id}
+  </delete>
+
+  <select id="countSharedByOwner" resultType="int">
+    SELECT COUNT(*) FROM workspace WHERE owner_id = #{ownerId} AND type = 'shared'
+  </select>
+</mapper>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WorkspaceMemberMapper">
+
+  <select id="selectByWorkspace" resultType="WorkspaceMember">
+    SELECT m.workspace_id, m.user_id, m.role, m.created_at,
+           u.display_name, u.username
+    FROM workspace_member m
+    JOIN app_user u ON u.id = m.user_id
+    WHERE m.workspace_id = #{workspaceId}
+    ORDER BY CASE m.role
+               WHEN 'owner' THEN 0
+               WHEN 'admin' THEN 1
+               WHEN 'member' THEN 2
+               ELSE 3
+             END,
+             u.display_name, u.id
+  </select>
+
+  <select id="selectUserIds" resultType="string">
+    SELECT user_id FROM workspace_member WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <select id="selectMember" resultType="WorkspaceMember">
+    SELECT workspace_id, user_id, role, created_at
+    FROM workspace_member
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO workspace_member (workspace_id, user_id, role) VALUES (#{workspaceId}, #{userId}, #{role})
+  </insert>
+
+  <update id="updateRole">
+    UPDATE workspace_member SET role = #{role}
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM workspace_member WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM workspace_member WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM workspace_member WHERE user_id = #{userId}
+  </delete>
+</mapper>

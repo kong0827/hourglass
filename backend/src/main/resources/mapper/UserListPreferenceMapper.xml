@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.UserListPreferenceMapper">
+
+  <select id="select" resultType="UserListPreference">
+    SELECT user_id, workspace_id, view_key, view_mode, columns_json, updated_at
+    FROM user_list_preference
+    WHERE user_id = #{userId} AND workspace_id = #{workspaceId} AND view_key = #{viewKey}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO user_list_preference (user_id, workspace_id, view_key, view_mode, columns_json)
+    VALUES (#{userId}, #{workspaceId}, #{viewKey}, #{viewMode}, #{columnsJson})
+    ON DUPLICATE KEY UPDATE
+      view_mode = VALUES(view_mode),
+      columns_json = VALUES(columns_json),
+      updated_at = CURRENT_TIMESTAMP
+  </insert>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM user_list_preference WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM user_list_preference WHERE user_id = #{userId}
+  </delete>
+</mapper>

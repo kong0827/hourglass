@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TimeLogMapper">
+
+  <sql id="cols">
+    id, task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note
+  </sql>
+
+  <select id="selectRunningByTaskAndUser" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE task_id = #{taskId} AND user_id = #{userId} AND ended_at IS NULL
+    ORDER BY id DESC
+    LIMIT 1
+  </select>
+
+  <select id="selectRunningByTask" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NULL
+    ORDER BY id
+  </select>
+
+  <select id="selectRunningAllByUser" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE user_id = #{userId} AND ended_at IS NULL
+    ORDER BY id
+  </select>
+
+  <select id="selectAllByWorkspace" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    ORDER BY task_id, id
+  </select>
+
+  <select id="sumByTaskByWorkspace" resultType="TimeAgg">
+    SELECT task_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    GROUP BY task_id
+  </select>
+
+  <update id="closeRunning">
+    UPDATE time_log SET ended_at = NOW(), minutes = #{minutes}
+    WHERE task_id = #{taskId} AND user_id = #{userId} AND ended_at IS NULL
+  </update>
+
+  <insert id="insert">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at)
+    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt})
+  </insert>
+
+  <insert id="insertCompleted">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note)
+    VALUES (#{taskId}, #{workspaceId}, #{userId}, #{startedAt}, #{endedAt}, #{minutes},
+            COALESCE(#{origin}, 'timer'), #{note})
+  </insert>
+
+  <insert id="insertCompletedBatch">
+    INSERT INTO time_log (task_id, workspace_id, user_id, started_at, ended_at, minutes, origin, note)
+    VALUES
+    <foreach collection="list" item="t" separator=",">
+      (#{t.taskId}, #{t.workspaceId}, #{t.userId}, #{t.startedAt}, #{t.endedAt}, #{t.minutes},
+       COALESCE(#{t.origin}, 'timer'), #{t.note})
+    </foreach>
+  </insert>
+
+  <select id="selectRecordsByTask" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
+    ORDER BY started_at DESC, id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectById" resultType="TimeLog">
+    SELECT <include refid="cols"/> FROM time_log WHERE id = #{id}
+  </select>
+
+  <delete id="deleteById">
+    DELETE FROM time_log WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM time_log WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM time_log WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="sumByWorkspaceUser" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId} AND ended_at IS NOT NULL
+  </select>
+
+  <!-- 每人每天 8 小时额度：该用户当天（跨全部空间）已记录的工时 -->
+  <select id="sumMinutesByUserOnDate" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE user_id = #{userId} AND ended_at IS NOT NULL
+      AND started_at &gt;= #{date} AND started_at &lt; DATE_ADD(#{date}, INTERVAL 1 DAY)
+  </select>
+
+  <!-- 任务完成快照用：首次开始 / 最后一次结束（没有记录时两者为 null） -->
+  <select id="selectBoundsByTask" resultType="TimeBounds">
+    SELECT MIN(started_at) AS first_started_at, MAX(ended_at) AS last_ended_at
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
+  <select id="sumSinceByWorkspaceUser" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+      AND ended_at IS NOT NULL AND started_at &gt;= #{from}
+  </select>
+
+  <select id="sumByTaskId" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
+  </select>
+
+  <!-- N-5：本空间全员合计（含未完成任务的计时） -->
+  <select id="sumByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+  </select>
+
+  <select id="sumSinceByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND ended_at IS NOT NULL AND started_at &gt;= #{from}
+  </select>
+
+  <!-- 回顾页：历史周必须有上界，否则把之后几周的工时也算进「本周」 -->
+  <select id="sumBetweenByWorkspace" resultType="int">
+    SELECT COALESCE(SUM(minutes), 0) FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND ended_at IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+  </select>
+
+  <select id="sumBetweenByWorkspaceGroupByUser" resultType="TimeAgg">
+    SELECT l.user_id AS user_id, SUM(l.minutes) AS total_minutes FROM time_log l
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.ended_at IS NOT NULL
+      AND l.started_at &gt;= #{from} AND l.started_at &lt; #{to}
+    <if test="viewerId != null">
+      <!-- 成员被设为不可见的项目，其工时同样不计入成员贡献 -->
+      AND NOT EXISTS (SELECT 1 FROM task t
+                      JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none'
+                      WHERE t.id = l.task_id)
+    </if>
+    GROUP BY l.user_id
+  </select>
+
+  <select id="selectByWorkspaceBetween" resultType="TimeLog">
+    SELECT id, task_id, workspace_id, user_id, started_at, ended_at, minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+  </select>
+
+  <!-- N-5 下钻：按成员统计本空间工时 -->
+  <select id="sumByWorkspaceGroupByUser" resultType="TimeAgg">
+    SELECT user_id AS user_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+    GROUP BY user_id
+  </select>
+  <select id="sumByTaskIds" resultType="TimeAgg">
+    SELECT task_id, SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId} AND ended_at IS NOT NULL
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
+  </select>
+
+  <!-- ==================== BE-Q-3：统计聚合 ==================== -->
+
+  <!-- 一次扫描返回「累计 / 区间」×「全空间 / 我」四个数；区间上界可选 -->
+  <select id="sumWork" resultType="com.hourglass.dto.WorkSumRow">
+    SELECT COALESCE(SUM(l.minutes), 0) AS total_all,
+           COALESCE(SUM(CASE WHEN l.started_at &gt;= #{from}
+             <if test="to != null"> AND l.started_at &lt; #{to}</if>
+             THEN l.minutes ELSE 0 END), 0) AS week_all,
+           COALESCE(SUM(CASE WHEN l.user_id = #{userId} THEN l.minutes ELSE 0 END), 0) AS total_mine,
+           COALESCE(SUM(CASE WHEN l.user_id = #{userId} AND l.started_at &gt;= #{from}
+             <if test="to != null"> AND l.started_at &lt; #{to}</if>
+             THEN l.minutes ELSE 0 END), 0) AS week_mine
+    FROM time_log l
+    WHERE l.workspace_id = #{workspaceId} AND l.ended_at IS NOT NULL
+    <if test="viewerId != null">
+      <!-- 成员被设为不可见的项目，其工时不计入任何汇总 -->
+      AND NOT EXISTS (SELECT 1 FROM task t
+                      JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none'
+                      WHERE t.id = l.task_id)
+    </if>
+  </select>
+
+  <!-- 甘特负载：只聚合区间内、且属于本次任务集合的工时（按计时人 × 周） -->
+  <select id="sumUserWeeklyMinutes" resultType="com.hourglass.dto.UserWeekRow">
+    SELECT user_id AS user_id,
+           DATE_SUB(DATE(started_at), INTERVAL WEEKDAY(started_at) DAY) AS week_start,
+           SUM(minutes) AS total_minutes
+    FROM time_log
+    WHERE workspace_id = #{workspaceId}
+      AND minutes IS NOT NULL
+      AND started_at &gt;= #{from} AND started_at &lt; #{to}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY user_id, week_start
+    ORDER BY MIN(started_at), user_id
+  </select>
+
+  <!-- M1 阶段统计：项目内工时按「计时人 × 自然日」聚合，服务层再按首版上线日归入首版/迭代 -->
+  <select id="sumUserDayMinutesByReq" resultType="com.hourglass.dto.UserDayRow">
+    SELECT tl.user_id AS user_id,
+           DATE(COALESCE(tl.ended_at, tl.started_at)) AS day,
+           SUM(tl.minutes) AS total_minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    WHERE tl.workspace_id = #{workspaceId}
+      AND tl.minutes IS NOT NULL
+      AND t.req_id = #{reqId}
+      AND t.deleted_at IS NULL
+    GROUP BY tl.user_id, DATE(COALESCE(tl.ended_at, tl.started_at))
+  </select>
+
+  <!-- 成员阶段工时下钻：任务 × 阶段，阶段判定与 sumUserDayMinutesByReq / 阶段卡完全同口径 -->
+  <select id="sumMemberTaskPhaseByReq" resultType="com.hourglass.dto.PhaseMemberTask">
+    SELECT t.id AS taskId,
+           t.title,
+           t.item_type AS itemType,
+           t.owner,
+           t.start_date AS startDate,
+           t.due_date AS dueDate,
+           t.estimate_minutes AS estimateMinutes,
+           t.board_column AS boardColumn,
+           CASE WHEN r.first_released_at IS NOT NULL
+                     AND DATE(COALESCE(tl.ended_at, tl.started_at)) &gt; r.first_released_at
+                THEN 'post' ELSE 'mvp' END AS phase,
+           SUM(tl.minutes) AS minutes
+    FROM time_log tl
+    INNER JOIN task t ON t.id = tl.task_id AND t.workspace_id = tl.workspace_id
+    INNER JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    WHERE tl.workspace_id = #{workspaceId}
+      AND tl.minutes IS NOT NULL
+      AND t.req_id = #{reqId}
+      AND t.deleted_at IS NULL
+      AND tl.user_id = #{userId}
+    GROUP BY t.id, t.title, t.item_type, t.owner, t.start_date, t.due_date,
+             t.estimate_minutes, t.board_column, phase
+    ORDER BY (phase = 'post'), t.id
+  </select>
+</mapper>

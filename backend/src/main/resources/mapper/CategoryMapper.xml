@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.CategoryMapper">
+
+  <select id="selectByWorkspace" resultType="Category">
+    SELECT id, workspace_id, name, color, sort_order, created_at
+    FROM category WHERE workspace_id = #{workspaceId} ORDER BY sort_order, id
+  </select>
+
+  <select id="selectById" resultType="Category">
+    SELECT id, workspace_id, name, color, sort_order, created_at
+    FROM category WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </select>
+
+  <select id="selectByName" resultType="Category">
+    SELECT id, workspace_id, name, color, sort_order, created_at
+    FROM category WHERE workspace_id = #{workspaceId} AND name = #{name}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO category (id, workspace_id, name, color, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{color}, #{sortOrder})
+  </insert>
+
+  <update id="update">
+    UPDATE category SET name = #{name}, color = #{color}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM category WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM category WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <update id="updateSortOrder">
+    UPDATE category SET sort_order = #{sortOrder}
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </update>
+
+  <update id="renameInTasks">
+    UPDATE task SET category = #{newName}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND category = #{oldName}
+  </update>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM category WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM category WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

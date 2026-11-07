@@ -1,0 +1,65 @@
+package com.hourglass.common;
+
+import com.hourglass.dto.BoardResponse;
+import com.hourglass.entity.Task;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
+/**
+ * 任务派生计算：与旧版前端保持一致的进度 / 截止状态 / 逾期计数规则
+ */
+public final class TaskCalc {
+
+    private TaskCalc() {
+    }
+
+    public static int progressOf(Task t) {
+        if (Consts.COL_DONE.equals(t.getBoardColumn())) {
+            return 100;
+        }
+        return t.getProgress() == null ? 0 : t.getProgress();
+    }
+
+    /** @return none/done/over/today/soon/ok */
+    public static String dueKind(Task t, LocalDate today) {
+        return dueKind(t.getBoardColumn(), t.getDueDate(), today);
+    }
+
+    /** 窄列投影（看板 meta / counts）复用同一口径 */
+    public static String dueKind(String boardColumn, LocalDate dueDate, LocalDate today) {
+        if (dueDate == null) {
+            return "none";
+        }
+        if (Consts.COL_DONE.equals(boardColumn)) {
+            return "done";
+        }
+        long days = ChronoUnit.DAYS.between(today, dueDate);
+        if (days < 0) {
+            return "over";
+        }
+        if (days == 0) {
+            return "today";
+        }
+        if (days <= 3) {
+            return "soon";
+        }
+        return "ok";
+    }
+
+    public static BoardResponse.Counts countDue(List<Task> tasks, LocalDate today) {
+        BoardResponse.Counts counts = new BoardResponse.Counts();
+        for (Task t : tasks) {
+            String kind = dueKind(t, today);
+            if ("over".equals(kind)) {
+                counts.setOver(counts.getOver() + 1);
+            } else if ("today".equals(kind)) {
+                counts.setToday(counts.getToday() + 1);
+            } else if ("soon".equals(kind)) {
+                counts.setSoon(counts.getSoon() + 1);
+            }
+        }
+        return counts;
+    }
+}

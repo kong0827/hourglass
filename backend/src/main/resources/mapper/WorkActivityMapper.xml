@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.WorkActivityMapper">
+
+  <insert id="insert">
+    INSERT INTO work_activity
+      (workspace_id, entity_type, entity_id, actor_id, actor_name, action, detail)
+    VALUES
+      (#{workspaceId}, #{entityType}, #{entityId}, #{actorId}, #{actorName}, #{action}, #{detail})
+  </insert>
+
+  <select id="selectByEntity" resultType="WorkActivity">
+    SELECT id, workspace_id, entity_type, entity_id, actor_id, actor_name,
+           action, detail, created_at
+    FROM work_activity
+    WHERE workspace_id = #{workspaceId}
+      AND entity_type = #{entityType}
+      AND entity_id = #{entityId}
+    ORDER BY id DESC
+    LIMIT #{limit}
+  </select>
+  <delete id="deleteByEntity">
+    DELETE FROM work_activity
+    WHERE workspace_id = #{workspaceId} AND entity_type = #{entityType} AND entity_id = #{entityId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM work_activity WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

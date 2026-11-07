@@ -1,0 +1,21 @@
+package com.hourglass.dto;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * 流程体检：一条跨列移动事件。
+ * from/to 列优先取结构化字段（新数据），为空时由 Service 从 detail 文本兜底解析（历史数据）。
+ */
+@Data
+public class FlowMoveRow {
+
+    private String taskId;
+    /** 任务所属项目（任务已彻底删除时为 null，不过滤） */
+    private String reqId;
+    private String fromColumn;
+    private String toColumn;
+    private String detail;
+    private LocalDateTime createdAt;
+}

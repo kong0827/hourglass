@@ -1,0 +1,42 @@
+package com.hourglass.mapper;
+
+import com.hourglass.entity.TaskCompletionRecord;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@Mapper
+public interface TaskCompletionRecordMapper {
+
+    /**
+     * 写入 / 覆盖一条完成快照。
+     * 同一任务反复"完成 → 取消完成 → 再完成"时只保留最后一次，靠 (workspace_id, task_id) 唯一键。
+     */
+    int upsert(TaskCompletionRecord record);
+
+    int deleteByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    /** 只刷新工时三列（补记 / 作废后重算），快照不存在时不插入 */
+    int updateWork(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId,
+                   @Param("totalMinutes") int totalMinutes,
+                   @Param("firstStartedAt") java.time.LocalDateTime firstStartedAt,
+                   @Param("lastEndedAt") java.time.LocalDateTime lastEndedAt);
+
+    /** 该 ID 是否还有历史完成快照（彻底删除后快照会保留，ID 不可复用） */
+    int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    /** 清空空间时连完成归档一起清（否则清空任务后「任务清单」仍显示旧记录） */
+    int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 区间完成条数（完成快照口径） */
+    int countByRange(@Param("workspaceId") String workspaceId,
+                     @Param("from") LocalDate from,
+                     @Param("to") LocalDate to);
+
+    /** 按月查（completed_at 在 [from, to) 区间内），按完成日倒序 */
+    List<TaskCompletionRecord> selectByRange(@Param("workspaceId") String workspaceId,
+                                            @Param("from") LocalDate from,
+                                            @Param("to") LocalDate to);
+}

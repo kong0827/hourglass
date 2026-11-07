@@ -1,0 +1,131 @@
+package com.hourglass.config;
+
+import com.hourglass.common.GlobalExceptionHandler;
+import com.hourglass.common.LoginUser;
+import com.hourglass.service.SseService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 所有成功的数据变更请求（非 GET 的 /api/*）完成后广播 SSE 通知。
+ * 广播只是刷新通知：任何广播失败都不影响已成功的业务响应。
+ *
+ * O-11：载荷补上 taskId 与操作人显示名，前端才能判断
+ * "是不是当前打开着的那条任务被改了"，从而提示"此任务刚被 X 修改"而不是静默不更新。
+ */
+@Component
+public class ChangeBroadcastFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(ChangeBroadcastFilter.class);
+    /** 从 /api/tasks/{id}/... 取出任务ID（list/done 等字面量路径不会被非 GET 请求命中） */
+    private static final Pattern TASK_PATH = Pattern.compile("^/api/tasks/([A-Za-z0-9_-]{1,32})(/.*)?$");
+    /** 从 /api/req-docs/{id}/... 取出文档ID，前端据此判断"是不是我打开着的这篇" */
+    private static final Pattern REQ_DOC_PATH = Pattern.compile("^/api/req-docs/([A-Za-z0-9_-]{1,32})(/.*)?$");
+
+    private final SseService sseService;
+    private final com.hourglass.service.WorkspaceVersionService versionService;
+
+    public ChangeBroadcastFilter(SseService sseService,
+                                 com.hourglass.service.WorkspaceVersionService versionService) {
+        this.sseService = sseService;
+        this.versionService = versionService;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        chain.doFilter(request, response);
+
+        /* getRequestURI 带 context-path（/hourglass/api/...），须先剥掉再判断 */
+        String uri = request.getRequestURI();
+        String ctx = request.getContextPath();
+        if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+            uri = uri.substring(ctx.length());
+        }
+        if (uri == null || !uri.startsWith("/api/")) {
+            return;
+        }
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            return;
+        }
+        if (uri.startsWith("/api/auth/") || uri.startsWith("/api/notify/") || uri.startsWith("/api/events")) {
+            return;
+        }
+        /* 通知的「标记已读」是收件人私事，不改动任何共享数据，不应触发他人刷新 */
+        if (uri.startsWith("/api/notifications")) {
+            return;
+        }
+        /* AI 的交互大多是**只读**的（拆需求出草稿、完成度体检、周报润色、改自己的 AI 配置），
+           但它们都是 POST，照常广播会让空间里其他人白刷新一遍。
+           唯一真写库的是 /api/ai/reqdoc/{id}/tasks（把草稿建成任务），必须照常广播。 */
+        if (uri.startsWith("/api/ai/") && !uri.endsWith("/tasks")) {
+            return;
+        }
+        int status = response.getStatus();
+        if (status < 200 || status >= 300) {
+            return;
+        }
+        /* 第九轮审查 #4：业务失败也是 HTTP 200（错误码在响应体里），
+           若只看状态码，被业务规则拒绝的写请求也会触发一次全空间刷新。
+           异常处理器已在 request 上打了失败标记，这里据此跳过。 */
+        if (Boolean.TRUE.equals(request.getAttribute(GlobalExceptionHandler.FAILED_ATTR))) {
+            return;
+        }
+        try {
+            // 带上空间粒度：服务端按空间成员投递，客户端再按"自己当前空间"过滤
+            String workspace = request.getParameter("workspace");
+            Matcher m = TASK_PATH.matcher(uri);
+            String taskId = m.matches() ? m.group(1) : null;
+            Matcher rm = REQ_DOC_PATH.matcher(uri);
+            String docId = rm.matches() ? rm.group(1) : null;
+            String actor = currentDisplayName();
+            String clientId = request.getHeader("X-Client-Id");
+            if (clientId != null && clientId.length() > 64) {
+                clientId = clientId.substring(0, 64);
+            }
+            /* 读缓存版本号：写成功后递增，下一次 GET 的 ETag 必然变化 */
+            versionService.bump(workspace);
+            sseService.broadcast("changed", workspace, taskId, actor, clientId, entityOf(uri), docId);
+        } catch (Exception e) {
+            log.warn("SSE 广播异常（业务请求已成功，仅影响刷新通知）", e);
+        }
+    }
+
+    /** 按接口前缀判断变更实体，前端据此只刷新相关数据 */
+    private String entityOf(String uri) {
+        if (uri.startsWith("/api/import") || uri.startsWith("/api/export")) return "all";
+        if (uri.startsWith("/api/tasks")) return uri.contains("/timer/") ? "timer" : "task";
+        if (uri.startsWith("/api/req-docs")) return "reqdoc";
+        if (uri.startsWith("/api/reqs")) return "req";
+        if (uri.startsWith("/api/branches")) return "branch";
+        if (uri.startsWith("/api/columns")) return "column";
+        if (uri.startsWith("/api/categories")) return "category";
+        if (uri.startsWith("/api/workspaces") || uri.startsWith("/api/invite")) return "workspace";
+        return "other";
+    }
+
+    /** 操作人显示名（取不到就留空：前端会退化为"他人"文案，不影响功能） */
+    private String currentDisplayName() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof LoginUser) {
+                return ((LoginUser) auth.getPrincipal()).getDisplayName();
+            }
+        } catch (Exception e) {
+            // 忽略：载荷里的操作人只是提示信息
+        }
+        return null;
+    }
+}

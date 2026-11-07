@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>沙漏 · 用户使用手册</title>
+  <style>
+    :root{--primary:#3370ff;--primary-soft:#eef4ff;--text:#1f2329;--text-2:#51565f;--text-3:#838894;--border:#e4e7ed;--surface:#fff;--background:#f5f7fa;--shadow:0 4px 18px rgba(31,35,41,.06)}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:88px}
+    body{margin:0;background:var(--background);color:var(--text);font:14px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+    button,a{font:inherit}
+    a{color:var(--primary);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .header{position:sticky;top:0;z-index:10;height:64px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 32px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+    .identity{display:flex;align-items:center;gap:12px;min-width:0}
+    .mark{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:var(--primary-soft);color:var(--primary)}
+    .title{font-size:17px;font-weight:650;line-height:1.3}
+    .subtitle{font-size:12px;color:var(--text-3);line-height:1.4}
+    .download{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;padding:7px 13px;border:1px solid #bfd2fa;border-radius:7px;background:var(--primary-soft);color:#245bdb;font-size:13px;font-weight:600}
+    .download:hover{background:#e1ebff;text-decoration:none}
+    .layout{width:min(1240px,100%);margin:0 auto;display:grid;grid-template-columns:236px minmax(0,1fr);gap:28px;padding:28px 32px 56px}
+    .sidebar{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 112px);overflow:auto;padding:16px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+    .toc-title{padding:0 10px 8px;color:var(--text-3);font-size:12px;font-weight:600}
+    .toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--text-2);font-size:13px;line-height:1.5}
+    .toc a.level-3{padding-left:24px;font-size:12.5px;color:var(--text-3)}
+    .toc a:hover{background:var(--primary-soft);color:var(--primary);text-decoration:none}
+    .manual{min-width:0;padding:38px 48px 52px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+    .manual h1{margin:0 0 20px;font-size:30px;line-height:1.35;letter-spacing:-.02em}
+    .manual h2{margin:42px 0 16px;padding-top:12px;border-top:1px solid var(--border);font-size:22px;line-height:1.45}
+    .manual h3{margin:28px 0 12px;font-size:17px;line-height:1.5}
+    .manual p{margin:10px 0;color:var(--text-2)}
+    .manual strong{color:var(--text);font-weight:650}
+    .manual ul,.manual ol{padding-left:24px;color:var(--text-2)}
+    .manual li{margin:5px 0}
+    .manual blockquote{margin:16px 0;padding:10px 16px;border-left:3px solid var(--primary);background:var(--primary-soft);border-radius:0 7px 7px 0;color:var(--text-2)}
+    .manual blockquote p{margin:2px 0}
+    .manual table{width:100%;margin:16px 0 22px;border-collapse:collapse;font-size:13px;line-height:1.65}
+    .manual th,.manual td{padding:10px 12px;border:1px solid var(--border);text-align:left;vertical-align:top}
+    .manual th{background:#f7f9fc;color:var(--text);font-weight:650;white-space:nowrap}
+    .manual code{padding:2px 5px;border-radius:4px;background:#f1f3f6;color:#b34836;font:12.5px/1.5 Consolas,Monaco,monospace}
+    .manual pre{overflow:auto;padding:16px;border-radius:8px;background:#20242b;color:#eef1f5}
+    .manual pre code{padding:0;background:none;color:inherit;font-size:13px}
+    .manual hr{margin:30px 0;border:0;border-top:1px solid var(--border)}
+    .loading,.error{padding:70px 20px;text-align:center;color:var(--text-3)}
+    .error{color:#b42318}
+    @media(max-width:900px){.layout{grid-template-columns:1fr;padding:16px}.sidebar{display:none}.manual{padding:26px 22px}.header{padding:0 16px}.subtitle{display:none}.manual table{display:block;overflow-x:auto}}
+    @media print{body{background:#fff}.header,.sidebar{display:none}.layout{display:block;padding:0}.manual{padding:0;border:0;box-shadow:none}.manual h2{break-after:avoid}.manual table{break-inside:auto}.manual tr{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="identity">
+      <span class="mark" aria-hidden="true">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M7 3c0 5 2 6 5 9-3 3-5 4-5 9M17 3c0 5-2 6-5 9 3 3 5 4 5 9"/></svg>
+      </span>
+      <div><div class="title">沙漏 · 用户使用手册</div><div class="subtitle">小而美，美而精的研发协作工具</div></div>
+    </div>
+    <a class="download" href="user-guide.md" download="沙漏-用户使用手册.md">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
+      下载 Markdown
+    </a>
+  </header>
+  <div class="layout">
+    <nav class="sidebar" aria-label="手册目录"><div class="toc-title">目录</div><div class="toc" id="toc"></div></nav>
+    <main class="manual" id="manual"><div class="loading">正在加载使用手册…</div></main>
+  </div>
+  <script src="vendor/markdown/marked.min.js"></script>
+  <script src="vendor/markdown/purify.min.js"></script>
+  <script>
+    fetch("user-guide.md").then(function(response){
+      if(!response.ok) throw new Error("HTTP " + response.status);
+      return response.text();
+    }).then(function(markdown){
+      var manual = document.getElementById("manual");
+      manual.innerHTML = DOMPurify.sanitize(marked.parse(markdown, {gfm:true, breaks:false}));
+      var headings = manual.querySelectorAll("h2,h3");
+      var toc = document.getElementById("toc");
+      headings.forEach(function(heading,index){
+        heading.id = "section-" + index;
+        var link = document.createElement("a");
+        link.href = "#" + heading.id;
+        link.textContent = heading.textContent;
+        link.className = heading.tagName === "H3" ? "level-3" : "level-2";
+        toc.appendChild(link);
+      });
+      manual.querySelectorAll("a[href^='http']").forEach(function(link){
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      });
+    }).catch(function(){
+      document.getElementById("manual").innerHTML = '<div class="error">手册加载失败，请刷新页面重试，或点击右上角下载 Markdown。</div>';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- resultType 用全限定名：dto 包不在 type-aliases-package（com.hourglass.entity）里，
+     写短名编译能过、启动才炸 TypeException -->
+<mapper namespace="com.hourglass.mapper.FlowHealthMapper">
+
+  <!-- 时间窗内的移动事件。列内排序（from_column 为 null 的历史数据 / from=to）也带回来，
+       由 Service 统一过滤，避免 SQL 里既判 null 又判相等 -->
+  <select id="selectMoves" resultType="com.hourglass.dto.FlowMoveRow">
+    SELECT l.task_id, t.req_id, l.from_column, l.to_column, l.detail, l.created_at
+    FROM task_log l
+    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.action = 'move'
+      AND l.created_at &gt;= #{since}
+    ORDER BY l.task_id, l.created_at, l.id
+  </select>
+
+  <!-- 只取算指标要用的列，别把 MEDIUMTEXT 之类拖进来 -->
+  <select id="selectTasks" resultType="com.hourglass.dto.FlowTaskRow">
+    SELECT id, req_id, title, priority, board_column, created_at, completed_at, req_doc_id
+    FROM task
+    WHERE workspace_id = #{workspaceId}
+      AND deleted_at IS NULL
+  </select>
+
+  <!-- 需求 → 首个任务的间隔。LEFT JOIN 保证「一份任务都没有的需求」也能出现（那正是要暴露的盲区） -->
+  <select id="selectReqDocs" resultType="com.hourglass.dto.FlowReqDocRow">
+    SELECT d.id,
+           d.req_id,
+           d.title,
+           d.status,
+           d.created_at,
+           MIN(t.created_at) AS first_task_at,
+           COUNT(t.id)       AS task_count
+    FROM requirement_doc d
+    LEFT JOIN task t
+           ON t.req_doc_id = d.id
+          AND t.workspace_id = d.workspace_id
+          AND t.deleted_at IS NULL
+    WHERE d.workspace_id = #{workspaceId}
+    GROUP BY d.id, d.req_id, d.title, d.status, d.created_at
+  </select>
+
+</mapper>

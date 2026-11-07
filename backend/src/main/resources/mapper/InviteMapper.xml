@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.InviteMapper">
+
+  <select id="selectById" resultType="Invite">
+    SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite WHERE id = #{id}
+  </select>
+
+  <select id="selectByWorkspace" resultType="Invite">
+    SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at DESC, id
+  </select>
+
+  <insert id="insert">
+    INSERT INTO invite (id, workspace_id, created_by, expires_at, used_count)
+    VALUES (#{id}, #{workspaceId}, #{createdBy}, #{expiresAt}, 0)
+  </insert>
+
+  <update id="incrUsedCount">
+    UPDATE invite SET used_count = used_count + 1 WHERE id = #{id}
+  </update>
+
+  <delete id="delete">
+    DELETE FROM invite WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM invite WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

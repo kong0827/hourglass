@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TaskDependencyMapper">
+
+  <sql id="cols">
+    id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at
+  </sql>
+
+  <select id="selectByWorkspace" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at, id
+  </select>
+
+  <select id="selectVisibleByWorkspace" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency d
+    WHERE d.workspace_id = #{workspaceId}
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = d.from_task_id
+                  AND t.workspace_id = d.workspace_id AND t.deleted_at IS NULL)
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = d.to_task_id
+                  AND t.workspace_id = d.workspace_id AND t.deleted_at IS NULL)
+    <if test="viewerId != null">
+      AND NOT EXISTS (
+        SELECT 1 FROM task t
+        JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                              AND pm.project_id = t.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t.id = d.from_task_id AND t.workspace_id = d.workspace_id AND pm.access = 'none')
+      AND NOT EXISTS (
+        SELECT 1 FROM task t
+        JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                              AND pm.project_id = t.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t.id = d.to_task_id AND t.workspace_id = d.workspace_id AND pm.access = 'none')
+    </if>
+    ORDER BY d.created_at, d.id
+  </select>
+
+  <select id="selectById" resultType="TaskDependency">
+    SELECT <include refid="cols"/> FROM task_dependency WHERE id = #{id}
+  </select>
+
+  <select id="countEdge" resultType="int">
+    SELECT COUNT(*) FROM task_dependency
+    WHERE from_task_id = #{fromTaskId} AND to_task_id = #{toTaskId}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO task_dependency (id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at)
+    VALUES (#{id}, #{workspaceId}, #{fromTaskId}, #{toTaskId}, #{depType}, #{lagDays},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <!-- 备份导入：uk_edge(from,to) 冲突时跳过该边，与旧的逐条 try/catch 语义一致 -->
+  <insert id="insertBatch">
+    INSERT IGNORE INTO task_dependency (id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at)
+    VALUES
+    <foreach collection="list" item="d" separator=",">
+      (#{d.id}, #{d.workspaceId}, #{d.fromTaskId}, #{d.toTaskId}, #{d.depType}, #{d.lagDays},
+       COALESCE(#{d.createdAt}, CURRENT_TIMESTAMP))
+    </foreach>
+  </insert>
+
+  <update id="update">
+    UPDATE task_dependency
+    SET dep_type = #{depType}, lag_days = #{lagDays}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM task_dependency WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM task_dependency
+    WHERE workspace_id = #{workspaceId}
+      AND (from_task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+      OR to_task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>)
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM task_dependency WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM task_dependency WHERE workspace_id = #{workspaceId}
+  </select>
+</mapper>

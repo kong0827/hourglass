@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ProjectMemberMapper">
+
+  <select id="selectByWorkspace" resultType="ProjectMember">
+    SELECT workspace_id, project_id, user_id, access, created_at, updated_at
+    FROM project_member
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY user_id, project_id
+  </select>
+
+  <select id="selectByUser" resultType="ProjectMember">
+    SELECT workspace_id, project_id, user_id, access, created_at, updated_at
+    FROM project_member
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </select>
+
+  <select id="selectOne" resultType="ProjectMember">
+    SELECT workspace_id, project_id, user_id, access, created_at, updated_at
+    FROM project_member
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND user_id = #{userId}
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO project_member (workspace_id, project_id, user_id, access)
+    VALUES (#{workspaceId}, #{projectId}, #{userId}, #{access})
+    ON DUPLICATE KEY UPDATE access = VALUES(access), updated_at = CURRENT_TIMESTAMP
+  </insert>
+
+  <delete id="deleteOne">
+    DELETE FROM project_member
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND user_id = #{userId}
+  </delete>
+
+  <delete id="deleteByProject">
+    DELETE FROM project_member WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+  </delete>
+
+  <delete id="deleteByUser">
+    DELETE FROM project_member WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM project_member WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteAllByUser">
+    DELETE FROM project_member WHERE user_id = #{userId}
+  </delete>
+</mapper>

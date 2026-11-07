@@ -1,0 +1,913 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TaskMapper">
+
+  <sql id="cols">
+    id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
+    progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
+    remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
+    item_type AS itemType, epic_id AS epicId, demand_id AS demandId,
+    severity, environment, reproduce_steps, found_version_id, regression_status
+  </sql>
+
+  <!--
+    项目可见范围：只排除显式配置为 access='none' 的项目；没有配置记录 = 默认参与。
+    viewerId 为 null（owner/admin/viewer/公开分享）时不过滤。
+  -->
+  <sql id="visibleProject">
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
+  </sql>
+
+  <select id="selectAll" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectAllVisible" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="selectColumnTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND board_column = #{column} AND deleted_at IS NULL
+    ORDER BY sort_order, id
+  </select>
+
+  <!-- 看板未完成列：只取非 done 的任务，历史已完成任务不再进内存（board_column 走 idx_board） -->
+  <select id="selectOpenTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column &lt;&gt; 'done'
+    <include refid="visibleProject"/>
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="selectDeleted" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  </select>
+
+  <select id="selectById" resultType="Task">
+    SELECT <include refid="cols"/> FROM task WHERE id = #{id}
+  </select>
+
+  <!-- 任务深链（O-3）：只在「我参与的空间」内查找，越权与不存在的返回同一结果（不泄露存在性） -->
+  <select id="selectByIdInMyWorkspaces" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE id = #{id}
+      AND workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+  </select>
+
+  <!-- 跨空间「我的任务」的共享 WHERE：列表 / 计数 / 覆盖空间三条 SQL 复用同一片段，
+       任何一次筛选口径调整都不会出现"计数与列表不一致"。 -->
+  <sql id="myTasksWhere">
+    WHERE t.deleted_at IS NULL
+      AND (t.owner_user_id = #{userId}
+           <if test="displayName != null and displayName != ''">
+             OR (t.owner_user_id IS NULL AND t.owner = #{displayName})
+           </if>)
+      <!-- 跨空间「我的任务」也不展示被显式设为不可见的项目；owner/admin/viewer 不受限 -->
+      AND (m.role IN ('owner', 'admin', 'viewer')
+           OR NOT EXISTS (SELECT 1 FROM project_member pm
+                          WHERE pm.workspace_id = t.workspace_id
+                            AND pm.project_id = t.req_id
+                            AND pm.user_id = #{userId}
+                            AND pm.access = 'none'))
+      <if test="openOnly"> AND t.board_column != 'done' </if>
+      <if test="q != null">
+        <!-- 口径与 ganttWhere 一致：标题/描述/备注/分类 + 项目名 + 标签名 + 附件名 -->
+        AND (t.title LIKE CONCAT('%', #{q}, '%')
+             OR t.description LIKE CONCAT('%', #{q}, '%')
+             OR t.note LIKE CONCAT('%', #{q}, '%')
+             OR t.category LIKE CONCAT('%', #{q}, '%')
+             OR EXISTS (SELECT 1 FROM requirement r
+                        WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
+                          AND r.name LIKE CONCAT('%', #{q}, '%'))
+             OR EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
+                        WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
+                          AND g.name LIKE CONCAT('%', #{q}, '%'))
+             OR EXISTS (SELECT 1 FROM attachment a
+                        WHERE a.target_id = t.id AND a.target_kind = 'task' AND a.workspace_id = t.workspace_id
+                          AND a.filename LIKE CONCAT('%', #{q}, '%')))
+      </if>
+      <if test="pris != null and pris.size() > 0">
+        AND t.priority IN
+        <foreach collection="pris" item="p" open="(" separator="," close=")">#{p}</foreach>
+      </if>
+      <if test="cats != null and cats.size() > 0">
+        AND t.category IN
+        <foreach collection="cats" item="c" open="(" separator="," close=")">#{c}</foreach>
+      </if>
+      <if test="reqs != null and reqs.size() > 0">
+        AND (
+        <foreach collection="reqs" item="r" separator=" OR ">
+          <choose>
+            <when test="r == '__none'">t.req_id IS NULL</when>
+            <otherwise>t.req_id = #{r}</otherwise>
+          </choose>
+        </foreach>
+        )
+      </if>
+      <if test="tags != null and tags.size() > 0">
+        AND EXISTS (SELECT 1 FROM task_tag tt JOIN tag tg ON tg.id = tt.tag_id
+                    WHERE tt.task_id = t.id AND tg.name IN
+                    <foreach collection="tags" item="tg" open="(" separator="," close=")">#{tg}</foreach>)
+      </if>
+      <if test="types != null and types.size() > 0">
+        AND t.item_type IN
+        <foreach collection="types" item="tp" open="(" separator="," close=")">#{tp}</foreach>
+      </if>
+      <if test="versions != null and versions.size() > 0">
+        AND (
+        <foreach collection="versions" item="v" separator=" OR ">
+          <choose>
+            <when test="v == '__none'">
+              NOT EXISTS (SELECT 1 FROM version_task vt WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+            </when>
+            <otherwise>
+              EXISTS (SELECT 1 FROM version_task vt
+                      WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id AND vt.version_id = #{v})
+            </otherwise>
+          </choose>
+        </foreach>
+        )
+      </if>
+      <if test="blocked"> AND t.is_blocked = 1 </if>
+      <if test="due != null">
+        <choose>
+          <when test="due == 'over'">AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{today}</when>
+          <when test="due == 'today'">AND t.board_column &lt;&gt; 'done' AND t.due_date = #{today}</when>
+          <when test="due == 'soon'">AND t.board_column &lt;&gt; 'done'
+            AND t.due_date &gt;= #{today} AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY)</when>
+          <otherwise>AND 1 = 0</otherwise>
+        </choose>
+      </if>
+      <if test="focus">
+        AND ((t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{today})
+             OR (t.board_column = 'doing' AND t.priority = 'P0'))
+      </if>
+  </sql>
+
+  <!-- 跨空间「我的任务」（N-3）：优先按账号ID匹配；历史数据 owner_user_id 为空时回落显示名文本。
+       workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。
+       分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
+  <select id="selectMyTasks" resultType="Task">
+    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
+           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
+           t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
+           t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
+           w.name AS workspace_name
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    LEFT JOIN workspace w ON w.id = t.workspace_id
+    <include refid="myTasksWhere"/>
+    ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <!-- total 用独立 COUNT（不依赖列表页），nameOnly=true 时再叠加"仅按显示名匹配"条件 -->
+  <select id="countMyTasks" resultType="int">
+    SELECT COUNT(*)
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    <include refid="myTasksWhere"/>
+    <if test="nameOnly"> AND t.owner_user_id IS NULL </if>
+  </select>
+
+  <!-- 覆盖空间：按筛选后的全量任务去重，分页不会让"覆盖 N 个空间"缩水 -->
+  <select id="selectMyTaskWorkspaces" resultType="com.hourglass.dto.MyTaskWorkspace">
+    SELECT DISTINCT t.workspace_id AS id, w.name AS name
+    FROM task t
+    JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
+    LEFT JOIN workspace w ON w.id = t.workspace_id
+    <include refid="myTasksWhere"/>
+    ORDER BY name
+  </select>
+
+  <insert id="insert">
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
+                      recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
+    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
+            #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
+            #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{epicId}, #{demandId},
+            #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <!-- 备份导入：多值写入，含回收站任务的 deleted_at（省掉逐行更新） -->
+  <insert id="insertBatch">
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
+                      start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
+                      is_blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, remind_at,
+                      remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
+                      severity, environment, reproduce_steps, found_version_id, regression_status, created_at, deleted_at)
+    VALUES
+    <foreach collection="list" item="t" separator=",">
+      (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
+       #{t.category}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
+       #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
+       #{t.note}, #{t.completedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
+       #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.epicId}, #{t.demandId},
+       #{t.severity}, #{t.environment}, #{t.reproduceSteps}, #{t.foundVersionId}, #{t.regressionStatus},
+       COALESCE(#{t.createdAt}, CURRENT_TIMESTAMP), #{t.deletedAt})
+    </foreach>
+  </insert>
+
+  <update id="update">
+    UPDATE task SET
+      title = #{title},
+      description = #{description},
+      priority = #{priority},
+      owner = #{owner},
+      owner_user_id = #{ownerUserId},
+      category = #{category},
+      board_column = #{boardColumn},
+      start_date = #{startDate},
+      due_date = #{dueDate},
+      req_id = #{reqId},
+      req_doc_id = #{reqDocId},
+      branch_id = #{branchId},
+      progress = #{progress},
+      is_milestone = #{isMilestone},
+      estimate_minutes = #{estimateMinutes},
+      is_blocked = #{blocked},
+      blocked_reason = #{blockedReason},
+      blocked_by_task_id = #{blockedByTaskId},
+      note = #{note},
+      completed_at = #{completedAt},
+      recur_type = #{recurType},
+      remind_at = #{remindAt},
+      remind_target = #{remindTarget},
+      remind_sent = #{remindSent},
+      sort_order = #{sortOrder},
+      item_type = COALESCE(#{itemType}, 'task'),
+      epic_id = #{epicId},
+      demand_id = #{demandId},
+      severity = #{severity},
+      environment = #{environment},
+      reproduce_steps = #{reproduceSteps},
+      found_version_id = #{foundVersionId},
+      regression_status = #{regressionStatus},
+      updated_at = NOW()
+    WHERE id = #{id}
+    <if test="versionCheck != null and versionCheck">
+      AND updated_at = #{updatedAt}
+    </if>
+  </update>
+
+  <!-- 需求详情「关联任务」透视：按 demand_id 反查（含列序：未完成在前） -->
+  <select id="selectByDemand" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), sort_order, id
+  </select>
+
+  <update id="clearOwnerUser">
+    UPDATE task SET owner_user_id = NULL WHERE owner_user_id = #{userId}
+  </update>
+
+  <update id="softDelete">
+    UPDATE task SET deleted_at = NOW(), updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <update id="restore">
+    UPDATE task SET deleted_at = NULL, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM task WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteByIds">
+    DELETE FROM task WHERE id IN
+    <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="selectPurgeable" resultType="Task">
+    SELECT <include refid="cols"/> FROM task WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+    LIMIT #{limit}
+  </select>
+
+  <!-- 备份导入前预判任务 ID 冲突：本空间任务已清空，同 ID 只可能被其它空间占用 -->
+  <select id="selectIdsInOtherWorkspaces" resultType="string">
+    SELECT id FROM task
+    WHERE workspace_id != #{workspaceId}
+      AND id IN
+    <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
+  <!-- 提醒扫描改为跨空间一条 SQL：每 5 分钟只查两次，再按 workspace_id 分组取空间配置 -->
+  <select id="selectRemindDueAll" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE deleted_at IS NULL
+      AND board_column != 'done'
+      AND remind_sent = 0
+      AND remind_at IS NOT NULL
+      AND remind_at &lt;= #{now}
+      AND remind_at &gt;= #{windowStart}
+    ORDER BY remind_at
+  </select>
+
+  <select id="selectRemindExpiredAll" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE deleted_at IS NULL
+      AND board_column != 'done'
+      AND remind_sent = 0
+      AND remind_at IS NOT NULL
+      AND remind_at &lt; #{before}
+    ORDER BY remind_at
+  </select>
+
+  <update id="markRemindSent">
+    UPDATE task SET remind_sent = 1 WHERE id = #{id}
+  </update>
+
+  <update id="setRecurNext">
+    UPDATE task SET recur_next_id = #{recurNextId} WHERE id = #{id} AND recur_next_id IS NULL
+  </update>
+
+  <update id="setEpic">
+    UPDATE task SET epic_id = #{epicId} WHERE id = #{id}
+  </update>
+
+  <update id="clearRecurNextByTaskIds">
+    UPDATE task SET recur_next_id = NULL WHERE recur_next_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </update>
+
+  <!--
+    用户改名后同步"负责人文本"（复评 R-2 收紧口径）。
+    身份绑定上线后 owner_user_id 才是权威，文本列只作历史兜底，因此分两类处理：
+    ① owner_user_id = 该用户：无条件同步 —— 这是确定属于他的任务，不会误伤别人；
+    ② owner_user_id 为空且 owner = 旧名（未回填的历史数据）：仅当该空间内
+       "不存在另一个在册成员也叫旧名"时才同步。原实现只看"旧显示名 + 该用户参与的空间"，
+       同一空间里有同名的另一个人时，会把别人的任务也改成新名。
+    回收站任务一并同步（与旧行为一致）。
+  -->
+  <update id="renameOwner">
+    UPDATE task SET owner = #{newName}
+    WHERE workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+      AND (
+        owner_user_id = #{userId}
+        OR (
+          owner_user_id IS NULL
+          AND owner = #{oldName}
+          AND NOT EXISTS (
+            SELECT 1 FROM workspace_member m
+            JOIN app_user u ON u.id = m.user_id
+            WHERE m.workspace_id = task.workspace_id
+              AND m.user_id &lt;&gt; #{userId}
+              AND u.display_name = #{oldName}
+          )
+        )
+      )
+  </update>
+
+  <update id="updateSortOrder">
+    UPDATE task SET sort_order = #{sortOrder} WHERE id = #{id}
+  </update>
+
+  <select id="maxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM task
+    WHERE workspace_id = #{workspaceId} AND board_column = #{boardColumn} AND deleted_at IS NULL
+  </select>
+
+  <update id="clearReq">
+    UPDATE task SET req_id = NULL, req_doc_id = NULL, demand_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </update>
+
+  <select id="countTasksByReq" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+
+  <update id="clearEpicChildren">
+    UPDATE task SET epic_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND epic_id = #{epicId}
+  </update>
+
+  <update id="clearEpicChildrenByTaskIds">
+    UPDATE task SET epic_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND epic_id IN
+    <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </update>
+
+  <update id="clearBranchRef">
+    UPDATE task SET branch_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId}
+  </update>
+
+  <update id="clearDemandRef">
+    UPDATE task SET demand_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </update>
+
+  <select id="selectByBranch" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), FIELD(priority, 'P0', 'P1', 'P2', 'P3'), sort_order, created_at
+  </select>
+
+  <select id="selectByReq" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), board_column, sort_order, id
+  </select>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM task WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <select id="countChildRefs" resultType="int">
+    SELECT
+      (SELECT COUNT(*) FROM attachment WHERE workspace_id = #{workspaceId} AND target_kind = 'task' AND target_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM subtask    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM time_log   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_tag   WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+    + (SELECT COUNT(*) FROM task_comment WHERE workspace_id = #{workspaceId} AND task_id = #{taskId})
+  </select>
+
+  <!-- 每任务评论数（看板角标 / 抽屉计数用） -->
+  <select id="countCommentsByTask" resultType="TaskCountAgg">
+    SELECT task_id AS task_id, COUNT(*) AS cnt
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+    GROUP BY task_id
+  </select>
+
+  <!-- 一次性回填（可选脚本 04 使用）：把显示名文本对应到空间成员账号 -->
+  <select id="selectDistinctOwnerTexts" resultType="java.lang.String">
+    SELECT DISTINCT owner FROM task WHERE owner_user_id IS NULL AND owner IS NOT NULL AND owner != ''
+  </select>
+
+  <update id="backfillOwnerUserId">
+    UPDATE task t
+    SET t.owner_user_id = #{userId}
+    WHERE t.owner = #{displayName}
+      AND t.owner_user_id IS NULL
+      AND t.workspace_id IN (SELECT workspace_id FROM workspace_member WHERE user_id = #{userId})
+  </update>
+  <!-- ==================== 甘特图（V1.4 SQL 区间分页） ==================== -->
+  <!-- 口径与 TaskService.match() 对齐；区间用生成列 gantt_start/gantt_end（见 sql/16） -->
+  <sql id="ganttWhere">
+    t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <if test="query.viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{query.viewerId}
+                        AND pm.access = 'none')
+    </if>
+    <if test="query.includeDone == false">
+      AND t.board_column &lt;&gt; 'done'
+    </if>
+    <if test="query.q != null">
+      AND (
+        LOCATE(LOWER(#{query.q}), LOWER(t.title)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.description)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.note)) > 0
+        OR LOCATE(LOWER(#{query.q}), LOWER(t.category)) > 0
+        OR EXISTS (SELECT 1 FROM requirement r
+                   WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(r.name)) > 0)
+        OR EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
+                   WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(g.name)) > 0)
+        OR EXISTS (SELECT 1 FROM attachment a
+                   WHERE a.target_id = t.id AND a.target_kind = 'task' AND a.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(a.filename)) > 0)
+      )
+    </if>
+    <if test="query.owners != null and query.owners.size() > 0">
+      AND t.owner IN
+      <foreach collection="query.owners" item="o" open="(" separator="," close=")">#{o}</foreach>
+    </if>
+    <if test="query.pris != null and query.pris.size() > 0">
+      AND t.priority IN
+      <foreach collection="query.pris" item="p" open="(" separator="," close=")">#{p}</foreach>
+    </if>
+    <if test="query.cats != null and query.cats.size() > 0">
+      AND t.category IN
+      <foreach collection="query.cats" item="cc" open="(" separator="," close=")">#{cc}</foreach>
+    </if>
+    <if test="query.reqNone">
+      <choose>
+        <when test="query.reqIds != null and query.reqIds.size() > 0">
+          AND (t.req_id IS NULL OR t.req_id IN
+          <foreach collection="query.reqIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>)
+        </when>
+        <otherwise>
+          AND t.req_id IS NULL
+        </otherwise>
+      </choose>
+    </if>
+    <if test="query.reqNone == false and query.reqIds != null and query.reqIds.size() > 0">
+      AND t.req_id IN
+      <foreach collection="query.reqIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>
+    </if>
+    <if test="query.tags != null and query.tags.size() > 0">
+      AND EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
+                  WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
+                    AND g.name IN
+                  <foreach collection="query.tags" item="tg" open="(" separator="," close=")">#{tg}</foreach>)
+    </if>
+    <if test="query.types != null and query.types.size() > 0">
+      AND t.item_type IN
+      <foreach collection="query.types" item="tp" open="(" separator="," close=")">#{tp}</foreach>
+    </if>
+    <if test="query.versionNone">
+      <choose>
+        <when test="query.versionIds != null and query.versionIds.size() > 0">
+          AND (NOT EXISTS (SELECT 1 FROM version_task vt
+                           WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+               OR EXISTS (SELECT 1 FROM version_task vt
+                          WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+                            AND vt.version_id IN
+                          <foreach collection="query.versionIds" item="vid" open="(" separator="," close=")">#{vid}</foreach>))
+        </when>
+        <otherwise>
+          AND NOT EXISTS (SELECT 1 FROM version_task vt
+                          WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id)
+        </otherwise>
+      </choose>
+    </if>
+    <if test="query.versionNone == false and query.versionIds != null and query.versionIds.size() > 0">
+      AND EXISTS (SELECT 1 FROM version_task vt
+                  WHERE vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+                    AND vt.version_id IN
+                  <foreach collection="query.versionIds" item="vid" open="(" separator="," close=")">#{vid}</foreach>)
+    </if>
+    <if test="query.due != null">
+      <choose>
+        <when test="query.due == 'over'">
+          AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{query.today}
+        </when>
+        <when test="query.due == 'today'">
+          AND t.board_column &lt;&gt; 'done' AND t.due_date = #{query.today}
+        </when>
+        <when test="query.due == 'soon'">
+          AND t.board_column &lt;&gt; 'done'
+          AND t.due_date &gt;= #{query.today}
+          AND t.due_date &lt;= DATE_ADD(#{query.today}, INTERVAL 3 DAY)
+        </when>
+        <otherwise>AND 1 = 0</otherwise>
+      </choose>
+    </if>
+    <if test="query.focus">
+      AND (
+        (t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{query.today})
+        OR (t.board_column = 'doing' AND t.priority = 'P0')
+      )
+    </if>
+    <if test="query.blocked">
+      AND t.is_blocked = 1
+    </if>
+    <if test="query.noDue">
+      AND t.due_date IS NULL
+    </if>
+  </sql>
+
+  <sql id="ganttScheduled">
+    AND (t.start_date IS NOT NULL OR t.due_date IS NOT NULL)
+    <if test="query.from != null">
+      AND t.gantt_end &gt;= #{query.from}
+    </if>
+    <if test="query.to != null">
+      AND t.gantt_start &lt;= #{query.to}
+    </if>
+  </sql>
+
+  <select id="selectGantt" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t2
+    JOIN (
+      SELECT t.id AS pid
+      FROM task t
+      WHERE <include refid="ganttWhere"/>
+      <include refid="ganttScheduled"/>
+      ORDER BY t.gantt_start, t.gantt_end, t.id
+      LIMIT #{limit} OFFSET #{offset}
+    ) gp ON gp.pid = t2.id
+    ORDER BY t2.gantt_start, t2.gantt_end, t2.id
+  </select>
+
+  <select id="countGantt" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="ganttScheduled"/>
+  </select>
+
+  <select id="selectGanttUnscheduled" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.start_date IS NULL AND t.due_date IS NULL
+    ORDER BY t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="countGanttUnscheduled" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.start_date IS NULL AND t.due_date IS NULL
+  </select>
+
+  <select id="countCommentsByTaskIds" resultType="TaskCountAgg">
+    SELECT task_id AS task_id, COUNT(*) AS cnt
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
+  </select>
+
+  <!-- ==================== 看板 / 列表 / 日历（BE-Q-1 SQL 下推） ==================== -->
+  <!--
+    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/分类/项目名/标签/附件名；
+    due/focus/blocked/noDue 与 TaskService.match 一致），已完成列再加完成时间范围。
+  -->
+  <sql id="doneScope">
+    <if test="scopeAll == false">
+      AND (t.completed_at IS NULL
+           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+    </if>
+  </sql>
+
+  <!--
+    无条件版本：countDoneInScope 的方法签名只有 (workspaceId, weekStart, weekEnd)，
+    没有 scopeAll 参数，引用带 <if test="scopeAll"> 的 doneScope 会抛
+    BindingException: Parameter 'scopeAll' not found。
+    该查询的"仅本周"口径由调用方保证（scopeAll 为 true 时走 countDoneAll），故这里无条件加范围。
+  -->
+  <sql id="doneScopeAlways">
+      AND (t.completed_at IS NULL
+           OR (t.completed_at &gt;= #{weekStart} AND t.completed_at &lt;= #{weekEnd}))
+  </sql>
+
+  <select id="countDoneAll" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="countDoneInScope" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+    <include refid="visibleProject"/>
+    <include refid="doneScopeAlways"/>
+  </select>
+
+  <select id="countDoneMatched" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.board_column = 'done'
+    <include refid="doneScope"/>
+  </select>
+
+  <select id="selectDonePage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.board_column = 'done'
+    <include refid="doneScope"/>
+    ORDER BY t.sort_order, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countTaskList" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+  </select>
+
+  <select id="selectTaskList" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+    ORDER BY
+    <choose>
+      <when test="sort == 'due'">
+        (t.due_date IS NULL), t.due_date, t.board_column, t.sort_order, t.id
+      </when>
+      <when test="sort == 'priority'">
+        CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 9 END,
+        t.board_column, t.sort_order, t.id
+      </when>
+      <when test="sort == 'updated'">
+        t.updated_at DESC, t.board_column, t.sort_order, t.id
+      </when>
+      <otherwise>
+        CASE t.board_column
+        <foreach collection="columnIds" item="cid" index="ci">WHEN #{cid} THEN ${ci}</foreach>
+        ELSE 999 END,
+        t.sort_order, t.board_column, t.id
+      </otherwise>
+    </choose>
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <!-- 日历候选：先把区间收敛到 due_date（走 idx_ws_due），精确的
+       「提前完成收敛到完成日」仍在 Java 里按原逻辑判定，避免两套口径。 -->
+  <select id="selectCalendar" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.due_date IS NOT NULL
+      AND t.due_date &gt;= #{first}
+      AND (t.due_date &lt;= #{last} OR t.start_date &lt;= #{last} OR t.completed_at &lt;= #{last})
+    <include refid="visibleProject"/>
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
+  <select id="selectBoardFacets" resultType="TaskFacetRow">
+    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, t.due_date, t.item_type, vt.version_id
+    FROM task t
+    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <!-- ==================== BE-Q-3：统计类服务 SQL 聚合 ==================== -->
+  <!--
+    统一口径：只统计未删除任务；日期区间为 [from, before)（before 由 Service 传「上界 + 1 天」）。
+    聚合行的名字 / 顺序尽量复刻旧 selectAll 的首次出现顺序，避免 JSON 数组顺序漂移。
+  -->
+
+  <!-- 近 N 周新增 / 完成：一次扫描，UNION ALL 后按周聚合 -->
+  <select id="countCreatedCompletedByWeek" resultType="com.hourglass.dto.WeekCountRow">
+    SELECT x.week_start AS week_start,
+           SUM(x.created) AS created,
+           SUM(x.completed) AS completed
+    FROM (
+      SELECT DATE_SUB(DATE(t.created_at), INTERVAL WEEKDAY(t.created_at) DAY) AS week_start,
+             1 AS created, 0 AS completed
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+        <include refid="visibleProject"/>
+        AND t.created_at &gt;= #{from} AND t.created_at &lt; #{before}
+      UNION ALL
+      SELECT DATE_SUB(DATE(t.completed_at), INTERVAL WEEKDAY(t.completed_at) DAY) AS week_start,
+             0 AS created, 1 AS completed
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+        <include refid="visibleProject"/>
+        AND t.board_column = 'done'
+        AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+    ) x
+    GROUP BY x.week_start
+  </select>
+
+  <select id="countCompletedByCategory" resultType="com.hourglass.dto.NameCountRow">
+    SELECT t.category AS name, COUNT(*) AS cnt
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      <include refid="visibleProject"/>
+      AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+    GROUP BY t.category
+    ORDER BY MAX(t.completed_at) DESC, MIN(t.id)
+  </select>
+
+  <select id="countCompletedByOwner" resultType="com.hourglass.dto.NameCountRow">
+    SELECT t.owner AS name, COUNT(*) AS cnt
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      <include refid="visibleProject"/>
+      AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+    GROUP BY t.owner
+    ORDER BY MAX(t.completed_at) DESC, MIN(t.id)
+  </select>
+
+  <select id="countBuckets" resultType="com.hourglass.dto.TaskBucketRow">
+    SELECT COALESCE(SUM(CASE WHEN t.board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN t.board_column = 'doing' THEN 1 ELSE 0 END), 0) AS doing,
+           COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN t.board_column NOT IN ('backlog', 'doing', 'done') THEN 1 ELSE 0 END), 0) AS other,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS overdue
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="selectLatestCompletedAt" resultType="java.time.LocalDate">
+    SELECT MAX(t.completed_at) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="selectCompletedBetween" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+      <include refid="visibleProject"/>
+      AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
+    ORDER BY t.completed_at DESC, BINARY t.id
+  </select>
+
+  <select id="selectPendingDone" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      <include refid="visibleProject"/>
+      AND t.board_column &lt;&gt; 'done' AND t.progress &gt;= 100
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="selectProgressTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      <include refid="visibleProject"/>
+      AND t.board_column NOT IN ('backlog', 'done')
+      AND (t.progress IS NULL OR t.progress &lt; 100)
+    <if test="history">
+      AND (t.created_at IS NULL OR t.created_at &lt; #{before})
+      AND EXISTS (SELECT 1 FROM task_log l
+                  WHERE l.workspace_id = t.workspace_id AND l.task_id = t.id
+                    AND l.task_id &lt;&gt; 'CFG'
+                    AND l.created_at &gt;= #{from} AND l.created_at &lt; #{before})
+    </if>
+    ORDER BY (t.due_date IS NULL), t.due_date, t.progress DESC, t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="countReviewStatus" resultType="com.hourglass.dto.ReviewCountRow">
+    SELECT COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.priority = 'P0' THEN 1 ELSE 0 END), 0) AS open_p0,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog' THEN 1 ELSE 0 END), 0) AS doing,
+           COALESCE(SUM(CASE WHEN t.board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS `over`,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.due_date = #{today} THEN 1 ELSE 0 END), 0) AS today,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+                              AND t.due_date &gt; #{today}
+                              AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY) THEN 1 ELSE 0 END), 0) AS soon
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="countLive" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+  </select>
+
+  <!-- 估时样本：只取填了预估的窄列 + 对应任务的工时合计（一次 JOIN 聚合） -->
+  <select id="selectEstimateTasks" resultType="Task">
+    SELECT t.id, t.title, t.category, t.board_column, t.estimate_minutes,
+           COALESCE(SUM(l.minutes), 0) AS total_minutes
+    FROM task t
+    LEFT JOIN time_log l
+           ON l.workspace_id = t.workspace_id AND l.task_id = t.id AND l.ended_at IS NOT NULL
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      <include refid="visibleProject"/>
+      AND t.estimate_minutes &gt; 0
+    GROUP BY t.id, t.title, t.category, t.board_column, t.estimate_minutes, t.sort_order
+    ORDER BY t.board_column, t.sort_order, t.id
+  </select>
+
+  <select id="selectTitlesByReq" resultType="string">
+    SELECT title FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
+      AND req_id = #{reqId}
+      AND title IS NOT NULL AND TRIM(title) &lt;&gt; ''
+    ORDER BY board_column, sort_order, id
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectByReqDoc" resultType="Task">
+    SELECT <include refid="cols"/>
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+    ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectTitles" resultType="string">
+    SELECT t.title FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.title IS NOT NULL
+    <include refid="visibleProject"/>
+  </select>
+
+  <select id="countByReq" resultType="com.hourglass.dto.ReqTaskAggRow">
+    SELECT req_id AS req_id,
+           COUNT(*) AS total,
+           COALESCE(SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
+           COALESCE(SUM(CASE WHEN board_column = 'done' THEN 100 ELSE COALESCE(progress, 0) END), 0) AS progress_sum
+    FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_id IS NOT NULL
+    GROUP BY req_id
+  </select>
+
+</mapper>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.RequirementDocHistoryMapper">
+
+  <sql id="listCols">
+    id, doc_id, workspace_id, version_no, title, format, saved_by, saved_by_user_id, created_at
+  </sql>
+
+  <insert id="insert">
+    INSERT INTO requirement_doc_history
+      (id, doc_id, workspace_id, version_no, title, content, format, saved_by, saved_by_user_id, created_at)
+    VALUES
+      (#{id}, #{docId}, #{workspaceId}, #{versionNo}, #{title}, #{content}, #{format},
+       #{savedBy}, #{savedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <select id="selectByDoc" resultType="com.hourglass.entity.RequirementDocHistory">
+    SELECT <include refid="listCols"/> FROM requirement_doc_history
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+    ORDER BY version_no DESC
+  </select>
+
+  <select id="selectById" resultType="com.hourglass.entity.RequirementDocHistory">
+    SELECT <include refid="listCols"/>, content
+    FROM requirement_doc_history WHERE id = #{id}
+  </select>
+
+  <select id="maxVersionNo" resultType="int">
+    SELECT COALESCE(MAX(version_no), 0) FROM requirement_doc_history WHERE doc_id = #{docId}
+  </select>
+
+  <delete id="deleteOld">
+    DELETE FROM requirement_doc_history
+    WHERE doc_id = #{docId}
+      AND version_no &lt;= (SELECT v FROM (
+            SELECT MAX(version_no) AS v FROM requirement_doc_history WHERE doc_id = #{docId}
+          ) t) - #{keep}
+  </delete>
+
+  <delete id="deleteByDoc">
+    DELETE FROM requirement_doc_history WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM requirement_doc_history
+    WHERE workspace_id = #{workspaceId}
+      AND doc_id IN (SELECT id FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId})
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM requirement_doc_history WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

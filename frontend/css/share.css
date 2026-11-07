@@ -1,0 +1,61 @@
+/* 只读分享页的少量布局样式（其余复用 tokens/base/gantt.css） */
+html, body{height:100%;margin:0;}
+body{background:var(--bg-app);}
+.app{height:100%;}
+.main{height:100%;}
+#view-gantt{height:100%;padding:0 20px 12px;overflow:hidden;background:var(--bg-app);}
+#view-gantt .gantt-page{height:100%;max-width:none;margin:0 auto;padding-top:14px;gap:10px;}
+.share-top{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;}
+.share-title h1{font-size:18px;line-height:1.2;margin:0;color:var(--text);}
+.share-title p{margin:4px 0 0;font-size:12px;color:var(--text-3);}
+.share-tools{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.share-tools .toolbar-meta{font-size:12px;color:var(--text-2);}
+.share-foot{margin:0;font-size:11px;color:var(--text-3);}
+.share-empty,.share-error{
+  padding:32px 20px;font-size:13px;color:var(--text-3);
+}
+.share-error{color:var(--danger-fg);}
+@media (max-width:900px){
+  #view-gantt{padding:0 10px 10px;}
+  .share-title h1{font-size:16px;}
+}
+
+/* 文档分享：正文排版与主应用 Markdown 预览一致（views.css 过大，分享页不复用） */
+#view-doc{padding:0 20px 12px;overflow:auto;background:var(--bg-app);}
+.doc-share-page{max-width:860px;margin:0 auto;padding-top:14px;gap:10px;}
+.share-doc{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+  padding:20px 24px 32px;min-height:120px;
+}
+.share-doc.markdown-body{font-size:14px;line-height:1.85;color:var(--text);word-wrap:break-word;}
+.share-doc h1,.share-doc h2,.share-doc h3,.share-doc h4{margin:24px 0 10px;font-weight:700;line-height:1.35;}
+.share-doc h1{font-size:24px;}
+.share-doc h2{font-size:19px;}
+.share-doc h3{font-size:16px;}
+.share-doc h4{font-size:14.5px;}
+.share-doc p{margin:10px 0;}
+.share-doc ul,.share-doc ol{margin:10px 0;padding-left:24px;}
+.share-doc li{margin:4px 0;}
+.share-doc blockquote{
+  margin:14px 0;padding:6px 14px;border-left:3px solid var(--border-strong);
+  color:var(--text-2);background:var(--surface-sunken);border-radius:0 6px 6px 0;
+}
+.share-doc code{
+  padding:1px 5px;border-radius:4px;background:var(--surface-sunken);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px;
+}
+.share-doc pre{
+  margin:14px 0;padding:12px 14px;border-radius:var(--r-md);
+  background:var(--surface-sunken);overflow:auto;
+}
+.share-doc pre code{padding:0;background:none;font-size:12.5px;line-height:1.7;}
+.share-doc table{border-collapse:collapse;width:auto;max-width:100%;margin:14px 0;font-size:13.5px;}
+.share-doc th,.share-doc td{border:1px solid var(--border);padding:8px 10px;vertical-align:middle;}
+.share-doc th{background:var(--surface-sunken);font-weight:650;text-align:left;}
+.share-doc img{max-width:100%;height:auto;border-radius:6px;}
+.share-doc a{color:var(--primary-fg);text-decoration:underline;}
+.share-doc hr{border:none;border-top:1px solid var(--border);margin:20px 0;}
+@media (max-width:900px){
+  #view-doc{padding:0 10px 10px;}
+  .share-doc{padding:16px;}
+}

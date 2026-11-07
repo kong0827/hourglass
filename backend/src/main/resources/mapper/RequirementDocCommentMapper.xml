@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.RequirementDocCommentMapper">
+
+  <insert id="insert">
+    INSERT INTO req_doc_comment (id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{docId}, #{userId}, #{content}, #{quoteText},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <select id="selectById" resultType="com.hourglass.entity.RequirementDocComment">
+    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
+    FROM req_doc_comment
+    WHERE id = #{id}
+  </select>
+
+  <select id="selectByDoc" resultType="com.hourglass.entity.RequirementDocComment">
+    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
+    FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+    ORDER BY created_at ASC
+  </select>
+
+  <select id="selectByWorkspace" resultType="com.hourglass.entity.RequirementDocComment">
+    SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
+    FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at ASC
+  </select>
+
+  <delete id="delete">
+    DELETE FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteByDoc">
+    DELETE FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId}
+      AND doc_id IN (SELECT id FROM requirement_doc WHERE workspace_id = #{workspaceId} AND req_id = #{reqId})
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM req_doc_comment WHERE workspace_id = #{workspaceId}
+  </delete>
+
+</mapper>

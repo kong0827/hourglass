@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.SubtaskMapper">
+
+  <sql id="cols">
+    id, task_id, workspace_id, title, done, created_at, updated_at
+  </sql>
+
+  <select id="selectByTaskId" resultType="Subtask">
+    SELECT <include refid="cols"/> FROM subtask
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY id
+  </select>
+
+  <select id="selectAll" resultType="Subtask">
+    SELECT <include refid="cols"/> FROM subtask WHERE workspace_id = #{workspaceId} ORDER BY task_id, id
+  </select>
+
+  <select id="selectById" resultType="Subtask">
+    SELECT <include refid="cols"/> FROM subtask WHERE id = #{id}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO subtask (task_id, workspace_id, title, done)
+    VALUES (#{taskId}, #{workspaceId}, #{title}, #{done})
+  </insert>
+
+  <insert id="insertBatch">
+    INSERT INTO subtask (task_id, workspace_id, title, done)
+    VALUES
+    <foreach collection="list" item="s" separator=",">
+      (#{s.taskId}, #{s.workspaceId}, #{s.title}, #{s.done})
+    </foreach>
+  </insert>
+
+  <update id="update">
+    UPDATE subtask SET
+      title = #{title},
+      done = #{done},
+      updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM subtask WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM subtask WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM subtask WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByTask" resultType="SubtaskAgg">
+    SELECT task_id, COUNT(*) AS total, SUM(done) AS done
+    FROM subtask
+    WHERE workspace_id = #{workspaceId}
+    GROUP BY task_id
+  </select>
+  <select id="countByTaskIds" resultType="SubtaskAgg">
+    SELECT task_id, COUNT(*) AS total, SUM(done) AS done
+    FROM subtask
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    GROUP BY task_id
+  </select>
+</mapper>

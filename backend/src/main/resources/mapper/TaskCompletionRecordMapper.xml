@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TaskCompletionRecordMapper">
+
+  <!-- 完成任务时落快照；同任务重复完成覆盖旧记录（唯一键 uk_ws_task） -->
+  <insert id="upsert">
+    INSERT INTO task_completion_record
+      (workspace_id, task_id, title, description, req_id, req_name, req_doc_id, req_doc_title,
+       owner, owner_user_id, category, priority, start_date, completed_at,
+       first_started_at, last_ended_at, total_minutes)
+    VALUES
+      (#{workspaceId}, #{taskId}, #{title}, #{description}, #{reqId}, #{reqName}, #{reqDocId}, #{reqDocTitle},
+       #{owner}, #{ownerUserId}, #{category}, #{priority}, #{startDate}, #{completedAt},
+       #{firstStartedAt}, #{lastEndedAt}, #{totalMinutes})
+    ON DUPLICATE KEY UPDATE
+      title            = VALUES(title),
+      description      = VALUES(description),
+      req_id           = VALUES(req_id),
+      req_name         = VALUES(req_name),
+      req_doc_id       = VALUES(req_doc_id),
+      req_doc_title    = VALUES(req_doc_title),
+      owner            = VALUES(owner),
+      owner_user_id    = VALUES(owner_user_id),
+      category         = VALUES(category),
+      priority         = VALUES(priority),
+      start_date       = VALUES(start_date),
+      completed_at     = VALUES(completed_at),
+      first_started_at = VALUES(first_started_at),
+      last_ended_at    = VALUES(last_ended_at),
+      total_minutes    = VALUES(total_minutes)
+  </insert>
+
+  <!-- 只刷新工时三列：补记 / 作废后快照的工时随实际记录重算，名称等历史字段保持不变 -->
+  <update id="updateWork">
+    UPDATE task_completion_record
+    SET total_minutes    = #{totalMinutes},
+        first_started_at = #{firstStartedAt},
+        last_ended_at    = #{lastEndedAt}
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </update>
+
+  <delete id="deleteByTaskId">
+    DELETE FROM task_completion_record
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <select id="countByTaskId" resultType="int">
+    SELECT COUNT(*) FROM task_completion_record
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task_completion_record WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="countByRange" resultType="int">
+    SELECT COUNT(*) FROM task_completion_record
+    WHERE workspace_id = #{workspaceId}
+      AND completed_at &gt;= #{from}
+      AND completed_at &lt; #{to}
+  </select>
+
+  <select id="selectByRange" resultType="TaskCompletionRecord">
+    SELECT id, workspace_id, task_id, title, description, req_id, req_name, req_doc_id, req_doc_title,
+           owner, owner_user_id, category, priority, start_date, completed_at,
+           first_started_at, last_ended_at, total_minutes, created_at
+    FROM task_completion_record
+    WHERE workspace_id = #{workspaceId}
+      AND completed_at &gt;= #{from}
+      AND completed_at &lt; #{to}
+    ORDER BY completed_at DESC, id DESC
+  </select>
+</mapper>

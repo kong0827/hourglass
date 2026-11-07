@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>沙漏 · 加入空间</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/components.css" />
+<link rel="stylesheet" href="css/auth.css" />
+<script src="config.js"></script>
+</head>
+<body class="auth-body">
+<div class="auth-card wide">
+
+  <!-- 状态一：加载中（3 行骨架） -->
+  <div id="stLoading" class="join-skel">
+    <div class="skel" style="height:48px;width:48px;border-radius:12px;margin:0 auto 12px"></div>
+    <div class="skel skel-line" style="width:70%;margin:0 auto"></div>
+    <div class="skel skel-line" style="width:50%;margin:0 auto"></div>
+    <div class="skel skel-line" style="width:60%;margin:0 auto"></div>
+  </div>
+
+  <!-- 状态二：无效 / 过期 -->
+  <div id="stError" hidden>
+    <div class="join-hero invalid">
+      <span class="hero-ic">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 5.8v5"/><path d="M10 14h.01"/></svg>
+      </span>
+      <h2 id="errTitle">邀请链接无效或已撤销</h2>
+      <p id="errMsg">请向空间主索取新的邀请链接。</p>
+    </div>
+    <p class="auth-tip" style="text-align:center"><a href="./">返回沙漏</a></p>
+  </div>
+
+  <!-- 状态三：有效 -->
+  <div id="stOk" hidden>
+    <div class="join-hero">
+      <span class="hero-ic">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.4" cy="6.6" r="3"/><path d="M2.8 16.2c0-2.6 2-4.4 4.6-4.4s4.6 1.8 4.6 4.4"/><path d="M13.4 4.1a3 3 0 0 1 0 5.8M15 12.4c1.6.6 2.6 1.9 2.6 3.8"/></svg>
+      </span>
+      <h2 id="joinTitle">加入共享空间</h2>
+      <p>加入后可与对方共同维护同一块看板</p>
+    </div>
+
+    <div class="join-info">
+      <div class="ir"><span class="k">空间</span><span class="v" id="ivWs">—</span></div>
+      <div class="ir"><span class="k">邀请人</span><span class="v" id="ivBy">—</span></div>
+      <div class="ir"><span class="k">有效期</span><span class="v" id="ivExp">—</span></div>
+    </div>
+
+    <form id="fJoin" class="join-actions" hidden>
+      <button class="btn primary lg" type="submit" id="btnJoin">一键加入</button>
+      <p class="join-note" id="joinAsNote"></p>
+    </form>
+
+    <div id="needLogin" class="join-actions" hidden>
+      <p class="join-note">此邀请需要已有账号：请先登录，登录后会回到本页完成加入。</p>
+      <a class="btn primary lg" id="toLogin" href="login.html">登录后加入</a>
+      <p class="join-note">没有账号？请先联系管理员创建账号</p>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { API } from "./js/core/api.js";
+(function () {
+  "use strict";
+
+  var code = "";
+  try { code = new URLSearchParams(window.location.search).get("code") || ""; } catch (e) { /* 忽略 */ }
+
+  var stLoading = document.getElementById("stLoading");
+  var stError = document.getElementById("stError");
+  var stOk = document.getElementById("stOk");
+  var errTitle = document.getElementById("errTitle");
+  var errMsg = document.getElementById("errMsg");
+  var ivWs = document.getElementById("ivWs");
+  var ivBy = document.getElementById("ivBy");
+  var ivExp = document.getElementById("ivExp");
+  var fJoin = document.getElementById("fJoin");
+  var needLogin = document.getElementById("needLogin");
+  var joinAsNote = document.getElementById("joinAsNote");
+  var btnJoin = document.getElementById("btnJoin");
+  var toLogin = document.getElementById("toLogin");
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function shortDate(v) {
+    if (!v) return "—";
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return String(v);
+    var m = d.getMonth() + 1, dd = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (dd < 10 ? "0" + dd : dd);
+  }
+  /* 无效（404）/ 过期（400）按后端 code 区分：api.js 会丢掉 code，这里直连读取 */
+  function fail(title, msg) {
+    stLoading.hidden = true;
+    stOk.hidden = true;
+    stError.hidden = false;
+    errTitle.textContent = title || "邀请链接无效或已撤销";
+    errMsg.textContent = msg || "请向空间主索取新的邀请链接。";
+  }
+  function loadMe() {
+    return fetch(API.url("/api/auth/me"), { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) return null;
+        return res.json().then(function (json) { return (json && json.code === 0) ? json.data : null; });
+      })
+      .catch(function () { return null; });
+  }
+  function myWorkspaces() {
+    return fetch(API.url("/api/workspaces"), { credentials: "same-origin" })
+      .then(function (res) { return res.json(); })
+      .then(function (json) { return (json && json.code === 0) ? (json.data || []) : []; })
+      .catch(function () { return []; });
+  }
+
+  if (!code) {
+    fail("链接缺少邀请码", "请使用空间主发来的完整邀请链接。");
+    return;
+  }
+  toLogin.href = API.appBase + "/login.html?next=" +
+    encodeURIComponent(API.appBase + "/join.html?code=" + code);
+
+  var info = null, me = null, alreadyWsId = null;
+
+  fetch(API.url("/api/invite/" + encodeURIComponent(code)), { credentials: "same-origin" })
+    .then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (json) {
+        return { status: res.status, json: json };
+      });
+    })
+    .then(function (r) {
+      var json = r.json;
+      if (!json || json.code !== 0) {
+        if (json && json.code === 400) {
+          fail("邀请链接已过期", json.message || "邀请链接有效期 7 天，请联系空间主重新生成。");
+        } else if (json && json.code === 404) {
+          fail("邀请链接无效或已撤销", json.message || "请向空间主索取新的邀请链接。");
+        } else if (r.status === 404) {
+          fail("邀请链接无效或已撤销", "请向空间主索取新的邀请链接。");
+        } else if (r.status === 400) {
+          fail("邀请链接已过期", "邀请链接有效期 7 天，请联系空间主重新生成。");
+        } else {
+          fail("无法校验邀请链接", (json && json.message) || ("请求失败（HTTP " + r.status + "）"));
+        }
+        return null;
+      }
+      info = json.data;
+      return loadMe();
+    })
+    .then(function (user) {
+      if (!info) return;
+      me = user;
+      ivWs.textContent = info.workspaceName || "—";
+      ivBy.textContent = info.inviterName || "空间主";
+      ivExp.textContent = shortDate(info.expiresAt);
+      document.getElementById("joinTitle").textContent = "加入「" + (info.workspaceName || "共享空间") + "」";
+
+      if (!me) {
+        stLoading.hidden = true;
+        stOk.hidden = false;
+        needLogin.hidden = false;
+        return;
+      }
+      joinAsNote.textContent = "将以账号「" + (me.displayName || me.username) + "」（@" + me.username + "）加入";
+      /* 已是成员时主按钮改为「进入空间」 */
+      return myWorkspaces().then(function (list) {
+        var hit = null;
+        (list || []).forEach(function (w) {
+          if (w.name === info.workspaceName) hit = w;
+        });
+        if (hit) {
+          alreadyWsId = hit.id;
+          btnJoin.textContent = "进入空间";
+        }
+        stLoading.hidden = true;
+        stOk.hidden = false;
+        fJoin.hidden = false;
+      });
+    })
+    .catch(function (ex) {
+      fail("无法校验邀请链接", (ex && ex.message) || "网络异常，请稍后重试。");
+    });
+
+  fJoin.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (alreadyWsId) { go(alreadyWsId); return; }
+    btnJoin.disabled = true;
+    btnJoin.classList.add("loading");
+    btnJoin.textContent = "加入中…";
+    API.post("/api/invite/" + encodeURIComponent(code) + "/join", {}).then(function (res) {
+      var wsId = (res && res.workspaceId) || null;
+      btnJoin.classList.remove("loading");
+      /* 加入成功：按钮短暂变成功态，800ms 后跳转 */
+      btnJoin.classList.remove("primary");
+      btnJoin.style.background = "var(--success)";
+      btnJoin.style.borderColor = "var(--success)";
+      btnJoin.style.color = "var(--text-inverse)";
+      btnJoin.textContent = res && res.already ? "已是成员，正在进入…" : "已加入，正在进入…";
+      setTimeout(function () { go(wsId); }, 800);
+    }).catch(function (ex) {
+      btnJoin.disabled = false;
+      btnJoin.classList.remove("loading");
+      btnJoin.textContent = "一键加入";
+      fail("加入失败", (ex && ex.message) || "请稍后重试，或联系空间主。");
+    });
+  });
+
+  function go(wsId) {
+    function done() { window.location.href = API.appBase + "/"; }
+    if (wsId) API.post("/api/workspaces/" + encodeURIComponent(wsId) + "/select", {}).then(done, done);
+    else done();
+  }
+})();
+</script>
+</body>
+</html>

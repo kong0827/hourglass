@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TaskCommentMapper">
+
+  <select id="selectByTaskId" resultType="TaskComment">
+    SELECT c.id, c.task_id, c.workspace_id, c.author_id, c.author_name, c.content, c.created_at,
+           u.display_name AS current_author_name
+    FROM task_comment c
+    LEFT JOIN app_user u ON u.id = c.author_id
+    WHERE c.workspace_id = #{workspaceId} AND c.task_id = #{taskId}
+    ORDER BY c.created_at ASC, c.id ASC
+  </select>
+
+  <select id="selectAllByWorkspace" resultType="TaskComment">
+    SELECT id, task_id, workspace_id, author_id, author_name, content, created_at
+    FROM task_comment
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY task_id, id
+  </select>
+
+  <select id="selectById" resultType="TaskComment">
+    SELECT id, task_id, workspace_id, author_id, author_name, content, created_at
+    FROM task_comment WHERE id = #{id}
+  </select>
+
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO task_comment (task_id, workspace_id, author_id, author_name, content, created_at)
+    VALUES (#{taskId}, #{workspaceId}, #{authorId}, #{authorName}, #{content}, COALESCE(#{createdAt,jdbcType=TIMESTAMP}, NOW()))
+  </insert>
+
+  <insert id="insertBatch">
+    INSERT INTO task_comment (task_id, workspace_id, author_id, author_name, content, created_at)
+    VALUES
+    <foreach collection="list" item="c" separator=",">
+      (#{c.taskId}, #{c.workspaceId}, #{c.authorId}, #{c.authorName}, #{c.content},
+       COALESCE(#{c.createdAt,jdbcType=TIMESTAMP}, NOW()))
+    </foreach>
+  </insert>
+
+  <delete id="deleteById">
+    DELETE FROM task_comment WHERE id = #{id}
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM task_comment WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task_comment WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

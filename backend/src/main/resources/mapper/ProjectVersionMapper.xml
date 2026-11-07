@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ProjectVersionMapper">
+
+  <sql id="cols">
+    id, workspace_id, req_id, name, description, status, start_date, target_date, released_at, created_at, updated_at
+  </sql>
+
+  <select id="selectByReq" resultType="ProjectVersion">
+    SELECT <include refid="cols"/> FROM project_version
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY FIELD(status, 'active', 'planned', 'released'), created_at DESC, id
+  </select>
+
+  <select id="selectById" resultType="ProjectVersion">
+    SELECT <include refid="cols"/> FROM project_version WHERE id = #{id}
+  </select>
+
+  <select id="selectByWorkspace" resultType="ProjectVersion">
+    SELECT <include refid="cols"/> FROM project_version
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at, id
+  </select>
+
+  <select id="countGroupByReq" resultType="java.util.HashMap">
+    SELECT req_id AS reqId, COUNT(*) AS cnt
+    FROM project_version WHERE workspace_id = #{workspaceId}
+    GROUP BY req_id
+  </select>
+
+  <select id="countByName" resultType="int">
+    SELECT COUNT(*) FROM project_version
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND name = #{name}
+    <if test="excludeId != null and excludeId != ''">AND id &lt;&gt; #{excludeId}</if>
+  </select>
+
+  <insert id="insert">
+    INSERT INTO project_version (id, workspace_id, req_id, name, description, status, start_date, target_date,
+                                 released_at, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{description}, #{status}, #{startDate}, #{targetDate},
+            #{releasedAt}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE project_version SET
+      name = #{name},
+      description = #{description},
+      status = #{status},
+      start_date = #{startDate},
+      target_date = #{targetDate},
+      updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="release">
+    UPDATE project_version SET status = 'released', released_at = NOW(), updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId} AND status &lt;&gt; 'released'
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM project_version WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM project_version WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM project_version WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

@@ -1,0 +1,95 @@
+server:
+  port: ${SERVER_PORT:8080}
+  # 默认只绑本机回环，对外统一走 nginx 反代；需要临时直连调试可用环境变量覆盖
+  address: ${BIND_ADDR:127.0.0.1}
+  # 信任 nginx 传来的 X-Forwarded-*，HTTPS 下会话/CSRF Cookie 才会带 Secure
+  forward-headers-strategy: native
+  servlet:
+    context-path: ${CONTEXT_PATH:/hourglass}
+    session:
+      timeout: 30d
+      cookie:
+        max-age: 30d
+        http-only: true
+        same-site: lax
+  tomcat:
+    threads:
+      max: 64
+    accept-count: 100
+
+spring:
+  application:
+    name: hourglass
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  task:
+    scheduling:
+      pool:
+        # SSE 心跳、提醒扫描、每日推送、回收站清理不抢同一个线程
+        size: 4
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:hourglass}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useServerPrepStmts=true&rewriteBatchedStatements=true
+    username: ${DB_USER:hourglass}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: hourglass-pool
+      maximum-pool-size: 10
+      connection-timeout: 3000
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.hourglass.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: 'NULL'
+
+# 登录账号：AUTH_PASSWORD 可用明文（启动时转 bcrypt）或直接配置 bcrypt 哈希
+app:
+  # 前端登录页（相对 context-path）。前端由 Nginx 独立提供，后端只做 302 跳转
+  login-page: ${APP_LOGIN_PAGE:/login.html}
+  # 进程内缓存（单实例部署）：成员关系与列/分类/标签 meta 都存在本进程内存里。
+  # 多实例部署时各实例互不通知，成员变更/meta 变更最多延迟一个 TTL 才在其它实例生效；
+  # 如需多实例，请去掉本缓存或改用外部共享缓存。
+  cache:
+    # 成员关系 (userId, workspaceId) 的 TTL；成员增删、空间改名/删除、账号删除会主动失效
+    member-ttl-seconds: 60
+    # 列/分类/标签 meta 的兜底 TTL；正常情况下由空间版本号与写入口主动失效
+    meta-ttl-seconds: 300
+  auth:
+    username: ${AUTH_USER:admin}
+    password: ${AUTH_PASSWORD:}
+  attach:
+    # 附件存储目录（相对工作目录或绝对路径）
+    dir: ${ATTACH_DIR:./data/attachments}
+  notify:
+    # 推送渠道：webhook（企业微信/钉钉机器人）/ serverchan（Server酱）/ pushplus
+    type: ${NOTIFY_TYPE:webhook}
+    enabled: ${NOTIFY_ENABLED:false}
+    # pushplus 的 token（serverchan 把 key 写在 URL 里）
+    token: ${NOTIFY_TOKEN:}
+    # Spring cron（秒 分 时 日 月 周），默认每天 09:00
+    cron: "${NOTIFY_CRON:0 0 9 * * *}"
+    # 可选：推送消息末尾附上的看板地址
+    link: ${NOTIFY_LINK:}
+    # 说明：推送 webhook 现在按空间配置（页面「空间设置」里由空间主填写），不再走环境变量
+  ai:
+    # 用户 AI Key 的加密密钥：生产部署请用环境变量 AI_CRYPTO_KEY 覆盖。
+    # 换了它，已保存的 key 全部解不开 —— 不影响业务，用户到「个人设置 → AI 设置」重填一次即可。
+    crypto-key: ${AI_CRYPTO_KEY:hourglass-local-ai-key-change-me}
+    # 默认禁止自定义 AI 地址访问内网/回环；本地 Ollama 或局域网中转需显式置 true
+    allow-private-network: ${AI_ALLOW_PRIVATE_NETWORK:false}
+  notification:
+    # 站内通知保留天数；每天 03:20 清理超期记录
+    retain-days: ${NOTIFICATION_RETAIN_DAYS:90}
+  mail:
+    # 数据库 outbox 扫描间隔；SMTP 主机、账号与密码统一由管理员接口保存，不走环境变量
+    scan-ms: ${MAIL_SCAN_MS:30000}
+    initial-delay-ms: ${MAIL_INITIAL_DELAY_MS:10000}
+    # 站点根地址，含 context-path（如 https://host/hourglass/）；用于通知邮件里的任务/登录链接，留空则不附链接
+    base-url: ${MAIL_BASE_URL:}
+
+logging:
+  level:
+    com.hourglass: info

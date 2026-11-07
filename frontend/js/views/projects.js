@@ -1,0 +1,427 @@
+/* views/projects · 项目视图 */
+
+import { API } from "../core/api.js";
+import { $, reqExpanded, reqListEl, searchInput, searchWrap } from "../core/dom.js";
+import { reloadFilteredViews } from "../core/filters-ui.js";
+import { icon } from "../core/icons.js";
+import { showView } from "../core/router.js";
+import { canEditReq, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { openTaskById } from "../core/task-actions.js";
+import { openTaskDrawer } from "../core/task-drawer.js";
+import { UI, esc, toast } from "../core/ui.js";
+import { colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
+import * as activityUI from "../core/activity-ui.js";
+import * as listPrefs from "../core/list-preferences.js";
+import { loadBoard, loadReqs } from "./board.js";
+import { loadReqDocs, openNewReqDocDialog, openReqDocAndJump, reqDocList, reqDocStatusLabel } from "./requirements.js";
+
+var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
+    segReqStatus = $("segReqStatus"), btnSaveReq = $("btnSaveReq"),
+    btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle");
+var projectTasks = {}, projectTaskErrors = {}, projectTaskSeq = {};
+function loadProjectTasks(reqId, force){
+  if(!force && projectTasks[reqId]) return Promise.resolve(projectTasks[reqId]);
+  var current = (projectTaskSeq[reqId] || 0) + 1;
+  projectTaskSeq[reqId] = current;
+  projectTasks[reqId] = null;
+  delete projectTaskErrors[reqId];
+  return API.get("/api/projects/" + encodeURIComponent(reqId) + "/tasks").then(function(rows){
+    if(projectTaskSeq[reqId] !== current) return rows;
+    projectTasks[reqId] = rows || [];
+    if(reqExpanded[reqId]) renderReqList();
+    return rows;
+  }).catch(function(ex){
+    if(projectTaskSeq[reqId] === current){
+      projectTaskErrors[reqId] = ex.message || "工作项加载失败";
+      if(reqExpanded[reqId]) renderReqList();
+    }
+    throw ex;
+  });
+}
+function projectTasksHTML(reqId){
+  var rows = projectTasks[reqId], error = projectTaskErrors[reqId];
+  if(error) return '<div class="tl-empty">' + esc(error) + ' <button class="btn sm ghost" type="button" data-project-task-retry="' + esc(reqId) + '">重试</button></div>';
+  if(!rows) return '<div class="tl-empty">工作项加载中…</div>';
+  if(!rows.length) return '<p class="foot-note" style="margin:4px 0">该项目还没有工作项。</p>';
+  return rows.map(function(t){
+    var status = t.boardColumn === "done" ? "已完成" : colName(t.boardColumn);
+    return '<button class="req-expand-doc" type="button" data-project-task-open="' + esc(t.id) + '">'
+      + '<span class="rd-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</span>'
+      + '<span class="rd-meta">' + esc(status) + ' · ' + esc(t.owner || "未指派")
+      + (t.dueDate ? ' · 截止 ' + esc(String(t.dueDate).substring(0, 10)) : '') + '</span></button>';
+  }).join("");
+}
+function refreshExpandedProjectTasks(){
+  Object.keys(reqExpanded).forEach(function(reqId){
+    if(reqExpanded[reqId]) loadProjectTasks(reqId, true).catch(function(){});
+  });
+}
+function syncReqStatusSeg(){
+  segReqStatus.querySelectorAll("[data-rst]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.rst === rt.formReqStatus);
+  });
+}
+function resetReqForm(){
+  rt.editingReqId = null;
+  rName.value = ""; rDesc.value = "";
+  rt.formReqStatus = "active";
+  fReqName.classList.remove("invalid");
+  syncReqStatusSeg();
+  reqFormTitle.textContent = "新增项目";
+  btnSaveReq.textContent = "添加项目";
+  btnCancelReqEdit.hidden = true;
+  if($("dlgProject")) UI.closeModal($("dlgProject"));
+  renderReqList();
+}
+function renderReqList(){
+  var countEl = $("reqCount");
+  if(countEl) countEl.textContent = rt.reqList.length ? "共 " + rt.reqList.length + " 个" : "";
+  document.querySelectorAll("[data-project-mode]").forEach(function(b){
+    var on = b.dataset.projectMode === listPrefs.viewMode("project-list");
+    b.classList.toggle("primary", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  if($("btnProjectColumns")) $("btnProjectColumns").hidden = listPrefs.viewMode("project-list") !== "table";
+  if(!rt.reqList.length){
+    reqListEl.className = "req-list";
+    reqListEl.innerHTML = UI.emptyState({
+      icon:"folder", title:"还没有项目",
+      text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
+    });
+    return;
+  }
+  if(listPrefs.viewMode("project-list") === "table"){
+    renderProjectTable();
+    return;
+  }
+  reqListEl.className = "req-list";
+  reqListEl.innerHTML = rt.reqList.map(function(r){
+    var open = !!reqExpanded[r.id];
+    var readOnly = r.access === "read";
+    var docs = (reqDocList || []).filter(function(d){ return d.reqId === r.id; });
+    var docHTML = docs.length ? docs.map(function(d){
+      return '<button class="req-expand-doc" type="button" data-reqdoc-open="' + esc(d.id) + '">' +
+        '<span class="rd-title">' + esc(d.title) + '</span>' +
+        '<span class="rd-meta">' + esc(docTypeName(d.docType)) + ' · ' + esc(reqDocStatusLabel(d.status)) +
+          (Number(d.taskCount) ? (" · " + Number(d.doneCount || 0) + "/" + Number(d.taskCount) + " 工作项") : "") +
+        '</span></button>';
+    }).join("") : '<p class="foot-note" style="margin:4px 0">还没有文档。</p>';
+    return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") + '" data-req-id="' + esc(r.id) + '">' +
+      '<div class="req-top">' +
+        '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
+          icon("chevronRight", 14) + '</button>' +
+        '<span class="req-name">' + esc(r.name) + '</span>' +
+        '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
+          reqStatusName(r.status) + '</span>' +
+        (readOnly ? '<span class="tag tag-ghost" title="你对该项目只有查看权限">只读</span>' : '') +
+        '<span class="req-acts">' +
+          '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
+          (readOnly ? '' : '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
+          (rt.currentWs && rt.currentWs.myRole === "owner"
+            ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>'
+            : '') +
+        '</span>' +
+      '</div>' +
+      (r.description ? '<div class="req-desc">' + esc(r.description) + '</div>' : '') +
+      '<div class="req-meta">' +
+        '<span class="progress" style="width:140px"><span class="bar"><i style="width:' + r.progressPct +
+          '%;background:' + (r.status === "done" ? "var(--success)" : "var(--primary)") + '"></i></span></span>' +
+        '<span style="font-weight:600;color:var(--text-2)">' + r.progressPct + '%</span>' +
+        '<span>' + r.taskCount + ' 工作项 · ' + r.doneCount + ' 完成' +
+          (Number(r.docCount) ? (' · ' + r.docCount + ' 文档') : '') + '</span>' +
+      '</div>' +
+      (readOnly ? '' : '<div class="req-taskbar">' +
+        '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
+          ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
+        '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
+          icon("edit", 14) + '</button>' +
+      '</div>') +
+      (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
+        '<section class="req-expand-section">' +
+          '<div class="req-expand-head"><span>文档</span>' +
+            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增文档</button>') + '</div>' +
+          docHTML +
+        '</section>' +
+        '<section class="req-expand-section">' +
+          '<div class="req-expand-head"><span>工作项</span>' +
+            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-req-open="' + esc(r.id) + '">+ 新建工作项</button>') + '</div>' +
+          '<div class="req-expand-tasks">' + projectTasksHTML(r.id) + '</div>' +
+        '</section>' +
+        '<div class="req-expand-acts">' +
+          '<button class="btn sm primary" type="button" data-req-board="' + esc(r.id) + '">在看板中查看</button>' +
+          '<button class="btn sm" type="button" data-req-docs="' + esc(r.id) + '">管理文档</button>' +
+        '</div>' +
+      '</div>' : '') +
+    '</div>';
+  }).join("");
+}
+var PROJECT_WIDTHS = { name:"minmax(180px,1fr)", status:"90px", description:"minmax(180px,1.2fr)", taskCount:"76px", doneCount:"76px", progress:"140px", docCount:"76px", firstReleasedAt:"120px", createdAt:"140px", updatedAt:"140px" };
+function projectGrid(el){
+  var widths = listPrefs.columns("project-list").map(function(key){ return PROJECT_WIDTHS[key] || "120px"; });
+  el.style.gridTemplateColumns = widths.concat(["224px"]).join(" ");
+}
+function projectCell(r, key){
+  if(key === "name") return '<span class="project-cell project-name-cell" title="' + esc(r.name) + '">' + esc(r.name) + '</span>';
+  if(key === "status") return '<span><span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(r.status)) + '</span></span>';
+  if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + esc(r.description || "—") + '</span>';
+  if(key === "taskCount") return '<span class="project-cell">' + (Number(r.taskCount) || 0) + '</span>';
+  if(key === "doneCount") return '<span class="project-cell">' + (Number(r.doneCount) || 0) + '</span>';
+  if(key === "progress") return '<span class="progress mini"><span class="bar"><i style="width:' + Math.max(0, Math.min(100, Number(r.progressPct) || 0)) + '%"></i></span><span class="pv">' + (Number(r.progressPct) || 0) + '%</span></span>';
+  if(key === "docCount") return '<span class="project-cell">' + (Number(r.docCount) || 0) + '</span>';
+  if(key === "firstReleasedAt") return '<span class="project-cell">' + (r.firstReleasedAt ? esc(String(r.firstReleasedAt).slice(0, 10)) : "—") + '</span>';
+  if(key === "createdAt" || key === "updatedAt") return '<span class="project-cell">' + (r[key] ? esc(fmtTs(r[key])) : "—") + '</span>';
+  return '<span class="project-cell">—</span>';
+}
+function projectActions(r){
+  var readOnly = r.access === "read";
+  return '<span class="project-row-acts">' +
+    (readOnly ? '' :
+      '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新增文档" aria-label="新增文档">' + icon("projects", 14) + '</button>') +
+    '<button class="icon-btn sm" type="button" data-req-board="' + esc(r.id) + '" title="在看板中查看" aria-label="在看板中查看">' + icon("board", 14) + '</button>' +
+    '<button class="icon-btn sm" type="button" data-req-docs="' + esc(r.id) + '" title="管理文档" aria-label="管理文档">' + icon("folder", 14) + '</button>' +
+    '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
+    (readOnly ? '' :
+      '<button class="icon-btn sm" type="button" data-edit-req="' + esc(r.id) + '" title="编辑项目" aria-label="编辑项目">' + icon("edit", 14) + '</button>') +
+    (rt.currentWs && rt.currentWs.myRole === "owner" ? '<button class="icon-btn sm danger" type="button" data-del-req="' + esc(r.id) + '" title="删除项目" aria-label="删除项目">' + icon("trash", 14) + '</button>' : '') +
+  '</span>';
+}
+function renderProjectTable(){
+  var cols = listPrefs.columns("project-list"), labels = listPrefs.labels("project-list");
+  reqListEl.className = "req-list project-table-wrap";
+  reqListEl.innerHTML = '<div class="project-table">' +
+    '<div class="project-table-head">' + cols.map(function(key){ return '<span>' + esc(labels[key]) + '</span>'; }).join("") + '<span>操作</span></div>' +
+    '<div class="project-table-body">' + rt.reqList.map(function(r){
+      return '<div class="project-table-row" data-req-id="' + esc(r.id) + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
+    }).join("") + '</div></div>';
+  var head = reqListEl.querySelector(".project-table-head");
+  if(head) projectGrid(head);
+  reqListEl.querySelectorAll(".project-table-row").forEach(projectGrid);
+}
+function enterProjectsView(){
+  if(rt.reqsLoaded) renderReqList();
+  else reqListEl.innerHTML = UI.skeletonRows(3);
+  listPrefs.load("project-list").then(renderReqList);
+  loadReqs();
+  /* IA-2：项目行展开要显示文档与任务进度 */
+  loadReqDocs().then(function(){ renderReqList(); });
+  refreshExpandedProjectTasks();
+}
+function saveReq(){
+  var name = rName.value.trim();
+  if(!name){
+    fReqName.classList.add("invalid");
+    try{ rName.focus(); }catch(e){ /* noop */ }
+    return;
+  }
+  var body = { name: name, description: rDesc.value.trim(), status: rt.formReqStatus };
+  var editing = !!rt.editingReqId;
+  var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
+  btnSaveReq.disabled = true;
+  p.then(function(){
+    btnSaveReq.disabled = false;
+    toast(editing ? ("已更新项目「" + name + "」") : ("已新增项目「" + name + "」"), "fs");
+    resetReqForm();
+    loadReqs().then(function(){
+      renderReqList();
+      loadBoard({silent:true});
+    });
+  }).catch(function(ex){
+    btnSaveReq.disabled = false;
+    toast(ex.message || "保存失败", "bad");
+  });
+}
+function deleteReq(id){
+  var r = null;
+  for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) r = rt.reqList[i];
+  if(!r) return;
+  if(!(rt.currentWs && rt.currentWs.myRole === "owner")){ toast("仅空间主可删除项目", "warn"); return; }
+  /* 后端删除项目会连带删除其下文档、版本与需求池记录；确认框必须把影响说完整。
+     docCount 来自项目列表，reqDocList 是本会话已加载的需求，取较大值防止列表快照过期。 */
+  var liveDocs = (reqDocList || []).filter(function(d){ return d.reqId === id; }).length;
+  var docs = Math.max(Number(r.docCount) || 0, liveDocs);
+  var versions = Number(r.versionCount) || 0;
+  var demands = Number(r.demandCount) || 0;
+  var msg = "删除项目「" + esc(r.name) + "」？其下工作项会保留，仅解除关联（回收站中的工作项也会一并解除）。";
+  if(docs || versions || demands){
+    msg += "<br><br>以下数据会一并删除，<b>不可恢复</b>：";
+    var parts = [];
+    if(docs) parts.push("<b>" + docs + "</b> 份文档");
+    if(versions) parts.push("<b>" + versions + "</b> 个版本");
+    if(demands) parts.push("<b>" + demands + "</b> 条需求池记录");
+    msg += parts.join("、") + "。";
+  }
+  UI.showConfirm({
+    title:"删除项目",
+    msg: msg,
+    okText: (docs || versions || demands) ? "删除项目及关联数据" : "删除"
+  }).then(function(ok){
+    if(!ok) return;
+    /* 二次确认：输入项目名才可删，防误点（项目删除不可恢复） */
+    UI.showPrompt({
+      title: "确认删除项目",
+      desc: "此操作不可恢复。请输入项目名「" + r.name + "」以确认删除。",
+      label: "项目名",
+      okText: "确认删除"
+    }).then(function(v){
+    if(v === null) return;
+    if(v !== r.name){ toast("项目名不匹配，未删除", "warn"); return; }
+    API.del("/api/reqs/" + encodeURIComponent(id)).then(function(res){
+      var deletedDocs = res && typeof res.docs === "number" ? res.docs : docs;
+      var extras = [];
+      if(deletedDocs) extras.push(deletedDocs + " 份文档");
+      if(res && res.versions) extras.push(res.versions + " 个版本");
+      if(res && res.demands) extras.push(res.demands + " 条需求池记录");
+      toast("已删除项目「" + r.name + "」，其下工作项已解除关联" +
+        (res && res.unlinked ? "（" + res.unlinked + " 项）" : "") +
+        (extras.length ? "；同时删除 " + extras.join("、") : ""), "fs");
+      if(rt.editingReqId === id) resetReqForm();
+      loadReqDocs(true);
+      loadReqs().then(function(){
+        renderReqList();
+        loadBoard({silent:true});
+      });
+    }).catch(function(ex){ toast("删除失败：" + (ex.message || "网络异常"), "bad"); });
+    });
+  });
+}
+function openProjectDialog(id){
+  rt.editingReqId = id || null;
+  rName.value = "";
+  rDesc.value = "";
+  rt.formReqStatus = "active";
+  fReqName.classList.remove("invalid");
+  if(id){
+    var r = null;
+    for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === id) r = rt.reqList[i];
+    if(r){ rName.value = r.name; rDesc.value = r.description || ""; rt.formReqStatus = r.status || "active"; }
+  }
+  syncReqStatusSeg();
+  reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
+  btnSaveReq.textContent = id ? "保存修改" : "添加项目";
+  btnCancelReqEdit.hidden = !id;
+  UI.openModal($("dlgProject"), "input");
+  setTimeout(function(){ try{ rName.focus(); }catch(e){ /* noop */ } }, 40);
+}
+if($("btnReqNew")) $("btnReqNew").addEventListener("click", function(){ openProjectDialog(null); });
+document.querySelectorAll("[data-project-mode]").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    if(btn.dataset.projectMode === listPrefs.viewMode("project-list")) return;
+    btn.disabled = true;
+    listPrefs.setViewMode("project-list", btn.dataset.projectMode).then(function(){
+      btn.disabled = false;
+      renderReqList();
+    }).catch(function(ex){
+      btn.disabled = false;
+      toast(ex.message || "视图切换失败", "bad");
+    });
+  });
+});
+if($("btnProjectColumns")) $("btnProjectColumns").addEventListener("click", function(){
+  listPrefs.openColumnSettings("project-list", renderReqList);
+});
+if($("dlgProjectX")) $("dlgProjectX").addEventListener("click", function(){ resetReqForm(); });
+btnSaveReq.addEventListener("click", saveReq);
+btnCancelReqEdit.addEventListener("click", resetReqForm);
+rName.addEventListener("input", function(){ fReqName.classList.remove("invalid"); });
+segReqStatus.addEventListener("click", function(e){
+  var b = e.target.closest("[data-rst]"); if(!b) return;
+  rt.formReqStatus = b.dataset.rst; syncReqStatusSeg();
+});
+reqListEl.addEventListener("click", function(e){
+  var activity = e.target.closest("[data-req-activity]");
+  if(activity){
+    var project = rt.reqList.filter(function(r){ return r.id === activity.dataset.reqActivity; })[0];
+    activityUI.openDialog(project ? project.name : "项目", "/api/projects/" + encodeURIComponent(activity.dataset.reqActivity) + "/activities");
+    return;
+  }
+  var openNew = e.target.closest("[data-req-open]");
+  if(openNew){
+    if(!canEditReq(openNew.dataset.reqOpen)){ toast("你对该项目只有查看权限", "warn"); return; }
+    openTaskDrawer("backlog", null, { reqId: openNew.dataset.reqOpen });
+    return;
+  }
+  var projectTask = e.target.closest("[data-project-task-open]");
+  if(projectTask){ openTaskById(projectTask.dataset.projectTaskOpen); return; }
+  var taskRetry = e.target.closest("[data-project-task-retry]");
+  if(taskRetry){ loadProjectTasks(taskRetry.dataset.projectTaskRetry, true).catch(function(){}); return; }
+  var ed = e.target.closest("[data-edit-req]");
+  if(ed){
+    if(!canEditReq(ed.dataset.editReq)){ toast("你对该项目只有查看权限", "warn"); return; }
+    var r = null;
+    for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === ed.dataset.editReq) r = rt.reqList[i];
+    if(r){
+      rt.editingReqId = r.id;
+      rName.value = r.name;
+      rDesc.value = r.description || "";
+      rt.formReqStatus = r.status || "active";
+      fReqName.classList.remove("invalid");
+      syncReqStatusSeg();
+      reqFormTitle.textContent = "编辑项目";
+      btnSaveReq.textContent = "保存修改";
+      btnCancelReqEdit.hidden = false;
+      UI.openModal($("dlgProject"), "input");
+      try{ rName.focus(); }catch(e2){ /* noop */ }
+    }
+    return;
+  }
+  var ex = e.target.closest("[data-req-expand]");
+  if(ex){
+    var rid0 = ex.dataset.reqExpand;
+    reqExpanded[rid0] = !reqExpanded[rid0];
+    renderReqList();
+    if(reqExpanded[rid0]) loadProjectTasks(rid0).catch(function(){});
+    return;
+  }
+  var docNew = e.target.closest("[data-doc-new]");
+  if(docNew){
+    if(!canEditReq(docNew.dataset.docNew)){ toast("你对该项目只有查看权限", "warn"); return; }
+    openNewReqDocDialog(docNew.dataset.docNew);
+    return;
+  }
+  var docOpen = e.target.closest("[data-reqdoc-open]");
+  if(docOpen){ openReqDocAndJump(docOpen.dataset.reqdocOpen); return; }
+  var toBoard = e.target.closest("[data-req-board]");
+  if(toBoard){
+    var rid1 = toBoard.dataset.reqBoard;
+    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
+    state.reqs = [rid1];
+    showView("board");
+    reloadFilteredViews();
+    toast("已按项目筛选看板：" + reqNameById(rid1));
+    return;
+  }
+  var manage = e.target.closest("[data-req-docs]");
+  if(manage){ showView("requirements"); return; }
+  var dl = e.target.closest("[data-del-req]");
+  if(dl) deleteReq(dl.dataset.delReq);
+});
+reqListEl.addEventListener("keydown", function(e){
+  var inp = e.target.closest("[data-req-new-input]");
+  if(!inp) return;
+  if(e.key !== "Enter") return;
+  if(e.isComposing || e.keyCode === 229) return;
+  var v = inp.value.trim();
+  if(!v) return;
+  e.preventDefault();
+  var reqId = inp.dataset.reqNewInput;
+  if(!canEditReq(reqId)){ toast("你对该项目只有查看权限", "warn"); return; }
+  inp.disabled = true;
+  API.post("/api/tasks", {
+    title: v.slice(0, 60), boardColumn: "backlog", priority: "P2", progress: 0, reqId: reqId
+  }).then(function(nt){
+    inp.disabled = false;
+    inp.value = "";
+    taskCacheExtra[nt.id] = nt;
+    toast("已在项目中新建「" + nt.title + "」", "fs");
+    loadProjectTasks(reqId, true).catch(function(){});
+    loadReqs().then(function(){ renderReqList(); loadBoard({silent:true}); });
+  }).catch(function(ex){
+    inp.disabled = false;
+    toast(ex.message || "创建失败", "bad");
+  });
+});
+
+export { enterProjectsView, openProjectDialog, refreshExpandedProjectTasks, renderReqList };

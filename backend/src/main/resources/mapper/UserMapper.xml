@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.UserMapper">
+
+  <sql id="cols">
+    id, username, password_hash, display_name, email, role, session_version,
+    work_start_hour, work_end_hour, work_max_hours,
+    ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
+    last_workspace_id, created_at, updated_at
+  </sql>
+
+  <select id="selectAll" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user ORDER BY created_at, id
+  </select>
+
+  <select id="selectByIds" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user
+    WHERE id IN
+    <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
+  <!-- 添加成员时的候选搜索：排除已在空间内的账号，只取选人所需字段 -->
+  <select id="searchCandidates" resultType="com.hourglass.dto.MemberCandidate">
+    SELECT u.id, u.username, u.display_name
+    FROM app_user u
+    WHERE NOT EXISTS (
+      SELECT 1 FROM workspace_member m
+      WHERE m.workspace_id = #{workspaceId} AND m.user_id = u.id
+    )
+    <if test="q != null">
+      AND (LOCATE(LOWER(#{q}), LOWER(u.username)) > 0
+           OR LOCATE(LOWER(#{q}), LOWER(u.display_name)) > 0)
+    </if>
+    ORDER BY u.username
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectById" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE id = #{id}
+  </select>
+
+  <select id="selectSessionVersion" resultType="java.lang.Long">
+    SELECT session_version FROM app_user WHERE id = #{id}
+  </select>
+
+  <update id="bumpSessionVersion">
+    UPDATE app_user SET session_version = session_version + 1, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <select id="selectByUsername" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE username = #{username}
+  </select>
+
+  <!-- 邮箱登录回退：写入口已做唯一校验，历史脏数据按创建先后取第一条 -->
+  <select id="selectByEmail" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user WHERE email = #{email} ORDER BY created_at, id LIMIT 1
+  </select>
+
+  <select id="countByEmail" resultType="int">
+    SELECT COUNT(*) FROM app_user WHERE email = #{email}
+    <if test="excludeId != null and excludeId != ''"> AND id &lt;&gt; #{excludeId} </if>
+  </select>
+
+  <select id="countAll" resultType="int">
+    SELECT COUNT(*) FROM app_user
+  </select>
+
+  <!-- 事务内锁定管理员行：并发降权/删除时串行化，保证至少保留一名管理员 -->
+  <select id="lockAdmins" resultType="string">
+    SELECT id FROM app_user WHERE role = 'admin' FOR UPDATE
+  </select>
+
+  <insert id="insert">
+    INSERT INTO app_user (id, username, password_hash, display_name, role, last_workspace_id)
+    VALUES (#{id}, #{username}, #{passwordHash}, #{displayName}, #{role}, #{lastWorkspaceId})
+  </insert>
+
+  <!-- role 为空时不更新角色：仅改显示名/邮箱不携带角色，避免把读取时的旧角色回写 -->
+  <update id="update">
+    UPDATE app_user SET
+      display_name = #{displayName},
+      email = #{email},
+      <if test="role != null">role = #{role},</if>
+      updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <update id="updatePassword">
+    UPDATE app_user SET password_hash = #{passwordHash}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <update id="updateLastWorkspace">
+    UPDATE app_user SET last_workspace_id = #{workspaceId} WHERE id = #{id}
+  </update>
+
+  <update id="resetLastWorkspaceForAll">
+    UPDATE app_user SET last_workspace_id = NULL
+    WHERE last_workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 只改计时设置（工作时段 + 每天上限）：独立语句，避免和"改显示名/角色"的 update 互相覆盖 -->
+  <update id="updateWorkHours">
+    UPDATE app_user
+    SET work_start_hour = #{startHour}, work_end_hour = #{endHour}, work_max_hours = #{maxHours}, updated_at = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <!-- 只改 AI 配置：独立语句，避免和别的 update 互相覆盖（同 updateWorkHours 的做法） -->
+  <update id="updateAiConfig">
+    UPDATE app_user
+    SET ai_provider = #{provider},
+        ai_base_url = #{baseUrl},
+        ai_model    = #{model},
+        ai_enabled  = #{enabled},
+        ai_api_key  = #{apiKey},
+        updated_at  = NOW()
+    WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM app_user WHERE id = #{id}
+  </delete>
+</mapper>

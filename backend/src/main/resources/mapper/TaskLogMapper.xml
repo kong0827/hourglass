@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TaskLogMapper">
+
+  <insert id="insert">
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail, from_column, to_column)
+    VALUES (#{taskId}, #{workspaceId}, #{actorId}, #{action}, #{detail}, #{fromColumn}, #{toColumn})
+  </insert>
+
+  <insert id="insertUnlinkReqLogs">
+    INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail)
+    SELECT t.id, t.workspace_id, #{actorId}, 'update', #{detail}
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId}
+  </insert>
+
+  <select id="selectByTaskId" resultType="TaskLog">
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
+           l.from_column, l.to_column, l.created_at,
+           u.display_name AS actor_name
+    FROM task_log l
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    WHERE l.workspace_id = #{workspaceId} AND l.task_id = #{taskId}
+    ORDER BY l.id DESC
+    LIMIT 200
+  </select>
+
+  <!-- 手机风险列表：一批任务最近一次进入阻塞的时间（没有日志的返回空，不拿 updated_at 冒充） -->
+  <select id="selectLastBlockedAt" resultType="com.hourglass.dto.TaskBlockedAt">
+    SELECT task_id AS taskId, MAX(created_at) AS blockedAt
+    FROM task_log
+    WHERE workspace_id = #{workspaceId}
+      AND action = 'update'
+      AND detail LIKE '%标记为被阻塞%'
+      AND task_id IN
+      <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    GROUP BY task_id
+  </select>
+
+  <!-- 取消完成时还原“完成前所在列”：取最近一次进入 done 的跨列移动 -->
+  <select id="selectLastDoneFromColumn" resultType="string">
+    SELECT from_column
+    FROM task_log
+    WHERE workspace_id = #{workspaceId}
+      AND task_id = #{taskId}
+      AND action = 'move'
+      AND to_column = 'done'
+      AND from_column IS NOT NULL
+    ORDER BY id DESC
+    LIMIT 1
+  </select>
+
+  <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
+  <select id="selectByWorkspace" resultType="TaskLog">
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
+           l.from_column, l.to_column, l.created_at,
+           u.display_name AS actor_name,
+           t.title AS task_title
+    FROM task_log l
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+    <if test="!includeConfig">
+      AND l.task_id &lt;&gt; 'CFG'
+    </if>
+    <if test="viewerId != null">
+      AND (l.task_id = 'CFG' OR NOT EXISTS (
+        SELECT 1 FROM task t2
+        JOIN project_member pm ON pm.workspace_id = t2.workspace_id
+                              AND pm.project_id = t2.req_id
+                              AND pm.user_id = #{viewerId}
+        WHERE t2.id = l.task_id
+          AND t2.workspace_id = l.workspace_id
+          AND pm.access = 'none'))
+    </if>
+    ORDER BY l.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <!-- 某周期内有活动的任务（周回顾看历史周期时用；CFG 哨兵事件没有任务，自然被过滤） -->
+  <select id="selectActiveTaskIds" resultType="string">
+    SELECT DISTINCT l.task_id
+    FROM task_log l
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.task_id &lt;&gt; 'CFG'
+      AND l.created_at &gt;= #{from}
+      AND l.created_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+  </select>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM task_log WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM task_log WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TagMapper">
+
+  <select id="selectAllWithCount" resultType="TagCount">
+    SELECT t.name AS name, COUNT(tt.task_id) AS count
+    FROM tag t
+    JOIN task_tag tt ON tt.tag_id = t.id AND tt.workspace_id = t.workspace_id
+    JOIN task tk ON tk.id = tt.task_id AND tk.workspace_id = t.workspace_id AND tk.deleted_at IS NULL
+    WHERE t.workspace_id = #{workspaceId}
+    GROUP BY t.id, t.name
+    HAVING count > 0
+    ORDER BY count DESC, t.name
+  </select>
+
+  <!-- member 被显式隐藏的项目：其任务上的标签不进入联想与筛选口径 -->
+  <select id="selectVisibleWithCount" resultType="TagCount">
+    SELECT t.name AS name, COUNT(tt.task_id) AS count
+    FROM tag t
+    JOIN task_tag tt ON tt.tag_id = t.id AND tt.workspace_id = t.workspace_id
+    JOIN task tk ON tk.id = tt.task_id AND tk.workspace_id = t.workspace_id AND tk.deleted_at IS NULL
+    WHERE t.workspace_id = #{workspaceId}
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = tk.workspace_id
+                        AND pm.project_id = tk.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    GROUP BY t.id, t.name
+    HAVING count > 0
+    ORDER BY count DESC, t.name
+  </select>
+
+  <select id="selectAllByWorkspace" resultType="Tag">
+    SELECT id, workspace_id, name, created_at FROM tag WHERE workspace_id = #{workspaceId} ORDER BY id
+  </select>
+
+  <select id="selectByName" resultType="Tag">
+    SELECT id, workspace_id, name, created_at FROM tag WHERE workspace_id = #{workspaceId} AND name = #{name}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO tag (id, workspace_id, name) VALUES (#{id}, #{workspaceId}, #{name})
+  </insert>
+
+  <select id="selectByTaskIds" resultType="TagTaskRow">
+    SELECT tt.task_id, t.name
+    FROM task_tag tt
+    JOIN tag t ON t.id = tt.tag_id
+    WHERE tt.workspace_id = #{workspaceId} AND tt.task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">
+      #{taskId}
+    </foreach>
+    ORDER BY t.name
+  </select>
+
+  <insert id="insertTaskTag">
+    INSERT IGNORE INTO task_tag (task_id, tag_id, workspace_id) VALUES (#{taskId}, #{tagId}, #{workspaceId})
+  </insert>
+
+  <insert id="insertTaskTags">
+    INSERT IGNORE INTO task_tag (task_id, tag_id, workspace_id) VALUES
+    <foreach collection="list" item="r" separator=",">
+      (#{r.taskId}, #{r.tagId}, #{workspaceId})
+    </foreach>
+  </insert>
+
+  <delete id="deleteTaskTags">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteTaskTagsByTaskIds">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId} AND task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
+  <delete id="deleteAllTaskTagsByWorkspace">
+    DELETE FROM task_tag WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteTagsByWorkspace">
+    DELETE FROM tag WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>
