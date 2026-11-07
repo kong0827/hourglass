@@ -615,7 +615,8 @@
 .bulk-bar .spacer{flex:1 1 auto;}
 
 /* ===================== 抽屉：评论区（N-6） ===================== */
-.comment-list{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto;}
+/* 不锁固定高度：评论多时由抽屉正文统一滚动，发送按钮自然跟在最后一条评论后面 */
+.comment-list{display:flex;flex-direction:column;gap:10px;max-height:none;overflow:visible;}
 .comment-item{display:flex;gap:8px;align-items:flex-start;}
 .comment-item .ci-main{flex:1 1 auto;min-width:0;}
 .comment-item .ci-head{display:flex;align-items:center;gap:8px;}

@@ -7,6 +7,7 @@
 --
 -- 幂等：列用 information_schema 判断，可重复执行；不涉及存量回填（默认值即正确口径）。
 -- ============================================================================
+USE hourglass;
 
 SET @x := (SELECT COUNT(*) FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'time_log' AND COLUMN_NAME = 'origin');

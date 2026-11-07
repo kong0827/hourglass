@@ -74,8 +74,6 @@ function renderBellBadge(){
     dot.hidden = n <= 0;
     dot.textContent = n > 99 ? "99+" : n;
   }
-  var tabDot = document.getElementById("tabMsgDot");
-  if(tabDot) tabDot.hidden = n <= 0;
   syncDocTitle();
 }
 /* 标题栏未读计数：切到别的标签页也能扫到；导航换标题后由 router 重新同步 */

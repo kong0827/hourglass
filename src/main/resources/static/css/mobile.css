@@ -599,3 +599,109 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 }
 [data-layout="mobile"] .offline-badge svg,
 [data-layout="mobile"] .tb-alert svg{width:16px;height:16px;}
+
+/* ===================== 手机端横向溢出兜底 ===================== */
+/* 用 clip 而非 hidden：hidden 会让 body 变成滚动容器，部分浏览器里会破坏 sticky */
+html[data-layout="mobile"],
+body[data-layout="mobile"]{overflow-x:hidden;}
+@supports (overflow-x:clip){
+  html[data-layout="mobile"],
+  body[data-layout="mobile"]{overflow-x:clip;}
+}
+
+/* 任务详情：长文本/长链接不允许把整页撑出横向滚动 */
+[data-layout="mobile"] .drawer#taskForm{overflow:hidden;}
+[data-layout="mobile"] .drawer#taskForm .drawer-body{
+  overflow-x:hidden;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+[data-layout="mobile"] .drawer#taskForm .tl-detail,
+[data-layout="mobile"] .drawer#taskForm .ci-body,
+[data-layout="mobile"] .drawer#taskForm .sub-txt,
+[data-layout="mobile"] .drawer#taskForm .att-name{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+[data-layout="mobile"] .drawer#taskForm .drawer-body img{
+  max-width:100%;
+  height:auto;
+}
+
+/* 分析：三个 tab 压窄，和「周期」放在同一行 */
+[data-layout="mobile"] .analysis-bar{
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:8px;
+  padding:6px 12px 0;
+}
+[data-layout="mobile"] .analysis-bar .set-tabs{
+  flex:1 1 auto;
+  min-width:0;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+[data-layout="mobile"] .analysis-bar .set-tabs::-webkit-scrollbar{display:none;}
+[data-layout="mobile"] .analysis-bar .set-tab{
+  height:30px;
+  padding:0 6px;
+  font-size:11.5px;
+  white-space:nowrap;
+}
+[data-layout="mobile"] .analysis-bar>label.row{
+  flex:0 0 auto;
+  gap:0!important;
+}
+[data-layout="mobile"] .analysis-bar>label .toolbar-meta{display:none;}
+[data-layout="mobile"] #analysisPeriod{
+  width:82px;
+  height:30px;
+  padding:0 22px 0 8px;
+  font-size:12px;
+}
+
+/* 管理页顶栏：说明文字在手机宽度放不下，只保留标题 */
+[data-layout="mobile"] .manager-toolbar>div:first-child>span{display:none;}
+[data-layout="mobile"] .manager-toolbar>div:first-child b{
+  font-size:13px;
+  white-space:nowrap;
+}
+[data-layout="mobile"] .manager-project-picker{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1 1 auto;
+  min-width:0;
+}
+[data-layout="mobile"] .manager-project-picker select{
+  flex:1 1 auto;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  height:30px;
+  padding:0 22px 0 8px;
+  font-size:12px;
+}
+
+/* 仅报表中心强制单行：项目选择 + 两个导出按钮；项目看板右侧还有模式切换，允许换行 */
+[data-layout="mobile"] #view-report .manager-toolbar{
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:8px;
+  min-height:32px;
+}
+[data-layout="mobile"] #view-report .manager-toolbar>div:first-child{
+  flex-wrap:nowrap;
+  gap:8px;
+}
+[data-layout="mobile"] #view-report .manager-toolbar>div:last-child{
+  display:flex;
+  flex:0 0 auto;
+  gap:4px;
+}
+[data-layout="mobile"] #view-report .manager-toolbar>div:last-child .btn{
+  height:30px;
+  padding:0 6px;
+  font-size:11px;
+}

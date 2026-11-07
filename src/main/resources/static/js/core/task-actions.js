@@ -144,7 +144,10 @@ function updateElapsedTexts(){
     el.textContent = fmtElapsed(rt.elapsedMinutes);
   });
 }
+var timerBusy = false;
 function toggleTaskTimer(taskId){
+  /* 卡片上的计时按钮没有抽屉里的禁用态：请求未返回时连点会开出两条运行中记录 */
+  if(timerBusy) return;
   var prev = state.runningTimer;
   var on = !!(prev && prev.taskId === taskId);
   var t = taskById(taskId);
@@ -152,6 +155,7 @@ function toggleTaskTimer(taskId){
   if(!on && t && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var name = t ? t.title : ((prev && prev.taskTitle) || "任务");
   var url = "/api/tasks/" + encodeURIComponent(taskId) + "/timer/" + (on ? "stop" : "start");
+  timerBusy = true;
   API.post(url, {}).then(function(d){
     if(on){
       var total = (d && typeof d.totalMinutes === "number") ? d.totalMinutes : 0;
@@ -172,6 +176,8 @@ function toggleTaskTimer(taskId){
     });
   }).catch(function(ex){
     toast(ex.message || "计时操作失败", "bad");
+  }).then(function(){
+    timerBusy = false;
   });
 }
 if($("timerPill")){

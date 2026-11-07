@@ -11,6 +11,7 @@
 --       避免因 time_log 随之清空而把历史工时抹成 0。
 -- 幂等：可重复执行；不改 completed_at / 名称等快照字段。
 -- ============================================================================
+USE hourglass;
 
 UPDATE task_completion_record r
 JOIN task k

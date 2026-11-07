@@ -106,6 +106,8 @@ VERIFY_FILES=(
   "css/mobile.css"
   "js/core/priorities.js"
   "user-guide.md"
+  # 2026-11-07 第二轮：本轮改动的手势模块此前未纳入逐文件校验
+  "js/core/gestures.js"
 )
 
 # ----------------------------- 基础准备 --------------------------------------

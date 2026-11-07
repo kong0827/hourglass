@@ -55,12 +55,12 @@ var VIEWS = {
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:lazyEnter("profile", "enterProfileView") }
 };
 var TAB_OF = {
-  mine: "mine",
+  mine: "mine", review: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board",
   projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
-  portfolio: "projects", project: "projects",
-  settings: "me", profile: "me", review: "me", analysis: "me", phase: "me",
-  report: "me", workload: "me", risks: "me"
+  portfolio: "portfolio", project: "portfolio",
+  phase: "portfolio", analysis: "portfolio", report: "portfolio", workload: "portfolio", risks: "portfolio",
+  settings: "me", profile: "me"
 };
 function syncTab(name){
   var bar = document.getElementById("tabBar");
@@ -195,7 +195,7 @@ $("sideNav").addEventListener("click", function(e){
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 /* 底栏已覆盖的视图 + 需要项目上下文的详情页，不放进「更多视图」 */
-var TABS_COVERED = { mine:1, board:1, projects:1, profile:1, project:1 };
+var TABS_COVERED = { mine:1, board:1, projects:1, portfolio:1, profile:1, project:1 };
 function moreMenuHTML(){
   return Object.keys(VIEWS).filter(function(name){
     return !TABS_COVERED[name];
@@ -228,15 +228,10 @@ function openMobMore(anchor){
 var mobViewsBtn = $("btnMobViews");
 if(mobViewsBtn) mobViewsBtn.addEventListener("click", function(){ openMobMore(mobViewsBtn); });
 
-/* 移动端底部 Tab：messages 过渡为打开现有通知面板；me 落个人设置 */
+/* 移动端底部 Tab：me 落个人设置，其余按视图路由 */
 window.addEventListener("ds:tab", function(e){
   var tab = e.detail && e.detail.tab;
   if(!tab) return;
-  if(tab === "messages"){
-    var bell = document.getElementById("btnAlert");
-    if(bell) bell.click();
-    return;
-  }
   if(tab === "me"){ showView("profile"); return; }
   showView(tab);
 });

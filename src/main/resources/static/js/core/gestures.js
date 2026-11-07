@@ -152,11 +152,9 @@ export function initMobileGestures(){
           closeSwiped(card);
           card.classList.add("swiped");
         }else{
-          /* 看板卡片没有操作条：左滑直接完成（已完成卡片改为打开菜单，避免误撤销）
-             先触发按钮，再开启点击抑制，否则合成 click 会被抑制掉 */
-          var doneBtn = card.querySelector("[data-done-toggle]");
-          if(doneBtn && !card.classList.contains("is-done")) doneBtn.click();
-          else openQuick(card);
+          /* 看板卡片没有操作条：左右滑都只打开快捷菜单，不直接改状态。
+             之前左滑会触发“完成”，手指轻微横划就会把任务移到已完成列，误触率太高。 */
+          openQuick(card);
           rt.suppressClickUntil = Date.now() + 350;
         }
       }else if(dx > 56){

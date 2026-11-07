@@ -1,5 +1,7 @@
 -- 优先级显示配置：P0-P3 存储档位不变，仅显示名与颜色按空间可配。
 -- 未配置的空间/档位不写行，由后端返回内置默认「紧急/高/中/低」。
+USE hourglass;
+
 CREATE TABLE IF NOT EXISTS `workspace_priority` (
   `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '配置ID',
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
