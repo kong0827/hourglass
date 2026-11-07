@@ -971,10 +971,18 @@ function openNewReqDocDialog(reqId){
   if(reqId && canEditReq(reqId)) sel.value = reqId;
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
+  if($("newReqDocWordFile")) $("newReqDocWordFile").value = "";
+  toggleNewReqDocWordField();
   fillDocTypeSelect("newReqDocType", "requirement");
   fillNewReqDocParents("");
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ if($("newReqDocTitle")) $("newReqDocTitle").focus(); }, 40);
+}
+function toggleNewReqDocWordField(){
+  var field = $("newReqDocWordField");
+  if(!field) return;
+  var isWord = $("newReqDocFormat") && $("newReqDocFormat").value === "word";
+  field.hidden = !isWord;
 }
 function closeNewReqDocDialog(){
   var d = $("dlgNewReqDoc");
@@ -1048,19 +1056,55 @@ function submitNewReqDoc(){
   if(!title){ toast("请填写文档名称", "warn"); $("newReqDocTitle").focus(); return; }
   var format = $("newReqDocFormat") ? $("newReqDocFormat").value : "markdown";
   var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
+  var isWord = format === "word";
+  var wordFile = isWord && $("newReqDocWordFile") ? $("newReqDocWordFile").files[0] : null;
+  if(isWord && !wordFile){ toast("请选择要导入的 Word 文件", "warn"); return; }
   if(ok) ok.disabled = true;
   API.post("/api/req-docs", {
     reqId: reqId, title: title, content: "", status: "draft",
-    format: format, docType: $("newReqDocType").value, parentId: parentId || null
+    format: isWord ? "html" : format, docType: $("newReqDocType").value, parentId: parentId || null
   })
     .then(function(doc){
-      closeNewReqDocDialog();
-      loadReqDocs(true);
-      openReqDocEditor(doc.id);
-      toast("已创建「" + doc.title + "」，接着写正文", "fs");
+      if(isWord){
+        return importWordForNewDoc(doc, wordFile);
+      }else{
+        closeNewReqDocDialog();
+        loadReqDocs(true);
+        openReqDocEditor(doc.id);
+        toast("已创建「" + doc.title + "」，接着写正文", "fs");
+        return null;
+      }
     })
     .catch(function(ex){ toast(ex.message || "创建失败", "bad"); })
     .then(function(){ if(ok) ok.disabled = false; });
+}
+function importWordForNewDoc(doc, file){
+  var fd = new FormData();
+  fd.append("file", file);
+  var url = API.url("/api/req-docs/import-word" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
+    var content = (json.data && json.data.content) || "";
+    return API.put("/api/req-docs/" + encodeURIComponent(doc.id), {
+      reqId: doc.reqId, title: doc.title, content: content, status: "draft",
+      format: "html", docType: doc.docType || "requirement", parentId: doc.parentId || null,
+      updatedAt: doc.updatedAt || ""
+    }).then(function(){
+      closeNewReqDocDialog();
+      loadReqDocs(true);
+      openReqDocEditor(doc.id);
+      toast("已导入「" + file.name + "」，记得检查格式", "fs");
+    });
+  });
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
@@ -2328,6 +2372,7 @@ function populateReqDocSelect(keep){
   if($("dlgNewReqDocCancel")) $("dlgNewReqDocCancel").addEventListener("click", closeNewReqDocDialog);
   if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", submitNewReqDoc);
   if($("newReqDocProject")) $("newReqDocProject").addEventListener("change", function(){ fillNewReqDocParents(""); });
+  if($("newReqDocFormat")) $("newReqDocFormat").addEventListener("change", toggleNewReqDocWordField);
   if($("newReqDocTitle")){
     $("newReqDocTitle").addEventListener("keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); submitNewReqDoc(); }

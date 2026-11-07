@@ -956,7 +956,13 @@
                 <select id="newReqDocFormat">
                   <option value="markdown">Markdown（默认，可导入导出）</option>
                   <option value="html">富文本</option>
+                  <option value="word">Word（.docx 导入）</option>
                 </select>
+              </label>
+              <label class="reqdoc-dlg-field" id="newReqDocWordField" hidden>
+                <span>Word 文件</span>
+                <input id="newReqDocWordFile" type="file" accept=".docx">
+                <small style="color:var(--text-3);display:block;margin-top:4px;">仅支持 .docx，内容将转换为富文本</small>
               </label>
               <label class="reqdoc-dlg-field">
                 <span>上级文档</span>
