@@ -24,6 +24,13 @@ deploy/.pending-deploy.stamp
 deploy/dist/
 # 部署记录（含明文凭据，仅限本地保存）
 deploy/部署记录-*.md
+# 内部上线清单（含真实成员信息与初始密码）
+deploy/上线清单.md
+# 服务器演示种子数据（仅本地保存）
+deploy/local/
+
+# 内部种子数据（含真实成员账号）
+sql/seeds/seed_yunying.sql
 
 # 系统文件
 .DS_Store
