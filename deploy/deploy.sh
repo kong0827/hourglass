@@ -427,7 +427,9 @@ if [ "$DO_VERIFY" -eq 1 ]; then
 set +e
 B=http://127.0.0.1:${NGINX_PORT}
 
-echo "HEALTH \$(curl -s -m 10 \$B/hourglass/api/health)"
+cd /tmp && rm -f dv.txt
+# 先调健康接口拿到 CSRF cookie（静态页由 Nginx 直出，不会带 Set-Cookie）
+echo "HEALTH \$(curl -s -c dv.txt -b dv.txt -m 10 \$B/hourglass/api/health)"
 echo "ROOT \$(curl -s -o /dev/null -w '%{http_code}' -m 10 \$B/hourglass/)"
 echo "LOCAL_JAR \$(sha256sum ${APP_DIR}/${JAR_NAME} | cut -c1-16)"
 echo "ERRORS \$(journalctl -u ${SERVICE} --no-pager -n 60 | grep -icE 'ERROR|Caused by' || true)"
@@ -444,10 +446,8 @@ AU="\$(sed -n 's/^AUTH_USER=//p' ${ENV_FILE})"
 AP="\$(sed -n 's/^AUTH_PASSWORD=//p' ${ENV_FILE})"
 CRYPTO="\$(grep -c '^AI_CRYPTO_KEY=' ${ENV_FILE} 2>/dev/null || true)"
 echo "CRYPTO \${CRYPTO:-0}"
-cd /tmp && rm -f dv.txt
-curl -s -c dv.txt -o /dev/null \$B/hourglass/login.html
-T=\$(awk '/XSRF-TOKEN/{print \$NF}' dv.txt)
-echo "LOGIN \$(curl -s -b dv.txt -c dv.txt -H "X-XSRF-TOKEN: \$T" -d "username=\$AU&password=\$AP" \$B/hourglass/api/auth/login)"
+T=\$(awk '/XSRF-TOKEN/{print \$NF}' /tmp/dv.txt)
+echo "LOGIN \$(curl -s -b /tmp/dv.txt -c /tmp/dv.txt -H "X-XSRF-TOKEN: \$T" -d "username=\$AU&password=\$AP" \$B/hourglass/api/auth/login)"
 echo "MEM \$(systemctl show ${SERVICE} -p MemoryCurrent --value | awk '{printf "%.0f", \$1/1048576}')"
 rm -f /tmp/dv.txt
 REMOTE
