@@ -156,6 +156,7 @@ This project evolved from **wokstudio**, a personal kanban project started by [c
 Key contributors:
 
 - [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; original wokstudio design and core implementation; continues to develop and expand Hourglass
+- kongxiangjin
 
 ## License
 

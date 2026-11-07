@@ -168,6 +168,7 @@ java -jar backend/target/hourglass-server.jar
 主要贡献者：
 
 - [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责 wokstudio 最初的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
+- kongxiangjin
 
 ## 许可
 
