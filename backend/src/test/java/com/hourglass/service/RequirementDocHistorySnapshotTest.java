@@ -43,7 +43,7 @@ class RequirementDocHistorySnapshotTest {
             mock(RequirementDocCommentMapper.class), reqs, users,
             mock(TaskMapper.class), mock(WorkActivityService.class), mock(DemandMapper.class),
             access, mock(NotificationEventService.class), mock(ReqDocShareMapper.class),
-            mock(WorkspaceMapper.class));
+            mock(WorkspaceMapper.class), mock(DocPreviewService.class));
 
     @Test
     void updateSnapshotsPreviousContent() {

@@ -1370,7 +1370,7 @@ function setDocFormatUI(format){
     badge.className = "reqdoc-fmt " + (md ? "md" : "html");
   }
   var imp = $("reqDocImport"), exp = $("reqDocExport");
-  if(imp) imp.title = md ? "导入 Markdown 文件" : "导入 HTML 文件";
+  if(imp) imp.title = md ? "导入 Markdown 文件" : "导入 HTML / Word 文件";
   if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
 }
 function fillMarkdownEditor(doc){
@@ -1987,7 +1987,7 @@ function importReqDoc(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var input = $("reqDocImportFile");
   if(input){
-    input.accept = isMarkdownDoc() ? ".md,.markdown,.txt" : ".html,.htm";
+    input.accept = isMarkdownDoc() ? ".md,.markdown,.txt" : ".html,.htm,.docx";
     input.click();
   }
 }
@@ -1998,6 +1998,10 @@ function onReqDocImportFile(e){
   if(!f) return;
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
+  if(/\.docx$/i.test(f.name)){
+    importWordFile(f);
+    return;
+  }
   var reader = new FileReader();
   reader.onload = function(){
     var text = String(reader.result || "");
@@ -2015,6 +2019,45 @@ function onReqDocImportFile(e){
   };
   reader.onerror = function(){ toast("读取文件失败", "bad"); };
   reader.readAsText(f, "utf-8");
+}
+function importWordFile(f){
+  var fd = new FormData();
+  fd.append("file", f);
+  var url = API.url("/api/req-docs/import-word" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  toast("正在导入 Word 文档…", "info");
+  fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
+    var data = json.data || {};
+    if(editingMeta.format !== "html"){
+      editingMeta.format = "html";
+      setDocFormatUI("html");
+    }
+    var apply = function(){
+      if(!reqEditor) return;
+      reqEditor.setContents(data.content || "");
+      markReqDocDirty();
+      rebuildToc();
+      updateReqDocCount();
+      toast("已导入「" + f.name + "」，记得保存", "fs");
+    };
+    if(reqEditor){
+      apply();
+    }else{
+      ensureEditor().then(function(ed){
+        if(!ed || editingMeta.format !== "html") return;
+        apply();
+      }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
+    }
+  }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
 }
 function exportReqDoc(){
   var md = isMarkdownDoc();

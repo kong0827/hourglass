@@ -1,6 +1,7 @@
 package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
+import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocPublishRequest;
@@ -26,9 +27,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
+import java.io.File;
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 需求（项目下的需求文档）。
@@ -103,6 +109,45 @@ public class RequirementDocController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(docService.create(userId, ws.getId(), req));
+    }
+
+    /** 阶段 1 MVP：导入 Word（docx）文件，返回清洗后的 HTML 正文 */
+    @PostMapping("/api/req-docs/import-word")
+    public ApiResult<Map<String, String>> importWord(@RequestParam("file") MultipartFile file,
+                                                     @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        if (file == null || file.isEmpty()) {
+            return ApiResult.error(400, "请选择文件");
+        }
+        if (file.getSize() > 10L * 1024 * 1024) {
+            return ApiResult.error(400, "文件不能超过 10MB");
+        }
+        String original = file.getOriginalFilename();
+        String ext = null;
+        if (original != null) {
+            int idx = original.lastIndexOf('.');
+            ext = idx > 0 ? original.substring(idx + 1).toLowerCase() : null;
+        }
+        if (!"docx".equals(ext)) {
+            return ApiResult.error(400, "仅支持 .docx 格式");
+        }
+        File temp = null;
+        try {
+            temp = File.createTempFile("hourglass-word-import-", ".docx");
+            file.transferTo(temp);
+            String html = docService.importWord(temp);
+            Map<String, String> data = new LinkedHashMap<String, String>();
+            data.put("format", "html");
+            data.put("content", html);
+            return ApiResult.ok(data);
+        } catch (IOException e) {
+            throw new AppException(500, "文件处理失败");
+        } finally {
+            if (temp != null && temp.exists()) {
+                temp.delete();
+            }
+        }
     }
 
     @PutMapping("/api/req-docs/{id}")

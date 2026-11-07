@@ -99,6 +99,7 @@ public class RequirementDocService {
     private final NotificationEventService notificationEvents;
     private final ReqDocShareMapper shareMapper;
     private final WorkspaceMapper workspaceMapper;
+    private final DocPreviewService docPreviewService;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
                                  RequirementDocCommentMapper commentMapper,
@@ -106,7 +107,8 @@ public class RequirementDocService {
                                  TaskMapper taskMapper, WorkActivityService workActivityService,
                                  DemandMapper demandMapper, ProjectAccessService projectAccess,
                                  NotificationEventService notificationEvents,
-                                 ReqDocShareMapper shareMapper, WorkspaceMapper workspaceMapper) {
+                                 ReqDocShareMapper shareMapper, WorkspaceMapper workspaceMapper,
+                                 DocPreviewService docPreviewService) {
         this.docMapper = docMapper;
         this.historyMapper = historyMapper;
         this.commentMapper = commentMapper;
@@ -119,6 +121,7 @@ public class RequirementDocService {
         this.notificationEvents = notificationEvents;
         this.shareMapper = shareMapper;
         this.workspaceMapper = workspaceMapper;
+        this.docPreviewService = docPreviewService;
     }
 
     public List<ReqDocView> list(String workspaceId, String userId) {
@@ -681,6 +684,24 @@ public class RequirementDocService {
         /* 只有空标签（<p><br></p> 之类）也视为空 */
         String text = clean.body().text();
         return (text == null || text.trim().isEmpty()) && out.indexOf("<hr") < 0 ? null : out;
+    }
+
+    /**
+     * 将 Word 文档（docx）导入为清洗后的 HTML 正文。
+     * 复用 DocPreviewService 的 docx->XHTML 能力，再经白名单清洗。
+     * 阶段 1 MVP：图片以 base64 data URL 内联在 HTML 中；不提取为独立附件。
+     */
+    public String importWord(java.io.File file) {
+        Map<String, String> preview = docPreviewService.preview(file, "docx");
+        String html = preview == null ? null : preview.get("content");
+        if (html == null || html.trim().isEmpty()) {
+            throw AppException.badRequest("文档内容为空或无法识别");
+        }
+        String clean = sanitize(html);
+        if (clean == null) {
+            throw AppException.badRequest("文档内容为空或无法识别");
+        }
+        return clean;
     }
 
     /**

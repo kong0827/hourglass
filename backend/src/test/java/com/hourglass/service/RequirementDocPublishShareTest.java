@@ -46,7 +46,7 @@ class RequirementDocPublishShareTest {
             mock(RequirementDocHistoryMapper.class), mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
             mock(RequirementMapper.class), mock(UserMapper.class),
             mock(TaskMapper.class), mock(WorkActivityService.class), mock(DemandMapper.class), access,
-            mock(NotificationEventService.class), shares, workspaces);
+            mock(NotificationEventService.class), shares, workspaces, mock(DocPreviewService.class));
 
     /* ---------------- canSeeDraft 口径 ---------------- */
 
