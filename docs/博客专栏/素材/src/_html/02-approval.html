@@ -1,0 +1,85 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#F7F4EC}
+body{font-family:"PingFang SC","Noto Sans SC","Source Han Sans SC",-apple-system,"Helvetica Neue",sans-serif;color:#22303F;-webkit-font-smoothing:antialiased}
+#root{width:1200px;padding:54px 64px 46px;background:
+  linear-gradient(#EFE9DB 1px,transparent 1px),linear-gradient(90deg,#EFE9DB 1px,transparent 1px);
+  background-size:60px 60px;background-color:#F7F4EC;position:relative}
+.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px}
+.kicker{font-size:13px;letter-spacing:.14em;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:10px}
+.kicker .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+h1{font-size:34px;line-height:1.35;margin:12px 0 8px;color:#1F3A5F;letter-spacing:.01em}
+.sub{font-size:15px;color:#6B7280;line-height:1.7;margin:0}
+.brand{font-size:11px;letter-spacing:.22em;color:#8A7A5C;text-align:right;line-height:1.9;white-space:nowrap}
+.brand b{display:block;color:#1F3A5F;font-size:13px;letter-spacing:.12em}
+.rule{width:64px;height:3px;background:#C9A227;margin:18px 0 26px}
+.card{background:#fff;border:1px solid #E4DCCB;border-radius:14px;box-shadow:0 6px 18px rgba(31,58,95,.05)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.pad{padding:24px 22px}
+.num{width:30px;height:30px;border-radius:50%;background:rgba(31,58,95,.06);color:var(--accent);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.h{font-size:18px;font-weight:700;color:#1F3A5F;margin:0 0 10px;line-height:1.45}
+.p{font-size:14px;line-height:1.8;color:#6B7280;margin:0}
+.tag{display:inline-block;margin-top:14px;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid rgba(201,162,39,.55);color:#8A6D1F;background:rgba(201,162,39,.08)}
+.bottom{margin-top:22px;border-left:3px solid #C9A227;background:#FFFDF7;border:1px solid #E4DCCB;border-left-width:3px;border-radius:10px;padding:16px 20px;font-size:15px;color:#1F3A5F;line-height:1.75}
+.bottom b{color:#1F3A5F}
+.row{display:grid;grid-template-columns:56px 1.15fr 1fr 1fr;gap:18px;align-items:start;padding:20px 22px;border-bottom:1px solid #EFE9DB}
+.row:last-child{border-bottom:none}
+.rowhead{font-size:12px;letter-spacing:.08em;color:#8A7A5C;padding:0 22px 8px;display:grid;grid-template-columns:56px 1.15fr 1fr 1fr;gap:18px}
+.row .idx{font-size:22px;font-weight:700;color:rgba(31,58,95,.28);line-height:1.2}
+.row .t{font-size:16px;font-weight:700;color:#1F3A5F;line-height:1.6}
+.row .c{font-size:13.5px;line-height:1.8;color:#6B7280}
+.row .c b{color:#1F3A5F;display:block;font-size:12px;letter-spacing:.08em;margin-bottom:4px}
+.table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:14px;background:#fff;border:1px solid #E4DCCB}
+.table th{font-size:12px;letter-spacing:.08em;color:#8A7A5C;font-weight:600;text-align:left;padding:14px 20px;background:#FBF8F1;border-bottom:1px solid #E4DCCB}
+.table td{font-size:13.5px;line-height:1.65;padding:13px 20px;border-bottom:1px solid #F1EBDE;color:#6B7280;vertical-align:top}
+.table tr:last-child td{border-bottom:none}
+.table td:first-child{color:#1F3A5F;font-weight:600;width:18%}
+.table td:nth-child(2){width:44%}
+.table td:nth-child(3){width:38%}
+.path{display:grid;grid-template-columns:repeat(5,1fr);gap:0;align-items:stretch}
+.step{position:relative;padding:22px 18px;background:#fff;border:1px solid #E4DCCB}
+.step:first-child{border-radius:14px 0 0 14px}
+.step:last-child{border-radius:0 14px 14px 0}
+.step+.step{border-left:none}
+.step .n{font-size:12px;letter-spacing:.14em;color:#C9A227;font-weight:700}
+.step .h{font-size:17px;margin:10px 0 8px}
+.step .p{font-size:12.5px;line-height:1.7}
+.step .r{font-size:11px;color:#8A7A5C;margin-top:12px;letter-spacing:.04em}
+.arrowline{height:2px;background:linear-gradient(90deg,#C9A227,rgba(201,162,39,.15));margin:24px 0 0}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.mini{font-size:12px;letter-spacing:.08em;color:#8A7A5C;margin-bottom:6px}
+.foot{margin-top:24px;font-size:11px;color:#9A8F7A;letter-spacing:.12em;display:flex;justify-content:space-between}
+.matrix{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:14px;background:#fff;border:1px solid #E4DCCB}
+.matrix th{font-size:12px;letter-spacing:.04em;color:#8A7A5C;font-weight:600;text-align:center;padding:13px 8px;background:#FBF8F1;border-bottom:1px solid #E4DCCB}
+.matrix th:first-child{text-align:left;padding-left:20px;width:16%}
+.matrix td{font-size:14px;padding:14px 8px;text-align:center;border-top:1px solid #F1EBDE;color:#6B7280}
+.matrix td:first-child{text-align:left;padding-left:20px;color:#1F3A5F;font-weight:600}
+.matrix .yes{color:#2F6B5E;font-weight:700;font-size:16px}
+.matrix .no{color:#CFC5B2}
+.matrix tr.hot td{background:#FFFDF7}
+.matrix .badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:600;color:#8A6D1F;background:rgba(201,162,39,.14);border:1px solid rgba(201,162,39,.45);border-radius:999px;padding:2px 8px;vertical-align:2px}
+.warn{border-color:rgba(201,162,39,.65)!important;background:#FFFDF7!important}
+.warn .num{background:rgba(201,162,39,.18);color:#8A6D1F}
+.list{margin:0;padding:0;list-style:none}
+.list li{font-size:14px;line-height:1.9;color:#6B7280;padding-left:18px;position:relative}
+.list li::before{content:"";position:absolute;left:0;top:12px;width:6px;height:6px;border-radius:50%;background:#C9A227;opacity:.7}
+@media (max-width:760px){#root{width:760px}.grid3,.grid4{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body><div id="root" style="--accent:#2F5D8A">
+  <div class="head"><div>
+    <div class="kicker"><span class="dot"></span>系列一 · 行业思考 ｜ 配图 02</div>
+    <h1>一个两小时的改动，走了三个人</h1>
+    <p class="sub">流程不是越完整越好，重量级要和团队规模匹配。</p>
+  </div><div class="brand"><b>项目管理专栏</b>PROJECT NOTES</div></div>
+  <div class="rule"></div>
+  <div class="grid4">
+    <div class="card pad"><div class="num">01</div><div class="h">需求评审</div><p class="p">两小时能评审完，问题不大。</p><span class="tag">正常</span></div>
+    <div class="card pad warn"><div class="num">02</div><div class="h">排期审批</div><p class="p">审批人出差，任务卡在这里三天。</p><span class="tag">卡点</span></div>
+    <div class="card pad"><div class="num">03</div><div class="h">上线审批</div><p class="p">再等一天签字，才能发布。</p><span class="tag">等待</span></div>
+    <div class="card pad"><div class="num">04</div><div class="h">上线</div><p class="p">两小时的改动，走了五天。</p><span class="tag">结果</span></div>
+  </div>
+  <div class="bottom"><b>八个人的团队，需要的是快速对齐，不是层层签字。</b>最后大家学会了「先干活，后补审批」，流程变成了形式。</div>
+  <div class="foot"><span>项目管理专栏 · 第 2 篇</span><span>项目管理专栏 · 配图</span></div>
+</div></body></html>
