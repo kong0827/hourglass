@@ -41,8 +41,8 @@ KEEP_JAR_BAK=3                           # 服务器上保留最近 N 份 jar �
 KEEP_FRONT_BAK=3                         # 服务器上保留最近 N 份前端备份
 KEEP_DB_BAK=14                           # 部署前库备份保留天数（天）
 
-NGINX_PORT=8081                          # 对外 nginx 端口
-APP_PORT=8082                            # 应用内部端口（仅本机）
+NGINX_PORT="${NGINX_PORT:-8081}"            # 对外 nginx 端口（目标机 nginx 监听 80 时：NGINX_PORT=80）
+APP_PORT="${APP_PORT:-8082}"                # 应用内部端口（仅本机）
 PUBLIC_URL="http://${HOST}:${NGINX_PORT}/hourglass"
 
 MVN="${MVN:-mvn}"
