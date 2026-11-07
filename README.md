@@ -8,13 +8,15 @@
 
 > 需求池提想法 → 评审排期 → 文档沉淀方案 → 拆成工作项 → 看板 / 日历 / 甘特推进 → 绑定版本发布 → 周回顾与月度清单
 
+![沙漏·协作主链路](docs/diagrams/main-flow.png)
+
 进度、工时、成员负载、逾期风险和交付报表都从日常操作里自动产生，不需要任何人二次录入。
 
-![沙漏·研发协作能力全景图](docs/images/capability-panorama.png)
+![沙漏·研发协作能力全景图](docs/diagrams/capability-panorama.png)
 
 - 项目介绍：[`docs/项目介绍.md`](docs/项目介绍.md)
 - 用户手册：[`docs/用户使用手册.md`](docs/用户使用手册.md)
-- 接口契约：[`docs/api.md`](docs/api.md)
+- 接口契约：[`docs/接口契约.md`](docs/接口契约.md)
 
 ---
 
@@ -40,6 +42,8 @@
 | 明确不做 | 多租户 SaaS、大规模横向扩展、多人实时协同编辑表格、复杂可配置工作流、插件市场 |
 
 ## 主要功能
+
+![沙漏·界面一览](docs/diagrams/ui-gallery.png)
 
 ### 我的工作
 
@@ -117,6 +121,8 @@ java -jar backend/target/hourglass-server.jar
 | 前端 | 原生 JavaScript ES Module，**无框架、无构建步骤**；PWA 离线壳 |
 | 部署 | 前端由 Nginx 直接托管，后端只提供 `/api/**`；systemd + 一键部署脚本 |
 
+![沙漏·技术架构](docs/diagrams/tech-architecture.png)
+
 几个刻意的架构选择：
 
 - **不用 Redis**：元数据放进程内缓存，靠 TTL 与空间版本号失效——因此定位是单实例部署
@@ -125,13 +131,19 @@ java -jar backend/target/hourglass-server.jar
 
 更深入的信息模型、统一口径规则、角色权限矩阵和配置项清单，见 [`docs/项目介绍.md`](docs/项目介绍.md) 与 [`docs/用户使用手册.md`](docs/用户使用手册.md)。
 
+![沙漏·信息模型](docs/diagrams/info-model.png)
+
 ## 文档
 
 | 文件 | 内容 |
 | --- | --- |
+| [`docs/产品说明.md`](docs/产品说明.md) | 产品说明：是什么、为谁、核心价值与部署形态 |
+| [`docs/快速上手指南.md`](docs/快速上手指南.md) | 快速上手：新团队 30 分钟跑通主链路 |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | 背景与定位、信息模型、模块地图、核心机制与边界取舍 |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | 面向最终用户的操作手册与统一口径解释 |
-| [`docs/api.md`](docs/api.md) | 接口契约，含工时、日历、回顾等口径附录 |
+| [`docs/管理员指南.md`](docs/管理员指南.md) | 管理员指南：部署架构、备份升级、通知与 AI、故障速查 |
+| [`docs/常见问题.md`](docs/常见问题.md) | 常见问题：口径、统计、部署与选型对比 |
+| [`docs/接口契约.md`](docs/接口契约.md) | 接口契约，含工时、日历、回顾等口径附录 |
 | [`deploy/README.md`](deploy/README.md) | 部署指南：服务器准备、systemd、Nginx、备份与回滚 |
 
 ## 边界与取舍

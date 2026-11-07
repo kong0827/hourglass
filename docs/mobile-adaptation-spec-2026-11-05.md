@@ -3,7 +3,7 @@
 > 版本：2026-11-05 v1
 > 适用对象：接手实现的 AI / 工程师
 > 配套原型：Ardot《Hourglass 移动端原型 v1》（fileId 744051571112339，18 屏）
-> 前置阅读：`docs/ui-redesign-spec.md`（令牌体系）、`docs/api.md`（接口约定）
+> 前置阅读：`docs/ui-redesign-spec.md`（令牌体系）、`docs/接口契约.md`（接口约定）
 
 ---
 

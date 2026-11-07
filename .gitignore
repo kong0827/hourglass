@@ -22,6 +22,8 @@ data/
 deploy/.last-deploy.stamp
 deploy/.pending-deploy.stamp
 deploy/dist/
+# 部署记录（含明文凭据，仅限本地保存）
+deploy/部署记录-*.md
 
 # 系统文件
 .DS_Store

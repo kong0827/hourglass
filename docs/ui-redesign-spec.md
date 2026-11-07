@@ -5,7 +5,7 @@
 > **阅读顺序**：先读 §0 使用说明与 §1 重构目标 → 按 §2 落地 CSS 令牌 → 按 §3 重建 Shell → 按 §4 建组件 → 按 §6/§7 逐页实现 → 按 §8 补交互 → 按 §9/§10 对齐架构与接口 → 按 §11 顺序实施 → 用 §12 验收。
 >
 > **硬约束**：
-> 1. 后端接口契约以 `docs/api.md` 为准，本文档 §10 是**映射表**，冲突时以 `api.md` 为准。
+> 1. 后端接口契约以 `docs/接口契约.md` 为准，本文档 §10 是**映射表**，冲突时以 `接口契约.md` 为准。
 > 2. 本文档描述的是**布局、视觉、交互、组件**的重构；**功能只增不减**——现有每一个功能点（含筛选、保存视图、工时计时、循环任务、附件、邀请链接、导入导出、回收站、SSE）都必须在新界面中保留可用入口。
 > 3. 目标终端：**仅桌面端 Web，设计基准宽度 1440px，最小支持 1280px**。不需要设计移动端布局，但需保证 1280～2560 区间不破版。
 
@@ -1270,7 +1270,7 @@ input,textarea,select{font:inherit;color:inherit;}
 | 新增表单 | 单行网格：登录名 160 / 显示名 160 / 密码 160 / 角色 100 / 创建按钮；窄屏换行 |
 | 说明块 | `--info-soft` 底 + `--info-border` 边框 + `ⓘ` 图标，内边距 12，`--r-sm` |
 
-**接口**：`GET /api/admin/users`、`POST /api/admin/users`、`PUT /api/admin/users/{id}`、`DELETE /api/admin/users/{id}`、`POST /api/admin/users/{id}/reset-password`（以 `api.md` 为准）。
+**接口**：`GET /api/admin/users`、`POST /api/admin/users`、`PUT /api/admin/users/{id}`、`DELETE /api/admin/users/{id}`、`POST /api/admin/users/{id}/reset-password`（以 `接口契约.md` 为准）。
 
 ---
 
@@ -1603,7 +1603,7 @@ window.DS = {
   workspace: { id, name, type, myRole },
   workspaces: [],
   view: "board",               // board|list|calendar|projects|review|stats|trash|settings|users
-  filter: {                    // 与 api.md 通用查询参数一一对应
+  filter: {                    // 与 接口契约.md 通用查询参数一一对应
     q: "", owners: [], pris: [], cats: [], reqs: [], tags: [],
     due: "", focus: false, doneScope: "week"
   },
@@ -1648,7 +1648,7 @@ const API = {
 
 ## 10. 组件 ↔ 接口映射表
 
-> 接口契约以 `docs/api.md` 为准。本表用于实现时快速定位"哪个交互调哪个接口"。
+> 接口契约以 `docs/接口契约.md` 为准。本表用于实现时快速定位"哪个交互调哪个接口"。
 
 | 界面元素 | 触发 | 接口 |
 |---|---|---|
@@ -1702,7 +1702,7 @@ const API = {
 | 全局 实时变更 | EventSource | `GET /api/events` |
 | 健康检查 | 部署探活 | `GET /api/health` |
 
-**通用查询参数**（看板 / 列表 / 已完成 共用，来自 `api.md`）：
+**通用查询参数**（看板 / 列表 / 已完成 共用，来自 `接口契约.md`）：
 
 `q` · `owners` · `pris` · `cats` · `reqs`（支持 `__none`）· `tags` · `due`（`over`/`today`/`soon`）· `focus` · `doneScope`（`week`/`all`）· `doneLimit` · `doneOffset`
 
@@ -1850,9 +1850,9 @@ const API = {
 
 ---
 
-**文档版本**：v1.0 · 对应后端 `docs/api.md` 契约版本（2026-10）
+**文档版本**：v1.0 · 对应后端 `docs/接口契约.md` 契约版本（2026-10）
 **适用范围**：`devstudio-server/src/main/resources/static/` 全部前端资源
-**变更方式**：如实施中发现本文档与 `api.md` 冲突，以 `api.md` 为准，并回写本文档。
+**变更方式**：如实施中发现本文档与 `接口契约.md` 冲突，以 `接口契约.md` 为准，并回写本文档。
 
 ---
 
@@ -1926,7 +1926,7 @@ const API = {
 
 ## 附录 D：v1.2 增量（第二轮复评 + 第九轮代码审查改造）
 
-**文档版本**：v1.0 → v1.2 · 后端契约增量见 `docs/api.md` 文末的「v1.2 增量」附录。
+**文档版本**：v1.0 → v1.2 · 后端契约增量见 `docs/接口契约.md` 文末的「v1.2 增量」附录。
 
 ### D.1 界面口径修订
 
@@ -2259,7 +2259,7 @@ const API = {
 
 - 视图切换器需要在 `app.js` 的视图路由里加一层「同一视图族内切换」，`data-view` 仍保留 `board/list/calendar` 三个值，避免深链失效。
 - 「项目 / 需求」合并需要项目详情页承载需求列表，属新增页面，工作量大于前两步。
-- **`docs/api.md` 一个字段都不用改** —— 全部是前端 IA 调整。
+- **`docs/接口契约.md` 一个字段都不用改** —— 全部是前端 IA 调整。
 
 ### I.6 可直接落地的补丁（档 A 中的纯 CSS/JS 数值）
 
@@ -2429,7 +2429,7 @@ body.side-rail .nav-item:hover .nl{
 | 编辑区还是"输入框"：内容多时框内滚动，只能看到一小块 | 之前只隐藏了边框，`.ql-container` 仍有固定高度 + 内滚 | SunEditor 配 `height:"auto"` + `minHeight:360px`（内容多高编辑区就多高）；CSS 侧 `.se-wrapper{overflow:visible}`，正文 `padding:18px 0 180px`；`resizingBar / showPathLabel` 关掉 —— **整页书写，页面本身滚动，和 Word 一样** |
 | 弹层/页面滚动条又粗又丑（Windows 默认深灰宽条） | 用的是浏览器默认滚动条 | `base.css` 追加全局细滚动条：`*{scrollbar-width:thin}`（Firefox）+ `::-webkit-scrollbar{width:10px}` 半透明圆角胶囊（thumb 用 `background-clip:content-box` 做出"细条"效果，hover 加深） |
 
-**SunEditor 集成要点**（对应 api.md §4）：
+**SunEditor 集成要点**（对应 接口契约.md §4）：
 1. `<textarea id="reqDocCanvas">` 作为挂载点，`SUNEDITOR.create` 配 `mode:"classic"`、工具栏含 `table / link / image / codeView`。
 2. 保存取 `getContents(true)`（HTML），载入 `setContents(html,false)`；字数 `getText()` 去空白统计；`onChange` 标脏。
 3. 服务端清洗对表格/图片的放行口径有**独立单测**验证（15 断言：table/thead/th/colspan/rowspan/png data URL 放行；script/onclick/iframe/svg/javascript:/position/background-image 拦截）。
@@ -2485,7 +2485,7 @@ body.side-rail .nav-item:hover .nl{
 - 未拆需求清单复用 `.done-item` 骨架，但 `.flow-orphans` 里覆盖了 `display:block` 与 `text-align:left`：**`<button>` 默认 `text-align:center`，被 flex 拉伸后标题会跑到中间**。
 - 数据不足时 `coverage.note` 给引导语（"多拖几次列"），不留空白面板。
 
-口径写死在 `FlowHealthService` 类注释与 `docs/api.md` §30，两处必须同步改：
+口径写死在 `FlowHealthService` 类注释与 `docs/接口契约.md` §30，两处必须同步改：
 
 1. 停留均值/中位数/P90 **只算已离开的段**，当前在制单独给（避免把"正卡着"混进历史均值）；
 2. 「已完成」列是终点，不计入停留；
@@ -2570,7 +2570,7 @@ v3.3 修掉的一个存量 bug：**深链直达 `#/profile` 时整页空白**。
 | 看板卡片 | meta 行 `8h40m/8h` | 有预估才显示；**计时中的任务也要显示**（那正是最该知道快超了的时候），此时实际值只含已结束的段，title 里注明 |
 | 流程体检 · 估时准不准 | 系数大数字 + 三段分布条 + 分类系数 + 预警清单 | 预警（进行中，还来得及）与复盘（已完成，超支了）**分两组**，不要混在一起 |
 
-计算口径（细节见 `docs/api.md` §32 与 `EstimateService` 类注释）：
+计算口径（细节见 `docs/接口契约.md` §32 与 `EstimateService` 类注释）：
 
 1. 系数 = **Σ实际/Σ预估**，不是平均比值（小任务会把后者带偏）；
 2. **只统计已完成任务**，进行中的实际值不完整；
@@ -2786,7 +2786,7 @@ java -cp "target/classes;target/tools;$(cat target/cp.txt)" AiReviewFactsTest
 ## 附录 N：v3.5 甘特图 V1.1 产品化与实底化（2026-10-30）
 
 > 对应 `docs/gantt-product-development-spec-2026-10-30.md` G-01～G-05 与
-> `docs/gantt-ui-optimization-2026-10-30.md` §2.1～§2.6。接口无变化，`docs/api.md` 不动。
+> `docs/gantt-ui-optimization-2026-10-30.md` §2.1～§2.6。接口无变化，`docs/接口契约.md` 不动。
 
 ### 1. 筛选与分组
 

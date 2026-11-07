@@ -12,7 +12,7 @@ Progress, work hours, member workload, overdue risks, and delivery reports are a
 
 - Project overview: [`docs/项目介绍.md`](docs/项目介绍.md) (Chinese)
 - User manual: [`docs/用户使用手册.md`](docs/用户使用手册.md) (Chinese)
-- API contract: [`docs/api.md`](docs/api.md) (Chinese)
+- API contract: [`docs/接口契约.md`](docs/接口契约.md) (Chinese)
 
 ---
 
@@ -130,7 +130,7 @@ For the deeper information model, unified metric rules, the role-permission matr
 | --- | --- |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | Background, positioning, information model, module map, core mechanisms (Chinese) |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | End-user manual and unified metric rules (Chinese) |
-| [`docs/api.md`](docs/api.md) | API contract with appendices on hours, calendar, retrospective conventions (Chinese) |
+| [`docs/接口契约.md`](docs/接口契约.md) | API contract with appendices on hours, calendar, retrospective conventions (Chinese) |
 | [`deploy/README.md`](deploy/README.md) | Deployment guide: server prep, systemd, Nginx, backup and rollback (Chinese) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog: milestones and notable changes |
 
