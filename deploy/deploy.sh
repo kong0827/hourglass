@@ -102,6 +102,10 @@ VERIFY_FILES=(
   "css/components.css"
   "css/gantt.css"
   "css/share.css"
+  # 2026-11-07 大版本新增的静态资源（线上已验证 200 且哈希一致）
+  "css/mobile.css"
+  "js/core/priorities.js"
+  "user-guide.md"
 )
 
 # ----------------------------- 基础准备 --------------------------------------
