@@ -236,6 +236,8 @@ public class TaskCascade {
            否则列表会继续展示一个打不开的缺陷入口 */
         testCaseMapper.clearBugTaskRefs(workspaceId, taskIds);
         testCaseRunMapper.clearBugTaskRefs(workspaceId, taskIds);
+        /* 其他任务把它当阻塞来源时，删除后不能留下指向空任务的引用 */
+        taskMapper.clearBlockedByTaskRefs(workspaceId, taskIds);
     }
 
     /**
@@ -295,19 +297,18 @@ public class TaskCascade {
     }
 
     /**
-     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支/版本/需求池/用例/文档评论。
-     * 操作时间线、附件与空间配置保留，避免“导入丢得比恢复得多”。
+     * 备份覆盖导入前清空：共用任务数据 + 按备份内容决定是否清需求文档/分支/版本/需求池/用例；
+     * 文档被替换时旧文档评论一并清掉。操作时间线、附件与空间配置保留，避免“导入丢得比恢复得多”。
      */
     public void clearWorkspaceDataForImport(String workspaceId, boolean clearRequirementDocs,
                                             boolean clearBranches, boolean clearVersions,
-                                            boolean clearDemands, boolean clearTestCases,
-                                            boolean clearDocComments) {
+                                            boolean clearDemands, boolean clearTestCases) {
         purgeWorkspaceTaskData(workspaceId, true, clearTestCases);
         if (clearRequirementDocs) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
-            if (clearDocComments) {
-                docCommentMapper.deleteByWorkspace(workspaceId);
-            }
+            /* 文档被整体替换时，旧评论必须一起清：旧备份没有 docComments 字段时更是如此，
+               否则跨空间导入会把评论挂到已删除/被复用的文档 ID 上 */
+            docCommentMapper.deleteByWorkspace(workspaceId);
             docHistoryMapper.deleteAllByWorkspace(workspaceId);
             reqDocShareMapper.deleteByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);

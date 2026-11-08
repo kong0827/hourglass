@@ -205,7 +205,7 @@ class TaskCascadeTest {
 
     @Test
     void importClearingKeepsAuditLogsAttachmentsAndOptionalData() {
-        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false, false);
+        cascade.clearWorkspaceDataForImport(WS, false, false, false, false, false);
 
         verify(taskMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper, never()).deleteByWorkspace(WS);
@@ -224,7 +224,7 @@ class TaskCascadeTest {
         verify(versionMapper, never()).deleteByWorkspace(WS);
         verify(demandMapper, never()).deleteByWorkspace(WS);
 
-        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true);
 
         verify(requirementDocMapper).deleteAllByWorkspace(WS);
         verify(testCaseRunMapper).deleteByWorkspace(WS);

@@ -98,15 +98,18 @@ public class DemandService {
         return d;
     }
 
+    /* 多取 1 条用于判断是否还有更早记录，避免正好 200 条时误报“已截断” */
+    private static final int LOG_PAGE_SIZE = 201;
+
     public List<Map<String, Object>> logs(String workspaceId, String id) {
         requireDemand(workspaceId, id);
-        return demandMapper.selectLogs(workspaceId, id);
+        return demandMapper.selectLogs(workspaceId, id, LOG_PAGE_SIZE);
     }
 
     public List<Map<String, Object>> logs(String workspaceId, String userId, String id) {
         Demand d = requireDemand(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        return demandMapper.selectLogs(workspaceId, id);
+        return demandMapper.selectLogs(workspaceId, id, LOG_PAGE_SIZE);
     }
 
     /** T2.3：需求详情「关联任务」透视（task.demand_id 反查，未完成的排前面） */

@@ -254,7 +254,8 @@ function renderReqDocTree(){
     return;
   }
   var kw = (($("reqDocSearch") || {}).value || "").trim().toLowerCase();
-  var rows = reqDocSearchList || reqDocList;   // 关键字过滤由服务端完成，结果单独缓存
+  var searchLimited = !!(reqDocSearchList && reqDocSearchList.length > 200);
+  var rows = searchLimited ? reqDocSearchList.slice(0, 200) : (reqDocSearchList || reqDocList);
   if(!rows.length){
     box.innerHTML = kw
       ? '<div class="reqdoc-empty2">没有找到匹配的文档</div>'
@@ -280,7 +281,10 @@ function renderReqDocTree(){
     return oa - ob;
   });
 
-  box.innerHTML = groups.map(function(g){
+  var searchHint = searchLimited
+    ? '<div class="reqdoc-empty2">仅显示前 200 条匹配结果，请缩小关键词范围。</div>'
+    : "";
+  box.innerHTML = searchHint + groups.map(function(g){
     var collapsed = !!reqCollapsed[g.key];
     var byId = {};
     g.items.forEach(function(r){ byId[r.id] = r; });
@@ -491,11 +495,14 @@ function reqDirtyReset(){
   reqDocDirty = false;
   state.reqDocId = null;
 }
-function tryCloseReqDocEditor(){
-  if(!reqDocDirty){ closeReqDocEditor(); return; }
+var reqDocCloseAction = null;
+function tryCloseReqDocEditor(after){
+  if(!reqDocDirty){ closeReqDocEditor(); if(after) after(); return; }
+  reqDocCloseAction = after || null;
   UI.openModal($("dlgReqDocClose"));
 }
 function closeReqDocCloseDialog(){
+  reqDocCloseAction = null;
   var d = $("dlgReqDocClose");
   if(d) UI.closeModal(d);
 }
@@ -1320,9 +1327,12 @@ function saveReqDoc(){
     updatedAt: editingMeta.updatedAt || null
   };
   var id = editingDocId;
+  var saveSeq = reqDocOpenSeq;
   var p = id ? API.put("/api/req-docs/" + encodeURIComponent(id), body)
              : API.post("/api/req-docs", body);
   return p.then(function(doc){
+    /* 保存期间切到别的文档：丢弃这次响应，避免把旧文档内容写回当前编辑器 */
+    if(reqDocOpenSeq !== saveSeq || (id && editingDocId !== id)) return doc;
     editingDocId = doc.id;
     state.reqDocId = doc.id;
     reqDocDirty = false;
@@ -1333,10 +1343,11 @@ function saveReqDoc(){
     activityUI.loadInto($("reqDocActivityList"), "/api/req-docs/" + encodeURIComponent(doc.id) + "/activities");
     return doc;
   }).catch(function(ex){
+    if(reqDocOpenSeq !== saveSeq || (id && editingDocId !== id)) return;
     if(ex && ex.code === 409){
       /* 版本冲突：本地编辑基于旧版本，点「查看最新内容」加载对方保存后的正文（本地未保存修改会被覆盖） */
       UI.toastAction(ex.message || "文档已被他人修改", "查看最新内容", function(){
-        if(editingDocId) openReqDocEditor(editingDocId);
+        if(id) openReqDocEditor(id);
       }, "bad", 12000);
       return null;
     }
@@ -1539,19 +1550,27 @@ function populateReqDocSelect(keep){
     });
   }
   if($("reqDocBack")) $("reqDocBack").addEventListener("click", tryCloseReqDocEditor);
+  if($("dlgReqDocClose")) $("dlgReqDocClose").__uiOnClose = function(){ reqDocCloseAction = null; };
   if($("dlgReqDocCloseCancel")) $("dlgReqDocCloseCancel").addEventListener("click", closeReqDocCloseDialog);
   if($("dlgReqDocCloseDiscard")){
     $("dlgReqDocCloseDiscard").addEventListener("click", function(){
+      var after = reqDocCloseAction;
+      reqDocCloseAction = null;
       closeReqDocCloseDialog();
       reqDocDirty = false;
       closeReqDocEditor();
+      if(after) after();
     });
   }
   if($("dlgReqDocCloseSave")){
     $("dlgReqDocCloseSave").addEventListener("click", function(){
+      var after = reqDocCloseAction;
       saveReqDoc().then(function(doc){
+        if(!doc) return;
+        reqDocCloseAction = null;
         closeReqDocCloseDialog();
-        if(doc) closeReqDocEditor();
+        closeReqDocEditor();
+        if(after) after();
       });
     });
   }

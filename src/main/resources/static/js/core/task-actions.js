@@ -203,11 +203,15 @@ setInterval(function(){
     }
   });
 }, 60000);
+var doneBusy = {};
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  /* 连点会并发 move/reopen：可能重复生成循环任务或重复写时间线 */
+  if(doneBusy[taskId]) return;
   var isDone = t.boardColumn === "done";
+  doneBusy[taskId] = true;
   /* 取消完成 = 回到「完成前所在列」，由后端按最后一次进入已完成列的移动日志还原；
      不是固定回「进行中」。 */
   if(isDone){
@@ -219,7 +223,7 @@ function toggleTaskDone(taskId){
       refreshListIfOpen();
       refreshCalendarIfOpen();
       refreshGanttIfOpen();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); }).then(function(){ delete doneBusy[taskId]; });
     return;
   }
   API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", {column:"done"}).then(function(res){
@@ -235,7 +239,7 @@ function toggleTaskDone(taskId){
     refreshListIfOpen();
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); }).then(function(){ delete doneBusy[taskId]; });
 }
 function openCardMenu(anchor, taskId){
   var t = taskById(taskId);

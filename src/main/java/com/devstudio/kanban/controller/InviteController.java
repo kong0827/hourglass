@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 邀请链接：/api/workspaces/{id}/invites 由空间主管理；
+ * 邀请链接：/api/workspaces/{id}/invites 由空间主或管理员管理；
  * /api/invite/{code} 查看信息与注册为公开接口，join 需登录（见 SecurityConfig）。
  */
 @RestController
@@ -26,19 +26,19 @@ public class InviteController {
         this.inviteService = inviteService;
     }
 
-    /** 生成邀请链接（仅空间主，7 天有效） */
+    /** 生成邀请链接（空间主或管理员，7 天有效） */
     @PostMapping("/api/workspaces/{id}/invites")
     public ApiResult<Map<String, Object>> create(@PathVariable String id) {
         return ApiResult.ok(inviteService.create(CurrentUser.id(), id));
     }
 
-    /** 当前空间的有效邀请列表（仅空间主） */
+    /** 当前空间的有效邀请列表（空间主或管理员） */
     @GetMapping("/api/workspaces/{id}/invites")
     public ApiResult<List<Invite>> list(@PathVariable String id) {
         return ApiResult.ok(inviteService.list(CurrentUser.id(), id));
     }
 
-    /** 撤销邀请（仅空间主） */
+    /** 撤销邀请（空间主或管理员） */
     @DeleteMapping("/api/workspaces/{id}/invites/{inviteId}")
     public ApiResult<Void> revoke(@PathVariable String id, @PathVariable String inviteId) {
         inviteService.revoke(CurrentUser.id(), id, inviteId);

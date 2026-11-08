@@ -400,7 +400,8 @@ public class TimeLogService {
         taskLog.setWorkspaceId(workspaceId);
         taskLog.setActorId(userId);
         taskLog.setAction("update");
-        taskLog.setDetail(detail);
+        /* task_log.detail = varchar(255)：补记/作废会把 200 字备注拼进来，必须截断 */
+        taskLog.setDetail(Texts.cut(detail, 255));
         logMapper.insert(taskLog);
     }
 }

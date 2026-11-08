@@ -40,7 +40,7 @@ public class TaskSaveRequest {
     private String category;
 
     /** 看板列 id：内置 backlog/doing/done 或自定义列（C 开头）；存在性由服务层校验 */
-    @Pattern(regexp = "^[A-Za-z0-9_-]{1,16}$", message = "所在列不合法")
+    @Pattern(regexp = "^[A-Za-z0-9_-]{1,24}$", message = "所在列不合法")
     private String boardColumn = "backlog";
 
     /** 开始日期 yyyy-MM-dd，选填。填了之后日历会按 [开始, 截止] 区间每天展示该任务 */

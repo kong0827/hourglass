@@ -48,7 +48,8 @@ public class TaskAuditLogger {
         taskLog.setWorkspaceId(workspaceId);
         taskLog.setActorId(userId);
         taskLog.setAction(action);
-        taskLog.setDetail(detail);
+        /* task_log.detail = varchar(255)：多字段同时修改时拼接可能超长，直接截断避免整次保存回滚 */
+        taskLog.setDetail(Texts.cut(detail, 255));
         taskLog.setFromColumn(fromColumn);
         taskLog.setToColumn(toColumn);
         logMapper.insert(taskLog);

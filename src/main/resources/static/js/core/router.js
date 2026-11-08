@@ -92,6 +92,14 @@ function showView(name){
     rt.analysisTab = name; showView("analysis"); return;
   }
   if(!VIEWS[name]) return;
+  /* 文档正文有未保存修改时，切换/重进视图都先确认；确认后再继续原来的跳转 */
+  if(activeView === "requirements"){
+    var reqMod = viewModule("requirements");
+    if(reqMod && reqMod.isReqDocEditing()){
+      reqMod.tryCloseReqDocEditor(function(){ showView(name); });
+      return;
+    }
+  }
   saveScroll();
   activeView = name;
   document.body.dataset.view = name;
@@ -126,7 +134,8 @@ function showView(name){
   return entered;
 }
 function viewFromHash(){
-  var name = String(window.location.hash || "").replace(/^#\/?/, "");
+  /* 深链形如 #/board?task=K1：视图名只取 ? 之前的部分，参数由 hashParam 单独解析 */
+  var name = String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0];
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
   try{

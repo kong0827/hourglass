@@ -102,6 +102,7 @@ class BackupImportBatchTest {
         demandMapper = mock(DemandMapper.class);
         service = new BackupService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, columnMapper, categoryMapper, mock(WorkspaceService.class), memberMapper,
+                mock(com.devstudio.kanban.mapper.ProjectMemberMapper.class),
                 mock(TaskCommentMapper.class),
                 mock(com.devstudio.kanban.mapper.TestCaseMapper.class),
                 mock(com.devstudio.kanban.mapper.TestCaseRunMapper.class),

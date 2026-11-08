@@ -7,6 +7,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
         FieldError fieldError = e.getBindingResult().getFieldError();
         String message = fieldError == null ? "参数不合法" : fieldError.getDefaultMessage();
         return ResponseEntity.badRequest().body(ApiResult.error(400, message));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResult<Void>> handleMissingParameter(MissingServletRequestParameterException e,
+                                                                  HttpServletRequest request) {
+        markFailed(request);
+        String name = e.getParameterName();
+        return ResponseEntity.badRequest()
+                .body(ApiResult.error(400, name == null || name.isEmpty() ? "缺少必填参数" : "缺少必填参数：" + name));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

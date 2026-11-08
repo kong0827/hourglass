@@ -34,6 +34,8 @@ public class WorkspaceMemberCache {
     private final long ttlMillis;
     private final LongSupplier clock;
     private final Map<String, Entry> entries = new ConcurrentHashMap<String, Entry>();
+    /** 失效代次：加载期间发生过 evict 就不回填，避免把已移除的成员重新写回缓存 */
+    private final java.util.concurrent.atomic.AtomicLong generation = new java.util.concurrent.atomic.AtomicLong();
 
     @Autowired
     public WorkspaceMemberCache(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
@@ -67,6 +69,7 @@ public class WorkspaceMemberCache {
             entries.remove(key, e);
         }
 
+        long gen = generation.get();
         Workspace ws = workspaceMapper.selectById(workspaceId);
         if (ws == null) {
             return null;
@@ -76,7 +79,9 @@ public class WorkspaceMemberCache {
             return null;
         }
         Entry loaded = new Entry(rawCopy(ws), m.getRole(), now + ttlMillis);
-        entries.put(key, loaded);
+        if (gen == generation.get()) {
+            entries.put(key, loaded);
+        }
         return maskedCopy(loaded);
     }
 
@@ -84,6 +89,7 @@ public class WorkspaceMemberCache {
         if (workspaceId == null || userId == null) {
             return;
         }
+        generation.incrementAndGet();
         entries.remove(key(workspaceId, userId));
     }
 
@@ -92,6 +98,7 @@ public class WorkspaceMemberCache {
         if (workspaceId == null) {
             return;
         }
+        generation.incrementAndGet();
         String prefix = workspaceId + SEP;
         Iterator<String> it = entries.keySet().iterator();
         while (it.hasNext()) {
@@ -106,6 +113,7 @@ public class WorkspaceMemberCache {
         if (userId == null) {
             return;
         }
+        generation.incrementAndGet();
         String suffix = SEP + userId;
         Iterator<String> it = entries.keySet().iterator();
         while (it.hasNext()) {

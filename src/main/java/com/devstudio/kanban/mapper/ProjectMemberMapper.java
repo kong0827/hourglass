@@ -33,4 +33,7 @@ public interface ProjectMemberMapper {
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 
     int deleteAllByUser(@Param("userId") String userId);
+
+    /** 覆盖导入后清理指向已不存在项目的项目级授权，避免项目 ID 复用时继承旧权限 */
+    int deleteMissingProjects(@Param("workspaceId") String workspaceId);
 }

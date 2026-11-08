@@ -94,6 +94,7 @@
     LEFT JOIN app_user u ON u.id = dl.operator
     WHERE dl.workspace_id = #{workspaceId} AND dl.demand_id = #{demandId}
     ORDER BY dl.id DESC
+    LIMIT #{limit}
   </select>
 
   <delete id="deleteLogsByReq">

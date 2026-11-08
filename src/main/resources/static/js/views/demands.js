@@ -410,7 +410,7 @@ function passDemand(id){
   if(isMobile() && MOBILE_APPROVALS.review.confirmOnApprove){
     UI.showConfirm({
       title:"确认通过需求",
-      msg:"通过后「" + d.title + "」将进入已通过，可排期进入版本。确定继续？",
+      msg:"通过后「" + esc(d.title) + "」将进入已通过，可排期进入版本。确定继续？",
       okText:"通过",
       cancelText:"取消"
     }).then(function(ok){ if(ok) doPass(); });
@@ -694,6 +694,7 @@ function showDemandDetail(id){
       if(!docId){ toast("先选择要关联的文档", "warn"); return; }
       dl.disabled = true;
       API.post("/api/demands/" + encodeURIComponent(id) + "/docs", { docId: docId }).then(function(){
+        dl.disabled = false;
         toast("已关联文档", "fs");
         loadDemandDocs(layer, id, d.reqId, writable);
       }).catch(function(ex){ dl.disabled = false; toast(ex.message || "关联失败", "bad"); });
@@ -774,13 +775,17 @@ function showDemandDetail(id){
   API.get("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     if(!ul) return;
+    logs = logs || [];
+    var limited = logs.length > 200;
+    if(limited) logs = logs.slice(0, 200);
     ul.innerHTML = logs.length ? logs.map(function(l){
       return '<li><span class="dem-log-ts">' + esc(fmtTs(l.createdAt) || "—") + '</span>'
         + '<b>' + esc(l.action || "") + '</b>'
         + (l.operatorName || l.operator ? '<span class="dem-log-op">' + esc(l.operatorName || l.operator) + '</span>' : '')
         + (l.note ? '<span class="dem-log-note">' + esc(l.note) + '</span>' : '')
         + '</li>';
-    }).join("") : '<li class="foot-note">暂无流转记录</li>';
+    }).join("") + (limited ? '<li class="foot-note">仅显示最近 200 条流转记录</li>' : "")
+      : '<li class="foot-note">暂无流转记录</li>';
   }).catch(function(){
     var ul = layer.querySelector("#demLogs");
     if(ul) ul.innerHTML = '<li class="foot-note">时间线加载失败</li>';

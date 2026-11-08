@@ -8,6 +8,7 @@ import com.devstudio.kanban.entity.Task;
 import com.devstudio.kanban.mapper.DemandMapper;
 import com.devstudio.kanban.mapper.ProjectVersionMapper;
 import com.devstudio.kanban.mapper.RequirementMapper;
+import com.devstudio.kanban.mapper.TaskMapper;
 import com.devstudio.kanban.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -40,8 +41,9 @@ class ProjectVersionServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final DemandMapper demands = mock(DemandMapper.class);
     private final NotificationEventService notifications = mock(NotificationEventService.class);
+    private final TaskMapper taskMapper = mock(TaskMapper.class);
     private final ProjectVersionService service =
-            new ProjectVersionService(versions, versionTasks, reqs, demands, access, notifications);
+            new ProjectVersionService(versions, versionTasks, reqs, demands, access, notifications, taskMapper);
 
     @Test
     void deleteClearsDemandReferencesBeforeRemovingVersion() {
@@ -54,6 +56,7 @@ class ProjectVersionServiceTest {
         order.verify(demands).clearVersionRefsByVersion(WS, "V1");
         order.verify(versions).deleteById(WS, "V1");
         verify(access).assertWrite(WS, USER, "R1");
+        verify(taskMapper).clearFoundVersionRef(WS, "V1");
     }
 
     @Test

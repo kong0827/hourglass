@@ -121,7 +121,8 @@ public class TaskQueryService {
         pageQuery.setUserId(userId);
         pageQuery.setDisplayName(displayName);
         pageQuery.setOpenOnly(openOnly);
-        pageQuery.setQ(Texts.trimToNull(query.getQ()));
+        /* LIKE 语义转义：% / _ / \ 按普通字符搜索，避免搜一个 % 就全量扫描并命中所有任务 */
+        pageQuery.setQ(escapeLike(Texts.trimToNull(query.getQ())));
         pageQuery.setPris(query.getPris());
         pageQuery.setCats(query.getCats());
         pageQuery.setReqs(query.getReqs());
@@ -828,5 +829,13 @@ public class TaskQueryService {
         }
         index.put(Consts.COL_DONE, i);
         return index;
+    }
+
+    /** MyBatis LIKE 参数转义；配合 SQL 的 ESCAPE '\\' 使用 */
+    private static String escapeLike(String q) {
+        if (q == null) {
+            return null;
+        }
+        return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

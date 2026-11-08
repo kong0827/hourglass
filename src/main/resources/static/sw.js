@@ -1,12 +1,14 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」） */
-var CACHE_NAME = "hourglass-shell-v102";
+var CACHE_NAME = "hourglass-shell-v103";
 var SHELL = [
   "/hourglass/",
   "/hourglass/index.html",
   "/hourglass/login.html",
   "/hourglass/join.html",
   "/hourglass/share.html",
+  "/hourglass/help.html",
+  "/hourglass/user-guide.md",
   "/hourglass/css/tokens.css",
   "/hourglass/css/base.css",
   "/hourglass/css/layout.css",
@@ -117,7 +119,8 @@ self.addEventListener("fetch", function (event) {
       }
       return response;
     }).catch(function () {
-      return caches.match(request).then(function (hit) {
+      /* ignoreSearch：离线打开 share.html?token=… / help.html?x 时也能命中预缓存的壳 */
+      return caches.match(request, { ignoreSearch: true }).then(function (hit) {
         if (hit) return hit;
         if (request.mode === "navigate") return caches.match("/hourglass/index.html");
         return new Response("", { status: 503, statusText: "offline" });

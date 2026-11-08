@@ -32,17 +32,20 @@ public class ProjectVersionService {
     private final DemandMapper demandMapper;
     private final ProjectAccessService projectAccess;
     private final NotificationEventService notificationEvents;
+    private final com.devstudio.kanban.mapper.TaskMapper taskMapper;
 
     public ProjectVersionService(ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper,
                                  ProjectAccessService projectAccess,
-                                 NotificationEventService notificationEvents) {
+                                 NotificationEventService notificationEvents,
+                                 com.devstudio.kanban.mapper.TaskMapper taskMapper) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.reqMapper = reqMapper;
         this.demandMapper = demandMapper;
         this.projectAccess = projectAccess;
         this.notificationEvents = notificationEvents;
+        this.taskMapper = taskMapper;
     }
 
     public List<ProjectVersion> list(String workspaceId, String reqId) {
@@ -189,6 +192,8 @@ public class ProjectVersionService {
         versionTaskMapper.deleteByVersion(workspaceId, id);
         /* 需求池的「目标版本」指向该版本：删版本时同步解绑，避免排期悬挂 */
         demandMapper.clearVersionRefsByVersion(workspaceId, id);
+        /* 缺陷任务的「发现版本」也要解绑，否则下次编辑会报版本不属于该项目 */
+        taskMapper.clearFoundVersionRef(workspaceId, id);
         versionMapper.deleteById(workspaceId, id);
         notifyDeleted(version, userId, taskCountByOwner);
     }

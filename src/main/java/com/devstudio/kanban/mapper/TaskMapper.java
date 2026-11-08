@@ -149,6 +149,15 @@ public interface TaskMapper {
     /** 需求池条目被删除时，把关联任务上的 demand_id 解绑（任务本身保留） */
     int clearDemandRef(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
+    /** 版本删除：清掉缺陷任务上的「发现版本」引用，避免编辑时校验失败 */
+    int clearFoundVersionRef(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+
+    /** 项目删除：项目下所有版本的「发现版本」引用一起清掉 */
+    int clearFoundVersionRefsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 任务彻底删除：清掉其他任务对它的「被谁阻塞」引用 */
+    int clearBlockedByTaskRefs(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
+
     /** 分支详情：挂在某条分支上的未删除任务（未完成的排前面） */
     List<com.devstudio.kanban.entity.Task> selectByBranch(@Param("workspaceId") String workspaceId,
                                                           @Param("branchId") String branchId);

@@ -108,8 +108,8 @@ export function initMobileGestures(){
   views.appendChild(ptr);
 
   views.addEventListener("pointerdown", function(e){
-    if(!isMobile() || e.pointerType === "mouse") return;
-    if(e.target.closest("input,textarea,select,a,button,.drawer-layer")) return;
+    if(!isMobile() || e.pointerType === "mouse"){ start = null; return; }
+    if(e.target.closest("input,textarea,select,a,button,.drawer-layer")){ start = null; return; }
     var scroller = e.target.closest(".view.on");
     if(!scroller) return;
     start = {
@@ -181,6 +181,9 @@ export function initMobileGestures(){
       refreshActiveView({manual:true});
     }
   });
+  /* 指针在 #views 外抬起（底栏/顶栏/抽屉）时也要清掉起点，避免下一次点击误用旧坐标触发幽灵滑动 */
+  document.addEventListener("pointerup", function(){ start = null; }, {passive:true});
+  document.addEventListener("pointercancel", function(){ start = null; }, {passive:true});
 
   document.addEventListener("click", function(e){
     if(Date.now() < (rt.suppressClickUntil || 0) && e.target.closest(CARD_SEL) && !e.target.closest(".mtc-swipe")){

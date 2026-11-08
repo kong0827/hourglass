@@ -42,6 +42,7 @@ MVN="${MVN:-mvn}"
 # 2026-11-01 CODE-5：app.js 拆为原生 ES Module（core/lib/views），校验清单同步为模块文件。
 VERIFY_FILES=(
   "index.html"
+  "help.html"
   "login.html"
   "join.html"
   "manifest.webmanifest"

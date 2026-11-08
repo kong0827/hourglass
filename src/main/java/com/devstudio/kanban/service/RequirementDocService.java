@@ -46,7 +46,7 @@ import java.util.Objects;
 @Service
 public class RequirementDocService {
 
-    /** 正文上限：粘贴截图会以 base64 内联，200KB 会把图片截断，放宽到 12MB（列是 MEDIUMTEXT，上限 16MB） */
+    /** 正文上限按 UTF-8 字节计：MEDIUMTEXT 上限 16MB，留出余量；中文/emoji 不能再按字符数算 */
     private static final int CONTENT_MAX = 12_000_000;
 
     /** 每篇文档保留的历史快照版数上限 */
@@ -123,10 +123,19 @@ public class RequirementDocService {
         return list(workspaceId, userId, null);
     }
 
+    /** 全文/模糊搜索是最重的路径：最多返回 200 条，避免一次把整个空间的命中文档全部带回 */
+    private static final int DOC_SEARCH_LIMIT = 200;
+
     public List<ReqDocView> list(String workspaceId, String userId, String keyword) {
-        List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId, likePattern(Texts.trimToNull(keyword)));
+        String kw = Texts.trimToNull(keyword);
+        /* 普通树需要完整父子结构，保持全量；搜索多取 1 条用于判断是否被截断 */
+        Integer limit = kw == null ? null : DOC_SEARCH_LIMIT + 1;
         java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
         String role = projectAccess.roleOf(workspaceId, userId);
+        /* 可见性条件下推到 SQL，避免 200 条上限把可见结果挤掉（先限行再内存过滤会少返回） */
+        boolean draftVisibleOnly = !ProjectAccessService.isPrivileged(role);
+        List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId, likePattern(kw), limit,
+                userId, draftVisibleOnly, hiddenReqs);
         List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>();
         for (ReqDocView v : rows) {
             if (hiddenReqs.contains(v.getReqId())) {
@@ -560,7 +569,7 @@ public class RequirementDocService {
         if (html == null || html.trim().isEmpty()) {
             return null;
         }
-        String src = html.length() > CONTENT_MAX ? html.substring(0, CONTENT_MAX) : html;
+        String src = cutContent(html);
         Document dirty = Jsoup.parseBodyFragment(src);
         dirty.outputSettings().prettyPrint(false);
         Document clean = new org.jsoup.safety.Cleaner(SAFELIST).clean(dirty);
@@ -574,6 +583,25 @@ public class RequirementDocService {
         /* 只有空标签（<p><br></p> 之类）也视为空 */
         String text = clean.body().text();
         return (text == null || text.trim().isEmpty()) && out.indexOf("<hr") < 0 ? null : out;
+    }
+
+    /** 按 UTF-8 字节上限截断，避免 12M 个中文字符（约 36MB）超过 MEDIUMTEXT 的 16MB */
+    private static String cutContent(String value) {
+        if (value == null) {
+            return null;
+        }
+        int bytes = 0;
+        int i = 0;
+        while (i < value.length()) {
+            int cp = value.codePointAt(i);
+            int width = cp <= 0x7F ? 1 : (cp <= 0x7FF ? 2 : (cp <= 0xFFFF ? 3 : 4));
+            if (bytes + width > CONTENT_MAX) {
+                break;
+            }
+            bytes += width;
+            i += Character.charCount(cp);
+        }
+        return i >= value.length() ? value : value.substring(0, i);
     }
 
     /**
@@ -732,7 +760,7 @@ public class RequirementDocService {
             if (content == null || content.trim().isEmpty()) {
                 return null;
             }
-            return content.length() > CONTENT_MAX ? content.substring(0, CONTENT_MAX) : content;
+            return cutContent(content);
         }
         return sanitize(content);
     }

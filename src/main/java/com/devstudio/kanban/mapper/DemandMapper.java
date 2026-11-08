@@ -36,7 +36,8 @@ public interface DemandMapper {
     int insertLog(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                   @Param("action") String action, @Param("note") String note, @Param("operator") String operator);
 
-    List<Map<String, Object>> selectLogs(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+    List<Map<String, Object>> selectLogs(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                                         @Param("limit") int limit);
 
     int deleteLogsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

@@ -17,7 +17,7 @@ public class TaskBulkMoveRequest {
     private List<String> ids;
 
     @NotBlank(message = "目标列不能为空")
-    @Pattern(regexp = "^[A-Za-z0-9_-]{1,16}$", message = "目标列不合法")
+    @Pattern(regexp = "^[A-Za-z0-9_-]{1,24}$", message = "目标列不合法")
     private String column;
 
     /** 批量整理默认不开始计时 */

@@ -60,22 +60,38 @@ public class TaskCommentService {
         this.watchService = watchService;
     }
 
+    private static final int COMMENT_PAGE_SIZE = 200;
+    private static final int COMMENT_PAGE_MAX = 500;
+
     /** 读评论：允许回收站中的任务（保留可读） */
     public List<TaskComment> list(String workspaceId, String taskId) {
         Task t = taskMapper.selectById(taskId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
         }
-        return commentMapper.selectByTaskId(workspaceId, taskId);
+        return page(workspaceId, taskId, null, COMMENT_PAGE_SIZE);
     }
 
     public List<TaskComment> list(String workspaceId, String userId, String taskId) {
+        return list(workspaceId, userId, taskId, null, COMMENT_PAGE_SIZE);
+    }
+
+    /** 游标分页：beforeId 为空取最新一页，否则取比它更早的一页；返回按时间正序 */
+    public List<TaskComment> list(String workspaceId, String userId, String taskId,
+                                  Long beforeId, Integer limit) {
         Task t = taskMapper.selectById(taskId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
         }
         projectAccess.assertViewTask(workspaceId, userId, t);
-        return commentMapper.selectByTaskId(workspaceId, taskId);
+        int size = limit == null ? COMMENT_PAGE_SIZE : Math.max(1, Math.min(COMMENT_PAGE_MAX, limit));
+        return page(workspaceId, taskId, beforeId, size);
+    }
+
+    private List<TaskComment> page(String workspaceId, String taskId, Long beforeId, int limit) {
+        List<TaskComment> rows = commentMapper.selectByTaskId(workspaceId, taskId, beforeId, limit);
+        Collections.reverse(rows);
+        return rows;
     }
 
     /** 不传结构化提及时的兼容入口（仅解析正文里的 @名字） */

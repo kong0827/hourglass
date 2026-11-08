@@ -672,24 +672,62 @@ if(iBlocked){
     rt.formDirty = true;
   });
 }
+var commentPageSeq = 0, commentsHasMore = false, commentsLoadingMore = false;
+var COMMENT_PAGE_SIZE = 200, COMMENT_FETCH_SIZE = 201;
 function loadComments(taskId){
   if(!fComments || !commentList) return;
+  var seq = ++commentPageSeq;
+  commentsLoadingMore = false;
+  commentsHasMore = false;
   commentList.innerHTML = '<div class="sub-empty">加载中…</div>';
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/comments").then(function(list){
-    if(rt.editingId === taskId) renderComments(list);
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/comments", {limit: COMMENT_FETCH_SIZE}).then(function(list){
+    if(seq !== commentPageSeq || rt.editingId !== taskId) return;
+    list = list || [];
+    /* 多取一条当哨兵：正好 200 条时不会误显示“加载更早” */
+    commentsHasMore = list.length > COMMENT_PAGE_SIZE;
+    commentsCache = commentsHasMore ? list.slice(list.length - COMMENT_PAGE_SIZE) : list;
+    renderComments();
   }).catch(function(){
-    if(rt.editingId === taskId) renderComments([]);
+    if(seq !== commentPageSeq || rt.editingId !== taskId) return;
+    commentsCache = [];
+    commentsHasMore = false;
+    renderComments();
   });
 }
-function renderComments(list){
-  commentsCache = list || [];
-  if(commentCount) commentCount.textContent = commentsCache.length ? (commentsCache.length + " 条") : "";
+function loadOlderComments(){
+  if(!rt.editingId || !commentsCache.length || commentsLoadingMore || !commentsHasMore) return;
+  var taskId = rt.editingId;
+  var seq = commentPageSeq;
+  var beforeId = commentsCache[0].id;
+  commentsLoadingMore = true;
+  renderComments();
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/comments", {
+    limit: COMMENT_FETCH_SIZE,
+    beforeId: beforeId
+  }).then(function(list){
+    if(seq !== commentPageSeq || rt.editingId !== taskId) return;
+    list = list || [];
+    commentsHasMore = list.length > COMMENT_PAGE_SIZE;
+    if(commentsHasMore) list = list.slice(list.length - COMMENT_PAGE_SIZE);
+    commentsCache = list.concat(commentsCache);
+    renderComments();
+  }).catch(function(ex){
+    if(seq === commentPageSeq && rt.editingId === taskId) toast(ex.message || "加载更早评论失败", "bad");
+  }).then(function(){
+    commentsLoadingMore = false;
+    if(seq === commentPageSeq && rt.editingId === taskId) renderComments();
+  });
+}
+function renderComments(){
+  if(commentCount) commentCount.textContent = commentsCache.length ? (commentsCache.length + (commentsHasMore ? "+" : "") + " 条") : "";
   if(!commentsCache.length){
     commentList.innerHTML = '<div class="sub-empty">还没有评论。这里是讨论区，与下方「操作时间线」分开：时间线记系统做了什么，评论记人说了什么。</div>';
     return;
   }
   var myId = rt.currentUser ? rt.currentUser.id : "";
-  commentList.innerHTML = commentsCache.map(function(c){
+  var more = commentsHasMore ? '<button class="btn sm ghost comment-more" type="button" data-comment-more>' +
+    (commentsLoadingMore ? "加载中…" : "加载更早的评论") + '</button>' : "";
+  commentList.innerHTML = more + commentsCache.map(function(c){
     var mine = c.authorId && c.authorId === myId;
     return '<div class="comment-item' + (mine ? " mine" : "") + '" data-cid="' + esc(c.id) + '">' +
       avatarHTML(c.authorName || "?", "sm") +
@@ -923,13 +961,15 @@ if(commentMention){
 }
 if(commentList){
   commentList.addEventListener("click", function(e){
+    if(e.target.closest("[data-comment-more]")){ loadOlderComments(); return; }
     var del = e.target.closest("[data-comment-del]");
     if(!del || !rt.editingId) return;
     if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
     var id = rt.editingId;
     API.del("/api/comments/" + encodeURIComponent(del.dataset.commentDel)).then(function(){
       toast("评论已删除", "fs");
-      loadComments(id);
+      /* 删除期间切到别的任务：不要用旧任务的重载覆盖新任务评论区 */
+      if(rt.editingId === id) loadComments(id);
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }

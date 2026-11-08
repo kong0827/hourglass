@@ -7,13 +7,18 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Set;
 
 @Mapper
 public interface RequirementDocMapper {
 
     /** 空间下的需求列表（带项目名、关联任务数、正文片段）；keyword 非空时按标题/正文模糊匹配 */
     List<ReqDocView> selectViewByWorkspace(@Param("workspaceId") String workspaceId,
-                                           @Param("keyword") String keyword);
+                                           @Param("keyword") String keyword,
+                                           @Param("limit") Integer limit,
+                                           @Param("viewerId") String viewerId,
+                                           @Param("draftVisibleOnly") boolean draftVisibleOnly,
+                                           @Param("hiddenReqs") Set<String> hiddenReqs);
 
     RequirementDoc selectById(@Param("id") String id);
 

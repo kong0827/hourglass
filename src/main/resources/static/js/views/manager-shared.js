@@ -40,7 +40,7 @@ function loadBarHTML(pct){
 }
 function csvCell(value){
   var s = value === null || value === undefined ? "" : String(value);
-  if(typeof value === "string" && /^[=+\-@]/.test(s)) s = "'" + s;
+  if(typeof value === "string" && /^\s*[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function downloadCsv(filename, rows){

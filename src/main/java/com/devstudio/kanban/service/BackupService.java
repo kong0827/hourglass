@@ -101,6 +101,7 @@ public class BackupService {
     private final CategoryMapper categoryMapper;
     private final WorkspaceService workspaceService;
     private final WorkspaceMemberMapper memberMapper;
+    private final com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper;
     private final TaskCommentMapper commentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
@@ -127,6 +128,7 @@ public class BackupService {
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                          BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
                          WorkspaceService workspaceService, WorkspaceMemberMapper memberMapper,
+                         com.devstudio.kanban.mapper.ProjectMemberMapper projectMemberMapper,
                          TaskCommentMapper commentMapper,
                          TestCaseMapper testCaseMapper,
                          TestCaseRunMapper testCaseRunMapper,
@@ -154,6 +156,7 @@ public class BackupService {
         this.categoryMapper = categoryMapper;
         this.workspaceService = workspaceService;
         this.memberMapper = memberMapper;
+        this.projectMemberMapper = projectMemberMapper;
         this.commentMapper = commentMapper;
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
@@ -513,6 +516,8 @@ public class BackupService {
             txTemplate.execute(status -> {
                 clearWorkspaceTaskData(workspaceId, data);
                 importReferenceData(data, st);
+                /* 项目已重建：清掉仍指向已删除项目的项目级授权，避免 ID 复用时继承旧权限 */
+                projectMemberMapper.deleteMissingProjects(workspaceId);
                 importDocComments(data, st);
                 return null;
             });
@@ -553,13 +558,12 @@ public class BackupService {
         // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"。
         // v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状。
         // v8：版本/需求池同口径——只有备份确实包含该字段才覆盖，旧备份不误删。
-        // v10：用例依赖项目、文档评论依赖文档；字段不全时保留现有数据，避免清了又恢复不回来。
+        // v10：用例依赖项目，旧备份缺失时保留；文档评论依赖文档，文档被替换时评论必须一起清。
         boolean withTestCases = data.getTestCases() != null && data.getReqs() != null;
-        boolean withDocComments = data.getDocComments() != null && data.getReqDocs() != null;
         cascade.clearWorkspaceDataForImport(workspaceId,
                 data.getReqDocs() != null, data.getBranches() != null,
                 data.getVersions() != null, data.getDemands() != null,
-                withTestCases, withDocComments);
+                withTestCases);
         /* 版本被覆盖但需求池未随备份恢复时，旧 version_id 已指向不存在的版本 */
         if (data.getVersions() != null && data.getDemands() == null) {
             demandMapper.clearVersionRefsByWorkspace(workspaceId);
@@ -940,8 +944,8 @@ public class BackupService {
                     continue;
                 }
                 String cid = Ids.sanitize(Texts.trimToNull(c.getId()));
-                // 跳过保留列 id（done 为系统列）与超出 board_column.id VARCHAR(16) 的旧数据
-                if (cid == null || cid.length() > 16 || Consts.COL_DONE.equals(cid)
+                // 跳过保留列 id（done 为系统列）与超出 board_column.id VARCHAR(24) 的数据
+                if (cid == null || cid.length() > 24 || Consts.COL_DONE.equals(cid)
                         || boardColumnMapper.selectById(workspaceId, cid) != null) {
                     continue;
                 }
@@ -1079,7 +1083,7 @@ public class BackupService {
             if ("bug".equals(itemType)) {
                 t.setSeverity(oneOf(b.getSeverity(),
                         new String[]{"blocker", "critical", "major", "minor"}, null));
-                t.setEnvironment(Texts.trimToNull(b.getEnvironment()));
+                t.setEnvironment(Texts.cut(Texts.trimToNull(b.getEnvironment()), 120));
                 t.setReproduceSteps(Texts.trimToNull(b.getReproduceSteps()));
                 String foundVersionId = Texts.trimToNull(b.getFoundVersionId());
                 if (foundVersionId != null && st.versionIdMap.containsKey(foundVersionId)) {
@@ -1825,8 +1829,12 @@ public class BackupService {
         if (value == null || value.isEmpty()) {
             return "";
         }
-        // 防公式注入：= + - @ 及前导制表/回车会被 Excel 等当公式或命令解释，先加单引号转成文本
-        char first = value.charAt(0);
+        // 防公式注入：= + - @ 及前导空白/制表/回车会被 Excel 等当公式或命令解释，先加单引号转成文本
+        int firstNonSpace = 0;
+        while (firstNonSpace < value.length() && Character.isWhitespace(value.charAt(firstNonSpace))) {
+            firstNonSpace++;
+        }
+        char first = firstNonSpace < value.length() ? value.charAt(firstNonSpace) : 0;
         if (first == '=' || first == '+' || first == '-' || first == '@'
                 || first == '\t' || first == '\r') {
             value = "'" + value;

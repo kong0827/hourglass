@@ -86,19 +86,19 @@
       <if test="openOnly"> AND t.board_column != 'done' </if>
       <if test="q != null">
         <!-- 口径与 ganttWhere 一致：标题/描述/备注/分类 + 项目名 + 标签名 + 附件名 -->
-        AND (t.title LIKE CONCAT('%', #{q}, '%')
-             OR t.description LIKE CONCAT('%', #{q}, '%')
-             OR t.note LIKE CONCAT('%', #{q}, '%')
-             OR t.category LIKE CONCAT('%', #{q}, '%')
+        AND (t.title LIKE CONCAT('%', #{q}, '%') ESCAPE '\\'
+             OR t.description LIKE CONCAT('%', #{q}, '%') ESCAPE '\\'
+             OR t.note LIKE CONCAT('%', #{q}, '%') ESCAPE '\\'
+             OR t.category LIKE CONCAT('%', #{q}, '%') ESCAPE '\\'
              OR EXISTS (SELECT 1 FROM requirement r
                         WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
-                          AND r.name LIKE CONCAT('%', #{q}, '%'))
+                          AND r.name LIKE CONCAT('%', #{q}, '%') ESCAPE '\\')
              OR EXISTS (SELECT 1 FROM task_tag tt JOIN tag g ON g.id = tt.tag_id
                         WHERE tt.task_id = t.id AND tt.workspace_id = t.workspace_id
-                          AND g.name LIKE CONCAT('%', #{q}, '%'))
+                          AND g.name LIKE CONCAT('%', #{q}, '%') ESCAPE '\\')
              OR EXISTS (SELECT 1 FROM attachment a
                         WHERE a.target_id = t.id AND a.target_kind = 'task' AND a.workspace_id = t.workspace_id
-                          AND a.filename LIKE CONCAT('%', #{q}, '%')))
+                          AND a.filename LIKE CONCAT('%', #{q}, '%') ESCAPE '\\'))
       </if>
       <if test="pris != null and pris.size() > 0">
         AND t.priority IN
@@ -417,6 +417,22 @@
   <update id="clearDemandRef">
     UPDATE task SET demand_id = NULL, updated_at = NOW()
     WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </update>
+
+  <update id="clearFoundVersionRef">
+    UPDATE task SET found_version_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND found_version_id = #{versionId}
+  </update>
+
+  <update id="clearFoundVersionRefsByReq">
+    UPDATE task SET found_version_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND found_version_id IS NOT NULL
+  </update>
+
+  <update id="clearBlockedByTaskRefs">
+    UPDATE task SET blocked_by_task_id = NULL, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND blocked_by_task_id IN
+    <foreach collection="taskIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
   </update>
 
   <select id="selectByBranch" resultType="Task">

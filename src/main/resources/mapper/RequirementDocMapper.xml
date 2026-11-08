@@ -26,6 +26,13 @@
       GROUP BY req_doc_id
     ) tc ON tc.req_doc_id = d.id
     WHERE d.workspace_id = #{workspaceId}
+    <if test="hiddenReqs != null and hiddenReqs.size() > 0">
+      AND (d.req_id IS NULL OR d.req_id NOT IN
+        <foreach collection="hiddenReqs" item="hr" open="(" separator="," close=")">#{hr}</foreach>)
+    </if>
+    <if test="draftVisibleOnly">
+      AND (d.published_at IS NOT NULL OR d.owner_user_id = #{viewerId})
+    </if>
     <choose>
       <when test="keyword != null and keyword != '' and keyword.length() >= 2">
         AND MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE)
@@ -42,6 +49,7 @@
         ORDER BY d.req_id, d.sort_order, d.created_at
       </otherwise>
     </choose>
+    <if test="limit != null">LIMIT #{limit}</if>
   </select>
 
   <select id="selectById" resultType="RequirementDoc">

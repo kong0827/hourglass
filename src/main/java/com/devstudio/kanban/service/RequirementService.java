@@ -245,6 +245,8 @@ public class RequirementService {
         int unlinked = taskMapper.countTasksByReq(workspaceId, id);
         logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
                 "解除与已删除项目「" + r.getName() + "」的关联");
+        /* 项目下的版本即将删除：缺陷任务的发现版本引用也一起清掉 */
+        taskMapper.clearFoundVersionRefsByReq(workspaceId, id);
         taskMapper.clearReq(workspaceId, id);
         /* 直接归属该项目的分支退回空间级公共分支（分支本身保留） */
         branchMapper.clearReqIdByReq(workspaceId, id);

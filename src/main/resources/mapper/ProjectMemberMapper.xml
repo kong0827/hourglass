@@ -47,4 +47,11 @@
   <delete id="deleteAllByUser">
     DELETE FROM project_member WHERE user_id = #{userId}
   </delete>
+
+  <delete id="deleteMissingProjects">
+    DELETE pm FROM project_member pm
+    LEFT JOIN requirement r
+      ON r.id = pm.project_id AND r.workspace_id = pm.workspace_id
+    WHERE pm.workspace_id = #{workspaceId} AND r.id IS NULL
+  </delete>
 </mapper>

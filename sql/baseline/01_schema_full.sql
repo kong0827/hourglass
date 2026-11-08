@@ -223,7 +223,8 @@ CREATE TABLE `demand_log` (
   `operator` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人账号ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
   PRIMARY KEY (`id`),
-  KEY `idx_ws_demand` (`workspace_id`,`demand_id`)
+  KEY `idx_ws_demand` (`workspace_id`,`demand_id`),
+  KEY `idx_ws_demand_id` (`workspace_id`,`demand_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求流转日志';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -343,7 +344,7 @@ CREATE TABLE `mail_delivery` (
   PRIMARY KEY (`id`),
   KEY `idx_mail_delivery_due` (`status`,`next_attempt_at`,`id`),
   KEY `idx_mail_delivery_reference` (`event_type`,`reference_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='事件邮件持久化 outbox';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='事件邮件持久化 outbox';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -364,7 +365,7 @@ CREATE TABLE `mail_setting` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   CONSTRAINT `chk_mail_setting_singleton` CHECK ((`id` = 1))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全局 SMTP 配置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局 SMTP 配置';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -696,7 +697,8 @@ CREATE TABLE `task_comment` (
   PRIMARY KEY (`id`),
   KEY `idx_task` (`task_id`,`id`),
   KEY `idx_ws` (`workspace_id`,`id`),
-  KEY `idx_ws_task` (`workspace_id`,`task_id`)
+  KEY `idx_ws_task` (`workspace_id`,`task_id`),
+  KEY `idx_ws_task_id` (`workspace_id`,`task_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务评论';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -769,8 +771,8 @@ CREATE TABLE `task_log` (
   `actor_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人用户ID（历史数据可空）',
   `action` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：create/update/move/delete/restore/undo',
   `detail` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '变更摘要',
-  `from_column` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动前所在看板列 id（仅 action=move 且跨列时非空）',
-  `to_column` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动后所在看板列 id（仅 action=move 且跨列时非空）',
+  `from_column` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动前所在看板列 id（仅 action=move 且跨列时非空）',
+  `to_column` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动后所在看板列 id（仅 action=move 且跨列时非空）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
   PRIMARY KEY (`id`),
   KEY `idx_task` (`task_id`,`id`),
