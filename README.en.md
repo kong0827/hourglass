@@ -56,8 +56,7 @@ Existing tools are either pure task boards (execution without requirements or me
 
 ### Delivery
 
-- **Work Items**: kanban, list, calendar, and Gantt share one filter set; drag between columns and create inline
-- **Gantt**: dependencies (FS / SS / FF / SF), milestones, baseline variance, critical path, member workload; CSV export, A3 printing, read-only share links
+- **Work Items**: kanban, list, calendar, and Gantt share one filter set; drag between columns and create inline. Gantt adds dependencies (FS / SS / FF / SF), milestones, baseline variance, critical path, and member workload, with CSV export, A3 printing, and read-only share links
 - **Documents**: rich-text / Markdown docs in a tree, with full-text search, historical snapshots, shareable publishing, and AI task-draft generation
 - **Tests**: case maintenance and execution records; a failed run converts directly into a bug work item
 - **Branches**: workspace-level branch tracking through development, testing, merge, and release
@@ -72,7 +71,7 @@ Existing tools are either pure task boards (execution without requirements or me
 - **Time tracking**: dragging into "In Progress" starts the timer; dragging into "Done" stops it and chains to the next task; manual backfill with void-and-recompute
 - **Permissions**: workspace roles (owner / admin / member / viewer) plus per-project visibility control
 - **Notifications**: in-app + SSE real-time push + email + external bots (Webhook / ServerChan / PushPlus)
-- **Attachments**: images, PDF, Markdown, ZIP, Excel; `.xlsx` files can be edited right inside the task detail
+- **Attachments**: images, PDF, Markdown, ZIP, Excel; `.xlsx` files can be edited right inside the work-item detail
 - **AI assistant**: each user configures their own model and quota for requirement breakdown, doc health checks, and weekly report drafts; results land only after human confirmation
 - **Data security**: rich-text whitelist sanitization, encrypted secret storage, AI endpoints denied intranet access by default; full per-workspace backup export / import
 - **Mobile**: three responsive breakpoints; installable PWA
@@ -113,7 +112,7 @@ To upgrade an existing database, run the numbered scripts under `sql/` in order 
 | Layer | Choice |
 | --- | --- |
 | Backend | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security (session login + CSRF) |
-| Database | MySQL 8 (utf8mb4), 43 tables, numbered idempotent migration scripts |
+| Database | MySQL 8 (utf8mb4), 46 tables, numbered idempotent migration scripts |
 | Realtime | SSE push for changes and notifications |
 | Frontend | Vanilla JavaScript ES Modules, **no framework, no build step**; PWA offline shell |
 | Deployment | Frontend served directly by Nginx, backend exposes only `/api/**`; systemd + one-command deploy script |
@@ -130,8 +129,12 @@ For the deeper information model, unified metric rules, the role-permission matr
 
 | File | Contents |
 | --- | --- |
+| [`docs/产品说明.md`](docs/产品说明.md) | Product overview: what it is, who it is for, core value and deployment shape (Chinese) |
+| [`docs/快速上手指南.md`](docs/快速上手指南.md) | Quick start: a new team runs the main flow in 30 minutes (Chinese) |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | Background, positioning, information model, module map, core mechanisms (Chinese) |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | End-user manual and unified metric rules (Chinese) |
+| [`docs/管理员指南.md`](docs/管理员指南.md) | Admin guide: deployment, backup and upgrade, notifications and AI, troubleshooting (Chinese) |
+| [`docs/常见问题.md`](docs/常见问题.md) | FAQ: metric conventions, statistics, deployment and trade-offs (Chinese) |
 | [`docs/接口契约.md`](docs/接口契约.md) | API contract with appendices on hours, calendar, retrospective conventions (Chinese) |
 | [`deploy/README.md`](deploy/README.md) | Deployment guide: server prep, systemd, Nginx, backup and rollback (Chinese) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog: milestones and notable changes |
