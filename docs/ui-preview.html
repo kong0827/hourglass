@@ -4432,6 +4432,44 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .manager-empty-cell{padding:22px!important;text-align:center!important;color:var(--text-3)!important;}
 /* .sheet 默认 max-width:480px 会把下钻表格截断，这里必须显式放开 */
 .manager-drill-sheet{max-width:none;width:min(1080px,94vw);}
+/* 成员负载抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 */
+.member-sheet{width:min(880px,94vw);}
+.member-sheet-id{display:flex;align-items:center;gap:12px;min-width:0;}
+.member-sheet-id h2{display:flex;align-items:center;gap:8px;}
+.member-sheet-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.member-sheet-kpi{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.member-sheet-kpi>i{display:block;font-style:normal;font-size:11.5px;color:var(--text-3);}
+.member-sheet-kpi>b{display:block;margin-top:3px;font-size:16px;line-height:22px;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-sheet-kpi>span{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);}
+.member-layer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 -4px;}
+.member-layer-head>b{font-size:13px;color:var(--text);}
+.member-layer-head>span{min-width:0;font-size:12px;color:var(--text-3);}
+.member-link{padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-link:hover{text-decoration:underline;}
+.member-back{align-self:flex-start;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-back:hover{text-decoration:underline;}
+.member-share{display:flex;align-items:center;gap:8px;min-width:120px;}
+.member-share .progress{flex:1;display:block;height:6px;border-radius:6px;background:var(--surface-sunken);overflow:hidden;}
+.member-share .progress>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
+.member-share b{min-width:34px;font-size:11.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;}
+.member-drill-tbl tbody tr[data-member-project]{cursor:pointer;}
+.member-drill-tbl tbody tr[data-member-project]:hover{background:var(--surface-hover);}
+.member-drill-tbl tbody tr[data-member-project]:focus-visible,
+.member-drill-tbl tbody tr[data-open-task]:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.member-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;}
+.member-day{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);text-align:left;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);}
+.member-day:disabled{cursor:default;}
+.member-day span{font-size:11.5px;color:var(--text-3);}
+.member-day b{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-day:not(:disabled):hover{background:var(--surface-hover);border-color:var(--primary-border);}
+.member-week-foot{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-3);}
+.member-week-foot b{color:var(--text);}
+.member-week-foot .member-link{margin-left:auto;}
+.member-week-note{font-size:12.5px;color:var(--text-3);}
+@media(max-width:680px){
+  .member-sheet-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .member-days{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
 .manager-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .manager-chart{display:block;width:100%;height:220px;}
 .manager-chart text{fill:var(--text-3);font-size:10px;}
@@ -38677,29 +38715,14 @@ __NS["views/workload.js"] = (function(){
 
 
 
-
 var { fullscreenButtonHTML } = __NS["core/fullscreen.js"];
-
-
 
 var esc = esc2;
 
-
-
-var { caliberHTML, fmtDate, fmtHours, loadBarHTML, openTaskTable } = __NS["views/manager-shared.js"];
+var { caliberHTML, fmtDate, fmtHours, loadBarHTML, taskStatusName } = __NS["views/manager-shared.js"];
 var cache = null, seq = 0, mode = "week";
-var pivotState = null;   /* 当前透视的格子数据，行/列/合计点击时取工作项 */
-var LOAD_PIVOT_KEY = "ds.workloadPivot";
-var loadPivot = (function(){
-  try{
-    var p = JSON.parse(localStorage.getItem(LOAD_PIVOT_KEY) || "null");
-    if(p && p.row && p.col && p.metric && p.row !== p.col) return p;
-  }catch(e){ /* 受限环境忽略 */ }
-  return {row:"member", col:"boardColumn", metric:"count"};
-})();
-var LOAD_PIVOT_DIMS = [["member", "成员"], ["project", "项目"], ["boardColumn", "状态"],
-  ["priority", "优先级"], ["itemType", "类型"]];
-var LOAD_PIVOT_METRICS = [["count", "工作项数"], ["estimate", "预估工时"], ["actual", "已用工时"]];
+var WEEK_DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+
 function enterWorkloadView(){ loadWorkload(); }
 function loadWorkload(opts){
   opts = opts || {};
@@ -38708,109 +38731,187 @@ function loadWorkload(opts){
   API.get("/api/manager/workload").then(function(data){ if(current===seq){cache=data;renderWorkload();} })
     .catch(function(ex){if(current===seq)body.innerHTML=UI.errorState(ex.message);});
 }
-function loadPivotDimLabel(dim){
-  for(var i = 0; i < LOAD_PIVOT_DIMS.length; i++) if(LOAD_PIVOT_DIMS[i][0] === dim) return LOAD_PIVOT_DIMS[i][1];
-  return dim;
+/* —— 成员抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 —— */
+function memberByKey(key){
+  return (cache && cache.members || []).filter(function(m){ return m.key === key; })[0];
 }
-function loadPivotValue(task, memberName, dim){
-  if(dim === "member") return memberName || "未分配";
-  if(dim === "project") return task.reqName || "未归类";
-  if(dim === "boardColumn") return colName(task.boardColumn) || "未设置";
-  if(dim === "priority") return task.priority ? priName(task.priority) : "未设置";
-  if(dim === "itemType") return typeName(task.itemType) || "任务";
-  return "—";
+function memberStatusTag(m){
+  return m.overloaded ? '<span class="mini-tag over">超载</span>'
+    : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>');
 }
-function loadPivotOrder(dim){
-  if(dim === "priority"){
-    var order = ["P0", "P1", "P2", "P3"];
-    return function(a, b){ return (order.indexOf(a) < 0 ? 9 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 9 : order.indexOf(b)); };
+function memberTaskCount(m){ return (m.tasks || []).length; }
+function memberProject(m, reqId){
+  return (m.projects || []).filter(function(p){ return (p.reqId || "") === (reqId || ""); })[0];
+}
+function memberKpisHTML(m){
+  return '<div class="member-sheet-kpis">'
+    + '<div class="member-sheet-kpi"><i>未完成工作项</i><b>' + memberTaskCount(m) + ' 项</b></div>'
+    + '<div class="member-sheet-kpi"><i>剩余预估</i><b>' + fmtHours(m.remainingMinutes) + '</b><span>剩余 ' + (m.workdays || 0) + ' 个工作日</span></div>'
+    + '<div class="member-sheet-kpi"><i>本周已计</i><b>' + fmtHours(m.weekMinutes) + '</b><span>上周 ' + fmtHours(m.lastWeekMinutes) + '</span></div>'
+    + '<div class="member-sheet-kpi"><i>负载</i><b>' + (Number(m.loadPct) || 0) + '%</b><span>容量 ' + fmtHours(m.capacityMinutes) + '</span></div>'
+    + '</div>';
+}
+function memberProjectsHTML(m){
+  var projects = (m.projects || []).slice().sort(function(a, b){ return (Number(b.remainingMinutes) || 0) - (Number(a.remainingMinutes) || 0); });
+  if(!projects.length) return '<div class="manager-empty-cell">该成员暂无未完成工作项</div>';
+  var total = Number(m.remainingMinutes) || 0;
+  var rows = projects.map(function(p){
+    var pct = total ? Math.round((Number(p.remainingMinutes) || 0) / total * 100) : 0;
+    return '<tr data-member-project="' + esc(p.reqId || "") + '" tabindex="0" title="查看该项目下的工作项">'
+      + '<td><b class="manager-drill-title">' + esc(p.name || "未归类") + '</b></td>'
+      + '<td class="num">' + (p.taskCount || 0) + '</td>'
+      + '<td class="num">' + fmtHours(p.remainingMinutes) + '</td>'
+      + '<td><div class="member-share"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div></td>'
+      + '</tr>';
+  }).join("");
+  return '<div class="member-layer-head"><b>项目分布</b>'
+    + '<button class="member-link" type="button" data-member-all="1">查看全部工作项 →</button></div>'
+    + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
+    + '<th>项目</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th>剩余占比</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function memberWeekHTML(m){
+  var days = m.dayMinutes || [];
+  var hasLogs = (m.weekLogs || []).length > 0;
+  var diff = (m.weekMinutes || 0) - (m.lastWeekMinutes || 0);
+  var diffCls = diff > 0 ? "tag-warning" : (diff < 0 ? "tag-success" : "tag-ghost");
+  var diffText = diff === 0 ? "持平" : ((diff > 0 ? "+" : "−") + fmtHours(Math.abs(diff)));
+  var cells = WEEK_DAY_NAMES.map(function(name, i){
+    var n = Number(days[i]) || 0;
+    return '<button class="member-day" type="button"' + (n ? ' data-member-day="' + i + '" title="查看该日计时明细"' : ' disabled') + '>'
+      + '<span>' + name + '</span><b>' + (n ? fmtHours(n) : "—") + '</b></button>';
+  }).join("");
+  var lastHTML = (m.lastWeekLogs || []).length
+    ? '<button class="member-link" type="button" data-member-logs="last" title="查看上周计时明细">上周 ' + fmtHours(m.lastWeekMinutes) + ' <span class="tag ' + diffCls + '">' + diffText + '</span></button>'
+    : '<span class="member-week-note">上周 ' + fmtHours(m.lastWeekMinutes) + ' · <span class="tag ' + diffCls + '">' + diffText + '</span></span>';
+  var weekLink = hasLogs ? '<button class="member-link" type="button" data-member-logs="week">查看明细 →</button>' : '';
+  return '<div class="member-layer-head"><b>本周工时</b>' + lastHTML + '</div>'
+    + '<div class="member-days">' + cells + '</div>'
+    + '<div class="member-week-foot">本周合计 <b>' + fmtHours(m.weekMinutes) + '</b>' + weekLink + '</div>';
+}
+function memberTasksHTML(m, layer){
+  var tasks = (m.tasks || []).filter(function(t){ return layer.all || (t.reqId || "") === (layer.reqId || ""); });
+  var rows = tasks.map(function(t){
+    return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
+      + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
+      + '<td>' + esc(t.reqName || "未归类") + '</td>'
+      + '<td>' + esc(taskStatusName(t)) + '</td>'
+      + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
+      + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
+      + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
+  }).join("") || '<tr><td colspan="6" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
+  return '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
+    + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
+    + '<th>工作项</th><th>项目</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function memberLogsData(m, scope, dayIdx){
+  var isLast = scope === "last";
+  var all = (isLast ? m.lastWeekLogs : m.weekLogs) || [];
+  var weekStart = isLast ? (cache && cache.lastWeekStart) : (cache && cache.weekStart);
+  var hasDay = dayIdx !== undefined && dayIdx !== null && dayIdx !== "";
+  var date = hasDay ? addDaysISO(weekStart, Number(dayIdx)) : "";
+  var rows = hasDay ? all.filter(function(l){ return l.date === date; }) : all;
+  var total = 0;
+  rows.forEach(function(l){ total += Number(l.minutes) || 0; });
+  var desc;
+  if(hasDay){
+    desc = WEEK_DAY_NAMES[Number(dayIdx)] + " " + fmtDate(date) + " 合计 " + fmtHours(total)
+      + " · " + (isLast ? "上周" : "本周") + "合计 " + fmtHours(isLast ? m.lastWeekMinutes : m.weekMinutes);
+  } else if(isLast){
+    var d = (m.weekMinutes || 0) - (m.lastWeekMinutes || 0);
+    desc = "上周合计 " + fmtHours(m.lastWeekMinutes) + " · 本周合计 " + fmtHours(m.weekMinutes)
+      + "（差异 " + (d === 0 ? "持平" : (d > 0 ? "+" : "−") + fmtHours(Math.abs(d))) + "）";
+  } else {
+    desc = "本周合计 " + fmtHours(m.weekMinutes);
   }
-  return function(a, b){ return String(a).localeCompare(String(b), "zh-CN"); };
+  return { rows: rows, total: total, desc: desc };
 }
-function loadPivotCell(metric, tasks){
-  var n = 0;
-  tasks.forEach(function(t){
-    if(metric === "estimate") n += Number(t.estimateMinutes) || 0;
-    else if(metric === "actual") n += Number(t.totalMinutes) || 0;
-    else n += 1;
+function memberLogsHTML(m, scope, dayIdx){
+  var data = memberLogsData(m, scope, dayIdx);
+  var rows = data.rows.map(function(l){
+    var attrs = l.taskId ? ' data-open-task="' + esc(l.taskId) + '" tabindex="0" title="打开工作项详情"' : "";
+    var origin = l.origin === "manual" ? ' <span class="tag tag-ghost">补记</span>' : "";
+    return '<tr' + attrs + '><td class="num">' + esc(fmtDate(l.date)) + '</td>'
+      + '<td><div class="manager-task-title">' + esc(l.title) + origin + '</div></td>'
+      + '<td>' + esc(l.reqName || "未归类") + '</td><td class="num">' + fmtHours(l.minutes) + '</td></tr>';
+  }).join("") || '<tr><td colspan="4" class="manager-empty-cell">该时段暂无计时记录</td></tr>';
+  return '<button class="member-back" type="button" data-member-back>← 返回项目分布</button>'
+    + '<div class="member-layer-head"><b>' + (scope === "last" ? "上周计时" : "本周计时") + '</b>'
+    + '<span>共 ' + data.rows.length + ' 条 · 点击记录行打开工作项</span></div>'
+    + '<div class="tbl-wrap"><table class="manager-tbl member-drill-tbl"><thead><tr>'
+    + '<th class="num">日期</th><th>工作项</th><th>项目</th><th class="num">耗时</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function memberDesc(m, layer){
+  if(layer.kind === "tasks"){
+    var p = memberProject(m, layer.reqId);
+    var tasks = (m.tasks || []).filter(function(t){ return layer.all || (t.reqId || "") === (layer.reqId || ""); });
+    var remain = layer.all ? (Number(m.remainingMinutes) || 0) : (Number(p && p.remainingMinutes) || 0);
+    return (layer.all ? "全部项目" : (p ? p.name : "未归类")) + " · " + tasks.length + " 项未完成 · 剩余 " + fmtHours(remain);
+  }
+  if(layer.kind === "logs") return memberLogsData(m, layer.logScope, layer.dayIdx).desc;
+  return "剩余 " + fmtHours(m.remainingMinutes) + " · " + memberTaskCount(m) + " 个未完成工作项 · 本周已计 " + fmtHours(m.weekMinutes);
+}
+function openMemberSheet(member, opts){
+  opts = opts || {};
+  var state = {
+    kind: opts.kind === "tasks" || opts.kind === "logs" ? opts.kind : "projects",
+    reqId: opts.reqId || "",
+    all: !!opts.all,
+    logScope: opts.logScope === "last" ? "last" : "week",
+    dayIdx: opts.dayIdx === undefined || opts.dayIdx === null || opts.dayIdx === "" ? undefined : opts.dayIdx
+  };
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("aria-label", "成员负载：" + member.name);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  function bodyHTML(){
+    if(state.kind === "tasks") return memberTasksHTML(member, state);
+    if(state.kind === "logs") return memberLogsHTML(member, state.logScope, state.dayIdx);
+    return memberProjectsHTML(member) + memberWeekHTML(member);
+  }
+  function render(focusBack){
+    layer.innerHTML = '<div class="sheet manager-drill-sheet member-sheet">'
+      + '<div class="sheet-head"><div class="member-sheet-id">' + avatarHTML(member.name, "lg")
+      + '<div style="min-width:0"><h2>' + esc(member.name) + ' ' + memberStatusTag(member) + '</h2>'
+      + '<div class="desc">' + esc(memberDesc(member, state)) + '</div></div></div>'
+      + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+      + '<div class="sheet-body">' + memberKpisHTML(member) + bodyHTML() + '</div></div>';
+    if(focusBack){
+      var target = layer.querySelector("[data-member-back]") || layer.querySelector("[data-manager-close]");
+      if(target) target.focus();
+    }
+  }
+  function toProjects(){
+    state.kind = "projects"; state.reqId = ""; state.all = false; state.dayIdx = undefined;
+    render(true);
+  }
+  render();
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-manager-close]")){ UI.closeModal(layer); return; }
+    if(e.target.closest("[data-member-back]")){ toProjects(); return; }
+    if(e.target.closest("[data-member-all]")){ state.kind = "tasks"; state.all = true; state.reqId = ""; render(true); return; }
+    var proj = e.target.closest("[data-member-project]");
+    if(proj){ state.kind = "tasks"; state.all = false; state.reqId = proj.dataset.memberProject || ""; render(true); return; }
+    var day = e.target.closest("[data-member-day]");
+    if(day){ state.kind = "logs"; state.dayIdx = Number(day.dataset.memberDay); render(true); return; }
+    var logs = e.target.closest("[data-member-logs]");
+    if(logs){ state.kind = "logs"; state.dayIdx = undefined; state.logScope = logs.dataset.memberLogs === "last" ? "last" : "week"; render(true); return; }
+    var task = e.target.closest("[data-open-task]");
+    if(task){ UI.closeModal(layer); openTaskById(task.dataset.openTask); }
   });
-  return n;
-}
-function loadPivotFmt(metric, v){
-  return metric === "count" ? String(v) : fmtHours(v);
-}
-function pivotTable(){
-  var rows = [], cols = [], buckets = {}, rowMap = {}, colMap = {}, all = [];
-  (cache.members || []).forEach(function(m){
-    (m.tasks || []).forEach(function(t){
-      var r = loadPivotValue(t, m.name, loadPivot.row);
-      var c = loadPivotValue(t, m.name, loadPivot.col);
-      if(rows.indexOf(r) < 0) rows.push(r);
-      if(cols.indexOf(c) < 0) cols.push(c);
-      var key = r + "\u0000" + c;
-      if(!buckets[key]) buckets[key] = [];
-      buckets[key].push(t);
-      (rowMap[r] = rowMap[r] || []).push(t);
-      (colMap[c] = colMap[c] || []).push(t);
-      all.push(t);
-    });
+  layer.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var row = e.target.closest("[data-member-project],[data-open-task]");
+    if(!row || e.target !== row) return;
+    e.preventDefault();
+    row.click();
   });
-  rows.sort(loadPivotOrder(loadPivot.row));
-  cols.sort(loadPivotOrder(loadPivot.col));
-  pivotState = { cells: buckets, rows: rowMap, cols: colMap, all: all,
-    rowDim: loadPivotDimLabel(loadPivot.row), colDim: loadPivotDimLabel(loadPivot.col) };
-  if(!rows.length){
-    return '<section class="manager-panel"><div class="manager-panel-head"><b>负载透视</b></div><div class="manager-empty-cell">暂无可透视的未完成工作项</div></section>';
-  }
-  var metric = loadPivot.metric;
-  function link(html, enabled, attrs){
-    return enabled ? '<button class="manager-cell-link" type="button" ' + attrs + '>' + html + '</button>' : "—";
-  }
-  var head = '<tr><th>' + esc(loadPivotDimLabel(loadPivot.row)) + ' \\ ' + esc(loadPivotDimLabel(loadPivot.col)) + '</th>' +
-    cols.map(function(c){
-      var list = colMap[c] || [];
-      return '<th class="num">' + link(esc(c), list.length, 'data-pv-col="' + esc(c) + '"') + '</th>';
-    }).join("") + '<th class="num">合计</th></tr>';
-  var body = rows.map(function(r){
-    var cells = cols.map(function(c){
-      var list = buckets[r + "\u0000" + c] || [];
-      return '<td class="num">' + link(loadPivotFmt(metric, loadPivotCell(metric, list)), list.length,
-        'data-pv-row="' + esc(r) + '" data-pv-col="' + esc(c) + '"') + '</td>';
-    }).join("");
-    var rowList = rowMap[r] || [];
-    return '<tr><td>' + link(esc(r), rowList.length, 'data-pv-row="' + esc(r) + '"') + '</td>' + cells +
-      '<td class="num">' + link('<b>' + loadPivotFmt(metric, loadPivotCell(metric, rowList)) + '</b>', rowList.length,
-        'data-pv-row="' + esc(r) + '"') + '</td></tr>';
-  }).join("");
-  var foot = '<tr><td><b>合计</b></td>' +
-    cols.map(function(c){
-      var list = colMap[c] || [];
-      return '<td class="num">' + link('<b>' + loadPivotFmt(metric, loadPivotCell(metric, list)) + '</b>', list.length,
-        'data-pv-col="' + esc(c) + '"') + '</td>';
-    }).join("") +
-    '<td class="num">' + link('<b>' + loadPivotFmt(metric, loadPivotCell(metric, all)) + '</b>', all.length,
-      'data-pv-all="1"') + '</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>负载透视</b><span>按两个维度交叉查看未完成工作项 · 点击数字看工作项</span></div>' +
-    '<div class="tbl-wrap"><table class="manager-tbl pivot-tbl"><thead>' + head + '</thead><tbody>' + body + foot + '</tbody></table></div></section>';
-}
-function pivotPanel(){
-  var dims = LOAD_PIVOT_DIMS.map(function(d){
-    return '<option value="' + d[0] + '"' + (loadPivot.row === d[0] ? " selected" : "") + '>' + esc(d[1]) + '</option>';
-  }).join("");
-  var dims2 = LOAD_PIVOT_DIMS.map(function(d){
-    return '<option value="' + d[0] + '"' + (loadPivot.col === d[0] ? " selected" : "") + '>' + esc(d[1]) + '</option>';
-  }).join("");
-  var metrics = LOAD_PIVOT_METRICS.map(function(m){
-    return '<option value="' + m[0] + '"' + (loadPivot.metric === m[0] ? " selected" : "") + '>' + esc(m[1]) + '</option>';
-  }).join("");
-  return '<div class="manager-toolbar"><div><b>负载透视</b><span>行 × 列交叉统计</span></div>' +
-    '<div class="row row-gap" style="gap:6px">' +
-      '<select class="mini-select" data-load-pivot="row" aria-label="透视行维度">' + dims + '</select>' +
-      '<span class="pivot-x">×</span>' +
-      '<select class="mini-select" data-load-pivot="col" aria-label="透视列维度">' + dims2 + '</select>' +
-      '<select class="mini-select" data-load-pivot="metric" aria-label="透视指标">' + metrics + '</select>' +
-      fullscreenButtonHTML() +
-    '</div></div>' + pivotTable();
+  UI.openModal(layer, state.kind === "projects" ? "" : "[data-member-back]");
 }
 
 function matrix(){
@@ -38821,36 +38922,31 @@ function matrix(){
   var rows = (cache.members || []).map(function(m){
     var cells = projects.map(function(p){
       var group=(m.projects||[]).filter(function(x){return (x.reqId||"")===(p.id||"");})[0];
-      return '<td class="num">'+(group&&group.remainingMinutes?'<button class="manager-cell-link" type="button" data-load-member="'+esc(m.key)+'" data-load-req="'+esc(p.id||"")+'">'+fmtHours(group.remainingMinutes)+'</button>':'—')+'</td>';
+      return '<td class="num">'+(group&&group.remainingMinutes?'<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="tasks" data-member-req="'+esc(p.id||"")+'" title="查看该项目下的工作项">'+fmtHours(group.remainingMinutes)+'</button>':'—')+'</td>';
     }).join("");
     var status=m.overloaded?'<span class="mini-tag over">超载</span>':(m.loadPct>=85?'<span class="mini-tag warn">接近满载</span>':'<span class="mini-tag ok">可承接 '+fmtHours(Math.max(0,m.capacityMinutes-m.remainingMinutes))+'</span>');
-    return '<tr><td><button class="manager-person manager-cell-link" type="button" data-load-member="'+esc(m.key)+'" data-load-all="1">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></button></td>'+cells+'<td class="num"><b>'+fmtHours(m.remainingMinutes)+'</b></td><td>'+loadBarHTML(m.loadPct)+'</td><td>'+status+'</td></tr>';
+    return '<tr><td><button class="manager-person manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" title="查看成员负载">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></button></td>'+cells+'<td class="num"><b>'+fmtHours(m.remainingMinutes)+'</b></td><td>'+loadBarHTML(m.loadPct)+'</td><td>'+status+'</td></tr>';
   }).join("") || '<tr><td colspan="20" class="manager-empty-cell">暂无成员负载数据</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>成员 × 项目负载矩阵</b><span>点击成员或项目工时进入工作项列表</span></div><div class="tbl-wrap"><table class="manager-tbl manager-matrix"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div></section>';
-}
-var WEEK_DAY_NAMES=["周一","周二","周三","周四","周五","周六","周日"];
-function weekDrillAttrs(m, dayIdx){
-  return ' data-week-member="'+esc(m.key)+'"'+(dayIdx===undefined?'':' data-week-day="'+dayIdx+'"');
-}
-function weekDrillHTML(m, html, dayIdx){
-  if(!(m.weekLogs||[]).length) return html;
-  return '<button class="manager-cell-link" type="button"'+weekDrillAttrs(m,dayIdx)+' title="查看计时明细">'+html+'</button>';
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>成员 × 项目负载矩阵</b><span>点击成员打开负载抽屉 · 点击工时穿透到项目工作项</span></div><div class="tbl-wrap"><table class="manager-tbl manager-matrix"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div></section>';
 }
 function weekTable(){
   var rows=(cache.members||[]).map(function(m){
+    var hasLogs=(m.weekLogs||[]).length>0;
+    var nameHTML='<button class="manager-person manager-cell-link" type="button" data-member-open="'+esc(m.key)+'"'+(hasLogs?' data-member-layer="logs"':'')+' title="查看成员负载">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></button>';
     var cells=(m.dayMinutes||[]).map(function(n,i){
-      return '<td class="num">'+(n?weekDrillHTML(m,fmtHours(n),i):'—')+'</td>';
+      if(!n) return '<td class="num">—</td>';
+      if(!hasLogs) return '<td class="num">'+fmtHours(n)+'</td>';
+      return '<td class="num"><button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" data-member-day="'+i+'" title="查看该日计时明细">'+fmtHours(n)+'</button></td>';
     }).join("");
     var diff=(m.weekMinutes||0)-(m.lastWeekMinutes||0),cls=diff>0?"tag-warning":(diff<0?"tag-success":"tag-ghost");
     var diffHTML='<span class="tag '+cls+'">'+(diff===0?'持平':((diff>0?'+':'−')+fmtHours(Math.abs(diff))))+'</span>';
     if((m.lastWeekLogs||[]).length){
-      diffHTML='<button class="manager-cell-link" type="button" data-week-member="'+esc(m.key)+'" data-week-last="1" title="查看上周计时明细">'+diffHTML+'</button>';
+      diffHTML='<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" data-member-scope="last" title="查看上周计时明细">'+diffHTML+'</button>';
     }
-    return '<tr><td>'+weekDrillHTML(m,'<span class="manager-person">'+avatarHTML(m.name,"sm")+'<b>'+esc(m.name)+'</b></span>')+'</td>'+cells+
-      '<td class="num">'+weekDrillHTML(m,'<b>'+fmtHours(m.weekMinutes)+'</b>')+'</td>'+
-      '<td>'+diffHTML+'</td></tr>';
+    var totalHTML=hasLogs?'<button class="manager-cell-link" type="button" data-member-open="'+esc(m.key)+'" data-member-layer="logs" title="查看本周计时明细"><b>'+fmtHours(m.weekMinutes)+'</b></button>':'<b>'+fmtHours(m.weekMinutes)+'</b>';
+    return '<tr><td>'+nameHTML+'</td>'+cells+'<td class="num">'+totalHTML+'</td><td>'+diffHTML+'</td></tr>';
   }).join("")||'<tr><td colspan="10" class="manager-empty-cell">本周暂无计时记录</td></tr>';
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时沉淀</b><span>与上周同口径对比 · 点击成员或格子查看计时明细</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>'+WEEK_DAY_NAMES.map(function(d){return '<th class="num">'+d+'</th>';}).join("")+'<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>本周工时沉淀</b><span>与上周同口径对比 · 点击成员打开抽屉，点击格子看当日明细</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th>'+WEEK_DAY_NAMES.map(function(d){return '<th class="num">'+d+'</th>';}).join("")+'<th class="num">本周合计</th><th>上周对比</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
 }
 function addDaysISO(iso, days){
   var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso||"");
@@ -38859,105 +38955,26 @@ function addDaysISO(iso, days){
   d.setUTCDate(d.getUTCDate()+days);
   return d.toISOString().slice(0,10);
 }
-function openWeekLogs(member, dayIdx, scope){
-  var isLast=scope==="last";
-  var all=(isLast?member.lastWeekLogs:member.weekLogs)||[];
-  var weekStart=isLast?(cache&&cache.lastWeekStart)||addDaysISO(cache&&cache.weekStart,-7):(cache&&cache.weekStart);
-  var hasDay=dayIdx!==undefined&&dayIdx!==null&&dayIdx!=="";
-  var date=hasDay?addDaysISO(weekStart,Number(dayIdx)):"";
-  var rows=hasDay?all.filter(function(l){return l.date===date;}):all;
-  var total=0;
-  rows.forEach(function(l){total+=Number(l.minutes)||0;});
-  var body=rows.map(function(l){
-    var attrs=l.taskId?' data-open-task="'+esc(l.taskId)+'" title="打开工作项详情"':"";
-    var origin=l.origin==="manual"?' <span class="tag tag-ghost">补记</span>':"";
-    return '<tr'+attrs+'><td class="num">'+esc(fmtDate(l.date))+'</td>'+
-      '<td><div class="manager-task-title">'+esc(l.title)+origin+'</div></td>'+
-      '<td>'+esc(l.reqName||"未归类")+'</td><td class="num">'+fmtHours(l.minutes)+'</td></tr>';
-  }).join("")||'<tr><td colspan="4" class="manager-empty-cell">该时段暂无计时记录</td></tr>';
-  var head;
-  if(hasDay) head=WEEK_DAY_NAMES[Number(dayIdx)]+" "+fmtDate(date)+" 合计 "+fmtHours(total)+" · "+(isLast?"上周":"本周")+"合计 "+fmtHours(isLast?member.lastWeekMinutes:member.weekMinutes);
-  else if(isLast){
-    var d=(member.weekMinutes||0)-(member.lastWeekMinutes||0);
-    head="上周合计 "+fmtHours(member.lastWeekMinutes)+" · 本周合计 "+fmtHours(member.weekMinutes)+"（差异 "+(d===0?"持平":(d>0?"+":"−")+fmtHours(Math.abs(d)))+"）";
-  }
-  else head="本周合计 "+fmtHours(member.weekMinutes);
-  var layer=document.createElement("div");
-  layer.className="modal-layer";
-  layer.setAttribute("role","dialog");
-  layer.setAttribute("aria-modal","true");
-  layer.__uiOnClose=function(){setTimeout(function(){layer.remove();},0);};
-  layer.innerHTML='<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'+
-    '<h2>'+esc(member.name+(isLast?" · 上周计时":" · 计时明细"))+'</h2>'+
-    '<div class="desc">'+esc(head+" · 共 "+rows.length+" 条记录 · 点击记录行打开工作项")+'</div></div>'+
-    '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">'+icon("close",15)+'</button></div>'+
-    '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'+
-    '<th class="num">日期</th><th>工作项</th><th>项目</th><th class="num">耗时</th>'+
-    '</tr></thead><tbody>'+body+'</tbody></table></div></div></div>';
-  document.body.appendChild(layer);
-  layer.addEventListener("click",function(e){
-    if(e.target.closest("[data-manager-close]")){UI.closeModal(layer);return;}
-    var row=e.target.closest("[data-open-task]");
-    if(row){UI.closeModal(layer);openTaskById(row.dataset.openTask);}
-  });
-  UI.openModal(layer);
-}
 function renderWorkload(){
-  $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button><button type="button" data-load-mode="pivot" aria-pressed="'+(mode==='pivot')+'">透视</button></div>'+fullscreenButtonHTML()+'</div>'
+  $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button></div>'+fullscreenButtonHTML()+'</div>'
     +caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × 6h）；无截止日默认 5 个剩余工作日，容量上限按 20 天计算。')
-    +(mode==='person'?matrix():(mode==='pivot'?pivotPanel():weekTable()));
+    +(mode==='person'?matrix():weekTable());
 }
 if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){
   var modeBtn=e.target.closest("[data-load-mode]");if(modeBtn){mode=modeBtn.dataset.loadMode;renderWorkload();return;}
   if(e.target.closest("[data-empty-action]")){loadWorkload();return;}
-  var pv=e.target.closest("[data-pv-row],[data-pv-col],[data-pv-all]");
-  if(pv&&pivotState){
-    var pr=pv.dataset.pvRow||"", pc=pv.dataset.pvCol||"", tasks, title;
-    if(pv.hasAttribute("data-pv-all")){ tasks=pivotState.all; title="全部"; }
-    else if(pr&&pc){ tasks=pivotState.cells[pr+"\u0000"+pc]||[]; title=pr+" × "+pc; }
-    else if(pr){ tasks=pivotState.rows[pr]||[]; title=pr; }
-    else { tasks=pivotState.cols[pc]||[]; title=pc; }
-    openTaskTable("负载透视 · "+title,tasks,
-      pivotState.rowDim+" × "+pivotState.colDim+" · 共 "+(tasks||[]).length+" 项 · 点击工作项行打开详情");
-    return;
-  }
-  var wk=e.target.closest("[data-week-member]");
-  if(wk&&cache){
-    var wm=(cache.members||[]).filter(function(m){return m.key===wk.dataset.weekMember;})[0];
-    if(wm)openWeekLogs(wm,wk.dataset.weekDay,wk.dataset.weekLast==="1"?"last":"");
-    return;
-  }
-  var btn=e.target.closest("[data-load-member]");if(!btn||!cache)return;
-  var member=(cache.members||[]).filter(function(m){return m.key===btn.dataset.loadMember;})[0];if(!member)return;
-  var req=btn.dataset.loadReq||"",all=btn.dataset.loadAll==="1";
-  /* 进入任务列表页查看该成员任务（替代弹框）：负责人筛选 + 项目筛选叠加，其余条件清空避免误导 */
-  state.q="";state.pris=[];state.cats=[];state.tags=[];state.types=[];state.due=null;state.focus=false;state.blocked=false;
-  searchInput.value="";searchWrap.classList.remove("has");
-  state.owners=[member.name];
-  state.reqs=(!all&&req)?[req]:[];
-  saveViewState();
-  applyListSavedView("all",{preset:"all",group:"none",sort:"default"});
-  showView("list");
-  loadBoard({animate:false});
-  toast("已在工作项列表筛选：" + member.name + (state.reqs.length ? " · " + reqNameById(state.reqs[0]) : " · 全部项目"), "fs");
-});
-if($("workloadBody"))$("workloadBody").addEventListener("change", function(e){
-  var sel = e.target.closest("[data-load-pivot]");
-  if(!sel) return;
-  var key = sel.dataset.loadPivot;
-  if(key !== "row" && key !== "col" && key !== "metric") return;
-  loadPivot[key] = sel.value;
-  if(loadPivot.row === loadPivot.col){
-    for(var i = 0; i < LOAD_PIVOT_DIMS.length; i++){
-      if(LOAD_PIVOT_DIMS[i][0] !== sel.value){
-        if(key === "row") loadPivot.col = LOAD_PIVOT_DIMS[i][0];
-        else loadPivot.row = LOAD_PIVOT_DIMS[i][0];
-        break;
-      }
+  var opener=e.target.closest("[data-member-open]");
+  if(opener&&cache){
+    var member=memberByKey(opener.dataset.memberOpen);
+    if(member){
+      openMemberSheet(member,{
+        kind: opener.dataset.memberLayer || "projects",
+        reqId: opener.dataset.memberReq || "",
+        logScope: opener.dataset.memberScope || "week",
+        dayIdx: opener.dataset.memberDay
+      });
     }
   }
-  try{ localStorage.setItem(LOAD_PIVOT_KEY, JSON.stringify(loadPivot)); }catch(err){ /* 忽略 */ }
-  renderWorkload();
 });
 
 return {enterWorkloadView: enterWorkloadView, loadWorkload: loadWorkload};
@@ -38980,6 +38997,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 23:24</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 23:37</span></div>
 </body>
 </html>

@@ -98,6 +98,44 @@
 .manager-empty-cell{padding:22px!important;text-align:center!important;color:var(--text-3)!important;}
 /* .sheet 默认 max-width:480px 会把下钻表格截断，这里必须显式放开 */
 .manager-drill-sheet{max-width:none;width:min(1080px,94vw);}
+/* 成员负载抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 */
+.member-sheet{width:min(880px,94vw);}
+.member-sheet-id{display:flex;align-items:center;gap:12px;min-width:0;}
+.member-sheet-id h2{display:flex;align-items:center;gap:8px;}
+.member-sheet-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.member-sheet-kpi{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.member-sheet-kpi>i{display:block;font-style:normal;font-size:11.5px;color:var(--text-3);}
+.member-sheet-kpi>b{display:block;margin-top:3px;font-size:16px;line-height:22px;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-sheet-kpi>span{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);}
+.member-layer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 -4px;}
+.member-layer-head>b{font-size:13px;color:var(--text);}
+.member-layer-head>span{min-width:0;font-size:12px;color:var(--text-3);}
+.member-link{padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-link:hover{text-decoration:underline;}
+.member-back{align-self:flex-start;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-back:hover{text-decoration:underline;}
+.member-share{display:flex;align-items:center;gap:8px;min-width:120px;}
+.member-share .progress{flex:1;display:block;height:6px;border-radius:6px;background:var(--surface-sunken);overflow:hidden;}
+.member-share .progress>i{display:block;height:100%;border-radius:inherit;background:var(--primary);}
+.member-share b{min-width:34px;font-size:11.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;}
+.member-drill-tbl tbody tr[data-member-project]{cursor:pointer;}
+.member-drill-tbl tbody tr[data-member-project]:hover{background:var(--surface-hover);}
+.member-drill-tbl tbody tr[data-member-project]:focus-visible,
+.member-drill-tbl tbody tr[data-open-task]:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.member-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;}
+.member-day{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);text-align:left;cursor:pointer;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);}
+.member-day:disabled{cursor:default;}
+.member-day span{font-size:11.5px;color:var(--text-3);}
+.member-day b{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;}
+.member-day:not(:disabled):hover{background:var(--surface-hover);border-color:var(--primary-border);}
+.member-week-foot{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-3);}
+.member-week-foot b{color:var(--text);}
+.member-week-foot .member-link{margin-left:auto;}
+.member-week-note{font-size:12.5px;color:var(--text-3);}
+@media(max-width:680px){
+  .member-sheet-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .member-days{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
 .manager-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .manager-chart{display:block;width:100%;height:220px;}
 .manager-chart text{fill:var(--text-3);font-size:10px;}
