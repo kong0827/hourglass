@@ -488,6 +488,8 @@ a:hover{text-decoration:underline;}
 .subnav-item:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--ring-focus);}
 .subnav-item.on{color:var(--primary-fg);font-weight:650;}
 .subnav-item.on::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:var(--primary);}
+/* 详情页（如项目驾驶舱）归属的父级分区：不是当前页，但要让用户知道从哪进来的 */
+.subnav-item.is-parent{color:var(--text);font-weight:600;}
 
 /* 全局搜索：宽 240 → 聚焦 380 */
 /* 顶栏计时胶囊：计时是跨空间的，离开看板也要能看见并一键停止 */
@@ -3506,6 +3508,8 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
 /* 报表的三个页签已提升到全局子导航，页内不再重复一行（周期选择仍留在本行） */
 .analysis-bar #analysisTabs{display:none;}
+/* 测试四模式同理：用例 / 测试计划 / 覆盖矩阵 / 测试报告统一走全局子导航 */
+#view-testcases #tcModeSeg{display:none;}
 #view-analysis [data-analysis-pane][hidden]{display:none;}
 
 /* ===== 版本视图（views/phase.js） ===== */
@@ -5636,7 +5640,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           <div class="menu" id="newMenu" hidden style="right:0;top:calc(100% + 6px)">
             <button class="menu-item" type="button" data-new="task">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-              新建任务 <span class="k">C</span>
+              新建工作项 <span class="k">C</span>
             </button>
             <button class="menu-item" type="button" data-new="req">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.4A1.6 1.6 0 0 1 5.6 3.8h7.2l3.2 3.2v8.4a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 15.4Z"/></svg>
@@ -5904,7 +5908,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                   <option value="40">宽松</option>
                 </select>
               </label>
-              <button class="btn sm primary" type="button" id="ganttNew">新建任务</button>
+              <button class="btn sm primary" type="button" id="ganttNew">新建工作项</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
           </div>
@@ -5976,9 +5980,9 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               </details>
             </div>
           </div>
-          <section class="gantt-load" id="ganttLoad" hidden aria-label="资源负载">
+          <section class="gantt-load" id="ganttLoad" hidden aria-label="成员负载">
             <div class="gantt-load-head">
-              <strong>资源负载</strong>
+              <strong>成员负载</strong>
               <span class="foot-note" id="ganttLoadRange"></span>
               <button class="icon-btn sm" type="button" id="ganttLoadClose" aria-label="关闭负载面板">×</button>
             </div>
@@ -7697,10 +7701,10 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
   <form class="drawer" id="taskForm" novalidate>
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
-      <h2 id="taskDrawerTitle">新建任务</h2>
-      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前任务所属项目新建任务">
+      <h2 id="taskDrawerTitle">新建工作项</h2>
+      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-        新建任务
+        新建工作项
       </button>
       <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
@@ -16891,7 +16895,7 @@ function renderMobileCalendar(){
         '<span class="cwd-dn">' + day.getDate() + '</span>' +
         '<span class="cwd-dw">' + weekdayCN(day) + '</span>' +
         '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无任务") + '</span>' +
-        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' + icon("plus", 12) + '</button>' +
+        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' + icon("plus", 12) + '</button>' +
       '</div>' +
       (rows ? '<div class="cwd-tasks">' + rows + '</div>' : '') +
     '</section>';
@@ -16967,7 +16971,7 @@ function renderCalendar(){
         '" title="展开当天已完成的任务">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
     }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
-      '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' +
+      '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' +
         icon("plus", 12) + '</button>' +
       '<span class="cal-dn">' + day + '</span>' +
       '<div class="cal-tasks">' + chips + '</div>' +
@@ -17721,8 +17725,8 @@ function renderListItems(items){
     rt.listSelected = {};
     var hasConditions = filterOn() || smart.preset !== "all" || smart.hideDone;
     listBody.innerHTML = '<div style="padding:8px">' + (hasConditions
-      ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的任务", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部任务", compact:true })
-      : UI.emptyState({ icon:"inbox", title:"这里还没有任务", textHtml:"新建一个任务；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建任务", compact:true })) + '</div>';
+      ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的工作项", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部工作项", compact:true })
+      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })) + '</div>';
     bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else openTaskDrawer("backlog"); });
     syncListSelectionUI();
     appendListMore();
@@ -18628,7 +18632,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWatchStatus(task.id);
     loadTimeline(task.id);
   }else{
-    taskDrawerTitle.textContent = "新建任务";
+    taskDrawerTitle.textContent = "新建工作项";
     btnDeleteTask.hidden = true;
     if(btnTaskNew) btnTaskNew.hidden = true;
     startedDone = false;
@@ -19563,7 +19567,7 @@ taskForm.addEventListener("submit", function(e){
       if(wasEdit){
         toast("已更新「" + title + "」", "fs");
       }else{
-        var tip = "已创建任务「" + nt.title + "」";
+        var tip = "已创建工作项「" + nt.title + "」";
         var kind = "fs";
         if(nt.dueDate){
           var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
@@ -21562,12 +21566,14 @@ function renderMine(d, append){
   }
   if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({
-      icon:"checkCircle", title:"没有分派给你的任务",
-      text:"被指派到你账号的任务会汇总在这里（跨你参与的全部空间）。若老数据只填了显示名、没有绑定账号，请先在任务里重新指定负责人。",
-      actionLabel:"刷新"
+      icon:"checkCircle", title:"没有分派给你的工作项",
+      text:"被指派到你账号的工作项会汇总在这里（跨你参与的全部空间）。新成员可以先去「工作项」看看团队正在做什么；若老数据只填了显示名、没有绑定账号，请在工作项里重新指定负责人。",
+      actionLabel:"去工作项"
     });
-    var emptyRefresh = mineBody.querySelector("[data-empty-action]");
-    if(emptyRefresh) emptyRefresh.addEventListener("click", function(){ loadMine(); });
+    var emptyGo = mineBody.querySelector("[data-empty-action]");
+    if(emptyGo) emptyGo.addEventListener("click", function(){
+      window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"board" } }));
+    });
     return;
   }
   if(!items.length){
@@ -23816,8 +23822,8 @@ function cardHTML(t, idx){
   '</article>';
 }
 function cardAddHTML(colId){
-  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增任务">' +
-    icon("plus", 13) + ' 添加任务</button>';
+  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增工作项">' +
+    icon("plus", 13) + ' 添加工作项</button>';
 }
 var mobCol = null;
 function mobileColId(){
@@ -23865,9 +23871,9 @@ function renderMobileBoard(opts){
   if(active === "done" && state.doneExtra.length) items = items.concat(state.doneExtra);
   var listHTML;
   if(!items.length){
-    var emptyTitle = filterOn() ? "无匹配任务" : "这一列还没有任务";
+    var emptyTitle = filterOn() ? "无匹配工作项" : "这一列还没有工作项";
     var emptyDesc = filterOn() ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
-    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建任务", compact:true });
+    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建工作项", compact:true });
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
   }
@@ -25461,12 +25467,12 @@ var VIEWS = {
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
-  testcases: { title:"测试", sub:"用例库、测试计划、覆盖矩阵与测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
+  testcases: { title:"测试", sub:"一条质量链路：用例 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
-  analysis: { title:"报表", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目", sub:"全局健康度：全部项目的健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目驾驶舱", sub:"单项目：周期、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  analysis: { title:"报表", sub:"团队节奏与质量体检：趋势、完成记录、流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目", sub:"一屏看全部项目：健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目驾驶舱", sub:"单项目首页：进度、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表", sub:"交付图表：燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
@@ -25500,15 +25506,23 @@ var SUBNAV = {
   ],
   projects: [
     { view:"projects", label:"项目列表", title:"全部项目与新建入口" },
-    { view:"portfolio", label:"全局健康度", title:"跨项目健康度、逾期与本周投入" }
+    { view:"portfolio", label:"全局健康度", title:"一屏看全部项目：健康度、逾期与本周投入" }
+  ],
+  testcases: [
+    { view:"testcases", tab:"cases", label:"用例", title:"用例库：录入、筛选与标记执行结果" },
+    { view:"testcases", tab:"plans", label:"测试计划", title:"从用例库圈选一批，按版本留痕" },
+    { view:"testcases", tab:"coverage", label:"覆盖矩阵", title:"按需求看用例覆盖与通过率" },
+    { view:"testcases", tab:"report", label:"测试报告", title:"当前项目通过率、失败清单与覆盖汇总" }
   ],
   insight: [
-    { view:"analysis", tab:"stats", label:"趋势与分布" },
-    { view:"analysis", tab:"completions", label:"完成记录" },
-    { view:"analysis", tab:"flow", label:"流程体检" },
-    { view:"report", label:"交付图表" }
+    { view:"analysis", tab:"stats", label:"趋势与分布", title:"新增与完成趋势、工时分布" },
+    { view:"analysis", tab:"completions", label:"完成记录", title:"按周期查看已完成工作项" },
+    { view:"analysis", tab:"flow", label:"流程体检", title:"一次通过率、需求开工延迟与估时准确度" },
+    { view:"report", label:"交付图表", title:"燃尽、速度、累积流与交付周期" }
   ]
 };
+/* 详情页归属的父级子导航项：驾驶舱从项目列表进入，用父项标出所在分区 */
+var SUBNAV_PARENT = { project:"projects" };
 /* 移动端「更多视图」的分组顺序，与侧栏保持一致 */
 var NAV_GROUPS = [
   { title:"我的", items:[["review","周回顾"]] },
@@ -25605,20 +25619,31 @@ function showView(name){
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
   return entered;
 }
+function subnavCurrentTab(navKey){
+  if(navKey === "insight") return rt.analysisTab;
+  if(navKey === "testcases"){
+    var m = viewModule("testcases");
+    return (m && m.currentTcMode) ? m.currentTcMode() : "cases";
+  }
+  return "";
+}
 function renderSubnav(name){
   var el = $("subNav");
   if(!el) return;
-  var items = SUBNAV[NAV_OF[name] || ""];
+  var navKey = NAV_OF[name] || "";
+  var items = SUBNAV[navKey];
   if(!items){
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
+  var curTab = subnavCurrentTab(navKey);
   var html = items.map(function(it){
-    var on = it.view === name && (!it.tab || (name === "analysis" && rt.analysisTab === it.tab));
-    return '<button class="subnav-item' + (on ? " on" : "") + '" type="button" data-sub-view="' + it.view + '"'
+    var on = it.view === name && (!it.tab || it.tab === curTab);
+    var parent = !on && SUBNAV_PARENT[name] === it.view;
+    return '<button class="subnav-item' + (on ? " on" : "") + (parent ? " is-parent" : "") + '" type="button" data-sub-view="' + it.view + '"'
       + (it.tab ? ' data-sub-tab="' + it.tab + '"' : "")
-      + (on ? ' aria-current="page"' : "")
+      + (on ? ' aria-current="page"' : parent ? ' aria-current="location"' : "")
       + (it.title ? ' title="' + UI.esc(it.title) + '"' : "")
       + '>' + UI.esc(it.label) + '</button>';
   }).join("");
@@ -25631,6 +25656,10 @@ if(subNavEl) subNavEl.addEventListener("click", function(e){
   if(!b) return;
   var view = b.dataset.subView, tab = b.dataset.subTab;
   if(view === "analysis" && tab) rt.analysisTab = tab;
+  if(view === "testcases" && tab){
+    loadView("testcases").then(function(m){ m.setTcMode(tab); renderSubnav(activeView); });
+    return;
+  }
   if(view === activeView){
     if(view === "analysis" && tab) loadView("analysis").then(function(m){ m.setAnalysisTab(tab); });
     renderSubnav(activeView);
@@ -25716,8 +25745,8 @@ $("sideNav").addEventListener("click", function(e){
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 var sideBrandBtn = $("sideBrand");
-/* Logo 回首页：与登录后默认落点保持一致 */
-if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("mine"); });
+/* Logo 回首页：与登录后默认落点保持一致（按角色选落点） */
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView(defaultLanding()); });
 /* 底栏已覆盖的入口不再放进「更多视图」；分组与侧栏一致，设置置底 */
 function moreMenuHTML(){
   return NAV_GROUPS.map(function(g){
@@ -25770,6 +25799,15 @@ window.addEventListener("ds:route-go", function(e){
   var to = e.detail && e.detail.view;
   if(to && VIEWS[to]) showView(to);
 });
+
+/* 首次登录（无深链）按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
+   管理者先进全局健康度；成员仍是「我的工作」 */
+function defaultLanding(){
+  var role = rt.currentWs && rt.currentWs.myRole;
+  if(role === "viewer") return "projects";
+  if(role === "owner" || role === "admin") return "portfolio";
+  return "mine";
+}
 
 /* ---- core/gestures.js ---- */
 /* core/gestures · 手机档位的手势：左滑露出操作、右滑快捷菜单、下拉刷新
@@ -26247,6 +26285,8 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
+  /* 无深链时才允许按角色改落点；有 hash 说明是刷新或分享链接，尊重原视图 */
+  var autoLanding = !String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0];
   var startView = viewFromHash();
   try{ history.replaceState(null, "", "#/" + startView); }
   catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
@@ -26272,7 +26312,7 @@ function boot(){
   /* 未登录时只允许先打这一次鉴权请求；401 由 API 层统一跳登录页，
      其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
   API.get("/api/auth/me").then(function(meUser){
-    startAuthenticatedApp(meUser, startView, deepTaskId);
+    startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding);
   }).catch(function(ex){
     if(ex && ex.status === 401) return;
     UI.showConfirm({
@@ -26285,7 +26325,7 @@ function boot(){
   });
 }
 
-function startAuthenticatedApp(meUser, startView, deepTaskId){
+function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
   showView(startView);
   showBoardSkeleton();
   loadBoard({animate:true}).then(function(){
@@ -26314,7 +26354,11 @@ function startAuthenticatedApp(meUser, startView, deepTaskId){
   loadReqs();
   loadBranches();
   loadViews();
-  loadMe(meUser);
+  loadMe(meUser).then(function(){
+    if(!autoLanding) return;
+    var landing = defaultLanding();
+    if(landing && landing !== activeView){ showView(landing); }
+  });
   initSSE();
   /* R-1：未读角标。SSE 之外再兜一层低频轮询；后台也拉，保证标签页标题计数实时 */
   loadUnread(true);
@@ -27904,7 +27948,7 @@ function renderGanttAnalysisMenu(){
     (isManager ? '<button class="menu-item" type="button" data-gantt-baseline-set>设为基线（当前计划）</button>' : '') +
     (isOwner ? '<button class="menu-item" type="button" data-gantt-baseline-clear"' + (hasBaseline ? '' : ' disabled') + '>清除基线</button>' : '') +
     '<div class="menu-sep"></div>' +
-    ganttAnalysisItem('data-gantt-load', '资源负载面板', ganttState.showLoad, '') +
+    ganttAnalysisItem('data-gantt-load', '成员负载面板', ganttState.showLoad, '') +
     (isOwner ? '<button class="menu-item" type="button" data-gantt-share>分享只读链接…</button>' : '');
 }
 function ganttApplyBaselineInfo(info){
@@ -28498,9 +28542,9 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
       text = "当前筛选条件下没有任务；清除筛选后可查看全部任务。";
       action = "清除筛选"; actionKind = "clear";
     }else{
-      title = "还没有任务";
-      text = "新建任务并填上开始或截止日期，就会按时间出现在甘特图里。";
-      action = "新建任务"; actionKind = "new";
+      title = "还没有工作项";
+      text = "新建工作项并填上开始或截止日期，就会按时间出现在甘特图里。";
+      action = "新建工作项"; actionKind = "new";
     }
   }else{
     title = "还没有排期任务";
@@ -31543,7 +31587,7 @@ function openVersionTasks(id){
     + '<button class="icon-btn sm" type="button" data-version-task-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="version-task-tools"><input type="search" placeholder="搜索任务标题或负责人…" aria-label="搜索版本任务" data-version-task-search />'
     + '<span class="version-task-count"></span></div><div class="version-task-list"></div></div>'
-    + '<div class="sheet-foot"><button class="btn" type="button" data-version-task-new>+ 在此版本新建任务</button>'
+    + '<div class="sheet-foot"><button class="btn" type="button" data-version-task-new>+ 在此版本新建工作项</button>'
     + '<span style="flex:1"></span><button class="btn" type="button" data-version-task-cancel>取消</button>'
     + '<button class="btn primary" type="button" data-version-task-save>保存关联</button></div></div>';
   function selectedIds(){ return Object.keys(selected).filter(function(taskId){ return selected[taskId]; }); }
@@ -34332,10 +34376,10 @@ function openRoleGuide(){
     roleGuideRow(["查看项目与任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "默认全部；设为「不可见」的项目不可见", ROLE_GUIDE_YES]),
     roleGuideRow(["查看统计 / 报表 / 成员负载", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "按可见项目过滤", ROLE_GUIDE_YES]),
     roleGuideGroup("工作项"),
-    roleGuideRow(["新建 / 编辑任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["删除任务（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["恢复回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["彻底删除回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新建 / 编辑工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["新增 / 编辑 / 排序看板列与分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
     roleGuideRow(["删除看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -34346,7 +34390,7 @@ function openRoleGuide(){
     roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["完整备份导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["导出任务 CSV", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES]),
+    roleGuideRow(["导出工作项 CSV", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES]),
     roleGuideRow(["删除共享空间", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO])
   ].join("");
 
@@ -35711,8 +35755,8 @@ btnReset.addEventListener("click", function(){
   rt.resetArmed = setTimeout(disarmReset, 3500);
 });
 var SHORTCUT_ROWS = [
-  ["N","新建任务：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
-  ["C","新建任务（打开详情抽屉）"],
+  ["N","新建工作项：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
+  ["C","新建工作项（打开详情抽屉）"],
   ["?","打开这份帮助（快捷键 + 录入语法）"],
   ["g b / g l / g m","跳转：工作项看板 / 工作项列表 / 我的工作"],
   ["g c / g g / g p","跳转：日历 / 甘特图 / 项目"],
@@ -36201,6 +36245,7 @@ function loadMoreCases(){
   });
 }
 function enterTestCasesView(){
+  syncModeUI();
   var run = function(){
     syncReqSel();
     if(tcMode === "coverage") loadCoverage();
@@ -36784,6 +36829,28 @@ function renderTcViewsMenu(){
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-tc-view-save>保存当前为视图</button></div>';
   tcViewsMenuEl.innerHTML = html;
 }
+/* 测试四模式已并到全局子导航：模式切换后同步高亮，避免还要维护页内分段 */
+function syncTcSubnav(){
+  if(document.body.dataset.view !== "testcases") return;
+  var el = document.getElementById("subNav");
+  if(!el) return;
+  el.querySelectorAll("[data-sub-tab]").forEach(function(b){
+    var on = b.dataset.subTab === tcMode;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+}
+function setTcMode(mode){
+  if(mode !== "cases" && mode !== "plans" && mode !== "coverage" && mode !== "report") return;
+  if(mode === tcMode){ syncModeUI(); return; }
+  tcMode = mode;
+  syncModeUI();
+  if(tcMode === "coverage") loadCoverage();
+  else if(tcMode === "report") loadTestReport();
+  else if(tcMode === "plans") loadPlans();
+  else { render(); loadCases(); }
+}
+function currentTcMode(){ return tcMode; }
 function syncModeUI(){
   var cov = tcMode === "coverage";
   var rep = tcMode === "report";
@@ -36797,6 +36864,7 @@ function syncModeUI(){
   document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
   });
+  syncTcSubnav();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = isWritable() && !cov && !rep && !plan ? "" : "none";
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
@@ -37722,13 +37790,8 @@ $("tcReq").addEventListener("change", function(){
 });
 $("tcModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-tc-mode]");
-  if(!b || b.dataset.tcMode === tcMode) return;
-  tcMode = b.dataset.tcMode;
-  syncModeUI();
-  if(tcMode === "coverage") loadCoverage();
-  else if(tcMode === "report") loadTestReport();
-  else if(tcMode === "plans") loadPlans();
-  else { render(); loadCases(); }
+  if(!b) return;
+  setTcMode(b.dataset.tcMode);
 });
 ["tcModule", "tcPri", "tcOwner"].forEach(function(id){
   $(id).addEventListener("change", function(){
@@ -38069,7 +38132,7 @@ function openCaseInProject(reqId, id){
   });
 }
 
-return {enterTestCasesView: enterTestCasesView, openCaseInProject: openCaseInProject};
+return {currentTcMode: currentTcMode, enterTestCasesView: enterTestCasesView, openCaseInProject: openCaseInProject, setTcMode: setTcMode};
 })();
 /* ---- views/workload.js ---- */
 __NS["views/workload.js"] = (function(){
@@ -38305,6 +38368,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 13:40</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 14:11</span></div>
 </body>
 </html>

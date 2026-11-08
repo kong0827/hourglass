@@ -1081,7 +1081,7 @@ function renderGanttAnalysisMenu(){
     (isManager ? '<button class="menu-item" type="button" data-gantt-baseline-set>设为基线（当前计划）</button>' : '') +
     (isOwner ? '<button class="menu-item" type="button" data-gantt-baseline-clear"' + (hasBaseline ? '' : ' disabled') + '>清除基线</button>' : '') +
     '<div class="menu-sep"></div>' +
-    ganttAnalysisItem('data-gantt-load', '资源负载面板', ganttState.showLoad, '') +
+    ganttAnalysisItem('data-gantt-load', '成员负载面板', ganttState.showLoad, '') +
     (isOwner ? '<button class="menu-item" type="button" data-gantt-share>分享只读链接…</button>' : '');
 }
 function ganttApplyBaselineInfo(info){
@@ -1675,9 +1675,9 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
       text = "当前筛选条件下没有任务；清除筛选后可查看全部任务。";
       action = "清除筛选"; actionKind = "clear";
     }else{
-      title = "还没有任务";
-      text = "新建任务并填上开始或截止日期，就会按时间出现在甘特图里。";
-      action = "新建任务"; actionKind = "new";
+      title = "还没有工作项";
+      text = "新建工作项并填上开始或截止日期，就会按时间出现在甘特图里。";
+      action = "新建工作项"; actionKind = "new";
     }
   }else{
     title = "还没有排期任务";

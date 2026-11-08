@@ -50,12 +50,12 @@ var VIEWS = {
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
-  testcases: { title:"测试", sub:"用例库、测试计划、覆盖矩阵与测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
+  testcases: { title:"测试", sub:"一条质量链路：用例 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
-  analysis: { title:"报表", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目", sub:"全局健康度：全部项目的健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目驾驶舱", sub:"单项目：周期、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  analysis: { title:"报表", sub:"团队节奏与质量体检：趋势、完成记录、流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目", sub:"一屏看全部项目：健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目驾驶舱", sub:"单项目首页：进度、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表", sub:"交付图表：燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
@@ -89,15 +89,23 @@ var SUBNAV = {
   ],
   projects: [
     { view:"projects", label:"项目列表", title:"全部项目与新建入口" },
-    { view:"portfolio", label:"全局健康度", title:"跨项目健康度、逾期与本周投入" }
+    { view:"portfolio", label:"全局健康度", title:"一屏看全部项目：健康度、逾期与本周投入" }
+  ],
+  testcases: [
+    { view:"testcases", tab:"cases", label:"用例", title:"用例库：录入、筛选与标记执行结果" },
+    { view:"testcases", tab:"plans", label:"测试计划", title:"从用例库圈选一批，按版本留痕" },
+    { view:"testcases", tab:"coverage", label:"覆盖矩阵", title:"按需求看用例覆盖与通过率" },
+    { view:"testcases", tab:"report", label:"测试报告", title:"当前项目通过率、失败清单与覆盖汇总" }
   ],
   insight: [
-    { view:"analysis", tab:"stats", label:"趋势与分布" },
-    { view:"analysis", tab:"completions", label:"完成记录" },
-    { view:"analysis", tab:"flow", label:"流程体检" },
-    { view:"report", label:"交付图表" }
+    { view:"analysis", tab:"stats", label:"趋势与分布", title:"新增与完成趋势、工时分布" },
+    { view:"analysis", tab:"completions", label:"完成记录", title:"按周期查看已完成工作项" },
+    { view:"analysis", tab:"flow", label:"流程体检", title:"一次通过率、需求开工延迟与估时准确度" },
+    { view:"report", label:"交付图表", title:"燃尽、速度、累积流与交付周期" }
   ]
 };
+/* 详情页归属的父级子导航项：驾驶舱从项目列表进入，用父项标出所在分区 */
+var SUBNAV_PARENT = { project:"projects" };
 /* 移动端「更多视图」的分组顺序，与侧栏保持一致 */
 var NAV_GROUPS = [
   { title:"我的", items:[["review","周回顾"]] },
@@ -194,20 +202,31 @@ function showView(name){
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
   return entered;
 }
+function subnavCurrentTab(navKey){
+  if(navKey === "insight") return rt.analysisTab;
+  if(navKey === "testcases"){
+    var m = viewModule("testcases");
+    return (m && m.currentTcMode) ? m.currentTcMode() : "cases";
+  }
+  return "";
+}
 function renderSubnav(name){
   var el = $("subNav");
   if(!el) return;
-  var items = SUBNAV[NAV_OF[name] || ""];
+  var navKey = NAV_OF[name] || "";
+  var items = SUBNAV[navKey];
   if(!items){
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
+  var curTab = subnavCurrentTab(navKey);
   var html = items.map(function(it){
-    var on = it.view === name && (!it.tab || (name === "analysis" && rt.analysisTab === it.tab));
-    return '<button class="subnav-item' + (on ? " on" : "") + '" type="button" data-sub-view="' + it.view + '"'
+    var on = it.view === name && (!it.tab || it.tab === curTab);
+    var parent = !on && SUBNAV_PARENT[name] === it.view;
+    return '<button class="subnav-item' + (on ? " on" : "") + (parent ? " is-parent" : "") + '" type="button" data-sub-view="' + it.view + '"'
       + (it.tab ? ' data-sub-tab="' + it.tab + '"' : "")
-      + (on ? ' aria-current="page"' : "")
+      + (on ? ' aria-current="page"' : parent ? ' aria-current="location"' : "")
       + (it.title ? ' title="' + UI.esc(it.title) + '"' : "")
       + '>' + UI.esc(it.label) + '</button>';
   }).join("");
@@ -220,6 +239,10 @@ if(subNavEl) subNavEl.addEventListener("click", function(e){
   if(!b) return;
   var view = b.dataset.subView, tab = b.dataset.subTab;
   if(view === "analysis" && tab) rt.analysisTab = tab;
+  if(view === "testcases" && tab){
+    loadView("testcases").then(function(m){ m.setTcMode(tab); renderSubnav(activeView); });
+    return;
+  }
   if(view === activeView){
     if(view === "analysis" && tab) loadView("analysis").then(function(m){ m.setAnalysisTab(tab); });
     renderSubnav(activeView);
@@ -305,8 +328,8 @@ $("sideNav").addEventListener("click", function(e){
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 var sideBrandBtn = $("sideBrand");
-/* Logo 回首页：与登录后默认落点保持一致 */
-if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("mine"); });
+/* Logo 回首页：与登录后默认落点保持一致（按角色选落点） */
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView(defaultLanding()); });
 /* 底栏已覆盖的入口不再放进「更多视图」；分组与侧栏一致，设置置底 */
 function moreMenuHTML(){
   return NAV_GROUPS.map(function(g){
@@ -360,4 +383,14 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-export { VIEWS, activeView, refreshActiveView, showView, viewFromHash };
+/* 首次登录（无深链）按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
+   管理者先进全局健康度；成员仍是「我的工作」 */
+function defaultLanding(){
+  /* 个人空间没有协作分工，仍回到「我的工作」 */
+  if(!rt.currentWs || rt.currentWs.type !== "shared") return "mine";
+  var role = rt.currentWs.myRole;
+  if(role === "viewer") return "projects";
+  if(role === "owner" || role === "admin") return "portfolio";
+  return "mine";
+}
+export { VIEWS, activeView, defaultLanding, refreshActiveView, showView, viewFromHash };

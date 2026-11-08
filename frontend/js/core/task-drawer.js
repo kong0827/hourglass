@@ -503,7 +503,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWatchStatus(task.id);
     loadTimeline(task.id);
   }else{
-    taskDrawerTitle.textContent = "新建任务";
+    taskDrawerTitle.textContent = "新建工作项";
     btnDeleteTask.hidden = true;
     if(btnTaskNew) btnTaskNew.hidden = true;
     startedDone = false;
@@ -1438,7 +1438,7 @@ taskForm.addEventListener("submit", function(e){
       if(wasEdit){
         toast("已更新「" + title + "」", "fs");
       }else{
-        var tip = "已创建任务「" + nt.title + "」";
+        var tip = "已创建工作项「" + nt.title + "」";
         var kind = "fs";
         if(nt.dueDate){
           var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);

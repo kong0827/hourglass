@@ -302,8 +302,8 @@ function cardHTML(t, idx){
   '</article>';
 }
 function cardAddHTML(colId){
-  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增任务">' +
-    icon("plus", 13) + ' 添加任务</button>';
+  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增工作项">' +
+    icon("plus", 13) + ' 添加工作项</button>';
 }
 var mobCol = null;
 function mobileColId(){
@@ -351,9 +351,9 @@ function renderMobileBoard(opts){
   if(active === "done" && state.doneExtra.length) items = items.concat(state.doneExtra);
   var listHTML;
   if(!items.length){
-    var emptyTitle = filterOn() ? "无匹配任务" : "这一列还没有任务";
+    var emptyTitle = filterOn() ? "无匹配工作项" : "这一列还没有工作项";
     var emptyDesc = filterOn() ? "调整筛选条件后再看" : "从下面新建，或把别的列拖过来";
-    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建任务", compact:true });
+    listHTML = UI.emptyState({ icon:"inbox", title:emptyTitle, text:emptyDesc, actionLabel:"新建工作项", compact:true });
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
   }

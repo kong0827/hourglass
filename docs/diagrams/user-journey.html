@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 用户旅程</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-journey">
+  <style>
+    #hg-journey {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 48px 56px 52px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-journey * { box-sizing: border-box; margin: 0; }
+
+    .uj-head { text-align: center; margin-bottom: 30px; }
+    .uj-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .uj-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .uj-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .uj-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .uj-sub { font-size: 17px; color: var(--text-2); line-height: 1.6; }
+
+    .uj-lane { margin-bottom: 26px; }
+    .uj-lane-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .uj-role {
+      font-size: 14px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
+      background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg);
+      white-space: nowrap;
+    }
+    .uj-lane.manager .uj-role { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .uj-quote { font-size: 14px; color: var(--text-3); }
+
+    .uj-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .uj-step {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .uj-when { font-size: 12px; color: var(--text-3); font-weight: 600; letter-spacing: 0.02em; }
+    .uj-what { font-size: 16px; font-weight: 700; }
+    .uj-how { font-size: 13px; line-height: 1.55; color: var(--text-2); }
+    .uj-chip {
+      align-self: flex-start; margin-top: 2px;
+      font-size: 11.5px; line-height: 1; padding: 7px 11px; border-radius: 999px;
+      background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg);
+      white-space: nowrap;
+    }
+    .uj-lane.manager .uj-chip { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+
+    .uj-bridge {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      font-size: 13px; color: var(--text-3); margin: -4px 0 18px;
+    }
+    .uj-bridge::before, .uj-bridge::after {
+      content: ""; height: 1px; width: 120px; background: var(--border);
+    }
+
+    .uj-merge {
+      background: var(--success-soft); border: 1px solid var(--success-border);
+      border-radius: 16px; padding: 22px; text-align: center;
+    }
+    .uj-merge-title { font-size: 16px; font-weight: 700; color: var(--success-fg); margin-bottom: 8px; }
+    .uj-merge-desc { font-size: 13.5px; color: #05603A; line-height: 1.6; margin-bottom: 14px; }
+    .uj-merge-chips { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+    .uj-merge-chip {
+      font-size: 12.5px; line-height: 1; padding: 8px 12px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--success-border); color: var(--success-fg);
+      font-weight: 600; white-space: nowrap;
+    }
+
+    @media (max-width: 760px) {
+      #hg-journey { width: 100%; padding: 28px 20px; }
+      .uj-steps { grid-template-columns: 1fr; }
+      .uj-bridge::before, .uj-bridge::after { width: 40px; }
+    }
+  </style>
+
+  <div class="uj-head">
+    <div class="uj-brand">
+      <div class="uj-logo">⏳</div>
+      <div class="uj-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="uj-sub">用户旅程 · 两种角色，一条主线 · 管理视角的每个数字都来自成员的日常操作</div>
+  </div>
+
+  <div class="uj-lane member">
+    <div class="uj-lane-head">
+      <span class="uj-role">成员 · 执行者</span>
+      <span class="uj-quote">「我知道今天该做什么，做完不用再汇报」</span>
+    </div>
+    <div class="uj-steps">
+      <div class="uj-step">
+        <div class="uj-when">每天开始</div>
+        <div class="uj-what">打开「我的工作」</div>
+        <div class="uj-how">跨空间汇总所有分给我的待办，按截止日期分组、分批加载。</div>
+        <span class="uj-chip">我的工作 · 跨空间待办</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">开始干活</div>
+        <div class="uj-what">拖进「进行中」</div>
+        <div class="uj-how">自动开表计时，切任务自动停旧开新，一人同一时刻只计一个任务。</div>
+        <span class="uj-chip">工作项 · 自动计时</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">做完</div>
+        <div class="uj-what">拖进「已完成」</div>
+        <div class="uj-how">停表并自动接力原列的下一个任务，工时随动作落到事实表。</div>
+        <span class="uj-chip">接力机制</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">补特殊情况</div>
+        <div class="uj-what">手工补记 / 作废</div>
+        <div class="uj-how">忘计时可以补，无效工时作废重算，补记后统计自动重算。</div>
+        <span class="uj-chip">工时补记 · 作废重算</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">每周收尾</div>
+        <div class="uj-what">确认周回顾</div>
+        <div class="uj-how">自动总结完成、待确认、进行中，AI 可起周报草稿。</div>
+        <span class="uj-chip">周回顾 · AI 草稿</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="uj-bridge">成员的每次操作自动留痕，成为管理视角的数据来源</div>
+
+  <div class="uj-lane manager">
+    <div class="uj-lane-head">
+      <span class="uj-role">管理者 · 全局视角</span>
+      <span class="uj-quote">「不用挨个问，就知道项目到哪了、谁有风险」</span>
+    </div>
+    <div class="uj-steps">
+      <div class="uj-step">
+        <div class="uj-when">看全局</div>
+        <div class="uj-what">项目 · 全局健康度</div>
+        <div class="uj-how">全部项目的健康度、逾期与本周投入，可下钻到项目驾驶舱。</div>
+        <span class="uj-chip">项目 · 全局健康度</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">定优先级</div>
+        <div class="uj-what">需求池评审排期</div>
+        <div class="uj-how">WSJF 自动打分排序，评审流转全程留痕，拒绝的需求不消失。</div>
+        <span class="uj-chip">需求池 · WSJF</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">盯节奏</div>
+        <div class="uj-what">工作项甘特与成员负载</div>
+        <div class="uj-how">依赖、关键路径、基线偏差；跨项目看忙闲与本周计时。</div>
+        <span class="uj-chip">工作项 · 成员负载</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">抓风险</div>
+        <div class="uj-what">逾期与阻塞</div>
+        <div class="uj-how">集中处理逾期、阻塞、停滞工作项，站内一键催办。</div>
+        <span class="uj-chip">逾期与阻塞</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">验收与复盘</div>
+        <div class="uj-what">报表与流程体检</div>
+        <div class="uj-how">燃尽、速度、一次通过率、估时准确度，共用一套周期口径。</div>
+        <span class="uj-chip">报表 · 流程体检</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="uj-merge">
+    <div class="uj-merge-title">两条旅程在「同一套数据」上交汇</div>
+    <div class="uj-merge-desc">管理者不需要派人汇报、成员不需要二次录入——每个统计数字都能回溯到具体任务、时段和操作。</div>
+    <div class="uj-merge-chips">
+      <span class="uj-merge-chip">口径统一</span>
+      <span class="uj-merge-chip">全程留痕</span>
+      <span class="uj-merge-chip">数字可下钻</span>
+      <span class="uj-merge-chip">无人需要维护报表</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

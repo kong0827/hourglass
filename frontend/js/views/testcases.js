@@ -158,6 +158,7 @@ function loadMoreCases(){
   });
 }
 function enterTestCasesView(){
+  syncModeUI();
   var run = function(){
     syncReqSel();
     if(tcMode === "coverage") loadCoverage();
@@ -741,6 +742,28 @@ function renderTcViewsMenu(){
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-tc-view-save>保存当前为视图</button></div>';
   tcViewsMenuEl.innerHTML = html;
 }
+/* 测试四模式已并到全局子导航：模式切换后同步高亮，避免还要维护页内分段 */
+function syncTcSubnav(){
+  if(document.body.dataset.view !== "testcases") return;
+  var el = document.getElementById("subNav");
+  if(!el) return;
+  el.querySelectorAll("[data-sub-tab]").forEach(function(b){
+    var on = b.dataset.subTab === tcMode;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+}
+function setTcMode(mode){
+  if(mode !== "cases" && mode !== "plans" && mode !== "coverage" && mode !== "report") return;
+  if(mode === tcMode){ syncModeUI(); return; }
+  tcMode = mode;
+  syncModeUI();
+  if(tcMode === "coverage") loadCoverage();
+  else if(tcMode === "report") loadTestReport();
+  else if(tcMode === "plans") loadPlans();
+  else { render(); loadCases(); }
+}
+function currentTcMode(){ return tcMode; }
 function syncModeUI(){
   var cov = tcMode === "coverage";
   var rep = tcMode === "report";
@@ -754,6 +777,7 @@ function syncModeUI(){
   document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
   });
+  syncTcSubnav();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = isWritable() && !cov && !rep && !plan ? "" : "none";
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
@@ -1679,13 +1703,8 @@ $("tcReq").addEventListener("change", function(){
 });
 $("tcModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-tc-mode]");
-  if(!b || b.dataset.tcMode === tcMode) return;
-  tcMode = b.dataset.tcMode;
-  syncModeUI();
-  if(tcMode === "coverage") loadCoverage();
-  else if(tcMode === "report") loadTestReport();
-  else if(tcMode === "plans") loadPlans();
-  else { render(); loadCases(); }
+  if(!b) return;
+  setTcMode(b.dataset.tcMode);
 });
 ["tcModule", "tcPri", "tcOwner"].forEach(function(id){
   $(id).addEventListener("change", function(){
@@ -2026,4 +2045,4 @@ function openCaseInProject(reqId, id){
   });
 }
 
-export { enterTestCasesView, openCaseInProject };
+export { currentTcMode, enterTestCasesView, openCaseInProject, setTcMode };

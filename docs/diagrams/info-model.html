@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 信息模型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-info-model">
+  <style>
+    #hg-info-model {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 48px 56px 52px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-info-model * { box-sizing: border-box; margin: 0; }
+
+    .im-head { text-align: center; margin-bottom: 30px; }
+    .im-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .im-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .im-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .im-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .im-sub { font-size: 17px; color: var(--text-2); line-height: 1.6; }
+
+    .im-band {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 20px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .im-band-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 700; padding: 7px 12px; border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .im-band-tag .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .tag-blue { background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg); }
+    .tag-blue .dot { background: var(--primary); }
+    .tag-green { background: var(--success-soft); border: 1px solid var(--success-border); color: var(--success-fg); }
+    .tag-green .dot { background: var(--success); }
+    .tag-plum { background: var(--plum-soft); border: 1px solid var(--plum-border); color: var(--plum-fg); }
+    .tag-plum .dot { background: var(--plum); }
+
+    .im-chain { display: flex; align-items: stretch; gap: 12px; }
+    .im-node {
+      flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .im-node.primary { background: var(--primary-soft); border-color: var(--primary-border); }
+    .im-node-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .im-node.primary .im-node-name { color: var(--primary-fg); }
+    .im-node-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
+    .im-node-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .im-node-chip {
+      font-size: 11.5px; line-height: 1; padding: 6px 9px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--primary-border); color: var(--primary-fg);
+      white-space: nowrap;
+    }
+    .im-node:not(.primary) .im-node-chip { background: var(--surface-sunken); border-color: var(--border); color: var(--text-2); }
+    .im-node-note { font-size: 12px; color: var(--text-3); margin-top: 14px; }
+    .im-arrow { display: flex; align-items: center; color: var(--text-3); font-size: 15px; flex: 0 0 18px; justify-content: center; }
+
+    .im-rel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .im-rel-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--surface); }
+    .im-rel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .im-rel-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    .im-rel-head .name { font-size: 14px; font-weight: 700; }
+    .im-rel-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.55; min-height: 58px; }
+    .im-rel-chip {
+      display: inline-block; margin-top: 10px;
+      font-size: 11.5px; line-height: 1; padding: 6px 10px; border-radius: 999px;
+      background: var(--success-soft); border: 1px solid var(--success-border); color: var(--success-fg);
+      white-space: nowrap;
+    }
+
+    .im-facts { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 14px; align-items: stretch; }
+    .im-fact-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; background: var(--surface); }
+    .im-fact-card.fact { background: var(--plum-soft); border-color: var(--plum-border); }
+    .im-fact-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+    .im-fact-card.fact .im-fact-name { color: var(--plum-fg); font-family: "SFMono-Regular", Consolas, Menlo, monospace; }
+    .im-fact-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+    .im-fact-chips { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .im-fact-chip {
+      font-size: 12px; color: var(--text-2); background: var(--surface-sunken);
+      border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    }
+    .im-rules { display: flex; flex-direction: column; gap: 8px; }
+    .im-rule {
+      font-size: 12.5px; color: var(--text-2); line-height: 1.45;
+      background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--plum);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    .im-rule b { color: var(--text); font-weight: 700; }
+
+    .im-views { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .im-view {
+      font-size: 12.5px; line-height: 1; padding: 8px 12px; border-radius: 999px;
+      background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .im-view.primary { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .im-foot { text-align: center; font-size: 13px; color: var(--text-3); margin-top: 14px; }
+
+    @media (max-width: 760px) {
+      #hg-info-model { width: 100%; padding: 28px 20px; }
+      .im-chain { flex-direction: column; }
+      .im-arrow { transform: rotate(90deg); }
+      .im-rel { grid-template-columns: 1fr; }
+      .im-facts { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="im-head">
+    <div class="im-brand">
+      <div class="im-logo">⏳</div>
+      <div class="im-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="im-sub">信息模型 · 一套数据贯穿需求、工作项、版本与工时 · 每个统计数字都可回溯</div>
+  </div>
+
+  <div class="im-band">
+    <span class="im-band-tag tag-blue"><span class="dot"></span>层级 · 空间 → 项目 → 工作项</span>
+    <div class="im-chain">
+      <div class="im-node">
+        <div class="im-node-name">空间</div>
+        <div class="im-node-desc">团队协作边界</div>
+        <div class="im-node-chips">
+          <span class="im-node-chip">成员与角色</span>
+          <span class="im-node-chip">看板列</span>
+          <span class="im-node-chip">分类</span>
+          <span class="im-node-chip">分支</span>
+        </div>
+        <div class="im-node-note">决定谁看得见、谁可以改</div>
+      </div>
+      <div class="im-arrow">→</div>
+      <div class="im-node">
+        <div class="im-node-name">项目</div>
+        <div class="im-node-desc">交付单元 · 工作项归属项目</div>
+        <div class="im-node-chips">
+          <span class="im-node-chip">项目驾驶舱</span>
+          <span class="im-node-chip">全局健康度</span>
+        </div>
+        <div class="im-node-note">一次交付的时间盒，版本在此切分</div>
+      </div>
+      <div class="im-arrow">→</div>
+      <div class="im-node primary">
+        <div class="im-node-name">工作项 · 执行与计时的最小单位</div>
+        <div class="im-node-desc">状态由看板列驱动</div>
+        <div class="im-node-chips">
+          <span class="im-node-chip">任务 · 面向执行</span>
+          <span class="im-node-chip">用户故事 · 迭代内可交付</span>
+          <span class="im-node-chip">缺陷 · 来自测试 / 反馈</span>
+          <span class="im-node-chip">史诗 · 需拆解后再排期</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="im-band">
+    <span class="im-band-tag tag-green"><span class="dot"></span>横向关联 · 四类对象围绕工作项</span>
+    <div class="im-rel">
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">需求池</span></div>
+        <div class="im-rel-desc">原始需求先入池评审，通过后拆成工作项；WSJF 自动打分排序，全程留痕。</div>
+        <span class="im-rel-chip">通过 → 拆解为工作项</span>
+      </div>
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">文档</span></div>
+        <div class="im-rel-desc">项目下的方案文档，多级文档树，可派生工作项、AI 拆任务草稿。</div>
+        <span class="im-rel-chip">文档 → 生成任务草稿</span>
+      </div>
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">版本</span></div>
+        <div class="im-rel-desc">工作项可绑定影响版本；发布说明自动汇总，首版 / 迭代双口径对比。</div>
+        <span class="im-rel-chip">工作项 → 绑定版本</span>
+      </div>
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">分支</span></div>
+        <div class="im-rel-desc">工作项可挂分支，跟踪一条分支从开发、测试、合并到发布的流转状态。</div>
+        <span class="im-rel-chip">工作项 → 挂载分支</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="im-band">
+    <span class="im-band-tag tag-plum"><span class="dot"></span>事实与口径 · 统计直读事实表</span>
+    <div class="im-facts">
+      <div class="im-fact-card">
+        <div class="im-fact-name">日常操作</div>
+        <div class="im-fact-desc">拖拽看板 · 手工补记 · 作废重算，不需要二次录入</div>
+        <div class="im-fact-chips">
+          <span class="im-fact-chip">拖入「进行中」自动开表</span>
+          <span class="im-fact-chip">拖入「已完成」停表接力</span>
+          <span class="im-fact-chip">补记 / 作废后自动重算</span>
+        </div>
+      </div>
+      <div class="im-fact-card fact">
+        <div class="im-fact-name">time_log · task_log</div>
+        <div class="im-fact-desc">工时与流转的事实表，留痕可回溯，补记后自动重算；每条记录带任务、时段、操作者</div>
+        <div class="im-fact-chips">
+          <span class="im-fact-chip">写入 · 拖拽、计时、补记、作废</span>
+          <span class="im-fact-chip">字段 · 任务 / 时段 / 操作者 / 来源</span>
+          <span class="im-fact-chip">读取 · 全部视图与 AI 周回顾</span>
+        </div>
+      </div>
+      <div class="im-fact-card">
+        <div class="im-fact-name">统一规则</div>
+        <div class="im-rules">
+          <div class="im-rule"><b>有效工时</b>：跳过周末，每人每天封顶 8 小时</div>
+          <div class="im-rule"><b>计时归属</b>：一人同一时刻只计一个任务</div>
+          <div class="im-rule"><b>口径统一</b>：逾期、工时、完成数各由一套规则计算</div>
+        </div>
+      </div>
+    </div>
+    <div class="im-views">
+      <span class="im-view primary">看板</span>
+      <span class="im-view primary">日历</span>
+      <span class="im-view primary">甘特图</span>
+      <span class="im-view primary">报表</span>
+      <span class="im-view">成员负载</span>
+      <span class="im-view">周回顾</span>
+    </div>
+    <div class="im-foot">所有视图读同一套事实数据 —— 任何页面看到的是同一个数字</div>
+  </div>
+</div>
+</body>
+</html>

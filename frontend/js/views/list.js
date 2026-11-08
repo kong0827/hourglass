@@ -594,8 +594,8 @@ function renderListItems(items){
     rt.listSelected = {};
     var hasConditions = filterOn() || smart.preset !== "all" || smart.hideDone;
     listBody.innerHTML = '<div style="padding:8px">' + (hasConditions
-      ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的任务", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部任务", compact:true })
-      : UI.emptyState({ icon:"inbox", title:"这里还没有任务", textHtml:"新建一个任务；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建任务", compact:true })) + '</div>';
+      ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的工作项", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部工作项", compact:true })
+      : UI.emptyState({ icon:"inbox", title:"这里还没有工作项", textHtml:"新建一个工作项；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建工作项", compact:true })) + '</div>';
     bindRetry(listBody, function(){ if(hasConditions) activatePreset("all"); else openTaskDrawer("backlog"); });
     syncListSelectionUI();
     appendListMore();

@@ -142,10 +142,10 @@ function openRoleGuide(){
     roleGuideRow(["查看项目与任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "默认全部；设为「不可见」的项目不可见", ROLE_GUIDE_YES]),
     roleGuideRow(["查看统计 / 报表 / 成员负载", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "按可见项目过滤", ROLE_GUIDE_YES]),
     roleGuideGroup("工作项"),
-    roleGuideRow(["新建 / 编辑任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["删除任务（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["恢复回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
-    roleGuideRow(["彻底删除回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新建 / 编辑工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
+    roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["新增 / 编辑 / 排序看板列与分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
     roleGuideRow(["删除看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -156,7 +156,7 @@ function openRoleGuide(){
     roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["完整备份导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["导出任务 CSV", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES]),
+    roleGuideRow(["导出工作项 CSV", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES]),
     roleGuideRow(["删除共享空间", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO])
   ].join("");
 
@@ -1521,8 +1521,8 @@ btnReset.addEventListener("click", function(){
   rt.resetArmed = setTimeout(disarmReset, 3500);
 });
 var SHORTCUT_ROWS = [
-  ["N","新建任务：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
-  ["C","新建任务（打开详情抽屉）"],
+  ["N","新建工作项：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
+  ["C","新建工作项（打开详情抽屉）"],
   ["?","打开这份帮助（快捷键 + 录入语法）"],
   ["g b / g l / g m","跳转：工作项看板 / 工作项列表 / 我的工作"],
   ["g c / g g / g p","跳转：日历 / 甘特图 / 项目"],

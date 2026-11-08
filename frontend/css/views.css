@@ -1856,6 +1856,8 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .analysis-bar .set-tabs{border-bottom:none;margin:0;padding:0;background:none;position:static;}
 /* 报表的三个页签已提升到全局子导航，页内不再重复一行（周期选择仍留在本行） */
 .analysis-bar #analysisTabs{display:none;}
+/* 测试四模式同理：用例 / 测试计划 / 覆盖矩阵 / 测试报告统一走全局子导航 */
+#view-testcases #tcModeSeg{display:none;}
 #view-analysis [data-analysis-pane][hidden]{display:none;}
 
 /* ===== 版本视图（views/phase.js） ===== */

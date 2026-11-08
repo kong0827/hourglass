@@ -520,12 +520,14 @@ function renderMine(d, append){
   }
   if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({
-      icon:"checkCircle", title:"没有分派给你的任务",
-      text:"被指派到你账号的任务会汇总在这里（跨你参与的全部空间）。若老数据只填了显示名、没有绑定账号，请先在任务里重新指定负责人。",
-      actionLabel:"刷新"
+      icon:"checkCircle", title:"没有分派给你的工作项",
+      text:"被指派到你账号的工作项会汇总在这里（跨你参与的全部空间）。新成员可以先去「工作项」看看团队正在做什么；若老数据只填了显示名、没有绑定账号，请在工作项里重新指定负责人。",
+      actionLabel:"去工作项"
     });
-    var emptyRefresh = mineBody.querySelector("[data-empty-action]");
-    if(emptyRefresh) emptyRefresh.addEventListener("click", function(){ loadMine(); });
+    var emptyGo = mineBody.querySelector("[data-empty-action]");
+    if(emptyGo) emptyGo.addEventListener("click", function(){
+      window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"board" } }));
+    });
     return;
   }
   if(!items.length){

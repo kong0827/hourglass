@@ -207,7 +207,7 @@
           <div class="menu" id="newMenu" hidden style="right:0;top:calc(100% + 6px)">
             <button class="menu-item" type="button" data-new="task">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-              新建任务 <span class="k">C</span>
+              新建工作项 <span class="k">C</span>
             </button>
             <button class="menu-item" type="button" data-new="req">
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.4A1.6 1.6 0 0 1 5.6 3.8h7.2l3.2 3.2v8.4a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 15.4Z"/></svg>
@@ -475,7 +475,7 @@
                   <option value="40">宽松</option>
                 </select>
               </label>
-              <button class="btn sm primary" type="button" id="ganttNew">新建任务</button>
+              <button class="btn sm primary" type="button" id="ganttNew">新建工作项</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
           </div>
@@ -547,9 +547,9 @@
               </details>
             </div>
           </div>
-          <section class="gantt-load" id="ganttLoad" hidden aria-label="资源负载">
+          <section class="gantt-load" id="ganttLoad" hidden aria-label="成员负载">
             <div class="gantt-load-head">
-              <strong>资源负载</strong>
+              <strong>成员负载</strong>
               <span class="foot-note" id="ganttLoadRange"></span>
               <button class="icon-btn sm" type="button" id="ganttLoadClose" aria-label="关闭负载面板">×</button>
             </div>
@@ -2268,10 +2268,10 @@
   <form class="drawer" id="taskForm" novalidate>
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
-      <h2 id="taskDrawerTitle">新建任务</h2>
-      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前任务所属项目新建任务">
+      <h2 id="taskDrawerTitle">新建工作项</h2>
+      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-        新建任务
+        新建工作项
       </button>
       <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>

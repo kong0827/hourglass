@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 研发协作能力全景图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-panorama">
+  <style>
+    #hg-panorama {
+      --bg-app: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      --gray-soft: #F2F4F7;
+      --gray-fg: #344054;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-app);
+      padding: 48px 56px 52px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-panorama * { box-sizing: border-box; margin: 0; }
+
+    .hg-head { text-align: center; margin-bottom: 34px; }
+    .hg-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .hg-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .hg-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .hg-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .hg-sub { font-size: 17px; color: var(--text-2); line-height: 1.6; }
+    .hg-sub b { color: var(--text); font-weight: 600; }
+
+    .hg-group {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .hg-group-label {
+      border-radius: 12px;
+      background: var(--surface-sunken);
+      border: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 12px 8px; text-align: center;
+    }
+    .hg-group-label .g-name { font-size: 16px; font-weight: 700; }
+    .hg-group-label .g-en { font-size: 11px; color: var(--text-3); letter-spacing: 0.08em; text-transform: uppercase; }
+    .hg-group-label .g-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .g-mine .g-dot { background: var(--primary); }
+    .g-plan .g-dot { background: var(--plum); }
+    .g-deliver .g-dot { background: var(--success); }
+    .g-insight .g-dot { background: var(--warning); }
+    .g-platform .g-dot { background: #98A2B3; }
+    .g-mine .hg-group-label { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .g-plan .hg-group-label { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .g-deliver .hg-group-label { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .g-insight .hg-group-label { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning-fg); }
+    .g-platform .hg-group-label { background: var(--gray-soft); border-color: var(--border-strong); color: var(--gray-fg); }
+
+    .hg-cards { display: grid; gap: 14px; }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+    .hg-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 14px 16px;
+    }
+    .hg-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .hg-card-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+    .hg-card-head .name { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .hg-card-head .route {
+      margin-left: auto; font-size: 11px; color: var(--text-3);
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    }
+    .g-mine .dot { background: var(--primary); }
+    .g-plan .dot { background: var(--plum); }
+    .g-deliver .dot { background: var(--success); }
+    .g-insight .dot { background: var(--warning); }
+    .g-platform .dot { background: #98A2B3; }
+
+    .hg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .hg-chip {
+      font-size: 12.5px; line-height: 1; padding: 7px 10px; border-radius: 999px;
+      background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .g-mine .hg-chip { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .g-plan .hg-chip { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .g-deliver .hg-chip { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .g-insight .hg-chip { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning-fg); }
+    .g-platform .hg-chip { background: var(--gray-soft); border-color: var(--border-strong); color: var(--gray-fg); }
+
+    .hg-flow {
+      margin-top: 22px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 24px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+    }
+    .hg-flow .label { font-size: 12.5px; font-weight: 700; color: var(--text-2); margin-right: 8px; }
+    .hg-node {
+      font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 999px;
+      background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .hg-node.primary { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .hg-arrow { color: var(--text-3); font-size: 14px; }
+
+    @media (max-width: 760px) {
+      #hg-panorama { width: 100%; padding: 28px 20px; }
+      .hg-group { grid-template-columns: 1fr; }
+      .cols-3, .cols-4, .cols-5 { grid-template-columns: repeat(2, 1fr); }
+      .hg-flow { justify-content: flex-start; }
+    }
+  </style>
+
+  <div class="hg-head">
+    <div class="hg-brand">
+      <div class="hg-logo">⏳</div>
+      <div class="hg-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="hg-sub">研发协作能力全景图 · <b>12 个一级入口、4 个分组</b>：需求、文档、工作项、版本、工时与回顾跑在同一套数据上</div>
+  </div>
+
+  <div class="hg-group g-mine">
+    <div class="hg-group-label"><span class="g-dot"></span><span class="g-name">我的</span><span class="g-en">Mine</span></div>
+    <div class="hg-cards cols-2">
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">我的工作</span><span class="route">#/mine</span></div>
+        <div class="hg-chips"><span class="hg-chip">跨空间待办</span><span class="hg-chip">分组与排序</span><span class="hg-chip">计时行内切换</span><span class="hg-chip">移动端团队视图</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">周回顾</span><span class="route">#/review</span></div>
+        <div class="hg-chips"><span class="hg-chip">自动总结</span><span class="hg-chip">完成透视</span><span class="hg-chip">工时汇总</span><span class="hg-chip">AI 周报草稿</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hg-group g-plan">
+    <div class="hg-group-label"><span class="g-dot"></span><span class="g-name">规划</span><span class="g-en">Plan</span></div>
+    <div class="hg-cards cols-3">
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">需求池</span><span class="route">#/demands</span></div>
+        <div class="hg-chips"><span class="hg-chip">需求收集</span><span class="hg-chip">评审与排期</span><span class="hg-chip">WSJF 自动打分</span><span class="hg-chip">两级回退</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">项目</span><span class="route">#/projects · #/portfolio</span></div>
+        <div class="hg-chips"><span class="hg-chip">项目列表</span><span class="hg-chip">全局健康度</span><span class="hg-chip">项目驾驶舱</span><span class="hg-chip">影响预览</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">版本</span><span class="route">#/phase</span></div>
+        <div class="hg-chips"><span class="hg-chip">首版 / 迭代双口径</span><span class="hg-chip">阶段投入</span><span class="hg-chip">发布说明自动汇总</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hg-group g-deliver">
+    <div class="hg-group-label"><span class="g-dot"></span><span class="g-name">交付</span><span class="g-en">Deliver</span></div>
+    <div class="hg-cards cols-4">
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">工作项</span><span class="route">#/board · #/list · #/calendar · #/gantt</span></div>
+        <div class="hg-chips"><span class="hg-chip">看板 / 列表 / 日历 / 甘特</span><span class="hg-chip">拖拽移列</span><span class="hg-chip">依赖与里程碑</span><span class="hg-chip">共享筛选</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">文档</span><span class="route">#/requirements</span></div>
+        <div class="hg-chips"><span class="hg-chip">树形文档</span><span class="hg-chip">富文本 / Markdown</span><span class="hg-chip">全文检索</span><span class="hg-chip">发布分享</span><span class="hg-chip">AI 拆任务草稿</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">测试</span><span class="route">#/testcases</span></div>
+        <div class="hg-chips"><span class="hg-chip">用例库</span><span class="hg-chip">测试计划</span><span class="hg-chip">覆盖矩阵</span><span class="hg-chip">测试报告</span><span class="hg-chip">失败转缺陷</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">分支</span><span class="route">#/branches</span></div>
+        <div class="hg-chips"><span class="hg-chip">开发</span><span class="hg-chip">测试</span><span class="hg-chip">合并</span><span class="hg-chip">发布</span><span class="hg-chip">流转留痕</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hg-group g-insight">
+    <div class="hg-group-label"><span class="g-dot"></span><span class="g-name">洞察</span><span class="g-en">Insight</span></div>
+    <div class="hg-cards cols-3">
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">报表</span><span class="route">#/insight</span></div>
+        <div class="hg-chips"><span class="hg-chip">趋势与分布</span><span class="hg-chip">完成记录</span><span class="hg-chip">流程体检</span><span class="hg-chip">交付图表</span><span class="hg-chip">周期切换</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">成员负载</span><span class="route">#/workload</span></div>
+        <div class="hg-chips"><span class="hg-chip">跨项目忙闲</span><span class="hg-chip">本周计时</span><span class="hg-chip">透视视图</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">逾期与阻塞</span><span class="route">#/risks</span></div>
+        <div class="hg-chips"><span class="hg-chip">逾期</span><span class="hg-chip">阻塞</span><span class="hg-chip">停滞</span><span class="hg-chip">站内催办</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hg-group g-platform">
+    <div class="hg-group-label"><span class="g-dot"></span><span class="g-name">平台能力</span><span class="g-en">Platform</span></div>
+    <div class="hg-cards cols-5">
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">计时</span></div>
+        <div class="hg-chips"><span class="hg-chip">自动开停表</span><span class="hg-chip">接力</span><span class="hg-chip">手工补记</span><span class="hg-chip">作废重算</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">通知</span></div>
+        <div class="hg-chips"><span class="hg-chip">站内 + SSE</span><span class="hg-chip">邮件</span><span class="hg-chip">Webhook / 机器人</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">权限与附件</span></div>
+        <div class="hg-chips"><span class="hg-chip">空间角色</span><span class="hg-chip">项目可见性</span><span class="hg-chip">评论附件</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">AI 助手</span></div>
+        <div class="hg-chips"><span class="hg-chip">自配模型</span><span class="hg-chip">需求拆解</span><span class="hg-chip">文档体检</span></div>
+      </div>
+      <div class="hg-card">
+        <div class="hg-card-head"><span class="dot"></span><span class="name">安全与移动端</span></div>
+        <div class="hg-chips"><span class="hg-chip">富文本白名单</span><span class="hg-chip">密码加密</span><span class="hg-chip">PWA 三档自适应</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hg-flow">
+    <span class="label">协作主链路</span>
+    <span class="hg-node primary">需求池</span><span class="hg-arrow">→</span>
+    <span class="hg-node">评审排期</span><span class="hg-arrow">→</span>
+    <span class="hg-node">文档沉淀</span><span class="hg-arrow">→</span>
+    <span class="hg-node primary">工作项</span><span class="hg-arrow">→</span>
+    <span class="hg-node">版本发布</span><span class="hg-arrow">→</span>
+    <span class="hg-node primary">周回顾</span>
+  </div>
+</div>
+</body>
+</html>

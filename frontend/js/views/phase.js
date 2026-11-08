@@ -850,7 +850,7 @@ function openVersionTasks(id){
     + '<button class="icon-btn sm" type="button" data-version-task-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="version-task-tools"><input type="search" placeholder="搜索任务标题或负责人…" aria-label="搜索版本任务" data-version-task-search />'
     + '<span class="version-task-count"></span></div><div class="version-task-list"></div></div>'
-    + '<div class="sheet-foot"><button class="btn" type="button" data-version-task-new>+ 在此版本新建任务</button>'
+    + '<div class="sheet-foot"><button class="btn" type="button" data-version-task-new>+ 在此版本新建工作项</button>'
     + '<span style="flex:1"></span><button class="btn" type="button" data-version-task-cancel>取消</button>'
     + '<button class="btn primary" type="button" data-version-task-save>保存关联</button></div></div>';
   function selectedIds(){ return Object.keys(selected).filter(function(taskId){ return selected[taskId]; }); }

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 界面一览</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-gallery">
+  <style>
+    #hg-gallery {
+      --surface: #FFFFFF;
+      --border: #E4E7EC;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 44px 48px 40px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-gallery * { box-sizing: border-box; margin: 0; }
+
+    .ug-head { text-align: center; margin-bottom: 28px; }
+    .ug-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+    .ug-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .ug-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .ug-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .ug-sub { font-size: 17px; color: var(--text-2); }
+
+    .ug-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .ug-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      overflow: hidden; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex; flex-direction: column;
+    }
+    .ug-shot { display: block; width: 100%; border-bottom: 1px solid var(--border); }
+    .ug-cap { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px 20px; }
+    .ug-num {
+      flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%;
+      background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700;
+    }
+    .ug-cap-body { min-width: 0; }
+    .ug-cap-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .ug-cap-desc { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+
+    .ug-foot {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      font-size: 13px; color: var(--text-3); margin-top: 22px;
+    }
+    .ug-foot .node {
+      font-size: 12.5px; padding: 7px 12px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .ug-foot .node.primary { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .ug-foot .arrow { color: var(--text-3); }
+
+    @media (max-width: 760px) {
+      #hg-gallery { width: 100%; padding: 24px 16px; }
+      .ug-grid { grid-template-columns: 1fr; }
+      .ug-foot { flex-wrap: wrap; }
+    }
+  </style>
+
+  <div class="ug-head">
+    <div class="ug-brand">
+      <div class="ug-logo">⏳</div>
+      <div class="ug-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="ug-sub">界面一览 · 沿协作主链路的六个关键界面</div>
+  </div>
+
+  <div class="ug-grid">
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/demands.png" alt="需求池">
+      <div class="ug-cap">
+        <div class="ug-num">1</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">需求池</div>
+          <div class="ug-cap-desc">评审流转 · WSJF 打分排期</div>
+        </div>
+      </div>
+    </div>
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/gantt.png" alt="工作项 · 甘特">
+      <div class="ug-cap">
+        <div class="ug-num">2</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">工作项 · 甘特</div>
+          <div class="ug-cap-desc">依赖 · 里程碑 · 成员负载</div>
+        </div>
+      </div>
+    </div>
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/calendar.png" alt="工作项 · 日历">
+      <div class="ug-cap">
+        <div class="ug-num">3</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">工作项 · 日历</div>
+          <div class="ug-cap-desc">按日期逐日铺开的工作项</div>
+        </div>
+      </div>
+    </div>
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/requirements.png" alt="文档">
+      <div class="ug-cap">
+        <div class="ug-num">4</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">文档</div>
+          <div class="ug-cap-desc">树形文档 · 全文检索 · 发布分享</div>
+        </div>
+      </div>
+    </div>
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/insight.png" alt="报表">
+      <div class="ug-cap">
+        <div class="ug-num">5</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">报表</div>
+          <div class="ug-cap-desc">趋势与分布 · 完成记录 · 流程体检 · 交付图表</div>
+        </div>
+      </div>
+    </div>
+    <div class="ug-card">
+      <img class="ug-shot" src="gallery/review.png" alt="周回顾">
+      <div class="ug-cap">
+        <div class="ug-num">6</div>
+        <div class="ug-cap-body">
+          <div class="ug-cap-title">周回顾</div>
+          <div class="ug-cap-desc">自动总结 · AI 周报草稿</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ug-foot">
+    <span class="node primary">需求</span><span class="arrow">→</span>
+    <span class="node">排期</span><span class="arrow">→</span>
+    <span class="node">推进</span><span class="arrow">→</span>
+    <span class="node primary">交付</span><span class="arrow">→</span>
+    <span class="node">度量</span><span class="arrow">→</span>
+    <span class="node primary">回顾</span>
+    <span>六个界面跑在同一套数据上</span>
+  </div>
+</div>
+</body>
+</html>

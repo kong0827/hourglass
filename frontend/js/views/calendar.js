@@ -152,7 +152,7 @@ function renderMobileCalendar(){
         '<span class="cwd-dn">' + day.getDate() + '</span>' +
         '<span class="cwd-dw">' + weekdayCN(day) + '</span>' +
         '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无任务") + '</span>' +
-        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' + icon("plus", 12) + '</button>' +
+        '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' + icon("plus", 12) + '</button>' +
       '</div>' +
       (rows ? '<div class="cwd-tasks">' + rows + '</div>' : '') +
     '</section>';
@@ -228,7 +228,7 @@ function renderCalendar(){
         '" title="展开当天已完成的任务">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
     }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
-      '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建任务" aria-label="在 ' + dateIso + ' 新建任务">' +
+      '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' +
         icon("plus", 12) + '</button>' +
       '<span class="cal-dn">' + day + '</span>' +
       '<div class="cal-tasks">' + chips + '</div>' +
