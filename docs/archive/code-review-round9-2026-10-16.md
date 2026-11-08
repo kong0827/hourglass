@@ -15,10 +15,10 @@
 ### 1. [P2] 任务评论（`task_comment`）在彻底删除 / 清空空间 / 覆盖导入时从未清理
 
 - 位置：
-  - `src/main/java/com/devstudio/kanban/service/TaskService.java:521-529`（`deleteChildren`：清了 subtask / task_tag / time_log / attachment / task_log，**唯独没有评论**）
-  - `src/main/java/com/devstudio/kanban/service/WorkspaceService.java:250-264`（`wipeData`：同上，缺评论）
-  - `src/main/java/com/devstudio/kanban/service/BackupService.java:182-187`（覆盖导入的删除清单：同样缺评论）
-  - `src/main/java/com/devstudio/kanban/mapper/TaskCommentMapper.java:20`、`:22`（`deleteByTaskId` / `deleteAllByWorkspace` **已定义，全项目零调用**）
+  - `src/main/java/com/hourglass/kanban/service/TaskService.java:521-529`（`deleteChildren`：清了 subtask / task_tag / time_log / attachment / task_log，**唯独没有评论**）
+  - `src/main/java/com/hourglass/kanban/service/WorkspaceService.java:250-264`（`wipeData`：同上，缺评论）
+  - `src/main/java/com/hourglass/kanban/service/BackupService.java:182-187`（覆盖导入的删除清单：同样缺评论）
+  - `src/main/java/com/hourglass/kanban/mapper/TaskCommentMapper.java:20`、`:22`（`deleteByTaskId` / `deleteAllByWorkspace` **已定义，全项目零调用**）
   - `TaskService.java:75`、`:82`、`:94`：注入了 `commentMapper` 字段却从未使用（旁证：接线漏了）
 - 触发路径：回收站自动清理（`TrashService.java:25`，每天 04:30）、`DELETE /api/tasks/{id}/purge`、删除共享空间（`WorkspaceController.java:60`）、`POST /api/import` 覆盖导入。
 - 根因：任务级联删除的实现清单比表结构晚一代（评论是后加的功能），新增评论表时补了 mapper 方法但没接到三个调用点。

@@ -16,6 +16,8 @@ public class TestCaseRun {
     private String note;
     /** 由本次失败转出的缺陷任务 ID */
     private String bugTaskId;
+    /** 所属测试计划 ID（计划内批量执行时写入；空=单用例执行） */
+    private String planId;
     private String executedBy;
     private String executedByUserId;
     private LocalDateTime createdAt;

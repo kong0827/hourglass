@@ -35,15 +35,24 @@ public class BoardQuery {
     private String doneScope = "week";
     private int doneLimit = 20;
     private int doneOffset = 0;
+    /** 未完成列首屏每列条数（其余通过 /api/tasks/column 滚动加载） */
+    private int openLimit = 60;
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String due, Boolean focus, String doneScope, Integer doneLimit, Integer doneOffset) {
-        return from(q, owners, pris, cats, reqs, tags, null, null, due, focus, null, null, doneScope, doneLimit, doneOffset);
+        return from(q, owners, pris, cats, reqs, tags, null, null, due, focus, null, null, doneScope, doneLimit, doneOffset, null);
     }
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String types, String versions, String due, Boolean focus, Boolean blocked, Boolean noDue,
                                   String doneScope, Integer doneLimit, Integer doneOffset) {
+        return from(q, owners, pris, cats, reqs, tags, types, versions, due, focus, blocked, noDue,
+                doneScope, doneLimit, doneOffset, null);
+    }
+
+    public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
+                                  String types, String versions, String due, Boolean focus, Boolean blocked, Boolean noDue,
+                                  String doneScope, Integer doneLimit, Integer doneOffset, Integer openLimit) {
         BoardQuery query = new BoardQuery();
         query.q = trimToNull(q);
         query.owners = splitCsv(owners);
@@ -63,6 +72,9 @@ public class BoardQuery {
         }
         if (doneOffset != null) {
             query.doneOffset = Math.max(0, doneOffset);
+        }
+        if (openLimit != null) {
+            query.openLimit = Math.max(1, Math.min(200, openLimit));
         }
         return query;
     }

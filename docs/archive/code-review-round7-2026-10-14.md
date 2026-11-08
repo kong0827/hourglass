@@ -29,7 +29,7 @@
 
 ### 3. [P3] 导入允许带逗号的分类名，分类出现后却无法筛选其任务
 
-- 位置：`src/main/java/com/devstudio/kanban/service/BackupService.java:236`、`:238`、`:337`、`:338`；查询拆分为 `src/main/java/com/devstudio/kanban/dto/BoardQuery.java:37`、`:52`，匹配为 `src/main/java/com/devstudio/kanban/service/TaskService.java:755`。
+- 位置：`src/main/java/com/hourglass/kanban/service/BackupService.java:236`、`:238`、`:337`、`:338`；查询拆分为 `src/main/java/com/hourglass/kanban/dto/BoardQuery.java:37`、`:52`，匹配为 `src/main/java/com/hourglass/kanban/service/TaskService.java:755`。
 - 触发：导入备份中某项任务的 `cat="A,B"`。导入成功，分类表与任务都保留 `A,B`；用户在筛选中选中这个分类。
 - 原因：日常分类创建/更新通过 `CategoryService.cleanName` 替换逗号，以遵守筛选参数的 CSV 协议；导入只 trim/cut，绕过该规则。前端数组经 join 和 URL 编码后，服务端解码仍得到 `A,B`，再拆成两个分类 `A` 和 `B`，无法精确匹配任务上的完整分类名。URL 编码不能解决服务端解码后的分隔冲突。
 - 影响：导入任务在全量列表可见，但选择其分类会漏掉任务。仅空间主可导入，标准当前版本导出的分类通常没有逗号，因此优先级 P3；手工备份、外部或历史数据可以触发。它是已有任务字段的导入校验不一致，不要求扩大 JSON 恢复范围。

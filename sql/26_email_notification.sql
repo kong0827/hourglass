@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS mail_setting (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT chk_mail_setting_singleton CHECK (id = 1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='全局 SMTP 配置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局 SMTP 配置';
 
 CREATE TABLE IF NOT EXISTS mail_delivery (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS mail_delivery (
   PRIMARY KEY (id),
   INDEX idx_mail_delivery_due (status, next_attempt_at, id),
   INDEX idx_mail_delivery_reference (event_type, reference_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事件邮件持久化 outbox';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='事件邮件持久化 outbox';
 
 -- 自检：不应输出 SMTP 密码内容。
 SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT

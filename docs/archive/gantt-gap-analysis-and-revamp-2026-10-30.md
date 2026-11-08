@@ -1,7 +1,7 @@
 # 甘特图能力盘点与改造方案
 
 - 日期：2026-10-30
-- 盘点对象：DevStudio 当前 `master`（`ec84fab`）甘特图实现
+- 盘点对象：Hourglass 当前 `master`（`ec84fab`）甘特图实现
 - 对照基线：主流项目管理甘特（MS Project / 飞书项目 / TeamGantt / 禅道专业版）的共性能力，不逐产品展开
 - 文档性质：差距分析 + 分期改造方案，不是实施规格；实施时以本文分阶段再落细节
 - 关联文档：`gantt-product-development-spec-2026-10-30.md`（V1.1 规格，已实施）、`gantt-ui-optimization-2026-10-30.md`（视觉）、`ui-redesign-spec.md` 附录 N

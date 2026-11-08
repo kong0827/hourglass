@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TestModuleMapper">
+
+  <select id="selectNames" resultType="string">
+    SELECT name FROM test_module
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY sort_order, name
+  </select>
+
+  <insert id="insert">
+    INSERT INTO test_module (id, workspace_id, req_id, name, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{sortOrder})
+  </insert>
+
+  <delete id="deleteByReq">
+    DELETE FROM test_module WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+</mapper>

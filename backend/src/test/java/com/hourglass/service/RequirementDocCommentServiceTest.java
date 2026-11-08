@@ -19,7 +19,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -63,7 +62,7 @@ class RequirementDocCommentServiceTest {
     void createRejectsViewer() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
-        when(access.roleOf(WS, USER)).thenReturn(ProjectAccessService.ROLE_VIEWER);
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, USER, REQ);
 
         ReqDocCommentRequest req = new ReqDocCommentRequest();
         req.setContent("hi");
@@ -103,6 +102,17 @@ class RequirementDocCommentServiceTest {
     }
 
     @Test
+    void deleteRejectsReadOnlyAuthor() {
+        RequirementDoc doc = doc(REQ);
+        when(docMapper.selectById(DOC)).thenReturn(doc);
+        when(commentMapper.selectById("C1")).thenReturn(comment(USER, "x"));
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, USER, REQ);
+
+        assertThrows(AppException.class, () -> service.delete(USER, WS, DOC, "C1"));
+        verify(commentMapper, never()).delete(anyString(), anyString());
+    }
+
+    @Test
     void deleteAllowsNonAuthorWithWritePermission() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
@@ -119,14 +129,14 @@ class RequirementDocCommentServiceTest {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
         when(commentMapper.selectById("C1")).thenReturn(comment(OTHER, "x"));
-        when(access.canWrite(WS, USER, REQ)).thenReturn(false);
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, USER, REQ);
 
         assertThrows(AppException.class, () -> service.delete(USER, WS, DOC, "C1"));
         verify(commentMapper, never()).delete(anyString(), anyString());
     }
 
     @Test
-    void deletableFlagReflectsOwnershipAndWritePermission() {
+    void deletableFlagRequiresCurrentWritePermission() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
         when(commentMapper.selectByDoc(WS, DOC)).thenReturn(Arrays.asList(
@@ -138,7 +148,7 @@ class RequirementDocCommentServiceTest {
 
         List<ReqDocCommentView> views = service.list(WS, USER, DOC);
 
-        assertTrue(views.get(0).isDeletable(), "作者可删自己的评论");
+        assertFalse(views.get(0).isDeletable(), "作者被降权后也不可删");
         assertFalse(views.get(1).isDeletable(), "非作者且无写权限不可删");
     }
 

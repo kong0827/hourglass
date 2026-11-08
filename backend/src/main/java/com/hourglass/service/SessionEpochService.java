@@ -2,6 +2,8 @@ package com.hourglass.service;
 
 import com.hourglass.mapper.UserMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationAdapter;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -10,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>登录时把 current() 写进会话；密码/平台角色变更时 bump()。
  * 重启后缓存为空，第一次校验从数据库取回同一代次，旧会话仍然有效；
- * 多实例部署时其它实例的代次变更最多延迟一次缓存命中，建议仍按单实例部署。</p>
+ * 多实例部署时其它实例的缓存不会主动失效，因此仍按单实例部署。</p>
  */
 @Service
 public class SessionEpochService {
@@ -42,8 +44,16 @@ public class SessionEpochService {
         }
         userMapper.bumpSessionVersion(userId);
         Long db = userMapper.selectSessionVersion(userId);
-        /* 不把新值写进缓存：事务回滚时数据库还是旧值，缓存应等提交后的下一次请求再读 */
+        /* 提交后再次失效，避免并发请求在事务提交前把旧代次重新填回缓存。 */
         cache.remove(userId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+                @Override
+                public void afterCommit() {
+                    cache.remove(userId);
+                }
+            });
+        }
         return db == null ? 0L : db;
     }
 

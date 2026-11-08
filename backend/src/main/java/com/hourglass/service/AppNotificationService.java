@@ -41,6 +41,13 @@ public class AppNotificationService {
      */
     public void pushImmediate(String userId, String workspaceId, String type,
                               String title, String body, String refTaskId) {
+        pushImmediate(userId, workspaceId, type, title, body, refTaskId, null, null);
+    }
+
+    /** 非任务事件通知：refKind/refId 指向需求、文档、分支、版本、项目或空间，供通知中心深链。 */
+    public void pushImmediate(String userId, String workspaceId, String type,
+                              String title, String body, String refTaskId,
+                              String refKind, String refId) {
         if (userId == null || workspaceId == null || title == null) {
             return;
         }
@@ -52,6 +59,8 @@ public class AppNotificationService {
             n.setTitle(cut(title, MAX_TITLE));
             n.setBody(cut(body, MAX_BODY));
             n.setRefTaskId(refTaskId);
+            n.setRefKind(refKind);
+            n.setRefId(refId);
             mapper.insert(n);
         } catch (Exception e) {
             log.warn("事件站内通知写入失败（不影响主流程）：user={} type={}", userId, type, e);
@@ -83,13 +92,28 @@ public class AppNotificationService {
         }
     }
 
-    public List<AppNotification> list(String userId, String workspaceId, Integer limit) {
+    public List<AppNotification> list(String userId, String workspaceId, String filter, Integer limit) {
         int n = limit == null ? 50 : Math.max(1, Math.min(200, limit));
-        return mapper.selectByUser(userId, workspaceId, n);
+        return mapper.selectByUser(userId, workspaceId, normalizeFilter(filter), n);
     }
 
     public int unread(String userId, String workspaceId) {
         return mapper.countUnread(userId, workspaceId);
+    }
+
+    public int total(String userId, String workspaceId) {
+        return mapper.countAll(userId, workspaceId);
+    }
+
+    public int mentions(String userId, String workspaceId) {
+        return mapper.countMentions(userId, workspaceId);
+    }
+
+    private String normalizeFilter(String filter) {
+        if ("unread".equals(filter) || "mention".equals(filter)) {
+            return filter;
+        }
+        return "all";
     }
 
     public void markRead(String userId, Long id) {

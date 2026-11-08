@@ -1,5 +1,6 @@
 package com.hourglass.mapper;
 
+import com.hourglass.dto.DemandQuery;
 import com.hourglass.entity.Demand;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,6 +14,15 @@ public interface DemandMapper {
     List<Demand> selectByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     List<Demand> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 分页：筛选/排序/LIMIT 全在 SQL 完成 */
+    List<Demand> selectPage(@Param("q") DemandQuery query);
+
+    /** 分页总数（与 selectPage 同一 WHERE） */
+    int countPage(@Param("q") DemandQuery query);
+
+    /** 各状态计数（status 条件由调用方置空，即忽略状态） */
+    List<Map<String, Object>> countGroupByStatus(@Param("q") DemandQuery query);
 
     Demand selectById(String id);
 

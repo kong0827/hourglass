@@ -15,6 +15,30 @@ body{background:var(--bg-app);}
   padding:32px 20px;font-size:13px;color:var(--text-3);
 }
 .share-error{color:var(--danger-fg);}
+
+/* 无效分享：整页只保留品牌、原因与下一步，隐藏业务工具栏和画布 */
+body.share-error-mode .app{display:none;}
+.share-error-page{
+  height:100%;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:var(--bg-app);
+}
+.share-error-page[hidden]{display:none;}
+.share-error-card{
+  width:min(460px,100%);background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:28px 28px 24px;box-shadow:var(--shadow-md);
+}
+.share-error-brand{
+  display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;
+  color:var(--text-3);margin-bottom:16px;
+}
+.share-error-card h1{margin:0 0 10px;font-size:18px;line-height:1.35;color:var(--text);}
+.share-error-detail{margin:0 0 6px;font-size:13.5px;line-height:1.7;color:var(--danger-fg);}
+.share-error-hint{margin:0 0 20px;font-size:12.5px;line-height:1.7;color:var(--text-3);}
+.share-error-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.share-error-actions .btn{text-decoration:none;}
+@media (max-width:900px){
+  .share-error-card{padding:22px 20px 18px;}
+}
 @media (max-width:900px){
   #view-gantt{padding:0 10px 10px;}
   .share-title h1{font-size:16px;}

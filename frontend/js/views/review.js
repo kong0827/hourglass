@@ -4,6 +4,7 @@ import { API } from "../core/api.js";
 import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { catColor, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { activeView } from "../core/router.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { avatarHTML, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
@@ -12,6 +13,36 @@ import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
 function reviewTitle(off){
   return off === -1 ? "上周工作回顾" : (off === 0 ? "本周工作回顾" : "工作回顾");
+}
+/* 项目维度回顾：选择单个项目时，统计、列表、工时与 AI 周报都只取该项目 */
+var REVIEW_REQ_KEY = "ds.reviewReq";
+var reviewReqId = (function(){
+  try{ return localStorage.getItem(REVIEW_REQ_KEY) || ""; }catch(e){ return ""; }
+})();
+function reviewParams(off){
+  var p = {};
+  if(off !== undefined && off !== null) p.weekOffset = off;
+  if(reviewReqId) p.reqId = reviewReqId;
+  return p;
+}
+function renderReviewReqOptions(){
+  var sel = $("reviewReq");
+  if(!sel) return;
+  var list = rt.reqList || [];
+  /* 项目列表还没加载完时不能把已保存的项目清掉，否则刷新后会退回「全部项目」 */
+  var exists = list.some(function(r){ return String(r.id) === reviewReqId; });
+  if(reviewReqId && rt.reqsLoaded && !exists) reviewReqId = "";
+  sel.innerHTML = '<option value="">全部项目</option>' + list.map(function(r){
+    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
+  }).join("");
+  if(reviewReqId && !exists){
+    /* 列表里暂时没有（尚未加载完）：补一个占位项，保持选中态与请求范围一致 */
+    var opt = document.createElement("option");
+    opt.value = reviewReqId;
+    opt.textContent = "已选项目";
+    sel.appendChild(opt);
+  }
+  sel.value = reviewReqId;
 }
 function setReviewLoading(){
   $("summaryText").innerHTML = "加载中…";
@@ -25,12 +56,11 @@ function setReviewLoading(){
   $("reqDist").innerHTML = UI.skeletonRows(3);
   $("doneList").innerHTML = UI.skeletonRows(4);
 }
-function enterReviewView(){
+function fetchReview(weekOffset){
   setReviewLoading();
-  loadReqs();
   var seq = ++rt.reviewSeq;
-  rt.reviewTarget = null;
-  API.get("/api/review").then(function(d){
+  rt.reviewTarget = weekOffset === undefined ? null : weekOffset;
+  API.get("/api/review", reviewParams(weekOffset)).then(function(d){
     if(seq !== rt.reviewSeq) return;
     state.reviewData = d;
     rt.reviewTarget = d.weekOffset;
@@ -41,12 +71,23 @@ function enterReviewView(){
     setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
   });
 }
+function enterReviewView(){
+  renderReviewReqOptions();
+  loadReqs().then(function(){
+    if(activeView !== "review") return;
+    var before = reviewReqId;
+    renderReviewReqOptions();
+    /* 本地记住的项目已被删除/不可见：第一次请求可能 404，列表到位后回到全部项目 */
+    if(before !== reviewReqId) fetchReview(null);
+  });
+  fetchReview(null);
+}
 function navWeek(delta){
   var base = rt.reviewTarget !== null ? rt.reviewTarget : (state.reviewData ? state.reviewData.weekOffset : -1);
   var off = base + delta;
-  rt.reviewTarget = off;
+  setReviewLoading();
   var seq = ++rt.reviewSeq;
-  API.get("/api/review", {weekOffset: off}).then(function(d){
+  API.get("/api/review", reviewParams(off)).then(function(d){
     if(seq !== rt.reviewSeq) return;
     state.reviewData = d;
     rt.reviewTarget = d.weekOffset;
@@ -57,14 +98,22 @@ function navWeek(delta){
     toast("加载失败：" + (ex.message || "网络异常"), "bad");
   });
 }
+function changeReviewReq(){
+  var sel = $("reviewReq");
+  reviewReqId = sel ? (sel.value || "") : "";
+  try{ localStorage.setItem(REVIEW_REQ_KEY, reviewReqId); }catch(e){ /* 受限环境忽略 */ }
+  /* 切项目后重新自动定位该项目最近有记录的周，避免停在一个空周 */
+  fetchReview(null);
+}
 function buildSummary(d){
   var list = d.completed || [];
   var n = list.length;
   var label = esc(d.label || "该周期");
+  var scope = d.reqName ? ("项目「<b>" + esc(d.reqName) + "</b>」 · ") : "";
   var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   var progTasks = d.progressTasks || [];
   if(!n && !progTasks.length && !d.doing && !d.backlog){
-    return label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在任务里填上进度，回顾里就能看到这一周你做了什么。";
+    return scope + label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在任务里填上进度，回顾里就能看到这一周你做了什么。";
   }
   var parts = [];
   if(n){
@@ -74,10 +123,10 @@ function buildSummary(d){
     var rateTxt = (withDue === 0)
       ? "，完成项均未设置截止日期"
       : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期交付");
-    parts.push("<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项任务" + rateTxt +
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项任务" + rateTxt +
       (p0 ? "，其中" + esc(priName("P0")) + " <b>" + p0 + "</b> 项。" : "。"));
   }else{
-    parts.push("<b>" + label + "（" + rangeTxt + "）</b>没有已交付的任务记录。");
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已交付的任务记录。");
   }
   if(n){
     var items = list.slice(0, 12).map(function(t){
@@ -127,7 +176,7 @@ function distHTML(list, colorOf, valueOf){
   }).join("");
 }
 function renderReview(d){
-  $("reviewTitle").textContent = reviewTitle(d.weekOffset);
+  $("reviewTitle").textContent = reviewTitle(d.weekOffset) + (d.reqName ? " · " + d.reqName : "");
   $("weekLabel").textContent = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   $("weekNext").disabled = d.weekOffset >= 0;
   $("summaryText").innerHTML = buildSummary(d);
@@ -153,8 +202,9 @@ function renderReview(d){
     /* IA-7：只保留本周两个口径；累计工时挪到分析页 */
     var hcards = [
       {k:"本周·我的", v:fmtMinutesShort(w.mineWeek || 0)},
-      {k:"本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
+      {k:d.reqName ? "本周·项目" : "本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
     ];
+    if($("reviewHoursScope")) $("reviewHoursScope").textContent = d.reqName ? ("本周 · 项目「" + d.reqName + "」/ 我的") : "本周 · 我的 / 全空间";
     reviewHoursEl.innerHTML = hcards.map(function(x){
       return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
     }).join("");
@@ -240,6 +290,7 @@ $("weekNext").addEventListener("click", function(){
   if(state.reviewData && state.reviewData.weekOffset >= 0) return;
   navWeek(1);
 });
+if($("reviewReq")) $("reviewReq").addEventListener("change", changeReviewReq);
 function copyReviewPlain(){
   var d = state.reviewData;
   if(!d){ toast("回顾还没加载完成", "warn"); return; }
@@ -247,7 +298,7 @@ function copyReviewPlain(){
   var doneTasks = d.completed || [];
   /* 复制口径与页面一致：先「进行中」（已开工未完成），再「本周完成」。
      不再叫「完成明细」—— 页面上的区块也叫「本周完成」。 */
-  var text = "沙漏 · " + (d.label || "") + "工作回顾（" + d.weekStart + " — " + d.weekEnd + "）\n\n"
+  var text = "沙漏 · " + (d.reqName ? "项目「" + d.reqName + "」· " : "") + (d.label || "") + "工作回顾（" + d.weekStart + " — " + d.weekEnd + "）\n\n"
     + summaryPlain(d) + "\n\n"
     + "进行中（" + progTasks.length + " 项）：\n"
     + (progTasks.length ? progTasks.map(function(t){
@@ -264,7 +315,7 @@ function copyReviewPlain(){
 }
 function copyReviewAi(){
   var d = state.reviewData;
-  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset, d.reqId)] : null;
   if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
   copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
 }
@@ -297,8 +348,8 @@ function copyReviewAi(){
 })();
 var aiReportCache = {};
 var aiReportBusy = false;
-function aiKey(off){
-  return String(window.CURRENT_WORKSPACE || "") + "#" + off;
+function aiKey(off, reqId){
+  return String(window.CURRENT_WORKSPACE || "") + "#" + (reqId || "") + "#" + off;
 }
 function aiReportIdle(){
   var body = $("reviewAiBody");
@@ -314,7 +365,7 @@ function aiReportIdle(){
 }
 function syncAiReport(d){
   if(!d || !$("reviewAiBody")) return;
-  var hit = aiReportCache[aiKey(d.weekOffset)];
+  var hit = aiReportCache[aiKey(d.weekOffset, d.reqId)];
   if(hit) renderAiReport(hit); else aiReportIdle();
 }
 function reportHTML(text){
@@ -345,6 +396,7 @@ function runAiReport(){
   var noteEl = $("reviewAiNote");
   var body = $("reviewAiBody");
   var week = d.weekOffset;
+  var req = d.reqId || "";
   aiReportBusy = true;
   aiBtnBusy(btn, true, "生成中…");
   $("reviewAiMeta").textContent = "正在写…（10–30 秒）";
@@ -355,13 +407,14 @@ function runAiReport(){
   $("reviewAiUsage").textContent = "";
   API.post("/api/ai/review/polish", {
     weekOffset: week,
+    reqId: req || null,
     note: noteEl ? String(noteEl.value || "").trim() : ""
   }).then(function(r){
-    aiReportCache[aiKey(r.weekOffset == null ? week : r.weekOffset)] = r;
-    /* 生成过程中可能已经翻到别的周：存进缓存就好，不要覆盖当前这一周的界面 */
-    if(state.reviewData && state.reviewData.weekOffset === week) renderAiReport(r);
+    aiReportCache[aiKey(r.weekOffset == null ? week : r.weekOffset, req)] = r;
+    /* 生成过程中可能已经翻到别的周/别的项目：存进缓存就好，不要覆盖当前界面 */
+    if(state.reviewData && state.reviewData.weekOffset === week && (state.reviewData.reqId || "") === req) renderAiReport(r);
   }).catch(function(ex){
-    if(state.reviewData && state.reviewData.weekOffset === week){
+    if(state.reviewData && state.reviewData.weekOffset === week && (state.reviewData.reqId || "") === req){
       body.hidden = true;
       $("reviewAiHint").hidden = false;
       $("reviewAiMeta").textContent = "生成失败";
@@ -375,7 +428,7 @@ function runAiReport(){
 if($("btnAiReport")) $("btnAiReport").addEventListener("click", runAiReport);
 if($("btnAiReportCopy")) $("btnAiReportCopy").addEventListener("click", function(){
   var d = state.reviewData;
-  var hit = d ? aiReportCache[aiKey(d.weekOffset)] : null;
+  var hit = d ? aiReportCache[aiKey(d.weekOffset, d.reqId)] : null;
   if(!hit || !hit.report){ toast("先点「生成周报」", "warn"); return; }
   copyToClipboard(hit.report, "已复制周报", "复制失败，请手动选择文本");
 });

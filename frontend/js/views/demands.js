@@ -35,6 +35,13 @@ var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
 function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
+var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}} */
+var demandColExtra = {};       /* 看板列已滚动加载的追加条目 */
+var demandTotal = 0;           /* 列表模式：当前筛选下的总数 */
+var demandHasMore = false;
+var demandServerFiltered = false;
+var DEMAND_BOARD_PAGE = 50;
+var DEMAND_TABLE_PAGE = 100;
 var versions = [];           /* 当前项目的版本（目标版本展示/排期选择） */
 var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
@@ -65,10 +72,11 @@ function wsjfText(d){
 
 function syncReqSel(){
   if(!demandReq) return;
-  demandReq.innerHTML = rt.reqList.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.demandReqId; });
+  demandReq.innerHTML = list.map(function(r){
+    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   }).join("");
-  if(!rt.demandReqId && rt.reqList.length) rt.demandReqId = rt.reqList[0].id;
+  if(!rt.demandReqId && list.length) rt.demandReqId = list[0].id;
   if(rt.demandReqId) demandReq.value = rt.demandReqId;
 }
 var demandLoadSeq = 0;
@@ -88,13 +96,20 @@ function loadDemands(){
   if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
   demandBody.innerHTML = UI.skeletonRows(2);
   Promise.all([
-    API.get("/api/demands", { reqId: reqId }),
+    API.get("/api/demands/board", { reqId: reqId, limit: DEMAND_BOARD_PAGE }),
     API.get("/api/versions", { reqId: reqId })
   ]).then(function(rs){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     if(listPrefs.viewMode("demand-pool") !== "board") return;
-    demands = rs[0];
+    demandBoard = rs[0].columns || {};
+    demandServerFiltered = false;
+    demandColExtra = {};
+    demands = [];
+    COLS.forEach(function(c){
+      var col = demandBoard[c[0]];
+      if(col) demands = demands.concat(col.items || []);
+    });
     versions = rs[1];
     render();
   }).catch(function(ex){
@@ -122,7 +137,24 @@ function enterDemandsView(){
     }
   });
 }
-/* 列表模式：跨项目全量展示，不随项目切换；版本名按项目补查一次 */
+/* 列表模式：跨项目分页展示，筛选/排序/分组在服务端完成，前端只渲染已加载页 */
+function demandPageParams(offset, limit){
+  return {
+    status: demSmart.preset === "all" ? null : demSmart.preset,
+    q: demSmart.q || null,
+    pris: demSmart.pris.join(","),
+    kinds: demSmart.kinds.join(","),
+    reqs: demSmart.reqs.join(","),
+    sort: demSmart.sort,
+    offset: offset,
+    limit: limit
+  };
+}
+function mergeLoadedDemands(items){
+  var known = {};
+  demands.forEach(function(d){ known[d.id] = 1; });
+  (items || []).forEach(function(d){ if(!known[d.id]) demands.push(d); });
+}
 function loadAllDemands(){
   if(!rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
@@ -135,14 +167,19 @@ function loadAllDemands(){
   var seq = ++demandLoadSeq;
   var wsId = rt.currentWs && rt.currentWs.id;
   demandBody.innerHTML = UI.skeletonRows(2);
-  API.get("/api/demands").then(function(list){
+  demandServerFiltered = true;
+  demandBoard = null;
+  demands = [];
+  demandTotal = 0;
+  demandHasMore = false;
+  API.get("/api/demands/page", demandPageParams(0, DEMAND_TABLE_PAGE)).then(function(page){
     if(seq !== demandLoadSeq) return null;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return null;
-    demands = list || [];
+    demands = (page.items || []).slice();
+    demandTotal = page.total || 0;
+    demandHasMore = !!page.hasMore;
     versions = [];
-    var reqIds = [];
-    demands.forEach(function(d){ if(d.reqId && reqIds.indexOf(d.reqId) === -1) reqIds.push(d.reqId); });
-    return Promise.all(reqIds.map(function(rid){
+    return Promise.all(uniqueReqIds(demands).map(function(rid){
       return API.get("/api/versions", { reqId: rid }).then(function(vs){
         (vs || []).forEach(function(v){ versionNames[v.id] = v.name; });
       }).catch(function(){});
@@ -156,6 +193,61 @@ function loadAllDemands(){
     demandBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
+  });
+}
+function uniqueReqIds(list){
+  var ids = [];
+  list.forEach(function(d){ if(d.reqId && ids.indexOf(d.reqId) === -1) ids.push(d.reqId); });
+  return ids;
+}
+/* 列表「加载更多」：按当前筛选条件追加下一页 */
+function loadMoreDemandTable(){
+  if(!demandHasMore) return Promise.resolve(false);
+  var seq = demandLoadSeq;
+  var btn = demandBody.querySelector("[data-dem-more]");
+  if(btn){ btn.disabled = true; btn.textContent = "加载中…"; }
+  return API.get("/api/demands/page", demandPageParams(demands.length, DEMAND_TABLE_PAGE)).then(function(page){
+    if(seq !== demandLoadSeq) return false;
+    mergeLoadedDemands(page.items);
+    demandTotal = page.total || demandTotal;
+    demandHasMore = !!page.hasMore;
+    var reqIds = uniqueReqIds(page.items);
+    return Promise.all(reqIds.map(function(rid){
+      return API.get("/api/versions", { reqId: rid }).then(function(vs){
+        (vs || []).forEach(function(v){ versionNames[v.id] = v.name; });
+      }).catch(function(){});
+    })).then(function(){
+      render();
+      return true;
+    });
+  }).catch(function(ex){
+    toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    return false;
+  });
+}
+/* 看板单列「加载更多」 */
+function loadMoreDemandColumn(status){
+  var col = demandBoard && demandBoard[status];
+  if(!col || !col.hasMore) return Promise.resolve(false);
+  var extra = demandColExtra[status] = demandColExtra[status] || [];
+  var seq = demandLoadSeq;
+  var reqId = rt.demandReqId;
+  return API.get("/api/demands/page", {
+    reqId: reqId, status: status, offset: col.items.length + extra.length,
+    limit: DEMAND_BOARD_PAGE
+  }).then(function(page){
+    if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return false;
+    var known = {};
+    col.items.concat(extra).forEach(function(d){ known[d.id] = 1; });
+    (page.items || []).forEach(function(d){
+      if(!known[d.id]){ extra.push(d); demands.push(d); }
+    });
+    col.hasMore = (col.items.length + extra.length) < page.total;
+    render();
+    return true;
+  }).catch(function(ex){
+    toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    return false;
   });
 }
 function reloadDemands(){
@@ -185,10 +277,14 @@ function render(){
   syncModeUI(mode);
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
-    var total = demands.length;
+    var total = 0;
+    COLS.forEach(function(c){
+      var col = demandBoard && demandBoard[c[0]];
+      if(col) total += col.matched || 0;
+    });
     demandsMeta.textContent = reqNameById(rt.demandReqId) + (total ? (" · 共 " + total + " 条") : "");
   }
-  if(!demands.length && !versions.length){
+  if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
       icon:"inbox", title:"需求池还是空的",
       text:"点右上角「提需求」录入第一条；评审通过后排期到版本。"
@@ -196,23 +292,37 @@ function render(){
     return;
   }
   demandBody.innerHTML = '<div class="bkl">' + COLS.map(function(c){
-    var items = demands.filter(function(d){ return d.status === c[0]; }).sort(function(a, b){
-      return priRank(a.priority) - priRank(b.priority)
-        || String(a.expectDate || "9999").localeCompare(String(b.expectDate || "9999"));
-    });
+    var col = (demandBoard && demandBoard[c[0]]) || {items:[], matched:0, hasMore:false};
+    var extra = demandColExtra[c[0]] || [];
+    var items = (col.items || []).concat(extra);
+    var more = col.hasMore
+      ? '<button class="bkl-more" type="button" data-dem-more="' + esc(c[0]) + '">加载更多（还有 '
+        + Math.max((col.matched || 0) - items.length, 0) + ' 条）</button>'
+      : "";
     return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title">'
       + '<span class="pdot" style="background:' + c[2] + '"></span>' + c[1] + '</span>'
-      + '<span class="bkl-count">' + items.length + '</span></div>'
+      + '<span class="bkl-count">' + (col.matched || 0) + '</span></div>'
       + (items.map(cardHTML).join("") || '<p class="foot-note" style="padding:10px 2px">暂无需求</p>')
+      + more
       + '</div>';
   }).join("") + '</div>';
+}
+/* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
+function demandMenuItems(d){
+  if(!isOwner()) return [];
+  var out = [];
+  if(d.status === "review"){
+    out.push({ act: "rej", label: "拒绝" });
+    out.push({ act: "edit", label: "编辑" });
+  }
+  out.push({ act: "del", label: "删除", danger: true });
+  return out;
 }
 function demandActs(d){
   var acts = "";
   if(isOwner()){
     if(d.status === "review"){
-      acts += '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>'
-        + '<button class="btn sm" type="button" data-dem-rej="' + esc(d.id) + '">拒绝</button>';
+      acts += '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
     }
     if(d.status === "pass"){
       acts += '<button class="btn sm primary" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
@@ -221,11 +331,33 @@ function demandActs(d){
       acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
     }
   }
-  var editBtn = (isOwner() && d.status === "review")
-    ? '<button class="btn sm ghost" type="button" data-dem-edit="' + esc(d.id) + '">编辑</button>' : "";
-  var delBtn = isOwner()
-    ? '<button class="btn sm ghost danger" type="button" data-dem-del="' + esc(d.id) + '">删除</button>' : "";
-  return acts + editBtn + delBtn;
+  if(demandMenuItems(d).length){
+    acts += '<button class="btn sm ghost" type="button" data-dem-menu-btn="' + esc(d.id) +
+      '" aria-haspopup="true" aria-expanded="false" title="更多操作">更多</button>';
+  }
+  return acts;
+}
+function openDemandRowMenu(anchor, d){
+  if(!anchor || !d) return;
+  var items = demandMenuItems(d);
+  if(!items.length) return;
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "140px";
+  menu.innerHTML = items.map(function(it){
+    return '<button class="menu-item' + (it.danger ? " danger" : "") + '" type="button" data-dem-menu="' + it.act + '">' + esc(it.label) + '</button>';
+  }).join("");
+  UI.openPop(menu, anchor, { onClose: function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-dem-menu]");
+    if(!b) return;
+    UI.closeAllPops();
+    if(b.dataset.demMenu === "rej") rejectDemand(d.id);
+    else if(b.dataset.demMenu === "edit") openDemandDialog(d);
+    else if(b.dataset.demMenu === "del") deleteDemand(d.id);
+  });
+  var first = menu.querySelector(".menu-item");
+  if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
 }
 function dragHint(status){
   if(status === "review") return "可拖到「已通过」或「已拒绝」";
@@ -285,6 +417,8 @@ var demSmart = { current:"all", preset:"all", group:"none", sort:"default", pris
 var demSmartBar = null, demTabsBox = null, demSearchInput = null, demQTimer = null;
 
 function demBaseRows(){
+  /* 列表模式的筛选已下推服务端：本地只渲染已加载页，避免分页后二次过滤导致条数对不上 */
+  if(demandServerFiltered) return demands;
   return demands.filter(function(d){
     if(demSmart.preset !== "all" && d.status !== demSmart.preset) return false;
     if(demSmart.pris.length && demSmart.pris.indexOf(d.priority || "P2") === -1) return false;
@@ -308,6 +442,8 @@ function demCompare(a, b){
     || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
 }
 function demSorted(rows){
+  /* 服务端已按所选排序返回，翻页追加后仍保持全局顺序 */
+  if(demandServerFiltered) return rows.slice();
   return rows.slice().sort(demCompare);
 }
 function demGroupInfo(d){
@@ -403,7 +539,9 @@ function restoreDemState(){
 }
 function demStateChanged(){
   syncDemControls();
-  render();
+  /* 列表模式的筛选/排序下推服务端，条件变化必须重新取第一页 */
+  if(listPrefs.viewMode("demand-pool") === "table") loadAllDemands();
+  else render();
   saveDemState();
 }
 function activateDemPreset(id){
@@ -650,25 +788,18 @@ function renderDemandTable(){
   var rows = demViewRows(), groups = demGroups();
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){
-    var text = demands.length ? ("全空间 · 共 " + demands.length + " 条") : "全空间";
-    if(hasCond && rows.length !== demands.length) text += " · 当前视图 " + rows.length + " 条";
-    if(demSmart.group !== "none") text += " · " + groups.length + " 组";
+    var text = demandTotal ? ("全空间 · 共 " + demandTotal + " 条") : "全空间";
+    if(hasCond && demandTotal) text += " · 已加载 " + demands.length + " 条";
+    if(demSmart.group !== "none" && groups.length) text += " · " + groups.length + " 组";
     demandsMeta.textContent = text;
   }
   if(!demands.length){
     demandBody.innerHTML = UI.emptyState({
-      icon:"inbox", title:"需求池还是空的",
-      text:"点右上角「提需求」录入第一条；评审通过后排期到版本。"
+      icon: hasCond ? "filterOff" : "inbox",
+      title: hasCond ? "没有符合当前视图条件的需求" : "需求池还是空的",
+      text: hasCond ? "切换视图，或调整、清空筛选条件后重试。" : "点右上角「提需求」录入第一条；评审通过后排期到版本。"
     });
-    return;
-  }
-  if(!rows.length){
-    demandBody.innerHTML = '<div style="padding:8px">' + UI.emptyState({
-      icon:"filterOff", title:"没有符合当前视图条件的需求",
-      text:"切换视图，或调整、清空筛选条件后重试。",
-      actionLabel:"查看全部需求", compact:true
-    }) + '</div>';
-    bindRetry(demandBody, function(){ activateDemPreset("all"); });
+    if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
     return;
   }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
@@ -694,6 +825,11 @@ function renderDemandTable(){
     body = groups.map(function(g){
       return groupHead(g) + (demSmart.collapsed["$" + g.key] ? "" : g.rows.map(rowHTML).join(""));
     }).join("");
+  }
+  if(demandHasMore){
+    body += '<tr class="dem-more-row"><td colspan="' + colspan + '">' +
+      '<button class="btn ghost sm" type="button" data-dem-more="table">加载更多（已加载 ' +
+      demands.length + ' / 共 ' + demandTotal + ' 条）</button></td></tr>';
   }
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
     + '<thead><tr>' + cols.map(function(k){ return '<th' + (numCols[k] ? ' class="num"' : '') + '>' + esc(labels[k] || k) + '</th>'; }).join("") + '<th>操作</th></tr></thead>'
@@ -825,7 +961,7 @@ function passDemand(id){
   if(isMobile() && MOBILE_APPROVALS.review.confirmOnApprove){
     UI.showConfirm({
       title:"确认通过需求",
-      msg:"通过后「" + d.title + "」将进入已通过，可排期进入版本。确定继续？",
+      msg:"通过后「" + esc(d.title) + "」将进入已通过，可排期进入版本。确定继续？",
       okText:"通过",
       cancelText:"取消"
     }).then(function(ok){ if(ok) doPass(); });
@@ -1264,6 +1400,12 @@ if($("btnDemandColumns")) $("btnDemandColumns").addEventListener("click", functi
   listPrefs.openColumnSettings("demand-pool", function(){ render(); });
 });
 if(demandBody) demandBody.addEventListener("click", function(e){
+  var dm = e.target.closest("[data-dem-more]");
+  if(dm){
+    if(dm.dataset.demMore === "table") loadMoreDemandTable();
+    else loadMoreDemandColumn(dm.dataset.demMore);
+    return;
+  }
   var gt = e.target.closest("[data-dem-group-toggle]");
   if(gt){
     var gkey = "$" + gt.dataset.demGroupToggle;
@@ -1273,6 +1415,8 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   }
   var dt = e.target.closest("[data-dem-detail]");
   if(dt){ showDemandDetail(dt.dataset.demDetail); return; }
+  var mb = e.target.closest("[data-dem-menu-btn]");
+  if(mb){ openDemandRowMenu(mb, findDemand(mb.dataset.demMenuBtn)); return; }
   var p = e.target.closest("[data-dem-pass]");
   if(p){ passDemand(p.dataset.demPass); return; }
   var r = e.target.closest("[data-dem-rej]");
@@ -1365,4 +1509,14 @@ if(demandBody){
   });
 }
 
-export { enterDemandsView, loadDemands, render };
+function openDemandById(id){
+  return API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
+    openDemandDialog(d);
+    return true;
+  }).catch(function(ex){
+    toast(ex.message || "需求不存在或无权查看", "warn");
+    return false;
+  });
+}
+
+export { enterDemandsView, loadDemands, openDemandById, render };

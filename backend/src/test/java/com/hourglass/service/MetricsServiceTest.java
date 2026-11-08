@@ -62,7 +62,7 @@ class MetricsServiceTest {
 
         WorkSumRow work = new WorkSumRow();
         work.setTotalMine(120);
-        when(timeLogMapper.sumWork(eq("W1"), eq("U1"), any(LocalDateTime.class), eq(null), eq("U9")))
+        when(timeLogMapper.sumWork(eq("W1"), eq("U1"), any(LocalDateTime.class), eq(null), eq("U9"), eq(null)))
                 .thenReturn(work);
         assertEquals(120, m.workMinutes("W1", "U1", LocalDateTime.now(), "U9").getTotalMine());
     }

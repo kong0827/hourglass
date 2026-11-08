@@ -151,6 +151,9 @@
                         AND pm.access = 'none'
                       WHERE t.id = l.task_id)
     </if>
+    <if test="reqId != null">
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = l.task_id AND t.req_id = #{reqId})
+    </if>
     GROUP BY l.user_id
   </select>
 
@@ -199,6 +202,9 @@
                         AND pm.user_id = #{viewerId}
                         AND pm.access = 'none'
                       WHERE t.id = l.task_id)
+    </if>
+    <if test="reqId != null">
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = l.task_id AND t.req_id = #{reqId})
     </if>
   </select>
 

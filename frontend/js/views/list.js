@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, listBulkBar } from "../core/dom.js";
-import { applyView, clearFilters, deleteView, promptSaveView, saveViewState, savedViewsFor } from "../core/filters-ui.js";
+import { applyView, clearFilters, deleteView, openMobFilterSheet, promptSaveView, saveViewState, savedViewsFor, updateMobFilterSummary } from "../core/filters-ui.js";
 import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
@@ -26,12 +26,21 @@ var listHasMore = false, listLoadingMore = false;
 var LIST_PAGE_SIZE = 500;
 var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
-var smart = { current:"all", preset:"all", group:"none", sort:"default", collapsed:{} };
+var smart = { current:"all", preset:"all", group:"none", sort:"default", sortDir:"asc", collapsed:{} };
 var LIST_GROUPS = ["none", "status", "owner", "priority", "project"];
-var LIST_SORTS = ["default", "due", "priority", "estimate", "actual", "updated"];
-var COL_WIDTHS = { title:"minmax(220px,1fr)", type:"90px", column:"100px", priority:"84px", owner:"110px", dueDate:"120px", progress:"128px", project:"140px", version:"110px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
+/* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
+var SORT_DEFAULT_DIR = {
+  due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
+  title:"asc", type:"asc", column:"asc", owner:"asc", progress:"desc",
+  project:"asc", version:"asc", category:"asc", startDate:"asc", tags:"asc",
+  subtasks:"desc", comments:"desc"
+};
+var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
+var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
+var COL_WIDTHS = { title:"minmax(160px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"70px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
 
 function renderSmartTabs(){
+  updateMobFilterSummary();
   if(!smartTabs) return;
   var presets = [["all","全部任务"],["mine","我的任务"],["doing","进行中"],["over","已逾期"]];
   var html = presets.map(function(p){
@@ -49,7 +58,16 @@ function renderSmartTabs(){
 function syncSmartControls(){
   if(smartGroup) smartGroup.value = smart.group;
   if(listSort) listSort.value = smart.sort;
+  syncSortDirUI();
   renderSmartTabs();
+}
+function syncSortDirUI(){
+  var btn = smartBar && smartBar.querySelector("[data-list-sortdir]");
+  if(!btn) return;
+  var on = smart.sort !== "default";
+  btn.hidden = !on;
+  btn.textContent = smart.sortDir === "desc" ? "↓" : "↑";
+  btn.title = smart.sortDir === "desc" ? "当前降序，点击切换为升序" : "当前升序，点击切换为降序";
 }
 function activatePreset(id){
   if(["all", "mine", "doing", "over"].indexOf(id) === -1) return;
@@ -57,13 +75,14 @@ function activatePreset(id){
   smart.preset = id;
   smart.group = "none";
   smart.sort = "default";
+  smart.sortDir = "asc";
   smart.collapsed = {};
   syncSmartControls();
   /* 预置视图从干净条件开始；后续在全局筛选栏追加的条件仍与预置条件叠加。 */
   clearFilters();
   saveViewState();
 }
-function currentListViewParams(){ return {preset:smart.preset, group:smart.group, sort:smart.sort}; }
+function currentListViewParams(){ return {preset:smart.preset, group:smart.group, sort:smart.sort, sortDir:smart.sortDir}; }
 function currentListViewId(){ return smart.current; }
 function currentListViewName(){
   for(var i = 0; i < rt.savedViews.length; i++){
@@ -76,6 +95,8 @@ function applyListSavedView(id, params){
   smart.preset = ["all", "mine", "doing", "over"].indexOf(params.preset) !== -1 ? params.preset : "all";
   smart.group = LIST_GROUPS.indexOf(params.group) !== -1 ? params.group : "none";
   smart.sort = LIST_SORTS.indexOf(params.sort) !== -1 ? params.sort : "default";
+  smart.sortDir = params.sortDir === "desc" ? "desc"
+    : (params.sortDir === "asc" ? "asc" : (SORT_DEFAULT_DIR[smart.sort] || "asc"));
   smart.collapsed = {};
   syncSmartControls();
   saveViewState();
@@ -99,19 +120,38 @@ function initSmartTable(){
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
         '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
-      '<span class="smart-list-sort"></span><span class="smart-view-spacer"></span>' +
+      '<span class="smart-list-sort"></span>' +
+      '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
+      '<span class="smart-view-spacer"></span>' +
       '<button class="btn sm" type="button" data-list-export>' + icon("download", 13) + ' 导出当前视图</button>' +
       '<button class="btn sm primary" type="button" data-list-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(smartBar, toolbar);
+  /* 手机：分组/排序/导出/保存视图收进筛选面板，标签行右侧保留入口 */
+  var mobSettings = document.createElement("button");
+  mobSettings.type = "button";
+  mobSettings.id = "listMobSettings";
+  mobSettings.className = "smart-mob-settings";
+  mobSettings.title = "分组、排序、导出与保存视图";
+  mobSettings.setAttribute("aria-label", "视图设置：分组、排序、导出与保存视图");
+  mobSettings.innerHTML = icon("settings", 13) + " 视图";
+  mobSettings.addEventListener("click", function(){ openMobFilterSheet({ section: "tools" }); });
+  smartBar.appendChild(mobSettings);
   smartTabs = smartBar.querySelector(".smart-view-tabs");
   smartGroup = smartBar.querySelector("[data-list-group]");
   var sortLabel = listSort.closest("label");
   smartBar.querySelector(".smart-list-sort").appendChild(sortLabel);
   sortLabel.classList.add("smart-view-control");
-  listSort.innerHTML = '<option value="default">默认顺序（沿用服务端）</option><option value="due">按截止日期</option>' +
-    '<option value="priority">按优先级</option><option value="estimate">按预估工时</option>' +
-    '<option value="actual">按实际工时</option><option value="updated">按更新时间</option>';
+  listSort.innerHTML = '<option value="default">默认顺序（沿用服务端）</option>' +
+    '<option value="due">按截止日期</option><option value="priority">按优先级</option>' +
+    '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
+    '<option value="updated">按更新时间</option>' +
+    [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
+     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按分类"],
+     ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
+    ].map(function(o){
+      return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>';
+    }).join("");
   syncSmartControls();
   smartTabs.addEventListener("click", function(e){
     var del = e.target.closest("[data-list-del]");
@@ -132,9 +172,12 @@ function initSmartTable(){
     updateListMeta(lastItems.length);
     saveViewState();
   });
-  smartBar.addEventListener("click", function(e){
+  /* 监听挂在工具条自身：手机档位整条会搬进筛选面板，挂在 smartBar 上会收不到点击 */
+  var smartTools = smartBar.querySelector(".smart-view-tools");
+  smartTools.addEventListener("click", function(e){
     if(e.target.closest("[data-list-save]")) promptSaveView();
     else if(e.target.closest("[data-list-export]")) exportListCsv();
+    else if(e.target.closest("[data-list-sortdir]")) toggleListSortDir();
   });
 }
 function enterListView(){
@@ -213,7 +256,15 @@ function applyGrid(el){
 function renderListHead(){
   var labels = listPrefs.labels("task-list");
   listHead.innerHTML = '<span><input type="checkbox" class="cbx" data-list-select-all aria-label="全选当前页" /></span>' +
-    listPrefs.columns("task-list").map(function(key){ return '<span>' + esc(labels[key]) + '</span>'; }).join("") + '<span></span>';
+    listPrefs.columns("task-list").map(function(key){
+      var sortKey = HEAD_SORT_MAP[key] || key;
+      var active = smart.sort === sortKey;
+      var ind = active ? (smart.sortDir === "desc" ? "↓" : "↑") : "";
+      return '<span aria-sort="' + (active ? (smart.sortDir === "desc" ? "descending" : "ascending") : "none") + '">' +
+        '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-sort-col="' + esc(key) + '"' +
+          ' title="按「' + esc(labels[key]) + '」排序">' + esc(labels[key]) +
+          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
+    }).join("") + '<span></span>';
   applyGrid(listHead);
 }
 function minutesText(value){
@@ -264,28 +315,72 @@ function presetFilteredItems(){
     return true;
   });
 }
+function sortValue(t, key){
+  if(key === "title") return String(t.title || "");
+  if(key === "type") return typeName(t.itemType) || "";
+  if(key === "column"){
+    var ci = -1;
+    COLUMNS.forEach(function(c, i){ if(c.id === t.boardColumn) ci = i; });
+    return ci < 0 ? 99 : ci;
+  }
+  if(key === "priority"){
+    var pi = PRIORITIES.indexOf(t.priority);
+    return pi < 0 ? 9 : pi;
+  }
+  if(key === "owner") return String(t.owner || "");
+  if(key === "due") return t.dueDate || null;
+  if(key === "progress") return progressOf(t);
+  if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
+  if(key === "version") return t.versionName || "";
+  if(key === "category") return t.category || "";
+  if(key === "startDate") return t.startDate || null;
+  if(key === "tags") return (t.tags || []).join(",");
+  if(key === "subtasks") return Number(t.subtaskTotal) || 0;
+  if(key === "actual") return Number(t.totalMinutes) || 0;
+  if(key === "estimate") return Number(t.estimateMinutes) || 0;
+  if(key === "comments") return Number(t.commentCount) || 0;
+  if(key === "updated") return t.updatedAt || null;
+  return "";
+}
 function compareTasks(a, b){
-  var x, y;
-  if(smart.sort === "due"){
-    x = a.dueDate || "9999-12-31"; y = b.dueDate || "9999-12-31";
-    return x < y ? -1 : (x > y ? 1 : 0);
-  }
-  if(smart.sort === "priority"){
-    x = PRIORITIES.indexOf(a.priority); y = PRIORITIES.indexOf(b.priority);
-    return (x < 0 ? 9 : x) - (y < 0 ? 9 : y);
-  }
-  if(smart.sort === "estimate") return (Number(b.estimateMinutes) || 0) - (Number(a.estimateMinutes) || 0);
-  if(smart.sort === "actual") return (Number(b.totalMinutes) || 0) - (Number(a.totalMinutes) || 0);
-  if(smart.sort === "updated"){
-    x = a.updatedAt || ""; y = b.updatedAt || "";
-    return x < y ? 1 : (x > y ? -1 : 0);
-  }
-  return 0;
+  if(smart.sort === "default") return 0;
+  var x = sortValue(a, smart.sort), y = sortValue(b, smart.sort);
+  /* 空值（未填截止/开始/更新时间）任何方向都排最后 */
+  if(x === null && y === null) return 0;
+  if(x === null) return 1;
+  if(y === null) return -1;
+  var r = (typeof x === "number" && typeof y === "number")
+    ? x - y
+    : String(x).localeCompare(String(y), "zh-Hans-CN");
+  return smart.sortDir === "desc" ? -r : r;
 }
 function sortedTasks(rows){
   var out = rows.slice();
   if(smart.sort !== "default") out.sort(compareTasks);
   return out;
+}
+function setListSort(key){
+  var mapped = HEAD_SORT_MAP[key] || key;
+  if(LIST_SORTS.indexOf(mapped) === -1) return;
+  if(mapped === smart.sort){
+    smart.sortDir = smart.sortDir === "desc" ? "asc" : "desc";
+  }else{
+    smart.sort = mapped;
+    smart.sortDir = SORT_DEFAULT_DIR[mapped] || "asc";
+  }
+  if(mapped === "due" || mapped === "priority" || mapped === "updated") serverSort = mapped;
+  syncSmartControls();
+  renderListHead();
+  renderListItems(lastItems);
+  saveViewState();
+}
+function toggleListSortDir(){
+  if(smart.sort === "default") return;
+  smart.sortDir = smart.sortDir === "desc" ? "asc" : "desc";
+  syncSmartControls();
+  renderListHead();
+  renderListItems(lastItems);
+  saveViewState();
 }
 function groupInfo(t){
   if(smart.group === "status") return {key:t.boardColumn || "unknown", label:colName(t.boardColumn) || "未设置状态"};
@@ -680,20 +775,38 @@ btnListBulk.addEventListener("click", function(){
     if(!ok) return;
     btnListBulk.disabled = true;
     UI.syncBusy(true);
+    var deleted = [], failed = [];
     Promise.all(ids.map(function(id){
-      return API.del("/api/tasks/" + encodeURIComponent(id)).catch(function(){ return null; });
+      return API.del("/api/tasks/" + encodeURIComponent(id))
+        .then(function(){ deleted.push(id); })
+        .catch(function(ex){ failed.push({ id: id, error: ex }); });
     })).then(function(){
       UI.syncBusy(false);
       btnListBulk.disabled = false;
-      toastAction("已移入回收站 " + ids.length + " 项", "撤销", function(){
-        Promise.all(ids.map(function(id){
-          return API.post("/api/tasks/" + encodeURIComponent(id) + "/restore", {}).catch(function(){ return null; });
-        })).then(function(){
-          toast("已恢复 " + ids.length + " 项", "fs");
-          loadList(); loadBoard({animate:false}); loadReqs();
-        });
-      }, "", 8000);
       loadList(); loadBoard({animate:false}); loadReqs();
+      if(!deleted.length){
+        toast("批量移入回收站失败：" + ((failed[0] && failed[0].error && failed[0].error.message) || "网络异常"), "bad");
+        return;
+      }
+      var msg = "已移入回收站 " + deleted.length + " 项" + (failed.length ? ("，" + failed.length + " 项失败") : "");
+      toastAction(msg, "撤销", function(){
+        var restored = [], restoreFailed = 0;
+        UI.syncBusy(true);
+        Promise.all(deleted.map(function(id){
+          return API.post("/api/tasks/" + encodeURIComponent(id) + "/restore", {})
+            .then(function(){ restored.push(id); })
+            .catch(function(){ restoreFailed++; });
+        })).then(function(){
+          UI.syncBusy(false);
+          loadList(); loadBoard({animate:false}); loadReqs();
+          if(!restored.length){
+            toast("恢复失败：" + restoreFailed + " 项均未恢复", "bad");
+            return;
+          }
+          toast("已恢复 " + restored.length + " 项" +
+            (restoreFailed ? ("，" + restoreFailed + " 项失败") : ""), restoreFailed ? "warn" : "fs");
+        });
+      }, failed.length ? "warn" : "", 8000);
     });
   });
 });
@@ -761,10 +874,20 @@ function openRowMenu(anchor, id){
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
 }
+if(listHead){
+  listHead.addEventListener("click", function(e){
+    var h = e.target.closest("[data-sort-col]");
+    if(h) setListSort(h.dataset.sortCol);
+  });
+}
 listSort.addEventListener("change", function(){
   if(LIST_SORTS.indexOf(listSort.value) === -1) return;
   smart.sort = listSort.value;
+  smart.sortDir = SORT_DEFAULT_DIR[smart.sort] || "asc";
+  if(smart.sort === "default") smart.sortDir = "asc";
   if(smart.sort === "due" || smart.sort === "priority" || smart.sort === "updated") serverSort = smart.sort;
+  syncSmartControls();
+  renderListHead();
   loadList();
   saveViewState();
 });

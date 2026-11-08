@@ -47,7 +47,8 @@ class RequirementServiceTest {
     private final RequirementService service = new RequirementService(reqs, tasks, logs, activity,
             workActivity, docs, versionService, versions, demands, branches, access,
             mock(AttachmentService.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
-            mock(TestCaseService.class));
+            mock(TestCaseService.class), mock(ProjectTemplateService.class),
+            mock(com.hourglass.mapper.WorkspaceMemberMapper.class));
 
     @Test
     void listBatchesVersionCountsAndFiltersHiddenProjects() {

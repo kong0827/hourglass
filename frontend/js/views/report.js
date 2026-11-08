@@ -186,7 +186,8 @@ function defectChart(d){
     + '<div class="manager-chart-legend"><span><i class="defect-opened-block"></i>新增</span><span><i class="defect-closed-block"></i>关闭</span><span><i class="defect-open-line"></i>存量</span></div></section>';
 }
 function projectOptions(){
-  return '<option value="">全部项目</option>' + rt.reqList.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join("");
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === reqId; });
+  return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
 }
 function renderReport(){
   $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>报表中心</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button></div></div>'

@@ -99,7 +99,7 @@ import { icon } from "./icons.js";
   function openModal(m, focusSel) {
     if (!m) return;
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
-    if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { closeModal(m); }); }
+    if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { requestCloseModal(m); }); }
     lastFocus = document.activeElement;
     m.classList.add("open");
     var target = focusSel ? m.querySelector(focusSel) : (m.querySelector("input:not([type=hidden]),textarea,select") || focusables(m)[0]);
@@ -118,9 +118,32 @@ import { icon } from "./icons.js";
   function closeTopModal() {
     var els = modalEls();
     for (var i = els.length - 1; i >= 0; i--) {
-      if (els[i].classList.contains("open")) { closeModal(els[i]); return true; }
+      if (els[i].classList.contains("open")) { requestCloseModal(els[i]); return true; }
     }
     return false;
+  }
+  /* 表单弹窗可注册关闭守卫：X/取消/Esc/遮罩都先经过它，由它决定是否确认与何时关闭 */
+  function setModalCloseGuard(m, fn) {
+    if (m) m.__closeGuard = typeof fn === "function" ? fn : null;
+  }
+  /* Cmd/Ctrl+Enter 的统一提交入口，非 <form> 弹窗也能加入 */
+  function setModalSubmit(m, fn) {
+    if (m) m.__submitFn = typeof fn === "function" ? fn : null;
+  }
+  function topOpenModal() {
+    var els = modalEls();
+    for (var i = els.length - 1; i >= 0; i--) {
+      if (els[i].classList.contains("open")) return els[i];
+    }
+    return null;
+  }
+  function requestCloseModal(m) {
+    if (!m) return;
+    if (m.__closeGuard) {
+      try { m.__closeGuard(); } catch (e) { closeModal(m); }
+      return;
+    }
+    closeModal(m);
   }
 
   /* 焦点陷阱 + 遮罩关闭（仅当 pointerdown 起点就在遮罩上，避免拖选文本误关） */
@@ -239,7 +262,7 @@ import { icon } from "./icons.js";
   function closeAllPops() {
     while (openPops.length) {
       var p = openPops.pop();
-      try { p.close(); } catch (e) { /* noop */ }
+      try { p.close(true); } catch (e) { /* noop */ }
     }
   }
   /**
@@ -285,11 +308,15 @@ import { icon } from "./icons.js";
       if (el.contains(e.target) || anchor.contains(e.target)) return;
       close();
     }
-    function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); close(); } }
-    function onScroll() { place(); }
-    function close() {
+    function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); close(true); } }
+    function onScroll() { if (el.__popOpen) place(); }
+    var bindTimer = null;
+    function close(restoreFocus) {
       if (!el.__popOpen) return;
+      /* 键盘操作把焦点带进浮层后，关闭时若焦点随之丢掉，读屏和 Tab 都会从页首重新开始 */
+      var hadFocus = !!restoreFocus && el.contains(document.activeElement);
       el.__popOpen = false;
+      if (bindTimer !== null) { clearTimeout(bindTimer); bindTimer = null; }
       el.hidden = true;
       anchor.setAttribute("aria-expanded", "false");
       el.style.left = el.style.top = el.style.width = "";
@@ -300,11 +327,16 @@ import { icon } from "./icons.js";
       var i = openPops.indexOf(rec);
       if (i >= 0) openPops.splice(i, 1);
       if (opts.onClose) opts.onClose();
+      if (hadFocus && document.contains(anchor)) {
+        try { anchor.focus({ preventScroll: true }); } catch (e) { /* noop */ }
+      }
     }
     var rec = { close: close, el: el, anchor: anchor };
     openPops.push(rec);
 
-    setTimeout(function () {
+    bindTimer = setTimeout(function () {
+      bindTimer = null;
+      if (!el.__popOpen) return;
       document.addEventListener("pointerdown", onDown, true);
       document.addEventListener("keydown", onKey, true);
       window.addEventListener("scroll", onScroll, true);
@@ -474,6 +506,10 @@ import { icon } from "./icons.js";
     openModal: openModal,
     closeModal: closeModal,
     closeTopModal: closeTopModal,
+    setModalCloseGuard: setModalCloseGuard,
+    setModalSubmit: setModalSubmit,
+    topOpenModal: topOpenModal,
+    requestCloseModal: requestCloseModal,
     anyModalOpen: anyModalOpen,
     anyDialogOpen: anyDialogOpen,
     openPop: openPop,

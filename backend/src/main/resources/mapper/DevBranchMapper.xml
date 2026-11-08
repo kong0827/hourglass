@@ -55,6 +55,92 @@
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
 
+  <!-- 分页/计数共用的筛选条件：可见范围、项目、状态、关键词全部下推 -->
+  <sql id="pageWhere">
+    b.workspace_id = #{q.workspaceId}
+    <if test="q.viewerId != null and q.viewerId != ''">
+      AND (b.req_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM project_member pm
+        WHERE pm.workspace_id = b.workspace_id
+          AND pm.project_id = b.req_id
+          AND pm.user_id = #{q.viewerId}
+          AND pm.access = 'none'))
+    </if>
+    <if test="q.projectId != null and q.projectId != ''">
+      AND (b.req_id = #{q.projectId}
+        OR (b.req_id IS NULL AND NOT EXISTS (
+          SELECT 1 FROM task t2
+          WHERE t2.branch_id = b.id AND t2.deleted_at IS NULL
+            AND t2.req_id IS NOT NULL AND t2.req_id &lt;&gt; #{q.projectId})))
+    </if>
+    <if test="q.status != null and q.status != ''">
+      AND b.status = #{q.status}
+    </if>
+    <if test="q.q != null and q.q != ''">
+      AND (b.name LIKE CONCAT('%', #{q.q}, '%')
+        OR b.target_branch LIKE CONCAT('%', #{q.q}, '%')
+        OR b.owner LIKE CONCAT('%', #{q.q}, '%')
+        OR EXISTS (SELECT 1 FROM task t3
+                   JOIN version_task vt3 ON vt3.task_id = t3.id AND vt3.workspace_id = t3.workspace_id
+                   JOIN project_version pv3 ON pv3.id = vt3.version_id AND pv3.workspace_id = t3.workspace_id
+                   WHERE t3.branch_id = b.id AND t3.deleted_at IS NULL
+                     AND pv3.name LIKE CONCAT('%', #{q.q}, '%'))
+        OR EXISTS (SELECT 1 FROM task t4
+                   JOIN requirement r4 ON r4.id = t4.req_id AND r4.workspace_id = t4.workspace_id
+                   WHERE t4.branch_id = b.id AND t4.deleted_at IS NULL
+                     AND (r4.name LIKE CONCAT('%', #{q.q}, '%')
+                          OR r4.id LIKE CONCAT('%', #{q.q}, '%'))))
+    </if>
+  </sql>
+
+  <!-- 分页列表：任务数用一次 GROUP BY 汇总（只统计查看人可见项目的任务） -->
+  <select id="selectPage" resultType="DevBranch">
+    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
+           b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
+           COALESCE(tc.task_count, 0) AS task_count,
+           COALESCE(tc.done_count, 0) AS done_count
+    FROM dev_branch b
+    LEFT JOIN (
+      SELECT t.branch_id,
+             COUNT(*) AS task_count,
+             SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task t
+      WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+      <if test="q.viewerId != null and q.viewerId != ''">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = t.workspace_id
+                          AND pm.project_id = t.req_id
+                          AND pm.user_id = #{q.viewerId}
+                          AND pm.access = 'none')
+      </if>
+      GROUP BY t.branch_id
+    ) tc ON tc.branch_id = b.id
+    WHERE <include refid="pageWhere"/>
+    ORDER BY b.updated_at DESC, b.id DESC
+    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <select id="selectOptions" resultType="DevBranch">
+    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.target_branch, b.owner
+    FROM dev_branch b
+    WHERE <include refid="pageWhere"/>
+    ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
+  </select>
+
+  <select id="countGroupByStatus" resultType="map">
+    SELECT b.status AS status, COUNT(*) AS cnt
+    FROM dev_branch b
+    WHERE <include refid="pageWhere"/>
+    GROUP BY b.status
+  </select>
+
+  <select id="selectAvgCycleDays" resultType="double">
+    SELECT AVG(TIMESTAMPDIFF(SECOND, b.created_at, b.released_at)) / 86400.0
+    FROM dev_branch b
+    WHERE <include refid="pageWhere"/>
+      AND b.status = 'released' AND b.released_at IS NOT NULL AND b.created_at IS NOT NULL
+  </select>
+
   <select id="selectById" resultType="DevBranch">
     SELECT <include refid="cols"/> FROM dev_branch WHERE id = #{id}
   </select>
@@ -68,6 +154,10 @@
     INNER JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = t.workspace_id
     LEFT JOIN requirement r ON r.id = pv.req_id
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+    <if test="branchIds != null and branchIds.size() > 0">
+      AND t.branch_id IN
+      <foreach collection="branchIds" item="bid" open="(" separator="," close=")">#{bid}</foreach>
+    </if>
     <if test="viewerId != null and viewerId != ''">
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = t.workspace_id
@@ -86,6 +176,10 @@
     INNER JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
       AND t.req_id IS NOT NULL
+    <if test="branchIds != null and branchIds.size() > 0">
+      AND t.branch_id IN
+      <foreach collection="branchIds" item="bid" open="(" separator="," close=")">#{bid}</foreach>
+    </if>
     <if test="viewerId != null and viewerId != ''">
       AND NOT EXISTS (SELECT 1 FROM project_member pm
                       WHERE pm.workspace_id = t.workspace_id

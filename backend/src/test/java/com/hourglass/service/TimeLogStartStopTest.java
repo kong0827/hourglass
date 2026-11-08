@@ -1,0 +1,96 @@
+package com.hourglass.service;
+
+import com.hourglass.entity.Task;
+import com.hourglass.entity.TimeLog;
+import com.hourglass.mapper.TaskLogMapper;
+import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.TimeLogMapper;
+import com.hourglass.mapper.UserMapper;
+import com.hourglass.mapper.WorkspaceMapper;
+import com.hourglass.mapper.WorkspaceMemberMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+
+import java.time.LocalDateTime;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class TimeLogStartStopTest {
+
+    private static final String WS = "W1";
+    private static final String TASK = "K1";
+    private static final String ME = "U1";
+
+    private final TimeLogMapper timeLogMapper = mock(TimeLogMapper.class);
+    private final TaskMapper taskMapper = mock(TaskMapper.class);
+    private final TaskLogMapper logMapper = mock(TaskLogMapper.class);
+    private final WorkspaceMapper workspaceMapper = mock(WorkspaceMapper.class);
+    private final UserMapper userMapper = mock(UserMapper.class);
+    private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
+    private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
+    private final TaskCompletionService completionService = mock(TaskCompletionService.class);
+    private final TimeLogService service = new TimeLogService(timeLogMapper, taskMapper, logMapper,
+            workspaceMapper, userMapper, memberMapper, projectAccess, completionService);
+
+    @BeforeEach
+    void setUp() {
+        Task task = new Task();
+        task.setId(TASK);
+        task.setWorkspaceId(WS);
+        task.setReqId("R1");
+        task.setTitle("任务");
+        when(taskMapper.selectById(TASK)).thenReturn(task);
+    }
+
+    @Test
+    void startLocksAccountBeforeCheckingAndInserting() {
+        service.start(ME, WS, TASK);
+
+        InOrder order = inOrder(userMapper, timeLogMapper);
+        order.verify(userMapper).lockById(ME);
+        order.verify(timeLogMapper).selectRunningByTaskAndUser(TASK, ME);
+        order.verify(timeLogMapper).selectRunningAllByUser(ME);
+        order.verify(timeLogMapper).insert(any(TimeLog.class));
+    }
+
+    @Test
+    void startDoesNotInsertWhenAlreadyRunning() {
+        when(timeLogMapper.selectRunningByTaskAndUser(TASK, ME)).thenReturn(running());
+
+        service.start(ME, WS, TASK);
+
+        verify(userMapper).lockById(ME);
+        verify(timeLogMapper, never()).selectRunningAllByUser(ME);
+        verify(timeLogMapper, never()).insert(any(TimeLog.class));
+    }
+
+    @Test
+    void stopLocksAccountBeforeCheckingAndClosing() {
+        when(timeLogMapper.selectRunningByTaskAndUser(TASK, ME)).thenReturn(running(), (TimeLog) null);
+
+        service.stop(ME, WS, TASK);
+
+        InOrder order = inOrder(userMapper, timeLogMapper);
+        order.verify(userMapper).lockById(ME);
+        order.verify(timeLogMapper).selectRunningByTaskAndUser(TASK, ME);
+        order.verify(timeLogMapper).closeRunning(eq(TASK), eq(ME), anyInt());
+    }
+
+    private static TimeLog running() {
+        TimeLog running = new TimeLog();
+        running.setId(1L);
+        running.setTaskId(TASK);
+        running.setWorkspaceId(WS);
+        running.setUserId(ME);
+        running.setStartedAt(LocalDateTime.now());
+        return running;
+    }
+}

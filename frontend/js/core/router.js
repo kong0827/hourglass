@@ -18,36 +18,44 @@ var activeView = "board";
 /* 低频视图：第一次进入时才拉取模块（视图代码已按 views/*.js 拆分） */
 var settingsTabPending = null;
 function lazyEnter(name, method){
-  return function(){
-    return loadView(name).then(function(m){ m[method](); return m; });
+  return function(isCurrent){
+    return loadView(name).then(function(m){
+      if(isCurrent && !isCurrent()) return m;
+      m[method]();
+      return m;
+    });
   };
 }
-function enterRequirementsLazy(){
-  return loadView("requirements").then(function(m){ m.enterRequirementsView(); return m; });
+function enterRequirementsLazy(isCurrent){
+  return loadView("requirements").then(function(m){
+    if(!isCurrent || isCurrent()) m.enterRequirementsView();
+    return m;
+  });
 }
-function enterSettingsLazy(){
+function enterSettingsLazy(isCurrent){
   return loadView("settings").then(function(m){
+    if(isCurrent && !isCurrent()) return m;
     m.enterSettingsView();
     if(settingsTabPending){ m.setSettingsTab(settingsTabPending); settingsTabPending = null; }
     return m;
   });
 }
 var VIEWS = {
-  mine:     { title:"我的任务", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
-  board:    { title:"任务看板", sub:null, enter:null },
-  list:     { title:"任务列表", sub:"沿用当前筛选条件，点击行打开详情抽屉", enter:enterListView },
+  mine:     { title:"我的工作", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
+  board:    { title:"工作项看板", sub:"工作项按看板列流转；项目是工作项的归属单元", enter:null },
+  list:     { title:"工作项列表", sub:"沿用当前筛选条件，点击行打开详情抽屉", enter:enterListView },
   calendar: { title:"日历",     sub:"按 [开始日期, 实际结束日] 逐日铺开；点任务开详情，格子可新建", enter:enterCalendarView },
   gantt:    { title:"甘特图",   sub:"按开始/截止日期排布任务；拖动条改期，拖两端调起止", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:lazyEnter("projects", "enterProjectsView") },
-  phase:    { title:"版本阶段", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
+  phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   testcases: { title:"测试用例", sub:"用例库与执行结果：逐条标记通过/失败，失败可一键转缺陷", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
   analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目总览", sub:"全部项目的健康度、逾期与本周投入；点项目名进入项目看板", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目看板", sub:"单项目：周期、工时、任务分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  portfolio: { title:"项目总览", sub:"全部项目的健康度、逾期与本周投入；点项目名进入项目概览", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目概览", sub:"单项目：周期、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表中心", sub:"燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
@@ -72,6 +80,7 @@ function syncTab(name){
     if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
   });
 }
+var routeSeq = 0;
 var scrollMemo = Object.create(null);
 function saveScroll(){
   var cur = document.querySelector(".view.on");
@@ -92,6 +101,18 @@ function showView(name){
     rt.analysisTab = name; showView("analysis"); return;
   }
   if(!VIEWS[name]) return;
+  /* 路由守卫：先让正在编辑的浮层决定是否放行（如任务抽屉有未保存改动） */
+  if(activeView && activeView !== name){
+    var guard = new CustomEvent("ds:before-route", {cancelable:true, detail:{from:activeView, to:name}});
+    if(!window.dispatchEvent(guard)){
+      try{ history.replaceState(null, "", "#/" + activeView); }catch(e){ /* noop */ }
+      return Promise.resolve(null);
+    }
+  }
+  var seq = ++routeSeq;
+  /* 路由切换统一收口：弹窗不跟随新页面残留（抽屉由 ds:before-route 监听方自行关闭） */
+  document.querySelectorAll(".modal-layer.open").forEach(function(m){ UI.closeModal(m); });
+  function isCurrent(){ return seq === routeSeq && activeView === name; }
   saveScroll();
   activeView = name;
   document.body.dataset.view = name;
@@ -115,17 +136,21 @@ function showView(name){
   document.title = VIEWS[name].title + " · 沙漏";
   syncDocTitle();
   updateBrand();
+  window.dispatchEvent(new CustomEvent("ds:view-change", { detail: { view: name } }));
   UI.closeAllPops();
   syncViewHash(name);
   var entered = loadPriorities().then(function(){
-    return VIEWS[name].enter ? VIEWS[name].enter() : null;
-  });
+    if(!isCurrent()) return null;
+    return VIEWS[name].enter ? VIEWS[name].enter(isCurrent) : null;
+  }).catch(function(){ return null; });
   /* 看板不在当前视图时只置脏，切回来再渲染一次 */
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
   return entered;
 }
 function viewFromHash(){
-  var name = String(window.location.hash || "").replace(/^#\/?/, "");
+  var raw = String(window.location.hash || "").replace(/^#\/?/, "");
+  var q = raw.indexOf("?");
+  var name = q >= 0 ? raw.substring(0, q) : raw;
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
   /* 无 hash（登录后首次进入）统一落「我的任务」，不沿用上次停留的视图 */
@@ -237,6 +262,12 @@ window.addEventListener("ds:tab", function(e){
   }
   if(tab === "me"){ showView("profile"); return; }
   showView(tab);
+});
+
+/* 浮层确认放弃改动后，重新发起被守卫拦下的路由 */
+window.addEventListener("ds:route-go", function(e){
+  var to = e.detail && e.detail.view;
+  if(to && VIEWS[to]) showView(to);
 });
 
 export { VIEWS, activeView, refreshActiveView, showView, viewFromHash };

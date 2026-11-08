@@ -260,6 +260,9 @@ public class WorkspaceService {
         ws.setOwnerId(userId);
         workspaceMapper.insert(ws);
         addMemberInternal(wsId, userId, "owner");
+        /* 历史异常删除可能只删了 workspace 行、留下列/分类（主键含 workspace_id），先清理再灌默认，避免启动补齐时主键冲突 */
+        boardColumnMapper.deleteAllByWorkspace(wsId);
+        categoryMapper.deleteAllByWorkspace(wsId);
         seedColumns(wsId);
         seedDefaultCategories(wsId);
     }

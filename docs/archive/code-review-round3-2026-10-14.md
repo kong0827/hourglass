@@ -12,7 +12,7 @@
 
 ### 1. [P1] 用户配置的推送地址可获取服务器共享 PushPlus token
 
-- 位置：`src/main/java/com/devstudio/kanban/service/WorkspaceService.java:193`；`src/main/java/com/devstudio/kanban/service/NotificationService.java:252`、`:258`、`:269`。
+- 位置：`src/main/java/com/hourglass/kanban/service/WorkspaceService.java:193`；`src/main/java/com/hourglass/kanban/service/NotificationService.java:252`、`:258`、`:269`。
 - 触发：部署启用 `NOTIFY_TYPE=pushplus` 并配置统一 `NOTIFY_TOKEN`。普通账号可以在其个人空间将 webhook 改为自己控制的 HTTPS 地址，再触发测试推送。
 - 原因：空间设置没有约束目标地址；通知服务把服务器 token 装进 payload，直接发送给该地址。
 - 影响：普通账号可获取服务器推送凭据。任意地址的服务端请求还存在访问内部网络的风险，具体可达范围取决于部署网络。
@@ -21,7 +21,7 @@
 
 ### 2. [P1] 部署文档中的行尾注释会进入 cron 值，照抄可导致启动失败
 
-- 位置：`deploy/README.md:121`、`:123`，以及 `:51`；`deploy/devstudio.service:11`；`src/main/resources/application.yml:57`。
+- 位置：`deploy/README.md:121`、`:123`，以及 `:51`；`deploy/hourglass.service:11`；`src/main/resources/application.yml:57`。
 - 触发：按 README 把 `NOTIFY_CRON=0 0 9 * * *        # 每天 ...` 写进 systemd EnvironmentFile。
 - 原因：EnvironmentFile 不按 shell 的行尾注释规则解析该值，`#` 后的内容会成为变量值。Spring cron 只接受六个字段，包含注释的值无法解析，计划任务初始化会阻止应用正常启动。`NOTIFY_TYPE` 的同类行尾注释也会破坏精确渠道匹配。
 - 验证：当前依赖中的 Spring `CronExpression.parse` 拒绝带行尾注释的 cron 值。
@@ -29,7 +29,7 @@
 
 ### 3. [P2] 循环任务重新打开后再次完成，会重复生成后续任务
 
-- 位置：`src/main/java/com/devstudio/kanban/service/TaskService.java:379`、`:501`。
+- 位置：`src/main/java/com/hourglass/kanban/service/TaskService.java:379`、`:501`。
 - 触发：完成一个循环任务，随后将原任务移回进行中，再次完成。
 - 原因：生成下一次任务只检查本次是否从非完成列进入完成列，没有保存该周期已经生成过后续任务的标记或关联。
 - 影响：同一周期产生两条后续任务，用户正常撤销完成操作就可能造成重复待办。这是串行操作问题，与已接受的并发最后写入生效无关。
@@ -38,7 +38,7 @@
 
 ### 4. [P2] 同一次保存修改标签并完成循环任务，后续任务继承旧标签
 
-- 位置：`src/main/java/com/devstudio/kanban/service/TaskService.java:328`、`:338`、`:547`。
+- 位置：`src/main/java/com/hourglass/kanban/service/TaskService.java:328`、`:338`、`:547`。
 - 触发：编辑循环任务，将标签从 old-tag 改为 new-tag，并在这次保存中改成已完成。
 - 原因：`maybeGenerateNext` 在 `saveTags` 前执行，生成器从数据库读取到原标签。
 - 影响：完成任务显示新标签，自动生成的下一次任务仍显示旧标签，导致标签筛选与任务继承不一致。
@@ -56,7 +56,7 @@
 
 ### 6. [P2] 快捷录入的负责人固定为“我”，没有落到实际成员
 
-- 位置：`src/main/resources/static/js/app.js:2195`；`src/main/java/com/devstudio/kanban/dto/TaskSaveRequest.java:32`；`src/main/java/com/devstudio/kanban/service/TaskService.java:563`。
+- 位置：`src/main/resources/static/js/app.js:2195`；`src/main/java/com/hourglass/kanban/dto/TaskSaveRequest.java:32`；`src/main/java/com/hourglass/kanban/service/TaskService.java:563`。
 - 触发：不同成员通过快捷录入创建任务。
 - 原因：前端不传 owner；DTO 默认 owner 为“我”；服务只有 owner 为空时才回填实际账号显示名。
 - 影响：这些任务的负责人都是字面量“我”，与普通编辑表单提交的成员显示名不同，负责人筛选和成员汇总不能正确归属。
@@ -65,7 +65,7 @@
 
 ### 7. [P2] 清空入口拦截只有项目或回收站数据的空间，且漏清部分筛选状态
 
-- 位置：`src/main/resources/static/js/app.js:1603`、`:1606`、`:1607`；`src/main/java/com/devstudio/kanban/service/BackupService.java:179`；`src/main/java/com/devstudio/kanban/service/UserService.java:177`。
+- 位置：`src/main/resources/static/js/app.js:1603`、`:1606`、`:1607`；`src/main/java/com/hourglass/kanban/service/BackupService.java:179`；`src/main/java/com/hourglass/kanban/service/UserService.java:177`。
 - 触发：没有有效任务但仍有项目或回收站任务，点击清空；或在标签/专注筛选开启时执行清空后重新创建任务。
 - 原因：清空按钮只检查看板有效任务数量，数量为零就直接返回；而后端空导入原本可以清理项目和回收站任务。清空后的筛选复位未包含 tags/focus。
 - 影响：不能通过这个入口一次清掉剩余数据；账号删除仍会因残余项目/任务拒绝，需要绕行单独删除或调用 API。遗留筛选也可能让新任务不可见。
@@ -75,7 +75,7 @@
 ### 8. [P2] 文档授予的数据库权限可能不足以执行 MySQL 8 默认备份命令
 
 - 位置：`deploy/README.md:32`；`deploy/backup.sh:47`。
-- 触发：按文档建立仅拥有 `devstudio.*` 权限的账号，用 MySQL 8.0.21 及以后版本的 mysqldump 执行默认表空间导出。
+- 触发：按文档建立仅拥有 `hourglass.*` 权限的账号，用 MySQL 8.0.21 及以后版本的 mysqldump 执行默认表空间导出。
 - 原因：该组合通常需要全局 PROCESS 权限；备份命令未使用 `--no-tablespaces`。数据库级 ALL 不包含全局 PROCESS。
 - 影响：应用能正常使用数据库，但定时数据库备份退出失败，附件打包也因 `set -euo pipefail` 不再继续。
 - 验证：部署配置静态审查；本地没有 MySQL/mysqldump，未做目标服务器实测。实际结果还受客户端版本及备份账号额外权限影响。
@@ -83,7 +83,7 @@
 
 ### 9. [P2] 缩略图接口先全量解码，压缩文件大小限制不能保护 JVM 内存
 
-- 位置：`src/main/java/com/devstudio/kanban/controller/AttachmentController.java:113`、`:115`、`:116`；`deploy/devstudio.service:14`。
+- 位置：`src/main/java/com/hourglass/kanban/controller/AttachmentController.java:113`、`:115`、`:116`；`deploy/hourglass.service:14`。
 - 触发：上传文件体积在限制内、但像素尺寸很大的压缩图片，再请求缩略图。
 - 原因：`ImageIO.read` 在缩小前解码整张图，没有限制源图总像素数；输出只限制宽度，极高窄图的输出高度也没有上限。
 - 影响：大图片可能耗尽部署默认的 320MB Java 堆。10000×10000 图像仅按每像素 4 字节计算就约 400MB，尚不包含其他对象。`catch(Exception)` 不会捕获 OutOfMemoryError；实际解码开销取决于图片格式和实现。

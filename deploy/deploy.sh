@@ -444,8 +444,8 @@ rm -rf /tmp/dv
 DB_PW="\$(sed -n 's/^DB_PASSWORD=//p' ${ENV_FILE})"
 AU="\$(sed -n 's/^AUTH_USER=//p' ${ENV_FILE})"
 AP="\$(sed -n 's/^AUTH_PASSWORD=//p' ${ENV_FILE})"
-CRYPTO="\$(grep -c '^AI_CRYPTO_KEY=' ${ENV_FILE} 2>/dev/null || true)"
-echo "CRYPTO \${CRYPTO:-0}"
+CRYPTO="\$(sed -n 's/^AI_CRYPTO_KEY=//p' ${ENV_FILE})"
+case "\$CRYPTO" in ""|"''"|'""'|*hourglass-local-ai-key-change-me*|*改成随机长字符串*) echo "CRYPTO 0" ;; *) echo "CRYPTO 1" ;; esac
 T=\$(awk '/XSRF-TOKEN/{print \$NF}' /tmp/dv.txt)
 echo "LOGIN \$(curl -s -b /tmp/dv.txt -c /tmp/dv.txt -H "X-XSRF-TOKEN: \$T" -d "username=\$AU&password=\$AP" \$B/hourglass/api/auth/login)"
 echo "MEM \$(systemctl show ${SERVICE} -p MemoryCurrent --value | awk '{printf "%.0f", \$1/1048576}')"
@@ -489,7 +489,8 @@ REMOTE
 
   CRYPTO="$(vget CRYPTO | awk '{print $2}')"
   if [ "${CRYPTO:-0}" = "0" ]; then
-    warn "未配置 AI_CRYPTO_KEY：AI Key / SMTP 密码将使用公开默认密钥加密，请尽快在 ${ENV_FILE} 中设置"
+    err "未配置独立 AI_CRYPTO_KEY：请在 ${ENV_FILE} 中设置随机长字符串后重新部署"
+    VERIFY_FAIL=1
   else
     ok "AI_CRYPTO_KEY 已配置"
   fi

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 工作台每日备份：数据库 mysqldump + 附件目录打包，各保留最近 14 天
 set -euo pipefail
+umask 077
 
 BACKUP_DIR="/opt/hourglass/backup"
 KEEP_DAYS=14
@@ -38,13 +39,14 @@ case "$ATTACH_DIR" in
   *) ATTACH_DIR="/opt/hourglass/${ATTACH_DIR#./}" ;;
 esac
 
-mkdir -p "$BACKUP_DIR"
+install -d -m 700 "$BACKUP_DIR"
 WARN=0
 
 # 1) 数据库（--no-tablespaces：库级授权账号无全局 PROCESS 权限时也能导出）
 STAMP="$(date +%F_%H%M)"
 DB_FILE="$BACKUP_DIR/hourglass-${STAMP}.sql.gz"
 mysqldump --defaults-extra-file="$CRED_FILE" --single-transaction --no-tablespaces --routines --triggers "$DB_NAME" | gzip > "$DB_FILE"
+chmod 600 "$DB_FILE"
 
 # 2) 附件目录（必须存在；缺失/打包失败时显式告警并以非零码退出，不静默跳过）
 if [ -d "$ATTACH_DIR" ]; then

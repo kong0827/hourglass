@@ -4,7 +4,7 @@ import { API } from "./api.js";
 import { $, board, btnSaveTask, iReq, searchInput, taskDrawer, taskForm } from "./dom.js";
 import { activeView, showView } from "./router.js";
 import { toggleRail } from "./shell.js";
-import { calState, rt, state, taskById } from "./state.js";
+import { calState, canEditTask, rt, state, taskById } from "./state.js";
 import { openDuePopover, toggleTaskDone } from "./task-actions.js";
 import { deleteTask, openTaskDrawer, tryCloseTaskDrawer } from "./task-drawer.js";
 import { UI, toast } from "./ui.js";
@@ -12,6 +12,13 @@ import { COLUMNS, COL_INDEX, colName, iso, parseDate } from "../lib/format.js";
 import { cancelDrag, drag, loadBoard, loadReqs, openInlineAdd } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { loadList, refreshListIfOpen } from "../views/list.js";
+import { init as initSearchPalette, openSearchPalette } from "./search-palette.js";
+
+initSearchPalette();
+
+/* 手机顶栏搜索图标：打开全局搜索面板（项目 / 工作项 / 文档 / 需求 / 用例） */
+var mobSearchBtn = $("btnMobSearch");
+if(mobSearchBtn) mobSearchBtn.addEventListener("click", openSearchPalette);
 
 var gPending = 0;
 function inEditable(el){
@@ -28,6 +35,7 @@ function focusedRow(){
   return (el && el.classList && el.classList.contains("list-row")) ? el : null;
 }
 function moveTaskCol(t, delta){
+  if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var idx = COL_INDEX[t.boardColumn] + delta;
   if(idx < 0 || idx >= COLUMNS.length) return;
   API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", {column: COLUMNS[idx].id}).then(function(res){
@@ -49,7 +57,9 @@ document.addEventListener("keydown", function(e){
     if(gMod && gMod.ganttState.unplannedDrag){ gMod.onGanttUnplannedCancel(); return; }
     if(gMod && gMod.ganttState.depDrag){ gMod.cleanupGanttLink(); return; }
     if(UI.confirmOpen()){ UI.settleConfirm(false); return; }
-    if(document.querySelector(".menu:not([hidden]),.ws-menu:not([hidden])")){ UI.closeAllPops(); return; }
+    var popEls = document.querySelectorAll(".menu,.ws-menu");
+    var hasPop = Array.prototype.some.call(popEls, function(el){ return UI.popOpen(el); });
+    if(hasPop){ UI.closeAllPops(); return; }
     if(taskDrawer.classList.contains("on")){ tryCloseTaskDrawer(); return; }
     if(UI.closeTopModal()) return;
     var inline = board.querySelector(".card-add-input");
@@ -75,9 +85,19 @@ document.addEventListener("keydown", function(e){
     }
   }
 
-  /* Ctrl/⌘ + K 或 / ：聚焦全局搜索 */
-  if((mod && (e.key === "k" || e.key === "K")) || (e.key === "/" && !inEditable(e.target))){
+  /* Ctrl/⌘ + K：全局搜索（项目/工作项/文档/需求/用例）；/ 仍聚焦顶部搜索框 */
+  if(mod && (e.key === "k" || e.key === "K")){
     e.preventDefault();
+    openSearchPalette();
+    return;
+  }
+  if(e.key === "/" && !inEditable(e.target)){
+    e.preventDefault();
+    /* 手机档位没有顶部搜索框，先打开筛选面板再聚焦关键词 */
+    if(document.documentElement.dataset.layout === "mobile"){
+      window.dispatchEvent(new CustomEvent("ds:view-search"));
+      return;
+    }
     searchInput.focus();
     searchInput.select();
     return;
@@ -95,6 +115,13 @@ document.addEventListener("keydown", function(e){
     if(taskDrawer.classList.contains("on")){
       e.preventDefault();
       if(!btnSaveTask.disabled) taskForm.dispatchEvent(new Event("submit", {cancelable:true, bubbles:true}));
+      return;
+    }
+    /* 非 <form> 弹窗（项目、用例、执行、转缺陷等）注册了自己的提交入口 */
+    var topModal = UI.topOpenModal();
+    if(topModal && topModal.__submitFn){
+      e.preventDefault();
+      topModal.__submitFn();
       return;
     }
     var openForm = document.querySelector(".modal-layer.open form");
@@ -176,23 +203,13 @@ document.addEventListener("keydown", function(e){
     if(e.key >= "0" && e.key <= "3"){
       e.preventDefault();
       if(!kt) return;
+      if(!canEditTask(kt)){ toast("你对该项目只有查看权限", "warn"); return; }
       var pri = "P" + e.key;
       API.put("/api/tasks/" + encodeURIComponent(kt.id), taskPayloadWith(kt, {priority: pri})).then(function(){
         toast("已设为 " + pri, "fs");
         loadBoard({silent:true});
         refreshListIfOpen();
       }).catch(function(ex){ toast(ex.message || "更新失败", "bad"); });
-      return;
-    }
-    if(card && (e.key === "ArrowUp" || e.key === "ArrowDown")){
-      e.preventDefault();
-      var all = Array.prototype.slice.call(board.querySelectorAll(".card"));
-      var i = all.indexOf(card);
-      var next = all[i + (e.key === "ArrowDown" ? 1 : -1)];
-      if(next){
-        next.focus();
-        if(next.scrollIntoView) next.scrollIntoView({block:"nearest"});
-      }
       return;
     }
   }

@@ -29,6 +29,11 @@ public interface TaskMapper {
     List<Task> selectOpenTasks(@Param("workspaceId") String workspaceId,
                                @Param("viewerId") String viewerId);
 
+    /** 看板单列未完成任务（滚动加载，走 idx_board） */
+    List<Task> selectOpenColumnTasks(@Param("workspaceId") String workspaceId,
+                                     @Param("viewerId") String viewerId,
+                                     @Param("column") String column);
+
     /** 已完成列：全部条数（不受 doneScope / 筛选影响） */
     int countDoneAll(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
 
@@ -220,16 +225,19 @@ public interface TaskMapper {
 
     /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
     LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
-                                      @Param("viewerId") String viewerId);
+                                      @Param("viewerId") String viewerId,
+                                      @Param("reqId") String reqId);
 
-    /** 指定周内的已完成任务（按完成时间倒序） */
+    /** 指定周内的已完成任务（按完成时间倒序）；reqId 非空时只看该项目 */
     List<Task> selectCompletedBetween(@Param("workspaceId") String workspaceId,
                                       @Param("viewerId") String viewerId,
+                                      @Param("reqId") String reqId,
                                       @Param("from") LocalDate from, @Param("before") LocalDate before);
 
     /** 进度 100% 但不在已完成列的任务 */
     List<Task> selectPendingDone(@Param("workspaceId") String workspaceId,
-                                 @Param("viewerId") String viewerId);
+                                 @Param("viewerId") String viewerId,
+                                 @Param("reqId") String reqId);
 
     /**
      * 周回顾「进行中」：非待处理 / 非已完成且进度 &lt; 100。
@@ -237,13 +245,15 @@ public interface TaskMapper {
      */
     List<Task> selectProgressTasks(@Param("workspaceId") String workspaceId,
                                    @Param("viewerId") String viewerId,
+                                   @Param("reqId") String reqId,
                                    @Param("from") LocalDate from, @Param("before") LocalDate before,
                                    @Param("history") boolean history);
 
     /** 周回顾：未完成任务计数与到期分布 */
     com.hourglass.dto.ReviewCountRow countReviewStatus(@Param("workspaceId") String workspaceId,
-                                                              @Param("viewerId") String viewerId,
-                                                              @Param("today") LocalDate today);
+                                                       @Param("viewerId") String viewerId,
+                                                       @Param("reqId") String reqId,
+                                                       @Param("today") LocalDate today);
 
     /** 未删除任务总数（估时统计的分母） */
     int countLive(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);

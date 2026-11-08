@@ -296,6 +296,9 @@ public class AiReqDocService {
         if (drafts == null || drafts.isEmpty()) {
             throw AppException.badRequest("没有选中的任务");
         }
+        if (drafts.size() > 15) {
+            throw AppException.badRequest("每次最多创建 15 个任务");
+        }
         RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
         Set<String> titles = new HashSet<String>();
         for (String title : taskMapper.selectTitles(workspaceId,

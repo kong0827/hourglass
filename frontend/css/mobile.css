@@ -75,16 +75,23 @@
 [data-layout="mobile"] #btnHelp,
 [data-layout="mobile"] a[href="help.html"],
 [data-layout="mobile"] #btnTheme{display:none !important;}
-[data-layout="mobile"] .tb-left{flex:0 1 auto;min-width:0;max-width:42%;}
-[data-layout="mobile"] .tb-title{font-size:16px;line-height:22px;}
-[data-layout="mobile"] .tb-right{flex:1 1 auto;justify-content:flex-end;gap:6px;min-width:0;}
-[data-layout="mobile"] .global-search{flex:1 1 88px;min-width:56px;}
-[data-layout="mobile"] .global-search input{width:100%;min-width:0;height:34px;font-size:16px;padding:0 30px 0 30px;}
-[data-layout="mobile"] .global-search input:focus{width:100%;box-shadow:none;}
-[data-layout="mobile"] .global-search > svg{left:9px;}
+[data-layout="mobile"] .tb-left{flex:1 1 auto;min-width:0;max-width:none;}
+[data-layout="mobile"] .tb-title{
+  font-size:16px;line-height:22px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-layout="mobile"] .tb-right{flex:0 0 auto;justify-content:flex-end;gap:6px;min-width:0;}
+/* 顶栏不再放当前视图搜索框：改由按钮打开全局搜索，视图内关键词在筛选面板里 */
+[data-layout="mobile"] .topbar .global-search{display:none !important;}
+.mob-search-btn{display:none !important;}
+[data-layout="mobile"] .mob-search-btn{display:grid !important;}
 [data-layout="mobile"] .timer-pill{max-width:132px;}
 [data-layout="mobile"] .timer-pill .tp-name{max-width:56px;}
 [data-layout="mobile"] .bell{width:34px;height:34px;}
+/* 手机全局搜索：没有物理键盘，隐藏快捷键提示 */
+[data-layout="mobile"] .palette-foot,
+[data-layout="mobile"] .palette-input kbd{display:none !important;}
+[data-layout="mobile"] .palette-sheet{max-height:72vh;}
 
 /* 新建 → 右下 FAB */
 [data-layout="mobile"] #btnNew{
@@ -97,8 +104,10 @@
 [data-layout="mobile"] #btnNew svg:last-child{display:none;}
 /* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
 
-/* ===================== 筛选栏 ===================== */
+/* ===================== 筛选：首屏只留一行摘要，完整条件进底部面板 ===================== */
+/* 手机不再把整条筛选栏铺在首屏；只保留一行摘要，条件与视图设置都在面板里 */
 [data-layout="mobile"] .filterbar{
+  display:none !important;
   height:auto;min-height:44px;padding:8px 12px;
   overflow-x:auto;overflow-y:hidden;
   -webkit-overflow-scrolling:touch;
@@ -107,6 +116,139 @@
 /* 「筛选条件」标签不参与压缩，否则 390px 下被挤成竖排 */
 [data-layout="mobile"] .fb-section-label{flex:0 0 auto;white-space:nowrap;}
 [data-layout="mobile"] .filterbar::-webkit-scrollbar{height:0;}
+
+.mob-filter{
+  display:none;flex:0 0 auto;padding:8px 12px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.mob-filter[hidden]{display:none !important;}
+[data-layout="mobile"] body[data-view="board"] .mob-filter,
+[data-layout="mobile"] body[data-view="list"] .mob-filter,
+[data-layout="mobile"] body[data-view="mine"] .mob-filter,
+[data-layout="mobile"] body[data-view="calendar"] .mob-filter{display:flex;}
+[data-layout="mobile"] body.mine-team[data-view="mine"] .mob-filter{display:none;}
+.mob-filter-btn{
+  flex:1 1 auto;display:flex;align-items:center;gap:8px;min-width:0;
+  height:36px;padding:0 6px 0 11px;
+  border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface);color:var(--text-2);
+  font:inherit;font-size:12.5px;font-weight:600;text-align:left;cursor:pointer;
+}
+.mob-filter-btn > svg{flex:0 0 auto;color:var(--text-3);}
+.mob-filter-btn.has > svg{color:var(--primary);}
+.mob-filter-btn .mbf-text{
+  flex:1 1 auto;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.mob-filter-btn .mbf-cta{
+  flex:0 0 auto;padding:4px 10px;border-radius:999px;
+  background:var(--primary-soft);color:var(--primary-fg);
+  font-size:11.5px;font-weight:700;
+}
+
+/* ===================== 筛选/视图底部面板 ===================== */
+.mob-sheet-layer{display:none;}
+[data-layout="mobile"] .mob-sheet-layer{
+  position:fixed;inset:0;z-index:140;
+  display:flex;align-items:flex-end;
+}
+[data-layout="mobile"] .mob-sheet-layer[hidden]{display:none !important;}
+.mob-sheet-scrim{
+  position:absolute;inset:0;background:var(--scrim);opacity:0;
+  transition:opacity .18s var(--ease-out);
+}
+.mob-sheet{
+  position:relative;width:100%;max-height:86vh;
+  display:flex;flex-direction:column;
+  background:var(--surface);border-radius:20px 20px 0 0;
+  box-shadow:var(--shadow-xl);
+  transform:translateY(22px);opacity:0;
+  transition:transform .22s var(--ease-out),opacity .18s var(--ease-out);
+}
+.mob-sheet-layer.open .mob-sheet-scrim{opacity:1;}
+.mob-sheet-layer.open .mob-sheet{transform:none;opacity:1;}
+.mob-sheet-grab{
+  width:36px;height:4px;border-radius:999px;background:var(--border);
+  margin:8px auto 2px;flex:0 0 auto;
+}
+.mob-sheet-head{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:4px 12px 6px 16px;
+}
+.mob-sheet-head h2{
+  flex:1 1 auto;min-width:0;margin:0;
+  font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--text);
+}
+.mob-sheet-body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 16px 18px;-webkit-overflow-scrolling:touch;
+}
+.mob-sheet-block{margin-top:14px;}
+.mob-sheet-block h3{
+  margin:0 0 8px;font-size:11.5px;font-weight:700;
+  letter-spacing:.04em;color:var(--text-3);
+}
+.mob-sheet-foot{
+  flex:0 0 auto;padding:10px 16px calc(14px + var(--safe-b));
+  border-top:1px solid var(--border);
+}
+.mob-sheet-foot .btn{width:100%;height:42px;}
+body.mob-sheet-open{overflow:hidden;}
+
+/* 面板内：搜索框、筛选栏改为纵向铺满 */
+[data-layout="mobile"] .mob-sheet .global-search{display:flex;width:100%;flex:none;}
+[data-layout="mobile"] .mob-sheet .global-search input{
+  width:100%;height:40px;font-size:16px;padding-right:38px;
+}
+[data-layout="mobile"] .mob-sheet .global-search input:focus{width:100%;}
+[data-layout="mobile"] .mob-sheet .global-search .gs-kbd{display:none;}
+[data-layout="mobile"] .mob-sheet .filterbar{
+  display:flex !important;flex-direction:column;align-items:stretch;gap:14px;
+  height:auto;min-height:0;padding:12px;overflow:visible;
+  border:1px solid var(--border);border-radius:var(--r-lg);
+  background:var(--surface-sunken);
+}
+[data-layout="mobile"] .mob-sheet .fb-main{
+  flex-direction:column;align-items:stretch;gap:14px;flex-wrap:wrap;
+}
+[data-layout="mobile"] .mob-sheet .fb-right{
+  flex-direction:column;align-items:stretch;gap:10px;margin-left:0;
+  padding-top:12px;border-top:1px solid var(--border);
+}
+[data-layout="mobile"] .mob-sheet .fb-right:not(:has(> :not([hidden]))){display:none;}
+[data-layout="mobile"] .mob-sheet .fgroup{
+  flex-direction:column;align-items:flex-start;gap:7px;width:100%;
+}
+[data-layout="mobile"] .mob-sheet .chips{flex-wrap:wrap;}
+[data-layout="mobile"] .mob-sheet .fb-active{
+  flex:0 0 auto;flex-wrap:wrap;overflow:visible;row-gap:8px;
+}
+[data-layout="mobile"] .mob-sheet .fb-actions{
+  flex-wrap:wrap;padding-left:0;border-left:0;gap:8px;
+}
+[data-layout="mobile"] .mob-sheet .fb-actions .btn{flex:1 1 auto;}
+/* 移动端筛选面板里不再需要横向滚动 */
+[data-layout="mobile"] .mob-sheet .filterbar::-webkit-scrollbar{display:none;}
+
+/* 列表「视图设置」入口：工具栏收进面板后仍保留入口 */
+[data-layout="mobile"] #view-list .smart-list-bar{position:relative;}
+[data-layout="mobile"] #view-list .smart-view-tabs{padding-right:78px;}
+.smart-mob-settings{display:none;}
+[data-layout="mobile"] #view-list .smart-mob-settings{
+  display:inline-flex;align-items:center;gap:5px;
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  height:28px;padding:0 10px;border:1px solid var(--border);border-radius:999px;
+  background:var(--surface);color:var(--text-2);font:inherit;font-size:11.5px;font-weight:650;
+}
+[data-layout="mobile"] #view-list .smart-mob-settings:active{background:var(--surface-hover);}
+[data-layout="mobile"] #view-list .smart-view-tools{display:none;}
+[data-layout="mobile"] .mob-sheet .smart-view-tools{
+  display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;padding:12px;
+  border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
+}
+[data-layout="mobile"] .mob-sheet .smart-view-tools .smart-view-spacer{display:none;}
+[data-layout="mobile"] .mob-sheet .smart-view-tools > .btn{flex:1 1 auto;}
+[data-layout="mobile"] .mob-sheet .smart-view-tools [data-list-export]{display:inline-flex;}
 
 /* ===================== 层级 ===================== */
 [data-layout="mobile"] .toast-layer{
@@ -139,6 +281,8 @@
   z-index:3;
 }
 [data-layout="mobile"] .drawer-foot .hint{display:none;}
+/* 移动端只保留一个主按钮，“保存并继续”从右上角更多菜单进入 */
+[data-layout="mobile"] #btnSaveTaskContinue{display:none;}
 [data-layout="mobile"] .task-detail-layout{grid-template-columns:1fr !important;display:block;}
 .sheet-grab{display:none;}
 [data-layout="mobile"] .sheet-grab{
@@ -149,8 +293,8 @@
 .drawer-foot #btnDrawerStatus{display:none;}
 
 /* ===================== 手机任务卡（我的任务 / 列表 / 看板共用） ===================== */
-[data-layout="mobile"] .mob-card-list{display:flex;flex-direction:column;gap:10px;}
-[data-layout="mobile"] .mob-groups{display:flex;flex-direction:column;gap:18px;padding-bottom:24px;}
+[data-layout="mobile"] .mob-card-list{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .mob-groups{display:flex;flex-direction:column;gap:14px;padding-bottom:16px;}
 [data-layout="mobile"] .mob-group-head{display:flex;align-items:center;gap:8px;margin:0 0 8px;}
 [data-layout="mobile"] .mob-group-head h3{
   margin:0;font-size:14px;font-weight:700;color:var(--text);
@@ -171,34 +315,34 @@
 [data-layout="mobile"] .mob-task-card{
   position:relative;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
-  padding:12px 14px;box-shadow:var(--shadow-xs);
+  padding:10px 12px;box-shadow:var(--shadow-xs);
   display:flex;flex-direction:column;cursor:pointer;
   touch-action:pan-y;
   transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out),border-color .18s var(--ease-out);
 }
 [data-layout="mobile"] .mob-task-card:active{border-color:var(--border-strong);}
-[data-layout="mobile"] .mtc-top{display:flex;align-items:center;gap:6px;min-height:30px;}
+[data-layout="mobile"] .mtc-top{display:flex;align-items:center;gap:6px;min-height:26px;}
 [data-layout="mobile"] .mtc-top .sp{flex:1 1 auto;}
 [data-layout="mobile"] .mtc-chip{
   display:inline-flex;align-items:center;gap:4px;max-width:46%;
-  height:20px;padding:0 8px;border-radius:999px;
+  height:19px;padding:0 7px;border-radius:999px;
   background:var(--surface-sunken);color:var(--text-2);
-  font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 [data-layout="mobile"] .mtc-chip i{width:6px;height:6px;border-radius:50%;background:var(--c,var(--text-3));flex:0 0 auto;}
 [data-layout="mobile"] .mtc-chip.ghost{background:transparent;border:1px solid var(--border);color:var(--text-3);}
 [data-layout="mobile"] .mtc-ico{
-  width:30px;height:30px;border-radius:50%;flex:0 0 auto;
+  width:26px;height:26px;border-radius:50%;flex:0 0 auto;
   display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-3);
 }
 [data-layout="mobile"] .mtc-ico.on{background:var(--success-soft);color:var(--success-fg);}
 [data-layout="mobile"] .mtc-title{
-  margin:8px 0 0;font-size:14.5px;line-height:21px;font-weight:600;color:var(--text);
+  margin:5px 0 0;font-size:14px;line-height:20px;font-weight:600;color:var(--text);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   letter-spacing:-.01em;word-break:break-word;
 }
 [data-layout="mobile"] .mtc-meta{
-  display:flex;align-items:center;gap:8px;margin-top:8px;min-width:0;
+  display:flex;align-items:center;gap:8px;margin-top:5px;min-width:0;
 }
 [data-layout="mobile"] .mtc-path{
   font-size:11.5px;color:var(--text-3);min-width:0;
@@ -210,7 +354,7 @@
 [data-layout="mobile"] .mtc-due.today{color:var(--warning-fg);}
 [data-layout="mobile"] .mtc-due.over{color:var(--danger-fg);}
 [data-layout="mobile"] .mtc-foot{
-  display:flex;align-items:center;gap:10px;margin-top:10px;
+  display:flex;align-items:center;gap:10px;margin-top:8px;
 }
 [data-layout="mobile"] .mtc-foot .progress{flex:1 1 auto;}
 [data-layout="mobile"] .mtc-owner{display:inline-flex;flex:0 0 auto;}
@@ -243,7 +387,7 @@
 [data-layout="mobile"] .list-scroll{
   background:transparent;border:0;border-radius:0;overflow:visible;
 }
-[data-layout="mobile"] .list-body{display:flex;flex-direction:column;gap:10px;}
+[data-layout="mobile"] .list-body{display:flex;flex-direction:column;gap:8px;}
 [data-layout="mobile"] #btnListColumns{display:none;}
 [data-layout="mobile"] .list-row{min-width:0;}
 [data-layout="mobile"] #listBulkBar .bulk-bar{flex-wrap:wrap;height:auto;padding:8px 10px;gap:6px;}
@@ -278,11 +422,14 @@
 [data-layout="mobile"] .mob-col-btn.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
 [data-layout="mobile"] .mob-col-btn.on b{background:var(--primary-soft);color:var(--primary-fg);}
 [data-layout="mobile"] .mob-board-list{
-  display:flex;flex-direction:column;gap:10px;
+  display:flex;flex-direction:column;gap:8px;
 }
 [data-layout="mobile"] .mob-board-list > .card{
-  border-radius:var(--radius-card);padding:12px 14px 12px 16px;
+  border-radius:var(--radius-card);padding:10px 12px 10px 14px;
 }
+[data-layout="mobile"] .mob-board-list .card-tags{margin-top:6px;}
+[data-layout="mobile"] .mob-board-list .card-meta{margin-top:6px;gap:8px;}
+[data-layout="mobile"] .mob-board-list .card-foot{margin-top:8px;}
 [data-layout="mobile"] .mob-board-list .card-add{
   height:42px;border-radius:var(--radius-card);background:var(--surface);
 }
@@ -577,14 +724,9 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 }
 [data-layout="mobile"] .mob-views-btn:active{background:var(--surface-hover);}
 
-/* 顶栏在加入「更多视图」后进一步压缩，360px 下不换行 */
-[data-layout="mobile"] .tb-left{max-width:24%;}
-[data-layout="mobile"] .global-search{flex:1 1 56px;min-width:40px;}
+/* 搜索框移出顶栏后不再挤占标题；计时中仍压缩胶囊，优先保住标题 */
 [data-layout="mobile"] .timer-pill{max-width:104px;}
 [data-layout="mobile"] .timer-pill .tp-name{display:none;}
-@media (max-width:379px){
-  [data-layout="mobile"] .tb-left{display:none;}
-}
 
 /* 团队视图不套用任务筛选栏（只在该页生效，别把看板/列表的筛选条一起藏掉） */
 [data-layout="mobile"] body.mine-team[data-view="mine"] .filterbar{display:none !important;}

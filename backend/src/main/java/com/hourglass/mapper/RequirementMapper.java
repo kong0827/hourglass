@@ -21,6 +21,9 @@ public interface RequirementMapper {
 
     int update(Requirement requirement);
 
+    int setArchived(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                    @Param("archived") boolean archived);
+
     /** 标记首版上线日（阶段归组口径，见 sql/23） */
     int markFirstReleased(@Param("workspaceId") String workspaceId, @Param("id") String id,
                           @Param("date") java.time.LocalDate date);

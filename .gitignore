@@ -22,15 +22,42 @@ data/
 deploy/.last-deploy.stamp
 deploy/.pending-deploy.stamp
 deploy/dist/
-# 部署记录（含明文凭据，仅限本地保存）
-deploy/部署记录-*.md
-# 内部上线清单（含真实成员信息与初始密码）
-deploy/上线清单.md
-# 服务器演示种子数据（仅本地保存）
-deploy/local/
 
-# 内部种子数据（含真实成员账号）
+# ===================== 内部资料（不对外发布）=====================
+# 以下内容的正本已移出仓库，存放在 ~/Documents/沙漏/内部资料/；
+# 这里的规则是兜底，防止同类文件被重新创建后误提交进公开仓库。
+#   · 商业化落地计划 —— 定价假设、试点折扣、支持人力上限、法务待决与未拍板决策项
+#   · 部署记录 / 上线清单 —— 服务器明文凭据、真实成员信息与初始密码
+#   · 审查截图证据 —— 约 13MB 二进制，公开报告已改为文字引用
+#   · seed_yunying.sql —— 含 15 个真实成员姓名；因 build.bat 按 sql/seeds/ 相对路径
+#     打包，正本暂留仓库内并忽略（未移出）
+docs/商业化落地计划.md
+docs/audit-shots/
+docs/audit/uiux-evidence/
+deploy/部署记录-*.md
+deploy/上线清单.md
+deploy/local/
 sql/seeds/seed_yunying.sql
+# 旧仓库（gitee chc2/workStuio）的完整历史副本，已移出至 内部资料/git-history/
+.git-gitee-history/
+
+# ===================== 本地截图产物 =====================
+# 从 .git/info/exclude 迁入，规则对所有 clone 一致生效（原先只有本机生效）。
+# 审查过程的临时截图与版本化登录稿不发布；文档真正引用的正式截图见下方白名单。
+docs/brand/login-live-*.png
+docs/images/_shot_*.png
+# 白名单：以下 11 张已被 docs/ 与 README 引用，必须随仓库发布（缺任一都会造成死链）
+!docs/images/_shot_flow-wide.png
+!docs/images/_shot_gantt-default.png
+!docs/images/_shot_gantt-wide.png
+!docs/images/_shot_gantt-1280.png
+!docs/images/_shot_gantt-p0-default.png
+!docs/images/_shot_gantt-p1-default.png
+!docs/images/_shot_gantt-zoom40.png
+!docs/images/_shot_list-wide.png
+!docs/images/_shot_review-wide.png
+!docs/images/_shot_share-page.png
+!docs/images/_shot_stats-wide.png
 
 # 系统文件
 .DS_Store
@@ -38,3 +65,11 @@ Thumbs.db
 
 # 本地联调凭据（含密码，仅限本地）
 backend/local.env
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.p12
+*.jks

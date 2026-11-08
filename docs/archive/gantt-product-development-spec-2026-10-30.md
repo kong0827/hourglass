@@ -1,7 +1,7 @@
-# DevStudio 甘特图产品化优化开发文档
+# Hourglass 甘特图产品化优化开发文档
 
 - 日期：2026-10-30
-- 适用项目：`devstudio-server`
+- 适用项目：`hourglass-server`
 - 文档性质：交给开发 AI 的实施规格，不是现状说明
 - 建议版本：甘特图 V1.1（产品能力）/ V1.2（数据规模）
 - 关联文档：`docs/gantt-ui-optimization-2026-10-30.md`（甘特条、颜色、把手等纯视觉优化）
@@ -76,7 +76,7 @@
 - 拖拽期间继续遵守 `ganttState.drag` 防刷新机制；不得让 SSE 或重复 render 打断拖动。
 - 日期计算复用 `parseDate`、`iso`、`addDays`、`dayDiff`、`TODAY`，不要另写一套时区逻辑。
 - 文本插 HTML 必须 `esc()`；不要引入内联事件处理器。
-- 静态资源变化后，`static/sw.js` 的 `CACHE_NAME` 必须递增；当前基线为 `devstudio-shell-v34`，若视觉文档已先递增，则在最新值上再递增，不要机械写死 v35。
+- 静态资源变化后，`static/sw.js` 的 `CACHE_NAME` 必须递增；当前基线为 `hourglass-shell-v34`，若视觉文档已先递增，则在最新值上再递增，不要机械写死 v35。
 - 改完前端运行 `node tools/preview/gen-preview.js`。
 - 不主动部署、不主动 Git 提交，除非用户另行明确要求。
 

@@ -18,7 +18,13 @@ public class LoginUser extends User {
     private final String role;
 
     public LoginUser(String id, String username, String passwordHash, String displayName, String role) {
-        super(username, passwordHash,
+        this(id, username, passwordHash, displayName, role, true);
+    }
+
+    /** enabled=false（账号已停用）时，DaoAuthenticationProvider 在密码校验通过后抛 DisabledException */
+    public LoginUser(String id, String username, String passwordHash, String displayName, String role,
+                     boolean enabled) {
+        super(username, passwordHash, enabled, true, true, true,
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT))));
         this.id = id;
         this.displayName = displayName;

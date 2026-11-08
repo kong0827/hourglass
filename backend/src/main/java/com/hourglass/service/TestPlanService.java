@@ -1,0 +1,238 @@
+package com.hourglass.service;
+
+import com.hourglass.common.AppException;
+import com.hourglass.common.CaseMeta;
+import com.hourglass.common.CurrentUser;
+import com.hourglass.common.Ids;
+import com.hourglass.common.Texts;
+import com.hourglass.dto.CaseRunRequest;
+import com.hourglass.dto.PlanBatchRequest;
+import com.hourglass.dto.TestPlanCaseView;
+import com.hourglass.dto.TestPlanSaveRequest;
+import com.hourglass.dto.TestPlanView;
+import com.hourglass.entity.TestCase;
+import com.hourglass.entity.TestPlan;
+import com.hourglass.entity.TestPlanCase;
+import com.hourglass.mapper.TestCaseMapper;
+import com.hourglass.mapper.TestPlanCaseMapper;
+import com.hourglass.mapper.TestPlanMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * 测试计划（A2 测试最小闭环）：项目下的回归/迭代容器。
+ * 圈选用例 → 计划内批量执行（结果写 test_plan_case + 追加 test_case_run 流水并同步用例最近结果）
+ * → 汇总（执行进度/通过率/缺陷数）由 SQL 聚合一次带回。
+ * 状态：draft（未开跑）→ running（首次批量执行自动流转，也可手动）→ done（归档快照）。
+ */
+@Service
+public class TestPlanService {
+
+    private final TestPlanMapper planMapper;
+    private final TestPlanCaseMapper planCaseMapper;
+    private final TestCaseMapper caseMapper;
+    private final TestCaseService caseService;
+    private final ProjectAccessService projectAccess;
+
+    public TestPlanService(TestPlanMapper planMapper, TestPlanCaseMapper planCaseMapper,
+                           TestCaseMapper caseMapper, TestCaseService caseService,
+                           ProjectAccessService projectAccess) {
+        this.planMapper = planMapper;
+        this.planCaseMapper = planCaseMapper;
+        this.caseMapper = caseMapper;
+        this.caseService = caseService;
+        this.projectAccess = projectAccess;
+    }
+
+    /* ---------- 查询 ---------- */
+
+    public List<TestPlanView> list(String workspaceId, String userId, String reqId) {
+        projectAccess.assertView(workspaceId, userId, reqId);
+        return planMapper.selectViewByReq(workspaceId, reqId);
+    }
+
+    /** 计划详情：本体 + 圈选用例（含计划内结果） */
+    public Map<String, Object> detail(String workspaceId, String userId, String id) {
+        TestPlan plan = requirePlan(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, plan.getReqId());
+        TestPlanView view = planMapper.selectViewById(id);
+        Map<String, Object> out = new LinkedHashMap<String, Object>();
+        out.put("plan", view);
+        List<TestPlanCaseView> cases = planCaseMapper.selectViewByPlan(id);
+        out.put("cases", cases);
+        out.put("passRate", view == null || view.getExecutedCount() == 0
+                ? null : Math.round(view.getPassedCount() * 1000.0 / view.getExecutedCount()) / 10.0);
+        return out;
+    }
+
+    /* ---------- 写入 ---------- */
+
+    @Transactional
+    public TestPlanView create(String userId, String workspaceId, TestPlanSaveRequest req) {
+        projectAccess.assertWrite(workspaceId, userId, req.getReqId());
+        checkDates(req);
+        TestPlan p = new TestPlan();
+        p.setId(Ids.gen("TP"));
+        p.setWorkspaceId(workspaceId);
+        p.setReqId(req.getReqId());
+        p.setName(Texts.cut(req.getName().trim(), 100));
+        p.setVersionId(Texts.trimToNull(req.getVersionId()));
+        p.setPlannedStart(req.getPlannedStart());
+        p.setPlannedEnd(req.getPlannedEnd());
+        p.setStatus(req.getStatus() == null ? "draft" : req.getStatus());
+        p.setNote(Texts.trimToNull(req.getNote()));
+        p.setCreatedBy(CurrentUser.get().getDisplayName());
+        p.setCreatedByUserId(userId);
+        planMapper.insert(p);
+        return planMapper.selectViewById(p.getId());
+    }
+
+    @Transactional
+    public TestPlanView update(String userId, String workspaceId, String id, TestPlanSaveRequest req) {
+        TestPlan p = requirePlan(workspaceId, id);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        projectAccess.assertWrite(workspaceId, userId, req.getReqId());
+        checkDates(req);
+        p.setReqId(req.getReqId());
+        p.setName(Texts.cut(req.getName().trim(), 100));
+        p.setVersionId(Texts.trimToNull(req.getVersionId()));
+        p.setPlannedStart(req.getPlannedStart());
+        p.setPlannedEnd(req.getPlannedEnd());
+        p.setNote(Texts.trimToNull(req.getNote()));
+        planMapper.update(p);
+        return planMapper.selectViewById(id);
+    }
+
+    /** 状态流转：done 前必须已圈选用例；done 后禁止再改内容（快照口径） */
+    @Transactional
+    public TestPlanView setStatus(String userId, String workspaceId, String id, String status) {
+        if (!status.matches("^(draft|running|done)$")) {
+            throw AppException.badRequest("计划状态不合法");
+        }
+        TestPlan p = requirePlan(workspaceId, id);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        if ("done".equals(status)) {
+            TestPlanView v = planMapper.selectViewById(id);
+            if (v == null || v.getCaseCount() == 0) {
+                throw AppException.badRequest("计划还没有圈选用例，无法标记完成");
+            }
+        }
+        planMapper.updateStatus(id, status);
+        return planMapper.selectViewById(id);
+    }
+
+    @Transactional
+    public void delete(String userId, String workspaceId, String id) {
+        TestPlan p = requirePlan(workspaceId, id);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        planCaseMapper.deleteByPlan(id);
+        planMapper.deleteById(workspaceId, id);
+    }
+
+    /* ---------- 圈选与批量执行 ---------- */
+
+    /** 加入计划：只接受同项目的用例，已在计划内的静默跳过，返回实际新增数 */
+    @Transactional
+    public int addCases(String userId, String workspaceId, String planId, PlanBatchRequest req) {
+        TestPlan p = requirePlan(workspaceId, planId);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        Set<String> exists = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
+        int added = 0;
+        for (String caseId : req.getCaseIds()) {
+            if (caseId == null || exists.contains(caseId)) {
+                continue;
+            }
+            TestCase c = caseMapper.selectById(caseId);
+            if (c == null || !workspaceId.equals(c.getWorkspaceId()) || !p.getReqId().equals(c.getReqId())) {
+                throw AppException.badRequest("用例不属于该项目或已不存在：" + caseId);
+            }
+            TestPlanCase row = new TestPlanCase();
+            row.setId(Ids.gen("PC"));
+            row.setPlanId(planId);
+            row.setCaseId(caseId);
+            planCaseMapper.insert(row);
+            exists.add(caseId);
+            added++;
+        }
+        return added;
+    }
+
+    @Transactional
+    public void removeCase(String userId, String workspaceId, String planId, String caseId) {
+        TestPlan p = requirePlan(workspaceId, planId);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        planCaseMapper.deleteByPlanAndCase(planId, caseId);
+    }
+
+    /**
+     * 批量执行：每例追加一条带 plan_id 的执行流水（沿用单例执行链路，
+     * 用例全局最近结果同步更新），并把结果回写 test_plan_case；
+     * draft 计划首次执行自动流转 running。返回处理条数。
+     */
+    @Transactional
+    public int batchRun(String userId, String workspaceId, String planId, PlanBatchRequest req) {
+        if (!CaseMeta.STATUS_PASSED.equals(req.getStatus())
+                && !CaseMeta.STATUS_FAILED.equals(req.getStatus())
+                && !CaseMeta.STATUS_BLOCKED.equals(req.getStatus())) {
+            throw AppException.badRequest("执行结果不合法");
+        }
+        TestPlan p = requirePlan(workspaceId, planId);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        Set<String> inPlan = new HashSet<String>(planCaseMapper.selectCaseIds(planId));
+        CaseRunRequest runReq = new CaseRunRequest();
+        runReq.setStatus(req.getStatus());
+        runReq.setNote(req.getNote());
+        int done = 0;
+        for (String caseId : req.getCaseIds()) {
+            if (caseId == null || !inPlan.contains(caseId)) {
+                continue;
+            }
+            caseService.run(userId, workspaceId, caseId, runReq, planId);
+            String note = Texts.trimToNull(req.getNote());
+            planCaseMapper.updateResult(planId, caseId, req.getStatus(), note,
+                    CurrentUser.get().getDisplayName(), userId);
+            done++;
+        }
+        if (done == 0) {
+            throw AppException.badRequest("勾选的用例都不在本计划中");
+        }
+        if ("draft".equals(p.getStatus())) {
+            planMapper.updateStatus(planId, "running");
+        }
+        return done;
+    }
+
+    /* ---------- 内部 ---------- */
+
+    private TestPlan requirePlan(String workspaceId, String id) {
+        TestPlan p = planMapper.selectById(id);
+        if (p == null || !workspaceId.equals(p.getWorkspaceId())) {
+            throw AppException.notFound("测试计划不存在：" + id);
+        }
+        return p;
+    }
+
+    private void assertEditable(TestPlan p) {
+        if ("done".equals(p.getStatus())) {
+            throw AppException.badRequest("计划已完成（快照口径），如需继续执行请先改回执行中");
+        }
+    }
+
+    private void checkDates(TestPlanSaveRequest req) {
+        if (req.getPlannedStart() != null && req.getPlannedEnd() != null
+                && req.getPlannedEnd().isBefore(req.getPlannedStart())) {
+            throw AppException.badRequest("计划结束日不能早于开始日");
+        }
+    }
+}

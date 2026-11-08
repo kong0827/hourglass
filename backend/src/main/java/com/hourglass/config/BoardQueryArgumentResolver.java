@@ -41,7 +41,8 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 bool(request.getParameter("noDue")),
                 request.getParameter("doneScope"),
                 integer(request.getParameter("doneLimit")),
-                integer(request.getParameter("doneOffset")));
+                integer(request.getParameter("doneOffset")),
+                integer(request.getParameter("openLimit")));
     }
 
     private Boolean bool(String v) {

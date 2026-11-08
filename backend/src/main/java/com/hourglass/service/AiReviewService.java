@@ -46,10 +46,10 @@ public class AiReviewService {
         this.client = client;
     }
 
-    public AiReviewResponse polish(String userId, String workspaceId, Integer weekOffset, String note) {
+    public AiReviewResponse polish(String userId, String workspaceId, Integer weekOffset, String reqId, String note) {
         AiConfig cfg = configService.resolve(userId);
         int off = weekOffset == null ? 0 : Math.max(-52, Math.min(0, weekOffset));
-        ReviewResponse d = reviewService.review(workspaceId, userId, off);
+        ReviewResponse d = reviewService.review(workspaceId, userId, reqId, off);
 
         List<Task> done = d.getCompleted();
         List<Task> progress = d.getProgressTasks();
@@ -57,7 +57,8 @@ public class AiReviewService {
         int doing = d.getDoing();
         int backlog = d.getBacklog();
         if (done.isEmpty() && progress.isEmpty() && pending.isEmpty() && doing == 0 && backlog == 0) {
-            throw AppException.badRequest("这一周没有任何工作记录，没有素材可写。先把卡片拖进「已完成」或用进度记录一下这周做了什么。");
+            String scope = d.getReqName() == null ? "这一周" : "该项目这一周";
+            throw AppException.badRequest(scope + "没有任何工作记录，没有素材可写。先把卡片拖进「已完成」或用进度记录一下这周做了什么。");
         }
 
         AiReviewResponse.Source src = new AiReviewResponse.Source();
@@ -115,6 +116,9 @@ public class AiReviewService {
         StringBuilder sb = new StringBuilder();
         String range = fmt(d.getWeekStart()) + " — " + fmt(d.getWeekEnd());
         sb.append("周期：").append(nz(d.getLabel())).append("（").append(range).append("）\n");
+        if (d.getReqName() != null && !d.getReqName().isEmpty()) {
+            sb.append("范围：项目「").append(d.getReqName()).append("」\n");
+        }
 
         ReviewResponse.Stats s = d.getStats() == null ? new ReviewResponse.Stats() : d.getStats();
         sb.append("统计：完成 ").append(s.getDone()).append(" 项");

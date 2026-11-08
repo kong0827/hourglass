@@ -6,7 +6,10 @@ import com.hourglass.common.CurrentWorkspace;
 import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.DemandActionRequest;
+import com.hourglass.dto.DemandBoardResponse;
 import com.hourglass.dto.DemandDocLinkRequest;
+import com.hourglass.dto.DemandPage;
+import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.entity.Demand;
@@ -41,6 +44,54 @@ public class DemandController {
     @GetMapping("/api/demands")
     public ApiResult<List<Demand>> list(@RequestParam(required = false) String reqId, @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.list(ctx.getWsId(), reqId, ctx.getUserId()));
+    }
+
+    /** 需求池看板首屏：每个状态一列，只下发前 limit 条 */
+    @GetMapping("/api/demands/board")
+    public ApiResult<DemandBoardResponse> board(@RequestParam(required = false) String reqId,
+                                                @RequestParam(required = false) Integer limit,
+                                                @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.board(ctx.getWsId(), ctx.getUserId(), reqId,
+                limit == null ? 0 : limit));
+    }
+
+    /** 需求池分页：看板单列滚动加载 + 列表模式的筛选/排序/分页 */
+    @GetMapping("/api/demands/page")
+    public ApiResult<DemandPage> page(@RequestParam(required = false) String reqId,
+                                      @RequestParam(required = false) String status,
+                                      @RequestParam(required = false) String q,
+                                      @RequestParam(required = false) String pris,
+                                      @RequestParam(required = false) String kinds,
+                                      @RequestParam(required = false) String reqs,
+                                      @RequestParam(required = false) String sort,
+                                      @RequestParam(required = false) Integer offset,
+                                      @RequestParam(required = false) Integer limit,
+                                      @CurrentWorkspace WorkspaceCtx ctx) {
+        DemandQuery query = new DemandQuery();
+        query.setReqId(reqId);
+        query.setStatus(status);
+        query.setQ(q == null || q.trim().isEmpty() ? null : q.trim());
+        query.setPris(csv(pris));
+        query.setKinds(csv(kinds));
+        query.setReqs(csv(reqs));
+        query.setSort(sort);
+        query.setOffset(offset == null ? 0 : offset);
+        query.setLimit(limit == null ? 50 : limit);
+        return ApiResult.ok(demandService.page(ctx.getWsId(), ctx.getUserId(), query));
+    }
+
+    private static List<String> csv(String value) {
+        List<String> list = new java.util.ArrayList<String>();
+        if (value == null) {
+            return list;
+        }
+        for (String part : value.split(",")) {
+            String item = part.trim();
+            if (!item.isEmpty()) {
+                list.add(item);
+            }
+        }
+        return list;
     }
 
     @GetMapping("/api/demands/{id}")

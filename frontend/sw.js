@@ -1,7 +1,7 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」）。
    SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。 */
-var CACHE_NAME = "hourglass-shell-v102";
+var CACHE_NAME = "hourglass-shell-v106";
 var SHELL = [
   "./",
   "index.html",
@@ -23,6 +23,7 @@ var SHELL = [
   "js/core/api.js",
   "js/core/activity-ui.js",
   "js/core/app.js",
+  "js/core/att-preview.js",
   "js/core/dom.js",
   "js/core/filters-ui.js",
   "js/core/filters.js",
@@ -35,6 +36,7 @@ var SHELL = [
   "js/core/priorities.js",
   "js/core/realtime.js",
   "js/core/router.js",
+  "js/core/search-palette.js",
   "js/core/shell.js",
   "js/core/sheet-viewer.js",
   "js/core/shortcuts.js",
@@ -113,7 +115,7 @@ self.addEventListener("fetch", function (event) {
 
   event.respondWith(
     fetch(request).then(function (response) {
-      if (response && response.status === 200 && response.type === "basic") {
+      if (!url.search && response && response.status === 200 && response.type === "basic") {
         var copy = response.clone();
         caches.open(CACHE_NAME).then(function (cache) {
           cache.put(request, copy).catch(function () {});

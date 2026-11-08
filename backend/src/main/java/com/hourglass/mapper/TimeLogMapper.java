@@ -84,11 +84,12 @@ public interface TimeLogMapper {
                                   @Param("from") LocalDateTime from,
                                   @Param("to") LocalDateTime to);
 
-    /** 本空间 [from, to) 区间按成员分组的工时（分钟）；viewerId 非空时排除不可见项目 */
+    /** 本空间 [from, to) 区间按成员分组的工时（分钟）；viewerId 非空时排除不可见项目，reqId 非空时只看该项目 */
     List<TimeAgg> sumBetweenByWorkspaceGroupByUser(@Param("workspaceId") String workspaceId,
                                                    @Param("from") LocalDateTime from,
                                                    @Param("to") LocalDateTime to,
-                                                   @Param("viewerId") String viewerId);
+                                                   @Param("viewerId") String viewerId,
+                                                   @Param("reqId") String reqId);
 
     /** 本空间 [from, to) 区间的计时原始记录（甘特负载用，按 started_at 走索引） */
     List<com.hourglass.entity.TimeLog> selectByWorkspaceBetween(
@@ -109,7 +110,8 @@ public interface TimeLogMapper {
                                                 @Param("userId") String userId,
                                                 @Param("from") LocalDateTime from,
                                                 @Param("to") LocalDateTime to,
-                                                @Param("viewerId") String viewerId);
+                                                @Param("viewerId") String viewerId,
+                                                @Param("reqId") String reqId);
 
     /** 甘特负载：限定任务集合，按时计人 + 周聚合实际工时（不再拉原始记录） */
     List<com.hourglass.dto.UserWeekRow> sumUserWeeklyMinutes(

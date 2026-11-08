@@ -51,6 +51,15 @@
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
 
+  <!-- 单列滚动加载：只取该列未完成任务，走 idx_board -->
+  <select id="selectOpenColumnTasks" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+      AND t.board_column = #{column} AND t.board_column &lt;&gt; 'done'
+    <include refid="visibleProject"/>
+    ORDER BY t.sort_order, t.id
+  </select>
+
   <select id="selectDeleted" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
@@ -809,12 +818,14 @@
     SELECT MAX(t.completed_at) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
     <include refid="visibleProject"/>
+    <if test="reqId != null">AND t.req_id = #{reqId}</if>
   </select>
 
   <select id="selectCompletedBetween" resultType="Task">
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
       <include refid="visibleProject"/>
+      <if test="reqId != null">AND t.req_id = #{reqId}</if>
       AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
     ORDER BY t.completed_at DESC, BINARY t.id
   </select>
@@ -823,6 +834,7 @@
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
+      <if test="reqId != null">AND t.req_id = #{reqId}</if>
       AND t.board_column &lt;&gt; 'done' AND t.progress &gt;= 100
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
@@ -831,6 +843,7 @@
     SELECT <include refid="cols"/> FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
+      <if test="reqId != null">AND t.req_id = #{reqId}</if>
       AND t.board_column NOT IN ('backlog', 'done')
       AND (t.progress IS NULL OR t.progress &lt; 100)
     <if test="history">
@@ -856,6 +869,7 @@
     FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
+    <if test="reqId != null">AND t.req_id = #{reqId}</if>
   </select>
 
   <select id="countLive" resultType="int">

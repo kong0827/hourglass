@@ -111,7 +111,7 @@ public class RequirementDocController {
         return ApiResult.ok(docService.create(userId, ws.getId(), req));
     }
 
-    /** 阶段 1 MVP：导入 Word（docx）文件，返回清洗后的 HTML 正文 */
+    /** 导入 Word 文件（docx 保留排版，doc 提取纯文本），返回清洗后的 HTML 正文 */
     @PostMapping("/api/req-docs/import-word")
     public ApiResult<Map<String, String>> importWord(@RequestParam("file") MultipartFile file,
                                                      @RequestParam(required = false) String workspace) {
@@ -129,14 +129,14 @@ public class RequirementDocController {
             int idx = original.lastIndexOf('.');
             ext = idx > 0 ? original.substring(idx + 1).toLowerCase() : null;
         }
-        if (!"docx".equals(ext)) {
-            return ApiResult.error(400, "仅支持 .docx 格式");
+        if (!"docx".equals(ext) && !"doc".equals(ext)) {
+            return ApiResult.error(400, "仅支持 .docx / .doc 格式");
         }
         File temp = null;
         try {
-            temp = File.createTempFile("hourglass-word-import-", ".docx");
+            temp = File.createTempFile("hourglass-word-import-", "." + ext);
             file.transferTo(temp);
-            String html = docService.importWord(temp);
+            String html = docService.importWord(temp, ext);
             Map<String, String> data = new LinkedHashMap<String, String>();
             data.put("format", "html");
             data.put("content", html);
@@ -191,7 +191,7 @@ public class RequirementDocController {
     /** 发布 / 收回发布：草稿仅作者与空间管理员可见，发布后按项目可见范围对成员开放 */
     @PutMapping("/api/req-docs/{id}/publish")
     public ApiResult<RequirementDoc> publish(@PathVariable String id,
-                                             @RequestBody ReqDocPublishRequest req,
+                                             @Valid @RequestBody ReqDocPublishRequest req,
                                              @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
@@ -229,7 +229,7 @@ public class RequirementDocController {
 
     /* ---------------- 只读分享 ---------------- */
 
-    /** 查看文档的分享链接（能看文档即可；已过期按无链接处理） */
+    /** 查看文档的分享链接（当前项目可写者；已过期按无链接处理） */
     @GetMapping("/api/req-docs/{id}/share")
     public ApiResult<ReqDocShare> shareInfo(@PathVariable String id,
                                             @RequestParam(required = false) String workspace) {
@@ -238,7 +238,7 @@ public class RequirementDocController {
         return ApiResult.ok(docService.shareInfo(userId, ws.getId(), id));
     }
 
-    /** 生成/重置分享链接（作者或项目可写者；文档须已发布） */
+    /** 生成/重置分享链接（当前项目可写者；文档须已发布） */
     @PostMapping("/api/req-docs/{id}/share")
     public ApiResult<ReqDocShare> createShare(@PathVariable String id,
                                               @RequestParam(required = false) String workspace) {

@@ -11,9 +11,14 @@ public interface AppNotificationMapper {
 
     List<AppNotification> selectByUser(@Param("userId") String userId,
                                        @Param("workspaceId") String workspaceId,
+                                       @Param("filter") String filter,
                                        @Param("limit") int limit);
 
     int countUnread(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
+
+    int countAll(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
+
+    int countMentions(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
 
     int insert(AppNotification n);
 

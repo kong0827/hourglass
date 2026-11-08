@@ -11,6 +11,26 @@
     WHERE workspace_id = #{workspaceId} AND target_id = #{targetId} AND target_kind = #{targetKind} ORDER BY id
   </select>
 
+  <select id="selectByTargets" resultType="Attachment">
+    SELECT <include refid="cols"/> FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind}
+      AND target_id IN
+      <foreach collection="targetIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
+    ORDER BY id
+  </select>
+
+  <select id="selectOrphanCaseRuns" resultType="Attachment">
+    SELECT <include refid="cols"/> FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = 'case_run'
+      AND NOT EXISTS (SELECT 1 FROM test_case_run r WHERE r.id = attachment.target_id)
+  </select>
+
+  <delete id="deleteOrphanCaseRuns">
+    DELETE FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_kind = 'case_run'
+      AND NOT EXISTS (SELECT 1 FROM test_case_run r WHERE r.id = attachment.target_id)
+  </delete>
+
   <select id="selectAllByWorkspace" resultType="Attachment">
     SELECT <include refid="cols"/> FROM attachment WHERE workspace_id = #{workspaceId}
   </select>

@@ -47,6 +47,10 @@ mybatis:
 
 # 登录账号：AUTH_PASSWORD 可用明文（启动时转 bcrypt）或直接配置 bcrypt 哈希
 app:
+  version: ${APP_VERSION:1.0.0}
+  # 系统审计日志保留天数；每天 03:40 清理超期记录
+  audit:
+    retain-days: ${AUDIT_RETAIN_DAYS:90}
   # 前端登录页（相对 context-path）。前端由 Nginx 独立提供，后端只做 302 跳转
   login-page: ${APP_LOGIN_PAGE:/login.html}
   # 进程内缓存（单实例部署）：成员关系与列/分类/标签 meta 都存在本进程内存里。

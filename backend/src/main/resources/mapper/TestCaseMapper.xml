@@ -51,11 +51,21 @@
     ORDER BY created_at ASC, id ASC
   </select>
 
+  <!-- 最近一轮执行挂载的证据附件数（失败截图等） -->
+  <sql id="evidenceCount">
+    (SELECT COUNT(*) FROM attachment a
+      WHERE a.target_kind = 'case_run'
+        AND a.target_id = (SELECT r.id FROM test_case_run r
+                           WHERE r.case_id = c.id AND r.workspace_id = c.workspace_id
+                           ORDER BY r.created_at DESC, r.id DESC LIMIT 1))
+  </sql>
+
   <select id="selectViewByReq" resultType="com.hourglass.dto.TestCaseView">
     SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title,
            c.title, c.precondition, c.module, c.priority, c.steps AS steps_json,
            c.latest_status, c.latest_note, c.latest_by, c.latest_at,
            c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           <include refid="evidenceCount"/> AS latest_evidence_count,
            c.created_at, c.updated_at
     FROM test_case c
     LEFT JOIN demand d ON d.id = c.demand_id
@@ -69,6 +79,124 @@
     FROM test_case
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND latest_status IS NOT NULL
     GROUP BY latest_status
+  </select>
+
+  <!-- 分页列表的共享 WHERE（与旧 selectViewByReq 保持同样的关联与排序口径） -->
+  <sql id="pageWhere">
+    WHERE c.workspace_id = #{q.workspaceId} AND c.req_id = #{q.reqId}
+    <choose>
+      <when test="q.status == '__untested'"> AND c.latest_status IS NULL </when>
+      <when test="q.status != null"> AND c.latest_status = #{q.status} </when>
+    </choose>
+    <choose>
+      <when test="q.module == '__none'"> AND (c.module IS NULL OR c.module = '') </when>
+      <when test="q.module != null"> AND c.module = #{q.module} </when>
+    </choose>
+    <choose>
+      <when test="q.pri == '__none'"> AND (c.priority IS NULL OR c.priority = '') </when>
+      <when test="q.pri != null"> AND c.priority = #{q.pri} </when>
+    </choose>
+    <if test="q.owner != null"> AND c.latest_by = #{q.owner} </if>
+    <if test="q.bugOnly"> AND c.latest_bug_task_id IS NOT NULL </if>
+    <if test="q.q != null">
+      AND (c.title LIKE CONCAT('%', #{q.q}, '%')
+           OR c.precondition LIKE CONCAT('%', #{q.q}, '%')
+           OR c.module LIKE CONCAT('%', #{q.q}, '%')
+           OR c.latest_note LIKE CONCAT('%', #{q.q}, '%')
+           OR c.steps LIKE CONCAT('%', #{q.q}, '%')
+           OR d.title LIKE CONCAT('%', #{q.q}, '%')
+           OR t.title LIKE CONCAT('%', #{q.q}, '%'))
+    </if>
+  </sql>
+
+  <sql id="pageJoins">
+    FROM test_case c
+    LEFT JOIN demand d ON d.id = c.demand_id
+    LEFT JOIN task t ON t.id = c.latest_bug_task_id
+  </sql>
+
+  <select id="countByQuery" resultType="int">
+    SELECT COUNT(*) <include refid="pageJoins"/>
+    <include refid="pageWhere"/>
+  </select>
+
+  <select id="selectViewByQuery" resultType="com.hourglass.dto.TestCaseView">
+    SELECT c.id, c.req_id, c.demand_id, d.title AS demand_title,
+           c.title, c.precondition, c.module, c.priority, c.steps AS steps_json,
+           c.latest_status, c.latest_note, c.latest_by, c.latest_at,
+           c.latest_bug_task_id, t.title AS latest_bug_task_title,
+           <include refid="evidenceCount"/> AS latest_evidence_count,
+           c.created_at, c.updated_at
+    <include refid="pageJoins"/>
+    <include refid="pageWhere"/>
+    ORDER BY c.created_at DESC, c.id DESC
+    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <select id="selectModules" resultType="string">
+    SELECT DISTINCT module FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+      AND module IS NOT NULL AND module &lt;&gt; ''
+    ORDER BY module
+  </select>
+
+  <select id="selectCoverageByDemand" resultType="com.hourglass.dto.CaseCoverageRow">
+    SELECT d.id AS demand_id, d.title AS demand_title, d.status AS demand_status, d.priority,
+           COUNT(c.id) AS case_total,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested,
+           COUNT(DISTINCT c.latest_bug_task_id) AS bug_count
+    FROM demand d
+    LEFT JOIN test_case c
+      ON c.demand_id = d.id AND c.workspace_id = d.workspace_id AND c.req_id = d.req_id
+    WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+    GROUP BY d.id, d.title, d.status, d.priority, d.created_at
+    ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej'), d.created_at DESC, d.id
+  </select>
+
+  <select id="selectUnlinkedCoverage" resultType="com.hourglass.dto.CaseCoverageRow">
+    SELECT COUNT(c.id) AS case_total,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested,
+           COUNT(DISTINCT c.latest_bug_task_id) AS bug_count
+    FROM test_case c
+    WHERE c.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+      AND (c.demand_id IS NULL OR c.demand_id NOT IN (
+        SELECT d.id FROM demand d WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+      ))
+  </select>
+
+  <select id="searchVisible" resultType="com.hourglass.dto.SearchHit">
+    SELECT 'case' AS type, c.id, c.title, c.req_id AS reqId, r.name AS reqName,
+           c.latest_status AS status, c.module AS extra, c.updated_at AS updatedAt
+    FROM test_case c
+    LEFT JOIN requirement r ON r.id = c.req_id AND r.workspace_id = c.workspace_id
+    WHERE c.workspace_id = #{workspaceId}
+      AND (
+        LOCATE(LOWER(#{q}), LOWER(c.title)) > 0
+        OR LOCATE(LOWER(#{q}), LOWER(c.module)) > 0
+        OR LOCATE(LOWER(#{q}), LOWER(c.precondition)) > 0
+      )
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = c.workspace_id
+                          AND pm.project_id = c.req_id
+                          AND pm.user_id = #{viewerId}
+                          AND pm.access = 'none')
+      </if>
+    ORDER BY c.updated_at DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectOwners" resultType="string">
+    SELECT DISTINCT latest_by FROM test_case
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+      AND latest_by IS NOT NULL AND latest_by &lt;&gt; ''
+    ORDER BY latest_by
   </select>
 
   <update id="clearBugTaskRefs">

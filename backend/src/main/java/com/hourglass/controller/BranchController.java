@@ -48,6 +48,55 @@ public class BranchController {
         return ApiResult.ok(branchService.list(ws.getId(), userId, project));
     }
 
+    /** 分支看板：各状态先给一屏 + 状态计数；列内滚动加载走 /api/branches/page */
+    @GetMapping("/api/branches/board")
+    public ApiResult<com.hourglass.dto.BranchBoard> board(@RequestParam(required = false) String workspace,
+                                                          @RequestParam(required = false) String project,
+                                                          @RequestParam(required = false) String q,
+                                                          @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
+        query.setProjectId(project);
+        query.setQ(q);
+        if (limit != null) {
+            query.setLimit(limit);
+        }
+        return ApiResult.ok(branchService.board(ws.getId(), userId, query));
+    }
+
+    /** 分支按状态分页（滚动加载已发布等大分组） */
+    @GetMapping("/api/branches/page")
+    public ApiResult<com.hourglass.dto.BranchPage> page(@RequestParam(required = false) String workspace,
+                                                        @RequestParam(required = false) String status,
+                                                        @RequestParam(required = false) String project,
+                                                        @RequestParam(required = false) String q,
+                                                        @RequestParam(required = false) Integer offset,
+                                                        @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
+        query.setStatus(status);
+        query.setProjectId(project);
+        query.setQ(q);
+        if (offset != null) {
+            query.setOffset(offset);
+        }
+        if (limit != null) {
+            query.setLimit(limit);
+        }
+        return ApiResult.ok(branchService.page(ws.getId(), userId, query));
+    }
+
+    /** 轻量分支选项：任务抽屉下拉、看板卡片分支名映射用 */
+    @GetMapping("/api/branches/options")
+    public ApiResult<List<DevBranch>> options(@RequestParam(required = false) String workspace,
+                                              @RequestParam(required = false) String project) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(branchService.options(ws.getId(), userId, project));
+    }
+
     @GetMapping("/api/branches/{id}")
     public ApiResult<DevBranch> get(@PathVariable String id,
                                     @RequestParam(required = false) String workspace) {

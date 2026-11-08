@@ -6,7 +6,7 @@ import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
 import { $, offlineBadge } from "./core/dom.js";
 import { loadViews } from "./core/filters-ui.js";
-import { loadUnread } from "./core/notifications.js";
+import { loadUnread, routeNotificationLink } from "./core/notifications.js";
 import { initSSE } from "./core/realtime.js";
 import { VIEWS, showView, viewFromHash } from "./core/router.js";
 import { handleDeepLink, hashParam, openTaskById } from "./core/task-actions.js";
@@ -73,7 +73,16 @@ function boot(){
      其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
   API.get("/api/auth/me").then(function(meUser){
     startAuthenticatedApp(meUser, startView, deepTaskId);
-  }).catch(function(){ /* API 层已处理 401；网络异常也先停在这里 */ });
+  }).catch(function(ex){
+    if(ex && ex.status === 401) return;
+    UI.showConfirm({
+      title:"暂时无法连接沙漏",
+      msg:"请检查网络或服务状态后重试。" + (ex && ex.message ? "<br>" + UI.esc(ex.message) : ""),
+      okText:"重新加载",
+      cancelText:"稍后重试",
+      danger:false
+    }).then(function(retry){ if(retry) window.location.reload(); });
+  });
 }
 
 function startAuthenticatedApp(meUser, startView, deepTaskId){
@@ -89,6 +98,18 @@ function startAuthenticatedApp(meUser, startView, deepTaskId){
       }catch(e){ pendingTask = ""; }
     }
     if(pendingTask) openTaskById(pendingTask);
+    /* 跨空间通知深链：切换空间 reload 后用 sessionStorage 接力 */
+    var pendingLink = null;
+    try{
+      var rawLink = sessionStorage.getItem("ds.openNoticeLink");
+      if(rawLink){
+        pendingLink = JSON.parse(rawLink);
+        sessionStorage.removeItem("ds.openNoticeLink");
+      }
+    }catch(e){ pendingLink = null; }
+    if(pendingLink && pendingLink.kind && pendingLink.id){
+      routeNotificationLink(pendingLink.kind, pendingLink.id, pendingLink.type);
+    }
   });
   loadReqs();
   loadBranches();

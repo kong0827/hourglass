@@ -176,9 +176,11 @@ function applyAnalysisPeriod(v){
   refreshAnalysisTab(false);
 }
 function enterStatsView(){ loadStats(); }
+var statsSeq = 0, flowSeq = 0;
 function loadStats(opts){
   opts = opts || {};
   var weeks = Number(state.statsWeeks) || 8;
+  var current = ++statsSeq;
   if(!opts.silent){
     $("chartWeeks").innerHTML = '<div class="skel skel-chart"></div>';
     if(statsHoursEl) statsHoursEl.innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
@@ -187,7 +189,10 @@ function loadStats(opts){
   }
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
-  API.get("/api/stats", {weeks: weeks}).then(renderStats).catch(function(ex){
+  API.get("/api/stats", {weeks: weeks}).then(function(d){
+    if(current === statsSeq) renderStats(d);
+  }).catch(function(ex){
+    if(current !== statsSeq) return;
     setPageError(ex, ["chartWeeks","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
   });
 }
@@ -320,6 +325,7 @@ function flowRow(label, value, widthPct, color){
 function loadFlowHealth(opts){
   opts = opts || {};
   var days = Number(state.flowDays) || 90;
+  var current = ++flowSeq;
   if($("flowDays")) $("flowDays").value = String(days);
   if(!opts.silent){
     $("flowInsights").innerHTML = UI.skeletonRows(3);
@@ -334,11 +340,16 @@ function loadFlowHealth(opts){
   /* 估时区块单独取：口径和流程瓶颈无关，各算各的，一个失败不影响另一个 */
   if($("flowEstTop")){
     $("flowEstTop").innerHTML = UI.skeletonRows(1);
-    API.get("/api/estimate/stats", {}).then(renderFlowEstimate).catch(function(ex){
-      $("flowEstTop").innerHTML = UI.errorState(ex.message);
+    API.get("/api/estimate/stats", {}).then(function(d){
+      if(current === flowSeq) renderFlowEstimate(d);
+    }).catch(function(ex){
+      if(current === flowSeq) $("flowEstTop").innerHTML = UI.errorState(ex.message);
     });
   }
-  API.get("/api/flow-health", {days: days}).then(renderFlowHealth).catch(function(ex){
+  API.get("/api/flow-health", {days: days}).then(function(d){
+    if(current === flowSeq) renderFlowHealth(d);
+  }).catch(function(ex){
+    if(current !== flowSeq) return;
     setPageError(ex, ["flowInsights","flowKpi","flowBars","flowRework","flowPriority","flowReqs"],
       function(){ loadFlowHealth(); });
   });

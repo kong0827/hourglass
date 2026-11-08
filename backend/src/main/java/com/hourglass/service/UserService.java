@@ -99,7 +99,8 @@ public class UserService implements UserDetailsService {
         if (u == null) {
             throw new UsernameNotFoundException("用户不存在");
         }
-        return new LoginUser(u.getId(), u.getUsername(), u.getPasswordHash(), u.getDisplayName(), u.getRole());
+        return new LoginUser(u.getId(), u.getUsername(), u.getPasswordHash(), u.getDisplayName(), u.getRole(),
+                !Boolean.TRUE.equals(u.getDisabled()));
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -237,6 +238,41 @@ public class UserService implements UserDetailsService {
         return userMapper.selectById(id);
     }
 
+    /**
+     * 停用/启用账号（A4 账号治理）。停用不是删除：
+     * 历史数据、负责人引用、成员关系全部保留，只阻断新登录；
+     * 停用瞬间 bump 会话代次，在线会话在下一次请求即失效。
+     */
+    @Transactional
+    public AppUser setDisabled(String id, boolean disabled) {
+        AppUser u = requireUser(id);
+        LoginUser me = CurrentUser.get();
+        if (disabled && me != null && id.equals(me.getId())) {
+            throw AppException.badRequest("不能停用当前登录账号");
+        }
+        if (disabled) {
+            // 与降权/删除同一把行锁串行化："至少保留一名可用管理员"
+            List<String> admins = userMapper.lockAdmins();
+            if (admins.contains(id)) {
+                int active = 0;
+                for (AppUser a : userMapper.selectByIds(admins)) {
+                    if (!Boolean.TRUE.equals(a.getDisabled())) {
+                        active++;
+                    }
+                }
+                if (active <= 1) {
+                    throw AppException.badRequest("至少保留一个可用的管理员账号");
+                }
+            }
+        }
+        userMapper.updateDisabled(id, disabled);
+        if (disabled) {
+            sessionEpochs.bump(id);
+        }
+        return userMapper.selectById(id);
+    }
+
+    @Transactional
     public void resetPassword(String id, PasswordResetRequest req) {
         requireUser(id);
         checkPasswordBytes(req.getPassword(), "密码");

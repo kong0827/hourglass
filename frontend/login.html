@@ -114,6 +114,13 @@ import { API } from "./js/core/api.js";
     document.getElementById(id).addEventListener("input", clearError);
   });
 
+  /* 直接打开 login.html 时浏览器还没有 CSRF Cookie（静态页不下发），
+     先访问公开接口换 token，否则登录 POST 会被 CSRF 拦成「没有权限执行该操作」 */
+  function ensureCsrfToken() {
+    if (/(?:^|;\s*)XSRF-TOKEN=/.test(document.cookie)) return Promise.resolve();
+    return API.get("/api/health").catch(function () { /* 网络异常由登录请求统一提示 */ });
+  }
+
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     clearError();
@@ -128,8 +135,10 @@ import { API } from "./js/core/api.js";
     btn.disabled = true;
     btn.classList.add("loading");
     btn.textContent = "登录中…";
-    API.postForm("/api/auth/login",
-        "username=" + encodeURIComponent(u) + "&password=" + encodeURIComponent(p))
+    ensureCsrfToken().then(function () {
+      return API.postForm("/api/auth/login",
+        "username=" + encodeURIComponent(u) + "&password=" + encodeURIComponent(p));
+    })
       .then(function () {
         var base = API.appBase;
         var next = null;

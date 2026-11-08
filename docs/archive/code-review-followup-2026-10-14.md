@@ -54,7 +54,7 @@ A 对任务甲开始计时后，B 打开同一任务会看到 A 的运行状态�
 
 位置：deploy/backup.sh:3,11-16；deploy/README.md 的 AUTH_PASSWORD 与 NOTIFY_CRON 示例。
 
-脚本启用 set -euo pipefail 后直接 source /etc/devstudio.env。但 systemd EnvironmentFile 与 shell 不是相同语法。文档允许未加引号的 bcrypt AUTH_PASSWORD=$2a$...，Bash 会展开 $2；没有第二个位置参数时 set -u 导致脚本在开始备份前退出。有效的 systemd 配置 NOTIFY_CRON=0 0 9 * * *，在 Bash 中也会尝试执行命令 0，导致退出。
+脚本启用 set -euo pipefail 后直接 source /etc/hourglass.env。但 systemd EnvironmentFile 与 shell 不是相同语法。文档允许未加引号的 bcrypt AUTH_PASSWORD=$2a$...，Bash 会展开 $2；没有第二个位置参数时 set -u 导致脚本在开始备份前退出。有效的 systemd 配置 NOTIFY_CRON=0 0 9 * * *，在 Bash 中也会尝试执行命令 0，导致退出。
 
 应按环境文件格式安全提取备份实际需要的 DB_NAME/ATTACH_DIR，或维护格式明确的共享配置，并同步更新文档；不要执行整份应用环境文件。另一个遗留问题：tar 失败被 2>/dev/null || true 吞掉，下一行仍输出 attachments ok，需以真实退出状态判定成功。
 

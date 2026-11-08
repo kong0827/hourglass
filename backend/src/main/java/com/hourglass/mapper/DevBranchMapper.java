@@ -19,19 +19,35 @@ public interface DevBranchMapper {
                                              @Param("viewerId") String viewerId,
                                              @Param("reqId") String reqId);
 
+    /** 分页列表（带关联任务数 / 已完成数；筛选、排序、分页全部下推） */
+    List<DevBranch> selectPage(@Param("q") com.hourglass.dto.BranchQuery q);
+
+    /** 轻量下拉选项：只取 id/name/status 等字段，不带任务数与标签 */
+    List<DevBranch> selectOptions(@Param("q") com.hourglass.dto.BranchQuery q);
+
+    /** 各状态条数（忽略 q.status；与分页同一口径） */
+    List<java.util.Map<String, Object>> countGroupByStatus(@Param("q") com.hourglass.dto.BranchQuery q);
+
+    /** 已发布分支的平均发布周期（天）；无样本返回 null */
+    Double selectAvgCycleDays(@Param("q") com.hourglass.dto.BranchQuery q);
+
     /**
      * 分支「影响版本」标签：task.branch_id × version_task 推导（无独立绑定）。
      * viewerId 非空时按项目可见性过滤（与 selectVisibleByWorkspace 同口径）。
+     * branchIds 非空时只查这些分支，避免分页时全表聚合。
      */
     List<com.hourglass.dto.BranchVersionTag> selectVersionTags(
-            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+            @Param("branchIds") List<String> branchIds);
 
     /**
      * 分支「归属项目」标签：task.branch_id × task.req_id 推导（无独立绑定）。
      * viewerId 非空时按项目可见性过滤（与 selectVisibleByWorkspace 同口径）。
+     * branchIds 非空时只查这些分支。
      */
     List<com.hourglass.dto.BranchProjectTag> selectProjectTags(
-            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+            @Param("branchIds") List<String> branchIds);
 
     /** 分支简表（id/name/status），版本统计聚合分支进度用 */
     List<DevBranch> selectBriefsByWorkspace(@Param("workspaceId") String workspaceId);

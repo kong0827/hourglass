@@ -7,10 +7,14 @@ import com.hourglass.entity.Attachment;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
+import com.hourglass.entity.TestCase;
+import com.hourglass.entity.TestCaseRun;
 import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.TaskLogMapper;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.TestCaseMapper;
+import com.hourglass.mapper.TestCaseRunMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,14 +43,17 @@ public class AttachmentService {
             Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx",
                     "doc", "docx", "xls", "ppt", "pptx"));
 
-    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 */
+    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据） */
     public static final String KIND_TASK = "task";
     public static final String KIND_DEMAND = "demand";
+    public static final String KIND_CASE_RUN = "case_run";
 
     private final AttachmentMapper attachmentMapper;
     private final TaskMapper taskMapper;
     private final TaskLogMapper logMapper;
     private final DemandMapper demandMapper;
+    private final TestCaseMapper caseMapper;
+    private final TestCaseRunMapper caseRunMapper;
     private final ProjectAccessService projectAccess;
 
     @Value("${app.attach.dir:./data/attachments}")
@@ -54,11 +61,14 @@ public class AttachmentService {
 
     public AttachmentService(AttachmentMapper attachmentMapper, TaskMapper taskMapper,
                              TaskLogMapper logMapper, DemandMapper demandMapper,
+                             TestCaseMapper caseMapper, TestCaseRunMapper caseRunMapper,
                              ProjectAccessService projectAccess) {
         this.attachmentMapper = attachmentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.demandMapper = demandMapper;
+        this.caseMapper = caseMapper;
+        this.caseRunMapper = caseRunMapper;
         this.projectAccess = projectAccess;
     }
 
@@ -85,6 +95,12 @@ public class AttachmentService {
                 throw AppException.notFound("附件所属需求不存在或已删除");
             }
             projectId = d.getReqId();
+        } else if (KIND_CASE_RUN.equals(a.getTargetKind())) {
+            TestCase c = caseOfRun(workspaceId, a.getTargetId());
+            if (c == null) {
+                throw AppException.notFound("附件所属执行记录不存在或已删除");
+            }
+            projectId = c.getReqId();
         } else {
             Task t = taskMapper.selectById(a.getTargetId());
             if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
@@ -302,6 +318,13 @@ public class AttachmentService {
             }
             return d.getReqId();
         }
+        if (KIND_CASE_RUN.equals(kind)) {
+            TestCase c = caseOfRun(workspaceId, targetId);
+            if (c == null) {
+                throw AppException.notFound("执行记录不存在：" + targetId);
+            }
+            return c.getReqId();
+        }
         Task t = taskMapper.selectById(targetId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
             throw AppException.notFound("任务不存在：" + targetId);
@@ -315,8 +338,33 @@ public class AttachmentService {
             Demand d = demandMapper.selectById(targetId);
             return d == null || !workspaceId.equals(d.getWorkspaceId()) ? null : d.getReqId();
         }
+        if (KIND_CASE_RUN.equals(kind)) {
+            TestCase c = caseOfRun(workspaceId, targetId);
+            return c == null ? null : c.getReqId();
+        }
         Task t = taskMapper.selectById(targetId);
         return t == null || !workspaceId.equals(t.getWorkspaceId()) ? null : t.getReqId();
+    }
+
+    /** 执行记录 → 用例（同空间）；任一不存在返回 null */
+    private TestCase caseOfRun(String workspaceId, String runId) {
+        TestCaseRun run = caseRunMapper.selectById(runId);
+        if (run == null || !workspaceId.equals(run.getWorkspaceId())) {
+            return null;
+        }
+        TestCase c = caseMapper.selectById(run.getCaseId());
+        return c == null || !workspaceId.equals(c.getWorkspaceId()) ? null : c;
+    }
+
+    /** 用例/项目删除后清理遗留的执行证据（记录已删、文件等提交后删） */
+    @Transactional
+    public void deleteOrphanCaseRunAttachments(String workspaceId) {
+        List<Attachment> list = attachmentMapper.selectOrphanCaseRuns(workspaceId);
+        if (list.isEmpty()) {
+            return;
+        }
+        attachmentMapper.deleteOrphanCaseRuns(workspaceId);
+        deleteFilesAfterCommit(list);
     }
 
     private String extOf(String filename) {
@@ -336,10 +384,13 @@ public class AttachmentService {
         return d;
     }
 
-    /** 任务附件写 task_log，需求附件写 demand_log（update 动作） */
+    /** 任务附件写 task_log，需求附件写 demand_log；执行证据已由用例流水承载，不再重复记日志 */
     private void logAction(String userId, String workspaceId, String targetId, String kind, String detail) {
         if (KIND_DEMAND.equals(kind)) {
             demandMapper.insertLog(workspaceId, targetId, "update", detail, userId);
+            return;
+        }
+        if (KIND_CASE_RUN.equals(kind)) {
             return;
         }
         TaskLog taskLog = new TaskLog();

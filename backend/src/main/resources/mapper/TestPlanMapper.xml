@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TestPlanMapper">
+
+  <sql id="agg">
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id) AS case_count,
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result IS NOT NULL) AS executed_count,
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'passed') AS passed_count,
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'failed') AS failed_count,
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'blocked') AS blocked_count,
+    (SELECT COUNT(*) FROM test_case_run r WHERE r.plan_id = p.id AND r.bug_task_id IS NOT NULL) AS defect_count
+  </sql>
+
+  <insert id="insert">
+    INSERT INTO test_plan
+      (id, workspace_id, req_id, name, version_id, planned_start, planned_end, status, note,
+       created_by, created_by_user_id)
+    VALUES
+      (#{id}, #{workspaceId}, #{reqId}, #{name}, #{versionId}, #{plannedStart}, #{plannedEnd}, #{status}, #{note},
+       #{createdBy}, #{createdByUserId})
+  </insert>
+
+  <update id="update">
+    UPDATE test_plan
+    SET req_id = #{reqId},
+        name = #{name},
+        version_id = #{versionId},
+        planned_start = #{plannedStart},
+        planned_end = #{plannedEnd},
+        note = #{note}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <select id="selectById" resultType="com.hourglass.entity.TestPlan">
+    SELECT * FROM test_plan WHERE id = #{id}
+  </select>
+
+  <select id="selectViewByReq" resultType="com.hourglass.dto.TestPlanView">
+    SELECT p.*, v.name AS version_name, <include refid="agg"/>
+    FROM test_plan p
+    LEFT JOIN project_version v ON v.id = p.version_id
+    WHERE p.workspace_id = #{workspaceId} AND p.req_id = #{reqId}
+    ORDER BY (p.status = 'done'), p.created_at DESC, p.id DESC
+  </select>
+
+  <select id="selectViewById" resultType="com.hourglass.dto.TestPlanView">
+    SELECT p.*, v.name AS version_name, <include refid="agg"/>
+    FROM test_plan p
+    LEFT JOIN project_version v ON v.id = p.version_id
+    WHERE p.id = #{id}
+  </select>
+
+  <update id="updateStatus">
+    UPDATE test_plan SET status = #{status}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM test_plan WHERE workspace_id = #{workspaceId} AND id = #{id}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM test_plan WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+</mapper>

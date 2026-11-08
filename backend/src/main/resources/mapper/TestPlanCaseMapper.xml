@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TestPlanCaseMapper">
+
+  <insert id="insert">
+    INSERT INTO test_plan_case
+      (id, plan_id, case_id, result, note, executed_by, executed_by_user_id, executed_at)
+    VALUES
+      (#{id}, #{planId}, #{caseId}, #{result}, #{note}, #{executedBy}, #{executedByUserId}, #{executedAt})
+  </insert>
+
+  <select id="selectCaseIds" resultType="string">
+    SELECT case_id FROM test_plan_case WHERE plan_id = #{planId}
+  </select>
+
+  <select id="selectViewByPlan" resultType="com.hourglass.dto.TestPlanCaseView">
+    SELECT pc.id, pc.plan_id, pc.case_id, pc.result, pc.note, pc.executed_by, pc.executed_at,
+           c.title, c.module, c.priority, c.demand_id,
+           c.latest_status, c.latest_bug_task_id
+    FROM test_plan_case pc
+    JOIN test_case c ON c.id = pc.case_id
+    WHERE pc.plan_id = #{planId}
+    ORDER BY c.module, c.created_at DESC, c.id DESC
+  </select>
+
+  <select id="selectByPlanAndCase" resultType="com.hourglass.entity.TestPlanCase">
+    SELECT * FROM test_plan_case WHERE plan_id = #{planId} AND case_id = #{caseId}
+  </select>
+
+  <update id="updateResult">
+    UPDATE test_plan_case
+    SET result = #{result},
+        note = #{note},
+        executed_by = #{by},
+        executed_by_user_id = #{byUserId},
+        executed_at = CURRENT_TIMESTAMP
+    WHERE plan_id = #{planId} AND case_id = #{caseId}
+  </update>
+
+  <delete id="deleteByPlanAndCase">
+    DELETE FROM test_plan_case WHERE plan_id = #{planId} AND case_id = #{caseId}
+  </delete>
+
+  <delete id="deleteByPlan">
+    DELETE FROM test_plan_case WHERE plan_id = #{planId}
+  </delete>
+
+  <delete id="deleteByCase">
+    DELETE FROM test_plan_case WHERE case_id = #{caseId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE pc FROM test_plan_case pc
+    JOIN test_plan p ON p.id = pc.plan_id
+    WHERE p.workspace_id = #{workspaceId} AND p.req_id = #{reqId}
+  </delete>
+</mapper>

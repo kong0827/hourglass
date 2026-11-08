@@ -72,6 +72,22 @@
     </section>
   </div>
 </div>
+<!-- 链接缺失 / 失效 / 过期：独立错误页，不展示甘特工具栏、画布与图例 -->
+<section class="share-error-page" id="shareErrorPage" hidden aria-live="polite">
+  <div class="share-error-card">
+    <div class="share-error-brand">
+      <img src="icons/favicon-32.png" alt="" width="28" height="28" />
+      <span>沙漏 · 只读分享</span>
+    </div>
+    <h1 id="shareErrorTitle">无法打开分享</h1>
+    <p class="share-error-detail" id="shareErrorDetail">链接缺少访问凭证。</p>
+    <p class="share-error-hint" id="shareErrorHint">请向分享者重新获取完整链接。</p>
+    <div class="share-error-actions">
+      <button class="btn" type="button" id="shareErrorRetry" hidden>重试</button>
+      <a class="btn primary" href="./">返回沙漏</a>
+    </div>
+  </div>
+</section>
 <script type="module" src="js/share.js"></script>
 </body>
 </html>

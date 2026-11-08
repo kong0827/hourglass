@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.UserMapper">
 
   <sql id="cols">
-    id, username, password_hash, display_name, email, role, session_version,
+    id, username, password_hash, display_name, email, role, disabled, session_version,
     work_start_hour, work_end_hour, work_max_hours,
     ai_provider, ai_base_url, ai_model, ai_api_key, ai_enabled,
     last_workspace_id, created_at, updated_at
@@ -37,6 +37,10 @@
 
   <select id="selectById" resultType="AppUser">
     SELECT <include refid="cols"/> FROM app_user WHERE id = #{id}
+  </select>
+
+  <select id="lockById" resultType="string">
+    SELECT id FROM app_user WHERE id = #{id} FOR UPDATE
   </select>
 
   <select id="selectSessionVersion" resultType="java.lang.Long">
@@ -87,6 +91,11 @@
 
   <update id="updatePassword">
     UPDATE app_user SET password_hash = #{passwordHash}, updated_at = NOW() WHERE id = #{id}
+  </update>
+
+  <!-- 停用/启用（A4）：只动 disabled 位的独立语句，避免与其他 update 互相覆盖 -->
+  <update id="updateDisabled">
+    UPDATE app_user SET disabled = #{disabled}, updated_at = NOW() WHERE id = #{id}
   </update>
 
   <update id="updateLastWorkspace">

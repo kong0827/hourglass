@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+
+import javax.validation.Valid;
 import java.util.Map;
 
 /**
@@ -90,7 +92,7 @@ public class AiController {
     /** 把勾选的草稿创建成任务（逐条处理，单条失败不影响其它） */
     @PostMapping("/api/ai/reqdoc/{id}/tasks")
     public ApiResult<AiApplyResult> apply(@PathVariable String id,
-                                          @RequestBody AiApplyRequest req,
+                                          @Valid @RequestBody AiApplyRequest req,
                                           @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
@@ -109,6 +111,6 @@ public class AiController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         AiReviewRequest body = req == null ? new AiReviewRequest() : req;
-        return ApiResult.ok(reviewService.polish(userId, ws.getId(), body.getWeekOffset(), body.getNote()));
+        return ApiResult.ok(reviewService.polish(userId, ws.getId(), body.getWeekOffset(), body.getReqId(), body.getNote()));
     }
 }

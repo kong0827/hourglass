@@ -64,6 +64,23 @@ public class SseService {
     @javax.annotation.PreDestroy
     public void shutdown() {
         broadcaster.shutdownNow();
+        for (SseEmitter emitter : new java.util.ArrayList<SseEmitter>(subscribers.keySet())) {
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {
+                // 连接可能已经断开，关闭阶段不再处理
+            }
+        }
+        subscribers.clear();
+    }
+
+    /** 当前活跃连接数（系统信息页只读展示） */
+    public int activeConnections() {
+        return subscribers.size();
+    }
+
+    public int activeUsers() {
+        return new HashSet<String>(subscribers.values()).size();
     }
 
     public SseEmitter subscribe(String userId) {

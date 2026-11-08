@@ -61,14 +61,28 @@ public class NotificationEventService {
         notify(recipientUserId, workspaceId, eventType, title, body, referenceId, null);
     }
 
+    /** 投递任务类事件通知（referenceId 为任务 ID）。 */
+    public void notify(String recipientUserId, String workspaceId, String eventType,
+                       String title, String body, String referenceId, String targetReqId) {
+        deliver(recipientUserId, workspaceId, eventType, title, body, referenceId, null, null, targetReqId);
+    }
+
     /**
-     * 投递事件通知。
-     *
+     * 投递非任务事件通知：refKind/refId 指向需求、文档、分支、版本等详情，通知中心可深链。
+     * 邮件仍不带链接（只有任务有统一深链格式）。
+     */
+    public void notifyLinked(String recipientUserId, String workspaceId, String eventType,
+                             String title, String body, String refKind, String refId, String targetReqId) {
+        deliver(recipientUserId, workspaceId, eventType, title, body, null, refKind, refId, targetReqId);
+    }
+
+    /**
      * @param targetReqId 业务对象所属项目；接收人对该项目不可见（被设为"不可见"）时不投递，
      *                    避免撤销项目权限后仍通过站内信/邮件拿到对象内容。null 表示无项目归属。
      */
-    public void notify(String recipientUserId, String workspaceId, String eventType,
-                       String title, String body, String referenceId, String targetReqId) {
+    private void deliver(String recipientUserId, String workspaceId, String eventType,
+                         String title, String body, String refTaskId, String refKind, String refId,
+                         String targetReqId) {
         if (recipientUserId == null) {
             return;
         }
@@ -97,10 +111,11 @@ public class NotificationEventService {
             return;
         }
         if (Boolean.TRUE.equals(preference.getInApp())) {
-            inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body, referenceId);
+            inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body,
+                    refTaskId, refKind, refId);
         }
         if (Boolean.TRUE.equals(preference.getEmail())) {
-            enqueueMail(recipientUserId, eventType, title, body, referenceId);
+            enqueueMail(recipientUserId, eventType, title, body, refTaskId);
         }
     }
 
@@ -111,11 +126,19 @@ public class NotificationEventService {
      */
     public void notifySystem(String recipientUserId, String workspaceId, String eventType,
                              String title, String body, String referenceId) {
+        notifySystem(recipientUserId, workspaceId, eventType, title, body, referenceId, null, null);
+    }
+
+    /** 系统通知也可带非任务深链（如项目可见范围 → 项目驾驶舱、成员角色 → 设置页）。 */
+    public void notifySystem(String recipientUserId, String workspaceId, String eventType,
+                             String title, String body, String referenceId,
+                             String refKind, String refId) {
         if (recipientUserId == null || workspaceId == null) {
             return;
         }
         try {
-            inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body, referenceId);
+            inAppService.pushImmediate(recipientUserId, workspaceId, eventType, title, body,
+                    referenceId, refKind, refId);
         } catch (Exception e) {
             log.warn("系统站内通知写入失败（不影响主业务）：user={} event={}", recipientUserId, eventType, e);
         }

@@ -30,13 +30,16 @@ public class NotificationCenterController {
     /** 我的通知列表（可按当前空间过滤） */
     @GetMapping("/api/notifications")
     public ApiResult<Map<String, Object>> list(@RequestParam(required = false) String workspace,
+                                               @RequestParam(required = false) String filter,
                                                @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         String wsId = trimToNull(workspace);
-        List<AppNotification> items = notificationService.list(userId, wsId, limit);
+        List<AppNotification> items = notificationService.list(userId, wsId, filter, limit);
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("items", items);
         res.put("unread", notificationService.unread(userId, wsId));
+        res.put("total", notificationService.total(userId, wsId));
+        res.put("mentions", notificationService.mentions(userId, wsId));
         return ApiResult.ok(res);
     }
 

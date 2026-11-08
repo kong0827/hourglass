@@ -8,7 +8,15 @@ public class ReqProgress {
     private String id;
     private String name;
     private String description;
+    private String objective;
     private String status;
+    /** 项目负责人（sql/50） */
+    private String ownerUserId;
+    /** 负责人显示名（列表联查填充；未设置时为空） */
+    private String ownerName;
+    private java.time.LocalDate plannedStart;
+    private java.time.LocalDate plannedEnd;
+    private java.time.LocalDateTime archivedAt;
     /** 首版上线日（null = 尚未标记；阶段视图项目切换用） */
     private java.time.LocalDate firstReleasedAt;
     /** 任务平均进度 0-100 */

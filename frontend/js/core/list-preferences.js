@@ -16,8 +16,8 @@ var DEFS = {
     mode: "card",
     modes: ["card", "table"],
     required: "name",
-    labels: { name:"项目名称", status:"状态", description:"描述", taskCount:"工作项数", doneCount:"完成数", progress:"进度", docCount:"文档数", firstReleasedAt:"首版上线日", createdAt:"创建时间", updatedAt:"更新时间" },
-    defaults: ["name","status","taskCount","doneCount","progress","docCount","firstReleasedAt"]
+    labels: { name:"项目名称", status:"状态", description:"描述", ownerName:"负责人", plannedEnd:"计划结束", taskCount:"工作项数", doneCount:"完成数", progress:"进度", docCount:"文档数", firstReleasedAt:"首版上线日", createdAt:"创建时间", updatedAt:"更新时间" },
+    defaults: ["name","status","ownerName","plannedEnd","taskCount","doneCount","progress","docCount","firstReleasedAt"]
   },
   "portfolio": {
     mode: "card",

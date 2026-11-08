@@ -5,14 +5,30 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { canEditReq, rt } from "../core/state.js";
+import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { PRIORITIES, fmtTs, priName, priTagHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
+import { downloadCsv } from "./manager-shared.js";
 
 var cases = [];
 var stats = { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
+var caseTotal = 0;        /* 当前筛选下的总数（服务端） */
+var caseHasMore = false;
+var caseModules = [];     /* 筛选下拉候选（服务端 facets） */
+var caseOwners = [];
+var CASE_PAGE = 100;
+var caseSearchTimer = null;
 var caseReqId = null;
 var statusFilter = "all";
+var tcMode = "cases";
+var coverageRows = [];
+var reportData = null;
+var reportSeq = 0;
+var runsCaseId = null;
+var runsCaseTitle = "";
+var runsSeq = 0;
+var runsList = [];
 var modFilter = "all";
 var priFilter = "all";
 var ownerFilter = "all";
@@ -24,7 +40,14 @@ var defectCaseId = null;
 var runStatus = "passed";
 var loadSeq = 0;
 /* 项目需求池条目缓存：填充「关联需求」下拉，避免每次开弹窗都请求 */
-var demandOptions = { reqId: null, list: [], loading: null };
+var demandOptions = { reqId: null, list: [], loading: null, error: null };
+var caseSaving = false;
+var caseRunning = false;
+var caseDefecting = false;
+var caseMoreLoading = false;
+var caseFormBaseline = null;
+var runFormBaseline = null;
+var defectFormBaseline = null;
 
 var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞" };
 function statusBadgeHTML(s){
@@ -42,16 +65,32 @@ function isWritable(){ return !!caseReqId && canEditReq(caseReqId); }
 
 function syncReqSel(){
   var sel = $("tcReq");
-  sel.innerHTML = rt.reqList.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === caseReqId; });
+  sel.innerHTML = list.map(function(r){
+    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   }).join("");
-  if(!caseReqId && rt.reqList.length) caseReqId = rt.reqList[0].id;
+  if(!caseReqId && list.length) caseReqId = list[0].id;
   if(caseReqId) sel.value = caseReqId;
+}
+function caseQueryParams(offset){
+  return {
+    reqId: caseReqId,
+    status: statusFilter === "all" ? null : statusFilter,
+    module: modFilter === "all" ? null : modFilter,
+    pri: priFilter === "all" ? null : priFilter,
+    owner: ownerFilter === "all" ? null : ownerFilter,
+    bug: bugOnly ? true : null,
+    q: searchText || null,
+    offset: offset,
+    limit: CASE_PAGE
+  };
 }
 function loadCases(){
   var seq = ++loadSeq;
   if(!caseReqId || !rt.reqList.length){
     cases = [];
+    caseTotal = 0;
+    caseHasMore = false;
     syncFilterOptions();
     $("tcList").innerHTML = UI.emptyState({
       icon: "folder", title: "还没有项目",
@@ -59,36 +98,421 @@ function loadCases(){
     });
     $("tcStats").innerHTML = "";
     $("tcMeta").textContent = "";
-    return;
+    return Promise.resolve(false);
   }
   var reqId = caseReqId;
   $("tcList").innerHTML = UI.skeletonRows(3);
-  Promise.all([
-    API.get("/api/test-cases", { reqId: reqId }),
+  return Promise.all([
+    API.get("/api/test-cases", caseQueryParams(0)),
     API.get("/api/test-cases/stats", { reqId: reqId })
   ]).then(function(rs){
     if(seq !== loadSeq || caseReqId !== reqId) return;
-    cases = rs[0] || [];
+    var page = rs[0] || {};
+    cases = (page.items || []).slice();
+    caseTotal = page.total || 0;
+    caseHasMore = !!page.hasMore;
+    caseModules = page.modules || [];
+    caseOwners = page.owners || [];
     stats = rs[1] || { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
     render();
+    return true;
   }).catch(function(ex){
-    if(seq !== loadSeq) return;
+    if(seq !== loadSeq) return false;
     $("tcList").innerHTML = UI.emptyState({
       icon: "alert", title: "加载失败", text: ex.message || "网络异常，请稍后重试"
     });
+    return false;
+  });
+}
+/* 滚动加载下一页：沿用当前筛选条件，按已加载条数作为 offset */
+function loadMoreCases(){
+  if(!caseHasMore || caseMoreLoading) return Promise.resolve(false);
+  caseMoreLoading = true;
+  var seq = loadSeq;
+  var reqId = caseReqId;
+  var btn = $("tcList").querySelector("[data-tc-more]");
+  function restoreBtn(){
+    var cur = $("tcList") ? $("tcList").querySelector("[data-tc-more]") : null;
+    var target = cur || (btn && btn.isConnected ? btn : null);
+    if(!target) return;
+    target.disabled = false;
+    target.textContent = "加载更多（已加载 " + cases.length + " / 共 " + caseTotal + " 条）";
+  }
+  if(btn){ btn.disabled = true; btn.textContent = "加载中…"; }
+  return API.get("/api/test-cases", caseQueryParams(cases.length)).then(function(page){
+    caseMoreLoading = false;
+    if(seq !== loadSeq || caseReqId !== reqId) return false;
+    var known = {};
+    cases.forEach(function(c){ known[c.id] = 1; });
+    (page.items || []).forEach(function(c){ if(!known[c.id]) cases.push(c); });
+    caseTotal = page.total || caseTotal;
+    caseHasMore = !!page.hasMore;
+    render();
+    return true;
+  }).catch(function(ex){
+    caseMoreLoading = false;
+    if(seq === loadSeq) restoreBtn();
+    toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    return false;
   });
 }
 function enterTestCasesView(){
-  if(rt.reqsLoaded){ syncReqSel(); loadCases(); return; }
+  var run = function(){
+    syncReqSel();
+    if(tcMode === "coverage") loadCoverage();
+    else if(tcMode === "report") loadTestReport();
+    else if(tcMode === "plans") loadPlans();
+    else loadCases();
+  };
+  if(rt.reqsLoaded){ run(); return; }
   $("tcList").innerHTML = UI.skeletonRows(3);
   loadReqs().then(function(){
-    if(rt.reqsLoaded){ syncReqSel(); loadCases(); return; }
+    if(rt.reqsLoaded){ run(); return; }
     /* 首屏并发：别的调用先占了 seq，本次回调被跳过，reqList 还没填充，再等一轮 */
-    loadReqs().then(function(){
-      if(rt.reqsLoaded){ syncReqSel(); loadCases(); return; }
-      syncReqSel(); loadCases();
-    });
+    loadReqs().then(run);
   });
+}
+
+/* ---------- 覆盖矩阵 ---------- */
+function loadCoverage(){
+  render();
+  if(!caseReqId) return;
+  $("tcCoverage").innerHTML = UI.skeletonRows(4);
+  API.get("/api/test-cases/coverage", { reqId: caseReqId }).then(function(rows){
+    if(tcMode !== "coverage") return;
+    coverageRows = rows || [];
+    renderCoverage();
+  }).catch(function(ex){
+    $("tcCoverage").innerHTML = UI.errorState(ex.message || "网络异常");
+  });
+}
+function renderCoverage(){
+  var box = $("tcCoverage");
+  if(!box) return;
+  var covered = 0, total = 0;
+  coverageRows.forEach(function(r){
+    if(r.demandId){ total++; if((r.caseTotal || 0) > 0) covered++; }
+  });
+  var head = '<div class="cov-summary">已覆盖需求 <b>' + covered + '</b> / ' + total +
+    (total ? '（' + Math.round(covered * 100 / total) + '%）' : '') +
+    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算</span></div>';
+  if(!coverageRows.length){
+    box.innerHTML = head + UI.emptyState({ icon:"checklist", title:"还没有可对照的需求或用例", text:"先录入需求池需求与测试用例，覆盖矩阵会自动汇总。" });
+    return;
+  }
+  var rows = coverageRows.map(function(r){
+    var total = r.caseTotal || 0;
+    var pct = total ? Math.round((r.passed || 0) * 100 / total) : 0;
+    var covTxt = !r.demandId ? "—" : (total ? "已覆盖" : "未覆盖");
+    var covCls = !r.demandId ? "mute" : (total ? "ok" : "over");
+    return '<div class="cov-row' + (r.demandId ? "" : " cov-unlinked") + '">' +
+      '<span class="cov-name"><b>' + esc(r.demandTitle || "未命名需求") + '</b>' +
+        (r.demandId ? '<small>' + esc(demandStatusLabel(r.demandStatus)) + '</small>' : '') + '</span>' +
+      '<span>' + total + '</span>' +
+      '<span class="cov-pass">' + (r.passed || 0) + '</span>' +
+      '<span class="cov-fail">' + (r.failed || 0) + '</span>' +
+      '<span class="cov-block">' + (r.blocked || 0) + '</span>' +
+      '<span>' + (r.untested || 0) + '</span>' +
+      '<span class="cov-bug">' + (r.bugCount || 0) + '</span>' +
+      '<span><i class="cov-bar"><i style="width:' + pct + '%"></i></i>' + pct + '%</span>' +
+      '<span class="mini-tag ' + covCls + '">' + covTxt + '</span>' +
+    '</div>';
+  }).join("");
+  box.innerHTML = head + '<div class="cov-table">' +
+    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span>未执行</span><span>缺陷</span><span>通过率</span><span>覆盖</span></div>' +
+    rows + '</div>';
+}
+
+/* ---------- 测试报告 ---------- */
+
+function reqNameOf(id){
+  var hit = (rt.reqList || []).filter(function(r){ return r.id === id; })[0];
+  return hit ? hit.name : (id || "");
+}
+function loadTestReport(){
+  render();
+  var box = $("tcReport");
+  if(!caseReqId){
+    box.innerHTML = UI.emptyState({ icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目，再生成测试报告。" });
+    return;
+  }
+  var seq = ++reportSeq;
+  var reqId = caseReqId;
+  box.innerHTML = UI.skeletonRows(4);
+  Promise.all([
+    API.get("/api/test-cases/stats", { reqId: reqId }),
+    API.get("/api/test-cases", { reqId: reqId, status: "failed", limit: 500, offset: 0 }),
+    API.get("/api/test-cases", { reqId: reqId, status: "blocked", limit: 200, offset: 0 }),
+    API.get("/api/test-cases/coverage", { reqId: reqId })
+  ]).then(function(rs){
+    if(seq !== reportSeq || caseReqId !== reqId) return;
+    reportData = {
+      stats: rs[0] || {},
+      failed: (rs[1] && rs[1].items) || [],
+      failedTotal: (rs[1] && rs[1].total) || 0,
+      blocked: (rs[2] && rs[2].items) || [],
+      blockedTotal: (rs[2] && rs[2].total) || 0,
+      coverage: rs[3] || [],
+      generatedAt: new Date()
+    };
+    renderTestReport();
+  }).catch(function(ex){
+    if(seq !== reportSeq) return;
+    box.innerHTML = UI.errorState(ex.message || "测试报告加载失败");
+  });
+}
+function coverageSummary(rows){
+  var total = 0, covered = 0;
+  (rows || []).forEach(function(r){
+    if(!r.demandId) return;
+    total++;
+    if((r.caseTotal || 0) > 0) covered++;
+  });
+  return { total: total, covered: covered, pct: total ? Math.round(covered * 100 / total) : 0 };
+}
+function caseMetaLine(c){
+  var parts = [];
+  if(c.module) parts.push(c.module);
+  if(c.priority) parts.push(priName(c.priority));
+  if(c.latestBy) parts.push(c.latestBy + (c.latestAt ? " · " + fmtTs(c.latestAt) : ""));
+  if(c.demandTitle) parts.push("需求：" + c.demandTitle);
+  return parts.map(esc).join(" · ");
+}
+function reportCaseRow(c, kind){
+  var bug = c.latestBugTaskId
+    ? '<button class="btn sm ghost" type="button" data-report-bug="' + esc(c.id) + '" title="打开关联缺陷">缺陷 · ' + esc(cut(c.latestBugTaskTitle || c.latestBugTaskId, 16)) + '</button>'
+    : "";
+  var ev = c.latestEvidenceCount
+    ? '<button class="btn sm ghost" type="button" data-report-runs="' + esc(c.id) + '" title="查看执行历史与证据">证据 ' + c.latestEvidenceCount + '</button>'
+    : '<button class="btn sm ghost" type="button" data-report-runs="' + esc(c.id) + '" title="查看执行历史">记录</button>';
+  return '<div class="rep-row ' + kind + '">'
+    + statusBadgeHTML(c.latestStatus)
+    + '<div class="rep-main"><b>' + esc(c.title) + '</b><small>' + caseMetaLine(c) + '</small>'
+    + (c.latestNote ? '<span class="rep-note">' + esc(c.latestNote) + '</span>' : '')
+    + '</div>'
+    + '<div class="rep-acts">' + bug + ev + '</div>'
+    + '</div>';
+}
+function renderTestReport(){
+  var box = $("tcReport");
+  if(!box || !reportData) return;
+  var s = reportData.stats || {};
+  var total = s.total || 0;
+  var passRate = total ? Math.round((s.passed || 0) * 100 / total) : 0;
+  var cov = coverageSummary(reportData.coverage);
+  var failed = reportData.failed || [];
+  var blocked = reportData.blocked || [];
+  var name = reqNameOf(caseReqId);
+  var stamp = reportData.generatedAt.toLocaleString("zh-CN", { hour12: false });
+  var head = '<div class="rep-head">'
+    + '<div><h3>测试报告 · ' + esc(name) + '</h3><p class="foot-note">生成时间 ' + esc(stamp) + ' · 口径：每个用例取最近一轮执行结果</p></div>'
+    + '<div class="rep-actions">'
+    +   '<button class="btn sm" type="button" data-tc-report-csv>导出 CSV</button>'
+    +   '<button class="btn sm" type="button" data-tc-report-print>打印 / 存 PDF</button>'
+    + '</div>'
+    + '</div>';
+  var tiles = '<div class="rep-tiles">'
+    + '<span class="tc-stat"><b>' + total + '</b>用例总数</span>'
+    + '<span class="tc-stat ok"><b>' + (s.passed || 0) + '</b>通过 · ' + passRate + '%</span>'
+    + '<span class="tc-stat over"><b>' + (s.failed || 0) + '</b>失败</span>'
+    + '<span class="tc-stat warn"><b>' + (s.blocked || 0) + '</b>阻塞</span>'
+    + '<span class="tc-stat mute"><b>' + (s.untested || 0) + '</b>未执行</span>'
+    + '<span class="tc-stat"><b>' + cov.pct + '%</b>需求覆盖（' + cov.covered + '/' + cov.total + '）</span>'
+    + '</div>';
+  var failBlock = '<section class="rep-section"><div class="rep-section-head"><b>失败用例</b><span>'
+    + (reportData.failedTotal || 0) + ' 条</span></div>'
+    + (failed.length
+      ? failed.map(function(c){ return reportCaseRow(c, "fail"); }).join("")
+      : '<p class="rep-empty">没有失败用例，最近一轮全部通过或未执行。</p>')
+    + ((reportData.failedTotal || 0) > failed.length
+      ? '<p class="foot-note">报告最多列出 500 条失败用例，当前展示 ' + failed.length + ' 条。</p>' : '')
+    + '</section>';
+  var blockBlock = blocked.length
+    ? '<section class="rep-section"><div class="rep-section-head"><b>阻塞用例</b><span>'
+      + (reportData.blockedTotal || 0) + ' 条</span></div>'
+      + blocked.map(function(c){ return reportCaseRow(c, "block"); }).join("")
+      + '</section>'
+    : "";
+  var covBlock = '';
+  if(cov.total){
+    covBlock = '<section class="rep-section"><div class="rep-section-head"><b>需求覆盖</b><span>'
+      + cov.covered + ' / ' + cov.total + '（' + cov.pct + '%）</span></div>'
+      + '<div class="rep-cov">' + reportData.coverage.filter(function(r){ return r.demandId; }).map(function(r){
+        var ok = (r.caseTotal || 0) > 0;
+        return '<div class="rep-cov-row"><span>' + esc(r.demandTitle || "未命名需求") + '</span>'
+          + '<span>' + (r.caseTotal || 0) + ' 用例 · ' + (r.passed || 0) + ' 通过 · ' + (r.failed || 0) + ' 失败</span>'
+          + '<span class="mini-tag ' + (ok ? "ok" : "over") + '">' + (ok ? "已覆盖" : "未覆盖") + '</span></div>';
+      }).join("") + '</div></section>';
+  }
+  box.innerHTML = head + tiles + failBlock + blockBlock + covBlock
+    + '<p class="foot-note">证据附件在执行历史中随执行记录保存；报告导出与打印均基于当前项目与最近一轮结果。</p>';
+}
+function reportPlainRows(){
+  if(!reportData) return [];
+  var s = reportData.stats || {};
+  var total = s.total || 0;
+  var cov = coverageSummary(reportData.coverage);
+  var rows = [
+    ["测试报告", reqNameOf(caseReqId)],
+    ["生成时间", reportData.generatedAt.toLocaleString("zh-CN", { hour12: false })],
+    ["用例总数", total],
+    ["通过", s.passed || 0],
+    ["失败", s.failed || 0],
+    ["阻塞", s.blocked || 0],
+    ["未执行", s.untested || 0],
+    ["通过率", (total ? Math.round((s.passed || 0) * 100 / total) : 0) + "%"],
+    ["需求覆盖", cov.covered + "/" + cov.total + "（" + cov.pct + "%）"],
+    [],
+    ["失败用例", "模块", "优先级", "最近执行", "备注", "证据数", "缺陷"]
+  ];
+  (reportData.failed || []).forEach(function(c){
+    rows.push([c.title, c.module || "", c.priority || "", (c.latestBy || "") + (c.latestAt ? " " + fmtTs(c.latestAt) : ""),
+      c.latestNote || "", c.latestEvidenceCount || 0, c.latestBugTaskTitle || c.latestBugTaskId || ""]);
+  });
+  return rows;
+}
+function exportTestReport(){
+  if(!reportData){ toast("报告还没有加载完成", "warn"); return; }
+  downloadCsv("测试报告-" + reqNameOf(caseReqId) + ".csv", reportPlainRows());
+  toast("已导出测试报告 CSV", "fs");
+}
+function printTestReport(){
+  if(!reportData){ toast("报告还没有加载完成", "warn"); return; }
+  var html = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>测试报告 · '
+    + esc(reqNameOf(caseReqId)) + '</title><style>'
+    + 'body{font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#101828;padding:28px;}'
+    + 'h3{margin:0 0 4px;font-size:20px;}.rep-actions,.foot-note,.rep-acts{display:none!important;}'
+    + '.rep-tiles{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;}.tc-stat{border:1px solid #E4E7EC;border-radius:6px;padding:6px 10px;font-size:12px;color:#475467;}'
+    + '.tc-stat b{font-size:16px;margin-right:6px;color:#101828;}.tc-stat.ok b{color:#12B76A;}.tc-stat.over b{color:#D92D20;}.tc-stat.warn b{color:#F79009;}'
+    + '.rep-section{margin-top:18px;border:1px solid #E4E7EC;border-radius:8px;padding:12px 14px;break-inside:avoid;}'
+    + '.rep-section-head{display:flex;justify-content:space-between;border-bottom:1px solid #E4E7EC;padding-bottom:8px;margin-bottom:8px;}'
+    + '.rep-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #F2F4F7;}.rep-row:last-child{border-bottom:0;}'
+    + '.rep-main{flex:1;min-width:0;}.rep-main b{display:block;font-size:13px;}.rep-main small{display:block;color:#667085;font-size:11.5px;}'
+    + '.rep-note{display:block;margin-top:3px;color:#475467;font-size:12px;}.rep-acts{font-size:11px;color:#667085;white-space:nowrap;}'
+    + '.mini-tag{border:1px solid #E4E7EC;border-radius:999px;padding:1px 7px;font-size:11px;}.mini-tag.ok{color:#027A48;border-color:#A6F4C5;}.mini-tag.over{color:#B42318;border-color:#FECDCA;}.mini-tag.warn{color:#B54708;border-color:#FEDF89;}'
+    + '.rep-empty{color:#667085;font-size:12.5px;}.rep-cov-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #F2F4F7;font-size:12.5px;}'
+    + '.rep-cov-row span:first-child{flex:1;min-width:0;}.rep-cov-row span:nth-child(2){color:#667085;white-space:nowrap;}'
+    + '</style></head><body><h3>测试报告 · ' + esc(reqNameOf(caseReqId)) + '</h3>'
+    + '<p style="color:#667085;font-size:12px;margin:0 0 4px">生成时间 ' + esc(reportData.generatedAt.toLocaleString("zh-CN", { hour12: false })) + ' · 口径：最近一轮执行结果</p>'
+    + ($("tcReport").querySelector(".rep-tiles") ? $("tcReport").querySelector(".rep-tiles").outerHTML : "")
+    + Array.prototype.map.call($("tcReport").querySelectorAll(".rep-section"), function(el){ return el.outerHTML; }).join("")
+    + '</body></html>';
+  var frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(frame);
+  var doc = frame.contentDocument || frame.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  setTimeout(function(){
+    try{ frame.contentWindow.focus(); frame.contentWindow.print(); }catch(e){ /* 打印被拦截时保持静默 */ }
+    setTimeout(function(){ frame.remove(); }, 1500);
+  }, 120);
+}
+
+/* ---------- 执行历史与证据 ---------- */
+
+function csrfCookie(){
+  var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+function attUrl(id){
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/download" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+}
+function attThumbUrl(id){
+  return API.url("/api/attachments/" + encodeURIComponent(id) + "/thumb" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+}
+function fmtSize(n){
+  if(!n && n !== 0) return "";
+  if(n < 1024) return n + " B";
+  if(n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+function evidenceHTML(a, writable){
+  var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
+  var del = writable
+    ? '<button class="icon-btn sm danger" type="button" data-run-att-del="' + esc(a.id) + '" title="删除证据" aria-label="删除证据">' + icon("trash", 13) + '</button>'
+    : "";
+  return '<span class="run-ev' + (isImg ? " is-img" : "") + '">'
+    + (isImg
+      ? '<a href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '"><img src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" /></a>'
+      : '<a class="run-ev-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '">' + icon("download", 13) + '<span>' + esc(cut(a.filename, 12)) + '</span></a>')
+    + del + '</span>';
+}
+function openRunsDialog(id, title){
+  var c = caseById(id);
+  runsCaseId = id;
+  runsCaseTitle = title || (c ? c.title : "");
+  runsList = [];
+  $("runsTitle").textContent = "执行历史 · " + cut(runsCaseTitle, 18);
+  $("runsSub").textContent = "最近在前；失败证据随执行记录保存。";
+  $("runsList").innerHTML = UI.skeletonRows(3);
+  $("runsReadonlyHint").hidden = isWritable();
+  var seq = ++runsSeq;
+  UI.openModal($("dlgCaseRuns"));
+  API.get("/api/test-cases/" + encodeURIComponent(id) + "/runs", { limit: 50 }).then(function(list){
+    if(seq !== runsSeq) return;
+    runsList = list || [];
+    renderRuns();
+  }).catch(function(ex){
+    if(seq === runsSeq) $("runsList").innerHTML = UI.errorState(ex.message || "执行历史加载失败");
+  });
+}
+function renderRuns(){
+  var box = $("runsList");
+  if(!box) return;
+  if(!runsList.length){
+    box.innerHTML = '<p class="rep-empty">还没有执行记录；点用例上的「执行」记录第一次结果。</p>';
+    return;
+  }
+  var writable = isWritable();
+  box.innerHTML = runsList.map(function(r){
+    var atts = r.attachments || [];
+    var ev = atts.length
+      ? '<div class="run-evs">' + atts.map(function(a){ return evidenceHTML(a, writable); }).join("") + '</div>'
+      : "";
+    var upload = writable
+      ? '<label class="btn sm ghost run-ev-add" title="上传失败证据">' + icon("plus", 12) + ' 证据'
+        + '<input type="file" hidden data-run-file="' + esc(r.id) + '" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" /></label>'
+      : "";
+    var bug = r.bugTaskId
+      ? '<button class="btn sm ghost" type="button" data-run-bug="' + esc(r.bugTaskId) + '">缺陷任务</button>'
+      : "";
+    return '<div class="run-item">'
+      + '<div class="run-top">' + statusBadgeHTML(r.status)
+      +   '<span class="run-by">' + esc(r.executedBy || "—") + '</span>'
+      +   '<span class="run-at">' + esc(fmtTs(r.createdAt) || "—") + '</span>'
+      +   '<span class="run-acts">' + bug + upload + '</span>'
+      + '</div>'
+      + (r.note ? '<p class="run-note">' + esc(r.note) + '</p>' : '')
+      + ev
+      + '</div>';
+  }).join("");
+}
+function uploadRunEvidence(caseId, runId, file){
+  if(file.size > 10 * 1024 * 1024){ toast("文件超过 10MB，未上传", "warn"); return; }
+  var fd = new FormData();
+  fd.append("file", file);
+  var url = API.url("/api/test-cases/" + encodeURIComponent(caseId) + "/runs/"
+    + encodeURIComponent(runId) + "/attachments"
+    + (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(json && json.code === 0){
+      toast("证据已上传", "fs");
+      openRunsDialog(caseId, runsCaseTitle);
+      loadCases();
+    }else{
+      toast((json && json.message) || "上传失败", "bad");
+    }
+  }).catch(function(ex){ toast(ex && ex.message ? ex.message : "上传失败", "bad"); });
 }
 
 /* ---------- 渲染 ---------- */
@@ -96,64 +520,59 @@ function enterTestCasesView(){
 function render(){
   syncModeUI();
   renderStats();
+  if(tcMode === "plans"){
+    $("tcList").hidden = true;
+    $("tcCoverage").hidden = true;
+    $("tcReport").hidden = true;
+    $("tcPlans").hidden = false;
+    $("tcStats").innerHTML = "";
+    $("tcMeta").textContent = caseReqId ? "圈选 → 批量执行 → 完成留痕" : "";
+    return;
+  }
+  if(tcMode === "coverage"){
+    $("tcList").hidden = true;
+    $("tcCoverage").hidden = false;
+    $("tcReport").hidden = true;
+    $("tcPlans").hidden = true;
+    $("tcMeta").textContent = caseReqId ? "需求 × 用例 × 缺陷" : "";
+    return;
+  }
+  if(tcMode === "report"){
+    $("tcList").hidden = true;
+    $("tcCoverage").hidden = true;
+    $("tcReport").hidden = false;
+    $("tcPlans").hidden = true;
+    $("tcMeta").textContent = caseReqId ? "最近一轮执行结果汇总" : "";
+    return;
+  }
+  $("tcList").hidden = false;
+  $("tcCoverage").hidden = true;
+  $("tcReport").hidden = true;
+  $("tcPlans").hidden = true;
   syncFilterOptions();
-  var rows = cases.filter(matchStatus).filter(matchSearch)
-    .filter(matchModule).filter(matchPri).filter(matchOwner).filter(matchBug);
-  $("tcMeta").textContent = (stats && stats.total)
-    ? (rows.length === stats.total ? "共 " + stats.total + " 条用例" : "筛选出 " + rows.length + " / " + stats.total + " 条用例")
-    : "";
+  var rows = cases;
+  var anyFilter = statusFilter !== "all" || modFilter !== "all" || priFilter !== "all"
+    || ownerFilter !== "all" || bugOnly || !!searchText;
+  var metaText = "";
+  if(stats && stats.total){
+    metaText = anyFilter ? ("筛选出 " + caseTotal + " / " + stats.total + " 条用例") : ("共 " + stats.total + " 条用例");
+    if(cases.length < caseTotal) metaText += " · 已加载 " + cases.length + " 条";
+  }
+  $("tcMeta").textContent = metaText;
   if(!rows.length){
-    var anyFilter = statusFilter !== "all" || modFilter !== "all" || priFilter !== "all"
-      || ownerFilter !== "all" || bugOnly || !!searchText;
     $("tcList").innerHTML = UI.emptyState({
       icon: anyFilter ? "filterOff" : "checklist",
-      title: searchText ? "没有匹配的用例" : (cases.length ? "没有符合条件的用例" : "还没有测试用例"),
-      text: searchText ? "换个关键词或清空搜索试试" : (cases.length ? "换个筛选条件试试" : "点右上角「新增用例」录入第一条，执行后按结果统计。")
+      title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "还没有测试用例"),
+      text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试" : "点右上角「新增用例」录入第一条，执行后按结果统计。")
     });
     return;
   }
-  $("tcList").innerHTML = rows.map(caseRowHTML).join("");
-}
-function matchStatus(c){
-  if(statusFilter === "all") return true;
-  if(statusFilter === "untested") return !c.latestStatus;
-  return c.latestStatus === statusFilter;
-}
-function matchModule(c){
-  if(modFilter === "all") return true;
-  if(modFilter === "__none") return !c.module;
-  return c.module === modFilter;
-}
-function matchPri(c){
-  if(priFilter === "all") return true;
-  if(priFilter === "__none") return !c.priority;
-  return c.priority === priFilter;
-}
-function matchOwner(c){
-  if(ownerFilter === "all") return true;
-  return c.latestBy === ownerFilter;
-}
-function matchBug(c){
-  return !bugOnly || !!c.latestBugTaskId;
-}
-function matchSearch(c){
-  if(!searchText) return true;
-  var hay = [c.title, c.module, c.precondition, c.latestNote, c.latestBugTaskTitle, c.demandTitle]
-    .concat((c.steps || []).map(function(s){ return [s.action, s.expected].join(" "); }))
-    .join("\n").toLowerCase();
-  return hay.indexOf(searchText) !== -1;
-}
-/* 筛选下拉选项由已加载用例动态生成；当前选中值失效时回落到「全部」 */
-function uniqValues(list, pick){
-  var seen = {};
-  var out = [];
-  (list || []).forEach(function(c){
-    var v = pick(c);
-    if(!v || seen[v]) return;
-    seen[v] = true;
-    out.push(v);
-  });
-  return out;
+  var html = rows.map(caseRowHTML).join("");
+  if(caseHasMore){
+    html += '<button class="btn ghost tc-load-more" type="button" data-tc-more>加载更多（已加载 '
+      + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
+  }
+  $("tcList").innerHTML = html;
 }
 function fillFilterSelect(id, allLabel, values, noneLabel, state){
   var sel = $(id);
@@ -170,11 +589,10 @@ function fillFilterSelect(id, allLabel, values, noneLabel, state){
   sel.value = state();
 }
 function syncFilterOptions(){
-  var modules = uniqValues(cases, function(c){ return c.module; });
-  var owners = uniqValues(cases, function(c){ return c.latestBy; });
-  var prisEmpty = cases.some(function(c){ return !c.priority; });
-  var modsEmpty = cases.some(function(c){ return !c.module; });
-  fillFilterSelect("tcModule", "模块：全部", modules, modsEmpty ? "未填模块" : null, function(v){
+  /* 候选值来自服务端 facets，不受当前筛选与已加载条数影响 */
+  var modules = caseModules;
+  var owners = caseOwners;
+  fillFilterSelect("tcModule", "模块：全部", modules, "未填模块", function(v){
     if(v === undefined) return modFilter;
     modFilter = v;
   });
@@ -182,7 +600,7 @@ function syncFilterOptions(){
     if(v === undefined) return ownerFilter;
     ownerFilter = v;
   });
-  fillFilterSelect("tcPri", "优先级：全部", PRIORITIES, prisEmpty ? "未设置" : null, function(v){
+  fillFilterSelect("tcPri", "优先级：全部", PRIORITIES, "未设置", function(v){
     if(v === undefined) return priFilter;
     priFilter = v;
   });
@@ -205,9 +623,109 @@ function renderStats(){
     return '<span class="tc-stat ' + it[2] + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
   }).join("");
 }
+
+/* ---------- 用例保存视图（scope=testcase：项目 / 执行结果 / 筛选 / 展示方式） ---------- */
+
+var tcViewsMenuEl = $("tcViewsMenu");
+function tcViewParams(){
+  return {
+    scope: "testcase", reqId: caseReqId || "", status: statusFilter,
+    module: modFilter, pri: priFilter, owner: ownerFilter,
+    bug: !!bugOnly, q: searchText || "", mode: tcMode
+  };
+}
+function tcViewMeaningful(p){
+  return !!(p.reqId || p.status !== "all" || p.module !== "all" || p.pri !== "all"
+    || p.owner !== "all" || p.bug || p.q || p.mode === "coverage" || p.mode === "report" || p.mode === "plans");
+}
+function applyTcView(v){
+  var p;
+  try{ p = JSON.parse(v.params || "{}"); }
+  catch(e){ toast("视图参数损坏，无法应用", "bad"); return; }
+  if(!p || p.scope !== "testcase" || (p.mode && p.mode !== "cases" && p.mode !== "coverage"
+    && p.mode !== "report" && p.mode !== "plans")){
+    toast("视图参数不合法，无法应用（可删除后重新保存）", "bad");
+    return;
+  }
+  if(p.reqId && rt.reqList.some(function(r){ return r.id === p.reqId; })) caseReqId = p.reqId;
+  statusFilter = typeof p.status === "string" && p.status ? p.status : "all";
+  modFilter = typeof p.module === "string" && p.module ? p.module : "all";
+  priFilter = typeof p.pri === "string" && p.pri ? p.pri : "all";
+  ownerFilter = typeof p.owner === "string" && p.owner ? p.owner : "all";
+  bugOnly = !!p.bug;
+  searchText = typeof p.q === "string" ? p.q.toLowerCase() : "";
+  tcMode = p.mode === "coverage" ? "coverage"
+    : (p.mode === "report" ? "report" : (p.mode === "plans" ? "plans" : "cases"));
+  if($("tcSearch")) $("tcSearch").value = searchText;
+  syncReqSel();
+  syncModeUI();
+  if(tcMode === "coverage") loadCoverage();
+  else if(tcMode === "report") loadTestReport();
+  else if(tcMode === "plans") loadPlans();
+  else loadCases();
+  toast("已应用视图「" + v.name + "」", "fs");
+}
+function saveTcView(){
+  var p = tcViewParams();
+  if(!tcViewMeaningful(p)){ toast("先选择项目或设置筛选条件，再保存视图", "warn"); return; }
+  UI.showPrompt({
+    title: "保存用例视图",
+    desc: "保存当前项目、执行结果与筛选条件；同名保存将覆盖原视图",
+    label: "视图名称（≤20 字）", maxLength: 20, okText: "保存"
+  }).then(function(name){
+    if(!name) return;
+    var overwrite = savedViewsFor("testcase").some(function(v){ return v.name === name; });
+    API.post("/api/views", { name: name, params: JSON.stringify(p) }).then(function(){
+      toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
+      loadViews().then(renderTcViewsMenu);
+    }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  });
+}
+function deleteTcView(id){
+  UI.showConfirm({ title: "删除视图", msg: "确定删除该用例视图？不影响用例数据。", okText: "删除" }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/views/" + encodeURIComponent(id)).then(function(){
+      toast("视图已删除", "fs");
+      loadViews().then(renderTcViewsMenu);
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+function renderTcViewsMenu(){
+  if(!tcViewsMenuEl) return;
+  var views = savedViewsFor("testcase");
+  var html = '<div class="menu-title">用例视图</div>';
+  if(!views.length){
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的用例视图；选定项目或筛选条件后保存。</p></div>';
+  }else{
+    html += views.map(function(v){
+      return '<div class="menu-row">' +
+        '<button class="menu-item" type="button" data-tc-view="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' + esc(v.name) + '</button>' +
+        '<button class="icon-btn sm" type="button" data-tc-view-del="' + esc(v.id) + '" aria-label="删除视图" title="删除视图">' + icon("close", 12) + '</button>' +
+      '</div>';
+    }).join("");
+  }
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-tc-view-save>保存当前为视图</button></div>';
+  tcViewsMenuEl.innerHTML = html;
+}
 function syncModeUI(){
+  var cov = tcMode === "coverage";
+  var rep = tcMode === "report";
+  var plan = tcMode === "plans";
+  var view = $("view-testcases");
+  if(view){
+    view.classList.toggle("cov-mode", cov);
+    view.classList.toggle("rep-mode", rep);
+    view.classList.toggle("plans-mode", plan);
+  }
+  document.querySelectorAll("#tcModeSeg [data-tc-mode]").forEach(function(b){
+    b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
+  });
   var bn = $("btnCaseNew");
-  if(bn) bn.style.display = isWritable() ? "" : "none";
+  if(bn) bn.style.display = isWritable() && !cov && !rep && !plan ? "" : "none";
+  var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
+  if(csvOut) csvOut.style.display = tcMode === "cases" && caseReqId ? "" : "none";
+  if(csvIn) csvIn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
+  if(planNew) planNew.style.display = plan && isWritable() ? "" : "none";
   document.querySelectorAll("#tcStatusSeg [data-tc-status]").forEach(function(b){
     var on = b.dataset.tcStatus === statusFilter;
     b.classList.toggle("primary", on);
@@ -224,8 +742,11 @@ function caseRowHTML(c){
   if(c.latestStatus){
     meta.push((c.latestBy || "—") + " " + (c.latestAt ? fmtTs(c.latestAt) : ""));
   }
+  if(c.latestEvidenceCount) meta.push("证据 " + c.latestEvidenceCount);
   var w = isWritable();
   var acts = "";
+  acts += '<button class="btn sm ghost" type="button" data-tc-runs="' + esc(c.id) + '" title="查看执行历史与失败证据">'
+    + icon("clock", 13) + ' 记录</button>';
   if(w){
     acts += '<button class="btn sm" type="button" data-tc-run="' + esc(c.id) + '">' + icon("play", 13) + ' 执行</button>';
   }
@@ -267,24 +788,41 @@ function demandPickLabel(d){
 }
 function loadDemandOptions(reqId){
   if(!reqId) return Promise.resolve([]);
-  if(demandOptions.reqId === reqId && demandOptions.list.length) return Promise.resolve(demandOptions.list);
   if(demandOptions.reqId === reqId && demandOptions.loading) return demandOptions.loading;
+  if(demandOptions.reqId === reqId && demandOptions.list.length && !demandOptions.error) return Promise.resolve(demandOptions.list);
   demandOptions.reqId = reqId;
   demandOptions.list = [];
+  demandOptions.error = null;
   demandOptions.loading = API.get("/api/demands", { reqId: reqId }).then(function(list){
     if(demandOptions.reqId === reqId){
       demandOptions.list = list || [];
+      demandOptions.error = null;
     }
     demandOptions.loading = null;
     return demandOptions.list;
-  }).catch(function(){
+  }).catch(function(ex){
+    /* 失败不能返回 []：调用方会把"加载失败"当成"确实没有需求"并清空关联 */
+    if(demandOptions.reqId === reqId){
+      demandOptions.list = [];
+      demandOptions.error = ex || new Error("需求候选加载失败");
+    }
     demandOptions.loading = null;
-    return [];
+    return null;
   });
   return demandOptions.loading;
 }
-function fillDemandSelect(selected){
+function fillDemandSelect(selected, fallbackLabel){
   var sel = $("cDemand");
+  if(demandOptions.error){
+    var keep = selected || "";
+    sel.innerHTML = keep
+      ? '<option value="' + esc(keep) + '">' + esc(fallbackLabel || "原关联需求") + '（需求列表加载失败，已保留）</option>'
+      : '<option value="">需求列表加载失败，暂无法选择（可重试）</option>';
+    sel.value = keep;
+    sel.dataset.loadError = "1";
+    return;
+  }
+  delete sel.dataset.loadError;
   var list = (demandOptions.reqId === caseReqId && demandOptions.list) ? demandOptions.list : [];
   var valid = selected && list.some(function(d){ return d.id === selected; });
   sel.innerHTML = '<option value="">不关联</option>'
@@ -293,6 +831,9 @@ function fillDemandSelect(selected){
     }).join("");
   sel.value = valid ? selected : "";
   if(selected && !valid && list.length) sel.value = "";
+}
+function demandOptionsFailedMessage(){
+  return "关联需求加载失败，已保留原有需求；可关闭后重新打开用例再试";
 }
 function setDemandLoading(){
   $("cDemand").innerHTML = '<option value="">需求加载中…</option>';
@@ -315,9 +856,15 @@ function openNewDialog(){
   $("cPri").value = "";
   $("cPrecondition").value = "";
   setDemandLoading();
-  loadDemandOptions(caseReqId).then(function(){ if(editingCase && !editingCase.id) fillDemandSelect(""); });
+  loadDemandOptions(caseReqId).then(function(list){
+    if(!editingCase || editingCase.id) return;
+    fillDemandSelect("");
+    syncCaseDemandBaseline();
+    if(list === null) toast(demandOptionsFailedMessage(), "warn");
+  });
   renderStepRows();
   applyReadOnly(!isWritable());
+  caseFormBaseline = caseFormSnapshot();
   UI.openModal($("dlgCase"), "input");
 }
 function openEditDialog(id){
@@ -326,6 +873,7 @@ function openEditDialog(id){
   editingCase = {
     id: id,
     demandId: c.demandId || "",
+    demandTitle: c.demandTitle || "",
     steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
   };
   $("caseFormTitle").textContent = isWritable() ? "编辑用例" : "查看用例";
@@ -335,11 +883,15 @@ function openEditDialog(id){
   $("cPri").value = c.priority || "";
   $("cPrecondition").value = c.precondition || "";
   setDemandLoading();
-  loadDemandOptions(caseReqId).then(function(){
-    if(editingCase && editingCase.id === id) fillDemandSelect(editingCase.demandId);
+  loadDemandOptions(caseReqId).then(function(list){
+    if(!editingCase || editingCase.id !== id) return;
+    fillDemandSelect(editingCase.demandId, editingCase.demandTitle);
+    syncCaseDemandBaseline();
+    if(list === null) toast(demandOptionsFailedMessage(), "warn");
   });
   renderStepRows();
   applyReadOnly(!isWritable());
+  caseFormBaseline = caseFormSnapshot();
   UI.openModal($("dlgCase"), "input");
 }
 function renderStepRows(){
@@ -390,7 +942,116 @@ function syncStepsFromDom(){
     });
   });
 }
+function stepsSnapshot(){
+  var rows = [];
+  $("tcSteps").querySelectorAll(".tc-step-row").forEach(function(row){
+    var tas = row.querySelectorAll("textarea");
+    rows.push([tas[0] ? tas[0].value : "", tas[1] ? tas[1].value : ""]);
+  });
+  return rows;
+}
+function caseFormSnapshot(){
+  return JSON.stringify([$("cTitle").value, $("cModule").value, $("cPri").value,
+    $("cDemand").value, $("cPrecondition").value, stepsSnapshot()]);
+}
+function caseFormDirty(){
+  return !!caseFormBaseline && caseFormSnapshot() !== caseFormBaseline;
+}
+/* 需求候选异步加载：加载期间 cDemand 只有占位项，不能拿它的空值当基线。
+   加载完成只校正基线的需求项，避免把加载期间用户对其他字段的编辑一起吞掉。 */
+function syncCaseDemandBaseline(){
+  if(!caseFormBaseline) return;
+  try{
+    var arr = JSON.parse(caseFormBaseline);
+    arr[3] = $("cDemand").value;
+    caseFormBaseline = JSON.stringify(arr);
+  }catch(e){ caseFormBaseline = caseFormSnapshot(); }
+}
+function runFormSnapshot(){
+  var files = $("runFiles") && $("runFiles").files ? Array.prototype.map.call($("runFiles").files, function(f){ return f.name; }) : [];
+  return JSON.stringify([runStatus, $("runNote").value, files]);
+}
+function runFormDirty(){ return !!runFormBaseline && runFormSnapshot() !== runFormBaseline; }
+function defectFormSnapshot(){
+  return JSON.stringify([$("defectSeverity").value, $("defectEnvironment").value]);
+}
+function defectFormDirty(){
+  return !!defectFormBaseline && defectFormSnapshot() !== defectFormBaseline;
+}
+function closeCaseDialog(){
+  caseFormBaseline = null;
+  editingCase = null;
+  UI.closeModal($("dlgCase"));
+}
+/* X、Esc、遮罩、路由与取消统一走这里；只有真正改过内容才确认 */
+function tryCloseCaseDialog(afterClose){
+  function finish(){
+    closeCaseDialog();
+    if(afterClose) afterClose();
+  }
+  if(!isWritable() || !caseFormDirty()){ finish(); return; }
+  UI.showConfirm({
+    title: "放弃未保存的修改？",
+    msg: "用例还没有保存，关闭后填写的内容会丢失。",
+    okText: "放弃修改",
+    cancelText: "继续编辑"
+  }).then(function(ok){ if(ok) finish(); });
+}
+function closeRunDialog(){
+  runFormBaseline = null;
+  runningCaseId = null;
+  UI.closeModal($("dlgCaseRun"));
+}
+function tryCloseRunDialog(afterClose){
+  function finish(){
+    closeRunDialog();
+    if(afterClose) afterClose();
+  }
+  if(!runFormDirty()){ finish(); return; }
+  UI.showConfirm({
+    title: "放弃本次执行记录？",
+    msg: "已填写的结果或备注不会保存。",
+    okText: "放弃",
+    cancelText: "继续填写"
+  }).then(function(ok){ if(ok) finish(); });
+}
+function closeDefectDialog(){
+  defectFormBaseline = null;
+  defectCaseId = null;
+  UI.closeModal($("dlgCaseDefect"));
+}
+function closeRunsDialog(){
+  runsCaseId = null;
+  runsCaseTitle = "";
+  runsList = [];
+  UI.closeModal($("dlgCaseRuns"));
+}
+function tryCloseDefectDialog(afterClose){
+  function finish(){
+    closeDefectDialog();
+    if(afterClose) afterClose();
+  }
+  if(!defectFormDirty()){ finish(); return; }
+  UI.showConfirm({
+    title: "放弃填写的内容？",
+    msg: "缺陷还没有创建，填写的严重度与环境不会保存。",
+    okText: "放弃",
+    cancelText: "继续填写"
+  }).then(function(ok){ if(ok) finish(); });
+}
+function setCaseBusy(btn, busy, label){
+  if(!btn) return;
+  btn.disabled = !!busy;
+  if(busy){
+    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = label || "处理中…";
+  }else if(btn.dataset.label){
+    btn.textContent = btn.dataset.label;
+    delete btn.dataset.label;
+  }
+}
 function saveCase(){
+  if(caseSaving || !isWritable()) return;
   var title = $("cTitle").value.trim();
   if(!title){
     $("fCaseTitle").classList.add("invalid");
@@ -406,14 +1067,23 @@ function saveCase(){
     demandId: $("cDemand").value || null,
     steps: collectSteps()
   };
-  var p = editingCase.id
+  var isEdit = !!editingCase.id;
+  caseSaving = true;
+  setCaseBusy($("btnSaveCase"), true, "保存中…");
+  var p = isEdit
     ? API.put("/api/test-cases/" + encodeURIComponent(editingCase.id), body)
     : API.post("/api/test-cases", body);
   p.then(function(){
-    UI.closeModal($("dlgCase"));
-    toast(editingCase.id ? "用例已保存" : "用例已创建");
+    caseSaving = false;
+    setCaseBusy($("btnSaveCase"), false);
+    closeCaseDialog();
+    toast(isEdit ? "用例已保存" : "用例已创建");
     loadCases();
-  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); });
+  }).catch(function(ex){
+    caseSaving = false;
+    setCaseBusy($("btnSaveCase"), false);
+    toast(ex.message || "保存失败", "bad");
+  });
 }
 function removeCase(id){
   var c = caseById(id);
@@ -430,9 +1100,11 @@ function openRunDialog(id){
   runningCaseId = id;
   runStatus = "passed";
   $("runNote").value = "";
+  if($("runFiles")) $("runFiles").value = "";
   var c = caseById(id);
   $("runFormTitle").textContent = "执行 · " + (c ? cut(c.title, 18) : "");
   syncRunSeg();
+  runFormBaseline = runFormSnapshot();
   UI.openModal($("dlgCaseRun"), "textarea");
 }
 function syncRunSeg(){
@@ -442,15 +1114,65 @@ function syncRunSeg(){
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
 }
+function uploadEvidenceQuiet(caseId, runId, file){
+  var fd = new FormData();
+  fd.append("file", file);
+  var url = API.url("/api/test-cases/" + encodeURIComponent(caseId) + "/runs/"
+    + encodeURIComponent(runId) + "/attachments"
+    + (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0) throw new Error((json && json.message) || "上传失败");
+    return true;
+  });
+}
 function doRun(){
-  API.post("/api/test-cases/" + encodeURIComponent(runningCaseId) + "/runs", {
+  if(caseRunning || !runningCaseId) return;
+  var caseId = runningCaseId;
+  var files = $("runFiles") && $("runFiles").files
+    ? Array.prototype.slice.call($("runFiles").files) : [];
+  var oversized = files.filter(function(f){ return f.size > 10 * 1024 * 1024; });
+  if(oversized.length){
+    toast("「" + oversized[0].name + "」超过 10MB，请先移除", "warn");
+    return;
+  }
+  caseRunning = true;
+  setCaseBusy($("btnDoRun"), true, files.length ? "记录并上传…" : "记录中…");
+  API.post("/api/test-cases/" + encodeURIComponent(caseId) + "/runs", {
     status: runStatus,
     note: $("runNote").value.trim() || null
-  }).then(function(){
-    UI.closeModal($("dlgCaseRun"));
-    toast(runStatus === "failed" ? "已记录失败，可点击「转缺陷」生成缺陷任务" : "执行结果已记录");
+  }).then(function(run){
+    var runId = run && run.id;
+    if(!runId || !files.length){
+      return { uploaded: 0, failed: 0 };
+    }
+    return Promise.all(files.map(function(f){
+      return uploadEvidenceQuiet(caseId, runId, f).then(function(){ return 1; }, function(){ return 0; });
+    })).then(function(rs){
+      var uploaded = rs.reduce(function(a, b){ return a + b; }, 0);
+      return { uploaded: uploaded, failed: files.length - uploaded };
+    });
+  }).then(function(res){
+    caseRunning = false;
+    setCaseBusy($("btnDoRun"), false);
+    closeRunDialog();
+    var msg = runStatus === "failed" ? "已记录失败，可点击「转缺陷」生成缺陷任务" : "执行结果已记录";
+    if(res.uploaded) msg += "，已上传 " + res.uploaded + " 个证据";
+    if(res.failed) msg += "，" + res.failed + " 个证据上传失败（可在「记录」里补传）";
+    toast(msg, res.failed ? "warn" : "fs");
     loadCases();
-  }).catch(function(ex){ toast(ex.message || "记录失败", "bad"); });
+  }).catch(function(ex){
+    caseRunning = false;
+    setCaseBusy($("btnDoRun"), false);
+    toast(ex.message || "记录失败", "bad");
+  });
 }
 
 /* ---------- 失败转缺陷 ---------- */
@@ -462,56 +1184,587 @@ function openDefectDialog(id){
   $("defectSeverity").value = "";
   $("defectEnvironment").value = "";
   $("fDefectSeverity").classList.remove("invalid");
+  defectFormBaseline = defectFormSnapshot();
   UI.openModal($("dlgCaseDefect"), "select");
 }
 function doDefect(){
+  if(caseDefecting || !defectCaseId) return;
   var severity = $("defectSeverity").value;
   if(!severity){
     $("fDefectSeverity").classList.add("invalid");
     toast("缺陷必须选择严重度", "warn");
     return;
   }
+  caseDefecting = true;
+  setCaseBusy($("btnDoDefect"), true, "创建中…");
   API.post("/api/test-cases/" + encodeURIComponent(defectCaseId) + "/defect", {
     severity: severity,
     environment: $("defectEnvironment").value.trim() || null
   }).then(function(task){
-    UI.closeModal($("dlgCaseDefect"));
+    caseDefecting = false;
+    setCaseBusy($("btnDoDefect"), false);
+    closeDefectDialog();
     toast("缺陷已创建");
     loadCases();
     openTaskById(task.id);
-  }).catch(function(ex){ toast(ex.message || "创建失败", "bad"); });
+  }).catch(function(ex){
+    caseDefecting = false;
+    setCaseBusy($("btnDoDefect"), false);
+    toast(ex.message || "创建失败", "bad");
+  });
+}
+
+/* ---------- 测试计划（A2：圈选用例 → 批量执行 → 按版本留痕） ---------- */
+
+var plans = [];
+var planSeq = 0;
+var planDetail = null;        /* { plan, cases, passRate }，非空 = 正在看计划详情 */
+var planDetailSeq = 0;
+var planSel = {};             /* 详情页批量执行勾选：caseId -> true */
+var planBatchStatus = "passed";
+var editingPlanId = null;
+var planSaving = false;
+var planPickCases = [];
+var pickingPlan = false;
+
+var PLAN_STATUS = { draft: ["草稿", "mute"], running: ["执行中", "warn"], done: ["已完成", "ok"] };
+function planBadgeHTML(s){
+  var it = PLAN_STATUS[s] || PLAN_STATUS.draft;
+  return '<span class="mini-tag ' + it[1] + '">' + it[0] + '</span>';
+}
+function planNextStatus(s){
+  return s === "draft" ? "running" : (s === "running" ? "done" : "draft");
+}
+function planNextLabel(s){
+  return s === "draft" ? "开始执行" : (s === "running" ? "标记完成" : "重新打开");
+}
+
+function loadPlans(){
+  render();
+  var box = $("tcPlans");
+  if(!box) return;
+  if(!caseReqId){
+    plans = []; planDetail = null;
+    box.innerHTML = UI.emptyState({
+      icon: "folder", title: "还没有项目",
+      text: "先创建项目，测试计划按项目收纳；一个版本或一轮回归建一个计划。"
+    });
+    return;
+  }
+  var seq = ++planSeq;
+  box.innerHTML = UI.skeletonRows(3);
+  API.get("/api/test-plans", { reqId: caseReqId }).then(function(rows){
+    if(seq !== planSeq) return;
+    plans = rows || [];
+    planDetail = null;
+    planDetailSeq++;
+    renderPlans();
+  }).catch(function(ex){
+    if(seq !== planSeq) return;
+    box.innerHTML = UI.errorState(ex.message || "测试计划加载失败");
+  });
+}
+function renderPlans(){
+  var box = $("tcPlans");
+  if(!box) return;
+  if(planDetail){ renderPlanDetail(); return; }
+  if(!plans.length){
+    box.innerHTML = UI.emptyState({
+      icon: "checklist", title: "还没有测试计划",
+      text: isWritable()
+        ? "点右上角「新建计划」：圈选一批用例，批量记录结果，完成即留痕。"
+        : "测试计划按项目收纳；你在该项目只有查看权限。"
+    });
+    return;
+  }
+  box.innerHTML = plans.map(function(p){
+    var pct = p.caseCount ? Math.round((p.executedCount || 0) * 100 / p.caseCount) : 0;
+    var meta = [];
+    if(p.versionName) meta.push("版本：" + p.versionName);
+    if(p.plannedStart || p.plannedEnd) meta.push((p.plannedStart || "—") + " → " + (p.plannedEnd || "—"));
+    meta.push("用例 " + (p.caseCount || 0) + " · 已执行 " + (p.executedCount || 0));
+    if(p.createdBy) meta.push(p.createdBy + " · " + (fmtTs(p.createdAt) || ""));
+    var w = !!caseReqId && canEditReq(p.reqId);
+    var acts = '<button class="btn sm" type="button" data-plan-open="' + esc(p.id) + '">打开</button>';
+    if(w){
+      /* 已完成计划是快照：update 服务端同样拒绝，这里不再提供编辑入口 */
+      acts += '<span class="tc-secondary">'
+        + (p.status !== "done"
+            ? '<button class="btn sm ghost" type="button" data-plan-edit="' + esc(p.id) + '">' + icon("edit", 13) + ' 编辑</button>'
+            : "")
+        + '<button class="icon-btn sm" type="button" data-plan-del="' + esc(p.id) + '" aria-label="删除计划">' + icon("trash", 14) + '</button>'
+        + '</span>';
+    }
+    return '<div class="tc-row" data-plan-open="' + esc(p.id) + '">'
+      + planBadgeHTML(p.status)
+      + '<div class="tc-main">'
+      +   '<div class="tc-title">' + esc(p.name) + '</div>'
+      +   '<div class="tc-meta">' + meta.map(esc).join(" · ") + '</div>'
+      +   '<div class="plan-bar"><i style="width:' + pct + '%"></i></div>'
+      + '</div>'
+      + '<div class="plan-counts">'
+      +   '<span class="mini-tag ok">通过 ' + (p.passedCount || 0) + '</span>'
+      +   '<span class="mini-tag over">失败 ' + (p.failedCount || 0) + '</span>'
+      +   (p.defectCount ? '<span class="mini-tag over">缺陷 ' + p.defectCount + '</span>' : "")
+      + '</div>'
+      + '<div class="tc-acts">' + acts + '</div>'
+      + '</div>';
+  }).join("");
+}
+
+function openPlanDetail(id){
+  var seq = ++planDetailSeq;
+  planSel = {};
+  $("tcPlans").innerHTML = UI.skeletonRows(4);
+  API.get("/api/test-plans/" + encodeURIComponent(id)).then(function(d){
+    if(seq !== planDetailSeq) return;
+    planDetail = d && d.plan ? d : null;
+    if(!planDetail){ $("tcPlans").innerHTML = UI.errorState("计划不存在或无权查看"); return; }
+    renderPlanDetail();
+  }).catch(function(ex){
+    if(seq !== planDetailSeq) return;
+    $("tcPlans").innerHTML = UI.errorState(ex.message || "计划加载失败");
+  });
+}
+function renderPlanDetail(){
+  var box = $("tcPlans");
+  var d = planDetail;
+  if(!box || !d) return;
+  var p = d.plan;
+  var cs = d.cases || [];
+  var done = p.status === "done";
+  var w = canEditReq(p.reqId);
+  var editable = w && !done;
+  var untested = (p.caseCount || 0) - (p.executedCount || 0);
+  var selCount = 0;
+  for(var k in planSel) if(planSel[k]) selCount++;
+  var meta = [];
+  if(p.versionName) meta.push("版本：" + p.versionName);
+  if(p.plannedStart || p.plannedEnd) meta.push("计划 " + (p.plannedStart || "—") + " → " + (p.plannedEnd || "—"));
+  if(p.createdBy) meta.push(p.createdBy + " 创建");
+  var head = '<div class="plan-head">'
+    + '<button class="btn sm ghost" type="button" data-plan-back>' + icon("left", 13) + ' 返回</button>'
+    + '<span class="toolbar-title">' + esc(p.name) + '</span>' + planBadgeHTML(p.status)
+    + '<span class="toolbar-meta">' + meta.map(esc).join(" · ") + '</span>'
+    + (w ? '<button class="btn sm ghost" type="button" data-plan-status="' + esc(planNextStatus(p.status)) + '">'
+        + planNextLabel(p.status) + '</button>' : "")
+    + '</div>';
+  if(p.note) head += '<p class="foot-note">' + esc(p.note) + '</p>';
+  if(done) head += '<p class="foot-note">已完成计划是结果快照：圈选与批量执行已锁定，可重新打开后继续编辑。</p>';
+  var pct = p.caseCount ? Math.round((p.executedCount || 0) * 100 / p.caseCount) : 0;
+  head += '<div class="tc-stats plan-stats">'
+    + '<span class="tc-stat"><b>' + (p.caseCount || 0) + '</b>圈选</span>'
+    + '<span class="tc-stat mute"><b>' + Math.max(0, untested) + '</b>未执行</span>'
+    + '<span class="tc-stat ok"><b>' + (p.passedCount || 0) + '</b>通过</span>'
+    + '<span class="tc-stat over"><b>' + (p.failedCount || 0) + '</b>失败</span>'
+    + '<span class="tc-stat warn"><b>' + (p.blockedCount || 0) + '</b>阻塞</span>'
+    + '<span class="tc-stat"><b>' + pct + '%</b>进度</span>'
+    + '<span class="tc-stat"><b>' + (d.passRate == null ? "—" : d.passRate + "%") + '</b>通过率</span>'
+    + '<span class="tc-stat over"><b>' + (p.defectCount || 0) + '</b>转缺陷</span>'
+    + '</div>';
+  var acts = '<div class="plan-acts">';
+  if(editable){
+    acts += '<button class="btn sm" type="button" data-plan-pick>' + icon("plus", 13) + ' 圈选用例</button>';
+    acts += '<span class="seg mini" data-plan-batch role="group" aria-label="批量执行结果">'
+      + '<button type="button" data-pbatch="passed" aria-pressed="' + (planBatchStatus === "passed") + '">通过</button>'
+      + '<button type="button" data-pbatch="failed" aria-pressed="' + (planBatchStatus === "failed") + '">失败</button>'
+      + '<button type="button" data-pbatch="blocked" aria-pressed="' + (planBatchStatus === "blocked") + '">阻塞</button>'
+      + '</span>'
+      + '<input id="planRunNote" type="text" maxlength="500" class="plan-note-inp" placeholder="批量备注（选填，写入本轮执行记录）" />'
+      + '<button class="btn sm primary" type="button" data-plan-runs>记录选中 ' + selCount + ' 条</button>';
+  }
+  acts += '<button class="btn sm ghost" type="button" data-plan-csv>' + icon("download", 13) + ' 导出报告</button>';
+  acts += '</div>';
+  var rows = "";
+  if(!cs.length){
+    rows = UI.emptyState({
+      icon: "checklist", title: "计划里还没有用例",
+      text: editable ? "点「圈选用例」从项目用例库挑一批。" : "该计划暂未圈选用例。"
+    });
+  }else{
+    rows = cs.map(function(c){
+      var chk = editable
+        ? '<input type="checkbox" data-pcase="' + esc(c.caseId) + '"' + (planSel[c.caseId] ? " checked" : "")
+          + ' aria-label="选择用例「' + esc(c.title) + '」" />'
+        : "";
+      var tail = [];
+      if(c.module) tail.push(c.module);
+      tail.push((c.priority || "—"));
+      if(c.executedBy) tail.push(c.executedBy + " " + (fmtTs(c.executedAt) || ""));
+      var del = editable
+        ? '<button class="icon-btn sm" type="button" data-plan-rm="' + esc(c.caseId) + '" aria-label="移出计划" title="移出计划（不删用例）">' + icon("minus", 14) + '</button>'
+        : "";
+      return '<div class="tc-row plan-case">' + chk
+        + statusBadgeHTML(c.result)
+        + '<div class="tc-main">'
+        +   '<div class="tc-title">' + esc(c.title) + '</div>'
+        +   '<div class="tc-meta">' + tail.map(esc).join(" · ") + '</div>'
+        +   (c.note ? '<div class="tc-note">' + esc(c.note) + '</div>' : "")
+        + '</div>'
+        + '<div class="tc-acts">' + (c.latestStatus ? '<span class="toolbar-meta">用例库最近：'
+            + (STATUS_LABEL[c.latestStatus] || c.latestStatus) + '</span>' : "") + del + '</div>'
+        + '</div>';
+    }).join("");
+  }
+  box.innerHTML = head + acts + '<div class="tc-list">' + rows + '</div>';
+}
+function planCaseIds(){
+  return (planDetail && planDetail.cases || []).map(function(c){ return c.caseId; });
+}
+function doPlanBatchRun(){
+  var ids = [];
+  for(var k in planSel) if(planSel[k]) ids.push(k);
+  if(!ids.length){ toast("先勾选要标记结果的用例", "warn"); return; }
+  var note = $("planRunNote") ? $("planRunNote").value.trim() : "";
+  API.post("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/runs",
+    { caseIds: ids, status: planBatchStatus, note: note || null })
+  .then(function(n){
+    toast("已记录 " + (n || 0) + " 条执行结果", "fs");
+    openPlanDetail(planDetail.plan.id);
+  }).catch(function(ex){ toast(ex.message || "批量记录失败", "bad"); });
+}
+function planStatusTo(status){
+  API.put("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/status?status=" + encodeURIComponent(status), {})
+  .then(function(){
+    toast(status === "done" ? "计划已完成并留痕" : (status === "running" ? "计划已开始执行" : "计划已回到草稿"), "fs");
+    openPlanDetail(planDetail.plan.id);
+  }).catch(function(ex){ toast(ex.message || "状态更新失败", "bad"); });
+}
+function exportPlanCsv(){
+  var d = planDetail;
+  if(!d) return;
+  var rows = [["标题", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
+  (d.cases || []).forEach(function(c){
+    rows.push([c.title, c.module || "", c.priority || "",
+      c.result ? (STATUS_LABEL[c.result] || c.result) : "未执行",
+      c.executedBy || "", c.executedAt ? fmtTs(c.executedAt) : "", c.note || ""]);
+  });
+  downloadCsv("测试计划-" + d.plan.name + ".csv", rows);
+  toast("已导出计划报告 CSV", "fs");
+}
+
+/* 新建 / 编辑计划 */
+function openPlanDialog(id){
+  editingPlanId = id || null;
+  var p = null;
+  if(id) for(var i = 0; i < plans.length; i++) if(plans[i].id === id) p = plans[i];
+  $("planFormTitle").textContent = p ? "编辑测试计划" : "新建测试计划";
+  $("pName").value = p ? p.name : "";
+  $("fPlanName").classList.remove("invalid");
+  $("pStart").value = p && p.plannedStart ? p.plannedStart : "";
+  $("pEnd").value = p && p.plannedEnd ? p.plannedEnd : "";
+  $("pNote").value = p && p.note ? p.note : "";
+  $("pVersion").innerHTML = '<option value="">不关联版本</option>';
+  $("btnSavePlan").textContent = "保存";
+  UI.openModal($("dlgPlan"), "input");
+  API.get("/api/versions", { reqId: caseReqId }).then(function(vs){
+    var html = '<option value="">不关联版本</option>';
+    (vs || []).forEach(function(v){
+      html += '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>';
+    });
+    $("pVersion").innerHTML = html;
+    if(p && p.versionId) $("pVersion").value = p.versionId;
+  }).catch(function(){ /* 版本下拉失败不阻塞：保持仅「不关联版本」 */ });
+}
+function savePlan(){
+  if(planSaving) return;
+  var name = $("pName").value.trim();
+  if(!name){ $("fPlanName").classList.add("invalid"); toast("请填写计划名称", "warn"); return; }
+  var body = {
+    reqId: caseReqId,
+    name: name,
+    versionId: $("pVersion").value || null,
+    plannedStart: $("pStart").value || null,
+    plannedEnd: $("pEnd").value || null,
+    note: $("pNote").value.trim() || null
+  };
+  planSaving = true;
+  setCaseBusy($("btnSavePlan"), true, "保存中…");
+  var call = editingPlanId
+    ? API.put("/api/test-plans/" + encodeURIComponent(editingPlanId), body)
+    : API.post("/api/test-plans", body);
+  call.then(function(){
+    planSaving = false;
+    setCaseBusy($("btnSavePlan"), false);
+    UI.closeModal($("dlgPlan"));
+    toast(editingPlanId ? "计划已更新" : "计划已创建", "fs");
+    loadPlans();
+  }).catch(function(ex){
+    planSaving = false;
+    setCaseBusy($("btnSavePlan"), false);
+    toast(ex.message || "保存失败", "bad");
+  });
+}
+function deletePlan(id){
+  var p = null;
+  for(var i = 0; i < plans.length; i++) if(plans[i].id === id) p = plans[i];
+  if(!p) return;
+  UI.showConfirm({
+    title: "删除测试计划",
+    msg: "删除计划「" + esc(p.name) + "」？已登记的执行记录会保留在「用例」页的执行历史中，仅计划汇总随之删除。",
+    okText: "删除计划"
+  }).then(function(ok){
+    if(!ok) return;
+    API.del("/api/test-plans/" + encodeURIComponent(id)).then(function(){
+      toast("计划已删除", "fs");
+      loadPlans();
+    }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+  });
+}
+
+/* 圈选用例弹窗 */
+function openPlanPick(){
+  var d = planDetail;
+  if(!d) return;
+  pickingPlan = false;
+  $("planPickList").innerHTML = UI.skeletonRows(3);
+  $("planPickCount").textContent = "";
+  UI.openModal($("dlgPlanPick"), "input");
+  API.get("/api/test-cases", { reqId: d.plan.reqId, offset: 0, limit: 500 }).then(function(page){
+    var inPlan = {};
+    (d.cases || []).forEach(function(c){ inPlan[c.caseId] = true; });
+    planPickCases = (page && page.items || []).filter(function(c){ return !inPlan[c.id]; });
+    if(!planPickCases.length){
+      $("planPickList").innerHTML = '<p class="rep-empty">项目用例库里的用例都已在本计划中。要更多用例可先在「用例」页录入或 CSV 导入。</p>';
+      $("btnDoPlanPick").disabled = true;
+      return;
+    }
+    $("btnDoPlanPick").disabled = false;
+    $("planPickList").innerHTML = planPickCases.map(function(c){
+      return '<label class="pick-row"><input type="checkbox" data-pick-case="' + esc(c.id) + '" />'
+        + statusBadgeHTML(c.latestStatus)
+        + '<span class="pick-main"><b>' + esc(c.title) + '</b>'
+        + '<small>' + esc([c.module, c.priority || "—"].join(" · ")) + '</small></span></label>';
+    }).join("");
+    syncPickCount();
+  }).catch(function(ex){
+    $("planPickList").innerHTML = UI.errorState(ex.message || "用例加载失败");
+  });
+}
+function syncPickCount(){
+  var n = $("planPickList").querySelectorAll("[data-pick-case]:checked").length;
+  $("planPickCount").textContent = "已选 " + n + " / 可加入 " + planPickCases.length + " 条";
+}
+function doPlanPick(){
+  if(pickingPlan) return;
+  var ids = [];
+  $("planPickList").querySelectorAll("[data-pick-case]:checked").forEach(function(inp){ ids.push(inp.dataset.pickCase); });
+  if(!ids.length){ toast("先勾选要加入的用例", "warn"); return; }
+  pickingPlan = true;
+  setCaseBusy($("btnDoPlanPick"), true, "加入中…");
+  API.post("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/cases", { caseIds: ids })
+  .then(function(added){
+    pickingPlan = false;
+    setCaseBusy($("btnDoPlanPick"), false);
+    UI.closeModal($("dlgPlanPick"));
+    toast("已加入 " + (added || 0) + " 条用例" + (ids.length - (added || 0) ? "（重复的已跳过）" : ""), "fs");
+    openPlanDetail(planDetail.plan.id);
+  }).catch(function(ex){
+    pickingPlan = false;
+    setCaseBusy($("btnDoPlanPick"), false);
+    toast(ex.message || "加入失败", "bad");
+  });
+}
+
+/* ---------- 用例 CSV 导入导出（A3：存量测试资产迁移） ---------- */
+
+function exportCasesCsv(){
+  if(!caseReqId){ toast("先选择项目", "warn"); return; }
+  var url = API.url("/api/test-cases/export.csv?reqId=" + encodeURIComponent(caseReqId)
+    + (window.CURRENT_WORKSPACE ? ("&workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  fetch(url, { credentials: "same-origin" }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    if(!res.ok){
+      return res.json().catch(function(){ return null; }).then(function(j){
+        throw new Error((j && j.message) || "导出失败");
+      });
+    }
+    return res.blob();
+  }).then(function(blob){
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = u;
+    a.download = "测试用例-" + reqNameOf(caseReqId) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 1500);
+    toast("已导出用例 CSV", "fs");
+  }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
+}
+function importCasesCsv(file){
+  if(!caseReqId){ toast("先选择项目", "warn"); return; }
+  if(file.size > 2 * 1024 * 1024){ toast("CSV 超过 2MB 上限，请拆分后导入", "warn"); return; }
+  var reader = new FileReader();
+  reader.onload = function(){
+    var text = String(reader.result || "");
+    if(!text.trim()){ toast("CSV 内容为空", "warn"); return; }
+    API.post("/api/test-cases/import?reqId=" + encodeURIComponent(caseReqId), { csv: text })
+    .then(function(r){
+      r = r || {};
+      var msg = "导入完成：新增 " + (r.created || 0) + " 条";
+      if(r.failed) msg += "，失败 " + r.failed + " 条";
+      if((r.total || 0) > 1000 || r.skipped) msg += "，超限跳过 " + (r.skipped || 0) + " 条";
+      toast(msg, r.failed ? "warn" : "fs");
+      if(r.errors && r.errors.length){
+        UI.showConfirm({
+          title: "导入明细",
+          msg: "以下行未导入：<br>" + r.errors.map(esc).join("<br>"),
+          danger: false, okText: "知道了", cancelText: "关闭"
+        });
+      }
+      loadCases();
+    }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
+  };
+  reader.onerror = function(){ toast("读取文件失败", "bad"); };
+  reader.readAsText(file);
 }
 
 /* ---------- 事件 ---------- */
 
 $("tcReq").addEventListener("change", function(){
   caseReqId = $("tcReq").value;
-  loadCases();
+  if(tcMode === "coverage") loadCoverage();
+  else if(tcMode === "report") loadTestReport();
+  else if(tcMode === "plans") loadPlans();
+  else loadCases();
+});
+$("tcModeSeg").addEventListener("click", function(e){
+  var b = e.target.closest("[data-tc-mode]");
+  if(!b || b.dataset.tcMode === tcMode) return;
+  tcMode = b.dataset.tcMode;
+  syncModeUI();
+  if(tcMode === "coverage") loadCoverage();
+  else if(tcMode === "report") loadTestReport();
+  else if(tcMode === "plans") loadPlans();
+  else { render(); loadCases(); }
 });
 ["tcModule", "tcPri", "tcOwner"].forEach(function(id){
   $(id).addEventListener("change", function(){
     modFilter = $("tcModule").value;
     priFilter = $("tcPri").value;
     ownerFilter = $("tcOwner").value;
-    render();
+    loadCases();
   });
 });
 $("tcBug").addEventListener("click", function(){
   bugOnly = !bugOnly;
-  render();
+  loadCases();
 });
 $("tcSearch").addEventListener("input", function(){
-  searchText = this.value.trim().toLowerCase();
-  render();
+  var value = this.value.trim().toLowerCase();
+  if(value === searchText) return;
+  searchText = value;
+  if(caseSearchTimer) clearTimeout(caseSearchTimer);
+  caseSearchTimer = setTimeout(function(){
+    caseSearchTimer = null;
+    loadCases();
+  }, 300);
 });
 $("tcStatusSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-tc-status]");
   if(!b) return;
   statusFilter = b.dataset.tcStatus;
-  render();
+  loadCases();
 });
+var tcViewsBtn = $("tcViewsBtn");
+if(tcViewsBtn && tcViewsMenuEl){
+  tcViewsBtn.addEventListener("click", function(){
+    if(UI.popOpen(tcViewsMenuEl)){ UI.closeAllPops(); return; }
+    renderTcViewsMenu();
+    UI.openPop(tcViewsMenuEl, tcViewsBtn, { align: "left", width: 260 });
+    loadViews().then(renderTcViewsMenu);
+  });
+  tcViewsMenuEl.addEventListener("click", function(e){
+    var ap = e.target.closest("[data-tc-view]");
+    if(ap){
+      for(var i = 0; i < rt.savedViews.length; i++){
+        if(String(rt.savedViews[i].id) === String(ap.dataset.tcView)){
+          applyTcView(rt.savedViews[i]);
+          UI.closeAllPops();
+          return;
+        }
+      }
+      return;
+    }
+    var dl = e.target.closest("[data-tc-view-del]");
+    if(dl){ deleteTcView(dl.dataset.tcViewDel); return; }
+    if(e.target.closest("[data-tc-view-save]")){ UI.closeAllPops(); saveTcView(); }
+  });
+}
 $("btnCaseNew").addEventListener("click", openNewDialog);
+
+/* 用例 CSV：导出走服务端（含步骤展开），导入读文件后以 JSON 文本提交 */
+$("btnCaseCsvOut").addEventListener("click", exportCasesCsv);
+$("btnCaseCsvIn").addEventListener("click", function(){ $("tcCsvFile").click(); });
+$("tcCsvFile").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  this.value = "";
+  if(f) importCasesCsv(f);
+});
+
+/* 测试计划：列表 → 详情 → 批量执行 */
+$("btnPlanNew").addEventListener("click", function(){ openPlanDialog(null); });
+$("tcPlans").addEventListener("click", function(e){
+  var b;
+  if((b = e.target.closest("[data-plan-back]"))){
+    planDetailSeq++; planDetail = null; renderPlans(); return;
+  }
+  if((b = e.target.closest("[data-plan-edit]"))){ openPlanDialog(b.dataset.planEdit); return; }
+  if((b = e.target.closest("[data-plan-del]"))){ deletePlan(b.dataset.planDel); return; }
+  if((b = e.target.closest("[data-plan-status]"))){ planStatusTo(b.dataset.planStatus); return; }
+  if((b = e.target.closest("[data-plan-pick]"))){ openPlanPick(); return; }
+  if((b = e.target.closest("[data-plan-runs]"))){ doPlanBatchRun(); return; }
+  if((b = e.target.closest("[data-plan-csv]"))){ exportPlanCsv(); return; }
+  if((b = e.target.closest("[data-pbatch]"))){
+    planBatchStatus = b.dataset.pbatch;
+    document.querySelectorAll("[data-pbatch]").forEach(function(x){
+      x.setAttribute("aria-pressed", x.dataset.pbatch === planBatchStatus ? "true" : "false");
+    });
+    return;
+  }
+  if((b = e.target.closest("[data-plan-rm]"))){
+    var planId = planDetail && planDetail.plan.id;
+    API.del("/api/test-plans/" + encodeURIComponent(planId) + "/cases/" + encodeURIComponent(b.dataset.planRm))
+      .then(function(){ toast("已移出计划（用例本身保留）", "fs"); openPlanDetail(planId); })
+      .catch(function(ex){ toast(ex.message || "移出失败", "bad"); });
+    return;
+  }
+  if((b = e.target.closest("[data-plan-open]")) && !e.target.closest(".tc-acts")){
+    openPlanDetail(b.dataset.planOpen);
+  }
+});
+$("tcPlans").addEventListener("change", function(e){
+  var c = e.target.closest("[data-pcase]");
+  if(!c) return;
+  planSel[c.dataset.pcase] = c.checked;
+  var btn = $("tcPlans").querySelector("[data-plan-runs]");
+  if(btn){
+    var n = 0;
+    for(var k in planSel) if(planSel[k]) n++;
+    btn.textContent = "记录选中 " + n + " 条";
+  }
+});
+$("btnSavePlan").addEventListener("click", savePlan);
+$("pName").addEventListener("input", function(){ $("fPlanName").classList.remove("invalid"); });
+$("dlgPlanX").addEventListener("click", function(){ UI.closeModal($("dlgPlan")); });
+UI.setModalSubmit($("dlgPlan"), function(){ if(!planSaving) savePlan(); });
+$("dlgPlanPickX").addEventListener("click", function(){ UI.closeModal($("dlgPlanPick")); });
+$("btnDoPlanPick").addEventListener("click", doPlanPick);
+$("planPickList").addEventListener("change", syncPickCount);
+$("btnPlanPickAll").addEventListener("click", function(){
+  var boxes = $("planPickList").querySelectorAll("[data-pick-case]");
+  var allOn = true;
+  boxes.forEach(function(x){ if(!x.checked) allOn = false; });
+  boxes.forEach(function(x){ x.checked = !allOn; });
+  syncPickCount();
+});
+UI.setModalSubmit($("dlgPlanPick"), function(){ if(!pickingPlan) doPlanPick(); });
 $("tcList").addEventListener("click", function(e){
+  var more = e.target.closest("[data-tc-more]");
+  if(more){ loadMoreCases(); return; }
+  var runs = e.target.closest("[data-tc-runs]");
+  if(runs){ openRunsDialog(runs.dataset.tcRuns); return; }
   var run = e.target.closest("[data-tc-run]");
   if(run){ openRunDialog(run.dataset.tcRun); return; }
   var def = e.target.closest("[data-tc-defect]");
@@ -556,7 +1809,20 @@ $("tcSteps").addEventListener("keydown", function(e){
 });
 $("btnSaveCase").addEventListener("click", saveCase);
 $("cTitle").addEventListener("input", function(){ $("fCaseTitle").classList.remove("invalid"); });
-$("dlgCaseX").addEventListener("click", function(){ UI.closeModal($("dlgCase")); });
+$("dlgCaseX").addEventListener("click", function(){ tryCloseCaseDialog(); });
+/* 单行输入 Enter 提交；步骤 textarea 保持换行，CJK 组合输入不触发 */
+$("dlgCase").addEventListener("keydown", function(e){
+  if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
+  if(!e.target || e.target.tagName !== "INPUT") return;
+  if(e.target.type === "checkbox" || e.target.type === "file") return;
+  if(!isWritable()) return;
+  e.preventDefault();
+  if(!caseSaving && !$("btnSaveCase").disabled) saveCase();
+});
+UI.setModalCloseGuard($("dlgCase"), function(){ tryCloseCaseDialog(); });
+UI.setModalSubmit($("dlgCase"), function(){
+  if(!caseSaving && !$("btnSaveCase").disabled) saveCase();
+});
 
 $("segCaseRun").addEventListener("click", function(e){
   var b = e.target.closest("[data-run-status]");
@@ -565,10 +1831,94 @@ $("segCaseRun").addEventListener("click", function(e){
   syncRunSeg();
 });
 $("btnDoRun").addEventListener("click", doRun);
-$("dlgCaseRunX").addEventListener("click", function(){ UI.closeModal($("dlgCaseRun")); });
+$("dlgCaseRunX").addEventListener("click", function(){ tryCloseRunDialog(); });
+UI.setModalCloseGuard($("dlgCaseRun"), function(){ tryCloseRunDialog(); });
+UI.setModalSubmit($("dlgCaseRun"), function(){ if(!caseRunning) doRun(); });
 
 $("btnDoDefect").addEventListener("click", doDefect);
 $("defectSeverity").addEventListener("change", function(){ $("fDefectSeverity").classList.remove("invalid"); });
-$("dlgCaseDefectX").addEventListener("click", function(){ UI.closeModal($("dlgCaseDefect")); });
+$("dlgCaseDefectX").addEventListener("click", function(){ tryCloseDefectDialog(); });
+UI.setModalCloseGuard($("dlgCaseDefect"), function(){ tryCloseDefectDialog(); });
+UI.setModalSubmit($("dlgCaseDefect"), function(){ if(!caseDefecting) doDefect(); });
 
-export { enterTestCasesView };
+/* 执行历史与失败证据 */
+$("dlgCaseRunsX").addEventListener("click", function(){ closeRunsDialog(); });
+UI.setModalCloseGuard($("dlgCaseRuns"), function(){ closeRunsDialog(); });
+$("runsList").addEventListener("click", function(e){
+  var del = e.target.closest("[data-run-att-del]");
+  if(del){
+    var caseId = runsCaseId;
+    var caseTitle = runsCaseTitle;
+    UI.showConfirm({ title: "删除证据", msg: "证据附件删除后不可恢复，确定删除？", okText: "删除" }).then(function(ok){
+      if(!ok) return;
+      del.disabled = true;
+      API.del("/api/attachments/" + encodeURIComponent(del.dataset.runAttDel)).then(function(){
+        toast("证据已删除", "fs");
+        if(caseId) openRunsDialog(caseId, caseTitle);
+        loadCases();
+      }).catch(function(ex){ del.disabled = false; toast(ex.message || "删除失败", "bad"); });
+    });
+    return;
+  }
+  var bug = e.target.closest("[data-run-bug]");
+  if(bug){ closeRunsDialog(); openTaskById(bug.dataset.runBug); }
+});
+$("runsList").addEventListener("change", function(e){
+  var inp = e.target.closest("[data-run-file]");
+  if(!inp || !inp.files || !inp.files[0]) return;
+  var file = inp.files[0];
+  inp.value = "";
+  if(runsCaseId) uploadRunEvidence(runsCaseId, inp.dataset.runFile, file);
+});
+
+/* 测试报告：导出 / 打印 / 跳转 */
+if($("tcReport")){
+  $("tcReport").addEventListener("click", function(e){
+    if(e.target.closest("[data-tc-report-csv]")){ exportTestReport(); return; }
+    if(e.target.closest("[data-tc-report-print]")){ printTestReport(); return; }
+    var hit = null;
+    var runs = e.target.closest("[data-report-runs]");
+    var bug = e.target.closest("[data-report-bug]");
+    var id = runs ? runs.dataset.reportRuns : (bug ? bug.dataset.reportBug : "");
+    if(id){
+      hit = (reportData && reportData.failed || []).filter(function(x){ return x.id === id; })[0];
+    }
+    if(runs){ openRunsDialog(id, hit ? hit.title : ""); return; }
+    if(bug){
+      if(hit && hit.latestBugTaskId) openTaskById(hit.latestBugTaskId);
+    }
+  });
+}
+
+/* 弹窗开着时切视图：先处理未保存内容，确认后再继续跳转 */
+window.addEventListener("ds:before-route", function(e){
+  var openId = null;
+  ["dlgCase", "dlgCaseRun", "dlgCaseDefect", "dlgCaseRuns"].forEach(function(id){
+    var d = $(id);
+    if(d && d.classList.contains("open")) openId = id;
+  });
+  if(!openId) return;
+  e.preventDefault();
+  var to = e.detail && e.detail.to;
+  function after(){
+    if(to) window.dispatchEvent(new CustomEvent("ds:route-go", { detail: { view: to } }));
+  }
+  if(openId === "dlgCase") tryCloseCaseDialog(after);
+  else if(openId === "dlgCaseRun") tryCloseRunDialog(after);
+  else if(openId === "dlgCaseRuns"){ closeRunsDialog(); after(); }
+  else tryCloseDefectDialog(after);
+});
+
+function openCaseInProject(reqId, id){
+  if(reqId) caseReqId = reqId;
+  syncReqSel();
+  var hit = caseById(id);
+  if(hit){ openEditDialog(id); return Promise.resolve(true); }
+  return loadCases().then(function(){
+    if(caseById(id)){ openEditDialog(id); return true; }
+    toast("用例不存在或无权查看", "warn");
+    return false;
+  });
+}
+
+export { enterTestCasesView, openCaseInProject };

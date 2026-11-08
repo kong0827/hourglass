@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 文档评论：查看文档即可阅读；非查看者角色可发表评论；评论作者或项目可写者可删除。 */
+/** 文档评论：查看文档即可阅读；当前项目可写者可发表评论和删除评论。 */
 @Service
 public class RequirementDocCommentService {
 
@@ -49,10 +49,7 @@ public class RequirementDocCommentService {
     @Transactional
     public ReqDocCommentView create(String userId, String workspaceId, String docId, ReqDocCommentRequest req) {
         RequirementDoc doc = requireVisibleDoc(workspaceId, userId, docId);
-        String role = projectAccess.roleOf(workspaceId, userId);
-        if (ProjectAccessService.isViewer(role)) {
-            throw new AppException(403, "查看者只能阅读文档，不能发表评论");
-        }
+        projectAccess.assertWrite(workspaceId, userId, doc.getReqId());
         RequirementDocComment c = new RequirementDocComment();
         c.setId(Ids.gen("DC"));
         c.setWorkspaceId(workspaceId);
@@ -74,9 +71,7 @@ public class RequirementDocCommentService {
         if (c == null || !workspaceId.equals(c.getWorkspaceId()) || !docId.equals(c.getDocId())) {
             throw AppException.notFound("评论不存在：" + commentId);
         }
-        if (!userId.equals(c.getUserId()) && !projectAccess.canWrite(workspaceId, userId, doc.getReqId())) {
-            throw new AppException(403, "只有评论作者或项目可写者可删除评论");
-        }
+        projectAccess.assertWrite(workspaceId, userId, doc.getReqId());
         commentMapper.delete(workspaceId, commentId);
     }
 
@@ -103,7 +98,7 @@ public class RequirementDocCommentService {
         v.setContent(c.getContent());
         v.setQuoteText(c.getQuoteText());
         v.setCreatedAt(c.getCreatedAt());
-        v.setDeletable(actorId.equals(c.getUserId()) || projectAccess.canWrite(workspaceId, actorId, docReqId));
+        v.setDeletable(projectAccess.canWrite(workspaceId, actorId, docReqId));
         return v;
     }
 }

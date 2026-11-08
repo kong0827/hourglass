@@ -51,7 +51,8 @@ class AttachmentServiceTest {
 
     private AttachmentService service(AttachmentMapper mapper) throws Exception {
         AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
-                mock(DemandMapper.class), mock(ProjectAccessService.class));
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(ProjectAccessService.class));
         ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
         return svc;
     }
@@ -132,8 +133,8 @@ class AttachmentServiceTest {
         Task task = new Task();
         task.setWorkspaceId("W1");
         when(taskMapper.selectById("K1")).thenReturn(task);
-        AttachmentService svc = new AttachmentService(mapper, taskMapper, logMapper, mock(DemandMapper.class),
-                mock(ProjectAccessService.class));
+        AttachmentService svc = new AttachmentService(mapper, taskMapper, logMapper, mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(ProjectAccessService.class));
         ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
 
         MockMultipartFile file = new MockMultipartFile("file", "计划.xlsx",
@@ -154,7 +155,8 @@ class AttachmentServiceTest {
         when(mapper.selectById(anyString())).thenReturn(attachment("A1", "A1.md"));
 
         AttachmentService svc = new AttachmentService(mapper, taskMapper, mock(TaskLogMapper.class),
-                mock(DemandMapper.class), mock(ProjectAccessService.class));
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(ProjectAccessService.class));
         /* 相对目录正是线上故障配置：transferTo 会把它解析到 Tomcat 上传临时目录 */
         ReflectionTestUtils.setField(svc, "attachDir", "./target/test-attach-relative");
 
@@ -182,7 +184,8 @@ class AttachmentServiceTest {
         AttachmentMapper mapper = mock(AttachmentMapper.class);
         TaskLogMapper logMapper = mock(TaskLogMapper.class);
         AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), logMapper,
-                mock(DemandMapper.class), mock(ProjectAccessService.class));
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(ProjectAccessService.class));
         ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
 
         Attachment a = attachment("A9", "A9.xlsx");
@@ -205,7 +208,8 @@ class AttachmentServiceTest {
     void overwriteContentRejectsMismatchedExt() throws Exception {
         AttachmentMapper mapper = mock(AttachmentMapper.class);
         AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
-                mock(DemandMapper.class), mock(ProjectAccessService.class));
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(ProjectAccessService.class));
         ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
 
         Attachment a = attachment("A9", "A9.xlsx");

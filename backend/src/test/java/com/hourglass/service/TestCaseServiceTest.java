@@ -52,8 +52,13 @@ class TestCaseServiceTest {
     private final TaskCommandService taskCommand = mock(TaskCommandService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper reqs = mock(RequirementMapper.class);
+    private final AttachmentService attachments = mock(AttachmentService.class);
     private final TestCaseService service =
-            new TestCaseService(cases, runs, taskCommand, access, reqs, mock(com.hourglass.mapper.DemandMapper.class));
+            new TestCaseService(cases, runs, taskCommand, access, reqs,
+                    mock(com.hourglass.mapper.DemandMapper.class), mock(com.hourglass.mapper.TestModuleMapper.class),
+                    mock(com.hourglass.mapper.AttachmentMapper.class), attachments,
+                    mock(com.hourglass.mapper.TestPlanMapper.class),
+                    mock(com.hourglass.mapper.TestPlanCaseMapper.class));
 
     @BeforeEach
     void setUp() {

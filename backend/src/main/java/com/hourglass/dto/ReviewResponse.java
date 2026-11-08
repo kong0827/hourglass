@@ -15,6 +15,9 @@ public class ReviewResponse {
     private String weekEnd;
     /** 本周/上周/该周期 */
     private String label;
+    /** 项目维度回顾：按项目筛选时为该项目 id/名称，全空间回顾时为空 */
+    private String reqId;
+    private String reqName;
     private List<Task> completed = new ArrayList<Task>();
     private Stats stats = new Stats();
     /** N-5：成员贡献带工时（按人归属的 time_log 合计） */

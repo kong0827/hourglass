@@ -9,6 +9,7 @@ import com.hourglass.dto.UserUpdateRequest;
 import com.hourglass.entity.AppUser;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.service.AccountSecurityMailService;
+import com.hourglass.service.AuditService;
 import com.hourglass.service.UserService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +17,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
 
@@ -32,12 +35,14 @@ public class AdminUserController {
     private final UserService userService;
     private final UserMapper userMapper;
     private final AccountSecurityMailService securityMail;
+    private final AuditService audit;
 
     public AdminUserController(UserService userService, UserMapper userMapper,
-                               AccountSecurityMailService securityMail) {
+                               AccountSecurityMailService securityMail, AuditService audit) {
         this.userService = userService;
         this.userMapper = userMapper;
         this.securityMail = securityMail;
+        this.audit = audit;
     }
 
     /** 以数据库实时角色为准（登录时写入会话的角色可能已过期） */
@@ -55,31 +60,63 @@ public class AdminUserController {
     }
 
     @PostMapping("/api/admin/users")
-    public ApiResult<AppUser> create(@Valid @RequestBody UserCreateRequest req) {
+    public ApiResult<AppUser> create(@Valid @RequestBody UserCreateRequest req, HttpServletRequest request) {
         requireAdmin();
         AppUser u = userService.create(req);
         securityMail.welcome(u);
+        audit.recordCurrent(null, "user_create", "user", u.getId(), u.getDisplayName(), true,
+                "创建账号 @" + u.getUsername() + "，角色 " + u.getRole(), request);
         return ApiResult.ok(u);
     }
 
     @PutMapping("/api/admin/users/{id}")
-    public ApiResult<AppUser> update(@PathVariable String id, @Valid @RequestBody UserUpdateRequest req) {
+    public ApiResult<AppUser> update(@PathVariable String id, @Valid @RequestBody UserUpdateRequest req,
+                                     HttpServletRequest request) {
         requireAdmin();
-        return ApiResult.ok(userService.update(id, req));
+        AppUser before = userMapper.selectById(id);
+        AppUser u = userService.update(id, req);
+        boolean roleChanged = before != null && !java.util.Objects.equals(before.getRole(), u.getRole());
+        audit.recordCurrent(null, roleChanged ? "role_change" : "user_update", "user", u.getId(),
+                u.getDisplayName(), true,
+                roleChanged ? ("账号 @" + u.getUsername() + " 角色由 " + before.getRole() + " 改为 " + u.getRole())
+                        : ("修改账号 @" + u.getUsername()), request);
+        return ApiResult.ok(u);
+    }
+
+    /** 停用/启用账号（A4）：停用即刻踢出在线会话，历史数据与引用全部保留 */
+    @PutMapping("/api/admin/users/{id}/disabled")
+    public ApiResult<AppUser> setDisabled(@PathVariable String id,
+                                          @RequestParam boolean disabled,
+                                          HttpServletRequest request) {
+        requireAdmin();
+        AppUser u = userService.setDisabled(id, disabled);
+        audit.recordCurrent(null, disabled ? "user_disable" : "user_enable", "user", id,
+                u == null ? id : u.getDisplayName(), true,
+                (disabled ? "停用账号" : "启用账号") + (u == null ? "" : " @" + u.getUsername()), request);
+        return ApiResult.ok(u);
     }
 
     @PostMapping("/api/admin/users/{id}/password")
-    public ApiResult<Void> resetPassword(@PathVariable String id, @Valid @RequestBody PasswordResetRequest req) {
+    public ApiResult<Void> resetPassword(@PathVariable String id, @Valid @RequestBody PasswordResetRequest req,
+                                         HttpServletRequest request) {
         requireAdmin();
         userService.resetPassword(id, req);
-        securityMail.passwordReset(userMapper.selectById(id));
+        AppUser u = userMapper.selectById(id);
+        securityMail.passwordReset(u);
+        audit.recordCurrent(null, "password_reset", "user", id,
+                u == null ? id : u.getDisplayName(), true,
+                "重置账号密码" + (u == null ? "" : " @" + u.getUsername()), request);
         return ApiResult.ok();
     }
 
     @DeleteMapping("/api/admin/users/{id}")
-    public ApiResult<Void> delete(@PathVariable String id) {
+    public ApiResult<Void> delete(@PathVariable String id, HttpServletRequest request) {
         requireAdmin();
+        AppUser u = userMapper.selectById(id);
         userService.delete(id);
+        audit.recordCurrent(null, "user_delete", "user", id,
+                u == null ? id : u.getDisplayName(), true,
+                "删除账号" + (u == null ? "" : " @" + u.getUsername()), request);
         return ApiResult.ok();
     }
 }

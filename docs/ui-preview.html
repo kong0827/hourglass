@@ -342,7 +342,9 @@ a:hover{text-decoration:underline;}
 }
 
 /* 品牌区 56px */
-.side-brand{display:flex;align-items:center;gap:10px;height:56px;flex:0 0 auto;padding:0 16px;}
+.side-brand{display:flex;align-items:center;gap:10px;width:100%;height:56px;flex:0 0 auto;padding:0 16px;
+  background:transparent;border:none;border-radius:0;color:inherit;text-align:left;cursor:pointer;}
+.side-brand:hover{background:var(--surface-hover);}
 .brand-mark{
   width:32px;height:32px;border-radius:var(--r-sm);flex:0 0 auto;
   background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border);
@@ -2347,8 +2349,16 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .rr-draft{
   display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;
   background:var(--warning-soft);border:1px solid transparent;
-  font-size:10px;line-height:15px;font-weight:650;color:var(--warning);vertical-align:1px;
+  font-size:10px;line-height:15px;font-weight:650;color:var(--warning-fg);vertical-align:1px;
 }
+.rr-drag{
+  flex:none;width:16px;height:18px;display:grid;place-items:center;
+  color:var(--text-3);cursor:grab;opacity:0;transition:opacity var(--dur-fast) var(--ease-out);
+}
+.reqdoc-row:hover .rr-drag{opacity:.7;}
+.rr-drag:hover{opacity:1!important;color:var(--text);}
+.rr-drag:active{cursor:grabbing;}
+.reqdoc-row.dragging{opacity:.5;background:var(--primary-soft);}
 /* 发布按钮：已发布时弱化为“收回发布” */
 #reqDocPublish.is-published{color:var(--warning);}
 
@@ -2642,11 +2652,25 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .rs-node.rd-depth2{padding-left:39px;}
 .rs-node.rd-depth3{padding-left:55px;}
 .rs-node.rd-depth4{padding-left:71px;}
+.rs-drag{flex:none;width:16px;height:18px;display:grid;place-items:center;color:var(--text-3);cursor:grab;opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+.rs-node:hover .rs-drag{opacity:.7;}
+.rs-drag:hover{opacity:1!important;color:var(--text);}
+.rs-drag:active{cursor:grabbing;}
+.rs-node.dragging{opacity:.5;background:var(--primary-soft);}
+.rs-drop-line{height:2px;border-radius:1px;background:var(--primary);margin:1px 0;pointer-events:none;}
+.rr-published{
+  display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;
+  background:var(--success-soft);border:1px solid transparent;
+  font-size:10px;line-height:15px;font-weight:650;color:var(--success-fg);vertical-align:1px;
+}
 .reqdoc-reader{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);padding:18px 22px 30px;min-width:0;}
-.rrd-empty{padding:60px 0;text-align:center;font-size:13px;color:var(--text-3);}
+.rrd-empty{padding:70px 24px;text-align:center;}
+.rrd-empty-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.rrd-empty-text{font-size:12.5px;color:var(--text-3);line-height:1.6;}
 .rrd-head{border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px;}
 .rrd-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
 .rrd-title-row h3{margin:0;font-size:17px;font-weight:650;color:var(--text);line-height:1.4;}
+.rrd-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .rrd-meta{margin-top:6px;font-size:12px;color:var(--text-3);}
 .rrd-body{font-size:14px;line-height:1.85;min-height:200px;}
 
@@ -3228,8 +3252,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 }
 
 /* ===== 需求池（views/demands.js） ===== */
-.bkl{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;align-items:start;}
-.bkl-col{display:flex;flex-direction:column;gap:8px;min-width:0;}
+/* 落点以整列（状态范围）为准：列等高并保留最小高度，空列也能接住拖拽 */
+.bkl{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;align-items:stretch;}
+.bkl-col{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:240px;border-radius:var(--r-md);transition:background var(--dur-fast) var(--ease-out);}
 .bkl-head{display:flex;align-items:center;gap:8px;padding:2px 2px 4px;}
 .bkl-title{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text);}
 /* 只作用于需求池列头的纯色圆点；全局 .pdot 是带 P1/P2 文字的优先级标签，不能压成 8px */
@@ -3272,7 +3297,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .dem-log-op{color:var(--text-3);}
 .dem-log-note{color:var(--text-2);flex:1 1 100%;margin:0;}
 @media (max-width:1100px){.bkl{grid-template-columns:repeat(2,1fr);}}
-@media (max-width:700px){.bkl{grid-template-columns:1fr;}.wsjf-grid{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:700px){.bkl{grid-template-columns:1fr;}.bkl-col{min-height:0;}.wsjf-grid{grid-template-columns:repeat(2,1fr);}}
 
 /* ===================== 测试用例 ===================== */
 .tc-page{padding-bottom:40px;}
@@ -4745,7 +4770,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 
   <!-- ==================== 侧边栏 240px ==================== -->
   <aside class="sidebar">
-    <div class="side-brand">
+    <button class="side-brand" type="button" id="sideBrand" title="返回首页" aria-label="返回首页">
       <span class="brand-mark" aria-hidden="true">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
           <path d="M5 3.5h10M5 16.5h10M6 3.5c0 3.2 1.3 4.8 4 6.5-2.7 1.7-4 3.3-4 6.5M14 3.5c0 3.2-1.3 4.8-4 6.5 2.7 1.7 4 3.3 4 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4753,7 +4778,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
         </svg>
       </span>
       <span class="side-brand-name">沙漏</span>
-    </div>
+    </button>
     <button class="rail-btn" type="button" id="btnRail" title="收起侧边栏（Ctrl+B）" aria-label="收起 / 展开侧边栏">
       <span data-icon="rail"></span>
     </button>
@@ -4938,6 +4963,12 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
             </button>
           </div>
         </div>
+
+        <a class="icon-btn" href="https://github.com/kong0827/hourglass" target="_blank" rel="noopener" aria-label="GitHub 仓库" title="GitHub 仓库">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M10 1.9a8.1 8.1 0 0 0-2.56 15.78c.4.07.56-.18.56-.38v-1.35c-2.27.49-2.75-1.1-2.75-1.1-.37-.94-.9-1.19-.9-1.19-.74-.5.06-.49.06-.49.81.06 1.24.84 1.24.84.72 1.24 1.9.88 2.36.67.07-.52.28-.88.51-1.08-1.81-.21-3.71-.91-3.71-4.04 0-.89.32-1.62.84-2.19-.08-.21-.36-1.05.08-2.19 0 0 .69-.22 2.25.84a7.82 7.82 0 0 1 4.08 0c1.56-1.06 2.25-.84 2.25-.84.44 1.14.16 1.98.08 2.19.52.57.84 1.3.84 2.19 0 3.14-1.9 3.83-3.72 4.04.29.25.55.74.55 1.49v2.2c0 .21.15.46.56.38A8.1 8.1 0 0 0 10 1.9Z"/>
+          </svg>
+        </a>
 
         <a class="icon-btn" href="help.html" target="_blank" rel="noopener" aria-label="帮助中心（使用手册、快速上手、常见问题等）" title="帮助中心（使用手册、快速上手、常见问题等）">
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -5504,7 +5535,10 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           <div class="reqdoc-split" id="reqDocSplit" hidden>
             <div class="reqdoc-split-tree" id="reqDocSplitTree"></div>
             <div class="reqdoc-reader" id="reqDocReader">
-              <div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>
+              <div class="rrd-empty">
+                <div class="rrd-empty-title">从左侧选择文档阅读</div>
+                <div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div>
+              </div>
             </div>
           </div>
           <!-- 最近动态：空间内全部文档的创建/更新/流转记录 -->
@@ -5558,7 +5592,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               <button class="btn sm ghost" type="button" id="reqDocDelete">删除</button>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
-            <input type="file" id="reqDocImportFile" hidden accept=".md,.markdown,.txt">
+            <input type="file" id="reqDocImportFile" hidden accept=".md,.markdown,.txt,.html,.htm">
           </div>
 
           <div class="reqdoc-editwrap">
@@ -5654,7 +5688,13 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 <select id="newReqDocFormat">
                   <option value="markdown">Markdown（默认，可导入导出）</option>
                   <option value="html">富文本</option>
+                  <option value="word">Word（.docx 导入）</option>
                 </select>
+              </label>
+              <label class="reqdoc-dlg-field" id="newReqDocWordField" hidden>
+                <span>Word 文件</span>
+                <input id="newReqDocWordFile" type="file" accept=".docx">
+                <small style="color:var(--text-3);display:block;margin-top:4px;">仅支持 .docx，内容将转换为富文本</small>
               </label>
               <label class="reqdoc-dlg-field">
                 <span>上级文档</span>
@@ -8175,7 +8215,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 </script>
 <script>
 (function(){"use strict";
-window.__DS_MODULES__ = window.__DS_MODULES__ || {};
+window.__HG_MODULES__ = window.__HG_MODULES__ || {};
 var __NS = {};
 /* ---- core/layout.js ---- */
 /* core/layout · 三档断点 → body[data-layout]
@@ -9868,8 +9908,9 @@ function loadScript(src){
 function ensureMarkdownLib(){
   if(typeof window.marked !== "undefined" && window.DOMPurify) return Promise.resolve();
   if(mdLibPromise) return mdLibPromise;
-  mdLibPromise = loadScript("vendor/markdown/marked.min.js")
-    .then(function(){ return loadScript("vendor/markdown/purify.min.js"); })
+  /* 与 sheet-viewer 一致：经 API.url 补应用根路径，避免页面 URL 无尾斜杠时相对路径解析到 /vendor */
+  mdLibPromise = loadScript(API.url("/vendor/markdown/marked.min.js"))
+    .then(function(){ return loadScript(API.url("/vendor/markdown/purify.min.js")); })
     .catch(function(ex){ mdLibPromise = null; throw ex; });
   return mdLibPromise;
 }
@@ -10080,9 +10121,9 @@ const cache = Object.create(null);
 const mods = Object.create(null);
 
 /* 静态预览稿把全部模块拼进同一个 IIFE，没有可 import 的文件路径；
-   由 tools/gen-preview.js 注入 window.__DS_MODULES__ 供这里同步取用。 */
+   由 tools/gen-preview.js 注入 window.__HG_MODULES__ 供这里同步取用。 */
 function bundled(name) {
-  return (typeof window !== "undefined" && window.__DS_MODULES__ && window.__DS_MODULES__[name]) || null;
+  return (typeof window !== "undefined" && window.__HG_MODULES__ && window.__HG_MODULES__[name]) || null;
 }
 
 function loadView(name) {
@@ -10494,10 +10535,15 @@ function reqDocRowHTML(r, depth, hasChild, collapsed){
   var caret = hasChild
     ? '<span class="rr-caret' + (collapsed ? " collapsed" : "") + '" data-toggle-doc="' + esc(r.id) + '" title="展开/收起子文档">' + icon("down", 13) + '</span>'
     : '<span class="rr-caret"></span>';
-  return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" data-reqdoc="' + esc(r.id) + '">' +
-    caret +
+  var drag = canEditReq(r.reqId)
+    ? '<span class="rr-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 13) + '</span>'
+    : '';
+  return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-reqdoc="' + esc(r.id) + '"' +
+    ' data-rr-reqid="' + esc(r.reqId || "") + '" data-rr-parent="' + esc(r.parentId || "") + '"' +
+    ' data-rr-depth="' + depth + '" data-rr-sort="' + (r.sortOrder || 0) + '">' +
+    caret + drag +
     '<span class="rr-main">' +
-      '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') + '</span>' +
+      '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>') + '</span>' +
       '<span class="rr-meta">' + meta.join(" · ") + '</span>' +
       (r.excerpt ? '<span class="rr-excerpt">' + esc(r.excerpt) + '</span>' : '') +
     '</span>' +
@@ -10552,6 +10598,10 @@ function renderReqDocTree(){
   /* 没有可写项目就不显示「新增文档」；项目列表未加载时不判定（加载完成后会重渲染修正） */
   var nb = $("reqDocNew");
   if(nb) nb.style.display = (!rt.reqsLoaded || rt.reqList.some(function(r){ return canEditReq(r.id); })) ? "" : "none";
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(4);
+    return;
+  }
   if(!reqDocList.length){
     box.innerHTML = '<div class="reqdoc-empty2">还没有文档。点右上角「新增文档」，先选项目再填文档名称。</div>';
     return;
@@ -10598,6 +10648,7 @@ var RD_STATUS = [
 var reqDocMode = reqDocModePref();
 var splitDocId = null;
 var splitDocSeq = 0;
+var readerExportSeq = 0;
 var feedSeq = 0;
 var draggingReqDocId = null;
 
@@ -10656,8 +10707,9 @@ function reqDocKanbanCard(d){
       }).join("")
       + '</select>'
     : '<span class="rk-status-label st ' + st + '"><i></i>' + reqDocStatusLabel(d.status) + '</span>';
+  var pub = d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>';
   return '<div class="rk-card" data-rkdoc="' + esc(d.id) + '"' + (editable ? ' draggable="true"' : '') + '>' +
-    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + (d.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') + '</span></div>' +
+    '<div class="rk-head">' + fmt + '<span class="rk-title">' + esc(d.title) + pub + '</span></div>' +
     '<div class="rk-meta">' + meta.join(" · ") + '</div>' +
     '<div class="rk-foot">' + statusCtl + tasks + '</div>' +
   '</div>';
@@ -10665,6 +10717,10 @@ function reqDocKanbanCard(d){
 function renderReqDocKanban(){
   var box = $("reqDocKanban");
   if(!box) return;
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(3);
+    return;
+  }
   var rows = reqDocSearchList || reqDocList;
   if(!rows.length){
     box.innerHTML = reqDocEmptyHTML();
@@ -10691,12 +10747,15 @@ function reqDocChangeStatus(id, status){
     return;
   }
   API.put("/api/req-docs/" + encodeURIComponent(id) + "/status", { status: status }).then(function(doc){
-    for(var i = 0; i < reqDocList.length; i++){
-      if(reqDocList[i].id === id){
-        reqDocList[i].status = doc.status;
-        reqDocList[i].updatedAt = doc.updatedAt;
+    [reqDocList, reqDocSearchList].forEach(function(list){
+      if(!list) return;
+      for(var i = 0; i < list.length; i++){
+        if(list[i].id === id){
+          list[i].status = doc.status;
+          list[i].updatedAt = doc.updatedAt;
+        }
       }
-    }
+    });
     renderReqDocKanban();
     toast("「" + d.title + "」已流转为「" + reqDocStatusLabel(status) + "」", "fs");
   }).catch(function(ex){
@@ -10720,10 +10779,16 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
   var fmt = r.format === "markdown"
     ? '<span class="rr-fmt md">MD</span>'
     : '<span class="rr-fmt">HTML</span>';
-  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" data-rs-doc="' + esc(r.id) + '">' +
-    caret + fmt +
+  var pub = r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published" title="已发布，项目成员可见">已发布</span>';
+  var drag = canEditReq(r.reqId)
+    ? '<span class="rs-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 12) + '</span>'
+    : '';
+  return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '"' +
+    ' data-rs-reqid="' + esc(r.reqId || "") + '" data-rs-parent="' + esc(r.parentId || "") + '"' +
+    ' data-rs-depth="' + depth + '" data-rs-sort="' + (r.sortOrder || 0) + '">' +
+    caret + fmt + drag +
     '<span class="rs-title">' + esc(r.title) + '</span>' +
-    (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '') +
+    pub +
   '</button>';
 }
 function renderReqDocSplitNodes(nodes, children, depth){
@@ -10740,7 +10805,11 @@ function renderReqDocSplit(){
   /* 选中的文档已被删除：回到占位提示 */
   if(splitDocId && !reqDocById(splitDocId)){
     splitDocId = null;
-    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty">从左侧选择文档，在这里阅读正文</div>';
+    if($("reqDocReader")) $("reqDocReader").innerHTML = '<div class="rrd-empty"><div class="rrd-empty-title">从左侧选择文档阅读</div><div class="rrd-empty-text">有编辑权限时，可拖动文档左侧的手柄调整顺序</div></div>';
+  }
+  if(!reqDocsLoaded){
+    box.innerHTML = UI.skeletonRows(4);
+    return;
   }
   var rows = reqDocSearchList || reqDocList;
   if(!rows.length){
@@ -10790,14 +10859,20 @@ function reqDocReaderOpenLinks(body){
 function renderReqDocReader(doc){
   var box = $("reqDocReader");
   if(!box) return;
+  var pubBadge = doc.publishedAt == null
+    ? '<span class="rr-draft">草稿</span>'
+    : '<span class="rr-published" title="已发布，项目成员可见">已发布</span>';
   var meta = [esc(docTypeName(doc.docType)), "负责人 " + esc(doc.owner || "—"), reqDocStatusLabel(doc.status)];
   if(doc.updatedAt) meta.push("更新于 " + esc(fmtTs(doc.updatedAt)));
   if(doc.taskCount) meta.push(doc.doneCount + "/" + doc.taskCount + " 工作项");
   box.innerHTML =
     '<div class="rrd-head">' +
       '<div class="rrd-title-row">' +
-        '<h3>' + esc(doc.title) + '</h3>' +
-        '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+        '<h3>' + esc(doc.title) + pubBadge + '</h3>' +
+        '<span class="rrd-acts">' +
+          '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
+          '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+        '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +
     '</div>' +
@@ -10817,6 +10892,302 @@ function renderReqDocReader(doc){
     reqDocReaderOpenLinks(body);
   }).catch(function(ex){
     if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
+  });
+}
+
+/* ---------- 阅读树拖拽排序 ---------- */
+
+var rsDragId = null;
+var rsDragSource = null;
+var rsDropLine = null;
+var rsDroppedInside = false;
+function ensureRsDropLine(){
+  if(rsDropLine) return rsDropLine;
+  rsDropLine = document.createElement("div");
+  rsDropLine.className = "rs-drop-line";
+  return rsDropLine;
+}
+function removeRsDropLine(){
+  if(rsDropLine && rsDropLine.parentNode) rsDropLine.parentNode.removeChild(rsDropLine);
+}
+function rsNodeSiblings(node){
+  /* 返回与 node 同项目、同父级、同层深的兄弟节点（按 DOM 顺序） */
+  var container = node.parentNode;
+  if(!container) return [];
+  var reqId = node.dataset.rsReqid;
+  var parentId = node.dataset.rsParent || "";
+  var depth = node.dataset.rsDepth;
+  return Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("rs-node")
+      && el.dataset.rsReqid === reqId
+      && (el.dataset.rsParent || "") === parentId
+      && el.dataset.rsDepth === depth;
+  });
+}
+function rsHitInfo(e){
+  /* 返回 {node, after: bool}：after=true 表示落在节点下半区，应插到它之后 */
+  var st = $("reqDocSplitTree");
+  if(!st) return null;
+  var y = e.clientY;
+  var nodes = Array.from(st.querySelectorAll(".rs-node")).filter(function(n){ return n !== rsDragSource; });
+  var best = null, bestDist = Infinity;
+  for(var i = 0; i < nodes.length; i++){
+    var r = nodes[i].getBoundingClientRect();
+    if(y < r.top || y > r.bottom) continue;
+    var mid = r.top + r.height / 2;
+    var dist = Math.abs(y - mid);
+    if(dist < bestDist){
+      bestDist = dist;
+      best = { node: nodes[i], after: y >= mid };
+    }
+  }
+  return best;
+}
+function rsCanDrop(targetNode){
+  if(!rsDragSource || !targetNode) return false;
+  if(targetNode === rsDragSource) return false;
+  /* 只允许同项目、同父级（同级兄弟）之间排序，避免跨项目/跨层级破坏树结构 */
+  return targetNode.dataset.rsReqid === rsDragSource.dataset.rsReqid
+    && (targetNode.dataset.rsParent || "") === (rsDragSource.dataset.rsParent || "");
+}
+function rsCommitReorder(){
+  if(!rsDragSource) return;
+  var line = ensureRsDropLine();
+  var container = line.parentNode;
+  if(!container || !container.contains(rsDragSource)){
+    removeRsDropLine();
+    rsDragSource = null;
+    rsDragId = null;
+    return;
+  }
+  /* 把被拖节点插到占位线位置，再按 DOM 顺序重算 sortOrder */
+  container.insertBefore(rsDragSource, line);
+  removeRsDropLine();
+  var reqId = rsDragSource.dataset.rsReqid;
+  var parentId = rsDragSource.dataset.rsParent || "";
+  var depth = rsDragSource.dataset.rsDepth;
+  var siblings = Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("rs-node")
+      && el.dataset.rsReqid === reqId
+      && (el.dataset.rsParent || "") === parentId
+      && el.dataset.rsDepth === depth;
+  });
+  var items = [];
+  for(var i = 0; i < siblings.length; i++){
+    items.push({ id: siblings[i].dataset.rsDoc, sortOrder: i * 10, parentId: parentId || null });
+  }
+  rsDragSource = null;
+  rsDragId = null;
+  if(!canEditReq(reqId)){
+    toast("你对该项目只有查看权限", "warn");
+    renderReqDocSplit();
+    return;
+  }
+  API.post("/api/req-docs/reorder", { items: items }).then(function(){
+    /* 本地同步 sortOrder，避免重新拉取前顺序回跳 */
+    items.forEach(function(it){
+      var d = reqDocById(it.id);
+      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
+    });
+    renderReqDocSplit();
+    toast("顺序已保存", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "排序保存失败", "bad");
+    renderReqDocSplit();
+  });
+}
+function initReqDocSplitDrag(){
+  var st = $("reqDocSplitTree");
+  if(!st) return;
+  st.addEventListener("dragstart", function(e){
+    var handle = e.target.closest ? e.target.closest(".rs-drag") : null;
+    if(!handle){
+      e.preventDefault();
+      return;
+    }
+    var node = handle.closest(".rs-node");
+    if(!node){ e.preventDefault(); return; }
+    var d = reqDocById(node.dataset.rsDoc);
+    if(!d || !canEditReq(d.reqId)){
+      e.preventDefault();
+      return;
+    }
+    rsDragId = node.dataset.rsDoc;
+    rsDragSource = node;
+    rsDroppedInside = false;
+    node.classList.add("dragging");
+    try{
+      e.dataTransfer.setData("text/plain", rsDragId);
+      e.dataTransfer.effectAllowed = "move";
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(node, 0, 0);
+    }catch(err){ /* 旧浏览器忽略 */ }
+  });
+  st.addEventListener("dragend", function(e){
+    var node = e.target.closest ? e.target.closest(".rs-node") : null;
+    if(node) node.classList.remove("dragging");
+    if(rsDragSource && rsDragSource.classList.contains("dragging")) rsDragSource.classList.remove("dragging");
+    if(rsDroppedInside){
+      rsDroppedInside = false;
+    }else{
+      removeRsDropLine();
+      rsDragSource = null;
+      rsDragId = null;
+    }
+  });
+  st.addEventListener("dragover", function(e){
+    if(!rsDragSource){ return; }
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    var hit = rsHitInfo(e);
+    var line = ensureRsDropLine();
+    if(hit && rsCanDrop(hit.node)){
+      var container = hit.node.parentNode;
+      if(hit.after){
+        container.insertBefore(line, hit.node.nextSibling);
+      }else{
+        container.insertBefore(line, hit.node);
+      }
+    }else{
+      removeRsDropLine();
+    }
+  });
+  st.addEventListener("dragleave", function(e){
+    if(!rsDragSource) return;
+    var stBox = $("reqDocSplitTree");
+    if(stBox && !stBox.contains(e.relatedTarget)) removeRsDropLine();
+  });
+  st.addEventListener("drop", function(e){
+    if(!rsDragSource) return;
+    e.preventDefault();
+    rsDroppedInside = true;
+    rsCommitReorder();
+  });
+}
+
+/* ---------- 列表树拖拽排序（与阅读树共用同一套逻辑，仅选择器不同） ---------- */
+
+var rrDragSource = null;
+var rrDroppedInside = false;
+function rrHitInfo(e){
+  var tree = $("reqDocTree");
+  if(!tree) return null;
+  var y = e.clientY;
+  var rows = Array.from(tree.querySelectorAll(".reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
+  var best = null, bestDist = Infinity;
+  for(var i = 0; i < rows.length; i++){
+    var r = rows[i].getBoundingClientRect();
+    if(y < r.top || y > r.bottom) continue;
+    var mid = r.top + r.height / 2;
+    var dist = Math.abs(y - mid);
+    if(dist < bestDist){
+      bestDist = dist;
+      best = { node: rows[i], after: y >= mid };
+    }
+  }
+  return best;
+}
+function rrCanDrop(targetNode){
+  if(!rrDragSource || !targetNode) return false;
+  if(targetNode === rrDragSource) return false;
+  return targetNode.dataset.rrReqid === rrDragSource.dataset.rrReqid
+    && (targetNode.dataset.rrParent || "") === (rrDragSource.dataset.rrParent || "");
+}
+function rrCommitReorder(){
+  if(!rrDragSource) return;
+  var line = ensureRsDropLine();
+  var container = line.parentNode;
+  if(!container || !container.contains(rrDragSource)){
+    removeRsDropLine();
+    rrDragSource = null;
+    return;
+  }
+  container.insertBefore(rrDragSource, line);
+  removeRsDropLine();
+  var reqId = rrDragSource.dataset.rrReqid;
+  var parentId = rrDragSource.dataset.rrParent || "";
+  var depth = rrDragSource.dataset.rrDepth;
+  var siblings = Array.from(container.children).filter(function(el){
+    return el.classList && el.classList.contains("reqdoc-row")
+      && el.dataset.rrReqid === reqId
+      && (el.dataset.rrParent || "") === parentId
+      && el.dataset.rrDepth === depth;
+  });
+  var items = [];
+  for(var i = 0; i < siblings.length; i++){
+    items.push({ id: siblings[i].dataset.reqdoc, sortOrder: i * 10, parentId: parentId || null });
+  }
+  rrDragSource = null;
+  if(!canEditReq(reqId)){
+    toast("你对该项目只有查看权限", "warn");
+    renderReqDocTree();
+    return;
+  }
+  API.post("/api/req-docs/reorder", { items: items }).then(function(){
+    items.forEach(function(it){
+      var d = reqDocById(it.id);
+      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
+    });
+    renderReqDocTree();
+    toast("顺序已保存", "fs");
+  }).catch(function(ex){
+    toast(ex.message || "排序保存失败", "bad");
+    renderReqDocTree();
+  });
+}
+function initReqDocTreeDrag(){
+  var tree = $("reqDocTree");
+  if(!tree) return;
+  tree.addEventListener("dragstart", function(e){
+    var handle = e.target.closest ? e.target.closest(".rr-drag") : null;
+    if(!handle){ e.preventDefault(); return; }
+    var row = handle.closest(".reqdoc-row");
+    if(!row){ e.preventDefault(); return; }
+    var d = reqDocById(row.dataset.reqdoc);
+    if(!d || !canEditReq(d.reqId)){ e.preventDefault(); return; }
+    rrDragSource = row;
+    rrDroppedInside = false;
+    row.classList.add("dragging");
+    try{
+      e.dataTransfer.setData("text/plain", row.dataset.reqdoc);
+      e.dataTransfer.effectAllowed = "move";
+      if(e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(row, 0, 0);
+    }catch(err){}
+  });
+  tree.addEventListener("dragend", function(e){
+    var row = e.target.closest ? e.target.closest(".reqdoc-row") : null;
+    if(row) row.classList.remove("dragging");
+    if(rrDragSource && rrDragSource.classList.contains("dragging")) rrDragSource.classList.remove("dragging");
+    if(rrDroppedInside){
+      rrDroppedInside = false;
+    }else{
+      removeRsDropLine();
+      rrDragSource = null;
+    }
+  });
+  tree.addEventListener("dragover", function(e){
+    if(!rrDragSource) return;
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    var hit = rrHitInfo(e);
+    var line = ensureRsDropLine();
+    if(hit && rrCanDrop(hit.node)){
+      var container = hit.node.parentNode;
+      if(hit.after) container.insertBefore(line, hit.node.nextSibling);
+      else container.insertBefore(line, hit.node);
+    }else{
+      removeRsDropLine();
+    }
+  });
+  tree.addEventListener("dragleave", function(e){
+    if(!rrDragSource) return;
+    var t = $("reqDocTree");
+    if(t && !t.contains(e.relatedTarget)) removeRsDropLine();
+  });
+  tree.addEventListener("drop", function(e){
+    if(!rrDragSource) return;
+    e.preventDefault();
+    rrDroppedInside = true;
+    rrCommitReorder();
   });
 }
 
@@ -10912,10 +11283,18 @@ function openNewReqDocDialog(reqId){
   if(reqId && canEditReq(reqId)) sel.value = reqId;
   if($("newReqDocTitle")) $("newReqDocTitle").value = "";
   if($("newReqDocFormat")) $("newReqDocFormat").value = "markdown";
+  if($("newReqDocWordFile")) $("newReqDocWordFile").value = "";
+  toggleNewReqDocWordField();
   fillDocTypeSelect("newReqDocType", "requirement");
   fillNewReqDocParents("");
   UI.openModal($("dlgNewReqDoc"));
   setTimeout(function(){ if($("newReqDocTitle")) $("newReqDocTitle").focus(); }, 40);
+}
+function toggleNewReqDocWordField(){
+  var field = $("newReqDocWordField");
+  if(!field) return;
+  var isWord = $("newReqDocFormat") && $("newReqDocFormat").value === "word";
+  field.hidden = !isWord;
 }
 function closeNewReqDocDialog(){
   var d = $("dlgNewReqDoc");
@@ -10989,19 +11368,55 @@ function submitNewReqDoc(){
   if(!title){ toast("请填写文档名称", "warn"); $("newReqDocTitle").focus(); return; }
   var format = $("newReqDocFormat") ? $("newReqDocFormat").value : "markdown";
   var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
+  var isWord = format === "word";
+  var wordFile = isWord && $("newReqDocWordFile") ? $("newReqDocWordFile").files[0] : null;
+  if(isWord && !wordFile){ toast("请选择要导入的 Word 文件", "warn"); return; }
   if(ok) ok.disabled = true;
   API.post("/api/req-docs", {
     reqId: reqId, title: title, content: "", status: "draft",
-    format: format, docType: $("newReqDocType").value, parentId: parentId || null
+    format: isWord ? "html" : format, docType: $("newReqDocType").value, parentId: parentId || null
   })
     .then(function(doc){
-      closeNewReqDocDialog();
-      loadReqDocs(true);
-      openReqDocEditor(doc.id);
-      toast("已创建「" + doc.title + "」，接着写正文", "fs");
+      if(isWord){
+        return importWordForNewDoc(doc, wordFile);
+      }else{
+        closeNewReqDocDialog();
+        loadReqDocs(true);
+        openReqDocEditor(doc.id);
+        toast("已创建「" + doc.title + "」，接着写正文", "fs");
+        return null;
+      }
     })
     .catch(function(ex){ toast(ex.message || "创建失败", "bad"); })
     .then(function(){ if(ok) ok.disabled = false; });
+}
+function importWordForNewDoc(doc, file){
+  var fd = new FormData();
+  fd.append("file", file);
+  var url = API.url("/api/req-docs/import-word" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
+    var content = (json.data && json.data.content) || "";
+    return API.put("/api/req-docs/" + encodeURIComponent(doc.id), {
+      reqId: doc.reqId, title: doc.title, content: content, status: "draft",
+      format: "html", docType: doc.docType || "requirement", parentId: doc.parentId || null,
+      updatedAt: doc.updatedAt || ""
+    }).then(function(){
+      closeNewReqDocDialog();
+      loadReqDocs(true);
+      openReqDocEditor(doc.id);
+      toast("已导入「" + file.name + "」，记得检查格式", "fs");
+    });
+  });
 }
 function openReqDocEditor(id){
   var seq = ++reqDocOpenSeq;
@@ -11310,8 +11725,9 @@ function setDocFormatUI(format){
     badge.textContent = md ? "Markdown" : "富文本";
     badge.className = "reqdoc-fmt " + (md ? "md" : "html");
   }
-  showEl($("reqDocImport"), md);
-  showEl($("reqDocExport"), md);
+  var imp = $("reqDocImport"), exp = $("reqDocExport");
+  if(imp) imp.title = md ? "导入 Markdown 文件" : "导入 HTML / Word 文件";
+  if(exp) exp.title = md ? "导出为 Markdown 文件" : "导出为 HTML 文件";
 }
 function fillMarkdownEditor(doc){
   if($("reqDocMdCanvas")) $("reqDocMdCanvas").value = doc.content || "";
@@ -11923,35 +12339,90 @@ function deleteReqDoc(){
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
-function importReqDocMarkdown(){
+function importReqDoc(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导入", "warn"); return; }
   var input = $("reqDocImportFile");
-  if(input) input.click();
+  if(input){
+    input.accept = isMarkdownDoc() ? ".md,.markdown,.txt" : ".html,.htm,.docx";
+    input.click();
+  }
 }
 function onReqDocImportFile(e){
   var input = e.target;
   var f = input.files && input.files[0];
   input.value = "";
   if(!f) return;
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导入", "warn"); return; }
+  if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   if(f.size > 10 * 1024 * 1024){ toast("文件超过 10MB，请拆分后再导入", "warn"); return; }
+  if(/\.docx$/i.test(f.name)){
+    importWordFile(f);
+    return;
+  }
   var reader = new FileReader();
   reader.onload = function(){
-    if(!isMarkdownDoc() || !$("reqDocMdCanvas")) return;
-    $("reqDocMdCanvas").value = String(reader.result || "");
-    markReqDocDirty();
-    renderMarkdownPreview();
+    var text = String(reader.result || "");
+    if(isMarkdownDoc()){
+      if(!$("reqDocMdCanvas")) return;
+      $("reqDocMdCanvas").value = text;
+      markReqDocDirty();
+      renderMarkdownPreview();
+    }else{
+      if(!reqEditor) return;
+      reqEditor.setContents(text);
+      markReqDocDirty();
+    }
     toast("已导入「" + f.name + "」，记得保存", "fs");
   };
   reader.onerror = function(){ toast("读取文件失败", "bad"); };
   reader.readAsText(f, "utf-8");
 }
-function exportReqDocMarkdown(){
-  if(!isMarkdownDoc()){ toast("只有 Markdown 文档支持导出", "warn"); return; }
-  var text = $("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "";
-  var name = (editingMeta.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ".md";
-  var blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+function importWordFile(f){
+  var fd = new FormData();
+  fd.append("file", f);
+  var url = API.url("/api/req-docs/import-word" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  toast("正在导入 Word 文档…", "info");
+  fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(!json || json.code !== 0){ throw new Error((json && json.message) || "导入失败"); }
+    var data = json.data || {};
+    if(editingMeta.format !== "html"){
+      editingMeta.format = "html";
+      setDocFormatUI("html");
+    }
+    var apply = function(){
+      if(!reqEditor) return;
+      reqEditor.setContents(data.content || "");
+      markReqDocDirty();
+      rebuildToc();
+      updateReqDocCount();
+      toast("已导入「" + f.name + "」，记得保存", "fs");
+    };
+    if(reqEditor){
+      apply();
+    }else{
+      ensureEditor().then(function(ed){
+        if(!ed || editingMeta.format !== "html") return;
+        apply();
+      }).catch(function(ex){ toast(ex.message || "编辑器加载失败", "bad"); });
+    }
+  }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
+}
+function exportReqDoc(){
+  var md = isMarkdownDoc();
+  var text = md ? ($("reqDocMdCanvas") ? $("reqDocMdCanvas").value : "")
+                : (reqEditor ? reqEditor.getContents(true) : "");
+  var ext = md ? ".md" : ".html";
+  var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
+  var name = (editingMeta.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
+  var blob = new Blob([text || ""], { type: mime });
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
   a.href = url;
@@ -11960,6 +12431,28 @@ function exportReqDocMarkdown(){
   a.click();
   setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
   toast("已导出 " + name, "fs");
+}
+function exportReqDocFromReader(docId){
+  var doc = reqDocById(docId);
+  if(!doc){ toast("文档信息未加载", "bad"); return; }
+  var seq = ++readerExportSeq;
+  API.get("/api/req-docs/" + encodeURIComponent(docId)).then(function(full){
+    if(seq !== readerExportSeq) return;
+    var md = full.format === "markdown";
+    var text = full.content || "";
+    var ext = md ? ".md" : ".html";
+    var mime = md ? "text/markdown;charset=utf-8" : "text/html;charset=utf-8";
+    var name = (full.title || "文档").replace(/[\\/:*?"<>|]/g, "_") + ext;
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+    toast("已导出 " + name, "fs");
+  }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
 /* 发布/收回发布：草稿仅作者与空间管理员可见，发布后按项目访问规则可见 */
 function refreshReqDocPublishBtn(){
@@ -12090,6 +12583,7 @@ function populateReqDocSelect(keep){
       var row = e.target.closest("[data-reqdoc]");
       if(row){ openReqDocEditor(row.dataset.reqdoc); }
     });
+    initReqDocTreeDrag();
   }
   /* 列表 / 看板 / 阅读 / 动态：展示方式切换 */
   var rdModeBtns = document.querySelectorAll("#reqDocListPage [data-rdmode]");
@@ -12167,12 +12661,15 @@ function populateReqDocSelect(keep){
       var node = e.target.closest("[data-rs-doc]");
       if(node) loadReqDocSplitDoc(node.dataset.rsDoc);
     });
+    initReqDocSplitDrag();
   }
   var rd = $("reqDocReader");
   if(rd){
     rd.addEventListener("click", function(e){
       var b = e.target.closest("[data-rrd-edit]");
-      if(b) openReqDocEditor(b.dataset.rrdEdit);
+      if(b){ openReqDocEditor(b.dataset.rrdEdit); return; }
+      var ex = e.target.closest("[data-rrd-export]");
+      if(ex) exportReqDocFromReader(ex.dataset.rrdExport);
     });
   }
   /* 动态：点条目打开对应文档 */
@@ -12187,6 +12684,7 @@ function populateReqDocSelect(keep){
   if($("dlgNewReqDocCancel")) $("dlgNewReqDocCancel").addEventListener("click", closeNewReqDocDialog);
   if($("dlgNewReqDocOk")) $("dlgNewReqDocOk").addEventListener("click", submitNewReqDoc);
   if($("newReqDocProject")) $("newReqDocProject").addEventListener("change", function(){ fillNewReqDocParents(""); });
+  if($("newReqDocFormat")) $("newReqDocFormat").addEventListener("change", toggleNewReqDocWordField);
   if($("newReqDocTitle")){
     $("newReqDocTitle").addEventListener("keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); submitNewReqDoc(); }
@@ -12247,8 +12745,8 @@ function populateReqDocSelect(keep){
   }
   if($("reqDocSave")) $("reqDocSave").addEventListener("click", saveReqDoc);
   if($("reqDocDelete")) $("reqDocDelete").addEventListener("click", deleteReqDoc);
-  if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDocMarkdown);
-  if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDocMarkdown);
+  if($("reqDocImport")) $("reqDocImport").addEventListener("click", importReqDoc);
+  if($("reqDocExport")) $("reqDocExport").addEventListener("click", exportReqDoc);
   if($("reqDocImportFile")) $("reqDocImportFile").addEventListener("change", onReqDocImportFile);
   if($("reqDocParent")) $("reqDocParent").addEventListener("change", function(){ markReqDocDirty(); });
   $("reqDocType").addEventListener("change", markReqDocDirty);
@@ -19734,7 +20232,6 @@ function showView(name){
   updateBrand();
   UI.closeAllPops();
   syncViewHash(name);
-  try{ localStorage.setItem("ds.view", name); }catch(e){ /* 隐私模式忽略 */ }
   var entered = loadPriorities().then(function(){
     return VIEWS[name].enter ? VIEWS[name].enter() : null;
   });
@@ -19746,10 +20243,7 @@ function viewFromHash(){
   var name = String(window.location.hash || "").replace(/^#\/?/, "");
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
-  try{
-    var saved = localStorage.getItem("ds.view");
-    if(saved && (VIEWS[saved] || legacy[saved])) return saved;
-  }catch(e){ /* 隐私模式/受限环境忽略 */ }
+  /* 无 hash（登录后首次进入）统一落「我的任务」，不沿用上次停留的视图 */
   return "mine";
 }
 var suppressHashSync = false;
@@ -19811,6 +20305,8 @@ $("sideNav").addEventListener("click", function(e){
 });
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
+var sideBrandBtn = $("sideBrand");
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("board"); });
 /* 底栏已覆盖的视图 + 需要项目上下文的详情页，不放进「更多视图」 */
 var TABS_COVERED = { mine:1, board:1, projects:1, profile:1, project:1 };
 function moreMenuHTML(){
@@ -30976,7 +31472,9 @@ function loadDemandOptions(reqId){
   demandOptions.reqId = reqId;
   demandOptions.list = [];
   demandOptions.loading = API.get("/api/demands", { reqId: reqId }).then(function(list){
-    demandOptions.list = list || [];
+    if(demandOptions.reqId === reqId){
+      demandOptions.list = list || [];
+    }
     demandOptions.loading = null;
     return demandOptions.list;
   }).catch(function(){
@@ -31109,7 +31607,7 @@ function saveCase(){
     steps: collectSteps()
   };
   var p = editingCase.id
-    ? API.put("/api/test-cases/" + editingCase.id, body)
+    ? API.put("/api/test-cases/" + encodeURIComponent(editingCase.id), body)
     : API.post("/api/test-cases", body);
   p.then(function(){
     UI.closeModal($("dlgCase"));
@@ -31120,7 +31618,7 @@ function saveCase(){
 function removeCase(id){
   var c = caseById(id);
   if(!window.confirm("删除用例「" + (c ? c.title : id) + "」？其执行记录将一并删除。")) return;
-  API.del("/api/test-cases/" + id).then(function(){
+  API.del("/api/test-cases/" + encodeURIComponent(id)).then(function(){
     toast("用例已删除");
     loadCases();
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
@@ -31145,7 +31643,7 @@ function syncRunSeg(){
   });
 }
 function doRun(){
-  API.post("/api/test-cases/" + runningCaseId + "/runs", {
+  API.post("/api/test-cases/" + encodeURIComponent(runningCaseId) + "/runs", {
     status: runStatus,
     note: $("runNote").value.trim() || null
   }).then(function(){
@@ -31173,7 +31671,7 @@ function doDefect(){
     toast("缺陷必须选择严重度", "warn");
     return;
   }
-  API.post("/api/test-cases/" + defectCaseId + "/defect", {
+  API.post("/api/test-cases/" + encodeURIComponent(defectCaseId) + "/defect", {
     severity: severity,
     environment: $("defectEnvironment").value.trim() || null
   }).then(function(task){
@@ -31344,22 +31842,22 @@ if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){
 
 return {enterWorkloadView: enterWorkloadView, loadWorkload: loadWorkload};
 })();
-window.__DS_MODULES__["gantt"] = __NS["views/gantt.js"];
-window.__DS_MODULES__["projects"] = __NS["views/projects.js"];
-window.__DS_MODULES__["requirements"] = __NS["views/requirements.js"];
-window.__DS_MODULES__["review"] = __NS["views/review.js"];
-window.__DS_MODULES__["analysis"] = __NS["views/analysis.js"];
-window.__DS_MODULES__["settings"] = __NS["views/settings.js"];
-window.__DS_MODULES__["profile"] = __NS["views/profile.js"];
-window.__DS_MODULES__["phase"] = __NS["views/phase.js"];
-window.__DS_MODULES__["demands"] = __NS["views/demands.js"];
-window.__DS_MODULES__["portfolio"] = __NS["views/portfolio.js"];
-window.__DS_MODULES__["project"] = __NS["views/project.js"];
-window.__DS_MODULES__["workload"] = __NS["views/workload.js"];
-window.__DS_MODULES__["risks"] = __NS["views/risks.js"];
-window.__DS_MODULES__["report"] = __NS["views/report.js"];
+window.__HG_MODULES__["gantt"] = __NS["views/gantt.js"];
+window.__HG_MODULES__["projects"] = __NS["views/projects.js"];
+window.__HG_MODULES__["requirements"] = __NS["views/requirements.js"];
+window.__HG_MODULES__["review"] = __NS["views/review.js"];
+window.__HG_MODULES__["analysis"] = __NS["views/analysis.js"];
+window.__HG_MODULES__["settings"] = __NS["views/settings.js"];
+window.__HG_MODULES__["profile"] = __NS["views/profile.js"];
+window.__HG_MODULES__["phase"] = __NS["views/phase.js"];
+window.__HG_MODULES__["demands"] = __NS["views/demands.js"];
+window.__HG_MODULES__["portfolio"] = __NS["views/portfolio.js"];
+window.__HG_MODULES__["project"] = __NS["views/project.js"];
+window.__HG_MODULES__["workload"] = __NS["views/workload.js"];
+window.__HG_MODULES__["risks"] = __NS["views/risks.js"];
+window.__HG_MODULES__["report"] = __NS["views/report.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-07 05:37</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-07 11:17</span></div>
 </body>
 </html>

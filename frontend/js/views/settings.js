@@ -146,15 +146,17 @@ function openRoleGuide(){
     roleGuideRow(["删除任务（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站任务", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["管理看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新增 / 编辑 / 排序看板列与分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["调整成员角色", "全部角色（可授予管理员）", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["调整成员角色", "除空间主外的角色", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["移出成员", "除空间主外", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["完整备份导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["导出任务 CSV", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES]),
     roleGuideRow(["删除共享空间", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO])
   ].join("");
 
@@ -253,6 +255,7 @@ function enterSettingsView(){
     ? "把链接发给已有账号的同事：对方登录后打开链接即可一键加入；新同事请先在你的「用户管理」里创建账号。链接 7 天有效，可随时撤销。"
     : "把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。";
   if($("setTabAccess")) $("setTabAccess").hidden = !isManager || isPersonal;
+  if($("setTabSystem")) $("setTabSystem").hidden = !isAdmin;
   if(isPersonal){
     wsMemberList.innerHTML = '<div class="foot-note">个人空间没有其他成员。</div>';
     $("wsMemberCount").textContent = "";
@@ -264,7 +267,15 @@ function enterSettingsView(){
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
+  /* 完整备份导入/导出与清空在后端均要求空间主；CSV 导出对所有角色开放 */
+  ["btnExport", "btnImport", "btnReset"].forEach(function(id){
+    var el = $(id);
+    if(!el) return;
+    if(!el.dataset.ownerTitle) el.dataset.ownerTitle = el.title || "";
+    el.disabled = !isOwner;
+    el.title = isOwner ? el.dataset.ownerTitle : "仅空间主可操作";
+  });
   loadColCfg();
   loadCatCfg();
   loadPriorityCfg();
@@ -279,6 +290,7 @@ function setSettingsTab(tab){
   var myRole = rt.currentWs && rt.currentWs.myRole;
   var isManager = myRole === "owner" || myRole === "admin";
   if(tab === "account" && !isAdmin) tab = "space";
+  if(tab === "system" && !isAdmin) tab = "space";
   if(tab === "access" && !isManager) tab = "space";
   settingsTab = tab;
   /* 活动分区需要占满视口剩余高度：切换时给设置页打标记，其他分区保持原布局 */
@@ -297,6 +309,7 @@ function setSettingsTab(tab){
   if(tab === "data") loadTrash({silent:true});
   if(tab === "access") loadProjectAccess();
   if(tab === "integration" && isAdmin) loadMailSettings();
+  if(tab === "system" && isAdmin){ loadSystemInfo(); loadAudit(1); }
   if(tab === "account") enterUsersView();
 }
 function initSetTabs(){
@@ -319,8 +332,8 @@ function loadWsMemberList(){
     wsMemberList.innerHTML = rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
       var role = m.role || "member";
-      /* 管理员只能调整/移除成员与查看者；管理员本人与空间主仅空间主可处理 */
-      var canManageRow = isOwner || (isManager && role !== "admin" && role !== "owner");
+      /* 空间主不进入角色下拉（后端禁止改空间主）；管理员只能处理成员与查看者 */
+      var canManageRow = role !== "owner" && (isOwner || (isManager && role !== "admin"));
       var canRemove = isSelf ? role !== "owner" : (canManageRow && role !== "owner");
       var roleCell = canManageRow
         ? '<select class="mini-select" data-member-role aria-label="空间角色" title="调整空间角色">' +
@@ -533,23 +546,27 @@ function loadColCfg(){
   });
 }
 function renderColCfg(){
-  var canEdit = rt.currentWs && rt.currentWs.myRole === "owner";
+  var readOnly = roleReadOnly();
+  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
   colCfgList.innerHTML = rt.colDefsCache.map(function(d, idx){
     var fixed = (d.id === "backlog" || d.id === "doing");
-    var delDisabled = fixed || !canEdit;
+    var delDisabled = fixed || !canDel;
     return '<div class="cfg-row" data-col-id="' + esc(d.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色" />' +
-      '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名" />' +
+      '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名"' + (readOnly ? " disabled" : "") + ' />' +
       (fixed ? '<span class="sysmark">系统列</span>' : '') +
-      '<button class="cc-act" type="button" data-col-up title="上移"' + (idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-col-down title="下移"' + (idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : "删除列") + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-col-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-col-down title="下移"' + (readOnly || idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : (canDel ? "删除列" : "仅空间主可删除列")) + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
+  ["colNewColor", "colNewName", "btnColAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
+  if($("colCfgHint")) $("colCfgHint").hidden = !readOnly;
   UI.wireTooltips(colCfgList);
 }
 function saveColRow(id){
+  if(roleReadOnly()) return;
   var row = colCfgList.querySelector('[data-col-id="' + id + '"]');
   if(!row) return;
   var name = row.querySelector("[data-col-name]").value.trim();
@@ -570,6 +587,7 @@ colCfgList.addEventListener("change", function(e){
   if(e.target.matches("[data-col-name]") || e.target.matches("[data-col-color]")) saveColRow(row.dataset.colId);
 });
 colCfgList.addEventListener("click", function(e){
+  if(roleReadOnly()) return;
   var row = e.target.closest("[data-col-id]");
   if(!row) return;
   var id = row.dataset.colId;
@@ -609,6 +627,7 @@ colCfgList.addEventListener("click", function(e){
   }
 });
 $("btnColAdd").addEventListener("click", function(){
+  if(roleReadOnly()) return;
   var name = colNewName.value.trim();
   if(!name){ toast("请填写新列名", "warn"); return; }
   API.post("/api/columns", { name: name, color: colNewColor.value }).then(function(){
@@ -629,20 +648,24 @@ function loadCatCfg(){
 }
 function renderCatCfg(){
   $("catCount").textContent = rt.catDefsCache.length ? "共 " + rt.catDefsCache.length + " 个" : "";
-  var canDel = rt.currentWs && rt.currentWs.myRole === "owner";
+  var readOnly = roleReadOnly();
+  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
   catCfgList.innerHTML = rt.catDefsCache.map(function(c, idx){
     return '<div class="cfg-row" data-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色" />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称" />' +
-      '<button class="cc-act" type="button" data-cat-up title="上移"' + (idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-cat-down title="下移"' + (idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-cat-del title="删除分类"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称"' + (readOnly ? " disabled" : "") + ' />' +
+      '<button class="cc-act" type="button" data-cat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-cat-down title="下移"' + (readOnly || idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除分类" : "仅空间主可删除分类") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
+  ["catNewColor", "catNewName", "btnCatAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
+  if($("catCfgHint")) $("catCfgHint").hidden = !readOnly;
   UI.wireTooltips(catCfgList);
 }
 function saveCatRow(id){
+  if(roleReadOnly()) return;
   var row = catCfgList.querySelector('[data-cat-id="' + id + '"]');
   if(!row) return;
   var name = row.querySelector("[data-cat-name]").value.trim();
@@ -661,6 +684,7 @@ catCfgList.addEventListener("change", function(e){
   if(e.target.matches("[data-cat-name]") || e.target.matches("[data-cat-color]")) saveCatRow(row.dataset.catId);
 });
 catCfgList.addEventListener("click", function(e){
+  if(roleReadOnly()) return;
   var row = e.target.closest("[data-cat-id]");
   if(!row) return;
   var id = row.dataset.catId;
@@ -697,6 +721,7 @@ catCfgList.addEventListener("click", function(e){
   }
 });
 $("btnCatAdd").addEventListener("click", function(){
+  if(roleReadOnly()) return;
   var name = catNewName.value.trim();
   if(!name){ toast("请填写分类名称", "warn"); return; }
   API.post("/api/categories", { name: name, color: catNewColor.value }).then(function(){
@@ -965,6 +990,213 @@ function renderActivity(list){
     '</div>';
   }).join("");
 }
+/* ---------- 系统信息 + 审计日志（B6，平台管理员） ---------- */
+var AUDIT_LABEL = {
+  login:"登录成功", login_fail:"登录失败", logout:"退出登录",
+  role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
+  member_add:"添加成员", member_remove:"移除成员", workspace_delete:"删除空间",
+  project_delete:"删除项目", user_create:"创建账号", user_update:"修改账号",
+  user_delete:"删除账号", password_reset:"重置密码"
+};
+var AUDIT_TARGET = {
+  auth:"登录", user:"账号", workspace:"空间", member:"成员", project:"项目", data:"数据"
+};
+var auditState = { page:1, size:50, total:0, pages:1, loading:false };
+
+function fmtBytes(n){
+  var v = Number(n) || 0;
+  if(v < 1024) return v + " B";
+  var units = ["KB","MB","GB","TB"], i = -1;
+  do { v /= 1024; i++; } while(v >= 1024 && i < units.length - 1);
+  return (v >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + units[i];
+}
+function fmtUptime(sec){
+  var s = Math.max(0, Number(sec) || 0);
+  var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if(d > 0) return d + " 天 " + h + " 小时";
+  if(h > 0) return h + " 小时 " + m + " 分";
+  return m + " 分钟";
+}
+function fmtAuditTs(value){
+  if(!value) return "—";
+  return String(value).replace("T", " ").slice(0, 19);
+}
+function auditParams(){
+  return {
+    q: ($("auditQ") && $("auditQ").value.trim()) || "",
+    action: ($("auditAction") && $("auditAction").value) || "",
+    result: ($("auditResult") && $("auditResult").value) || "",
+    from: ($("auditFrom") && $("auditFrom").value) || "",
+    to: ($("auditTo") && $("auditTo").value) || ""
+  };
+}
+function loadAudit(page){
+  if(!$("auditBody")) return;
+  if(auditState.loading) return;
+  auditState.loading = true;
+  auditState.page = page || 1;
+  var p = auditParams();
+  p.page = auditState.page;
+  p.size = auditState.size;
+  $("auditBody").innerHTML = '<tr><td colspan="7" class="audit-empty">加载中…</td></tr>';
+  API.getGlobal("/api/admin/audit/logs", p).then(function(data){
+    auditState.loading = false;
+    renderAudit(data || {});
+  }).catch(function(ex){
+    auditState.loading = false;
+    $("auditBody").innerHTML = '<tr><td colspan="7" class="audit-empty">加载失败：' +
+      esc(ex.message || "网络异常") + '</td></tr>';
+  });
+}
+function renderAudit(data){
+  var list = data.items || [];
+  auditState.total = data.total || 0;
+  auditState.page = data.page || 1;
+  auditState.size = data.size || 50;
+  auditState.pages = Math.max(1, Math.ceil(auditState.total / auditState.size));
+  if($("auditCount")) $("auditCount").textContent = "共 " + auditState.total + " 条 · 全空间";
+  if($("auditHint")) $("auditHint").textContent = "登录成功/失败、权限变更、数据导出、删除/清空、备份恢复等安全事件；保留 " +
+    (data.retentionDays || 90) + " 天，可按条件筛选并导出 CSV。";
+  if(!list.length){
+    $("auditBody").innerHTML = '<tr><td colspan="7" class="audit-empty">当前条件下没有审计记录</td></tr>';
+  }else{
+    $("auditBody").innerHTML = list.map(function(a){
+      var target = a.targetName || a.targetId || "—";
+      var kind = AUDIT_TARGET[a.targetType] || a.targetType || "";
+      var ok = a.result !== "fail";
+      return '<tr>' +
+        '<td class="audit-time">' + esc(fmtAuditTs(a.createdAt)) + '</td>' +
+        '<td class="audit-actor">' + esc(a.actorName || "系统") + '</td>' +
+        '<td><span class="tag tag-ghost">' + esc(AUDIT_LABEL[a.action] || a.action) + '</span></td>' +
+        '<td class="audit-target" title="' + esc(target) + '">' + esc(target) +
+          (kind ? '<span class="audit-kind">' + esc(kind) + '</span>' : '') + '</td>' +
+        '<td><span class="tag ' + (ok ? "tag-success" : "tag-danger") + '">' + (ok ? "成功" : "失败") + '</span></td>' +
+        '<td class="audit-detail" title="' + esc(a.detail || "") + '">' + esc(a.detail || "—") + '</td>' +
+        '<td class="audit-ip">' + esc(a.ip || "—") + '</td>' +
+      '</tr>';
+    }).join("");
+  }
+  if($("auditPage")){
+    $("auditPage").textContent = auditState.total
+      ? ("第 " + auditState.page + " / " + auditState.pages + " 页 · 保留 " + (data.retentionDays || 90) + " 天")
+      : "";
+  }
+  if($("auditPrev")) $("auditPrev").disabled = auditState.page <= 1;
+  if($("auditNext")) $("auditNext").disabled = !data.hasMore;
+}
+function loadSystemInfo(){
+  if(!$("sysGrid")) return;
+  $("sysGrid").innerHTML = '<div class="sys-card sys-loading">加载中…</div>';
+  API.get("/api/admin/system/info").then(function(d){
+    renderSystemInfo(d || {});
+  }).catch(function(ex){
+    $("sysGrid").innerHTML = '<div class="sys-card sys-loading">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function sysKv(rows){
+  return '<dl class="sys-kv">' + rows.map(function(r){
+    return '<div><dt>' + esc(r[0]) + '</dt><dd' + (r[2] ? ' class="' + r[2] + '"' : '') + '>' + esc(r[1] == null || r[1] === "" ? "—" : r[1]) + '</dd></div>';
+  }).join("") + '</dl>';
+}
+function sysCard(title, badge, body, tone){
+  return '<div class="sys-card' + (tone ? " " + tone : "") + '">' +
+    '<div class="sys-card-h"><span>' + esc(title) + '</span>' +
+    (badge ? '<span class="tag ' + (badge.tone || "tag-ghost") + '">' + esc(badge.text) + '</span>' : '') +
+    '</div>' + body + '</div>';
+}
+function renderSystemInfo(d){
+  var app = d.app || {}, rtInfo = d.runtime || {}, db = d.database || {};
+  var storage = d.storage || {}, mail = d.mail || {}, hook = d.webhook || {};
+  var sse = d.sse || {}, backup = d.backup || {}, audit = d.audit || {};
+  var dbOk = db.status === "up";
+  var cards = [];
+  cards.push(sysCard("版本与运行", { text:"v" + (app.version || "—") }, sysKv([
+    ["启动时间", app.startedAt],
+    ["已运行", fmtUptime(app.uptimeSeconds)],
+    ["Java", (rtInfo.javaVersion || "—") + (rtInfo.javaVendor ? " · " + rtInfo.javaVendor : "")],
+    ["系统", (rtInfo.osName || "—") + " / " + (rtInfo.osArch || "—")],
+    ["内存", fmtBytes(rtInfo.usedMemoryBytes) + " / " + fmtBytes(rtInfo.maxMemoryBytes)]
+  ]), dbOk ? "" : "sys-warn"));
+  cards.push(sysCard("数据库", { text: dbOk ? "连接正常" : "连接异常", tone: dbOk ? "tag-success" : "tag-danger" }, sysKv([
+    ["状态", dbOk ? "up" : "down"],
+    ["版本", db.version],
+    ["附件文件", (storage.fileCount || 0) + " 个 · " + fmtBytes(storage.totalBytes)],
+    ["存储目录", storage.path],
+    ["磁盘可用", storage.diskUsableBytes == null ? null : fmtBytes(storage.diskUsableBytes) + " / " + fmtBytes(storage.diskTotalBytes)]
+  ]), dbOk ? "" : "sys-warn"));
+  cards.push(sysCard("邮件投递", { text: mail.enabled ? "已启用" : "未启用", tone: mail.enabled ? "tag-success" : "tag-ghost" }, sysKv([
+    ["已发送", mail.sent || 0],
+    ["等待重试", mail.pending || 0],
+    ["最终失败", mail.failed || 0],
+    ["最近一封", mail.lastSentAt || mail.lastAt],
+    ["最近错误", mail.lastError]
+  ]), mail.failed > 0 ? "sys-warn" : ""));
+  var hookState = hook.configured ? (hook.enabled === false ? "已配置 · 关闭" : "已配置") : "未配置";
+  cards.push(sysCard("外部推送（当前空间）", { text: hook.workspaceName || "未知空间", tone: "tag-ghost" }, sysKv([
+    ["状态", hookState],
+    ["渠道", hook.channel],
+    ["站内通知", hook.inAppEnabled === false ? "关闭" : "开启"],
+    ["最近推送", hook.lastAt],
+    ["最近结果", hook.lastStatus]
+  ]), !hook.configured ? "sys-warn" : ""));
+  cards.push(sysCard("实时连接", { text: (sse.connections || 0) + " 条", tone: (sse.connections ? "tag-success" : "tag-ghost") }, sysKv([
+    ["SSE 连接", sse.connections || 0],
+    ["在线用户", sse.users || 0]
+  ])));
+  cards.push(sysCard("备份与审计", { text: "审计 " + (audit.total || 0) + " 条", tone: "tag-ghost" }, sysKv([
+    ["最近导入/清空", backup.lastImportAt ? (backup.lastImportAction === "clear" ? "清空" : "导入") + " · " + backup.lastImportAt : null],
+    ["导入说明", backup.lastImportDetail],
+    ["最近导出", backup.lastExportAt ? backup.lastExportDetail + " · " + backup.lastExportAt : null],
+    ["最早审计", audit.oldestAt],
+    ["审计总数", audit.total || 0]
+  ])));
+  $("sysGrid").innerHTML = cards.join("");
+}
+function resetAuditFilters(){
+  ["auditQ","auditFrom","auditTo"].forEach(function(id){ if($(id)) $(id).value = ""; });
+  if($("auditAction")) $("auditAction").value = "";
+  if($("auditResult")) $("auditResult").value = "";
+  loadAudit(1);
+}
+function exportAuditCsv(){
+  var p = auditParams(), parts = [];
+  for(var k in p){
+    if(Object.prototype.hasOwnProperty.call(p, k) && p[k]) parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(p[k]));
+  }
+  var url = API.url("/api/admin/audit/logs.csv" + (parts.length ? "?" + parts.join("&") : ""));
+  fetch(url, { credentials:"same-origin" }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    if(!res.ok) throw new Error("请求失败（HTTP " + res.status + "）");
+    return res.blob();
+  }).then(function(blob){
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = u;
+    a.download = "audit-" + rt.TODAY_ISO + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 1500);
+    toast("已导出审计日志 CSV", "fs");
+  }).catch(function(ex){
+    toast("导出失败：" + (ex.message || "网络异常"), "bad");
+  });
+}
+if($("btnAuditApply")) $("btnAuditApply").addEventListener("click", function(){ loadAudit(1); });
+if($("btnAuditReset")) $("btnAuditReset").addEventListener("click", resetAuditFilters);
+if($("btnAuditCsv")) $("btnAuditCsv").addEventListener("click", exportAuditCsv);
+if($("auditPrev")) $("auditPrev").addEventListener("click", function(){
+  if(auditState.page > 1) loadAudit(auditState.page - 1);
+});
+if($("auditNext")) $("auditNext").addEventListener("click", function(){
+  if(auditState.page < auditState.pages) loadAudit(auditState.page + 1);
+});
+if($("auditQ")) $("auditQ").addEventListener("keydown", function(e){
+  if(e.key === "Enter"){ e.preventDefault(); loadAudit(1); }
+});
+if($("auditAction")) $("auditAction").addEventListener("change", function(){ loadAudit(1); });
+if($("auditResult")) $("auditResult").addEventListener("change", function(){ loadAudit(1); });
+
 $("btnWsSave").addEventListener("click", function(){
   if(!rt.currentWs) return;
   var body = {
@@ -1296,7 +1528,8 @@ var SHORTCUT_ROWS = [
   ["g c / g g / g p","跳转：日历 / 甘特图 / 项目"],
   ["g r / g a / g s","跳转：周回顾 / 分析 / 设置"],
   ["0 / 1 / 2 / 3","卡片/列表行聚焦时设置优先级 P0–P3"],
-  ["/ 或 Ctrl/⌘ + K","聚焦全局搜索：任意视图可用；不支持筛选的视图不会自动跳页"],
+  ["Ctrl/⌘ + K","打开全局搜索：项目、工作项、文档、需求、用例一次搜到"],
+  ["/","聚焦顶部任务搜索框：在支持筛选的视图里直接过滤列表"],
   ["Space","卡片/列表行聚焦时打开详情抽屉"],
   ["D","卡片/列表行聚焦时改期（今天 / 明天 / 一周后＝5 个工作日 / 无期限，或选具体日期）"],
   ["X","卡片/列表行聚焦时标记完成；在已完成列内按 X 则取消完成"],
@@ -1369,7 +1602,8 @@ function renderUsers(list){
         return '<tr data-user-id="' + esc(u.id) + '">' +
           '<td><div class="user-acct">' + avatarHTML(u.displayName, "xl") +
             '<span class="mi"><span class="nm">' + esc(u.displayName) +
-              (isMe ? '<span class="self-tag">当前登录</span>' : '') + '</span>' +
+              (isMe ? '<span class="self-tag">当前登录</span>' : '') +
+              (u.disabled ? '<span class="self-tag">已停用</span>' : '') + '</span>' +
             '<span class="sub">@' + esc(u.username) + '</span></span>' +
           '</div></td>' +
           '<td class="user-email' + (u.email ? '' : ' empty') + '">' +
@@ -1389,6 +1623,30 @@ function userDeleteGuard(u){
   if(u.role === "admin" && userAdminCount <= 1) return "至少保留一名管理员";
   return "";
 }
+/* A4 停用/启用：停用≠删除，历史数据与负责人引用保留，只阻断登录与在线会话 */
+function userDisableGuard(u){
+  if(rt.currentUser && u.id === rt.currentUser.id) return "不能停用当前登录账号";
+  if(u.disabled) return "";
+  var activeAdmins = userCache.filter(function(x){ return x.role === "admin" && !x.disabled; }).length;
+  if(u.role === "admin" && activeAdmins <= 1) return "至少保留一名可用管理员";
+  return "";
+}
+function toggleUserDisabled(u){
+  var disabling = !u.disabled;
+  var run = function(){
+    API.put("/api/admin/users/" + encodeURIComponent(u.id) + "/disabled?disabled=" + disabling, {}).then(function(){
+      toast(disabling ? "已停用账号「" + u.displayName + "」（历史数据保留）"
+                      : "已启用账号「" + u.displayName + "」", "fs");
+      loadUsers();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  };
+  if(!disabling){ run(); return; }
+  UI.showConfirm({
+    title:"停用账号",
+    msg:"停用「" + esc(u.displayName) + "」？该账号将立即退出登录且无法再登录；其历史任务、负责人引用与成员关系全部保留，随时可重新启用。",
+    okText:"停用账号"
+  }).then(function(ok){ if(ok) run(); });
+}
 function removeUser(u){
   UI.showConfirm({
     title:"删除用户",
@@ -1404,10 +1662,15 @@ function removeUser(u){
 }
 function openUserMenu(anchor, u){
   var guard = userDeleteGuard(u);
+  var dGuard = userDisableGuard(u);
   var menu = document.createElement("div");
   menu.className = "menu";
   menu.innerHTML =
     '<button class="menu-item" type="button" data-act="pass">' + icon("refresh", 14) + '重置密码</button>' +
+    (dGuard && !u.disabled ? '<div class="menu-note">' + esc(dGuard) + '</div>' : '') +
+    '<button class="menu-item' + (u.disabled ? '' : ' danger') + '" type="button" data-act="toggle"' +
+      (dGuard && !u.disabled ? " disabled" : "") + '>' +
+      icon(u.disabled ? "check" : "pause", 14) + (u.disabled ? '启用账号</button>' : '停用账号</button>') +
     (guard ? '<div class="menu-note">' + esc(guard) + '</div>' : '') +
     '<button class="menu-item danger" type="button" data-act="del"' + (guard ? " disabled" : "") + '>' +
       icon("trash", 14) + '删除账号</button>';
@@ -1416,6 +1679,7 @@ function openUserMenu(anchor, u){
     if(!b || b.disabled) return;
     UI.closeAllPops();
     if(b.dataset.act === "pass") openUserPwdDialog(u.id, u.displayName);
+    else if(b.dataset.act === "toggle") toggleUserDisabled(u);
     else removeUser(u);
   });
   UI.openPop(menu, anchor, {

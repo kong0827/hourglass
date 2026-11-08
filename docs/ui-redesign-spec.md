@@ -1,6 +1,6 @@
-# 工作台（DevStudio）前端重构规范 v1.0
+# 工作台（Hourglass）前端重构规范 v1.0
 
-> **本文档的用途**：这是一份**面向 AI 编码工具的开发蓝本**。阅读者（AI 或工程师）应当**只依据本文档**完成 `devstudio-server/src/main/resources/static/` 下前端（HTML/CSS/JS）的重构，**不得改变任何后端接口的路径、入参、出参与语义**。
+> **本文档的用途**：这是一份**面向 AI 编码工具的开发蓝本**。阅读者（AI 或工程师）应当**只依据本文档**完成 `hourglass-server/src/main/resources/static/` 下前端（HTML/CSS/JS）的重构，**不得改变任何后端接口的路径、入参、出参与语义**。
 >
 > **阅读顺序**：先读 §0 使用说明与 §1 重构目标 → 按 §2 落地 CSS 令牌 → 按 §3 重建 Shell → 按 §4 建组件 → 按 §6/§7 逐页实现 → 按 §8 补交互 → 按 §9/§10 对齐架构与接口 → 按 §11 顺序实施 → 用 §12 验收。
 >
@@ -1851,14 +1851,14 @@ const API = {
 ---
 
 **文档版本**：v1.0 · 对应后端 `docs/接口契约.md` 契约版本（2026-10）
-**适用范围**：`devstudio-server/src/main/resources/static/` 全部前端资源
+**适用范围**：`hourglass-server/src/main/resources/static/` 全部前端资源
 **变更方式**：如实施中发现本文档与 `接口契约.md` 冲突，以 `接口契约.md` 为准，并回写本文档。
 
 ---
 
 ## 附录 C：v1.1 增量（2026-10-16 功能评估报告改造）
 
-> 来源：`工作台DevStudio-功能评估报告-2026-10-16.html`。本节记录**对 v1.0 规范的修订**，其余章节继续有效。
+> 来源：`工作台Hourglass-功能评估报告-2026-10-16.html`。本节记录**对 v1.0 规范的修订**，其余章节继续有效。
 
 ### C.1 §4.7 卡片规格修订
 
@@ -2862,7 +2862,7 @@ node tools/shots/shot-gantt.mjs    # default / zoom40 / 1280 / month / group / f
 ```
 
 截图：`docs/images/_shot_gantt-default.png`、`-zoom40`、`-1280`、`-month`、`-group`、`-filter`。
-SW `CACHE_NAME` 已递增到 `devstudio-shell-v35`。
+SW `CACHE_NAME` 已递增到 `hourglass-shell-v35`。
 
 ---
 
@@ -2940,7 +2940,7 @@ node tools/preview/gen-preview.js
 - 未排期列表仍只显示前 50 条；`/api/tasks/list` 仍是 500 条截断；无行虚拟化（P1-1/P1-2）。
 - 批量保存是 N 次 PUT，不是事务；P1 可换批量接口。
 - 移动端仍不适配；打印未做分页表头重复。
-- SW `CACHE_NAME` 递增到 `devstudio-shell-v36`（V1.4/V2.0 上线时最终为 `devstudio-shell-v44`）。
+- SW `CACHE_NAME` 递增到 `hourglass-shell-v36`（V1.4/V2.0 上线时最终为 `hourglass-shell-v44`）。
 
 ---
 

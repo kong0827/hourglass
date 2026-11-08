@@ -1,4 +1,4 @@
-# DevStudio 全面优化方案（2026-10-31）
+# Hourglass 全面优化方案（2026-10-31）
 
 > 面向：后续负责落地的 AI / 开发者。本文是**只读审查**的结论，没有改任何代码。
 > 范围：页面与信息架构、交互、视觉与无障碍、功能重叠、正确性与安全、前端性能、后端与数据库性能、部署配置、代码结构。
@@ -10,7 +10,7 @@
 
 1. 技术栈不变：Java 8 / Spring Boot 2.7 / MyBatis / MySQL 8；前端**零框架、零构建**（可用原生 ES Module + `import()`，不引入 webpack / vite / React）。
 2. SQL 迁移只**新增**编号脚本（从 `sql/17_*.sql` 开始），必须幂等（可重复执行）。**不要修改 `sql/09_task_flow.sql`**（有外部改动）。
-3. 改了 `static/` 下任何前端资源，必须同步提升 `static/sw.js` 的 `CACHE_NAME`（当前 `devstudio-shell-v46`），或者先完成 [F-LOAD-3] 的版本号统一。
+3. 改了 `static/` 下任何前端资源，必须同步提升 `static/sw.js` 的 `CACHE_NAME`（当前 `hourglass-shell-v46`），或者先完成 [F-LOAD-3] 的版本号统一。
 4. 改了表结构、或者改了"任务挂了哪些子表"，要同步检查 `BackupService`（备份格式当前是 v5）和级联删除清单（见 [BE-ARCH-3]）。
 5. README「几个刻意的设计」中的口径（工时封顶 8h、计时归属于人、完成后接力、日历按实际结束日铺开、回顾三区互斥、历史回顾靠日志还原、任务清单是快照）**不要改动**。本文与这些口径冲突的地方，已经单独标成「需决策」。
 6. 不要替用户 commit、push 或部署。所有改动的验证方式是：`mvn -o -DskipTests package` 通过，并在无头浏览器里预览，确认没有 JS 异常。
@@ -400,7 +400,7 @@ ALTER TABLE task ADD KEY idx_remind_scan (remind_sent, remind_at);       -- 配�
 - **备份导入导出**：`BackupService.java:121-722`：导入在一个事务里逐行插入，每个已完成任务还要调用一次 `archive`；导出把所有表都加载进堆内存。→ 导入时先预加载用户和成员的 Map，按 500 行一批做多值 INSERT（配合 OPS-3 的 `rewriteBatchedStatements`）；导出改用 Jackson `JsonGenerator` 流式输出（当前 `-Xmx320m`，有 OOM 风险）。
 
 ### BE-RT-1 调度线程池 `P0·S`
-- **位置**：`DevStudioApplication.java:7`（`@EnableScheduling`，全项目都没有配置 TaskScheduler）。SSE 心跳（每 25 秒，`SseService.java:242-254`）、`remindScan`（每 5 分钟）、`dailyPush`、凌晨 4:30 的 purge 都挤在同一个线程上。
+- **位置**：`HourglassApplication.java:7`（`@EnableScheduling`，全项目都没有配置 TaskScheduler）。SSE 心跳（每 25 秒，`SseService.java:242-254`）、`remindScan`（每 5 分钟）、`dailyPush`、凌晨 4:30 的 purge 都挤在同一个线程上。
 - **影响**：只要有一个慢任务（webhook 超时、purge 积压），心跳就会延迟；前端判定 SSE 不健康后转入轮询，引发连锁式的刷新。
 - **建议**：`application.yml` 增加 `spring.task.scheduling.pool.size: 4`；外部推送放到 `@Async` 的有界线程池里（核心线程 2，队列 100）。
 
@@ -461,7 +461,7 @@ ALTER TABLE task ADD KEY idx_remind_scan (remind_sent, remind_at);       -- 配�
 ## 9. 部署与配置
 
 ### OPS-1 gzip 与静态资源缓存头 `P0·S`
-- **位置**：`deploy/nginx-devstudio.conf`（没有 gzip，也没有单独的静态资源 location）、`application.yml:24-25`（`cache.period: 0`）
+- **位置**：`deploy/nginx-hourglass.conf`（没有 gzip，也没有单独的静态资源 location）、`application.yml:24-25`（`cache.period: 0`）
 - **建议**：
 ```nginx
 gzip on; gzip_min_length 1024;
@@ -493,8 +493,8 @@ spring.datasource.hikari.connection-timeout: 3000
 - 开启 HTTP/2，这是 CODE-5 模块化之后的前提（需要 HTTPS，属于用户负责的部署层）。
 
 ### OPS-5 JVM 参数 `P1·S`
-- **位置**：`deploy/devstudio.service:14`（`-Xms128m -Xmx320m`）
-- **建议**：`-Xms320m -Xmx320m -XX:MaxMetaspaceSize=128m -Xss512k -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/devstudio -XX:+ExitOnOutOfMemoryError`。GC 按核数选择：单核用 `-XX:+UseSerialGC`，两核及以上用 G1。
+- **位置**：`deploy/hourglass.service:14`（`-Xms128m -Xmx320m`）
+- **建议**：`-Xms320m -Xmx320m -XX:MaxMetaspaceSize=128m -Xss512k -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/hourglass -XX:+ExitOnOutOfMemoryError`。GC 按核数选择：单核用 `-XX:+UseSerialGC`，两核及以上用 G1。
 
 ---
 
@@ -788,7 +788,7 @@ spring.datasource.hikari.connection-timeout: 3000
 
 **第三十六轮：复查修复**
 - 分支页：状态筛选点击从已删除的顶部格子迁到列头（`#branchGroups` 上的 `data-br-filter`），点击列头只看该状态、再点取消。
-- SW 升至 `devstudio-shell-v69`，预览稿重生成；`node tools/check-assets.js` 校验预缓存清单与页面引用一致。
+- SW 升至 `hourglass-shell-v69`，预览稿重生成；`node tools/check-assets.js` 校验预缓存清单与页面引用一致。
 
 **第三十七轮：TOP-6 我的任务分页**
 - 后端：`/api/my-tasks` 新增 `offset` / `limit`（默认 0 / 200，上限 500，服务端收敛）；`TaskMapper` 新增 `myTasksWhere` 共享片段，列表 / `COUNT` / 覆盖空间三条 SQL 复用，筛选口径不会漂移；排序追加 `t.id` 保证翻页边界稳定。
@@ -817,7 +817,7 @@ spring.datasource.hikari.connection-timeout: 3000
 - 状态对象化：原 149 个顶层 `var` 中，39 个会被跨视图写入的变量收进 `core/state.js` 的 `rt` 对象（`rt.listCache`、`rt.currentWs`、`rt.analysisTab`…），其余仍是模块私有 `var`；视图之间只通过 `rt` 或函数交换数据。
 - 加载策略：看板 / 列表 / 日历 / 我的任务 / 分支 / 需求 / 抽屉等首屏与半首屏模块同步 `import`；甘特、项目、周回顾、分析、设置、个人设置通过 `core/view-loader.js` 在第一次进入时 `import()`，同一模块只加载一次；`index.html` 改为 `<script type="module">` + `modulepreload`。
 - 兼容：`share.html` 仍使用独立的 `share.js`（入口改为 module，`GS` 改为 import）；`login.html` / `join.html` 的内联脚本改为 module 并 `import { API }`。
-- 工具链：`sw.js` 预缓存清单扩充到 50 项并升至 `devstudio-shell-v73`；`tools/check-assets.js` 新增 ES Module 静态 import 图递归校验；`tools/preview/gen-preview.js` 改为按 import 图拼接单文件预览包，并通过 `window.__DS_MODULES__` 让低频视图在预览稿里也能按需取用；`deploy/deploy.sh` 的字节校验清单同步为模块文件。
+- 工具链：`sw.js` 预缓存清单扩充到 50 项并升至 `hourglass-shell-v73`；`tools/check-assets.js` 新增 ES Module 静态 import 图递归校验；`tools/preview/gen-preview.js` 改为按 import 图拼接单文件预览包，并通过 `window.__HG_MODULES__` 让低频视图在预览稿里也能按需取用；`deploy/deploy.sh` 的字节校验清单同步为模块文件。
 - 保留：IA/UX/MOB、ETag（`core/api.js` 未改请求层）、SSE、计时胶囊、甘特窗口化、筛选/搜索/保存视图。
 - 验证：`mvn -o -DskipTests package`、`mvn test`（43 个测试）、全量模块 acorn/module 语法检查、`node --check`（工作台入口外的工具脚本）、`node tools/preview/gen-preview.js`、`node tools/check-assets.js`、无头 Edge 冒烟：12 个路由全部渲染且无 JS 异常；真实模块模式下首屏只加载 6 个视图 chunk，进入甘特/设置时才请求对应 chunk；任务抽屉打开后分支下拉 5 项（按需加载成功）。
 - 体积：首屏静态模块 321.5 KB 原始（约等于 90 KB gzip 传输），低频视图 chunk 225 KB 按需加载。**未达到计划里"首屏原始 <150 KB"的目标**：抽屉（34 KB）、筛选栏（16 KB）等虽属低频但交互入口密集，继续拆分需要把大量跨模块调用改成异步，风险大于收益，暂缓。

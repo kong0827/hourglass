@@ -16,9 +16,7 @@ Progress, work hours, member workload, overdue risks, and delivery reports are a
 
 ## Live Demo
 
-- URL: http://43.156.155.204/hourglass/
-- Guest account: `visitor` / `Visitor@2026`
-- Note: demo data may be reset; do not store real business data
+Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself (about 30 minutes, see [`deploy/README.md`](deploy/README.md)), or load the demo seed [`sql/seeds/seed_demo_public.sql`](sql/seeds/seed_demo_public.sql) into a local instance. Contact the maintainers for access to a hosted demo.
 
 ---
 
@@ -37,7 +35,7 @@ Existing tools are either pure task boards (execution without requirements or me
 
 | Dimension | Description |
 | --- | --- |
-| Who it's for | R&D teams of 10–50: they run requirement management and iterations, but have no dedicated PMO |
+| Who it's for | Recommended for R&D teams of 50 or fewer people: they run requirement management and iterations, but have no dedicated PMO |
 | Form factor | Single instance, self-hosted: one jar + MySQL; no Redis / MQ / object storage required |
 | Core thesis | Task management is not the goal — **hours and retrospectives** are; moving a task drives the timer, and timers accumulate into weekly retrospectives and monthly delivery lists |
 | Product style | Small and sharp: restrained scope, consistent metrics, every number explainable — no feature stacking to match big products |
@@ -144,22 +142,27 @@ For the deeper information model, unified metric rules, the role-permission matr
 
 | Not doing / limited | Why |
 | --- | --- |
-| Multi-tenant SaaS, large-scale horizontal scaling | Self-hosted for teams under 50; single instance is a deliberate choice |
+| Multi-tenant SaaS, large-scale horizontal scaling | Recommended for self-hosted teams of 50 or fewer people; single instance is a deliberate choice |
 | Real-time collaborative spreadsheet editing | The online spreadsheet is for viewing attachments and quick edits; last-write-wins on save |
 | Predictive statistics and AI scoring | Metrics are retrospective and traceable only; no unexplainable model outputs |
 | Migration from other platforms | No Jira / ZenTao importers; internal backups restore per workspace |
 
 ## Collaboration
 
-This project evolved from **wokstudio**, a personal kanban project started by [chc2](https://gitee.com/chc2) (chenghongchang), and was later upgraded into **Hourglass**, a self-hosted R&D collaboration workbench for small teams. It is now maintained by chc2 and continuously improved.
+This project evolved from a personal kanban project started by [chc2](https://gitee.com/chc2) (chenghongchang) into **Hourglass**, a self-hosted R&D collaboration workbench for small teams. It is now maintained by chc2 and continuously improved.
 
 Key contributors:
 
-- [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; original wokstudio design and core implementation; continues to develop and expand Hourglass
+- [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; designed and implemented the original personal kanban project; continues to develop and expand Hourglass
 - kongxiangjin
 
 ## License
 
-[Mulan Permissive Software License, Version 2 (MulanPSL-2.0)](LICENSE)
+[PolyForm Noncommercial License 1.0.0](LICENSE): **source-available, no commercial use**. This is not OSI-approved open source.
 
-Licenses and copyrights of the bundled third-party frontend libraries (Univer, SheetJS, SunEditor, marked, DOMPurify) are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- **Permitted**: use, modification and distribution for noncommercial purposes — personal study, research, experimentation, hobby projects; and use by charitable organizations, educational institutions, public research organizations, public safety or health organizations, environmental protection organizations and government institutions, regardless of funding.
+- **Not permitted**: any commercial use — running the software in business operations, offering the software or services based on it for a fee, or using it in client delivery projects.
+- **Commercial licensing**: enterprise intranet deployments, client delivery and paid pilots require a separate commercial license from the copyright holders (contact details to be added).
+- Copyright, project history and contributor terms: see [NOTICE](NOTICE). Trademarks (the "Hourglass" name and logo) are not licensed.
+- Licenses and copyrights of the bundled third-party frontend libraries (Univer, SheetJS, SunEditor, marked, DOMPurify, React, RxJS) and backend dependencies are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- Note: **MySQL Connector/J is GPL-2.0 with the Oracle FOSS Exception**, which most likely does not cover an application under a non-open-source license. Resolve it as described in that file before redistributing any build artifact.

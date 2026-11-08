@@ -193,6 +193,20 @@ import { API } from "./core/api.js";
       '<path d="M0,0 L8,4 L0,8 Z" fill="var(--text-3)"></path></marker></defs>' + out.join("") + '</svg>';
   }
 
+  /* 链接缺失 / 失效 / 过期：整页切到独立错误页，避免留下空白甘特让人误以为仍在加载 */
+  function showShareError(opts) {
+    opts = opts || {};
+    var page = $("shareErrorPage");
+    if (!page) return;
+    document.body.classList.add("share-error-mode");
+    $("shareErrorTitle").textContent = opts.title || "无法打开分享";
+    $("shareErrorDetail").textContent = opts.detail || "链接无效或已过期。";
+    $("shareErrorHint").textContent = opts.hint || "请向分享者重新获取完整链接。";
+    $("shareErrorRetry").hidden = !opts.retry;
+    page.hidden = false;
+    document.title = "无法打开分享 · 沙漏";
+  }
+
   function boot() {
     var token = "";
     var kind = "";
@@ -202,7 +216,10 @@ import { API } from "./core/api.js";
       kind = q.get("kind") || "";
     } catch (e) { token = ""; }
     if (!token) {
-      scroll.innerHTML = '<div class="share-error">链接缺少 token 参数，无法查看。</div>';
+      showShareError({
+        detail: "链接缺少 token 参数，无法查看。",
+        hint: "分享链接不完整，可能被聊天工具截断；请向分享者重新获取。"
+      });
       return;
     }
     if (kind === "doc") { bootDoc(token); return; }
@@ -217,7 +234,11 @@ import { API } from "./core/api.js";
         render();
       })
       .catch(function (ex) {
-        scroll.innerHTML = '<div class="share-error">无法打开分享：' + esc(ex.message || "网络异常") + '</div>';
+        showShareError({
+          detail: ex.message || "网络异常",
+          hint: "链接可能已失效，或网络暂时不可用；可稍后重试或向分享者重新获取链接。",
+          retry: true
+        });
       });
   }
 
@@ -241,7 +262,6 @@ import { API } from "./core/api.js";
     return mdLibPromise;
   }
   function bootDoc(token) {
-    var body = $("docShareBody");
     fetch(API.base + "/api/share/docs?token=" + encodeURIComponent(token), { credentials: "omit" })
       .then(function (r) { return r.text(); })
       .then(function (txt) { return JSON.parse(txt); })
@@ -250,7 +270,11 @@ import { API } from "./core/api.js";
         renderDoc(j.data);
       })
       .catch(function (ex) {
-        body.innerHTML = '<div class="share-error">无法打开分享：' + esc(ex.message || "网络异常") + '</div>';
+        showShareError({
+          detail: ex.message || "网络异常",
+          hint: "链接可能已失效，或网络暂时不可用；可稍后重试或向分享者重新获取链接。",
+          retry: true
+        });
       });
   }
   function renderDoc(d) {
@@ -296,5 +320,6 @@ import { API } from "./core/api.js";
     if (!state.range) return;
     scroll.scrollLeft = Math.max(0, dayDiff(today(), state.range.start) * state.dayW - 160);
   });
+  $("shareErrorRetry").addEventListener("click", function () { location.reload(); });
 
   boot();

@@ -1825,7 +1825,7 @@ function renderGanttFilterMenu(){
     return ganttFilterChip("data-gantt-version", v.id, esc(v.label), state.versions.indexOf(v.id) !== -1);
   }).join("");
   var projHTML = rt.reqList.map(function(r){
-    return ganttFilterChip("data-gantt-req", r.id, esc(r.name), state.reqs.indexOf(r.id) !== -1);
+    return ganttFilterChip("data-gantt-req", r.id, esc(r.name) + (r.archivedAt ? "（已归档）" : ""), state.reqs.indexOf(r.id) !== -1);
   }).join("");
   if(state.reqs.indexOf("__none") !== -1){
     projHTML += ganttFilterChip("data-gantt-req", "__none", "未归类", true);

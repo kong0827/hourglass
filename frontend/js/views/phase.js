@@ -19,6 +19,7 @@ var editingVerId = null;
 var viewMode = "phase";            /* phase | version | overview */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
+var loadSeq = 0;
 /* 任务抽屉的「影响版本」选项缓存：按项目缓存，写版本后失效 */
 var versionOptionsCache = {};
 var taskOptionsCache = {};
@@ -80,10 +81,12 @@ function phaseOf(t, firstRel){
 
 function syncReqSel(){
   if(!phaseReq) return;
-  phaseReq.innerHTML = rt.reqList.map(function(r){
-    return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
+  /* 归档项目默认不出现在切换器里，但当前正在看的那一个保留，避免视图突然跳走 */
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.phaseReqId; });
+  phaseReq.innerHTML = list.map(function(r){
+    return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   }).join("");
-  if(!rt.phaseReqId && rt.reqList.length) rt.phaseReqId = rt.reqList[0].id;
+  if(!rt.phaseReqId && list.length) rt.phaseReqId = list[0].id;
   if(rt.phaseReqId) phaseReq.value = rt.phaseReqId;
 }
 function invalidateVersionCache(reqId){
@@ -102,18 +105,20 @@ function loadPhaseData(){
   if(phaseMeta) phaseMeta.textContent = reqNameById(rt.phaseReqId);
   phaseBody.innerHTML = UI.skeletonRows(4);
   var reqId = rt.phaseReqId;
+  var current = ++loadSeq;
   Promise.all([
     API.get("/api/phase/stats", { reqId: reqId }),
     API.get("/api/versions/stats", { reqId: reqId }),
     API.get("/api/versions", { reqId: reqId }),
     API.get("/api/versions/task-options", { reqId: reqId })
   ]).then(function(rs){
-    if(rt.phaseReqId !== reqId) return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview") return;
     cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3] };
     versionOptionsCache[reqId] = rs[2];
     taskOptionsCache[reqId] = rs[3];
     renderPhaseView();
   }).catch(function(ex){
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview") return;
     phaseBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
     });
@@ -148,12 +153,15 @@ function reloadView(){
 /* ---------- 全部项目总览（管理端） ---------- */
 
 function loadOverview(){
+  var current = ++loadSeq;
   if(phaseMeta) phaseMeta.textContent = "全部项目";
   phaseBody.innerHTML = UI.skeletonRows(5);
   API.get("/api/versions/overview").then(function(ov){
+    if(current !== loadSeq || viewMode !== "overview") return;
     overviewCache = ov;
-    if(viewMode === "overview") renderOverviewMode();
+    renderOverviewMode();
   }).catch(function(ex){
+    if(current !== loadSeq || viewMode !== "overview") return;
     phaseBody.innerHTML = UI.emptyState({
       icon:"alert", title:"总览加载失败", text: ex.message || "网络异常，请稍后重试"
     });
@@ -1247,4 +1255,4 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(ua){ openUnboundTasks(); return; }
 });
 
-export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView };
+export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView, showReleaseNote };

@@ -19,6 +19,9 @@ public interface UserMapper {
 
     AppUser selectById(String id);
 
+    /** 串行化同账号的计时开始/停止（SELECT ... FOR UPDATE，须在事务内调用） */
+    String lockById(@Param("id") String id);
+
     /** 账号级会话代次（不存在返回 null） */
     Long selectSessionVersion(@Param("id") String id);
 
@@ -48,6 +51,9 @@ public interface UserMapper {
     int update(AppUser user);
 
     int updatePassword(@Param("id") String id, @Param("passwordHash") String passwordHash);
+
+    /** 停用/启用账号（A4）：只改 disabled 位；代次 bump 由 Service 决定 */
+    int updateDisabled(@Param("id") String id, @Param("disabled") boolean disabled);
 
     int updateLastWorkspace(@Param("id") String id, @Param("workspaceId") String workspaceId);
 

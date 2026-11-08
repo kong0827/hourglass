@@ -27,8 +27,11 @@ function askSwitchWorkspace(wsId, wsName, opts){
   var msg = opts.taskTitle
     ? ('即将切换到「' + esc(target) + '」并打开任务「' + esc(opts.taskTitle) + '」。<br><br>' +
        '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。')
-    : ('切换到「' + esc(target) + '」会重新加载页面。<br><br>' +
-       '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。');
+    : opts.linkTitle
+      ? ('即将切换到「' + esc(target) + '」并打开通知关联内容「' + esc(opts.linkTitle) + '」。<br><br>' +
+         '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。')
+      : ('切换到「' + esc(target) + '」会重新加载页面。<br><br>' +
+         '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。');
   return UI.showConfirm({
     title: opts.title || "切换空间",
     msg: msg,
@@ -40,6 +43,9 @@ function askSwitchWorkspace(wsId, wsName, opts){
     return API.post("/api/workspaces/" + encodeURIComponent(wsId) + "/select", {}).then(function(){
       if(opts.openTaskId){
         try{ sessionStorage.setItem("ds.openTask", opts.openTaskId); }catch(e){ /* noop */ }
+      }
+      if(opts.openLink && opts.openLink.kind && opts.openLink.id){
+        try{ sessionStorage.setItem("ds.openNoticeLink", JSON.stringify(opts.openLink)); }catch(e){ /* noop */ }
       }
       window.location.reload();
       return true;

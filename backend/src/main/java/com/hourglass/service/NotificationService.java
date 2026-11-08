@@ -660,7 +660,7 @@ public class NotificationService {
         } else {
             String err = Webhooks.check(hook);
             if (err != null) {
-                log.warn("推送地址被拒绝（{}）：{}", err, Texts.cut(hook, 100));
+                log.warn("推送地址被拒绝（{}），空间 {}", err, ws.getId());
                 recordResult(ws, "failed:" + Texts.cut(err, 120));
                 return false;
             }
@@ -705,7 +705,7 @@ public class NotificationService {
             recordResult(ws, "success");
             return true;
         } catch (Exception e) {
-            log.warn("推送请求失败", e);
+            log.warn("推送请求失败：{}", safeError(e));
             /* 异常文本可能带完整 webhook（serverchan 的 URL 里就有 token），回写到设置页前先脱敏 */
             recordResult(ws, "failed:" + Texts.cut(safeError(e), 120));
             return false;

@@ -36,8 +36,8 @@ class DemandServiceNotificationTest {
 
         service.pass("admin", "W1", "D1", null);
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」评审通过"), anyString(), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」评审通过"), anyString(), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test
@@ -49,8 +49,8 @@ class DemandServiceNotificationTest {
 
         service.reject("admin", "W1", "D1", body);
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」评审拒绝"), eq("not ready"), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」评审拒绝"), eq("not ready"), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test
@@ -68,8 +68,8 @@ class DemandServiceNotificationTest {
 
         service.plan("admin", "W1", "D1", body);
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」已排期"), eq("目标版本：1.0"), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」已排期"), eq("目标版本：1.0"), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test
@@ -79,8 +79,8 @@ class DemandServiceNotificationTest {
 
         service.reopen("admin", "W1", "D1", null);
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」重新打开"), anyString(), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」重新打开"), anyString(), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test
@@ -93,8 +93,8 @@ class DemandServiceNotificationTest {
 
         service.update("admin", "W1", "D1", req);
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand2」已被编辑"), eq("需求内容有更新（仍处于待评审）"), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand2」已被编辑"), eq("需求内容有更新（仍处于待评审）"), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test
@@ -104,8 +104,8 @@ class DemandServiceNotificationTest {
 
         service.delete("admin", "W1", "D1");
 
-        verify(events).notify(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
-                eq("需求「Demand」已被删除"), anyString(), isNull(), eq("R1"));
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「Demand」已被删除"), anyString(), eq("demand"), eq("D1"), eq("R1"));
     }
 
     @Test

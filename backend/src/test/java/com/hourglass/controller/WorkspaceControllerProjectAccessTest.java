@@ -53,7 +53,8 @@ class WorkspaceControllerProjectAccessTest {
         activityService = mock(ActivityService.class);
         notificationEvents = mock(NotificationEventService.class);
         mvc = MockMvcBuilders.standaloneSetup(new WorkspaceController(workspaceService, mock(UserMapper.class),
-                        projectAccessService, requirementMapper, activityService, notificationEvents))
+                        projectAccessService, requirementMapper, activityService, notificationEvents,
+                        mock(com.hourglass.service.AuditService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         LoginUser user = new LoginUser("U1", "u1", "x", "我", "user");
@@ -127,7 +128,7 @@ class WorkspaceControllerProjectAccessTest {
 
         verify(notificationEvents).notifySystem("U2", WS, NotificationEventService.PROJECT_ACCESS,
                 "项目可见范围已调整：「项目A」",
-                "你在空间「W1」中对该项目的可见范围已调整为「不可见」", null);
+                "你在空间「W1」中对该项目的可见范围已调整为「不可见」", null, "project", "P1");
     }
 
     @Test
@@ -158,7 +159,7 @@ class WorkspaceControllerProjectAccessTest {
 
         verify(notificationEvents).notifySystem("U2", WS, NotificationEventService.MEMBER_REMOVED,
                 "你已被移出空间「W1」",
-                "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主", null);
+                "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主", null, "workspace", "W1");
     }
 
     private void workspace(String type) {

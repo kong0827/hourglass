@@ -66,8 +66,8 @@ class ProjectVersionServiceTest {
 
         assertSame(released, result);
         verify(versions, never()).release(anyString(), anyString());
-        verify(notifications, never()).notify(anyString(), anyString(), anyString(),
-                anyString(), anyString(), any(), anyString());
+        verify(notifications, never()).notifyLinked(anyString(), anyString(), anyString(),
+                anyString(), anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -82,12 +82,12 @@ class ProjectVersionServiceTest {
 
         service.publish(USER, WS, "V1");
 
-        verify(notifications).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "版本「V1」已发布", "你负责的 2 项任务已随该版本发布", null, "R1");
-        verify(notifications, never()).notify(eq("U3"), anyString(), anyString(),
-                anyString(), anyString(), any(), anyString());
-        verify(notifications, never()).notify(eq(USER), anyString(), anyString(),
-                anyString(), anyString(), any(), anyString());
+        verify(notifications).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "版本「V1」已发布", "你负责的 2 项任务已随该版本发布", "version", "V1", "R1");
+        verify(notifications, never()).notifyLinked(eq("U3"), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(notifications, never()).notifyLinked(eq(USER), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -106,8 +106,8 @@ class ProjectVersionServiceTest {
         order.verify(versionTasks).deleteByVersion(WS, "V1");
         order.verify(demands).clearVersionRefsByVersion(WS, "V1");
         order.verify(versions).deleteById(WS, "V1");
-        order.verify(notifications).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "版本「V1」已删除", "你负责的 2 项任务已随该版本解绑", null, "R1");
+        order.verify(notifications).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "版本「V1」已删除", "你负责的 2 项任务已随该版本解绑", "version", "V1", "R1");
     }
 
     @Test

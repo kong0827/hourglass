@@ -98,6 +98,12 @@
         e.silent = true;
         throw e;
       }
+      /* fetch 只在断网 / DNS / 连接被拒时抛 TypeError，统一转成可读中文，别把英文原文丢到界面 */
+      if (err && err.name === "TypeError") {
+        var netErr = new Error("网络异常，请检查网络连接后重试");
+        netErr.network = true;
+        throw netErr;
+      }
       throw err;
     }).then(function (res) {
       if (timer) { clearTimeout(timer); timer = null; }

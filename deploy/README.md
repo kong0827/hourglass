@@ -14,7 +14,7 @@ deploy/dist/Hourglass-<版本>/
   config/application.yml           外置配置，与 jar 同级的 config 目录会自动加载
   config/hourglass.env.example     环境变量模板 → 复制为 /etc/hourglass.env
   deploy/                          hourglass.service、nginx 配置、backup.sh、本指南
-  sql/                             建库脚本、种子数据、上线清单
+  sql/                             建库脚本、种子数据、上线清单（上线清单属内部资料、不在仓库内；build.bat 会按脚本注释的路径取用，缺失时只告警不中断打包）
 deploy/dist/Hourglass-<版本>.zip    同一交付包的压缩版
 ```
 
@@ -44,11 +44,12 @@ date
 sudo timedatectl set-timezone Asia/Shanghai
 
 # 建库 + 建应用账号 + 建表（全新部署只需这一个文件，需 root 执行，可重复执行）
-# 内含：CREATE DATABASE hourglass、账号 'hourglass'@'%'（库内全部权限）、全部表结构
+# 内含：CREATE DATABASE hourglass、随机口令创建账号 'hourglass'@'%'（库内全部权限）、全部表结构
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-> 账号密码写在脚本里（占位值 `ChangeMe_Hourglass_2026!`），上线前改成强密码，并同步 `/etc/hourglass.env` 的 `DB_PASSWORD`；账号已存在时脚本不会覆盖密码，改密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。
+> 应用账号不再内置固定口令：脚本首次执行时用 `RANDOM_BYTES` 随机生成一次性密码，并在结束时以「沙漏部署提示」输出一次。**请立即把该密码写进第 3 步 `/etc/hourglass.env` 的 `DB_PASSWORD`（用单引号包裹）**；这条提示不会再次出现，也不要把建库输出重定向或记录到日志文件里。
+> 账号已存在时脚本不改动其密码，只输出提示；重置密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。若你的 MySQL 禁用了 `RANDOM_BYTES`，按脚本内注释改用 `SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)`，或先手工建号再执行脚本。
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
 > 已部署过的库升级仍执行 `sql/` 下对应的增量脚本（如 `31_branch_project.sql`），不要重跑完整基线（会重建表）。
 

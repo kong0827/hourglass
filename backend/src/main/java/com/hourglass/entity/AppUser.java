@@ -18,6 +18,8 @@ public class AppUser {
     private String email;
     /** admin/user（只管账号，不等于空间权限） */
     private String role;
+    /** 1=已停用：不可登录、会话即刻失效；历史数据与负责人引用保留（A4 账号治理） */
+    private Boolean disabled;
     /** 会话代次：密码/角色变更时递增，旧会话失效（不输出给前端） */
     @JsonIgnore
     private Long sessionVersion;

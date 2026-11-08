@@ -17,6 +17,12 @@ public interface RequirementDocMapper {
 
     RequirementDoc selectById(@Param("id") String id);
 
+    /** 全局搜索：标题/正文 LIKE（不走全文索引，短词也能稳定命中） */
+    List<com.hourglass.dto.SearchHit> searchVisible(@Param("workspaceId") String workspaceId,
+                                                    @Param("viewerId") String viewerId,
+                                                    @Param("q") String q,
+                                                    @Param("limit") int limit);
+
     /** 账号删除后清理文档负责人引用 */
     int clearOwnerUser(@Param("userId") String userId);
 

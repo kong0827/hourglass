@@ -69,6 +69,6 @@ public class MetricsService {
 
     /** 工时汇总：累计 / 本周期 × 全空间 / 我（一次 SQL；viewerId 非空时排除不可见项目） */
     public WorkSumRow workMinutes(String workspaceId, String userId, LocalDateTime from, String viewerId) {
-        return timeLogMapper.sumWork(workspaceId, userId, from, null, viewerId);
+        return timeLogMapper.sumWork(workspaceId, userId, from, null, viewerId, null);
     }
 }

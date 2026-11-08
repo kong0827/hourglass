@@ -46,8 +46,8 @@ class RequirementDocServiceNotificationTest {
         service.update("U1", WS, "D1", request("<p>new</p>"));
 
         assertEquals("U2", d.getOwnerUserId(), "未带负责人时编辑不能把负责人换成操作者");
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "文档「文档」已更新", "文档内容或属性有更新", null, "R1");
+        verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "文档「文档」已更新", "文档内容或属性有更新", "doc", "D1", "R1");
     }
 
     @Test
@@ -68,8 +68,8 @@ class RequirementDocServiceNotificationTest {
 
         service.delete("U1", WS, "D1");
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "文档「文档」已被删除", "需求文档已删除，关联任务已解绑", null, "R1");
+        verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "文档「文档」已被删除", "需求文档已删除，关联任务已解绑", "doc", "D1", "R1");
     }
 
     private RequirementDoc doc() {

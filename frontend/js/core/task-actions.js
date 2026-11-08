@@ -16,17 +16,23 @@ import { loadList, refreshListIfOpen } from "../views/list.js";
 function taskLink(id){
   return window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(id);
 }
+var openTaskSeq = 0;
 function openTaskById(id){
+  var seq = ++openTaskSeq;
   var local = taskById(id);
   if(local && !local.deletedAt){ openTaskDrawer(null, local); return Promise.resolve(true); }
   /* 路径用单数 /api/task/{id}：与 /api/tasks/list、/api/tasks/done 零歧义 */
   return API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
+    if(seq !== openTaskSeq) return false;
     if(!t){ toast("任务不存在或你没有访问权限", "warn"); return false; }
     if(t.deletedAt){ toast("该任务已被删除，可在回收站查看", "warn"); return false; }
     taskCacheExtra[t.id] = t;
     openTaskDrawer(null, t);
     return true;
-  }).catch(function(){ toast("任务不存在或你没有访问权限", "warn"); return false; });
+  }).catch(function(){
+    if(seq === openTaskSeq) toast("任务不存在或你没有访问权限", "warn");
+    return false;
+  });
 }
 function hashParam(name){
   var h = String(window.location.hash || "");
@@ -91,20 +97,25 @@ function openDuePopover(anchor, taskId){
     try{ el.querySelector("[data-due-input]").focus(); }catch(e2){ /* noop */ }
   }, 30);
 }
+var dueSeqByTask = {};
 function setTaskDue(taskId, dueDate){
   var t = taskById(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
+  var seq = (dueSeqByTask[taskId] || 0) + 1;
+  dueSeqByTask[taskId] = seq;
   var before = t.dueDate || null;
   t.dueDate = dueDate;                                  // 乐观更新
   if(state.board && activeView === "board") render({animate:false});
   API.put("/api/tasks/" + encodeURIComponent(taskId), taskPayloadWith(t, {dueDate: dueDate})).then(function(){
+    if(dueSeqByTask[taskId] !== seq) return;
     toast(dueDate ? ("已改期至 " + fmtFull(parseDate(dueDate))) : "已清除截止日期", dueDate ? "fs" : "warn");
     loadBoard({silent:true});
     refreshListIfOpen();
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
   }).catch(function(ex){
+    if(dueSeqByTask[taskId] !== seq) return;
     t.dueDate = before;                                  // 失败回滚
     if(state.board && activeView === "board") render({animate:false});
     toast(ex.message || "改期失败", "bad");

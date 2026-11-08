@@ -16,6 +16,9 @@ public class AppNotification {
     private String title;
     private String body;
     private String refTaskId;
+    /** 非任务通知的关联对象：demand / doc / branch / version / project / workspace */
+    private String refKind;
+    private String refId;
     private LocalDateTime readAt;
     private LocalDateTime createdAt;
 

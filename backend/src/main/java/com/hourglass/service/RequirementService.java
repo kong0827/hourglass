@@ -39,6 +39,8 @@ public class RequirementService {
     private final AttachmentService attachmentService;
     private final com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper;
     private final TestCaseService caseService;
+    private final ProjectTemplateService templateService;
+    private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -49,7 +51,9 @@ public class RequirementService {
                               ProjectAccessService projectAccess,
                               AttachmentService attachmentService,
                               com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
-                              TestCaseService caseService) {
+                              TestCaseService caseService,
+                              ProjectTemplateService templateService,
+                              com.hourglass.mapper.WorkspaceMemberMapper memberMapper) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -64,6 +68,8 @@ public class RequirementService {
         this.attachmentService = attachmentService;
         this.mailDeliveryMapper = mailDeliveryMapper;
         this.caseService = caseService;
+        this.templateService = templateService;
+        this.memberMapper = memberMapper;
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
@@ -99,6 +105,12 @@ public class RequirementService {
             }
         }
         List<Requirement> reqs = reqMapper.selectAll(workspaceId);
+        java.util.Map<String, String> ownerNames = new java.util.HashMap<String, String>();
+        for (com.hourglass.entity.WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
+            if (m.getUserId() != null && m.getDisplayName() != null) {
+                ownerNames.put(m.getUserId(), m.getDisplayName());
+            }
+        }
         List<ReqProgress> out = new ArrayList<ReqProgress>();
         for (Requirement r : reqs) {
             if (hidden.contains(r.getId())) {
@@ -108,7 +120,13 @@ public class RequirementService {
             p.setId(r.getId());
             p.setName(r.getName());
             p.setDescription(r.getDescription());
+            p.setObjective(r.getObjective());
             p.setStatus(r.getStatus());
+            p.setOwnerUserId(r.getOwnerUserId());
+            p.setOwnerName(ownerNames.get(r.getOwnerUserId()));
+            p.setPlannedStart(r.getPlannedStart());
+            p.setPlannedEnd(r.getPlannedEnd());
+            p.setArchivedAt(r.getArchivedAt());
             p.setFirstReleasedAt(r.getFirstReleasedAt());
             p.setCreatedAt(r.getCreatedAt());
             p.setUpdatedAt(r.getUpdatedAt());
@@ -147,7 +165,13 @@ public class RequirementService {
         r.setName(req.getName().trim());
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
+        applyProfile(workspaceId, r, req);
         reqMapper.insert(r);
+        /* 模板只做增量补齐：列按空间共享、文档/测试模块/版本归属本项目 */
+        String template = Texts.trimToNull(req.getTemplate());
+        if (template != null && templateService.exists(template)) {
+            templateService.apply(workspaceId, userId, id, template);
+        }
         workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id,
                 "create", "创建了项目「" + r.getName() + "」");
         return reqMapper.selectById(id);
@@ -166,10 +190,52 @@ public class RequirementService {
         r.setName(req.getName().trim());
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
+        applyProfile(workspaceId, r, req);
         reqMapper.update(r);
         recordChange(workspaceId, id, "名称", old.getName(), r.getName());
         recordChange(workspaceId, id, "描述", old.getDescription(), r.getDescription());
         recordChange(workspaceId, id, "状态", old.getStatus(), r.getStatus());
+        recordChange(workspaceId, id, "项目目标", old.getObjective(), r.getObjective());
+        recordChange(workspaceId, id, "负责人", ownerLabel(workspaceId, old.getOwnerUserId()), ownerLabel(workspaceId, r.getOwnerUserId()));
+        recordChange(workspaceId, id, "计划开始", old.getPlannedStart(), r.getPlannedStart());
+        recordChange(workspaceId, id, "计划结束", old.getPlannedEnd(), r.getPlannedEnd());
+        return reqMapper.selectById(id);
+    }
+
+    private void applyProfile(String workspaceId, Requirement r, ReqSaveRequest req) {
+        r.setObjective(Texts.trimToNull(req.getObjective()));
+        String ownerId = Texts.trimToNull(req.getOwnerUserId());
+        if (ownerId != null && memberMapper.selectMember(workspaceId, ownerId) == null) {
+            throw new AppException(400, "项目负责人不是当前空间成员");
+        }
+        if (req.getPlannedStart() != null && req.getPlannedEnd() != null
+                && req.getPlannedEnd().isBefore(req.getPlannedStart())) {
+            throw new AppException(400, "计划结束日不能早于计划开始日");
+        }
+        r.setOwnerUserId(ownerId);
+        r.setPlannedStart(req.getPlannedStart());
+        r.setPlannedEnd(req.getPlannedEnd());
+    }
+
+    private String ownerLabel(String workspaceId, String userId) {
+        if (userId == null) {
+            return null;
+        }
+        com.hourglass.entity.WorkspaceMember m = memberMapper.selectMember(workspaceId, userId);
+        return m != null && m.getDisplayName() != null ? m.getDisplayName() : userId;
+    }
+
+    /** 归档/取消归档：只影响默认视图展示，不删除数据 */
+    @Transactional
+    public Requirement setArchived(String workspaceId, String userId, String id, boolean archived) {
+        Requirement old = reqMapper.selectById(id);
+        if (old == null || !workspaceId.equals(old.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        projectAccess.assertWrite(workspaceId, userId, id);
+        reqMapper.setArchived(workspaceId, id, archived);
+        workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id, "archive",
+                archived ? "归档了项目" : "取消归档");
         return reqMapper.selectById(id);
     }
 
@@ -217,6 +283,25 @@ public class RequirementService {
 
     private static String display(Object value) {
         return value == null ? "（空）" : String.valueOf(value);
+    }
+
+    /**
+     * 删除影响预览（A5）：不落库，只统计"删掉这个项目会发生什么"。
+     * 与 delete() 的统计口径一致（任务含回收站；分支退回空间级、数量单独给出供提示）。
+     */
+    public RequirementDeleteResult deleteImpact(String workspaceId, String id) {
+        Requirement r = reqMapper.selectById(id);
+        if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在：" + id);
+        }
+        RequirementDeleteResult result = new RequirementDeleteResult();
+        result.setName(r.getName());
+        result.setUnlinked(taskMapper.countTasksByReq(workspaceId, id));
+        result.setDocs(docService.countByReq(workspaceId, id));
+        result.setVersions(versionMapper.selectByReq(workspaceId, id).size());
+        result.setDemands(demandMapper.selectByReq(workspaceId, id).size());
+        result.setCases(caseService.countByReq(workspaceId, id));
+        return result;
     }
 
     /** @return 解绑任务数 + 连带删除的需求文档数 */
@@ -271,6 +356,7 @@ public class RequirementService {
         result.setDocs(docs);
         result.setVersions(versions);
         result.setDemands(demands);
+        result.setCases(cases);
         return result;
     }
 }

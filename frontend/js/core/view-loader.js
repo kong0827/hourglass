@@ -8,9 +8,9 @@ const cache = Object.create(null);
 const mods = Object.create(null);
 
 /* 静态预览稿把全部模块拼进同一个 IIFE，没有可 import 的文件路径；
-   由 tools/gen-preview.js 注入 window.__DS_MODULES__ 供这里同步取用。 */
+   由 tools/gen-preview.js 注入 window.__HG_MODULES__ 供这里同步取用。 */
 function bundled(name) {
-  return (typeof window !== "undefined" && window.__DS_MODULES__ && window.__DS_MODULES__[name]) || null;
+  return (typeof window !== "undefined" && window.__HG_MODULES__ && window.__HG_MODULES__[name]) || null;
 }
 
 export function loadView(name) {

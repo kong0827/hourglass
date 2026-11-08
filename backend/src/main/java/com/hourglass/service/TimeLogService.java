@@ -109,9 +109,10 @@ public class TimeLogService {
     public Map<String, Object> start(String userId, String workspaceId, String taskId) {
         Task task = ensureTask(workspaceId, taskId);
         projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+        // 同账号跨任务共用一把锁，避免跨设备同时开始产生多条运行记录
+        userMapper.lockById(userId);
         if (timeLogMapper.selectRunningByTaskAndUser(taskId, userId) == null) {
             // 个人计时：开始新计时前自动停止"我自己"其他任务上运行中的计时
-            // （无锁先查后插，同账号跨设备极端并发窗口见 api.md「已接受的现状口径」）
             for (TimeLog other : timeLogMapper.selectRunningAllByUser(userId)) {
                 int wallMins = wallMinutes(other.getStartedAt());
                 int mins = effectiveMinutes(other.getStartedAt(), userId);
@@ -192,6 +193,7 @@ public class TimeLogService {
     @Transactional
     public Map<String, Object> stop(String userId, String workspaceId, String taskId) {
         ensureTask(workspaceId, taskId);
+        userMapper.lockById(userId);
         TimeLog running = timeLogMapper.selectRunningByTaskAndUser(taskId, userId);
         if (running == null) {
             throw AppException.badRequest("当前没有正在进行的计时");

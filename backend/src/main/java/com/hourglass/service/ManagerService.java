@@ -135,7 +135,13 @@ public class ManagerService {
         project.put("reqId", requirement.getId());
         project.put("name", requirement.getName());
         project.put("description", requirement.getDescription());
+        project.put("objective", requirement.getObjective());
         project.put("status", requirement.getStatus());
+        project.put("ownerUserId", requirement.getOwnerUserId());
+        project.put("ownerName", memberDisplayName(snapshot.members, requirement.getOwnerUserId()));
+        project.put("plannedStart", requirement.getPlannedStart());
+        project.put("plannedEnd", requirement.getPlannedEnd());
+        project.put("archivedAt", requirement.getArchivedAt());
         project.put("firstReleasedAt", requirement.getFirstReleasedAt());
         project.put("createdAt", requirement.getCreatedAt());
         project.put("updatedAt", requirement.getUpdatedAt());
@@ -1179,6 +1185,18 @@ public class ManagerService {
             }
         }
         return result;
+    }
+
+    private String memberDisplayName(List<WorkspaceMember> members, String userId) {
+        if (!hasText(userId)) {
+            return null;
+        }
+        for (WorkspaceMember member : members) {
+            if (member != null && userId.equals(member.getUserId())) {
+                return hasText(member.getDisplayName()) ? member.getDisplayName() : userId;
+            }
+        }
+        return userId;
     }
 
     private String ownerName(Task task, Map<String, WorkspaceMember> membersById) {

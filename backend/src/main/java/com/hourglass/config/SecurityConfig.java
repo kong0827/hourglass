@@ -1,6 +1,7 @@
 package com.hourglass.config;
 
 import com.hourglass.common.LoginUser;
+import com.hourglass.service.AuditService;
 import com.hourglass.service.SessionEpochService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -35,7 +36,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, SessionEpochService epochs) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, SessionEpochService epochs,
+                                           AuditService audit) throws Exception {
         http
             .addFilterAfter(new SessionEpochFilter(epochs), UsernamePasswordAuthenticationFilter.class)
             .authorizeRequests()
@@ -56,14 +58,29 @@ public class SecurityConfig {
                         LoginUser user = (LoginUser) auth.getPrincipal();
                         req.getSession(true).setAttribute(SessionEpochFilter.SESSION_KEY,
                                 epochs.current(user.getId()));
+                        audit.recordLogin(user, user.getUsername(), true, "登录成功", req);
                     }
                     writeJson(res, 200, "{\"code\":0,\"message\":\"ok\"}");
                 })
-                .failureHandler((req, res, ex) -> writeJson(res, 200, "{\"code\":401,\"message\":\"用户名或密码错误\"}"))
+                .failureHandler((req, res, ex) -> {
+                    String username = req.getParameter("username");
+                    /* 停用账号给出明确原因，而不是伪装成密码错误让人反复试（A4） */
+                    boolean disabled = ex instanceof org.springframework.security.authentication.DisabledException;
+                    String message = disabled ? "该账号已被停用，请联系管理员" : "用户名或密码错误";
+                    audit.recordLogin(null, username == null ? "（未填写）" : username,
+                            false, message, req);
+                    writeJson(res, 200, "{\"code\":401,\"message\":\"" + message + "\"}");
+                })
             .and()
             .logout()
                 .logoutUrl("/api/auth/logout")
-                .logoutSuccessHandler((req, res, auth) -> writeJson(res, 200, "{\"code\":0,\"message\":\"ok\"}"))
+                .logoutSuccessHandler((req, res, auth) -> {
+                    if (auth != null && auth.getPrincipal() instanceof LoginUser) {
+                        LoginUser user = (LoginUser) auth.getPrincipal();
+                        audit.recordLogout(user, req);
+                    }
+                    writeJson(res, 200, "{\"code\":0,\"message\":\"ok\"}");
+                })
             .and()
             .exceptionHandling()
                 .authenticationEntryPoint((req, res, ex) -> {

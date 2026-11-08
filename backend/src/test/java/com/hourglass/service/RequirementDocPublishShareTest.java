@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -112,10 +113,22 @@ class RequirementDocPublishShareTest {
     void publishByNonWriterPrivilegedForbidden() {
         RequirementDoc d = doc(false);
         stubVisible(d, OTHER, "admin");
-        when(access.canWrite(WS, OTHER, "R1")).thenReturn(false);
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, OTHER, "R1");
 
         AppException ex = assertThrows(AppException.class, () -> service.publish(OTHER, WS, DOC_ID, true));
         assertEquals(403, ex.getCode());
+    }
+
+    @Test
+    void publishByReadOnlyAuthorForbidden() {
+        RequirementDoc d = doc(false);
+        stubVisible(d, AUTHOR, "viewer");
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, AUTHOR, "R1");
+
+        AppException ex = assertThrows(AppException.class, () -> service.publish(AUTHOR, WS, DOC_ID, true));
+
+        assertEquals(403, ex.getCode());
+        verify(docs, never()).updatePublished(anyString(), any());
     }
 
     @Test
@@ -166,10 +179,20 @@ class RequirementDocPublishShareTest {
     }
 
     @Test
+    void shareInfoRejectsReadOnlyAuthor() {
+        RequirementDoc d = doc(true);
+        stubVisible(d, AUTHOR, "viewer");
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, AUTHOR, "R1");
+
+        assertThrows(AppException.class, () -> service.shareInfo(AUTHOR, WS, DOC_ID));
+        verify(shares, never()).selectByDoc(anyString(), anyString());
+    }
+
+    @Test
     void revokeShareByNonWriterForbidden() {
         RequirementDoc d = doc(true);
         stubVisible(d, OTHER, "member");
-        when(access.canWrite(WS, OTHER, "R1")).thenReturn(false);
+        doThrow(new AppException(403, "只读")).when(access).assertWrite(WS, OTHER, "R1");
 
         AppException ex = assertThrows(AppException.class, () -> service.revokeShare(OTHER, WS, DOC_ID));
         assertEquals(403, ex.getCode());

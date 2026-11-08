@@ -12,7 +12,7 @@
 
 ### 1. [P1] 跨空间自动停止计时，将个人任务标题写入共享空间时间线
 
-- 位置：`src/main/java/com/devstudio/kanban/service/TimeLogService.java:54`、`:58`。
+- 位置：`src/main/java/com/hourglass/kanban/service/TimeLogService.java:54`、`:58`。
 - 触发：成员 A 在共享空间任务上计时，随后在个人空间的私密任务上开始计时。
 - 原因：按人停止其他空间计时的逻辑是预期行为，但日志写入旧任务所在的空间，详情却包含新任务的标题。
 - 影响：共享空间其他成员读取旧任务时间线，即可看到 A 的个人任务标题。新任务也可能来自另一个他们没有权限访问的共享空间。
@@ -21,7 +21,7 @@
 
 ### 2. [P1] “至少保留一名管理员”的检查不具备并发保护
 
-- 位置：`src/main/java/com/devstudio/kanban/service/UserService.java:133`、`:136`、`:170`；`src/main/resources/mapper/UserMapper.xml:25`。
+- 位置：`src/main/java/com/hourglass/kanban/service/UserService.java:133`、`:136`、`:170`；`src/main/resources/mapper/UserMapper.xml:25`。
 - 触发：当前只有 A、B 两名管理员，两个请求分别将 A、B 降为普通用户，读取管理员数量的阶段重叠。例如两名管理员各自降权，或一名管理员从两个页面提交两个账号的降权。
 - 原因：先执行普通 `COUNT(*)`，确认数量大于 1，再修改不同账号；没有串行化这项全局约束。各方法有事务，但事务本身不保证两次检查及后续修改互斥。
 - 影响：两个请求都通过，最终管理员数量为 0。当前管理接口会实时复核数据库角色，旧会话也无法继续管理；bootstrap 仅在总用户数为 0 时建管理员，重启不能恢复权限，需要人工修数据库。
@@ -30,7 +30,7 @@
 
 ### 3. [P2，上一轮修复遗漏] 循环防重复关联没有进入导入导出链路
 
-- 位置：`src/main/java/com/devstudio/kanban/dto/BackupData.java:27`；`src/main/java/com/devstudio/kanban/service/BackupService.java:140`、`:347`；`src/main/java/com/devstudio/kanban/service/TaskService.java:512`；`src/main/resources/mapper/TaskMapper.xml:27`。
+- 位置：`src/main/java/com/hourglass/kanban/dto/BackupData.java:27`；`src/main/java/com/hourglass/kanban/service/BackupService.java:140`、`:347`；`src/main/java/com/hourglass/kanban/service/TaskService.java:512`；`src/main/resources/mapper/TaskMapper.xml:27`。
 - 触发：完成循环任务 K1，生成 K2；导出当前任务 JSON，再原样导回同一空间；重新打开 K1，然后再次完成。
 - 原因：新增的 `recurNextId` 只保存在 task 表和任务对象中。BackupTask 不包含该字段，导出和导入均未传递；INSERT 也没有该列。导回后 K1 与 K2 都在，但关联变为 null，生成器误认为尚未派生。
 - 影响：再次生成 K3，同一周期重复待办，上一轮防重复修复在正常导入后失效。
@@ -48,7 +48,7 @@
 
 ### 5. [P2] CSV 导出未保护公式前缀，Excel 会把任务文本当公式
 
-- 位置：`src/main/java/com/devstudio/kanban/service/BackupService.java:457`、`:509`；`docs/api.md:298`。
+- 位置：`src/main/java/com/hourglass/kanban/service/BackupService.java:457`、`:509`；`docs/api.md:298`。
 - 触发：共享空间成员创建标题为 `=1+1` 的任务，其他成员导出 CSV 并用 Excel 打开。
 - 原因：csv helper 只处理逗号、双引号与换行；直接返回以 `=` 等公式前缀开头的用户文本。CSV 加双引号本身也不能阻止电子表格识别公式。
 - 影响：任务标题被解释为公式而不是原文；复杂公式还可能产生误导链接或外部数据访问，实际行为受 Excel 版本和信任设置影响，不宣称已验证外部执行。
@@ -57,7 +57,7 @@
 
 ### 6. [P2] 推送返回 HTML 或缺少状态码时仍判成功，提醒被永久标记为已发送
 
-- 位置：`src/main/java/com/devstudio/kanban/service/NotificationService.java:112`、`:113`、`:291`、`:297`、`:304`。
+- 位置：`src/main/java/com/hourglass/kanban/service/NotificationService.java:112`、`:113`、`:291`、`:297`、`:304`。
 - 触发：PushPlus/Server酱或渠道网关返回 HTTP 成功但正文为错误 HTML、空正文、无渠道状态码的 JSON；禁用重定向后，未被 HTTP 客户端判为错误的跳转响应也存在同类风险。
 - 原因：`extractError` 在无法找到渠道状态码时返回 null，sendContent 将 null 解释为成功。这里“没有解析出错误”并不等于“渠道确认接收成功”。
 - 影响：实际没有投递的提醒被 markRemindSent，不再进入六小时重试；手动测试也显示成功。
@@ -66,7 +66,7 @@
 
 ### 7. [P2] 子任务修改与删除绕过父任务有效性检查
 
-- 位置：`src/main/java/com/devstudio/kanban/service/SubtaskService.java:53`、`:73`、`:82`。
+- 位置：`src/main/java/com/hourglass/kanban/service/SubtaskService.java:53`、`:73`、`:82`。
 - 触发：A 打开任务检查清单，B 将父任务移入回收站；A 的旧弹窗继续勾选、重命名或删除子任务。也可直接调用已知子任务 ID 的接口。
 - 原因：list/create 会检查父任务仍在当前空间且未删除；update/delete 只检查子任务所属空间，没有检查父任务。
 - 影响：已进入回收站的任务仍可被旧页面修改，尤其删除子任务会改变以后恢复出的内容。任务编辑、计时、子任务新增均已拒绝已删除父任务，接口行为不一致。

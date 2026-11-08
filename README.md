@@ -20,9 +20,7 @@
 
 ## 在线体验
 
-- 地址：http://43.156.155.204/hourglass/
-- 游客账号：`visitor` / `Visitor@2026`
-- 说明：演示环境数据可能被重置，请勿存放真实业务数据
+公开文档不再给出演示环境地址与游客口令。想上手可以：直接部署一份（约 30 分钟，见 [`deploy/README.md`](deploy/README.md)）；或用演示种子数据 [`sql/seeds/seed_demo_public.sql`](sql/seeds/seed_demo_public.sql) 起一份本地实例。需要试用托管演示环境的，联系维护者开通。
 
 ---
 
@@ -41,7 +39,7 @@
 
 | 维度 | 说明 |
 | --- | --- |
-| 面向谁 | 10–50 人的研发团队：有需求管理和迭代节奏，但没有专职 PMO |
+| 面向谁 | 适合 50 人以下的研发团队：有需求管理和迭代节奏，但没有专职 PMO |
 | 形态 | 单实例、自托管：一个 jar + MySQL，不需要 Redis / MQ / 对象存储 |
 | 核心主张 | 任务管理不是目的，**工时和回顾**才是；移动任务驱动计时，计时沉淀为周回顾和月度清单 |
 | 产品风格 | 小而美：范围克制、口径统一、每个数字可解释，不为对标大产品堆功能 |
@@ -122,7 +120,7 @@ java -jar backend/target/hourglass-server.jar
 | 层 | 选型 |
 | --- | --- |
 | 后端 | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security（会话登录 + CSRF） |
-| 数据库 | MySQL 8（utf8mb4），43 张表，编号式幂等迁移脚本 |
+| 数据库 | MySQL 8（utf8mb4），44 张表，编号式幂等迁移脚本 |
 | 实时 | SSE 推送变更与通知 |
 | 前端 | 原生 JavaScript ES Module，**无框架、无构建步骤**；PWA 离线壳 |
 | 部署 | 前端由 Nginx 直接托管，后端只提供 `/api/**`；systemd + 一键部署脚本 |
@@ -150,28 +148,35 @@ java -jar backend/target/hourglass-server.jar
 | [`docs/管理员指南.md`](docs/管理员指南.md) | 管理员指南：部署架构、备份升级、通知与 AI、故障速查 |
 | [`docs/常见问题.md`](docs/常见问题.md) | 常见问题：口径、统计、部署与选型对比 |
 | [`docs/接口契约.md`](docs/接口契约.md) | 接口契约，含工时、日历、回顾等口径附录 |
+| [`docs/产品竞品对标与功能体验优化分析报告.md`](docs/产品竞品对标与功能体验优化分析报告.md) | 竞品对标、五维差距矩阵、UI/UX 审查、页面优化方案与三阶段路线图（配套[页面示意](docs/audit/页面优化示意图.html)） |
 | [`deploy/README.md`](deploy/README.md) | 部署指南：服务器准备、systemd、Nginx、备份与回滚 |
+| [`CHANGELOG.md`](CHANGELOG.md) | 更新日志：版本变更与在制改动清单 |
 
 ## 边界与取舍
 
 | 不做 / 有限支持 | 原因 |
 | --- | --- |
-| 多租户 SaaS 与大规模横向扩展 | 面向 50 人以下团队自托管，单实例部署是刻意选择 |
+| 多租户 SaaS 与大规模横向扩展 | 适合 50 人以下团队自托管，单实例部署是刻意选择 |
 | 多人实时协同编辑表格 | 在线表格定位是附件查看与快速修改，以覆盖保存为最终稿 |
 | 预测型统计与 AI 评分 | 度量只做可回溯统计，不引入无法解释的模型输出 |
 | 从其他平台迁移 | 不提供 Jira / 禅道等外部系统的迁移工具，内部备份按空间独立恢复 |
 
 ## 联合开发
 
-本项目前身为 [chc2](https://gitee.com/chc2)（chenghongchang）发起的个人看板项目 **wokstudio**，后升级为面向小团队的私有化研发协作工作台 **沙漏（Hourglass）**，目前由 chc2 持续维护、完善。
+本项目由 [chc2](https://gitee.com/chc2)（chenghongchang）发起的个人看板项目逐步升级为面向小团队的私有化研发协作工作台 **沙漏（Hourglass）**，目前由 chc2 持续维护、完善。
 
 主要贡献者：
 
-- [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责 wokstudio 最初的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
+- [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责早期个人看板项目的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
 - kongxiangjin
 
 ## 许可
 
-[CC BY-NC 4.0（署名-非商用 4.0 国际）](LICENSE)：本项目可免费使用、修改与分发（须保留署名），**不得用于商业目的**。
+[PolyForm Noncommercial License 1.0.0](LICENSE)：**源码可用（source-available），禁止商用**。本项目不是 OSI 意义上的开源软件。
 
-注意：`frontend/vendor/` 内嵌的第三方库（Univer、SheetJS、SunEditor、marked、DOMPurify）各自沿用其原始开源许可证（Apache-2.0 / MIT 等），其授权范围不受本项目非商用约束影响。
+- **允许**：个人学习、研究、试验、兴趣项目等非商业目的的使用、修改与分发；慈善组织、教育机构、公共研究机构、公共安全/卫生/环境保护组织与政府机构的使用（无论资金来源）。
+- **禁止**：任何商业目的的使用——在生产经营中使用本软件、以收费方式提供本软件或基于它的服务、将其用于对外交付的项目。
+- **商业授权**：企业内网部署、对外交付、试点评估等商业场景，须先向版权持有人取得商业授权（联系方式待补充）。
+- 版权、历史沿革与贡献者许可说明见 [NOTICE](NOTICE)；「沙漏」「Hourglass」名称与 logo 等商标不在许可授予范围内。
+- `frontend/vendor/` 内嵌的第三方库（Univer、SheetJS、SunEditor、marked、DOMPurify、React、RxJS）与后端依赖各自沿用其原始开源许可证，清单见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- 其中 **MySQL Connector/J 为 GPL-2.0 + Oracle FOSS Exception**，该例外很可能不适用于非开源许可的应用，**对外分发前须按清单说明处理**。

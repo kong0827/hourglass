@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.AuditLogMapper">
+
+  <sql id="cols">
+    id, workspace_id, actor_id, actor_name, action, target_type, target_id,
+    target_name, result, detail, ip, created_at
+  </sql>
+
+  <sql id="filters">
+    <if test="workspaceId != null and workspaceId != ''">
+      AND workspace_id = #{workspaceId}
+    </if>
+    <if test="q != null and q != ''">
+      AND (detail LIKE CONCAT('%', #{q}, '%')
+        OR actor_name LIKE CONCAT('%', #{q}, '%')
+        OR target_name LIKE CONCAT('%', #{q}, '%')
+        OR target_id LIKE CONCAT('%', #{q}, '%')
+        OR action LIKE CONCAT('%', #{q}, '%')
+        OR ip LIKE CONCAT('%', #{q}, '%'))
+    </if>
+    <if test="action != null and action != ''">
+      AND action = #{action}
+    </if>
+    <if test="result != null and result != ''">
+      AND result = #{result}
+    </if>
+    <if test="actorId != null and actorId != ''">
+      AND actor_id = #{actorId}
+    </if>
+    <if test="from != null">
+      AND created_at &gt;= #{from}
+    </if>
+    <if test="to != null">
+      AND created_at &lt; #{to}
+    </if>
+  </sql>
+
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO audit_log
+      (workspace_id, actor_id, actor_name, action, target_type, target_id,
+       target_name, result, detail, ip)
+    VALUES
+      (#{workspaceId}, #{actorId}, #{actorName}, #{action}, #{targetType}, #{targetId},
+       #{targetName}, #{result}, #{detail}, #{ip})
+  </insert>
+
+  <select id="count" resultType="int">
+    SELECT COUNT(*) FROM audit_log
+    WHERE 1 = 1
+    <include refid="filters"/>
+  </select>
+
+  <select id="selectPage" resultType="AuditLog">
+    SELECT <include refid="cols"/>
+    FROM audit_log
+    WHERE 1 = 1
+    <include refid="filters"/>
+    ORDER BY id DESC
+    LIMIT #{offset}, #{size}
+  </select>
+
+  <select id="selectForExport" resultType="AuditLog">
+    SELECT <include refid="cols"/>
+    FROM audit_log
+    WHERE 1 = 1
+    <include refid="filters"/>
+    ORDER BY id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectOldest" resultType="java.time.LocalDateTime">
+    SELECT MIN(created_at) FROM audit_log
+    <where>
+      <if test="workspaceId != null and workspaceId != ''">
+        workspace_id = #{workspaceId}
+      </if>
+    </where>
+  </select>
+
+  <delete id="deleteBefore">
+    DELETE FROM audit_log WHERE created_at &lt; #{cutoff}
+  </delete>
+</mapper>

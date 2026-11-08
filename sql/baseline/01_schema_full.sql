@@ -12,10 +12,20 @@
 CREATE DATABASE IF NOT EXISTS hourglass DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 应用账号：host '%' 允许外部连接，库内全部权限（增删改查、建表/改表/删表、视图、触发器、导入导出等）。
--- 上线前把占位密码换成强密码，并与 /etc/hourglass.env 的 DB_PASSWORD 保持一致；
--- 账号已存在时 CREATE USER IF NOT EXISTS 不会覆盖密码，改密码请用 ALTER USER。
+-- 密码不再内置固定值：账号不存在时随机生成一次性密码并在末尾打印一次，请立即保存到 /etc/hourglass.env 的 DB_PASSWORD。
+-- 账号已存在时本脚本不改动其密码，只输出提示；重置密码用 ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';
 -- 外部直连还需 MySQL 服务的 bind-address 非 127.0.0.1，且防火墙放行 3306。
-CREATE USER IF NOT EXISTS 'hourglass'@'%' IDENTIFIED BY 'ChangeMe_Hourglass_2026!';
+SET @hg_user_exists = (SELECT COUNT(*) FROM mysql.user WHERE user = 'hourglass' AND host = '%');
+-- 若你的 MySQL 禁用了 RANDOM_BYTES，把 RANDOM_BYTES(24) 换成 SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)
+SET @hg_db_password = IF(@hg_user_exists = 0,
+                        CONCAT(SUBSTRING(REPLACE(REPLACE(REPLACE(TO_BASE64(RANDOM_BYTES(24)), '+', ''), '/', ''), '=', ''), 1, 18), 'aA1!'),
+                        NULL);
+SET @hg_create_sql = IF(@hg_user_exists = 0,
+                        CONCAT('CREATE USER ''hourglass''@''%'' IDENTIFIED BY ', QUOTE(@hg_db_password)),
+                        'SELECT 1');
+PREPARE hg_stmt FROM @hg_create_sql;
+EXECUTE hg_stmt;
+DEALLOCATE PREPARE hg_stmt;
 GRANT ALL PRIVILEGES ON hourglass.* TO 'hourglass'@'%';
 FLUSH PRIVILEGES;
 
@@ -53,13 +63,16 @@ CREATE TABLE `app_notification` (
   `title` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标题',
   `body` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '正文',
   `ref_task_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联任务ID（点击直达）',
+  `ref_kind` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联对象类型：demand/doc/branch/version/project/workspace',
+  `ref_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联对象 ID（非任务通知深链）',
   `read_at` datetime DEFAULT NULL COMMENT '已读时间，空=未读',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '产生时间',
   PRIMARY KEY (`id`),
   KEY `idx_user_unread` (`user_id`,`read_at`,`id`),
   KEY `idx_user_ws` (`user_id`,`workspace_id`,`id`),
   KEY `idx_ws_ref` (`workspace_id`,`ref_task_id`),
-  KEY `idx_user_ref_type` (`user_id`,`ref_task_id`,`type`,`created_at`)
+  KEY `idx_user_ref_type` (`user_id`,`ref_task_id`,`type`,`created_at`),
+  KEY `idx_user_ref` (`user_id`,`ref_kind`,`ref_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用内通知';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -77,6 +90,7 @@ CREATE TABLE `app_user` (
   `display_name` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '显示名（负责人默认值）',
   `email` varchar(254) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '个人事件邮件收件地址',
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user' COMMENT '角色：admin/user（只管账号）',
+  `disabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1=账号已停用：不可登录、会话即刻失效；历史数据与负责人引用保留',
   `session_version` bigint NOT NULL DEFAULT '1' COMMENT '账号级会话代次；密码/角色变更时递增，旧会话失效',
   `work_start_hour` tinyint NOT NULL DEFAULT '9' COMMENT '每天几点开始计入工时（0-23）',
   `work_end_hour` tinyint NOT NULL DEFAULT '18' COMMENT '每天几点之后不再计入（1-24，24=当天24:00）',
@@ -424,12 +438,18 @@ CREATE TABLE `requirement` (
   `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `name` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目名称',
   `description` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目描述',
+  `objective` varchar(400) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目目标（一句话，驾驶舱展示）',
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '状态：active/done/hold',
+  `owner_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '项目负责人（app_user.id）',
+  `planned_start` date DEFAULT NULL COMMENT '计划开始日',
+  `planned_end` date DEFAULT NULL COMMENT '计划结束日',
   `first_released_at` date DEFAULT NULL COMMENT '首版上线日（空=未上线，全部投入归入首版开发）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `archived_at` datetime DEFAULT NULL COMMENT '归档时间（NULL=未归档）',
   PRIMARY KEY (`id`),
-  KEY `idx_ws` (`workspace_id`)
+  KEY `idx_ws` (`workspace_id`),
+  KEY `idx_ws_owner` (`workspace_id`,`owner_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目（原需求）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -849,6 +869,26 @@ CREATE TABLE `test_case` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `test_module`
+--
+
+DROP TABLE IF EXISTS `test_module`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `test_module` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `req_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID（requirement.id）',
+  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块名',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序（小的在前）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_req_name` (`workspace_id`,`req_id`,`name`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目测试模块（模板预置 + 手动维护）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `test_case_run`
 --
 
@@ -862,14 +902,60 @@ CREATE TABLE `test_case_run` (
   `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行结果：passed/failed/blocked',
   `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行备注（失败原因等）',
   `bug_task_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '由本次失败转出的缺陷任务ID',
+  `plan_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属测试计划ID（计划批量执行时写入；空=单用例执行）',
   `executed_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行人显示名',
   `executed_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '执行人账号ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '执行时间',
   PRIMARY KEY (`id`),
   KEY `idx_case` (`case_id`,`id`),
-  KEY `idx_ws` (`workspace_id`)
+  KEY `idx_ws` (`workspace_id`),
+  KEY `idx_plan` (`plan_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用例执行流水（每次执行一行）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `test_plan`
+--
+
+DROP TABLE IF EXISTS `test_plan`;
+CREATE TABLE `test_plan` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '计划ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `req_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID（requirement.id）',
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '计划名称',
+  `version_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联版本ID（project_version.id，选填）',
+  `planned_start` date DEFAULT NULL COMMENT '计划开始日',
+  `planned_end` date DEFAULT NULL COMMENT '计划结束日',
+  `status` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft' COMMENT '状态：draft/running/done',
+  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '说明/范围',
+  `created_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人显示名',
+  `created_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人账号ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`),
+  KEY `idx_ws_status` (`workspace_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划（项目下的回归/迭代容器）';
+
+--
+-- Table structure for table `test_plan_case`
+--
+
+DROP TABLE IF EXISTS `test_plan_case`;
+CREATE TABLE `test_plan_case` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '关联ID',
+  `plan_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属计划ID（test_plan.id）',
+  `case_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID（test_case.id）',
+  `result` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '计划内最近结果：passed/failed/blocked，空=未执行',
+  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '计划内执行备注',
+  `executed_by` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '计划内执行人显示名',
+  `executed_by_user_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '计划内执行人账号ID',
+  `executed_at` datetime DEFAULT NULL COMMENT '计划内执行时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入计划时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_plan_case` (`plan_id`,`case_id`),
+  KEY `idx_case` (`case_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划圈选用例（含计划内最近结果）';
 
 --
 -- Table structure for table `time_log`
@@ -1034,6 +1120,32 @@ CREATE TABLE `workspace_priority` (
   UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `audit_log`（B6 系统审计）
+--
+
+DROP TABLE IF EXISTS `audit_log`;
+CREATE TABLE `audit_log` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+  `workspace_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '归属空间ID；登录等系统事件为空',
+  `actor_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人用户ID；登录失败等场景可空',
+  `actor_name` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人显示名/尝试账号快照',
+  `action` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：login/login_fail/logout/export/import/clear/role_change/member_add/member_remove/workspace_delete/project_delete/user_create/user_update/user_delete/password_reset',
+  `target_type` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '对象类型：auth/user/workspace/member/project/data',
+  `target_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '对象ID',
+  `target_name` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '对象名称快照',
+  `result` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'success' COMMENT 'success/fail',
+  `detail` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '变更摘要（不记录密码/Token）',
+  `ip` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '来源IP',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ws_id` (`workspace_id`,`id`),
+  KEY `idx_ws_created` (`workspace_id`,`created_at`),
+  KEY `idx_actor` (`actor_id`,`id`),
+  KEY `idx_action_time` (`action`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统审计日志（安全事件最小集）';
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1045,3 +1157,15 @@ CREATE TABLE `workspace_priority` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-11-04 10:53:29
+
+-- ============================================================================
+-- 部署提示：应用账号密码只在这里输出一次，请立即保存
+-- ============================================================================
+SELECT IF(@hg_user_exists = 0,
+          CONCAT('已创建应用账号 hourglass@%，一次性密码：', COALESCE(@hg_db_password, ''),
+                 '  —— 请马上写入 /etc/hourglass.env 的 DB_PASSWORD（单引号包裹），本提示不会再次出现'),
+          '应用账号 hourglass@% 已存在，本次未改动其密码；如需重置请执行 ALTER USER ''hourglass''@''%'' IDENTIFIED BY ''新密码'';')
+       AS `沙漏部署提示`;
+SET @hg_db_password = NULL;
+SET @hg_create_sql = NULL;
+SET @hg_user_exists = NULL;

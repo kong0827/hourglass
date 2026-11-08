@@ -80,7 +80,8 @@ class WorkActivityRecordingTest {
                 mock(ProjectVersionService.class), mock(com.hourglass.mapper.ProjectVersionMapper.class),
                 mock(DemandMapper.class), mock(com.hourglass.mapper.DevBranchMapper.class),
                 mock(ProjectAccessService.class), mock(AttachmentService.class),
-                mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(TestCaseService.class));
+                mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(TestCaseService.class),
+                mock(ProjectTemplateService.class), mock(com.hourglass.mapper.WorkspaceMemberMapper.class));
     }
 
     @Test

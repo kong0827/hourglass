@@ -7,7 +7,7 @@ import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
 import { currentMode } from "./mobile-rules.js";
-import { loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, updateBellTitle } from "./notifications.js";
+import { invalidateNotifications, loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, setNoticeFilter, updateBellTitle } from "./notifications.js";
 import { activeView, showView } from "./router.js";
 import { rt, state, taskById } from "./state.js";
 import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js";
@@ -213,6 +213,12 @@ $("btnAlert").addEventListener("click", function(){
   UI.openPop($("alertPanel"), $("btnAlert"), {align:"left"});
 });
 $("alertPanel").addEventListener("click", function(e){
+  /* 通知筛选：全部 / 未读 / 提及 */
+  var filterBtn = e.target.closest("[data-ap-filter]");
+  if(filterBtn){
+    setNoticeFilter(filterBtn.dataset.apFilter);
+    return;
+  }
   /* 顶部 tab：通知 / 截止提醒 */
   var tabBtn = e.target.closest("[data-ap-tab]");
   if(tabBtn){
@@ -227,12 +233,19 @@ $("alertPanel").addEventListener("click", function(e){
   }
   /* 全部标为已读 */
   if(e.target.closest("[data-ap-readall]")){
+    invalidateNotifications();
     API.postGlobal("/api/notifications/read-all").then(function(){
       notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
       notifyState.unread = 0;
       renderBellBadge(); updateBellTitle(); renderAlertPanel();
+      loadAlertPanel();
+      loadUnread(true);
       toast("已全部标为已读", "fs");
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }).catch(function(ex){
+      loadAlertPanel();
+      loadUnread(true);
+      toast(ex.message || "操作失败", "bad");
+    });
     return;
   }
   /* 通知项：标记已读 + 打开关联任务 */

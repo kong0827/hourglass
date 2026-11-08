@@ -41,7 +41,7 @@ class NotificationEventServiceTest {
                 "assigned", "body", "K1");
 
         verify(inApp).pushImmediate("U1", "W1", UserNotificationPreferenceService.TASK_ASSIGNED,
-                "assigned", "body", "K1");
+                "assigned", "body", "K1", null, null);
         verify(deliveries).enqueue("u1@example.com", "assigned", "body",
                 UserNotificationPreferenceService.TASK_ASSIGNED, "K1");
     }
@@ -87,7 +87,7 @@ class NotificationEventServiceTest {
                 "removed", "body", null);
 
         verify(inApp).pushImmediate("U1", "W1", NotificationEventService.MEMBER_REMOVED,
-                "removed", "body", null);
+                "removed", "body", null, null, null);
         verify(deliveries).enqueue("u1@example.com", "removed", "body",
                 NotificationEventService.MEMBER_REMOVED, null);
         verifyNoInteractions(preferences, projectAccess, members);

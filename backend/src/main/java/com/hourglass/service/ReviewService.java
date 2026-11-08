@@ -1,6 +1,8 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import com.hourglass.dto.BoardResponse;
+import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReviewCountRow;
 import com.hourglass.dto.ReviewResponse;
 import com.hourglass.dto.WorkSumRow;
@@ -51,16 +53,39 @@ public class ReviewService {
 
     /** 兼容旧调用（不带用户时工作区工时的"我的"部分按 0 计） */
     public ReviewResponse review(String workspaceId, Integer weekOffset) {
-        return review(workspaceId, null, weekOffset);
+        return review(workspaceId, null, null, weekOffset);
     }
 
     public ReviewResponse review(String workspaceId, String userId, Integer weekOffset) {
+        return review(workspaceId, userId, null, weekOffset);
+    }
+
+    /**
+     * 周回顾。reqId 非空时只看该项目（项目维度回顾），否则看整个空间。
+     * 项目不在当前用户可见范围内时按"不存在"处理。
+     */
+    public ReviewResponse review(String workspaceId, String userId, String reqId, Integer weekOffset) {
+        String scopeReq = normalizeReqId(reqId);
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<ReqProgress> reqs = requirementService.list(workspaceId, userId);
+        ReqProgress scopedReq = null;
+        if (scopeReq != null) {
+            for (ReqProgress r : reqs) {
+                if (scopeReq.equals(r.getId())) {
+                    scopedReq = r;
+                    break;
+                }
+            }
+            if (scopedReq == null) {
+                throw AppException.notFound("项目不存在或你没有访问权限：" + scopeReq);
+            }
+        }
+
         LocalDate today = LocalDate.now();
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
-        String viewerId = projectAccess.viewerScope(workspaceId, userId);
 
         /* 只允许回看过去 52 周：正向偏移会翻到未来（永远是空周），无上限还会让 LocalDate 溢出 */
-        int offset = weekOffset == null ? autoOffset(workspaceId, viewerId, monday)
+        int offset = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday)
                 : Math.max(-52, Math.min(0, weekOffset));
         LocalDate start = monday.plusWeeks(offset);
         LocalDate end = start.plusDays(6);
@@ -71,9 +96,11 @@ public class ReviewService {
         resp.setWeekStart(start.toString());
         resp.setWeekEnd(end.toString());
         resp.setLabel(offset == 0 ? "本周" : (offset == -1 ? "上周" : "该周期"));
+        resp.setReqId(scopedReq == null ? null : scopedReq.getId());
+        resp.setReqName(scopedReq == null ? null : scopedReq.getName());
 
         /* 本周完成：一次查询取回列表，统计量由这份小结果集在内存里汇总 */
-        List<Task> completed = taskMapper.selectCompletedBetween(workspaceId, viewerId, start, before);
+        List<Task> completed = taskMapper.selectCompletedBetween(workspaceId, viewerId, scopeReq, start, before);
         resp.setCompleted(completed);
 
         int done = completed.size();
@@ -114,7 +141,7 @@ public class ReviewService {
         Map<String, Integer> weekUserMinutes = new HashMap<String, Integer>();
         int nonMemberMinutes = 0;
         for (TimeAgg a : timeLogMapper.sumBetweenByWorkspaceGroupByUser(workspaceId,
-                start.atStartOfDay(), before.atStartOfDay(), viewerId)) {
+                start.atStartOfDay(), before.atStartOfDay(), viewerId, scopeReq)) {
             int mm = a.getTotalMinutes() == null ? 0 : a.getTotalMinutes();
             if (a.getUserId() != null && memberIds.contains(a.getUserId())) {
                 Integer old = weekUserMinutes.get(a.getUserId());
@@ -161,7 +188,7 @@ public class ReviewService {
 
         /* N-5：工时（本空间全员 / 我的 / 本周期全空间）一次聚合 */
         WorkSumRow work = timeLogMapper.sumWork(workspaceId, userId,
-                start.atStartOfDay(), before.atStartOfDay(), viewerId);
+                start.atStartOfDay(), before.atStartOfDay(), viewerId, scopeReq);
         ReviewResponse.WorkMinutes wm = new ReviewResponse.WorkMinutes();
         if (work != null) {
             wm.setSpace(work.getTotalAll());
@@ -182,16 +209,30 @@ public class ReviewService {
         }
 
         /* O-10：进度 100% 但未入已完成列 → 单独成组，不静默漏统计 */
-        resp.setPendingDone(taskMapper.selectPendingDone(workspaceId, viewerId));
+        resp.setPendingDone(taskMapper.selectPendingDone(workspaceId, viewerId, scopeReq));
 
         /* 「进行中」= 已经开工、还没做完的任务 —— 按所在列判断（非「已完成」、非「待处理」）。
            历史周期由 SQL 收敛到「该周期内有日志活动」且「周期结束时已存在」。 */
-        resp.setProgressTasks(taskMapper.selectProgressTasks(workspaceId, viewerId, start, before, offset < 0));
+        resp.setProgressTasks(taskMapper.selectProgressTasks(workspaceId, viewerId, scopeReq, start, before, offset < 0));
 
-        resp.setReqDist(requirementService.list(workspaceId, userId));
+        /* 项目维度回顾只展示当前项目；全空间回顾展示全部可见项目 */
+        if (scopedReq != null) {
+            List<ReqProgress> only = new ArrayList<ReqProgress>();
+            only.add(scopedReq);
+            resp.setReqDist(only);
+            /* 只看项目时，没有交付/工时的成员不必占位展示 */
+            for (int i = memberStats.size() - 1; i >= 0; i--) {
+                ReviewResponse.MemberStat ms = memberStats.get(i);
+                if (ms.getCount() == 0 && ms.getMinutes() == 0) {
+                    memberStats.remove(i);
+                }
+            }
+        } else {
+            resp.setReqDist(reqs);
+        }
 
         /* 未完成任务的计数与到期分布：一次条件 SUM，替代对全部任务的三次遍历 */
-        ReviewCountRow rc = taskMapper.countReviewStatus(workspaceId, viewerId, today);
+        ReviewCountRow rc = taskMapper.countReviewStatus(workspaceId, viewerId, scopeReq, today);
         BoardResponse.Counts counts = new BoardResponse.Counts();
         if (rc != null) {
             counts.setOver(rc.getOver());
@@ -206,14 +247,22 @@ public class ReviewService {
     }
 
     /** 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周 */
-    private int autoOffset(String workspaceId, String viewerId, LocalDate monday) {
-        LocalDate latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId);
+    private int autoOffset(String workspaceId, String viewerId, String reqId, LocalDate monday) {
+        LocalDate latest = taskMapper.selectLatestCompletedAt(workspaceId, viewerId, reqId);
         if (latest == null) {
             return -1;
         }
         LocalDate weekStart = latest.minusDays(latest.getDayOfWeek().getValue() - 1);
         int offset = (int) ChronoUnit.WEEKS.between(monday, weekStart);
         return Math.max(-12, Math.min(0, offset));
+    }
+
+    private static String normalizeReqId(String reqId) {
+        if (reqId == null) {
+            return null;
+        }
+        String s = reqId.trim();
+        return s.isEmpty() ? null : s;
     }
 
     private List<BoardResponse.NameCount> toNameCounts(Map<String, Integer> map) {

@@ -2,9 +2,9 @@
 
 import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
-import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
+import { canEditReq, canEditTask, rt, state, taskById, taskCacheExtra } from "./state.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
@@ -22,6 +22,8 @@ function syncDrawerDirty(){
     taskFormHint.textContent = dirty ? "有未保存的改动" : "";
   }
 }
+/* 每次标记改动自增：保存期间又编辑时，不能把新改动误当成已保存 */
+var formRev = 0;
 (function watchFormDirty(){
   var desc = Object.getOwnPropertyDescriptor(rt, "formDirty");
   if(desc && desc.set && desc.get) return; // 已被监听
@@ -29,6 +31,7 @@ function syncDrawerDirty(){
   Object.defineProperty(rt, "formDirty", {
     get: function(){ return val; },
     set: function(v){
+      if(v) formRev++;
       val = !!v;
       syncDrawerDirty();
     }
@@ -40,10 +43,18 @@ function setSaveLoading(loading){
     btnSaveTask.textContent = "保存中…";
     btnSaveTask.disabled = true;
     btnSaveTask.classList.add("loading");
+    if(btnSaveTaskContinue){
+      btnSaveTaskContinue.disabled = true;
+      btnSaveTaskContinue.classList.add("loading");
+    }
   }else{
     btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存任务";
     btnSaveTask.disabled = false;
     btnSaveTask.classList.remove("loading");
+    if(btnSaveTaskContinue){
+      btnSaveTaskContinue.disabled = false;
+      btnSaveTaskContinue.classList.remove("loading");
+    }
   }
 }
 function focusField(el){
@@ -149,6 +160,10 @@ function applyDrawerReadOnly(readOnly){
   }
   if(btnAttach) btnAttach.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
+  /* 新建任务保存后仍走“保存并关闭”：留在新建态再保存会重复创建 */
+  if(btnSaveTaskContinue) btnSaveTaskContinue.hidden = !!readOnly || !rt.editingId;
+  var moreSaveContinue = $("taskMoreSaveContinue");
+  if(moreSaveContinue) moreSaveContinue.hidden = !!readOnly || !rt.editingId;
   if(btnDeleteTask) btnDeleteTask.hidden = !!readOnly || !rt.editingId;
   if(iSubNew){
     iSubNew.disabled = !!readOnly;
@@ -200,11 +215,38 @@ function populateColSelect(){
   }).join("");
   if(cur && colMeta(cur)) iCol.value = cur;
 }
-function populateReqSelect(){
+/* 新建任务的默认项目：当前项目页 > 筛选栏唯一项目 > 最近一次使用的项目。
+   仅接受当前空间项目列表内的 ID，避免沿用已删除/无权限的项目。 */
+var LAST_REQ_KEY = "ds.lastReqId";
+function reqExists(id){
+  return !!id && rt.reqList.some(function(r){ return r.id === id; });
+}
+/* 新建任务不应默认落到已归档项目；已归档项目仅在编辑旧任务时保留为当前项 */
+function reqActive(id){
+  return !!id && rt.reqList.some(function(r){ return r.id === id && !r.archivedAt; });
+}
+function rememberedReqId(){
+  try{ return localStorage.getItem(LAST_REQ_KEY) || ""; }catch(e){ return ""; }
+}
+function rememberReqId(id){
+  if(!reqActive(id)) return;
+  try{ localStorage.setItem(LAST_REQ_KEY, id); }catch(e){ /* 隐私模式忽略 */ }
+}
+function defaultReqId(){
+  if(document.body.dataset.view === "project" && reqActive(rt.managerProjectId)) return rt.managerProjectId;
+  var picked = state.reqs;
+  if(Array.isArray(picked) && picked.length === 1 && picked[0] !== "__none" && reqActive(picked[0])) return picked[0];
+  var last = rememberedReqId();
+  return reqActive(last) ? last : "";
+}
+function populateReqSelect(keepId){
   if(!iReq) return;
-  var cur = iReq.value;
+  var cur = keepId !== undefined ? keepId : iReq.value;
   var html = '<option value="">（无项目）</option>';
-  rt.reqList.forEach(function(r){ html += '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>'; });
+  rt.reqList.forEach(function(r){
+    if(r.archivedAt && r.id !== cur) return;
+    html += '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
+  });
   iReq.innerHTML = html;
   if(cur && rt.reqList.some(function(r){ return r.id === cur; })) iReq.value = cur;
   else iReq.value = "";
@@ -295,6 +337,27 @@ function renderTimeline(logs){
       '<span class="tl-detail">' + actor + esc(txt) + '</span></div>';
   }).join("");
 }
+/* 附属数据失败显示“加载失败 + 重试”，不能伪装成空态 */
+function drawerLoadErrorHTML(msg, retryAttr){
+  return '<div class="sub-empty">' + esc(msg) + ' ' +
+    '<button class="btn sm ghost" type="button" data-' + retryAttr + '>重试</button></div>';
+}
+function loadTimeline(taskId){
+  if(!timelineBox) return;
+  timelineBox.innerHTML = '<div class="tl-empty">加载中…</div>';
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/logs").then(function(logs){
+    if(rt.editingId === taskId) renderTimeline(logs);
+  }).catch(function(ex){
+    if(rt.editingId !== taskId) return;
+    timelineBox.innerHTML = '<div class="tl-empty">操作时间线加载失败：' +
+      esc(ex.message || "网络异常") + ' <button class="btn sm ghost" type="button" data-timeline-retry>重试</button></div>';
+  });
+}
+if(timelineBox){
+  timelineBox.addEventListener("click", function(e){
+    if(e.target.closest("[data-timeline-retry]") && rt.editingId) loadTimeline(rt.editingId);
+  });
+}
 var origProgress = 0;
 var startedDone = false;
 var commentsCache = [];
@@ -352,7 +415,9 @@ function openTaskDrawer(colId, task, defaults){
   mentionCandidateTask = null;
   mentionCandidates = [];
   closeMention();
-  var readOnly = task ? !canEditTask(task) : !canEditReq(defaults && defaults.reqId);
+  /* 新建任务先确定项目，再据其权限决定表单是否只读 */
+  var initialReqId = task ? (task.reqId || "") : ((defaults && defaults.reqId) || defaultReqId());
+  var readOnly = task ? !canEditTask(task) : !canEditReq(initialReqId);
   if(task) taskCacheExtra[task.id] = task;
   if(drawerNotice) drawerNotice.hidden = true;
   /* 分支 / 需求下拉改为按需加载：首次打开抽屉时才拉取对应视图模块，不拖首屏。
@@ -377,7 +442,7 @@ function openTaskDrawer(colId, task, defaults){
     rt.formCat = task.category || (rt.categoriesCache.length ? rt.categoriesCache[0].name : "");
     populateColSelect();
     iCol.value = task.boardColumn || "backlog";
-    populateReqSelect();
+    populateReqSelect(task.reqId || "");
     iReq.value = task.reqId || "";
     if(iItemType) iItemType.value = task.itemType || "task";
     if(iSeverity) iSeverity.value = task.severity || "";
@@ -407,15 +472,15 @@ function openTaskDrawer(colId, task, defaults){
     populateOwnerSelect(task.owner || "", task.ownerUserId || "");
     fWork.hidden = false; fAttach.hidden = false; fSubtasks.hidden = false; fTimeline.hidden = false;
     if(fComments) fComments.hidden = false;
+    /* 编辑已有任务时展开低频字段，避免已填的版本/文档/分支被折叠隐藏 */
+    var drawerMore = $("drawerMore");
+    if(drawerMore) drawerMore.open = true;
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
     loadComments(task.id);
     loadWatchStatus(task.id);
-    timelineBox.innerHTML = '<div class="tl-empty">加载中…</div>';
-    API.get("/api/tasks/" + encodeURIComponent(task.id) + "/logs").then(function(logs){
-      if(rt.editingId === task.id) renderTimeline(logs);
-    }).catch(function(){ if(rt.editingId === task.id) renderTimeline([]); });
+    loadTimeline(task.id);
   }else{
     taskDrawerTitle.textContent = "新建任务";
     btnDeleteTask.hidden = true;
@@ -433,9 +498,9 @@ function openTaskDrawer(colId, task, defaults){
     rt.formCat = rt.categoriesCache.length ? rt.categoriesCache[0].name : "";
     populateColSelect();
     iCol.value = colId || "backlog";
-    populateReqSelect();
-    /* 基于需求池需求创建工作项（需求详情入口）：锁定需求所在项目、预选目标版本为影响版本 */
-    iReq.value = (defaults && defaults.reqId) || "";
+    populateReqSelect(initialReqId);
+    /* 基于需求池需求创建工作项（需求详情入口）：锁定需求所在项目；普通入口回落到默认项目 */
+    iReq.value = initialReqId;
     if(defaults && defaults.demandId){
       taskDrawerTitle.textContent = "基于需求创建工作项";
       rt.formDemandId = defaults.demandId;
@@ -448,7 +513,7 @@ function openTaskDrawer(colId, task, defaults){
     ensureFoundVersion("");
     ensureEpic((defaults && defaults.epicId) || "");
     ensureReqDoc((defaults && defaults.reqDocId) || "");
-    ensureBranch("", (defaults && defaults.reqId) || "");
+    ensureBranch("", initialReqId);
     origProgress = 0;
     iProg.value = 0;
     iNote.value = "";
@@ -462,6 +527,8 @@ function openTaskDrawer(colId, task, defaults){
     populateOwnerSelect(rt.currentUser ? (rt.currentUser.displayName || "") : "", rt.currentUser ? rt.currentUser.id : "");
     fWork.hidden = true; fAttach.hidden = true; fSubtasks.hidden = true; fTimeline.hidden = true;
     if(fComments) fComments.hidden = true;
+    var drawerMoreNew = $("drawerMore");
+    if(drawerMoreNew) drawerMoreNew.open = false;
     commentsCache = [];
     loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
@@ -501,6 +568,23 @@ function syncProgByCol(){
   }
 }
 function hintEl(){ return $("progHint"); }
+/* 路由切换前收口抽屉：干净则直接关，有改动先确认，确认后再放行路由 */
+window.addEventListener("ds:before-route", function(e){
+  if(!taskDrawer.classList.contains("on")) return;
+  if(!rt.formDirty){ forceCloseTaskDrawer(); return; }
+  e.preventDefault();
+  var to = e.detail && e.detail.to;
+  UI.showConfirm({
+    title:"离开当前任务？",
+    msg:"表单有未保存的修改，切换页面后会丢失。",
+    okText:"放弃并离开",
+    cancelText:"继续编辑"
+  }).then(function(ok){
+    if(!ok) return;
+    forceCloseTaskDrawer();
+    window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:to } }));
+  });
+});
 function tryCloseTaskDrawer(){
   if(!taskDrawer.classList.contains("on")) return;
   if(rt.formDirty){
@@ -680,8 +764,11 @@ function loadComments(taskId){
   commentList.innerHTML = '<div class="sub-empty">加载中…</div>';
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/comments").then(function(list){
     if(rt.editingId === taskId) renderComments(list);
-  }).catch(function(){
-    if(rt.editingId === taskId) renderComments([]);
+  }).catch(function(ex){
+    if(rt.editingId !== taskId) return;
+    commentsCache = [];
+    if(commentCount) commentCount.textContent = "";
+    commentList.innerHTML = drawerLoadErrorHTML("评论加载失败：" + (ex.message || "网络异常"), "retry-comments");
   });
 }
 function renderComments(list){
@@ -926,6 +1013,7 @@ if(commentMention){
 }
 if(commentList){
   commentList.addEventListener("click", function(e){
+    if(e.target.closest("[data-retry-comments]") && rt.editingId){ loadComments(rt.editingId); return; }
     var del = e.target.closest("[data-comment-del]");
     if(!del || !rt.editingId) return;
     if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
@@ -1047,6 +1135,12 @@ $("taskMoreMenu").addEventListener("click", function(e){
     copyToClipboard(t.title, "标题已复制到剪贴板");
     return;
   }
+  if(kind === "save-continue"){
+    if(btnSaveTaskContinue && !btnSaveTaskContinue.hidden && !btnSaveTaskContinue.disabled){
+      taskForm.requestSubmit(btnSaveTaskContinue);
+    }
+    return;
+  }
   if(kind === "trash"){
     if(!t) return;
     /* 确认框取消时抽屉保持打开；成功删除后 deleteTask 内部关闭 */
@@ -1055,7 +1149,8 @@ $("taskMoreMenu").addEventListener("click", function(e){
 });
 taskForm.addEventListener("submit", function(e){
   e.preventDefault();
-  if(rt.drawerReadOnly) return;
+  if(rt.drawerReadOnly || btnSaveTask.disabled) return;
+  var saveAndContinue = !!(e.submitter && e.submitter.id === "btnSaveTaskContinue");
   var title = iTitle.value.trim();
   if(!title){
     fTitle.classList.add("invalid");
@@ -1145,6 +1240,7 @@ taskForm.addEventListener("submit", function(e){
   var seq = rt.taskFormSeq;
   var wasEdit = !!rt.editingId;
   var editId = rt.editingId;
+  var revAtSubmit = formRev;
   setSaveLoading(true);
   var req = wasEdit
     ? API.put("/api/tasks/" + encodeURIComponent(editId), payload)
@@ -1152,20 +1248,32 @@ taskForm.addEventListener("submit", function(e){
   req.then(function(nt){
     setSaveLoading(false);
     if(seq !== rt.taskFormSeq) return;   // 抽屉已切换：界面由新的打开流程管理
-    rt.formDirty = false;
-    forceCloseTaskDrawer();
-    if(wasEdit){
-      toast("已更新「" + title + "」", "fs");
+    rememberReqId(nt && nt.reqId);
+    if(saveAndContinue && wasEdit && rt.editingId === editId){
+      /* 连续编辑：留在抽屉里；同步缓存与标题，后续保存不会带着旧值 */
+      var changedDuringSave = formRev !== revAtSubmit;
+      if(nt && taskCacheExtra[editId]) taskCacheExtra[editId] = Object.assign({}, taskCacheExtra[editId], nt);
+      if(nt && nt.title && !changedDuringSave) taskDrawerTitle.textContent = nt.title;
+      if(!changedDuringSave) rt.formDirty = false;
+      var stayHint = $("taskFormHint");
+      if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
+      if(changedDuringSave) toast("已保存提交时的内容 · 保存期间的新改动还未保存", "warn");
+      else toast("已保存「" + title + "」");
     }else{
-      var tip = "已创建任务「" + nt.title + "」";
-      var kind = "fs";
-      if(nt.dueDate){
-        var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
-        if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
-        else if(d === 0) tip += "，今天到期";
-        else if(d <= 3) tip += "，剩余 " + d + " 天";
+      forceCloseTaskDrawer();
+      if(wasEdit){
+        toast("已更新「" + title + "」", "fs");
+      }else{
+        var tip = "已创建任务「" + nt.title + "」";
+        var kind = "fs";
+        if(nt.dueDate){
+          var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
+          if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
+          else if(d === 0) tip += "，今天到期";
+          else if(d <= 3) tip += "，剩余 " + d + " 天";
+        }
+        toast(tip, kind);
       }
-      toast(tip, kind);
     }
     loadBoard({animate:true});
     loadReqs();
@@ -1211,6 +1319,9 @@ function deleteTask(id){
   }).then(function(ok){
     if(!ok) return;
     API.del("/api/tasks/" + encodeURIComponent(id)).then(function(){
+      t.deletedAt = t.deletedAt || new Date().toISOString();
+      delete taskCacheExtra[id];
+      delete rt.listCache[id];
       if(rt.editingId === id) forceCloseTaskDrawer();
       loadBoard({animate:false});
       loadReqs();
@@ -1220,6 +1331,7 @@ function deleteTask(id){
       refreshAssociationViews();
       toastAction("已移入回收站「" + t.title + "」", "撤销", function(){
         API.post("/api/tasks/" + encodeURIComponent(id) + "/restore", {}).then(function(){
+          delete t.deletedAt;
           toast("已恢复「" + t.title + "」", "fs");
           loadBoard({animate:true, movedId:id});
           loadReqs();
@@ -1260,8 +1372,11 @@ function loadSubtasks(taskId){
   subList.innerHTML = '<div class="sub-empty">加载中…</div>';
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/subtasks").then(function(list){
     if(rt.editingId === taskId) renderSubtasks(list);
-  }).catch(function(){
-    if(rt.editingId === taskId) renderSubtasks([]);
+  }).catch(function(ex){
+    if(rt.editingId !== taskId) return;
+    rt.subtasksCache = [];
+    if(subCount) subCount.textContent = "";
+    subList.innerHTML = drawerLoadErrorHTML("检查项加载失败：" + (ex.message || "网络异常"), "retry-subtasks");
   });
 }
 subList.addEventListener("change", function(e){
@@ -1281,6 +1396,7 @@ subList.addEventListener("change", function(e){
   });
 });
 subList.addEventListener("click", function(e){
+  if(e.target.closest("[data-retry-subtasks]") && rt.editingId){ loadSubtasks(rt.editingId); return; }
   var del = e.target.closest("[data-sub-del]");
   if(!del || !rt.editingId) return;
   e.preventDefault();
@@ -1689,5 +1805,22 @@ if(btnDrawerStatus){
     UI.openPop(el, btnDrawerStatus, { align: "left", onClose: function(){ el.remove(); } });
   });
 }
+
+/* 低频字段归入「更多字段」：只移动 DOM，id 与事件监听保持不变 */
+(function initDrawerMoreFields(){
+  var host = $("drawerMoreBody");
+  if(!host) return;
+  ["iItemType", "iTags", "iReqDoc", "iVersion", "iEpic", "iBranch"].forEach(function(id){
+    var el = $(id);
+    var field = el && el.closest(".field");
+    if(field) host.appendChild(field);
+  });
+  var remindGrid = iRemind && iRemind.closest(".form-grid");
+  if(remindGrid) host.appendChild(remindGrid);
+  /* 字段搬走后清掉空栅格，避免留下空白间距 */
+  document.querySelectorAll(".task-detail-main .form-grid").forEach(function(grid){
+    if(!grid.querySelector(".field")) grid.remove();
+  });
+})();
 
 export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, showDrawerNotice, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

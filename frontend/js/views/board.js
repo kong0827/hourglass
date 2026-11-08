@@ -127,6 +127,34 @@ function loadMoreDone(){
     return false;
   });
 }
+function loadMoreColumn(colId){
+  var cd = state.board && state.board.columns[colId];
+  if(!cd || !cd.hasMore) return Promise.resolve(false);
+  var gen = state.boardGen;
+  var offset = cd.items.length;
+  var listEl = board.querySelector('.board-col[data-col="' + colId + '"] .board-col-body') ||
+    board.querySelector(".mob-board-list");
+  if(listEl) listEl.classList.add("loading-more");
+  UI.syncBusy(true);
+  return API.get("/api/tasks/column", boardParams({col: colId, offset: offset, limit: 60})).then(function(page){
+    UI.syncBusy(false);
+    if(listEl) listEl.classList.remove("loading-more");
+    if(gen !== state.boardGen) return false;
+    var known = {};
+    cd.items.forEach(function(t){ known[t.id] = 1; });
+    (page.items || []).forEach(function(t){ if(!known[t.id]) cd.items.push(t); });
+    cd.matched = page.matched;
+    cd.total = page.total;
+    cd.hasMore = cd.items.length < page.matched;
+    render({animate:false});
+    return true;
+  }).catch(function(ex){
+    UI.syncBusy(false);
+    if(listEl) listEl.classList.remove("loading-more");
+    if(gen === state.boardGen) toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    return false;
+  });
+}
 function refreshBoardPreserving(){
   var wanted = state.doneExtra.length;
   loadBoard({silent:true}).then(function(){
@@ -329,7 +357,7 @@ function renderMobileBoard(opts){
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
   }
-  if(active === "done" && cd.hasMore){
+  if(cd.hasMore){
     listHTML += '<button class="btn mob-load-more" type="button" data-more="1">加载更多（还有 ' +
       Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
   }
@@ -418,9 +446,9 @@ function render(opts){
     }else{
       items.forEach(function(t, i){ body += cardHTML(t, i); });
     }
-    if(c.done && cd.hasMore){
+    if(cd.hasMore){
       body += '<button class="col-more" type="button" data-more="1">加载更多（还有 ' +
-        Math.max(cd.matched - items.length, 0) + ' 项）</button>';
+        Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
     }
     body += cardAddHTML(c.id);
     body += '</div>';
@@ -838,7 +866,12 @@ board.addEventListener("click", function(e){
     return;
   }
   var more = e.target.closest("[data-more]");
-  if(more){ loadMoreDone(); return; }
+  if(more){
+    var colEl = more.closest(".board-col");
+    var cid = colEl ? colEl.dataset.col : mobileColId();
+    if(cid === "done") loadMoreDone(); else loadMoreColumn(cid);
+    return;
+  }
   var dueBtn = e.target.closest("[data-due-pop]");
   if(dueBtn){ openDuePopover(dueBtn, dueBtn.dataset.duePop); return; }
   var menuBtn = e.target.closest("[data-card-menu]");

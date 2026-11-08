@@ -13,6 +13,8 @@ import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.entity.Workspace;
+import com.hourglass.mapper.RequirementMapper;
+import com.hourglass.service.AuditService;
 import com.hourglass.service.RequirementService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
 
@@ -32,10 +35,15 @@ public class RequirementController {
 
     private final RequirementService requirementService;
     private final WorkspaceService workspaceService;
+    private final RequirementMapper requirementMapper;
+    private final AuditService audit;
 
-    public RequirementController(RequirementService requirementService, WorkspaceService workspaceService) {
+    public RequirementController(RequirementService requirementService, WorkspaceService workspaceService,
+                                 RequirementMapper requirementMapper, AuditService audit) {
         this.requirementService = requirementService;
         this.workspaceService = workspaceService;
+        this.requirementMapper = requirementMapper;
+        this.audit = audit;
     }
 
     /** 项目列表（含任务数、完成数、平均进度） */
@@ -84,14 +92,53 @@ public class RequirementController {
         return ApiResult.ok(requirementService.markFirstRelease(ctx.getWsId(), id, date));
     }
 
-    /** 删除项目：其下任务保留（解除关联），其下需求文档一并删除 */
+    /** 归档项目：只从默认视图隐藏，不删除任何数据；archived=false 可恢复 */
+    @PutMapping({"/api/reqs/{id}/archive", "/api/projects/{id}/archive"})
+    public ApiResult<Requirement> archive(@PathVariable String id,
+                                          @RequestParam(defaultValue = "true") boolean archived,
+                                          @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(requirementService.setArchived(ws.getId(), userId, id, archived));
+    }
+
+    /** 删除影响预览（A5）：任务解绑数/文档/版本/需求池/用例数量，确认框据此写准确文案 */
+    @GetMapping({"/api/reqs/{id}/delete-impact", "/api/projects/{id}/delete-impact"})
+    public ApiResult<RequirementDeleteResult> deleteImpact(@PathVariable String id,
+                                                           @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(requirementService.deleteImpact(ws.getId(), id));
+    }
+
+    /**
+     * 删除项目：其下任务保留（解除关联），其下需求文档/用例/版本/需求池条目一并删除。
+     * A5 删除保护：服务端强制"输入完整项目名"确认——与前端确认框同口径，
+     * 绕过前端的直接 API 调用同样被拦下（400 并附预览接口地址）。
+     */
     @DeleteMapping({"/api/reqs/{id}", "/api/projects/{id}"})
     public ApiResult<RequirementDeleteResult> delete(@PathVariable String id,
-                                                     @RequestParam(required = false) String workspace) {
+                                                     @RequestParam(required = false) String confirm,
+                                                     @RequestParam(required = false) String workspace,
+                                                     HttpServletRequest request) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         /* 删除项目会级联删需求文档：仅空间主可执行 */
         workspaceService.requireOwner(userId, ws.getId());
-        return ApiResult.ok(requirementService.delete(userId, ws.getId(), id));
+        Requirement project = requirementMapper.selectById(id);
+        if (project == null || !ws.getId().equals(project.getWorkspaceId())) {
+            throw new com.hourglass.common.AppException(404, "项目不存在");
+        }
+        if (confirm == null || !confirm.equals(project.getName())) {
+            throw com.hourglass.common.AppException.badRequest(
+                    "删除项目需要输入完整项目名确认（防误删）；影响范围请先查 GET /api/reqs/" + id + "/delete-impact");
+        }
+        RequirementDeleteResult result = requirementService.delete(userId, ws.getId(), id);
+        audit.recordCurrent(ws.getId(), "project_delete", "project", id,
+                project == null ? id : project.getName(), true,
+                "删除项目「" + (project == null ? id : project.getName()) + "」，解除关联 "
+                        + result.getUnlinked() + " 项任务" + (result.getDocs() > 0 ? "，" + result.getDocs() + " 份文档" : ""),
+                request);
+        return ApiResult.ok(result);
     }
 }

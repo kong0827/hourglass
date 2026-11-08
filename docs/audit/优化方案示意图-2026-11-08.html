@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>沙漏 · 优化方案示意图 2026-11-08</title>
+<style>
+:root{
+  --accent:#2563EB; --ink:#1F2937; --sub:#6B7280; --line:#E5E7EB; --bg:#F8FAFC;
+  --card:#FFFFFF; --ok:#16A34A; --warn:#D97706; --bad:#DC2626; --chip:#EFF6FF;
+  --radius:10px; --shadow:0 1px 3px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 20px 60px;background:var(--bg);color:var(--ink);
+  font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:22px;margin:0 0 6px}
+.meta{color:var(--sub);font-size:13px;margin-bottom:28px}
+h2{font-size:17px;margin:38px 0 4px}
+.note{color:var(--sub);font-size:13px;margin:0 0 14px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.pair{grid-template-columns:1fr}}
+.pane{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden}
+.pane-h{padding:8px 14px;font-size:12px;font-weight:600;color:var(--sub);
+  border-bottom:1px solid var(--line);background:#FBFCFE;display:flex;justify-content:space-between}
+.pane-h .tag{font-weight:400}
+.body{padding:14px}
+.app{display:grid;grid-template-columns:150px 1fr;gap:10px;font-size:12px}
+.side{border-right:1px dashed var(--line);padding-right:10px;color:var(--sub)}
+.side .grp{font-size:11px;color:#9CA3AF;margin:8px 0 3px}
+.side .it{padding:3px 8px;border-radius:6px}
+.side .it.on{background:var(--chip);color:var(--accent);font-weight:600}
+.frame{border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff}
+.topline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.title{font-size:14px;font-weight:700}
+.badge{font-size:11px;padding:1px 8px;border-radius:999px;background:#ECFDF5;color:var(--ok)}
+.badge.glay{background:#F3F4F6;color:var(--sub)}
+.bar{height:6px;border-radius:4px;background:#EEF2F7;position:relative;margin:4px 0 10px}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--accent);opacity:.85}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+.m{border:1px solid var(--line);border-radius:8px;padding:6px 8px;text-align:center}
+.m b{display:block;font-size:15px}
+.m span{font-size:11px;color:var(--sub)}
+.m.warn b{color:var(--warn)} .m.bad b{color:var(--bad)}
+.ms{display:flex;align-items:center;gap:6px;margin:6px 0 10px;font-size:12px}
+.dia{width:0;height:0;border:5px solid transparent;border-bottom-color:var(--accent);display:inline-block}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;border:2px solid var(--accent)}
+.dot.done{background:var(--ok);border-color:var(--ok)}
+.dot.now{background:#fff;border-color:var(--warn)}
+.line{flex:1;height:2px;background:var(--line)}
+.tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.tabs span{font-size:12px;padding:2px 10px;border-radius:6px;color:var(--sub)}
+.tabs span.on{background:var(--chip);color:var(--accent);font-weight:600}
+.rows{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rw{display:flex;justify-content:space-between;padding:5px 10px;font-size:12px;border-top:1px solid #F3F4F6}
+.rw:first-child{border-top:none;background:#FAFBFD;color:var(--sub)}
+.flag{font-size:11px;padding:0 6px;border-radius:4px}
+.flag.o{background:#FFFBEB;color:var(--warn)} .flag.b{background:#FEF2F2;color:var(--bad)}
+.drawer{border:1px solid var(--line);border-radius:10px;background:#fff;max-width:420px;box-shadow:var(--shadow)}
+.dr-h{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px}
+.dr-h small{font-weight:400;color:var(--sub)}
+.sec{padding:8px 14px;border-bottom:1px dashed #F3F4F6;font-size:12px}
+.sec .lab{color:var(--sub);font-size:11px;margin-bottom:4px}
+.f{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;background:#FCFCFD}
+.f.pri{background:var(--chip);border-color:#BFDBFE;color:var(--accent)}
+.fold{padding:6px 14px;font-size:12px;color:var(--sub)}
+.save{padding:8px 14px;font-size:12px;color:var(--ok)}
+.grid6{display:grid;grid-template-columns:repeat(6,72px);gap:4px;font-size:11px;color:var(--sub)}
+.grid6 div{border:1px solid var(--line);border-radius:5px;padding:5px 4px;text-align:center;background:#FCFCFD}
+.arrow{color:var(--accent);font-weight:700}
+.pill{display:inline-block;font-size:11px;border-radius:999px;padding:1px 9px;margin:2px 3px 2px 0;background:#F3F4F6;color:var(--sub)}
+.legend{margin-top:22px;font-size:12px;color:var(--sub)}
+.legend b{color:var(--ink)}
+</style>
+</head>
+<body><div class="wrap">
+<h1>沙漏 · 重点优化方案布局示意</h1>
+<p class="meta">2026-11-08 竞品对标与体验审查配套 · 线框示意（浅色），对应报告 §14.2 项目驾驶舱 / §14.3 测试计划闭环 / §14.4 任务抽屉分层</p>
+
+<h2>① 项目详情 → 项目驾驶舱（§14.2）</h2>
+<p class="note">左为现状（任务聚合页），右为建议。原则：不加新对象，只把已有数据组织成“一眼答案”。</p>
+<div class="pair">
+  <div class="pane"><div class="pane-h">现状 v1.1 前<span class="tag">项目详情 = 文档 + 任务列表</span></div><div class="body">
+    <div class="frame">
+      <div class="topline"><span class="title">聚合支付网关</span><span class="badge glay">进行中</span></div>
+      <div class="rows">
+        <div class="rw"><span>文档</span><span>8 篇</span></div>
+        <div class="rw"><span>工作项列表</span><span>29 项</span></div>
+        <div class="rw"><span>…平铺筛选后列表…</span><span></span></div>
+      </div>
+      <div class="f" style="margin-top:8px">无负责人</div><div class="f">无计划起止</div><div class="f">无里程碑</div><div class="f">无风险聚合</div>
+    </div>
+  </div></div>
+  <div class="pane"><div class="pane-h">建议<span class="tag">项目（列表）→ 驾驶舱 两级</span></div><div class="body">
+    <div class="frame">
+      <div class="topline"><span class="title">聚合支付网关</span><span class="badge">进行中</span>
+        <span class="pill">负责人 张伟</span><span class="pill">06-01 → 11-20</span></div>
+      <div class="bar"><i style="width:72%"></i></div>
+      <div class="metrics">
+        <div class="m"><b>69%</b><span>完成 18/29</span></div>
+        <div class="m bad"><b>2</b><span>逾期</span></div>
+        <div class="m"><b>21h</b><span>本周投入</span></div>
+        <div class="m warn"><b>−3d</b><span>距计划完工</span></div>
+        <div class="m"><b>90%</b><span>用例通过</span></div>
+      </div>
+      <div class="ms"><span class="dot done"></span>需求冻结 10-20<span class="line"></span>
+        <span class="dot now"></span>联调 11-10<span class="line"></span><span class="dia"></span>发布 11-20</div>
+      <div class="tabs"><span class="on">概览</span><span>工作项</span><span>文档</span><span>测试</span><span>版本</span><span>活动</span></div>
+      <div class="rows">
+        <div class="rw"><span>风险信号</span><span><span class="flag b">逾期 5</span> <span class="flag o">阻塞 2</span> <span class="flag o">超载 1 人</span> →</span></div>
+        <div class="rw"><span>成员负载</span><span>刘洋 141% · 王浩 183%（可点直达）</span></div>
+        <div class="rw"><span>版本 V1.2</span><span>承诺 7 项 · 已完成 2</span></div>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<h2>② 测试计划闭环（§14.3）</h2>
+<p class="note">测试页新增第 4 个 tab「测试计划」：一张 test_plan 表 + 圈选 + 批量执行 + 汇总导出；不引入套件/提测单/多级树。</p>
+<div class="pair">
+  <div class="pane"><div class="pane-h">现状<span class="tag">用例清单，逐条弹窗执行</span></div><div class="body">
+    <div class="frame">
+      <div class="topline"><span class="title">测试用例</span><span class="badge glay">共 120 条</span></div>
+      <div class="rows">
+        <div class="rw"><span>回调幂等</span><span><span class="pill">执行</span><span class="pill">编辑</span></span></div>
+        <div class="rw"><span>JSAPI 验签</span><span><span class="pill">执行</span><span class="pill">编辑</span></span></div>
+        <div class="rw"><span>…每条单独点开、单独填结果…</span><span></span></div>
+      </div>
+      <div class="f" style="margin-top:8px">无“本轮回归”容器</div><div class="f">无批量</div><div class="f">无 CSV 迁移</div>
+    </div>
+  </div></div>
+  <div class="pane"><div class="pane-h">建议<span class="tag">计划详情</span></div><div class="body">
+    <div class="frame">
+      <div class="topline"><span class="title">V1.2 回归</span><span class="badge">执行中</span>
+        <span class="pill">11-05 → 11-19</span><span class="pill">关联 V1.2 · 需求 4</span></div>
+      <div class="bar"><i style="width:57%"></i></div>
+      <div class="metrics" style="grid-template-columns:repeat(5,1fr)">
+        <div class="m"><b>68/120</b><span>已执行</span></div>
+        <div class="m"><b>61</b><span>通过</span></div>
+        <div class="m bad"><b>5</b><span>失败</span></div>
+        <div class="m warn"><b>2</b><span>阻塞</span></div>
+        <div class="m"><b>90%</b><span>通过率</span></div>
+      </div>
+      <div class="rows">
+        <div class="rw"><span>☑ 回调幂等</span><span>失败 <span class="flag b">已转缺陷 XmK0011</span></span></div>
+        <div class="rw"><span>☑ JSAPI 验签</span><span>通过</span></div>
+        <div class="rw"><span>☑ 分账对账</span><span>未执行</span></div>
+      </div>
+      <div class="topline" style="margin:10px 0 0">
+        <span class="pill" style="background:var(--chip);color:var(--accent)">批量执行（勾选 → 一次填结果）</span>
+        <span class="pill">圈选用例</span><span class="pill">导出 CSV</span><span class="pill">测试简报 PNG</span>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<h2>③ 任务抽屉分层 + 保存语义（§14.4）</h2>
+<p class="note">左为现状（10 区块 33 控件一屏）；右为建议（首屏 7 面 + 三组折叠 + 自动保存可见承诺）。</p>
+<div class="pair">
+  <div class="pane"><div class="pane-h">现状<span class="tag">33 控件同屏 · 保存语义三种</span></div><div class="body">
+    <div class="drawer">
+      <div class="dr-h">编辑任务 <small>Ctrl+Enter 保存</small></div>
+      <div class="sec"><div class="grid6">
+        <div>标题</div><div>描述</div><div>类型</div><div>优先级</div><div>标签</div><div>项目</div>
+        <div>文档</div><div>版本</div><div>史诗</div><div>分支</div><div>开始日</div><div>截止日</div>
+        <div>分类</div><div>里程碑</div><div>预计</div><div>实际</div><div>进度</div><div>备注</div>
+        <div>循环</div><div>提醒</div><div>提醒谁</div><div>阻塞</div><div>严重度</div><div>环境</div>
+        <div>复现</div><div>版本</div><div>回归</div><div>清单</div><div>附件</div><div>工时</div>
+      </div></div>
+    </div>
+  </div></div>
+  <div class="pane"><div class="pane-h">建议<span class="tag">首屏 7 面 · 其余折叠</span></div><div class="body">
+    <div class="drawer">
+      <div class="dr-h">任务标题、负责人、截止、状态、进度、描述 <small>＋ 新建仅首屏</small></div>
+      <div class="sec"><span class="f pri">待处理</span><span class="f pri">进行中</span><span class="f">待测试</span><span class="f">已完成</span>
+        <div style="margin-top:6px"><span class="f">负责人 刘洋</span><span class="f">截止 11-14 · 明天</span><span class="f pri">高</span></div></div>
+      <div class="fold">▸ 关联：项目 / 版本 / 史诗 / <b>依赖（只读：我依赖谁 · 谁等我）</b></div>
+      <div class="fold">▸ 执行：检查清单 / 附件 / 工时</div>
+      <div class="fold">▸ 更多字段：提醒 / 循环 / 阻塞 / 分类 / 标签 / 缺陷信息</div>
+      <div class="save">✓ 已自动保存 · 14:32（评论与附件即时提交）</div>
+    </div>
+  </div></div>
+</div>
+
+<div class="legend"><b>图例：</b>蓝=主操作/强调，绿=正常与完成，橙=需关注（阻塞/超载），红=风险（逾期/失败/缺陷）。
+所有区块均为既有数据的重新组织，不新增一级导航入口；术语按报告 §14.5 统一（项目 / 工作项 / 需求 / 文档）。</div>
+</div></body>
+</html>

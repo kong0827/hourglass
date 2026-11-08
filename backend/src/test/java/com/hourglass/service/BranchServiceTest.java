@@ -16,6 +16,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -39,11 +42,11 @@ class BranchServiceTest {
         when(access.viewerScope(WS, "U1")).thenReturn("U1");
         when(branchMapper.selectVisibleByWorkspace(WS, "U1", null)).thenReturn(Arrays.asList(
                 branch("B1"), branch("B2")));
-        when(branchMapper.selectVersionTags(WS, "U1")).thenReturn(Arrays.asList(
+        when(branchMapper.selectVersionTags(eq(WS), eq("U1"), anyList())).thenReturn(Arrays.asList(
                 tag("B1", "V2", "v2.0", "released", "R1", "项目A"),
                 tag("B1", "V1", "v1.0", "active", "R1", "项目A"),
                 tag("B2", "V3", "v1.0", "planned", "R2", "项目B")));
-        when(branchMapper.selectProjectTags(WS, "U1")).thenReturn(Arrays.asList(
+        when(branchMapper.selectProjectTags(eq(WS), eq("U1"), anyList())).thenReturn(Arrays.asList(
                 proj("B1", "R1", "项目A"),
                 proj("B2", "R2", "项目B")));
 
@@ -64,9 +67,9 @@ class BranchServiceTest {
         when(access.viewerScope(WS, "U9")).thenReturn(null);
         when(branchMapper.selectById("B1")).thenReturn(b1);
         when(branchMapper.selectById("B2")).thenReturn(b2);
-        when(branchMapper.selectVersionTags(WS, null)).thenReturn(Collections.singletonList(
+        when(branchMapper.selectVersionTags(eq(WS), nullable(String.class), anyList())).thenReturn(Collections.singletonList(
                 tag("B2", "V3", "v1.0", "planned", "R2", "项目B")));
-        when(branchMapper.selectProjectTags(WS, null)).thenReturn(Collections.singletonList(
+        when(branchMapper.selectProjectTags(eq(WS), nullable(String.class), anyList())).thenReturn(Collections.singletonList(
                 proj("B2", "R2", "项目B")));
 
         assertEquals(1, service.getDetail(WS, "U9", "B2").getVersions().size());
@@ -78,8 +81,8 @@ class BranchServiceTest {
         when(access.viewerScope(WS, "U1")).thenReturn("U1");
         when(branchMapper.selectVisibleByWorkspace(WS, "U1", "R1")).thenReturn(Arrays.asList(
                 branch("B1"), branch("B2"), branch("B3")));
-        when(branchMapper.selectVersionTags(WS, "U1")).thenReturn(Collections.emptyList());
-        when(branchMapper.selectProjectTags(WS, "U1")).thenReturn(Arrays.asList(
+        when(branchMapper.selectVersionTags(eq(WS), eq("U1"), anyList())).thenReturn(Collections.emptyList());
+        when(branchMapper.selectProjectTags(eq(WS), eq("U1"), anyList())).thenReturn(Arrays.asList(
                 proj("B1", "R1", "项目A"),
                 proj("B2", "R2", "项目B")));
 
@@ -98,8 +101,8 @@ class BranchServiceTest {
         direct.setReqId("R1");
         when(branchMapper.selectVisibleByWorkspace(WS, "U1", "R1")).thenReturn(Arrays.asList(
                 direct, branch("B2")));
-        when(branchMapper.selectVersionTags(WS, "U1")).thenReturn(Collections.emptyList());
-        when(branchMapper.selectProjectTags(WS, "U1")).thenReturn(Collections.singletonList(
+        when(branchMapper.selectVersionTags(eq(WS), eq("U1"), anyList())).thenReturn(Collections.emptyList());
+        when(branchMapper.selectProjectTags(eq(WS), eq("U1"), anyList())).thenReturn(Collections.singletonList(
                 proj("B2", "R2", "项目B")));
 
         List<DevBranch> out = service.list(WS, "U1", "R1");
@@ -118,8 +121,8 @@ class BranchServiceTest {
         when(branchMapper.selectVisibleByWorkspace(WS, "U1", null)).thenReturn(
                 new java.util.ArrayList<DevBranch>(Arrays.asList(hidden, visible)));
         when(access.hiddenProjectIds(WS, "U1")).thenReturn(Collections.singleton("R2"));
-        when(branchMapper.selectVersionTags(WS, "U1")).thenReturn(Collections.emptyList());
-        when(branchMapper.selectProjectTags(WS, "U1")).thenReturn(Collections.emptyList());
+        when(branchMapper.selectVersionTags(eq(WS), eq("U1"), anyList())).thenReturn(Collections.emptyList());
+        when(branchMapper.selectProjectTags(eq(WS), eq("U1"), anyList())).thenReturn(Collections.emptyList());
 
         List<DevBranch> out = service.list(WS, "U1");
 
@@ -138,8 +141,8 @@ class BranchServiceTest {
 
         service.changeStatus("U1", WS, "B1", req);
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "分支「B1」状态变更", "开发中 → 待测试", null, "R1");
+        verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "分支「B1」状态变更", "开发中 → 待测试", "branch", "B1", "R1");
     }
 
     @Test
@@ -165,8 +168,8 @@ class BranchServiceTest {
 
         service.delete("U1", WS, "B1");
 
-        verify(events).notify("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
-                "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", null, "R1");
+        verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
+                "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", "branch", "B1", "R1");
         verify(branchMapper).deleteById(WS, "B1");
     }
 

@@ -10,7 +10,7 @@
 
 ### 1. [P1，修复遗漏] 管理员锁的分支依据旧角色，角色在读取后变化时仍可清掉最后一名管理员
 
-- 位置：`src/main/java/com/devstudio/kanban/service/UserService.java:134`、`:135`、`:137`、`:143`；`src/main/resources/mapper/UserMapper.xml:37`。
+- 位置：`src/main/java/com/hourglass/kanban/service/UserService.java:134`、`:135`、`:137`、`:143`；`src/main/resources/mapper/UserMapper.xml:37`。
 - 触发顺序：原先只有管理员 A，U 是普通用户。请求 R 开始保存 U 的显示名/角色，非锁定读取到 U=user 后暂停；另一请求将 U 升为管理员，随后将 A 降为普通用户，此时 U 是唯一管理员；R 继续把 U 的旧角色 user 写回。
 - 原因：新加的 `lockAdmins` 仅在“此前读取的 u 是 admin，且请求明确改成 user”时调用。R 的快照里 u=user，因此完全不进入锁分支。mapper UPDATE 始终写 role；即使请求省略 role，保存显示名也会写回读取时的旧角色。
 - 影响：最终没有管理员。原来的两个管理员同时降权路径已有锁保护，但“读取普通用户后发生提升”及角色字段随显示名保存的路径仍可绕过约束。该问题属于账号权限不变量，不属于已接受的任务并发覆盖。
@@ -19,7 +19,7 @@
 
 ### 2. [P2] 密码按字符数校验，允许 bcrypt 静默忽略超出 72 字节的部分
 
-- 位置：`src/main/java/com/devstudio/kanban/dto/UserCreateRequest.java:19`；`src/main/java/com/devstudio/kanban/dto/PasswordResetRequest.java:14`；`src/main/java/com/devstudio/kanban/dto/PasswordChangeRequest.java:18`；`src/main/java/com/devstudio/kanban/config/SecurityConfig.java:24`；`src/main/java/com/devstudio/kanban/service/UserService.java:159`、`:207`。
+- 位置：`src/main/java/com/hourglass/kanban/dto/UserCreateRequest.java:19`；`src/main/java/com/hourglass/kanban/dto/PasswordResetRequest.java:14`；`src/main/java/com/hourglass/kanban/dto/PasswordChangeRequest.java:18`；`src/main/java/com/hourglass/kanban/config/SecurityConfig.java:24`；`src/main/java/com/hourglass/kanban/service/UserService.java:159`、`:207`。
 - 触发：设置“24 个中文字 + A12345”为密码，共 30 个字符、78 个 UTF-8 字节，满足现有 6–64 字符校验。
 - 原因：当前 BCryptPasswordEncoder 使用 bcrypt 的 72 字节有效输入限制，校验只检查字符数。多字节字符会提前耗尽有效输入，后缀未参与密码匹配。
 - 影响：把 A12345 换成 B12345 后仍能匹配原密码；用户可能以为已通过修改后缀更换密码，实际有效凭据未改变。此问题涉及新登录/密码匹配，不是已接受的旧会话继续有效。
@@ -28,7 +28,7 @@
 
 ### 3. [P2，修复遗漏] 推送成功码仍由正则扫描任意正文，HTML 或嵌套错误响应仍可被误判
 
-- 位置：`src/main/java/com/devstudio/kanban/service/NotificationService.java:43`、`:44`、`:292`、`:306`；任务提醒标记位于 `:113`。
+- 位置：`src/main/java/com/hourglass/kanban/service/NotificationService.java:43`、`:44`、`:292`、`:306`；任务提醒标记位于 `:113`。
 - 触发：渠道或网关返回 HTML，其中脚本或缓存数据含 `"code":200`；或返回 `{"details":{"code":200},"code":500}`。
 - 原因：上一轮把“找不到错误码也算成功”改成“找到成功码才算成功”，但依然对任意字符串使用正则，取第一个匹配，并未解析顶层 JSON。正则还会把 `{"code":0.5}` 中的整数前缀 0 当成功码。
 - 影响：错误响应仍可能触发已发送标记，提醒不再重试，与文档“HTML 错误页不判成功”的说明不一致。简单的不含状态码 HTML 已能正确拒绝，该部分修复有效。
@@ -46,7 +46,7 @@
 
 ### 5. [P2] SSE 空间隔离只在浏览器过滤，其他账号仍收到个人空间的活动事件
 
-- 位置：`src/main/java/com/devstudio/kanban/controller/SseController.java:20`；`src/main/java/com/devstudio/kanban/service/SseService.java:21`、`:23`、`:52`；`src/main/java/com/devstudio/kanban/config/ChangeBroadcastFilter.java:46`；`src/main/resources/static/js/app.js:2824`。
+- 位置：`src/main/java/com/hourglass/kanban/controller/SseController.java:20`；`src/main/java/com/hourglass/kanban/service/SseService.java:21`、`:23`、`:52`；`src/main/java/com/hourglass/kanban/config/ChangeBroadcastFilter.java:46`；`src/main/resources/static/js/app.js:2824`。
 - 触发：账号 B 登录并订阅 `/api/events`；账号 A 在自己的个人空间修改任务。
 - 原因：SSE 订阅没有记录用户或空间，所有 emitter 共用一个集合，任何变更都把 workspace ID 发给所有连接。前端收到后再按当前空间过滤，这只能减少刷新，不能实现服务端数据隔离。
 - 影响：B 能观察无权访问的个人/共享空间 ID 及变更发生的时间与频率。事件目前没有任务内容，因此本轮不宣称能通过 SSE 读取任务标题或详情；普通数据接口的空间权限校验也仍然存在。
@@ -55,7 +55,7 @@
 
 ### 6. [P3] 保存视图参数未校验结构，合法 JSON 也能令前端报错并污染筛选状态
 
-- 位置：`src/main/java/com/devstudio/kanban/dto/SavedViewRequest.java:15`；`src/main/java/com/devstudio/kanban/service/SavedViewService.java:34`；`src/main/resources/static/js/app.js:2297`。
+- 位置：`src/main/java/com/hourglass/kanban/dto/SavedViewRequest.java:15`；`src/main/java/com/hourglass/kanban/service/SavedViewService.java:34`；`src/main/resources/static/js/app.js:2297`。
 - 触发：通过视图接口保存 params 字符串 `null`，或 `{"cats":"Work"}`，再点击应用。
 - 原因：服务端只检查字符串非空与长度，原样保存；前端只捕获 JSON.parse 的语法错误，没检查结果是否为非空对象或 owners/cats 等字段是否为数组。
 - 影响：null 会直接抛 TypeError，无法应用；错误类型会写入全局 state，随后筛选清理调用 cats.filter 报错，可能让看板刷新与筛选异常。影响通常局限于该用户的视图，标准 UI 生成的参数通常正确，优先级低于其他问题。

@@ -21,12 +21,13 @@ public class ReviewController {
         this.workspaceService = workspaceService;
     }
 
-    /** 工作回顾：weekOffset 不传时自动选最近一个有完成记录的周 */
+    /** 工作回顾：weekOffset 不传时自动选最近一个有完成记录的周；reqId 非空时只看该项目 */
     @GetMapping("/api/review")
     public ApiResult<ReviewResponse> review(@RequestParam(required = false) String workspace,
-                                            @RequestParam(required = false) Integer weekOffset) {
+                                            @RequestParam(required = false) Integer weekOffset,
+                                            @RequestParam(required = false) String reqId) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(reviewService.review(ws.getId(), userId, weekOffset));
+        return ApiResult.ok(reviewService.review(ws.getId(), userId, reqId, weekOffset));
     }
 }

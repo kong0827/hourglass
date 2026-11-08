@@ -6,8 +6,12 @@ import lombok.Data;
 @Data
 public class RequirementDeleteResult {
 
+    /** 项目名称（影响预览回传，前端做"输入项目名确认"时核对用） */
+    private String name;
     private int unlinked;
     private int docs;
     private int versions;
     private int demands;
+    /** 连带删除的测试用例数（A5 影响预览与删除结果口径一致） */
+    private int cases;
 }

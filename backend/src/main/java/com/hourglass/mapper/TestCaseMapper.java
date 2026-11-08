@@ -19,6 +19,16 @@ public interface TestCaseMapper {
     /** 项目下用例列表：带转出缺陷任务标题，按创建时间倒序（新的在前） */
     List<TestCaseView> selectViewByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 分页列表（筛选 + LIMIT 下推） */
+    List<TestCaseView> selectViewByQuery(@Param("q") com.hourglass.dto.CaseQuery query);
+
+    int countByQuery(@Param("q") com.hourglass.dto.CaseQuery query);
+
+    /** 筛选下拉候选值（不受当前筛选影响） */
+    List<String> selectModules(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    List<String> selectOwners(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
     /** 项目用例概览：latest_status 计数（未执行不在此列，由调用方按总数反推） */
     List<Map<String, Object>> countGroupByStatus(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
@@ -47,6 +57,20 @@ public interface TestCaseMapper {
 
     /** 项目删除级联：用例数（确认提示用）与整项目用例清理 */
     int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    /** 覆盖矩阵：按需求池需求聚合用例结果（含零用例的需求） */
+    List<com.hourglass.dto.CaseCoverageRow> selectCoverageByDemand(@Param("workspaceId") String workspaceId,
+                                                                   @Param("reqId") String reqId);
+
+    /** 覆盖矩阵：未关联任何需求的用例单独成行 */
+    com.hourglass.dto.CaseCoverageRow selectUnlinkedCoverage(@Param("workspaceId") String workspaceId,
+                                                             @Param("reqId") String reqId);
+
+    /** 全局搜索：跨项目匹配标题/模块/前置条件，viewerId 非空时排除无权限项目 */
+    List<com.hourglass.dto.SearchHit> searchVisible(@Param("workspaceId") String workspaceId,
+                                                    @Param("viewerId") String viewerId,
+                                                    @Param("q") String q,
+                                                    @Param("limit") int limit);
 
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 

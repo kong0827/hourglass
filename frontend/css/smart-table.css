@@ -64,11 +64,17 @@
 #view-demands .dem-group-name{font-weight:600;color:var(--text);}
 #view-demands .dem-group-count{font-size:12px;color:var(--text-3);}
 @media (max-width:767px){
+  #view-list .smart-view-tabs,
+  #view-demands .smart-view-tabs{min-height:40px;padding:4px 6px;}
   #view-list .smart-view-tools,
-  #view-demands .smart-view-tools{align-items:stretch;}
+  #view-demands .smart-view-tools{align-items:stretch;padding:6px 8px;gap:8px;}
   #view-list .smart-view-spacer,
   #view-demands .smart-view-spacer{display:none;}
   #view-list .smart-view-tools > .btn,
   #view-demands .smart-view-tools > .btn{flex:1 1 auto;}
+  /* 手机窄屏：分组/排序标签让位给下拉；导出按钮收起，避免多占一行 */
+  #view-list .smart-view-control > span,
+  #view-demands .smart-view-control > span{display:none;}
+  #view-list .smart-view-tools [data-list-export]{display:none;}
   #view-demands .dem-search{max-width:none;flex:1 1 100%;}
 }

@@ -1,0 +1,43 @@
+Required Notice: Copyright 沙漏 Hourglass 项目贡献者（chenghongchang / chc2、kongxiangjin）
+Required Notice: 沙漏 Hourglass is licensed under the PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0)
+
+沙漏 Hourglass
+Copyright 2026 沙漏 Hourglass 项目贡献者
+
+## 许可
+
+本产品采用 **PolyForm Noncommercial License 1.0.0**（见 [LICENSE](LICENSE)）：
+
+- **允许**：个人学习、研究、试验、兴趣项目等非商业目的的使用、修改与分发；
+  慈善组织、教育机构、公共研究机构、公共安全/卫生/环境保护组织与政府机构的使用
+  （无论其资金来源如何）。
+- **禁止**：任何商业目的的使用——包括但不限于在生产经营活动中使用本软件、
+  以收费方式提供本软件或基于本软件的服务、将其用于为客户交付的项目。
+- **商业授权**：版权所有人保留就本产品另行授予商业许可的权利。
+  需要在商业场景中使用（含企业内网部署、对外交付、试点评估）的组织，
+  请向版权持有人取得商业授权后再使用。
+- 本产品的商标与名称（「沙漏」「Hourglass」及相关 logo）不在上述许可授予范围内。
+
+## 历史与贡献者
+
+项目前身为 chenghongchang（chc2）发起的个人看板项目 wokstudio，
+后逐步升级为面向小团队的私有化研发协作工作台「沙漏（Hourglass）」，
+现由 chc2 与 kongxiangjin 共同维护。完整贡献者名单见 README.md「联合开发」章节与 Git 提交记录。
+
+后续贡献者提交代码即视为同意其贡献以 PolyForm Noncommercial License 1.0.0 分发，
+并授权版权持有人就该贡献另行授予商业许可（贡献者许可协议，CLA）。
+
+## 第三方组件
+
+`frontend/vendor/` 目录内嵌的第三方开源软件与后端依赖，
+版权归各自权利人所有、沿用各自的开源许可证（Apache-2.0 / MIT / LGPL 等），
+不因本产品的非商业许可而改变；清单见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+其中 **MySQL Connector/J 为 GPL-2.0 + Oracle FOSS Exception**：
+该例外通常要求与之组合的应用采用其认可的开源许可证，本产品为非商业源码可用许可，
+可能不在例外范围内，正式对外分发前须按 THIRD-PARTY-NOTICES.md 的说明处理。
+
+## AI 能力
+
+本产品包含可选的 AI 能力（需求拆解、文档体检、周回顾草稿）。
+AI 模型与调用额度由使用者自行配置和承担，本产品不代替使用者与任何模型服务商建立授权关系。

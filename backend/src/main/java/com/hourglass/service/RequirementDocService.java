@@ -458,15 +458,13 @@ public class RequirementDocService {
 
     /**
      * 发布（published=true）或收回发布（false）。
-     * 权限：作者或项目可写者（含空间 owner/admin）；草稿对其他人不可见，按 404 处理。
+     * 权限：当前项目可写者（含空间 owner/admin）；作者身份不绕过只读限制。
      * 发布不触碰正文与历史，只改 published_at。
      */
     @Transactional
     public RequirementDoc publish(String userId, String workspaceId, String id, boolean published) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
-        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
-            throw new AppException(403, "只有文档作者或项目可写者可发布/收回发布");
-        }
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         if (published == (d.getPublishedAt() != null)) {
             return d;
         }
@@ -481,15 +479,13 @@ public class RequirementDocService {
 
     private static final int SHARE_DAYS = 30;
 
-    /** 生成/重置分享链接：仅已发布文档可分享；权限同发布（作者或项目可写者） */
+    /** 生成/重置分享链接：仅已发布文档可分享；权限同发布 */
     @Transactional
     public ReqDocShare createShare(String userId, String workspaceId, String docId) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         if (d.getPublishedAt() == null) {
             throw AppException.badRequest("文档尚未发布，发布后才能生成分享链接");
-        }
-        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
-            throw new AppException(403, "只有文档作者或项目可写者可生成分享链接");
         }
         ReqDocShare share = new ReqDocShare();
         share.setWorkspaceId(workspaceId);
@@ -503,9 +499,10 @@ public class RequirementDocService {
         return shareMapper.selectByDoc(workspaceId, docId);
     }
 
-    /** 查看现有分享链接（能看文档即可）；已过期按无链接处理 */
+    /** 查看现有分享链接：分享凭证仅当前项目可写者可见；已过期按无链接处理 */
     public ReqDocShare shareInfo(String userId, String workspaceId, String docId) {
-        getVisible(workspaceId, userId, docId);
+        RequirementDoc d = getVisible(workspaceId, userId, docId);
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         ReqDocShare share = shareMapper.selectByDoc(workspaceId, docId);
         if (share != null && share.getExpiresAt() != null
                 && share.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
@@ -517,9 +514,7 @@ public class RequirementDocService {
     @Transactional
     public void revokeShare(String userId, String workspaceId, String docId) {
         RequirementDoc d = getVisible(workspaceId, userId, docId);
-        if (!userId.equals(d.getOwnerUserId()) && !projectAccess.canWrite(workspaceId, userId, d.getReqId())) {
-            throw new AppException(403, "只有文档作者或项目可写者可撤销分享链接");
-        }
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
         shareMapper.deleteByDoc(workspaceId, docId);
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId, "share",
                 "撤销了文档「" + d.getTitle() + "」的只读分享链接");
@@ -687,12 +682,17 @@ public class RequirementDocService {
     }
 
     /**
-     * 将 Word 文档（docx）导入为清洗后的 HTML 正文。
-     * 复用 DocPreviewService 的 docx->XHTML 能力，再经白名单清洗。
-     * 阶段 1 MVP：图片以 base64 data URL 内联在 HTML 中；不提取为独立附件。
+     * 将 Word 文档导入为清洗后的 HTML 正文（docx 保留排版，doc 提取文本）。
+     * 复用 DocPreviewService 的转换能力，再经白名单清洗。
+     * 图片以 base64 data URL 内联在 HTML 中；不提取为独立附件。
      */
     public String importWord(java.io.File file) {
-        Map<String, String> preview = docPreviewService.preview(file, "docx");
+        return importWord(file, "docx");
+    }
+
+    /** 导入 Word：docx 走 XHTML 转换，doc 走 POI 文本提取，最后统一白名单清洗 */
+    public String importWord(java.io.File file, String ext) {
+        Map<String, String> preview = docPreviewService.preview(file, ext);
         String html = preview == null ? null : preview.get("content");
         if (html == null || html.trim().isEmpty()) {
             throw AppException.badRequest("文档内容为空或无法识别");
@@ -767,9 +767,9 @@ public class RequirementDocService {
         if (owner == null || owner.equals(actorId)) {
             return;
         }
-        /* 文档 ID 不是任务 ID：不能写进 refTaskId，否则通知中心点击会按任务打开并报不存在 */
-        notificationEvents.notify(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DEMAND_STATUS,
-                title, body, null, d.getReqId());
+        /* 文档 ID 不是任务 ID：写 refKind/refId，通知中心按文档打开 */
+        notificationEvents.notifyLinked(owner, d.getWorkspaceId(), UserNotificationPreferenceService.DEMAND_STATUS,
+                title, body, "doc", d.getId(), d.getReqId());
     }
 
     private void apply(RequirementDoc d, String reqId, ReqDocSaveRequest req, String userId) {

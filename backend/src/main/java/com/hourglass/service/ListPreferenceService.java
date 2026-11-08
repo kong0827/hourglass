@@ -33,7 +33,7 @@ public class ListPreferenceService {
             "title", "type", "column", "priority", "owner", "dueDate", "progress", "project", "version",
             "category", "startDate", "tags", "subtasks", "work", "comments", "updatedAt")));
     private static final Set<String> PROJECT_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-            "name", "status", "description", "taskCount", "doneCount", "progress", "docCount",
+            "name", "status", "description", "ownerName", "plannedEnd", "taskCount", "doneCount", "progress", "docCount",
             "firstReleasedAt", "createdAt", "updatedAt")));
     private static final Set<String> PORTFOLIO_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "name", "status", "health", "total", "backlog", "doing", "done", "overdue", "blocked",

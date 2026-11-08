@@ -10,7 +10,7 @@
 
 ### 1. [P1] 循环任务残留关联在 ID 复用后可泄露其他空间的私有标题
 
-- 位置：`src/main/java/com/devstudio/kanban/service/TaskService.java:512`，特别是 `:514`–`:517`；清理路径为 `:436`，指定 ID 创建为 `:253`。
+- 位置：`src/main/java/com/hourglass/kanban/service/TaskService.java:512`，特别是 `:514`–`:517`；清理路径为 `:436`，指定 ID 创建为 `:253`。
 - 触发顺序：共享空间循环任务 P 已生成后续任务 K2，P 保留 `recurNextId=K2`；将 K2 放入回收站后彻底删除；另一账号在自己的个人空间以指定 ID K2 创建新任务；共享成员重新打开 P，再完成 P。
 - 原因：彻底删除 K2 没有清除指向它的循环关联；创建接口允许复用已释放的 ID。再次完成 P 时，按全局 ID 查到任务就直接当作后续任务复用，没有核对空间或派生身份，且将查到的标题写入 P 的共享时间线。
 - 影响：个人任务标题泄露到共享空间成员可读取的日志；P 也无法正确生成自己的下一次循环任务。同空间复用 ID 同样会把无关任务误认作后续任务。这是串行操作下的关联与授权问题，不依赖多人覆盖或计时并发。
@@ -19,7 +19,7 @@
 
 ### 2. [P2] 新增 SSE 成员查询异常会在业务处理成功后逃出请求过滤器
 
-- 位置：`src/main/java/com/devstudio/kanban/service/SseService.java:71`；`src/main/java/com/devstudio/kanban/config/ChangeBroadcastFilter.java:28`、`:46`。
+- 位置：`src/main/java/com/hourglass/kanban/service/SseService.java:71`；`src/main/java/com/hourglass/kanban/config/ChangeBroadcastFilter.java:28`、`:46`。
 - 触发：带 workspace 的变更请求已经完成业务处理并返回成功状态，随后 SSE 广播查询空间成员遇到数据库连接池耗尽、临时连接故障等异常。
 - 原因：新增的 `memberMapper.selectByWorkspace` 位于 emitter 发送异常捕获之外；过滤器先执行 `chain.doFilter`，再广播，广播调用也没有隔离异常。即使没有 SSE 订阅者，仍会查询成员并可能失败。
 - 影响：已提交的写入之后，异常仍向 Servlet 调用链传播，可能干扰响应交付或连接完成；用户可能认为保存失败而重试，造成重复创建等后果。是否最终返回 HTTP 500 取决于响应是否已提交及容器处理，不能笼统断言所有部署都返回 500。

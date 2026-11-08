@@ -15,6 +15,7 @@ import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.UserMapper;
 import com.hourglass.service.ActivityService;
+import com.hourglass.service.AuditService;
 import com.hourglass.service.NotificationEventService;
 import com.hourglass.service.ProjectAccessService;
 import com.hourglass.service.WorkspaceService;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,18 +46,21 @@ public class WorkspaceController {
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
     private final NotificationEventService notificationEvents;
+    private final AuditService audit;
 
     public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper,
                                ProjectAccessService projectAccessService,
                                RequirementMapper requirementMapper,
                                ActivityService activityService,
-                               NotificationEventService notificationEvents) {
+                               NotificationEventService notificationEvents,
+                               AuditService audit) {
         this.workspaceService = workspaceService;
         this.userMapper = userMapper;
         this.projectAccessService = projectAccessService;
         this.requirementMapper = requirementMapper;
         this.activityService = activityService;
         this.notificationEvents = notificationEvents;
+        this.audit = audit;
     }
 
     /** 我参与的空间（个人空间排前） */
@@ -85,8 +90,12 @@ public class WorkspaceController {
 
     /** 删除共享空间（仅空间主，连带数据） */
     @DeleteMapping("/api/workspaces/{id}")
-    public ApiResult<Void> delete(@PathVariable String id) {
-        workspaceService.deleteShared(CurrentUser.id(), id);
+    public ApiResult<Void> delete(@PathVariable String id, HttpServletRequest request) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.requireMember(userId, id);
+        workspaceService.deleteShared(userId, id);
+        audit.recordCurrent(id, "workspace_delete", "workspace", id, ws.getName(),
+                true, "删除空间「" + ws.getName() + "」及其数据", request);
         return ApiResult.ok();
     }
 
@@ -113,26 +122,35 @@ public class WorkspaceController {
     }
 
     @PostMapping("/api/workspaces/{id}/members")
-    public ApiResult<Void> addMember(@PathVariable String id, @Valid @RequestBody MemberAddRequest req) {
+    public ApiResult<Void> addMember(@PathVariable String id, @Valid @RequestBody MemberAddRequest req,
+                                     HttpServletRequest request) {
         AppUser me = userMapper.selectById(CurrentUser.id());
         if (me == null || !"admin".equals(me.getRole())) {
             throw new AppException(403, "共享空间成员需通过邀请链接加入：请生成邀请链接发给对方，对方确认后才会成为成员");
         }
         workspaceService.addMember(CurrentUser.id(), id, req.getUsername());
+        audit.recordCurrent(id, "member_add", "member", req.getUsername(), req.getUsername(),
+                true, "添加成员：" + req.getUsername(), request);
         return ApiResult.ok();
     }
 
     /** 移除成员（空间主）/ 退出空间（成员自己） */
     @DeleteMapping("/api/workspaces/{id}/members/{userId}")
-    public ApiResult<Void> removeMember(@PathVariable String id, @PathVariable String userId) {
+    public ApiResult<Void> removeMember(@PathVariable String id, @PathVariable String userId,
+                                        HttpServletRequest request) {
         String me = CurrentUser.id();
+        Workspace before = workspaceService.requireMember(me, id);
         workspaceService.removeMember(me, id, userId);
+        boolean self = me.equals(userId);
+        audit.recordCurrent(id, "member_remove", "member", userId, userId, true,
+                self ? "退出空间「" + before.getName() + "」"
+                        : ("移除成员 " + userId + "（空间「" + before.getName() + "」）"), request);
         /* 被移除的人已不是成员，普通通知的成员校验会拦掉，必须走系统通道 */
-        if (!me.equals(userId)) {
-            Workspace ws = workspaceService.requireMember(me, id);
+        if (!self) {
             notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_REMOVED,
-                    "你已被移出空间「" + ws.getName() + "」",
-                    "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主", null);
+                    "你已被移出空间「" + before.getName() + "」",
+                    "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主",
+                    null, "workspace", id);
         }
         return ApiResult.ok();
     }
@@ -140,15 +158,20 @@ public class WorkspaceController {
     /** 调整成员空间角色：owner / admin / member / viewer（仅空间主可操作） */
     @PutMapping("/api/workspaces/{id}/members/{userId}/role")
     public ApiResult<Void> updateMemberRole(@PathVariable String id, @PathVariable String userId,
-                                            @RequestBody MemberRoleRequest req) {
+                                            @RequestBody MemberRoleRequest req,
+                                            HttpServletRequest request) {
         String me = CurrentUser.id();
         String role = req == null ? null : req.getRole();
+        Workspace ws = workspaceService.requireMember(me, id);
         workspaceService.updateMemberRole(me, id, userId, role);
+        audit.recordCurrent(id, "role_change", "member", userId, userId, true,
+                "成员 " + userId + " 的空间角色调整为「" + roleLabel(role) + "」（空间「" + ws.getName() + "」）",
+                request);
         if (!me.equals(userId)) {
-            Workspace ws = workspaceService.requireMember(me, id);
             notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_ROLE,
                     "空间角色已调整：「" + ws.getName() + "」",
-                    "你在空间「" + ws.getName() + "」中的角色已调整为「" + roleLabel(role) + "」", null);
+                    "你在空间「" + ws.getName() + "」中的角色已调整为「" + roleLabel(role) + "」",
+                    null, "workspace", id);
         }
         return ApiResult.ok();
     }
@@ -176,7 +199,8 @@ public class WorkspaceController {
     /** 保存单个「成员 × 项目」可见范围；access 为空/default 表示恢复默认参与 */
     @PutMapping("/api/workspaces/{id}/project-access")
     public ApiResult<Void> saveProjectAccess(@PathVariable String id,
-                                             @RequestBody ProjectAccessRequest req) {
+                                             @RequestBody ProjectAccessRequest req,
+                                             HttpServletRequest request) {
         String me = CurrentUser.id();
         Workspace ws = workspaceService.requireMember(me, id);
         projectAccessService.requireManage(id, me);
@@ -209,10 +233,14 @@ public class WorkspaceController {
         String access = ProjectAccessService.normalizeAccess(req.getAccess());
         activityService.logConfig(id, me,
                 "调整项目可见范围「" + project.getName() + "」→ " + (access.isEmpty() ? "default" : access));
+        audit.recordCurrent(id, "role_change", "project", project.getId(), project.getName(), true,
+                "成员 " + req.getUserId() + " 对项目「" + project.getName() + "」的可见范围改为「"
+                        + (access.isEmpty() ? "default" : access) + "」", request);
         if (!me.equals(req.getUserId()) && !previous.equals(access)) {
             notificationEvents.notifySystem(req.getUserId(), id, NotificationEventService.PROJECT_ACCESS,
                     "项目可见范围已调整：「" + project.getName() + "」",
-                    "你在空间「" + ws.getName() + "」中对该项目的可见范围已调整为「" + accessLabel(access) + "」", null);
+                    "你在空间「" + ws.getName() + "」中对该项目的可见范围已调整为「" + accessLabel(access) + "」",
+                    null, "project", project.getId());
         }
         return ApiResult.ok();
     }

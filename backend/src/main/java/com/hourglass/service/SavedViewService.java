@@ -75,14 +75,18 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数必须是 JSON 对象");
         }
         ObjectNode out = JSON.createObjectNode();
-        /* scope 区分任务视图（不存该字段）与需求池视图（demand），两类视图的 preset/group/sort 枚举不同 */
-        copyEnum(root, out, "scope", "demand");
+        /* scope 区分：任务视图（不存该字段）、需求池（demand）、文档（doc）、测试用例（testcase） */
+        copyEnum(root, out, "scope", "demand", "doc", "testcase");
+        String scope = root.path("scope").isTextual() ? root.get("scope").asText() : "";
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
         copyString(root, out, "doneScope", 16);
         copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "rej");
         copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "kind");
-        copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created");
+        copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created",
+                "title", "type", "column", "owner", "progress", "project", "version",
+                "category", "startDate", "tags", "subtasks", "comments");
+        copyEnum(root, out, "sortDir", "asc", "desc");
         copyStringArray(root, out, "owners");
         copyStringArray(root, out, "pris");
         copyStringArray(root, out, "kinds");
@@ -104,6 +108,27 @@ public class SavedViewService {
                 throw AppException.badRequest("视图参数不合法：blocked 应为布尔值");
             }
             out.put("blocked", blocked.asBoolean());
+        }
+        /* 文档视图：搜索词已由 q 承载，另存项目范围与展示方式 */
+        if ("doc".equals(scope)) {
+            copyString(root, out, "reqId", 32);
+            copyEnum(root, out, "mode", "tree", "kanban", "read", "feed");
+        }
+        /* 测试用例视图：项目 + 执行结果 + 模块/优先级/执行人 + 仅看有缺陷 + 展示方式 */
+        if ("testcase".equals(scope)) {
+            copyString(root, out, "reqId", 32);
+            copyString(root, out, "module", 50);
+            copyString(root, out, "pri", 20);
+            copyString(root, out, "owner", 80);
+            copyEnum(root, out, "status", "all", "untested", "passed", "failed", "blocked");
+            copyEnum(root, out, "mode", "cases", "coverage");
+            JsonNode bug = root.get("bug");
+            if (bug != null && !bug.isNull()) {
+                if (!bug.isBoolean()) {
+                    throw AppException.badRequest("视图参数不合法：bug 应为布尔值");
+                }
+                out.put("bug", bug.asBoolean());
+            }
         }
         String json = out.toString();
         if (json.length() > 600) {

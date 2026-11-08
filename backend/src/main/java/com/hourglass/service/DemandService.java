@@ -4,6 +4,9 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.DemandActionRequest;
+import com.hourglass.dto.DemandBoardResponse;
+import com.hourglass.dto.DemandPage;
+import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
@@ -86,6 +89,134 @@ public class DemandService {
             fillWsjf(d);
         }
         return list;
+    }
+
+    /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 条件 */
+    public DemandPage page(String workspaceId, String userId, DemandQuery query) {
+        prepare(workspaceId, userId, query);
+        query.setStatus(validStatus(query.getStatus()));
+        query.setOffset(Math.max(0, query.getOffset()));
+        query.setLimit(Math.max(1, Math.min(200, query.getLimit())));
+
+        Map<String, Integer> counts = countByStatus(query);
+        int total = query.getStatus() == null
+                ? sumCounts(counts)
+                : countOf(counts, query.getStatus());
+        List<Demand> items = total <= query.getOffset()
+                ? new java.util.ArrayList<Demand>()
+                : demandMapper.selectPage(query);
+        for (Demand d : items) {
+            fillWsjf(d);
+        }
+
+        DemandPage page = new DemandPage();
+        page.setTotal(total);
+        page.setOffset(query.getOffset());
+        page.setLimit(query.getLimit());
+        page.setItems(items);
+        page.setHasMore(query.getOffset() + items.size() < total);
+        page.setCounts(counts);
+        return page;
+    }
+
+    /** 看板：每个状态一列，只取首屏 limit 条；其余由 /api/demands/page 滚动加载 */
+    public DemandBoardResponse board(String workspaceId, String userId, String reqId, int limit) {
+        DemandQuery base = new DemandQuery();
+        base.setReqId(Texts.trimToNull(reqId));
+        prepare(workspaceId, userId, base);
+        int safeLimit = Math.max(1, Math.min(100, limit <= 0 ? 50 : limit));
+        Map<String, Integer> counts = countByStatus(base);
+
+        DemandBoardResponse resp = new DemandBoardResponse();
+        resp.setCounts(counts);
+        for (String status : DEMAND_STATUSES) {
+            DemandQuery q = copyOf(base);
+            q.setStatus(status);
+            q.setOffset(0);
+            q.setLimit(safeLimit);
+            int matched = countOf(counts, status);
+            List<Demand> items = matched == 0 ? new java.util.ArrayList<Demand>() : demandMapper.selectPage(q);
+            for (Demand d : items) {
+                fillWsjf(d);
+            }
+            DemandBoardResponse.Column col = new DemandBoardResponse.Column();
+            col.setItems(items);
+            col.setMatched(matched);
+            col.setHasMore(matched > items.size());
+            resp.getColumns().put(status, col);
+        }
+        return resp;
+    }
+
+    private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "rej"};
+
+    private void prepare(String workspaceId, String userId, DemandQuery query) {
+        query.setWorkspaceId(workspaceId);
+        if (query.getReqId() != null) {
+            requireProject(workspaceId, query.getReqId());
+            projectAccess.assertView(workspaceId, userId, query.getReqId());
+        }
+        query.setViewerId(projectAccess.viewerScope(workspaceId, userId));
+    }
+
+    private String validStatus(String status) {
+        String s = Texts.trimToNull(status);
+        if (s == null) {
+            return null;
+        }
+        for (String known : DEMAND_STATUSES) {
+            if (known.equals(s)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Integer> countByStatus(DemandQuery query) {
+        DemandQuery countsQuery = copyOf(query);
+        countsQuery.setStatus(null);
+        Map<String, Integer> counts = new java.util.LinkedHashMap<String, Integer>();
+        for (String status : DEMAND_STATUSES) {
+            counts.put(status, 0);
+        }
+        for (Map<String, Object> row : demandMapper.countGroupByStatus(countsQuery)) {
+            Object status = row.get("status");
+            Object cnt = row.get("cnt");
+            if (status != null) {
+                counts.put(String.valueOf(status), cnt == null ? 0 : ((Number) cnt).intValue());
+            }
+        }
+        counts.put("all", sumCounts(counts));
+        return counts;
+    }
+
+    private int countOf(Map<String, Integer> counts, String status) {
+        Integer n = counts.get(status);
+        return n == null ? 0 : n;
+    }
+
+    private int sumCounts(Map<String, Integer> counts) {
+        int sum = 0;
+        for (String status : DEMAND_STATUSES) {
+            sum += countOf(counts, status);
+        }
+        return sum;
+    }
+
+    private DemandQuery copyOf(DemandQuery src) {
+        DemandQuery q = new DemandQuery();
+        q.setWorkspaceId(src.getWorkspaceId());
+        q.setReqId(src.getReqId());
+        q.setStatus(src.getStatus());
+        q.setQ(src.getQ());
+        q.setPris(src.getPris());
+        q.setKinds(src.getKinds());
+        q.setReqs(src.getReqs());
+        q.setSort(src.getSort());
+        q.setOffset(src.getOffset());
+        q.setLimit(src.getLimit());
+        q.setViewerId(src.getViewerId());
+        return q;
     }
 
     public Demand get(String workspaceId, String id) {
@@ -300,10 +431,11 @@ public class DemandService {
         if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
             return;
         }
-        notificationEvents.notify(d.getCreatedBy(), d.getWorkspaceId(),
+        notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
                 UserNotificationPreferenceService.DEMAND_STATUS,
                 "需求「" + d.getTitle() + "」" + action,
-                detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400), null, d.getReqId());
+                detail == null ? "需求状态已变更为：" + action : Texts.cut(detail, 400),
+                "demand", d.getId(), d.getReqId());
     }
 
     /** 编辑/删除：提交人不是操作者时告知，避免自己的需求被改动却毫不知情 */
@@ -311,9 +443,9 @@ public class DemandService {
         if (d.getCreatedBy() == null || d.getCreatedBy().equals(actorId)) {
             return;
         }
-        /* 需求 ID 不是任务 ID：通知中心不能按任务打开 */
-        notificationEvents.notify(d.getCreatedBy(), d.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS, title, body, null, d.getReqId());
+        notificationEvents.notifyLinked(d.getCreatedBy(), d.getWorkspaceId(),
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body,
+                "demand", d.getId(), d.getReqId());
     }
 
     private void fillWsjf(Demand d) {

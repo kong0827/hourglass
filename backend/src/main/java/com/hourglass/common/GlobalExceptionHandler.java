@@ -68,10 +68,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResult.error(400, "文件不能超过 10MB"));
     }
 
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResult<Void>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException e, HttpServletRequest request) {
+        markFailed(request);
+        log.warn("请求方法不支持：{} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(405).body(ApiResult.error(405, "请求方法不支持"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResult<Void>> handleOther(Exception e, HttpServletRequest request) {
         markFailed(request);
-        log.error("未处理异常", e);
+        log.error("未处理异常：{} {}", request.getMethod(), request.getRequestURI(), e);
         return ResponseEntity.status(500).body(ApiResult.error(500, "服务内部错误"));
     }
 }

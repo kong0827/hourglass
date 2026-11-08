@@ -3,7 +3,8 @@
 <mapper namespace="com.hourglass.mapper.RequirementMapper">
 
   <sql id="cols">
-    id, workspace_id, name, description, status, first_released_at, created_at, updated_at
+    id, workspace_id, name, description, objective, status, owner_user_id, planned_start, planned_end,
+    first_released_at, created_at, updated_at, archived_at
   </sql>
 
   <select id="selectAll" resultType="Requirement">
@@ -23,17 +24,29 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO requirement (id, workspace_id, name, description, status, first_released_at)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{status}, #{firstReleasedAt})
+    INSERT INTO requirement (id, workspace_id, name, description, objective, status, owner_user_id,
+      planned_start, planned_end, first_released_at)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{objective}, #{status}, #{ownerUserId},
+      #{plannedStart}, #{plannedEnd}, #{firstReleasedAt})
   </insert>
 
   <update id="update">
     UPDATE requirement SET
       name = #{name},
       description = #{description},
+      objective = #{objective},
       status = #{status},
+      owner_user_id = #{ownerUserId},
+      planned_start = #{plannedStart},
+      planned_end = #{plannedEnd},
       updated_at = NOW()
     WHERE id = #{id}
+  </update>
+
+  <update id="setArchived">
+    UPDATE requirement SET archived_at = <choose><when test="archived">NOW()</when><otherwise>NULL</otherwise></choose>,
+      updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
   <!-- 标记首版上线：只写 first_released_at，不触碰其余字段（历史任务归组不重算） -->

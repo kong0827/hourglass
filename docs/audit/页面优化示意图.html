@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>沙漏 · 关键页面优化前后示意</title>
+<style>
+  :root{
+    --bg:#F7F8FA; --surface:#FFFFFF; --sunken:#F2F4F7; --hover:#E9ECF1;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text2:#475467; --text3:#98A2B3;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE;
+    --success:#12B76A; --success-soft:#ECFDF3;
+    --warn:#F79009; --warn-soft:#FFFAEB;
+    --danger:#F04438; --danger-soft:#FEF3F2;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .page{max-width:1500px;margin:0 auto;padding:40px 44px 64px;}
+  .doc-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+    padding-bottom:22px;border-bottom:1px solid var(--border);margin-bottom:28px;}
+  .doc-head h1{font-size:24px;line-height:32px;margin:0 0 6px;letter-spacing:-.01em;}
+  .doc-head p{margin:0;color:var(--text2);font-size:13px;}
+  .doc-meta{text-align:right;color:var(--text3);font-size:12px;white-space:nowrap;}
+  .doc-meta b{display:block;color:var(--text2);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;}
+  .principle{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px;}
+  .principle span{padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);
+    color:var(--text2);font-size:12px;}
+  .principle span b{color:var(--text);font-weight:600;}
+
+  .section{margin-bottom:44px;break-inside:avoid;}
+  .sec-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;}
+  .sec-no{width:30px;height:30px;border-radius:8px;background:var(--primary);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;margin-top:2px;}
+  .sec-head h2{font-size:17px;line-height:26px;margin:0 0 2px;letter-spacing:-.01em;}
+  .sec-head p{margin:0;color:var(--text2);font-size:12.5px;}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .shot{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(16,24,40,.05);overflow:hidden;}
+  .shot-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+    border-bottom:1px solid var(--border);background:#FCFCFD;}
+  .shot-head strong{font-size:12.5px;letter-spacing:.02em;}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:999px;}
+  .tag.before{background:var(--danger-soft);color:#B42318;}
+  .tag.after{background:var(--success-soft);color:#027A48;}
+  .canvas{padding:14px;min-height:430px;background:var(--surface);}
+  .canvas.sunken{background:#FBFCFD;}
+
+  /* generic wireframe atoms */
+  .app{position:relative;display:flex;height:100%;min-height:400px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);}
+  .side{width:92px;flex:none;background:#FAFBFC;border-right:1px solid var(--border);padding:8px 7px;}
+  .brand{display:flex;align-items:center;gap:5px;margin-bottom:10px;font-size:9px;font-weight:700;color:var(--text2);}
+  .brand i{width:14px;height:14px;border-radius:4px;background:var(--primary);display:block;}
+  .navline{height:18px;border-radius:4px;margin-bottom:5px;background:#EDF0F4;}
+  .navline.on{background:var(--primary-soft);border:1px solid var(--primary-border);}
+  .navlabel{font-size:7.5px;color:var(--text3);margin:7px 2px 4px;letter-spacing:.08em;}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .top{height:34px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;
+    padding:0 10px;gap:8px;flex:none;}
+  .crumb{font-size:9px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .top-actions{display:flex;gap:5px;align-items:center;}
+  .pill{height:18px;padding:0 7px;border-radius:999px;border:1px solid var(--border);background:#fff;
+    display:inline-flex;align-items:center;font-size:8px;color:var(--text2);white-space:nowrap;}
+  .pill.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .pill.soft{background:var(--primary-soft);border-color:var(--primary-border);color:#1D4ED8;}
+  .pill.warn{background:var(--warn-soft);border-color:#FEDF89;color:#B54708;}
+  .pill.danger{background:var(--danger-soft);border-color:#FDA29B;color:#B42318;}
+  .pill.success{background:var(--success-soft);border-color:#A6F4C5;color:#027A48;}
+  .body{padding:10px;overflow:hidden;flex:1;}
+  .h1w{font-size:12px;font-weight:700;margin-bottom:2px;}
+  .subw{font-size:8.5px;color:var(--text3);margin-bottom:9px;}
+  .card{border:1px solid var(--border);border-radius:8px;background:#fff;padding:9px;}
+  .card h4{margin:0 0 4px;font-size:9.5px;font-weight:650;}
+  .muted{color:var(--text3);}
+  .tiny{font-size:8px;line-height:1.55;color:var(--text3);}
+  .row{display:flex;gap:6px;align-items:center;}
+  .between{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .metric{border:1px solid var(--border);border-radius:7px;padding:7px 8px;background:#fff;}
+  .metric .k{font-size:7.5px;color:var(--text3);margin-bottom:2px;}
+  .metric .v{font-size:14px;font-weight:700;letter-spacing:-.01em;}
+  .metric .v small{font-size:8px;font-weight:500;color:var(--text3);}
+  .bar{height:4px;border-radius:999px;background:#E9ECF1;overflow:hidden;}
+  .bar i{display:block;height:100%;background:var(--primary);border-radius:999px;}
+  .bar.warn i{background:var(--warn);}
+  .chip{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:999px;
+    background:var(--sunken);color:var(--text2);font-size:7.5px;white-space:nowrap;}
+  .chip.blue{background:var(--primary-soft);color:#1D4ED8;}
+  .chip.green{background:var(--success-soft);color:#027A48;}
+  .chip.orange{background:var(--warn-soft);color:#B54708;}
+  .chip.red{background:var(--danger-soft);color:#B42318;}
+  .lines{height:5px;border-radius:3px;background:#EEF1F4;margin:4px 0;}
+  .lines.s{width:64%;}
+  .lines.m{width:82%;}
+  .field{border:1px solid var(--border);border-radius:5px;height:22px;display:flex;align-items:center;
+    padding:0 6px;font-size:8px;color:var(--text3);background:#fff;}
+  .field.filled{color:var(--text2);border-color:var(--border-strong);}
+  .label{font-size:7.5px;color:var(--text3);margin:5px 0 2px;}
+  .btnw{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 9px;border-radius:5px;
+    border:1px solid var(--border-strong);background:#fff;font-size:8px;color:var(--text2);white-space:nowrap;}
+  .btnw.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .tabs{display:flex;gap:10px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+  .tabs span{font-size:8.5px;color:var(--text3);padding:5px 0 4px;position:relative;}
+  .tabs span.on{color:var(--primary);font-weight:600;}
+  .tabs span.on:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--primary);border-radius:2px;}
+  .avatar{width:14px;height:14px;border-radius:50%;background:#E0E7FF;border:1px solid #C7D2FE;
+    display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:#3730A3;font-weight:700;}
+  .avatars{display:flex;}
+  .avatars .avatar{margin-left:-3px;}
+  .avatars .avatar:first-child{margin-left:0;}
+  .overlay{position:relative;}
+  .scrim{position:absolute;inset:0;background:rgba(16,24,40,.18);border-radius:0;}
+  .drawer{position:absolute;top:0;right:0;bottom:0;width:74%;background:#fff;border-left:1px solid var(--border);
+    box-shadow:-12px 0 32px rgba(16,24,40,.12);padding:9px;display:flex;flex-direction:column;}
+  .drawer.wide{width:94%;}
+  .drawer.narrow{width:62%;}
+  .drawer-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  .drawer-title{font-size:10px;font-weight:700;}
+  .drawer-scroll{overflow:hidden;flex:1;padding-top:7px;}
+  .drawer-foot{border-top:1px solid var(--border);padding-top:6px;display:flex;justify-content:flex-end;gap:5px;}
+  .callout{border-left:3px solid var(--warn);background:var(--warn-soft);padding:7px 9px;border-radius:0 6px 6px 0;
+    font-size:8px;color:#7A2E0E;margin-top:7px;}
+  .callout.red{border-color:var(--danger);background:var(--danger-soft);color:#912018;}
+  .callout.green{border-color:var(--success);background:var(--success-soft);color:#05603A;}
+  .note{display:flex;gap:10px;margin-top:10px;padding:10px 12px;border:1px dashed var(--border-strong);
+    border-radius:8px;background:#FCFCFD;color:var(--text2);font-size:11px;line-height:1.7;}
+  .note b{color:var(--text);}
+  .note .no{font-weight:700;color:var(--primary);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--text3);font-size:10px;}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;}
+
+  /* search palette */
+  .palette{width:76%;margin:16px auto;background:#fff;border:1px solid var(--border);border-radius:10px;
+    box-shadow:0 18px 40px rgba(16,24,40,.16);overflow:hidden;}
+  .palette-input{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--border);}
+  .palette-input .fake{flex:1;font-size:11px;color:var(--text);}
+  .palette-input kbd{font-size:8px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:1px 5px;color:var(--text3);background:#FAFBFC;}
+  .palette-body{padding:7px 7px 9px;}
+  .palette-group{font-size:7.5px;letter-spacing:.08em;color:var(--text3);padding:7px 7px 3px;}
+  .palette-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:9px;color:var(--text2);}
+  .palette-item.on{background:var(--primary-soft);color:#1D4ED8;}
+  .palette-item .k{width:22px;height:22px;border-radius:6px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text3);flex:none;}
+  .palette-item .t{flex:1;min-width:0;}
+  .palette-item .t b{display:block;font-size:9.5px;color:var(--text);font-weight:600;}
+  .palette-item .t span{font-size:7.5px;color:var(--text3);}
+  .palette-foot{display:flex;gap:12px;padding:7px 12px;border-top:1px solid var(--border);background:#FAFBFC;color:var(--text3);font-size:7.5px;}
+  .palette-foot kbd{font-size:7px;border:1px solid var(--border);border-radius:3px;padding:0 4px;background:#fff;}
+
+  @media print{
+    body{background:#fff;} .page{padding:20px;} .section{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="doc-head">
+    <div>
+      <h1>沙漏 · 关键页面优化前后示意</h1>
+      <p>基于 2026-11-07 线上演示环境实机审查，围绕「项目、任务、测试、搜索」四条高频路径给出的页面结构建议。</p>
+    </div>
+    <div class="doc-meta"><b>示意图</b>非最终视觉稿 · 设计基准 1440px</div>
+  </header>
+
+  <div class="principle">
+    <span><b>原则 01</b> 核心字段首屏可见</span>
+    <span><b>原则 02</b> 上下文不丢失</span>
+    <span><b>原则 03</b> 一个动作只出现一次</span>
+    <span><b>原则 04</b> 轻量优先，配置后置</span>
+  </div>
+
+  <!-- 1 项目 -->
+  <section class="section">
+    <div class="sec-head">
+      <div class="sec-no">01</div>
+      <div>
+        <h2>项目详情：从「任务聚合页」变成「项目驾驶舱」</h2>
+        <p>现状只回答“任务完成了多少”；建议补齐负责人、计划周期、成员、里程碑与风险，让管理者进入项目 10 秒内看懂全局。</p>
+      </div>
+    </div>
+    <div class="compare">
+      <div class="shot">
+        <div class="shot-head"><strong>现状 · 项目看板</strong><span class="tag before">信息缺口</span></div>
+        <div class="canvas">
+          <div class="app">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div>
+              <div class="navlabel">项目协作</div>
+              <div class="navline"></div><div class="navline on"></div><div class="navline"></div>
+              <div class="navlabel">工作项</div>
+              <div class="navline"></div><div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">项目 / 项目看板</div><div class="top-actions"><span class="pill">＋ 新建</span></div></div>
+              <div class="body">
+                <div class="between" style="margin-bottom:8px;">
+                  <div><div class="h1w">项目看板</div><div class="subw">单项目：周期、工时、任务分布、史诗与成员负载</div></div>
+                  <div class="row"><span class="pill">单项目</span><span class="pill soft">整体完成 69%</span></div>
+                </div>
+                <div class="grid4" style="margin-bottom:8px;">
+                  <div class="metric"><div class="k">计划周期</div><div class="v" style="font-size:11px;">4-20 → 1-15</div><div class="tiny">29 个任务</div></div>
+                  <div class="metric"><div class="k">预估工时合计</div><div class="v">1536<small>h</small></div><div class="tiny">剩余 378.8h</div></div>
+                  <div class="metric"><div class="k">实际投入</div><div class="v">968.3<small>h</small></div><div class="tiny">含进行中任务</div></div>
+                  <div class="metric"><div class="k">工时偏差</div><div class="v" style="color:#B54708;">-17.9%</div><div class="tiny">（实际-预估）÷预估</div></div>
+                </div>
+                <div class="grid2">
+                  <div class="card">
+                    <div class="between"><h4>任务分布</h4><span class="tiny">29 个任务</span></div>
+                    <div class="tiny" style="margin-top:5px;">待处理 8 · 进行中 3 · 已完成 18 · 逾期 2</div>
+                    <div class="bar" style="margin-top:8px;"><i style="width:62%"></i></div>
+                  </div>
+                  <div class="card">
+                    <h4>近 8 周新增 / 完成</h4>
+                    <div class="row" style="align-items:flex-end;height:54px;gap:3px;margin-top:3px;">
+                      <div style="width:9px;height:16px;background:#2563EB;border-radius:2px;"></div>
+                      <div style="width:9px;height:10px;background:#12B76A;border-radius:2px;"></div>
+                      <div style="width:9px;height:22px;background:#2563EB;border-radius:2px;"></div>
+                      <div style="width:9px;height:12px;background:#12B76A;border-radius:2px;"></div>
+                      <div style="width:9px;height:26px;background:#2563EB;border-radius:2px;"></div>
+                      <div style="width:9px;height:18px;background:#12B76A;border-radius:2px;"></div>
+                      <div style="width:9px;height:44px;background:#2563EB;border-radius:2px;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout red" style="margin-top:9px;">
+                  看不到：负责人、项目成员、项目级起止日期、里程碑、当前版本、关键风险。计划周期由任务日期反推，项目本身没有排期。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shot">
+        <div class="shot-head"><strong>建议 · 项目驾驶舱</strong><span class="tag after">全局可见</span></div>
+        <div class="canvas">
+          <div class="app">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div>
+              <div class="navlabel">项目协作</div>
+              <div class="navline"></div><div class="navline on"></div><div class="navline"></div>
+              <div class="navlabel">工作项</div>
+              <div class="navline"></div><div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">项目 / 聚合支付网关</div><div class="top-actions"><span class="pill">编辑</span><span class="pill primary">＋ 工作项</span></div></div>
+              <div class="body">
+                <div class="between" style="margin-bottom:7px;">
+                  <div>
+                    <div class="row"><span class="h1w" style="margin:0;">聚合支付网关</span><span class="chip green">进行中</span><span class="chip blue">V2.0</span></div>
+                    <div class="subw" style="margin-top:1px;">统一接入微信、支付宝、银联等渠道的收单网关</div>
+                  </div>
+                  <div class="row"><div class="avatars"><span class="avatar">张</span><span class="avatar">王</span><span class="avatar">陈</span><span class="avatar">+3</span></div><span class="tiny">6 人</span></div>
+                </div>
+                <div class="tabs"><span class="on">概览</span><span>工作项</span><span>文档</span><span>测试</span><span>版本</span><span>设置</span></div>
+                <div class="grid4" style="margin-bottom:7px;">
+                  <div class="metric"><div class="k">负责人</div><div class="v" style="font-size:10px;">张伟</div><div class="tiny">产品负责人</div></div>
+                  <div class="metric"><div class="k">计划周期</div><div class="v" style="font-size:10px;">04-20 → 01-15</div><div class="tiny">剩余 69 天</div></div>
+                  <div class="metric"><div class="k">整体进度</div><div class="v">69%</div><div class="bar" style="margin-top:3px;"><i style="width:69%"></i></div></div>
+                  <div class="metric"><div class="k">风险</div><div class="v" style="font-size:10px;color:#B42318;">2 项逾期</div><div class="tiny">1 项阻塞 · 2 人超载</div></div>
+                </div>
+                <div class="grid2">
+                  <div class="card">
+                    <div class="between"><h4>里程碑</h4><span class="tiny">共 4 个</span></div>
+                    <div style="display:flex;align-items:center;gap:0;margin-top:8px;">
+                      <span style="width:7px;height:7px;border-radius:50%;background:#12B76A;"></span>
+                      <span style="flex:1;height:2px;background:#12B76A;"></span>
+                      <span style="width:7px;height:7px;border-radius:50%;background:#12B76A;"></span>
+                      <span style="flex:1;height:2px;background:#D0D5DD;"></span>
+                      <span style="width:7px;height:7px;transform:rotate(45deg);background:#F79009;"></span>
+                      <span style="flex:1;height:2px;background:#D0D5DD;"></span>
+                      <span style="width:7px;height:7px;border-radius:50%;border:1px solid #98A2B3;background:#fff;"></span>
+                    </div>
+                    <div class="between tiny" style="margin-top:4px;"><span>V1.0</span><span>V1.2</span><span>联调</span><span>V2.0</span></div>
+                  </div>
+                  <div class="card">
+                    <div class="between"><h4>本周需要关注</h4><span class="chip red">2 逾期</span></div>
+                    <div class="tiny" style="margin-top:5px;line-height:1.8;">
+                      <div class="between"><span>高并下发订单号冲突</span><span style="color:#B42318;">逾期 5 天</span></div>
+                      <div class="between"><span>实时规则引擎</span><span style="color:#B54708;">阻塞 · 等接口</span></div>
+                      <div class="between"><span>V2.0 需求评审</span><span>今天 18:00</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout green" style="margin-top:8px;">
+                  新增「项目信息」右栏：负责人、成员、周期、版本、可见范围；字段一次配置，列表、概览、报表共用。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="no">改动要点</span>
+      <div><b>项目实体补齐 6 个字段</b>（负责人、计划起止、成员、当前版本、里程碑、归档状态）；<b>项目页改为 Tab 结构</b>，概览只放“结论”，明细进对应 Tab；<b>计划周期优先用项目字段</b>，未填时回退到任务日期推导并标注“自动推导”，避免口径混淆。</div>
+    </div>
+  </section>
+
+  <!-- 2 任务抽屉 -->
+  <section class="section">
+    <div class="sec-head">
+      <div class="sec-no">02</div>
+      <div>
+        <h2>任务详情：核心字段首屏可见，长表单折叠</h2>
+        <p>现状抽屉占满屏宽，截止日期、预计工时在首屏之外；建议改为 680–760px 右侧抽屉，第一屏只保留“做什么、谁做、何时做、到哪了”。</p>
+      </div>
+    </div>
+    <div class="compare">
+      <div class="shot">
+        <div class="shot-head"><strong>现状 · 新建 / 编辑任务</strong><span class="tag before">字段过载</span></div>
+        <div class="canvas">
+          <div class="app overlay">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div><div class="navline"></div><div class="navline on"></div>
+              <div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">任务列表</div><div class="top-actions"><span class="pill">＋ 新建</span></div></div>
+              <div class="body">
+                <div class="lines"></div><div class="lines m"></div><div class="lines"></div><div class="lines s"></div>
+              </div>
+            </div>
+            <div class="scrim"></div>
+            <div class="drawer wide">
+              <div class="drawer-head"><span class="drawer-title">新建任务</span><div class="row"><span class="pill">＋ 新建任务</span><span class="pill">关注</span><span class="pill">✕</span></div></div>
+              <div class="drawer-scroll">
+                <div class="row" style="margin-bottom:5px;"><span class="chip red">紧急</span><span class="chip orange">高</span><span class="chip blue">中</span><span class="chip">低</span><span class="pill">待处理 ▾</span></div>
+                <div class="label">任务标题 *</div><div class="field filled" style="width:66%;">例如：重构权限校验中间件</div>
+                <div class="label">任务描述</div><div class="field" style="width:66%;height:34px;">选填：目标、验收标准、注意事项…</div>
+                <div class="grid2" style="width:66%;">
+                  <div><div class="label">工作项类型</div><div class="field filled">任务 ▾</div></div>
+                  <div><div class="label">所属项目</div><div class="field filled">（无项目） ▾</div></div>
+                </div>
+                <div class="grid2" style="width:66%;">
+                  <div><div class="label">影响版本</div><div class="field">待规划 ▾</div></div>
+                  <div><div class="label">所属史诗</div><div class="field">无所属史诗 ▾</div></div>
+                </div>
+                <div class="grid2" style="width:66%;">
+                  <div><div class="label">关联文档</div><div class="field">不关联 ▾</div></div>
+                  <div><div class="label">所属分支</div><div class="field">不关联分支 ▾</div></div>
+                </div>
+                <div class="callout red" style="width:66%;">截止日期、预计耗时、进度、提醒、阻塞、检查清单、附件均需向下滚动才能看到；“所属项目”默认无项目，容易产生游离任务。</div>
+              </div>
+              <div class="drawer-foot"><span class="btnw">取消</span><span class="btnw primary">保存任务</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shot">
+        <div class="shot-head"><strong>建议 · 720px 任务抽屉</strong><span class="tag after">上下文保留</span></div>
+        <div class="canvas">
+          <div class="app overlay">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div><div class="navline"></div><div class="navline on"></div>
+              <div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">任务列表</div><div class="top-actions"><span class="pill">＋ 新建</span></div></div>
+              <div class="body">
+                <div class="lines"></div><div class="lines m"></div><div class="lines"></div><div class="lines s"></div>
+              </div>
+            </div>
+            <div class="scrim"></div>
+            <div class="drawer narrow">
+              <div class="drawer-head"><span class="drawer-title">V1.2 回归测试</span><div class="row"><span class="pill">关注</span><span class="pill">···</span><span class="pill">✕</span></div></div>
+              <div style="display:flex;gap:7px;padding-top:7px;">
+                <div style="flex:1;min-width:0;">
+                  <div class="row" style="margin-bottom:5px;"><span class="chip red">紧急</span><span class="chip blue">中</span><span class="chip">待处理 ▾</span></div>
+                  <div class="row" style="margin-bottom:6px;">
+                    <span class="pill soft">黄丽</span><span class="pill warn">截止 11-19 · 逾期 1 天</span><span class="pill">聚合支付网关</span>
+                  </div>
+                  <div class="tabs"><span class="on">详情</span><span>动态</span><span>工时</span></div>
+                  <div class="label">任务标题 *</div><div class="field filled">V1.2 回归测试</div>
+                  <div class="label">任务描述</div><div class="field" style="height:30px;">路由与熔断场景回归</div>
+                  <div class="grid2">
+                    <div><div class="label">开始 / 截止日期</div><div class="row"><div class="field filled" style="flex:1;">11-11</div><div class="field filled" style="flex:1;">11-19</div></div></div>
+                    <div><div class="label">预计 / 实际</div><div class="row"><div class="field filled" style="flex:1;">49h</div><div class="field" style="flex:1;">—</div></div></div>
+                  </div>
+                  <div class="label">当前进度</div><div class="bar"><i style="width:0%"></i></div>
+                  <div class="row" style="justify-content:space-between;margin-top:8px;"><span class="tiny">检查清单 0/4</span><span class="tiny">附件 2</span><span class="tiny">工时 0</span></div>
+                  <div class="callout" style="margin-top:6px;">「更多字段」折叠：类型、版本、史诗、分支、文档、标签、循环、提醒、阻塞。</div>
+                </div>
+                <div style="width:38%;border-left:1px solid var(--border);padding-left:7px;">
+                  <div class="label" style="margin-top:0;">负责人</div><div class="field filled">黄丽 ▾</div>
+                  <div class="label">关注人</div><div class="row"><span class="avatar">张</span><span class="avatar">王</span><span class="pill">+ 添加</span></div>
+                  <div class="label">评论 · 3</div>
+                  <div class="card" style="padding:6px;margin-bottom:5px;"><div class="tiny"><b style="color:var(--text2)">陈静</b> 14:20<br/>回流逻辑已确认，按 V1.2 验收。</div></div>
+                  <div class="field" style="height:30px;">写下评论… @ 提及</div>
+                </div>
+              </div>
+              <div class="drawer-foot"><span class="btnw">删除</span><span class="btnw">取消</span><span class="btnw primary">保存</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="no">改动要点</span>
+      <div><b>第一屏固定“标题 + 状态 + 负责人 + 截止 + 项目 + 优先级”</b>；日期与工时合并为一行；其余字段进“更多字段”；评论/关注人移到右侧窄栏；抽屉宽度 720px，保留看板上下文。新建时项目默认当前项目或“收集箱”，不再默认“无项目”。</div>
+    </div>
+  </section>
+
+  <!-- 3 测试用例 -->
+  <section class="section">
+    <div class="sec-head">
+      <div class="sec-no">03</div>
+      <div>
+        <h2>测试用例：从「用例卡片」到「用例库 + 测试计划」</h2>
+        <p>现状只能逐条执行，缺少模块树、批量执行、导入导出与测试计划；建议用“左树 + 中列表 + 顶部计划条”的最小闭环承接一次真实回归。</p>
+      </div>
+    </div>
+    <div class="compare">
+      <div class="shot">
+        <div class="shot-head"><strong>现状 · 测试用例</strong><span class="tag before">难以承接测试周期</span></div>
+        <div class="canvas">
+          <div class="app">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div><div class="navline on"></div><div class="navline"></div>
+              <div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">测试用例</div><div class="top-actions"><span class="pill primary">＋ 新增用例</span></div></div>
+              <div class="body">
+                <div class="between" style="margin-bottom:6px;"><div class="h1w">测试用例 <span class="tiny">共 3 条用例</span></div></div>
+                <div class="row" style="flex-wrap:wrap;gap:5px;margin-bottom:7px;">
+                  <span class="field" style="width:120px;">搜索用例 / 前置 / 步骤…</span>
+                  <span class="field" style="width:52px;">模块 ▾</span><span class="field" style="width:52px;">优先级 ▾</span><span class="field" style="width:52px;">执行人 ▾</span><span class="field" style="width:52px;">状态 ▾</span>
+                </div>
+                <div class="grid4" style="margin-bottom:7px;">
+                  <div class="metric"><div class="k">总用例</div><div class="v">3</div></div>
+                  <div class="metric"><div class="k">未执行</div><div class="v">0</div></div>
+                  <div class="metric"><div class="k">通过</div><div class="v" style="color:#027A48;">2</div></div>
+                  <div class="metric"><div class="k">失败</div><div class="v" style="color:#B42318;">1</div></div>
+                </div>
+                <div class="card" style="margin-bottom:5px;"><div class="between"><span class="tiny"><b style="color:#B42318;">失败</b> · 回调重复通知-幂等处理 · 紧急</span><span class="pill">执行</span></div><div class="tiny">支付核心 · 1 步 · 前置：存在一笔已支付成功的订单 · 黄丽</div></div>
+                <div class="card" style="margin-bottom:5px;"><div class="between"><span class="tiny"><b style="color:#027A48;">通过</b> · 微信 JSAPI-签名验证 · 高</span><span class="pill">执行</span></div><div class="tiny">支付核心 · 1 步 · 前置：微信渠道证书已配置 · 黄丽</div></div>
+                <div class="card"><div class="between"><span class="tiny"><b style="color:#027A48;">通过</b> · 统一下单-幂等单号重复提交 · 紧急</span><span class="pill">执行</span></div><div class="tiny">支付核心 · 1 步 · 前置：商户已开通 · 黄丽</div></div>
+                <div class="callout red" style="margin-top:7px;">模块是自由文本；无目录树、无批量选择、无测试计划、无导入导出、无评审；回归一次要逐条点“执行”。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shot">
+        <div class="shot-head"><strong>建议 · 用例库 + 测试计划</strong><span class="tag after">可承接回归</span></div>
+        <div class="canvas">
+          <div class="app">
+            <div class="side">
+              <div class="brand"><i></i>沙漏</div>
+              <div class="navline"></div><div class="navline on"></div><div class="navline"></div>
+              <div class="navline"></div><div class="navline"></div>
+            </div>
+            <div class="main">
+              <div class="top"><div class="crumb">测试 / 聚合支付网关</div><div class="top-actions"><span class="pill">导入</span><span class="pill">导出</span><span class="pill primary">＋ 新增用例</span></div></div>
+              <div class="body">
+                <div class="between" style="margin-bottom:6px;"><div class="row"><div class="h1w" style="margin:0;">测试计划</div><span class="chip blue">V1.2 回归 · 进行中</span></div><span class="tiny">执行 12/30 · 通过 10 · 失败 2 · 阻塞 0</span></div>
+                <div class="card" style="padding:6px;margin-bottom:7px;">
+                  <div class="between"><div class="row"><span class="pill success">批量通过</span><span class="pill danger">批量失败</span><span class="pill">指派执行人</span><span class="pill">一键转缺陷</span></div><span class="tiny">已选 3 项</span></div>
+                </div>
+                <div style="display:flex;gap:7px;">
+                  <div style="width:88px;flex:none;border-right:1px solid var(--border);padding-right:6px;">
+                    <div class="tiny" style="font-weight:700;color:var(--text2);">用例库</div>
+                    <div class="tiny" style="margin-top:4px;">▾ 支付核心 <span class="muted">18</span></div>
+                    <div class="tiny" style="padding-left:8px;">· 统一下单 <span class="muted">6</span></div>
+                    <div class="tiny" style="padding-left:8px;">· 回调通知 <span class="muted">5</span></div>
+                    <div class="tiny" style="margin-top:4px;">▾ 对账 <span class="muted">8</span></div>
+                    <div class="tiny" style="margin-top:4px;">▸ 退款 <span class="muted">4</span></div>
+                  </div>
+                  <div style="flex:1;min-width:0;">
+                    <div class="row" style="margin-bottom:4px;"><span class="field" style="flex:1;">搜索用例…</span><span class="field" style="width:40px;">全部 ▾</span></div>
+                    <div class="card" style="padding:5px;margin-bottom:4px;"><div class="row"><span style="width:8px;height:8px;border:1px solid #98A2B3;border-radius:2px;"></span><span class="tiny" style="flex:1;"><b style="color:#B42318;">失败</b> · 回调重复通知-幂等处理 · P0</span><span class="pill">执行</span></div></div>
+                    <div class="card" style="padding:5px;margin-bottom:4px;"><div class="row"><span style="width:8px;height:8px;border:1px solid #98A2B3;border-radius:2px;"></span><span class="tiny" style="flex:1;"><b style="color:#027A48;">通过</b> · 微信 JSAPI-签名验证 · P1</span><span class="pill">执行</span></div></div>
+                    <div class="card" style="padding:5px;margin-bottom:4px;"><div class="row"><span style="width:8px;height:8px;border:1px solid #98A2B3;border-radius:2px;"></span><span class="tiny" style="flex:1;">未执行 · 统一下单-重复提交 · P0</span><span class="pill">执行</span></div></div>
+                    <div class="card" style="padding:5px;"><div class="row"><span style="width:8px;height:8px;border:1px solid #98A2B3;border-radius:2px;"></span><span class="tiny" style="flex:1;">未执行 · 退款部分退款 · P2</span><span class="pill">执行</span></div></div>
+                  </div>
+                </div>
+                <div class="callout green" style="margin-top:7px;">最小闭环：模块树 + 计划批次 + 批量执行 + 失败转缺陷 + 单页报告；先不做基线、版本 diff、参数化、自动化对接。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="no">改动要点</span>
+      <div><b>模块从自由文本升级为两级目录</b>；新增轻量「测试计划」对象（名称、版本、用例范围、执行人、截止日期）；列表支持多选批量执行；执行结果按计划聚合；导入导出用“标题/模块/优先级/前置/步骤/预期”六列模板。与现有“失败转缺陷”直接复用，不新增第二套缺陷入口。</div>
+    </div>
+  </section>
+
+  <!-- 4 全局搜索 -->
+  <section class="section">
+    <div class="sec-head">
+      <div class="sec-no">04</div>
+      <div>
+        <h2>全局搜索：从「任务筛选器」到「跨对象直达」</h2>
+        <p>现状搜索只筛任务，并弹提示“去列表查看”；建议改为 Cmd+K 搜索面板，按项目、任务、文档、用例分组，回车直达详情。</p>
+      </div>
+    </div>
+    <div class="compare">
+      <div class="shot">
+        <div class="shot-head"><strong>现状 · 搜索</strong><span class="tag before">只覆盖任务</span></div>
+        <div class="canvas">
+          <div class="app">
+            <div class="side"><div class="brand"><i></i>沙漏</div><div class="navline"></div><div class="navline"></div><div class="navline"></div></div>
+            <div class="main">
+              <div class="top"><div class="crumb">项目</div><div class="top-actions"><span class="pill" style="width:150px;justify-content:space-between;">🔍 支付 <span>✕ ✕</span></span><span class="pill primary">＋ 新建</span></div></div>
+              <div class="body">
+                <div class="card" style="margin-bottom:6px;"><div class="tiny"><b>聚合支付网关</b> · 29 工作项 · 69%</div></div>
+                <div class="card" style="margin-bottom:6px;"><div class="tiny"><b>商户对账平台</b> · 18 工作项 · 54%</div></div>
+                <div class="card"><div class="tiny"><b>风控引擎</b> · 13 工作项 · 28%</div></div>
+                <div style="position:absolute;right:14px;bottom:16px;background:#FFFAEB;border:1px solid #FEDF89;border-radius:7px;padding:8px 10px;font-size:9px;color:#7A2E0E;">
+                  ⚠ 「支付」的搜索结果在看板 / 列表中查看
+                  <span style="display:inline-block;margin-left:8px;border:1px solid #FEDF89;background:#fff;border-radius:4px;padding:1px 6px;">去列表</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shot">
+        <div class="shot-head"><strong>建议 · Cmd+K 统一搜索</strong><span class="tag after">四类对象直达</span></div>
+        <div class="canvas sunken">
+          <div class="app" style="background:#F2F4F7;">
+            <div class="side"><div class="brand"><i></i>沙漏</div><div class="navline"></div><div class="navline"></div><div class="navline"></div></div>
+            <div class="main">
+              <div class="top"><div class="crumb">任意页面</div><div class="top-actions"><span class="pill primary">＋ 新建</span></div></div>
+              <div class="body">
+                <div class="palette">
+                  <div class="palette-input"><span class="tiny">🔍</span><span class="fake">支付</span><kbd>ESC</kbd></div>
+                  <div class="palette-body">
+                    <div class="palette-group">项目 · 2</div>
+                    <div class="palette-item on"><span class="k">项</span><span class="t"><b>聚合支付网关</b><span>进行中 · 29 工作项 · 负责人 张伟</span></span><span class="tiny">↵</span></div>
+                    <div class="palette-item"><span class="k">项</span><span class="t"><b>商户对账平台</b><span>进行中 · 18 工作项 · 负责人 王浩</span></span></div>
+                    <div class="palette-group">任务 · 5</div>
+                    <div class="palette-item"><span class="k">任</span><span class="t"><b>聚合支付网关 V1.2 发布</b><span>待处理 · 张伟 · 11-20</span></span></div>
+                    <div class="palette-item"><span class="k">任</span><span class="t"><b>高并下发订单号冲突</b><span>进行中 · 王浩 · 逾期 5 天</span></span></div>
+                    <div class="palette-group">文档 · 3</div>
+                    <div class="palette-item"><span class="k">文</span><span class="t"><b>V1.2 需求说明</b><span>聚合支付网关 · 张伟 · 3/4 工作项</span></span></div>
+                    <div class="palette-group">测试用例 · 2</div>
+                    <div class="palette-item"><span class="k">测</span><span class="t"><b>微信 JSAPI-签名验证</b><span>支付核心 · 通过 · P1</span></span></div>
+                  </div>
+                  <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>↵</kbd> 打开</span><span><kbd>⌘</kbd><kbd>K</kbd> 唤起</span><span style="margin-left:auto;">只搜索有权访问的内容</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <span class="no">改动要点</span>
+      <div><b>复用现有数据能力</b>：任务全文检索、文档全文索引（ngram）、项目名、用例标题各查一次，按权限过滤后分组返回；<b>不新建搜索页</b>，结果直接打开项目详情 / 任务抽屉 / 文档编辑 / 用例详情；保留“在列表中查看全部”作为兜底。顺带修复搜索框两个清除按钮的视觉缺陷。</div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <span><i style="background:#2563EB;"></i>建议新增/主操作</span>
+    <span><i style="background:#F79009;"></i>需要关注的状态</span>
+    <span><i style="background:#F04438;"></i>现状缺口/风险</span>
+    <span><i style="background:#12B76A;"></i>已具备能力，建议复用</span>
+  </div>
+</div>
+</body>
+</html>

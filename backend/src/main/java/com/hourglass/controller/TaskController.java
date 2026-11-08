@@ -89,6 +89,17 @@ public class TaskController {
         return ApiResult.ok(queryService.donePage(ctx.getWsId(), ctx.getUserId(), query));
     }
 
+    /** 未完成列分页（「加载更多」）：col 为看板列 id */
+    @GetMapping("/api/tasks/column")
+    public ApiResult<BoardResponse.ColumnData> column(@CurrentWorkspace WorkspaceCtx ctx,
+                                                      @BoardFilter BoardQuery query,
+                                                      @RequestParam String col,
+                                                      @RequestParam(required = false) Integer offset,
+                                                      @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(queryService.columnPage(ctx.getWsId(), ctx.getUserId(), query, col,
+                offset == null ? 0 : offset, limit == null ? 0 : limit));
+    }
+
     /** 列表视图：筛选后的分页任务，sort: due/priority/updated/column */
     @GetMapping("/api/tasks/list")
     public ResponseEntity<ApiResult<TaskListResponse>> list(@CurrentWorkspace WorkspaceCtx ctx,

@@ -122,8 +122,11 @@ copy /y "sql\baseline\01_schema_full.sql" "%SQL_DIR%\01_schema_full.sql" >nul
 if errorlevel 1 goto :pack_fail
 copy /y "sql\seeds\seed_yunying.sql" "%SQL_DIR%\seed_yunying.sql" >nul
 if errorlevel 1 goto :pack_fail
-copy /y "deploy\上线清单.md" "%SQL_DIR%\上线清单.md" >nul
-if errorlevel 1 goto :pack_fail
+rem 上线清单属内部资料，已移出仓库：优先取仓库外 ../内部资料 路径，仓库内旧路径作兼容回退
+rem 两处都没有时只告警、不中断打包（交付包内将不含上线清单）
+copy /y "..\内部资料\deploy\上线清单.md" "%SQL_DIR%\上线清单.md" >nul
+if errorlevel 1 copy /y "deploy\上线清单.md" "%SQL_DIR%\上线清单.md" >nul
+if errorlevel 1 echo [WARN] 未找到 上线清单.md，交付包不含该文件
 
 set "JAR_SHA="
 for /f "skip=1 delims=" %%H in ('certutil -hashfile "%PACKAGE%\%JAR_NAME%" SHA256') do if not defined JAR_SHA set "JAR_SHA=%%H"

@@ -236,7 +236,10 @@ public class TaskQueryService {
                 data.setAllTotal(colTasks.size());
                 data.setMatched(matched.size());
                 data.setTotal(colTasks.size());
-                data.setItems(matched);
+                /* 首屏每列只下发 openLimit 条，其余由 /api/tasks/column 滚动加载 */
+                int limit = Math.min(query.getOpenLimit(), matched.size());
+                data.setItems(new ArrayList<Task>(matched.subList(0, limit)));
+                data.setHasMore(limit < matched.size());
             }
             resp.getColumns().put(col, data);
         }
@@ -245,6 +248,36 @@ public class TaskQueryService {
         resp.setCounts(countDue(facets, today));
         resp.setMeta(buildMeta(workspaceId, facets, viewerId));
         return resp;
+    }
+
+    /** 未完成列滚动加载：与首屏同一套筛选口径，按 offset/limit 切片下发 */
+    public BoardResponse.ColumnData columnPage(String workspaceId, String userId, BoardQuery query,
+                                               String column, int offset, int limit) {
+        String col = Texts.trimToNull(column);
+        if (col == null) {
+            return new BoardResponse.ColumnData();
+        }
+        if (Consts.COL_DONE.equals(col)) {
+            return donePage(workspaceId, userId, query);
+        }
+        LocalDate today = LocalDate.now();
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<Task> tasks = taskMapper.selectOpenColumnTasks(workspaceId, viewerId, col);
+        mergeVersionInfo(workspaceId, tasks);
+        mergeTaskExtras(workspaceId, tasks);
+        List<Task> matched = filter(tasks, query, today);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? 60 : Math.min(limit, 200);
+        int from = Math.min(safeOffset, matched.size());
+        int to = Math.min(from + safeLimit, matched.size());
+
+        BoardResponse.ColumnData data = new BoardResponse.ColumnData();
+        data.setAllTotal(tasks.size());
+        data.setMatched(matched.size());
+        data.setTotal(tasks.size());
+        data.setItems(new ArrayList<Task>(matched.subList(from, to)));
+        data.setHasMore(to < matched.size());
+        return data;
     }
 
     public BoardResponse.ColumnData donePage(String workspaceId, String userId, BoardQuery query) {

@@ -12,9 +12,26 @@ import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
 var VIEW_KEY = "project-view";
+var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
-var pfCache = null, pfSeq = 0, expanded = {};
+var pfCache = null, expanded = {};
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
+var projectTab = (function(){
+  try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
+})();
+function setProjectTab(tab){
+  if(["overview","epics","members"].indexOf(tab) === -1) return;
+  projectTab = tab;
+  try{ localStorage.setItem(TAB_KEY, tab); }catch(e){ /* 受限环境忽略 */ }
+  if(cache && currentMode() === "board") renderProject();
+}
+function projectTabBar(){
+  var tabs = [["overview","概览"],["epics","史诗"],["members","成员负载"]];
+  return '<div class="seg mini project-tabs" role="tablist" aria-label="项目详情分区">' + tabs.map(function(t){
+    var on = projectTab === t[0];
+    return '<button type="button" role="tab" data-project-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' + t[1] + '</button>';
+  }).join("") + '</div>';
+}
 function enterProjectView(){
   effectiveMode = null;
   listPrefs.load(VIEW_KEY).then(function(){
@@ -24,10 +41,15 @@ function enterProjectView(){
 }
 /* 临时覆盖只影响本次浏览：点项目名跳看板不改写用户持久化偏好 */
 function currentMode(){ return effectiveMode || listPrefs.viewMode(VIEW_KEY); }
+function selectableReqs(){
+  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.managerProjectId; });
+  return list.length ? list : rt.reqList;
+}
 function selectedProject(){
-  if(!rt.reqList.length) return null;
-  var hit = rt.reqList.filter(function(r){ return r.id === rt.managerProjectId; })[0];
-  if(!hit){ hit = rt.reqList[0]; rt.managerProjectId = hit.id; }
+  var list = selectableReqs();
+  if(!list.length) return null;
+  var hit = list.filter(function(r){ return r.id === rt.managerProjectId; })[0];
+  if(!hit){ hit = list[0]; rt.managerProjectId = hit.id; }
   return hit;
 }
 function loadProject(opts){
@@ -79,15 +101,50 @@ function modeSeg(){
     + '<button type="button" data-pv-mode="drill" aria-pressed="' + (mode === "drill") + '">全部项目透视</button>'
     + '</div>';
 }
+function dayDiff(from, to){
+  function utc(s){ var a = String(s).slice(0, 10).split("-"); return Date.UTC(Number(a[0]), Number(a[1]) - 1, Number(a[2])); }
+  return Math.round((utc(to) - utc(from)) / 86400000);
+}
+function projectBrief(p, m, c, members){
+  var facts = [];
+  facts.push('<span><i>负责人</i><b>' + esc(p.ownerName || "未指定") + '</b></span>');
+  facts.push('<span><i>计划周期</i><b>' + (p.plannedStart || p.plannedEnd
+    ? esc(fmtDate(p.plannedStart) + " → " + fmtDate(p.plannedEnd))
+    : "未设置") + '</b></span>');
+  var daysLeft = p.plannedEnd && cache.today ? dayDiff(cache.today, p.plannedEnd) : null;
+  if(daysLeft !== null){
+    facts.push('<span><i>计划' + (daysLeft < 0 ? "超期" : "剩余") + '</i><b' + (daysLeft < 0 ? ' style="color:var(--danger-fg)"' : "") + '>'
+      + Math.abs(daysLeft) + ' 天</b></span>');
+  }
+  facts.push('<span><i>首版上线</i><b>' + (p.firstReleasedAt ? esc(fmtDate(p.firstReleasedAt)) : "未标记") + '</b></span>');
+
+  var risks = [];
+  if(!p.ownerName) risks.push('<span class="mini-tag warn">未指定负责人</span>');
+  if(c.overdue) risks.push('<span class="mini-tag over">逾期 ' + c.overdue + ' 项</span>');
+  if(c.blocked) risks.push('<span class="mini-tag warn">阻塞 ' + c.blocked + ' 项</span>');
+  var overloaded = (members || []).filter(function(x){ return x.overloaded; }).length;
+  if(overloaded) risks.push('<span class="mini-tag over">' + overloaded + ' 人超载</span>');
+  if(daysLeft !== null && daysLeft < 0 && (m.progressPct || 0) < 100) risks.push('<span class="mini-tag over">已超计划结束 ' + Math.abs(daysLeft) + ' 天</span>');
+  if(!risks.length) risks.push('<span class="mini-tag ok">暂无风险信号</span>');
+
+  return (p.archivedAt ? '<div class="project-brief-archived">该项目已归档：默认列表不再展示，数据完整保留。</div>' : '')
+    + '<section class="manager-panel project-brief"><div class="project-brief-main">'
+    + '<span class="project-brief-label">项目目标</span>'
+    + '<p class="project-brief-goal' + (p.objective ? "" : " muted") + '">' + esc(p.objective || p.description || "未填写项目目标，可在「编辑项目」中补充") + '</p>'
+    + '<div class="project-brief-facts">' + facts.join("") + '</div></div>'
+    + '<div class="project-brief-risk"><span class="project-brief-label">风险信号</span><div>' + risks.join("") + '</div></div>'
+    + '</section>';
+}
 function renderProject(){
   var p = cache.project || {}, m = cache.metrics || {}, c = cache.counts || {}, tasks = cache.tasks || [];
   var total = tasks.length, done = c.done || 0, progress = m.progressPct || 0;
-  var options = rt.reqList.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === p.reqId ? ' selected' : '') + '>' + esc(r.name) + '</option>'; }).join("");
+  var options = selectableReqs().map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === p.reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
   var deviation = m.deviationPct === null || m.deviationPct === undefined ? "—" : ((m.deviationPct > 0 ? "+" : "") + m.deviationPct + "%");
   var epics = cache.epics || [];
-  $("projectBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>项目看板</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
-    + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span></div></div>'
-    + caliberHTML('整体进度 = Σ任务完成度 ÷ 任务数；指标由任务流转、预估与自动计时汇总，不提供手填项目进度。')
+  var toolbar = '<div class="manager-toolbar"><div class="manager-project-picker"><b>项目看板</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
+    + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span></div></div>';
+  var overview = caliberHTML('整体进度 = Σ任务完成度 ÷ 任务数；指标由任务流转、预估与自动计时汇总，不提供手填项目进度。')
+    + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'
     + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个任务", "all")
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
@@ -97,26 +154,28 @@ function renderProject(){
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
+    + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>';
+  var epicsPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
-    }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成任务</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+    }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成任务</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
+  var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
+  $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
 function loadDrill(opts){
   opts = opts || {};
   var body = $("projectBody");
   if(!body) return;
-  var current = ++pfSeq;
+  var current = ++seq;
   if(!opts.silent && !pfCache) body.innerHTML = UI.skeletonCards(3);
   API.get("/api/manager/portfolio").then(function(data){
-    if(current !== pfSeq) return;
+    if(current !== seq) return;
     pfCache = data; renderDrill();
   }).catch(function(ex){
-    if(current === pfSeq) body.innerHTML = UI.errorState(ex.message);
+    if(current === seq) body.innerHTML = UI.errorState(ex.message);
   });
 }
 function statusName(st){
@@ -351,6 +410,8 @@ function metricTasks(kind){
 }
 function onClick(e){
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
+  var tabBtn = e.target.closest("[data-project-tab]");
+  if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
   var pvMode = e.target.closest("[data-pv-mode]");
   if(pvMode){
     var m = pvMode.dataset.pvMode;

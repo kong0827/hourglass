@@ -202,11 +202,11 @@ public class ProjectVersionService {
     /** 版本发布：按负责人聚合版本内任务，每人一条通知（操作者本人跳过） */
     private void notifyReleased(ProjectVersion version, String actorId) {
         for (Map.Entry<String, Integer> entry : taskCountByOwner(version, actorId).entrySet()) {
-            notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
+            notificationEvents.notifyLinked(entry.getKey(), version.getWorkspaceId(),
                     UserNotificationPreferenceService.DEMAND_STATUS,
                     "版本「" + version.getName() + "」已发布",
                     "你负责的 " + entry.getValue() + " 项任务已随该版本发布",
-                    null, version.getReqId());
+                    "version", version.getId(), version.getReqId());
         }
     }
 
@@ -214,11 +214,11 @@ public class ProjectVersionService {
     private void notifyDeleted(ProjectVersion version, String actorId,
                                Map<String, Integer> taskCountByOwner) {
         for (Map.Entry<String, Integer> entry : taskCountByOwner.entrySet()) {
-            notificationEvents.notify(entry.getKey(), version.getWorkspaceId(),
+            notificationEvents.notifyLinked(entry.getKey(), version.getWorkspaceId(),
                     UserNotificationPreferenceService.DEMAND_STATUS,
                     "版本「" + version.getName() + "」已删除",
                     "你负责的 " + entry.getValue() + " 项任务已随该版本解绑",
-                    null, version.getReqId());
+                    "version", version.getId(), version.getReqId());
         }
     }
 

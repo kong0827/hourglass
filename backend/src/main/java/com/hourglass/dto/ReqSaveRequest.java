@@ -20,6 +20,19 @@ public class ReqSaveRequest {
     @Size(max = 160, message = "需求描述不能超过 160 字")
     private String description;
 
+    @Size(max = 400, message = "项目目标不能超过 400 字")
+    private String objective;
+
+    @Size(max = 32, message = "项目负责人不合法")
+    private String ownerUserId;
+
+    private java.time.LocalDate plannedStart;
+    private java.time.LocalDate plannedEnd;
+
     @Pattern(regexp = "active|done|hold", message = "需求状态不合法")
     private String status = "active";
+
+    /** 仅新建时生效：blank / standard / test；留空按空白项目处理 */
+    @Pattern(regexp = "^(blank|standard|test)?$", message = "项目模板不合法")
+    private String template;
 }

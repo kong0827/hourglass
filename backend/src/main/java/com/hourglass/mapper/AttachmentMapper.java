@@ -9,9 +9,19 @@ import java.util.List;
 @Mapper
 public interface AttachmentMapper {
 
-    /** 按目标取附件（target_kind：task / demand） */
+    /** 按目标取附件（target_kind：task / demand / case_run） */
     List<Attachment> selectByTarget(@Param("workspaceId") String workspaceId,
                                     @Param("targetId") String targetId, @Param("targetKind") String targetKind);
+
+    /** 批量取附件（执行记录列表一次取全部证据，避免 N+1） */
+    List<Attachment> selectByTargets(@Param("workspaceId") String workspaceId,
+                                     @Param("targetKind") String targetKind,
+                                     @Param("targetIds") List<String> targetIds);
+
+    /** 用例/项目删除后遗留的执行证据（执行记录已不存在） */
+    List<Attachment> selectOrphanCaseRuns(@Param("workspaceId") String workspaceId);
+
+    int deleteOrphanCaseRuns(@Param("workspaceId") String workspaceId);
 
     List<Attachment> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
 

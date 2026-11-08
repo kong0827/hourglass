@@ -158,15 +158,15 @@ const chunks = order.map(function (m) {
   return "/* ---- " + m + " ---- */\n" + t.code;
 }).join("\n");
 
-/* 低频视图在预览稿里没有可 import 的文件路径：把它们的导出注册到 window.__DS_MODULES__，
+/* 低频视图在预览稿里没有可 import 的文件路径：把它们的导出注册到 window.__HG_MODULES__，
    core/view-loader 会优先从这里同步取模块（真实部署仍然走原生 dynamic import）。
    注册必须在模块代码之后执行，否则拿不到 IIFE 的返回值。 */
 const registry = LAZY_VIEWS.map(function (name) {
-  return "window.__DS_MODULES__[" + JSON.stringify(name) + "] = __NS[" +
+  return "window.__HG_MODULES__[" + JSON.stringify(name) + "] = __NS[" +
     JSON.stringify("views/" + name + ".js") + "];";
 }).join("\n");
 
-const bundle = "window.__DS_MODULES__ = window.__DS_MODULES__ || {};\nvar __NS = {};\n" +
+const bundle = "window.__HG_MODULES__ = window.__HG_MODULES__ || {};\nvar __NS = {};\n" +
   chunks + "\n" + registry;
 
 const MOCK = fs.readFileSync(path.join(__dirname, "preview-mock.js"), "utf8");

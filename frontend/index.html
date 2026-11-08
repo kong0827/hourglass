@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>沙漏 · 任务看板</title>
+<title>沙漏 · 工作项看板</title>
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
 <link rel="shortcut icon" href="favicon.ico" />
 <script src="config.js"></script>
@@ -79,7 +79,7 @@
       <span class="nav-sec">我的工作</span>
       <button class="nav-item" type="button" data-view="mine" id="navMine">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.8 12.4 8l5.6.5-4.2 3.7 1.2 5.5L10 14.9l-5 2.8 1.2-5.5L2 8.5 7.6 8Z"/></svg>
-        <span class="nl">我的任务</span>
+        <span class="nl">我的工作</span>
       </button>
       <button class="nav-item" type="button" data-view="review">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.3 9 12.5l4.4-4.7"/></svg>
@@ -87,7 +87,7 @@
       </button>
 
       <span class="nav-sec">项目协作</span>
-      <button class="nav-item" type="button" data-view="projects">
+      <button class="nav-item" type="button" data-view="projects" title="项目：交付单元，工作项都归入项目">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 5.4A1.8 1.8 0 0 1 5 3.6h8l4 4v8a1.8 1.8 0 0 1-1.8 1.8H5A1.8 1.8 0 0 1 3.2 15.6Z"/><path d="M12.6 3.6v4.2h4.2"/></svg>
         <span class="nl">项目</span>
       </button>
@@ -95,11 +95,11 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="5" height="5" rx="1.2"/><rect x="12" y="3" width="5" height="5" rx="1.2"/><rect x="3" y="12" width="5" height="5" rx="1.2"/><rect x="12" y="12" width="5" height="5" rx="1.2"/></svg>
         <span class="nl">项目总览</span>
       </button>
-      <button class="nav-item" type="button" data-view="demands">
+      <button class="nav-item" type="button" data-view="demands" title="需求池：待评审、待排期的原始需求">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.4 4.2h13.2v8.4l-3.2 3.2H3.4Z"/><path d="M13.4 15.8v-3.2h3.2"/><path d="M6.6 8h6.8M6.6 11.2h4.4"/></svg>
         <span class="nl">需求池</span>
       </button>
-      <button class="nav-item" type="button" data-view="requirements">
+      <button class="nav-item" type="button" data-view="requirements" title="文档：项目下的需求、方案与验收文档">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h8l4 4v9H4Z"/><path d="M12 3.5v4h4M7 11h6M7 14h4"/></svg>
         <span class="nl">文档</span>
       </button>
@@ -115,7 +115,7 @@
       </button>
       <button class="nav-item" type="button" data-view="list">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.6 5.2h12.8M3.6 10h12.8M3.6 14.8h7.2"/></svg>
-        <span class="nl">任务列表</span>
+        <span class="nl">工作项列表</span>
       </button>
       <button class="nav-item" type="button" data-view="calendar">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.4" width="14" height="12.6" rx="2.2"/><path d="M3 8.2h14M6.8 4.4V2.8M13.2 4.4V2.8"/></svg>
@@ -148,7 +148,7 @@
       <span class="nav-sec">度量</span>
       <button class="nav-item" type="button" data-view="phase">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.4" cy="10" r="1.9"/><circle cx="10" cy="10" r="1.9"/><circle cx="15.6" cy="10" r="1.9"/><path d="M6.3 10h1.8M11.9 10h1.8"/></svg>
-        <span class="nl">版本阶段</span>
+        <span class="nl">版本</span>
       </button>
       <button class="nav-item" type="button" data-view="workload">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="3"/><path d="M2.8 17c.5-3 2-4.5 4.2-4.5s3.7 1.5 4.2 4.5M13 5.2a3 3 0 0 1 0 5.6M14 12.7c2 .4 3 1.8 3.3 4.3"/></svg>
@@ -182,7 +182,7 @@
     <!-- 顶栏 68px -->
     <header class="topbar">
       <div class="tb-left">
-        <h1 class="tb-title" id="viewTitle">任务看板</h1>
+        <h1 class="tb-title" id="viewTitle">工作项看板</h1>
         <p class="tb-sub" id="brandSub">加载中…</p>
       </div>
 
@@ -203,7 +203,7 @@
           <span class="tp-stop" id="timerPillStop" title="停止计时">停止</span>
         </button>
 
-        <label class="global-search" id="searchWrap" title="搜索标题 / 描述 / 备注（Ctrl/⌘ + K）">
+        <label class="global-search" id="searchWrap" title="按标题 / 描述 / 备注筛选当前视图（Ctrl/⌘ + K 打开全局搜索）">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
@@ -213,6 +213,12 @@
           </button>
           <span class="gs-kbd" aria-hidden="true"><kbd id="kbdMod">Ctrl</kbd><kbd>K</kbd></span>
         </label>
+
+        <button class="icon-btn mob-search-btn" id="btnMobSearch" type="button" aria-label="全局搜索" title="全局搜索：项目、工作项、文档、需求、用例">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+            <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
+          </svg>
+        </button>
 
         <div style="position:relative">
           <button class="btn primary" id="btnNew" type="button" aria-haspopup="true" aria-expanded="false">
@@ -285,10 +291,19 @@
       建议窗口宽度 ≥ 1280px 以获得完整布局
     </div>
 
+    <!-- 手机筛选摘要：首屏只留一行，完整筛选在底部面板 -->
+    <div class="mob-filter" id="mobFilter">
+      <button class="mob-filter-btn" id="btnMobFilter" type="button"
+              aria-haspopup="dialog" aria-expanded="false" aria-controls="mobFilterSheet">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 4.6h13.2l-5.1 6.1v4.7l-3 1.6v-6.3z"/></svg>
+        <span class="mbf-text" id="mobFilterText">未筛选</span>
+        <span class="mbf-cta">筛选</span>
+      </button>
+    </div>
+
     <!-- 筛选栏 48px（仅看板 / 列表） -->
     <div class="filterbar" id="filterbar" aria-label="筛选条件">
       <div class="fb-main">
-        <span class="group-label fb-section-label" aria-hidden="true">筛选条件</span>
         <div class="fgroup" id="fgStatus">
           <span class="group-label">状态</span>
           <span class="chips" id="chipsDue">
@@ -300,19 +315,21 @@
           </span>
         </div>
 
-        <div class="fgroup" id="fgOwner" hidden><span class="group-label">负责人</span><span class="chips" id="chipsOwner"></span></div>
-        <div class="fgroup" id="fgPri" hidden><span class="group-label">优先级</span><span class="chips" id="chipsPri"></span></div>
-        <div class="fgroup" id="fgType" hidden><span class="group-label">类型</span><span class="chips" id="chipsType"></span></div>
-        <div class="fgroup" id="fgVersion" hidden><span class="group-label">版本</span><span class="chips" id="chipsVersion"></span></div>
-        <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
-        <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
-
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、分类、标签与项目">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
           <div class="menu popover" id="moreFilterMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
+        </div>
+
+        <div class="fb-active" id="fbActive">
+          <div class="fgroup" id="fgOwner" hidden><span class="chips" id="chipsOwner"></span></div>
+          <div class="fgroup" id="fgPri" hidden><span class="chips" id="chipsPri"></span></div>
+          <div class="fgroup" id="fgType" hidden><span class="chips" id="chipsType"></span></div>
+          <div class="fgroup" id="fgVersion" hidden><span class="chips" id="chipsVersion"></span></div>
+          <div class="fgroup" id="fgBlocked" hidden><span class="chips" id="chipsBlocked"></span></div>
+          <div class="fgroup" id="fgQuery" hidden><span class="chips" id="chipsQuery"></span></div>
         </div>
       </div>
 
@@ -329,12 +346,12 @@
     <main class="views" id="views">
 
       <!-- ===== 看板 ===== -->
-      <section class="view view-flush on" id="view-board" aria-label="任务看板">
+      <section class="view view-flush on" id="view-board" aria-label="工作项看板">
         <div class="board" id="board"></div>
       </section>
 
       <!-- ===== 我的任务（跨空间聚合，N-3） ===== -->
-      <section class="view" id="view-mine" aria-label="我的任务">
+      <section class="view" id="view-mine" aria-label="我的工作">
         <div class="view-page wide">
           <div class="page-toolbar">
             <div class="seg mini mine-mode" id="mineMode" role="group" aria-label="我的 / 团队">
@@ -360,7 +377,7 @@
       </section>
 
       <!-- ===== 列表 ===== -->
-      <section class="view" id="view-list" aria-label="任务列表">
+      <section class="view" id="view-list" aria-label="工作项列表">
         <div class="view-page wide">
           <div class="list-toolbar">
             <span class="toolbar-meta" id="listMeta">—</span>
@@ -578,6 +595,7 @@
                 <button class="btn sm" type="button" data-project-mode="card" aria-pressed="true">卡片</button>
                 <button class="btn sm" type="button" data-project-mode="table" aria-pressed="false">表格</button>
                 <button class="btn sm" type="button" id="btnProjectColumns" hidden>显示字段</button>
+                <button class="btn sm" type="button" id="btnShowArchived" aria-pressed="false">显示已归档</button>
               </span>
               <button class="btn primary sm" type="button" id="btnReqNew" style="margin-left:auto">新建项目</button>
             </div>
@@ -595,6 +613,29 @@
                 <div class="field">
                   <label for="rDesc">项目描述</label>
                   <textarea id="rDesc" maxlength="160" placeholder="选填：目标、范围、验收标准…"></textarea>
+                </div>
+                <div class="field">
+                  <label for="rObjective">项目目标</label>
+                  <textarea id="rObjective" maxlength="400" placeholder="选填：一句话说明这个项目要达成的结果，会显示在项目驾驶舱首屏"></textarea>
+                </div>
+                <div class="field">
+                  <label for="rOwner">项目负责人</label>
+                  <select id="rOwner" aria-label="项目负责人"><option value="">未指定</option></select>
+                </div>
+                <div class="row row-gap">
+                  <div class="field" style="flex:1">
+                    <label for="rPlanStart">计划开始</label>
+                    <input id="rPlanStart" type="date" aria-label="计划开始日" />
+                  </div>
+                  <div class="field" style="flex:1">
+                    <label for="rPlanEnd">计划结束</label>
+                    <input id="rPlanEnd" type="date" aria-label="计划结束日" />
+                  </div>
+                </div>
+                <div class="field" id="fReqTemplate">
+                  <label for="rTemplate">项目模板 <small class="tc-optional">仅新建时生效</small></label>
+                  <select id="rTemplate" aria-label="选择项目模板"></select>
+                  <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试模块与默认版本，不覆盖已有内容</p>
                 </div>
                 <div class="field">
                   <label>项目状态</label>
@@ -616,10 +657,10 @@
       </section>
 
       <!-- ===== 版本阶段 ===== -->
-      <section class="view" id="view-phase" aria-label="版本阶段">
+      <section class="view" id="view-phase" aria-label="版本">
         <div class="view-page" id="phasePage">
           <div class="page-toolbar">
-            <span class="toolbar-title">版本阶段</span>
+            <span class="toolbar-title">版本</span>
             <span class="toolbar-meta" id="phaseMeta"></span>
             <span class="toolbar-right">
               <select id="phaseReq" class="mini-select" aria-label="选择项目"></select>
@@ -781,6 +822,10 @@
         <div class="view-page reqdoc-listpage" id="reqDocListPage">
           <div class="page-toolbar">
             <span class="toolbar-title">文档</span>
+            <span class="reqdoc-filter" id="reqDocProjFilter" hidden>
+              <span class="rpf-label">项目：</span><span id="reqDocProjFilterName"></span>
+              <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
+            </span>
             <span class="reqdoc-modes" role="tablist" aria-label="文档展示方式">
               <button class="rm-btn" type="button" role="tab" data-rdmode="tree" aria-selected="true">列表</button>
               <button class="rm-btn" type="button" role="tab" data-rdmode="kanban" aria-selected="false">看板</button>
@@ -788,6 +833,10 @@
               <button class="rm-btn" type="button" role="tab" data-rdmode="feed" aria-selected="false">动态</button>
             </span>
             <span class="toolbar-right">
+              <span class="views-menu-wrap">
+                <button class="btn sm ghost" type="button" id="rdViewsBtn" aria-haspopup="true" aria-expanded="false" title="文档视图：保存当前搜索、项目范围与展示方式">视图</button>
+                <div class="menu popover" id="rdViewsMenu" hidden></div>
+              </span>
               <span class="reqdoc-search">
                 <input type="search" id="reqDocSearch" placeholder="搜索标题或正文…" aria-label="搜索文档">
               </span>
@@ -796,6 +845,7 @@
               </button>
             </span>
           </div>
+          <div class="reqdoc-load-error" id="reqDocLoadError" role="alert" hidden></div>
           <div class="reqdoc-tree" id="reqDocTree"></div>
           <!-- 看板：按状态分列，拖拽卡片流转状态 -->
           <div class="reqdoc-kanban" id="reqDocKanban" hidden></div>
@@ -838,29 +888,37 @@
               <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查文档里的功能点是否都有工作项覆盖">
                 完成度检查
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocHistory" title="查看历史版本并恢复">
-                <span data-icon="clock"></span>&nbsp;历史版本
-              </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocImport" title="导入 Markdown 文件">
-                <span data-icon="upload"></span>&nbsp;导入
-              </button>
-              <button class="btn sm ghost" type="button" id="reqDocExport" title="导出为 Markdown 文件">
-                <span data-icon="download"></span>&nbsp;导出
-              </button>
-              <button class="btn sm ghost" type="button" id="reqDocCopy"><span data-icon="copy"></span>&nbsp;复制</button>
               <button class="btn sm ghost" type="button" id="reqDocPublish" title="草稿仅作者与空间管理员可见；发布后项目成员可见">
                 <span data-icon="eye"></span>&nbsp;发布
               </button>
               <button class="btn sm ghost" type="button" id="reqDocShare" title="生成只读分享链接（需先发布）">
                 <span data-icon="link"></span>&nbsp;分享
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocDelete">删除</button>
+              <span class="reqdoc-more">
+                <button class="icon-btn sm" type="button" id="reqDocMore" aria-label="更多文档操作" aria-haspopup="true" aria-expanded="false" title="更多操作">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="4.6" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
+                </button>
+                <div class="menu" id="reqDocMoreMenu" hidden>
+                  <button class="menu-item" type="button" id="reqDocHistory" title="查看历史版本并恢复">
+                    <span data-icon="clock"></span>历史版本
+                  </button>
+                  <button class="menu-item" type="button" id="reqDocImport" title="导入 Word / Markdown / TXT / HTML 文件">
+                    <span data-icon="upload"></span>导入文件…
+                  </button>
+                  <button class="menu-item" type="button" id="reqDocExport" title="导出为 Markdown 文件">
+                    <span data-icon="download"></span>导出文件
+                  </button>
+                  <button class="menu-item" type="button" id="reqDocCopy"><span data-icon="copy"></span>复制正文</button>
+                  <div class="menu-sep"></div>
+                  <button class="menu-item danger" type="button" id="reqDocDelete">删除文档</button>
+                </div>
+              </span>
               <button class="btn sm primary" type="button" id="reqDocSave">保存</button>
             </span>
-            <input type="file" id="reqDocImportFile" hidden accept=".md,.markdown,.txt,.html,.htm">
+            <input type="file" id="reqDocImportFile" hidden accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
           </div>
 
           <div class="reqdoc-editwrap">
@@ -937,7 +995,7 @@
         <div class="modal-layer" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle">
           <div class="sheet reqdoc-dlg">
             <h3 class="reqdoc-dlg-title" id="dlgNewReqDocTitle">新增文档</h3>
-            <p class="reqdoc-dlg-msg">选择项目和分类；可挂在上级文档下，确认后进入编辑页。</p>
+            <p class="reqdoc-dlg-msg">选择项目和分类；可以从空白开始写，也可以直接上传已有文件，确认后进入编辑页。</p>
             <div class="reqdoc-dlg-form">
               <label class="reqdoc-dlg-field">
                 <span>所属项目</span>
@@ -951,18 +1009,24 @@
                 <span>文档分类</span>
                 <select id="newReqDocType"></select>
               </label>
-              <label class="reqdoc-dlg-field">
+              <div class="reqdoc-dlg-field">
+                <span>创建方式</span>
+                <div class="seg mini" id="newReqDocSource" role="group" aria-label="创建方式">
+                  <button type="button" data-docsrc="blank" aria-pressed="true">空白新建</button>
+                  <button type="button" data-docsrc="file" aria-pressed="false">上传文件</button>
+                </div>
+              </div>
+              <label class="reqdoc-dlg-field" id="newReqDocFormatField">
                 <span>正文格式</span>
                 <select id="newReqDocFormat">
                   <option value="markdown">Markdown（默认，可导入导出）</option>
                   <option value="html">富文本</option>
-                  <option value="word">Word（.docx 导入）</option>
                 </select>
               </label>
-              <label class="reqdoc-dlg-field" id="newReqDocWordField" hidden>
-                <span>Word 文件</span>
-                <input id="newReqDocWordFile" type="file" accept=".docx">
-                <small style="color:var(--text-3);display:block;margin-top:4px;">仅支持 .docx，内容将转换为富文本</small>
+              <label class="reqdoc-dlg-field" id="newReqDocFileField" hidden>
+                <span>选择文件</span>
+                <input id="newReqDocFile" type="file" accept=".docx,.doc,.md,.markdown,.txt,.html,.htm">
+                <small style="color:var(--text-3);display:block;margin-top:4px;">支持 Word（.docx / .doc）、Markdown、TXT、HTML；导入后可继续在线编辑</small>
               </label>
               <label class="reqdoc-dlg-field">
                 <span>上级文档</span>
@@ -1067,8 +1131,18 @@
         <div class="view-page tc-page">
           <div class="page-toolbar">
             <span class="toolbar-title">测试用例</span>
+            <span class="seg mini" id="tcModeSeg" role="group" aria-label="测试视图">
+              <button type="button" data-tc-mode="cases" aria-pressed="true">用例</button>
+              <button type="button" data-tc-mode="plans" aria-pressed="false">测试计划</button>
+              <button type="button" data-tc-mode="coverage" aria-pressed="false">覆盖矩阵</button>
+              <button type="button" data-tc-mode="report" aria-pressed="false">测试报告</button>
+            </span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
+              <span class="views-menu-wrap">
+                <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                <div class="menu popover" id="tcViewsMenu" hidden></div>
+              </span>
               <input id="tcSearch" type="search" class="tc-search" placeholder="搜索用例 / 前置 / 步骤…" aria-label="搜索测试用例" />
               <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
               <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
@@ -1082,10 +1156,17 @@
                 <button type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
               </div>
               <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+              <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+              <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
+              <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
+              <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
               <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新增用例</button>
             </span>
           </div>
           <div class="tc-stats" id="tcStats"></div>
+          <div class="tc-coverage" id="tcCoverage" hidden></div>
+          <div class="tc-report" id="tcReport" hidden></div>
+          <div class="tc-plans" id="tcPlans" hidden></div>
           <div class="tc-list" id="tcList"></div>
         </div>
 
@@ -1148,9 +1229,26 @@
                 <label for="runNote">备注</label>
                 <textarea id="runNote" maxlength="500" placeholder="选填：失败原因、阻塞点…"></textarea>
               </div>
+              <div class="field">
+                <label for="runFiles">失败证据 <small class="tc-optional">选填 · 截图 / 日志 / 附件，单个 ≤10MB</small></label>
+                <input id="runFiles" type="file" multiple accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
+                <p class="foot-note">记录成功后自动上传到本轮执行记录，测试报告与执行历史可追溯。</p>
+              </div>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnDoRun">记录</button>
               </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 执行历史与失败证据 -->
+        <div class="modal-layer" id="dlgCaseRuns" role="dialog" aria-modal="true" aria-labelledby="runsTitle"><div class="sheet md"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="runsTitle">执行历史</h3><button class="icon-btn sm" type="button" id="dlgCaseRunsX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note" id="runsSub"></p>
+              <div class="tc-runs" id="runsList"></div>
+              <p class="foot-note" id="runsReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
             </div>
           </div>
         </div></div></div>
@@ -1178,6 +1276,61 @@
               </div>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnDoDefect">创建缺陷</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 新建 / 编辑测试计划 -->
+        <div class="modal-layer" id="dlgPlan" role="dialog" aria-modal="true" aria-labelledby="planFormTitle"><div class="sheet sm"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="planFormTitle">新建测试计划</h3><button class="icon-btn sm" type="button" id="dlgPlanX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <div class="field" id="fPlanName">
+                <label for="pName">计划名称 <span class="req">*</span></label>
+                <input id="pName" type="text" maxlength="60" placeholder="如：v1.2 上线前回归" autocomplete="off" />
+                <span class="err">请填写计划名称</span>
+              </div>
+              <div class="row row-gap">
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pVersion">关联版本 <small class="tc-optional">选填</small></label>
+                  <select id="pVersion"></select>
+                </div>
+              </div>
+              <div class="row row-gap">
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pStart">计划开始</label>
+                  <input id="pStart" type="date" />
+                </div>
+                <div class="field" style="flex:1 1 50%">
+                  <label for="pEnd">计划截止</label>
+                  <input id="pEnd" type="date" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="pNote">说明</label>
+                <textarea id="pNote" maxlength="500" placeholder="选填：范围、准出标准、环境…"></textarea>
+              </div>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnSavePlan">保存</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 圈选用例加入计划 -->
+        <div class="modal-layer" id="dlgPlanPick" role="dialog" aria-modal="true" aria-labelledby="planPickTitle"><div class="sheet md"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="planPickTitle">圈选用例</h3><button class="icon-btn sm" type="button" id="dlgPlanPickX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note" id="planPickSub">勾选要加入本计划的用例（已在计划内的自动跳过）。</p>
+              <div class="row row-gap" style="align-items:center">
+                <button class="btn sm ghost" type="button" id="btnPlanPickAll">全选/反选</button>
+                <span class="toolbar-meta" id="planPickCount"></span>
+              </div>
+              <div class="tc-runs" id="planPickList"></div>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnDoPlanPick">加入计划</button>
               </div>
             </div>
           </div>
@@ -1257,6 +1410,9 @@
           <div class="page-toolbar">
             <span class="toolbar-title" id="reviewTitle">上周工作回顾</span>
             <span class="toolbar-right">
+              <select class="mini-select" id="reviewReq" aria-label="回顾范围：全部项目或单个项目" title="按项目查看周回顾">
+                <option value="">全部项目</option>
+              </select>
               <span class="row row-gap" style="gap:4px">
                 <button class="icon-btn sm" type="button" id="weekPrev" aria-label="上一周">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3 4.6 7l4 4"/></svg>
@@ -1515,7 +1671,7 @@
       </section>
 
       <!-- ===== 项目协作：单项目看板（从项目总览下钻） ===== -->
-      <section class="view" id="view-project" aria-label="项目看板">
+      <section class="view" id="view-project" aria-label="项目概览">
         <div class="view-page wide manager-page" id="projectBody"></div>
       </section>
 
@@ -1545,6 +1701,7 @@
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="integration">集成</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="data">数据</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="activity">活动</button>
+            <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="system" id="setTabSystem" hidden>系统</button>
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-set-tab="account" id="setTabAccount" hidden>账号</button>
           </div>
 
@@ -1700,6 +1857,7 @@
                 <input type="text" id="colNewName" maxlength="12" placeholder="新列名，如：待验收" />
                 <button class="btn sm" type="button" id="btnColAdd">添加列</button>
               </div>
+              <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-cats">
@@ -1714,6 +1872,7 @@
                 <input type="text" id="catNewName" maxlength="12" placeholder="新分类名，如：客户跟进" />
                 <button class="btn sm" type="button" id="btnCatAdd">添加分类</button>
               </div>
+              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看分类配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-priorities">
@@ -1762,6 +1921,70 @@
               </div>
               <p class="set-hint">空间内的任务操作与配置变更记录（最近 200 条，倒序）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
               <div class="act-list" id="actList"></div>
+            </div>
+
+            <div class="panel" data-set-pane="system" id="set-system">
+              <div class="panel-head">
+                <h3>系统信息</h3>
+                <span class="meta-right" id="sysMeta">只读 · 平台管理员可见</span>
+              </div>
+              <p class="set-hint">版本、运行时、数据库、附件容量、通知投递与实时连接。刷新页面即可获取最新状态，不提供任何写操作。</p>
+              <div class="sys-grid" id="sysGrid"></div>
+
+              <div class="panel-head" style="margin-top:26px">
+                <h3>审计日志</h3>
+                <span class="meta-right" id="auditCount">全空间</span>
+              </div>
+              <p class="set-hint" id="auditHint">登录成功/失败、权限变更、数据导出、删除/清空、备份恢复等安全事件；默认保留 90 天，可按条件筛选并导出 CSV。</p>
+              <div class="audit-bar">
+                <input id="auditQ" type="search" placeholder="搜索操作人 / 对象 / 详情 / IP" autocomplete="off" aria-label="搜索审计日志" />
+                <select id="auditAction" aria-label="事件类型">
+                  <option value="">全部事件</option>
+                  <option value="login">登录成功</option>
+                  <option value="login_fail">登录失败</option>
+                  <option value="logout">退出登录</option>
+                  <option value="role_change">权限变更</option>
+                  <option value="export">数据导出</option>
+                  <option value="import">备份恢复</option>
+                  <option value="clear">清空数据</option>
+                  <option value="member_add">添加成员</option>
+                  <option value="member_remove">移除成员</option>
+                  <option value="workspace_delete">删除空间</option>
+                  <option value="project_delete">删除项目</option>
+                  <option value="user_create">创建账号</option>
+                  <option value="user_update">修改账号</option>
+                  <option value="user_delete">删除账号</option>
+                  <option value="password_reset">重置密码</option>
+                </select>
+                <select id="auditResult" aria-label="结果">
+                  <option value="">全部结果</option>
+                  <option value="success">成功</option>
+                  <option value="fail">失败</option>
+                </select>
+                <span class="audit-dates">
+                  <input id="auditFrom" type="date" aria-label="开始日期" />
+                  <span>至</span>
+                  <input id="auditTo" type="date" aria-label="结束日期" />
+                </span>
+                <button class="btn sm" type="button" id="btnAuditApply">筛选</button>
+                <button class="btn sm" type="button" id="btnAuditReset">重置</button>
+                <span class="spacer"></span>
+                <button class="btn sm" type="button" id="btnAuditCsv">导出 CSV</button>
+              </div>
+              <div class="audit-wrap">
+                <table class="audit-tbl">
+                  <thead>
+                    <tr><th>时间</th><th>操作人</th><th>事件</th><th>对象</th><th>结果</th><th>详情</th><th class="audit-ip">IP</th></tr>
+                  </thead>
+                  <tbody id="auditBody"></tbody>
+                </table>
+              </div>
+              <div class="audit-pager">
+                <span class="foot-note" id="auditPage"></span>
+                <span class="spacer"></span>
+                <button class="btn sm" type="button" id="auditPrev">上一页</button>
+                <button class="btn sm" type="button" id="auditNext">下一页</button>
+              </div>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-trash">
@@ -1960,6 +2183,34 @@
   </div>
 </div>
 
+<!-- ==================== 手机筛选与视图面板 ==================== -->
+<div class="mob-sheet-layer" id="mobFilterSheet" hidden>
+  <div class="mob-sheet-scrim" data-mob-sheet-close></div>
+  <section class="mob-sheet" role="dialog" aria-modal="true" aria-labelledby="mobSheetTitle" tabindex="-1">
+    <div class="mob-sheet-grab" aria-hidden="true"></div>
+    <header class="mob-sheet-head">
+      <h2 id="mobSheetTitle">筛选与视图</h2>
+      <button class="icon-btn" type="button" data-mob-sheet-close aria-label="关闭筛选面板" title="关闭">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+      </button>
+    </header>
+    <div class="mob-sheet-body">
+      <section class="mob-sheet-block" id="mobSheetSearchBlock">
+        <h3>当前视图关键词</h3>
+        <div id="mobSheetSearchSlot"></div>
+      </section>
+      <div id="mobSheetFilterSlot"></div>
+      <section class="mob-sheet-block" id="mobSheetToolsBlock" hidden>
+        <h3>视图设置</h3>
+        <div id="mobSheetToolsSlot"></div>
+      </section>
+    </div>
+    <footer class="mob-sheet-foot">
+      <button class="btn primary" type="button" data-mob-sheet-close>完成</button>
+    </footer>
+  </section>
+</div>
+
 <!-- ==================== 应用页脚：备案信息（占一行高度，不压内容） ==================== -->
 <footer class="app-foot" id="appFoot">
   <span class="af-brand">个人自由工具开发</span>
@@ -1971,7 +2222,7 @@
 <!-- ==================== 移动端底部导航 ==================== -->
 <nav class="tabbar" id="tabBar" aria-label="主导航（移动端）" hidden>
   <div class="tabbar-pill">
-    <button class="tab" type="button" data-tab="mine" aria-label="我的任务">
+    <button class="tab" type="button" data-tab="mine" aria-label="我的工作">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="4"/><path d="M6.9 10.2 9.2 12.5 13.2 8.1"/></svg>
       <span>任务</span>
     </button>
@@ -2038,6 +2289,10 @@
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
             复制标题
           </button>
+          <button class="menu-item" type="button" data-task-more="save-continue" id="taskMoreSaveContinue" hidden>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.6h9.2L16.4 6.8v9.6H3.6z"/><path d="M7 3.6v4.2h5.4V3.6M7 16.4v-3.6h6v3.6"/></svg>
+            保存并继续
+          </button>
           <div class="menu-sep"></div>
           <button class="menu-item danger" type="button" data-task-more="trash" id="taskMoreTrash">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
@@ -2052,6 +2307,7 @@
       <div class="stack task-detail-main">
         <!-- 基本信息 -->
         <div class="drawer-field-group">
+          <h3 class="drawer-group-title">基本信息</h3>
           <div class="field" id="fTitle">
             <label for="iTitle">任务标题 <span class="req">*</span></label>
             <input id="iTitle" type="text" maxlength="60" placeholder="例如：重构权限校验中间件" autocomplete="off" />
@@ -2086,8 +2342,18 @@
           </div>
         </div>
 
+        <!-- 更多字段：低频字段默认收起，编辑已有任务时展开，避免隐藏已填内容 -->
+        <details class="drawer-more" id="drawerMore">
+          <summary>
+            <span>更多字段</span>
+            <span class="foot-note">类型、标签、文档、版本、史诗、分支、循环与提醒</span>
+          </summary>
+          <div class="drawer-more-body" id="drawerMoreBody"></div>
+        </details>
+
         <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
         <div class="drawer-field-group" id="fDefect" hidden>
+          <h3 class="drawer-group-title">缺陷信息</h3>
           <div class="form-grid">
             <div class="field" id="fSeverity">
               <label for="iSeverity">严重度 <span class="req">*</span></label>
@@ -2127,6 +2393,7 @@
 
         <!-- 归属关系 -->
         <div class="drawer-field-group">
+          <h3 class="drawer-group-title">归属关系</h3>
           <div class="form-grid">
             <div class="field">
               <label for="iReq">所属项目</label>
@@ -2164,6 +2431,7 @@
 
         <!-- 时间 / 进度 -->
         <div class="drawer-field-group">
+          <h3 class="drawer-group-title">时间与进度</h3>
           <div class="field">
             <label for="iStart">开始日期（选填）</label>
             <input id="iStart" type="date" />
@@ -2360,6 +2628,7 @@
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
+      <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前任务，继续补充评论、检查项或时间">保存并继续</button>
       <button class="btn primary" type="submit" id="btnSaveTask">保存任务</button>
     </div>
   </form>
@@ -2631,6 +2900,24 @@
             </div>
           </div>
         </div>
+<!-- 全局搜索（Cmd/Ctrl+K） -->
+<div class="modal-layer search-palette" id="dlgSearch" role="dialog" aria-modal="true" aria-label="全局搜索">
+  <div class="sheet palette-sheet">
+    <div class="palette-input">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
+      </svg>
+      <input id="paletteInput" type="search" placeholder="搜索项目、工作项、文档、需求、用例…" autocomplete="off" aria-label="全局搜索" />
+      <kbd>Esc</kbd>
+    </div>
+    <div class="palette-results" id="paletteResults" role="listbox" aria-label="搜索结果"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+      <span><kbd>Enter</kbd> 打开</span>
+      <span><kbd>Esc</kbd> 关闭</span>
+    </div>
+  </div>
+</div>
 <div class="unread-bubble" id="unreadBubble" hidden>
   <button class="ub-main" type="button" id="unreadBubbleMain" title="打开通知中心">
     <span class="ub-ic" id="unreadBubbleIcon"></span>
@@ -2656,6 +2943,7 @@
 <link rel="modulepreload" href="js/core/app.js" />
 <link rel="modulepreload" href="js/core/realtime.js" />
 <link rel="modulepreload" href="js/core/shortcuts.js" />
+<link rel="modulepreload" href="js/core/search-palette.js" />
 <link rel="modulepreload" href="js/core/shell.js" />
 <link rel="modulepreload" href="js/core/utils.js" />
 <link rel="modulepreload" href="js/core/view-loader.js" />

@@ -15,7 +15,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** Word 导入为文档正文：阶段 1 MVP 仅支持 docx，返回清洗后的 HTML。 */
+/** Word 导入为文档正文：docx 保留排版，doc 提取文本，返回清洗后的 HTML。 */
 class RequirementDocImportWordTest {
 
     private final DocPreviewService previewService = mock(DocPreviewService.class);
@@ -50,6 +50,16 @@ class RequirementDocImportWordTest {
 
         assertTrue(html.contains("<p>Hello</p>"));
         assertTrue(!html.contains("<script>"));
+    }
+
+    @Test
+    void importsLegacyDocUsingDocConverter() {
+        when(previewService.preview(any(File.class), eq("doc")))
+                .thenReturn(previewResult("<html><body><p>Legacy</p></body></html>"));
+
+        String html = docService.importWord(mock(File.class), "doc");
+
+        assertTrue(html.contains("<p>Legacy</p>"));
     }
 
     @Test

@@ -26,6 +26,8 @@ public class TestCaseView {
     private LocalDateTime latestAt;
     private String latestBugTaskId;
     private String latestBugTaskTitle;
+    /** 最近一轮执行挂载的证据附件数（失败截图等） */
+    private Integer latestEvidenceCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

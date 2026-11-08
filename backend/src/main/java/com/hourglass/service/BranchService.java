@@ -3,7 +3,10 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.BranchBoard;
+import com.hourglass.dto.BranchPage;
 import com.hourglass.dto.BranchProjectTag;
+import com.hourglass.dto.BranchQuery;
 import com.hourglass.dto.BranchSaveRequest;
 import com.hourglass.dto.BranchStatusRequest;
 import com.hourglass.dto.BranchVersionTag;
@@ -143,6 +146,137 @@ public class BranchService {
         return filtered;
     }
 
+    /* ---------- 分页 ---------- */
+
+    /** 状态分组分页：默认「已发布」等大分组只取一屏，滚动加载走 page() */
+    public BranchPage page(String workspaceId, String userId, BranchQuery query) {
+        BranchQuery q = normalize(workspaceId, userId, query);
+        Map<String, Integer> counts = countsOf(q);
+        BranchPage page = new BranchPage();
+        page.setStatus(q.getStatus());
+        page.setCounts(counts);
+        page.setAvgCycleDays(avgCycleDays(q));
+        int total = q.getStatus() != null ? countOf(counts, q.getStatus()) : sumCounts(counts);
+        page.setTotal(total);
+        page.setOffset(q.getOffset());
+        page.setLimit(q.getLimit());
+        if (total > q.getOffset()) {
+            List<DevBranch> items = branchMapper.selectPage(q);
+            decorate(workspaceId, q.getViewerId(), items);
+            page.setItems(items);
+        }
+        page.setHasMore(q.getOffset() + page.getItems().size() < total);
+        return page;
+    }
+
+    /** 看板：每个状态先给 limit 条，列内滚动加载走 page(status=...) */
+    public BranchBoard board(String workspaceId, String userId, BranchQuery query) {
+        BranchQuery base = normalize(workspaceId, userId, query);
+        base.setStatus(null);
+        Map<String, Integer> counts = countsOf(base);
+        BranchBoard board = new BranchBoard();
+        board.setCounts(counts);
+        board.setAvgCycleDays(avgCycleDays(base));
+        List<DevBranch> all = new ArrayList<DevBranch>();
+        for (String status : LABELS.keySet()) {
+            BranchBoard.Column col = new BranchBoard.Column();
+            int matched = countOf(counts, status);
+            col.setMatched(matched);
+            if (matched > 0) {
+                BranchQuery cq = copyOf(base);
+                cq.setStatus(status);
+                cq.setOffset(0);
+                List<DevBranch> items = branchMapper.selectPage(cq);
+                col.setItems(items);
+                col.setHasMore(items.size() < matched);
+                all.addAll(items);
+            }
+            board.getColumns().put(status, col);
+        }
+        decorate(workspaceId, base.getViewerId(), all);
+        return board;
+    }
+
+    /** 任务抽屉「所属分支」下拉：按项目过滤的轻量选项（不含任务数与标签） */
+    public List<DevBranch> options(String workspaceId, String userId, String projectId) {
+        BranchQuery q = new BranchQuery();
+        q.setWorkspaceId(workspaceId);
+        q.setViewerId(projectAccess.viewerScope(workspaceId, userId));
+        q.setProjectId(Texts.trimToNull(projectId));
+        return branchMapper.selectOptions(q);
+    }
+
+    private BranchQuery normalize(String workspaceId, String userId, BranchQuery query) {
+        BranchQuery q = query == null ? new BranchQuery() : query;
+        q.setWorkspaceId(workspaceId);
+        q.setViewerId(projectAccess.viewerScope(workspaceId, userId));
+        q.setProjectId(Texts.trimToNull(q.getProjectId()));
+        q.setQ(Texts.trimToNull(q.getQ()));
+        if (q.getStatus() != null && !LABELS.containsKey(q.getStatus())) {
+            q.setStatus(null);
+        }
+        q.setOffset(Math.max(0, q.getOffset()));
+        q.setLimit(Math.max(1, Math.min(200, q.getLimit())));
+        return q;
+    }
+
+    private Map<String, Integer> countsOf(BranchQuery q) {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        for (String status : LABELS.keySet()) {
+            counts.put(status, 0);
+        }
+        BranchQuery cq = copyOf(q);
+        cq.setStatus(null);
+        for (Map<String, Object> row : branchMapper.countGroupByStatus(cq)) {
+            String status = String.valueOf(row.get("status"));
+            int cnt = ((Number) row.get("cnt")).intValue();
+            counts.put(status, cnt);
+        }
+        counts.put("all", sumCounts(counts));
+        return counts;
+    }
+
+    private Double avgCycleDays(BranchQuery q) {
+        BranchQuery cq = copyOf(q);
+        cq.setStatus(ST_RELEASED);
+        return branchMapper.selectAvgCycleDays(cq);
+    }
+
+    private static int countOf(Map<String, Integer> counts, String status) {
+        Integer n = counts.get(status);
+        return n == null ? 0 : n;
+    }
+
+    private static int sumCounts(Map<String, Integer> counts) {
+        int sum = 0;
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (!"all".equals(e.getKey()) && e.getValue() != null) {
+                sum += e.getValue();
+            }
+        }
+        return sum;
+    }
+
+    private static BranchQuery copyOf(BranchQuery src) {
+        BranchQuery q = new BranchQuery();
+        q.setWorkspaceId(src.getWorkspaceId());
+        q.setViewerId(src.getViewerId());
+        q.setProjectId(src.getProjectId());
+        q.setStatus(src.getStatus());
+        q.setQ(src.getQ());
+        q.setOffset(src.getOffset());
+        q.setLimit(src.getLimit());
+        return q;
+    }
+
+    private void decorate(String workspaceId, String viewerId, List<DevBranch> branches) {
+        if (branches.isEmpty()) {
+            return;
+        }
+        fillVersions(workspaceId, viewerId, branches);
+        fillProjects(workspaceId, viewerId, branches);
+    }
+
     /** 分支详情（列表 + 抽屉共用实体）：带推导的影响版本标签与归属项目标签 */
     public DevBranch getDetail(String workspaceId, String userId, String id) {
         DevBranch b = get(workspaceId, id);
@@ -163,7 +297,11 @@ public class BranchService {
             return;
         }
         Map<String, List<BranchVersionTag>> byBranch = new LinkedHashMap<String, List<BranchVersionTag>>();
-        for (BranchVersionTag tag : branchMapper.selectVersionTags(workspaceId, viewerId)) {
+        List<String> ids = new ArrayList<String>();
+        for (DevBranch b : branches) {
+            ids.add(b.getId());
+        }
+        for (BranchVersionTag tag : branchMapper.selectVersionTags(workspaceId, viewerId, ids)) {
             List<BranchVersionTag> list = byBranch.get(tag.getBranchId());
             if (list == null) {
                 list = new ArrayList<BranchVersionTag>();
@@ -203,7 +341,11 @@ public class BranchService {
             return;
         }
         Map<String, List<BranchProjectTag>> byBranch = new LinkedHashMap<String, List<BranchProjectTag>>();
-        for (BranchProjectTag tag : branchMapper.selectProjectTags(workspaceId, viewerId)) {
+        List<String> ids = new ArrayList<String>();
+        for (DevBranch b : branches) {
+            ids.add(b.getId());
+        }
+        for (BranchProjectTag tag : branchMapper.selectProjectTags(workspaceId, viewerId, ids)) {
             List<BranchProjectTag> list = byBranch.get(tag.getBranchId());
             if (list == null) {
                 list = new ArrayList<BranchProjectTag>();
@@ -398,9 +540,9 @@ public class BranchService {
         if (owner == null || owner.equals(actorId)) {
             return;
         }
-        /* 分支 ID 不是任务 ID：不能写进 refTaskId，否则通知中心点击会按任务打开并报不存在 */
-        notificationEvents.notify(owner, b.getWorkspaceId(),
-                UserNotificationPreferenceService.DEMAND_STATUS, title, body, null, b.getReqId());
+        notificationEvents.notifyLinked(owner, b.getWorkspaceId(),
+                UserNotificationPreferenceService.DEMAND_STATUS, title, body,
+                "branch", b.getId(), b.getReqId());
     }
 
     /** 新建时按初始状态盖上第一个时间点（其余留空，等真正进入再写） */

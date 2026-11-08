@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 旧版前端备份文件结构（devstudio-kanban-backup.json），导入导出沿用同一格式
+ * 旧版前端备份文件结构（hourglass-backup.json），导入导出沿用同一格式
  */
 @Data
 public class BackupData {

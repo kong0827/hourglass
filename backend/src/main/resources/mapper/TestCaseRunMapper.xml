@@ -4,10 +4,10 @@
 
   <insert id="insert">
     INSERT INTO test_case_run
-      (id, case_id, workspace_id, status, note, bug_task_id,
+      (id, case_id, workspace_id, status, note, bug_task_id, plan_id,
        executed_by, executed_by_user_id, created_at)
     VALUES
-      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{bugTaskId},
+      (#{id}, #{caseId}, #{workspaceId}, #{status}, #{note}, #{bugTaskId}, #{planId},
        #{executedBy}, #{executedByUserId}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -34,6 +34,17 @@
     WHERE case_id = #{caseId}
     ORDER BY created_at DESC, id DESC
     LIMIT 1
+  </select>
+
+  <select id="selectById" resultType="com.hourglass.entity.TestCaseRun">
+    SELECT * FROM test_case_run WHERE id = #{id}
+  </select>
+
+  <select id="selectByCase" resultType="com.hourglass.entity.TestCaseRun">
+    SELECT * FROM test_case_run
+    WHERE workspace_id = #{workspaceId} AND case_id = #{caseId}
+    ORDER BY created_at DESC, id DESC
+    LIMIT #{limit}
   </select>
 
   <update id="updateBugTask">

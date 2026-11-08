@@ -16,6 +16,14 @@ public interface TestCaseRunMapper {
 
     TestCaseRun selectLatestByCase(@Param("caseId") String caseId);
 
+    /** 单条执行记录（失败证据附件按 run id 挂载，校验归属用） */
+    TestCaseRun selectById(@Param("id") String id);
+
+    /** 用例执行历史：最近在前，报告与详情共用 */
+    List<TestCaseRun> selectByCase(@Param("workspaceId") String workspaceId,
+                                   @Param("caseId") String caseId,
+                                   @Param("limit") int limit);
+
     /** 最近失败转出缺陷时回填该轮流水（仅当该轮为 failed 时由服务层判断） */
     int updateBugTask(@Param("id") String id, @Param("bugTaskId") String bugTaskId);
 
