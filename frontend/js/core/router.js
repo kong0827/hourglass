@@ -273,7 +273,7 @@ function viewFromHash(){
   var name = q >= 0 ? raw.substring(0, q) : raw;
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
-  /* 无 hash 时先落「我的工作」；登录信息就绪后 main.js 再按角色校正落点 */
+  /* 无 hash 时固定落「我的工作」：登录首屏对所有角色一致 */
   return "mine";
 }
 var suppressHashSync = false;
@@ -399,7 +399,7 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-/* 首次登录（无深链）按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
+/* 左上角品牌回首页按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
    管理者先进全局健康度；成员仍是「我的工作」 */
 function defaultLanding(){
   /* 个人空间没有协作分工，仍回到「我的工作」 */

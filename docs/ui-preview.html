@@ -25828,7 +25828,7 @@ function viewFromHash(){
   var name = q >= 0 ? raw.substring(0, q) : raw;
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
-  /* 无 hash 时先落「我的工作」；登录信息就绪后 main.js 再按角色校正落点 */
+  /* 无 hash 时固定落「我的工作」：登录首屏对所有角色一致 */
   return "mine";
 }
 var suppressHashSync = false;
@@ -25954,7 +25954,7 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-/* 首次登录（无深链）按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
+/* 左上角品牌回首页按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
    管理者先进全局健康度；成员仍是「我的工作」 */
 function defaultLanding(){
   /* 个人空间没有协作分工，仍回到「我的工作」 */
@@ -26547,8 +26547,7 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
-  /* 无深链时才允许按角色改落点；有 hash 说明是刷新或分享链接，尊重原视图 */
-  var autoLanding = !String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0];
+  /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
   try{ history.replaceState(null, "", "#/" + startView); }
   catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
@@ -26574,7 +26573,7 @@ function boot(){
   /* 未登录时只允许先打这一次鉴权请求；401 由 API 层统一跳登录页，
      其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
   API.get("/api/auth/me").then(function(meUser){
-    startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding);
+    startAuthenticatedApp(meUser, startView, deepTaskId);
   }).catch(function(ex){
     if(ex && ex.status === 401) return;
     UI.showConfirm({
@@ -26587,7 +26586,7 @@ function boot(){
   });
 }
 
-function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
+function startAuthenticatedApp(meUser, startView, deepTaskId){
   showView(startView);
   showBoardSkeleton();
   loadBoard({animate:true}).then(function(){
@@ -26616,13 +26615,7 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
   loadReqs();
   loadBranches();
   loadViews();
-  loadMe(meUser).then(function(){
-    if(!autoLanding) return;
-    /* 角色信息回来前用户可能已经自己点了别的视图，不要把人拽走 */
-    if(activeView !== startView) return;
-    var landing = defaultLanding();
-    if(landing && landing !== activeView){ showView(landing); }
-  });
+  loadMe(meUser);
   initSSE();
   /* R-1：未读角标。SSE 之外再兜一层低频轮询；后台也拉，保证标签页标题计数实时 */
   loadUnread(true);
@@ -38987,6 +38980,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 14:41</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 23:24</span></div>
 </body>
 </html>

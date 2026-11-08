@@ -9,7 +9,7 @@ import { loadViews } from "./core/filters-ui.js";
 import "./core/fullscreen.js";
 import { loadUnread, routeNotificationLink } from "./core/notifications.js";
 import { initSSE } from "./core/realtime.js";
-import { VIEWS, activeView, defaultLanding, showView, viewFromHash } from "./core/router.js";
+import { VIEWS, showView, viewFromHash } from "./core/router.js";
 import { handleDeepLink, hashParam, openTaskById } from "./core/task-actions.js";
 import { buildFormControls, renderTagChips, syncFormSegs, syncProgVal } from "./core/task-drawer.js";
 import { UI } from "./core/ui.js";
@@ -48,8 +48,7 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
-  /* 无深链时才允许按角色改落点；有 hash 说明是刷新或分享链接，尊重原视图 */
-  var autoLanding = !String(window.location.hash || "").replace(/^#\/?/, "").split("?")[0];
+  /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
   try{ history.replaceState(null, "", "#/" + startView); }
   catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
@@ -75,7 +74,7 @@ function boot(){
   /* 未登录时只允许先打这一次鉴权请求；401 由 API 层统一跳登录页，
      其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
   API.get("/api/auth/me").then(function(meUser){
-    startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding);
+    startAuthenticatedApp(meUser, startView, deepTaskId);
   }).catch(function(ex){
     if(ex && ex.status === 401) return;
     UI.showConfirm({
@@ -88,7 +87,7 @@ function boot(){
   });
 }
 
-function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
+function startAuthenticatedApp(meUser, startView, deepTaskId){
   showView(startView);
   showBoardSkeleton();
   loadBoard({animate:true}).then(function(){
@@ -117,13 +116,7 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
   loadReqs();
   loadBranches();
   loadViews();
-  loadMe(meUser).then(function(){
-    if(!autoLanding) return;
-    /* 角色信息回来前用户可能已经自己点了别的视图，不要把人拽走 */
-    if(activeView !== startView) return;
-    var landing = defaultLanding();
-    if(landing && landing !== activeView){ showView(landing); }
-  });
+  loadMe(meUser);
   initSSE();
   /* R-1：未读角标。SSE 之外再兜一层低频轮询；后台也拉，保证标签页标题计数实时 */
   loadUnread(true);
