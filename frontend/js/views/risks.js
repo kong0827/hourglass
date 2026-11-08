@@ -7,6 +7,7 @@ import { rt } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, priTagHTML } from "../lib/format.js";
+import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { daysBetween, fmtDate } from "./manager-shared.js";
 
 var cache=null,seq=0,sending=false;
@@ -29,7 +30,7 @@ function riskCard(t,kind,today){
 }
 function riskColumn(kind,title,rows,today){
   return '<section class="manager-risk-col"><div class="manager-risk-head"><b>'+title+'</b><span>'+rows.length+'</span></div>'
-    +(rows.length?rows.map(function(t){return riskCard(t,kind,today);}).join(""):'<div class="manager-risk-empty">暂无'+title+'任务</div>')+'</section>';
+    +(rows.length?rows.map(function(t){return riskCard(t,kind,today);}).join(""):'<div class="manager-risk-empty">暂无'+title+'工作项</div>')+'</section>';
 }
 function uniqueRiskTasks(){
   var map={};["overdue","blocked","stagnant"].forEach(function(k){((cache&&cache[k])||[]).forEach(function(t){map[t.id]=t;});});
@@ -37,7 +38,7 @@ function uniqueRiskTasks(){
 }
 function renderRisks(){
   var today=cache.today,all=uniqueRiskTasks(),over=cache.overloaded||[];
-  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+'</div>'
+  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+fullscreenButtonHTML()+'</div>'
     +(over.length?'<button type="button" class="manager-overload-note" data-risk-overload title="查看成员负载"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></button>':'')
     +'<div class="manager-risk-grid">'+riskColumn("overdue","逾期",cache.overdue||[],today)+riskColumn("blocked","被阻塞",cache.blocked||[],today)+riskColumn("stagnant","7 天未动",cache.stagnant||[],today)+'</div>';
 }
@@ -59,7 +60,7 @@ if($("risksBody"))$("risksBody").addEventListener("click",function(e){
   var single=e.target.closest("[data-nudge]");if(single){nudge([single.dataset.nudge]);return;}
   if(e.target.closest("[data-nudge-all]")){
     var ids=uniqueRiskTasks().map(function(t){return t.id;});
-    UI.showConfirm({title:"全部催办",msg:"将向这些任务的负责人发送站内通知，共 <b>"+ids.length+"</b> 项。是否继续？",okText:"发送催办",danger:false}).then(function(ok){if(ok)nudge(ids);});return;
+    UI.showConfirm({title:"全部催办",msg:"将向这些工作项的负责人发送站内通知，共 <b>"+ids.length+"</b> 项。是否继续？",okText:"发送催办",danger:false}).then(function(ok){if(ok)nudge(ids);});return;
   }
   var open=e.target.closest("[data-risk-open]");if(open)openTaskById(open.dataset.riskOpen);
 });

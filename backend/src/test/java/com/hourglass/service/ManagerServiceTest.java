@@ -102,7 +102,7 @@ class ManagerServiceTest {
         WorkspaceMember loggedOnly = new WorkspaceMember();
         loggedOnly.setUserId("U2");
         loggedOnly.setDisplayName("Bob");
-        TimeLog thisWeek = timeLog("U1", TODAY.atTime(9, 0), 60);
+        TimeLog thisWeek = timeLog("U1", "T1", TODAY.atTime(9, 0), 60);
         TimeLog lastWeek = timeLog("U1", TODAY.minusWeeks(1).atTime(9, 0), 30);
         TimeLog loggedOnlyWeek = timeLog("U2", TODAY.atTime(10, 0), 45);
 
@@ -125,6 +125,24 @@ class ManagerServiceTest {
         assertEquals(1, tasks.size(), "完成列任务不能进入工作量");
         assertEquals(120, tasks.get(0).get("totalMinutes"));
         assertEquals("项目一", tasks.get(0).get("reqName"));
+        assertEquals("2026-11-09", workload.get("weekStart"), "周视图下钻需要周一日期");
+        List<Map<String, Object>> aliceLogs = castList(alice.get("weekLogs"));
+        assertEquals(1, aliceLogs.size(), "本周计时明细用于按周下钻，上周记录不进入");
+        assertEquals(TODAY.toString(), aliceLogs.get(0).get("date"));
+        assertEquals("T1", aliceLogs.get(0).get("taskId"));
+        assertEquals("T1", aliceLogs.get(0).get("title"));
+        assertEquals("项目一", aliceLogs.get(0).get("reqName"));
+        assertEquals(60, aliceLogs.get(0).get("minutes"));
+        List<Map<String, Object>> loggedOnlyLogs = castList(member(members, "U2").get("weekLogs"));
+        assertEquals(1, loggedOnlyLogs.size());
+        assertEquals("未关联工作项", loggedOnlyLogs.get(0).get("title"));
+        assertEquals("未归类", loggedOnlyLogs.get(0).get("reqName"));
+        assertEquals("2026-11-02", workload.get("lastWeekStart"), "上周对比下钻需要上周周一日期");
+        List<Map<String, Object>> aliceLastLogs = castList(alice.get("lastWeekLogs"));
+        assertEquals(1, aliceLastLogs.size(), "上周计时明细用于差异下钻，本周记录不进入");
+        assertEquals(TODAY.minusWeeks(1).toString(), aliceLastLogs.get(0).get("date"));
+        assertEquals(30, aliceLastLogs.get(0).get("minutes"));
+        assertEquals(0, castList(member(members, "U2").get("lastWeekLogs")).size());
         assertTrue(member(members, "unassigned") != null, "未指派任务也必须保留");
         assertEquals(45, member(members, "U2").get("weekMinutes"), "只有计时、无未完成任务成员也要进入周视图");
     }

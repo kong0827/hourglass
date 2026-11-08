@@ -3,6 +3,7 @@
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
+import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { rt } from "../core/state.js";
@@ -86,9 +87,9 @@ function weeklyChart(weeks){
   }).join("") + '</div><div class="manager-chart-legend"><span><i class="created"></i>新增</span><span><i class="completed"></i>完成</span></div>';
 }
 function memberRows(members){
-  if(!members.length) return '<tr><td colspan="6" class="manager-empty-cell">暂无未完成任务</td></tr>';
+  if(!members.length) return '<tr><td colspan="6" class="manager-empty-cell">暂无未完成工作项</td></tr>';
   return members.map(function(m){
-    return '<tr data-member-key="' + esc(m.key) + '" title="查看该成员的项目任务"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span></td>'
+    return '<tr data-member-key="' + esc(m.key) + '" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span></td>'
       + '<td class="num">' + m.taskCount + '</td><td class="num">' + fmtHours(m.remainingMinutes) + '</td>'
       + '<td class="num">' + fmtHours(m.actualWeekMinutes) + '</td><td>' + loadBarHTML(m.loadPct) + '</td>'
       + '<td>' + (m.overloaded ? '<span class="mini-tag over">超载</span>' : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>')) + '</td></tr>';
@@ -144,15 +145,15 @@ function renderProject(){
   var toolbar = '<div class="manager-toolbar"><div class="manager-project-picker">'
     + '<button class="btn sm ghost" type="button" id="btnProjectBack" title="返回项目列表">← 项目列表</button>'
     + '<b>' + esc(p.name || "项目驾驶舱") + '</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
-    + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span></div></div>';
-  var overview = caliberHTML('整体进度 = Σ任务完成度 ÷ 任务数；指标由任务流转、预估与自动计时汇总，不提供手填项目进度。')
+    + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
+  var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。')
     + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'
-    + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个任务", "all")
+    + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个工作项", "all")
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
-    + metric("实际投入", fmtHours(m.actualMinutes), "含进行中任务", "actual")
-    + metric("工时偏差（已完成任务口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
-    + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>任务分布</b><span>' + total + ' 个任务</span></div>'
+    + metric("实际投入", fmtHours(m.actualMinutes), "含进行中工作项", "actual")
+    + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
+    + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
@@ -161,7 +162,7 @@ function renderProject(){
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成任务</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
@@ -253,7 +254,7 @@ function emptyCols(n){
   return s;
 }
 function drillTaskRow(t){
-  return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开任务详情">'
+  return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
     + drillName(2, '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
     + '<td>' + esc(taskStatusName(t)) + '</td>'
     + '<td class="num">' + taskPct(t) + '%</td>'
@@ -268,7 +269,7 @@ function drillGroupRow(level, key, open, badge, title, kids, openAttr){
   var head = (kids.length ? caretBtn(key, open, "展开") : caretPlaceholder())
     + (badge || "")
     + (openAttr
-      ? '<button class="manager-drill-link" type="button" data-drill-open="' + esc(openAttr) + '" title="查看任务明细">' + esc(title) + '</button>'
+      ? '<button class="manager-drill-link" type="button" data-drill-open="' + esc(openAttr) + '" title="查看工作项明细">' + esc(title) + '</button>'
       : '<span class="manager-drill-title">' + esc(title) + '</span>')
     + '<span class="manager-drill-count">' + c.done + ' / ' + kids.length + ' 完成</span>';
   return '<tr class="drill-group">'
@@ -307,7 +308,7 @@ function drillProjectRow(p){
       }).join("");
       if(un.length) rows += drillGroupRow(1, "g:" + p.reqId, !!expanded["g:" + p.reqId], "", "未归入史诗", un, "g:" + p.reqId);
     }else{
-      rows += '<tr class="drill-empty"><td colspan="11" class="manager-empty-cell">该项目还没有任务</td></tr>';
+      rows += '<tr class="drill-empty"><td colspan="11" class="manager-empty-cell">该项目还没有工作项</td></tr>';
     }
   }
   return rows;
@@ -351,9 +352,9 @@ function renderDrill(){
   }else{
     body = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
   }
-  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目全局透视</b><span>逐层展开史诗与任务</span></div>'
-    + '<div class="toolbar-right">' + drillControls() + modeSeg() + '</div></div>'
-    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数（与单项目驾驶舱同口径）；项目行统计该项目全部任务（含史诗任务本身），史诗行只统计其子任务，因此子行数字相加不等于项目行。项目名进入项目驾驶舱，史诗名称查看子任务明细，任务行打开详情。')
+  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目全局透视</b><span>逐层展开史诗与工作项</span></div>'
+    + '<div class="toolbar-right">' + drillControls() + modeSeg() + fullscreenButtonHTML() + '</div></div>'
+    + caliberHTML('进度 = Σ工作项完成度 ÷ 工作项数（与单项目驾驶舱同口径）；项目行统计该项目全部工作项（含史诗本身），史诗行只统计其子工作项，因此子行数字相加不等于项目行。项目名进入项目驾驶舱，史诗名称查看子工作项明细，工作项行打开详情。')
     + body;
 }
 function expandAllDrill(){
@@ -377,7 +378,7 @@ function exportDrill(){
   var rows = [["项目透视", pfCache.today], [],
     ["层级","名称","所属项目","状态","健康度","进度","待处理","进行中","已完成","逾期","负责人","截止","预估(小时)","实际(小时)"]];
   function taskRow(p, t){
-    rows.push(["任务", t.title, p.name, taskStatusName(t), "", taskPct(t) + "%", "", "", "", "",
+    rows.push(["工作项", t.title, p.name, taskStatusName(t), "", taskPct(t) + "%", "", "", "", "",
       t.owner || "未指派", fmtDate(t.dueDate), hoursNum(t.estimateMinutes), hoursNum(t.totalMinutes)]);
   }
   function groupRow(p, name, kids){
@@ -469,7 +470,7 @@ function onClick(e){
   var metricBtn = e.target.closest("[data-project-metric]");
   if(metricBtn){
     var kind = metricBtn.dataset.projectMetric;
-    var names = {all:"全部任务",backlog:"待处理",doing:"进行中",done:"已完成",overdue:"逾期",blocked:"被阻塞",estimate:"有预估的任务",actual:"有实际工时的任务",variance:"已完成任务工时偏差"};
+    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",done:"已完成",overdue:"逾期",blocked:"被阻塞",estimate:"有预估的工作项",actual:"有实际工时的工作项",variance:"已完成工作项工时偏差"};
     openTaskTable((cache.project.name || "项目") + " · " + names[kind], metricTasks(kind)); return;
   }
   var epic = e.target.closest("[data-epic]");
@@ -482,7 +483,7 @@ function onClick(e){
   if(member){
     var key = member.dataset.memberKey;
     var rows = (cache.tasks || []).filter(function(t){ return t.boardColumn !== "done" && (t.ownerUserId || t.owner || "unassigned") === key; });
-    openTaskTable("成员项目任务", rows);
+    openTaskTable("成员项目工作项", rows);
   }
 }
 function renderAfterModeSwitch(){

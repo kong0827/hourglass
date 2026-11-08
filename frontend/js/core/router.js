@@ -57,7 +57,7 @@ var VIEWS = {
   portfolio: { title:"项目", sub:"一屏看全部项目：健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
   project: { title:"项目驾驶舱", sub:"单项目首页：进度、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
-  risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
+  risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞工作项与站内催办", enter:lazyEnter("risks", "enterRisksView") },
   report: { title:"报表", sub:"交付图表：燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
   messages: { title:"消息", sub:"站内通知与截止提醒；与右上角通知中心同一数据", enter:lazyEnter("messages", "enterMessagesView") },
   settings: { title:"设置",     sub:"空间、成员与权限、工作流、通知与集成、数据与审计", enter:enterSettingsLazy },
@@ -147,7 +147,7 @@ function restoreScroll(name){
 function showView(name){
   /* 兼容旧入口：回收站→数据与审计、用户管理→平台 */
   if(name === "trash"){ settingsTabPending = "data"; showView("settings"); return; }
-  if(name === "users"){ settingsTabPending = "platform"; showView("settings"); return; }
+  if(name === "users"){ settingsTabPending = "account"; showView("settings"); return; }
   /* 兼容旧入口：分析页的三个页签 */
   if(name === "stats" || name === "completions" || name === "flow"){
     rt.analysisTab = name; showView("analysis"); return;
@@ -220,18 +220,34 @@ function renderSubnav(name){
     el.innerHTML = "";
     return;
   }
-  var curTab = subnavCurrentTab(navKey);
   var html = items.map(function(it){
-    var on = it.view === name && (!it.tab || it.tab === curTab);
-    var parent = !on && SUBNAV_PARENT[name] === it.view;
-    return '<button class="subnav-item' + (on ? " on" : "") + (parent ? " is-parent" : "") + '" type="button" data-sub-view="' + it.view + '"'
+    return '<button class="subnav-item" type="button" data-sub-view="' + it.view + '"'
       + (it.tab ? ' data-sub-tab="' + it.tab + '"' : "")
-      + (on ? ' aria-current="page"' : parent ? ' aria-current="location"' : "")
       + (it.title ? ' title="' + UI.esc(it.title) + '"' : "")
       + '>' + UI.esc(it.label) + '</button>';
   }).join("");
   el.innerHTML = html;
   el.hidden = false;
+  updateSubnavState(name);
+}
+/* 只同步高亮，不重建 DOM：同域切页签时保留按钮焦点 */
+function updateSubnavState(name){
+  var el = $("subNav");
+  if(!el) return;
+  name = name || activeView;
+  var navKey = NAV_OF[name] || "";
+  var items = SUBNAV[navKey];
+  if(!items) return;
+  var curTab = subnavCurrentTab(navKey);
+  el.querySelectorAll(".subnav-item").forEach(function(b){
+    var on = b.dataset.subView === name && (!b.dataset.subTab || b.dataset.subTab === curTab);
+    var parent = !on && SUBNAV_PARENT[name] === b.dataset.subView;
+    b.classList.toggle("on", on);
+    b.classList.toggle("is-parent", parent);
+    if(on) b.setAttribute("aria-current","page");
+    else if(parent) b.setAttribute("aria-current","location");
+    else b.removeAttribute("aria-current");
+  });
 }
 var subNavEl = $("subNav");
 if(subNavEl) subNavEl.addEventListener("click", function(e){
@@ -240,12 +256,12 @@ if(subNavEl) subNavEl.addEventListener("click", function(e){
   var view = b.dataset.subView, tab = b.dataset.subTab;
   if(view === "analysis" && tab) rt.analysisTab = tab;
   if(view === "testcases" && tab){
-    loadView("testcases").then(function(m){ m.setTcMode(tab); renderSubnav(activeView); });
+    loadView("testcases").then(function(m){ m.setTcMode(tab); updateSubnavState(); });
     return;
   }
   if(view === activeView){
     if(view === "analysis" && tab) loadView("analysis").then(function(m){ m.setAnalysisTab(tab); });
-    renderSubnav(activeView);
+    updateSubnavState();
     return;
   }
   showView(view);
@@ -257,7 +273,7 @@ function viewFromHash(){
   var name = q >= 0 ? raw.substring(0, q) : raw;
   var legacy = {trash:1, users:1, stats:1, completions:1, flow:1};
   if(VIEWS[name] || legacy[name]) return name;
-  /* 无 hash（登录后首次进入）统一落「我的任务」，不沿用上次停留的视图 */
+  /* 无 hash 时先落「我的工作」；登录信息就绪后 main.js 再按角色校正落点 */
   return "mine";
 }
 var suppressHashSync = false;
@@ -308,7 +324,7 @@ function refreshActiveView(opts){
   else if(activeView === "settings"){
     loadView("settings").then(function(m){
       if(m.settingsTab === "data") m.loadTrash({silent:true});
-      if(m.settingsTab === "platform") m.loadUsers(true);
+      if(m.settingsTab === "platform") m.refreshPlatformTab();
     });
   }
 }

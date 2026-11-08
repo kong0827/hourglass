@@ -14,6 +14,7 @@ import { loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen } from "../view
 import { loadView } from "./view-loader.js";
 import { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, listViewDeleted, markListViewSaved, refreshListIfOpen, renderSmartTabs } from "../views/list.js";
 import { loadMine } from "../views/mine.js";
+import { viewParamProvider } from "./view-params.js";
 
 var mfVersionQ = "";
 function applyVersionFilter(){
@@ -218,7 +219,7 @@ function renderBlockedChip(){
   var box = $("chipsBlocked");
   if(!box) return;
   if(!state.blocked){ box.innerHTML = ""; $("fgBlocked").hidden = true; return; }
-  box.innerHTML = '<button class="chip alert-today" type="button" data-blocked-filter aria-pressed="true" title="清空：只看被阻塞的任务">' +
+  box.innerHTML = '<button class="chip alert-today" type="button" data-blocked-filter aria-pressed="true" title="清空：只看被阻塞的工作项">' +
     '<i class="cdot" style="background:var(--warning)"></i>仅看被阻塞' + icon("close", 12) + '</button>';
   $("fgBlocked").hidden = false;
 }
@@ -540,6 +541,14 @@ function parseViewParams(p){
       p.hideDone !== undefined || p.sort !== undefined
   };
 }
+/* 甘特布局可能从看板/列表的通用视图条应用，此时甘特模块还没加载：
+   先把模块拉起来恢复布局，避免用户切到甘特后看到的是旧布局 */
+function hasGanttLayout(p){
+  return ["ganttGroup", "ganttGroup2", "ganttSort", "ganttCols", "ganttShowDone",
+    "ganttDensity", "ganttScale", "ganttZoom", "ganttRange"].some(function(k){
+    return p[k] !== undefined && p[k] !== null;
+  });
+}
 function applyView(v){
   var p;
   try{ p = JSON.parse(v.params); }
@@ -553,7 +562,10 @@ function applyView(v){
   state.doneScope = f.doneScope;
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
-  /* 视图 = 筛选 + 可选的列表布局；看板/列表原地应用，不强制跳到列表 */
+  /* 视图 = 筛选 + 可选的布局：甘特布局由视图自己恢复，列表布局只作用于列表 */
+  var provider = viewParamProvider(activeView);
+  if(provider && provider.apply) provider.apply(p, v);
+  else if(hasGanttLayout(p)) loadView("gantt").then(function(m){ m.applyGanttViewParams(p); });
   if(f.listConfig) applyListSavedView(v.id, f);
   reloadFilteredViews();
   toast("已应用视图「" + v.name + "」", "fs");
@@ -581,13 +593,17 @@ viewBox.addEventListener("click", function(e){
 });
 function promptSaveView(){
   var forList = activeView === "list";
-  if(!forList && !filterOn()){ toast("当前没有筛选条件，先设置筛选再保存", "warn"); return; }
+  var provider = viewParamProvider(activeView);
+  /* 甘特图等带布局参数的视图：没有筛选也可以保存（布局本身就是视图内容） */
+  if(!forList && !provider && !filterOn()){ toast("当前没有筛选条件，先设置筛选再保存", "warn"); return; }
   $("dlgViewInput").value = forList ? currentListViewName() : "";
   $("fDlgViewName").classList.remove("invalid");
   var desc = $("dlgViewName").querySelector(".desc");
   if(desc) desc.textContent = forList
     ? "保存当前筛选、分组与排序；同名保存将覆盖原视图"
-    : "保存当前筛选与列表视图设置（看板 / 列表共用）；同名保存将覆盖原视图";
+    : (provider && provider.describe
+        ? provider.describe()
+        : "保存当前筛选与列表视图设置（看板 / 列表共用）；同名保存将覆盖原视图");
   UI.openModal($("dlgViewName"));
 }
 $("btnSaveView").addEventListener("click", promptSaveView);
@@ -598,23 +614,33 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
   if(name.length > 20) name = name.slice(0, 20);
   var forList = activeView === "list";
   var params = currentFilterParams();
-  var listParams = currentListViewParams();
-  params.preset = listParams.preset;
-  params.group = listParams.group;
-  params.subgroup = listParams.subgroup;
-  params.hideDone = listParams.hideDone;
-  params.sort = listParams.sort;
-  params.sortDir = listParams.sortDir;
+  var provider = viewParamProvider(activeView);
+  if(provider && provider.capture){
+    var extra = provider.capture();
+    for(var k in extra) if(Object.prototype.hasOwnProperty.call(extra, k)) params[k] = extra[k];
+  }
+  /* 甘特视图只表达甘特布局：不写列表布局，避免应用时顺带改掉列表设置 */
+  if(!(provider && provider.skipListConfig)){
+    var listParams = currentListViewParams();
+    params.preset = listParams.preset;
+    params.group = listParams.group;
+    params.subgroup = listParams.subgroup;
+    params.hideDone = listParams.hideDone;
+    params.sort = listParams.sort;
+    params.sortDir = listParams.sortDir;
+  }
   var overwrite = savedViewsFor("task").some(function(v){ return v.name === name; });
   var submitBtn = $("dlgViewNameOk");
   submitBtn.disabled = true;
   API.post("/api/views", { name: name, params: JSON.stringify(params) }).then(function(saved){
     submitBtn.disabled = false;
     UI.closeModal($("dlgViewName"));
-    if(saved) markListViewSaved(saved.id);
+    /* 甘特视图不写列表布局，也不要把列表的当前视图改到它上面 */
+    if(saved && !(provider && provider.skipListConfig)) markListViewSaved(saved.id);
     toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
-    loadViews();
-    if(activeView === "gantt") loadView("gantt").then(function(m){ m.renderGanttViewsMenu(); });
+    loadViews().then(function(){
+      if(activeView === "gantt") loadView("gantt").then(function(m){ m.renderGanttViewsMenu(); });
+    });
   }).catch(function(ex){ submitBtn.disabled = false; toast(ex.message || "保存失败", "bad"); });
 });
 

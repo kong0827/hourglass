@@ -151,7 +151,7 @@ function renderMobileCalendar(){
       '<div class="cwd-head">' +
         '<span class="cwd-dn">' + day.getDate() + '</span>' +
         '<span class="cwd-dw">' + weekdayCN(day) + '</span>' +
-        '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无任务") + '</span>' +
+        '<span class="cwd-n">' + (list.length ? list.length + " 项" : "无工作项") + '</span>' +
         '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' + icon("plus", 12) + '</button>' +
       '</div>' +
       (rows ? '<div class="cwd-tasks">' + rows + '</div>' : '') +
@@ -222,10 +222,10 @@ function renderCalendar(){
         (t.owner ? '<span class="cal-own" aria-label="负责人 ' + esc(t.owner) + '">' + esc(t.owner.slice(-1)) + '</span>' : '') +
         '</button>';
     }
-    if(visible.length > 3) chips += '<button type="button" class="cal-more" title="查看当天全部任务">+' + (visible.length - 3) + ' 更多</button>';
+    if(visible.length > 3) chips += '<button type="button" class="cal-more" title="查看当天全部工作项">+' + (visible.length - 3) + ' 更多</button>';
     if(doneItems.length && !expanded){
       chips += '<button type="button" class="cal-chip done cal-done-toggle" data-cal-show-done="' + dateIso +
-        '" title="展开当天已完成的任务">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
+        '" title="展开当天已完成的工作项">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';
     }
     html += '<div class="' + cls + '" data-cal-date="' + dateIso + '" role="button" tabindex="0" aria-label="' + dateIso + '">' +
       '<button class="cal-add" type="button" data-cal-add="' + dateIso + '" title="在这一天新建工作项" aria-label="在 ' + dateIso + ' 新建工作项">' +
@@ -253,11 +253,11 @@ function openNewTaskOnDate(dateIso){
       unplannedList.innerHTML = items.length
         ? items.slice(0, 50).map(function(t){ return cardHTML(t, 0); }).join("") +
           (items.length > 50 ? '<p class="foot-note">仅显示前 50 项，共 ' + items.length + ' 项未排期</p>' : "")
-        : UI.colEmpty("本月没有未排期的任务：所有任务都已有截止日期。");
+        : UI.colEmpty("本月没有未排期的工作项：所有工作项都已有截止日期。");
     }
   }).catch(function(){
     if(unplannedCount) unplannedCount.textContent = "—";
-    if(unplannedList) unplannedList.innerHTML = UI.colEmpty("未排期任务加载失败（该接口需要后端支持）");
+    if(unplannedList) unplannedList.innerHTML = UI.colEmpty("未排期工作项加载失败（该接口需要后端支持）");
   });
 }
 function wireCardContainer(root){
@@ -282,7 +282,7 @@ function wireCardContainer(root){
 function renderCalDayList(){
   if(!calState.selected){
     calDayList.innerHTML = '<div class="empty-state compact"><span class="es-ic">' + icon("calendar", 40) + '</span>' +
-      '<p>点击左侧日期查看当天全部截止任务</p></div>';
+      '<p>点击左侧日期查看当天全部截止工作项</p></div>';
     return;
   }
   var sel = parseDate(calState.selected);
@@ -298,11 +298,11 @@ function renderCalDayList(){
   var showDone = !!calState.showDone[selIso];
   var html = '<div class="cal-side-head">' +
       '<h3>' + fmtMD(sel) + ' ' + weekdayCN(sel) + '</h3>' +
-      '<span class="foot-note">共 ' + list.length + ' 项任务</span>' +
+      '<span class="foot-note">共 ' + list.length + ' 项工作项</span>' +
     '</div>';
   html += '<div class="cal-side-list">' + (openList.length
     ? openList.map(function(t){ return cardHTML(t, 0); }).join("")
-    : UI.colEmpty("当日没有进行中的任务", "inbox"));
+    : UI.colEmpty("当日没有进行中的工作项", "inbox"));
   if(doneList.length){
     html += '<button class="btn sm ghost cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
       (showDone ? "收起已完成" : "展开 " + doneList.length + " 项已完成") + '</button>';

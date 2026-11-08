@@ -6,6 +6,7 @@ import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours } from "./manager-shared.js";
+import { fullscreenButtonHTML } from "../core/fullscreen.js";
 
 var cache = null, seq = 0, reqId = "";
 function reportThemeColors(){
@@ -190,8 +191,8 @@ function projectOptions(){
   return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
 }
 function renderReport(){
-  $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>交付图表</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button></div></div>'
-    + caliberHTML('燃尽 = 总预估 − 截至当日已完成任务实际工时；速度按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与任务、计时数据同源。')
+  $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>交付图表</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
+    + caliberHTML('燃尽 = 总预估 − 截至当日已完成工作项实际工时；速度按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
 }
@@ -200,11 +201,11 @@ function exportCsv(){
   var rows = [["交付图表", reqId ? (rt.reqList.filter(function(r){ return r.id === reqId; })[0] || {}).name : "全部项目"], [],
     ["燃尽日期","剩余分钟","理想分钟"]];
   ((cache.burndown || {}).points || []).forEach(function(p){ rows.push([p.date,p.remainingMinutes,p.idealMinutes]); });
-  rows.push([],["速度周开始","完成分钟","完成任务数"]);
+  rows.push([],["速度周开始","完成分钟","完成工作项数"]);
   ((cache.velocity || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.completedMinutes,w.completedCount]); });
   rows.push([],["累积流周开始","待处理","进行中","已完成"]);
   ((cache.flow || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.backlog,w.doing,w.done]); });
-  rows.push([],["交付周期","任务数","占比"]);
+  rows.push([],["交付周期","工作项数","占比"]);
   ((cache.delivery || {}).buckets || []).forEach(function(b){ rows.push([b.label,b.count,b.pct + "%"]); });
   rows.push([],["缺陷周开始","新增","关闭","周末存量"]);
   ((cache.defects || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.opened,w.closed,w.open]); });

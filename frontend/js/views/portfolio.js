@@ -8,6 +8,7 @@ import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML } from "../lib/format.js";
 import { icon } from "../core/icons.js";
+import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { caliberHTML, downloadCsv, fmtHours, openTaskTable } from "./manager-shared.js";
 
 var cache = null, seq = 0;
@@ -94,7 +95,7 @@ function pfCell(p, key){
   if(key === "backlog" || key === "doing" || key === "done" || key === "overdue"){
     var v = p[key] || 0;
     var cls = (key === "overdue" && v) ? "over" : "";
-    return '<td class="num"><button type="button" class="' + cls + '" style="font:inherit;color:inherit" data-project-drill="' + esc(p.reqId) + '" data-metric="' + key + '" title="查看任务明细"><b>' + v + '</b></button></td>';
+    return '<td class="num"><button type="button" class="' + cls + '" style="font:inherit;color:inherit" data-project-drill="' + esc(p.reqId) + '" data-metric="' + key + '" title="查看工作项明细"><b>' + v + '</b></button></td>';
   }
   return '<td class="num">' + (p[key] === null || p[key] === undefined ? "—" : p[key]) + '</td>';
 }
@@ -118,23 +119,23 @@ function renderPortfolio(){
     + '</div>'
     + '<button class="btn sm" type="button" id="btnPortfolioColumns"' + (mode === "table" ? "" : " hidden") + '>显示字段</button>';
   $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>全局健康度</b><span>全部项目 · 点击指标查看明细，点项目名进入项目驾驶舱</span></div>'
-    + '<div class="toolbar-right">' + seg
+    + '<div class="toolbar-right">' + seg + fullscreenButtonHTML()
     + '<button class="btn sm" type="button" data-portfolio-export>导出周报</button></div></div>'
-    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数；红灯 = 逾期占比 &gt;10% 且连续 7 天无完成，橙灯 = 有逾期或成员超载。')
+    + caliberHTML('进度 = Σ工作项完成度 ÷ 工作项数；红灯 = 逾期占比 &gt;10% 且连续 7 天无完成，橙灯 = 有逾期或成员超载。')
     + '<div class="manager-kpis">'
     + kpi("进行中项目", active + '<small> / ' + projects.length + '</small>', "共 " + projects.length + " 个项目", "projects")
-    + kpi("逾期任务", k.overdueTasks || 0, "未完成任务", "overdue", k.overdueTasks ? "danger" : "")
+    + kpi("逾期工作项", k.overdueTasks || 0, "未完成工作项", "overdue", k.overdueTasks ? "danger" : "")
     + kpi("本周完成", k.weekCompleted || 0, "按完成时间归周", "weekDone")
     + kpi("本周团队工时", fmtHours(k.weekWorkMinutes), "自动计时汇总", "hours") + '</div>'
     + (mode === "table"
-      ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入任务。"}))
+      ? (projects.length ? projectTable(projects) : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"}))
       : '<div class="manager-legend"><span><i class="manager-light green"></i>正常</span><span><i class="manager-light orange"></i>有逾期或超载</span><span><i class="manager-light red"></i>逾期与停滞叠加</span></div>'
         + (projects.length ? '<div class="manager-project-grid" id="portfolioProjects">' + projects.map(projectCard).join("") + '</div>'
-          : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入任务。"})));
+          : UI.emptyState({icon:"folder", title:"还没有项目", text:"先在空间里创建项目并归入工作项。"})));
 }
 function exportPortfolio(){
   if(!cache) return;
-  var rows = [["项目周报", cache.today], [], ["项目","状态","健康度","总任务","待处理","进行中","已完成","逾期","阻塞","完成率","本周完成","本周工时(分钟)","预估(分钟)","实际(分钟)","超载人数","连续无完成天数"]];
+  var rows = [["项目周报", cache.today], [], ["项目","状态","健康度","总工作项","待处理","进行中","已完成","逾期","阻塞","完成率","本周完成","本周工时(分钟)","预估(分钟)","实际(分钟)","超载人数","连续无完成天数"]];
   (cache.projects || []).forEach(function(p){
     rows.push([p.name,p.status,p.health,p.total,p.backlog,p.doing,p.done,p.overdue,p.blocked,p.progressPct + "%",p.weekCompleted,p.weekWorkMinutes,p.estimateMinutes,p.actualMinutes,p.overloadedMembers,p.stagnantDays]);
   });
@@ -161,7 +162,7 @@ function openActiveProjects(){
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目驾驶舱，卡片下钻可见任务明细</div></div>'
+    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目驾驶舱，卡片下钻可见工作项明细</div></div>'
     + '<button class="icon-btn sm" type="button" data-kpi-projects-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>项目</th><th>健康度</th><th class="num">进度</th><th class="num">待处理</th><th class="num">进行中</th><th class="num">已完成</th><th class="num">逾期</th><th>成员</th>'
@@ -211,7 +212,7 @@ function onClick(e){
     });
     openTaskTable("本周团队工时", rows, "实际列显示本周计时 · 合计 " + fmtHours((cache.kpis || {}).weekWorkMinutes));
   }else{
-    openTaskTable(kind === "overdue" ? "全部逾期任务" : "本周完成任务", tasksFor(null, kind));
+    openTaskTable(kind === "overdue" ? "全部逾期工作项" : "本周完成工作项", tasksFor(null, kind));
   }
 }
 if($("portfolioBody")) $("portfolioBody").addEventListener("click", onClick);

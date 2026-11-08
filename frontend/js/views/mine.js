@@ -1,4 +1,4 @@
-/* views/mine · 我的任务（分页 + 分组 + 行内操作） */
+/* views/mine · 我的工作（分页 + 分组 + 行内操作） */
 
 import { API } from "../core/api.js";
 import { btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter } from "../core/dom.js";
@@ -26,7 +26,7 @@ function askSwitchWorkspace(wsId, wsName, opts){
   opts = opts || {};
   var target = wsName || wsNameById(wsId);
   var msg = opts.taskTitle
-    ? ('即将切换到「' + esc(target) + '」并打开任务「' + esc(opts.taskTitle) + '」。<br><br>' +
+    ? ('即将切换到「' + esc(target) + '」并打开工作项「' + esc(opts.taskTitle) + '」。<br><br>' +
        '当前空间的筛选条件、抽屉里未保存的编辑都不会保留。')
     : opts.linkTitle
       ? ('即将切换到「' + esc(target) + '」并打开通知关联内容「' + esc(opts.linkTitle) + '」。<br><br>' +
@@ -250,7 +250,7 @@ function mineRowHTML(t){
       (editable ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
       ((editable || running) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
         ((!running && !tAllowed) ? " disabled" : "") +
-        ' title="' + (running ? "停止计时" : (tAllowed ? "开始计时" : "待处理/已完成的任务不能计时，移到进行中后再开始")) + '"' +
+        ' title="' + (running ? "停止计时" : (tAllowed ? "开始计时" : "待处理/已完成的工作项不能计时，移到进行中后再开始")) + '"' +
         ' aria-label="开始或停止计时">' + icon(running ? "pause" : "clock", 14) + '</button>' : '') +
       (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
     '</span>' +
@@ -302,15 +302,15 @@ function withReqNames(items){
 function openTeamRiskTasks(kind){
   var params = kind === "blocked" ? { blocked: true, limit: 100 } : { due: "over", limit: 100 };
   API.get("/api/tasks/list", params).then(function(r){
-    openTaskTable(kind === "blocked" ? "被阻塞任务" : "逾期任务", withReqNames(r && r.items),
-      "团队视图 · 点击任务行打开详情");
-  }).catch(function(err){ toast(err && err.message ? err.message : "任务加载失败", "bad"); });
+    openTaskTable(kind === "blocked" ? "被阻塞工作项" : "逾期工作项", withReqNames(r && r.items),
+      "团队视图 · 点击工作项行打开详情");
+  }).catch(function(err){ toast(err && err.message ? err.message : "工作项加载失败", "bad"); });
 }
 function openMemberTasks(name){
   API.get("/api/tasks/list", { owners: name, limit: 100 }).then(function(r){
-    openTaskTable(name + " · 未完成任务", withReqNames(r && r.items),
-      "团队视图 · 点击任务行打开详情");
-  }).catch(function(err){ toast(err && err.message ? err.message : "任务加载失败", "bad"); });
+    openTaskTable(name + " · 未完成工作项", withReqNames(r && r.items),
+      "团队视图 · 点击工作项行打开详情");
+  }).catch(function(err){ toast(err && err.message ? err.message : "工作项加载失败", "bad"); });
 }
 function teamSectionError(err, title){
   if(err && err.code === 4030){
@@ -360,8 +360,8 @@ function renderTeam(opts){
             (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
         '<div class="th-grid">' +
           '<div><b>' + (h.doneCount || 0) + '/' + (h.planCount || 0) + '</b><span>完成 / 计划</span></div>' +
-          '<button type="button" class="danger" data-team-risk="over" title="查看逾期任务"><b>' + (h.overdue || 0) + '</b><span>已逾期</span></button>' +
-          '<button type="button" class="warn" data-team-risk="blocked" title="查看被阻塞任务"><b>' + (h.blocked || 0) + '</b><span>被阻塞</span></button>' +
+          '<button type="button" class="danger" data-team-risk="over" title="查看逾期工作项"><b>' + (h.overdue || 0) + '</b><span>已逾期</span></button>' +
+          '<button type="button" class="warn" data-team-risk="blocked" title="查看被阻塞工作项"><b>' + (h.blocked || 0) + '</b><span>被阻塞</span></button>' +
         '</div>' +
       '</section>' +
       '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>' +
@@ -371,16 +371,16 @@ function renderTeam(opts){
           '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
         '</div></section>';
 
-    html += '<section class="team-card"><div class="tc-head"><h3>风险任务</h3><span class="foot-note">' + riskList.length + ' 项</span></div>' +
+    html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项</span></div>' +
       (riskList.length ? '<div class="team-risks">' + riskList.map(function(r){
         var lv = r.level === "high" ? "high" : "mid";
         return '<div class="team-risk ' + lv + '" data-team-task="' + esc(r.taskId) + '" role="button" tabindex="0">' +
           '<i class="tr-dot"></i>' +
-          '<div class="tr-main"><b>' + esc(r.title || "未命名任务") + '</b>' +
+          '<div class="tr-main"><b>' + esc(r.title || "未命名工作项") + '</b>' +
             '<span>' + esc(r.ownerName || "未指派") + ' · ' + esc(r.reason || "") + '</span></div>' +
           (r.dayCount ? '<span class="tr-days">' + r.dayCount + ' 天</span>' : '') +
         '</div>';
-      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"本周没有风险任务", compact:true})) +
+      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"本周没有风险工作项", compact:true})) +
       '</section>';
 
     if(workload.__err){
@@ -391,7 +391,7 @@ function renderTeam(opts){
         (members.length ? '<div class="team-load">' + members.map(function(m){
           var pct = Math.round((Number(m.percent) || 0) * 100);
           var cls = pct > 100 ? "over" : (pct >= 90 ? "near" : "");
-          return '<button type="button" class="tl-row" data-team-member="' + esc(m.name || "") + '" title="查看该成员未完成任务">' +
+          return '<button type="button" class="tl-row" data-team-member="' + esc(m.name || "") + '" title="查看该成员未完成工作项">' +
             '<div class="tl-top"><b>' + esc(m.name || "—") + '</b><span>' + hm(m.actualMinutes) + ' / ' + hm(m.plannedMinutes) + '</span></div>' +
             '<div class="tl-bar"><i class="' + cls + '" style="width:' + Math.min(pct, 100) + '%"></i></div>' +
             '<span class="tl-pct ' + cls + '">' + pct + '%</span>' +
@@ -455,7 +455,7 @@ function mobileMineCardHTML(t){
       '<span class="sp"></span>' +
       '<button class="mtc-ico' + (running ? " on" : "") + '" type="button" data-mine-timer' +
         ((!running && !tAllowed) ? " disabled" : "") +
-        ' title="' + (running ? "停止计时" : (tAllowed ? "开始计时" : "待处理/已完成的任务不能计时")) + '" aria-label="开始或停止计时">' +
+        ' title="' + (running ? "停止计时" : (tAllowed ? "开始计时" : "待处理/已完成的工作项不能计时")) + '" aria-label="开始或停止计时">' +
         icon(running ? "pause" : "clock", 15) + '</button>' +
     '</div>' +
     '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
@@ -532,7 +532,7 @@ function renderMine(d, append){
   }
   if(!items.length){
     mineBody.innerHTML = UI.emptyState({
-      icon:"filterOff", title:"当前筛选下没有任务", compact:true,
+      icon:"filterOff", title:"当前筛选下没有工作项", compact:true,
       text:"试着放宽顶栏筛选条件，或切换空间。",
       actionLabel:"清除筛选"
     }) + mineMoreHTML();
@@ -589,7 +589,7 @@ function mineToggleTimer(t){
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 停止自己的计时不受项目可见范围限制（与后端一致），只拦「开始」 */
   if(!running && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(!running && !timerAllowed(t)){ toast("只有「进行中」的任务才能计时，请先把任务移到进行中", "warn"); return; }
+  if(!running && !timerAllowed(t)){ toast("只有「进行中」的工作项才能计时，请先把工作项移到进行中", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
       /* 乐观更新本地状态并立即重渲染：不等 /my-running-timer 往返，行内图标即刻切换 */
@@ -657,7 +657,7 @@ if(mineBody){
     if(wsId && rt.currentWs && wsId !== rt.currentWs.id){
       var rowTitle = row.querySelector(".lr-t");
       askSwitchWorkspace(wsId, wsNameById(wsId), {
-        title: "打开其他空间的任务",
+        title: "打开其他空间的工作项",
         okText: "切换并打开",
         taskTitle: rowTitle ? rowTitle.textContent : "",
         openTaskId: id

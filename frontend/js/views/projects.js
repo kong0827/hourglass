@@ -384,7 +384,7 @@ function toggleArchive(id){
   if(!archiving){ apply(); return; }
   UI.showConfirm({
     title: "归档项目",
-    msg: "归档「" + esc(r.name) + "」后将从默认项目列表与项目切换器中隐藏，任务与文档数据完整保留，可随时恢复。",
+    msg: "归档「" + esc(r.name) + "」后将从默认项目列表与项目切换器中隐藏，工作项与文档数据完整保留，可随时恢复。",
     danger: false,
     okText: "归档"
   }).then(function(ok){ if(ok) apply(); });

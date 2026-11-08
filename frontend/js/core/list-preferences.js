@@ -9,7 +9,7 @@ var DEFS = {
     mode: "table",
     modes: ["table"],
     required: "title",
-    labels: { title:"任务", type:"类型", column:"看板列", priority:"优先级", owner:"负责人", dueDate:"截止日期", progress:"进度", project:"项目", version:"影响版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新时间" },
+    labels: { title:"工作项", type:"类型", column:"看板列", priority:"优先级", owner:"负责人", dueDate:"截止日期", progress:"进度", project:"项目", version:"影响版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新时间" },
     defaults: ["title","type","column","priority","owner","dueDate","progress","project","version"]
   },
   "project-list": {
@@ -23,14 +23,14 @@ var DEFS = {
     mode: "card",
     modes: ["card", "table"],
     required: "name",
-    labels: { name:"项目", status:"状态", health:"健康度", total:"总任务", backlog:"待处理", doing:"进行中", done:"已完成", overdue:"逾期", blocked:"阻塞", progress:"完成率", weekCompleted:"本周完成", weekWorkMinutes:"本周工时", members:"成员" },
+    labels: { name:"项目", status:"状态", health:"健康度", total:"总工作项", backlog:"待处理", doing:"进行中", done:"已完成", overdue:"逾期", blocked:"阻塞", progress:"完成率", weekCompleted:"本周完成", weekWorkMinutes:"本周工时", members:"成员" },
     defaults: ["name","status","health","total","backlog","doing","done","overdue","progress"]
   },
   "project-view": {
     mode: "board",
     modes: ["board", "drill"],
     required: "name",
-    labels: { name:"名称", status:"状态", health:"健康度", total:"总任务", backlog:"待处理", doing:"进行中", done:"已完成", overdue:"逾期", progress:"进度", owner:"负责人", dueDate:"截止", estimate:"预估", actual:"实际" },
+    labels: { name:"名称", status:"状态", health:"健康度", total:"总工作项", backlog:"待处理", doing:"进行中", done:"已完成", overdue:"逾期", progress:"进度", owner:"负责人", dueDate:"截止", estimate:"预估", actual:"实际" },
     defaults: ["name","status","health","backlog","doing","done","overdue","progress"]
   },
   "demand-pool": {

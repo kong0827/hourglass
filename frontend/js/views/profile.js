@@ -52,16 +52,16 @@ function enterProfileView(){
   loadNotificationPreferences();
 }
 var NOTIFY_EVENTS = {
-  task_assigned: ["任务指派", "任务创建或负责人变更后指派给我"],
-  task_comment: ["评论与@", "我负责的任务有新评论，或评论中被 @ 提及"],
-  task_watch: ["我关注的任务", "关注的任务有新评论、列流转、移入回收站或恢复"],
-  task_updated: ["任务变更与提醒", "我负责的任务字段变更、移列、移入回收站或恢复"],
+  task_assigned: ["工作项指派", "工作项创建或负责人变更后指派给我"],
+  task_comment: ["评论与@", "我负责的工作项有新评论，或评论中被 @ 提及"],
+  task_watch: ["我关注的工作项", "关注的工作项有新评论、列流转、移入回收站或恢复"],
+  task_updated: ["工作项变更与提醒", "我负责的工作项字段变更、移列、移入回收站或恢复"],
   demand_status: ["需求与版本动态", "我提交的需求、负责的文档与分支状态变化，或所在版本发布/删除"],
-  daily_digest: ["每日任务汇总", "每天 09:00 汇总我负责的逾期/今日到期任务（仅站内）"]
+  daily_digest: ["每日工作项汇总", "每天 09:00 汇总我负责的逾期/今日到期工作项（仅站内）"]
 };
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
-  { title: "任务", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
+  { title: "工作项", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
   { title: "需求与版本", types: ["demand_status"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];

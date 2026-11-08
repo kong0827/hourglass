@@ -24,13 +24,13 @@ function openTaskById(id){
   /* 路径用单数 /api/task/{id}：与 /api/tasks/list、/api/tasks/done 零歧义 */
   return API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
     if(seq !== openTaskSeq) return false;
-    if(!t){ toast("任务不存在或你没有访问权限", "warn"); return false; }
-    if(t.deletedAt){ toast("该任务已被删除，可在回收站查看", "warn"); return false; }
+    if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return false; }
+    if(t.deletedAt){ toast("该工作项已被删除，可在回收站查看", "warn"); return false; }
     taskCacheExtra[t.id] = t;
     openTaskDrawer(null, t);
     return true;
   }).catch(function(){
-    if(seq === openTaskSeq) toast("任务不存在或你没有访问权限", "warn");
+    if(seq === openTaskSeq) toast("工作项不存在或你没有访问权限", "warn");
     return false;
   });
 }
@@ -145,9 +145,9 @@ function renderTimerPill(){
   var rt = state.runningTimer;
   pill.hidden = !rt;
   if(!rt) return;
-  var name = rt.taskTitle || "任务";
+  var name = rt.taskTitle || "工作项";
   $("timerPillName").textContent = name;
-  pill.title = "正在计时：" + name + "（点击打开任务）";
+  pill.title = "正在计时：" + name + "（点击打开工作项）";
   updateElapsedTexts();
 }
 function updateElapsedTexts(){
@@ -163,7 +163,7 @@ function toggleTaskTimer(taskId){
   var t = taskById(taskId);
   /* 停止自己已开始的计时始终允许（避免降权后计时卡死）；开始新计时需要项目写权限 */
   if(!on && t && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  var name = t ? t.title : ((prev && prev.taskTitle) || "任务");
+  var name = t ? t.title : ((prev && prev.taskTitle) || "工作项");
   var url = "/api/tasks/" + encodeURIComponent(taskId) + "/timer/" + (on ? "stop" : "start");
   API.post(url, {}).then(function(d){
     if(on){
@@ -171,7 +171,7 @@ function toggleTaskTimer(taskId){
       toast("已停止「" + name + "」的计时" + (total ? "，累计 " + fmtMinutesShort(total) : ""), "fs");
     }else if(prev && prev.taskId && prev.taskId !== taskId){
       var other = taskById(prev.taskId);
-      var otherName = other ? other.title : (prev.taskTitle || "另一个任务");
+      var otherName = other ? other.title : (prev.taskTitle || "另一个工作项");
       toast("已开始「" + name + "」的计时 · 自动暂停了「" + otherName + "」", "fs");
     }else{
       toast("已开始「" + name + "」的计时", "fs");
@@ -233,8 +233,8 @@ function toggleTaskDone(taskId){
     var task = res.task;
     var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
     var doneMsg = dd > 0
-      ? ("已完成任务「" + task.title + "」，延期 " + dd + " 天完成")
-      : ("已完成任务「" + task.title + "」，按期完成");
+      ? ("已完成工作项「" + task.title + "」，延期 " + dd + " 天完成")
+      : ("已完成工作项「" + task.title + "」，按期完成");
     if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
     toast(doneMsg, dd > 0 ? "warn" : "fs");
     loadBoard({animate:false, movedId: task.id});
@@ -264,7 +264,7 @@ function openCardMenu(anchor, taskId){
   }
   html +=
     '<button class="menu-item" type="button" data-cm="copy">' + icon("copy", 14) + '复制标题</button>' +
-    '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制任务链接</button>';
+    '<button class="menu-item" type="button" data-cm="link">' + icon("extlink", 14) + '复制工作项链接</button>';
   var others = editable ? COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }) : [];
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
@@ -296,7 +296,7 @@ function openCardMenu(anchor, taskId){
       else if(k === "done") toggleTaskDone(t.id);
       else if(k === "timer") toggleTaskTimer(t.id);
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");
-      else if(k === "link") copyToClipboard(taskLink(t.id), "任务链接已复制（可直接定位到该任务）");
+      else if(k === "link") copyToClipboard(taskLink(t.id), "工作项链接已复制（可直接定位到该工作项）");
       else if(k === "del") deleteTask(t.id);
       return;
     }

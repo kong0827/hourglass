@@ -271,7 +271,7 @@ function noticeListHTML(){
   if(!notifyState.items.length){
     return '<div class="ap-empty">' + icon("checkCircle", 22) +
       '<div style="margin-top:6px">还没有通知</div>' +
-      '<div class="ap-empty-sub">任务到点提醒、评论与指派都会出现在这里</div></div>';
+      '<div class="ap-empty-sub">工作项到点提醒、评论与指派都会出现在这里</div></div>';
   }
   var items = notifyState.items;
   if(rt.noticeFilter === "unread") items = items.filter(function(x){ return !x.readAt; });
@@ -358,7 +358,7 @@ function dueGroupsHTML(){
   group("today","今天到期", g.today);
   group("soon","3 天内", g.soon);
   if(!total){
-    html += '<div class="ap-empty">' + icon("checkCircle", 22) + '<div style="margin-top:6px">节奏健康，没有逾期或临期任务</div></div>';
+    html += '<div class="ap-empty">' + icon("checkCircle", 22) + '<div style="margin-top:6px">节奏健康，没有逾期或临期工作项</div></div>';
   }
   return html;
 }
@@ -529,7 +529,7 @@ function openFromNotification(ds){
   if(wsId && rt.currentWs && wsId !== rt.currentWs.id){
     /* 跨空间通知：先二次确认（切空间会 reload，别让人点一下就被带走） */
     askSwitchWorkspace(wsId, (item && item.workspaceName) || wsNameById(wsId), taskId ? {
-      title: "打开其他空间的任务",
+      title: "打开其他空间的工作项",
       okText: "切换并打开",
       taskTitle: item ? item.title : "",
       openTaskId: taskId

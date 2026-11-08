@@ -43,7 +43,7 @@ var COL_WIDTHS = { title:"minmax(160px,1fr)", type:"80px", column:"96px", priori
 function renderSmartTabs(){
   updateMobFilterSummary();
   if(!smartTabs) return;
-  var presets = [["all","全部任务"],["mine","我的任务"],["doing","进行中"],["over","已逾期"]];
+  var presets = [["all","全部工作项"],["mine","分派给我"],["doing","进行中"],["over","已逾期"]];
   var html = presets.map(function(p){
     var on = smart.current === p[0];
     return '<button class="smart-view-tab' + (on ? ' on' : '') + '" type="button" role="tab" aria-selected="' + on + '" data-list-preset="' + p[0] + '">' + p[1] + '</button>';
@@ -64,7 +64,7 @@ function syncSmartControls(){
   if(hideBtn){
     hideBtn.setAttribute("aria-pressed", smart.hideDone ? "true" : "false");
     hideBtn.classList.toggle("on", smart.hideDone);
-    hideBtn.title = smart.hideDone ? "当前已隐藏已完成（点击显示）" : "隐藏已完成任务，聚焦未完成项";
+    hideBtn.title = smart.hideDone ? "当前已隐藏已完成（点击显示）" : "隐藏已完成工作项，聚焦未完成项";
   }
   if(listSort) listSort.value = smart.sort;
   syncSortDirUI();
@@ -515,13 +515,13 @@ function taskCsvValue(t, key){
 }
 function exportListCsv(){
   var rows = currentViewRows();
-  if(!rows.length){ toast("当前视图没有可导出的任务", "warn"); return; }
+  if(!rows.length){ toast("当前视图没有可导出的工作项", "warn"); return; }
   var columns = listPrefs.columns("task-list"), labels = listPrefs.labels("task-list");
   var lines = [columns.map(function(key){ return labels[key]; })];
   rows.forEach(function(t){ lines.push(columns.map(function(key){ return taskCsvValue(t, key); })); });
   var csv = "\uFEFF" + lines.map(function(line){ return line.map(csvCell).join(","); }).join("\r\n");
-  var presetNames = {all:"全部任务", mine:"我的任务", doing:"进行中", over:"已逾期"};
-  var name = currentListViewName() || presetNames[smart.preset] || "任务列表";
+  var presetNames = {all:"全部工作项", mine:"分派给我", doing:"进行中", over:"已逾期"};
+  var name = currentListViewName() || presetNames[smart.preset] || "工作项列表";
   name = name.replace(/[\\/:*?"<>|]/g, "-");
   triggerDownload(name + "-" + rt.TODAY_ISO + ".csv", csv, "text/csv;charset=utf-8;");
   toast("已导出当前视图 " + rows.length + " 项", "fs");
@@ -618,7 +618,7 @@ function renderListItems(items){
     return '<div class="list-row" data-list-id="' + esc(t.id) + '" tabindex="0" role="row">' +
       '<span><input type="checkbox" class="cbx" data-row-check="' + esc(t.id) + '"' +
         (editable ? '' : ' disabled title="只读项目不可批量操作"') +
-        ' aria-label="选择任务：' + esc(t.title) + '"' + (keepSelected[t.id] ? ' checked' : '') + ' /></span>' +
+        ' aria-label="选择工作项：' + esc(t.title) + '"' + (keepSelected[t.id] ? ' checked' : '') + ' /></span>' +
       visibleColumns.map(function(key){ return taskCell(t, key, hasTypeCol); }).join("") +
       '<span class="cell-act"><button class="icon-btn sm" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 15) + '</button></span></div>';
   }
@@ -871,7 +871,7 @@ btnListBulk.addEventListener("click", function(){
   if(!ids.length) return;
   UI.showConfirm({
     title:"批量移入回收站",
-    msg:"将把选中的 <b>" + ids.length + "</b> 项任务移入回收站（30 天内可恢复）。确定继续？",
+    msg:"将把选中的 <b>" + ids.length + "</b> 项工作项移入回收站（30 天内可恢复）。确定继续？",
     okText:"移到回收站"
   }).then(function(ok){
     if(!ok) return;
@@ -932,7 +932,7 @@ function openRowMenu(anchor, id){
   }
   html +=
     '<button class="menu-item" type="button" data-row-act="copy">' + icon("copy", 14) + '复制标题</button>' +
-    '<button class="menu-item" type="button" data-row-act="link">' + icon("extlink", 14) + '复制任务链接</button>';
+    '<button class="menu-item" type="button" data-row-act="link">' + icon("extlink", 14) + '复制工作项链接</button>';
   var others = editable ? COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }) : [];
   if(others.length){
     html += '<div class="menu-sep"></div><div class="menu-title">移动到</div>';
@@ -960,7 +960,7 @@ function openRowMenu(anchor, id){
       }else if(k === "edit") openTaskDrawer(null, t);
       else if(k === "done") toggleTaskDone(t.id);
       else if(k === "timer") toggleTaskTimer(t.id);
-      else if(k === "link") copyToClipboard(taskLink(t.id), "任务链接已复制（可直接定位到该任务）");
+      else if(k === "link") copyToClipboard(taskLink(t.id), "工作项链接已复制（可直接定位到该工作项）");
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");
       else if(k === "del") deleteTask(t.id);
       return;

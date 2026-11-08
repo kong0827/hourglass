@@ -39,7 +39,7 @@ var branchOptionCache = {};      /* projectId → 下拉选项 */
 var brDrawerId = null;
 var brEditingId = null;
 var dragBranch = null;        /* 拖动中的分支卡片 { id, status } */
-var branchSelectProject = ""; /* 任务抽屉里「所属分支」当前的项目过滤（后台刷新时不能丢） */
+var branchSelectProject = ""; /* 工作项抽屉里「所属分支」当前的项目过滤（后台刷新时不能丢） */
 var reqsPending = null;       /* 项目列表加载中，避免多个下拉各自重复请求 */
 var reqsTried = false;
 function ensureReqs(cb){
@@ -223,6 +223,8 @@ function branchCycleAvg(){
 function renderBranches(){
   var box = $("branchGroups");
   if(!box) return;
+  /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
+  box.classList.toggle("br-list-mode", branchViewMode === "list");
   var st = branchStat();
   var meta = $("branchMeta");
   var projectFilterName = branchProjectFilter ? (projectNameById(branchProjectFilter) || "") : "";
@@ -587,7 +589,7 @@ function deleteBranch(id){
   UI.showConfirm({
     title: "删除分支",
     msg: "「" + esc(b.name) + "」将被删除，操作记录一起清掉" +
-      (n ? ("；挂在它上面的 " + n + " 个任务会解除关联（任务本身保留）") : "") + "。确定删除？",
+      (n ? ("；挂在它上面的 " + n + " 个工作项会解除关联（工作项本身保留）") : "") + "。确定删除？",
     okText: "删除分支"
   }).then(function(ok){
     if(!ok) return;
@@ -684,7 +686,7 @@ function loadBranchTasks(id){
     var box = $("brTaskList");
     if(!box || brDrawerId !== id) return;
     if(!tasks || !tasks.length){
-      box.innerHTML = '<div class="tl-empty">还没有任务关联到这条分支。在任务详情的「所属分支」里挂上来。</div>';
+      box.innerHTML = '<div class="tl-empty">还没有工作项关联到这条分支。在工作项详情的「所属分支」里挂上来。</div>';
       return;
     }
     box.innerHTML = tasks.map(function(t){
@@ -737,7 +739,7 @@ function populateBranchSelect(keep, projectId){
     API.get("/api/branches/options", projectId ? { project: projectId } : null).then(function(list){
       branchOptionCache[projectId] = list || [];
       if(branchSelectProject === projectId) populateBranchSelect(cur, projectId);
-    }).catch(function(){ /* 分支拉取失败时下拉保持空，不影响任务保存 */ });
+    }).catch(function(){ /* 分支拉取失败时下拉保持空，不影响工作项保存 */ });
     return;
   }
   fillBranchSelect(sel, cur, rows);

@@ -92,7 +92,7 @@ function onSseChanged(event){
   if(info.ws && window.CURRENT_WORKSPACE && info.ws !== window.CURRENT_WORKSPACE) return;
   /* O-11：抽屉正开着这条任务 → 只给轻提示，不自动刷新、不覆盖未保存草稿 */
   if(taskDrawer.classList.contains("on") && rt.editingId && info.taskId && info.taskId === rt.editingId){
-    showDrawerNotice("此任务刚被" + (info.actor ? ("「" + info.actor + "」") : "他人") + "修改，点击刷新查看最新内容");
+    showDrawerNotice("此工作项刚被" + (info.actor ? ("「" + info.actor + "」") : "他人") + "修改，点击刷新查看最新内容");
     return;
   }
   /* 需求文档正开着这篇且被他人改动 → 编辑器内轻提示（dirty 时带「查看最新内容」按钮） */

@@ -143,7 +143,7 @@ const phaseOne = `(async () => {
   document.getElementById('ganttNextMonth').click();
   document.getElementById('ganttNextMonth').click();
   await wait(150);
-  ok('空月份提示正确', !!document.querySelector('.gantt-month-empty') && document.querySelector('.gantt-month-empty').textContent.indexOf('本月没有排期任务') >= 0);
+  ok('空月份提示正确', !!document.querySelector('.gantt-month-empty') && document.querySelector('.gantt-month-empty').textContent.indexOf('本月没有排期工作项') >= 0);
   ok('空月份不显示今天线', !document.querySelector('.gantt-today'));
   document.getElementById('ganttToday').click();
   await wait(200);

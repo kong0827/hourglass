@@ -109,7 +109,10 @@ for (const m of modules) visit(m);
 const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
   "phase", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
-  .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js"]));
+  .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
+    /* fullscreen 的 init/enter/exit 与 search-palette 的 init 同名：平铺会让后者覆盖前者，
+       预览稿里全屏按钮就成了死按钮（真实 ESM 各文件独立作用域，没有这个问题） */
+    "core/fullscreen.js"]));
 
 /** 收集模块的导出表：外部名 → 本地标识符（export { open as openSearchPalette }） */
 function collectExports(code) {

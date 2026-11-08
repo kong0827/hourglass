@@ -79,7 +79,7 @@ import { API } from "./core/api.js";
       dated.push({ t: t, s: s, e: e });
     });
     if (!dated.length) {
-      scroll.innerHTML = '<div class="share-empty">当前没有可展示的排期任务。</div>';
+      scroll.innerHTML = '<div class="share-empty">当前没有可展示的排期工作项。</div>';
       return;
     }
     dated.sort(function (a, b) { return (a.s - b.s) || (a.e - b.e) || String(a.t.id).localeCompare(String(b.t.id)); });
@@ -153,7 +153,7 @@ import { API } from "./core/api.js";
     });
     scroll.innerHTML = '<div class="gantt-grid" style="--gantt-label-w:' + LABEL_W + 'px;--gantt-day-w:' + dayW +
         'px;--gantt-row-h:' + ROW_H + 'px;">' +
-      '<div class="gantt-head"><div class="gantt-corner">任务 <span class="gantt-corner-meta">' + dated.length + '</span></div>' +
+      '<div class="gantt-head"><div class="gantt-corner">工作项 <span class="gantt-corner-meta">' + dated.length + '</span></div>' +
         '<div class="gantt-axis" style="width:' + totalW + 'px">' + headHTML(range, dayW) + '</div></div>' +
       '<div class="gantt-body">' + rows + '</div>' +
       depsSVG(geom, range, dayW, totalW, HEAD_H + dated.length * ROW_H, lw) +

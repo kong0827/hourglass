@@ -61,7 +61,7 @@ function renderCompletions(rows, month){
 
   $("compCount").textContent = n ? ("共 " + n + " 条") : "";
   $("compStats").innerHTML = [
-    { k: "完成任务", v: n + " 项" },
+    { k: "完成工作项", v: n + " 项" },
     { k: "总耗时", v: fmtMinutesShort(totalMin) || "—" },
     { k: "平均每项", v: n ? (fmtMinutesShort(Math.round(totalMin / n)) || "—") : "—" },
     { k: "参与成员", v: ownerKeys.length ? (ownerKeys.length + " 人") : "—",
@@ -72,17 +72,17 @@ function renderCompletions(rows, month){
   }).join("");
 
   if(!n){
-    $("compWrap").innerHTML = UI.colEmpty(month + " 还没有完成记录。把任务拖进「已完成」列就会自动归档到这里。");
+    $("compWrap").innerHTML = UI.colEmpty(month + " 还没有完成记录。把工作项拖进「已完成」列就会自动归档到这里。");
     return;
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
      计时的首次/最后时间属于内部数据，不展示 */
-  var head = "<tr><th>任务</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
+  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
       "<td>" + (r.taskId
-        ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开任务详情">' + esc(r.title) + "</button>"
+        ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">' + esc(r.title) + "</button>"
         : '<span class="comp-t">' + esc(r.title) + "</span>") +
         (r.description ? '<span class="comp-d">' + esc(r.description) + "</span>" : "") + "</td>" +
       "<td>" + (r.reqName ? esc(r.reqName) : '<span class="comp-dim">—</span>') + "</td>" +
@@ -90,8 +90,8 @@ function renderCompletions(rows, month){
       "<td>" + esc(r.owner || "—") + "</td>" +
       "<td>" + (r.category ? catTag(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
       '<td>' + priTagHTML(r.priority) + '</td>' +
-      '<td class="nowrap" title="任务开始日期">' + esc(r.startDate || "—") + "</td>" +
-      '<td class="nowrap" title="任务完成日期">' + esc(r.completedAt || "—") + "</td>" +
+      '<td class="nowrap" title="工作项开始日期">' + esc(r.startDate || "—") + "</td>" +
+      '<td class="nowrap" title="工作项完成日期">' + esc(r.completedAt || "—") + "</td>" +
       '<td class="nowrap"><b>' + (fmtMinutesShort(r.totalMinutes) || "—") + "</b></td>" +
     "</tr>";
   }).join("");
@@ -113,7 +113,7 @@ function exportCompCSV(){
   var rows = compRowsCache || [];
   if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
   var month = currentCompMonth();
-  var lines = [["任务名称","详情","归属项目","关联文档","负责人","分类","优先级",
+  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","分类","优先级",
     "开始时间","结束时间","总耗时(分钟)","总耗时"]];
   rows.forEach(function(r){
     lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
@@ -122,7 +122,7 @@ function exportCompCSV(){
   var csv = "\uFEFF" + lines.map(function(cols){
     return cols.map(ganttCsvCell).join(",");
   }).join("\r\n");
-  triggerDownload("任务清单-" + month + ".csv", csv, "text/csv;charset=utf-8;");
+  triggerDownload("工作项清单-" + month + ".csv", csv, "text/csv;charset=utf-8;");
   toast("已导出 " + rows.length + " 条记录", "fs");
 }
 if($("compWrap")) $("compWrap").addEventListener("click", function(e){
@@ -439,7 +439,7 @@ function renderFlowHealth(d){
   /* ---- 优先级 ---- */
   var prio = d.priority || [];
   if(!prio.length){
-    $("flowPriority").innerHTML = UI.colEmpty("还没有任务");
+    $("flowPriority").innerHTML = UI.colEmpty("还没有工作项");
   }else{
     var maxMv = 0;
     prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
@@ -447,7 +447,7 @@ function renderFlowHealth(d){
       return flowRow(priName(p.priority) + " · " + p.tasks + " 项", p.avgMoves + " 次",
         maxMv > 0 ? p.avgMoves / maxMv * 100 : 0, priColor(p.priority));
     }).join("") + '</div>' +
-      '<p class="flow-note">数字是每个任务平均被移动多少次列。优先级立得住的话，' + esc(priName("P0")) + ' 应该<b>更少</b>被来回拖。</p>';
+      '<p class="flow-note">数字是每个工作项平均被移动多少次列。优先级立得住的话，' + esc(priName("P0")) + ' 应该<b>更少</b>被来回拖。</p>';
   }
 
   /* ---- 文档 → 开工 ---- */
@@ -467,7 +467,7 @@ function renderFlowHealth(d){
         return '<div class="done-item">' +
           '<div class="di-main"><button class="link-cell" type="button" data-open-reqdoc="' + esc(x.id) + '">' +
             esc(x.title) + '</button>' +
-          '<div class="di-m"><span>已挂 ' + x.ageDays + ' 天，还没有任务</span></div></div></div>';
+          '<div class="di-m"><span>已挂 ' + x.ageDays + ' 天，还没有工作项</span></div></div></div>';
       }).join("") + '</div>';
     }
     $("flowReqs").innerHTML = html;
@@ -475,7 +475,7 @@ function renderFlowHealth(d){
 }
 function renderFlowEstimate(d){
   if($("flowEstMeta")){
-    $("flowEstMeta").textContent = d.tasksWithEstimate + " / " + d.tasksTotal + " 个任务填了预估";
+    $("flowEstMeta").textContent = d.tasksWithEstimate + " / " + d.tasksTotal + " 个工作项填了预估";
   }
   var top = $("flowEstTop");
   if(!top) return;
@@ -501,7 +501,7 @@ function renderFlowEstimate(d){
       '<div class="lbl">实际 / 预估</div>' +
     '</div>' +
     '<div class="fe-main">' +
-      '<div class="fe-bar" title="按任务数分布">' +
+      '<div class="fe-bar" title="按工作项数分布">' +
         '<i class="under" style="width:' + wu + '%"></i>' +
         '<i class="ok" style="width:' + wa + '%"></i>' +
         '<i class="over" style="width:' + wo + '%"></i>' +
@@ -511,7 +511,7 @@ function renderFlowEstimate(d){
         '<span>准确 <b>' + d.accurateCount + '</b></span>' +
         '<span>低估 <b>' + d.overCount + '</b></span>' +
         '<span>样本 <b>' + n + '</b> 项已完成</span>' +
-        (d.noTimeCount ? '<span title="没开过计时的任务没有实际耗时，不参与系数">未计时 <b>' + d.noTimeCount + '</b> 项</span>' : '') +
+        (d.noTimeCount ? '<span title="没开过计时的工作项没有实际耗时，不参与系数">未计时 <b>' + d.noTimeCount + '</b> 项</span>' : '') +
       '</div>' +
       '<div class="fe-sug">' + esc(d.suggestion || "") + '</div>' +
     '</div>';
@@ -520,7 +520,7 @@ function renderFlowEstimate(d){
   /* 进行中且已消耗 80% 以上：唯一还来得及处理的清单 */
   if(d.atRisk && d.atRisk.length){
     html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">'
-      + d.atRisk.length + ' 个进行中的任务已用掉预估的 80% 以上</div>';
+      + d.atRisk.length + ' 个进行中的工作项已用掉预估的 80% 以上</div>';
     for(var i = 0; i < d.atRisk.length && i < 8; i++){
       var t = d.atRisk[i];
       var hi = t.level === "danger";

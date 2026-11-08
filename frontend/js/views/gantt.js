@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, iDue, iStart, searchInput, searchWrap } from "../core/dom.js";
-import { applyView, clearFilters, promptSaveView, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
+import { applyView, clearFilters, deleteView, promptSaveView, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
@@ -11,6 +11,7 @@ import { canEditTask, catTag, filterOn, progressOf, reqNameById, rt, selectedFil
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { registerViewParams } from "../core/view-params.js";
 import { bindRetry } from "../core/utils.js";
 import { PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
@@ -53,7 +54,7 @@ var ganttState = {
   groupBy: "none", collapsed: {}, rangeMode: "auto", anchorMonth: null,
   notice: "", unplannedDrag: null,
   rows: [],               // 当前渲染的已排期行（{t, s, e, rs, re}），CSV 与多选范围共用
-  undated: [],            // 未排期任务（左下方抽屉）
+  undated: [],            // 未排期工作项（左下方抽屉）
   sel: {}, selAnchor: null,
   undo: [], undoBusy: false,   // 改期撤销栈，最多 20 步
   /* ---- V1.4 ---- */
@@ -76,7 +77,7 @@ var ganttState = {
   depDrag: null,
   /* ---- V1.4.1 显示密度与左列宽度 ---- */
   density: "comfortable", // comfortable | compact | minimal
-  labelW: GANTT_LABEL_W,  // 左列任务列表像素宽度
+  labelW: GANTT_LABEL_W,  // 左列工作项列表像素宽度
   labelDrag: null         // 拖拽调整左列宽度时的状态
 };
 var GANTT_DEFAULT_COLS = { project: true, owner: true, dates: true, work: true, subtask: true, tags: false, comments: false };
@@ -652,7 +653,7 @@ function ganttRowHTML(x, range, dayW, totalW){
     ? '<span class="gantt-handle l" data-gantt-handle="l"></span><span class="gantt-handle r" data-gantt-handle="r"></span>'
     : "";
   var linkDot = (ganttReadOnly() || !editable) ? "" :
-    '<span class="gantt-link-dot" data-gantt-link="' + esc(t.id) + '" title="拖到另一条任务上建立依赖"></span>';
+    '<span class="gantt-link-dot" data-gantt-link="' + esc(t.id) + '" title="拖到另一条工作项上建立依赖"></span>';
   var ghost = ganttBaselineHTML(t, range, dayW);
   var rowClass = "gantt-row" + (selected ? " is-selected" : "");
   var labelHTML = '<button class="gantt-label" type="button" data-gantt-open="' + esc(t.id) + '">' +
@@ -942,7 +943,7 @@ function ganttUndoLast(){
     });
     if(!items.length){
       ganttState.undoBusy = false;
-      toast(skipped ? "任务已被再次修改，未撤销" : "没有可撤销的改期", "bad");
+      toast(skipped ? "工作项已被再次修改，未撤销" : "没有可撤销的改期", "bad");
       loadGantt();
       return;
     }
@@ -973,7 +974,7 @@ function ganttStatusText(t){
 function ganttCsvText(scope, rowsOverride){
   var rows = rowsOverride || ((scope === "all") ? ganttAllTasks() : ganttState.rows);
   var lines = [];
-  lines.push(["任务","状态","优先级","项目","负责人","开始","截止","工期(天)","进度%","估时(小时)","实际(小时)","子任务","里程碑","基线偏差(天)","标签","看板列"]
+  lines.push(["工作项","状态","优先级","项目","负责人","开始","截止","工期(天)","进度%","估时(小时)","实际(小时)","子任务","里程碑","基线偏差(天)","标签","看板列"]
     .map(ganttCsvCell).join(","));
   rows.forEach(function(it){
     var t = it.t || it;
@@ -1044,7 +1045,7 @@ function ganttExportAllRemote(){
       ganttState.exportBusy = false;
       ingest(unplanned || []);
       var all = collected;
-      if(!all.length){ toast("当前筛选下没有任务", "warn"); return; }
+      if(!all.length){ toast("当前筛选下没有工作项", "warn"); return; }
       ganttDownloadCsv(ganttCsvText("all", all), "甘特图-" + rt.TODAY_ISO + "-全部筛选.csv");
     }).catch(function(ex){
       ganttState.exportBusy = false;
@@ -1059,8 +1060,8 @@ function ganttExportCsv(scope){
     ganttExportAllRemote();
     return;
   }
-  if(!ganttAllTasks().length){ toast("当前没有可导出的任务", "warn"); return; }
-  if(scope !== "all" && !ganttState.rows.length){ toast("当前范围没有已排期任务", "warn"); return; }
+  if(!ganttAllTasks().length){ toast("当前没有可导出的工作项", "warn"); return; }
+  if(scope !== "all" && !ganttState.rows.length){ toast("当前范围没有已排期工作项", "warn"); return; }
   var name = "甘特图-" + rt.TODAY_ISO + (scope === "all" ? "-全部筛选" : "-当前范围") + ".csv";
   ganttDownloadCsv(ganttCsvText(scope), name);
 }
@@ -1100,7 +1101,7 @@ function ganttToggleCritical(){
     if(!ganttState.critical || !Object.keys(ganttState.critical).length){
       toast(ganttState.notice || "没有可计算的关键路径（需要依赖关系）", "warn");
     }else{
-      toast("已高亮 " + Object.keys(ganttState.critical).length + " 个关键任务", "fs");
+      toast("已高亮 " + Object.keys(ganttState.critical).length + " 个关键工作项", "fs");
     }
   }
 }
@@ -1210,7 +1211,7 @@ function renderGanttLoad(){
   });
   html += '</div>';
   if(!d.members.length){
-    html = '<div class="gantt-load-empty">当前筛选下没有带估时的排期任务。</div>';
+    html = '<div class="gantt-load-empty">当前筛选下没有带估时的排期工作项。</div>';
   }
   ganttLoadBody.innerHTML = html;
 }
@@ -1295,7 +1296,7 @@ function openGanttDepMenu(depId, anchorEl){
   /* 依赖两端都必须可写（与后端 GanttService 同口径）；未知任务交给后端判定 */
   var fromT = ganttState.byId[dep.fromTaskId], toT = ganttState.byId[dep.toTaskId];
   if((fromT && !canEditTask(fromT)) || (toT && !canEditTask(toT))){
-    toast("依赖关联的任务所在项目只有查看权限", "warn");
+    toast("依赖关联的工作项所在项目只有查看权限", "warn");
     return;
   }
   if(!ganttDepMenu) return;
@@ -1507,7 +1508,7 @@ function renderGantt(){
       /* 不能拿“某一页”的数据继续渲染：直接切月视图并重新按区间查询 */
       ganttState.rangeMode = "month";
       ganttState.anchorMonth = ganttMonthStart(rt.TODAY);
-      ganttState.pendingNotice = "任务时间跨度超过 2 年，已切换到月视图；可用上一月/下一月查看其他区间。";
+      ganttState.pendingNotice = "工作项时间跨度超过 2 年，已切换到月视图；可用上一月/下一月查看其他区间。";
       ganttState.scrolled = true;
       syncGanttControls();
       loadGantt();
@@ -1545,7 +1546,7 @@ function renderGantt(){
   ganttState.layout = ganttBuildLayout(inRange);
   ganttState.win = { start: -1, end: -1 };
   ganttState.emptyMonthHTML = (ganttState.rangeMode === "month" && !inRange.length)
-    ? UI.colEmpty("本月没有排期任务；可以翻到上一月/下一月，或把未排期任务拖进时间轴。", "calendar")
+    ? UI.colEmpty("本月没有排期工作项；可以翻到上一月/下一月，或把未排期工作项拖进时间轴。", "calendar")
     : "";
 
   var densityClass = 'density-' + ganttState.density;
@@ -1553,7 +1554,7 @@ function renderGantt(){
   ganttScroll.innerHTML = '<div class="gantt-grid is-scale-' + ganttState.scale + ' ' + densityClass + '" style="--gantt-label-w:' + labelW + 'px;--gantt-day-w:' + dayW +
       'px;--gantt-row-h:' + rowH + 'px;--gantt-group-h:' + groupH + 'px;">' +
     '<div class="gantt-head">' +
-      '<div class="gantt-corner">任务 <span class="gantt-corner-meta">' + inRange.length + '</span><span class="gantt-resizer" aria-label="拖动调整列宽" role="separator"></span></div>' +
+      '<div class="gantt-corner">工作项 <span class="gantt-corner-meta">' + inRange.length + '</span><span class="gantt-resizer" aria-label="拖动调整列宽" role="separator"></span></div>' +
       '<div class="gantt-axis" style="width:' + totalW + 'px">' + GS.headHTML(range, dayW, ganttState.scale, rt.TODAY_ISO) + '</div>' +
     '</div>' +
     '<div class="gantt-body"></div>' +
@@ -1657,22 +1658,22 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
   var title, text, action = "", actionKind = "";
   if(!visible.length && all.length){
     /* 有任务但都被「显示已完成」隐藏了：这条优先于月份空态 */
-    title = "当前没有未完成任务";
-    text = "已完成任务被隐藏了；勾选上方「显示已完成」可以查看。";
+    title = "当前没有未完成工作项";
+    text = "已完成工作项被隐藏了；勾选上方「显示已完成」可以查看。";
   }else if(ganttState.rangeMode === "month"){
-    title = filterOn() ? "本月没有符合筛选的排期任务" : "本月没有排期任务";
-    text = "可以翻到上一月/下一月，或把未排期任务拖进时间轴。" +
-      (filterOn() ? "当前筛选条件下本月没有任务。" : "");
+    title = filterOn() ? "本月没有符合筛选的排期工作项" : "本月没有排期工作项";
+    text = "可以翻到上一月/下一月，或把未排期工作项拖进时间轴。" +
+      (filterOn() ? "当前筛选条件下本月没有工作项。" : "");
   }else if(!all.length){
     /* 排期任务为 0 不等于没有任务：未排期区可能还有任务 */
     var anyUnplanned = ganttState.serverUnplanned !== null ? ganttState.unscheduledTotal : undated.length;
     if(anyUnplanned > 0){
-      title = "还没有排期任务";
-      text = "所有任务都还没有开始/截止日期；在下方「未排期」里拖到时间轴即可排期。";
+      title = "还没有排期工作项";
+      text = "所有工作项都还没有开始/截止日期；在下方「未排期」里拖到时间轴即可排期。";
       action = "去列表"; actionKind = "list";
     }else if(filterOn()){
-      title = "没有符合筛选的任务";
-      text = "当前筛选条件下没有任务；清除筛选后可查看全部任务。";
+      title = "没有符合筛选的工作项";
+      text = "当前筛选条件下没有工作项；清除筛选后可查看全部工作项。";
       action = "清除筛选"; actionKind = "clear";
     }else{
       title = "还没有工作项";
@@ -1680,8 +1681,8 @@ function renderGanttEmpty(all, visible, hiddenDone, undated){
       action = "新建工作项"; actionKind = "new";
     }
   }else{
-    title = "还没有排期任务";
-    text = "给任务填上开始或截止日期后，这里会按时间排布。";
+    title = "还没有排期工作项";
+    text = "给工作项填上开始或截止日期后，这里会按时间排布。";
     action = "去列表"; actionKind = "list";
   }
   ganttScroll.innerHTML = '<div style="padding:20px">' +
@@ -1840,7 +1841,7 @@ function renderGanttFilterMenu(){
     return ganttFilterChip("data-gantt-due", d.v, d.n, state.due === d.v);
   }).join("");
   var blockedHTML = ganttFilterChip("data-gantt-blocked", "1", "仅看被阻塞", state.blocked);
-  var html = '<div class="menu-title">筛选任务</div>' +
+  var html = '<div class="menu-title">筛选工作项</div>' +
     '<div class="menu-field"><input class="input" type="search" id="ganttFilterQ" placeholder="关键词：标题 / 项目 / 标签" aria-label="关键词筛选" value="' + esc(state.q) + '" /></div>' +
     ganttFilterSection("负责人", ownerHTML || '<span class="foot-note">当前空间没有负责人可选</span>') +
     ganttFilterSection("优先级", priHTML) +
@@ -1873,16 +1874,20 @@ function ganttSetQuery(kw){
 function renderGanttViewsMenu(){
   if(!ganttViewsMenu) return;
   var views = savedViewsFor("task");
-  var html = '<div class="menu-title">保存的视图</div>';
+  var html = '<div class="menu-title">甘特视图</div>';
   if(!views.length){
-    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的视图；先设置筛选，再保存。</p></div>';
+    html += '<div class="menu-field"><p class="foot-note" style="margin:0">还没有保存的甘特视图；调整筛选或布局后保存。</p></div>';
   }else{
     html += views.map(function(v){
-      return '<button class="menu-item" type="button" data-gantt-view="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' +
-        esc(v.name) + '</button>';
+      return '<div class="menu-row">' +
+        '<button class="menu-item" type="button" data-gantt-view="' + esc(v.id) + '" title="应用视图：' + esc(v.name) + '">' +
+          esc(v.name) + '</button>' +
+        '<button class="icon-btn sm" type="button" data-gantt-view-del="' + esc(v.id) +
+          '" title="删除视图" aria-label="删除视图：' + esc(v.name) + '">' + icon("close", 12) + '</button>' +
+        '</div>';
     }).join("");
   }
-  html += '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-view-save>保存为视图</button></div>';
+  html += '<div class="menu-foot"><button class="btn sm" type="button" data-gantt-view-save>保存当前为视图</button></div>';
   html += '<div class="menu-sep"></div><div class="menu-title">排序</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
     [["start", "开始"], ["due", "截止"], ["priority", "优先级"], ["owner", "负责人"], ["progress", "进度"]].map(function(o){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
@@ -1896,6 +1901,69 @@ function renderGanttViewsMenu(){
       return ganttFilterChip("data-gantt-col", o[0], o[1], !!ganttState.cols[o[0]]);
     }).join("") + '</div></div>';
   ganttViewsMenu.innerHTML = html;
+}
+/* ---- 保存视图：甘特布局（筛选之外的部分）随视图一起存取 ---- */
+var GANTT_VIEW_SORTS = ["start", "due", "priority", "owner", "progress"];
+var GANTT_VIEW_GROUPS = ["none", "project", "owner", "status", "category", "priority"];
+function ganttViewParams(){
+  var cols = [];
+  for(var k in GANTT_DEFAULT_COLS) if(ganttState.cols[k]) cols.push(k);
+  return {
+    ganttSort: ganttState.sortBy,
+    ganttGroup: ganttState.groupBy,
+    ganttGroup2: ganttState.groupBy2,
+    ganttCols: cols,
+    ganttShowDone: !!ganttState.showDone,
+    ganttDensity: ganttState.density,
+    ganttScale: ganttState.scale,
+    ganttZoom: String(ganttState.zoomDayW),
+    ganttRange: ganttState.rangeMode
+  };
+}
+function applyGanttViewParams(p){
+  if(!p || typeof p !== "object") return false;
+  var changed = false;
+  if(GANTT_VIEW_SORTS.indexOf(p.ganttSort) !== -1 && ganttState.sortBy !== p.ganttSort){
+    ganttState.sortBy = p.ganttSort; changed = true;
+  }
+  if(GANTT_VIEW_GROUPS.indexOf(p.ganttGroup) !== -1 && ganttState.groupBy !== p.ganttGroup){
+    ganttState.groupBy = p.ganttGroup; changed = true;
+  }
+  if(GANTT_VIEW_GROUPS.indexOf(p.ganttGroup2) !== -1 && ganttState.groupBy2 !== p.ganttGroup2){
+    ganttState.groupBy2 = p.ganttGroup2; changed = true;
+  }
+  /* 一级不分组时二级分组没有意义，与手动切换下拉框保持一致 */
+  if(ganttState.groupBy === "none") ganttState.groupBy2 = "none";
+  if(Array.isArray(p.ganttCols)){
+    for(var ck in GANTT_DEFAULT_COLS) ganttState.cols[ck] = p.ganttCols.indexOf(ck) !== -1;
+    changed = true;
+  }
+  if(typeof p.ganttShowDone === "boolean" && ganttState.showDone !== p.ganttShowDone){
+    ganttState.showDone = p.ganttShowDone; changed = true;
+  }
+  if(["comfortable", "compact", "minimal"].indexOf(p.ganttDensity) !== -1 && ganttState.density !== p.ganttDensity){
+    ganttState.density = p.ganttDensity; changed = true;
+  }
+  if(["day", "week", "month"].indexOf(p.ganttScale) !== -1 && ganttState.scale !== p.ganttScale){
+    ganttState.scale = p.ganttScale; changed = true;
+  }
+  var zoom = Number(p.ganttZoom);
+  if([20, 28, 40].indexOf(zoom) !== -1 && ganttState.zoomDayW !== zoom){
+    ganttState.zoomDayW = zoom; changed = true;
+  }
+  if(ganttState.scale === "day") ganttState.dayW = ganttState.zoomDayW;
+  if((p.ganttRange === "auto" || p.ganttRange === "month") && ganttState.rangeMode !== p.ganttRange){
+    ganttState.rangeMode = p.ganttRange; changed = true;
+    if(p.ganttRange === "month" && !ganttState.anchorMonth) ganttState.anchorMonth = ganttMonthStart(rt.TODAY);
+  }
+  if(!changed) return false;
+  ganttState.collapsed = {};
+  saveGanttPrefs();
+  if(activeView === "gantt"){
+    syncGanttControls();
+    renderGantt();
+  }
+  return true;
 }
 function renderGanttExportMenu(){
   if(!ganttExportMenu) return;
@@ -2098,7 +2166,7 @@ function onGanttPointerDown(e){
       if(!tt || !canEditTask(tt)) return;
       var ss = parseDate(tt.startDate) || parseDate(tt.dueDate);
       var ee = parseDate(tt.dueDate) || ss;
-      if(!ss || !ee) return;   // 未排期任务不参与批量平移
+      if(!ss || !ee) return;   // 未排期工作项不参与批量平移
       if(ss > ee){ var tmp2 = ss; ss = ee; ee = tmp2; }
       items.push({
         id: tt.id, task: tt,
@@ -2560,6 +2628,8 @@ if(ganttViewsBtn){
 }
 if(ganttViewsMenu){
   ganttViewsMenu.addEventListener("click", function(e){
+    var del = e.target.closest("[data-gantt-view-del]");
+    if(del){ UI.closeAllPops(); deleteView(del.getAttribute("data-gantt-view-del")); return; }
     if(e.target.closest("[data-gantt-view-save]")){ UI.closeAllPops(); promptSaveView(); return; }
     var sortEl = e.target.closest("[data-gantt-sort]");
     if(sortEl){
@@ -2663,7 +2733,7 @@ if(ganttDepMenu){
     }
     if(e.target.closest("[data-gantt-dep-del]")){
       UI.closeAllPops();
-      UI.showConfirm({ title:"删除依赖", msg:"删除后两条任务不再有先后约束，确定？", okText:"删除" }).then(function(ok){
+      UI.showConfirm({ title:"删除依赖", msg:"删除后两条工作项不再有先后约束，确定？", okText:"删除" }).then(function(ok){
         if(!ok) return;
         API.del("/api/gantt/deps/" + encodeURIComponent(depId)).then(function(){
           toast("依赖已删除", "fs");
@@ -2707,4 +2777,13 @@ window.addEventListener("resize", function(){
   }, 180);
 });
 
-export { cleanupGanttLink, enterGanttView, ganttCsvCell, ganttState, ganttUndoLast, ganttViewsMenu, loadGantt, loadGanttPrefs, onGanttDragCancel, onGanttUnplannedCancel, renderGanttFilterState, renderGanttViewsMenu, syncGanttControls, syncGanttUndoUI };
+registerViewParams("gantt", {
+  describe: function(){
+    return "保存当前筛选与甘特图布局（分组、排序、左列字段、显示与缩放）；同名保存将覆盖原视图";
+  },
+  capture: ganttViewParams,
+  apply: applyGanttViewParams,
+  skipListConfig: true
+});
+
+export { applyGanttViewParams, cleanupGanttLink, enterGanttView, ganttCsvCell, ganttState, ganttUndoLast, ganttViewParams, ganttViewsMenu, loadGantt, loadGanttPrefs, onGanttDragCancel, onGanttUnplannedCancel, renderGanttFilterState, renderGanttViewsMenu, syncGanttControls, syncGanttUndoUI };

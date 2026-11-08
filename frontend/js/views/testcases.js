@@ -511,7 +511,7 @@ function renderRuns(){
         + '<input type="file" hidden data-run-file="' + esc(r.id) + '" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" /></label>'
       : "";
     var bug = r.bugTaskId
-      ? '<button class="btn sm ghost" type="button" data-run-bug="' + esc(r.bugTaskId) + '">缺陷任务</button>'
+      ? '<button class="btn sm ghost" type="button" data-run-bug="' + esc(r.bugTaskId) + '">缺陷工作项</button>'
       : "";
     return '<div class="run-item">'
       + '<div class="run-top">' + statusBadgeHTML(r.status)
@@ -1224,7 +1224,7 @@ function doRun(){
     caseRunning = false;
     setCaseBusy($("btnDoRun"), false);
     closeRunDialog();
-    var msg = runStatus === "failed" ? "已记录失败，可点击「转缺陷」生成缺陷任务" : "执行结果已记录";
+    var msg = runStatus === "failed" ? "已记录失败，可点击「转缺陷」生成缺陷工作项" : "执行结果已记录";
     if(res.uploaded) msg += "，已上传 " + res.uploaded + " 个证据";
     if(res.failed) msg += "，" + res.failed + " 个证据上传失败（可在「记录」里补传）";
     toast(msg, res.failed ? "warn" : "fs");
@@ -1241,7 +1241,7 @@ function doRun(){
 function openDefectDialog(id){
   defectCaseId = id;
   var c = caseById(id);
-  $("caseDefectDesc").textContent = "「" + (c ? c.title : "") + "」将生成一条缺陷任务，执行步骤与失败备注写入描述。";
+  $("caseDefectDesc").textContent = "「" + (c ? c.title : "") + "」将生成一条缺陷工作项，执行步骤与失败备注写入描述。";
   $("defectSeverity").value = "";
   $("defectEnvironment").value = "";
   $("fDefectSeverity").classList.remove("invalid");

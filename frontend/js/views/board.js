@@ -222,7 +222,7 @@ function cardHTML(t, idx){
   }
   if(t.estimateMinutes){
     /* 有预估就显示「实际/预估」：光看实际用了几小时没人知道自己算不算慢。
-       计时中的任务同样要显示 —— 那正是最该知道自己快超了的时候；
+       计时中的工作项同样要显示 —— 那正是最该知道自己快超了的时候；
        此时实际值只含已结束的段，title 里说明，避免误读。 */
     var actMin = Number(t.totalMinutes) || 0;
     var estR = actMin / t.estimateMinutes;
@@ -262,7 +262,7 @@ function cardHTML(t, idx){
          否则常驻的绿色按钮会盖住卡片标题 */
       (editable && !running && timerAllowed(t)
         ? '<button class="card-act low" type="button" data-timer-toggle="' + esc(t.id) + '"' +
-            ' title="开始计时（会自动暂停其他任务的计时）" aria-label="开始计时：' + esc(t.title) + '">' +
+            ' title="开始计时（会自动暂停其他工作项的计时）" aria-label="开始计时：' + esc(t.title) + '">' +
             icon("timer", 13) + '</button>'
         : '') +
       (editable
@@ -328,8 +328,8 @@ function renderMobileBoard(opts){
       UI.emptyState({
         icon:"board",
         title:"看板还是空的",
-        text:"点击右下角「新建」创建第一个任务，数据会实时同步到其他端。",
-        actionLabel:"新建第一项任务"
+        text:"点击右下角「新建」创建第一个工作项，数据会实时同步到其他端。",
+        actionLabel:"新建第一项工作项"
       }) + '</div>';
     bindRetry(board, function(){ openTaskDrawer("backlog"); });
     renderAlertBar(); renderFilterChips();
@@ -405,8 +405,8 @@ function render(opts){
       UI.emptyState({
         icon:"board",
         title:"看板还是空的",
-        textHtml:"新建一个任务，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。",
-        actionLabel:"新建第一项任务"
+        textHtml:"新建一个工作项，或用快捷键 <b>N</b> 快速录入。<br>数据保存在服务器，多端实时同步。",
+        actionLabel:"新建第一项工作项"
       }) + '</div>';
     bindRetry(board, function(){ openTaskDrawer("backlog"); });
     renderAlertBar(); renderFilterChips();
@@ -431,7 +431,7 @@ function render(opts){
         (c.done ? '' : ' role="button" tabindex="0" title="点击改名"') + '>' + esc(c.name) + '</span>' +
       '<span class="col-count" aria-live="polite">' + (filterOn() ? (cd.matched + "/" + cd.total) : cd.total) + '</span>' +
       '<span class="sp"></span>' +
-      '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新增任务" aria-label="在「' + esc(c.name) + '」新增任务">' + icon("plus", 14) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新增工作项" aria-label="在「' + esc(c.name) + '」新增工作项">' + icon("plus", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
         icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
     '</div>';
@@ -439,8 +439,8 @@ function render(opts){
     var body = '<div class="board-col-body" role="list">';
     if(!items.length){
       var emptyText, emptyIc;
-      if(filterOn()){ emptyText = "无匹配任务"; emptyIc = "filterOff"; }
-      else if(c.done && state.doneScope === "week" && cd.allTotal){ emptyText = "本周还没有完成的任务"; emptyIc = "checkCircle"; }
+      if(filterOn()){ emptyText = "无匹配工作项"; emptyIc = "filterOff"; }
+      else if(c.done && state.doneScope === "week" && cd.allTotal){ emptyText = "本周还没有完成的工作项"; emptyIc = "checkCircle"; }
       else { emptyText = "拖动卡片到这里"; emptyIc = "inbox"; }
       body += UI.colEmpty(emptyText, emptyIc);
     }else{
@@ -502,7 +502,7 @@ function openInlineAdd(colId, preset, focusIt){
   input.maxLength = 120;
   input.placeholder = "输入标题后回车创建…（!P0 / #项目 / @负责人 / +标签 / %进度 / ~每周 / 明天）";
   input.value = preset || "";
-  input.setAttribute("aria-label", "在「" + colName(colId) + "」新增任务");
+  input.setAttribute("aria-label", "在「" + colName(colId) + "」新增工作项");
   input._restore = addBtn;
 
   var hint = document.createElement("div");
@@ -562,7 +562,7 @@ function openInlineAdd(colId, preset, focusIt){
 function inlineAddCreate(colId, title, input){
   var q = parseQuickAdd(title);
   if(q.reqId && !canEditReq(q.reqId)){
-    toast("「" + q.reqName + "」只有查看权限，无法新增任务", "warn");
+    toast("「" + q.reqName + "」只有查看权限，无法新增工作项", "warn");
     return;
   }
   var payload = {
@@ -757,8 +757,8 @@ function endDrag(){
     if(res.to === "done" && res.from !== "done"){
       var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
       var doneMsg = dd > 0
-        ? ("已完成任务「" + task.title + "」，延期 " + dd + " 天完成")
-        : ("已完成任务「" + task.title + "」，按期完成");
+        ? ("已完成工作项「" + task.title + "」，延期 " + dd + " 天完成")
+        : ("已完成工作项「" + task.title + "」，按期完成");
       /* 完成后自动接力了同列的下一个任务，明确说出来，别让人以为计时断了 */
       if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
       toast(doneMsg, dd > 0 ? "warn" : "fs");

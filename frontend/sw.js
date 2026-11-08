@@ -1,7 +1,7 @@
 /* 沙漏 Service Worker：API 永不缓存，静态资源网络优先 + 离线兜底
    离线策略 = 只读：壳与静态资源可离线打开，任何 /api/ 请求都不缓存、断网即失败（前端显示「离线（只读）」）。
    SHELL 用相对路径，资源挂在任意上下文路径下都能正常工作。 */
-var CACHE_NAME = "hourglass-shell-v110";
+var CACHE_NAME = "hourglass-shell-v112";
 var SHELL = [
   "./",
   "index.html",
@@ -27,6 +27,7 @@ var SHELL = [
   "js/core/dom.js",
   "js/core/filters-ui.js",
   "js/core/filters.js",
+  "js/core/fullscreen.js",
   "js/core/icons.js",
   "js/core/layout.js",
   "js/core/list-preferences.js",
@@ -47,6 +48,7 @@ var SHELL = [
   "js/core/ui.js",
   "js/core/utils.js",
   "js/core/view-loader.js",
+  "js/core/view-params.js",
   "js/lib/download.js",
   "js/lib/format.js",
   "js/lib/gantt-shared.js",
@@ -60,6 +62,7 @@ var SHELL = [
   "js/views/gantt.js",
   "js/views/list.js",
   "js/views/manager-shared.js",
+  "js/views/messages.js",
   "js/views/mine.js",
   "js/views/phase.js",
   "js/views/portfolio.js",

@@ -114,7 +114,7 @@ function buildSummary(d){
   var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   var progTasks = d.progressTasks || [];
   if(!n && !progTasks.length && !d.doing && !d.backlog){
-    return scope + label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在任务里填上进度，回顾里就能看到这一周你做了什么。";
+    return scope + label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在工作项里填上进度，回顾里就能看到这一周你做了什么。";
   }
   var parts = [];
   if(n){
@@ -124,10 +124,10 @@ function buildSummary(d){
     var rateTxt = (withDue === 0)
       ? "，完成项均未设置截止日期"
       : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期交付");
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项任务" + rateTxt +
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项工作项" + rateTxt +
       (p0 ? "，其中" + esc(priName("P0")) + " <b>" + p0 + "</b> 项。" : "。"));
   }else{
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已交付的任务记录。");
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已交付的工作项记录。");
   }
   if(n){
     var items = list.slice(0, 12).map(function(t){
@@ -218,7 +218,7 @@ function renderReviewPivot(d){
   fillPivotOptions(colSel, reviewPivot.col);
   var list = (d && d.completed) || [];
   if(!list.length){
-    box.innerHTML = UI.colEmpty("该周期没有已完成的任务，暂无可透视数据");
+    box.innerHTML = UI.colEmpty("该周期没有已完成的工作项，暂无可透视数据");
     return;
   }
   var rows = [], cols = [], cells = {}, rowMap = {}, colMap = {};
@@ -287,7 +287,7 @@ if($("reviewPivot")) $("reviewPivot").addEventListener("click", function(e){
   else if(r){ tasks = reviewPivotState.rows[r] || []; title = r; }
   else { tasks = reviewPivotState.cols[c] || []; title = c; }
   openTaskTable("周回顾透视 · " + title, tasks,
-    reviewPivotState.rowDim + " × " + reviewPivotState.colDim + " · 共 " + tasks.length + " 项 · 点击任务行打开详情");
+    reviewPivotState.rowDim + " × " + reviewPivotState.colDim + " · 共 " + tasks.length + " 项 · 点击工作项行打开详情");
 });
 
 function distHTML(list, colorOf, valueOf){  if(!list || !list.length) return UI.colEmpty("暂无数据");
@@ -384,7 +384,7 @@ function renderReview(d){
       '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
       '<span class="tag tag-' + badgeKind + '">' + badge + '</span>' +
     '</div>';
-  }).join("") : UI.colEmpty("该周期没有已完成的任务");
+  }).join("") : UI.colEmpty("该周期没有已完成的工作项");
   if(doneCountEl) doneCountEl.textContent = list.length ? ("共 " + list.length + " 项") : "";
 
   var progTasks = d.progressTasks || [];
@@ -399,7 +399,7 @@ function renderReview(d){
       '</span>' +
       '<span class="di-d">' + esc(colName(t.boardColumn)) + '</span>' +
     '</div>';
-  }).join("") : UI.colEmpty("当前没有进行中的任务（把任务拖到「进行中」列即可）");
+  }).join("") : UI.colEmpty("当前没有进行中的工作项（把工作项拖到「进行中」列即可）");
   if(progCountEl) progCountEl.textContent = progTasks.length ? ("共 " + progTasks.length + " 项") : "";
 
   var reqDist = d.reqDist || [];
@@ -432,12 +432,12 @@ function copyReviewPlain(){
         var rn = t.reqId ? reqNameById(t.reqId) : null;
         return "· " + colName(t.boardColumn) + "　" + t.title + "　" + progressOf(t) + "%"
           + (rn ? "（" + rn + "）" : "") + (t.note ? "　备注：" + t.note : "");
-      }).join("\n") : "（当前没有进行中的任务）")
+      }).join("\n") : "（当前没有进行中的工作项）")
     + "\n\n本周完成（" + doneTasks.length + " 项）：\n"
     + (doneTasks.length ? doneTasks.map(function(t){
         return "· [" + t.priority + "][" + t.category + "] " + t.title + " — " + t.owner
           + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
-      }).join("\n") : "（本周没有完成的任务）");
+      }).join("\n") : "（本周没有完成的工作项）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");
 }
 function copyReviewAi(){
@@ -513,7 +513,7 @@ function renderAiReport(r){
   var s = r.source || {};
   var based = "基于 " + (s.completed || 0) + " 项完成 / " + (s.progress || 0) + " 项进行中";
   if(s.pendingDone) based += " / " + s.pendingDone + " 项待确认完成";
-  if(s.truncated) based += "（任务太多，只取了前若干条）";
+  if(s.truncated) based += "（工作项太多，只取了前若干条）";
   $("reviewAiUsage").textContent = based + " · " + aiUsageText(r.usage);
 }
 function runAiReport(){

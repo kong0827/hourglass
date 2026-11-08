@@ -6,9 +6,10 @@ import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
 import { $, offlineBadge } from "./core/dom.js";
 import { loadViews } from "./core/filters-ui.js";
+import "./core/fullscreen.js";
 import { loadUnread, routeNotificationLink } from "./core/notifications.js";
 import { initSSE } from "./core/realtime.js";
-import { VIEWS, defaultLanding, showView, viewFromHash } from "./core/router.js";
+import { VIEWS, activeView, defaultLanding, showView, viewFromHash } from "./core/router.js";
 import { handleDeepLink, hashParam, openTaskById } from "./core/task-actions.js";
 import { buildFormControls, renderTagChips, syncFormSegs, syncProgVal } from "./core/task-drawer.js";
 import { UI } from "./core/ui.js";
@@ -118,6 +119,8 @@ function startAuthenticatedApp(meUser, startView, deepTaskId, autoLanding){
   loadViews();
   loadMe(meUser).then(function(){
     if(!autoLanding) return;
+    /* 角色信息回来前用户可能已经自己点了别的视图，不要把人拽走 */
+    if(activeView !== startView) return;
     var landing = defaultLanding();
     if(landing && landing !== activeView){ showView(landing); }
   });

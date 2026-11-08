@@ -50,6 +50,8 @@
     undo: function (s) { return svg(s, '<path d="M7.2 4.8 4 8l3.2 3.2"/><path d="M4 8h5.6a4.4 4.4 0 0 1 0 8.8H7.8"/>'); },
     redo: function (s) { return svg(s, '<path d="M12.8 4.8 16 8l-3.2 3.2"/><path d="M16 8h-5.6a4.4 4.4 0 0 0 0 8.8h1.8"/>'); },
     rail: function (s) { return svg(s, '<path d="M11.2 5.2 7 10l4.2 4.8"/><path d="M15.4 5.2 11.2 10l4.2 4.8"/>'); },
+    expand: function (s) { return svg(s, '<path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/>'); },
+    compress: function (s) { return svg(s, '<path d="M9 3.4v5.2H3.8"/><path d="M9 8.6 3.6 3.2"/><path d="M11 16.6v-5.2h5.2"/><path d="M11 11.4l5.4 5.4"/>'); },
 
     /* ---- 箭头（需求列表树用） ---- */
     down: function (s) { return svg(s, '<path d="M5 7.8 10 12.8l5-5"/>'); },

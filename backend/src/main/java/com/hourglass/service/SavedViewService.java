@@ -118,6 +118,22 @@ public class SavedViewService {
             }
             out.put("hideDone", hideDone.asBoolean());
         }
+        /* 甘特图视图：筛选之外还要记住布局，应用视图时原样恢复 */
+        copyEnum(root, out, "ganttSort", "start", "due", "priority", "owner", "progress");
+        copyEnum(root, out, "ganttGroup", "none", "project", "owner", "status", "category", "priority");
+        copyEnum(root, out, "ganttGroup2", "none", "project", "owner", "status", "category", "priority");
+        copyEnum(root, out, "ganttDensity", "comfortable", "compact", "minimal");
+        copyEnum(root, out, "ganttScale", "day", "week", "month");
+        copyEnum(root, out, "ganttZoom", "20", "28", "40");
+        copyEnum(root, out, "ganttRange", "auto", "month");
+        copyStringArray(root, out, "ganttCols");
+        JsonNode ganttShowDone = root.get("ganttShowDone");
+        if (ganttShowDone != null && !ganttShowDone.isNull()) {
+            if (!ganttShowDone.isBoolean()) {
+                throw AppException.badRequest("视图参数不合法：ganttShowDone 应为布尔值");
+            }
+            out.put("ganttShowDone", ganttShowDone.asBoolean());
+        }
         /* 文档视图：搜索词已由 q 承载，另存项目范围与展示方式 */
         if ("doc".equals(scope)) {
             copyString(root, out, "reqId", 32);
@@ -140,7 +156,7 @@ public class SavedViewService {
             }
         }
         String json = out.toString();
-        if (json.length() > 600) {
+        if (json.length() > 1200) {
             throw AppException.badRequest("视图参数过长");
         }
         return json;

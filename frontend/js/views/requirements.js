@@ -1884,9 +1884,9 @@ function renderAiSplit(d){
     var p = String(t.priority || "P2").toUpperCase();
     var pcls = p === "P0" ? "p0" : (p === "P1" ? "p1" : "");
     return '<div class="ai-item on" data-i="' + i + '">' +
-      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择任务">' +
+      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择工作项">' +
       '<div class="ai-main">' +
-        '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="任务标题">' +
+        '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="工作项标题">' +
         (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
         '<div class="ai-meta">' +
           '<span class="ai-tag ' + pcls + '" style="color:' + esc(priColor(p)) + '">' + esc(priName(p)) + '</span>' +
@@ -1916,15 +1916,15 @@ function applyAiSplit(){
       dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex
     });
   }
-  if(!picked.length){ toast("至少选一条要创建的任务", "warn"); return; }
+  if(!picked.length){ toast("至少选一条要创建的工作项", "warn"); return; }
 
   var btn = $("dlgAiSplitOk");
   btn.disabled = true;
   API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/tasks", { tasks: picked }).then(function(r){
     btn.disabled = false;
     UI.closeModal($("dlgAiSplit"));
-    var msg = "已创建 " + r.created + " 个任务";
-    if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名任务";
+    var msg = "已创建 " + r.created + " 个工作项";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名工作项";
     if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 个失败";
     toast(msg, r.failed && r.failed.length ? "warn" : "fs");
     if(r.failed && r.failed.length){

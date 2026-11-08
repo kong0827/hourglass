@@ -213,14 +213,21 @@ public class ManagerService {
             projects.add(item);
         }
 
+        Map<String, Task> tasksById = new HashMap<String, Task>();
+        for (Task task : snapshot.tasks) {
+            tasksById.put(task.getId(), task);
+        }
+
         List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : accumulators.values()) {
-            members.add(workloadMember(member, snapshot.logs, weekStart, today, reqNames));
+            members.add(workloadMember(member, snapshot.logs, weekStart, today, reqNames, tasksById));
         }
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("capacityMinutesPerDay", DAILY_CAPACITY_MINUTES);
         result.put("workdays", DEFAULT_WORKDAYS);
+        result.put("weekStart", weekStart.toString());
+        result.put("lastWeekStart", weekStart.minusWeeks(1).toString());
         result.put("projects", projects);
         result.put("members", members);
         return result;
@@ -470,13 +477,16 @@ public class ManagerService {
 
     private Map<String, Object> workloadMember(MemberAccumulator member, List<TimeLog> logs,
                                                LocalDate weekStart, LocalDate today,
-                                               Map<String, String> reqNames) {
+                                               Map<String, String> reqNames,
+                                               Map<String, Task> tasksById) {
         int remainingMinutes = remaining(member.tasks);
         int workdays = workdays(member.latestDue, today);
         int loadPct = loadPct(remainingMinutes, workdays);
         int weekMinutes = 0;
         int lastWeekMinutes = 0;
         int[] dayMinutes = new int[WEEK_DAYS];
+        List<Map<String, Object>> weekLogs = new ArrayList<Map<String, Object>>();
+        List<Map<String, Object>> lastWeekLogs = new ArrayList<Map<String, Object>>();
         if (member.userId != null) {
             for (TimeLog log : logs) {
                 if (log == null || !member.userId.equals(log.getUserId()) || log.getStartedAt() == null) {
@@ -487,11 +497,15 @@ public class ManagerService {
                 if (!date.isBefore(weekStart) && date.isBefore(weekStart.plusWeeks(1))) {
                     weekMinutes += value;
                     dayMinutes[date.getDayOfWeek().getValue() - 1] += value;
+                    weekLogs.add(weekLogRow(log, tasksById, reqNames));
                 } else if (!date.isBefore(weekStart.minusWeeks(1)) && date.isBefore(weekStart)) {
                     lastWeekMinutes += value;
+                    lastWeekLogs.add(weekLogRow(log, tasksById, reqNames));
                 }
             }
         }
+        sortLogsByDateDesc(weekLogs);
+        sortLogsByDateDesc(lastWeekLogs);
 
         LinkedHashMap<String, MemberProject> projectGroups = new LinkedHashMap<String, MemberProject>();
         for (Task task : member.tasks) {
@@ -534,7 +548,32 @@ public class ManagerService {
         result.put("dayMinutes", days);
         result.put("projects", projects);
         result.put("tasks", taskMaps(member.tasks, reqNames));
+        result.put("weekLogs", weekLogs);
+        result.put("lastWeekLogs", lastWeekLogs);
         return result;
+    }
+
+    private void sortLogsByDateDesc(List<Map<String, Object>> logs) {
+        Collections.sort(logs, new Comparator<Map<String, Object>>() {
+            @Override
+            public int compare(Map<String, Object> a, Map<String, Object> b) {
+                return String.valueOf(b.get("date")).compareTo(String.valueOf(a.get("date")));
+            }
+        });
+    }
+
+    private Map<String, Object> weekLogRow(TimeLog log, Map<String, Task> tasksById,
+                                           Map<String, String> reqNames) {
+        Task task = log.getTaskId() == null ? null : tasksById.get(log.getTaskId());
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("date", log.getStartedAt().toLocalDate().toString());
+        row.put("taskId", log.getTaskId());
+        row.put("title", task == null ? "未关联工作项" : task.getTitle());
+        String reqName = task == null || task.getReqId() == null ? null : reqNames.get(task.getReqId());
+        row.put("reqName", reqName == null ? UNCATEGORIZED_NAME : reqName);
+        row.put("minutes", minutes(log.getMinutes()));
+        row.put("origin", log.getOrigin());
+        return row;
     }
 
     private LinkedHashMap<String, MemberAccumulator> memberAccumulators(List<Task> openTasks,

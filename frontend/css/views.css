@@ -477,15 +477,16 @@
   overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-lg);
   background:var(--surface);
 }
-.user-table{width:100%;min-width:720px;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+.user-table{width:100%;min-width:860px;border-collapse:collapse;font-size:13px;table-layout:fixed;}
 .user-table th,.user-table td{
   padding:9px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle;
 }
 .user-table th{height:38px;background:var(--surface-sunken);font-size:12px;font-weight:650;color:var(--text-2);white-space:nowrap;}
-.user-table th:nth-child(1){width:32%;}
-.user-table th:nth-child(2){width:28%;}
-.user-table th:nth-child(3){width:14%;}
+.user-table th:nth-child(1){width:28%;}
+.user-table th:nth-child(2){width:20%;}
+.user-table th:nth-child(3){width:12%;}
 .user-table th:nth-child(4){width:26%;}
+.user-table th:nth-child(5){width:14%;}
 .user-table tbody tr:last-child td{border-bottom:none;}
 .user-table tbody tr:hover{background:var(--surface-hover);}
 .user-table .user-th-acts{text-align:right;}
@@ -501,6 +502,18 @@
 .user-email{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-email.empty{color:var(--text-3);}
 .user-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
+.user-spaces{
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:100%;padding:0;
+  border:0;background:none;text-align:left;cursor:pointer;
+}
+.user-spaces .tag{max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;line-height:18px;}
+.user-spaces:hover .tag{border-color:var(--border-strong);color:var(--text-2);}
+.user-spaces-sheet{width:min(620px,calc(100vw - 32px));}
+.user-spaces-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.user-spaces-sect{display:flex;flex-direction:column;gap:8px;}
+.user-spaces-sect h4{margin:0;font-size:13px;font-weight:650;color:var(--text);}
+.user-space-row .nm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.user-space-current{font-size:11px;font-weight:500;color:var(--text-3);}
 /* 项目可见范围矩阵 */
 .access-matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r-lg);}
 .access-matrix{min-width:640px;}
@@ -1620,6 +1633,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .bf-l{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* 列表视图 */
+.br-groups.br-list-mode{display:block;}
 .br-list-wrap{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);overflow:auto;}
 .br-list tbody tr{cursor:pointer;}
 .br-list tbody tr:hover{background:var(--surface-hover);}
@@ -1681,7 +1695,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .br-badge{
   display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;cursor:pointer;
   border-radius:var(--r-pill);border:1px solid transparent;background:none;
-  font-size:11.5px;font-weight:650;font-family:inherit;
+  font-size:11.5px;font-weight:650;font-family:inherit;white-space:nowrap;
 }
 .br-badge.br-st-dev{color:var(--primary);background:var(--primary-soft);border-color:var(--primary-border);}
 .br-badge.br-st-testing{color:var(--warning-fg);background:var(--warning-soft);border-color:var(--warning-border);}
@@ -1788,6 +1802,9 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .set-tab:hover{color:var(--text);background:var(--surface-hover);}
 .set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);}
 #view-settings [data-set-pane][hidden]{display:none;}
+#view-settings [data-platform-sub][hidden]{display:none;}
+.set-subtabs{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 0;}
+.set-subtabs .foot-note{margin:0;}
 
 /* 活动分区：列表占满视口剩余高度，避免面板下方留下整块空白 */
 #view-settings.set-fill.on{display:flex;flex-direction:column;}
@@ -2019,6 +2036,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 
 /* ===================== 测试用例 ===================== */
 .tc-page{padding-bottom:40px;}
+/* 工具栏分两组：筛选组可在中间自由换行，操作组始终整体靠右不拆散 */
+.tc-filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.tc-actionbar{display:flex;align-items:center;gap:8px;flex:0 0 auto;flex-wrap:nowrap;}
 .tc-stats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px;}
 .tc-stat{display:inline-flex;align-items:baseline;gap:6px;padding:6px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--text-2);}
 .tc-stat b{font-size:16px;font-weight:650;color:var(--text);}

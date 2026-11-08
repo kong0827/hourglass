@@ -127,7 +127,7 @@
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="3"/><path d="M2.8 17c.5-3 2-4.5 4.2-4.5s3.7 1.5 4.2 4.5M13 5.2a3 3 0 0 1 0 5.6M14 12.7c2 .4 3 1.8 3.3 4.3"/></svg>
         <span class="nl">成员负载</span>
       </button>
-      <button class="nav-item" type="button" data-view="risks" title="逾期与阻塞：逾期、阻塞、停滞任务与站内催办">
+      <button class="nav-item" type="button" data-view="risks" title="逾期与阻塞：逾期、阻塞、停滞工作项与站内催办">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 18 17H2Z"/><path d="M10 8v4M10 15h.01"/></svg>
         <span class="nl">逾期与阻塞</span>
       </button>
@@ -174,7 +174,7 @@
           实时连接已断开，正在重连…
         </span>
 
-        <button class="timer-pill" id="timerPill" type="button" hidden title="正在计时，点击打开任务">
+        <button class="timer-pill" id="timerPill" type="button" hidden title="正在计时，点击打开工作项">
           <span class="tp-dot" aria-hidden="true"></span>
           <span class="tp-name" id="timerPillName"></span>
           <b data-elapsed>0:00</b>
@@ -185,7 +185,7 @@
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
-          <input id="searchInput" type="search" placeholder="搜索…" autocomplete="off" aria-label="按标题、描述、备注、项目、标签、附件名搜索任务" />
+          <input id="searchInput" type="search" placeholder="搜索…" autocomplete="off" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
           <button class="gs-clear" id="searchClear" type="button" aria-label="清空搜索">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
@@ -281,9 +281,9 @@
         <div class="fgroup" id="fgStatus">
           <span class="group-label">状态</span>
           <span class="chips" id="chipsDue">
-            <button class="chip alert-over" id="chipOver" type="button" aria-pressed="false" aria-label="只看已逾期任务"><i class="cdot"></i>已逾期 <span class="n" id="nOver">0</span></button>
-            <button class="chip alert-today" id="chipToday" type="button" aria-pressed="false" aria-label="只看今天到期的任务"><i class="cdot"></i>今天到期 <span class="n" id="nToday">0</span></button>
-            <button class="chip alert-soon" id="chipSoon" type="button" aria-pressed="false" aria-label="只看 3 天内到期的任务"><i class="cdot"></i>3 天内 <span class="n" id="nSoon">0</span></button>
+            <button class="chip alert-over" id="chipOver" type="button" aria-pressed="false" aria-label="只看已逾期工作项"><i class="cdot"></i>已逾期 <span class="n" id="nOver">0</span></button>
+            <button class="chip alert-today" id="chipToday" type="button" aria-pressed="false" aria-label="只看今天到期的工作项"><i class="cdot"></i>今天到期 <span class="n" id="nToday">0</span></button>
+            <button class="chip alert-soon" id="chipSoon" type="button" aria-pressed="false" aria-label="只看 3 天内到期的工作项"><i class="cdot"></i>3 天内 <span class="n" id="nSoon">0</span></button>
             <button class="chip alert-focus" id="chipFocus" type="button" aria-pressed="false" title="只看：逾期 + 今天到期 + 进行中的 P0"><i class="cdot"></i>今日聚焦</button>
             <span class="chip calm" id="chipHealthy" hidden>暂无逾期</span>
           </span>
@@ -308,6 +308,9 @@
       </div>
 
       <div class="fb-right">
+        <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+        </button>
         <div class="fgroup" id="viewGroup" hidden><span class="chips" id="viewBox"></span></div>
         <div class="fb-actions" id="filterActions" hidden>
           <button class="chip" id="selectedSummary" type="button" title="清空全部筛选"></button>
@@ -324,7 +327,7 @@
         <div class="board" id="board"></div>
       </section>
 
-      <!-- ===== 我的任务（跨空间聚合，N-3） ===== -->
+      <!-- ===== 我的工作（跨空间聚合，N-3） ===== -->
       <section class="view" id="view-mine" aria-label="我的工作">
         <div class="view-page wide">
           <div class="page-toolbar">
@@ -394,7 +397,7 @@
           <div class="list-scroll" id="listScroll">
             <div class="list-head" id="listHead">
               <span><input type="checkbox" class="cbx" id="listSelectAll" aria-label="全选当前页" /></span>
-              <span>任务</span>
+              <span>工作项</span>
               <span>列</span>
               <span>优先级</span>
               <span>负责人</span>
@@ -439,12 +442,12 @@
                 <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
                 本月未排期
                 <span class="cnt" id="unplannedCount">0</span>
-                <span class="foot-note" style="font-weight:400">（没有截止日期、因此在日历里看不见的任务）</span>
+                <span class="foot-note" style="font-weight:400">（没有截止日期、因此在日历里看不见的工作项）</span>
               </summary>
               <div class="unplanned-list" id="unplannedList"></div>
             </details>
           </div>
-          <aside class="cal-side" id="calDayList" aria-label="选中日期的任务"></aside>
+          <aside class="cal-side" id="calDayList" aria-label="选中日期的工作项"></aside>
         </div>
       </section>
 
@@ -475,6 +478,9 @@
                   <option value="40">宽松</option>
                 </select>
               </label>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn sm primary" type="button" id="ganttNew">新建工作项</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
@@ -491,7 +497,7 @@
               <button class="btn sm ghost" type="button" id="ganttClearFilter" hidden>清除筛选</button>
               <label class="row row-gap" style="gap:6px">
                 <span class="toolbar-meta is-strong">分组</span>
-                <select id="ganttGroup" class="mini-select" aria-label="任务分组方式">
+                <select id="ganttGroup" class="mini-select" aria-label="工作项分组方式">
                   <option value="none">不分组</option>
                   <option value="project">按项目</option>
                   <option value="owner">按负责人</option>
@@ -525,7 +531,7 @@
                   <div class="gantt-more-row">
                     <span class="gantt-more-label">范围</span>
                     <div class="seg mini gantt-range-mode" id="ganttRangeMode" role="group" aria-label="时间范围模式">
-                      <button type="button" data-gantt-range="auto" aria-pressed="true" title="自动覆盖全部任务并包含今天">适配全部</button>
+                      <button type="button" data-gantt-range="auto" aria-pressed="true" title="自动覆盖全部工作项并包含今天">适配全部</button>
                       <button type="button" data-gantt-range="month" aria-pressed="false" title="按自然月查看">月视图</button>
                     </div>
                   </div>
@@ -592,6 +598,9 @@
                 <button class="btn sm" type="button" id="btnProjectColumns" hidden>显示字段</button>
                 <button class="btn sm" type="button" id="btnShowArchived" aria-pressed="false">显示已归档</button>
               </span>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn primary sm" type="button" id="btnReqNew" style="margin-left:auto">新建项目</button>
             </div>
             <div class="req-list" id="reqList"></div>
@@ -644,7 +653,7 @@
                   <button class="btn primary" type="button" id="btnSaveReq">添加项目</button>
                   <button class="btn" type="button" id="btnCancelReqEdit" hidden>取消编辑</button>
                 </div>
-                <p class="foot-note">删除项目时其下任务会保留，仅解除关联；把任务归入项目后，可在筛选栏按项目查看全部工作</p>
+                <p class="foot-note">删除项目时其下工作项会保留，仅解除关联；把工作项归入项目后，可在筛选栏按项目查看全部工作</p>
               </div>
             </div>
           </div></div></div>
@@ -664,6 +673,9 @@
                 <button type="button" data-pmode="version" aria-pressed="false">按版本</button>
                 <button type="button" data-pmode="overview" aria-pressed="false">全部项目</button>
               </div>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn sm primary" type="button" id="btnVerNew">+ 新建版本</button>
             </span>
           </div>
@@ -697,7 +709,7 @@
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnSaveVer">创建版本</button>
               </div>
-              <p class="foot-note">版本属于所选项目；任务在详情抽屉选「影响版本」，需求池排期时选「目标版本」</p>
+              <p class="foot-note">版本属于所选项目；工作项在详情抽屉选「影响版本」，需求池排期时选「目标版本」</p>
             </div>
           </div>
         </div></div></div>
@@ -716,6 +728,9 @@
               </div>
               <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
               <select id="demandReq" class="mini-select" aria-label="选择项目"></select>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn sm primary" type="button" id="btnDemandNew">+ 提需求</button>
             </span>
           </div>
@@ -835,6 +850,9 @@
               <span class="reqdoc-search">
                 <input type="search" id="reqDocSearch" placeholder="搜索标题或正文…" aria-label="搜索文档">
               </span>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn primary sm" type="button" id="reqDocNew">
                 <span data-icon="plus"></span>&nbsp;新增文档
               </button>
@@ -1054,12 +1072,12 @@
         <div class="modal-layer" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
           <div class="sheet ai-dlg">
             <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆分结果</h3>
-            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的任务，标题可以直接改。不勾的不会落库。</p>
+            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的工作项，标题可以直接改。不勾的不会落库。</p>
             <div class="ai-list" id="aiSplitList"></div>
             <div class="ai-usage" id="aiSplitUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgAiSplitCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgAiSplitOk">创建选中任务</button>
+              <button class="btn primary" type="button" id="dlgAiSplitOk">创建选中工作项</button>
             </div>
           </div>
         </div>
@@ -1135,28 +1153,35 @@
             </span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
-              <span class="views-menu-wrap">
-                <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
-                <div class="menu popover" id="tcViewsMenu" hidden></div>
+              <span class="tc-filterbar">
+                <span class="views-menu-wrap">
+                  <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
+                  <div class="menu popover" id="tcViewsMenu" hidden></div>
+                </span>
+                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索用例 / 前置 / 步骤…" aria-label="搜索测试用例" />
+                <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
+                <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
+                <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
+                <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false">有缺陷</button>
+                <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
+                  <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
+                  <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
+                  <button type="button" data-tc-status="passed" aria-pressed="false">通过</button>
+                  <button type="button" data-tc-status="failed" aria-pressed="false">失败</button>
+                  <button type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
+                </div>
               </span>
-              <input id="tcSearch" type="search" class="tc-search" placeholder="搜索用例 / 前置 / 步骤…" aria-label="搜索测试用例" />
-              <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
-              <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
-              <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
-              <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false">有缺陷</button>
-              <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
-                <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
-                <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
-                <button type="button" data-tc-status="passed" aria-pressed="false">通过</button>
-                <button type="button" data-tc-status="failed" aria-pressed="false">失败</button>
-                <button type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
-              </div>
-              <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
-              <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
-              <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
-              <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
-              <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
-              <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新增用例</button>
+              <span class="tc-actionbar">
+                <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+                <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+                <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
+                <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
+                <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
+                <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+                </button>
+                <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新增用例</button>
+              </span>
             </span>
           </div>
           <div class="tc-stats" id="tcStats"></div>
@@ -1353,6 +1378,9 @@
               <span class="br-search">
                 <input type="search" id="branchSearch" placeholder="搜索分支名 / 目标分支 / 项目…" aria-label="搜索分支" autocomplete="off" />
               </span>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <button class="btn primary sm" type="button" id="branchNew">
                 <span data-icon="plus"></span>&nbsp;新建分支
               </button>
@@ -1422,6 +1450,9 @@
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 3l4 4-4 4"/></svg>
                 </button>
               </span>
+              <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+              </button>
               <div style="position:relative">
                 <button class="btn sm" type="button" id="btnCopy" aria-haspopup="true" aria-expanded="false">
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
@@ -1479,7 +1510,7 @@
               </span>
             </div>
             <div class="tbl-wrap" id="reviewPivot"></div>
-            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的任务；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
+            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
           </div>
 
           <div class="panel">
@@ -1492,7 +1523,7 @@
 
           <div class="panel" id="reviewPendingBox" hidden>
             <div class="panel-head"><h3>待确认完成</h3><span class="meta-right" id="pendingCount"></span></div>
-            <p class="set-hint">这些任务进度已到 <b>100%</b>，但还没有移入「已完成」列，因此不计入上方完成指标。移入已完成列后即计入。</p>
+            <p class="set-hint">这些工作项进度已到 <b>100%</b>，但还没有移入「已完成」列，因此不计入上方完成指标。移入已完成列后即计入。</p>
             <div class="done-list" id="pendingList"></div>
           </div>
 
@@ -1542,6 +1573,9 @@
               <option value="days90">近 90 天</option>
             </select>
           </label>
+          <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false" style="margin-left:auto">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
+          </button>
         </div>
         <div data-analysis-pane="stats">
         <div class="view-page wide">
@@ -1589,7 +1623,7 @@
         <div data-analysis-pane="completions" hidden>
         <div class="view-page">
           <div class="page-toolbar">
-            <span class="toolbar-title">任务清单</span>
+            <span class="toolbar-title">工作项清单</span>
             <span class="toolbar-right">
               <span class="row row-gap" style="gap:4px">
                 <button class="icon-btn sm" type="button" id="compPrev" aria-label="上一月">
@@ -1614,7 +1648,7 @@
               <h3>完成记录</h3>
               <span class="meta-right" id="compCount"></span>
             </div>
-            <p class="set-hint">任务移入「已完成」时自动归档：项目名、负责人存的是<b>当时</b>的快照，之后改名或删除都不影响这里。</p>
+            <p class="set-hint">工作项移入「已完成」时自动归档：项目名、负责人存的是<b>当时</b>的快照，之后改名或删除都不影响这里。</p>
             <div id="compWrap"></div>
           </div>
         </div>
@@ -1647,7 +1681,7 @@
               <span class="meta-right" id="flowRange">—</span>
             </div>
             <div class="flow-bars" id="flowBars"></div>
-            <p class="foot-note">条形长度 = 该列累计停留占全部列的比例。均值与中位数只算<b>已经离开</b>该列的停留，右列单独列出「当前仍卡在这列」的任务，不混进历史均值。</p>
+            <p class="foot-note">条形长度 = 该列累计停留占全部列的比例。均值与中位数只算<b>已经离开</b>该列的停留，右列单独列出「当前仍卡在这列」的工作项，不混进历史均值。</p>
           </div>
 
           <div class="duo">
@@ -1844,7 +1878,11 @@
                   <h3 style="font-size:14px">邀请链接</h3>
                   <span class="meta-right">7 天有效</span>
                 </div>
-                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可一键加入；新同事请先在你的「用户管理」里创建账号。链接 7 天有效，可随时撤销。</p>
+                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。</p>
+                <p class="set-hint" id="inviteNoAccountHint">
+                  <span id="inviteNoAccountText">对方还没有账号？请联系平台管理员先创建账号。</span>
+                  <button class="link-btn" type="button" id="btnInviteCreateAccount" hidden>去创建账号</button>
+                </p>
                 <button class="btn sm" type="button" id="btnInviteGen">生成邀请链接</button>
                 <div class="member-list" id="inviteList" style="margin-top:10px"></div>
               </div>
@@ -1855,7 +1893,7 @@
                 <h3>项目可见范围</h3>
                 <span class="meta-right" id="accessSummary"></span>
               </div>
-              <p class="set-hint">按「成员 × 项目」配置参与范围：默认参与可读写；设为「只读」后只能查看该项目；设为「不可见」后，该项目在项目、任务、看板、报表中都不出现。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
+              <p class="set-hint">按「成员 × 项目」配置参与范围：默认参与可读写；设为「只读」后只能查看该项目；设为「不可见」后，该项目在项目、工作项、看板、报表中都不出现。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
               <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
                 <div class="foot-note">加载中…</div>
               </div>
@@ -1866,7 +1904,7 @@
                 <h3>看板列</h3>
                 <span class="meta-right">拖拽/按钮调整顺序</span>
               </div>
-              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。删除列时其任务移入最靠前的列。</p>
+              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。删除列时其工作项移入最靠前的列。</p>
               <div class="cfg-list" id="colCfgList"></div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
@@ -1881,7 +1919,7 @@
                 <h3>分类</h3>
                 <span class="meta-right" id="catCount"></span>
               </div>
-              <p class="set-hint">分类按空间配置，改名会同步到已有任务；删除分类时其任务改到第一个分类。</p>
+              <p class="set-hint">分类按空间配置，改名会同步到已有工作项；删除分类时其工作项改到第一个分类。</p>
               <div class="cfg-list" id="catCfgList"></div>
               <div class="cfg-add">
                 <input type="color" id="catNewColor" value="#98A2B3" title="新分类颜色" aria-label="新分类颜色" />
@@ -1908,11 +1946,11 @@
             <div class="panel" data-set-pane="data" id="set-data">
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
-                <button class="btn" type="button" id="btnExport" title="导出任务数据：任务、回收站、项目、子任务、标签、工时、评论、依赖/基线、文档与分支（不含附件文件与时间线）">
+                <button class="btn" type="button" id="btnExport" title="导出任务数据：工作项、回收站、项目、子任务、标签、工时、评论、依赖/基线、文档与分支（不含附件文件与时间线）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9.6M6.2 8.8 10 12.6 13.8 8.8M4.4 15.6h11.2"/></svg>
                   导出任务备份
                 </button>
-                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖任务/项目/评论/依赖与基线；v6 备份还覆盖文档与分支，不含附件文件与时间线）">
+                <button class="btn" type="button" id="btnImport" title="从任务备份恢复（覆盖工作项/项目/评论/依赖与基线；v6 备份还覆盖文档与分支，不含附件文件与时间线）">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.6V4M6.2 8.2 10 4.4 13.8 8.2M4.4 15.6h11.2"/></svg>
                   导入任务备份
                 </button>
@@ -1926,7 +1964,7 @@
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：任务（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按任务与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
@@ -1935,20 +1973,32 @@
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
               </div>
-              <p class="set-hint">空间内的任务操作与配置变更记录（最近 200 条，倒序）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
+              <p class="set-hint">空间内的工作项操作与配置变更记录（最近 200 条，倒序）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
               <div class="act-list" id="actList"></div>
             </div>
 
-            <div class="panel" data-set-pane="platform" id="set-system">
-              <div class="panel-head">
-                <h3>系统信息</h3>
-                <span class="meta-right" id="sysMeta">只读 · 平台管理员可见</span>
+            <div class="set-subtabs" data-set-pane="platform" id="platformBar" hidden>
+              <div class="seg mini" role="group" aria-label="平台分区">
+                <button type="button" data-platform-tab="account" aria-pressed="true">账号管理</button>
+                <button type="button" data-platform-tab="system" aria-pressed="false">系统信息</button>
+                <button type="button" data-platform-tab="audit" aria-pressed="false">审计日志</button>
               </div>
-              <p class="set-hint">版本、运行时、数据库、附件容量、通知投递与实时连接。刷新页面即可获取最新状态，不提供任何写操作。</p>
-              <div class="sys-grid" id="sysGrid"></div>
+              <span class="foot-note">账号是平台身份；空间角色在「成员与权限」里分配。</span>
+            </div>
 
-              <div class="panel-head" style="margin-top:26px">
-                <h3>审计日志</h3>
+            <div class="panel" data-set-pane="platform" data-platform-pane="system" id="set-system" hidden>
+              <div data-platform-sub="system">
+                <div class="panel-head">
+                  <h3>系统信息</h3>
+                  <span class="meta-right" id="sysMeta">只读 · 平台管理员可见</span>
+                </div>
+                <p class="set-hint">版本、运行时、数据库、附件容量、通知投递与实时连接。刷新页面即可获取最新状态，不提供任何写操作。</p>
+                <div class="sys-grid" id="sysGrid"></div>
+              </div>
+
+              <div data-platform-sub="audit">
+                <div class="panel-head">
+                  <h3>审计日志</h3>
                 <span class="meta-right" id="auditCount">全空间</span>
               </div>
               <p class="set-hint" id="auditHint">登录成功/失败、权限变更、数据导出、删除/清空、备份恢复等安全事件；默认保留 90 天，可按条件筛选并导出 CSV。</p>
@@ -2001,33 +2051,35 @@
                 <button class="btn sm" type="button" id="auditPrev">上一页</button>
                 <button class="btn sm" type="button" id="auditNext">下一页</button>
               </div>
+              </div>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-trash">
                           <div class="panel-head"><h3>回收站</h3><span class="meta-right">30 天自动清理</span></div>
-                          <p class="set-hint">删除的任务保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
+                          <p class="set-hint">删除的工作项保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
                           <div class="trash-list" id="trashList"></div>
                         </div>
             
-                        <div class="panel" data-set-pane="platform" id="set-account">
+                        <div class="panel" data-set-pane="platform" data-platform-pane="account" id="set-account" hidden>
                           <div class="panel-head"><h3>账号管理</h3><span class="meta-right">仅平台管理员</span></div>
                           <div class="notice">
                             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.6"/><path d="M10 13.6V9.4"/><path d="M10 6.6h.01"/></svg>
-                            <span>账号由管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除用户前需先清空其数据，至少保留一名管理员。</span>
+                            <span>账号由平台管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除账号前需先清空其个人空间数据，且至少保留一名平台管理员。</span>
                           </div>
-                          <div class="panel-head" style="margin-top:16px"><h3 style="font-size:14px">新增用户</h3></div>
+                          <p class="set-hint" style="margin:10px 0 0">账号属于平台，空间角色属于某个空间：账号创建后不会自动加入共享空间，需要在「成员与权限」中分配角色。<button class="link-btn" type="button" id="btnAccountGotoMembers">去分配空间角色</button></p>
+                          <div class="panel-head" style="margin-top:16px"><h3 style="font-size:14px">新增账号</h3></div>
                           <div class="user-add">
                             <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" aria-label="登录名" autocomplete="off" />
                             <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" aria-label="显示名" autocomplete="off" />
                             <input class="input" type="password" id="uNewPass" maxlength="64" placeholder="初始密码（≥6 位）" aria-label="初始密码" autocomplete="new-password" />
-                            <select class="select" id="uNewRole" aria-label="角色">
-                              <option value="user">成员</option>
-                              <option value="admin">管理员</option>
+                            <select class="select" id="uNewRole" aria-label="平台角色">
+                              <option value="user">普通账号</option>
+                              <option value="admin">平台管理员</option>
                             </select>
                             <button class="btn primary" type="button" id="btnUserAdd">创建</button>
                           </div>
                           <div class="user-list" id="userList" style="margin-top:16px"></div>
-                          <p class="set-hint" style="margin:12px 0 0">成员角色只能管理自己的数据与参与的空间；管理员另可管理全部账号（本页）。邮箱在行尾「编辑」里填写，支持账号或邮箱登录。</p>
+                          <p class="set-hint" style="margin:12px 0 0">普通账号只能管理自己的数据与参与的空间；平台管理员另可管理全部账号（本页）与系统设置。邮箱在行尾「编辑」里填写，支持账号或邮箱登录。</p>
                         </div>
 
                       </div>
@@ -2075,8 +2127,8 @@
               <div class="set-grid">
                 <div class="field" id="fMeName">
                   <label for="meNameInput">显示名</label>
-                  <input id="meNameInput" type="text" maxlength="32" autocomplete="off" placeholder="用于任务负责人默认值" />
-                  <span class="hint">改名会同步你名下任务的负责人文本；历史时间线保留旧记录。</span>
+                  <input id="meNameInput" type="text" maxlength="32" autocomplete="off" placeholder="用于工作项负责人默认值" />
+                  <span class="hint">改名会同步你名下工作项的负责人文本；历史时间线保留旧记录。</span>
                 </div>
                 <div class="field" id="fMeEmail">
                   <label for="meEmail">邮箱</label>
@@ -2120,7 +2172,7 @@
                 <h3>消息通知</h3>
                 <span class="meta-right">只接收与你相关的事件</span>
               </div>
-              <p class="set-hint">任务指派、任务变动、评论和需求池状态变化可分别选择站内或邮件通知；自己的操作不会通知自己。</p>
+              <p class="set-hint">工作项指派、工作项变动、评论和需求池状态变化可分别选择站内或邮件通知；自己的操作不会通知自己。</p>
               <div class="notification-prefs" id="meNotificationPrefs"></div>
               <div class="set-actions">
                 <button class="btn ghost" type="button" id="meNotificationPreset" title="只保留指派、评论与@、关注与每日汇总的站内通知">仅重要事件</button>
@@ -2299,7 +2351,7 @@
         <div class="menu" id="taskMoreMenu" hidden style="right:0;top:calc(100% + 6px)">
           <button class="menu-item" type="button" data-task-more="copy-link">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.4 11.6a3.4 3.4 0 0 0 4.8 0l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8L9.8 5.4"/><path d="M11.6 8.4a3.4 3.4 0 0 0-4.8 0L4.2 11a3.4 3.4 0 0 0 4.8 4.8l1.1-1.1"/></svg>
-            复制任务链接
+            复制工作项链接
           </button>
           <button class="menu-item" type="button" data-task-more="copy-title">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
@@ -2325,13 +2377,13 @@
         <div class="drawer-field-group">
           <h3 class="drawer-group-title">基本信息</h3>
           <div class="field" id="fTitle">
-            <label for="iTitle">任务标题 <span class="req">*</span></label>
+            <label for="iTitle">工作项标题 <span class="req">*</span></label>
             <input id="iTitle" type="text" maxlength="60" placeholder="例如：重构权限校验中间件" autocomplete="off" />
-            <span class="err">请填写任务标题</span>
+            <span class="err">请填写工作项标题</span>
           </div>
 
           <div class="field">
-            <label for="iDesc">任务描述</label>
+            <label for="iDesc">工作项描述</label>
             <textarea id="iDesc" maxlength="200" placeholder="选填：目标、验收标准、注意事项…" style="min-height:88px"></textarea>
           </div>
 
@@ -2468,7 +2520,7 @@
               <button type="button" data-start="week">本周一</button>
               <button type="button" data-start="">清空</button>
             </div>
-            <span class="hint">填了之后，日历会在「开始 → 截止」的每一天都展示这个任务（不填则只出现在截止日）</span>
+            <span class="hint">填了之后，日历会在「开始 → 截止」的每一天都展示这个工作项（不填则只出现在截止日）</span>
           </div>
 
           <div class="form-grid">
@@ -2556,7 +2608,7 @@
               <input id="iBlockedReason" class="input" type="text" maxlength="120"
                      placeholder="卡在什么上（等谁 / 等什么 / 预计何时解除）" disabled />
             </div>
-            <span class="hint">被阻塞的任务在卡片上会显示橙色条纹，可在筛选栏「更多筛选 → 仅看被阻塞」里集中查看。</span>
+            <span class="hint">被阻塞的工作项在卡片上会显示橙色条纹，可在筛选栏「更多筛选 → 仅看被阻塞」里集中查看。</span>
           </div>
         </div>
 
@@ -2662,14 +2714,14 @@
     </div>
 
     <div class="drawer-foot">
-      <button class="icon-btn" type="button" id="btnDrawerStatus" aria-label="切换任务状态" title="切换任务状态">
+      <button class="icon-btn" type="button" id="btnDrawerStatus" aria-label="切换工作项状态" title="切换工作项状态">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
       </button>
       <span class="hint" id="taskFormHint">保存后可拖动卡片调整状态与顺序</span>
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
-      <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前任务，继续补充评论、检查项或时间">保存并继续</button>
-      <button class="btn primary" type="submit" id="btnSaveTask">保存任务</button>
+      <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前工作项，继续补充评论、检查项或时间">保存并继续</button>
+      <button class="btn primary" type="submit" id="btnSaveTask">保存工作项</button>
     </div>
   </form>
 </div>
@@ -2736,7 +2788,7 @@
     <div class="sheet-head">
       <div style="flex:1 1 auto;min-width:0">
         <h2 id="dlgWsDeleteTitle">删除空间</h2>
-        <div class="desc danger">空间内的全部任务、项目、附件将一并删除，不可恢复</div>
+        <div class="desc danger">空间内的全部工作项、项目、附件将一并删除，不可恢复</div>
       </div>
       <button class="icon-btn sm" type="button" id="dlgWsDeleteX" aria-label="关闭">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
@@ -2808,12 +2860,12 @@
         <span class="err">邮箱格式不正确</span>
       </div>
       <div class="field" id="fDlgUserRole">
-        <label for="dlgUserRole">角色</label>
+        <label for="dlgUserRole">平台角色</label>
         <select id="dlgUserRole">
-          <option value="user">成员</option>
-          <option value="admin">管理员</option>
+          <option value="user">普通账号</option>
+          <option value="admin">平台管理员</option>
         </select>
-        <span class="hint" id="dlgUserRoleHint">成员只能管理自己的数据与参与的空间；管理员可管理全部账号。</span>
+        <span class="hint" id="dlgUserRoleHint">普通账号只能管理自己的数据与参与的空间；平台管理员可管理全部账号与系统设置。</span>
       </div>
     </div>
     <div class="sheet-foot">
@@ -2896,7 +2948,7 @@
         <div class="modal-layer" id="dlgTimeAdd" role="dialog" aria-modal="true" aria-labelledby="dlgTimeAddTitle">
           <div class="sheet">
             <h3 class="reqdoc-dlg-title" id="dlgTimeAddTitle">补记工时</h3>
-            <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入任务与报表；可在下方记录列表删除或作废。</p>
+            <p class="reqdoc-dlg-msg">为忘开表、加班等场景补一条实际工时。补记不经过工作时段裁剪，直接计入工作项与报表；可在下方记录列表删除或作废。</p>
             <div class="reqdoc-dlg-form">
               <label class="reqdoc-dlg-field">
                 <span>成员</span>
@@ -2968,6 +3020,7 @@
   </button>
   <button class="ub-x" type="button" id="unreadBubbleX" aria-label="关闭新通知提醒">×</button>
 </div>
+<button class="fs-exit" id="fsExit" type="button" hidden>退出全屏 <span>Esc</span></button>
 <div class="toast-layer" id="toastWrap" aria-live="polite"></div>
 
 <link rel="modulepreload" href="js/main.js" />
@@ -2977,6 +3030,8 @@
 <link rel="modulepreload" href="js/core/router.js" />
 <link rel="modulepreload" href="js/core/filters.js" />
 <link rel="modulepreload" href="js/core/filters-ui.js" />
+<link rel="modulepreload" href="js/core/fullscreen.js" />
+<link rel="modulepreload" href="js/core/view-params.js" />
 <link rel="modulepreload" href="js/core/notifications.js" />
 <link rel="modulepreload" href="js/core/task-actions.js" />
 <link rel="modulepreload" href="js/core/task-drawer.js" />

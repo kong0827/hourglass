@@ -49,7 +49,7 @@ function downloadCsv(filename, rows){
 }
 function openTaskTable(title, tasks, description){
   var rows = (tasks || []).map(function(t){
-    return '<tr data-open-task="' + esc(t.id) + '" title="打开任务详情">'
+    return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
       + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
       + '<td>' + esc(t.reqName || "未归类") + '</td>'
       + '<td><span class="manager-person">' + avatarHTML(t.owner || "未", "sm") + esc(t.owner || "未指派") + '</span></td>'
@@ -57,17 +57,17 @@ function openTaskTable(title, tasks, description){
       + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
       + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
       + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
-  }).join("") || '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无任务</td></tr>';
+  }).join("") || '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + (tasks || []).length + " 项 · 点击任务行打开详情")) + '</div></div>'
+    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + (tasks || []).length + " 项 · 点击工作项行打开详情")) + '</div></div>'
     + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
-    + '<th>任务</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
+    + '<th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){

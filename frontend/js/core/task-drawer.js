@@ -49,7 +49,7 @@ function setSaveLoading(loading){
       btnSaveTaskContinue.classList.add("loading");
     }
   }else{
-    btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存任务";
+    btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存工作项";
     btnSaveTask.disabled = false;
     btnSaveTask.classList.remove("loading");
     if(btnSaveTaskContinue){
@@ -410,7 +410,7 @@ function renderWatchButton(res){
   if(taskWatchLabel) taskWatchLabel.textContent = watching ? "已关注" : "关注";
   btnTaskWatch.title = watching
     ? "已关注：新评论、移入回收站或恢复时会通知你（点击取消）"
-    : "关注后，该任务的新评论、移入回收站或恢复会通知你";
+    : "关注后，该工作项的新评论、移入回收站或恢复会通知你";
 }
 function loadWatchStatus(taskId){
   watchTaskId = taskId || null;
@@ -445,7 +445,7 @@ function openTaskDrawer(colId, task, defaults){
   if(task){
     var isDone = task.boardColumn === "done";
     startedDone = isDone;
-    taskDrawerTitle.textContent = task.title || "任务详情";
+    taskDrawerTitle.textContent = task.title || "工作项详情";
     btnDeleteTask.hidden = false;
     if(btnTaskNew) btnTaskNew.hidden = false;
     iTitle.value = task.title || "";
@@ -580,8 +580,8 @@ function syncProgByCol(){
     iProg.disabled = true;
     if(segProg) segProg.classList.add("disabled");
     if(progVal) progVal.textContent = "100%";
-    if(wrap) wrap.title = "已完成任务的进度按 100% 计";
-    if(hintEl()) hintEl().textContent = "已完成任务的进度按 100% 计" +
+    if(wrap) wrap.title = "已完成工作项的进度按 100% 计";
+    if(hintEl()) hintEl().textContent = "已完成工作项的进度按 100% 计" +
       (origProgress && origProgress !== 100 ? "（原记录 " + origProgress + "%）" : "");
   }else{
     iProg.disabled = false;
@@ -600,7 +600,7 @@ window.addEventListener("ds:before-route", function(e){
   e.preventDefault();
   var to = e.detail && e.detail.to;
   UI.showConfirm({
-    title:"离开当前任务？",
+    title:"离开当前工作项？",
     msg:"表单有未保存的修改，切换页面后会丢失。",
     okText:"放弃并离开",
     cancelText:"继续编辑"
@@ -1204,7 +1204,7 @@ if(drawerNoticeReload){
     var id = rt.editingId;
     drawerNotice.hidden = true;
     API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
-      if(!t){ toast("任务不存在或你没有访问权限", "warn"); return; }
+      if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return; }
       taskCacheExtra[t.id] = t;
       openTaskDrawer(null, t);
     }).catch(function(){ toast("刷新失败，请稍后重试", "bad"); });
@@ -1270,7 +1270,7 @@ if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){
     btnTaskWatch.disabled = false;
     if(watchTaskId !== taskId) return;
     renderWatchButton(res);
-    toast(watching ? "已取消关注" : "已关注：该任务的评论与回收站操作会通知你");
+    toast(watching ? "已取消关注" : "已关注：该工作项的评论与回收站操作会通知你");
   }, function(e){
     btnTaskWatch.disabled = false;
     if(!e || !e.silent) toast((e && e.message) || "操作失败", "bad");
@@ -1279,7 +1279,7 @@ if(btnTaskWatch) btnTaskWatch.addEventListener("click", function(){
 /* 任务详情内新建任务：沿用当前任务的项目/版本/史诗，抽屉切换为新建模式 */
 if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
   if(!rt.editingId) return;
-  if(rt.formDirty){ toast("当前任务有未保存的改动，请先保存再新建", "warn"); return; }
+  if(rt.formDirty){ toast("当前工作项有未保存的改动，请先保存再新建", "warn"); return; }
   var t = taskCacheExtra[rt.editingId] || {};
   var vSel = $("iVersion"), eSel = $("iEpic");
   openTaskDrawer(t.boardColumn || "backlog", null, {
@@ -1296,7 +1296,7 @@ $("taskMoreMenu").addEventListener("click", function(e){
   var t = rt.editingId ? taskById(rt.editingId) : null;
   if(kind === "copy-link"){
     if(!t) return;
-    copyToClipboard(window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(t.id), "任务链接已复制到剪贴板");
+    copyToClipboard(window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(t.id), "工作项链接已复制到剪贴板");
     return;
   }
   if(kind === "copy-title"){
@@ -1932,12 +1932,12 @@ if(workLogList){
     var title = manual ? "删除补记" : "作废这条工时记录？";
     var msg;
     if(manual){
-      msg = "删除后这条实际工时将从任务与报表中移除，确定？";
+      msg = "删除后这条实际工时将从工作项与报表中移除，确定？";
     } else {
       var when = rec.startedAt ? (fmtTs(rec.startedAt) + " → " + fmtTs(rec.endedAt)) : (rec.date || "");
       msg = esc(rec.userName || rec.userId || "成员") + " · <b>" + fmtMinutes(rec.minutes) + "</b><br>"
         + esc(when) + ' <span style="color:var(--text-3)">计时记录</span><br><br>'
-        + "作废后这条记录不再计入任务、报表与每人每天额度；操作会保留在任务时间线。"
+        + "作废后这条记录不再计入工作项、报表与每人每天额度；操作会保留在工作项时间线。"
         + "请用「补记」按天重新录入实际工时。";
     }
     UI.showConfirm({ title:title, msg:msg, okText: manual ? "删除" : "作废并移除", danger:true }).then(function(ok){

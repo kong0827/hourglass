@@ -285,6 +285,31 @@ body[data-view="mine"] #btnSaveView{display:none;}
 .view.on{display:block;}
 .view.view-flush{padding:0;overflow:hidden;}
 
+/* ===================== 视图全屏 =====================
+   收起侧栏 / 顶栏 / 子导航 / 筛选栏 / 页脚，只留当前视图占满窗口。
+   甘特图、日历、看板、列表、报表等数据密集型页面共用。 */
+body.fs-view .sidebar,
+body.fs-view .topbar,
+body.fs-view .subnav,
+body.fs-view .filterbar,
+body.fs-view .mob-filter,
+body.fs-view .app-foot,
+body.fs-view .tabbar,
+body.fs-view .narrow-hint{display:none !important;}
+.fs-exit{
+  position:fixed;right:max(24px, env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index:80;display:none;align-items:center;gap:6px;
+  height:32px;padding:0 12px;border:1px solid var(--border);border-radius:999px;
+  background:var(--surface);color:var(--text-2);font-size:12px;font-weight:600;
+  box-shadow:var(--shadow-md);
+}
+.fs-exit:hover{background:var(--surface-hover);color:var(--text);}
+.fs-exit span{
+  padding:1px 5px;border:1px solid var(--border);border-radius:4px;
+  background:var(--surface-sunken);font-size:10.5px;font-weight:650;color:var(--text-3);
+}
+body.fs-view .fs-exit{display:inline-flex;}
+
 /* 视图内部纵向流
    宽度上限只用于超宽屏兜底：普通 1440/1920 屏上让内容吃满可用区域，
    否则两侧会空出几百像素（甘特图这类信息密集页尤其明显）。 */

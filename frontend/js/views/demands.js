@@ -1127,7 +1127,7 @@ function loadDemandTasks(layer, id){
       + '<th>工作项</th><th>类型</th><th>负责人</th><th class="num">预估</th><th>状态</th></tr></thead><tbody>'
       + tasks.map(function(t){
         var done = t.boardColumn === "done";
-        return '<tr data-open-task="' + esc(t.id) + '" title="打开任务详情">'
+        return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
           + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
           + '<td>' + typeBadgeHTML(t.itemType) + '</td>'
           + '<td>' + esc(t.owner || "—") + '</td>'

@@ -6,6 +6,7 @@
   <select id="selectOptionsByReq" resultType="Task">
     SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
            t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+           t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
              WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
     FROM task t
