@@ -46,7 +46,10 @@ sql/seeds/seed_yunying.sql
 # 审查过程的临时截图与版本化登录稿不发布；文档真正引用的正式截图见下方白名单。
 docs/brand/login-live-*.png
 docs/images/_shot_*.png
-# 白名单：以下 11 张已被 docs/ 与 README 引用，必须随仓库发布（缺任一都会造成死链）
+# 白名单：以下 16 张已被 docs/ 与 README 引用，必须随仓库发布（缺任一都会造成死链）
+!docs/images/_shot_ai_split.png
+!docs/images/_shot_calendar-wide.png
+!docs/images/_shot_docs-list-wide.png
 !docs/images/_shot_flow-wide.png
 !docs/images/_shot_gantt-default.png
 !docs/images/_shot_gantt-wide.png
@@ -55,6 +58,8 @@ docs/images/_shot_*.png
 !docs/images/_shot_gantt-p1-default.png
 !docs/images/_shot_gantt-zoom40.png
 !docs/images/_shot_list-wide.png
+!docs/images/_shot_mine-wide.png
+!docs/images/_shot_reqdoc_toc.png
 !docs/images/_shot_review-wide.png
 !docs/images/_shot_share-page.png
 !docs/images/_shot_stats-wide.png
