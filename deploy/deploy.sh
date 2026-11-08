@@ -423,7 +423,9 @@ fi
 # ============================= 5. 校验 ========================================
 if [ "$DO_VERIFY" -eq 1 ]; then
   step "5/6 校验（健康检查 / 产物一致性 / 前端哈希 / 登录）"
-  VERIFY_OUT="$(sudo_do 2>&1 <<REMOTE
+  # 校验脚本先落临时文件：heredoc 直接放在 $( ) 里时，内嵌引号会让本地 bash 解析报错
+  VERIFY_TMP="$(mktemp)"
+  sudo_do >"$VERIFY_TMP" 2>&1 <<REMOTE
 set +e
 B=http://127.0.0.1:${NGINX_PORT}
 
@@ -451,7 +453,8 @@ echo "LOGIN \$(curl -s -b /tmp/dv.txt -c /tmp/dv.txt -H "X-XSRF-TOKEN: \$T" -d "
 echo "MEM \$(systemctl show ${SERVICE} -p MemoryCurrent --value | awk '{printf "%.0f", \$1/1048576}')"
 rm -f /tmp/dv.txt
 REMOTE
-)"
+  VERIFY_OUT="$(cat "$VERIFY_TMP")"
+  rm -f "$VERIFY_TMP"
 
   VERIFY_FAIL=0
 

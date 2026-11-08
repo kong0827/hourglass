@@ -4,7 +4,7 @@
 -- test_plan_case ：计划圈选的用例 + 计划内最近结果（批量执行时回写）；
 -- test_case_run.plan_id：批量执行写入的流水可回溯所属计划。
 -- 执行：mysql -u hourglass -p hourglass < sql/55_test_plan.sql
--- 幂等：可重复执行（CREATE IF NOT EXISTS；ALTER 重复执行会报列已存在，跳过即可）。
+-- 幂等：可重复执行（CREATE IF NOT EXISTS；ALTER 按 information_schema 判断后跳过）。
 -- ============================================================================
 
 USE hourglass;
@@ -43,6 +43,16 @@ CREATE TABLE IF NOT EXISTS `test_plan_case` (
   KEY `idx_case` (`case_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划圈选用例（含计划内最近结果）';
 
-ALTER TABLE `test_case_run`
-  ADD COLUMN `plan_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属测试计划ID（计划批量执行时写入；空=单用例执行）' AFTER `bug_task_id`,
-  ADD KEY `idx_plan` (`plan_id`,`id`);
+SET @s := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `test_case_run` ADD COLUMN `plan_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT ''所属测试计划ID（计划批量执行时写入；空=单用例执行）'' AFTER `bug_task_id`',
+  'DO 0')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'test_case_run' AND COLUMN_NAME = 'plan_id');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @s := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `test_case_run` ADD KEY `idx_plan` (`plan_id`,`id`)',
+  'DO 0')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'test_case_run' AND INDEX_NAME = 'idx_plan');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;

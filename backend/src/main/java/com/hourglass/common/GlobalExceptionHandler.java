@@ -76,6 +76,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(405).body(ApiResult.error(405, "请求方法不支持"));
     }
 
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestTimeoutException.class)
+    public void handleAsyncTimeout(HttpServletRequest request) {
+        // SSE 到点断开属正常回收：响应已是 event-stream，不能再写 JSON 错误体，
+        // 否则 HttpMessageNotWritableException 会把每次重连都刷成一条 ERROR。
+        markFailed(request);
+        log.debug("异步请求超时（SSE 正常断开）：{} {}", request.getMethod(), request.getRequestURI());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResult<Void>> handleOther(Exception e, HttpServletRequest request) {
         markFailed(request);
