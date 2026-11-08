@@ -43,10 +43,11 @@ public class AttachmentService {
             Arrays.asList("jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "md", "zip", "xlsx",
                     "doc", "docx", "xls", "ppt", "pptx"));
 
-    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据） */
+    /** 附件目标类型（sql/24 泛化）：任务 / 需求池需求 / 用例执行记录（失败证据）/ 任务评论 */
     public static final String KIND_TASK = "task";
     public static final String KIND_DEMAND = "demand";
     public static final String KIND_CASE_RUN = "case_run";
+    public static final String KIND_COMMENT = "comment";
 
     private final AttachmentMapper attachmentMapper;
     private final TaskMapper taskMapper;
@@ -54,6 +55,7 @@ public class AttachmentService {
     private final DemandMapper demandMapper;
     private final TestCaseMapper caseMapper;
     private final TestCaseRunMapper caseRunMapper;
+    private final com.hourglass.mapper.TaskCommentMapper commentMapper;
     private final ProjectAccessService projectAccess;
 
     @Value("${app.attach.dir:./data/attachments}")
@@ -62,6 +64,7 @@ public class AttachmentService {
     public AttachmentService(AttachmentMapper attachmentMapper, TaskMapper taskMapper,
                              TaskLogMapper logMapper, DemandMapper demandMapper,
                              TestCaseMapper caseMapper, TestCaseRunMapper caseRunMapper,
+                             com.hourglass.mapper.TaskCommentMapper commentMapper,
                              ProjectAccessService projectAccess) {
         this.attachmentMapper = attachmentMapper;
         this.taskMapper = taskMapper;
@@ -69,7 +72,16 @@ public class AttachmentService {
         this.demandMapper = demandMapper;
         this.caseMapper = caseMapper;
         this.caseRunMapper = caseRunMapper;
+        this.commentMapper = commentMapper;
         this.projectAccess = projectAccess;
+    }
+
+    /** 评论列表一次取全部附件，避免逐条评论 N+1 查询 */
+    public List<Attachment> commentsAttachments(String workspaceId, List<String> commentIds) {
+        if (commentIds == null || commentIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return attachmentMapper.selectByTargets(workspaceId, KIND_COMMENT, commentIds);
     }
 
     public List<Attachment> list(String workspaceId, String userId, String targetId, String kind) {
@@ -101,6 +113,12 @@ public class AttachmentService {
                 throw AppException.notFound("附件所属执行记录不存在或已删除");
             }
             projectId = c.getReqId();
+        } else if (KIND_COMMENT.equals(a.getTargetKind())) {
+            Task t = taskOfComment(workspaceId, a.getTargetId());
+            if (t == null) {
+                throw AppException.notFound("附件所属评论或任务不存在");
+            }
+            projectId = t.getReqId();
         } else {
             Task t = taskMapper.selectById(a.getTargetId());
             if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
@@ -238,6 +256,16 @@ public class AttachmentService {
         deleteFilesAfterCommit(list);
     }
 
+    /** 评论随任务彻底删除时，其附件一并清理（记录随事务，文件提交后删） */
+    public void deleteByCommentTasks(String workspaceId, List<String> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return;
+        }
+        List<Attachment> list = attachmentMapper.selectByCommentTaskIds(workspaceId, taskIds);
+        attachmentMapper.deleteByCommentTaskIds(workspaceId, taskIds);
+        deleteFilesAfterCommit(list);
+    }
+
     /** 导入覆盖/清空空间数据时调用 */
     public void deleteAllWithFiles(String workspaceId) {
         List<Attachment> list = attachmentMapper.selectAllByWorkspace(workspaceId);
@@ -325,11 +353,40 @@ public class AttachmentService {
             }
             return c.getReqId();
         }
+        if (KIND_COMMENT.equals(kind)) {
+            Task t = taskOfComment(workspaceId, targetId);
+            if (t == null) {
+                throw AppException.notFound("评论不存在：" + targetId);
+            }
+            if (t.getDeletedAt() != null) {
+                throw AppException.badRequest("任务在回收站中，不能给评论添加附件");
+            }
+            return t.getReqId();
+        }
         Task t = taskMapper.selectById(targetId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
             throw AppException.notFound("任务不存在：" + targetId);
         }
         return t.getReqId();
+    }
+
+    /** 评论 → 所属任务；评论或任务不存在/不同空间返回 null */
+    private Task taskOfComment(String workspaceId, String commentId) {
+        long id;
+        try {
+            id = Long.parseLong(commentId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        com.hourglass.entity.TaskComment c = commentMapper.selectById(id);
+        if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
+            return null;
+        }
+        Task t = taskMapper.selectById(c.getTaskId());
+        if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
+            return null;
+        }
+        return t;
     }
 
     /** 已存在的附件反查所属项目；任务在回收站中也允许追溯 */
@@ -341,6 +398,10 @@ public class AttachmentService {
         if (KIND_CASE_RUN.equals(kind)) {
             TestCase c = caseOfRun(workspaceId, targetId);
             return c == null ? null : c.getReqId();
+        }
+        if (KIND_COMMENT.equals(kind)) {
+            Task ct = taskOfComment(workspaceId, targetId);
+            return ct == null ? null : ct.getReqId();
         }
         Task t = taskMapper.selectById(targetId);
         return t == null || !workspaceId.equals(t.getWorkspaceId()) ? null : t.getReqId();
@@ -393,8 +454,16 @@ public class AttachmentService {
         if (KIND_CASE_RUN.equals(kind)) {
             return;
         }
+        String taskId = targetId;
+        if (KIND_COMMENT.equals(kind)) {
+            Task t = taskOfComment(workspaceId, targetId);
+            if (t == null) {
+                return;
+            }
+            taskId = t.getId();
+        }
         TaskLog taskLog = new TaskLog();
-        taskLog.setTaskId(targetId);
+        taskLog.setTaskId(taskId);
         taskLog.setWorkspaceId(workspaceId);
         taskLog.setActorId(userId);
         taskLog.setAction("update");

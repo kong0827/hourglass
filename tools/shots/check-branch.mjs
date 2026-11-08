@@ -124,7 +124,7 @@ try {
   await sleep(350)
 
   /* 看板卡片上的分支标签 + 任务抽屉的「所属分支」下拉 */
-  await b.eval(`document.querySelector('.nav-item[data-view="board"]').click()`)
+  await b.eval(`document.querySelector('.nav-item[data-view="workitems"]').click()`)
   await sleep(900)
   const tag = await b.eval(`(() => {
     const t = document.querySelector('.tag-branch')

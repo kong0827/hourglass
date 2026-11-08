@@ -6,12 +6,13 @@ import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
-import { openTaskDrawer } from "../core/task-drawer.js";
+import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { DOC_TYPES, colName, docTypeName, fmtTs, pad2, priColor, priName, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs, render } from "./board.js";
+import { openDemandDetailById } from "./demands.js";
 
 var reqDocList = [];
 var reqDocDirty = false;
@@ -183,13 +184,18 @@ var reqDocFetchSeq = 0;
 var reqDocSearchList = null;
 /* 列表加载失败：与「真的没有文档」区分，保留旧数据并提供重试 */
 var reqDocsError = null;
-function fetchReqDocs(kw){
+function fetchReqDocs(kw, refreshFull){
   var seq = ++reqDocFetchSeq;
-  return API.get("/api/req-docs", kw ? { keyword: kw } : null).then(function(rows){
+  var main = API.get("/api/req-docs", kw ? { keyword: kw } : null);
+  /* 搜索结果是子集，写操作后只刷新它会让全量列表（下拉、卡片文档名）停在旧数据；
+     force 刷新时顺带取一份全量，打字搜索仍然只发一个请求 */
+  var full = (kw && refreshFull) ? API.get("/api/req-docs", null).catch(function(){ return null; }) : null;
+  return Promise.all([main, full]).then(function(res){
     if(seq !== reqDocFetchSeq) return;   // 快速连续搜索：丢弃过期响应
-    rows = rows || [];
+    var rows = res[0] || [];
     if(kw){
       reqDocSearchList = rows;
+      if(res[1]) reqDocList = res[1];
     }else{
       reqDocList = rows;
       reqDocSearchList = null;
@@ -207,7 +213,7 @@ function fetchReqDocs(kw){
 }
 function loadReqDocs(force){
   if(reqDocsLoaded && !force) return Promise.resolve(reqDocList);
-  return fetchReqDocs(reqDocKeyword);
+  return fetchReqDocs(reqDocKeyword, !!force);
 }
 function enterRequirementsView(){
   fillReqDocProjectSelect();
@@ -218,7 +224,8 @@ function enterRequirementsView(){
   });
   showReqDocList();
   setReqDocMode(reqDocMode);
-  loadReqDocs().then(function(){ renderReqDocMode(); });
+  /* 文档列表带「已完成/总工作项」，看板或抽屉里改过任务后必须重新取，否则计数停在旧值 */
+  loadReqDocs(true).then(function(){ renderReqDocMode(); });
 }
 function showReqDocList(){
   /* 同视图内再点「文档」也要先处理未保存正文，不能直接清空编辑态 */
@@ -254,6 +261,50 @@ function reqDocDescendants(id){
   }
   return out;
 }
+/* 某父级下的同项目子文档（parentId 传 null 取根级），按 sortOrder 排好 */
+function reqDocKidsOf(parentId, reqId){
+  var out = reqDocList.filter(function(d){
+    if(reqId && d.reqId !== reqId) return false;
+    return (d.parentId || "") === (parentId || "");
+  });
+  return out.sort(reqDocSort);
+}
+/* 拖拽移动计划：返回要提交给 /api/req-docs/reorder 的 items（含新父级与整组重排的 sortOrder） */
+function reqDocPlanMove(srcId, targetId, zone){
+  var src = reqDocById(srcId);
+  if(!src) return null;
+  var newParentId, kids;
+  if(zone === "into"){
+    var t = reqDocById(targetId);
+    if(!t) return null;
+    newParentId = t.id;
+    kids = reqDocKidsOf(t.id, src.reqId);
+  }else if(zone === "root"){
+    newParentId = null;
+    kids = reqDocKidsOf(null, src.reqId);
+  }else{
+    var t2 = reqDocById(targetId);
+    if(!t2) return null;
+    newParentId = t2.parentId || null;
+    kids = reqDocKidsOf(t2.parentId, src.reqId);
+  }
+  kids = kids.filter(function(k){ return k.id !== srcId; });
+  var idx = kids.length;
+  if(zone === "before" || zone === "after"){
+    idx = -1;
+    for(var i = 0; i < kids.length; i++){
+      if(kids[i].id === targetId){ idx = i; break; }
+    }
+    if(idx < 0) return null;
+    if(zone === "after") idx += 1;
+  }
+  kids.splice(idx, 0, src);
+  var items = [];
+  for(var j = 0; j < kids.length; j++){
+    items.push({ id: kids[j].id, sortOrder: j * 10, parentId: newParentId });
+  }
+  return items;
+}
 function reqDocRowHTML(r, depth, hasChild, collapsed){
   var meta = [esc(docTypeName(r.docType)), esc(r.owner || "—") + " 创建"];
   if(r.createdAt) meta.push(esc(fmtTs(r.createdAt)));
@@ -268,10 +319,13 @@ function reqDocRowHTML(r, depth, hasChild, collapsed){
   var drag = canEditReq(r.reqId)
     ? '<span class="rr-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 13) + '</span>'
     : '';
+  var rename = canEditReq(r.reqId)
+    ? '<span class="rr-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 12) + '</span>'
+    : '';
   return '<button class="reqdoc-row rd-depth' + Math.min(depth, 4) + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-reqdoc="' + esc(r.id) + '"' +
-    ' data-rr-reqid="' + esc(r.reqId || "") + '" data-rr-parent="' + esc(r.parentId || "") + '"' +
-    ' data-rr-depth="' + depth + '" data-rr-sort="' + (r.sortOrder || 0) + '">' +
-    caret + drag +
+    ' data-rr-reqid="' + esc(r.reqId || "") + '"' +
+    ' data-rr-depth="' + depth + '">' +
+    caret + drag + rename +
     '<span class="rr-main">' +
       '<span class="rr-title">' + fmt + esc(r.title) + (r.publishedAt == null ? '<span class="rr-draft">草稿</span>' : '<span class="rr-published">已发布</span>') + '</span>' +
       '<span class="rr-meta">' + meta.join(" · ") + '</span>' +
@@ -636,10 +690,13 @@ function reqDocSplitNodeHTML(r, depth, hasChild, collapsed){
   var drag = canEditReq(r.reqId)
     ? '<span class="rs-drag" title="拖动调整顺序" aria-label="拖动调整顺序">' + icon("grip", 12) + '</span>'
     : '';
+  var rename = canEditReq(r.reqId)
+    ? '<span class="rs-rename" role="button" title="重命名" aria-label="重命名">' + icon("edit", 11) + '</span>'
+    : '';
   return '<button class="rs-node rd-depth' + Math.min(depth, 4) + (r.id === splitDocId ? " active" : "") + '" type="button" draggable="' + (canEditReq(r.reqId) ? 'true' : 'false') + '" data-rs-doc="' + esc(r.id) + '"' +
-    ' data-rs-reqid="' + esc(r.reqId || "") + '" data-rs-parent="' + esc(r.parentId || "") + '"' +
-    ' data-rs-depth="' + depth + '" data-rs-sort="' + (r.sortOrder || 0) + '">' +
-    caret + fmt + drag +
+    ' data-rs-reqid="' + esc(r.reqId || "") + '"' +
+    ' data-rs-depth="' + depth + '">' +
+    caret + fmt + drag + rename +
     '<span class="rs-title">' + esc(r.title) + '</span>' +
     pub +
   '</button>';
@@ -730,9 +787,11 @@ function renderReqDocReader(doc){
   box.innerHTML =
     '<div class="rrd-main">' +
     '<div class="rrd-head">' +
+      '<div class="rrd-crumb" id="rrdCrumb"></div>' +
       '<div class="rrd-title-row">' +
-        '<h3>' + esc(doc.title) + pubBadge + '</h3>' +
+        '<h3><span class="rrd-title-text">' + esc(doc.title) + '</span>' + pubBadge + '</h3>' +
         '<span class="rrd-acts">' +
+          (canWrite ? '<button class="btn sm ghost" type="button" data-rrd-rename="' + esc(doc.id) + '" title="重命名文档">' + icon("edit", 13) + ' 重命名</button>' : '') +
           '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canWrite ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
@@ -762,6 +821,7 @@ function renderReqDocReader(doc){
       '</div>' +
     '</aside>';
   if(!canWrite){ var cf = $("rrdCommentForm"); if(cf) cf.style.display = "none"; }
+  renderReqDocCrumb($("rrdCrumb"), doc.id);
   var body = $("reqDocReaderBody");
   var id = doc.id;
   loadMarkdownLib().then(function(){
@@ -778,6 +838,100 @@ function renderReqDocReader(doc){
     rrdApplyHighlights();
   }).catch(function(ex){
     if(splitDocId === id) body.innerHTML = UI.errorState(ex.message || "正文渲染失败");
+  });
+}
+
+/* ---------- 阅读：面包屑（项目 / 上层文档链 / 当前文档）与行内重命名 ---------- */
+
+function renderReqDocCrumb(el, docId){
+  if(!el) return;
+  var d = reqDocById(docId);
+  if(!d){ el.innerHTML = ""; return; }
+  var parts = ['<span class="rrd-crumb-proj">' + esc(reqDocProjectName(d.reqId)) + '</span>'];
+  var guard = 0, cur = d;
+  while(cur && cur.parentId && guard++ < 20){
+    var p = reqDocById(cur.parentId);
+    if(!p) break;
+    parts.push('<span class="rrd-crumb-sep">/</span><button class="rrd-crumb-link" type="button" data-rrd-crumb="' + esc(p.id) + '" title="打开上层文档">' + esc(p.title) + '</button>');
+    cur = p;
+  }
+  parts.push('<span class="rrd-crumb-sep">/</span><span class="rrd-crumb-cur">' + esc(d.title) + '</span>');
+  el.innerHTML = parts.join("");
+}
+/* 行内重命名：titleEl 被临时隐藏并出现输入框；保存走轻量 PUT /title 接口。
+   hideEl（树行/节点是 button，输入框不能放进 button 里）：隐藏它，把输入框插到它后面 */
+function reqDocBeginRename(id, opts){
+  if(!id || !opts) return;
+  var titleEl = opts.titleEl, hideEl = opts.hideEl || null;
+  if(!titleEl) return;
+  var d = reqDocById(id);
+  if(!d || !canEditReq(d.reqId)) return;
+  var host = hideEl || titleEl;
+  if(host.dataset.rrRenaming) return;
+  var old = d.title || "";
+  var input = document.createElement("input");
+  input.className = opts.inputClass || "rr-rename-input";
+  input.type = "text";
+  input.maxLength = 100;
+  input.value = old;
+  input.setAttribute("aria-label", "文档名称");
+  host.dataset.rrRenaming = "1";
+  host.style.display = "none";
+  host.parentNode.insertBefore(input, host.nextSibling);
+  input.focus();
+  input.select();
+  var done = false;
+  function finish(save){
+    if(done) return;
+    done = true;
+    var name = (input.value || "").trim();
+    delete host.dataset.rrRenaming;
+    host.style.display = "";
+    if(input.parentNode) input.parentNode.removeChild(input);
+    if(!save || !name || name === old) return;
+    API.put("/api/req-docs/" + encodeURIComponent(id) + "/title", { title: name }).then(function(doc){
+      var newTitle = (doc && doc.title) ? doc.title : name;
+      [reqDocList, reqDocSearchList].forEach(function(list){
+        if(!list) return;
+        for(var i = 0; i < list.length; i++){
+          if(list[i].id === id) list[i].title = newTitle;
+        }
+      });
+      syncReqDocTitleViews(id);
+      toast("已重命名为「" + newTitle + "」", "fs");
+    }).catch(function(ex){
+      toast(ex.message || "重命名失败", "bad");
+    });
+  }
+  input.addEventListener("keydown", function(e){
+    if(e.isComposing || e.keyCode === 229) return;
+    if(e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if(e.key === "Escape"){ e.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", function(){ finish(true); });
+}
+/* 重命名成功后把各处展示的标题同步一遍（列表/左树/阅读器标题/面包屑） */
+function syncReqDocTitleViews(id){
+  var d = reqDocById(id);
+  if(!d) return;
+  if(reqDocMode === "tree") renderReqDocTree();
+  else if(reqDocMode === "read") renderReqDocSplit();
+  else if(reqDocMode === "kanban") renderReqDocKanban();
+  /* 阅读器此刻显示的是被重命名的这篇，才更新标题与面包屑 */
+  if(splitDocId !== id) return;
+  var span = document.querySelector("#reqDocReader .rrd-title-text");
+  if(span) span.textContent = d.title;
+  renderReqDocCrumb($("rrdCrumb"), id);
+}
+/* 把 reorder 结果同步进全量与搜索两份列表，避免搜索态下显示旧结构 */
+function reqDocApplySortItems(items){
+  [reqDocList, reqDocSearchList].forEach(function(list){
+    if(!list) return;
+    items.forEach(function(it){
+      for(var i = 0; i < list.length; i++){
+        if(list[i].id === it.id){ list[i].sortOrder = it.sortOrder; list[i].parentId = it.parentId; break; }
+      }
+    });
   });
 }
 
@@ -948,6 +1102,7 @@ function maybeShowRrdSelBubble(){
 var rsDragId = null;
 var rsDragSource = null;
 var rsDropLine = null;
+var rsDropTarget = null;
 var rsDroppedInside = false;
 var rsHandlePressed = false;
 function ensureRsDropLine(){
@@ -959,89 +1114,90 @@ function ensureRsDropLine(){
 function removeRsDropLine(){
   if(rsDropLine && rsDropLine.parentNode) rsDropLine.parentNode.removeChild(rsDropLine);
 }
-function rsNodeSiblings(node){
-  /* 返回与 node 同项目、同父级、同层深的兄弟节点（按 DOM 顺序） */
-  var container = node.parentNode;
-  if(!container) return [];
-  var reqId = node.dataset.rsReqid;
-  var parentId = node.dataset.rsParent || "";
-  var depth = node.dataset.rsDepth;
-  return Array.from(container.children).filter(function(el){
-    return el.classList && el.classList.contains("rs-node")
-      && el.dataset.rsReqid === reqId
-      && (el.dataset.rsParent || "") === parentId
-      && el.dataset.rsDepth === depth;
-  });
+/* 清掉“放入此文档/项目”的高亮（drop-into） */
+function reqDocDragClearDropHighlight(tree){
+  if(!tree) return;
+  tree.querySelectorAll(".drop-into").forEach(function(el){ el.classList.remove("drop-into"); });
+}
+/* 指示线 pointer-events:none，指针压在线那几像素上时命中不到行；此时保持上一帧目标，
+   否则会被误判成“拖回项目根级”，在插入位置与根级之间来回抖 */
+function reqDocDragOnDropLine(e){
+  if(!rsDropLine || !rsDropLine.parentNode) return false;
+  var r = rsDropLine.getBoundingClientRect();
+  return e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2;
 }
 function rsHitInfo(e){
-  /* 返回 {node, after: bool}：after=true 表示落在节点下半区，应插到它之后 */
+  /* 返回 {node, zone}：zone = before（上 30% 插到它前面）/ into（中间，成为它的子文档）/ after（下 30% 插到它后面） */
   var st = $("reqDocSplitTree");
   if(!st) return null;
   var y = e.clientY;
   var nodes = Array.from(st.querySelectorAll(".rs-node")).filter(function(n){ return n !== rsDragSource; });
-  var best = null, bestDist = Infinity;
   for(var i = 0; i < nodes.length; i++){
     var r = nodes[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
-    var mid = r.top + r.height / 2;
-    var dist = Math.abs(y - mid);
-    if(dist < bestDist){
-      bestDist = dist;
-      best = { node: nodes[i], after: y >= mid };
-    }
+    var rel = (y - r.top) / Math.max(r.height, 1);
+    return { node: nodes[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
-  return best;
+  return null;
+}
+function rsProjRootHit(e){
+  /* 悬停在项目分组标题上：可把文档放回该项目根级 */
+  if(!rsDragSource) return null;
+  var proj = e.target.closest ? e.target.closest(".rs-proj") : null;
+  if(!proj) return null;
+  var head = proj.querySelector(".rs-proj-head");
+  if(!head) return null;
+  var key = head.dataset.rsProj || "";
+  if(key !== (rsDragSource.dataset.rsReqid || "")) return null;
+  return head;
 }
 function rsCanDrop(targetNode){
   if(!rsDragSource || !targetNode) return false;
   if(targetNode === rsDragSource) return false;
-  /* 只允许同项目、同父级（同级兄弟）之间排序，避免跨项目/跨层级破坏树结构 */
-  return targetNode.dataset.rsReqid === rsDragSource.dataset.rsReqid
-    && (targetNode.dataset.rsParent || "") === (rsDragSource.dataset.rsParent || "");
+  if(targetNode.dataset.rsReqid !== rsDragSource.dataset.rsReqid) return false;
+  /* 跨项目禁止；目标在自己子树内（含“插到后代旁边”）会成环，也禁止。同项目内跨层级/跨目录允许 */
+  var desc = reqDocDescendants(rsDragSource.dataset.rsDoc);
+  return !desc[targetNode.dataset.rsDoc];
 }
 function rsCommitReorder(){
-  if(!rsDragSource) return;
-  var line = ensureRsDropLine();
-  var container = line.parentNode;
-  if(!container || !container.contains(rsDragSource)){
-    removeRsDropLine();
-    rsDragSource = null;
-    rsDragId = null;
-    return;
-  }
-  /* 把被拖节点插到占位线位置，再按 DOM 顺序重算 sortOrder */
-  container.insertBefore(rsDragSource, line);
-  removeRsDropLine();
-  var reqId = rsDragSource.dataset.rsReqid;
-  var parentId = rsDragSource.dataset.rsParent || "";
-  var depth = rsDragSource.dataset.rsDepth;
-  var siblings = Array.from(container.children).filter(function(el){
-    return el.classList && el.classList.contains("rs-node")
-      && el.dataset.rsReqid === reqId
-      && (el.dataset.rsParent || "") === parentId
-      && el.dataset.rsDepth === depth;
-  });
-  var items = [];
-  for(var i = 0; i < siblings.length; i++){
-    items.push({ id: siblings[i].dataset.rsDoc, sortOrder: i * 10, parentId: parentId || null });
-  }
+  var source = rsDragSource;
+  var target = rsDropTarget;
+  var st = $("reqDocSplitTree");
   rsDragSource = null;
   rsDragId = null;
-  if(!canEditReq(reqId)){
+  rsDropTarget = null;
+  removeRsDropLine();
+  reqDocDragClearDropHighlight(st);
+  if(!source || !target){ if(st) renderReqDocSplit(); return; }
+  var srcId = source.dataset.rsDoc;
+  if(!canEditReq(source.dataset.rsReqid)){
     toast("你对该项目只有查看权限", "warn");
     renderReqDocSplit();
     return;
   }
+  var before = reqDocById(srcId);
+  var oldParentId = before ? (before.parentId || null) : null;
+  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  if(!items){ renderReqDocSplit(); return; }
+  var changed = false;
+  for(var i = 0; i < items.length; i++){
+    var d = reqDocById(items[i].id);
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+      changed = true;
+      break;
+    }
+  }
+  if(!changed){ renderReqDocSplit(); return; }
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
-    /* 本地同步 sortOrder，避免重新拉取前顺序回跳 */
-    items.forEach(function(it){
-      var d = reqDocById(it.id);
-      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
-    });
+    /* 本地同步 sortOrder/parentId，避免重新拉取前顺序回跳 */
+    reqDocApplySortItems(items);
+    /* 拖进某个文档下时顺手展开它，让移动结果可见 */
+    if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
     renderReqDocSplit();
-    toast("顺序已保存", "fs");
+    var after = reqDocById(srcId);
+    toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
-    toast(ex.message || "排序保存失败", "bad");
+    toast(ex.message || "移动保存失败", "bad");
     renderReqDocSplit();
   });
 }
@@ -1067,6 +1223,7 @@ function initReqDocSplitDrag(){
     }
     rsDragId = node.dataset.rsDoc;
     rsDragSource = node;
+    rsDropTarget = null;
     rsDroppedInside = false;
     node.classList.add("dragging");
     try{
@@ -1084,31 +1241,53 @@ function initReqDocSplitDrag(){
       rsDroppedInside = false;
     }else{
       removeRsDropLine();
+      reqDocDragClearDropHighlight(st);
       rsDragSource = null;
       rsDragId = null;
+      rsDropTarget = null;
     }
   });
   st.addEventListener("dragover", function(e){
     if(!rsDragSource){ return; }
     e.preventDefault();
     try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    if(reqDocDragOnDropLine(e)) return;
     var hit = rsHitInfo(e);
     var line = ensureRsDropLine();
+    reqDocDragClearDropHighlight(st);
+    var target = null;
     if(hit && rsCanDrop(hit.node)){
-      var container = hit.node.parentNode;
-      if(hit.after){
-        container.insertBefore(line, hit.node.nextSibling);
+      target = { zone: hit.zone, docId: hit.node.dataset.rsDoc };
+      if(hit.zone === "into"){
+        removeRsDropLine();
+        hit.node.classList.add("drop-into");
       }else{
-        container.insertBefore(line, hit.node);
+        var container = hit.node.parentNode;
+        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+        else container.insertBefore(line, hit.node);
+      }
+    }else if(!hit){
+      var projHead = rsProjRootHit(e);
+      if(projHead){
+        target = { zone: "root", docId: null };
+        removeRsDropLine();
+        projHead.classList.add("drop-into");
+      }else{
+        removeRsDropLine();
       }
     }else{
       removeRsDropLine();
     }
+    rsDropTarget = target;
   });
   st.addEventListener("dragleave", function(e){
     if(!rsDragSource) return;
     var stBox = $("reqDocSplitTree");
-    if(stBox && !stBox.contains(e.relatedTarget)) removeRsDropLine();
+    if(stBox && !stBox.contains(e.relatedTarget)){
+      removeRsDropLine();
+      reqDocDragClearDropHighlight(stBox);
+      rsDropTarget = null;
+    }
   });
   st.addEventListener("drop", function(e){
     if(!rsDragSource) return;
@@ -1121,73 +1300,79 @@ function initReqDocSplitDrag(){
 /* ---------- 列表树拖拽排序（与阅读树共用同一套逻辑，仅选择器不同） ---------- */
 
 var rrDragSource = null;
+var rrDropTarget = null;
 var rrDroppedInside = false;
 /* 行本身才是 draggable 元素，dragstart 的 target 是整行，找不到 .rr-drag；
    所以在 mousedown 时记住是否按在手柄上 */
 var rrHandlePressed = false;
 function rrHitInfo(e){
+  /* 返回 {node, zone}：zone = before / into / after（与阅读树一致） */
   var tree = $("reqDocTree");
   if(!tree) return null;
   var y = e.clientY;
   var rows = Array.from(tree.querySelectorAll(".reqdoc-row")).filter(function(n){ return n !== rrDragSource; });
-  var best = null, bestDist = Infinity;
   for(var i = 0; i < rows.length; i++){
     var r = rows[i].getBoundingClientRect();
     if(y < r.top || y > r.bottom) continue;
-    var mid = r.top + r.height / 2;
-    var dist = Math.abs(y - mid);
-    if(dist < bestDist){
-      bestDist = dist;
-      best = { node: rows[i], after: y >= mid };
-    }
+    var rel = (y - r.top) / Math.max(r.height, 1);
+    return { node: rows[i], zone: rel < 0.3 ? "before" : (rel > 0.7 ? "after" : "into") };
   }
-  return best;
+  return null;
+}
+function rrProjRootHit(e){
+  if(!rrDragSource) return null;
+  var proj = e.target.closest ? e.target.closest(".reqdoc-proj") : null;
+  if(!proj) return null;
+  var head = proj.querySelector(".reqdoc-proj-head");
+  if(!head) return null;
+  var key = head.dataset.toggleProj || "";
+  if(key !== (rrDragSource.dataset.rrReqid || "")) return null;
+  return head;
 }
 function rrCanDrop(targetNode){
   if(!rrDragSource || !targetNode) return false;
   if(targetNode === rrDragSource) return false;
-  return targetNode.dataset.rrReqid === rrDragSource.dataset.rrReqid
-    && (targetNode.dataset.rrParent || "") === (rrDragSource.dataset.rrParent || "");
+  if(targetNode.dataset.rrReqid !== rrDragSource.dataset.rrReqid) return false;
+  /* 跨项目禁止；目标在自己子树内会成环，也禁止。同项目内跨目录/跨层级允许 */
+  var desc = reqDocDescendants(rrDragSource.dataset.reqdoc);
+  return !desc[targetNode.dataset.reqdoc];
 }
 function rrCommitReorder(){
-  if(!rrDragSource) return;
-  var line = ensureRsDropLine();
-  var container = line.parentNode;
-  if(!container || !container.contains(rrDragSource)){
-    removeRsDropLine();
-    rrDragSource = null;
-    return;
-  }
-  container.insertBefore(rrDragSource, line);
-  removeRsDropLine();
-  var reqId = rrDragSource.dataset.rrReqid;
-  var parentId = rrDragSource.dataset.rrParent || "";
-  var depth = rrDragSource.dataset.rrDepth;
-  var siblings = Array.from(container.children).filter(function(el){
-    return el.classList && el.classList.contains("reqdoc-row")
-      && el.dataset.rrReqid === reqId
-      && (el.dataset.rrParent || "") === parentId
-      && el.dataset.rrDepth === depth;
-  });
-  var items = [];
-  for(var i = 0; i < siblings.length; i++){
-    items.push({ id: siblings[i].dataset.reqdoc, sortOrder: i * 10, parentId: parentId || null });
-  }
+  var source = rrDragSource;
+  var target = rrDropTarget;
+  var tree = $("reqDocTree");
   rrDragSource = null;
-  if(!canEditReq(reqId)){
+  rrDropTarget = null;
+  removeRsDropLine();
+  reqDocDragClearDropHighlight(tree);
+  if(!source || !target){ if(tree) renderReqDocTree(); return; }
+  var srcId = source.dataset.reqdoc;
+  if(!canEditReq(source.dataset.rrReqid)){
     toast("你对该项目只有查看权限", "warn");
     renderReqDocTree();
     return;
   }
+  var before = reqDocById(srcId);
+  var oldParentId = before ? (before.parentId || null) : null;
+  var items = reqDocPlanMove(srcId, target.docId, target.zone);
+  if(!items){ renderReqDocTree(); return; }
+  var changed = false;
+  for(var i = 0; i < items.length; i++){
+    var d = reqDocById(items[i].id);
+    if(d && ((d.sortOrder || 0) !== items[i].sortOrder || (d.parentId || null) !== (items[i].parentId || null))){
+      changed = true;
+      break;
+    }
+  }
+  if(!changed){ renderReqDocTree(); return; }
   API.post("/api/req-docs/reorder", { items: items }).then(function(){
-    items.forEach(function(it){
-      var d = reqDocById(it.id);
-      if(d){ d.sortOrder = it.sortOrder; d.parentId = it.parentId; }
-    });
+    reqDocApplySortItems(items);
+    if(target.zone === "into" && target.docId) delete reqDocCollapsedDocs[target.docId];
     renderReqDocTree();
-    toast("顺序已保存", "fs");
+    var after = reqDocById(srcId);
+    toast(after && (after.parentId || null) !== oldParentId ? "文档已移动" : "顺序已保存", "fs");
   }).catch(function(ex){
-    toast(ex.message || "排序保存失败", "bad");
+    toast(ex.message || "移动保存失败", "bad");
     renderReqDocTree();
   });
 }
@@ -1206,6 +1391,7 @@ function initReqDocTreeDrag(){
     var d = reqDocById(row.dataset.reqdoc);
     if(!d || !canEditReq(d.reqId)){ e.preventDefault(); return; }
     rrDragSource = row;
+    rrDropTarget = null;
     rrDroppedInside = false;
     row.classList.add("dragging");
     try{
@@ -1223,27 +1409,52 @@ function initReqDocTreeDrag(){
       rrDroppedInside = false;
     }else{
       removeRsDropLine();
+      reqDocDragClearDropHighlight(tree);
       rrDragSource = null;
+      rrDropTarget = null;
     }
   });
   tree.addEventListener("dragover", function(e){
     if(!rrDragSource) return;
     e.preventDefault();
     try{ e.dataTransfer.dropEffect = "move"; }catch(err){}
+    if(reqDocDragOnDropLine(e)) return;
     var hit = rrHitInfo(e);
     var line = ensureRsDropLine();
+    reqDocDragClearDropHighlight(tree);
+    var target = null;
     if(hit && rrCanDrop(hit.node)){
-      var container = hit.node.parentNode;
-      if(hit.after) container.insertBefore(line, hit.node.nextSibling);
-      else container.insertBefore(line, hit.node);
+      target = { zone: hit.zone, docId: hit.node.dataset.reqdoc };
+      if(hit.zone === "into"){
+        removeRsDropLine();
+        hit.node.classList.add("drop-into");
+      }else{
+        var container = hit.node.parentNode;
+        if(hit.zone === "after") container.insertBefore(line, hit.node.nextSibling);
+        else container.insertBefore(line, hit.node);
+      }
+    }else if(!hit){
+      var projHead = rrProjRootHit(e);
+      if(projHead){
+        target = { zone: "root", docId: null };
+        removeRsDropLine();
+        projHead.classList.add("drop-into");
+      }else{
+        removeRsDropLine();
+      }
     }else{
       removeRsDropLine();
     }
+    rrDropTarget = target;
   });
   tree.addEventListener("dragleave", function(e){
     if(!rrDragSource) return;
     var t = $("reqDocTree");
-    if(t && !t.contains(e.relatedTarget)) removeRsDropLine();
+    if(t && !t.contains(e.relatedTarget)){
+      removeRsDropLine();
+      reqDocDragClearDropHighlight(t);
+      rrDropTarget = null;
+    }
   });
   tree.addEventListener("drop", function(e){
     if(!rrDragSource) return;
@@ -1414,9 +1625,9 @@ function loadReqDocDemands(id){
       return;
     }
     list.innerHTML = rows.map(function(d){
-      return '<div class="req-expand-doc dem-doc-readonly">'
+      return '<button class="req-expand-doc" type="button" data-doc-demand="' + esc(d.id) + '" title="查看需求详情">'
         + '<span class="rd-title">' + esc(d.title) + '</span>'
-        + '<span class="rd-meta">' + esc(demandStatusName(d.status)) + ' · ' + esc(priName(d.priority)) + '</span></div>';
+        + '<span class="rd-meta">' + esc(demandStatusName(d.status)) + ' · ' + esc(priName(d.priority)) + '</span></button>';
     }).join("");
   }).catch(function(ex){
     if(editingDocId === id) list.innerHTML = UI.errorState(ex.message || "关联需求加载失败");
@@ -1425,6 +1636,11 @@ function loadReqDocDemands(id){
 function refreshReqDocTasksIfOpen(){
   var page = $("reqDocEditPage");
   if(editingDocId && page && !page.hidden) loadReqDocTasks(editingDocId);
+}
+/* 工作项的文档归属或完成状态变了：文档列表里的工作项计数要一起刷新 */
+function refreshReqDocListIfOpen(){
+  if(activeView !== "requirements") return;
+  loadReqDocs(true);
 }
 function createReqDocTask(){
   if(reqDocReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
@@ -2704,9 +2920,13 @@ function toggleReqDocPublish(){
   API.put("/api/req-docs/" + encodeURIComponent(editingDocId) + "/publish", { published: !published }).then(function(d){
     editingMeta.publishedAt = (d && d.publishedAt) || null;
     refreshReqDocPublishBtn();
-    for(var i = 0; i < reqDocList.length; i++){
-      if(reqDocList[i].id === editingDocId) reqDocList[i].publishedAt = editingMeta.publishedAt;
-    }
+    /* 搜索态下列表来自 reqDocSearchList，两处都要同步，否则徽标仍是「草稿」 */
+    [reqDocList, reqDocSearchList].forEach(function(list){
+      if(!list) return;
+      for(var i = 0; i < list.length; i++){
+        if(list[i].id === editingDocId) list[i].publishedAt = editingMeta.publishedAt;
+      }
+    });
     renderReqDocMode();
     toast(published ? "已收回发布，文档转为草稿" : "已发布，项目成员现在可以查看", "fs");
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); })
@@ -2803,6 +3023,7 @@ function populateReqDocSelect(keep){
       : (!reqId ? "先选项目，再从该项目的文档里挑"
         : (opts.length ? "从该项目的文档里挑" : "该项目还没有文档"));
   }
+  syncAssocViewBtns();
 }
 (function wireRequirementView(){
   var tree = $("reqDocTree");
@@ -2819,6 +3040,18 @@ function populateReqDocSelect(keep){
         return;
       }
       if(e.target.closest(".rr-drag")) return;
+      var rn = e.target.closest(".rr-rename");
+      if(rn){
+        var rrow = e.target.closest("[data-reqdoc]");
+        if(rrow){
+          reqDocBeginRename(rrow.dataset.reqdoc, {
+            titleEl: rrow.querySelector(".rr-title"),
+            hideEl: rrow,
+            inputClass: "rr-rename-input" + (rrow.dataset.rrDepth ? " rd-depth" + Math.min(parseInt(rrow.dataset.rrDepth, 10) || 0, 4) : "")
+          });
+        }
+        return;
+      }
       var row = e.target.closest("[data-reqdoc]");
       if(row){ openReqDocEditor(row.dataset.reqdoc); }
     });
@@ -2924,6 +3157,18 @@ function populateReqDocSelect(keep){
         return;
       }
       if(e.target.closest(".rs-drag")) return;
+      var srn = e.target.closest(".rs-rename");
+      if(srn){
+        var snode = e.target.closest("[data-rs-doc]");
+        if(snode){
+          reqDocBeginRename(snode.dataset.rsDoc, {
+            titleEl: snode.querySelector(".rs-title"),
+            hideEl: snode,
+            inputClass: "rs-rename-input" + (snode.dataset.rsDepth ? " rd-depth" + Math.min(parseInt(snode.dataset.rsDepth, 10) || 0, 4) : "")
+          });
+        }
+        return;
+      }
       var node = e.target.closest("[data-rs-doc]");
       if(node) loadReqDocSplitDoc(node.dataset.rsDoc);
     });
@@ -2932,6 +3177,16 @@ function populateReqDocSelect(keep){
   var rd = $("reqDocReader");
   if(rd){
     rd.addEventListener("click", function(e){
+      var crumb = e.target.closest("[data-rrd-crumb]");
+      if(crumb){ loadReqDocSplitDoc(crumb.dataset.rrdCrumb); return; }
+      var rn = e.target.closest("[data-rrd-rename]");
+      if(rn){
+        reqDocBeginRename(rn.dataset.rrdRename, {
+          titleEl: document.querySelector("#reqDocReader .rrd-title-text"),
+          inputClass: "rrd-rename-input"
+        });
+        return;
+      }
       var b = e.target.closest("[data-rrd-edit]");
       if(b){ openReqDocEditor(b.dataset.rrdEdit); return; }
       var hb = e.target.closest("[data-rrd-history]");
@@ -3108,6 +3363,10 @@ function populateReqDocSelect(keep){
     var retry = e.target.closest("[data-empty-action]");
     if(retry && editingDocId) loadReqDocTasks(editingDocId);
   });
+  if($("reqDocDemandList")) $("reqDocDemandList").addEventListener("click", function(e){
+    var dem = e.target.closest("[data-doc-demand]");
+    if(dem) openDemandDetailById(dem.dataset.docDemand);
+  });
 
   /* 大纲：工具条上的「大纲」按钮开关；面板标题栏的折叠按钮收起 */
   if($("reqDocTocToggle")){
@@ -3213,4 +3472,4 @@ function notifyReqDocChanged(docId, actor){
   openReqDocEditor(editingDocId);
 }
 
-export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, populateReqDocSelect, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, setReqDocProjectFilter, tryCloseReqDocEditor };
+export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, populateReqDocSelect, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, setReqDocProjectFilter, tryCloseReqDocEditor };

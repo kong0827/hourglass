@@ -141,7 +141,9 @@ function renderProject(){
   var options = selectableReqs().map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === p.reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
   var deviation = m.deviationPct === null || m.deviationPct === undefined ? "—" : ((m.deviationPct > 0 ? "+" : "") + m.deviationPct + "%");
   var epics = cache.epics || [];
-  var toolbar = '<div class="manager-toolbar"><div class="manager-project-picker"><b>项目看板</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
+  var toolbar = '<div class="manager-toolbar"><div class="manager-project-picker">'
+    + '<button class="btn sm ghost" type="button" id="btnProjectBack" title="返回项目列表">← 项目列表</button>'
+    + '<b>' + esc(p.name || "项目驾驶舱") + '</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
     + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span></div></div>';
   var overview = caliberHTML('整体进度 = Σ任务完成度 ÷ 任务数；指标由任务流转、预估与自动计时汇总，不提供手填项目进度。')
     + projectBrief(p, m, c, cache.members)
@@ -286,7 +288,7 @@ function drillProjectRow(p){
   var healthName = p.health === "green" ? "正常" : "需关注";
   var name = caretBtn(key, open, "展开项目")
     + '<i class="manager-light ' + esc(p.health) + '" title="' + healthName + '" aria-label="' + healthName + '"></i>'
-    + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目看板">' + esc(p.name) + '</button>';
+    + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目驾驶舱">' + esc(p.name) + '</button>';
   var rows = '<tr class="drill-project">'
     + drillName(0, name)
     + '<td><span class="tag ghost">' + esc(statusName(p.status)) + '</span></td>'
@@ -349,9 +351,9 @@ function renderDrill(){
   }else{
     body = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
   }
-  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目看板 · 全部项目</b><span>逐层展开史诗与任务</span></div>'
+  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目全局透视</b><span>逐层展开史诗与任务</span></div>'
     + '<div class="toolbar-right">' + drillControls() + modeSeg() + '</div></div>'
-    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数（与单项目看板同口径）；项目行统计该项目全部任务（含史诗任务本身），史诗行只统计其子任务，因此子行数字相加不等于项目行。项目名进入单项目看板，史诗名称查看子任务明细，任务行打开详情。')
+    + caliberHTML('进度 = Σ任务完成度 ÷ 任务数（与单项目驾驶舱同口径）；项目行统计该项目全部任务（含史诗任务本身），史诗行只统计其子任务，因此子行数字相加不等于项目行。项目名进入项目驾驶舱，史诗名称查看子任务明细，任务行打开详情。')
     + body;
 }
 function expandAllDrill(){
@@ -409,6 +411,10 @@ function metricTasks(kind){
   return rows;
 }
 function onClick(e){
+  if(e.target.closest("#btnProjectBack")){
+    window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"projects" } }));
+    return;
+  }
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
   var tabBtn = e.target.closest("[data-project-tab]");
   if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }

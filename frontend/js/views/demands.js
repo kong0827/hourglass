@@ -9,7 +9,7 @@ import { isMobile } from "../core/layout.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
-import { openTaskDrawer } from "../core/task-drawer.js";
+import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
@@ -48,6 +48,8 @@ var editingDemandId = null;
 var planDemandId = null;
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
+/* 项目页「查看需求池」的跨视图定位参数；enterDemandsView 应用后清空 */
+var pendingFocusReq = null;
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
 /* 需求写权限跟随所属项目：成员在只读项目下不显示/不放行任何写入口 */
@@ -119,9 +121,20 @@ function loadDemands(){
     });
   });
 }
+/* 供项目页等外部视图跳转：进入需求池并定位到指定项目（看板模式选项目、列表模式带项目筛选） */
+function openDemandsForReq(reqId){
+  pendingFocusReq = reqId || null;
+}
 function enterDemandsView(){
   initDemSmartBar();
   restoreDemState();
+  /* 项目页「查看需求池」携带的项目定位：恢复本地视图状态后应用，避免被快照覆盖 */
+  if(pendingFocusReq){
+    rt.demandReqId = pendingFocusReq;
+    demSmart.reqs = [pendingFocusReq];
+    saveDemState();
+    pendingFocusReq = null;
+  }
   syncDemControls();
   loadViews().then(renderDemTabs);
   listPrefs.load("demand-pool").then(function(){
@@ -315,6 +328,8 @@ function demandMenuItems(d){
     out.push({ act: "rej", label: "拒绝" });
     out.push({ act: "edit", label: "编辑" });
   }
+  if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
+  if(d.status === "plan") out.push({ act: "unplan", label: "撤销排期" });
   out.push({ act: "del", label: "删除", danger: true });
   return out;
 }
@@ -353,6 +368,8 @@ function openDemandRowMenu(anchor, d){
     if(!b) return;
     UI.closeAllPops();
     if(b.dataset.demMenu === "rej") rejectDemand(d.id);
+    else if(b.dataset.demMenu === "unpass") unpassDemand(d.id);
+    else if(b.dataset.demMenu === "unplan") unplanDemand(d.id);
     else if(b.dataset.demMenu === "edit") openDemandDialog(d);
     else if(b.dataset.demMenu === "del") deleteDemand(d.id);
   });
@@ -361,8 +378,9 @@ function openDemandRowMenu(anchor, d){
 }
 function dragHint(status){
   if(status === "review") return "可拖到「已通过」或「已拒绝」";
-  if(status === "pass") return "可拖到「已排期」选择目标版本";
+  if(status === "pass") return "可拖到「已排期」选择目标版本，或拖回「待评审」撤回";
   if(status === "rej") return "可拖回「待评审」重新打开";
+  if(status === "plan") return "可拖回「已通过」撤销排期";
   return "拖到其他列流转状态";
 }
 function cardHTML(d){
@@ -996,6 +1014,33 @@ function reopenDemand(id){
     loadDemands();
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
 }
+function unpassDemand(id){
+  var d = findDemand(id);
+  if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
+  API.post("/api/demands/" + encodeURIComponent(id) + "/unpass", {}).then(function(){
+    toast("已撤回「" + d.title + "」，回到待评审", "fs");
+    loadDemands();
+  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+}
+function unplanDemand(id){
+  var d = findDemand(id);
+  if(!d) return;
+  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
+  var ver = d.versionId ? versionNames[d.versionId] : "";
+  UI.showConfirm({
+    title:"撤销排期",
+    msg:"「" + esc(d.title) + "」将退回「已通过」" + (ver ? "，并解除与版本「" + esc(ver) + "」的关联" : "") + "。确定继续？",
+    okText:"撤销排期",
+    cancelText:"取消"
+  }).then(function(ok){
+    if(!ok) return;
+    API.post("/api/demands/" + encodeURIComponent(id) + "/unplan", {}).then(function(){
+      toast("已撤销「" + d.title + "」的排期", "fs");
+      loadDemands();
+    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  });
+}
 function openPlanDialog(id){
   var d = findDemand(id);
   if(!d) return;
@@ -1024,7 +1069,7 @@ function fillPlanVersions(d, list){
         return '<option value="' + esc(v.id) + '">' + esc(v.name) + (v.targetDate ? (" · 目标 " + String(v.targetDate).substring(5, 10)) : "") + '</option>';
       }).join("")
     : '<option value="">（该项目还没有未发布版本）</option>';
-  if(!usable.length) toast("先在「版本阶段」里创建版本，再排期需求", "warn");
+  if(!usable.length) toast("先在「规划 > 版本」里创建版本，再排期需求", "warn");
   dpVersion.value = d.versionId && usable.some(function(v){ return v.id === d.versionId; }) ? d.versionId : "";
 }
 function doPlan(){
@@ -1435,8 +1480,9 @@ if(demandBody) demandBody.addEventListener("click", function(e){
 
 function allowedDrop(from, to){
   if(from === "review") return to === "pass" || to === "rej";
-  if(from === "pass") return to === "plan";
+  if(from === "pass") return to === "plan" || to === "review";
   if(from === "rej") return to === "review";
+  if(from === "plan") return to === "pass";
   return false;
 }
 function clearColOver(){
@@ -1454,8 +1500,8 @@ function markCanDrop(from){
 }
 /* 不合法落点给出明确文案，而不是静默吞掉 */
 function dropDenied(status){
-  if(status === "pass") toast("已通过的需求只能拖到「已排期」", "warn");
-  else if(status === "plan") toast("已排期的需求在版本里管理，不能拖拽改状态", "warn");
+  if(status === "pass") toast("已通过的需求可拖到「已排期」，或拖回「待评审」撤回", "warn");
+  else if(status === "plan") toast("已排期的需求可拖回「已通过」撤销排期", "warn");
   else if(status === "rej") toast("已拒绝的需求只能拖回「待评审」重新打开", "warn");
   else toast("待评审的需求可以拖到「已通过」或「已拒绝」", "warn");
 }
@@ -1463,6 +1509,8 @@ function applyDrop(src, to){
   if(src.status === "review" && to === "rej"){ rejectDemand(src.id); }
   else if(src.status === "review" && to === "pass"){ passDemand(src.id); }
   else if(src.status === "pass" && to === "plan"){ openPlanDialog(src.id); }
+  else if(src.status === "pass" && to === "review"){ unpassDemand(src.id); }
+  else if(src.status === "plan" && to === "pass"){ unplanDemand(src.id); }
   else if(src.status === "rej" && to === "review"){ reopenDemand(src.id); }
 }
 if(demandBody){
@@ -1483,11 +1531,13 @@ if(demandBody){
       c.classList.remove("bkl-col-no");
     });
     if(!col) return;
+    /* 非法列也要 preventDefault：否则 drop 不触发，用户得不到“为什么不让我放”的提示 */
+    e.preventDefault();
     if(!allowedDrop(dragSrc.status, col.dataset.col)){
       col.classList.add("bkl-col-no");
+      e.dataTransfer.dropEffect = "none";
       return;
     }
-    e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     col.classList.add("bkl-col-over");
   });
@@ -1519,4 +1569,94 @@ function openDemandById(id){
   });
 }
 
-export { enterDemandsView, loadDemands, openDemandById, render };
+/* 只读详情入口：供用例覆盖矩阵等外部视图跳转，查看者 / 无写权限也能打开 */
+function openDemandDetailById(id){
+  var hit = findDemand(id);
+  if(hit){ showDemandDetail(id); return Promise.resolve(true); }
+  return API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
+    if(!findDemand(d.id)) demands.push(d);
+    showDemandDetail(d.id);
+    return true;
+  }).catch(function(ex){
+    toast(ex.message || "需求不存在或无权查看", "warn");
+    return false;
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * 任务抽屉「关联需求」下拉（iDemand）
+ * 层次口径与后端 applyRequest 一致：需求必须属于任务所选项目；
+ * 未选项目时可从全空间挑选，选中后由抽屉自动带出需求所属项目。
+ * --------------------------------------------------------------------------- */
+var drawerDemandOpts = { reqId: null, list: [], error: null };
+function drawerDemandStatusLabel(st){
+  for(var i = 0; i < COLS.length; i++){
+    if(COLS[i][0] === st) return COLS[i][1];
+  }
+  return "";
+}
+function fillDrawerDemandSelect(reqId, keep){
+  var sel = $("iDemand");
+  if(!sel || sel.dataset.demandReq !== reqId) return;
+  if(($("iReq") ? $("iReq").value : "") !== reqId) return;
+  if(drawerDemandOpts.error){
+    if(keep){
+      sel.innerHTML = '<option value="' + esc(keep) + '">原关联需求（列表加载失败，已保留）</option>';
+      sel.value = keep;
+    }else{
+      sel.innerHTML = '<option value="">需求列表加载失败，暂无法选择（可重试）</option>';
+      sel.value = "";
+    }
+    sel.setAttribute("data-ready", "1");
+    syncAssocViewBtns();
+    return;
+  }
+  var html = '<option value="">不关联</option>';
+  var matched = false;
+  (drawerDemandOpts.list || []).forEach(function(d){
+    var on = d.id === keep;
+    if(on) matched = true;
+    var tag = drawerDemandStatusLabel(d.status);
+    html += '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '">'
+      + esc(d.title) + (tag ? "（" + esc(tag) + "）" : "") + '</option>';
+  });
+  /* 编辑时原关联已被删除/失效：保留原值展示，保存时后端会静默解绑 */
+  if(keep && !matched){
+    html += '<option value="' + esc(keep) + '" data-req="' + esc(reqId) + '">原关联需求（已不在该项目需求池）</option>';
+    matched = true;
+  }
+  sel.innerHTML = html;
+  sel.value = keep || "";
+  sel.setAttribute("data-ready", "1");
+  syncAssocViewBtns();
+}
+function ensureDemandOptions(keep, reqId){
+  var sel = $("iDemand");
+  if(!sel) return;
+  var want = reqId || "";
+  sel.dataset.demandReq = want;
+  if(drawerDemandOpts.reqId === want && (drawerDemandOpts.list.length || drawerDemandOpts.error)){
+    fillDrawerDemandSelect(want, keep);
+    return;
+  }
+  if(drawerDemandOpts.reqId === want && drawerDemandOpts.loading) return;
+  drawerDemandOpts.reqId = want;
+  drawerDemandOpts.list = [];
+  drawerDemandOpts.error = null;
+  sel.innerHTML = '<option value="">需求加载中…</option>';
+  sel.value = "";
+  syncAssocViewBtns();
+  drawerDemandOpts.loading = API.get("/api/demands", want ? { reqId: want } : {}).then(function(list){
+    if(drawerDemandOpts.reqId !== want) return;
+    drawerDemandOpts.list = list || [];
+    drawerDemandOpts.loading = null;
+    fillDrawerDemandSelect(want, keep);
+  }).catch(function(ex){
+    if(drawerDemandOpts.reqId !== want) return;
+    drawerDemandOpts.error = ex || new Error("需求候选加载失败");
+    drawerDemandOpts.loading = null;
+    fillDrawerDemandSelect(want, keep);
+  });
+}
+
+export { enterDemandsView, ensureDemandOptions, loadDemands, openDemandById, openDemandDetailById, openDemandsForReq, render };

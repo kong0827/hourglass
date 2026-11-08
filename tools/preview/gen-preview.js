@@ -66,9 +66,13 @@ const codeOf = new Map(modules.map(m => [m, fs.readFileSync(path.join(JS, m), "u
 
 function importsOf(code) {
   const out = [];
+  /* [^;]*? 而不是 [\s\S]*?：后者会跨过副作用导入 import "x"; 吃到下一行的 from，
+     把两条语句并成一条（曾把 task-actions 的具名导入整条删掉） */
   const re = /^\s*import\s+[^;]*?from\s+"([^"]+)";/gm;
   let m;
   while ((m = re.exec(code))) out.push(m[1]);
+  const side = /^\s*import\s+"([^"]+)";/gm;
+  while ((m = side.exec(code))) out.push(m[1]);
   return out;
 }
 function resolve(from, spec) {
@@ -103,27 +107,58 @@ for (const m of modules) visit(m);
    因此：被 import 引用的共享模块与低频视图各自包一层 IIFE，导出放进 __NS[路径]，
    依赖方从 __NS 解构取用；其余模块保持平铺（导出仍以原标识符对外可见）。 */
 const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "settings", "profile",
-  "phase", "demands", "portfolio", "project", "workload", "risks", "report"];
+  "phase", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js"]));
 
-/** 剥掉 import/export 并记录导出名；依赖被包装模块时改为从 __NS 取 */
-function transformModule(name, code) {
+/** 收集模块的导出表：外部名 → 本地标识符（export { open as openSearchPalette }） */
+function collectExports(code) {
   const exported = {};
-  code = code.replace(/^\s*export\s*\{([\s\S]*?)\};\s*$/gm, function (m, inner) {
+  code.replace(/^\s*export\s*\{([\s\S]*?)\};\s*$/gm, function (m, inner) {
     inner.split(",").map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (part) {
       const alias = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
       if (alias) exported[alias[2]] = alias[1];
       else exported[part] = part;
     });
-    return "";
+    return m;
   });
+  code.replace(/^export\s+(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
+    function (m, kind, id) { exported[id] = id; return m; });
+  return exported;
+}
+const exportsCache = new Map();
+function exportsOf(name) {
+  if (!exportsCache.has(name)) exportsCache.set(name, collectExports(codeOf.get(name) || ""));
+  return exportsCache.get(name);
+}
+
+/** 剥掉 import/export 并记录导出名；依赖被包装模块时改为从 __NS 取 */
+function transformModule(name, code) {
+  const exported = collectExports(code);
+  code = code.replace(/^\s*export\s*\{([\s\S]*?)\};\s*$/gm, "");
   code = code.replace(/^export\s+(function|const|var|let|class)\s+([A-Za-z_$][\w$]*)/gm,
-    function (m, kind, id) { exported[id] = id; return kind + " " + id; });
-  code = code.replace(/^\s*import\s+([\s\S]*?)\s+from\s+"([^"]+)";\s*$/gm, function (m, clause, spec) {
+    function (m, kind, id) { return kind + " " + id; });
+  /* 副作用导入（import "x";）没有 from，必须单独剥掉，否则平铺后就是语法错误 */
+  code = code.replace(/^\s*import\s+"([^"]+)";\s*$/gm, "");
+  code = code.replace(/^\s*import\s+([^;]*?)\s+from\s+"([^"]+)";\s*$/gm, function (m, clause, spec) {
     const target = resolve(name, spec);
-    if (!WRAPPED.has(target)) return "";   // 平铺模块的声明本来就在外层作用域
     clause = clause.trim();
+    if (!WRAPPED.has(target)) {
+      /* 平铺模块的声明本来就在外层作用域，跳过即可；但外部名与本地名不一致时
+         （export { open as openSearchPalette }、import { init as x }）必须补别名，
+         否则原文件里用的新名字未定义 */
+      const braces = clause.match(/^\{([\s\S]*)\}$/);
+      if (!braces) return "";
+      const targetExports = exportsOf(target);
+      return braces[1].split(",").map(function (x) { return x.trim(); }).filter(Boolean)
+        .map(function (part) {
+          const alias = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+          const external = alias ? alias[1] : part;
+          const binding = alias ? alias[2] : part;
+          const local = targetExports[external] || external;
+          return binding === local ? "" : "var " + binding + " = " + local + ";";
+        }).filter(Boolean).join(" ");
+    }
     const ns = clause.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)$/);
     if (ns) return "var " + ns[1] + " = __NS[" + JSON.stringify(target) + "];";
     const names = clause.replace(/^\{|\}$/g, "").split(",").map(function (x) { return x.trim(); })

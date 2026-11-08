@@ -62,7 +62,7 @@ var NOTIFY_EVENTS = {
 /* 展示分组：同一类打扰放在一起，用户能就近判断要不要全关 */
 var NOTIFY_GROUPS = [
   { title: "任务", types: ["task_assigned", "task_comment", "task_watch", "task_updated"] },
-  { title: "项目协作", types: ["demand_status"] },
+  { title: "需求与版本", types: ["demand_status"] },
   { title: "每日汇总", types: ["daily_digest"] }
 ];
 /* 仅重要事件：直接指向我的（指派/评论@/关注）与低频日报保留，广播类关闭，邮件全关 */

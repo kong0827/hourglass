@@ -1074,7 +1074,7 @@ function renderGanttAnalysisMenu(){
   var hasBaseline = !!ganttState.baselineAt;
   var isOwner = !!(rt.currentWs && rt.currentWs.myRole === "owner");
   var isManager = !!(rt.currentWs && (rt.currentWs.myRole === "owner" || rt.currentWs.myRole === "admin"));
-  ganttAnalysisMenu.innerHTML = '<div class="menu-title">分析</div>' +
+  ganttAnalysisMenu.innerHTML = '<div class="menu-title">甘特分析</div>' +
     ganttAnalysisItem('data-gantt-critical', '关键路径高亮', ganttState.showCritical, '') +
     ganttAnalysisItem('data-gantt-baseline-toggle', '显示基线', ganttState.baselineOn, hasBaseline ? '' : '未设置') +
     '<div class="menu-sep"></div>' +

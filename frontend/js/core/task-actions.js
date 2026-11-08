@@ -129,11 +129,13 @@ function loadRunningTimer(cb){
     state.runningTimer = (d && d.running) ? d : null;
     updateElapsedTexts();
     renderTimerPill();
+    window.dispatchEvent(new CustomEvent("ds:running-timer"));
     if(cb) cb(state.runningTimer);
   }).catch(function(){
     if(seq !== runningTimerSeq) return;
     state.runningTimer = null;
     renderTimerPill();
+    window.dispatchEvent(new CustomEvent("ds:running-timer"));
     if(cb) cb(null);
   });
 }
@@ -257,7 +259,7 @@ function openCardMenu(anchor, taskId){
   }
   if(editable || running){
     /* 停止自己已开始的计时不受只读限制（与后端口径一致） */
-    html += '<button class="menu-item" type="button" data-cm="timer">' + icon("timer", 14) +
+    html += '<button class="menu-item" type="button" data-cm="timer">' + icon(running ? "pause" : "timer", 14) +
       (running ? "停止计时" : "开始计时") + '</button>';
   }
   html +=

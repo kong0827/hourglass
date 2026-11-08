@@ -167,6 +167,22 @@ public class DemandController {
     }
 
     @RequireRole
+    @PostMapping("/api/demands/{id}/unpass")
+    public ApiResult<Demand> unpass(@PathVariable String id,
+                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.unpass(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    @RequireRole
+    @PostMapping("/api/demands/{id}/unplan")
+    public ApiResult<Demand> unplan(@PathVariable String id,
+                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.unplan(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    @RequireRole
     @PostMapping("/api/demands/{id}/reopen")
     public ApiResult<Demand> reopen(@PathVariable String id,
                                     @RequestBody(required = false) DemandActionRequest body,

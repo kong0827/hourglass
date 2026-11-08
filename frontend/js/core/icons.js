@@ -25,6 +25,8 @@
     calendar: function (s) { return svg(s, '<rect x="3" y="4.4" width="14" height="12.6" rx="2.2"/><path d="M3 8.2h14M6.8 4.4V2.8M13.2 4.4V2.8"/>'); },
     projects: function (s) { return svg(s, '<path d="M3.2 5.4A1.8 1.8 0 0 1 5 3.6h8l4 4v8a1.8 1.8 0 0 1-1.8 1.8H5A1.8 1.8 0 0 1 3.2 15.6Z"/><path d="M12.6 3.6v4.2h4.2"/>'); },
     review: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.2"/><path d="M6.8 10.3 9 12.5l4.4-4.7"/>'); },
+    /* 需求池：与导航「需求池」入口同一图标 */
+    demand: function (s) { return svg(s, '<path d="M3.4 4.2h13.2v8.4l-3.2 3.2H3.4Z"/><path d="M13.4 15.8v-3.2h3.2"/><path d="M6.6 8h6.8M6.6 11.2h4.4"/>'); },
     stats: function (s) { return svg(s, '<path d="M4.4 16.2V11M10 16.2V4.6M15.6 16.2v-7"/>'); },
     trash: function (s) { return svg(s, '<path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/>'); },
     settings: function (s) { return svg(s, '<path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/>'); },

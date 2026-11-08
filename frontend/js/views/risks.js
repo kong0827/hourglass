@@ -2,6 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
+import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -37,7 +38,7 @@ function uniqueRiskTasks(){
 function renderRisks(){
   var today=cache.today,all=uniqueRiskTasks(),over=cache.overloaded||[];
   $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+'</div>'
-    +(over.length?'<div class="manager-overload-note"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></div>':'')
+    +(over.length?'<button type="button" class="manager-overload-note" data-risk-overload title="查看成员负载"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></button>':'')
     +'<div class="manager-risk-grid">'+riskColumn("overdue","逾期",cache.overdue||[],today)+riskColumn("blocked","被阻塞",cache.blocked||[],today)+riskColumn("stagnant","7 天未动",cache.stagnant||[],today)+'</div>';
 }
 function postBatches(ids){
@@ -54,6 +55,7 @@ function nudge(ids){
 }
 if($("risksBody"))$("risksBody").addEventListener("click",function(e){
   if(e.target.closest("[data-empty-action]")){loadRisks();return;}
+  if(e.target.closest("[data-risk-overload]")){showView("workload");return;}
   var single=e.target.closest("[data-nudge]");if(single){nudge([single.dataset.nudge]);return;}
   if(e.target.closest("[data-nudge-all]")){
     var ids=uniqueRiskTasks().map(function(t){return t.id;});

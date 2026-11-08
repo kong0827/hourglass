@@ -143,7 +143,8 @@ document.addEventListener("keydown", function(e){
   /* g + 字母：跳转视图（800ms 内组合，允许 g g） */
   if(gPending && Date.now() - gPending < 900){
     var gmap = {b:"board", l:"list", m:"mine", c:"calendar", g:"gantt", p:"projects",
-                r:"review", a:"analysis", s:"settings"};
+                r:"review", a:"analysis", s:"settings", d:"demands", v:"phase",
+                o:"requirements", t:"testcases", i:"risks", w:"workload", n:"messages"};
     var gt = gmap[String(e.key || "").toLowerCase()];
     gPending = 0;
     if(gt){ e.preventDefault(); showView(gt); return; }

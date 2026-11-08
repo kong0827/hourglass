@@ -66,6 +66,25 @@
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </delete>
 
+  <select id="selectByCommentTaskIds" resultType="Attachment">
+    SELECT a.id, a.target_id, a.target_kind, a.workspace_id, a.filename, a.content_type, a.size,
+           a.stored_name, a.created_at
+    FROM attachment a
+    INNER JOIN task_comment c ON c.id = a.target_id AND c.workspace_id = a.workspace_id
+    WHERE a.workspace_id = #{workspaceId} AND a.target_kind = 'comment'
+      AND c.task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+    ORDER BY a.id
+  </select>
+
+  <delete id="deleteByCommentTaskIds">
+    DELETE a FROM attachment a
+    INNER JOIN task_comment c ON c.id = a.target_id AND c.workspace_id = a.workspace_id
+    WHERE a.workspace_id = #{workspaceId} AND a.target_kind = 'comment'
+      AND c.task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+  </delete>
+
   <delete id="deleteByTarget">
     DELETE FROM attachment
     WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind} AND target_id = #{targetId}

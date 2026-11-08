@@ -75,6 +75,8 @@ public class Task {
     private Integer attachmentCount;
     /** 「我的任务」用：所属空间名（非表字段） */
     private String workspaceName;
+    /** 「我的任务」用：所属项目名（非表字段，mergeTaskExtras 填充，跨空间分组/展示用） */
+    private String reqName;
     /** 「我的任务」用：当前用户对该任务的可写性 write/read（非表字段，跨空间批量填充） */
     private String access;
     /**

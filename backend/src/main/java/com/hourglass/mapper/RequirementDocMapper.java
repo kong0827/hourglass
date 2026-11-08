@@ -17,9 +17,15 @@ public interface RequirementDocMapper {
 
     RequirementDoc selectById(@Param("id") String id);
 
-    /** 全局搜索：标题/正文 LIKE（不走全文索引，短词也能稳定命中） */
+    /**
+     * 全局搜索：标题/正文 LIKE（不走全文索引，短词也能稳定命中）。
+     * 草稿可见口径与列表一致：仅作者本人与空间 owner/admin 能命中，
+     * seeAllDrafts 为 true 时（特权角色）不做该过滤。
+     */
     List<com.hourglass.dto.SearchHit> searchVisible(@Param("workspaceId") String workspaceId,
                                                     @Param("viewerId") String viewerId,
+                                                    @Param("userId") String userId,
+                                                    @Param("seeAllDrafts") boolean seeAllDrafts,
                                                     @Param("q") String q,
                                                     @Param("limit") int limit);
 
@@ -43,6 +49,11 @@ public interface RequirementDocMapper {
     int updateStatus(@Param("workspaceId") String workspaceId,
                      @Param("id") String id,
                      @Param("status") String status);
+
+    /** 行内重命名：只动 title，不触碰正文与乐观锁 */
+    int updateTitle(@Param("workspaceId") String workspaceId,
+                    @Param("id") String id,
+                    @Param("title") String title);
 
     /** 阅读/树拖拽排序：只动 sort_order 与 parent_id，不触碰正文与乐观锁 */
     int updateSortOrder(@Param("workspaceId") String workspaceId,

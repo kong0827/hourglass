@@ -38,7 +38,8 @@ class TaskCommentServiceNotificationTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
     private final TaskCommentService service = new TaskCommentService(comments, tasks,
-            mock(TaskLogMapper.class), users, members, events, access, mock(TaskWatchService.class));
+            mock(TaskLogMapper.class), users, members, events, access, mock(TaskWatchService.class),
+            mock(AttachmentService.class));
 
     @Test
     void commentNotifiesOwnerThroughEventPreferences() {

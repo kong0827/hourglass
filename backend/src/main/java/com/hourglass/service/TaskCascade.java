@@ -222,6 +222,7 @@ public class TaskCascade {
            ID 复用由 create() 里的 hasSnapshot 检查拦住。 */
         /* 第九轮审查 #1/#2：评论与应用内通知必须跟着任务一起清，否则已删除的任务 ID
            会被 countChildRefs 永久锁死，同 ID 还原时旧评论还会挂到新任务上。 */
+        attachmentService.deleteByCommentTasks(workspaceId, taskIds);
         commentMapper.deleteByTaskIds(workspaceId, taskIds);
         watchMapper.deleteByTaskIds(workspaceId, taskIds);
         appNotificationMapper.deleteByTaskIds(workspaceId, taskIds);

@@ -83,6 +83,7 @@ public class SavedViewService {
         copyString(root, out, "doneScope", 16);
         copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "rej");
         copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "kind");
+        copyEnum(root, out, "subgroup", "none", "status", "owner", "priority", "project");
         copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created",
                 "title", "type", "column", "owner", "progress", "project", "version",
                 "category", "startDate", "tags", "subtasks", "comments");
@@ -108,6 +109,14 @@ public class SavedViewService {
                 throw AppException.badRequest("视图参数不合法：blocked 应为布尔值");
             }
             out.put("blocked", blocked.asBoolean());
+        }
+        /* 列表视图：隐藏已完成是视图口径的一部分，需要随视图保存 */
+        JsonNode hideDone = root.get("hideDone");
+        if (hideDone != null && !hideDone.isNull()) {
+            if (!hideDone.isBoolean()) {
+                throw AppException.badRequest("视图参数不合法：hideDone 应为布尔值");
+            }
+            out.put("hideDone", hideDone.asBoolean());
         }
         /* 文档视图：搜索词已由 q 承载，另存项目范围与展示方式 */
         if ("doc".equals(scope)) {

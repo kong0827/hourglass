@@ -21,20 +21,22 @@ try {
   await b.shot(OUT + '_shot_flow.png', { fullPage: false })
   /* 视图区滚动容器是 .view 不是 window，fullPage 截不到下半屏 —— 先滚到底再补一张 */
   await b.eval(`(() => {
-    const v = document.getElementById('view-flow')
+    const v = document.getElementById('view-analysis')
     if (v) v.scrollTop = v.scrollHeight
   })()`)
   await sleep(400)
   await b.shot(OUT + '_shot_flow_bottom.png', { fullPage: false })
 
-  /* ---------- 1. 侧栏入口 ---------- */
+  /* ---------- 1. 侧栏入口（流程体检已并入「报表」页的子导航） ---------- */
   const nav = await b.eval(`(() => {
-    const el = document.querySelector('.nav-item[data-view="flow"]')
+    const el = document.querySelector('.nav-item[data-view="insight"]')
+    const sub = document.querySelector('#subNav [data-sub-tab="flow"]')
     return { exists: !!el, text: el ? el.textContent.trim() : null,
-             active: el ? el.classList.contains('on') : false }
+             active: el ? el.classList.contains('on') : false,
+             subActive: sub ? sub.classList.contains('on') : false }
   })()`)
-  log(nav.exists && nav.text === '流程体检', '侧栏有「流程体检」入口', JSON.stringify(nav))
-  log(nav.active, '进入该视图后导航项高亮')
+  log(nav.exists && nav.text === '报表', '侧栏有「报表」入口', JSON.stringify(nav))
+  log(nav.active && nav.subActive, '进入流程体检后「报表」与子导航同时高亮')
 
   /* ---------- 2. 结论区 ---------- */
   const ins = await b.eval(`(() => {
@@ -111,7 +113,7 @@ try {
 
   /* ---------- 7. 布局不溢出 ---------- */
   const layout = await b.eval(`(() => {
-    const v = document.getElementById('view-flow')
+    const v = document.getElementById('view-analysis')
     const over = [...v.querySelectorAll('*')].filter(el => {
       const r = el.getBoundingClientRect()
       return r.width > 0 && (r.right > window.innerWidth + 1 || r.left < -1)

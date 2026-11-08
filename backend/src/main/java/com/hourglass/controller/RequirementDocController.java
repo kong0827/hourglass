@@ -5,6 +5,7 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocPublishRequest;
+import com.hourglass.dto.ReqDocRenameRequest;
 import com.hourglass.dto.ReqDocReorderRequest;
 import com.hourglass.dto.ReqDocRestoreRequest;
 import com.hourglass.dto.ReqDocSaveRequest;
@@ -207,6 +208,16 @@ public class RequirementDocController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(docService.changeStatus(userId, ws.getId(), id, req.getStatus()));
+    }
+
+    /** 行内重命名：轻量接口，只改标题，不携带正文也不走整篇乐观锁 */
+    @PutMapping("/api/req-docs/{id}/title")
+    public ApiResult<RequirementDoc> rename(@PathVariable String id,
+                                            @Valid @RequestBody ReqDocRenameRequest req,
+                                            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.rename(userId, ws.getId(), id, req.getTitle()));
     }
 
     /** 阅读/树拖拽排序：批量调整 sort_order 与 parent_id，不携带正文也不走整篇乐观锁 */

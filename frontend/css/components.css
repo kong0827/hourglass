@@ -74,10 +74,17 @@
   display:inline-flex;align-items:center;justify-content:center;color:var(--text-3);border-radius:50%;
 }
 .label-help:hover{color:var(--text);background:var(--surface-hover);}
+/* 字段标签右侧的小文字链接（如任务抽屉关联需求/文档的「查看」） */
+.label-link{
+  flex:0 0 auto;height:18px;padding:0 5px;border:0;background:none;cursor:pointer;
+  font-size:12px;font-weight:600;line-height:18px;color:var(--primary);border-radius:4px;
+}
+.label-link:hover{background:var(--surface-hover);}
 .type-help-list{padding:4px 10px 10px;display:flex;flex-direction:column;gap:8px;}
 .type-help-row{display:flex;gap:8px;align-items:flex-start;}
 .type-help-row .mini-tag{flex:0 0 auto;margin-top:1px;}
 .type-help-desc{font-size:12px;color:var(--text-2);line-height:18px;min-width:0;}
+.tc-help-note{margin:0;padding:0 10px 10px;line-height:18px;}
 
 .input,.textarea,.select,
 .field input[type="text"],.field input[type="password"],.field input[type="date"],
@@ -195,6 +202,12 @@ input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);backgr
 .chip[aria-pressed="true"] .n{color:var(--primary-fg);}
 .chip.ghost{background:transparent;border-color:var(--border);color:var(--text-3);}
 .chip.ghost:hover{background:var(--surface-hover);color:var(--text-2);}
+/* 版本筛选：搜索 + 限高滚动，避免版本数量上百时平铺撑爆弹层 */
+.mf-version-search{
+  width:100%;height:30px;padding:0 10px;margin-bottom:6px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:13px;
+}
+.mf-version-scroll{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding-right:4px;}
 
 /* 语义 chip */
 .chip .cdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
@@ -626,6 +639,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   box-shadow:var(--shadow-lg);animation:ds-pop-in var(--dur-base) var(--ease-out) both;
   max-height:min(420px,70vh);overflow-y:auto;
 }
+/* 菜单分组标题（移动端「更多视图」按侧栏分组） */
+.menu-sec{padding:8px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--text-3);}
+.menu-sec:first-child{padding-top:4px;}
+.menu-sec:not(:first-child){border-top:1px solid var(--border);margin-top:4px;}
 .menu-item{
   display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 10px;
   border-radius:var(--r-xs);font-size:13px;color:var(--text);text-align:left;
@@ -683,6 +700,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   display:inline-grid;place-items:center;font-variant-numeric:tabular-nums;
 }
 .alert-panel .ap-body{max-height:420px;overflow-y:auto;}
+/* 消息页：复用通知面板结构与样式，只去掉浮层宽度与滚动高度限制 */
+.msg-center{width:auto;max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
+.msg-center .ap-body{max-height:none;min-height:240px;}
+#messagesBody{padding-top:20px;}
 
 /* 通知项 */
 .apn{

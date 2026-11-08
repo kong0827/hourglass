@@ -4,6 +4,7 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Mentions;
 import com.hourglass.common.Texts;
 import com.hourglass.entity.AppUser;
+import com.hourglass.entity.Attachment;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskComment;
 import com.hourglass.entity.TaskLog;
@@ -20,9 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -45,11 +48,13 @@ public class TaskCommentService {
     private final NotificationEventService notificationEvents;
     private final ProjectAccessService projectAccess;
     private final TaskWatchService watchService;
+    private final AttachmentService attachmentService;
 
     public TaskCommentService(TaskCommentMapper commentMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               UserMapper userMapper, WorkspaceMemberMapper memberMapper,
                               NotificationEventService notificationEvents,
-                              ProjectAccessService projectAccess, TaskWatchService watchService) {
+                              ProjectAccessService projectAccess, TaskWatchService watchService,
+                              AttachmentService attachmentService) {
         this.commentMapper = commentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -58,6 +63,7 @@ public class TaskCommentService {
         this.notificationEvents = notificationEvents;
         this.projectAccess = projectAccess;
         this.watchService = watchService;
+        this.attachmentService = attachmentService;
     }
 
     /** 读评论：允许回收站中的任务（保留可读） */
@@ -66,7 +72,7 @@ public class TaskCommentService {
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
         }
-        return commentMapper.selectByTaskId(workspaceId, taskId);
+        return withAttachments(workspaceId, commentMapper.selectByTaskId(workspaceId, taskId));
     }
 
     public List<TaskComment> list(String workspaceId, String userId, String taskId) {
@@ -75,7 +81,33 @@ public class TaskCommentService {
             throw AppException.notFound("任务不存在：" + taskId);
         }
         projectAccess.assertViewTask(workspaceId, userId, t);
-        return commentMapper.selectByTaskId(workspaceId, taskId);
+        return withAttachments(workspaceId, commentMapper.selectByTaskId(workspaceId, taskId));
+    }
+
+    /** 一次取回整条讨论的附件，按评论分桶，避免逐条查询 */
+    private List<TaskComment> withAttachments(String workspaceId, List<TaskComment> comments) {
+        if (comments == null || comments.isEmpty()) {
+            return comments == null ? Collections.<TaskComment>emptyList() : comments;
+        }
+        List<String> ids = new ArrayList<String>(comments.size());
+        for (TaskComment c : comments) {
+            ids.add(String.valueOf(c.getId()));
+        }
+        Map<String, List<Attachment>> byTarget = new HashMap<String, List<Attachment>>();
+        for (Attachment a : attachmentService.commentsAttachments(workspaceId, ids)) {
+            List<Attachment> bucket = byTarget.get(a.getTargetId());
+            if (bucket == null) {
+                bucket = new ArrayList<Attachment>();
+                byTarget.put(a.getTargetId(), bucket);
+            }
+            bucket.add(a);
+        }
+        for (TaskComment c : comments) {
+            c.setAttachments(byTarget.containsKey(String.valueOf(c.getId()))
+                    ? byTarget.get(String.valueOf(c.getId()))
+                    : Collections.<Attachment>emptyList());
+        }
+        return comments;
     }
 
     /** 不传结构化提及时的兼容入口（仅解析正文里的 @名字） */
@@ -109,6 +141,7 @@ public class TaskCommentService {
         c.setContent(Texts.cut(text, MAX_LEN));
         commentMapper.insert(c);
         c.setCurrentAuthorName(author);
+        c.setAttachments(Collections.<Attachment>emptyList());
 
         TaskLog taskLog = new TaskLog();
         taskLog.setTaskId(taskId);
@@ -203,6 +236,8 @@ public class TaskCommentService {
         if (t != null) {
             projectAccess.assertWrite(workspaceId, userId, t.getReqId());
         }
+        /* 评论附件跟着评论走：记录随事务，文件提交后再删 */
+        attachmentService.deleteByTarget(workspaceId, String.valueOf(id), AttachmentService.KIND_COMMENT);
         commentMapper.deleteById(id);
     }
 }

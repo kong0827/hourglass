@@ -161,19 +161,19 @@ function openRoleGuide(){
   ].join("");
 
   var menuRows = [
-    roleGuideRow(["我的任务、周回顾", "可见", "可见", "可见", "可见"]),
-    roleGuideRow(["项目、项目总览、需求池、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
-    roleGuideRow(["看板、任务列表、日历、甘特图、分支", "可见", "可见", "可见（不可见项目的任务不出现）", "可见"]),
-    roleGuideRow(["分析、报表中心", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
-    roleGuideRow(["版本阶段、成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["我的工作、周回顾", "可见", "可见", "可见", "可见"]),
+    roleGuideRow(["需求池、项目（含全局健康度）、版本、文档", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["工作项（看板/列表/日历/甘特）、测试、分支", "可见", "可见", "可见（不可见项目的任务不出现）", "可见"]),
+    roleGuideRow(["报表（趋势与分布/完成记录/流程体检/交付图表）", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
+    roleGuideRow(["成员负载、逾期与阻塞", "可见", "可见", "可见（按可见项目过滤）", "可见"]),
     roleGuideRow(["设置、个人设置", "可见", "可见", "可见（编辑项受角色限制）", "可见（只读）"])
   ].join("");
 
   var settingsRows = [
-    roleGuideRow(["空间 / 成员与角色 / 工作流 / 集成 / 数据 / 活动", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
+    roleGuideRow(["空间 / 成员与权限 / 工作流 / 通知与集成 / 数据与审计", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见", "所有空间角色可见"]),
     roleGuideRow(["项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["账号（用户管理）", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"]),
-    roleGuideRow(["集成 → SMTP 邮件配置", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
+    roleGuideRow(["平台（账号管理 / 系统信息 / 审计日志）", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"]),
+    roleGuideRow(["通知与集成 → SMTP 邮件配置", "仅平台管理员", "仅平台管理员", "仅平台管理员", "仅平台管理员"])
   ].join("");
 
   var layer = document.createElement("div");
@@ -254,8 +254,7 @@ function enterSettingsView(){
   if($("inviteHint")) $("inviteHint").textContent = isAdmin
     ? "把链接发给已有账号的同事：对方登录后打开链接即可一键加入；新同事请先在你的「用户管理」里创建账号。链接 7 天有效，可随时撤销。"
     : "把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。";
-  if($("setTabAccess")) $("setTabAccess").hidden = !isManager || isPersonal;
-  if($("setTabSystem")) $("setTabSystem").hidden = !isAdmin;
+  if($("setTabPlatform")) $("setTabPlatform").hidden = !isAdmin;
   if(isPersonal){
     wsMemberList.innerHTML = '<div class="foot-note">个人空间没有其他成员。</div>';
     $("wsMemberCount").textContent = "";
@@ -289,13 +288,13 @@ function setSettingsTab(tab){
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
   var myRole = rt.currentWs && rt.currentWs.myRole;
   var isManager = myRole === "owner" || myRole === "admin";
-  if(tab === "account" && !isAdmin) tab = "space";
-  if(tab === "system" && !isAdmin) tab = "space";
-  if(tab === "access" && !isManager) tab = "space";
+  var isPersonal = !!(rt.currentWs && rt.currentWs.type === "personal");
+  /* 兼容旧页签名：account/system→平台，access→成员与权限，activity→数据与审计 */
+  if(tab === "account" || tab === "system") tab = "platform";
+  if(tab === "access") tab = "members";
+  if(tab === "activity") tab = "data";
+  if(tab === "platform" && !isAdmin) tab = "space";
   settingsTab = tab;
-  /* 活动分区需要占满视口剩余高度：切换时给设置页打标记，其他分区保持原布局 */
-  var viewEl = document.getElementById("view-settings");
-  if(viewEl) viewEl.classList.toggle("set-fill", tab === "activity");
   document.querySelectorAll("#setTabs [data-set-tab]").forEach(function(b){
     var on = b.dataset.setTab === tab;
     b.classList.toggle("on", on);
@@ -304,13 +303,14 @@ function setSettingsTab(tab){
   document.querySelectorAll("#view-settings [data-set-pane]").forEach(function(p){
     p.hidden = p.dataset.setPane !== tab;
   });
-  /* SMTP 配置在「集成」页里，仅平台管理员可见 */
+  /* 项目可见范围与成员同属权限域，但只对管理者可见 */
+  if($("set-access")) $("set-access").hidden = !(tab === "members" && isManager && !isPersonal);
+  /* SMTP 配置在「通知与集成」页里，仅平台管理员可见 */
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
-  if(tab === "access") loadProjectAccess();
+  if(tab === "members" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration" && isAdmin) loadMailSettings();
-  if(tab === "system" && isAdmin){ loadSystemInfo(); loadAudit(1); }
-  if(tab === "account") enterUsersView();
+  if(tab === "platform" && isAdmin){ loadSystemInfo(); loadAudit(1); enterUsersView(); }
 }
 function initSetTabs(){
   var box = $("setTabs");
@@ -1524,9 +1524,11 @@ var SHORTCUT_ROWS = [
   ["N","新建任务：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
   ["C","新建任务（打开详情抽屉）"],
   ["?","打开这份帮助（快捷键 + 录入语法）"],
-  ["g b / g l / g m","跳转：看板 / 列表 / 我的任务"],
+  ["g b / g l / g m","跳转：工作项看板 / 工作项列表 / 我的工作"],
   ["g c / g g / g p","跳转：日历 / 甘特图 / 项目"],
-  ["g r / g a / g s","跳转：周回顾 / 分析 / 设置"],
+  ["g d / g v / g o","跳转：需求池 / 版本 / 文档"],
+  ["g t / g i / g w","跳转：测试 / 逾期与阻塞 / 成员负载"],
+  ["g n / g r / g a / g s","跳转：消息 / 周回顾 / 报表 / 设置"],
   ["0 / 1 / 2 / 3","卡片/列表行聚焦时设置优先级 P0–P3"],
   ["Ctrl/⌘ + K","打开全局搜索：项目、工作项、文档、需求、用例一次搜到"],
   ["/","聚焦顶部任务搜索框：在支持筛选的视图里直接过滤列表"],
@@ -1555,7 +1557,8 @@ function openHelp(){
   if(!$("dlgHelp")) return;
   UI.openModal($("dlgHelp"));
 }
-if($("btnHelp")) $("btnHelp").addEventListener("click", openHelp);
+/* 顶栏帮助菜单在 core/app.js 中绑定：设置模块是懒加载的，
+   入口不能跟着它一起延后可用 */
 if($("dlgHelpX")) $("dlgHelpX").addEventListener("click", function(){ UI.closeModal($("dlgHelp")); });
 if($("dlgHelpOk")) $("dlgHelpOk").addEventListener("click", function(){ UI.closeModal($("dlgHelp")); });
 var userListEl = $("userList");

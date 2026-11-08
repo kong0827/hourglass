@@ -1,4 +1,4 @@
-/* views/report · 报表中心 */
+/* views/report · 交付图表 */
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
@@ -190,14 +190,14 @@ function projectOptions(){
   return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
 }
 function renderReport(){
-  $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>报表中心</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button></div></div>'
+  $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>交付图表</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button></div></div>'
     + caliberHTML('燃尽 = 总预估 − 截至当日已完成任务实际工时；速度按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与任务、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
 }
 function exportCsv(){
   if(!cache) return;
-  var rows = [["报表中心", reqId ? (rt.reqList.filter(function(r){ return r.id === reqId; })[0] || {}).name : "全部项目"], [],
+  var rows = [["交付图表", reqId ? (rt.reqList.filter(function(r){ return r.id === reqId; })[0] || {}).name : "全部项目"], [],
     ["燃尽日期","剩余分钟","理想分钟"]];
   ((cache.burndown || {}).points || []).forEach(function(p){ rows.push([p.date,p.remainingMinutes,p.idealMinutes]); });
   rows.push([],["速度周开始","完成分钟","完成任务数"]);

@@ -17,6 +17,10 @@
         LOCATE(LOWER(#{q}), LOWER(d.title)) > 0
         OR LOCATE(LOWER(#{q}), LOWER(d.content_brief)) > 0
       )
+      <if test="!seeAllDrafts">
+        <!-- 草稿（published_at 为空）只对作者本人可见；口径同 RequirementDocService.canSeeDraft -->
+        AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+      </if>
       <if test="viewerId != null">
         AND NOT EXISTS (SELECT 1 FROM project_member pm
                         WHERE pm.workspace_id = d.workspace_id
@@ -112,6 +116,12 @@
   <!-- 看板拖拽的轻量状态流转：只动状态与更新时间，不走整篇乐观锁 -->
   <update id="updateStatus">
     UPDATE requirement_doc SET status = #{status}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 行内重命名：只动 title，不触碰正文与乐观锁 -->
+  <update id="updateTitle">
+    UPDATE requirement_doc SET title = #{title}, updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 

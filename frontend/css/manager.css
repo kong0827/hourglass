@@ -151,6 +151,11 @@
 .manager-risk-foot>span:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .manager-risk-empty{padding:28px 8px;text-align:center;color:var(--text-3);font-size:12.5px;}
 .manager-overload-note{padding:11px 13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--warning-border);border-radius:var(--r-md);background:var(--warning-soft);font-size:12.5px;}
+button.manager-overload-note{width:100%;text-align:left;font:inherit;cursor:pointer;color:var(--text-2);}
+button.manager-overload-note:hover{border-color:var(--warning);}
+.pivot-tbl .manager-cell-link{padding:1px 3px;font-variant-numeric:tabular-nums;}
+.pivot-tbl th .manager-cell-link{color:var(--text-2);font-weight:600;}
+.pivot-tbl td:first-child .manager-cell-link{color:var(--text);}
 /* 全部项目透视：项目 → Epic → 任务 逐层展开 */
 .manager-drill-tbl .drill-name{white-space:nowrap;}
 .manager-drill-tbl .drill-name > *{vertical-align:middle;}

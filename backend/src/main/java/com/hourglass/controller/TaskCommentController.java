@@ -3,9 +3,11 @@ package com.hourglass.controller;
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.TaskCommentRequest;
+import com.hourglass.entity.Attachment;
 import com.hourglass.entity.TaskComment;
 import com.hourglass.entity.Workspace;
 import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.service.AttachmentService;
 import com.hourglass.service.TaskCommentService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -25,10 +28,13 @@ public class TaskCommentController {
 
     private final TaskCommentService commentService;
     private final WorkspaceService workspaceService;
+    private final AttachmentService attachmentService;
 
-    public TaskCommentController(TaskCommentService commentService, WorkspaceService workspaceService) {
+    public TaskCommentController(TaskCommentService commentService, WorkspaceService workspaceService,
+                                 AttachmentService attachmentService) {
         this.commentService = commentService;
         this.workspaceService = workspaceService;
+        this.attachmentService = attachmentService;
     }
 
     @GetMapping("/api/tasks/{id}/comments")
@@ -63,5 +69,15 @@ public class TaskCommentController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         commentService.delete(userId, ws.getId(), id);
         return ApiResult.ok();
+    }
+
+    /** 评论附件：评论先落库再逐个上传，target_kind = comment */
+    @PostMapping("/api/comments/{id}/attachments")
+    public ApiResult<Attachment> uploadAttachment(@PathVariable String id, @RequestParam("file") MultipartFile file,
+                                                  @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(attachmentService.upload(userId, ws.getId(), id,
+                AttachmentService.KIND_COMMENT, file));
     }
 }

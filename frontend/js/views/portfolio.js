@@ -75,7 +75,7 @@ function statusName(st){
 }
 function pfCell(p, key){
   if(key === "name"){
-    return '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目看板">' + esc(p.name) + '</button></td>';
+    return '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目驾驶舱">' + esc(p.name) + '</button></td>';
   }
   if(key === "status") return '<td><span class="tag ghost">' + esc(statusName(p.status)) + '</span></td>';
   if(key === "health"){
@@ -117,7 +117,7 @@ function renderPortfolio(){
     + '<button type="button" data-pf-mode="table" aria-pressed="' + (mode === "table") + '">列表</button>'
     + '</div>'
     + '<button class="btn sm" type="button" id="btnPortfolioColumns"' + (mode === "table" ? "" : " hidden") + '>显示字段</button>';
-  $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>项目总览</b><span>全部项目 · 点击指标查看明细，点项目名进入项目看板</span></div>'
+  $("portfolioBody").innerHTML = '<div class="manager-toolbar"><div><b>全局健康度</b><span>全部项目 · 点击指标查看明细，点项目名进入项目驾驶舱</span></div>'
     + '<div class="toolbar-right">' + seg
     + '<button class="btn sm" type="button" data-portfolio-export>导出周报</button></div></div>'
     + caliberHTML('进度 = Σ任务完成度 ÷ 任务数；红灯 = 逾期占比 &gt;10% 且连续 7 天无完成，橙灯 = 有逾期或成员超载。')
@@ -148,7 +148,7 @@ function openActiveProjects(){
     var healthName = p.health === "green" ? "正常" : "需关注";
     var tagCls = p.health === "green" ? "tag-success" : (p.health === "red" ? "tag-danger" : "tag-warning");
     return '<tr>'
-      + '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目看板">' + esc(p.name) + '</button></td>'
+      + '<td><button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '" title="打开项目驾驶舱">' + esc(p.name) + '</button></td>'
       + '<td><span class="tag ' + tagCls + '">' + healthName + '</span></td>'
       + '<td class="num">' + (p.progressPct || 0) + '%</td>'
       + '<td class="num">' + (p.backlog || 0) + '</td><td class="num">' + (p.doing || 0) + '</td><td class="num">' + (p.done || 0) + '</td>'
@@ -161,7 +161,7 @@ function openActiveProjects(){
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目看板，卡片下钻可见任务明细</div></div>'
+    + '<h2>进行中项目 · ' + projects.length + '</h2><div class="desc">点击项目名进入项目驾驶舱，卡片下钻可见任务明细</div></div>'
     + '<button class="icon-btn sm" type="button" data-kpi-projects-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>项目</th><th>健康度</th><th class="num">进度</th><th class="num">待处理</th><th class="num">进行中</th><th class="num">已完成</th><th class="num">逾期</th><th>成员</th>'

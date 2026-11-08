@@ -3,6 +3,7 @@
 import { API } from "../core/api.js";
 import { $, hoursNote, segWorkScope, statsHoursEl, workScopeTag } from "../core/dom.js";
 import { catTag, rt, state } from "../core/state.js";
+import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
@@ -80,7 +81,9 @@ function renderCompletions(rows, month){
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
-      '<td><span class="comp-t">' + esc(r.title) + "</span>" +
+      "<td>" + (r.taskId
+        ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开任务详情">' + esc(r.title) + "</button>"
+        : '<span class="comp-t">' + esc(r.title) + "</span>") +
         (r.description ? '<span class="comp-d">' + esc(r.description) + "</span>" : "") + "</td>" +
       "<td>" + (r.reqName ? esc(r.reqName) : '<span class="comp-dim">—</span>') + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
@@ -123,6 +126,8 @@ function exportCompCSV(){
   toast("已导出 " + rows.length + " 条记录", "fs");
 }
 if($("compWrap")) $("compWrap").addEventListener("click", function(e){
+  var t = e.target.closest("[data-open-task]");
+  if(t){ openTaskById(t.dataset.openTask); return; }
   var b = e.target.closest("[data-open-reqdoc]");
   if(b) openReqDocAndJump(b.dataset.openReqdoc);
 });
@@ -151,6 +156,12 @@ function setAnalysisTab(tab, opts){
     var on = b.dataset.analysisTab === tab;
     b.classList.toggle("on", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  /* 全局子导航与页内页签同源：从旧 hash 或周期切换回来时保持高亮一致 */
+  document.querySelectorAll("#subNav [data-sub-tab]").forEach(function(b){
+    var on = b.dataset.subTab === tab;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   document.querySelectorAll("#view-analysis [data-analysis-pane]").forEach(function(p){
     p.hidden = p.dataset.analysisPane !== tab;
@@ -563,4 +574,4 @@ if($("view-analysis")){
   });
 }
 
-export { enterAnalysisView, refreshAnalysisTab };
+export { enterAnalysisView, refreshAnalysisTab, setAnalysisTab };

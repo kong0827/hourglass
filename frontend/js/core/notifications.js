@@ -137,9 +137,7 @@ function loadUnread(force){
     }
   }).catch(function(){ /* 通知是增强能力：失败静默，不打扰用户 */ });
 }
-function renderAlertPanel(){
-  var panel = $("alertPanel");
-  if(!panel) return;
+function alertCenterHTML(){
   var unread = notifyState.unread;
   var html = '<div class="ap-tabs" role="tablist">' +
       '<button class="ap-tab" type="button" role="tab" data-ap-tab="notice" aria-selected="' + (rt.alertTab === "notice") + '">' +
@@ -160,7 +158,85 @@ function renderAlertPanel(){
   }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
     html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-test>在空间中测试推送</button></div>';
   }
-  panel.innerHTML = html;
+  return html;
+}
+function renderAlertPanel(){
+  var panel = $("alertPanel");
+  if(!panel) return;
+  panel.innerHTML = alertCenterHTML();
+  renderMessagesPage();
+}
+/* 消息页与右上角通知面板共用同一套结构，避免两处口径漂移 */
+function renderMessagesPage(){
+  var box = $("messagesBody");
+  if(!box) return;
+  var view = box.closest(".view");
+  if(view && !view.classList.contains("on")) return;
+  box.innerHTML = '<div class="alert-panel msg-center">' + alertCenterHTML() + '</div>';
+}
+function enterMessagesView(){
+  renderMessagesPage();
+  loadUnread(true);
+  loadAlertPanel();
+}
+function handleNoticeClick(e){
+  /* 通知筛选：全部 / 未读 / 提及 */
+  var filterBtn = e.target.closest("[data-ap-filter]");
+  if(filterBtn){
+    setNoticeFilter(filterBtn.dataset.apFilter);
+    return;
+  }
+  /* 顶部 tab：通知 / 截止提醒 */
+  var tabBtn = e.target.closest("[data-ap-tab]");
+  if(tabBtn){
+    var next = tabBtn.dataset.apTab === "due" ? "due" : "notice";
+    if(next !== rt.alertTab){
+      rt.alertTab = next;
+      try{ localStorage.setItem("ds.alertTab", rt.alertTab); }catch(err){ /* 受限环境忽略 */ }
+      renderAlertPanel();
+      loadAlertPanel();
+    }
+    return;
+  }
+  /* 全部标为已读 */
+  if(e.target.closest("[data-ap-readall]")){
+    invalidateNotifications();
+    API.postGlobal("/api/notifications/read-all").then(function(){
+      notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
+      notifyState.unread = 0;
+      renderBellBadge(); updateBellTitle(); renderAlertPanel();
+      loadAlertPanel();
+      loadUnread(true);
+      toast("已全部标为已读", "fs");
+    }).catch(function(ex){
+      loadAlertPanel();
+      loadUnread(true);
+      toast(ex.message || "操作失败", "bad");
+    });
+    return;
+  }
+  /* 通知项：标记已读 + 打开关联任务 */
+  var apn = e.target.closest("[data-apn]");
+  if(apn){
+    UI.closeAllPops();
+    openFromNotification(apn.dataset);
+    return;
+  }
+  var t = e.target.closest("[data-ap-task]");
+  if(t){
+    UI.closeAllPops();
+    var taskId = t.dataset.apTask;
+    /* 动态引入，避免 notifications ↔ task-drawer ↔ router 的静态循环依赖 */
+    import("./task-actions.js").then(function(m){ m.openTaskById(taskId); });
+    return;
+  }
+  if(e.target.closest("[data-ap-test]")){
+    UI.closeAllPops();
+    import("../views/settings.js").then(function(){
+      var b = $("btnNotifyTest");
+      if(b) b.click();
+    }).catch(function(){ toast("请在「设置 · 通知与集成」中测试推送", "warn"); });
+  }
 }
 function noticeFilterHTML(){
   /* 计数来自服务端全量统计；列表只返回当前筛选的一页，不能拿列表长度当计数 */
@@ -482,4 +558,4 @@ function openFromNotification(ds){
   $("unreadBubbleX").addEventListener("click", hideUnreadBubble);
 })();
 
-export { invalidateNotifications, loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertBar, renderAlertPanel, renderBellBadge, routeNotificationLink, setNoticeFilter, syncDocTitle, updateBellTitle };
+export { enterMessagesView, handleNoticeClick, invalidateNotifications, loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertBar, renderAlertPanel, renderBellBadge, renderMessagesPage, routeNotificationLink, setNoticeFilter, syncDocTitle, updateBellTitle };

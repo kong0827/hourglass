@@ -2,9 +2,10 @@
 
 import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
-import { $, attachCount, attachList, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, rt, state, taskById, taskCacheExtra } from "./state.js";
+import { loadRunningTimer } from "./task-actions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
@@ -66,6 +67,13 @@ function focusField(el){
 }
 
 function currentReqId(){ return $("iReq") ? ($("iReq").value || "") : ""; }
+/* 关联需求/关联文档的「查看」按钮：有选中值才出现；下拉被模块异步填充时由填充方回调同步 */
+function syncAssocViewBtns(){
+  [["iDemand", "iDemandView"], ["iReqDoc", "iReqDocView"]].forEach(function(p){
+    var sel = $(p[0]), btn = $(p[1]);
+    if(btn) btn.hidden = !(sel && sel.value);
+  });
+}
 function assocStillCurrent(seq, taskId, reqId){
   return seq === rt.taskFormSeq
     && (rt.editingId || null) === (taskId || null)
@@ -75,6 +83,14 @@ function ensureReqDoc(v){
   var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
   loadView("requirements").then(function(m){
     if(assocStillCurrent(seq, taskId, reqId)) m.ensureReqDocOptions(v);
+  });
+}
+function ensureDemand(v){
+  var sel = $("iDemand");
+  if(sel) sel.removeAttribute("data-ready");
+  var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
+  loadView("demands").then(function(m){
+    if(assocStillCurrent(seq, taskId, reqId)) m.ensureDemandOptions(v || "", reqId);
   });
 }
 function ensureBranch(v, projectId){
@@ -131,7 +147,10 @@ function refreshAssociationViews(){
   var projects = viewModule("projects");
   if(projects) projects.refreshExpandedProjectTasks();
   var requirements = viewModule("requirements");
-  if(requirements) requirements.refreshReqDocTasksIfOpen();
+  if(requirements){
+    requirements.refreshReqDocTasksIfOpen();
+    requirements.refreshReqDocListIfOpen();
+  }
   var phase = viewModule("phase");
   if(phase){
     phase.invalidateTaskOptionsCache();
@@ -454,6 +473,7 @@ function openTaskDrawer(colId, task, defaults){
     ensureFoundVersion(task.foundVersionId || "");
     ensureEpic(task.epicId, task.id);
     rt.formDemandId = task.demandId || null;
+    ensureDemand(rt.formDemandId || "");
     ensureReqDoc(task.reqDocId || "");
     ensureBranch(task.branchId || "", task.reqId || "");
     origProgress = (typeof task.progress === "number") ? task.progress : 0;
@@ -478,6 +498,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
+    clearPendingCommentFiles();
     loadComments(task.id);
     loadWatchStatus(task.id);
     loadTimeline(task.id);
@@ -504,8 +525,10 @@ function openTaskDrawer(colId, task, defaults){
     if(defaults && defaults.demandId){
       taskDrawerTitle.textContent = "基于需求创建工作项";
       rt.formDemandId = defaults.demandId;
+      ensureDemand(defaults.demandId);
     }else{
       rt.formDemandId = null;
+      ensureDemand("");
     }
     if(iItemType) iItemType.value = "task";
     clearDefectFields();
@@ -530,12 +553,14 @@ function openTaskDrawer(colId, task, defaults){
     var drawerMoreNew = $("drawerMore");
     if(drawerMoreNew) drawerMoreNew.open = false;
     commentsCache = [];
+    clearPendingCommentFiles();
     loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
     if(commentCount) commentCount.textContent = "";
     closeMention();
   }
   syncDefectFields();
+  syncAssocViewBtns();
   syncProgVal();
   syncProgByCol();
   fTitle.classList.remove("invalid");
@@ -740,7 +765,42 @@ if(epicHelp){
 if(iReq) iReq.addEventListener("change", function(){
   ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
   ensureBranch(($("iBranch") || {}).value, iReq.value);
+  /* 换项目后原需求池关联失效：立即清空下拉并按新项目重载候选（后端同口径静默解绑） */
+  var demandSel = $("iDemand");
+  if(demandSel) demandSel.value = "";
   rt.formDemandId = null;
+  ensureDemand("");
+  syncAssocViewBtns();
+});
+var iDemand = $("iDemand");
+if(iDemand) iDemand.addEventListener("change", function(){
+  rt.formDemandId = iDemand.value || null;
+  syncAssocViewBtns();
+  /* 选中需求 → 自动带出需求所属项目（与后端「未选项目时以需求为准」同一口径） */
+  if(!iDemand.value) return;
+  var opt = iDemand.options[iDemand.selectedIndex];
+  var wantReq = opt ? (opt.getAttribute("data-req") || "") : "";
+  if(wantReq && wantReq !== iReq.value){
+    iReq.value = wantReq;
+    ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
+    ensureBranch(($("iBranch") || {}).value, wantReq);
+    ensureReqDoc("");
+    ensureDemand(iDemand.value);
+  }
+});
+var demandViewBtn = $("iDemandView");
+if(demandViewBtn) demandViewBtn.addEventListener("click", function(){
+  var sel = $("iDemand");
+  var id = sel ? (sel.value || "") : "";
+  if(!id) return;
+  loadView("demands").then(function(m){ m.openDemandDetailById(id); });
+});
+var docViewBtn = $("iReqDocView");
+if(docViewBtn) docViewBtn.addEventListener("click", function(){
+  var sel = $("iReqDoc");
+  var id = sel ? (sel.value || "") : "";
+  if(!id) return;
+  loadView("requirements").then(function(m){ m.openReqDocAndJump(id); });
 });
 if(iItemType) iItemType.addEventListener("change", function(){
   syncDefectFields();
@@ -781,6 +841,7 @@ function renderComments(list){
   var myId = rt.currentUser ? rt.currentUser.id : "";
   commentList.innerHTML = commentsCache.map(function(c){
     var mine = c.authorId && c.authorId === myId;
+    var files = c.attachments || [];
     return '<div class="comment-item' + (mine ? " mine" : "") + '" data-cid="' + esc(c.id) + '">' +
       avatarHTML(c.authorName || "?", "sm") +
       '<span class="ci-main">' +
@@ -788,40 +849,148 @@ function renderComments(list){
           '<span class="ci-time">' + esc(fmtTs(c.createdAt)) + '</span>' +
           (mine && !rt.drawerReadOnly ? '<button class="ci-del" type="button" data-comment-del="' + esc(c.id) + '">删除</button>' : '') +
         '</span>' +
-        '<span class="ci-body">' + esc(c.content) + '</span>' +
+        (c.content ? '<span class="ci-body">' + esc(c.content) + '</span>' : '') +
+        (files.length ? '<span class="ci-files">' + files.map(function(a){
+          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="预览 / 下载">' +
+            icon("clip", 12) +
+            '<span class="cf-name">' + esc(a.filename) + '</span>' +
+            '<span class="cf-size">' + esc(fmtSize(a.size)) + '</span>' +
+          '</a>';
+        }).join("") + '</span>' : '') +
       '</span>' +
     '</div>';
   }).join("");
+}
+/* ==================== 评论附件 ==================== */
+var pendingCommentFiles = [];
+var COMMENT_FILE_RE = /\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i;
+var COMMENT_FILE_MAX = 10 * 1024 * 1024;
+var COMMENT_FILE_MAX_COUNT = 5;
+
+function renderPendingCommentFiles(){
+  if(!commentAttachChips || !commentAttachTip) return;
+  commentAttachChips.hidden = !pendingCommentFiles.length;
+  commentAttachChips.innerHTML = pendingCommentFiles.map(function(f, i){
+    return '<span class="comment-attach-chip">' +
+      '<span class="ca-name" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+      '<span class="ca-size">' + esc(fmtSize(f.size)) + '</span>' +
+      '<button type="button" data-comment-file-remove="' + i + '" title="移除" aria-label="移除附件">×</button>' +
+    '</span>';
+  }).join("");
+  commentAttachTip.textContent = pendingCommentFiles.length
+    ? ("待上传 " + pendingCommentFiles.length + " 个") : "";
+}
+function clearPendingCommentFiles(){
+  pendingCommentFiles = [];
+  if(iCommentFiles) iCommentFiles.value = "";
+  renderPendingCommentFiles();
+}
+function pickCommentFiles(){
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(iCommentFiles) iCommentFiles.click();
+}
+function addCommentFiles(picked){
+  picked.forEach(function(f){
+    if(!f.size){ toast("「" + f.name + "」是空文件，已跳过", "warn"); return; }
+    if(f.size > COMMENT_FILE_MAX){ toast("「" + f.name + "」超过 10MB，已跳过", "warn"); return; }
+    if(!COMMENT_FILE_RE.test(f.name)){
+      toast("「" + f.name + "」类型不支持（图片/PDF/Office/txt/md/zip）", "warn");
+      return;
+    }
+    if(pendingCommentFiles.length >= COMMENT_FILE_MAX_COUNT){
+      toast("一次最多添加 " + COMMENT_FILE_MAX_COUNT + " 个附件", "warn");
+      return;
+    }
+    for(var i = 0; i < pendingCommentFiles.length; i++){
+      if(pendingCommentFiles[i].name === f.name && pendingCommentFiles[i].size === f.size) return;
+    }
+    pendingCommentFiles.push(f);
+  });
+  renderPendingCommentFiles();
+}
+/* 评论先落库，再逐个上传附件；单个失败不影响其它文件，最后汇总提示 */
+function uploadCommentFiles(commentId, files){
+  var failed = [];
+  var chain = Promise.resolve();
+  files.forEach(function(f){
+    chain = chain.then(function(){
+      var fd = new FormData();
+      fd.append("file", f);
+      var url = API.url("/api/comments/" + encodeURIComponent(commentId) + "/attachments" +
+        (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+      return fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "X-XSRF-TOKEN": csrfCookie() },
+        body: fd
+      }).then(function(res){
+        if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+        return res.json().catch(function(){ return null; });
+      }).then(function(json){
+        if(!json || json.code !== 0){
+          failed.push(f.name + "（" + ((json && json.message) || "上传失败") + "）");
+        }
+      }).catch(function(ex){
+        failed.push(f.name + "（" + (ex && ex.message ? ex.message : "网络异常") + "）");
+      });
+    });
+  });
+  return chain.then(function(){ return failed; });
 }
 function sendComment(){
   if(!rt.editingId || !iComment || rt.commentSending) return;
   if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
   var text = iComment.value.trim();
-  if(!text) return;
+  var files = pendingCommentFiles.slice();
+  if(!text && !files.length) return;
   if(text.length > 500){ toast("评论最多 500 字", "warn"); return; }
   var id = rt.editingId;
   rt.commentSending = true;
   btnCommentSend.disabled = true;
+  if(btnCommentAttach) btnCommentAttach.disabled = true;
   API.post("/api/tasks/" + encodeURIComponent(id) + "/comments", {
-    content: text,
+    /* 只发附件时给一个占位正文：评论正文在后端是必填的 */
+    content: text || "上传了附件",
     /* 从候选里点选过的成员精确带上 ID：正文重名时也能通知到被选中的那位 */
     mentionUserIds: pickedMentionIds(text)
+  }).then(function(comment){
+    if(!files.length || !comment || comment.id == null) return;
+    return uploadCommentFiles(comment.id, files).then(function(failed){
+      if(failed.length) toast("评论已发表，部分附件上传失败：" + failed.join("、"), "bad");
+    });
   }).then(function(){
     rt.commentSending = false;
     btnCommentSend.disabled = false;
+    if(btnCommentAttach) btnCommentAttach.disabled = false;
     /* 发送期间切到了别的任务：不要把新任务抽屉里的草稿清掉 */
     if(rt.editingId !== id) return;
     iComment.value = "";
     closeMention();
     mentionPicked = [];
+    clearPendingCommentFiles();
     loadComments(id);
   }).catch(function(ex){
     rt.commentSending = false;
     btnCommentSend.disabled = false;
+    if(btnCommentAttach) btnCommentAttach.disabled = false;
     toast(ex.message || "发送失败", "bad");
   });
 }
 if(btnCommentSend) btnCommentSend.addEventListener("click", sendComment);
+if(btnCommentAttach) btnCommentAttach.addEventListener("click", pickCommentFiles);
+if(iCommentFiles) iCommentFiles.addEventListener("change", function(){
+  var picked = Array.prototype.slice.call(iCommentFiles.files || []);
+  iCommentFiles.value = "";
+  if(!picked.length) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  addCommentFiles(picked);
+});
+if(commentAttachChips) commentAttachChips.addEventListener("click", function(e){
+  var btn = e.target.closest("[data-comment-file-remove]");
+  if(!btn) return;
+  pendingCommentFiles.splice(Number(btn.dataset.commentFileRemove), 1);
+  renderPendingCommentFiles();
+});
 
 /* ==================== 评论 @提及 ==================== */
 var mentionState = {open:false, items:[], index:0, start:0, end:0};
@@ -1218,8 +1387,13 @@ taskForm.addEventListener("submit", function(e){
       if(es && es.getAttribute("data-ready")) return es.value || "";
       return current ? (current.epicId || null) : null;
     })(),
-    /* 关联需求池需求：由需求拆分时携带；编辑未变更时与后端「null=保持原值」口径一致 */
-    demandId: rt.formDemandId || null,
+    /* 关联需求池需求：下拉就绪以当前选择为准（空串=明确解除）；
+       未就绪（如 Ctrl+Enter）保留打开时带出的关联，null=后端保持原值 */
+    demandId: (function(){
+      var ds = $("iDemand");
+      if(ds && ds.getAttribute("data-ready")) return ds.value || "";
+      return rt.formDemandId || null;
+    })(),
     /* O-13：在已完成列里不改动原进度（抽屉显示 100% 只是口径）；离开该列才写回用户设定的值 */
     progress: (startedDone && stillDone) ? origProgress : (Number(iProg.value) || 0),
     /* 小时 → 分钟；空/0 一律视为"没估"，不传 0 去污染系数 */
@@ -1389,6 +1563,8 @@ subList.addEventListener("change", function(e){
     subList.classList.remove("busy");
     loadSubtasks(id);
     loadBoard({silent:true});
+    refreshListIfOpen();
+    refreshGanttIfOpen();
   }).catch(function(ex){
     subList.classList.remove("busy");
     cb.checked = !cb.checked;
@@ -1406,6 +1582,8 @@ subList.addEventListener("click", function(e){
   API.del("/api/subtasks/" + del.dataset.subDel).then(function(){
     loadSubtasks(id);
     loadBoard({silent:true});
+    refreshListIfOpen();
+    refreshGanttIfOpen();
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
 });
 iSubNew.addEventListener("keydown", function(e){
@@ -1420,6 +1598,8 @@ iSubNew.addEventListener("keydown", function(e){
   API.post("/api/tasks/" + encodeURIComponent(id) + "/subtasks", {title: value}).then(function(){
     loadSubtasks(id);
     loadBoard({silent:true});
+    refreshListIfOpen();
+    refreshGanttIfOpen();
   }).catch(function(ex){
     iSubNew.value = value;
     toast(ex.message || "添加失败", "bad");
@@ -1618,7 +1798,12 @@ btnTimer.addEventListener("click", function(){
     btnTimer.disabled = false;
     renderWork(d);
     toast(running ? ("已停止计时，累计 " + fmtMinutes(d.totalMinutes)) : "开始计时", "fs");
+    /* 同步顶部计时胶囊与「我的工作」行内状态（否则最长要等 60s 轮询） */
+    loadRunningTimer();
     loadBoard({silent:true});
+    /* 列表与甘特都有「工时」列，计时开始/停止要一起刷新 */
+    refreshListIfOpen();
+    refreshGanttIfOpen();
     recSeq++;
     loadWorkRecords(taskId, recSeq);
   }).catch(function(ex){
@@ -1726,6 +1911,8 @@ if(dlgTimeAddOk){
       loadWorkRecords(taskId, recSeq);
       fetchTimer(taskId, workSeq);
       loadBoard({silent:true});
+      refreshListIfOpen();
+      refreshGanttIfOpen();
     }).catch(function(ex){
       toast(ex.message || "补记失败", "bad");
     }).then(function(){ dlgTimeAddOk.disabled = false; });
@@ -1761,6 +1948,8 @@ if(workLogList){
         loadWorkRecords(taskId, recSeq);
         fetchTimer(taskId, workSeq);
         loadBoard({silent:true});
+        refreshListIfOpen();
+        refreshGanttIfOpen();
       }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
     });
   });
@@ -1823,4 +2012,4 @@ if(btnDrawerStatus){
   });
 })();
 
-export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, showDrawerNotice, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };
+export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, showDrawerNotice, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

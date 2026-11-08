@@ -375,6 +375,27 @@ public class RequirementDocService {
     }
 
     /**
+     * 行内重命名等轻量改名：只改 title，不碰正文、不建历史快照、不走整篇乐观锁。
+     */
+    @Transactional
+    public RequirementDoc rename(String userId, String workspaceId, String id, String title) {
+        RequirementDoc d = getVisible(workspaceId, userId, id);
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        String newTitle = Texts.cut(Texts.trimToNull(title), 100);
+        if (newTitle == null) {
+            throw AppException.badRequest("文档标题不能为空");
+        }
+        String oldTitle = d.getTitle();
+        if (!newTitle.equals(oldTitle)) {
+            docMapper.updateTitle(workspaceId, id, newTitle);
+            recordChange(userId, workspaceId, id, "标题", oldTitle, newTitle);
+            notifyDocOwner(docMapper.selectById(id), userId,
+                    "文档「" + newTitle + "」已更新", "文档标题：由「" + oldTitle + "」改为「" + newTitle + "」");
+        }
+        return docMapper.selectById(id);
+    }
+
+    /**
      * 删除需求：任务上的关联解绑（任务本身不动），然后删需求。
      * 任务保留原项目，所以不会连带删任务。
      */

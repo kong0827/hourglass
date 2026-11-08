@@ -13,6 +13,7 @@ import { colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../li
 import * as activityUI from "../core/activity-ui.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { loadBoard, loadReqs } from "./board.js";
+import { openDemandsForReq } from "./demands.js";
 import { loadReqDocs, openNewReqDocDialog, openReqDocAndJump, reqDocList, reqDocStatusLabel, setReqDocProjectFilter } from "./requirements.js";
 
 var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
@@ -266,6 +267,7 @@ function renderReqList(){
         '</section>' +
         '<div class="req-expand-acts">' +
           '<button class="btn sm primary" type="button" data-req-board="' + esc(r.id) + '">在看板中查看</button>' +
+          '<button class="btn sm" type="button" data-req-demands="' + esc(r.id) + '">查看需求池</button>' +
           '<button class="btn sm" type="button" data-req-docs="' + esc(r.id) + '">管理文档</button>' +
         '</div>' +
       '</div>' : '') +
@@ -298,6 +300,7 @@ function projectActions(r){
       '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新增文档" aria-label="新增文档">' + icon("projects", 14) + '</button>') +
     '<button class="icon-btn sm" type="button" data-req-board="' + esc(r.id) + '" title="在看板中查看" aria-label="在看板中查看">' + icon("board", 14) + '</button>' +
+    '<button class="icon-btn sm" type="button" data-req-demands="' + esc(r.id) + '" title="查看需求池" aria-label="查看需求池">' + icon("demand", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-docs="' + esc(r.id) + '" title="管理文档" aria-label="管理文档">' + icon("folder", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-activity="' + esc(r.id) + '" title="活动轨迹" aria-label="活动轨迹">' + icon("clock", 14) + '</button>' +
     (readOnly ? '' :
@@ -596,6 +599,13 @@ reqListEl.addEventListener("click", function(e){
   if(manage){
     setReqDocProjectFilter(manage.dataset.reqDocs);
     showView("requirements");
+    return;
+  }
+  var toDemands = e.target.closest("[data-req-demands]");
+  if(toDemands){
+    openDemandsForReq(toDemands.dataset.reqDemands);
+    showView("demands");
+    toast("已按项目筛选需求池：" + reqNameById(toDemands.dataset.reqDemands));
     return;
   }
   var dl = e.target.closest("[data-del-req]");

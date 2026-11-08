@@ -43,30 +43,28 @@ Existing tools are either pure task boards (execution without requirements or me
 
 ## Key Features
 
-### My Work
+### My
 
-- **My Tasks**: all work items assigned to you, aggregated across workspaces with batched loading; a team view on mobile
+- **My Work**: all work items assigned to you, aggregated across workspaces with batched loading; a team view on mobile
 - **Weekly Retrospective**: automatically summarizes the week's completed, pending-confirmation, and in-progress work; optional AI-drafted weekly report
 
-### Project Collaboration
+### Planning
 
-- **Projects / Project Overview**: health, overdue items, and this week's effort across all projects, with drill-down to specific work items
 - **Demand Pool**: requirement intake, review, and scheduling; automatic WSJF scoring, fully auditable
-- **Documents**: rich-text / Markdown docs in a tree, with full-text search, historical snapshots, shareable publishing, and AI task-draft generation
-- **Test Cases**: case maintenance and execution records; a failed run converts directly into a bug work item
+- **Projects / Global Health**: health, overdue items, and this week's effort across all projects, with drill-down into each project cockpit
+- **Releases**: first-release / iteration dual views, release notes generated automatically
 
-### Work Items
+### Delivery
 
-- **Kanban**: drag between columns, inline creation; filters shared across kanban, list, calendar, and Gantt
-- **Task List / Calendar**: table view and a day-by-day calendar view
+- **Work Items**: kanban, list, calendar, and Gantt share one filter set; drag between columns and create inline
 - **Gantt**: dependencies (FS / SS / FF / SF), milestones, baseline variance, critical path, member workload; CSV export, A3 printing, read-only share links
+- **Documents**: rich-text / Markdown docs in a tree, with full-text search, historical snapshots, shareable publishing, and AI task-draft generation
+- **Tests**: case maintenance and execution records; a failed run converts directly into a bug work item
 - **Branches**: workspace-level branch tracking through development, testing, merge, and release
 
-### Insight & Metrics
+### Insight
 
-- **Analytics**: trends, completion records, process health checks (first-pass rate, requirement start delay, estimation accuracy)
-- **Report Center**: burndown, cumulative flow, velocity, and lead-time distribution charts, exportable
-- **Release Stages**: first-release / iteration dual views, release notes generated automatically
+- **Reports**: trends & distribution, completion records, process health checks (first-pass rate, requirement start delay, estimation accuracy), and delivery charts (burndown, cumulative flow, velocity, lead-time distribution)
 - **Member Workload / Overdue & Blocked**: see busyness across projects and handle at-risk items centrally
 
 ### Platform Capabilities

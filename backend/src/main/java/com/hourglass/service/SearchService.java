@@ -95,7 +95,9 @@ public class SearchService {
         }
 
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
-        hits.addAll(docMapper.searchVisible(workspaceId, viewerId, q, per));
+        /* 文档草稿的可见口径与文档列表一致：仅作者本人与空间 owner/admin 能搜到 */
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
+        hits.addAll(docMapper.searchVisible(workspaceId, viewerId, userId, seeAllDrafts, q, per));
 
         DemandQuery dq = new DemandQuery();
         dq.setQ(q);

@@ -312,7 +312,7 @@
       { id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" },
       { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
     ],
-    "/api/views": [{ id: "V1", name: "我的 P0", params: { pris: ["P0"] } }],
+    "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
     /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
       { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, done: false },
@@ -701,6 +701,27 @@
         sDoc.updatedAt = ts(0, now.getHours(), now.getMinutes());
       }
       data = sDoc || {};
+    } else if (method === "PUT" && /^\/api\/req-docs\/[A-Za-z0-9_-]+\/publish$/.test(clean)) {
+      /* 发布/收回发布：写回内存里的 publishedAt，列表与正文徽标才能切到「已发布」 */
+      var pId = clean.split("/")[3], pDoc = null;
+      for (var pi = 0; pi < reqDocs.length; pi++) if (reqDocs[pi].id === pId) { pDoc = reqDocs[pi]; break; }
+      if (pDoc) {
+        var pNow = new Date();
+        pDoc.publishedAt = (reqBody && reqBody.published) ? ts(0, pNow.getHours(), pNow.getMinutes()) : null;
+        pDoc.updatedAt = ts(0, pNow.getHours(), pNow.getMinutes());
+      }
+      data = pDoc || {};
+    } else if (method === "PUT" && /^\/api\/req-docs\/[A-Za-z0-9_-]+$/.test(clean)) {
+      /* 编辑器保存：把标题/正文/状态写回内存，重新打开还能看到刚保存的内容 */
+      var eId = clean.split("/").pop(), eDoc = null;
+      for (var ei = 0; ei < reqDocs.length; ei++) if (reqDocs[ei].id === eId) { eDoc = reqDocs[ei]; break; }
+      if (eDoc && reqBody) {
+        ["title", "content", "status", "format", "docType", "parentId"].forEach(function (k) {
+          if (reqBody[k] !== undefined) eDoc[k] = reqBody[k];
+        });
+        eDoc.updatedAt = ts(0, new Date().getHours(), new Date().getMinutes());
+      }
+      data = eDoc || {};
     } else if (clean === "/api/gantt") {
       data = mockGantt(u);
     } else if (clean === "/api/gantt/deps" && method === "GET") {

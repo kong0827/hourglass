@@ -15,6 +15,23 @@ import { loadView } from "./view-loader.js";
 import { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, listViewDeleted, markListViewSaved, refreshListIfOpen, renderSmartTabs } from "../views/list.js";
 import { loadMine } from "../views/mine.js";
 
+var mfVersionQ = "";
+function applyVersionFilter(){
+  var menu = moreFilterMenu;
+  if(!menu) return;
+  var input = menu.querySelector("[data-mf-version-q]");
+  if(!input) return;
+  mfVersionQ = String(input.value || "").toLowerCase();
+  var empty = menu.querySelector("[data-mf-version-empty]");
+  var shown = 0;
+  menu.querySelectorAll("[data-mf-version-item]").forEach(function(btn){
+    var hit = !mfVersionQ || String(btn.dataset.label || "").indexOf(mfVersionQ) !== -1
+      || btn.getAttribute("aria-pressed") === "true";
+    btn.hidden = !hit;
+    if(hit) shown++;
+  });
+  if(empty) empty.hidden = shown > 0;
+}
 function metaCount(list, name){
   if(!list) return 0;
   for(var i = 0; i < list.length; i++) if(list[i].name === name) return list[i].count;
@@ -139,9 +156,18 @@ function renderMoreFilter(meta){
   var typeInner = typeItems(meta).map(function(o){
     return option("type", o.name, esc(typeName(o.name)), o.count, state.types.indexOf(o.name) !== -1);
   }).join("");
-  var versionInner = versionItems(meta).map(function(o){
-    return option("version", itemVal(o), esc(o.name), o.count, state.versions.indexOf(itemVal(o)) !== -1);
+  var versionList = versionItems(meta);
+  var versionInner = versionList.map(function(o){
+    return option("version", itemVal(o), esc(o.name), o.count, state.versions.indexOf(itemVal(o)) !== -1)
+      .replace('<button class="chip"', '<button class="chip" data-mf-version-item data-label="' + esc(String(o.name).toLowerCase()) + '"');
   }).join("");
+  /* 版本会随发布持续累积，上百个平铺会撑爆弹层：超过一屏就加搜索并限制高度 */
+  if(versionList.length > 8){
+    versionInner = '<input type="search" class="mf-version-search" data-mf-version-q value="' + esc(mfVersionQ) +
+      '" placeholder="搜索版本名…（共 ' + versionList.length + ' 个）" aria-label="搜索版本" autocomplete="off" />' +
+      '<div class="mf-version-scroll" data-mf-version-list>' + versionInner +
+      '<p class="foot-note mf-version-empty" data-mf-version-empty hidden style="margin:4px 0 0">没有匹配的版本</p></div>';
+  }
   var catInner = cats.map(function(c){
     return option("cat", c.name, esc(c.name), c.count, state.cats.indexOf(c.name) !== -1);
   }).join("");
@@ -173,6 +199,7 @@ function renderMoreFilter(meta){
   var scrollTop = moreFilterMenu.scrollTop;
   moreFilterMenu.innerHTML = html;
   moreFilterMenu.scrollTop = scrollTop;
+  applyVersionFilter();
 
   var n = state.owners.length + state.pris.length + state.types.length + state.versions.length
     + state.cats.length + state.tags.length + state.reqs.length + (state.blocked ? 1 : 0);
@@ -203,6 +230,10 @@ function viewScopeOf(v){
 function savedViewsFor(scope){
   return (rt.savedViews || []).filter(function(v){ return viewScopeOf(v) === scope; });
 }
+/* 我的工作不展示工作项列表的视图：这些视图含列表布局（预置/分组/排序），在那里只能部分生效 */
+function viewsShownHere(){
+  return activeView !== "mine" && savedViewsFor("task").length > 0;
+}
 function renderViews(){
   if(!viewBox) return;
   viewBox.innerHTML = savedViewsFor("task").map(function(v){
@@ -211,14 +242,16 @@ function renderViews(){
       '<button class="vx" type="button" data-view-del="' + esc(v.id) + '" title="删除视图" aria-label="删除视图">' + icon("close", 11) + '</button>' +
       '</span>';
   }).join("");
-  $("viewGroup").hidden = savedViewsFor("task").length === 0;
+  $("viewGroup").hidden = !viewsShownHere();
   renderSmartTabs();
   updateFilterActions();
 }
 function updateFilterActions(){
   var n = selectedFilterCount();
-  /* 列表视图由 Smart Bar 承载「视图」入口，筛选栏只保留清空与已选摘要 */
-  var showActions = n > 0 || (activeView !== "list" && savedViewsFor("task").length > 0);
+  /* 列表视图由 Smart Bar 承载「视图」入口，筛选栏只保留清空与已选摘要；
+     我的工作不展示工作项列表的视图，因此也不因已有视图常驻操作区 */
+  var showActions = n > 0 ||
+    (activeView !== "list" && activeView !== "mine" && savedViewsFor("task").length > 0);
   filterActions.hidden = !showActions;
   selectedSummary.hidden = n === 0;
   selectedSummary.innerHTML = '已选 ' + n + ' 项 ' + icon("close", 12);
@@ -285,7 +318,8 @@ function saveViewState(){
     var listSnap = null;
     try{
       var lp = currentListViewParams();
-      listSnap = { current: currentListViewId(), preset: lp.preset, group: lp.group, sort: lp.sort, sortDir: lp.sortDir };
+      listSnap = { current: currentListViewId(), preset: lp.preset, group: lp.group,
+        subgroup: lp.subgroup || "none", hideDone: !!lp.hideDone, sort: lp.sort, sortDir: lp.sortDir };
     }catch(err){ /* 列表模块尚未就绪 */ }
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
       wsId: ws,
@@ -326,10 +360,14 @@ function restoreViewState(){
     var lp = currentListViewParams();
     if((snap.list.current || "all") !== currentListViewId() ||
        snap.list.preset !== lp.preset || snap.list.group !== lp.group ||
+       (snap.list.subgroup || "none") !== (lp.subgroup || "none") ||
+       !!snap.list.hideDone !== !!lp.hideDone ||
        snap.list.sort !== lp.sort || (snap.list.sortDir || "asc") !== (lp.sortDir || "asc")){
       applyListSavedView(snap.list.current || "all", {
         preset: snap.list.preset || "all",
         group: snap.list.group || "none",
+        subgroup: snap.list.subgroup || "none",
+        hideDone: !!snap.list.hideDone,
         sort: snap.list.sort || "default",
         sortDir: snap.list.sortDir || "asc"
       });
@@ -446,6 +484,9 @@ function handleFilterClick(e){
 $("filterbar").addEventListener("click", handleFilterClick);
 /* 打开后菜单会被挂到 body 下，点击不再冒泡到筛选栏，需要单独监听 */
 moreFilterMenu.addEventListener("click", handleFilterClick);
+moreFilterMenu.addEventListener("input", function(e){
+  if(e.target.closest("[data-mf-version-q]")) applyVersionFilter();
+});
 $("btnMoreFilter").addEventListener("click", function(){
   if(UI.popOpen(moreFilterMenu)){ UI.closeAllPops(); return; }
   UI.openPop(moreFilterMenu, $("btnMoreFilter"), {align:"left", width:344});
@@ -473,9 +514,12 @@ function parseViewParams(p){
   if(p.blocked !== undefined && p.blocked !== null && typeof p.blocked !== "boolean") return null;
   var preset = (p.preset === undefined || p.preset === null) ? "all" : p.preset;
   var group = (p.group === undefined || p.group === null) ? "none" : p.group;
+  var subgroup = (p.subgroup === undefined || p.subgroup === null) ? "none" : p.subgroup;
   var sort = (p.sort === undefined || p.sort === null) ? "default" : p.sort;
   if(["all", "mine", "doing", "over"].indexOf(preset) === -1) return null;
   if(["none", "status", "owner", "priority", "project"].indexOf(group) === -1) return null;
+  if(["none", "status", "owner", "priority", "project"].indexOf(subgroup) === -1) return null;
+  if(p.hideDone !== undefined && p.hideDone !== null && typeof p.hideDone !== "boolean") return null;
   if(["default", "due", "priority", "estimate", "actual", "updated",
       "title", "type", "column", "owner", "progress", "project", "version",
       "category", "startDate", "tags", "subtasks", "comments"].indexOf(sort) === -1) return null;
@@ -488,9 +532,12 @@ function parseViewParams(p){
     doneScope: p.doneScope === "all" ? "all" : "week",
     preset: preset,
     group: group,
+    subgroup: subgroup,
+    hideDone: p.hideDone === true,
     sort: sort,
     sortDir: p.sortDir === "desc" ? "desc" : "asc",
-    listConfig: p.preset !== undefined || p.group !== undefined || p.sort !== undefined
+    listConfig: p.preset !== undefined || p.group !== undefined || p.subgroup !== undefined ||
+      p.hideDone !== undefined || p.sort !== undefined
   };
 }
 function applyView(v){
@@ -506,14 +553,9 @@ function applyView(v){
   state.doneScope = f.doneScope;
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
-  if(f.listConfig || activeView === "list"){
-    applyListSavedView(v.id, f);
-    loadBoard({animate:false});
-    if(activeView === "list") refreshListIfOpen();
-    else showView("list");
-  }else{
-    reloadFilteredViews();
-  }
+  /* 视图 = 筛选 + 可选的列表布局；看板/列表原地应用，不强制跳到列表 */
+  if(f.listConfig) applyListSavedView(v.id, f);
+  reloadFilteredViews();
   toast("已应用视图「" + v.name + "」", "fs");
 }
 function deleteView(id){
@@ -543,7 +585,9 @@ function promptSaveView(){
   $("dlgViewInput").value = forList ? currentListViewName() : "";
   $("fDlgViewName").classList.remove("invalid");
   var desc = $("dlgViewName").querySelector(".desc");
-  if(desc) desc.textContent = forList ? "保存当前筛选、分组与排序；同名保存将覆盖原视图" : "保存当前全部筛选条件，可跨设备应用";
+  if(desc) desc.textContent = forList
+    ? "保存当前筛选、分组与排序；同名保存将覆盖原视图"
+    : "保存当前筛选与列表视图设置（看板 / 列表共用）；同名保存将覆盖原视图";
   UI.openModal($("dlgViewName"));
 }
 $("btnSaveView").addEventListener("click", promptSaveView);
@@ -554,20 +598,20 @@ $("dlgViewNameForm").addEventListener("submit", function(e){
   if(name.length > 20) name = name.slice(0, 20);
   var forList = activeView === "list";
   var params = currentFilterParams();
-  if(forList){
-    var listParams = currentListViewParams();
-    params.preset = listParams.preset;
-    params.group = listParams.group;
-    params.sort = listParams.sort;
-    params.sortDir = listParams.sortDir;
-  }
+  var listParams = currentListViewParams();
+  params.preset = listParams.preset;
+  params.group = listParams.group;
+  params.subgroup = listParams.subgroup;
+  params.hideDone = listParams.hideDone;
+  params.sort = listParams.sort;
+  params.sortDir = listParams.sortDir;
   var overwrite = savedViewsFor("task").some(function(v){ return v.name === name; });
   var submitBtn = $("dlgViewNameOk");
   submitBtn.disabled = true;
   API.post("/api/views", { name: name, params: JSON.stringify(params) }).then(function(saved){
     submitBtn.disabled = false;
     UI.closeModal($("dlgViewName"));
-    if(forList && saved) markListViewSaved(saved.id);
+    if(saved) markListViewSaved(saved.id);
     toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
     loadViews();
     if(activeView === "gantt") loadView("gantt").then(function(m){ m.renderGanttViewsMenu(); });
@@ -750,7 +794,12 @@ document.addEventListener("keydown", function(e){
     : (idx + (e.shiftKey ? -1 : 1) + list.length) % list.length;
   list[next].focus();
 }, true);
-window.addEventListener("ds:view-change", updateMobFilterSummary);
+window.addEventListener("ds:view-change", function(){
+  /* 视图切换后按新页面的口径重算「视图」入口与操作区：我的工作不保留工作项列表的视图 */
+  renderViews();
+  /* 面板是按当前视图拼装的（列表的视图设置块会搬进去）：换页就收起，避免旧控制条留在新页面 */
+  if(sheetOpen) closeMobFilterSheet();
+});
 window.addEventListener("ds:layout", function(){
   updateMobFilterSummary();
   if(!isMobile()) closeMobFilterSheet(true);

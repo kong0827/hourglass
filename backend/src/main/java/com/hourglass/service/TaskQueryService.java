@@ -596,6 +596,8 @@ public class TaskQueryService {
                 if (rn != null) {
                     extra.append(rn).append(' ');
                 }
+                /* 项目名随任务下发：跨空间「我的任务」按项目分组/展示用 */
+                t.setReqName(rn);
             }
             StringBuilder ab = attachMap.get(t.getId());
             if (ab != null) {

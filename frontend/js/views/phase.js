@@ -1,15 +1,18 @@
-/* views/phase · 版本阶段：按阶段（首版/迭代）与按版本（三态版本卡）双口径 */
+/* views/phase · 版本：按阶段（首版/迭代）与按版本（三态版本卡）双口径 */
 
 import { API } from "../core/api.js";
-import { $ } from "../core/dom.js";
+import { $, searchInput, searchWrap } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, reqNameById, rt } from "../core/state.js";
+import { reloadFilteredViews } from "../core/filters-ui.js";
+import { showView } from "../core/router.js";
+import { canEditReq, reqNameById, rt, state } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { colName, fmtMinutesShort } from "../lib/format.js";
 import { loadReqs } from "./board.js";
+import { openDemandDetailById } from "./demands.js";
 
 var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBody"),
     vName = $("vName"), vStart = $("vStart"), vTarget = $("vTarget"), vDesc = $("vDesc"),
@@ -244,11 +247,13 @@ function syncModeSeg(){
 function metricCells(cells, drill){
   return '<div class="pgrid">' + cells.map(function(c){
     var color = c[2] ? ' style="color:var(--' + c[2] + ');"' : '';
-    /* drill：{scope:"version"|"phase", val} —— 指标格点击下钻任务明细；c[3]===false 的格不参与（如计划发布日期） */
+    /* drill：{scope:"version"|"phase", val} —— 指标格点击下钻任务明细；c[3]===false 的格不参与（如计划发布日期）；
+       c[4]="demands" 表示该格下钻需求明细而非任务（已排需求/已排期需求） */
     if(drill && c[3] !== false){
+      var kind = c[4] ? ' data-drill-kind="' + esc(c[4]) + '"' : '';
       return '<button type="button" class="pcell drillable" data-drill-scope="' + esc(drill.scope)
-        + '" data-drill-val="' + esc(drill.val) + '" data-drill-metric="' + esc(c[1])
-        + '" title="查看该口径的任务明细"><b' + color + '>' + c[0] + '</b><span>' + esc(c[1]) + '</span></button>';
+        + '" data-drill-val="' + esc(drill.val) + '" data-drill-metric="' + esc(c[1]) + '"' + kind
+        + ' title="查看该口径的明细"><b' + color + '>' + c[0] + '</b><span>' + esc(c[1]) + '</span></button>';
     }
     return '<div class="pcell"><b' + color + '>' + c[0] + '</b><span>' + esc(c[1]) + '</span></div>';
   }).join("") + '</div>';
@@ -316,9 +321,13 @@ function openDrillModal(scope, val, metric){
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  var boardBtn = (scope === "version" && val)
+    ? '<button class="btn sm" type="button" data-drill-board title="在看板中按此版本筛选">在看板中查看</button>'
+    : '';
   layer.innerHTML = '<div class="sheet wide"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(reqNameById(rt.phaseReqId)) + ' · ' + esc(scopeName) + ' · ' + esc(metric) + '</h2>'
     + '<div class="desc">共 ' + rows.length + ' 项 · 点击任务行打开详情</div></div>'
+    + boardBtn
     + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
     + '<th>任务</th><th>类型</th><th>负责人</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>状态</th>'
@@ -326,10 +335,69 @@ function openDrillModal(scope, val, metric){
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
+    var bb = e.target.closest("[data-drill-board]");
+    if(bb){
+      UI.closeModal(layer);
+      /* 复用项目页「在看板中查看」的跳转口径：清掉旧筛选，按当前项目 + 该版本过滤。
+         下钻弹窗列的是版本全部任务（含任意时间完成的），doneScope 一并切到 all，避免跳过去只剩空列。 */
+      state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.versions = [val]; state.due = null; state.focus = false; state.blocked = false;
+      state.doneScope = "all";
+      if(searchInput) searchInput.value = "";
+      if(searchWrap) searchWrap.classList.remove("has");
+      state.reqs = [rt.phaseReqId];
+      showView("board");
+      reloadFilteredViews();
+      toast("已按版本筛选看板：" + scopeName + "，已完成列显示全部");
+      return;
+    }
     var t = e.target.closest("[data-open-task]");
     if(t){ UI.closeModal(layer); openTaskById(t.dataset.openTask); }
   });
   UI.openModal(layer);
+}
+
+/* 版本需求下钻：已排需求/已排期需求格点击，列出排到该版本的需求（与计数同口径：不含已拒绝），行点击开需求详情 */
+function demandStatusLabel(st){
+  return st === "plan" ? "已排期" : st === "pass" ? "已通过" : st === "rej" ? "已拒绝" : "待评审";
+}
+function openVersionDemandsModal(versionId){
+  var v = findVersion(versionId);
+  var name = v ? v.name : "版本";
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.innerHTML = '<div class="sheet wide"><div class="sheet-head"><div style="flex:1;min-width:0">'
+    + '<h2>' + esc(reqNameById(rt.phaseReqId)) + ' · ' + esc(name) + ' · 已排需求</h2>'
+    + '<div class="desc">加载中…</div></div>'
+    + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + '<div class="sheet-body"><div class="tbl-wrap"></div></div></div>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
+    var d = e.target.closest("[data-open-demand]");
+    if(d){ UI.closeModal(layer); openDemandDetailById(d.dataset.openDemand); }
+  });
+  UI.openModal(layer);
+  API.get("/api/versions/" + encodeURIComponent(versionId) + "/release-note").then(function(note){
+    if(!document.body.contains(layer)) return;   // 弹层已被关闭：丢弃过期响应
+    var rows = note.demands || [];
+    var body = rows.map(function(d){
+      return '<tr data-open-demand="' + esc(d.id) + '" title="查看需求详情">'
+        + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(d.title) + '</td>'
+        + '<td>' + esc(d.itemKind || "其他") + '</td>'
+        + '<td><span class="tag ghost">' + esc(demandStatusLabel(d.status)) + '</span></td>'
+        + '<td>' + esc(d.priority || "—") + '</td></tr>';
+    }).join("") || '<tr><td colspan="4" class="foot-note" style="padding:16px;text-align:center">该版本没有已排需求</td></tr>';
+    layer.querySelector(".desc").textContent = "共 " + rows.length + " 项 · 点击需求行打开详情";
+    layer.querySelector(".tbl-wrap").innerHTML = '<table class="phase-tbl"><thead><tr>'
+      + '<th>需求</th><th>类型</th><th>状态</th><th>优先级</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table>';
+  }).catch(function(ex){
+    if(!document.body.contains(layer)) return;
+    layer.querySelector(".tbl-wrap").innerHTML = UI.errorState(ex.message || "已排需求加载失败");
+  });
 }
 
 /* 成员阶段工时下钻：按该成员自己的计时记录列出「任务 × 阶段」，合计与阶段卡一致 */
@@ -577,7 +645,7 @@ function versionCardHTML(v){
     cells = [
       [fmtMinutesShort(v.workMinutes), "投入工时", ""],
       [v.doneCount, "完成任务", ""],
-      [v.demandCount, "已排需求", "", false],
+      [v.demandCount, "已排需求", "", true, "demands"],
       [devText(v.deviationPct), "整体偏差", devColor(v.deviationPct)],
       [fmtPct(v.onTimePct), "准时完成率", ""],
       [v.avgTaskMinutes === null || v.avgTaskMinutes === undefined ? "—" : fmtMinutesShort(v.avgTaskMinutes), "任务均耗时", ""]
@@ -587,13 +655,13 @@ function versionCardHTML(v){
       [fmtMinutesShort(v.workMinutes), "已投入工时", ""],
       [v.doneCount, "已完成", ""],
       [v.doingCount, "进行中", ""],
-      [v.demandCount, "已排需求", "", false],
+      [v.demandCount, "已排需求", "", true, "demands"],
       [fmtMinutesShort(v.remainingMinutes), "剩余预估", ""],
       [dateShort(v.targetDate), "计划发布", "", false]
     ];
   }else{
     cells = [
-      [v.scheduledDemandCount, "已排期需求", "", false],
+      [v.demandCount, "已排需求", "", true, "demands"],
       [fmtMinutesShort(v.estimateMinutes), "预估工时", ""],
       [v.taskCount ? v.taskCount : "—", "已拆解任务", ""],
       [fmtMinutesShort(v.workMinutes), "已投入工时", ""]
@@ -984,12 +1052,14 @@ function showReleaseNote(id){
   API.get("/api/versions/" + encodeURIComponent(id) + "/release-note").then(function(note){
     var v = note.version || {};
     var taskRows = (note.tasks || []).map(function(t){
-      return '<li>' + esc(t.title) + (t.boardColumn === "done" ? ' <span class="tag tag-success">已完成</span>' : "")
+      return '<li><button class="link-cell" type="button" data-note-task="' + esc(t.id) + '" title="查看任务">' + esc(t.title) + '</button>'
+        + (t.boardColumn === "done" ? ' <span class="tag tag-success">已完成</span>' : "")
         + (t.preLaunchFold ? ' <span class="tag ghost">上线前归入</span>' : "")
         + (t.estimateMinutes ? ' <span class="mini-tag mute">' + fmtMinutesShort(t.estimateMinutes) + '</span>' : "") + '</li>';
     }).join("") || '<li class="foot-note">该版本没有绑定任务</li>';
     var demandRows = (note.demands || []).map(function(d){
-      return '<li>' + esc(d.title) + ' <span class="tag ghost">' + esc(d.itemKind || "其他") + '</span></li>';
+      return '<li><button class="link-cell" type="button" data-note-demand="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
+        + ' <span class="tag ghost">' + esc(d.itemKind || "其他") + '</span></li>';
     }).join("") || '<li class="foot-note">没有已排需求</li>';
     var layer = document.createElement("div");
     layer.className = "modal-layer";
@@ -1009,6 +1079,10 @@ function showReleaseNote(id){
     layer.addEventListener("click", function(e){
       if(e.target.closest("[data-note-x]")) UI.closeModal(layer);
       if(e.target.closest("[data-note-export]")) exportReleaseNoteCSV(note);
+      var tk = e.target.closest("[data-note-task]");
+      if(tk){ UI.closeModal(layer); openTaskById(tk.dataset.noteTask); return; }
+      var dm = e.target.closest("[data-note-demand]");
+      if(dm){ UI.closeModal(layer); openDemandDetailById(dm.dataset.noteDemand); return; }
     });
     UI.openModal(layer);
   }).catch(function(ex){ toast(ex.message || "生成发布说明失败", "bad"); });
@@ -1221,7 +1295,11 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   var mr = e.target.closest("[data-member-drill]");
   if(mr){ openMemberDrill(mr.dataset.memberDrill, mr.dataset.memberName); return; }
   var dr = e.target.closest("[data-drill-scope]");
-  if(dr){ openDrillModal(dr.dataset.drillScope, dr.dataset.drillVal, dr.dataset.drillMetric); return; }
+  if(dr){
+    if(dr.dataset.drillKind === "demands") openVersionDemandsModal(dr.dataset.drillVal);
+    else openDrillModal(dr.dataset.drillScope, dr.dataset.drillVal, dr.dataset.drillMetric);
+    return;
+  }
   var flt = e.target.closest("[data-filter]");
   if(flt){
     var seg = flt.parentNode;

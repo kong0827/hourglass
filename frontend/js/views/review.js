@@ -7,12 +7,13 @@ import { catColor, catTag, progressOf, reqNameById, rt, state, tagChip } from ".
 import { activeView } from "../core/router.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
-import { avatarHTML, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
+import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
 import { loadReqs, pending } from "./board.js";
+import { openTaskTable } from "./manager-shared.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
 function reviewTitle(off){
-  return off === -1 ? "上周工作回顾" : (off === 0 ? "本周工作回顾" : "工作回顾");
+  return off === -1 ? "上周回顾" : (off === 0 ? "本周回顾" : "回顾");
 }
 /* 项目维度回顾：选择单个项目时，统计、列表、工时与 AI 周报都只取该项目 */
 var REVIEW_REQ_KEY = "ds.reviewReq";
@@ -164,8 +165,132 @@ function summaryPlain(d){
   el.innerHTML = buildSummary(d).replace(/<br\s*\/?>/gi, "\n");
   return el.textContent || "";
 }
-function distHTML(list, colorOf, valueOf){
-  if(!list || !list.length) return UI.colEmpty("暂无数据");
+/* ==================== 完成透视 ==================== */
+var REVIEW_PIVOT_KEY = "ds.reviewPivot";
+var reviewPivot = (function(){
+  try{
+    var p = JSON.parse(localStorage.getItem(REVIEW_PIVOT_KEY) || "null");
+    if(p && p.row && p.col && p.row !== p.col) return {row:p.row, col:p.col};
+  }catch(e){ /* 受限环境忽略 */ }
+  return {row:"owner", col:"reqId"};
+})();
+var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "分类"], ["column", "状态"]];
+var reviewPivotState = null;
+function pivotDimLabel(dim){
+  for(var i = 0; i < PIVOT_DIMS.length; i++) if(PIVOT_DIMS[i][0] === dim) return PIVOT_DIMS[i][1];
+  return dim;
+}
+function pivotValue(t, dim){
+  if(dim === "owner") return t.owner || "未分配";
+  if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
+  if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
+  if(dim === "category") return t.category || "未分类";
+  if(dim === "column") return colName(t.boardColumn) || "未设置";
+  return "—";
+}
+function pivotOrder(dim){
+  if(dim === "priority"){
+    return function(a, b){
+      var ai = PRIORITIES.indexOf(a), bi = PRIORITIES.indexOf(b);
+      return (ai < 0 ? 9 : ai) - (bi < 0 ? 9 : bi);
+    };
+  }
+  if(dim === "column"){
+    return function(a, b){
+      var ai = -1, bi = -1;
+      COLUMNS.forEach(function(c, i){ if(c.name === a) ai = i; if(c.name === b) bi = i; });
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    };
+  }
+  return function(a, b){ return String(a).localeCompare(String(b), "zh-CN"); };
+}
+function fillPivotOptions(sel, value){
+  if(!sel) return;
+  if(!sel.options.length){
+    sel.innerHTML = PIVOT_DIMS.map(function(d){ return '<option value="' + d[0] + '">' + esc(d[1]) + '</option>'; }).join("");
+  }
+  sel.value = value;
+}
+function renderReviewPivot(d){
+  var box = $("reviewPivot"), rowSel = $("reviewPivotRow"), colSel = $("reviewPivotCol");
+  if(!box || !rowSel || !colSel) return;
+  fillPivotOptions(rowSel, reviewPivot.row);
+  fillPivotOptions(colSel, reviewPivot.col);
+  var list = (d && d.completed) || [];
+  if(!list.length){
+    box.innerHTML = UI.colEmpty("该周期没有已完成的任务，暂无可透视数据");
+    return;
+  }
+  var rows = [], cols = [], cells = {}, rowMap = {}, colMap = {};
+  list.forEach(function(t){
+    var r = pivotValue(t, reviewPivot.row), c = pivotValue(t, reviewPivot.col);
+    if(rows.indexOf(r) < 0) rows.push(r);
+    if(cols.indexOf(c) < 0) cols.push(c);
+    var key = r + "\u0000" + c;
+    (cells[key] = cells[key] || []).push(t);
+    (rowMap[r] = rowMap[r] || []).push(t);
+    (colMap[c] = colMap[c] || []).push(t);
+  });
+  rows.sort(pivotOrder(reviewPivot.row));
+  cols.sort(pivotOrder(reviewPivot.col));
+  reviewPivotState = { cells: cells, rows: rowMap, cols: colMap, all: list,
+    rowDim: pivotDimLabel(reviewPivot.row), colDim: pivotDimLabel(reviewPivot.col) };
+  function link(html, enabled, attrs){
+    return enabled ? '<button class="manager-cell-link" type="button" ' + attrs + '>' + html + '</button>' : "—";
+  }
+  var head = '<tr><th>' + esc(pivotDimLabel(reviewPivot.row)) + ' \\ ' + esc(pivotDimLabel(reviewPivot.col)) + '</th>' +
+    cols.map(function(c){
+      var n = (colMap[c] || []).length;
+      return '<th class="num">' + link(esc(c), n, 'data-rvp-col="' + esc(c) + '"') + '</th>';
+    }).join("") +
+    '<th class="num">合计</th></tr>';
+  var body = rows.map(function(r){
+    var rowList = rowMap[r] || [];
+    var cellsHTML = cols.map(function(c){
+      var n = (cells[r + "\u0000" + c] || []).length;
+      return '<td class="num">' + link(String(n), n, 'data-rvp-row="' + esc(r) + '" data-rvp-col="' + esc(c) + '"') + '</td>';
+    }).join("");
+    return '<tr><td>' + link('<b>' + esc(r) + '</b>', rowList.length, 'data-rvp-row="' + esc(r) + '"') + '</td>' + cellsHTML +
+      '<td class="num">' + link('<b>' + rowList.length + '</b>', rowList.length, 'data-rvp-row="' + esc(r) + '"') + '</td></tr>';
+  }).join("");
+  var foot = '<tr><td><b>合计</b></td>' +
+    cols.map(function(c){
+      var n = (colMap[c] || []).length;
+      return '<td class="num">' + link('<b>' + n + '</b>', n, 'data-rvp-col="' + esc(c) + '"') + '</td>';
+    }).join("") +
+    '<td class="num">' + link('<b>' + list.length + '</b>', list.length, 'data-rvp-all="1"') + '</td></tr>';
+  box.innerHTML = '<table class="manager-tbl pivot-tbl"><thead>' + head + '</thead><tbody>' + body + foot + '</tbody></table>';
+}
+function onReviewPivotChange(which){
+  var rowSel = $("reviewPivotRow"), colSel = $("reviewPivotCol");
+  if(!rowSel || !colSel) return;
+  if(rowSel.value === colSel.value){
+    var pick = null;
+    for(var i = 0; i < PIVOT_DIMS.length; i++){
+      if(PIVOT_DIMS[i][0] !== rowSel.value){ pick = PIVOT_DIMS[i][0]; break; }
+    }
+    if(pick){ if(which === "row") colSel.value = pick; else rowSel.value = pick; }
+  }
+  reviewPivot.row = rowSel.value;
+  reviewPivot.col = colSel.value;
+  try{ localStorage.setItem(REVIEW_PIVOT_KEY, JSON.stringify(reviewPivot)); }catch(e){ /* 忽略 */ }
+  renderReviewPivot(state.reviewData);
+}
+if($("reviewPivotRow")) $("reviewPivotRow").addEventListener("change", function(){ onReviewPivotChange("row"); });
+if($("reviewPivotCol")) $("reviewPivotCol").addEventListener("change", function(){ onReviewPivotChange("col"); });
+if($("reviewPivot")) $("reviewPivot").addEventListener("click", function(e){
+  var b = e.target.closest("[data-rvp-row],[data-rvp-col],[data-rvp-all]");
+  if(!b || !reviewPivotState) return;
+  var r = b.dataset.rvpRow || "", c = b.dataset.rvpCol || "", tasks, title;
+  if(b.hasAttribute("data-rvp-all")){ tasks = reviewPivotState.all; title = "全部"; }
+  else if(r && c){ tasks = reviewPivotState.cells[r + "\u0000" + c] || []; title = r + " × " + c; }
+  else if(r){ tasks = reviewPivotState.rows[r] || []; title = r; }
+  else { tasks = reviewPivotState.cols[c] || []; title = c; }
+  openTaskTable("周回顾透视 · " + title, tasks,
+    reviewPivotState.rowDim + " × " + reviewPivotState.colDim + " · 共 " + tasks.length + " 项 · 点击任务行打开详情");
+});
+
+function distHTML(list, colorOf, valueOf){  if(!list || !list.length) return UI.colEmpty("暂无数据");
   var max = 1;
   list.forEach(function(x){ if(x.count > max) max = x.count; });
   return list.map(function(x){
@@ -195,6 +320,8 @@ function renderReview(d){
     return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
       '<small>' + x.u + '</small></div></div>';
   }).join("");
+
+  renderReviewPivot(d);
 
   /* N-5：工时区（全空间 / 我的） */
   if(reviewHoursEl){

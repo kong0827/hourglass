@@ -26,7 +26,8 @@ var listHasMore = false, listLoadingMore = false;
 var LIST_PAGE_SIZE = 500;
 var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
-var smart = { current:"all", preset:"all", group:"none", sort:"default", sortDir:"asc", collapsed:{} };
+var smart = { current:"all", preset:"all", group:"none", subgroup:"none", hideDone:false,
+  sort:"default", sortDir:"asc", collapsed:{} };
 var LIST_GROUPS = ["none", "status", "owner", "priority", "project"];
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
 var SORT_DEFAULT_DIR = {
@@ -57,6 +58,14 @@ function renderSmartTabs(){
 }
 function syncSmartControls(){
   if(smartGroup) smartGroup.value = smart.group;
+  var sub = smartBar && smartBar.querySelector("[data-list-subgroup]");
+  if(sub){ sub.value = effectiveSubgroup(); sub.disabled = smart.group === "none"; }
+  var hideBtn = smartBar && smartBar.querySelector("[data-list-hide-done]");
+  if(hideBtn){
+    hideBtn.setAttribute("aria-pressed", smart.hideDone ? "true" : "false");
+    hideBtn.classList.toggle("on", smart.hideDone);
+    hideBtn.title = smart.hideDone ? "当前已隐藏已完成（点击显示）" : "隐藏已完成任务，聚焦未完成项";
+  }
   if(listSort) listSort.value = smart.sort;
   syncSortDirUI();
   renderSmartTabs();
@@ -74,6 +83,8 @@ function activatePreset(id){
   smart.current = id;
   smart.preset = id;
   smart.group = "none";
+  smart.subgroup = "none";
+  smart.hideDone = false;
   smart.sort = "default";
   smart.sortDir = "asc";
   smart.collapsed = {};
@@ -82,7 +93,10 @@ function activatePreset(id){
   clearFilters();
   saveViewState();
 }
-function currentListViewParams(){ return {preset:smart.preset, group:smart.group, sort:smart.sort, sortDir:smart.sortDir}; }
+function currentListViewParams(){
+  return {preset:smart.preset, group:smart.group, subgroup:effectiveSubgroup(), hideDone:smart.hideDone,
+    sort:smart.sort, sortDir:smart.sortDir};
+}
 function currentListViewId(){ return smart.current; }
 function currentListViewName(){
   for(var i = 0; i < rt.savedViews.length; i++){
@@ -94,6 +108,8 @@ function applyListSavedView(id, params){
   smart.current = String(id);
   smart.preset = ["all", "mine", "doing", "over"].indexOf(params.preset) !== -1 ? params.preset : "all";
   smart.group = LIST_GROUPS.indexOf(params.group) !== -1 ? params.group : "none";
+  smart.subgroup = LIST_GROUPS.indexOf(params.subgroup) !== -1 ? params.subgroup : "none";
+  smart.hideDone = params.hideDone === true;
   smart.sort = LIST_SORTS.indexOf(params.sort) !== -1 ? params.sort : "default";
   smart.sortDir = params.sortDir === "desc" ? "desc"
     : (params.sortDir === "asc" ? "asc" : (SORT_DEFAULT_DIR[smart.sort] || "asc"));
@@ -120,6 +136,10 @@ function initSmartTable(){
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
         '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
+      '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-list-subgroup aria-label="二级分组方式">' +
+        '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
+        '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
+      '<button class="btn sm ghost list-hide-done" type="button" data-list-hide-done aria-pressed="false">隐藏已完成</button>' +
       '<span class="smart-list-sort"></span>' +
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
       '<span class="smart-view-spacer"></span>' +
@@ -139,6 +159,7 @@ function initSmartTable(){
   smartBar.appendChild(mobSettings);
   smartTabs = smartBar.querySelector(".smart-view-tabs");
   smartGroup = smartBar.querySelector("[data-list-group]");
+  var smartSubgroup = smartBar.querySelector("[data-list-subgroup]");
   var sortLabel = listSort.closest("label");
   smartBar.querySelector(".smart-list-sort").appendChild(sortLabel);
   sortLabel.classList.add("smart-view-control");
@@ -167,7 +188,18 @@ function initSmartTable(){
   smartGroup.addEventListener("change", function(){
     if(LIST_GROUPS.indexOf(smartGroup.value) === -1) return;
     smart.group = smartGroup.value;
+    if(smart.group === "none" || smart.group === smart.subgroup) smart.subgroup = "none";
     smart.collapsed = {};
+    syncSmartControls();
+    renderListItems(lastItems);
+    updateListMeta(lastItems.length);
+    saveViewState();
+  });
+  smartSubgroup.addEventListener("change", function(){
+    if(LIST_GROUPS.indexOf(smartSubgroup.value) === -1) return;
+    smart.subgroup = smartSubgroup.value;
+    smart.collapsed = {};
+    syncSmartControls();
     renderListItems(lastItems);
     updateListMeta(lastItems.length);
     saveViewState();
@@ -178,6 +210,14 @@ function initSmartTable(){
     if(e.target.closest("[data-list-save]")) promptSaveView();
     else if(e.target.closest("[data-list-export]")) exportListCsv();
     else if(e.target.closest("[data-list-sortdir]")) toggleListSortDir();
+    else if(e.target.closest("[data-list-hide-done]")){
+      smart.hideDone = !smart.hideDone;
+      smart.collapsed = {};
+      syncSmartControls();
+      renderListItems(lastItems);
+      updateListMeta(lastItems.length);
+      saveViewState();
+    }
   });
 }
 function enterListView(){
@@ -210,6 +250,7 @@ function updateListMeta(rawCount){
   var text = "已加载 " + lastItems.length + " / 共 " + rt.listTotal + " 项";
   if(filterOn() || hasLocalPreset) text += " · 当前视图 " + shown + " 项";
   if(smart.group !== "none") text += " · " + currentViewGroups().length + " 组";
+  if(smart.hideDone) text += " · 已隐藏已完成";
   listMeta.textContent = text;
 }
 function loadList(opts){
@@ -307,8 +348,13 @@ function mineMatches(t){
   /* 历史任务未绑定账号时，沿用系统的负责人显示名回落规则。 */
   return !!t.owner && t.owner === (u.displayName || u.username);
 }
+function isDoneTask(t){
+  var c = colMeta(t.boardColumn);
+  return !!(c && c.done) || t.boardColumn === "done";
+}
 function presetFilteredItems(){
-  return lastItems.filter(function(t){
+  var items = smart.hideDone ? lastItems.filter(function(t){ return !isDoneTask(t); }) : lastItems;
+  return items.filter(function(t){
     if(smart.preset === "mine") return mineMatches(t);
     if(smart.preset === "doing") return t.boardColumn === "doing";
     if(smart.preset === "over") return dueState(t).kind === "over";
@@ -382,12 +428,36 @@ function toggleListSortDir(){
   renderListItems(lastItems);
   saveViewState();
 }
-function groupInfo(t){
-  if(smart.group === "status") return {key:t.boardColumn || "unknown", label:colName(t.boardColumn) || "未设置状态"};
-  if(smart.group === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
-  if(smart.group === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
-  if(smart.group === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
+function groupInfoBy(t, dim){
+  if(dim === "status") return {key:t.boardColumn || "unknown", label:colName(t.boardColumn) || "未设置状态"};
+  if(dim === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
+  if(dim === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
+  if(dim === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
   return null;
+}
+function groupInfo(t){ return smart.group === "none" ? null : groupInfoBy(t, smart.group); }
+/* 二级维度不能与一级重复；一级不分组时二级无意义 */
+function effectiveSubgroup(){
+  return (smart.group === "none" || smart.subgroup === "none" || smart.subgroup === smart.group)
+    ? "none" : smart.subgroup;
+}
+function subgroupInfo(t){
+  var dim = effectiveSubgroup();
+  return dim === "none" ? null : groupInfoBy(t, dim);
+}
+function groupCompare(dim){
+  return function(a, b){
+    if(dim === "status"){
+      var ai = -1, bi = -1;
+      COLUMNS.forEach(function(c, i){ if(c.id === a.key) ai = i; if(c.id === b.key) bi = i; });
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    }
+    if(dim === "priority"){
+      return (PRIORITIES.indexOf(a.key) < 0 ? 9 : PRIORITIES.indexOf(a.key)) -
+        (PRIORITIES.indexOf(b.key) < 0 ? 9 : PRIORITIES.indexOf(b.key));
+    }
+    return a.label.localeCompare(b.label, "zh-CN");
+  };
 }
 function currentViewGroups(){
   if(smart.group === "none") return [];
@@ -395,22 +465,24 @@ function currentViewGroups(){
   presetFilteredItems().forEach(function(t){
     var info = groupInfo(t), group = null;
     for(var i = 0; i < groups.length; i++) if(groups[i].key === info.key){ group = groups[i]; break; }
-    if(!group){ group = {key:info.key, label:info.label, rows:[]}; groups.push(group); }
+    if(!group){ group = {key:info.key, label:info.label, rows:[], subgroups:[]}; groups.push(group); }
     group.rows.push(t);
-  });
-  groups.forEach(function(g){ g.rows = sortedTasks(g.rows); });
-  groups.sort(function(a, b){
-    if(smart.group === "status"){
-      var ai = -1, bi = -1;
-      COLUMNS.forEach(function(c, i){ if(c.id === a.key) ai = i; if(c.id === b.key) bi = i; });
-      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    var subInfo = subgroupInfo(t);
+    if(subInfo){
+      var sub = null;
+      for(var j = 0; j < group.subgroups.length; j++){
+        if(group.subgroups[j].key === subInfo.key){ sub = group.subgroups[j]; break; }
+      }
+      if(!sub){ sub = {key:subInfo.key, label:subInfo.label, rows:[]}; group.subgroups.push(sub); }
+      sub.rows.push(t);
     }
-    if(smart.group === "priority"){
-      return (PRIORITIES.indexOf(a.key) < 0 ? 9 : PRIORITIES.indexOf(a.key)) -
-        (PRIORITIES.indexOf(b.key) < 0 ? 9 : PRIORITIES.indexOf(b.key));
-    }
-    return a.label.localeCompare(b.label, "zh-CN");
   });
+  groups.forEach(function(g){
+    g.rows = sortedTasks(g.rows);
+    g.subgroups.forEach(function(s){ s.rows = sortedTasks(s.rows); });
+    g.subgroups.sort(groupCompare(smart.subgroup));
+  });
+  groups.sort(groupCompare(smart.group));
   return groups;
 }
 function currentViewRows(){
@@ -491,10 +563,25 @@ function renderMobileListItems(viewRows, groups){
   }
   listBody.innerHTML = groups.map(function(g){
     var collapsed = !!smart.collapsed["$" + g.key];
+    var inner = "";
+    if(!collapsed){
+      if(g.subgroups.length){
+        inner = g.subgroups.map(function(s){
+          var sc = !!smart.collapsed["$sub:" + g.key + "/" + s.key];
+          return '<div class="mob-list-subgroup">' +
+            '<button class="mob-subgroup-head" type="button" data-list-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!sc) + '">' +
+            '<h4>' + esc(s.label) + '</h4><span class="mob-group-n">' + s.rows.length + '</span>' +
+            '<span class="mob-group-caret' + (sc ? "" : " open") + '">' + icon("caretDown", 14) + '</span></button>' +
+            (sc ? "" : '<div class="mob-card-list">' + cards(s.rows) + '</div>') + '</div>';
+        }).join("");
+      }else{
+        inner = '<div class="mob-card-list">' + cards(g.rows) + '</div>';
+      }
+    }
     return '<div class="mob-list-group"><button class="mob-group-head" type="button" data-list-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
       '<h3>' + esc(g.label) + '</h3><span class="mob-group-n">' + g.rows.length + '</span>' +
       '<span class="mob-group-caret' + (collapsed ? "" : " open") + '">' + icon("caretDown", 14) + '</span></button>' +
-      (collapsed ? "" : '<div class="mob-card-list">' + cards(g.rows) + '</div>') + '</div>';
+      inner + '</div>';
   }).join("");
 }
 function renderListItems(items){
@@ -505,7 +592,7 @@ function renderListItems(items){
   var viewRows = currentViewRows();
   if(!viewRows.length){
     rt.listSelected = {};
-    var hasConditions = filterOn() || smart.preset !== "all";
+    var hasConditions = filterOn() || smart.preset !== "all" || smart.hideDone;
     listBody.innerHTML = '<div style="padding:8px">' + (hasConditions
       ? UI.emptyState({ icon:"filterOff", title:"没有符合当前视图条件的任务", text:"切换视图，或调整、清空筛选条件后重试。", actionLabel:"查看全部任务", compact:true })
       : UI.emptyState({ icon:"inbox", title:"这里还没有任务", textHtml:"新建一个任务；或用快捷键 <b>N</b>（会自动切到看板并聚焦列内录入框）。", actionLabel:"新建任务", compact:true })) + '</div>';
@@ -543,7 +630,15 @@ function renderListItems(items){
       var head = '<div class="list-group-row"><button type="button" data-list-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
         '<span class="list-group-caret' + (collapsed ? '' : ' open') + '">▶</span><span class="list-group-name">' + esc(g.label) + '</span>' +
         '<span class="list-group-count">' + g.rows.length + ' 项</span></button></div>';
-      return head + (collapsed ? '' : g.rows.map(rowHTML).join(""));
+      if(collapsed) return head;
+      if(!g.subgroups.length) return head + g.rows.map(rowHTML).join("");
+      return head + g.subgroups.map(function(s){
+        var sc = !!smart.collapsed["$sub:" + g.key + "/" + s.key];
+        var subHead = '<div class="list-subgroup-row"><button type="button" data-list-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!sc) + '">' +
+          '<span class="list-subgroup-caret' + (sc ? '' : ' open') + '">▶</span><span class="list-subgroup-name">' + esc(s.label) + '</span>' +
+          '<span class="list-subgroup-count">' + s.rows.length + ' 项</span></button></div>';
+        return subHead + (sc ? "" : s.rows.map(rowHTML).join(""));
+      }).join("");
     }).join("");
   }
   Array.prototype.forEach.call(listBody.querySelectorAll(".list-row"), applyGrid);
@@ -718,6 +813,13 @@ if(listBulkBar){
 listBody.addEventListener("click", function(e){
   if(e.target.closest("[data-list-more]")){
     if(!listLoadingMore) loadList({more:true});
+    return;
+  }
+  var subgroupToggle = e.target.closest("[data-list-subgroup-toggle]");
+  if(subgroupToggle){
+    var subKey = "$sub:" + subgroupToggle.dataset.listSubgroupToggle;
+    smart.collapsed[subKey] = !smart.collapsed[subKey];
+    renderListItems(lastItems);
     return;
   }
   var groupToggle = e.target.closest("[data-list-group-toggle]");

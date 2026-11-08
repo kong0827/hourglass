@@ -39,6 +39,13 @@ public interface AttachmentMapper {
 
     int deleteByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
+    /** 任务评论上的附件（target_id = task_comment.id） */
+    List<Attachment> selectByCommentTaskIds(@Param("workspaceId") String workspaceId,
+                                            @Param("taskIds") List<String> taskIds);
+
+    int deleteByCommentTaskIds(@Param("workspaceId") String workspaceId,
+                               @Param("taskIds") List<String> taskIds);
+
     int deleteByTarget(@Param("workspaceId") String workspaceId,
                        @Param("targetId") String targetId, @Param("targetKind") String targetKind);
 

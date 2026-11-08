@@ -7,9 +7,9 @@ import { updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
 import { currentMode } from "./mobile-rules.js";
-import { invalidateNotifications, loadAlertPanel, loadUnread, notifyState, openFromNotification, renderAlertPanel, renderBellBadge, setNoticeFilter, updateBellTitle } from "./notifications.js";
+import { handleNoticeClick, loadAlertPanel, loadUnread, renderAlertPanel } from "./notifications.js";
 import { activeView, showView } from "./router.js";
-import { rt, state, taskById } from "./state.js";
+import { rt, state } from "./state.js";
 import { openTaskDrawer, refreshOwnerSelect, syncCatSeg } from "./task-drawer.js";
 import { UI, esc, toast } from "./ui.js";
 import { avatarColor, avatarColorIndex, initial } from "../lib/format.js";
@@ -141,8 +141,8 @@ function loadMe(prefetched){
   return p.then(function(u){
     rt.currentUser = u;
     if(u.displayName) rt.OWNER_DEFAULT = u.displayName;
-    var tabAcc = $("setTabAccount");
-    if(tabAcc) tabAcc.hidden = u.role !== "admin";
+    var tabPlat = $("setTabPlatform");
+    if(tabPlat) tabPlat.hidden = u.role !== "admin";
     renderSideUser(u);
     /* me 回来了：把等它的视图初始化补跑一遍（深链直达 #/profile 时靠这个） */
     loadView("profile").then(function(m){ m.flushMeReady(); });
@@ -212,60 +212,26 @@ $("btnAlert").addEventListener("click", function(){
   loadUnread();
   UI.openPop($("alertPanel"), $("btnAlert"), {align:"left"});
 });
-$("alertPanel").addEventListener("click", function(e){
-  /* 通知筛选：全部 / 未读 / 提及 */
-  var filterBtn = e.target.closest("[data-ap-filter]");
-  if(filterBtn){
-    setNoticeFilter(filterBtn.dataset.apFilter);
-    return;
-  }
-  /* 顶部 tab：通知 / 截止提醒 */
-  var tabBtn = e.target.closest("[data-ap-tab]");
-  if(tabBtn){
-    var next = tabBtn.dataset.apTab === "due" ? "due" : "notice";
-    if(next !== rt.alertTab){
-      rt.alertTab = next;
-      try{ localStorage.setItem("ds.alertTab", rt.alertTab); }catch(err){ /* 受限环境忽略 */ }
-      renderAlertPanel();
-      loadAlertPanel();
-    }
-    return;
-  }
-  /* 全部标为已读 */
-  if(e.target.closest("[data-ap-readall]")){
-    invalidateNotifications();
-    API.postGlobal("/api/notifications/read-all").then(function(){
-      notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
-      notifyState.unread = 0;
-      renderBellBadge(); updateBellTitle(); renderAlertPanel();
-      loadAlertPanel();
-      loadUnread(true);
-      toast("已全部标为已读", "fs");
-    }).catch(function(ex){
-      loadAlertPanel();
-      loadUnread(true);
-      toast(ex.message || "操作失败", "bad");
-    });
-    return;
-  }
-  /* 通知项：标记已读 + 打开关联任务 */
-  var apn = e.target.closest("[data-apn]");
-  if(apn){
-    UI.closeAllPops();
-    openFromNotification(apn.dataset);
-    return;
-  }
-  var t = e.target.closest("[data-ap-task]");
-  if(t){
-    var task = taskById(t.dataset.apTask);
-    UI.closeAllPops();
-    if(task) openTaskDrawer(null, task);
-    return;
-  }
-  if(e.target.closest("[data-ap-test]")){
-    UI.closeAllPops();
-    $("btnNotifyTest").click();
-  }
+$("alertPanel").addEventListener("click", handleNoticeClick);
+
+/* 顶栏帮助菜单：帮助对话框由设置模块渲染，这里只在点击时按需加载，
+   保证未访问过设置页也能用（帮助中心 / GitHub 直接新开） */
+function openHelpDialog(){
+  loadView("settings").then(function(m){ m.openHelp(); });
+}
+if($("btnHelp")) $("btnHelp").addEventListener("click", function(){
+  var menu = $("helpMenu");
+  if(!menu){ openHelpDialog(); return; }
+  if(UI.popOpen(menu)){ UI.closeAllPops(); return; }
+  UI.openPop(menu, $("btnHelp"), {align:"right"});
+});
+if($("helpMenu")) $("helpMenu").addEventListener("click", function(e){
+  var b = e.target.closest("[data-help]");
+  if(!b) return;
+  UI.closeAllPops();
+  if(b.dataset.help === "shortcuts"){ openHelpDialog(); return; }
+  if(b.dataset.help === "manual"){ window.open("help.html", "_blank", "noopener"); return; }
+  if(b.dataset.help === "github"){ window.open("https://github.com/kong0827/hourglass", "_blank", "noopener"); }
 });
 
 export { loadCategories, loadMe, loadWorkspaces, pruneStaleFilters, renderSideUser, updateTagDatalist };

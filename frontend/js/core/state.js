@@ -50,7 +50,7 @@ var state = {
   due:null, focus:false, doneScope:"week", blocked:false,
   board:null, doneExtra:[], loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
-  mineSpace:"",
+  mineSpace:"", mineGroup:"due", mineSort:"default",
   collapsedCols:{}, inlineAdd:null,
   runningTimer:null, compMonth:null, reqDocId:null
 };

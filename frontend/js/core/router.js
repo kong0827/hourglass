@@ -42,38 +42,82 @@ function enterSettingsLazy(isCurrent){
 }
 var VIEWS = {
   mine:     { title:"我的工作", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
-  board:    { title:"工作项看板", sub:"工作项按看板列流转；项目是工作项的归属单元", enter:null },
-  list:     { title:"工作项列表", sub:"沿用当前筛选条件，点击行打开详情抽屉", enter:enterListView },
-  calendar: { title:"日历",     sub:"按 [开始日期, 实际结束日] 逐日铺开；点任务开详情，格子可新建", enter:enterCalendarView },
-  gantt:    { title:"甘特图",   sub:"按开始/截止日期排布任务；拖动条改期，拖两端调起止", enter:lazyEnter("gantt", "enterGanttView") },
-  projects: { title:"项目",     sub:"把任务归入项目，筛选栏可按项目查看全部工作", enter:lazyEnter("projects", "enterProjectsView") },
+  board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、日历与甘特", enter:null },
+  list:     { title:"工作项", sub:"列表视图：沿用当前筛选，点击行打开详情抽屉", enter:enterListView },
+  calendar: { title:"工作项", sub:"日历视图：按 [开始日期, 实际结束日] 逐日铺开", enter:enterCalendarView },
+  gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
+  projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
-  testcases: { title:"测试用例", sub:"用例库与执行结果：逐条标记通过/失败，失败可一键转缺陷", enter:lazyEnter("testcases", "enterTestCasesView") },
+  testcases: { title:"测试", sub:"用例库、测试计划、覆盖矩阵与测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
   review:   { title:"周回顾", sub:"按周自动总结完成与进展", enter:lazyEnter("review", "enterReviewView") },
-  analysis: { title:"分析", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
-  portfolio: { title:"项目总览", sub:"全部项目的健康度、逾期与本周投入；点项目名进入项目概览", enter:lazyEnter("portfolio", "enterPortfolioView") },
-  project: { title:"项目概览", sub:"单项目：周期、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
+  analysis: { title:"报表", sub:"趋势与分布 / 完成记录 / 流程体检，同一周期口径", enter:lazyEnter("analysis", "enterAnalysisView") },
+  portfolio: { title:"项目", sub:"全局健康度：全部项目的健康度、逾期与本周投入；点项目名进入驾驶舱", enter:lazyEnter("portfolio", "enterPortfolioView") },
+  project: { title:"项目驾驶舱", sub:"单项目：周期、工时、工作项分布、史诗与成员负载", enter:lazyEnter("project", "enterProjectView") },
   workload: { title:"成员负载", sub:"跨项目剩余工时容量与本周计时", enter:lazyEnter("workload", "enterWorkloadView") },
   risks: { title:"逾期与阻塞", sub:"逾期、阻塞、停滞任务与站内催办", enter:lazyEnter("risks", "enterRisksView") },
-  report: { title:"报表中心", sub:"燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
-  settings: { title:"设置",     sub:"空间、成员与邀请、看板列、分类与数据管理", enter:enterSettingsLazy },
+  report: { title:"报表", sub:"交付图表：燃尽、速度、累积流与交付周期", enter:lazyEnter("report", "enterReportView") },
+  messages: { title:"消息", sub:"站内通知与截止提醒；与右上角通知中心同一数据", enter:lazyEnter("messages", "enterMessagesView") },
+  settings: { title:"设置",     sub:"空间、成员与权限、工作流、通知与集成、数据与审计", enter:enterSettingsLazy },
   profile:  { title:"个人设置", sub:"账号信息、计时规则、AI 额度与密码", enter:lazyEnter("profile", "enterProfileView") }
 };
+/* 视图 → 侧栏一级入口。多个视图共用一个入口时，靠页内子导航切换 */
+var NAV_OF = {
+  mine:"mine", review:"review",
+  demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase",
+  board:"workitems", list:"workitems", calendar:"workitems", gantt:"workitems",
+  requirements:"requirements", testcases:"testcases", branches:"branches",
+  analysis:"insight", report:"insight",
+  workload:"workload", risks:"risks"
+};
+/* 点击一级入口落到的默认视图；workitems / insight 记住上次用过的视图 */
+var NAV_HOME = {
+  mine:"mine", review:"review", demands:"demands", projects:"projects", phase:"phase",
+  workitems:"board", requirements:"requirements", testcases:"testcases", branches:"branches",
+  insight:"analysis", workload:"workload", risks:"risks"
+};
+var navMemo = { workitems:"board", insight:"analysis" };
+/* 同一业务域内的视图切换：放页内子导航，不占一级菜单 */
+var SUBNAV = {
+  workitems: [
+    { view:"board", label:"看板", title:"按状态分列，拖拽流转" },
+    { view:"list", label:"列表", title:"表格字段、分组排序与批量操作" },
+    { view:"calendar", label:"日历", title:"按日期铺开，格子可新建" },
+    { view:"gantt", label:"甘特", title:"依赖、里程碑与基线" }
+  ],
+  projects: [
+    { view:"projects", label:"项目列表", title:"全部项目与新建入口" },
+    { view:"portfolio", label:"全局健康度", title:"跨项目健康度、逾期与本周投入" }
+  ],
+  insight: [
+    { view:"analysis", tab:"stats", label:"趋势与分布" },
+    { view:"analysis", tab:"completions", label:"完成记录" },
+    { view:"analysis", tab:"flow", label:"流程体检" },
+    { view:"report", label:"交付图表" }
+  ]
+};
+/* 移动端「更多视图」的分组顺序，与侧栏保持一致 */
+var NAV_GROUPS = [
+  { title:"我的", items:[["review","周回顾"]] },
+  { title:"规划", items:[["demands","需求池"],["phase","版本"]] },
+  { title:"交付", items:[["requirements","文档"],["testcases","测试"],["branches","分支"]] },
+  { title:"洞察", items:[["insight","报表"],["workload","成员负载"],["risks","逾期与阻塞"]] },
+  { title:"", items:[["settings","设置"]] }
+];
 var TAB_OF = {
-  mine: "mine",
+  mine: "mine", review: "mine",
   board: "board", list: "board", calendar: "board", gantt: "board", branches: "board",
   projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
-  portfolio: "projects", project: "projects",
-  settings: "me", profile: "me", review: "me", analysis: "me", phase: "me",
-  report: "me", workload: "me", risks: "me"
+  portfolio: "projects", project: "projects", phase: "projects",
+  messages: "messages",
+  settings: "me", profile: "me"
 };
 function syncTab(name){
   var bar = document.getElementById("tabBar");
   if(!bar) return;
-  var want = TAB_OF[name] || "mine";
+  var want = Object.prototype.hasOwnProperty.call(TAB_OF, name) ? TAB_OF[name] : "";
   bar.querySelectorAll("[data-tab]").forEach(function(b){
     var on = b.dataset.tab === want;
     b.classList.toggle("on", on);
@@ -93,10 +137,10 @@ function restoreScroll(name){
   requestAnimationFrame(function(){ el.scrollTop = scrollMemo["view-" + name] || 0; });
 }
 function showView(name){
-  /* IA-5：旧入口并入设置页 tabs —— 回收站→数据、用户管理→账号 */
+  /* 兼容旧入口：回收站→数据与审计、用户管理→平台 */
   if(name === "trash"){ settingsTabPending = "data"; showView("settings"); return; }
-  if(name === "users"){ settingsTabPending = "account"; showView("settings"); return; }
-  /* IA-1：旧入口并入「分析」的三个 tab */
+  if(name === "users"){ settingsTabPending = "platform"; showView("settings"); return; }
+  /* 兼容旧入口：分析页的三个页签 */
   if(name === "stats" || name === "completions" || name === "flow"){
     rt.analysisTab = name; showView("analysis"); return;
   }
@@ -117,8 +161,10 @@ function showView(name){
   activeView = name;
   document.body.dataset.view = name;
   syncTab(name);
+  var navKey = NAV_OF[name] || "";
+  /* 记住多视图业务域上次查看的视图，再点一级入口时回到那里 */
+  if(navKey === "workitems" || navKey === "insight") navMemo[navKey] = name;
   var nav = $("sideNav");
-  var navKey = name === "project" ? "portfolio" : name;
   if(nav){
     nav.querySelectorAll("[data-view]").forEach(function(b){
       var on = b.dataset.view === navKey;
@@ -126,6 +172,7 @@ function showView(name){
       if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
     });
   }
+  renderSubnav(name);
   var sideSet = $("sideSettings");
   if(sideSet) sideSet.classList.toggle("on", name === "settings");
   document.querySelectorAll(".view").forEach(function(s){
@@ -147,6 +194,40 @@ function showView(name){
   if(name === "board" && rt.boardDirty){ rt.boardDirty = false; render({animate:false}); }
   return entered;
 }
+function renderSubnav(name){
+  var el = $("subNav");
+  if(!el) return;
+  var items = SUBNAV[NAV_OF[name] || ""];
+  if(!items){
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  var html = items.map(function(it){
+    var on = it.view === name && (!it.tab || (name === "analysis" && rt.analysisTab === it.tab));
+    return '<button class="subnav-item' + (on ? " on" : "") + '" type="button" data-sub-view="' + it.view + '"'
+      + (it.tab ? ' data-sub-tab="' + it.tab + '"' : "")
+      + (on ? ' aria-current="page"' : "")
+      + (it.title ? ' title="' + UI.esc(it.title) + '"' : "")
+      + '>' + UI.esc(it.label) + '</button>';
+  }).join("");
+  el.innerHTML = html;
+  el.hidden = false;
+}
+var subNavEl = $("subNav");
+if(subNavEl) subNavEl.addEventListener("click", function(e){
+  var b = e.target.closest("[data-sub-view]");
+  if(!b) return;
+  var view = b.dataset.subView, tab = b.dataset.subTab;
+  if(view === "analysis" && tab) rt.analysisTab = tab;
+  if(view === activeView){
+    if(view === "analysis" && tab) loadView("analysis").then(function(m){ m.setAnalysisTab(tab); });
+    renderSubnav(activeView);
+    return;
+  }
+  showView(view);
+});
+
 function viewFromHash(){
   var raw = String(window.location.hash || "").replace(/^#\/?/, "");
   var q = raw.indexOf("?");
@@ -191,7 +272,7 @@ function refreshActiveView(opts){
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
   else if(activeView === "gantt") loadView("gantt").then(function(m){ m.loadGantt({silent:true}); });
   else if(activeView === "analysis") loadView("analysis").then(function(m){ m.refreshAnalysisTab(true); });
-  else if(activeView === "requirements") loadView("requirements").then(function(m){ m.loadReqDocs(); });
+  else if(activeView === "requirements") loadView("requirements").then(function(m){ m.loadReqDocs(!!(opts && opts.manual)); });
   else if(activeView === "testcases") loadView("testcases").then(function(m){ m.enterTestCasesView(); });
   else if(activeView === "phase") loadView("phase").then(function(m){ m.enterPhaseView(); });
   else if(activeView === "demands") loadView("demands").then(function(m){ m.enterDemandsView(); });
@@ -200,10 +281,11 @@ function refreshActiveView(opts){
   else if(activeView === "workload") loadView("workload").then(function(m){ m.loadWorkload({silent:true}); });
   else if(activeView === "risks") loadView("risks").then(function(m){ m.loadRisks({silent:true}); });
   else if(activeView === "report") loadView("report").then(function(m){ m.loadReport({silent:true}); });
+  else if(activeView === "messages") loadView("messages").then(function(m){ m.enterMessagesView(); });
   else if(activeView === "settings"){
     loadView("settings").then(function(m){
       if(m.settingsTab === "data") m.loadTrash({silent:true});
-      if(m.settingsTab === "account") m.loadUsers(true);
+      if(m.settingsTab === "platform") m.loadUsers(true);
     });
   }
 }
@@ -211,20 +293,28 @@ $("sideNav").addEventListener("click", function(e){
   /* MOB-1：底部 tab 的「更多」 */
   if(e.target.closest("#mobMore")){ openMobMore(); return; }
   var b = e.target.closest("[data-view]");
-  if(b) showView(b.dataset.view);
+  if(!b) return;
+  var key = b.dataset.view;
+  /* 一级入口就是视图本身 */
+  if(VIEWS[key]){ showView(key); return; }
+  /* 已在本业务域内：单独点击不打断当前视图（子导航负责切换） */
+  if(NAV_OF[activeView] === key) return;
+  var target = navMemo[key] || NAV_HOME[key];
+  if(target) showView(target);
 });
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 var sideBrandBtn = $("sideBrand");
-if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("board"); });
-/* 底栏已覆盖的视图 + 需要项目上下文的详情页，不放进「更多视图」 */
-var TABS_COVERED = { mine:1, board:1, projects:1, profile:1, project:1 };
+/* Logo 回首页：与登录后默认落点保持一致 */
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("mine"); });
+/* 底栏已覆盖的入口不再放进「更多视图」；分组与侧栏一致，设置置底 */
 function moreMenuHTML(){
-  return Object.keys(VIEWS).filter(function(name){
-    return !TABS_COVERED[name];
-  }).map(function(name){
-    return '<button class="menu-item" type="button" data-mob-view="' + name + '">' +
-      UI.esc(VIEWS[name].title) + '</button>';
+  return NAV_GROUPS.map(function(g){
+    var items = g.items.map(function(it){
+      return '<button class="menu-item" type="button" data-nav-key="' + it[0] + '">' + UI.esc(it[1]) + '</button>';
+    }).join("");
+    if(!items) return "";
+    return (g.title ? '<div class="menu-sec">' + UI.esc(g.title) + '</div>' : "") + items;
   }).join("");
 }
 function openMobMore(anchor){
@@ -239,10 +329,13 @@ function openMobMore(anchor){
     menu.innerHTML = moreMenuHTML();
     document.body.appendChild(menu);
     menu.addEventListener("click", function(ev){
-      var mb = ev.target.closest("[data-mob-view]");
+      var mb = ev.target.closest("[data-nav-key]");
       if(!mb) return;
       UI.closeAllPops();
-      showView(mb.dataset.mobView);
+      var key = mb.dataset.navKey;
+      if(VIEWS[key]){ showView(key); return; }
+      var target = navMemo[key] || NAV_HOME[key];
+      if(target) showView(target);
     });
   }
   UI.openPop(menu, btn, {align:"right"});
@@ -251,16 +344,13 @@ function openMobMore(anchor){
 var mobViewsBtn = $("btnMobViews");
 if(mobViewsBtn) mobViewsBtn.addEventListener("click", function(){ openMobMore(mobViewsBtn); });
 
-/* 移动端底部 Tab：messages 过渡为打开现有通知面板；me 落个人设置 */
+/* 移动端底部 Tab：消息落独立页面；me 落个人设置 */
 window.addEventListener("ds:tab", function(e){
   var tab = e.detail && e.detail.tab;
   if(!tab) return;
-  if(tab === "messages"){
-    var bell = document.getElementById("btnAlert");
-    if(bell) bell.click();
-    return;
-  }
+  if(tab === "messages"){ showView("messages"); return; }
   if(tab === "me"){ showView("profile"); return; }
+  if(tab === "board"){ showView(navMemo.workitems || "board"); return; }
   showView(tab);
 });
 

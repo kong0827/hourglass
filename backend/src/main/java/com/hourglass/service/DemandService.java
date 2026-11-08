@@ -27,7 +27,8 @@ import java.util.Map;
  * M2 需求池（T2.1 / T2.4 / T2.5）：CRUD + 状态机 + WSJF。
  *
  * <p>状态机：review（待评审）→ pass（已通过）/ rej（已拒绝）；pass → plan（已排期，选目标版本）；
- * rej → reopen 回 review。评审流转仅空间主可执行，全部动作写 demand_log 留痕。
+ * rej → reopen 回 review；pass → unpass 撤回评审；plan → unplan 退回已通过并解绑版本。
+ * 评审流转仅空间主可执行，全部动作写 demand_log 留痕。
  * WSJF =（业务价值+时间紧迫度+风险降低）÷ 工作量，四分量齐全才算，禁止手填结果。
  */
 @Service
@@ -344,6 +345,41 @@ public class DemandService {
         return get(workspaceId, id);
     }
 
+    /** 撤回评审：已通过 → 待评审（审批点错了可退回重评） */
+    @Transactional
+    public Demand unpass(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand d = requireDemand(workspaceId, id);
+        requireStatus(d, "pass", "unpass");
+        d.setStatus("review");
+        d.setReviewNote(Texts.cut(Texts.trimToNull(noteOf(body)), 500));
+        demandMapper.update(d);
+        demandMapper.insertLog(workspaceId, id, "unpass", d.getReviewNote(), userId);
+        notifyStatus(d, userId, "撤回评审", d.getReviewNote());
+        return get(workspaceId, id);
+    }
+
+    /** 撤销排期：已排期 → 已通过，同时解绑版本 */
+    @Transactional
+    public Demand unplan(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand d = requireDemand(workspaceId, id);
+        requireStatus(d, "plan", "unplan");
+        String oldVersionId = d.getVersionId();
+        String oldVersionName = null;
+        if (oldVersionId != null) {
+            ProjectVersion old = versionMapper.selectById(oldVersionId);
+            oldVersionName = old == null ? oldVersionId : old.getName();
+        }
+        d.setStatus("pass");
+        d.setVersionId(null);
+        d.setReviewNote(Texts.cut(Texts.trimToNull(noteOf(body)), 500));
+        demandMapper.update(d);
+        demandMapper.insertLog(workspaceId, id, "unplan", "撤销排期"
+                + (oldVersionName == null ? "" : "（原版本 " + oldVersionName + "）")
+                + (d.getReviewNote() == null ? "" : "：" + d.getReviewNote()), userId);
+        notifyStatus(d, userId, "撤销排期", "需求已退回已通过，可重新选择目标版本");
+        return get(workspaceId, id);
+    }
+
     /** 重新打开：已拒绝 → 待评审（清掉拒绝原因，重新进入评审） */
     @Transactional
     public Demand reopen(String userId, String workspaceId, String id, DemandActionRequest body) {
@@ -487,6 +523,12 @@ public class DemandService {
         }
         if ("reopen".equals(action)) {
             return "重新打开";
+        }
+        if ("unpass".equals(action)) {
+            return "撤回评审";
+        }
+        if ("unplan".equals(action)) {
+            return "撤销排期";
         }
         return action;
     }
