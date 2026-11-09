@@ -1,4 +1,4 @@
-/* 静态预览稿的演示数据（docs/ui-preview.html 专用，不连后端）
+/* 静态预览稿的演示数据（docs/preview/ui-preview.html 专用，不连后端）
    改这里就能改预览稿里看到的内容。 */
 (function () {
   function pad(n) { return (n < 10 ? "0" : "") + n; }

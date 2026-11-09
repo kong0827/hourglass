@@ -1,4 +1,4 @@
-/* 分支视图自检（CDP 驱动真 Chrome，跑 docs/ui-preview.html 的演示数据）
+/* 分支视图自检（CDP 驱动真 Chrome，跑 docs/preview/ui-preview.html 的演示数据）
    用法：node tools/shots/check-branch.mjs
    断言重点：
      1) 侧栏「分支」能进，四列分组 + 顶部五格统计渲染出来
@@ -10,7 +10,7 @@ import { launch } from 'file:///C:/Users/chenghongchang/.workbuddy/skills/browse
 import { pathToFileURL } from 'node:url'
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const PREVIEW = pathToFileURL('docs/ui-preview.html').href
+const PREVIEW = pathToFileURL('docs/preview/ui-preview.html').href
 const b = await launch({ chrome: CHROME, width: 1440, height: 900 })
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 let pass = 0, fail = 0

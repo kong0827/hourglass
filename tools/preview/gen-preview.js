@@ -1,5 +1,5 @@
 /* ============================================================================
-   生成自包含的静态预览稿：docs/ui-preview.html
+   生成自包含的静态预览稿：docs/preview/ui-preview.html
    把真实的 index.html + CSS + JS 内联成一个单文件，并注入 tools/preview/preview-mock.js
    的演示数据（不连后端也能看全套界面）。
 
@@ -8,14 +8,14 @@
    注意：
      · 预览稿只是"某一时刻的快照"，改完前端要重新跑一次命令才会同步；
      · 演示数据在 tools/preview/preview-mock.js 里改，比如让某一列塞满卡片来验证滚动；
-     · 产物 docs/ui-preview.html 体积较大（~450KB），不要手工编辑。
+     · 产物 docs/preview/ui-preview.html 体积较大（~450KB），不要手工编辑。
    ========================================================================== */
 const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const STATIC = path.join(ROOT, "frontend");
-const OUT = path.join(ROOT, "docs/ui-preview.html");
+const OUT = path.join(ROOT, "docs/preview/ui-preview.html");
 
 /** 递归展开 @import，把多个 CSS 合成一份 */
 function inlineCss(file) {
@@ -66,13 +66,12 @@ const codeOf = new Map(modules.map(m => [m, fs.readFileSync(path.join(JS, m), "u
 
 function importsOf(code) {
   const out = [];
-  /* [^;]*? 而不是 [\s\S]*?：后者会跨过副作用导入 import "x"; 吃到下一行的 from，
-     把两条语句并成一条（曾把 task-actions 的具名导入整条删掉） */
-  const re = /^\s*import\s+[^;]*?from\s+"([^"]+)";/gm;
+  /* 用一条正则按源码顺序收集：具名导入与副作用导入（import "x";）交叉出现时，
+     分两条正则遍历会把副作用导入全部排到后面，拼接顺序就不再等于真实 ESM 求值顺序
+     （templates/index.js 必须早于 core/dom.js 就是靠这一点）。 */
+  const re = /^\s*import\s+(?:[^;]*?from\s+)?"([^"]+)";/gm;
   let m;
   while ((m = re.exec(code))) out.push(m[1]);
-  const side = /^\s*import\s+"([^"]+)";/gm;
-  while ((m = side.exec(code))) out.push(m[1]);
   return out;
 }
 function resolve(from, spec) {
@@ -110,6 +109,9 @@ const LAZY_VIEWS = ["gantt", "projects", "requirements", "review", "analysis", "
   "phase", "demands", "portfolio", "project", "workload", "risks", "report", "testcases", "messages"];
 const WRAPPED = new Set(LAZY_VIEWS.map(function (n) { return "views/" + n + ".js"; })
   .concat(["core/list-preferences.js", "core/activity-ui.js", "views/manager-shared.js",
+    /* view-loader 的 const cache 与 transitions.js 的 var cache 同名：
+       平铺拼接会在同一作用域重复声明，真实 ESM 各自独立作用域 */
+    "core/view-loader.js",
     /* fullscreen 的 init/enter/exit 与 search-palette 的 init 同名：平铺会让后者覆盖前者，
        预览稿里全屏按钮就成了死按钮（真实 ESM 各文件独立作用域，没有这个问题） */
     "core/fullscreen.js"]));

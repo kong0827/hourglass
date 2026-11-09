@@ -4,7 +4,7 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { showView } from "../core/router.js";
-import { rt } from "../core/state.js";
+import { dueState, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML } from "../lib/format.js";
 import { icon } from "../core/icons.js";
@@ -41,7 +41,7 @@ function tasksFor(reqId, metric){
   if(metric === "backlog") return rows.filter(function(t){ return t.boardColumn !== "done" && t.boardColumn !== "doing"; });
   if(metric === "doing") return rows.filter(function(t){ return t.boardColumn === "doing"; });
   if(metric === "done") return rows.filter(function(t){ return t.boardColumn === "done"; });
-  if(metric === "overdue") return rows.filter(function(t){ return t.boardColumn !== "done" && t.dueDate && t.dueDate < cache.today; });
+  if(metric === "overdue") return rows.filter(function(t){ return dueState(t).kind === "over"; });
   if(metric === "blocked") return rows.filter(function(t){ return t.boardColumn !== "done" && t.blocked; });
   if(metric === "weekDone"){
     var monday = mondayIso(cache.today);

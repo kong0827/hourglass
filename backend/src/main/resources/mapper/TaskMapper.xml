@@ -25,13 +25,19 @@
   </sql>
 
   <select id="selectAll" resultType="Task">
-    SELECT <include refid="cols"/> FROM task
+    SELECT <include refid="cols"/>,
+           (SELECT bc.processing_rule FROM board_column bc
+            WHERE bc.workspace_id = task.workspace_id AND bc.id = task.board_column) AS processing_rule
+    FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL
     ORDER BY board_column, sort_order, id
   </select>
 
   <select id="selectAllVisible" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t
+    SELECT <include refid="cols"/>,
+           (SELECT bc.processing_rule FROM board_column bc
+            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column) AS processing_rule
+    FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
     ORDER BY t.board_column, t.sort_order, t.id
@@ -214,10 +220,11 @@
            t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
-           w.name AS workspace_name
+           bc.processing_rule, w.name AS workspace_name
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     LEFT JOIN workspace w ON w.id = t.workspace_id
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     <include refid="myTasksWhere"/>
     ORDER BY (t.due_date IS NULL), t.due_date, FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.updated_at DESC, t.id
     LIMIT #{limit} OFFSET #{offset}
@@ -692,7 +699,10 @@
   </sql>
 
   <select id="selectGantt" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t2
+    SELECT <include refid="cols"/>,
+           (SELECT bc.processing_rule FROM board_column bc
+            WHERE bc.workspace_id = t2.workspace_id AND bc.id = t2.board_column) AS processing_rule
+    FROM task t2
     JOIN (
       SELECT t.id AS pid
       FROM task t
@@ -711,7 +721,10 @@
   </select>
 
   <select id="selectGanttUnscheduled" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t
+    SELECT <include refid="cols"/>,
+           (SELECT bc.processing_rule FROM board_column bc
+            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column) AS processing_rule
+    FROM task t
     WHERE <include refid="ganttWhere"/>
       AND t.start_date IS NULL AND t.due_date IS NULL
     ORDER BY t.id
@@ -719,7 +732,10 @@
   </select>
 
   <select id="selectGanttUnscheduledPage" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t
+    SELECT <include refid="cols"/>,
+           (SELECT bc.processing_rule FROM board_column bc
+            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column) AS processing_rule
+    FROM task t
     WHERE <include refid="ganttWhere"/>
       AND t.start_date IS NULL AND t.due_date IS NULL
     ORDER BY t.id

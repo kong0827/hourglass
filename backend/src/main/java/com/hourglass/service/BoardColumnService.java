@@ -71,14 +71,14 @@ public class BoardColumnService {
         if (c == null) {
             throw AppException.notFound("看板列不存在：" + id);
         }
-        if (Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id)) {
-            throw AppException.badRequest("「待处理」「进行中」为内置列，不可修改处理规则");
-        }
         String name = req.getName().trim();
         checkName(workspaceId, name, id);
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
-        c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
+        /* 内置列只冻结处理规则，名称/颜色仍允许调整（与删除提示「可改名」一致） */
+        if (!Consts.COL_BACKLOG.equals(id) && !Consts.COL_DOING.equals(id)) {
+            c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
+        }
         boardColumnMapper.update(c);
         evictColumns(workspaceId);
         return boardColumnMapper.selectById(workspaceId, id);

@@ -1,5 +1,7 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeLog;
 import com.hourglass.mapper.TaskLogMapper;
@@ -13,13 +15,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -83,6 +91,51 @@ class TimeLogStartStopTest {
         order.verify(userMapper).lockById(ME);
         order.verify(timeLogMapper).selectRunningByTaskAndUser(TASK, ME);
         order.verify(timeLogMapper).closeRunning(eq(TASK), eq(ME), anyInt());
+    }
+
+    @Test
+    void startManualRejectsBlockedTask() {
+        Task blocked = task(TASK, "doing");
+        blocked.setBlocked(true);
+        when(taskMapper.selectById(TASK)).thenReturn(blocked);
+        when(taskSupport.canTime(WS, "doing")).thenReturn(true);
+
+        AppException ex = assertThrows(AppException.class, () -> service.startManual(ME, WS, TASK));
+
+        assertEquals(400, ex.getCode());
+        verify(timeLogMapper, never()).insert(any(TimeLog.class));
+    }
+
+    @Test
+    void resumeSkipsBlockedTasks() {
+        when(taskSupport.canTime(WS, "doing")).thenReturn(true);
+        when(timeLogMapper.selectRunningAllByUser(ME)).thenReturn(Collections.<TimeLog>emptyList());
+        AppUser me = new AppUser();
+        me.setId(ME);
+        me.setDisplayName("我");
+        when(userMapper.selectById(ME)).thenReturn(me);
+        Task blocked = task("K1", "doing");
+        blocked.setBlocked(true);
+        Task next = task("K2", "doing");
+        when(taskMapper.selectColumnTasks(WS, "doing")).thenReturn(Arrays.asList(blocked, next));
+        when(taskMapper.selectById("K2")).thenReturn(next);
+        when(projectAccess.canWrite(WS, ME, "R1")).thenReturn(true);
+
+        Task resumed = service.resumeInColumn(ME, WS, "doing", null);
+
+        assertSame(next, resumed, "接力必须跳过阻塞任务");
+        verify(timeLogMapper, times(1)).insert(any(TimeLog.class));
+    }
+
+    private static Task task(String id, String column) {
+        Task task = new Task();
+        task.setId(id);
+        task.setWorkspaceId(WS);
+        task.setReqId("R1");
+        task.setTitle(id);
+        task.setBoardColumn(column);
+        task.setOwnerUserId(ME);
+        return task;
     }
 
     private static TimeLog running() {

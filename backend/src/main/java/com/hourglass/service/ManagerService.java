@@ -1259,6 +1259,7 @@ public class ManagerService {
         item.put("ownerUserId", task.getOwnerUserId());
         item.put("categoryId", task.getCategoryId());
         item.put("boardColumn", task.getBoardColumn());
+        item.put("processingRule", task.getProcessingRule());
         item.put("startDate", task.getStartDate());
         item.put("dueDate", task.getDueDate());
         item.put("reqId", task.getReqId());
@@ -1384,7 +1385,9 @@ public class ManagerService {
     }
 
     private boolean isOverdue(Task task, LocalDate today) {
-        return !isDone(task) && task.getDueDate() != null && task.getDueDate().isBefore(today);
+        /* 「执行结束」列不计逾期，与看板 / 列表 / 统计 SQL 同一口径 */
+        return !isDone(task) && !"ended".equals(task.getProcessingRule())
+                && task.getDueDate() != null && task.getDueDate().isBefore(today);
     }
 
     private boolean isStagnant(Task task, LocalDate today) {

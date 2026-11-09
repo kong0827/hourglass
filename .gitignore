@@ -47,6 +47,8 @@ sql/hourglass_full_init.sql
 tools/generate_seed_from_excel.py
 # 数据库转储（含真实业务数据）
 backup/
+# 后端源码里的 backup 包不是转储目录，必须纳入版本管理
+!backend/src/main/java/com/hourglass/service/backup/
 # 旧仓库（gitee chc2/workStuio）的完整历史副本，已移出至 内部资料/git-history/
 .git-gitee-history/
 

@@ -7,6 +7,7 @@ USE hourglass;
 --   唯一键 (workspace_id, name) → (workspace_id, project_id, name)。
 --   不迁移历史：旧空间级行（project_id=''）删除；任务/需求旧模块引用置空
 --   （task.category_id=''、demand.category_id=NULL，均表示「未指定」）。
+--   ⚠ 仅适用于开发 / 演示库重建；已有真实数据的库执行前必须先备份，或跳过本脚本并自行补数据。
 --   幂等：MySQL 8 不支持 ADD COLUMN IF NOT EXISTS，这里按 information_schema 逐列/逐索引判断。
 -- ============================================================================
 

@@ -573,6 +573,7 @@ public class GanttService {
             p.setPriority(t.getPriority());
             p.setOwner(t.getOwner());
             p.setBoardColumn(t.getBoardColumn());
+            p.setProcessingRule(t.getProcessingRule());
             p.setStartDate(t.getStartDate());
             p.setDueDate(t.getDueDate());
             p.setProgress(t.getProgress());

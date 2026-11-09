@@ -4,7 +4,7 @@ import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, catNameById, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, catNameById, colRuleOf, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -453,6 +453,14 @@ function syncDueNote(){
   var d = iDue.value ? parseDate(iDue.value) : null;
   if(!d || isNaN(d.getTime())){
     note.textContent = "";
+    note.classList.remove("overdue");
+    return;
+  }
+  var t = rt.editingId ? taskCacheExtra[rt.editingId] : null;
+  var rule = colRuleOf(iCol && iCol.value ? iCol.value : (t && t.boardColumn), t);
+  if(rule === "done" || rule === "ended"){
+    /* 已完成 / 执行结束列不再提示逾期，与看板、列表、甘特口径一致 */
+    note.textContent = (d.getMonth() + 1) + "月" + d.getDate() + "日 · " + weekdayCN(d) + " · " + (rule === "done" ? "已完成" : "执行结束");
     note.classList.remove("overdue");
     return;
   }
@@ -1886,6 +1894,18 @@ taskForm.addEventListener("submit", function(e){
   var columnChanged = wasEdit && fromCol !== toCol;
   var wsId = (current && current.workspaceId) || (rt.currentWs && rt.currentWs.id);
   var items = columnChanged ? [{ from: fromCol, title: title }] : [];
+  /* 与后端一致：改到「正常计时」列会自动开表；只在能确认目标列规则时提示，避免误导 */
+  var autoTimerHint = (function(){
+    if(!columnChanged || payload.blocked) return false;
+    if(state.runningTimer && state.runningTimer.taskId === editId) return false;
+    for(var i = 0; i < COLUMNS.length; i++){
+      if(COLUMNS[i].id === toCol) return COLUMNS[i].processingRule === "normal";
+    }
+    for(var j = 0; j < rt.colDefsCache.length; j++){
+      if(rt.colDefsCache[j].id === toCol) return (rt.colDefsCache[j].processingRule || "normal") === "normal";
+    }
+    return false;
+  })();
   var retried = false;
   function onSaved(nt){
     setSaveLoading(false);
@@ -1900,11 +1920,11 @@ taskForm.addEventListener("submit", function(e){
       var stayHint = $("taskFormHint");
       if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
       if(changedDuringSave) toast("已保存提交时的内容 · 保存期间的新改动还未保存", "warn");
-      else toast("已保存「" + title + "」");
+      else toast("已保存「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""));
     }else{
       forceCloseTaskDrawer();
       if(wasEdit){
-        toast("已更新「" + title + "」", "fs");
+        toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
       }else{
         var tip = "已创建工作项「" + nt.title + "」";
         var kind = "fs";

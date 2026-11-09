@@ -2085,4 +2085,16 @@ function openCaseInProject(reqId, id){
   });
 }
 
-export { currentTcMode, enterTestCasesView, openCaseInProject, setTcMode };
+function setTcProject(reqId){
+  if(!reqId) return;
+  caseReqId = reqId;
+  syncReqSel();
+  if(document.body.dataset.view === "testcases"){
+    if(tcMode === "plans") loadPlans();
+    else if(tcMode === "coverage") loadCoverage();
+    else if(tcMode === "report") loadTestReport();
+    else { render(); loadCases(); }
+  }
+}
+
+export { currentTcMode, enterTestCasesView, openCaseInProject, setTcMode, setTcProject };

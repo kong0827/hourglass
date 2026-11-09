@@ -4,6 +4,7 @@ import { API } from "../core/api.js";
 import { invalidateRules, loadRules } from "../core/transitions.js";
 import { loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
+import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
@@ -1617,6 +1618,11 @@ $("btnExportCsv").addEventListener("click", function(){
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
     toast("已导出 CSV", "fs");
   }).catch(function(ex){ toast("导出失败：" + (ex.message || "网络异常"), "bad"); });
+});
+var btnNavTelemetry = $("btnNavTelemetryCsv");
+if(btnNavTelemetry) btnNavTelemetry.addEventListener("click", function(){
+  triggerDownload("hourglass-nav-" + rt.TODAY_ISO + ".csv", "\ufeff" + navTelemetryCsv(), "text/csv;charset=utf-8");
+  toast("已导出导航使用记录", "fs");
 });
 var btnReset = $("btnReset"), resetLabel = $("resetLabel");
 function disarmReset(){

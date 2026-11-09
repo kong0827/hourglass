@@ -141,6 +141,7 @@ function mineGroupOf(t){
   var st = dueState(t);
   if(st.kind === "over") return "over";
   if(st.kind === "today") return "today";
+  if(st.kind === "ended") return "ended";
   if(st.kind === "none") return "later";
   var dow = (rt.TODAY.getDay() + 6) % 7;             // 周一=0
   var weekEnd = addDays(rt.TODAY, 6 - dow);
@@ -150,6 +151,7 @@ var MINE_GROUPS = [
   {k:"over", label:"逾期", hint:"先处理已经拖过期的"},
   {k:"today", label:"今天", hint:"今天到期"},
   {k:"week", label:"本周", hint:"本周内到期"},
+  {k:"ended", label:"执行结束", hint:"所在列已结束计时，不计逾期"},
   {k:"later", label:"以后", hint:"本周之后或未设截止"}
 ];
 

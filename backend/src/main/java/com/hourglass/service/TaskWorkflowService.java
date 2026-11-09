@@ -177,8 +177,9 @@ public class TaskWorkflowService {
                 } else {
                     /* 拖进「正常处理」列 = 开工，自动开始计时。
                        若本人已有别的任务在计时，start() 会先把它停掉 —— 个人同一时刻只计一个任务。
-                       autoTimer=false 时跳过（"取消完成"这类回退操作不该顺手开表）。 */
-                    boolean wantAuto = req.getAutoTimer() == null || req.getAutoTimer();
+                       阻塞任务不开表；autoTimer=false 时跳过（"取消完成"这类回退操作不该顺手开表）。 */
+                    boolean wantAuto = (req.getAutoTimer() == null || req.getAutoTimer())
+                            && !Boolean.TRUE.equals(task.getBlocked());
                     if (wantAuto) {
                         Map<String, Object> work = timeLogService.start(userId, workspaceId, id);
                         autoTimerStarted = Boolean.TRUE.equals(work.get("running"));
@@ -315,12 +316,15 @@ public class TaskWorkflowService {
     }
 
     /**
-     * 抽屉里编辑导致的改列：计时联动（完成停表+接力 / 回待处理停表）。
+     * 抽屉里编辑导致的改列：计时联动（完成停表+接力 / 进入可计时列开表 / 进入不可计时列停表）。
      * 由 {@link TaskCommandService#update} 在落库前调用，保持与拖拽 move 相同的计时口径。
+     *
+     * @param blocked 本次保存后的阻塞状态；阻塞任务不开表（与前端不显示计时入口一致）
      */
     @org.springframework.transaction.annotation.Transactional
     public String beforeEditColumnChange(String userId, String workspaceId, String id,
-                                         String from, String to, String reason, boolean force) {
+                                         String from, String to, String reason, boolean force,
+                                         boolean blocked) {
         if (from == null || from.equals(to)) {
             return null;
         }
@@ -333,6 +337,9 @@ public class TaskWorkflowService {
         } else if (!support.canTime(workspaceId, to)) {
             /* 抽屉里改成不可计时列：工时保留，计时停掉 */
             timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
+        } else if (!blocked) {
+            /* 改成「正常处理」列 = 开工，与看板拖拽 / 列表行内移动同一口径 */
+            timeLogService.start(userId, workspaceId, id);
         }
         return moveSuffix(decision);
     }

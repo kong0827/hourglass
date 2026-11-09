@@ -137,7 +137,7 @@ function loadUnread(force){
     }
   }).catch(function(){ /* 通知是增强能力：失败静默，不打扰用户 */ });
 }
-function alertCenterHTML(){
+function alertCenterHTML(isPage){
   var unread = notifyState.unread;
   var html = '<div class="ap-tabs" role="tablist">' +
       '<button class="ap-tab" type="button" role="tab" data-ap-tab="notice" aria-selected="' + (rt.alertTab === "notice") + '">' +
@@ -151,13 +151,15 @@ function alertCenterHTML(){
       (rt.alertTab === "notice" ? noticeFilterHTML() + noticeListHTML() : dueGroupsHTML()) +
     '</div>';
 
+  var foot = "";
+  /* 面板是浮层，需要一条去完整消息页的出口；消息页自身不再重复显示 */
+  if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm ghost" type="button" data-ap-all>查看全部消息</button>';
   if(rt.alertTab === "notice"){
-    if(unread > 0){
-      html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-readall>全部标为已读</button></div>';
-    }
+    if(unread > 0) foot += '<button class="btn sm" type="button" data-ap-readall>全部标为已读</button>';
   }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
-    html += '<div class="ap-foot"><button class="btn sm block" type="button" data-ap-test>在空间中测试推送</button></div>';
+    foot += '<button class="btn sm" type="button" data-ap-test>在空间中测试推送</button>';
   }
+  if(foot) html += '<div class="ap-foot">' + foot + '</div>';
   return html;
 }
 function renderAlertPanel(){
@@ -172,7 +174,7 @@ function renderMessagesPage(){
   if(!box) return;
   var view = box.closest(".view");
   if(view && !view.classList.contains("on")) return;
-  box.innerHTML = '<div class="alert-panel msg-center">' + alertCenterHTML() + '</div>';
+  box.innerHTML = '<div class="alert-panel msg-center">' + alertCenterHTML(true) + '</div>';
 }
 function enterMessagesView(){
   renderMessagesPage();
@@ -200,6 +202,12 @@ function handleNoticeClick(e){
       renderAlertPanel();
       loadAlertPanel();
     }
+    return;
+  }
+  /* 完整消息页入口：面板与消息页共用同一份数据，路由由 router 统一处理 */
+  if(e.target.closest("[data-ap-all]")){
+    UI.closeAllPops();
+    window.dispatchEvent(new CustomEvent("ds:route-go", {detail:{view:"messages"}}));
     return;
   }
   /* 全部标为已读 */

@@ -17,7 +17,8 @@ class PublicGanttTaskTest {
         List<String> fields = Arrays.stream(PublicGanttTask.class.getDeclaredFields())
                 .map(Field::getName).sorted().collect(Collectors.toList());
         assertEquals(Arrays.asList("blocked", "boardColumn", "dueDate", "estimateMinutes", "id",
-                        "isMilestone", "owner", "priority", "progress", "startDate", "title", "totalMinutes"),
+                        "isMilestone", "owner", "priority", "processingRule", "progress", "startDate",
+                        "title", "totalMinutes"),
                 fields);
     }
 }

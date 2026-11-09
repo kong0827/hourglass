@@ -7,6 +7,7 @@ import com.hourglass.dto.ColumnOrderRequest;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.CategoryService;
+import com.hourglass.service.ProjectAccessService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,25 +19,43 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 public class CategoryController {
 
     private final CategoryService categoryService;
     private final WorkspaceService workspaceService;
+    private final ProjectAccessService projectAccess;
 
-    public CategoryController(CategoryService categoryService, WorkspaceService workspaceService) {
+    public CategoryController(CategoryService categoryService, WorkspaceService workspaceService,
+                              ProjectAccessService projectAccess) {
         this.categoryService = categoryService;
         this.workspaceService = workspaceService;
+        this.projectAccess = projectAccess;
     }
 
     /** project 为空返回空间内全部项目的模块（跨项目展示/筛选），带 project 只返回该项目清单 */
     @GetMapping("/api/categories")
     public ApiResult<List<Category>> list(@RequestParam(required = false) String project,
                                           @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(categoryService.list(ws.getId(), project));
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        List<Category> list = categoryService.list(ws.getId(), project);
+        /* 与任务/需求同一可见口径：被设为「不可见」的项目，其模块名也不下发 */
+        Set<String> hidden = projectAccess.hiddenProjectIds(ws.getId(), userId);
+        if (hidden.isEmpty()) {
+            return ApiResult.ok(list);
+        }
+        List<Category> visible = new ArrayList<Category>();
+        for (Category c : list) {
+            if (c.getProjectId() == null || !hidden.contains(c.getProjectId())) {
+                visible.add(c);
+            }
+        }
+        return ApiResult.ok(visible);
     }
 
     @PostMapping("/api/categories")

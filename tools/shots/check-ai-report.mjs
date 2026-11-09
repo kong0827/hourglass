@@ -1,4 +1,4 @@
-/* 周回顾 · AI 周报 自检（CDP 真 Chrome + docs/ui-preview.html 演示数据，不连后端）
+/* 周回顾 · AI 周报 自检（CDP 真 Chrome + docs/preview/ui-preview.html 演示数据，不连后端）
    用法：node tools/shots/check-ai-report.mjs
    断言口径：
      1) 面板在「自动总结」下面，初始是空态（正文隐藏、按钮「生成周报」、复制按钮不显示）
@@ -12,7 +12,7 @@ import { launch } from 'file:///C:/Users/chenghongchang/.workbuddy/skills/browse
 import { pathToFileURL } from 'node:url'
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const PREVIEW = pathToFileURL('docs/ui-preview.html').href
+const PREVIEW = pathToFileURL('docs/preview/ui-preview.html').href
 const OUT = 'docs/images/'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 

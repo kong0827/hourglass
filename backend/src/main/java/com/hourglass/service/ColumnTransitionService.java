@@ -73,6 +73,9 @@ public class ColumnTransitionService {
         if (from.equals(to)) {
             throw AppException.badRequest("同列内是排序，不需要配置流转规则");
         }
+        if (!RULE_ALLOW.equals(rule) && !RULE_REASON.equals(rule) && !RULE_DENY.equals(rule)) {
+            throw AppException.badRequest("流转规则只能是 allow / reason / deny");
+        }
         ColumnTransition t = new ColumnTransition();
         t.setWorkspaceId(workspaceId);
         t.setFromColumn(from);
@@ -118,8 +121,11 @@ public class ColumnTransitionService {
             throw new AppException(422, denyMessage(workspaceId, from, to));
         }
         if (RULE_REASON.equals(rule)) {
-            if (force && canForce) {
-                return new Decision(rule, cleaned, true);
+            if (force) {
+                if (canForce) {
+                    return new Decision(rule, cleaned, true);
+                }
+                throw new AppException(403, "仅空间主或管理员可强制移动");
             }
             if (cleaned == null) {
                 throw new AppException(412, "从「" + columnName(workspaceId, from) + "」移到「"

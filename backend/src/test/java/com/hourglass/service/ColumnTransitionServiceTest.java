@@ -93,6 +93,33 @@ class ColumnTransitionServiceTest {
         assertTrue(forced.isForced());
     }
 
+    @Test
+    void reasonCellAlsoRejectsMemberForce() {
+        AppException memberForce = assertThrows(AppException.class,
+                () -> service.check(WS, "done", "doing", null, true, false));
+        assertEquals(403, memberForce.getCode());
+
+        ColumnTransitionService.Decision forced =
+                service.check(WS, "done", "doing", null, true, true);
+        assertEquals("reason", forced.getRule());
+        assertTrue(forced.isForced());
+    }
+
+    @Test
+    void saveRejectsUnknownRule() {
+        List<BoardColumn> columns = new ArrayList<BoardColumn>();
+        BoardColumn doing = new BoardColumn();
+        doing.setId("doing");
+        doing.setName("进行中");
+        columns.add(doing);
+        when(columnService.list(WS)).thenReturn(columns);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.save(WS, "doing", "done", "bogus"));
+        assertEquals(400, ex.getCode());
+        assertTrue(ex.getMessage().contains("allow / reason / deny"));
+    }
+
     private static ColumnTransition rule(String from, String to, String rule) {
         ColumnTransition t = new ColumnTransition();
         t.setWorkspaceId(WS);

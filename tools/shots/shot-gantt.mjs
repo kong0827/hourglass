@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const PREVIEW = pathToFileURL('docs/ui-preview.html').href + '#/gantt'
+const PREVIEW = pathToFileURL('docs/preview/ui-preview.html').href + '#/gantt'
 const OUT = path.resolve('docs/images') + path.sep
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 

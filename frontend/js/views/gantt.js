@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catNameById, catTag, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -43,6 +43,7 @@ var GANTT_PAGE = 100;
 var GANTT_MAX_LOAD = 3000;
 var GANTT_MAX_DAYS = 740;
 var GANTT_DONE    = {c:"var(--success)", soft:"var(--success-soft)", bd:"var(--success-border)"};
+var GANTT_ENDED   = {c:"var(--text-3)", soft:"var(--surface-3)", bd:"var(--border-strong)"};
 var GANTT_BLOCKED = {c:"var(--warning)", soft:"var(--warning-soft)", bd:"var(--warning-border)"};
 var GANTT_OVERDUE = {c:"var(--danger)",  soft:"var(--danger-soft)",  bd:"var(--danger-border)"};
 var GANTT_DOING   = {c:"var(--primary)", soft:"var(--primary-soft)", bd:"var(--primary-border)"};
@@ -427,11 +428,14 @@ function ganttMetaText(info){
 }
 function ganttStatusOf(t){
   var done = t.boardColumn === "done";
+  /* 「执行结束」列与已完成一样不计逾期（列规则来自看板定义或任务自带值） */
+  var ended = !done && colRuleOf(t.boardColumn, t) === "ended";
   var days = 0;
-  if(!done && t.dueDate && t.dueDate < rt.TODAY_ISO){
+  if(!done && !ended && t.dueDate && t.dueDate < rt.TODAY_ISO){
     days = Math.abs(dayDiff(parseDate(t.dueDate), rt.TODAY));
   }
   if(done) return { key: "done", color: GANTT_DONE, days: 0, badge: "已完成" };
+  if(ended) return { key: "ended", color: GANTT_ENDED, days: 0, badge: "执行结束" };
   if(t.blocked) return {
     key: "blocked", color: GANTT_BLOCKED, days: days,
     badge: days ? ("阻塞 · 逾期 " + days + " 天") : "阻塞"
@@ -448,7 +452,7 @@ function ganttGroupFieldValue(t, field){
   if(field === "owner") return t.owner ? { v: t.owner, name: t.owner } : { v: "__none", name: "未分配" };
   if(field === "status"){
     var st = ganttStatusOf(t);
-    var nm = st.key === "done" ? "已完成" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
+    var nm = st.key === "done" ? "已完成" : st.key === "ended" ? "执行结束" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
     return { v: st.key, name: nm };
   }
   if(field === "category") return { v: t.categoryId || "__none", name: catNameById(t.categoryId) || "未指定模块" };
@@ -642,6 +646,7 @@ function ganttRowHTML(x, range, dayW, totalW){
       ? fmtFull(realS) + " → " + fmtFull(realE)
       : (t.startDate ? "开始 " + fmtFull(realS) : "截止 " + fmtFull(realE)));
   var statusText = st.key === "done" ? "已完成"
+    : st.key === "ended" ? "执行结束"
     : st.key === "blocked" ? ("阻塞" + (st.days ? "，逾期 " + st.days + " 天" : ""))
     : st.key === "overdue" ? ("逾期 " + st.days + " 天")
     : "进行中";
@@ -974,6 +979,7 @@ function ganttCsvCell(v){
 function ganttStatusText(t){
   var st = ganttStatusOf(t);
   if(st.key === "done") return "已完成";
+  if(st.key === "ended") return "执行结束";
   if(st.key === "blocked") return "阻塞" + (st.days ? " · 逾期 " + st.days + " 天" : "");
   if(st.key === "overdue") return "逾期 " + st.days + " 天";
   return "进行中";

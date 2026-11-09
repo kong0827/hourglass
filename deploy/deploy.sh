@@ -68,6 +68,7 @@ VERIFY_FILES=(
   "js/core/filters-ui.js"
   "js/core/filters.js"
   "js/core/icons.js"
+  "js/core/nav-telemetry.js"
   "js/core/notifications.js"
   "js/core/realtime.js"
   "js/core/router.js"
@@ -76,6 +77,9 @@ VERIFY_FILES=(
   "js/core/state.js"
   "js/core/task-actions.js"
   "js/core/task-drawer.js"
+  "js/core/templates/index.js"
+  "js/core/templates/overlays.js"
+  "js/core/templates/task-drawer.js"
   "js/core/theme.js"
   "js/core/ui.js"
   "js/core/utils.js"
@@ -214,8 +218,8 @@ changed() {
   fi
 }
 
-# 完整基线会删表、种子会重灌演示数据，只允许手工执行，不纳入自动部署改动检测
-CHANGED_ALL="$(changed backend sql frontend | grep -vE '^sql/(baseline|seeds)/' || true)"
+# 完整基线会删表、旧结构与种子会重灌过时数据，只允许手工执行，不纳入自动部署改动检测
+CHANGED_ALL="$(changed backend sql frontend | grep -vE '^sql/(baseline|legacy|seeds)/' || true)"
 if [ -n "$CHANGED_ALL" ]; then
   printf '%s\n' "$CHANGED_ALL" | sed 's/^/      /'
 else

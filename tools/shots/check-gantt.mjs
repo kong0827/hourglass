@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const PREVIEW = pathToFileURL(path.join(ROOT, 'docs/ui-preview.html')).href + '#/gantt'
+const PREVIEW = pathToFileURL(path.join(ROOT, 'docs/preview/ui-preview.html')).href + '#/gantt'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function findBrowserCli() {

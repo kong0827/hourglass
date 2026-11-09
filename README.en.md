@@ -16,7 +16,7 @@ Progress, work hours, member workload, overdue risks, and delivery reports are a
 
 ## Live Demo
 
-Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself (about 30 minutes, see [`deploy/README.md`](deploy/README.md)), or load the demo seed [`sql/seeds/seed_demo_public.sql`](sql/seeds/seed_demo_public.sql) into a local instance. Contact the maintainers for access to a hosted demo.
+Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself (about 30 minutes, see [`deploy/README.md`](deploy/README.md)), initialize the database from the single baseline script, then sign in and create your first project. Contact the maintainers for access to a hosted demo.
 
 ---
 
@@ -51,20 +51,20 @@ Existing tools are either pure task boards (execution without requirements or me
 ### Planning
 
 - **Demand Pool**: requirement intake, review, and scheduling; automatic WSJF scoring, fully auditable
-- **Projects / Global Health**: health, overdue items, and this week's effort across all projects, with drill-down into each project cockpit
+- **Projects / Global Health**: project list and global-health views; open a project cockpit to maintain owner, objective, and planned dates, and review progress, hours, work-item distribution, and member workload; project templates, archiving, and delete with impact preview are supported
 - **Releases**: first-release / iteration dual views, release notes generated automatically
 
 ### Delivery
 
 - **Work Items**: kanban, list, calendar, and Gantt share one filter set; drag between columns and create inline. Gantt adds dependencies (FS / SS / FF / SF), milestones, baseline variance, critical path, and member workload, with CSV export, A3 printing, and read-only share links
 - **Documents**: rich-text / Markdown docs in a tree, with full-text search, historical snapshots, shareable publishing, and AI task-draft generation
-- **Tests**: case maintenance and execution records; a failed run converts directly into a bug work item
+- **Tests**: cases, test plans, a coverage matrix, and test reports; a failed case converts directly into a bug work item, completed plans are locked as snapshots, and CSV import / export is supported
 - **Branches**: workspace-level branch tracking through development, testing, merge, and release
 
 ### Insight
 
 - **Reports**: trends & distribution, completion records, process health checks (first-pass rate, requirement start delay, estimation accuracy), and delivery charts (burndown, cumulative flow, velocity, lead-time distribution)
-- **Member Workload / Overdue & Blocked**: see busyness across projects and handle at-risk items centrally
+- **Member Workload / Overdue & Blocked**: see busyness across projects and handle at-risk items centrally; workload supports person / week drill-down and a monthly hours CSV export
 
 ### Platform Capabilities
 
@@ -74,6 +74,8 @@ Existing tools are either pure task boards (execution without requirements or me
 - **Attachments**: images, PDF, Markdown, Word, ZIP, Excel; images, PDF, Markdown and Word open in a preview modal (images support zoom, rotation and panning), and `.xlsx` files can be edited right inside the work-item detail
 - **AI assistant**: each user configures their own model and quota for requirement breakdown, doc health checks, and weekly report drafts; results land only after human confirmation
 - **Data security**: rich-text whitelist sanitization, encrypted secret storage, AI endpoints denied intranet access by default; full per-workspace backup export / import
+- **Transition constraints**: a source × target matrix per workspace (allow / require reason / deny), permissive by default; column-level processing rules control timing and overdue independently
+- **Search and audit**: global search across demands, work items, documents, and test cases; audit logs with filters and CSV export, plus system information for admins
 - **Mobile**: three responsive breakpoints; installable PWA
 
 ## Getting Started
@@ -105,14 +107,14 @@ java -jar backend/target/hourglass-server.jar
 
 For production, run `bash deploy/deploy.sh`: it detects changes → packages frontend / backend as needed → backs up the database → applies incremental SQL → swaps artifacts → health-checks, with `--dry-run` / `--rollback` support. See [`deploy/README.md`](deploy/README.md) (Chinese).
 
-To upgrade an existing database, run the numbered scripts under `sql/` in order (all idempotent); for demo data, optionally run `sql/seeds/seed_demo.sql` (default account `admin / admin123`, local demo only).
+To upgrade an existing database, run the numbered scripts under `sql/` in order (all idempotent); for a fresh install, run only `sql/baseline/01_schema_full.sql`. See [`sql/README.md`](sql/README.md) for the boundary between the two entries.
 
 ## Tech Stack
 
 | Layer | Choice |
 | --- | --- |
 | Backend | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security (session login + CSRF) |
-| Database | MySQL 8 (utf8mb4), 46 tables, numbered idempotent migration scripts |
+| Database | MySQL 8 (utf8mb4), 47 tables, numbered idempotent migration scripts |
 | Realtime | SSE push for changes and notifications |
 | Frontend | Vanilla JavaScript ES Modules, **no framework, no build step**; PWA offline shell |
 | Deployment | Frontend served directly by Nginx, backend exposes only `/api/**`; systemd + one-command deploy script |

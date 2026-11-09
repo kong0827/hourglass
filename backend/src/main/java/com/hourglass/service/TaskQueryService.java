@@ -182,9 +182,10 @@ public class TaskQueryService {
 
         BoardResponse resp = new BoardResponse();
         for (BoardColumn c : configCols) {
-            resp.getColumnDefs().add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(), false));
+            resp.getColumnDefs().add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(),
+                    support.processingRule(workspaceId, c.getId()), false));
         }
-        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", true));
+        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", "done", true));
         for (String col : openColumns) {
             resp.getColumns().put(col, openPage(workspaceId, viewerId, openQuery, query, col,
                     0, query.getOpenLimit(), col.equals(fallbackCol), knownColumns));

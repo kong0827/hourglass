@@ -95,24 +95,33 @@ function tagChip(name){
   return '<span class="tag tag-ghost">' + esc(name) + '</span>';
 }
 function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
+/** 列的有效处理规则：优先任务自带值（跨空间「我的任务」），其次看板列定义、设置页缓存；未知按 normal（与后端默认一致） */
+function colRuleOf(id, task){
+  if(task && task.processingRule) return task.processingRule;
+  if(!id) return "normal";
+  for(var i = 0; i < COLUMNS.length; i++){
+    var c = COLUMNS[i];
+    if(c.id === id && c.processingRule) return c.processingRule;
+  }
+  for(var j = 0; j < rt.colDefsCache.length; j++){
+    var d = rt.colDefsCache[j];
+    if(d.id === id) return d.processingRule || "normal";
+  }
+  return "normal";
+}
 function timerAllowed(t){
   if(!t) return false;
   /* 阻塞任务停表不换列 */
   if(t.blocked) return false;
   var col = t.boardColumn;
   if(col === "backlog" || col === "done") return false;
-  if(rt.colDefsCache && rt.colDefsCache.length){
-    for(var i = 0; i < rt.colDefsCache.length; i++){
-      var c = rt.colDefsCache[i];
-      if(c.id === col) return c.processingRule === "normal";
-    }
-  }
-  /* 列定义未加载或旧空间无 processingRule：保持与后端 TaskSupport 相同的默认口径 */
-  return true;
+  /* 只有「正常计时」列可计时；暂停/结束计时列由后端同样拒绝，前端不再显示计时入口 */
+  return colRuleOf(col, t) === "normal";
 }
 function dueState(t){
   if(!t.dueDate) return {kind:"none"};
   if(t.boardColumn === "done") return {kind:"done"};
+  if(colRuleOf(t.boardColumn, t) === "ended") return {kind:"ended"};
   var d = dayDiff(parseDate(t.dueDate), rt.TODAY);
   if(d < 0)   return {kind:"over", n:Math.abs(d)};
   if(d === 0) return {kind:"today", n:0};
@@ -123,6 +132,7 @@ function dueText(t){
   var s = dueState(t);
   if(s.kind === "none")  return "未设截止";
   if(s.kind === "done")  return "已完成 " + fmtShortMD(parseDate(t.completedAt || t.dueDate));
+  if(s.kind === "ended") return "执行结束";
   if(s.kind === "over")  return "逾期 " + s.n + " 天";
   if(s.kind === "today") return "今天到期";
   if(s.kind === "soon")  return "剩余 " + s.n + " 天";
@@ -213,4 +223,4 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 
-export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

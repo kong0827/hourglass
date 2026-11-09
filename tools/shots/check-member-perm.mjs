@@ -2,7 +2,7 @@ import { launch } from 'file:///C:/Users/chenghongchang/.workbuddy/skills/browse
 import { pathToFileURL } from 'node:url'
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const PREVIEW = pathToFileURL('docs/ui-preview.html').href
+const PREVIEW = pathToFileURL('docs/preview/ui-preview.html').href
 const b = await launch({ chrome: CHROME, width: 1440, height: 900 })
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 let pass = 0, fail = 0

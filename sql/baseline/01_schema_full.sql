@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Regenerated 2026-11-09: full schema after migrations 01-58 (46 tables).
+-- Regenerated 2026-11-09: full schema after migrations 01-62 (47 tables).
 --
--- 生成方式：在空库按序重放 sql/01-56 号升级脚本后导出（2026-11-09，46 张表），已手工合入 57、58，与增量链等效。
+-- 生成方式：在空库按序重放 sql/01-62 号升级脚本后导出（2026-11-09，47 张表），与增量链等效。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。

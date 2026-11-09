@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
-import { rt } from "../core/state.js";
+import { dueState, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
@@ -16,6 +16,7 @@ var VIEW_KEY = "project-view";
 var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
+var deliveryCache = Object.create(null);
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
 var projectTab = (function(){
   try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
@@ -136,6 +137,83 @@ function projectBrief(p, m, c, members){
     + '<div class="project-brief-risk"><span class="project-brief-label">风险信号</span><div>' + risks.join("") + '</div></div>'
     + '</section>';
 }
+function deliveryPanel(p){
+  var data = deliveryCache[p.id] || {};
+  function card(kind, label, value, foot){
+    return '<button class="project-delivery-card" type="button" data-project-open="' + kind + '">'
+      + '<b>' + esc(value) + '</b><span>' + esc(label) + '</span><small>' + esc(foot) + '</small></button>';
+  }
+  function valueOf(key){
+    if(data[key] === undefined) return "—";
+    if(data[key] === null) return "—";
+    return String(data[key]);
+  }
+  function footOf(key, loading, failed){
+    if(data[key] === undefined) return loading;
+    if(data[key] === null) return failed;
+    return "";
+  }
+  function casesFoot(){
+    if(data.cases === undefined) return "加载中";
+    if(data.cases === null) return "加载失败";
+    if(data.plans === undefined || data.plans === null) return "用例库";
+    return data.plans + " 个测试计划";
+  }
+  return '<section class="manager-panel project-delivery"><div class="manager-panel-head"><b>交付资源</b><span>打开时自动按本项目筛选</span></div>'
+    + '<div class="project-delivery-grid">'
+    + card("docs", "文档", valueOf("docs"), footOf("docs", "加载中", "加载失败") || "需求 / 方案文档")
+    + card("tests", "测试用例", valueOf("cases"), casesFoot())
+    + card("versions", "版本", valueOf("versions"), footOf("versions", "加载中", "加载失败") || "首版 / 迭代")
+    + '</div></section>';
+}
+function loadProjectDelivery(p){
+  if(!p || !p.id || deliveryCache[p.id]) return;
+  deliveryCache[p.id] = {};
+  var id = p.id;
+  function paint(){
+    var box = document.querySelector('[data-project-open="docs"]');
+    if(!box || rt.managerProjectId !== id || currentMode() !== "board") return;
+    var panel = box.closest(".project-delivery-grid");
+    if(!panel) return;
+    var data = deliveryCache[id] || {};
+    var docsBtn = panel.querySelector('[data-project-open="docs"]');
+    var casesBtn = panel.querySelector('[data-project-open="tests"]');
+    var verBtn = panel.querySelector('[data-project-open="versions"]');
+    if(docsBtn && data.docs !== null && data.docs !== undefined){
+      docsBtn.querySelector("b").textContent = data.docs;
+      docsBtn.querySelector("small").textContent = "需求 / 方案文档";
+    }
+    if(casesBtn && data.cases !== null && data.cases !== undefined){
+      casesBtn.querySelector("b").textContent = data.cases;
+      casesBtn.querySelector("small").textContent = (data.plans || 0) + " 个测试计划";
+    }
+    if(verBtn && data.versions !== null && data.versions !== undefined){
+      verBtn.querySelector("b").textContent = data.versions;
+      verBtn.querySelector("small").textContent = "首版 / 迭代";
+    }
+  }
+  function fail(kind, ex){
+    deliveryCache[id] = deliveryCache[id] || {};
+    deliveryCache[id][kind] = null;
+    var panel = document.querySelector(".project-delivery-grid");
+    if(!panel) return;
+    var btn = panel.querySelector('[data-project-open="' + (kind === "cases" ? "tests" : kind) + '"]');
+    if(btn){ btn.querySelector("b").textContent = "—"; btn.querySelector("small").textContent = ex.message || "加载失败"; }
+  }
+  API.getAllPages("/api/req-docs", {}).then(function(rows){
+    var n = rows.filter(function(d){ return d.reqId === id; }).length;
+    deliveryCache[id].docs = n; paint();
+  }).catch(function(ex){ fail("docs", ex); });
+  API.get("/api/test-cases/stats", { reqId: id }).then(function(s){
+    deliveryCache[id].cases = (s && s.total) || 0; paint();
+  }).catch(function(ex){ fail("cases", ex); });
+  API.getAllPages("/api/test-plans", { reqId: id }).then(function(rows){
+    deliveryCache[id].plans = rows.length; paint();
+  }).catch(function(){ deliveryCache[id].plans = 0; paint(); });
+  API.get("/api/versions", { reqId: id }).then(function(rows){
+    deliveryCache[id].versions = (rows || []).length; paint();
+  }).catch(function(ex){ fail("versions", ex); });
+}
 function renderProject(){
   var p = cache.project || {}, m = cache.metrics || {}, c = cache.counts || {}, tasks = cache.tasks || [];
   var total = tasks.length, done = c.done || 0, progress = m.progressPct || 0;
@@ -157,7 +235,8 @@ function renderProject(){
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
-    + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>';
+    + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
+    + deliveryPanel(p);
   var epicsPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>史诗汇总</b><span>点击史诗查看子项</span></div>'
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
@@ -166,6 +245,7 @@ function renderProject(){
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
+  if(projectTab === "overview") loadProjectDelivery(p);
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
 function loadDrill(opts){
@@ -213,12 +293,12 @@ function avgPct(tasks){
   return Math.round(sum / tasks.length);
 }
 function countCols(tasks){
-  var today = pfCache.today, c = { backlog:0, doing:0, done:0, overdue:0 };
+  var c = { backlog:0, doing:0, done:0, overdue:0 };
   tasks.forEach(function(t){
     if(t.boardColumn === "doing") c.doing++;
     else if(isDone(t)) c.done++;
     else c.backlog++;
-    if(!isDone(t) && t.dueDate && t.dueDate < today) c.overdue++;
+    if(dueState(t).kind === "over") c.overdue++;
   });
   return c;
 }
@@ -404,7 +484,7 @@ function metricTasks(kind){
   if(kind === "backlog") return rows.filter(function(t){ return t.boardColumn !== "done" && t.boardColumn !== "doing"; });
   if(kind === "doing") return rows.filter(function(t){ return t.boardColumn === "doing"; });
   if(kind === "done") return rows.filter(function(t){ return t.boardColumn === "done"; });
-  if(kind === "overdue") return rows.filter(function(t){ return t.boardColumn !== "done" && t.dueDate && t.dueDate < cache.today; });
+  if(kind === "overdue") return rows.filter(function(t){ return dueState(t).kind === "over"; });
   if(kind === "blocked") return rows.filter(function(t){ return t.boardColumn !== "done" && t.blocked; });
   if(kind === "estimate") return rows.filter(function(t){ return t.estimateMinutes > 0; });
   if(kind === "actual") return rows.filter(function(t){ return t.totalMinutes > 0; });
@@ -417,6 +497,32 @@ function onClick(e){
     return;
   }
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
+  var openRes = e.target.closest("[data-project-open]");
+  if(openRes){
+    var kind = openRes.dataset.projectOpen;
+    var pid = (cache && cache.project && cache.project.id) || rt.managerProjectId;
+    if(!pid) return;
+    var go = function(view){ window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:view } })); };
+    import("../core/view-loader.js").then(function(m){
+      if(kind === "versions"){
+        return m.loadView("phase").then(function(mod){
+          if(mod && mod.setPhaseProject) mod.setPhaseProject(pid);
+          go("phase");
+        });
+      }
+      if(kind === "docs"){
+        return m.loadView("requirements").then(function(mod){
+          if(mod && mod.setReqDocProjectFilter) mod.setReqDocProjectFilter(pid);
+          go("requirements");
+        });
+      }
+      return m.loadView("testcases").then(function(mod){
+        if(mod && mod.setTcProject) mod.setTcProject(pid);
+        go("testcases");
+      });
+    }).catch(function(ex){ toast(ex.message || "打开失败", "bad"); });
+    return;
+  }
   var tabBtn = e.target.closest("[data-project-tab]");
   if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
   var pvMode = e.target.closest("[data-pv-mode]");

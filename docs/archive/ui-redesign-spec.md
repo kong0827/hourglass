@@ -2140,7 +2140,7 @@ const API = {
 
 | 项 | 说明 |
 |---|---|
-| 渲染源 | `docs/ui-preview.html`（`node tools/preview/gen-preview.js` 生成，真实 CSS/JS + 演示数据） |
+| 渲染源 | `docs/preview/ui-preview.html`（`node tools/preview/gen-preview.js` 生成，真实 CSS/JS + 演示数据） |
 | 驱动方式 | CDP 直连本机 Chrome，`--window-size` 之外再用 `Emulation.setDeviceMetricsOverride` 强制 **1440×900 / 1280×800 / 1440×760** 三档精确视口 |
 | 采集内容 | 10 个视图逐页截图 + 几何量测（侧栏/顶栏/筛选栏/看板列/表格的 `clientWidth` vs `scrollWidth`、字号分布） |
 | 关键实测值 | 1440×900：侧栏 240、看板列 300、看板区 1200 无横向滚动、筛选栏 48 无溢出、导航 11 项、末项底 597 / 页脚顶 852 |
@@ -2657,7 +2657,7 @@ v3.4 修掉的一个 bug：**模块累计里首个任务的预估与实际被重
 
 ### 7. 自检
 
-`node tools/shots/check-branch.mjs`（CDP 真 Chrome + `docs/ui-preview.html` 演示数据，25 项）：
+`node tools/shots/check-branch.mjs`（CDP 真 Chrome + `docs/preview/ui-preview.html` 演示数据，25 项）：
 进视图与侧栏高亮、顶部 5 格、四列分组、4 张卡、分支名与停留时长、统计格筛选与取消、
 状态浮层 4 档 + 编辑/删除、编辑弹窗回填且隐藏初始状态、抽屉 4 段/4 时间点/4 键值/任务/日志、
 看板分支标签、任务抽屉下拉 4 组 5 项且回填 `BR1`。
@@ -2700,7 +2700,7 @@ body (flex column, height:100dvh)
 
 ### 3. 自检
 
-`node tools/shots/shot-foot.mjs`（CDP 真 Chrome + `docs/ui-preview.html`，14 项）：页脚 `position=static`、
+`node tools/shots/shot-foot.mjs`（CDP 真 Chrome + `docs/preview/ui-preview.html`，14 项）：页脚 `position=static`、
 底边贴视口、高度 26px、内容区底边 = 页脚顶边、侧栏 `.side-foot` 底边不越过页脚、
 退出按钮与头像用 `elementFromPoint` 命中自身（无遮挡）、任务清单视图底边对齐，外加 1280 收起态复验一遍。
 截图：`docs/foot-board.png` / `docs/foot-completions.png` / `docs/foot-rail.png`。

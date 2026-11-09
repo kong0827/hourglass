@@ -1,3 +1,6 @@
+-- ⚠ 历史遗留的早期建库脚本（19 张表），只保留用于追溯旧版本结构。
+--   全新部署请统一使用 sql/baseline/01_schema_full.sql；本文件不再维护，直接执行会得到缺少后续模块的旧库。
+--
 -- 工作台 · 任务看板 数据库基线（MySQL 8，utf8mb4）
 -- 多用户 + 空间模型：每个账号有个人空间，可另建/加入共享空间；业务数据按空间隔离
 CREATE DATABASE IF NOT EXISTS hourglass DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

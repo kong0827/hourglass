@@ -100,7 +100,8 @@ public class MobileService {
             if (isDone(task)) {
                 continue;
             }
-            if (task.getDueDate() != null && task.getDueDate().isBefore(today)) {
+            if (!"ended".equals(task.getProcessingRule())
+                    && task.getDueDate() != null && task.getDueDate().isBefore(today)) {
                 overdue++;
             }
             if (Boolean.TRUE.equals(task.getBlocked())) {

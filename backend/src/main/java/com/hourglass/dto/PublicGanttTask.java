@@ -16,6 +16,8 @@ public class PublicGanttTask {
     private String priority;
     private String owner;
     private String boardColumn;
+    /** 目标列的处理规则：公开页据此判断「执行结束」列不计逾期 */
+    private String processingRule;
     private LocalDate startDate;
     private LocalDate dueDate;
     private Integer progress;

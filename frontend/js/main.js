@@ -1,5 +1,8 @@
 /* main.js · 入口：核心与首屏模块同步加载，低频视图按需 import */
 
+/* 必须第一个：把抽屉/弹窗结构注入 DOM，供 core/dom.js 顶层取元素 */
+import "./core/templates/index.js";
+import { initNavTelemetry } from "./core/nav-telemetry.js";
 import { initMobileGestures } from "./core/gestures.js";
 import { initLayout, isMobile } from "./core/layout.js";
 import { loadMe } from "./core/app.js";
@@ -88,6 +91,7 @@ function boot(){
 }
 
 function startAuthenticatedApp(meUser, startView, deepTaskId){
+  initNavTelemetry(startView);
   showView(startView);
   showBoardSkeleton();
   loadBoard({animate:true}).then(function(){

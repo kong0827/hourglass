@@ -42,11 +42,13 @@ import { API } from "./core/api.js";
 
   function statusOf(t) {
     var done = t.boardColumn === "done";
+    var ended = !done && t.processingRule === "ended";
     var days = 0;
-    if (!done && t.dueDate && t.dueDate < iso(today())) {
+    if (!done && !ended && t.dueDate && t.dueDate < iso(today())) {
       days = Math.abs(dayDiff(parseDate(t.dueDate), today()));
     }
     if (done) return { key: "done", c: "var(--success)", soft: "var(--success-soft)", bd: "var(--success-border)", label: "已完成" };
+    if (ended) return { key: "ended", c: "var(--text-3)", soft: "var(--surface-3)", bd: "var(--border-strong)", label: "执行结束" };
     if (t.blocked) return { key: "blocked", c: "var(--warning)", soft: "var(--warning-soft)", bd: "var(--warning-border)", label: "阻塞" + (days ? " · 逾期 " + days + " 天" : "") };
     if (days > 0) return { key: "overdue", c: "var(--danger)", soft: "var(--danger-soft)", bd: "var(--danger-border)", label: "逾期 " + days + " 天" };
     return { key: "doing", c: priorityColor(t.priority), soft: prioritySoft(t.priority), bd: "var(--border-strong)", label: "" };

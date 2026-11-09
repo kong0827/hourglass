@@ -1498,4 +1498,13 @@ if(phaseBody) phaseBody.addEventListener("input", function(e){
   if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
 });
 
-export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView, showReleaseNote };
+function setPhaseProject(reqId){
+  if(!reqId) return;
+  rt.phaseReqId = reqId;
+  if(viewMode === "overview") viewMode = "phase";
+  if(document.body.dataset.view === "phase"){
+    syncModeSeg();
+    loadPhaseData();
+  }
+}
+export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView, setPhaseProject, showReleaseNote };

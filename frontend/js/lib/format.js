@@ -5,9 +5,9 @@ import { esc } from "../core/ui.js";
 import { GS } from "./gantt-shared.js";
 
 var COLUMNS = [
-  {id:"backlog", name:"待处理", color:"#98A2B3"},
-  {id:"doing",   name:"进行中", color:"#2E90FA"},
-  {id:"done",    name:"已完成", color:"#12B76A", done:true}
+  {id:"backlog", name:"待处理", color:"#98A2B3", processingRule:"backlog"},
+  {id:"doing",   name:"进行中", color:"#2E90FA", processingRule:"normal"},
+  {id:"done",    name:"已完成", color:"#12B76A", processingRule:"done", done:true}
 ];
 var COL_INDEX = {};
 function rebuildColIndex(){
@@ -19,7 +19,9 @@ function syncColumns(defs){
   if(!defs || !defs.length) return;
   COLUMNS.length = 0;
   defs.forEach(function(d){
-    COLUMNS.push({ id:d.id, name:d.name, color:d.color || "#98A2B3", done: !!d.done });
+    /* processingRule 决定计时与逾期口径，必须随列定义一起缓存，否则前端只能按 normal 兜底 */
+    COLUMNS.push({ id:d.id, name:d.name, color:d.color || "#98A2B3",
+      processingRule: d.processingRule || (d.done ? "done" : "normal"), done: !!d.done });
   });
   rebuildColIndex();
 }

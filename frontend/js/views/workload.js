@@ -5,9 +5,9 @@ import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import { openTaskById } from "../core/task-actions.js";
-import { UI, esc } from "../core/ui.js";
+import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
-import { caliberHTML, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
+import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, taskStatusName } from "./manager-shared.js";
 
 var cache = null, seq = 0, mode = "week";
 var WEEK_DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -244,13 +244,37 @@ function addDaysISO(iso, days){
   d.setUTCDate(d.getUTCDate()+days);
   return d.toISOString().slice(0,10);
 }
+function exportMonthHours(){
+  var now = new Date();
+  var ym = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2);
+  var today = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2) + "-" + ("0" + now.getDate()).slice(-2);
+  API.get("/api/mobile/workload", { from: ym + "-01", to: today }).then(function(data){
+    var members = (data && data.members) || [];
+    if(!members.length){ toast("本月还没有计时记录", "warn"); return; }
+    var rows = [["成员", "计划工时(h)", "实际工时(h)", "投入率", "统计区间"]];
+    members.forEach(function(m){
+      rows.push([
+        m.name || m.userId,
+        (Number(m.plannedMinutes) || 0) / 60,
+        (Number(m.actualMinutes) || 0) / 60,
+        (Math.round((Number(m.percent) || 0) * 1000) / 10) + "%",
+        (data.rangeFrom || (ym + "-01")) + " → " + (data.rangeTo || today)
+      ]);
+    });
+    downloadCsv("本月工时-" + ym + ".csv", rows);
+    toast("已导出 " + members.length + " 位成员的月度工时", "fs");
+  }).catch(function(ex){
+    toast(ex && ex.message ? ex.message : "月度工时导出失败", "bad");
+  });
+}
 function renderWorkload(){
-  $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button></div>'+fullscreenButtonHTML()+'</div>'
+  $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button></div><button class="btn sm ghost" type="button" data-load-export title="导出当前自然月各成员的实际工时">导出本月工时</button>'+fullscreenButtonHTML()+'</div>'
     +caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × 6h）；无截止日默认 5 个剩余工作日，容量上限按 20 天计算。')
     +(mode==='person'?matrix():weekTable());
 }
 if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){
   var modeBtn=e.target.closest("[data-load-mode]");if(modeBtn){mode=modeBtn.dataset.loadMode;renderWorkload();return;}
+  if(e.target.closest("[data-load-export]")){exportMonthHours();return;}
   if(e.target.closest("[data-empty-action]")){loadWorkload();return;}
   var opener=e.target.closest("[data-member-open]");
   if(opener&&cache){

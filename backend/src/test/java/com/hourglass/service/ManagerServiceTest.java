@@ -87,6 +87,25 @@ class ManagerServiceTest {
     }
 
     @Test
+    void endedColumnDoesNotCountAsOverdueButWaitingDoes() {
+        Requirement req = requirement("R1", "项目一");
+        Task ended = openTask("T1", "R1", "archive", 100);
+        ended.setProcessingRule("ended");
+        ended.setDueDate(TODAY.minusDays(3));
+        Task waiting = openTask("T2", "R1", "waiting", 100);
+        waiting.setProcessingRule("waiting");
+        waiting.setDueDate(TODAY.minusDays(2));
+
+        ManagerService service = service(Arrays.asList(ended, waiting),
+                Collections.singletonList(req), Collections.<TimeAgg>emptyList(),
+                Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
+        List<Map<String, Object>> projects = castList(service.portfolio(WORKSPACE, VIEWER).get("projects"));
+        assertEquals(1, project(projects, "R1").get("overdue"), "执行结束列不计逾期，等待列仍计");
+        assertEquals("T2", castList(service.risks(WORKSPACE, VIEWER).get("overdue")).get(0).get("id"),
+                "风险列表与项目逾期计数同一口径");
+    }
+
+    @Test
     void workloadUsesPerTaskRemainingAndLatestDueCapacity() {
         Requirement requirement = requirement("R1", "项目一");
         Task task = openTask("T1", "R1", Consts.COL_DOING, 700);

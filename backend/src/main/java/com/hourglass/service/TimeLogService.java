@@ -149,6 +149,9 @@ public class TimeLogService {
         if (!support.canTime(workspaceId, task.getBoardColumn())) {
             throw AppException.badRequest("当前列不计时，请先移到处理规则为「正常计时」的列");
         }
+        if (Boolean.TRUE.equals(task.getBlocked())) {
+            throw AppException.badRequest("任务处于阻塞状态，请先解除阻塞再开始计时");
+        }
         return start(userId, workspaceId, taskId);
     }
 
@@ -179,7 +182,9 @@ public class TimeLogService {
             boolean mine = t.getOwnerUserId() != null
                     ? userId.equals(t.getOwnerUserId())
                     : (myName != null && myName.equals(t.getOwner()));
-            if (mine && projectAccess.canWrite(workspaceId, userId, t.getReqId())) {
+            /* 阻塞任务不开表：接力也不能把计时开到阻塞任务上 */
+            if (mine && !Boolean.TRUE.equals(t.getBlocked())
+                    && projectAccess.canWrite(workspaceId, userId, t.getReqId())) {
                 start(userId, workspaceId, t.getId());
                 return t;
             }

@@ -24,8 +24,22 @@ deploy/dist/Hourglass-<版本>.zip    同一交付包的压缩版
 Linux/Mac 开发机也可直接：
 
 ```bash
-mvn -e -DskipTests -f backend/pom.xml package
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_291.jdk/Contents/Home \
+  mvn -e -DskipTests -f backend/pom.xml package
 # 产出 backend/target/hourglass-server.jar
+```
+
+> 必须用 JDK 8 打包。Maven 默认可能指向新版 JDK，此时旧版 Lombok 会静默失效，
+> 编译报大量 `找不到符号`（实体类的 getter/setter 全部缺失），很容易误判成代码错误。
+> Windows 上用 `deploy\build.bat` 会自行选择 JDK 8。
+
+本地联调与回归：
+
+```bash
+bash deploy/local/stack.sh            # 起 MySQL(3307) + 后端(8080) + 静态服务(8081)
+E2E_BASE=http://127.0.0.1:8081/hourglass E2E_USER=admin E2E_PASS=admin123 \
+  node tools/e2e/smoke.mjs            # 浏览器冒烟：登录、12 个入口、驾驶舱、通知中心、导航使用记录
+python3 tools/preview/gen-preview.js  # 重新生成 docs/preview/ui-preview.html
 ```
 
 ## 1. 服务器准备

@@ -243,9 +243,10 @@ public class TaskCommandService {
             } else {
                 t.setCompletedAt(null);
             }
-            /* 流转校验 + 计时联动：完成停表+接力 / 回待处理停表（与拖拽 move 同一口径） */
+            /* 流转校验 + 计时联动：完成停表+接力 / 进入可计时列开表 / 进入不可计时列停表（与拖拽 move 同一口径） */
             moveSuffix = workflow.beforeEditColumnChange(userId, workspaceId, id, old.getBoardColumn(),
-                    t.getBoardColumn(), req.getMoveReason(), Boolean.TRUE.equals(req.getForce()));
+                    t.getBoardColumn(), req.getMoveReason(), Boolean.TRUE.equals(req.getForce()),
+                    Boolean.TRUE.equals(t.getBlocked()));
         } else {
             t.setSortOrder(old.getSortOrder());
             t.setCompletedAt(old.getCompletedAt());

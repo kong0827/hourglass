@@ -35,7 +35,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -261,7 +263,14 @@ class TaskCascadeTest {
                 TaskCascade.WORKSPACE_TASK_TABLES);
     }
 
-    /** 离线扫描 sql/ 的建表语句：新增带 task_id 的表却忘了登记时，这里会失败 */
+    /**
+     * 离线扫描生效中的建表语句：基线（全新安装）+ 根目录增量脚本（已有库升级）。
+     * sql/legacy 与 sql/seeds 是历史结构与旧演示数据，不参与校验。
+     *
+     * <p>两个方向都要查：带 task_id 的表必须登记（漏登记会留下孤儿数据）；
+     * 登记的每张表也必须真实存在（改名或删表后忘了同步清单）。attachment 走
+     * target_id + target_kind 的多态关联，扫描不到 task_id，只参与存在性校验。
+     */
     @Test
     void everyTableWithTaskColumnInSqlIsRegistered() throws IOException {
         Path sqlDir = Paths.get("sql");
@@ -271,26 +280,38 @@ class TaskCascadeTest {
         assertTrue(Files.isDirectory(sqlDir), "找不到 sql/ 目录：" + sqlDir.toAbsolutePath());
 
         Set<String> found = new TreeSet<String>();
+        Map<String, String> tables = new TreeMap<String, String>();
         Pattern createTable = Pattern.compile(
                 "(?is)CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([a-z0-9_]+)`?\\s*\\((.*?)\\)\\s*ENGINE");
-        Pattern taskColumn = Pattern.compile("(?im)^\\s*(?:from_|to_|ref_)?task_id\\s");
+        Pattern taskColumn = Pattern.compile("(?im)^\\s*`?(?:from_|to_|ref_)?task_id`?\\s");
 
-        DirectoryStream<Path> files = Files.newDirectoryStream(sqlDir, "*.sql");
-        try {
-            for (Path file : files) {
-                String sql = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-                Matcher m = createTable.matcher(sql);
-                while (m.find()) {
-                    if (taskColumn.matcher(m.group(2)).find()) {
-                        found.add(m.group(1));
+        List<Path> scanDirs = Arrays.asList(sqlDir, sqlDir.resolve("baseline"));
+        for (Path dir : scanDirs) {
+            if (!Files.isDirectory(dir)) continue;
+            DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*.sql");
+            try {
+                for (Path file : files) {
+                    String sql = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                    Matcher m = createTable.matcher(sql);
+                    while (m.find()) {
+                        tables.put(m.group(1), m.group(2));
+                        if (taskColumn.matcher(m.group(2)).find()) {
+                            found.add(m.group(1));
+                        }
                     }
                 }
+            } finally {
+                files.close();
             }
-        } finally {
-            files.close();
         }
 
-        assertEquals(new TreeSet<String>(TaskCascade.TASK_REF_TABLES), found,
-                "sql/ 中带 task_id 的表必须登记到 TaskCascade.TASK_REF_TABLES");
+        for (String ref : TaskCascade.TASK_REF_TABLES) {
+            assertTrue(tables.containsKey(ref),
+                    "TaskCascade 登记了不存在的表：" + ref + "（现存表：" + tables.keySet() + "）");
+        }
+        Set<String> unregistered = new TreeSet<String>(found);
+        unregistered.removeAll(TaskCascade.TASK_REF_TABLES);
+        assertTrue(unregistered.isEmpty(),
+                "sql/ 与 sql/baseline/ 中带 task_id 的表必须登记到 TaskCascade.TASK_REF_TABLES，缺少：" + unregistered);
     }
 }

@@ -11,7 +11,7 @@ HEAD 代码依赖的列若缺失就会在首次请求报错——本脚本在 CI
   - 增量里的 CREATE TABLE t          → 基线必须存在表 t
   - 增量里的 ALTER TABLE t ADD COLUMN c → 基线表 t 必须有列 c
   - 增量里的 ALTER TABLE t ADD KEY k  → 基线表 t 必须有索引 k
-范围：sql/02*.sql 起的全部增量（01_schema.sql 是早期版本，不参与）。
+范围：sql/ 根目录的全部编号增量（早期 01_schema.sql 已归档到 sql/legacy/，不参与）。
 
 用法：python3 tools/check_baseline_drift.py [仓库根目录]
 退出码：0=无漂移；1=发现漂移（输出缺失明细）。
@@ -76,7 +76,7 @@ def main():
         return 1
 
     tables = parse_baseline(baseline_path)
-    items, dropped = parse_increments(sql_dir, skip={"01_schema.sql", "01_schema_full.sql"})
+    items, dropped = parse_increments(sql_dir, skip=set())
     missing = []
     for fn, table, kind, name in items:
         if (table, kind, name) in dropped:

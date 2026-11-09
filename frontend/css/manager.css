@@ -231,3 +231,13 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .project-brief-archived{padding:8px 14px;border-radius:var(--r-md);background:var(--surface-sunken);border:1px dashed var(--border);
   font-size:12.5px;color:var(--text-2);}
 @media(max-width:760px){.project-brief-risk{align-items:flex-start}.project-brief-risk > div{justify-content:flex-start}}
+
+/* 项目驾驶舱：交付资源聚合入口（文档 / 测试 / 版本） */
+.project-delivery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.project-delivery-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;text-align:left;
+  background:var(--surface-sunken);border:1px solid transparent;border-radius:var(--r-md);cursor:pointer;transition:border-color .15s,background .15s;}
+.project-delivery-card:hover{border-color:var(--primary);background:var(--surface);}
+.project-delivery-card b{font-size:20px;line-height:26px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.project-delivery-card span{font-size:12.5px;font-weight:600;color:var(--text-2);}
+.project-delivery-card small{font-size:11.5px;color:var(--text-3);}
+@media(max-width:760px){.project-delivery-grid{grid-template-columns:1fr;}}
