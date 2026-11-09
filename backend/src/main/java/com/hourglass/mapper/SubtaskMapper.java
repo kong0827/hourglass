@@ -12,6 +12,11 @@ public interface SubtaskMapper {
 
     List<Subtask> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
+    List<Subtask> selectPageByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId,
+                                     @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
     List<Subtask> selectAll(@Param("workspaceId") String workspaceId);
 
     Subtask selectById(Long id);

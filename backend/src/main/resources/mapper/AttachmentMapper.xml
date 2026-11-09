@@ -11,6 +11,18 @@
     WHERE workspace_id = #{workspaceId} AND target_id = #{targetId} AND target_kind = #{targetKind} ORDER BY id
   </select>
 
+  <select id="selectPageByTarget" resultType="Attachment">
+    SELECT <include refid="cols"/> FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_id = #{targetId} AND target_kind = #{targetKind}
+    ORDER BY id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByTarget" resultType="int">
+    SELECT COUNT(*) FROM attachment
+    WHERE workspace_id = #{workspaceId} AND target_id = #{targetId} AND target_kind = #{targetKind}
+  </select>
+
   <select id="selectByTargets" resultType="Attachment">
     SELECT <include refid="cols"/> FROM attachment
     WHERE workspace_id = #{workspaceId} AND target_kind = #{targetKind}

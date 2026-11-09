@@ -17,27 +17,56 @@
       AND entity_type = #{entityType}
       AND entity_id = #{entityId}
     ORDER BY id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
   </select>
-  <!-- 文档动态流：联出文档标题与可见性判定字段（draft 草稿在服务层按查看人过滤） -->
+
+  <select id="countByEntity" resultType="int">
+    SELECT COUNT(*) FROM work_activity
+    WHERE workspace_id = #{workspaceId}
+      AND entity_type = #{entityType}
+      AND entity_id = #{entityId}
+  </select>
+
+  <sql id="docActivityWhere">
+    a.workspace_id = #{workspaceId}
+    AND a.entity_type = #{entityType}
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id
+                        AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
+    <if test="!seeAllDrafts">
+      AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+    </if>
+  </sql>
+
   <select id="selectDocActivities" resultType="com.hourglass.dto.ReqDocActivityView">
     SELECT a.id,
-           a.entity_id    AS docId,
-           d.title        AS docTitle,
-           d.req_id       AS reqId,
+           a.entity_id     AS docId,
+           d.title         AS docTitle,
+           d.req_id        AS reqId,
            d.owner_user_id AS ownerUserId,
-           d.published_at AS publishedAt,
-           a.actor_name   AS actorName,
+           d.published_at  AS publishedAt,
+           a.actor_name    AS actorName,
            a.action,
            a.detail,
            a.created_at
     FROM work_activity a
-    LEFT JOIN requirement_doc d
+    INNER JOIN requirement_doc d
       ON d.id = a.entity_id AND d.workspace_id = a.workspace_id
-    WHERE a.workspace_id = #{workspaceId}
-      AND a.entity_type = #{entityType}
+    WHERE <include refid="docActivityWhere"/>
     ORDER BY a.id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countDocActivities" resultType="int">
+    SELECT COUNT(*)
+    FROM work_activity a
+    INNER JOIN requirement_doc d
+      ON d.id = a.entity_id AND d.workspace_id = a.workspace_id
+    WHERE <include refid="docActivityWhere"/>
   </select>
 
   <delete id="deleteByEntity">

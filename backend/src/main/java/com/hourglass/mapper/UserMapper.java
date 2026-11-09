@@ -12,6 +12,8 @@ public interface UserMapper {
 
     List<AppUser> selectAll();
 
+    List<AppUser> selectPage(@Param("offset") int offset, @Param("limit") int limit);
+
     /** 按登录名/显示名模糊搜索尚未加入该空间的账号（添加成员用，最多 20 条） */
     List<MemberCandidate> searchCandidates(@Param("workspaceId") String workspaceId,
                                            @Param("q") String q,

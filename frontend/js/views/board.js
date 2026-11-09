@@ -86,7 +86,7 @@ var reqLoadSeq = 0;
 function loadReqs(){
   var seq = ++reqLoadSeq;
   var wsId = rt.currentWs && rt.currentWs.id;
-  return API.get("/api/reqs").then(function(list){
+  return API.getAllPages("/api/reqs").then(function(list){
     if(seq !== reqLoadSeq) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     rt.reqList = list || [];

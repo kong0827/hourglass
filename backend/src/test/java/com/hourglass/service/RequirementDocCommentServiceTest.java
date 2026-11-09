@@ -47,15 +47,18 @@ class RequirementDocCommentServiceTest {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
         RequirementDocComment c = comment(USER, "hello");
-        when(commentMapper.selectByDoc(WS, DOC)).thenReturn(Collections.singletonList(c));
-        when(userMapper.selectById(USER)).thenReturn(user("张三"));
+        when(commentMapper.countByDoc(WS, DOC)).thenReturn(1);
+        when(commentMapper.selectByDoc(WS, DOC, 0, 100)).thenReturn(Collections.singletonList(c));
+        when(userMapper.selectByIds(Collections.singletonList(USER)))
+                .thenReturn(Collections.singletonList(user(USER, "张三")));
         when(access.canWrite(WS, USER, REQ)).thenReturn(true);
 
-        List<ReqDocCommentView> views = service.list(WS, USER, DOC);
+        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, 0, 100);
 
-        assertEquals(1, views.size());
-        assertEquals("hello", views.get(0).getContent());
-        assertEquals("张三", views.get(0).getUserName());
+        assertEquals(1, page.getTotal());
+        assertEquals(1, page.getItems().size());
+        assertEquals("hello", page.getItems().get(0).getContent());
+        assertEquals("张三", page.getItems().get(0).getUserName());
     }
 
     @Test
@@ -74,7 +77,7 @@ class RequirementDocCommentServiceTest {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
         when(access.roleOf(WS, USER)).thenReturn(ProjectAccessService.ROLE_MEMBER);
-        when(userMapper.selectById(USER)).thenReturn(user("李四"));
+        when(userMapper.selectById(USER)).thenReturn(user(USER, "李四"));
         when(access.canWrite(WS, USER, REQ)).thenReturn(true);
 
         ReqDocCommentRequest req = new ReqDocCommentRequest();
@@ -139,17 +142,20 @@ class RequirementDocCommentServiceTest {
     void deletableFlagRequiresCurrentWritePermission() {
         RequirementDoc doc = doc(REQ);
         when(docMapper.selectById(DOC)).thenReturn(doc);
-        when(commentMapper.selectByDoc(WS, DOC)).thenReturn(Arrays.asList(
+        when(commentMapper.countByDoc(WS, DOC)).thenReturn(2);
+        when(commentMapper.selectByDoc(WS, DOC, 0, 100)).thenReturn(Arrays.asList(
                 comment(USER, "own"),
                 comment(OTHER, "other")));
-        when(userMapper.selectById(USER)).thenReturn(user("Me"));
-        when(userMapper.selectById(OTHER)).thenReturn(user("Other"));
+        when(userMapper.selectByIds(Arrays.asList(USER, OTHER)))
+                .thenReturn(Arrays.asList(user(USER, "Me"), user(OTHER, "Other")));
         when(access.canWrite(WS, USER, REQ)).thenReturn(false);
 
-        List<ReqDocCommentView> views = service.list(WS, USER, DOC);
+        com.hourglass.dto.PageResult<ReqDocCommentView> page = service.list(WS, USER, DOC, 0, 100);
+        List<ReqDocCommentView> views = page.getItems();
 
         assertFalse(views.get(0).isDeletable(), "作者被降权后也不可删");
         assertFalse(views.get(1).isDeletable(), "非作者且无写权限不可删");
+        verify(access).canWrite(WS, USER, REQ);
     }
 
     private RequirementDoc doc(String reqId) {
@@ -171,8 +177,9 @@ class RequirementDocCommentServiceTest {
         return c;
     }
 
-    private AppUser user(String name) {
+    private AppUser user(String id, String name) {
         AppUser u = new AppUser();
+        u.setId(id);
         u.setDisplayName(name);
         return u;
     }

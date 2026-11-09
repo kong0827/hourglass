@@ -13,6 +13,13 @@ public interface AttachmentMapper {
     List<Attachment> selectByTarget(@Param("workspaceId") String workspaceId,
                                     @Param("targetId") String targetId, @Param("targetKind") String targetKind);
 
+    List<Attachment> selectPageByTarget(@Param("workspaceId") String workspaceId,
+                                        @Param("targetId") String targetId, @Param("targetKind") String targetKind,
+                                        @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByTarget(@Param("workspaceId") String workspaceId,
+                      @Param("targetId") String targetId, @Param("targetKind") String targetKind);
+
     /** 批量取附件（执行记录列表一次取全部证据，避免 N+1） */
     List<Attachment> selectByTargets(@Param("workspaceId") String workspaceId,
                                      @Param("targetKind") String targetKind,

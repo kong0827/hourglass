@@ -19,7 +19,7 @@ var trashList = $("trashList");
 function loadTrash(opts){
   opts = opts || {};
   if(!opts.silent) trashList.innerHTML = UI.skeletonRows(4);
-  API.get("/api/trash").then(function(list){
+  API.getAllPages("/api/trash").then(function(list){
     renderTrash(list);
   }).catch(function(ex){
     trashList.innerHTML = UI.errorState(ex.message);
@@ -109,11 +109,17 @@ trashList.addEventListener("click", function(e){
 var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
     wsMemberList = $("wsMemberList"), wsMemberName = $("wsMemberName"),
     catCfgList = $("catCfgList"), catNewName = $("catNewName"), catNewColor = $("catNewColor"),
-    colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor");
+    colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor"), colNewRule = $("colNewRule");
 /* 成员搜索选择器：用户先从候选列表选中，再点「添加成员」 */
 var wsMemberSelected = null, wsMemberCandidates = {}, wsMemberTimer = null, wsMemberSeq = 0;
 var ROLE_LABELS = { owner:"空间主", admin:"管理员", member:"成员", viewer:"查看者" };
+var RULE_LABELS = { normal:"正常处理", waiting:"等待接续", ended:"执行结束" };
 function roleLabel(role){ return ROLE_LABELS[role] || ROLE_LABELS.member; }
+function colRuleOptions(selected){
+  return Object.keys(RULE_LABELS).map(function(k){
+    return '<option value="' + k + '"' + (k === selected ? " selected" : "") + '>' + RULE_LABELS[k] + '</option>';
+  }).join("");
+}
 function roleOptions(selected, allowAdmin){
   var roles = allowAdmin === false ? ["member","viewer"] : ["admin","member","viewer"];
   return roles.map(function(r){
@@ -554,7 +560,7 @@ function loadInvites(){
   var listEl = $("inviteList");
   if(!listEl || !rt.currentWs) return;
   listEl.innerHTML = UI.skeletonRows(1);
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/invites").then(function(list){
+  API.getAllPages("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/invites").then(function(list){
     rt.inviteCache = list || [];
     renderInvites();
   }).catch(function(ex){
@@ -594,17 +600,21 @@ function renderColCfg(){
   colCfgList.innerHTML = rt.colDefsCache.map(function(d, idx){
     var fixed = (d.id === "backlog" || d.id === "doing");
     var delDisabled = fixed || !canDel;
+    var ruleSelect = fixed ? ''
+      : '<select class="mini-select col-rule" data-col-rule aria-label="处理规则"' + (readOnly ? " disabled" : "") + '>' +
+          colRuleOptions(d.processingRule || "normal") + '</select>';
     return '<div class="cfg-row" data-col-id="' + esc(d.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
       '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色"' + (readOnly ? " disabled" : "") + ' />' +
       '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名"' + (readOnly ? " disabled" : "") + ' />' +
+      ruleSelect +
       (fixed ? '<span class="sysmark">系统列</span>' : '') +
       '<button class="cc-act" type="button" data-col-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-col-down title="下移"' + (readOnly || idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
       '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : (canDel ? "删除列" : "仅空间主可删除列")) + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
-  ["colNewColor", "colNewName", "btnColAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
+  ["colNewColor", "colNewName", "colNewRule", "btnColAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
   if($("colCfgHint")) $("colCfgHint").hidden = !readOnly;
   UI.wireTooltips(colCfgList);
 }
@@ -614,8 +624,10 @@ function saveColRow(id){
   if(!row) return;
   var name = row.querySelector("[data-col-name]").value.trim();
   var color = row.querySelector("[data-col-color]").value;
+  var ruleEl = row.querySelector("[data-col-rule]");
+  var processingRule = ruleEl ? ruleEl.value : "normal";
   if(!name){ toast("列名不能为空", "warn"); loadColCfg(); return; }
-  API.put("/api/columns/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
+  API.put("/api/columns/" + encodeURIComponent(id), { name: name, color: color, processingRule: processingRule }).then(function(){
     toast("已更新列「" + name + "」", "fs");
     loadColCfg();
     loadBoard({silent:true});
@@ -627,7 +639,7 @@ function saveColRow(id){
 colCfgList.addEventListener("change", function(e){
   var row = e.target.closest("[data-col-id]");
   if(!row) return;
-  if(e.target.matches("[data-col-name]") || e.target.matches("[data-col-color]")) saveColRow(row.dataset.colId);
+  if(e.target.matches("[data-col-name]") || e.target.matches("[data-col-color]") || e.target.matches("[data-col-rule]")) saveColRow(row.dataset.colId);
 });
 colCfgList.addEventListener("click", function(e){
   if(roleReadOnly()) return;
@@ -673,9 +685,10 @@ $("btnColAdd").addEventListener("click", function(){
   if(roleReadOnly()) return;
   var name = colNewName.value.trim();
   if(!name){ toast("请填写新列名", "warn"); return; }
-  API.post("/api/columns", { name: name, color: colNewColor.value }).then(function(){
+  API.post("/api/columns", { name: name, color: colNewColor.value, processingRule: colNewRule.value || "normal" }).then(function(){
     toast("已添加列「" + name + "」", "fs");
     colNewName.value = "";
+    if(colNewRule) colNewRule.value = "normal";
     loadColCfg();
     loadBoard({silent:true});
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
@@ -1007,17 +1020,34 @@ if($("wsNotifyToken")) $("wsNotifyToken").addEventListener("input", function(){
   if(this.value.trim() && $("wsNotifyClearToken")) $("wsNotifyClearToken").checked = false;
 });
 var ACT_LABEL = {create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置"};
-function loadActivity(){
+var actState = {items:[], total:0, hasMore:false, loading:false};
+function loadActivity(opts){
   if(!actList) return;
-  actList.innerHTML = UI.skeletonRows(4);
-  API.get("/api/activity", {limit: 200}).then(function(list){
-    renderActivity(list || []);
+  opts = opts || {};
+  var append = !!opts.more && actState.items.length > 0;
+  if(append && actState.loading) return;
+  if(!append){
+    actState.items = [];
+    actState.total = 0;
+    actState.hasMore = false;
+    actList.innerHTML = UI.skeletonRows(4);
+  }
+  actState.loading = true;
+  API.get("/api/activity", {offset: actState.items.length, limit: 100}).then(function(page){
+    actState.loading = false;
+    var rows = (page && page.items) || [];
+    actState.items = append ? actState.items.concat(rows) : rows;
+    actState.total = Math.max((page && page.total) || 0, actState.items.length);
+    actState.hasMore = !!(page && page.hasMore) && rows.length > 0;
+    renderActivity(actState.items);
   }).catch(function(ex){
+    actState.loading = false;
+    if(append){ toast(ex.message || "加载更多失败", "bad"); return; }
     actList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "该接口需要后端支持") + '</div>';
   });
 }
 function renderActivity(list){
-  if(actCount) actCount.textContent = list.length ? ("最近 " + list.length + " 条") : "";
+  if(actCount) actCount.textContent = list.length ? ("已加载 " + list.length + " / 共 " + actState.total + " 条") : "";
   if(!list.length){
     actList.innerHTML = UI.colEmpty("还没有操作记录");
     return;
@@ -1031,8 +1061,13 @@ function renderActivity(list){
       '<span class="ai-act"><span class="tag ' + (a.action === "delete" ? "tag-danger" : (a.action === "create" ? "tag-success" : "tag-ghost")) + '">' +
         esc(ACT_LABEL[a.action] || a.action) + '</span></span>' +
     '</div>';
-  }).join("");
+  }).join("") + (actState.hasMore
+    ? '<div class="act-more"><button class="btn sm block" type="button" data-act-more>加载更多</button></div>'
+    : "");
 }
+if(actList) actList.addEventListener("click", function(e){
+  if(e.target.closest("[data-act-more]")) loadActivity({more:true});
+});
 /* ---------- 系统信息 + 审计日志（B6，平台管理员） ---------- */
 var AUDIT_LABEL = {
   login:"登录成功", login_fail:"登录失败", logout:"退出登录",
@@ -1660,7 +1695,7 @@ function enterUsersView(){
 function loadUsers(silent){
   if(!userListEl) return;
   if(!silent) userListEl.innerHTML = '<div style="padding:12px 14px">' + UI.skeletonRows(3) + '</div>';
-  API.get("/api/admin/users").then(function(list){
+  API.getAllPages("/api/admin/users").then(function(list){
     renderUsers(list);
   }).catch(function(ex){
     if(rt.currentUser && rt.currentUser.role !== "admin"){

@@ -13,7 +13,10 @@ public interface RequirementDocHistoryMapper {
 
     /** 版本列表（不含正文，避免把多版大正文一次拉出来） */
     List<RequirementDocHistory> selectByDoc(@Param("workspaceId") String workspaceId,
-                                            @Param("docId") String docId);
+                                            @Param("docId") String docId,
+                                            @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
 
     /** 单个版本（含正文） */
     RequirementDocHistory selectById(@Param("id") String id);

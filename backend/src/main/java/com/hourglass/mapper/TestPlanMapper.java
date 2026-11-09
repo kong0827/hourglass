@@ -18,7 +18,10 @@ public interface TestPlanMapper {
 
     /** 项目下计划列表（含圈选/执行汇总，一次聚合带回） */
     List<TestPlanView> selectViewByReq(@Param("workspaceId") String workspaceId,
-                                       @Param("reqId") String reqId);
+                                       @Param("reqId") String reqId,
+                                       @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     TestPlanView selectViewById(@Param("id") String id);
 

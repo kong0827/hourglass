@@ -43,27 +43,56 @@
     ORDER BY sort_order, id
   </select>
 
-  <!-- 看板未完成列：只取非 done 的任务，历史已完成任务不再进内存（board_column 走 idx_board） -->
-  <select id="selectOpenTasks" resultType="Task">
-    SELECT <include refid="cols"/> FROM task t
+  <!-- 未配置的历史列归入首个看板列，与旧 Java 分桶口径一致 -->
+  <sql id="openColumnScope">
+    <choose>
+      <when test="fallback">
+        AND (t.board_column = #{column} OR t.board_column NOT IN
+        <foreach collection="knownColumns" item="cid" open="(" separator="," close=")">#{cid}</foreach>)
+      </when>
+      <otherwise>AND t.board_column = #{column}</otherwise>
+    </choose>
+  </sql>
+
+  <select id="countOpenColumn" resultType="int">
+    SELECT COUNT(*) FROM task t
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column &lt;&gt; 'done'
     <include refid="visibleProject"/>
-    ORDER BY t.board_column, t.sort_order, t.id
+    <include refid="openColumnScope"/>
   </select>
 
-  <!-- 单列滚动加载：只取该列未完成任务，走 idx_board -->
-  <select id="selectOpenColumnTasks" resultType="Task">
+  <select id="countOpenMatched" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="openColumnScope"/>
+  </select>
+
+  <select id="selectOpenPage" resultType="Task">
     SELECT <include refid="cols"/> FROM task t
-    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
-      AND t.board_column = #{column} AND t.board_column &lt;&gt; 'done'
-    <include refid="visibleProject"/>
+    WHERE <include refid="ganttWhere"/>
+    <include refid="openColumnScope"/>
     ORDER BY t.sort_order, t.id
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <select id="selectDeleted" resultType="Task">
     SELECT <include refid="cols"/> FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NOT NULL
     ORDER BY deleted_at DESC
+  </select>
+
+  <select id="selectDeletedPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NOT NULL
+    <include refid="visibleProject"/>
+    ORDER BY t.deleted_at DESC, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countDeletedVisible" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NOT NULL
+    <include refid="visibleProject"/>
   </select>
 
   <select id="selectById" resultType="Task">
@@ -154,15 +183,23 @@
       <if test="blocked"> AND t.is_blocked = 1 </if>
       <if test="due != null">
         <choose>
-          <when test="due == 'over'">AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{today}</when>
-          <when test="due == 'today'">AND t.board_column &lt;&gt; 'done' AND t.due_date = #{today}</when>
+          <when test="due == 'over'">AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{today}
+            AND NOT EXISTS (SELECT 1 FROM board_column bc
+                            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')</when>
+          <when test="due == 'today'">AND t.board_column &lt;&gt; 'done' AND t.due_date = #{today}
+            AND NOT EXISTS (SELECT 1 FROM board_column bc
+                            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')</when>
           <when test="due == 'soon'">AND t.board_column &lt;&gt; 'done'
-            AND t.due_date &gt;= #{today} AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY)</when>
+            AND t.due_date &gt;= #{today} AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY)
+            AND NOT EXISTS (SELECT 1 FROM board_column bc
+                            WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')</when>
           <otherwise>AND 1 = 0</otherwise>
         </choose>
       </if>
       <if test="focus">
-        AND ((t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{today})
+        AND ((t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{today}
+              AND NOT EXISTS (SELECT 1 FROM board_column bc
+                              WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended'))
              OR (t.board_column = 'doing' AND t.priority = 'P0'))
       </if>
   </sql>
@@ -440,6 +477,44 @@
     ORDER BY (board_column = 'done'), board_column, sort_order, id
   </select>
 
+  <select id="selectByReqPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), board_column, sort_order, id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countActiveByReq" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND deleted_at IS NULL
+  </select>
+
+  <select id="selectByDemandPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
+    ORDER BY (board_column = 'done'), FIELD(priority, 'P0', 'P1', 'P2', 'P3'), sort_order, created_at, id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countActiveByDemand" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND deleted_at IS NULL
+  </select>
+
+  <select id="selectByBranchPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+    ORDER BY (t.board_column = 'done'), FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.sort_order, t.created_at, t.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countActiveByBranch" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+  </select>
+
   <select id="countByWorkspace" resultType="int">
     SELECT COUNT(*) FROM task WHERE workspace_id = #{workspaceId}
   </select>
@@ -568,21 +643,29 @@
       <choose>
         <when test="query.due == 'over'">
           AND t.board_column &lt;&gt; 'done' AND t.due_date &lt; #{query.today}
+          AND NOT EXISTS (SELECT 1 FROM board_column bc
+                          WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')
         </when>
         <when test="query.due == 'today'">
           AND t.board_column &lt;&gt; 'done' AND t.due_date = #{query.today}
+          AND NOT EXISTS (SELECT 1 FROM board_column bc
+                          WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')
         </when>
         <when test="query.due == 'soon'">
           AND t.board_column &lt;&gt; 'done'
           AND t.due_date &gt;= #{query.today}
           AND t.due_date &lt;= DATE_ADD(#{query.today}, INTERVAL 3 DAY)
+          AND NOT EXISTS (SELECT 1 FROM board_column bc
+                          WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended')
         </when>
         <otherwise>AND 1 = 0</otherwise>
       </choose>
     </if>
     <if test="query.focus">
       AND (
-        (t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{query.today})
+        (t.board_column &lt;&gt; 'done' AND t.due_date IS NOT NULL AND t.due_date &lt;= #{query.today}
+         AND NOT EXISTS (SELECT 1 FROM board_column bc
+                         WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended'))
         OR (t.board_column = 'doing' AND t.priority = 'P0')
       )
     </if>
@@ -629,6 +712,14 @@
       AND t.start_date IS NULL AND t.due_date IS NULL
     ORDER BY t.id
     LIMIT #{limit}
+  </select>
+
+  <select id="selectGanttUnscheduledPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+      AND t.start_date IS NULL AND t.due_date IS NULL
+    ORDER BY t.id
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <select id="countGanttUnscheduled" resultType="int">
@@ -742,8 +833,9 @@
 
   <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
   <select id="selectBoardFacets" resultType="TaskFacetRow">
-    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, t.due_date, t.item_type, vt.version_id
+    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, bc.processing_rule, t.due_date, t.item_type, vt.version_id
     FROM task t
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
@@ -808,8 +900,10 @@
            COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
            COALESCE(SUM(CASE WHEN t.board_column NOT IN ('backlog', 'doing', 'done') THEN 1 ELSE 0 END), 0) AS other,
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
-                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS overdue
+                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS overdue
     FROM task t
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
   </select>
@@ -861,12 +955,16 @@
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog' THEN 1 ELSE 0 END), 0) AS doing,
            COALESCE(SUM(CASE WHEN t.board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
-                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today} THEN 1 ELSE 0 END), 0) AS `over`,
-           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.due_date = #{today} THEN 1 ELSE 0 END), 0) AS today,
+                              AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS `over`,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.due_date = #{today}
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS today,
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
                               AND t.due_date &gt; #{today}
-                              AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY) THEN 1 ELSE 0 END), 0) AS soon
+                              AND t.due_date &lt;= DATE_ADD(#{today}, INTERVAL 3 DAY)
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS soon
     FROM task t
+    LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
     <if test="reqId != null">AND t.req_id = #{reqId}</if>
@@ -906,6 +1004,18 @@
     FROM task
     WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
     ORDER BY board_column, sort_order, id
+  </select>
+
+  <select id="selectByReqDocPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
+    ORDER BY board_column, sort_order, id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countActiveByReqDoc" resultType="int">
+    SELECT COUNT(*) FROM task
+    WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id = #{reqDocId}
   </select>
 
   <select id="selectTitles" resultType="string">

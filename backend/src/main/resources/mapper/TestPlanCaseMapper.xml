@@ -21,6 +21,11 @@
     JOIN test_case c ON c.id = pc.case_id
     WHERE pc.plan_id = #{planId}
     ORDER BY c.module, c.created_at DESC, c.id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByPlan" resultType="int">
+    SELECT COUNT(*) FROM test_plan_case WHERE plan_id = #{planId}
   </select>
 
   <select id="selectByPlanAndCase" resultType="com.hourglass.entity.TestPlanCase">

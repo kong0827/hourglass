@@ -19,6 +19,8 @@ public class Task {
     private String category;
     /** 看板列 id（board_column 表 + done） */
     private String boardColumn;
+    /** 列处理规则（非表字段，查询时由 board_column 填充；built-in 列由调用方推断） */
+    private String processingRule;
     /** 开始日期（日历按 [startDate, dueDate] 区间逐日展示；为空则只在截止日出现） */
     private LocalDate startDate;
     private LocalDate dueDate;

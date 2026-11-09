@@ -65,19 +65,14 @@ public class TaskTrashService {
         this.purgeTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    public List<Task> trash(String workspaceId, String userId) {
-        List<Task> list = taskMapper.selectDeleted(workspaceId);
-        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
-        if (hiddenReqs.isEmpty()) {
-            return list;
-        }
-        List<Task> visible = new ArrayList<Task>();
-        for (Task t : list) {
-            if (t.getReqId() == null || !hiddenReqs.contains(t.getReqId())) {
-                visible.add(t);
-            }
-        }
-        return visible;
+    public com.hourglass.dto.PageResult<Task> trash(String workspaceId, String userId, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        int total = taskMapper.countDeletedVisible(workspaceId, viewerId);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectDeletedPage(workspaceId, viewerId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 软删除：进回收站，30 天后由定时任务清理 */

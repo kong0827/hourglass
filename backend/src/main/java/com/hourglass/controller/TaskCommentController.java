@@ -38,10 +38,14 @@ public class TaskCommentController {
     }
 
     @GetMapping("/api/tasks/{id}/comments")
-    public ApiResult<List<TaskComment>> list(@PathVariable String id,
-                                             @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<TaskComment>> list(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(commentService.list(ws.getId(), CurrentUser.id(), id));
+        return ApiResult.ok(commentService.list(ws.getId(), CurrentUser.id(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/tasks/{id}/comments")

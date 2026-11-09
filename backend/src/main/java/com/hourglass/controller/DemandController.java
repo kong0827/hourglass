@@ -8,6 +8,7 @@ import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.DemandActionRequest;
 import com.hourglass.dto.DemandBoardResponse;
 import com.hourglass.dto.DemandDocLinkRequest;
+import com.hourglass.dto.DemandGanttPage;
 import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
@@ -41,11 +42,6 @@ public class DemandController {
         this.docService = docService;
     }
 
-    @GetMapping("/api/demands")
-    public ApiResult<List<Demand>> list(@RequestParam(required = false) String reqId, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(demandService.list(ctx.getWsId(), reqId, ctx.getUserId()));
-    }
-
     /** 需求池看板首屏：每个状态一列，只下发前 limit 条 */
     @GetMapping("/api/demands/board")
     public ApiResult<DemandBoardResponse> board(@RequestParam(required = false) String reqId,
@@ -56,7 +52,7 @@ public class DemandController {
     }
 
     /** 需求池分页：看板单列滚动加载 + 列表模式的筛选/排序/分页 */
-    @GetMapping("/api/demands/page")
+    @GetMapping({"/api/demands", "/api/demands/page"})
     public ApiResult<DemandPage> page(@RequestParam(required = false) String reqId,
                                       @RequestParam(required = false) String status,
                                       @RequestParam(required = false) String q,
@@ -67,8 +63,30 @@ public class DemandController {
                                       @RequestParam(required = false) Integer offset,
                                       @RequestParam(required = false) Integer limit,
                                       @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.page(ctx.getWsId(), ctx.getUserId(),
+                query(reqId, status, q, pris, kinds, reqs, sort, offset, limit)));
+    }
+
+    /** 需求池甘特：分页口径同列表，额外下发每条需求的阶段时间轴 */
+    @GetMapping("/api/demands/gantt")
+    public ApiResult<DemandGanttPage> gantt(@RequestParam(required = false) String reqId,
+                                            @RequestParam(required = false) String status,
+                                            @RequestParam(required = false) String q,
+                                            @RequestParam(required = false) String pris,
+                                            @RequestParam(required = false) String kinds,
+                                            @RequestParam(required = false) String reqs,
+                                            @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Integer offset,
+                                            @RequestParam(required = false) Integer limit,
+                                            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.gantt(ctx.getWsId(), ctx.getUserId(),
+                query(reqId, status, q, pris, kinds, reqs, sort, offset, limit)));
+    }
+
+    private static DemandQuery query(String reqId, String status, String q, String pris, String kinds,
+                                     String reqs, String sort, Integer offset, Integer limit) {
         DemandQuery query = new DemandQuery();
-        query.setReqId(reqId);
+        query.setReqId(reqId == null || reqId.trim().isEmpty() ? null : reqId.trim());
         query.setStatus(status);
         query.setQ(q == null || q.trim().isEmpty() ? null : q.trim());
         query.setPris(csv(pris));
@@ -77,7 +95,7 @@ public class DemandController {
         query.setSort(sort);
         query.setOffset(offset == null ? 0 : offset);
         query.setLimit(limit == null ? 50 : limit);
-        return ApiResult.ok(demandService.page(ctx.getWsId(), ctx.getUserId(), query));
+        return query;
     }
 
     private static List<String> csv(String value) {
@@ -100,20 +118,34 @@ public class DemandController {
     }
 
     @GetMapping("/api/demands/{id}/logs")
-    public ApiResult<List<Map<String, Object>>> logs(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(demandService.logs(ctx.getWsId(), ctx.getUserId(), id));
+    public ApiResult<com.hourglass.dto.PageResult<Map<String, Object>>> logs(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.logs(ctx.getWsId(), ctx.getUserId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** T2.3：需求详情「关联任务」透视 */
     @GetMapping("/api/demands/{id}/tasks")
-    public ApiResult<List<Task>> tasks(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(demandService.tasks(ctx.getWsId(), ctx.getUserId(), id));
+    public ApiResult<com.hourglass.dto.PageResult<Task>> tasks(@PathVariable String id,
+                                                               @CurrentWorkspace WorkspaceCtx ctx,
+                                                               @RequestParam(required = false) Integer offset,
+                                                               @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(demandService.tasks(ctx.getWsId(), ctx.getUserId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 需求详情「关联文档」列表 */
     @GetMapping("/api/demands/{id}/docs")
-    public ApiResult<List<ReqDocView>> docs(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(docService.docsOfDemand(ctx.getWsId(), id, ctx.getUserId()));
+    public ApiResult<com.hourglass.dto.PageResult<ReqDocView>> docs(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(docService.docsOfDemand(ctx.getWsId(), id, ctx.getUserId(),
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/demands/{id}/docs")

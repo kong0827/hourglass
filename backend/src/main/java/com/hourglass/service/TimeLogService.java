@@ -1,9 +1,9 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
-import com.hourglass.common.Consts;
 import com.hourglass.common.Texts;
 import com.hourglass.common.WorkTime;
+import com.hourglass.dto.PageResult;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
@@ -43,11 +43,12 @@ public class TimeLogService {
     private final WorkspaceMemberMapper memberMapper;
     private final ProjectAccessService projectAccess;
     private final TaskCompletionService completionService;
+    private final TaskSupport support;
 
     public TimeLogService(TimeLogMapper timeLogMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                           WorkspaceMapper workspaceMapper, UserMapper userMapper,
                           WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess,
-                          TaskCompletionService completionService) {
+                          TaskCompletionService completionService, TaskSupport support) {
         this.timeLogMapper = timeLogMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -56,6 +57,7 @@ public class TimeLogService {
         this.memberMapper = memberMapper;
         this.projectAccess = projectAccess;
         this.completionService = completionService;
+        this.support = support;
     }
 
     /**
@@ -144,8 +146,8 @@ public class TimeLogService {
     public Map<String, Object> startManual(String userId, String workspaceId, String taskId) {
         Task task = ensureTask(workspaceId, taskId);
         projectAccess.assertWrite(workspaceId, userId, task.getReqId());
-        if (Consts.COL_BACKLOG.equals(task.getBoardColumn()) || Consts.COL_DONE.equals(task.getBoardColumn())) {
-            throw AppException.badRequest("只有「进行中」的任务才能计时，请先把任务移到进行中");
+        if (!support.canTime(workspaceId, task.getBoardColumn())) {
+            throw AppException.badRequest("当前列不允许计时，请先把任务移到「正常处理」列");
         }
         return start(userId, workspaceId, taskId);
     }
@@ -160,7 +162,7 @@ public class TimeLogService {
      */
     @Transactional
     public Task resumeInColumn(String userId, String workspaceId, String columnId, String excludeTaskId) {
-        if (columnId == null || Consts.COL_BACKLOG.equals(columnId) || Consts.COL_DONE.equals(columnId)) {
+        if (!support.canTime(workspaceId, columnId)) {
             return null;
         }
         if (!timeLogMapper.selectRunningAllByUser(userId).isEmpty()) {
@@ -302,15 +304,33 @@ public class TimeLogService {
                 t.getYear(), t.getMonthValue(), t.getDayOfMonth(), t.getHour(), t.getMinute());
     }
 
-    /** 任务抽屉的工时记录列表：已结束的计时 + 手工补记，按时间倒序（最多 50 条） */
-    public List<Map<String, Object>> records(String workspaceId, String taskId, String userId) {
+    /** 任务抽屉的工时记录列表：已结束的计时 + 手工补记，按时间倒序。 */
+    public PageResult<Map<String, Object>> records(String workspaceId, String taskId, String userId,
+                                                   int offset, int limit) {
         projectAccess.assertViewTask(workspaceId, userId, ensureTask(workspaceId, taskId));
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = timeLogMapper.countRecordsByTask(workspaceId, taskId);
+        List<TimeLog> rows = total <= safeOffset ? new ArrayList<TimeLog>()
+                : timeLogMapper.selectRecordsByTask(workspaceId, taskId, safeOffset, safeLimit);
+        java.util.Set<String> userIds = new java.util.LinkedHashSet<String>();
+        for (TimeLog row : rows) {
+            if (row.getUserId() != null) {
+                userIds.add(row.getUserId());
+            }
+        }
+        Map<String, AppUser> users = new LinkedHashMap<String, AppUser>();
+        if (!userIds.isEmpty()) {
+            for (AppUser user : userMapper.selectByIds(new ArrayList<String>(userIds))) {
+                users.put(user.getId(), user);
+            }
+        }
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-        for (TimeLog tl : timeLogMapper.selectRecordsByTask(workspaceId, taskId, 50)) {
+        for (TimeLog tl : rows) {
             Map<String, Object> m = new LinkedHashMap<String, Object>();
             m.put("id", tl.getId());
             m.put("userId", tl.getUserId());
-            m.put("userName", displayNameOf(tl.getUserId()));
+            m.put("userName", displayName(users.get(tl.getUserId()), tl.getUserId()));
             m.put("origin", ORIGIN_MANUAL.equals(tl.getOrigin()) ? ORIGIN_MANUAL : ORIGIN_TIMER);
             m.put("minutes", tl.getMinutes());
             m.put("date", tl.getStartedAt() == null ? null : tl.getStartedAt().toLocalDate().toString());
@@ -320,7 +340,15 @@ public class TimeLogService {
             m.put("mine", userId.equals(tl.getUserId()));
             out.add(m);
         }
-        return out;
+        return PageResult.of(out, total, safeOffset, safeLimit);
+    }
+
+    private static String displayName(AppUser user, String userId) {
+        if (user == null) {
+            return userId;
+        }
+        String displayName = Texts.trimToNull(user.getDisplayName());
+        return displayName == null ? user.getUsername() : displayName;
     }
 
     private String displayNameOf(String uid) {

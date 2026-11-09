@@ -1,6 +1,7 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import com.hourglass.dto.PageResult;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
@@ -21,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -51,8 +53,9 @@ class TimeLogManualTest {
     private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
     private final TaskCompletionService completionService = mock(TaskCompletionService.class);
+    private final TaskSupport taskSupport = mock(TaskSupport.class);
     private final TimeLogService service = new TimeLogService(timeLogMapper, taskMapper, logMapper,
-            workspaceMapper, userMapper, memberMapper, projectAccess, completionService);
+            workspaceMapper, userMapper, memberMapper, projectAccess, completionService, taskSupport);
 
     private static Task task() {
         Task t = new Task();
@@ -246,16 +249,19 @@ class TimeLogManualTest {
         TimeLog manual = manualLog(1L, "U2", "manual");
         manual.setNote("加班");
         TimeLog legacy = manualLog(2L, ME, null);
-        when(timeLogMapper.selectRecordsByTask(WS, TASK, 50)).thenReturn(Arrays.asList(manual, legacy));
+        when(timeLogMapper.countRecordsByTask(WS, TASK)).thenReturn(2);
+        when(timeLogMapper.selectRecordsByTask(WS, TASK, 0, 100)).thenReturn(Arrays.asList(manual, legacy));
         AppUser u2 = new AppUser();
         u2.setId("U2");
         u2.setUsername("u2");
         u2.setDisplayName("小李");
-        when(userMapper.selectById("U2")).thenReturn(u2);
+        when(userMapper.selectByIds(Arrays.asList("U2", ME))).thenReturn(Collections.singletonList(u2));
 
-        List<Map<String, Object>> list = service.records(WS, TASK, ME);
+        PageResult<Map<String, Object>> page = service.records(WS, TASK, ME, 0, 100);
+        List<Map<String, Object>> list = page.getItems();
 
         verify(projectAccess).assertViewTask(WS, ME, taskMapper.selectById(TASK));
+        assertEquals(2, page.getTotal());
         assertEquals(2, list.size());
         Map<String, Object> first = list.get(0);
         assertEquals(1L, first.get("id"));

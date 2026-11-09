@@ -44,7 +44,12 @@
     SELECT * FROM test_case_run
     WHERE workspace_id = #{workspaceId} AND case_id = #{caseId}
     ORDER BY created_at DESC, id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByCase" resultType="int">
+    SELECT COUNT(*) FROM test_case_run
+    WHERE workspace_id = #{workspaceId} AND case_id = #{caseId}
   </select>
 
   <update id="updateBugTask">

@@ -5,6 +5,7 @@ import com.hourglass.common.Consts;
 import com.hourglass.common.Ids;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReqSaveRequest;
 import com.hourglass.dto.RequirementDeleteResult;
@@ -73,7 +74,23 @@ public class RequirementService {
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
-        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        List<ReqProgress> out = new ArrayList<ReqProgress>();
+        int offset = 0;
+        while (true) {
+            PageResult<ReqProgress> page = page(workspaceId, userId, offset, 100);
+            out.addAll(page.getItems());
+            if (!page.isHasMore() || page.getItems().isEmpty()) {
+                return out;
+            }
+            offset += page.getItems().size();
+        }
+    }
+
+    public PageResult<ReqProgress> page(String workspaceId, String userId, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        int total = reqMapper.countVisible(workspaceId, viewerId);
         /* 只读态一次算清：查看者与非成员全局只读，成员仅在显式 read 的项目上只读 */
         String role = projectAccess.roleOf(workspaceId, userId);
         boolean globalRead = role == null || ProjectAccessService.isViewer(role);
@@ -99,12 +116,15 @@ public class RequirementService {
             }
         }
         java.util.Map<String, Integer> demandCounts = new java.util.HashMap<String, Integer>();
-        for (com.hourglass.entity.Demand d : demandMapper.selectByWorkspace(workspaceId)) {
-            if (d.getReqId() != null) {
-                demandCounts.merge(d.getReqId(), 1, Integer::sum);
+        for (java.util.Map<String, Object> row : demandMapper.countGroupByReq(workspaceId)) {
+            Object k = row.get("reqId");
+            Object v = row.get("cnt");
+            if (k != null && v instanceof Number) {
+                demandCounts.put(String.valueOf(k), ((Number) v).intValue());
             }
         }
-        List<Requirement> reqs = reqMapper.selectAll(workspaceId);
+        List<Requirement> reqs = total <= safeOffset ? new ArrayList<Requirement>()
+                : reqMapper.selectPage(workspaceId, viewerId, safeOffset, safeLimit);
         java.util.Map<String, String> ownerNames = new java.util.HashMap<String, String>();
         for (com.hourglass.entity.WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
             if (m.getUserId() != null && m.getDisplayName() != null) {
@@ -113,9 +133,6 @@ public class RequirementService {
         }
         List<ReqProgress> out = new ArrayList<ReqProgress>();
         for (Requirement r : reqs) {
-            if (hidden.contains(r.getId())) {
-                continue;
-            }
             ReqProgress p = new ReqProgress();
             p.setId(r.getId());
             p.setName(r.getName());
@@ -146,7 +163,7 @@ public class RequirementService {
             p.setProgressPct(count == 0 ? 0 : (int) Math.round((double) agg.getProgressSum() / count));
             out.add(p);
         }
-        return out;
+        return PageResult.of(out, total, safeOffset, safeLimit);
     }
 
     @Transactional
@@ -240,22 +257,28 @@ public class RequirementService {
     }
 
     /** 项目活动查询前必须验证项目归属，避免凭实体 ID 跨空间读取。 */
-    public List<WorkActivity> activities(String workspaceId, String userId, String id) {
+    public PageResult<WorkActivity> activities(String workspaceId, String userId, String id,
+                                               int offset, int limit) {
         Requirement r = reqMapper.selectById(id);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
         projectAccess.assertView(workspaceId, userId, id);
-        return workActivityService.listByEntity(workspaceId, WorkActivityService.PROJECT, id);
+        return workActivityService.listByEntity(workspaceId, WorkActivityService.PROJECT, id, offset, limit);
     }
 
-    public List<Task> tasks(String workspaceId, String userId, String id) {
+    public PageResult<Task> tasks(String workspaceId, String userId, String id, int offset, int limit) {
         Requirement r = reqMapper.selectById(id);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
         projectAccess.assertView(workspaceId, userId, id);
-        return taskMapper.selectByReq(workspaceId, id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = taskMapper.countActiveByReq(workspaceId, id);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectByReqPage(workspaceId, id, safeOffset, safeLimit);
+        return PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /**

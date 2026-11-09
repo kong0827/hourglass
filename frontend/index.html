@@ -723,6 +723,7 @@
               <div class="seg mini" id="demandModeSeg" role="group" aria-label="需求池展示形式">
                 <button type="button" data-dem-mode="board" aria-pressed="true">看板</button>
                 <button type="button" data-dem-mode="table" aria-pressed="false">列表</button>
+                <button type="button" data-dem-mode="gantt" aria-pressed="false">甘特</button>
               </div>
               <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
               <select id="demandReq" class="mini-select" aria-label="选择项目"></select>
@@ -731,6 +732,39 @@
               </button>
               <button class="btn sm primary" type="button" id="btnDemandNew">+ 提需求</button>
             </span>
+          </div>
+          <div class="gantt-tools demg-tools" id="demandGanttBar" hidden>
+            <div class="gantt-tools-left">
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">刻度</span>
+                <select class="mini-select" data-demg-scale aria-label="时间刻度">
+                  <option value="day">日</option>
+                  <option value="week">周</option>
+                  <option value="month">月</option>
+                </select>
+              </label>
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">缩放</span>
+                <select class="mini-select" data-demg-zoom aria-label="时间轴缩放">
+                  <option value="20">紧凑</option>
+                  <option value="28" selected>标准</option>
+                  <option value="40">宽松</option>
+                </select>
+              </label>
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">范围</span>
+                <select class="mini-select" data-demg-range aria-label="时间范围">
+                  <option value="auto">适配全部</option>
+                  <option value="month">按月查看</option>
+                </select>
+              </label>
+            </div>
+            <div class="gantt-tools-right">
+              <button class="btn sm ghost gantt-range-btn" type="button" data-demg-prev aria-label="上一月" title="上一月">‹</button>
+              <span class="gantt-range-label" data-demg-range-label aria-live="polite">自动范围</span>
+              <button class="btn sm ghost gantt-range-btn" type="button" data-demg-next aria-label="下一月" title="下一月">›</button>
+              <button class="btn sm" type="button" data-demg-today>今天</button>
+            </div>
           </div>
           <div id="demandBody"></div>
         </div>
@@ -1892,11 +1926,16 @@
                 <h3>看板列</h3>
                 <span class="meta-right">拖拽/按钮调整顺序</span>
               </div>
-              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。删除列时其工作项移入最靠前的列。</p>
+              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。自定义列可设处理规则：正常处理（可计时、计逾期）、等待接续（停表、计逾期）、执行结束（停表、不计逾期）。删除列时其工作项移入最靠前的列。</p>
               <div class="cfg-list" id="colCfgList"></div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
                 <input type="text" id="colNewName" maxlength="12" placeholder="新列名，如：待验收" />
+                <select id="colNewRule" class="mini-select" aria-label="新列处理规则">
+                  <option value="normal">正常处理</option>
+                  <option value="waiting">等待接续</option>
+                  <option value="ended">执行结束</option>
+                </select>
                 <button class="btn sm" type="button" id="btnColAdd">添加列</button>
               </div>
               <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
@@ -1961,7 +2000,7 @@
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
               </div>
-              <p class="set-hint">空间内的工作项操作与配置变更记录（最近 200 条，倒序）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
+              <p class="set-hint">空间内的工作项操作与配置变更记录（按时间倒序，每次加载 100 条）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
               <div class="act-list" id="actList"></div>
             </div>
 
@@ -2402,7 +2441,7 @@
         <details class="drawer-more" id="drawerMore">
           <summary>
             <span>更多字段</span>
-            <span class="foot-note">类型、标签、文档、版本、史诗、分支、循环与提醒</span>
+            <span class="foot-note">类型、标签、版本、史诗、分支、循环与提醒</span>
           </summary>
           <div class="drawer-more-body" id="drawerMoreBody"></div>
         </details>
@@ -2457,19 +2496,23 @@
             </div>
             <div class="field">
               <div class="label-row">
+                <label for="iReqDocPicker">关联文档</label>
+                <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
+              </div>
+              <button type="button" class="req-doc-trigger" id="iReqDocPicker" aria-haspopup="dialog" aria-expanded="false">
+                <span class="req-doc-trigger-text placeholder" id="iReqDocPickerText">搜索并选择文档</span>
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+              </button>
+              <select id="iReqDoc" hidden tabindex="-1" aria-hidden="true"></select>
+              <span class="hint" id="iReqDocHint">无需先选项目，可搜索全部可见文档</span>
+            </div>
+            <div class="field">
+              <div class="label-row">
                 <label for="iDemand">关联需求</label>
                 <button type="button" class="label-link" id="iDemandView" hidden>查看</button>
               </div>
               <select id="iDemand"></select>
               <span class="hint" id="iDemandHint">先选项目，再从该项目的需求池条目里挑；未选项目时直接挑需求，会自动带出所属项目</span>
-            </div>
-            <div class="field">
-              <div class="label-row">
-                <label for="iReqDoc">关联文档</label>
-                <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
-              </div>
-              <select id="iReqDoc"></select>
-              <span class="hint" id="iReqDocHint">先选项目，再从该项目的文档里挑</span>
             </div>
           </div>
 

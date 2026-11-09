@@ -78,3 +78,6 @@ backend/local.env
 *.key
 *.p12
 *.jks
+
+# 本地目录
+/hourglass/

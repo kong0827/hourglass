@@ -40,10 +40,22 @@ public class ColumnController {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         List<BoardResponse.ColumnDef> defs = new ArrayList<BoardResponse.ColumnDef>();
         for (BoardColumn c : boardColumnService.list(ws.getId())) {
-            defs.add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(), false));
+            defs.add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(),
+                    processingRuleOf(c), false));
         }
-        defs.add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", true));
+        defs.add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", "done", true));
         return ApiResult.ok(defs);
+    }
+
+    private String processingRuleOf(BoardColumn c) {
+        if (Consts.COL_BACKLOG.equals(c.getId())) {
+            return "backlog";
+        }
+        if (Consts.COL_DOING.equals(c.getId())) {
+            return "normal";
+        }
+        String rule = c.getProcessingRule();
+        return rule == null ? "normal" : rule;
     }
 
     @PostMapping("/api/columns")

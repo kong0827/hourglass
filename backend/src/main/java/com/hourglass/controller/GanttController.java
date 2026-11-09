@@ -85,6 +85,23 @@ public class GanttController {
                 .body(ApiResult.ok(resp));
     }
 
+    /** 未排期工作项续页（首屏由 /api/gantt 一并返回） */
+    @GetMapping("/api/gantt/unscheduled")
+    public ApiResult<com.hourglass.dto.PageResult<com.hourglass.entity.Task>> unscheduled(
+            @CurrentWorkspace WorkspaceCtx ctx,
+            @BoardFilter BoardQuery query,
+            @RequestParam(required = false) Boolean includeDone,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(ganttService.unscheduled(ctx.getWsId(), ctx.getUserId(), query, from, to,
+                includeDone == null || includeDone,
+                offset == null ? 0 : offset, limit == null ? 0 : limit));
+    }
+
     @GetMapping("/api/gantt/deps")
     public ApiResult<List<TaskDependency>> deps(@CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(ganttService.deps(ctx.getWsId(), ctx.getUserId()));

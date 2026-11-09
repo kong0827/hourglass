@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.PageResult;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.TimeLogService;
 import com.hourglass.service.WorkspaceService;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -64,11 +64,14 @@ public class TimerController {
 
     /** 工时记录列表（已结束的计时 + 手工补记） */
     @GetMapping("/api/tasks/{taskId}/timer/records")
-    public ApiResult<List<Map<String, Object>>> records(@PathVariable String taskId,
-                                                        @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<Map<String, Object>>> records(@PathVariable String taskId,
+                                                              @RequestParam(required = false) String workspace,
+                                                              @RequestParam(required = false) Integer offset,
+                                                              @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(timeLogService.records(ws.getId(), taskId, userId));
+        return ApiResult.ok(timeLogService.records(ws.getId(), taskId, userId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 手工补记工时：forUserId 为空补自己，否则补该空间成员；date 格式 yyyy-MM-dd */

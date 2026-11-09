@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.PlanBatchRequest;
 import com.hourglass.dto.TestPlanSaveRequest;
 import com.hourglass.dto.TestPlanView;
@@ -37,20 +38,35 @@ public class TestPlanController {
     }
 
     @GetMapping("/api/test-plans")
-    public ApiResult<List<TestPlanView>> list(@RequestParam String reqId,
-                                              @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<TestPlanView>> list(@RequestParam String reqId,
+                                                    @RequestParam(required = false) String workspace,
+                                                    @RequestParam(required = false) Integer offset,
+                                                    @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(planService.list(ws.getId(), userId, reqId));
+        return ApiResult.ok(planService.page(ws.getId(), userId, reqId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
-    /** 计划详情：plan + cases + passRate */
+    /** 计划详情：plan + passRate；用例行通过 cases 分页接口读取 */
     @GetMapping("/api/test-plans/{id}")
     public ApiResult<Map<String, Object>> detail(@PathVariable String id,
                                                  @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(planService.detail(ws.getId(), userId, id));
+    }
+
+    @GetMapping("/api/test-plans/{id}/cases")
+    public ApiResult<PageResult<com.hourglass.dto.TestPlanCaseView>> cases(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(planService.cases(ws.getId(), userId, id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/test-plans")

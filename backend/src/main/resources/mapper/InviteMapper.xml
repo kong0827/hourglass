@@ -10,6 +10,11 @@
     SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite
     WHERE workspace_id = #{workspaceId}
     ORDER BY created_at DESC, id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM invite WHERE workspace_id = #{workspaceId}
   </select>
 
   <insert id="insert">

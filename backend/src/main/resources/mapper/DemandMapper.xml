@@ -8,6 +8,12 @@
     created_by, created_at, updated_at
   </sql>
 
+  <sql id="pageCols">
+    d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.priority, d.status,
+    d.expect_date, d.accept_text, d.version_id, v.name AS versionName, d.review_note,
+    d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
+  </sql>
+
   <!-- 需求池列表（M1 版本卡需求数 / M2 看板共用），已拒绝的排最后 -->
   <select id="selectByReq" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
@@ -85,7 +91,8 @@
   </select>
 
   <select id="selectPage" resultType="Demand">
-    SELECT <include refid="cols"/> FROM demand d
+    SELECT <include refid="pageCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
     <include refid="pageWhere"/>
     <include refid="pageOrder"/>
     LIMIT #{q.limit} OFFSET #{q.offset}
@@ -95,6 +102,24 @@
     SELECT d.status AS status, COUNT(*) AS cnt FROM demand d
     <include refid="pageWhere"/>
     GROUP BY d.status
+  </select>
+
+  <select id="countGroupByReq" resultType="map">
+    SELECT req_id AS reqId, COUNT(*) AS cnt FROM demand
+    WHERE workspace_id = #{workspaceId}
+    GROUP BY req_id
+  </select>
+
+  <select id="countByStatus" resultType="int">
+    SELECT COUNT(*) FROM demand d
+    WHERE d.workspace_id = #{workspaceId} AND d.status = #{status}
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id
+                        AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
   </select>
 
   <!-- 发布说明：目标版本指向该版本的需求（不含已拒绝） -->
@@ -165,7 +190,96 @@
     LEFT JOIN app_user u ON u.id = dl.operator
     WHERE dl.workspace_id = #{workspaceId} AND dl.demand_id = #{demandId}
     ORDER BY dl.id DESC
+    LIMIT #{limit} OFFSET #{offset}
   </select>
+
+  <select id="countLogs" resultType="int">
+    SELECT COUNT(*) FROM demand_log
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </select>
+
+  <!-- 甘特：按当前页需求批量取阶段时间，禁止逐条查询 -->
+  <select id="selectLogTimeline" resultType="map">
+    SELECT demand_id AS demandId,
+           MAX(CASE WHEN action = 'pass' THEN created_at END) AS passAt,
+           MAX(CASE WHEN action = 'rej' THEN created_at END) AS rejAt,
+           MAX(CASE WHEN action = 'plan' THEN created_at END) AS planAt
+    FROM demand_log
+    WHERE workspace_id = #{workspaceId}
+      AND demand_id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    GROUP BY demand_id
+  </select>
+
+  <select id="selectDocTimeline" resultType="map">
+    SELECT l.demand_id AS demandId,
+           COUNT(*) AS docCount,
+           SUM(CASE WHEN rd.published_at IS NOT NULL THEN 1 ELSE 0 END) AS docPublished,
+           MIN(rd.created_at) AS docStart,
+           MAX(rd.published_at) AS docEnd
+    FROM demand_doc_link l
+    INNER JOIN requirement_doc rd ON rd.id = l.doc_id AND rd.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.demand_id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = rd.workspace_id AND pm.project_id = rd.req_id
+                          AND pm.user_id = #{viewerId} AND pm.access = 'none')
+      </if>
+      <if test="!seeAllDrafts">
+        AND (rd.published_at IS NOT NULL OR rd.owner_user_id = #{userId})
+      </if>
+    GROUP BY l.demand_id
+  </select>
+
+  <select id="selectTaskTimeline" resultType="map">
+    SELECT t.demand_id AS demandId,
+           COUNT(*) AS taskCount,
+           SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone,
+           SUM(CASE WHEN t.board_column &lt;&gt; 'done' THEN 1 ELSE 0 END) AS taskOpen,
+           MIN(CASE WHEN t.start_date IS NOT NULL THEN t.start_date
+                    WHEN t.board_column &lt;&gt; 'backlog' THEN DATE(t.created_at) END) AS devStart,
+           MAX(CASE WHEN t.board_column = 'done'
+                    THEN COALESCE(t.completed_at, DATE(t.updated_at)) END) AS devEnd
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId}
+      AND t.deleted_at IS NULL
+      AND t.demand_id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    GROUP BY t.demand_id
+  </select>
+
+  <select id="selectTestTimeline" resultType="map">
+    SELECT x.demandId AS demandId,
+           COUNT(*) AS caseCount,
+           MIN(x.firstAt) AS testStart,
+           MAX(x.lastAt) AS testEnd,
+           SUM(CASE WHEN x.lastStatus IS NULL OR x.lastStatus &lt;&gt; 'passed' THEN 1 ELSE 0 END) AS testPending
+    FROM (
+      SELECT tc.demand_id AS demandId,
+             tc.id AS caseId,
+             MIN(r.created_at) AS firstAt,
+             MAX(r.created_at) AS lastAt,
+             SUBSTRING_INDEX(GROUP_CONCAT(r.status ORDER BY r.created_at DESC, r.id DESC), ',', 1) AS lastStatus
+      FROM test_case tc
+      LEFT JOIN test_case_run r ON r.case_id = tc.id AND r.workspace_id = tc.workspace_id
+      WHERE tc.workspace_id = #{workspaceId}
+        AND tc.demand_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+      GROUP BY tc.demand_id, tc.id
+    ) x
+    GROUP BY x.demandId
+  </select>
+
+  <select id="selectVersionTimeline" resultType="map">
+    SELECT id AS id, target_date AS targetDate, released_at AS releasedAt
+    FROM project_version
+    WHERE workspace_id = #{workspaceId}
+      AND id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </select>
+
 
   <delete id="deleteLogsByReq">
     DELETE dl FROM demand_log dl

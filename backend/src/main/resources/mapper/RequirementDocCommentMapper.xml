@@ -18,7 +18,13 @@
     SELECT id, workspace_id, doc_id, user_id, content, quote_text, created_at, updated_at
     FROM req_doc_comment
     WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, id ASC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByDoc" resultType="int">
+    SELECT COUNT(*) FROM req_doc_comment
+    WHERE workspace_id = #{workspaceId} AND doc_id = #{docId}
   </select>
 
   <select id="selectByWorkspace" resultType="com.hourglass.entity.RequirementDocComment">

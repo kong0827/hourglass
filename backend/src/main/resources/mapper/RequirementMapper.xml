@@ -11,6 +11,28 @@
     SELECT <include refid="cols"/> FROM requirement WHERE workspace_id = #{workspaceId} ORDER BY created_at, id
   </select>
 
+  <sql id="visibleScope">
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = r.workspace_id AND pm.project_id = r.id
+                        AND pm.user_id = #{viewerId} AND pm.access = 'none')
+    </if>
+  </sql>
+
+  <select id="selectPage" resultType="Requirement">
+    SELECT <include refid="cols"/> FROM requirement r
+    WHERE r.workspace_id = #{workspaceId}
+    <include refid="visibleScope"/>
+    ORDER BY r.created_at, r.id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countVisible" resultType="int">
+    SELECT COUNT(*) FROM requirement r
+    WHERE r.workspace_id = #{workspaceId}
+    <include refid="visibleScope"/>
+  </select>
+
   <select id="selectById" resultType="Requirement">
     SELECT <include refid="cols"/> FROM requirement WHERE id = #{id}
   </select>

@@ -129,23 +129,35 @@ public class RequirementDocService {
     }
 
     public List<ReqDocView> list(String workspaceId, String userId, String keyword) {
-        List<ReqDocView> rows = docMapper.selectViewByWorkspace(workspaceId, likePattern(Texts.trimToNull(keyword)));
-        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
+        List<ReqDocView> out = new java.util.ArrayList<ReqDocView>();
+        int offset = 0;
+        while (true) {
+            com.hourglass.dto.PageResult<ReqDocView> page = page(workspaceId, userId, keyword, offset, 100);
+            out.addAll(page.getItems());
+            if (!page.isHasMore() || page.getItems().isEmpty()) {
+                return out;
+            }
+            offset += page.getItems().size();
+        }
+    }
+
+    public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String keyword,
+                                                          int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String pattern = likePattern(Texts.trimToNull(keyword));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         String role = projectAccess.roleOf(workspaceId, userId);
-        List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>();
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(role);
+        int total = docMapper.countVisible(workspaceId, pattern, viewerId, userId, seeAllDrafts);
+        List<ReqDocView> rows = total <= safeOffset ? new java.util.ArrayList<ReqDocView>()
+                : docMapper.selectViewByWorkspace(workspaceId, pattern, viewerId, userId, seeAllDrafts,
+                        safeOffset, safeLimit);
         for (ReqDocView v : rows) {
-            if (hiddenReqs.contains(v.getReqId())) {
-                continue;
-            }
-            /* 草稿（未发布）只对作者与空间 owner/admin 可见，其余成员按不存在处理 */
-            if (!canSeeDraft(v.getOwnerUserId(), v.getPublishedAt(), userId, role)) {
-                continue;
-            }
             v.setExcerpt(excerptOf(v.getContentBrief()));
             v.setContentBrief(null);
-            visible.add(v);
         }
-        return visible;
+        return com.hourglass.dto.PageResult.of(rows, total, safeOffset, safeLimit);
     }
 
     /**
@@ -185,6 +197,16 @@ public class RequirementDocService {
     public List<Task> tasks(String workspaceId, String id) {
         get(workspaceId, id);
         return taskMapper.selectByReqDoc(workspaceId, id);
+    }
+
+    public com.hourglass.dto.PageResult<Task> taskPage(String workspaceId, String id, int offset, int limit) {
+        get(workspaceId, id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = taskMapper.countActiveByReqDoc(workspaceId, id);
+        List<Task> items = total <= safeOffset ? new java.util.ArrayList<Task>()
+                : taskMapper.selectByReqDocPage(workspaceId, id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     @Transactional
@@ -263,31 +285,26 @@ public class RequirementDocService {
         return docMapper.selectById(id);
     }
 
-    /** 需求文档活动查询前复用详情接口的空间归属校验。 */
-    public List<WorkActivity> activities(String workspaceId, String id) {
-        get(workspaceId, id);
-        return workActivityService.listByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id);
+    /** 需求文档活动查询前复用详情可见性校验。 */
+    public com.hourglass.dto.PageResult<WorkActivity> activities(String workspaceId, String userId, String id,
+                                                                  int offset, int limit) {
+        getVisible(workspaceId, userId, id);
+        return workActivityService.listByEntity(workspaceId, WorkActivityService.REQUIREMENT_DOC, id,
+                offset, limit);
     }
 
-    /** 空间级文档动态流：按查看人过滤隐藏项目与他人草稿，最多返回 limit 条 */
-    public List<ReqDocActivityView> feedActivities(String workspaceId, String userId, int limit) {
-        List<ReqDocActivityView> rows = workActivityService.docActivities(workspaceId, limit);
-        java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
-        String role = projectAccess.roleOf(workspaceId, userId);
-        List<ReqDocActivityView> visible = new java.util.ArrayList<ReqDocActivityView>(rows.size());
-        for (ReqDocActivityView row : rows) {
-            /* 文档已被删除（理论上活动随文档清理，保险起见跳过）或项目不可见：不外泄 */
-            if (row.getDocId() == null || hiddenReqs.contains(row.getReqId())) {
-                continue;
-            }
-            if (!canSeeDraft(row.getOwnerUserId(), row.getPublishedAt(), userId, role)) {
-                continue;
-            }
+    /** 空间级文档动态流：项目与草稿可见性已在 SQL 中过滤，列表与总数同口径。 */
+    public com.hourglass.dto.PageResult<ReqDocActivityView> feedActivities(String workspaceId, String userId,
+                                                                            int offset, int limit) {
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
+        com.hourglass.dto.PageResult<ReqDocActivityView> page = workActivityService.docActivities(
+                workspaceId, viewerId, userId, seeAllDrafts, offset, limit);
+        for (ReqDocActivityView row : page.getItems()) {
             row.setOwnerUserId(null);
             row.setPublishedAt(null);
-            visible.add(row);
         }
-        return visible;
+        return page;
     }
 
     /**
@@ -440,9 +457,16 @@ public class RequirementDocService {
     /* ---------------- 历史版本 ---------------- */
 
     /** 版本列表（不含正文）：读取前校验项目可见范围 */
-    public List<RequirementDocHistory> history(String workspaceId, String userId, String docId) {
+    public com.hourglass.dto.PageResult<RequirementDocHistory> history(String workspaceId, String userId, String docId,
+                                                                       int offset, int limit) {
         getVisible(workspaceId, userId, docId);
-        return historyMapper.selectByDoc(workspaceId, docId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = historyMapper.countByDoc(workspaceId, docId);
+        List<RequirementDocHistory> items = total <= safeOffset
+                ? new java.util.ArrayList<RequirementDocHistory>()
+                : historyMapper.selectByDoc(workspaceId, docId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 单个版本（含正文）：读取前校验项目可见范围 */
@@ -597,37 +621,38 @@ public class RequirementDocService {
 
     /* ---------------- 需求池 ↔ 文档 ---------------- */
 
-    public List<ReqDocView> docsOfDemand(String workspaceId, String demandId) {
-        return docsOfDemand(workspaceId, demandId, null);
-    }
-
-    public List<ReqDocView> docsOfDemand(String workspaceId, String demandId, String userId) {
+    public com.hourglass.dto.PageResult<ReqDocView> docsOfDemand(String workspaceId, String demandId, String userId,
+                                                                  int offset, int limit) {
         Demand demand = demandMapper.selectById(demandId);
         if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
             throw AppException.notFound("需求不存在：" + demandId);
         }
         projectAccess.assertView(workspaceId, userId, demand.getReqId());
-        List<ReqDocView> rows = docMapper.selectByDemand(workspaceId, demandId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         String role = projectAccess.roleOf(workspaceId, userId);
-        List<ReqDocView> visible = new java.util.ArrayList<ReqDocView>(rows.size());
-        for (ReqDocView v : rows) {
-            /* 历史关联可能跨项目（文档曾被移动）：按查看人可见范围过滤，避免泄露别的项目的内容 */
-            if (userId != null && !projectAccess.canView(workspaceId, userId, v.getReqId())) {
-                continue;
-            }
-            if (!canSeeDraft(v.getOwnerUserId(), v.getPublishedAt(), userId, role)) {
-                continue;
-            }
-            v.setExcerpt(excerptOf(v.getContentBrief()));
-            v.setContentBrief(null);
-            visible.add(v);
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(role);
+        int total = docMapper.countByDemand(workspaceId, demandId, viewerId, userId, seeAllDrafts);
+        List<ReqDocView> rows = total <= safeOffset ? new java.util.ArrayList<ReqDocView>()
+                : docMapper.selectByDemand(workspaceId, demandId, viewerId, userId, seeAllDrafts,
+                        safeOffset, safeLimit);
+        for (ReqDocView row : rows) {
+            row.setExcerpt(excerptOf(row.getContentBrief()));
+            row.setContentBrief(null);
         }
-        return visible;
+        return com.hourglass.dto.PageResult.of(rows, total, safeOffset, safeLimit);
     }
 
-    public List<Map<String, Object>> demandsOfDoc(String workspaceId, String id) {
+    public com.hourglass.dto.PageResult<Map<String, Object>> demandsOfDoc(String workspaceId, String id,
+                                                                           int offset, int limit) {
         get(workspaceId, id);
-        return docMapper.selectDemandsByDoc(workspaceId, id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = docMapper.countDemandsByDoc(workspaceId, id);
+        List<Map<String, Object>> items = total <= safeOffset ? new java.util.ArrayList<Map<String, Object>>()
+                : docMapper.selectDemandsByDoc(workspaceId, id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 只允许关联同一项目下的文档，避免需求详情里出现别的项目的规格 */

@@ -36,14 +36,33 @@ public class RequirementDocCommentService {
         this.projectAccess = projectAccess;
     }
 
-    public List<ReqDocCommentView> list(String workspaceId, String userId, String docId) {
+    public com.hourglass.dto.PageResult<ReqDocCommentView> list(String workspaceId, String userId, String docId,
+                                                                 int offset, int limit) {
         RequirementDoc doc = requireVisibleDoc(workspaceId, userId, docId);
-        List<RequirementDocComment> rows = commentMapper.selectByDoc(workspaceId, docId);
-        List<ReqDocCommentView> views = new ArrayList<ReqDocCommentView>(rows.size());
-        for (RequirementDocComment c : rows) {
-            views.add(toView(c, workspaceId, userId, doc.getReqId()));
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = commentMapper.countByDoc(workspaceId, docId);
+        List<RequirementDocComment> rows = total <= safeOffset ? new ArrayList<RequirementDocComment>()
+                : commentMapper.selectByDoc(workspaceId, docId, safeOffset, safeLimit);
+
+        java.util.Set<String> userIds = new java.util.LinkedHashSet<String>();
+        for (RequirementDocComment row : rows) {
+            if (row.getUserId() != null) {
+                userIds.add(row.getUserId());
+            }
         }
-        return views;
+        java.util.Map<String, String> userNames = new java.util.HashMap<String, String>();
+        if (!userIds.isEmpty()) {
+            for (AppUser user : userMapper.selectByIds(new ArrayList<String>(userIds))) {
+                userNames.put(user.getId(), user.getDisplayName());
+            }
+        }
+        boolean deletable = !rows.isEmpty() && projectAccess.canWrite(workspaceId, userId, doc.getReqId());
+        List<ReqDocCommentView> views = new ArrayList<ReqDocCommentView>(rows.size());
+        for (RequirementDocComment row : rows) {
+            views.add(toView(row, userNames.get(row.getUserId()), deletable));
+        }
+        return com.hourglass.dto.PageResult.of(views, total, safeOffset, safeLimit);
     }
 
     @Transactional
@@ -90,15 +109,20 @@ public class RequirementDocCommentService {
     }
 
     private ReqDocCommentView toView(RequirementDocComment c, String workspaceId, String actorId, String docReqId) {
+        AppUser user = userMapper.selectById(c.getUserId());
+        return toView(c, user == null ? null : user.getDisplayName(),
+                projectAccess.canWrite(workspaceId, actorId, docReqId));
+    }
+
+    private ReqDocCommentView toView(RequirementDocComment c, String userName, boolean deletable) {
         ReqDocCommentView v = new ReqDocCommentView();
         v.setId(c.getId());
         v.setUserId(c.getUserId());
-        AppUser u = userMapper.selectById(c.getUserId());
-        v.setUserName(u == null ? "—" : Texts.cut(u.getDisplayName(), 32));
+        v.setUserName(userName == null ? "—" : Texts.cut(userName, 32));
         v.setContent(c.getContent());
         v.setQuoteText(c.getQuoteText());
         v.setCreatedAt(c.getCreatedAt());
-        v.setDeletable(projectAccess.canWrite(workspaceId, actorId, docReqId));
+        v.setDeletable(deletable);
         return v;
     }
 }

@@ -49,11 +49,11 @@ import java.util.Set;
 @Service
 public class GanttService {
 
-    private static final int DEFAULT_LIMIT = 300;
-    private static final int MAX_LIMIT = 2000;
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 100;
     private static final int MAX_DEPS = 5000;
-    /** 未排期列表一次最多返回多少条（前端只展示前 50） */
-    private static final int UNSCHEDULED_LIMIT = 200;
+    /** 未排期列表单次最多返回多少条（首屏与「加载更多」共用同一上限） */
+    private static final int UNSCHEDULED_LIMIT = 100;
     /** 负载面板一次最多统计多少条排期任务 */
     private static final int LOAD_MAX_TASKS = 20000;
     /** 每人每周容量：5 个工作日 × 8 小时 */
@@ -125,6 +125,21 @@ public class GanttService {
             resp.setBaselineAt(baselineMapper.selectCapturedAt(workspaceId));
         }
         return resp;
+    }
+
+    /** 未排期列表续页：首屏由 /api/gantt 一并返回，此接口供「加载更多」使用 */
+    public com.hourglass.dto.PageResult<Task> unscheduled(
+            String workspaceId, String userId, BoardQuery query, LocalDate from, LocalDate to,
+            boolean includeDone, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+        GanttQuery gq = GanttQuery.from(query, LocalDate.now(), from, to, includeDone);
+        gq.setViewerId(projectAccess.viewerScope(workspaceId, userId));
+        int total = taskMapper.countGanttUnscheduled(workspaceId, gq);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectGanttUnscheduledPage(workspaceId, gq, safeOffset, safeLimit);
+        taskService.mergeGanttExtras(workspaceId, items);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     private LocalDate effectiveStart(Task t) {

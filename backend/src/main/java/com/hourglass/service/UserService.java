@@ -140,8 +140,13 @@ public class UserService implements UserDetailsService {
 
     /* ==================== 管理（仅管理员） ==================== */
 
-    public List<AppUser> list() {
-        return userMapper.selectAll();
+    public com.hourglass.dto.PageResult<AppUser> page(int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = userMapper.countAll();
+        List<AppUser> items = total <= safeOffset ? java.util.Collections.<AppUser>emptyList()
+                : userMapper.selectPage(safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     @Transactional

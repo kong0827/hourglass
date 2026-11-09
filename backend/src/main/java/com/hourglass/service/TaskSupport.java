@@ -160,4 +160,28 @@ class TaskSupport {
         BoardColumn c = metaCache.column(workspaceId, column);
         return c == null ? column : c.getName();
     }
+
+    /** 列的有效处理规则：built-in 列固定，自定义列读库 */
+    String processingRule(String workspaceId, String column) {
+        if (Consts.COL_BACKLOG.equals(column)) {
+            return "backlog";
+        }
+        if (Consts.COL_DONE.equals(column)) {
+            return "done";
+        }
+        BoardColumn c = metaCache.column(workspaceId, column);
+        String rule = c == null ? null : c.getProcessingRule();
+        return rule == null ? "normal" : rule;
+    }
+
+    /** 当前列是否允许运行计时：只有「正常处理」列可计时 */
+    boolean canTime(String workspaceId, String column) {
+        return "normal".equals(processingRule(workspaceId, column));
+    }
+
+    /** 当前列是否计入执行逾期：正常处理 / 等待接续 / 待处理都计，执行结束 / 已完成不计 */
+    boolean countsOverdue(String workspaceId, String column) {
+        String rule = processingRule(workspaceId, column);
+        return "normal".equals(rule) || "waiting".equals(rule) || "backlog".equals(rule);
+    }
 }

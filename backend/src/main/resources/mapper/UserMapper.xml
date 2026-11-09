@@ -13,6 +13,12 @@
     SELECT <include refid="cols"/> FROM app_user ORDER BY created_at, id
   </select>
 
+  <select id="selectPage" resultType="AppUser">
+    SELECT <include refid="cols"/> FROM app_user
+    ORDER BY created_at, id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
   <select id="selectByIds" resultType="AppUser">
     SELECT <include refid="cols"/> FROM app_user
     WHERE id IN

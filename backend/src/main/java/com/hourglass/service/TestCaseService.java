@@ -103,7 +103,7 @@ public class TestCaseService {
         query.setPri(Texts.trimToNull(query.getPri()));
         query.setOwner(Texts.trimToNull(query.getOwner()));
         query.setOffset(Math.max(0, query.getOffset()));
-        query.setLimit(Math.max(1, Math.min(500, query.getLimit())));
+        query.setLimit(Math.max(1, Math.min(100, query.getLimit())));
 
         int total = caseMapper.countByQuery(query);
         List<TestCaseView> rows = total <= query.getOffset()
@@ -176,14 +176,18 @@ public class TestCaseService {
     }
 
     /** 执行历史（最近在前）：每轮带失败证据附件，供详情与测试报告追溯 */
-    public List<CaseRunView> runs(String workspaceId, String userId, String caseId, int limit) {
+    public com.hourglass.dto.PageResult<CaseRunView> runs(
+            String workspaceId, String userId, String caseId, int offset, int limit) {
         TestCase c = get(workspaceId, caseId);
         projectAccess.assertView(workspaceId, userId, c.getReqId());
-        List<TestCaseRun> rows = runMapper.selectByCase(workspaceId, caseId,
-                Math.max(1, Math.min(200, limit)));
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = runMapper.countByCase(workspaceId, caseId);
+        List<TestCaseRun> rows = total <= safeOffset ? new ArrayList<TestCaseRun>()
+                : runMapper.selectByCase(workspaceId, caseId, safeOffset, safeLimit);
         List<CaseRunView> out = new ArrayList<CaseRunView>();
         if (rows.isEmpty()) {
-            return out;
+            return com.hourglass.dto.PageResult.of(out, total, safeOffset, safeLimit);
         }
         List<String> ids = new ArrayList<String>();
         for (TestCaseRun r : rows) {
@@ -212,7 +216,7 @@ public class TestCaseService {
             v.setAttachments(atts == null ? new ArrayList<Attachment>() : atts);
             out.add(v);
         }
-        return out;
+        return com.hourglass.dto.PageResult.of(out, total, safeOffset, safeLimit);
     }
 
     /** 失败证据上传：附件挂在本轮执行记录下，删除流水时一并清理 */

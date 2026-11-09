@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>需求时间轴 · 原型</title>
+<script>
+(function(){try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();
+</script>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD; --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF;
+  --purple:#7A5AF8; --purple-soft:#F4F3FF;
+  --st-review:#667085; --st-plan:#0B8AD9; --st-design:#6941C6; --st-dev:#2563EB;
+  --st-test:#B54708; --st-complete:#067647; --st-release:#0E7C70;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05); --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+  --shadow-xl:0 24px 48px -12px rgba(16,24,40,.18); --ring:0 0 0 3px rgba(37,99,235,.16);
+  --sidebar-w:220px; --topbar-h:60px; --label-w:380px;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153; --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --info:#53B1FD; --info-soft:#10202F; --info-border:#1F4468;
+  --purple:#9B8AFB; --purple-soft:#1D1933;
+  --st-review:#98A2B3; --st-plan:#53B1FD; --st-design:#9B8AFB; --st-dev:#4C8DFF;
+  --st-test:#FDB022; --st-complete:#32D583; --st-release:#2ED3C6;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4); --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 24px -6px rgba(0,0,0,.55),0 4px 8px -4px rgba(0,0,0,.35);
+  --shadow-xl:0 24px 48px -12px rgba(0,0,0,.7); --ring:0 0 0 3px rgba(76,141,255,.22);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{font-family:var(--font-sans);font-size:13px;color:var(--text);background:var(--bg-app);-webkit-font-smoothing:antialiased;}
+body.no-scroll{overflow:hidden;}
+button{font:inherit;border:none;background:none;cursor:pointer;color:inherit;}
+select{font:inherit;}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+.app{display:flex;height:100vh;overflow:hidden;}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
+.content{flex:1 1 auto;min-height:0;overflow-y:auto;padding:22px 24px 30px;display:flex;flex-direction:column;gap:14px;}
+
+.sidebar{width:var(--sidebar-w);flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);}
+.side-brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;}
+.brand-mark{width:32px;height:32px;border-radius:var(--r-sm);background:var(--primary);display:grid;place-items:center;color:#fff;}
+.side-brand-name{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.side-ws{padding:0 12px 10px;}
+.ws-switch{display:flex;align-items:center;gap:9px;width:100%;height:44px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);}
+.ws-switch:hover{background:var(--surface-hover);}
+.ws-avatar{width:24px;height:24px;font-size:11px;border-radius:6px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-weight:700;}
+.ws-n{font-size:13px;font-weight:600;}
+.ws-kind{font-size:11px;color:var(--text-3);}
+.ws-caret{color:var(--text-3);margin-left:auto;}
+.side-nav{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:0 12px 12px;}
+.nav-sec{padding:12px 10px 4px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3);}
+.nav-item{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--text-2);font-size:13px;font-weight:550;width:100%;text-align:left;transition:background .12s ease;}
+.nav-item svg{flex:0 0 auto;color:var(--text-3);}
+.nav-item:hover{background:var(--surface-hover);color:var(--text);}
+.nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:650;}
+.nav-item.on svg{color:var(--primary);}
+.nav-new{margin-left:auto;font-size:10px;font-weight:700;padding:1px 6px;border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);}
+.nav-item.on .nav-new{background:var(--primary);color:#fff;}
+.side-foot{border-top:1px solid var(--border);padding:10px 12px;display:flex;flex-direction:column;gap:2px;}
+.side-user{display:flex;align-items:center;gap:9px;padding:8px 6px;border-radius:var(--r-sm);}
+.side-user:hover{background:var(--surface-hover);}
+.avatar{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--primary);flex:0 0 auto;}
+.side-user-n{font-size:12.5px;font-weight:600;line-height:1.25;}
+.side-user-r{font-size:11px;color:var(--text-3);}
+
+.topbar{height:var(--topbar-h);flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);}
+.tb-title{font-size:15px;font-weight:650;letter-spacing:-.01em;}
+.tb-sub{font-size:12px;color:var(--text-3);margin-top:1px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.proto-pill{font-size:11px;font-weight:650;padding:3px 9px;border-radius:var(--r-pill);background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border);}
+.icon-btn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);border:1px solid transparent;}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--border);}
+
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;}
+.page-head h1{font-size:20px;font-weight:700;letter-spacing:-.02em;}
+.page-head p{font-size:12.5px;color:var(--text-3);line-height:1.65;margin-top:5px;max-width:820px;}
+.view-tabs{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;flex:0 0 auto;}
+.view-tabs button{height:28px;padding:0 13px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--text-2);}
+.view-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.kpi{padding:13px 14px;display:flex;flex-direction:column;gap:3px;min-width:0;}
+.kpi-label{font-size:11.5px;color:var(--text-3);font-weight:550;}
+.kpi-value{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums;}
+.kpi-value small{font-size:12px;font-weight:600;color:var(--text-2);margin-left:2px;}
+.kpi-sub{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.filters{padding:14px 16px;}
+.filter-grid{display:grid;grid-template-columns:220px 170px minmax(300px,1fr) auto;gap:14px;align-items:end;}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.field>span{font-size:11.5px;color:var(--text-3);font-weight:550;}
+.field select{height:32px;width:100%;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:0 9px;color:var(--text);font-size:12.5px;}
+.field select:hover{border-color:var(--border-strong);}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{height:28px;padding:0 11px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:550;white-space:nowrap;}
+.chip:hover{border-color:var(--border-strong);color:var(--text);}
+.chip[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:650;}
+.segctl{display:inline-flex;padding:3px;background:var(--surface-sunken);border-radius:var(--r-sm);gap:2px;}
+.segctl button{height:26px;padding:0 11px;border-radius:6px;font-size:12px;font-weight:550;color:var(--text-2);white-space:nowrap;}
+.segctl button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);font-weight:650;}
+.filter-sub{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:12px;}
+.check{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-2);cursor:pointer;}
+.check input{width:14px;height:14px;accent-color:var(--primary);}
+.filter-hint{font-size:11.5px;color:var(--text-3);}
+
+.tl-card{overflow:hidden;}
+.tl-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;flex-wrap:wrap;}
+.legend{display:flex;flex-wrap:wrap;gap:9px 14px;font-size:11.5px;color:var(--text-2);}
+.lg{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.sw{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}
+.sw-line{width:14px;height:0;border-top:1.5px dashed var(--border-strong);flex:0 0 auto;}
+.tl-actions{display:flex;align-items:center;gap:10px;}
+.hint{font-size:11.5px;color:var(--text-3);}
+.btn{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+.btn:hover{background:var(--surface-hover);color:var(--text);border-color:var(--border-strong);}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;}
+
+.tl-scroll{overflow-x:auto;overflow-y:hidden;background:var(--surface);}
+.tl-scroll::-webkit-scrollbar{height:10px;}
+.tl-scroll::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px;border:2px solid var(--surface);}
+.tl-axis{display:flex;height:52px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface);position:relative;}
+.tl-axis-label{width:var(--label-w);flex:0 0 auto;position:sticky;left:0;z-index:5;background:var(--surface);box-shadow:1px 0 0 var(--border);display:flex;flex-direction:column;justify-content:center;padding:0 14px;gap:2px;}
+.tl-axis-label b{font-size:12px;font-weight:650;color:var(--text-2);}
+.tl-axis-label span{font-size:10.5px;color:var(--text-3);}
+.tl-axis-track{position:relative;flex:0 0 auto;height:52px;}
+.axis-today{position:absolute;top:3px;transform:translateX(-50%);background:var(--danger);color:#fff;font-size:9.5px;font-weight:700;border-radius:var(--r-pill);padding:1px 6px;white-space:nowrap;z-index:3;}
+.axis-month{position:absolute;top:25px;font-size:11.5px;font-weight:650;color:var(--text-2);white-space:nowrap;}
+.axis-week{position:absolute;top:38px;font-size:10px;color:var(--text-3);white-space:nowrap;}
+.tl-row{display:flex;border-bottom:1px solid var(--border);}
+.tl-row:last-child{border-bottom:none;}
+.tl-row:hover .tl-label{background:var(--surface-hover);}
+.tl-label{width:var(--label-w);flex:0 0 auto;position:sticky;left:0;z-index:3;background:var(--surface);box-shadow:1px 0 0 var(--border);}
+.tl-open{display:flex;align-items:center;gap:8px;width:100%;height:58px;padding:0 12px 0 14px;text-align:left;}
+.pri{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.pri-P0{background:var(--danger);} .pri-P1{background:var(--warning);} .pri-P2{background:var(--info);} .pri-P3{background:var(--text-3);}
+.tl-lmain{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:3px;}
+.tl-ltitle{font-size:12.5px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tl-lmeta{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.badge{font-size:10px;font-weight:650;padding:2px 7px;border-radius:var(--r-pill);white-space:nowrap;border:1px solid transparent;flex:0 0 auto;}
+.badge-ok{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+.badge-run{background:var(--primary-soft);color:var(--primary-fg);border-color:var(--primary-border);}
+.badge-wait{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+.badge-bad{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
+.tl-lead{font-size:11px;font-weight:650;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.tl-lead small{font-weight:500;color:var(--text-3);}
+.chev{color:var(--text-3);opacity:0;transition:opacity .12s ease;flex:0 0 auto;}
+.tl-open:hover .chev,.tl-open:focus-visible .chev{opacity:1;}
+.tl-track{position:relative;flex:0 0 auto;height:58px;background:var(--surface);}
+.gl{position:absolute;top:0;bottom:0;width:1px;background:var(--border);opacity:.55;pointer-events:none;}
+.gl.week{opacity:.28;}
+.gl.month{opacity:.7;}
+.today-line{position:absolute;top:0;bottom:0;border-left:1px dashed var(--danger);opacity:.55;pointer-events:none;}
+.tl-seg{position:absolute;top:20px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:10px;font-weight:650;letter-spacing:.01em;white-space:nowrap;cursor:default;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
+.tl-seg span{overflow:hidden;text-overflow:ellipsis;padding:0 4px;}
+.tl-seg.is-point{top:25px;height:8px;border-radius:50%;}
+.tl-seg.is-open::after{content:"";position:absolute;right:0;top:0;bottom:0;width:7px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.5) 0 2px,transparent 2px 4px);}
+.seg-review{background:var(--st-review);} .seg-plan{background:var(--st-plan);} .seg-design{background:var(--st-design);}
+.seg-dev{background:var(--st-dev);} .seg-test{background:var(--st-test);} .seg-complete{background:var(--st-complete);}
+.seg-release{background:var(--st-release);}
+.gap{position:absolute;top:29px;height:0;border-top:1.5px dashed var(--border-strong);}
+.gap span{position:absolute;left:50%;top:-15px;transform:translateX(-50%);font-size:9.5px;color:var(--text-3);background:var(--surface);padding:0 3px;white-space:nowrap;}
+.gap.is-open{border-color:var(--warning);}
+.stop{position:absolute;top:26px;width:9px;height:9px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft);}
+
+.empty{padding:56px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;}
+.empty svg{color:var(--text-3);}
+.empty b{font-size:13.5px;}
+.empty span{font-size:12px;color:var(--text-3);max-width:420px;line-height:1.7;}
+
+.coverage{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px dashed var(--border-strong);border-radius:var(--r-md);background:var(--surface);font-size:12.5px;color:var(--text-2);}
+.coverage svg{color:var(--warning);flex:0 0 auto;}
+.coverage b{color:var(--text);}
+.coverage .btn{margin-left:auto;}
+.page-note{font-size:11.5px;color:var(--text-3);line-height:1.75;margin:0 2px;}
+
+.tbl-wrap{overflow:auto;border-radius:var(--r-lg);}
+.tl-table{width:100%;min-width:1080px;border-collapse:collapse;font-size:12px;}
+.tl-table th{position:sticky;top:0;background:var(--surface);z-index:2;text-align:left;font-size:11px;font-weight:650;color:var(--text-3);padding:10px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.tl-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text-2);white-space:nowrap;}
+.tl-table tbody tr{cursor:pointer;}
+.tl-table tbody tr:hover td{background:var(--surface-hover);}
+.tl-table tbody tr:last-child td{border-bottom:none;}
+.tl-table .c-title{max-width:230px;white-space:normal;}
+.tl-table .c-title b{display:block;font-size:12.5px;color:var(--text);font-weight:650;line-height:1.35;}
+.tl-table .c-title span{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px;}
+.tl-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+.cell-miss{color:var(--text-3);font-style:normal;border-bottom:1px dashed var(--border-strong);cursor:help;}
+.cell-run{color:var(--primary-fg);font-weight:650;}
+.soft-tag{display:inline-block;font-size:9.5px;font-weight:650;padding:1px 5px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);margin-left:4px;}
+
+.scrim{position:fixed;inset:0;background:rgba(16,24,40,.38);opacity:0;visibility:hidden;transition:opacity .18s ease,visibility .18s ease;z-index:40;}
+.scrim.on{opacity:1;visibility:visible;}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-xl);transform:translateX(100%);transition:transform .22s cubic-bezier(.2,.8,.2,1);z-index:50;display:flex;flex-direction:column;}
+.drawer.on{transform:none;}
+.drawer-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border);}
+.drawer-head h2{font-size:15.5px;font-weight:700;line-height:1.4;letter-spacing:-.01em;}
+.drawer-head .d-meta{font-size:11.5px;color:var(--text-3);margin-top:4px;line-height:1.5;}
+.drawer-head .badge{margin-left:auto;margin-top:2px;}
+.drawer-close{width:30px;height:30px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-3);flex:0 0 auto;}
+.drawer-close:hover{background:var(--surface-hover);color:var(--text);}
+.drawer-body{overflow-y:auto;padding:16px 18px 28px;}
+.d-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.d-stat{background:var(--surface-sunken);border-radius:var(--r-sm);padding:9px 10px;min-width:0;}
+.d-stat span{display:block;font-size:10.5px;color:var(--text-3);}
+.d-stat b{display:block;font-size:15px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+.d-stat b small{font-size:11px;color:var(--text-2);font-weight:500;}
+.d-sect{margin-top:18px;}
+.d-sect h4{font-size:12.5px;font-weight:650;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.d-sect h4 small{font-size:11px;color:var(--text-3);font-weight:500;}
+.stage-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+.stage-table th{text-align:left;font-size:10.5px;color:var(--text-3);font-weight:600;padding:0 6px 6px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.stage-table td{padding:7px 6px;border-bottom:1px dashed var(--border);vertical-align:top;color:var(--text-2);}
+.stage-table td:first-child{font-weight:650;color:var(--text);white-space:nowrap;}
+.stage-table td:last-child{white-space:normal;line-height:1.5;}
+.stage-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.stage-table tr.is-miss td{color:var(--text-3);}
+.stage-table tr.is-miss td:first-child{font-weight:500;}
+.d-empty{padding:14px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);font-size:12px;color:var(--text-3);line-height:1.6;}
+.d-empty span{display:block;margin-top:3px;}
+.d-task{border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;margin-bottom:8px;}
+.d-task:last-child{margin-bottom:0;}
+.dt-top{display:flex;align-items:center;gap:8px;}
+.dt-top b{font-size:12px;font-weight:650;color:var(--text);flex:1 1 auto;min-width:0;line-height:1.4;}
+.dt-meta{font-size:11px;color:var(--text-3);margin-top:3px;}
+.ev-item{display:grid;grid-template-columns:46px 50px 1fr;gap:8px;align-items:start;padding:6px 0;border-bottom:1px dashed var(--border);font-size:11.5px;}
+.ev-item:last-child{border-bottom:none;}
+.ev-date{color:var(--text-3);font-variant-numeric:tabular-nums;}
+.ev-tag{font-size:9.5px;font-weight:650;padding:1px 5px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);text-align:center;}
+.ev-text{color:var(--text-2);line-height:1.55;}
+.d-note{margin-top:16px;font-size:10.5px;color:var(--text-3);line-height:1.7;}
+
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-48%) scale(.98);width:min(520px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-xl);z-index:60;opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility .16s ease;}
+.modal.on{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1);}
+.modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
+.modal-head h3{font-size:14px;font-weight:700;}
+.modal-head .drawer-close{margin-left:auto;}
+.modal-body{padding:14px 16px;max-height:60vh;overflow-y:auto;}
+.modal-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;}
+.modal-body p{font-size:12px;color:var(--text-3);line-height:1.7;margin-bottom:10px;}
+.unlinked-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--border);}
+.unlinked-item:last-child{border-bottom:none;}
+.unlinked-item b{font-size:12.5px;color:var(--text);font-weight:600;flex:1 1 auto;}
+.unlinked-item span{font-size:11px;color:var(--text-3);}
+
+.tip{position:fixed;z-index:80;max-width:280px;padding:8px 10px;border-radius:8px;background:#101828;color:#fff;font-size:11px;line-height:1.55;box-shadow:var(--shadow-lg);pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .1s ease,transform .1s ease;}
+.tip.on{opacity:1;transform:none;}
+.tip b{font-size:11.5px;font-weight:650;display:block;margin-bottom:1px;}
+.tip b.warn{color:#FEC84B;}
+.tip span{color:rgba(255,255,255,.72);}
+.tip em{display:block;margin-top:3px;font-style:normal;color:rgba(255,255,255,.55);}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,10px);background:#101828;color:#fff;font-size:12px;padding:9px 14px;border-radius:9px;box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transition:opacity .16s ease,transform .16s ease,visibility .16s ease;z-index:90;max-width:calc(100vw - 32px);}
+.toast.on{opacity:1;visibility:visible;transform:translate(-50%,0);}
+
+@media (max-width:1280px){ .kpis{grid-template-columns:repeat(3,1fr);} }
+@media (max-width:1080px){
+  :root{--label-w:300px;}
+  .filter-grid{grid-template-columns:200px 160px 1fr;}
+  .filter-grid .field:last-child{grid-column:1 / -1;}
+}
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .content{padding:16px;}
+  .topbar{padding:0 16px;}
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .page-head{flex-direction:column;gap:10px;}
+  .filter-grid{grid-template-columns:1fr 1fr;}
+  .filter-grid .field:nth-child(3){grid-column:1 / -1;}
+  .d-stats{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:600px){
+  :root{--label-w:230px;}
+  .tb-sub{display:none;}
+  .kpis{grid-template-columns:1fr 1fr;}
+  .kpi-value{font-size:19px;}
+  .filter-grid{grid-template-columns:1fr;}
+  .filter-grid .field:nth-child(3){grid-column:auto;}
+  .tl-toolbar{gap:8px;}
+  .hint{display:none;}
+  .tl-open{height:62px;gap:6px;}
+  .badge{display:none;}
+  .tl-badge-mobile{display:inline-flex;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h8M5 15.5h8M6 2.5v3.2L9 9l3-3.3V2.5M6 15.5v-3.2L9 9l3 3.3v3.2"/></svg>
+      </span>
+      <span class="side-brand-name">沙漏</span>
+    </div>
+    <div class="side-ws">
+      <button class="ws-switch" type="button" data-nav>
+        <span class="ws-avatar">东</span>
+        <span style="min-width:0;text-align:left">
+          <span class="ws-n" style="display:block">东证自研</span>
+          <span class="ws-kind">研发空间 · 18 人</span>
+        </span>
+        <svg class="ws-caret" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-sec">我的</div>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M5 8l2 2 4-4"/></svg>我的工作</button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M5 2v3M11 2v3M2.5 6.5h11"/></svg>周回顾</button>
+      <div class="nav-sec">规划</div>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h3l1 2h3l1-2h3"/><path d="M4 4h8l1.5 4v4A1.5 1.5 0 0 1 12 13.5H4A1.5 1.5 0 0 1 2.5 12V8L4 4z"/></svg>需求池</button>
+      <button class="nav-item on" type="button"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>需求时间轴<span class="nav-new">新</span></button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l5 3-5 3-5-3 5-3z"/><path d="M3 8.5l5 3 5-3"/></svg>版本</button>
+      <div class="nav-sec">交付</div>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>文档</button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8l1.8 1.8L10.8 6"/></svg>测试</button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="4" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/><circle cx="11.5" cy="7" r="1.5"/><path d="M4.5 5.5v5M6 7h4"/></svg>分支</button>
+      <div class="nav-sec">洞察</div>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13V8M8 13V3M13 13V6"/></svg>报表</button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><path d="M2.5 13c0-2 1.6-3.5 3.5-3.5S9.5 11 9.5 13"/><path d="M10.5 5.2a2 2 0 0 1 0 3.6M11.5 9.8c1.2.4 2 1.5 2 2.7"/></svg>成员负载</button>
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l6 11H2z"/><path d="M8 6.5v3.5M8 12h.01"/></svg>逾期与阻塞</button>
+    </nav>
+    <div class="side-foot">
+      <button class="nav-item" type="button" data-nav><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 2.5v2M8 11.5v2M2.5 8h2M11.5 8h2M4.1 4.1l1.4 1.4M10.5 10.5l1.4 1.4M11.9 4.1l-1.4 1.4M5.5 10.5l-1.4 1.4"/></svg>设置</button>
+      <button class="side-user" type="button" data-nav>
+        <span class="avatar">陈</span>
+        <span style="min-width:0;text-align:left">
+          <span class="side-user-n" style="display:block">陈亦舟</span>
+          <span class="side-user-r">空间管理员</span>
+        </span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title">需求时间轴</div>
+        <div class="tb-sub">每条需求从提出、设计、开发、测试到完成的实际耗时</div>
+      </div>
+      <div class="tb-right">
+        <span class="proto-pill">原型 · 演示数据</span>
+        <button class="icon-btn" type="button" id="themeBtn" title="切换深色模式" aria-label="切换深色模式">
+          <svg id="themeIcon" width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="9" r="3.2"/><path d="M9 2v1.6M9 14.4V16M2 9h1.6M14.4 9H16M4.1 4.1l1.1 1.1M12.8 12.8l1.1 1.1M13.9 4.1l-1.1 1.1M5.2 12.8l-1.1 1.1"/></svg>
+        </button>
+        <span class="avatar" style="width:30px;height:30px">陈</span>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>需求时间轴</h1>
+          <p>以需求池条目为锚点，把评审、排期、设计、开发、测试、完成与发布串成一条泳道。数据来自需求流转日志、工作项列停留、用例执行和版本发布；没有记录的部分不会被补成 0 天。</p>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="视图切换">
+          <button type="button" role="tab" data-tab="timeline" aria-selected="true">时间轴</button>
+          <button type="button" role="tab" data-tab="table" aria-selected="false">明细表</button>
+        </div>
+      </div>
+
+      <section class="kpis" id="kpis" aria-label="需求概况"></section>
+
+      <section class="card filters" aria-label="筛选">
+        <div class="filter-grid">
+          <label class="field"><span>项目</span>
+            <select id="projectSel">
+              <option value="">全部项目</option>
+              <option value="投行工作台">投行工作台</option>
+              <option value="固收估值">固收估值</option>
+              <option value="风控合规">风控合规</option>
+            </select>
+          </label>
+          <label class="field"><span>时间范围</span>
+            <select id="rangeSel">
+              <option value="180" selected>近 180 天</option>
+              <option value="90">近 90 天</option>
+              <option value="0">全部</option>
+            </select>
+          </label>
+          <div class="field"><span>状态</span>
+            <div class="chips" id="statusChips">
+              <button class="chip" type="button" data-chip="all" aria-pressed="true">全部</button>
+              <button class="chip" type="button" data-chip="active" aria-pressed="false">进行中</button>
+              <button class="chip" type="button" data-chip="done" aria-pressed="false">已完成</button>
+              <button class="chip" type="button" data-chip="review" aria-pressed="false">待评审</button>
+              <button class="chip" type="button" data-chip="rejected" aria-pressed="false">已拒绝</button>
+            </div>
+          </div>
+          <div class="field"><span>时间粒度</span>
+            <div class="segctl" role="group" aria-label="时间粒度">
+              <button type="button" data-scale="week" aria-pressed="true">周</button>
+              <button type="button" data-scale="day" aria-pressed="false">日</button>
+            </div>
+          </div>
+        </div>
+        <div class="filter-sub">
+          <label class="check"><input type="checkbox" id="showHours">显示计时工时</label>
+          <label class="check"><input type="checkbox" id="onlyDoc">仅看有文档的需求</label>
+          <span class="filter-hint">设计阶段只在关联文档创建并发布后成立；没有文档不算 0 天。</span>
+        </div>
+      </section>
+
+      <div id="viewBody"></div>
+      <div id="coverage"></div>
+      <p class="page-note">口径：历时时长按自然日计算；同一需求下并行工作项取区间并集，不把各任务天数相加；虚线表示未记录或等待中的阶段，不按 0 天计入；计时工时来自工作项计时器，与日历历时是两种口径。</p>
+    </main>
+  </div>
+</div>
+
+<div class="scrim" id="backdrop"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div style="min-width:0">
+      <h2 id="drawerTitle">需求</h2>
+      <div class="d-meta" id="drawerMeta"></div>
+    </div>
+    <span id="drawerBadge"></span>
+    <button class="drawer-close" type="button" data-close aria-label="关闭详情">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="scrim" id="modalBackdrop"></div>
+<div class="modal" id="unlinkedModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-head">
+    <h3 id="modalTitle">未关联需求的工作项</h3>
+    <button class="drawer-close" type="button" data-close aria-label="关闭">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+  <div class="modal-foot"><button class="btn" type="button" data-close>知道了</button></div>
+</div>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+var TODAY = "2026-11-09";
+var UNLINKED = [
+  { title:"临时排查：导出文件乱码", project:"投行工作台", owner:"张敏", column:"已完成" },
+  { title:"值班告警阈值调整", project:"固收估值", owner:"李强", column:"进行中" },
+  { title:"登录页文案微调", project:"风控合规", owner:"王蕾", column:"待处理" }
+];
+
+var DEMANDS = [
+  {
+    id:"D1", title:"客户持仓对账单支持导出", project:"投行工作台", priority:"P1", source:"运营 · 陈", version:"V2.4",
+    status:"released", created:"2026-06-18", passed:"2026-06-24", planned:"2026-07-01",
+    doc:{ title:"对账单导出需求说明", created:"2026-07-02", published:"2026-07-10" },
+    dev:{ start:"2026-07-11", end:"2026-07-29" }, test:{ start:"2026-07-29", end:"2026-08-06" },
+    complete:"2026-08-08", released:"2026-08-15", hours:41.5,
+    cases:{ total:8, passed:6, failed:2 },
+    tasks:[
+      { title:"对账单模板与字段映射", owner:"张敏", column:"已完成", start:"2026-07-11", end:"2026-07-20", testStart:"2026-07-20", testEnd:"2026-07-24", hours:12.5 },
+      { title:"导出接口与权限校验", owner:"周凯", column:"已完成", start:"2026-07-14", end:"2026-07-25", testStart:"2026-07-25", testEnd:"2026-07-31", hours:14 },
+      { title:"大数据量分页导出", owner:"李强", column:"已完成", start:"2026-07-18", end:"2026-07-28", testStart:"2026-07-28", testEnd:"2026-08-04", hours:9 },
+      { title:"导出按钮与进度提示", owner:"王蕾", column:"已完成", start:"2026-07-22", end:"2026-07-29", testStart:"2026-07-29", testEnd:"2026-08-06", hours:6 }
+    ]
+  },
+  {
+    id:"D2", title:"交易流水查询提速", project:"投行工作台", priority:"P0", source:"技术 · 周", version:"V2.5",
+    status:"done", created:"2026-07-22", passed:"2026-07-24", planned:"2026-07-28",
+    doc:null, dev:{ start:"2026-08-01", end:"2026-09-20" }, test:{ start:"2026-09-20", end:"2026-10-28" },
+    complete:"2026-10-30", released:null, versionTarget:"2026-11-20", hours:63,
+    cases:{ total:5, passed:5, failed:0 },
+    tasks:[
+      { title:"慢查询定位与索引优化", owner:"周凯", column:"已完成", start:"2026-08-01", end:"2026-08-28", testStart:"2026-08-28", testEnd:"2026-09-15", hours:22 },
+      { title:"查询结果缓存与限流", owner:"李强", column:"已完成", start:"2026-08-20", end:"2026-09-20", testStart:"2026-09-20", testEnd:"2026-10-28", hours:41 }
+    ]
+  },
+  {
+    id:"D3", title:"移动端审批流", project:"风控合规", priority:"P1", source:"风控 · 王", version:"V1.8",
+    status:"active", created:"2026-08-28", passed:"2026-08-30", planned:"2026-09-01",
+    doc:{ title:"移动端审批交互方案", created:"2026-09-02", published:"2026-09-05" },
+    dev:{ start:"2026-09-06", end:null }, test:null, complete:null, released:null, hours:26.5,
+    cases:null,
+    tasks:[
+      { title:"审批详情页适配", owner:"王蕾", column:"开发中", start:"2026-09-06", end:null, hours:12 },
+      { title:"批量审批与手势", owner:"张敏", column:"开发中", start:"2026-09-15", end:null, hours:9 },
+      { title:"消息推送与角标", owner:"周凯", column:"开发中", start:"2026-10-08", end:null, hours:5.5 }
+    ]
+  },
+  {
+    id:"D4", title:"权限矩阵重构", project:"风控合规", priority:"P0", source:"安全 · 李", version:null,
+    status:"rejected", created:"2026-07-05", passed:null, planned:null, rejected:"2026-07-19",
+    rejectReason:"与现有 AD 体系冲突，转由安全组统一治理",
+    doc:null, dev:null, test:null, complete:null, released:null, hours:0, cases:null, tasks:[]
+  },
+  {
+    id:"D5", title:"行情订阅异常告警", project:"固收估值", priority:"P2", source:"交易 · 刘", version:null,
+    status:"review", created:"2026-10-02", passed:null, planned:null,
+    doc:null, dev:null, test:null, complete:null, released:null, hours:0, cases:null, tasks:[]
+  },
+  {
+    id:"D6", title:"债券估值日终任务编排", project:"固收估值", priority:"P1", source:"估值 · 赵", version:"V3.1",
+    status:"active", created:"2026-08-15", passed:"2026-08-20", planned:"2026-09-10",
+    doc:null, dev:null, test:null, complete:null, released:null, hours:0, cases:null, tasks:[]
+  },
+  {
+    id:"D7", title:"报表中心指标口径统一", project:"投行工作台", priority:"P2", source:"数据 · 孙", version:"V2.3",
+    status:"released", created:"2026-05-20", passed:"2026-05-27", planned:"2026-06-03",
+    doc:{ title:"报表指标口径说明", created:"2026-06-04", published:"2026-06-12" },
+    dev:{ start:"2026-06-12", end:"2026-07-10" }, test:null,
+    complete:"2026-07-15", released:"2026-07-20", hours:34, cases:null,
+    tasks:[
+      { title:"指标口径梳理", owner:"孙悦", column:"已完成", start:"2026-06-12", end:"2026-06-25", hours:14 },
+      { title:"报表配置项改造", owner:"张敏", column:"已完成", start:"2026-06-20", end:"2026-07-05", hours:12 },
+      { title:"历史数据回填校验", owner:"李强", column:"已完成", start:"2026-06-28", end:"2026-07-10", hours:8 }
+    ]
+  },
+  {
+    id:"D8", title:"客户经理工作台改版", project:"投行工作台", priority:"P1", source:"业务 · 何", version:"V2.6",
+    status:"active", created:"2026-09-15", passed:"2026-09-18", planned:"2026-09-22",
+    doc:{ title:"工作台改版交互说明", created:"2026-09-23", published:"2026-09-30" },
+    dev:{ start:"2026-10-01", end:null }, test:null, complete:null, released:null, hours:51,
+    cases:null,
+    tasks:[
+      { title:"首页信息架构重排", owner:"张敏", column:"开发中", start:"2026-10-01", end:null, hours:18 },
+      { title:"客户卡片与快捷入口", owner:"王蕾", column:"开发中", start:"2026-10-05", end:null, hours:16 },
+      { title:"指标看板接入", owner:"李强", column:"开发中", start:"2026-10-12", end:null, hours:11 },
+      { title:"权限与灰度开关", owner:"周凯", column:"开发中", start:"2026-10-20", end:null, hours:6 }
+    ]
+  }
+];
+
+var STATUS = {
+  released:{ label:"已发布", cls:"badge-ok" },
+  done:{ label:"已完成待发布", cls:"badge-ok" },
+  active:{ label:"进行中", cls:"badge-run" },
+  review:{ label:"待评审", cls:"badge-wait" },
+  rejected:{ label:"已拒绝", cls:"badge-bad" }
+};
+
+var STAGES = {
+  review:{ name:"评审", cls:"seg-review" },
+  plan:{ name:"排期", cls:"seg-plan" },
+  design:{ name:"设计", cls:"seg-design" },
+  dev:{ name:"开发", cls:"seg-dev" },
+  test:{ name:"测试", cls:"seg-test" },
+  complete:{ name:"完成", cls:"seg-complete" },
+  release:{ name:"发布", cls:"seg-release" }
+};
+
+var state = { project:"", status:"all", range:180, scale:"week", showHours:false, onlyDoc:false, tab:"timeline" };
+var LAST = { todayX:null };
+var toastTimer = null;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]; }); }
+function ts(iso){ return Date.parse(iso + "T00:00:00Z"); }
+function days(a, b){ return Math.round((ts(b) - ts(a)) / 86400000); }
+function addDays(iso, n){ var d = new Date(ts(iso)); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function md(iso){ return iso ? iso.slice(5) : "—"; }
+function maxDate(a, b){ return a > b ? a : b; }
+function minDate(a, b){ return a < b ? a : b; }
+function durText(a, b){ if(!a || !b) return "—"; var n = days(a, b); return n <= 0 ? "节点" : n + " 天"; }
+function tipAttr(html){ return ' data-tip="' + String(html).replace(/"/g, "&quot;") + '"'; }
+function leadEnd(d){ return d.complete || d.released || d.rejected || TODAY; }
+function leadDays(d){ return Math.max(0, days(d.created, leadEnd(d))); }
+
+function stagesOf(d){
+  var out = [];
+  var reviewEnd = d.passed || d.rejected || TODAY;
+  out.push({ stage:"review", start:d.created, end:reviewEnd, open:!d.passed && !d.rejected });
+  if(d.passed && d.planned) out.push({ stage:"plan", start:d.passed, end:d.planned });
+  if(d.doc) out.push({ stage:"design", start:d.doc.created, end:d.doc.published || TODAY, open:!d.doc.published });
+  if(d.dev) out.push({ stage:"dev", start:d.dev.start, end:d.dev.end || TODAY, open:!d.dev.end });
+  if(d.test) out.push({ stage:"test", start:d.test.start, end:d.test.end || TODAY, open:!d.test.end });
+  if(d.complete){
+    if(d.test && d.test.end) out.push({ stage:"complete", start:d.test.end, end:d.complete });
+    else out.push({ stage:"complete", start:d.complete, end:d.complete, point:true });
+  }
+  if(d.released) out.push({ stage:"release", start:d.complete || d.released, end:d.released });
+  return out;
+}
+
+function gapsOf(d){
+  var out = [];
+  if(d.status === "rejected") return out;
+  if(d.planned && !d.dev && !d.tasks.length){
+    out.push({ start:d.planned, end:TODAY, label:"已排期未开工", open:true });
+    return out;
+  }
+  if(d.dev && !d.doc){
+    var from = d.planned || d.passed || d.created;
+    out.push({ start:from, end:d.dev.start, label:"未走文档" });
+  }
+  if(d.dev && d.dev.end && !d.test && d.complete){
+    out.push({ start:d.dev.end, end:d.complete, label:"未执行用例" });
+  }
+  if(d.complete && !d.released){
+    out.push({ start:d.complete, end:TODAY, label:d.status === "done" ? "待发布" : "未发布", open:true });
+  }
+  return out;
+}
+
+function gapDays(d){
+  return gapsOf(d).reduce(function(sum, g){ return sum + Math.max(0, days(g.start, g.end)); }, 0);
+}
+
+function eventsOf(d){
+  var out = [];
+  out.push({ at:d.created, tag:"需求池", text:"提交需求" + (d.source ? "（来源：" + d.source + "）" : "") });
+  if(d.passed) out.push({ at:d.passed, tag:"需求池", text:"评审通过" });
+  if(d.rejected) out.push({ at:d.rejected, tag:"需求池", text:"评审拒绝" + (d.rejectReason ? "：" + d.rejectReason : "") });
+  if(d.planned) out.push({ at:d.planned, tag:"需求池", text:"排期至 " + (d.version || "目标版本") });
+  if(d.doc){
+    out.push({ at:d.doc.created, tag:"文档", text:"创建《" + d.doc.title + "》" });
+    if(d.doc.published) out.push({ at:d.doc.published, tag:"文档", text:"发布《" + d.doc.title + "》" });
+  }
+  if(d.tasks.length) out.push({ at:d.tasks[0].start, tag:"工作项", text:"首个工作项「" + d.tasks[0].title + "」开始" });
+  if(d.test && d.cases){
+    out.push({ at:d.test.end || TODAY, tag:"测试", text:"执行用例 " + d.cases.total + " 条，通过 " + d.cases.passed + " / 失败 " + d.cases.failed });
+  }
+  if(d.complete) out.push({ at:d.complete, tag:"工作项", text:"全部工作项完成" });
+  if(d.released) out.push({ at:d.released, tag:"版本", text:(d.version || "版本") + " 发布" });
+  return out.sort(function(a, b){ return a.at.localeCompare(b.at); });
+}
+
+function prefilter(){
+  return DEMANDS.filter(function(d){
+    if(state.project && d.project !== state.project) return false;
+    if(state.status === "done" && !(d.status === "done" || d.status === "released")) return false;
+    if(state.status !== "all" && state.status !== "done" && d.status !== state.status) return false;
+    if(state.onlyDoc && !d.doc) return false;
+    return true;
+  });
+}
+
+function boundsFor(list){
+  if(state.range === 0){
+    var min = list.length ? list.map(function(d){ return d.created; }).sort()[0] : addDays(TODAY, -180);
+    return { start:addDays(min, -7), end:addDays(TODAY, 14) };
+  }
+  return { start:addDays(TODAY, -(state.range - 1)), end:addDays(TODAY, 14) };
+}
+
+function overlaps(d, b){
+  var end = leadEnd(d);
+  if(d.released && d.released > end) end = d.released;
+  return days(d.created, b.end) >= 0 && days(end, b.start) <= 0;
+}
+
+function render(opts){
+  opts = opts || {};
+  var oldScroll = $("tlScroll") ? $("tlScroll").scrollLeft : 0;
+  var pre = prefilter();
+  var b = boundsFor(pre);
+  var list = pre.filter(function(d){ return overlaps(d, b); });
+  renderKpis(list);
+  if(state.tab === "timeline") renderTimeline(list, b); else renderTable(list);
+  renderCoverage();
+  syncUI();
+  if(opts.today) scrollToToday();
+  else if($("tlScroll")) $("tlScroll").scrollLeft = oldScroll;
+}
+
+function renderKpis(list){
+  var done = list.filter(function(d){ return d.status === "done" || d.status === "released"; });
+  var avg = done.length ? Math.round(done.reduce(function(s, d){ return s + days(d.created, d.complete); }, 0) / done.length) : null;
+  var max = done.length ? Math.max.apply(null, done.map(function(d){ return days(d.created, d.complete); })) : null;
+  var active = list.filter(function(d){ return d.status === "active"; }).length;
+  var pendingDone = list.filter(function(d){ return d.status === "done"; }).length;
+  var review = list.filter(function(d){ return d.status === "review"; }).length;
+  var rejected = list.filter(function(d){ return d.status === "rejected"; }).length;
+  var hours = list.reduce(function(s, d){ return s + (d.hours || 0); }, 0);
+  var tasks = list.reduce(function(s, d){ return s + d.tasks.length; }, 0);
+  var oldestReview = list.filter(function(d){ return d.status === "review"; }).sort(function(a, b){ return a.created.localeCompare(b.created); })[0];
+
+  $("kpis").innerHTML =
+    '<div class="card kpi"><span class="kpi-label">需求总数</span><b class="kpi-value">' + list.length + '</b><span class="kpi-sub">当前筛选范围</span></div>' +
+    '<div class="card kpi"><span class="kpi-label">已完成</span><b class="kpi-value">' + done.length + '</b><span class="kpi-sub">' + (done.length ? "平均 " + avg + " 天 · 最长 " + max + " 天" : "暂无完成样本") + '</span></div>' +
+    '<div class="card kpi"><span class="kpi-label">进行中</span><b class="kpi-value">' + active + '</b><span class="kpi-sub">' + (pendingDone ? "另有 " + pendingDone + " 条待发布" : "含开发、测试与已排期") + '</span></div>' +
+    '<div class="card kpi"><span class="kpi-label">待评审 / 已拒绝</span><b class="kpi-value">' + review + ' / ' + rejected + '</b><span class="kpi-sub">' + (oldestReview ? "最久待评审 " + days(oldestReview.created, TODAY) + " 天" : "无待评审需求") + '</span></div>' +
+    '<div class="card kpi"><span class="kpi-label">累计计时</span><b class="kpi-value">' + (hours ? hours.toFixed(1) : "0") + '<small>h</small></b><span class="kpi-sub">来自 ' + tasks + ' 个工作项</span></div>';
+}
+
+function monthsIn(start, end){
+  var out = [];
+  var d = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, 1));
+  while(d.toISOString().slice(0, 10) <= end){
+    var iso = d.toISOString().slice(0, 10);
+    out.push({ iso:iso, label:iso.slice(5, 7) === "01" ? iso.slice(0, 4) + "年1月" : Number(iso.slice(5, 7)) + "月" });
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return out;
+}
+
+function renderTimeline(list, b){
+  if(!list.length){
+    $("viewBody").innerHTML = '<section class="card"><div class="empty">' +
+      '<svg width="30" height="30" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>' +
+      '<b>当前筛选下没有需求</b><span>换一个项目或时间范围，或者清除筛选条件再试。</span>' +
+      '<button class="btn sm" type="button" data-reset>清除筛选</button></div></section>';
+    LAST.todayX = null;
+    return;
+  }
+
+  var vStart = b.start, vEnd = b.end;
+  var w = state.scale === "day" ? 6 : 3;
+  var trackW = Math.max(300, days(vStart, vEnd) * w);
+  var todayX = TODAY >= vStart && TODAY <= vEnd ? days(vStart, TODAY) * w + w / 2 : null;
+  LAST.todayX = todayX;
+
+  var months = monthsIn(vStart, vEnd).map(function(m){
+    var x = days(vStart, m.iso) * w;
+    return { label:m.label, x:Math.max(0, x), line:x > 0 && x < trackW ? x : null };
+  });
+  var weeks = [];
+  if(state.scale === "day"){
+    var mon = vStart;
+    while(new Date(ts(mon)).getUTCDay() !== 1) mon = addDays(mon, 1);
+    for(var d = mon; d <= vEnd; d = addDays(d, 7)) weeks.push({ date:d, x:days(vStart, d) * w });
+  }
+
+  function gridHtml(){
+    var html = "";
+    months.forEach(function(m){ if(m.line !== null) html += '<i class="gl month" style="left:' + m.line + 'px"></i>'; });
+    weeks.forEach(function(wk){ html += '<i class="gl week" style="left:' + wk.x + 'px"></i>'; });
+    if(todayX !== null) html += '<i class="today-line" style="left:' + todayX + 'px"></i>';
+    return html;
+  }
+
+  var rows = list.slice().sort(function(a, b){ return a.created.localeCompare(b.created); }).map(function(d){
+    var st = STATUS[d.status];
+    var items = [];
+    stagesOf(d).forEach(function(s){ items.push({ kind:"seg", data:s }); });
+    gapsOf(d).forEach(function(g){ items.push({ kind:"gap", data:g }); });
+
+    var bar = gridHtml();
+    items.forEach(function(item){
+      var s = item.data;
+      if(item.kind === "seg"){
+        var a = maxDate(s.start, vStart), z = minDate(s.end, vEnd);
+        if(days(a, z) < 0) return;
+        var left = days(vStart, a) * w;
+        var width = Math.max(s.point ? 6 : 4, days(a, z) * w - 1);
+        if(s.point){ left = days(vStart, s.start) * w + w / 2 - 3; width = 6; }
+        var label = "";
+        if(!s.point && width >= 36) label = STAGES[s.stage].name;
+        if(!s.point && width >= 70) label += " " + days(s.start, s.end) + "天";
+        var tip = "<b>" + STAGES[s.stage].name + "</b><br>" + md(s.start) + " → " + (s.open ? "至今" : md(s.end)) + " · " + (s.point ? "节点" : days(s.start, s.end) + " 天") +
+          (s.open ? "<br><span>进行中，尚未结束</span>" : "") +
+          "<em>来源：" + (s.stage === "review" ? (d.rejected ? "需求池拒绝日志" : d.passed ? "需求池通过日志" : "等待评审") : s.stage === "plan" ? "需求池排期日志" : s.stage === "design" ? "文档创建 → 发布" : s.stage === "dev" ? "task_log 列停留并集" : s.stage === "test" ? "用例执行 + 测试列" : s.stage === "complete" ? "全部工作项进入完成列" : "版本 released_at") + "</em>";
+        bar += '<i class="tl-seg ' + STAGES[s.stage].cls + (s.open ? " is-open" : "") + (s.point ? " is-point" : "") + '" style="left:' + left + 'px;width:' + width + 'px"' + tipAttr(tip) + '>' + (label ? "<span>" + label + "</span>" : "") + '</i>';
+      }else{
+        var ga = maxDate(s.start, vStart), gz = minDate(s.end, vEnd);
+        if(days(ga, gz) <= 0) return;
+        var gleft = days(vStart, ga) * w;
+        var gwidth = Math.max(2, days(ga, gz) * w - 1);
+        var gLabel = gwidth >= 64 ? s.label + " " + days(s.start, s.end) + "天" : "";
+        var gTip = '<b class="warn">' + esc(s.label) + '</b><br>' + md(s.start) + " → " + (s.open ? "至今" : md(s.end)) + " · " + days(s.start, s.end) + " 天<br><span>未记录，不按 0 天计入</span>";
+        bar += '<i class="gap' + (s.open ? " is-open" : "") + '" style="left:' + gleft + 'px;width:' + gwidth + 'px"' + tipAttr(gTip) + '>' + (gLabel ? "<span>" + esc(gLabel) + "</span>" : "") + '</i>';
+      }
+    });
+    if(d.rejected){
+      var rx = days(vStart, d.rejected) * w + w / 2;
+      if(rx >= 0 && rx <= trackW) bar += '<i class="stop" style="left:' + (rx - 4) + 'px" title="已拒绝"></i>';
+    }
+
+    return '<div class="tl-row">' +
+      '<div class="tl-label"><button type="button" class="tl-open" data-open="' + d.id + '" aria-label="查看 ' + esc(d.title) + ' 的阶段耗时">' +
+        '<span class="pri pri-' + d.priority + '" title="' + d.priority + '"></span>' +
+        '<span class="tl-lmain"><span class="tl-ltitle" title="' + esc(d.title) + '">' + esc(d.title) + '</span>' +
+        '<span class="tl-lmeta">' + esc(d.project) + ' · ' + esc(d.version || "未排期") + ' · ' + esc(d.source) + '</span></span>' +
+        '<span class="badge ' + st.cls + '">' + st.label + '</span>' +
+        '<span class="tl-lead">' + leadDays(d) + ' 天' + (state.showHours && d.hours ? '<small> · ' + d.hours.toFixed(1) + 'h</small>' : '') + '</span>' +
+        '<svg class="chev" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>' +
+      '</button></div>' +
+      '<div class="tl-track" style="width:' + trackW + 'px">' + bar + '</div>' +
+    '</div>';
+  }).join("");
+
+  var axis = "";
+  var rowA = -999, rowB = -999;
+  months.forEach(function(m){
+    var lw = 0;
+    for(var i = 0; i < m.label.length; i++) lw += /[\u4e00-\u9fa5]/.test(m.label[i]) ? 12 : 6.5;
+    var top = 25;
+    if(m.x < rowA + 6){
+      if(m.x < rowB + 6) return;
+      top = 10; rowB = m.x + lw;
+    } else rowA = m.x + lw;
+    axis += '<span class="axis-month" style="left:' + m.x + 'px;top:' + top + 'px">' + m.label + '</span>';
+  });
+  axis += weeks.map(function(wk){ return '<span class="axis-week" style="left:' + (wk.x + 2) + 'px">' + md(wk.date) + '</span>'; }).join("");
+  if(todayX !== null) axis += '<span class="axis-today" style="left:' + todayX + 'px">今天</span>';
+
+  $("viewBody").innerHTML = '<section class="card tl-card">' +
+    '<div class="tl-toolbar">' + legendHtml() +
+      '<div class="tl-actions"><span class="hint">虚线 = 未记录或等待中的阶段</span><button class="btn sm" type="button" data-today>回到今天</button></div>' +
+    '</div>' +
+    '<div class="tl-scroll" id="tlScroll"><div class="tl-canvas" style="width:calc(var(--label-w) + ' + trackW + 'px)">' +
+      '<div class="tl-axis"><div class="tl-axis-label"><b>需求</b><span>' + vStart.slice(0, 4) + '年 · 按提出时间排序</span></div><div class="tl-axis-track" style="width:' + trackW + 'px">' + axis + '</div></div>' +
+      rows +
+    '</div></div>' +
+  '</section>';
+}
+
+function legendHtml(){
+  var items = [["评审","seg-review"],["排期","seg-plan"],["设计","seg-design"],["开发","seg-dev"],["测试","seg-test"],["完成","seg-complete"],["发布","seg-release"]];
+  return '<div class="legend">' + items.map(function(it){ return '<span class="lg"><i class="sw" style="background:var(--' + (it[1] === "seg-review" ? "st-review" : it[1] === "seg-plan" ? "st-plan" : it[1] === "seg-design" ? "st-design" : it[1] === "seg-dev" ? "st-dev" : it[1] === "seg-test" ? "st-test" : it[1] === "seg-complete" ? "st-complete" : "st-release") + ')"></i>' + it[0] + '</span>'; }).join("") +
+    '<span class="lg"><i class="sw-line"></i>未记录</span></div>';
+}
+
+function renderTable(list){
+  if(!list.length){
+    $("viewBody").innerHTML = '<section class="card"><div class="empty"><b>当前筛选下没有需求</b><span>换一个项目或时间范围，或者清除筛选条件再试。</span><button class="btn sm" type="button" data-reset>清除筛选</button></div></section>';
+    return;
+  }
+  var rows = list.slice().sort(function(a, b){ return b.created.localeCompare(a.created); }).map(function(d){
+    var st = STATUS[d.status];
+    var design = d.doc ? durText(d.doc.created, d.doc.published) : '<span class="cell-miss" title="未关联需求文档">未走文档</span>';
+    var dev = d.dev ? (d.dev.end ? durText(d.dev.start, d.dev.end) : '<span class="cell-run">进行中 ' + days(d.dev.start, TODAY) + ' 天</span>') : '<span class="cell-miss" title="尚未创建工作项">未开工</span>';
+    var test = d.test ? (d.test.end ? durText(d.test.start, d.test.end) : '<span class="cell-run">进行中 ' + days(d.test.start, TODAY) + ' 天</span>') : '<span class="cell-miss" title="没有测试执行记录">未执行</span>';
+    var lead = leadDays(d);
+    var leadTag = d.status === "rejected" ? '<span class="soft-tag">止于拒绝</span>' : (d.complete ? "" : '<span class="soft-tag">进行中</span>');
+    return '<tr data-open="' + d.id + '" tabindex="0">' +
+      '<td class="c-title"><b title="' + esc(d.title) + '">' + esc(d.title) + '</b><span>' + esc(d.source) + '</span></td>' +
+      '<td>' + esc(d.project) + '</td>' +
+      '<td><span class="badge ' + st.cls + '">' + st.label + '</span></td>' +
+      '<td>' + md(d.created) + '</td>' +
+      '<td>' + design + '</td>' +
+      '<td>' + dev + '</td>' +
+      '<td>' + test + '</td>' +
+      '<td>' + (d.complete ? md(d.complete) : '<span class="cell-miss">未完成</span>') + '</td>' +
+      '<td>' + (d.released ? md(d.released) : '<span class="cell-miss">' + (d.version ? "未发布" : "未关联版本") + '</span>') + '</td>' +
+      '<td class="num">' + lead + ' 天' + leadTag + '</td>' +
+      '<td class="num">' + (d.hours ? d.hours.toFixed(1) + ' h' : '—') + '</td>' +
+    '</tr>';
+  }).join("");
+
+  $("viewBody").innerHTML = '<section class="card tbl-wrap"><table class="tl-table">' +
+    '<thead><tr><th>需求</th><th>项目</th><th>状态</th><th>提出</th><th>设计</th><th>开发</th><th>测试</th><th>完成</th><th>发布</th><th class="num">总历时</th><th class="num">计时</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table></section>';
+}
+
+function renderCoverage(){
+  var items = UNLINKED.filter(function(x){ return !state.project || x.project === state.project; });
+  if(!items.length){ $("coverage").innerHTML = ""; return; }
+  $("coverage").innerHTML = '<div class="coverage">' +
+    '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l6 11H2z"/><path d="M8 6.5v3.5M8 12h.01"/></svg>' +
+    '<span>另有 <b>' + items.length + '</b> 个工作项未关联需求，不进入时间轴。它们仍计入工作项报表与工时。</span>' +
+    '<button class="btn sm" type="button" data-unlinked>查看</button></div>';
+}
+
+function syncUI(){
+  document.querySelectorAll("#statusChips [data-chip]").forEach(function(el){
+    el.setAttribute("aria-pressed", el.dataset.chip === state.status ? "true" : "false");
+  });
+  document.querySelectorAll("[data-scale]").forEach(function(el){
+    el.setAttribute("aria-pressed", el.dataset.scale === state.scale ? "true" : "false");
+  });
+  document.querySelectorAll("[data-tab]").forEach(function(el){
+    el.setAttribute("aria-selected", el.dataset.tab === state.tab ? "true" : "false");
+    el.classList.toggle("on", el.dataset.tab === state.tab);
+  });
+  $("projectSel").value = state.project;
+  $("rangeSel").value = String(state.range);
+  $("showHours").checked = state.showHours;
+  $("onlyDoc").checked = state.onlyDoc;
+}
+
+function scrollToToday(){
+  var el = $("tlScroll");
+  if(!el || LAST.todayX === null) return;
+  var left = Math.max(0, LAST.todayX - el.clientWidth / 2);
+  if(el.scrollTo) el.scrollTo({ left:left, behavior:"smooth" }); else el.scrollLeft = left;
+}
+
+function taskDwell(t){
+  var parts = [];
+  if(t.start) parts.push("开发 " + (t.end ? days(t.start, t.end) : days(t.start, TODAY)) + " 天" + (t.end ? "" : "（进行中）"));
+  if(t.testStart) parts.push("测试 " + (t.testEnd ? days(t.testStart, t.testEnd) : days(t.testStart, TODAY)) + " 天");
+  if(t.hours) parts.push(t.hours + "h");
+  return parts.join(" · ");
+}
+
+function stageRows(d){
+  var rows = [];
+  rows.push({ name:"提出", start:md(d.created), end:"—", dur:"节点", src:"需求池创建" });
+  var re = d.passed || d.rejected;
+  rows.push({ name:"评审", start:md(d.created), end:re ? md(re) : "至今", dur:durText(d.created, re || TODAY), miss:false, src:d.rejected ? "需求池：拒绝（" + (d.rejectReason || "无备注") + "）" : d.passed ? "需求池：评审通过" : "等待评审" });
+  rows.push({ name:"排期", start:d.passed ? md(d.passed) : "—", end:d.planned ? md(d.planned) : "—", dur:d.passed && d.planned ? durText(d.passed, d.planned) : "—", miss:!(d.passed && d.planned), src:d.planned ? "排期至 " + (d.version || "目标版本") : d.passed ? "已通过，尚未排期" : "尚未评审通过" });
+  rows.push({ name:"设计", start:d.doc ? md(d.doc.created) : "—", end:d.doc ? md(d.doc.published) : "—", dur:d.doc ? durText(d.doc.created, d.doc.published) : "—", miss:!d.doc, src:d.doc ? "文档：创建 → 发布" : "未走文档，需求池直接拆分工作项" });
+  rows.push({ name:"开发", start:d.dev ? md(d.dev.start) : "—", end:d.dev ? (d.dev.end ? md(d.dev.end) : "至今") : "—", dur:d.dev ? durText(d.dev.start, d.dev.end || TODAY) : "—", miss:!d.dev, src:d.dev ? "task_log：列停留并集" : d.planned ? "已排期，尚未创建工作项" : "尚未开工" });
+  rows.push({ name:"测试", start:d.test ? md(d.test.start) : "—", end:d.test ? (d.test.end ? md(d.test.end) : "至今") : "—", dur:d.test ? durText(d.test.start, d.test.end || TODAY) : "—", miss:!d.test, src:d.test ? "用例执行 + 测试列" : d.complete ? "未执行用例" : "尚未进入测试" });
+  var compStart = d.test && d.test.end ? d.test.end : d.dev && d.dev.end ? d.dev.end : null;
+  rows.push({ name:"完成", start:compStart ? md(compStart) : "—", end:d.complete ? md(d.complete) : "—", dur:d.complete && compStart ? durText(compStart, d.complete) : d.complete ? "节点" : "—", miss:!d.complete, src:d.complete ? "全部工作项进入完成列" : "未完成" });
+  rows.push({ name:"发布", start:d.released ? md(d.complete || d.released) : "—", end:d.released ? md(d.released) : "—", dur:d.released ? durText(d.complete || d.released, d.released) : "—", miss:!d.released, src:d.released ? (d.version || "版本") + " 已发布" : d.status === "done" ? "已完成，等待 " + (d.version || "版本") + " 发布" + (d.versionTarget ? "（目标 " + md(d.versionTarget) + "）" : "") : "未发布" });
+  return rows;
+}
+
+function drawerHtml(d){
+  var st = STATUS[d.status];
+  var rows = stageRows(d).map(function(r){
+    return '<tr class="' + (r.miss ? "is-miss" : "") + '"><td>' + r.name + '</td><td>' + r.start + '</td><td>' + r.end + '</td><td class="num">' + r.dur + '</td><td>' + esc(r.src) + '</td></tr>';
+  }).join("");
+  var tasks = d.tasks.length ? d.tasks.map(function(t){
+    var cls = t.column === "已完成" ? "badge-ok" : t.column === "测试中" ? "badge-wait" : "badge-run";
+    return '<div class="d-task"><div class="dt-top"><b>' + esc(t.title) + '</b><span class="badge ' + cls + '">' + esc(t.column) + '</span></div><div class="dt-meta">' + esc(t.owner) + ' · ' + taskDwell(t) + '</div></div>';
+  }).join("") : '<div class="d-empty">还没有关联工作项。<span>需求池详情可以直接「拆分为工作项」；拆分后这里会按工作项的列停留自动累计。</span></div>';
+  var evs = eventsOf(d).map(function(e){
+    return '<div class="ev-item"><span class="ev-date">' + md(e.at) + '</span><span class="ev-tag">' + esc(e.tag) + '</span><span class="ev-text">' + esc(e.text) + '</span></div>';
+  }).join("");
+  return '<div class="d-stats">' +
+      '<div class="d-stat"><span>总历时</span><b>' + leadDays(d) + '<small> 天</small></b></div>' +
+      '<div class="d-stat"><span>计时工时</span><b>' + (d.hours ? d.hours.toFixed(1) : "0") + '<small> h</small></b></div>' +
+      '<div class="d-stat"><span>工作项</span><b>' + d.tasks.length + '<small> 个</small></b></div>' +
+      '<div class="d-stat"><span>虚线等待</span><b>' + gapDays(d) + '<small> 天</small></b></div>' +
+    '</div>' +
+    '<div class="d-sect"><h4>阶段耗时 <small>按自然日</small></h4><table class="stage-table"><thead><tr><th>阶段</th><th>开始</th><th>结束</th><th class="num">历时</th><th>依据</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="d-sect"><h4>关联工作项 <small>' + d.tasks.length + ' 个</small></h4>' + tasks + '</div>' +
+    '<div class="d-sect"><h4>流转记录</h4>' + evs + '</div>' +
+    '<p class="d-note">历时按自然日；并行工作项取区间并集，不把各任务天数相加；虚线表示未记录或等待中的阶段，不按 0 天计入；计时工时来自工作项计时器，与日历历时是两种口径。</p>';
+}
+
+function openDrawer(id){
+  var d = DEMANDS.filter(function(x){ return x.id === id; })[0];
+  if(!d) return;
+  $("drawerTitle").textContent = d.title;
+  $("drawerMeta").textContent = d.project + " · " + (d.version || "未排期") + " · " + d.priority + " · 来源 " + d.source;
+  $("drawerBadge").innerHTML = '<span class="badge ' + STATUS[d.status].cls + '">' + STATUS[d.status].label + '</span>';
+  $("drawerBody").innerHTML = drawerHtml(d);
+  $("backdrop").classList.add("on");
+  $("drawer").classList.add("on");
+  document.body.classList.add("no-scroll");
+}
+
+function openUnlinked(){
+  var items = UNLINKED.filter(function(x){ return !state.project || x.project === state.project; });
+  $("modalBody").innerHTML = '<p>这些工作项没有 <b>demand_id</b>，因此不会出现在需求时间轴里。若需要纳入，可在需求池拆分工时挂到需求上，或在需求详情中关联。</p>' +
+    items.map(function(x){
+      return '<div class="unlinked-item"><b>' + esc(x.title) + '</b><span>' + esc(x.project) + ' · ' + esc(x.owner) + ' · ' + esc(x.column) + '</span></div>';
+    }).join("");
+  $("modalBackdrop").classList.add("on");
+  $("unlinkedModal").classList.add("on");
+  document.body.classList.add("no-scroll");
+}
+
+function closeAll(){
+  $("backdrop").classList.remove("on");
+  $("drawer").classList.remove("on");
+  $("modalBackdrop").classList.remove("on");
+  $("unlinkedModal").classList.remove("on");
+  document.body.classList.remove("no-scroll");
+}
+
+function resetFilters(){
+  state.project = "";
+  state.status = "all";
+  state.range = 180;
+  state.onlyDoc = false;
+  state.showHours = false;
+  state.scale = "week";
+  render();
+}
+
+function toast(msg){
+  var el = $("toast");
+  el.textContent = msg;
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.classList.remove("on"); }, 2000);
+}
+
+function moveTip(e){
+  var tip = $("tip");
+  var x = e.clientX + 14, y = e.clientY + 16;
+  var w = tip.offsetWidth, h = tip.offsetHeight;
+  if(x + w > window.innerWidth - 12) x = e.clientX - w - 12;
+  if(y + h > window.innerHeight - 12) y = e.clientY - h - 12;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+
+document.getElementById("projectSel").addEventListener("change", function(e){ state.project = e.target.value; render(); });
+document.getElementById("rangeSel").addEventListener("change", function(e){ state.range = Number(e.target.value); render(); });
+document.getElementById("showHours").addEventListener("change", function(e){ state.showHours = e.target.checked; render(); });
+document.getElementById("onlyDoc").addEventListener("change", function(e){ state.onlyDoc = e.target.checked; render(); });
+
+document.addEventListener("click", function(e){
+  var nav = e.target.closest("[data-nav]");
+  if(nav){ toast("原型仅演示「需求时间轴」，其他入口保持现状"); return; }
+  var chip = e.target.closest("[data-chip]");
+  if(chip){ state.status = chip.dataset.chip; render(); return; }
+  var scale = e.target.closest("[data-scale]");
+  if(scale){ if(state.scale !== scale.dataset.scale){ state.scale = scale.dataset.scale; render(); } return; }
+  var tab = e.target.closest("[data-tab]");
+  if(tab){ if(state.tab !== tab.dataset.tab){ state.tab = tab.dataset.tab; render(); } return; }
+  var today = e.target.closest("[data-today]");
+  if(today){ scrollToToday(); return; }
+  var unlinked = e.target.closest("[data-unlinked]");
+  if(unlinked){ openUnlinked(); return; }
+  var reset = e.target.closest("[data-reset]");
+  if(reset){ resetFilters(); return; }
+  var close = e.target.closest("[data-close]");
+  if(close){ closeAll(); return; }
+  var open = e.target.closest("[data-open]");
+  if(open){ openDrawer(open.dataset.open); return; }
+});
+
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape"){ closeAll(); return; }
+  if(e.key === "Enter" || e.key === " "){
+    var row = e.target.closest("tr[data-open]");
+    if(row){ e.preventDefault(); openDrawer(row.dataset.open); }
+  }
+});
+
+$("backdrop").addEventListener("click", closeAll);
+$("modalBackdrop").addEventListener("click", closeAll);
+
+document.addEventListener("mouseover", function(e){
+  var t = e.target.closest("[data-tip]");
+  if(!t) return;
+  var tip = $("tip");
+  tip.innerHTML = t.getAttribute("data-tip");
+  tip.classList.add("on");
+  moveTip(e);
+});
+document.addEventListener("mousemove", function(e){
+  if($("tip").classList.contains("on")) moveTip(e);
+});
+document.addEventListener("mouseout", function(e){
+  var t = e.target.closest("[data-tip]");
+  if(t && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-tip]"))) $("tip").classList.remove("on");
+});
+
+document.getElementById("themeBtn").addEventListener("click", function(){
+  var dark = document.documentElement.getAttribute("data-theme") === "dark";
+  var next = dark ? "light" : "dark";
+  if(next === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  else document.documentElement.removeAttribute("data-theme");
+  try{ localStorage.setItem("ds.theme", next); }catch(e){}
+  toast(next === "dark" ? "已切换深色模式" : "已切换浅色模式");
+});
+
+render();
+</script>
+</body>
+</html>

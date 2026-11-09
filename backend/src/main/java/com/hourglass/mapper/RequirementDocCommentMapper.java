@@ -13,7 +13,10 @@ public interface RequirementDocCommentMapper {
 
     RequirementDocComment selectById(@Param("id") String id);
 
-    List<RequirementDocComment> selectByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
+    List<RequirementDocComment> selectByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId,
+                                            @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
 
     List<RequirementDocComment> selectByWorkspace(@Param("workspaceId") String workspaceId);
 

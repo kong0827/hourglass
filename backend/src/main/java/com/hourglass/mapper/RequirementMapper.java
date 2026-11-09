@@ -11,6 +11,12 @@ public interface RequirementMapper {
 
     List<Requirement> selectAll(@Param("workspaceId") String workspaceId);
 
+    List<Requirement> selectPage(@Param("workspaceId") String workspaceId,
+                                 @Param("viewerId") String viewerId,
+                                 @Param("offset") int offset, @Param("limit") int limit);
+
+    int countVisible(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
+
     Requirement selectById(String id);
 
     /** 按 id 批量取项目名称（只取 id/name） */

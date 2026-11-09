@@ -13,7 +13,10 @@ public interface TaskLogMapper {
     int insert(TaskLog log);
 
     /** 查询/删除一律带空间条件：任务 ID 跨空间复用时防止误读误删 */
-    List<TaskLog> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    List<TaskLog> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId,
+                                 @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
     /** 一批任务最近一次「标记为被阻塞」的时间；没有日志的阻塞任务不返回。 */
     List<TaskBlockedAt> selectLastBlockedAt(@Param("workspaceId") String workspaceId,
@@ -30,7 +33,11 @@ public interface TaskLogMapper {
     List<TaskLog> selectByWorkspace(@Param("workspaceId") String workspaceId,
                                     @Param("viewerId") String viewerId,
                                     @Param("includeConfig") boolean includeConfig,
-                                    @Param("limit") int limit);
+                                    @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByWorkspace(@Param("workspaceId") String workspaceId,
+                         @Param("viewerId") String viewerId,
+                         @Param("includeConfig") boolean includeConfig);
 
     /**
      * 某个时间段内"有活动"的任务 ID（去重）。

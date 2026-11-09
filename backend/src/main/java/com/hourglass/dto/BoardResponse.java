@@ -24,15 +24,21 @@ public class BoardResponse {
         private String id;
         private String name;
         private String color;
+        private String processingRule;
         private boolean done;
 
         public ColumnDef() {
         }
 
         public ColumnDef(String id, String name, String color, boolean done) {
+            this(id, name, color, null, done);
+        }
+
+        public ColumnDef(String id, String name, String color, String processingRule, boolean done) {
             this.id = id;
             this.name = name;
             this.color = color;
+            this.processingRule = processingRule;
             this.done = done;
         }
     }

@@ -63,9 +63,15 @@ public class InviteService {
         return res;
     }
 
-    public List<Invite> list(String userId, String workspaceId) {
+    public com.hourglass.dto.PageResult<Invite> list(
+            String userId, String workspaceId, int offset, int limit) {
         requireShared(userId, workspaceId);
-        return inviteMapper.selectByWorkspace(workspaceId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = inviteMapper.countByWorkspace(workspaceId);
+        List<Invite> items = total <= safeOffset ? new java.util.ArrayList<Invite>()
+                : inviteMapper.selectByWorkspace(workspaceId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     public void revoke(String userId, String workspaceId, String inviteId) {

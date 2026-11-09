@@ -2,6 +2,8 @@ package com.hourglass.service;
 
 import com.hourglass.common.CurrentUser;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.PageResult;
+import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.mapper.UserMapper;
@@ -10,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** 通用业务实体活动轨迹，独立于任务日志与空间活动流。 */
@@ -22,7 +25,7 @@ public class WorkActivityService {
     private static final Logger log = LoggerFactory.getLogger(WorkActivityService.class);
     private static final int ACTOR_NAME_MAX = 64;
     private static final int DETAIL_MAX = 1000;
-    private static final int LIST_LIMIT = 200;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final WorkActivityMapper activityMapper;
     private final UserMapper userMapper;
@@ -68,14 +71,28 @@ public class WorkActivityService {
         record(workspaceId, entityType, entityId, actorId, action, detail);
     }
 
-    /** 按实体倒序查询，固定最多返回 200 条。 */
-    public List<WorkActivity> listByEntity(String workspaceId, String entityType, String entityId) {
-        return activityMapper.selectByEntity(workspaceId, entityType, entityId, LIST_LIMIT);
+    /** 按实体倒序分页查询。 */
+    public PageResult<WorkActivity> listByEntity(String workspaceId, String entityType, String entityId,
+                                                 int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        int total = activityMapper.countByEntity(workspaceId, entityType, entityId);
+        List<WorkActivity> items = total <= safeOffset ? new ArrayList<WorkActivity>()
+                : activityMapper.selectByEntity(workspaceId, entityType, entityId, safeOffset, safeLimit);
+        return PageResult.of(items, total, safeOffset, safeLimit);
     }
 
-    /** 空间级文档动态流（联出文档标题等展示字段），草稿/隐藏项目过滤由文档服务按查看人做 */
-    public List<com.hourglass.dto.ReqDocActivityView> docActivities(String workspaceId, int limit) {
-        return activityMapper.selectDocActivities(workspaceId, REQUIREMENT_DOC, limit);
+    /** 空间级文档动态流：可见性过滤、计数与分页共用 SQL 条件。 */
+    public PageResult<ReqDocActivityView> docActivities(String workspaceId, String viewerId, String userId,
+                                                        boolean seeAllDrafts, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        int total = activityMapper.countDocActivities(workspaceId, REQUIREMENT_DOC,
+                viewerId, userId, seeAllDrafts);
+        List<ReqDocActivityView> items = total <= safeOffset ? new ArrayList<ReqDocActivityView>()
+                : activityMapper.selectDocActivities(workspaceId, REQUIREMENT_DOC,
+                        viewerId, userId, seeAllDrafts, safeOffset, safeLimit);
+        return PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 实体删除时清掉它的活动轨迹，避免同 ID 重建后混入旧历史。 */

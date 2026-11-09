@@ -3,6 +3,10 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.DemandGanttItem;
+import com.hourglass.dto.DemandGanttPage;
+import com.hourglass.dto.DemandStage;
+import com.hourglass.dto.DemandTimeline;
 import com.hourglass.dto.DemandActionRequest;
 import com.hourglass.dto.DemandBoardResponse;
 import com.hourglass.dto.DemandPage;
@@ -20,6 +24,10 @@ import com.hourglass.mapper.TaskMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +41,8 @@ import java.util.Map;
  */
 @Service
 public class DemandService {
+
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final DemandMapper demandMapper;
     private final RequirementMapper reqMapper;
@@ -63,41 +73,12 @@ public class DemandService {
         this.caseMapper = caseMapper;
     }
 
-    public List<Demand> list(String workspaceId, String reqId) {
-        return list(workspaceId, reqId, null);
-    }
-
-    public List<Demand> list(String workspaceId, String reqId, String userId) {
-        List<Demand> list;
-        if (reqId == null || reqId.trim().isEmpty()) {
-            list = demandMapper.selectByWorkspace(workspaceId);
-            java.util.Set<String> hiddenReqs = projectAccess.hiddenProjectIds(workspaceId, userId);
-            if (!hiddenReqs.isEmpty()) {
-                java.util.List<Demand> visible = new java.util.ArrayList<Demand>();
-                for (Demand d : list) {
-                    if (d.getReqId() == null || !hiddenReqs.contains(d.getReqId())) {
-                        visible.add(d);
-                    }
-                }
-                list = visible;
-            }
-        } else {
-            requireProject(workspaceId, reqId);
-            projectAccess.assertView(workspaceId, userId, reqId);
-            list = demandMapper.selectByReq(workspaceId, reqId);
-        }
-        for (Demand d : list) {
-            fillWsjf(d);
-        }
-        return list;
-    }
-
     /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 条件 */
     public DemandPage page(String workspaceId, String userId, DemandQuery query) {
         prepare(workspaceId, userId, query);
         query.setStatus(validStatus(query.getStatus()));
         query.setOffset(Math.max(0, query.getOffset()));
-        query.setLimit(Math.max(1, Math.min(200, query.getLimit())));
+        query.setLimit(Math.max(1, Math.min(MAX_PAGE_SIZE, query.getLimit())));
 
         Map<String, Integer> counts = countByStatus(query);
         int total = query.getStatus() == null
@@ -125,7 +106,7 @@ public class DemandService {
         DemandQuery base = new DemandQuery();
         base.setReqId(Texts.trimToNull(reqId));
         prepare(workspaceId, userId, base);
-        int safeLimit = Math.max(1, Math.min(100, limit <= 0 ? 50 : limit));
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit <= 0 ? 50 : limit));
         Map<String, Integer> counts = countByStatus(base);
 
         DemandBoardResponse resp = new DemandBoardResponse();
@@ -150,6 +131,233 @@ public class DemandService {
     }
 
     private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "rej"};
+
+    /**
+     * 甘特：分页口径与列表一致，只对当前页做批量聚合，避免逐条查询。
+     * 阶段时间只取真实记录（流转日志/关联文档/工作项/用例/版本），缺记录不推算。
+     */
+    public DemandGanttPage gantt(String workspaceId, String userId, DemandQuery query) {
+        DemandPage page = page(workspaceId, userId, query);
+        DemandGanttPage out = new DemandGanttPage();
+        out.setTotal(page.getTotal());
+        out.setOffset(page.getOffset());
+        out.setLimit(page.getLimit());
+        out.setHasMore(page.isHasMore());
+        out.setCounts(page.getCounts());
+
+        List<Demand> demands = page.getItems();
+        if (demands.isEmpty()) {
+            return out;
+        }
+        List<String> ids = new ArrayList<String>();
+        List<String> versionIds = new ArrayList<String>();
+        for (Demand d : demands) {
+            ids.add(d.getId());
+            if (d.getVersionId() != null) {
+                versionIds.add(d.getVersionId());
+            }
+        }
+
+        Map<String, Map<String, Object>> logs = indexRows(demandMapper.selectLogTimeline(workspaceId, ids));
+        boolean seeAllDrafts = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
+        Map<String, Map<String, Object>> docs = indexRows(demandMapper.selectDocTimeline(
+                workspaceId, ids, query.getViewerId(), userId, seeAllDrafts));
+        Map<String, Map<String, Object>> tasks = indexRows(demandMapper.selectTaskTimeline(workspaceId, ids));
+        Map<String, Map<String, Object>> tests = indexRows(demandMapper.selectTestTimeline(workspaceId, ids));
+        Map<String, Map<String, Object>> versions = versionIds.isEmpty()
+                ? new LinkedHashMap<String, Map<String, Object>>()
+                : indexRows(demandMapper.selectVersionTimeline(workspaceId, versionIds), "id");
+
+        LocalDate today = LocalDate.now();
+        for (Demand d : demands) {
+            DemandGanttItem item = new DemandGanttItem();
+            item.setDemand(d);
+            item.setTimeline(timelineOf(d, logs.get(d.getId()), docs.get(d.getId()),
+                    tasks.get(d.getId()), tests.get(d.getId()),
+                    d.getVersionId() == null ? null : versions.get(d.getVersionId()), today));
+            out.getItems().add(item);
+        }
+        return out;
+    }
+
+    private static Map<String, Map<String, Object>> indexRows(List<Map<String, Object>> rows) {
+        return indexRows(rows, "demandId");
+    }
+
+    private static Map<String, Map<String, Object>> indexRows(List<Map<String, Object>> rows, String key) {
+        Map<String, Map<String, Object>> out = new LinkedHashMap<String, Map<String, Object>>();
+        if (rows == null) {
+            return out;
+        }
+        for (Map<String, Object> row : rows) {
+            Object id = row.get(key);
+            if (id != null) {
+                out.put(String.valueOf(id), row);
+            }
+        }
+        return out;
+    }
+
+    private DemandTimeline timelineOf(Demand d, Map<String, Object> log, Map<String, Object> doc,
+                                      Map<String, Object> task, Map<String, Object> test,
+                                      Map<String, Object> version, LocalDate today) {
+        DemandTimeline timeline = new DemandTimeline();
+        List<DemandStage> stages = timeline.getStages();
+        String status = d.getStatus();
+        LocalDate created = d.getCreatedAt() == null ? today : d.getCreatedAt().toLocalDate();
+        LocalDate passAt = toDate(value(log, "passAt"));
+        LocalDate rejAt = toDate(value(log, "rejAt"));
+        LocalDate planAt = toDate(value(log, "planAt"));
+
+        /* 评审整段计算：创建 → 最后一次通过；待评审算到今天；已拒绝停在最后一次拒绝 */
+        LocalDate reviewEnd;
+        boolean reviewOpen;
+        if ("review".equals(status)) {
+            reviewEnd = today;
+            reviewOpen = true;
+        } else if ("rej".equals(status)) {
+            reviewEnd = rejAt == null ? today : rejAt;
+            reviewOpen = rejAt == null;
+        } else {
+            reviewEnd = passAt != null ? passAt : (planAt != null ? planAt : today);
+            reviewOpen = passAt == null && planAt == null;
+        }
+        addStage(stages, "review", created, reviewEnd, reviewOpen, false);
+
+        if (planAt != null && "plan".equals(status)) {
+            LocalDate planStart = passAt == null ? created : passAt;
+            addStage(stages, "plan", planStart, planAt, false, planStart.isEqual(planAt));
+        }
+
+        int docCount = intValue(value(doc, "docCount"));
+        int docPublished = intValue(value(doc, "docPublished"));
+        timeline.setDocCount(docCount);
+        timeline.setDocPublished(docPublished);
+        LocalDate docStart = toDate(value(doc, "docStart"));
+        if (docStart != null) {
+            boolean designOpen = docPublished < docCount;
+            addStage(stages, "design", docStart, designOpen ? today : toDate(value(doc, "docEnd")),
+                    designOpen, false);
+        }
+
+        int taskCount = intValue(value(task, "taskCount"));
+        int taskDone = intValue(value(task, "taskDone"));
+        int taskOpen = intValue(value(task, "taskOpen"));
+        timeline.setTaskCount(taskCount);
+        timeline.setTaskDone(taskDone);
+        LocalDate devStart = toDate(value(task, "devStart"));
+        LocalDate devEnd = toDate(value(task, "devEnd"));
+        boolean devOpen = taskOpen > 0;
+        if (devStart != null) {
+            addStage(stages, "dev", devStart, devOpen ? today : devEnd, devOpen, false);
+        }
+
+        int caseCount = intValue(value(test, "caseCount"));
+        int casePending = intValue(value(test, "testPending"));
+        timeline.setCaseCount(caseCount);
+        timeline.setCasePending(casePending);
+        LocalDate testStart = toDate(value(test, "testStart"));
+        LocalDate testEnd = toDate(value(test, "testEnd"));
+        if (testStart != null) {
+            addStage(stages, "test", testStart, casePending > 0 ? today : testEnd,
+                    casePending > 0, false);
+        }
+
+        /* 完成点取开发与测试的较晚收口；仍有用例未通过时不算完成 */
+        LocalDate lastWork = devEnd;
+        if (testEnd != null && (lastWork == null || testEnd.isAfter(lastWork))) {
+            lastWork = testEnd;
+        }
+        LocalDate completeAt = null;
+        if (taskCount > 0 && taskDone >= taskCount && casePending == 0) {
+            completeAt = lastWork == null ? today : lastWork;
+            addStage(stages, "complete", completeAt, completeAt, false, true);
+        }
+
+        LocalDate releasedAt = toDate(value(version, "releasedAt"));
+        if (releasedAt != null) {
+            LocalDate releaseStart = completeAt != null ? completeAt : (lastWork == null ? releasedAt : lastWork);
+            if (releaseStart.isAfter(releasedAt)) {
+                releaseStart = releasedAt;
+            }
+            addStage(stages, "release", releaseStart, releasedAt, false, releaseStart.isEqual(releasedAt));
+        }
+
+        LocalDate start = null;
+        LocalDate end = null;
+        for (DemandStage stage : stages) {
+            if (start == null || stage.getStart().isBefore(start)) {
+                start = stage.getStart();
+            }
+            if (end == null || stage.getEnd().isAfter(end)) {
+                end = stage.getEnd();
+            }
+        }
+        timeline.setStart(start);
+        timeline.setEnd(end);
+        timeline.setDays(start == null || end == null ? 0
+                : (int) (java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1));
+        return timeline;
+    }
+
+    private static void addStage(List<DemandStage> stages, String name, LocalDate start, LocalDate end,
+                                 boolean open, boolean point) {
+        if (start == null) {
+            return;
+        }
+        if (end == null || end.isBefore(start)) {
+            end = start;
+        }
+        DemandStage stage = new DemandStage();
+        stage.setStage(name);
+        stage.setStart(start);
+        stage.setEnd(end);
+        stage.setOpen(open);
+        stage.setPoint(point);
+        stages.add(stage);
+    }
+
+    private static Object value(Map<String, Object> row, String key) {
+        return row == null ? null : row.get(key);
+    }
+
+    private static LocalDate toDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate) {
+            return (LocalDate) value;
+        }
+        if (value instanceof LocalDateTime) {
+            return ((LocalDateTime) value).toLocalDate();
+        }
+        if (value instanceof java.sql.Date) {
+            return ((java.sql.Date) value).toLocalDate();
+        }
+        if (value instanceof java.sql.Timestamp) {
+            return ((java.sql.Timestamp) value).toLocalDateTime().toLocalDate();
+        }
+        if (value instanceof java.util.Date) {
+            return new java.sql.Date(((java.util.Date) value).getTime()).toLocalDate();
+        }
+        String text = String.valueOf(value);
+        return text.length() < 10 ? null : LocalDate.parse(text.substring(0, 10));
+    }
+
+    private static int intValue(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
+    }
+
 
     private void prepare(String workspaceId, String userId, DemandQuery query) {
         query.setWorkspaceId(workspaceId);
@@ -233,27 +441,28 @@ public class DemandService {
         return d;
     }
 
-    public List<Map<String, Object>> logs(String workspaceId, String id) {
-        requireDemand(workspaceId, id);
-        return demandMapper.selectLogs(workspaceId, id);
-    }
-
-    public List<Map<String, Object>> logs(String workspaceId, String userId, String id) {
+    public com.hourglass.dto.PageResult<Map<String, Object>> logs(String workspaceId, String userId, String id,
+                                                                   int offset, int limit) {
         Demand d = requireDemand(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        return demandMapper.selectLogs(workspaceId, id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        int total = demandMapper.countLogs(workspaceId, id);
+        List<Map<String, Object>> items = total <= safeOffset ? new ArrayList<Map<String, Object>>()
+                : demandMapper.selectLogs(workspaceId, id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
-    /** T2.3：需求详情「关联任务」透视（task.demand_id 反查，未完成的排前面） */
-    public List<Task> tasks(String workspaceId, String id) {
-        requireDemand(workspaceId, id);
-        return taskMapper.selectByDemand(workspaceId, id);
-    }
-
-    public List<Task> tasks(String workspaceId, String userId, String id) {
+    public com.hourglass.dto.PageResult<Task> tasks(String workspaceId, String userId, String id,
+                                                     int offset, int limit) {
         Demand d = requireDemand(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        return taskMapper.selectByDemand(workspaceId, id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = taskMapper.countActiveByDemand(workspaceId, id);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectByDemandPage(workspaceId, id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     @Transactional

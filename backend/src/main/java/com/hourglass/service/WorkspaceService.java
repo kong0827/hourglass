@@ -551,6 +551,7 @@ public class WorkspaceService {
         backlog.setWorkspaceId(workspaceId);
         backlog.setName("待处理");
         backlog.setColor("#c08a3e");
+        backlog.setProcessingRule("normal");
         backlog.setSortOrder(0);
         boardColumnMapper.insert(backlog);
 
@@ -559,6 +560,7 @@ public class WorkspaceService {
         doing.setWorkspaceId(workspaceId);
         doing.setName("进行中");
         doing.setColor("#5b83ad");
+        doing.setProcessingRule("normal");
         doing.setSortOrder(1);
         boardColumnMapper.insert(doing);
     }

@@ -344,8 +344,8 @@ $("sideNav").addEventListener("click", function(e){
 var sideSettingsBtn = $("sideSettings");
 if(sideSettingsBtn) sideSettingsBtn.addEventListener("click", function(){ showView("settings"); });
 var sideBrandBtn = $("sideBrand");
-/* Logo 回首页：与登录后默认落点保持一致（按角色选落点） */
-if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView(defaultLanding()); });
+/* Logo 回首页：与登录首屏一致，固定落「我的工作」 */
+if(sideBrandBtn) sideBrandBtn.addEventListener("click", function(){ showView("mine"); });
 /* 底栏已覆盖的入口不再放进「更多视图」；分组与侧栏一致，设置置底 */
 function moreMenuHTML(){
   return NAV_GROUPS.map(function(g){
@@ -399,14 +399,4 @@ window.addEventListener("ds:route-go", function(e){
   if(to && VIEWS[to]) showView(to);
 });
 
-/* 左上角品牌回首页按角色选落点：查看者没有「分派给我」的待办，直接进可读的项目列表；
-   管理者先进全局健康度；成员仍是「我的工作」 */
-function defaultLanding(){
-  /* 个人空间没有协作分工，仍回到「我的工作」 */
-  if(!rt.currentWs || rt.currentWs.type !== "shared") return "mine";
-  var role = rt.currentWs.myRole;
-  if(role === "viewer") return "projects";
-  if(role === "owner" || role === "admin") return "portfolio";
-  return "mine";
-}
-export { VIEWS, activeView, defaultLanding, refreshActiveView, showView, viewFromHash };
+export { VIEWS, activeView, refreshActiveView, showView, viewFromHash };

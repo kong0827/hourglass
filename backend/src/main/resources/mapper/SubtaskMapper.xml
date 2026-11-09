@@ -11,6 +11,17 @@
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY id
   </select>
 
+  <select id="selectPageByTaskId" resultType="Subtask">
+    SELECT <include refid="cols"/> FROM subtask
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+    ORDER BY id
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByTaskId" resultType="int">
+    SELECT COUNT(*) FROM subtask WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </select>
+
   <select id="selectAll" resultType="Subtask">
     SELECT <include refid="cols"/> FROM subtask WHERE workspace_id = #{workspaceId} ORDER BY task_id, id
   </select>

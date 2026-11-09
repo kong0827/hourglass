@@ -66,6 +66,16 @@ public class TaskWorkflowService {
         this.projectAccess = projectAccess;
     }
 
+    private String stopReasonForRule(String rule) {
+        if ("waiting".equals(rule)) {
+            return "进入等待列";
+        }
+        if ("ended".equals(rule)) {
+            return "执行已结束";
+        }
+        return "移回待处理";
+    }
+
     /** 取前后两项之间的中值；返回 -1 表示间隔不够，需要整列重排 */
     private int sparseOrder(Task prev, Task next) {
         Integer p = prev == null ? null : prev.getSortOrder();
@@ -130,11 +140,11 @@ public class TaskWorkflowService {
                 generatedDue = maybeGenerateNext(userId, workspaceId, task, from);
             } else {
                 task.setCompletedAt(null);
-                if (Consts.COL_BACKLOG.equals(to)) {
-                    /* 回退到待处理：已记录的工时保留，但不再继续计时（待处理的任务不该有在跑的计时） */
-                    timeLogService.closeRunningForTask(workspaceId, id, userId, "移回待处理");
+                if (!support.canTime(workspaceId, to)) {
+                    /* 移入不可计时列（待处理 / 等待接续 / 执行结束）：保留已记录工时，停掉运行中计时 */
+                    timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
                 } else {
-                    /* 拖进「进行中」（或任何非待处理、非已完成的列）= 开工，自动开始计时。
+                    /* 拖进「正常处理」列 = 开工，自动开始计时。
                        若本人已有别的任务在计时，start() 会先把它停掉 —— 个人同一时刻只计一个任务。
                        autoTimer=false 时跳过（"取消完成"这类回退操作不该顺手开表）。 */
                     boolean wantAuto = req.getAutoTimer() == null || req.getAutoTimer();
@@ -263,9 +273,9 @@ public class TaskWorkflowService {
             timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已完成");
             /* 抽屉里改成已完成也接力：进行中不该出现"谁都没在计时"的空档 */
             timeLogService.resumeInColumn(userId, workspaceId, from, id);
-        } else if (Consts.COL_BACKLOG.equals(to)) {
-            /* 抽屉里把列改成「待处理」：工时保留，计时停掉 */
-            timeLogService.closeRunningForTask(workspaceId, id, userId, "移回待处理");
+        } else if (!support.canTime(workspaceId, to)) {
+            /* 抽屉里改成不可计时列：工时保留，计时停掉 */
+            timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
         }
     }
 

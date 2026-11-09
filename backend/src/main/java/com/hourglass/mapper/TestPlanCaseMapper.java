@@ -16,7 +16,10 @@ public interface TestPlanCaseMapper {
     List<String> selectCaseIds(@Param("planId") String planId);
 
     /** 计划详情的用例行（本体信息 + 计划内结果） */
-    List<TestPlanCaseView> selectViewByPlan(@Param("planId") String planId);
+    List<TestPlanCaseView> selectViewByPlan(@Param("planId") String planId,
+                                            @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByPlan(@Param("planId") String planId);
 
     TestPlanCase selectByPlanAndCase(@Param("planId") String planId, @Param("caseId") String caseId);
 

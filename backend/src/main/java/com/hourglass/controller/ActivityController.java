@@ -25,10 +25,13 @@ public class ActivityController {
     }
 
     @GetMapping("/api/activity")
-    public ApiResult<List<TaskLog>> activity(@RequestParam(required = false) String workspace,
-                                             @RequestParam(required = false) Integer limit) {
+    public ApiResult<com.hourglass.dto.PageResult<TaskLog>> activity(
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(activityService.activity(ws.getId(), userId, limit));
+        return ApiResult.ok(activityService.activity(ws.getId(), userId,
+                offset == null ? 0 : offset, limit == null ? 50 : limit));
     }
 }

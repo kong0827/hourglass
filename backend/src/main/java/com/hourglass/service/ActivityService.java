@@ -60,12 +60,16 @@ public class ActivityService {
         logConfig(workspaceId, actorId, detail);
     }
 
-    /** 空间活动流（倒序，最多 limit 条；排除配置哨兵以外的噪音由调用方决定） */
-    public List<TaskLog> activity(String workspaceId, String userId, Integer limit) {
-        int n = limit == null ? 200 : Math.max(1, Math.min(500, limit));
-        /* 配置审计文案会点名项目/成员，只在空间主与管理员之间可见 */
+    /** 空间活动流（倒序；配置审计仅空间主与管理员可见） */
+    public com.hourglass.dto.PageResult<TaskLog> activity(
+            String workspaceId, String userId, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
         boolean includeConfig = ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId));
-        return logMapper.selectByWorkspace(workspaceId, projectAccess.viewerScope(workspaceId, userId),
-                includeConfig, n);
+        int total = logMapper.countByWorkspace(workspaceId, viewerId, includeConfig);
+        List<TaskLog> items = total <= safeOffset ? new java.util.ArrayList<TaskLog>()
+                : logMapper.selectByWorkspace(workspaceId, viewerId, includeConfig, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 }

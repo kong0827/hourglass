@@ -33,7 +33,7 @@ class MetricsServiceTest {
     void overdueUsesSharedDueKind() {
         TaskMapper taskMapper = mock(TaskMapper.class);
         MetricsService m = new MetricsService(taskMapper, mock(TimeLogMapper.class),
-                mock(TaskCompletionRecordMapper.class));
+                mock(TaskCompletionRecordMapper.class), mock(WorkspaceMetaCache.class));
         LocalDate today = LocalDate.of(2026, 11, 1);
         List<Task> tasks = Arrays.asList(
                 task("2026-10-30", "todo"),
@@ -50,7 +50,7 @@ class MetricsServiceTest {
         TaskMapper taskMapper = mock(TaskMapper.class);
         TimeLogMapper timeLogMapper = mock(TimeLogMapper.class);
         TaskCompletionRecordMapper completionMapper = mock(TaskCompletionRecordMapper.class);
-        MetricsService m = new MetricsService(taskMapper, timeLogMapper, completionMapper);
+        MetricsService m = new MetricsService(taskMapper, timeLogMapper, completionMapper, mock(WorkspaceMetaCache.class));
 
         when(completionMapper.countByRange(eq("W1"), any(LocalDate.class), any(LocalDate.class))).thenReturn(7);
         assertEquals(7, m.completedCount("W1", LocalDate.of(2026, 10, 1), LocalDate.of(2026, 11, 1)));

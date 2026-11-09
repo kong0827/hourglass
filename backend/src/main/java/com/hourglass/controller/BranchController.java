@@ -39,15 +39,6 @@ public class BranchController {
         this.workspaceService = workspaceService;
     }
 
-    /** 分支列表（含关联任务数 / 已完成数 / 归属项目；只统计查看人可见项目） */
-    @GetMapping("/api/branches")
-    public ApiResult<List<DevBranch>> list(@RequestParam(required = false) String workspace,
-                                           @RequestParam(required = false) String project) {
-        String userId = CurrentUser.id();
-        Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(branchService.list(ws.getId(), userId, project));
-    }
-
     /** 分支看板：各状态先给一屏 + 状态计数；列内滚动加载走 /api/branches/page */
     @GetMapping("/api/branches/board")
     public ApiResult<com.hourglass.dto.BranchBoard> board(@RequestParam(required = false) String workspace,
@@ -65,8 +56,8 @@ public class BranchController {
         return ApiResult.ok(branchService.board(ws.getId(), userId, query));
     }
 
-    /** 分支按状态分页（滚动加载已发布等大分组） */
-    @GetMapping("/api/branches/page")
+    /** 分支分页列表（含关联任务数 / 已完成数 / 归属项目；只统计查看人可见项目） */
+    @GetMapping({"/api/branches", "/api/branches/page"})
     public ApiResult<com.hourglass.dto.BranchPage> page(@RequestParam(required = false) String workspace,
                                                         @RequestParam(required = false) String status,
                                                         @RequestParam(required = false) String project,
@@ -90,11 +81,15 @@ public class BranchController {
 
     /** 轻量分支选项：任务抽屉下拉、看板卡片分支名映射用 */
     @GetMapping("/api/branches/options")
-    public ApiResult<List<DevBranch>> options(@RequestParam(required = false) String workspace,
-                                              @RequestParam(required = false) String project) {
+    public ApiResult<com.hourglass.dto.PageResult<DevBranch>> options(
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(branchService.options(ws.getId(), userId, project));
+        return ApiResult.ok(branchService.options(ws.getId(), userId, project,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @GetMapping("/api/branches/{id}")
@@ -106,19 +101,27 @@ public class BranchController {
 
     /** 状态变更时间线（倒序：最近的在前） */
     @GetMapping("/api/branches/{id}/logs")
-    public ApiResult<List<DevBranchLog>> logs(@PathVariable String id,
-                                              @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<DevBranchLog>> logs(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(branchService.logs(ws.getId(), CurrentUser.id(), id));
+        return ApiResult.ok(branchService.logs(ws.getId(), CurrentUser.id(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 分支详情里的关联任务列表 */
     @GetMapping("/api/branches/{id}/tasks")
-    public ApiResult<List<com.hourglass.entity.Task>> tasks(@PathVariable String id,
-                                                                  @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<com.hourglass.entity.Task>> tasks(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(branchService.tasks(ws.getId(), userId, id));
+        return ApiResult.ok(branchService.tasks(ws.getId(), userId, id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/branches")

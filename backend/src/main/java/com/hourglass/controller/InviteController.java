@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -34,8 +35,12 @@ public class InviteController {
 
     /** 当前空间的有效邀请列表（仅空间主） */
     @GetMapping("/api/workspaces/{id}/invites")
-    public ApiResult<List<Invite>> list(@PathVariable String id) {
-        return ApiResult.ok(inviteService.list(CurrentUser.id(), id));
+    public ApiResult<com.hourglass.dto.PageResult<Invite>> list(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(inviteService.list(CurrentUser.id(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 撤销邀请（仅空间主） */

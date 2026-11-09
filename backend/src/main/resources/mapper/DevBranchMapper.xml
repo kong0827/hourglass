@@ -124,7 +124,13 @@
     SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.target_branch, b.owner
     FROM dev_branch b
     WHERE <include refid="pageWhere"/>
-    ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
+    ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC, b.id DESC
+    LIMIT #{q.limit} OFFSET #{q.offset}
+  </select>
+
+  <select id="countOptions" resultType="int">
+    SELECT COUNT(*) FROM dev_branch b
+    WHERE <include refid="pageWhere"/>
   </select>
 
   <select id="countGroupByStatus" resultType="map">
@@ -262,7 +268,11 @@
     FROM dev_branch_log
     WHERE branch_id = #{branchId}
     ORDER BY created_at DESC, id DESC
-    LIMIT 200
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countLogs" resultType="int">
+    SELECT COUNT(*) FROM dev_branch_log WHERE branch_id = #{branchId}
   </select>
 
   <update id="clearOwnerUser">

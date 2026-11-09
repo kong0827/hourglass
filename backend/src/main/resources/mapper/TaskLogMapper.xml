@@ -22,7 +22,12 @@
     LEFT JOIN app_user u ON u.id = l.actor_id
     WHERE l.workspace_id = #{workspaceId} AND l.task_id = #{taskId}
     ORDER BY l.id DESC
-    LIMIT 200
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByTaskId" resultType="int">
+    SELECT COUNT(*) FROM task_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
   </select>
 
   <!-- 手机风险列表：一批任务最近一次进入阻塞的时间（没有日志的返回空，不拿 updated_at 冒充） -->
@@ -50,15 +55,7 @@
     LIMIT 1
   </select>
 
-  <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
-  <select id="selectByWorkspace" resultType="TaskLog">
-    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
-           l.from_column, l.to_column, l.created_at,
-           u.display_name AS actor_name,
-           t.title AS task_title
-    FROM task_log l
-    LEFT JOIN app_user u ON u.id = l.actor_id
-    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+  <sql id="workspaceActivityWhere">
     WHERE l.workspace_id = #{workspaceId}
     <if test="!includeConfig">
       AND l.task_id &lt;&gt; 'CFG'
@@ -73,8 +70,25 @@
           AND t2.workspace_id = l.workspace_id
           AND pm.access = 'none'))
     </if>
+  </sql>
+
+  <!-- 空间级活动流（O-9）：含配置类哨兵事件（task_id = CFG） -->
+  <select id="selectByWorkspace" resultType="TaskLog">
+    SELECT l.id, l.task_id, l.workspace_id, l.actor_id, l.action, l.detail,
+           l.from_column, l.to_column, l.created_at,
+           u.display_name AS actor_name,
+           t.title AS task_title
+    FROM task_log l
+    LEFT JOIN app_user u ON u.id = l.actor_id
+    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    <include refid="workspaceActivityWhere"/>
     ORDER BY l.id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM task_log l
+    <include refid="workspaceActivityWhere"/>
   </select>
 
   <!-- 某周期内有活动的任务（周回顾看历史周期时用；CFG 哨兵事件没有任务，自然被过滤） -->

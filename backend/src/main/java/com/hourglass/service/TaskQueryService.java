@@ -55,9 +55,9 @@ public class TaskQueryService {
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
     /** 工作项类型固定顺序（与任务表单下拉一致） */
     private static final String[] TASK_TYPES = {"task", "story", "bug", "epic"};
-    private static final int LIST_LIMIT = 500;
-    /** 我的任务分页上限（与 /api/tasks/list 的 500 上限一致） */
-    public static final int MY_TASKS_MAX_LIMIT = 500;
+    private static final int LIST_LIMIT = 100;
+    /** 我的任务分页上限（与 /api/tasks/list 的 100 上限一致） */
+    public static final int MY_TASKS_MAX_LIMIT = 100;
 
     private final TaskMapper taskMapper;
     private final RequirementMapper reqMapper;
@@ -166,25 +166,30 @@ public class TaskQueryService {
         LocalDate today = LocalDate.now();
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<BoardColumn> configCols = metaCache.columns(workspaceId);
-        Map<String, List<Task>> byCol = new LinkedHashMap<String, List<Task>>();
-        for (BoardColumn c : configCols) {
-            byCol.put(c.getId(), new ArrayList<Task>());
-        }
-        byCol.put(Consts.COL_DONE, new ArrayList<Task>());
         String fallbackCol = configCols.isEmpty() ? Consts.COL_BACKLOG : configCols.get(0).getId();
-        /* 第九轮审查 #3：兜底列必须在 byCol 里真实存在。
-           否则 configCols 为空（手工改库/异常恢复）时 byCol.get(fallbackCol) 返回 null，
-           未完成任务会被静默丢弃，响应里只剩「已完成」一列。 */
-        if (!byCol.containsKey(fallbackCol)) {
-            byCol.put(fallbackCol, new ArrayList<Task>());
+        List<String> openColumns = new ArrayList<String>();
+        List<String> knownColumns = new ArrayList<String>();
+        for (BoardColumn c : configCols) {
+            openColumns.add(c.getId());
+            knownColumns.add(c.getId());
+        }
+        knownColumns.add(Consts.COL_DONE);
+        if (openColumns.isEmpty()) {
+            openColumns.add(fallbackCol);
+        }
+        GanttQuery openQuery = GanttQuery.from(query, today, null, null, false);
+        openQuery.setViewerId(viewerId);
+
+        BoardResponse resp = new BoardResponse();
+        for (BoardColumn c : configCols) {
+            resp.getColumnDefs().add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(), false));
+        }
+        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", true));
+        for (String col : openColumns) {
+            resp.getColumns().put(col, openPage(workspaceId, viewerId, openQuery, query, col,
+                    0, query.getOpenLimit(), col.equals(fallbackCol), knownColumns));
         }
 
-        /* 未完成列：SQL 直接按列取（board_column <> done），历史已完成任务不再进内存 */
-        List<Task> open = taskMapper.selectOpenTasks(workspaceId, viewerId);
-        /* 版本筛选在内存 match() 里判定，未完成列需要先补版本绑定 */
-        mergeVersionInfo(workspaceId, open);
-
-        /* 已完成列：计数与筛选下推 SQL，只取当前页；筛选口径复用 ganttWhere（与 match() 对齐） */
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate sunday = monday.plusDays(6);
         boolean scopeAll = "all".equals(query.getDoneScope());
@@ -197,52 +202,15 @@ public class TaskQueryService {
                 : doneTotal;
         List<Task> doneItems = doneMatched == 0 ? new ArrayList<Task>()
                 : taskMapper.selectDonePage(workspaceId, doneQuery, scopeAll, monday, sunday, 0, query.getDoneLimit());
+        mergeTaskExtras(workspaceId, doneItems);
 
-        /* 附属数据只对本次真正返回的 id 批量查一次（未完成 + 已完成当前页） */
-        List<Task> visible = new ArrayList<Task>(open.size() + doneItems.size());
-        visible.addAll(open);
-        visible.addAll(doneItems);
-        mergeTaskExtras(workspaceId, visible);
-
-        for (Task t : open) {
-            List<Task> list = byCol.get(t.getBoardColumn());
-            if (list == null) {
-                list = byCol.get(fallbackCol);
-            }
-            if (list != null) {
-                list.add(t);
-            }
-        }
-        byCol.get(Consts.COL_DONE).addAll(doneItems);
-
-        BoardResponse resp = new BoardResponse();
-        for (BoardColumn c : configCols) {
-            resp.getColumnDefs().add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(), false));
-        }
-        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", true));
-
-        for (Map.Entry<String, List<Task>> entry : byCol.entrySet()) {
-            String col = entry.getKey();
-            List<Task> colTasks = entry.getValue();
-            BoardResponse.ColumnData data = new BoardResponse.ColumnData();
-            if (Consts.COL_DONE.equals(col)) {
-                data.setAllTotal(doneAll);
-                data.setMatched(doneMatched);
-                data.setTotal(doneTotal);
-                data.setItems(colTasks);
-                data.setHasMore(doneMatched > query.getDoneLimit());
-            } else {
-                List<Task> matched = filter(colTasks, query, today);
-                data.setAllTotal(colTasks.size());
-                data.setMatched(matched.size());
-                data.setTotal(colTasks.size());
-                /* 首屏每列只下发 openLimit 条，其余由 /api/tasks/column 滚动加载 */
-                int limit = Math.min(query.getOpenLimit(), matched.size());
-                data.setItems(new ArrayList<Task>(matched.subList(0, limit)));
-                data.setHasMore(limit < matched.size());
-            }
-            resp.getColumns().put(col, data);
-        }
+        BoardResponse.ColumnData doneData = new BoardResponse.ColumnData();
+        doneData.setAllTotal(doneAll);
+        doneData.setMatched(doneMatched);
+        doneData.setTotal(doneTotal);
+        doneData.setItems(doneItems);
+        doneData.setHasMore(doneMatched > query.getDoneLimit());
+        resp.getColumns().put(Consts.COL_DONE, doneData);
 
         List<TaskFacetRow> facets = taskMapper.selectBoardFacets(workspaceId, viewerId);
         resp.setCounts(countDue(facets, today));
@@ -250,7 +218,31 @@ public class TaskQueryService {
         return resp;
     }
 
-    /** 未完成列滚动加载：与首屏同一套筛选口径，按 offset/limit 切片下发 */
+    private BoardResponse.ColumnData openPage(String workspaceId, String viewerId, GanttQuery openQuery,
+                                              BoardQuery query, String column, int offset, int limit,
+                                              boolean fallback, List<String> knownColumns) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int allTotal = taskMapper.countOpenColumn(workspaceId, viewerId, column, fallback, knownColumns);
+        int matched = hasFilters(query)
+                ? taskMapper.countOpenMatched(workspaceId, openQuery, column, fallback, knownColumns)
+                : allTotal;
+        List<Task> items = matched <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectOpenPage(workspaceId, openQuery, column, fallback, knownColumns,
+                        safeOffset, safeLimit);
+        mergeVersionInfo(workspaceId, items);
+        mergeTaskExtras(workspaceId, items);
+
+        BoardResponse.ColumnData data = new BoardResponse.ColumnData();
+        data.setAllTotal(allTotal);
+        data.setMatched(matched);
+        data.setTotal(allTotal);
+        data.setItems(items);
+        data.setHasMore(safeOffset + items.size() < matched);
+        return data;
+    }
+
+    /** 未完成列滚动加载：与首屏同一套筛选口径，筛选和分页均在 SQL 完成 */
     public BoardResponse.ColumnData columnPage(String workspaceId, String userId, BoardQuery query,
                                                String column, int offset, int limit) {
         String col = Texts.trimToNull(column);
@@ -262,22 +254,17 @@ public class TaskQueryService {
         }
         LocalDate today = LocalDate.now();
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
-        List<Task> tasks = taskMapper.selectOpenColumnTasks(workspaceId, viewerId, col);
-        mergeVersionInfo(workspaceId, tasks);
-        mergeTaskExtras(workspaceId, tasks);
-        List<Task> matched = filter(tasks, query, today);
-        int safeOffset = Math.max(0, offset);
-        int safeLimit = limit <= 0 ? 60 : Math.min(limit, 200);
-        int from = Math.min(safeOffset, matched.size());
-        int to = Math.min(from + safeLimit, matched.size());
-
-        BoardResponse.ColumnData data = new BoardResponse.ColumnData();
-        data.setAllTotal(tasks.size());
-        data.setMatched(matched.size());
-        data.setTotal(tasks.size());
-        data.setItems(new ArrayList<Task>(matched.subList(from, to)));
-        data.setHasMore(to < matched.size());
-        return data;
+        List<BoardColumn> configCols = metaCache.columns(workspaceId);
+        String fallbackCol = configCols.isEmpty() ? Consts.COL_BACKLOG : configCols.get(0).getId();
+        List<String> knownColumns = new ArrayList<String>();
+        for (BoardColumn c : configCols) {
+            knownColumns.add(c.getId());
+        }
+        knownColumns.add(Consts.COL_DONE);
+        GanttQuery openQuery = GanttQuery.from(query, today, null, null, false);
+        openQuery.setViewerId(viewerId);
+        return openPage(workspaceId, viewerId, openQuery, query, col, offset, limit <= 0 ? 60 : limit,
+                col.equals(fallbackCol), knownColumns);
     }
 
     public BoardResponse.ColumnData donePage(String workspaceId, String userId, BoardQuery query) {
@@ -307,7 +294,7 @@ public class TaskQueryService {
         return data;
     }
 
-    /** 列表视图：筛选与 LIMIT 下推 SQL（上限 500），sort: due/priority/updated/column */
+    /** 列表视图：筛选与 LIMIT 下推 SQL（上限 100），sort: due/priority/updated/column */
     public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort) {
         return list(workspaceId, userId, query, sort, 0, LIST_LIMIT);
     }
@@ -445,15 +432,17 @@ public class TaskQueryService {
         }
     }
 
-    public List<TaskLog> logs(String workspaceId, String taskId) {
-        return logs(workspaceId, null, taskId);
-    }
-
-    public List<TaskLog> logs(String workspaceId, String userId, String taskId) {
+    public com.hourglass.dto.PageResult<TaskLog> logs(
+            String workspaceId, String userId, String taskId, int offset, int limit) {
         /* 回收站任务的日志保留可读（与评论一致），因此显式 INCLUDE，而不是沿用"排除已删除"的默认 */
         Task t = support.requireIncludingDeleted(workspaceId, taskId);
         projectAccess.assertViewTask(workspaceId, userId, t);
-        return logMapper.selectByTaskId(workspaceId, taskId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = logMapper.countByTaskId(workspaceId, taskId);
+        List<TaskLog> items = total <= safeOffset ? new ArrayList<TaskLog>()
+                : logMapper.selectByTaskId(workspaceId, taskId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 日历视图：与指定月份有交集的全部任务（默认当月）。
@@ -693,7 +682,8 @@ public class TaskQueryService {
             }
         }
         if (query.getDue() != null) {
-            String kind = TaskCalc.dueKind(t, today);
+            String rule = support.processingRule(t.getWorkspaceId(), t.getBoardColumn());
+            String kind = TaskCalc.dueKind(t.getBoardColumn(), rule, t.getDueDate(), today);
             if ("soon".equals(query.getDue())) {
                 if (!"soon".equals(kind) && !"today".equals(kind)) {
                     return false;
@@ -703,7 +693,8 @@ public class TaskQueryService {
             }
         }
         if (query.isFocus()) {
-            String kind = TaskCalc.dueKind(t, today);
+            String rule = support.processingRule(t.getWorkspaceId(), t.getBoardColumn());
+            String kind = TaskCalc.dueKind(t.getBoardColumn(), rule, t.getDueDate(), today);
             boolean hit = "over".equals(kind) || "today".equals(kind)
                     || (Consts.COL_DOING.equals(t.getBoardColumn()) && "P0".equals(t.getPriority()));
             if (!hit) {
@@ -742,7 +733,7 @@ public class TaskQueryService {
     private BoardResponse.Counts countDue(List<TaskFacetRow> facets, LocalDate today) {
         BoardResponse.Counts counts = new BoardResponse.Counts();
         for (TaskFacetRow r : facets) {
-            String kind = TaskCalc.dueKind(r.getBoardColumn(), r.getDueDate(), today);
+            String kind = TaskCalc.dueKind(r.getBoardColumn(), r.getProcessingRule(), r.getDueDate(), today);
             if ("over".equals(kind)) {
                 counts.setOver(counts.getOver() + 1);
             } else if ("today".equals(kind)) {

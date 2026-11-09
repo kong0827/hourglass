@@ -9,7 +9,10 @@ import java.util.List;
 @Mapper
 public interface TaskCommentMapper {
 
-    List<TaskComment> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    List<TaskComment> selectByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId,
+                                     @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByTaskId(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
     /** 备份导出：空间内全部评论（含回收站任务上的评论） */
     List<TaskComment> selectAllByWorkspace(@Param("workspaceId") String workspaceId);

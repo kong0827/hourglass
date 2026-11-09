@@ -11,6 +11,7 @@ public class BoardColumn {
     private String workspaceId;
     private String name;
     private String color;
+    private String processingRule;
     private Integer sortOrder;
     private LocalDateTime createdAt;
 }

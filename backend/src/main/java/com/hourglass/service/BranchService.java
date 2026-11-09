@@ -198,12 +198,17 @@ public class BranchService {
     }
 
     /** 任务抽屉「所属分支」下拉：按项目过滤的轻量选项（不含任务数与标签） */
-    public List<DevBranch> options(String workspaceId, String userId, String projectId) {
-        BranchQuery q = new BranchQuery();
-        q.setWorkspaceId(workspaceId);
-        q.setViewerId(projectAccess.viewerScope(workspaceId, userId));
-        q.setProjectId(Texts.trimToNull(projectId));
-        return branchMapper.selectOptions(q);
+    public com.hourglass.dto.PageResult<DevBranch> options(String workspaceId, String userId, String projectId,
+                                                            int offset, int limit) {
+        BranchQuery query = new BranchQuery();
+        query.setProjectId(projectId);
+        query.setOffset(offset);
+        query.setLimit(limit);
+        BranchQuery q = normalize(workspaceId, userId, query);
+        int total = branchMapper.countOptions(q);
+        List<DevBranch> items = total <= q.getOffset() ? new ArrayList<DevBranch>()
+                : branchMapper.selectOptions(q);
+        return com.hourglass.dto.PageResult.of(items, total, q.getOffset(), q.getLimit());
     }
 
     private BranchQuery normalize(String workspaceId, String userId, BranchQuery query) {
@@ -216,7 +221,7 @@ public class BranchService {
             q.setStatus(null);
         }
         q.setOffset(Math.max(0, q.getOffset()));
-        q.setLimit(Math.max(1, Math.min(200, q.getLimit())));
+        q.setLimit(Math.max(1, Math.min(100, q.getLimit())));
         return q;
     }
 
@@ -508,28 +513,30 @@ public class BranchService {
         branchMapper.deleteById(workspaceId, id);
     }
 
-    public List<DevBranchLog> logs(String workspaceId, String userId, String id) {
+    public com.hourglass.dto.PageResult<DevBranchLog> logs(
+            String workspaceId, String userId, String id, int offset, int limit) {
         DevBranch b = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, b.getReqId());
-        return branchMapper.selectLogs(id);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = branchMapper.countLogs(id);
+        List<DevBranchLog> items = total <= safeOffset ? new ArrayList<DevBranchLog>()
+                : branchMapper.selectLogs(id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 分支详情里的「关联任务」：未完成的排前面，同优先级按创建顺序；隐藏项目下的任务不返回 */
-    public List<Task> tasks(String workspaceId, String userId, String id) {
+    public com.hourglass.dto.PageResult<Task> tasks(
+            String workspaceId, String userId, String id, int offset, int limit) {
         DevBranch b = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, b.getReqId());
-        List<Task> list = taskMapper.selectByBranch(workspaceId, id);
-        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
-        if (hidden.isEmpty()) {
-            return list;
-        }
-        List<Task> visible = new ArrayList<Task>();
-        for (Task t : list) {
-            if (t.getReqId() == null || !hidden.contains(t.getReqId())) {
-                visible.add(t);
-            }
-        }
-        return visible;
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = taskMapper.countActiveByBranch(workspaceId, id, viewerId);
+        List<Task> items = total <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectByBranchPage(workspaceId, id, viewerId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /* ==================== 内部 ==================== */

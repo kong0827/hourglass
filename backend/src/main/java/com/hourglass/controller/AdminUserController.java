@@ -3,6 +3,7 @@ package com.hourglass.controller;
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.PasswordResetRequest;
 import com.hourglass.dto.UserCreateRequest;
 import com.hourglass.dto.UserUpdateRequest;
@@ -54,9 +55,10 @@ public class AdminUserController {
     }
 
     @GetMapping("/api/admin/users")
-    public ApiResult<List<AppUser>> list() {
+    public ApiResult<PageResult<AppUser>> list(@RequestParam(required = false) Integer offset,
+                                               @RequestParam(required = false) Integer limit) {
         requireAdmin();
-        return ApiResult.ok(userService.list());
+        return ApiResult.ok(userService.page(offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/admin/users")

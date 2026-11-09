@@ -13,7 +13,10 @@ public interface InviteMapper {
 
     Invite selectById(String id);
 
-    List<Invite> selectByWorkspace(@Param("workspaceId") String workspaceId);
+    List<Invite> selectByWorkspace(@Param("workspaceId") String workspaceId,
+                                   @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByWorkspace(@Param("workspaceId") String workspaceId);
 
     int incrUsedCount(@Param("id") String id);
 

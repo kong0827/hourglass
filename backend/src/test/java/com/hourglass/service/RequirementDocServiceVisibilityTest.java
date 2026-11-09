@@ -45,20 +45,24 @@ class RequirementDocServiceVisibilityTest {
             mock(ReqDocShareMapper.class), mock(WorkspaceMapper.class), mock(DocPreviewService.class));
 
     @Test
-    void docsOfDemandFiltersProjectsInvisibleToViewer() {
+    void docsOfDemandPushesViewerAndDraftVisibilityIntoPageQuery() {
         Demand demand = new Demand();
         demand.setId("DM1");
         demand.setWorkspaceId(WS);
         demand.setReqId("R1");
         when(demands.selectById("DM1")).thenReturn(demand);
-        when(access.canView(WS, USER, "R1")).thenReturn(true);
-        when(docs.selectByDemand(WS, "DM1")).thenReturn(Arrays.asList(view("D1", "R1"), view("D2", "R2")));
-        when(access.canView(WS, USER, "R2")).thenReturn(false);
+        when(access.viewerScope(WS, USER)).thenReturn(USER);
+        when(access.roleOf(WS, USER)).thenReturn(ProjectAccessService.ROLE_MEMBER);
+        when(docs.countByDemand(WS, "DM1", USER, USER, false)).thenReturn(1);
+        when(docs.selectByDemand(WS, "DM1", USER, USER, false, 0, 100))
+                .thenReturn(java.util.Collections.singletonList(view("D1", "R1")));
 
-        List<ReqDocView> visible = service.docsOfDemand(WS, "DM1", USER);
+        com.hourglass.dto.PageResult<ReqDocView> visible = service.docsOfDemand(WS, "DM1", USER, 0, 100);
 
-        assertEquals(1, visible.size(), "不可见项目的文档被过滤");
-        assertEquals("D1", visible.get(0).getId());
+        assertEquals(1, visible.getTotal());
+        assertEquals(1, visible.getItems().size());
+        assertEquals("D1", visible.getItems().get(0).getId());
+        assertEquals("正文", visible.getItems().get(0).getExcerpt());
     }
 
     @Test
@@ -70,14 +74,14 @@ class RequirementDocServiceVisibilityTest {
         when(demands.selectById("DM1")).thenReturn(demand);
         doThrow(AppException.notFound("项目不存在：R1")).when(access).assertView(WS, USER, "R1");
 
-        assertThrows(AppException.class, () -> service.docsOfDemand(WS, "DM1", USER));
+        assertThrows(AppException.class, () -> service.docsOfDemand(WS, "DM1", USER, 0, 100));
     }
 
     @Test
     void docsOfDemandMissingDemandIsNotFound() {
         when(demands.selectById("DM9")).thenReturn(null);
 
-        assertThrows(AppException.class, () -> service.docsOfDemand(WS, "DM9", USER));
+        assertThrows(AppException.class, () -> service.docsOfDemand(WS, "DM9", USER, 0, 100));
     }
 
     private ReqDocView view(String id, String reqId) {

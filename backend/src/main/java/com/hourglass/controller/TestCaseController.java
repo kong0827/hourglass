@@ -128,12 +128,15 @@ public class TestCaseController {
 
     /** 执行历史与失败证据（最近在前） */
     @GetMapping("/api/test-cases/{id}/runs")
-    public ApiResult<List<CaseRunView>> runs(@PathVariable String id,
-                                             @RequestParam(required = false) Integer limit,
-                                             @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<CaseRunView>> runs(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(caseService.runs(ws.getId(), userId, id, limit == null ? 30 : limit));
+        return ApiResult.ok(caseService.runs(ws.getId(), userId, id,
+                offset == null ? 0 : offset, limit == null ? 30 : limit));
     }
 
     /** 上传失败证据（截图/日志/录屏文件），挂在本轮执行记录下 */

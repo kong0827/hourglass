@@ -14,10 +14,12 @@ import { canEditReq, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
 
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
+    demandGanttBar = $("demandGanttBar"), demandsPage = $("demandsPage"),
     dReq = $("dReq"), dTitle = $("dTitle"), dDesc = $("dDesc"), dAccept = $("dAccept"),
     dSource = $("dSource"), dKind = $("dKind"), dExpect = $("dExpect"),
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
@@ -42,6 +44,12 @@ var demandHasMore = false;
 var demandServerFiltered = false;
 var DEMAND_BOARD_PAGE = 50;
 var DEMAND_TABLE_PAGE = 100;
+var DEMAND_GANTT_PAGE = 100;
+var DEMAND_GANTT_MAX_DAYS = 730;
+var DEM_STAGE_ORDER = ["review", "plan", "design", "dev", "test", "complete", "release"];
+var DEM_STAGE_NAMES = { review:"评审", plan:"排期", design:"设计", dev:"开发", test:"测试", complete:"完成", release:"发布" };
+var DEM_STAGE_COLORS = { review:"var(--text-3)", plan:"var(--info)", design:"var(--plum)", dev:"var(--primary)", test:"var(--warning)", complete:"var(--success)", release:"var(--success)" };
+var demGantt = { scale:"day", zoomDayW:28, rangeMode:"auto", anchorMonth:null, range:null, dayW:28, scrollLeft:0, scrolled:false, notice:"" };
 var versions = [];           /* 当前项目的版本（目标版本展示/排期选择） */
 var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
@@ -65,6 +73,9 @@ function versionName(id){
   for(var i = 0; i < versions.length; i++) if(versions[i].id === id) return versions[i].name;
   return versionNames[id] || "";
 }
+function demandVersionName(d){
+  return d && (d.versionName || versionName(d.versionId)) || "";
+}
 function wsjfText(d){
   if(d.wsjfScore === null || d.wsjfScore === undefined) return "";
   return "WSJF " + (Math.round(d.wsjfScore * 10) / 10);
@@ -84,7 +95,10 @@ function syncReqSel(){
 var demandLoadSeq = 0;
 function loadDemands(){
   var seq = ++demandLoadSeq;
-  if(listPrefs.viewMode("demand-pool") === "table"){ loadAllDemands(); return; }
+  var mode = listPrefs.viewMode("demand-pool");
+  syncModeUI(mode);
+  if(mode === "gantt"){ loadDemandGantt(); return; }
+  if(mode === "table"){ loadAllDemands(); return; }
   if(!rt.demandReqId || !rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
@@ -186,19 +200,12 @@ function loadAllDemands(){
   demandTotal = 0;
   demandHasMore = false;
   API.get("/api/demands/page", demandPageParams(0, DEMAND_TABLE_PAGE)).then(function(page){
-    if(seq !== demandLoadSeq) return null;
-    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return null;
+    if(seq !== demandLoadSeq) return;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     demands = (page.items || []).slice();
     demandTotal = page.total || 0;
     demandHasMore = !!page.hasMore;
     versions = [];
-    return Promise.all(uniqueReqIds(demands).map(function(rid){
-      return API.get("/api/versions", { reqId: rid }).then(function(vs){
-        (vs || []).forEach(function(v){ versionNames[v.id] = v.name; });
-      }).catch(function(){});
-    }));
-  }).then(function(done){
-    if(done === null || seq !== demandLoadSeq) return;
     if(listPrefs.viewMode("demand-pool") !== "table") return;
     render();
   }).catch(function(ex){
@@ -207,11 +214,6 @@ function loadAllDemands(){
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
   });
-}
-function uniqueReqIds(list){
-  var ids = [];
-  list.forEach(function(d){ if(d.reqId && ids.indexOf(d.reqId) === -1) ids.push(d.reqId); });
-  return ids;
 }
 /* 列表「加载更多」：按当前筛选条件追加下一页 */
 function loadMoreDemandTable(){
@@ -224,15 +226,8 @@ function loadMoreDemandTable(){
     mergeLoadedDemands(page.items);
     demandTotal = page.total || demandTotal;
     demandHasMore = !!page.hasMore;
-    var reqIds = uniqueReqIds(page.items);
-    return Promise.all(reqIds.map(function(rid){
-      return API.get("/api/versions", { reqId: rid }).then(function(vs){
-        (vs || []).forEach(function(v){ versionNames[v.id] = v.name; });
-      }).catch(function(){});
-    })).then(function(){
-      render();
-      return true;
-    });
+    render();
+    return true;
   }).catch(function(ex){
     toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
     return false;
@@ -268,6 +263,70 @@ function reloadDemands(){
   loadDemands();
 }
 
+/* ---------- 甘特：加载（跨项目，筛选/排序在服务端） ---------- */
+
+function mergeGanttItems(items){
+  var known = {};
+  demands.forEach(function(d){ known[d.id] = 1; });
+  (items || []).forEach(function(it){
+    if(!it || !it.demand || known[it.demand.id]) return;
+    it.demand.__timeline = it.timeline || null;
+    demands.push(it.demand);
+    known[it.demand.id] = 1;
+  });
+}
+function loadDemandGantt(){
+  if(!rt.reqList.length){
+    demandBody.innerHTML = UI.emptyState({
+      icon:"folder", title:"还没有项目",
+      text:"先在「项目」里创建项目，需求池按项目收纳需求。"
+    });
+    if(demandsMeta) demandsMeta.textContent = "";
+    return;
+  }
+  var seq = ++demandLoadSeq;
+  var wsId = rt.currentWs && rt.currentWs.id;
+  demandBody.innerHTML = UI.skeletonRows(3);
+  demandServerFiltered = true;
+  demandBoard = null;
+  demands = [];
+  demandTotal = 0;
+  demandHasMore = false;
+  API.get("/api/demands/gantt", demandPageParams(0, DEMAND_GANTT_PAGE)).then(function(page){
+    if(seq !== demandLoadSeq) return;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    demands = [];
+    mergeGanttItems(page.items);
+    demandTotal = page.total || 0;
+    demandHasMore = !!page.hasMore;
+    if(listPrefs.viewMode("demand-pool") !== "gantt") return;
+    render();
+  }).catch(function(ex){
+    if(seq !== demandLoadSeq) return;
+    demandBody.innerHTML = UI.emptyState({
+      icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
+    });
+  });
+}
+function loadMoreDemandGantt(){
+  if(!demandHasMore) return Promise.resolve(false);
+  var seq = demandLoadSeq;
+  var btn = demandBody.querySelector('[data-dem-more="gantt"]');
+  if(btn){ btn.disabled = true; btn.textContent = "加载中…"; }
+  return API.get("/api/demands/gantt", demandPageParams(demands.length, DEMAND_GANTT_PAGE)).then(function(page){
+    if(seq !== demandLoadSeq) return false;
+    mergeGanttItems(page.items);
+    demandTotal = page.total || demandTotal;
+    demandHasMore = !!page.hasMore;
+    render();
+    return true;
+  }).catch(function(ex){
+    toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    render();
+    return false;
+  });
+}
+
 /* ---------- 看板渲染 ---------- */
 
 function syncModeUI(mode){
@@ -276,18 +335,27 @@ function syncModeUI(mode){
     b.classList.toggle("primary", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
-  if(demandReq) demandReq.hidden = mode === "table";
+  if(demandReq) demandReq.hidden = mode !== "board";
   var bc = $("btnDemandColumns");
   if(bc) bc.hidden = mode !== "table";
-  /* 智能视图条只在列表模式出现：看板模式保持评审状态机的原貌 */
-  if(demSmartBar) demSmartBar.hidden = mode !== "table";
-  /* 只读项目不显示「提需求」；列表模式全空间，只要有一个可写项目即可 */
+  /* 智能视图条承载搜索/筛选/分组/排序：列表与甘特共用，看板保持评审状态机原貌 */
+  if(demSmartBar) demSmartBar.hidden = mode === "board";
+  if(demandGanttBar) demandGanttBar.hidden = mode !== "gantt";
+  if(demandsPage){
+    demandsPage.classList.toggle("dem-gantt", mode === "gantt");
+    var vw = demandsPage.closest(".view");
+    if(vw) vw.classList.toggle("is-dem-gantt", mode === "gantt");
+  }
+  if(demandBody) demandBody.classList.toggle("demg-body", mode === "gantt");
+  /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可 */
   var bn = $("btnDemandNew");
-  if(bn) bn.style.display = (writableReqs().length && (mode === "table" || canEditReq(rt.demandReqId))) ? "" : "none";
+  if(bn) bn.style.display = (writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
+  syncDemGanttControls();
 }
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
   syncModeUI(mode);
+  if(mode === "gantt"){ renderDemandGantt(); return; }
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
     var total = 0;
@@ -397,7 +465,7 @@ function cardHTML(d, opts){
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
     + '<div class="bkl-tags">'
-    + (versionName(d.versionId) ? '<span class="tag ghost">' + esc(versionName(d.versionId)) + '</span>' : '')
+    + (demandVersionName(d) ? '<span class="tag ghost">' + esc(demandVersionName(d)) + '</span>' : '')
     + (d.expectDate ? '<span class="tag tag-info">期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>' : '')
     + (wsjfText(d) ? '<span class="tag tag-plum">' + esc(wsjfText(d)) + '</span>' : '')
     + '</div>'
@@ -421,7 +489,7 @@ function demandCell(d, key){
   if(key === "priority") return priTagHTML(d.priority || "P2");
   if(key === "status") return statusTag(d.status);
   if(key === "project") return esc(reqNameById(d.reqId) || "—");
-  if(key === "version") return esc(versionName(d.versionId) || "—");
+  if(key === "version") return esc(demandVersionName(d) || "—");
   if(key === "expectDate") return esc(d.expectDate ? String(d.expectDate).substring(0, 10) : "—");
   if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? "—" : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return esc(d.source || "—");
@@ -533,7 +601,8 @@ function saveDemState(){
       wsId: ws,
       view: {
         current: demSmart.current, preset: demSmart.preset, group: demSmart.group, sort: demSmart.sort,
-        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(), reqs: demSmart.reqs.slice()
+        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(), reqs: demSmart.reqs.slice(),
+        gantt: { scale: demGantt.scale, rangeMode: demGantt.rangeMode, zoomDayW: demGantt.zoomDayW }
       }
     }));
   }catch(e){ /* 隐私模式/受限环境忽略 */ }
@@ -543,11 +612,22 @@ function demStrArr(v){
   return v.filter(function(x){ return typeof x === "string"; });
 }
 function restoreDemState(){
-  if(!rt.currentWs) return;
+  /* 工作区切换后旧区间的像素位置/锚点月份不可复用 */
+  function resetGanttTransient(){
+    demGantt.anchorMonth = null;
+    demGantt.range = null;
+    demGantt.scrolled = false;
+    demGantt.scrollLeft = 0;
+    demGantt.notice = "";
+  }
+  if(!rt.currentWs){ resetGanttTransient(); return; }
   var snap;
   try{ snap = JSON.parse(localStorage.getItem(DEM_STATE_KEY) || "null"); }
-  catch(e){ return; }
-  if(!snap || snap.wsId !== rt.currentWs.id || !snap.view) return;
+  catch(e){ resetGanttTransient(); return; }
+  if(!snap || snap.wsId !== rt.currentWs.id || !snap.view){
+    resetGanttTransient();
+    return;
+  }
   var v = snap.view;
   demSmart.current = typeof v.current === "string" ? v.current : "all";
   demSmart.preset = DEM_PRESETS.some(function(p){ return p[0] === v.preset; }) ? v.preset : "all";
@@ -557,11 +637,18 @@ function restoreDemState(){
   demSmart.kinds = demStrArr(v.kinds);
   demSmart.reqs = demStrArr(v.reqs);
   demSmart.q = typeof v.q === "string" ? v.q : "";
+  if(v.gantt && typeof v.gantt === "object"){
+    if(["day", "week", "month"].indexOf(v.gantt.scale) !== -1) demGantt.scale = v.gantt.scale;
+    if(["auto", "month"].indexOf(v.gantt.rangeMode) !== -1) demGantt.rangeMode = v.gantt.rangeMode;
+    if([20, 28, 40].indexOf(v.gantt.zoomDayW) !== -1) demGantt.zoomDayW = v.gantt.zoomDayW;
+  }
+  resetGanttTransient();
 }
 function demStateChanged(){
   syncDemControls();
-  /* 列表模式的筛选/排序下推服务端，条件变化必须重新取第一页 */
-  if(listPrefs.viewMode("demand-pool") === "table") loadAllDemands();
+  /* 列表与甘特的筛选/排序下推服务端，条件变化必须重新取第一页 */
+  var mode = listPrefs.viewMode("demand-pool");
+  if(mode === "table" || mode === "gantt") loadDemands();
   else render();
   saveDemState();
 }
@@ -716,7 +803,7 @@ function demCsvValue(d, key){
   if(key === "priority") return d.priority || "";
   if(key === "status") return statusName(d.status);
   if(key === "project") return reqNameById(d.reqId) || "";
-  if(key === "version") return versionName(d.versionId) || "";
+  if(key === "version") return demandVersionName(d);
   if(key === "expectDate") return d.expectDate ? String(d.expectDate).substring(0, 10) : "";
   if(key === "wsjf") return (d.wsjfScore === null || d.wsjfScore === undefined) ? "" : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return d.source || "";
@@ -758,6 +845,7 @@ function initDemSmartBar(){
       '<button class="btn sm primary" type="button" data-dem-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(demSmartBar, demandBody);
+  if(demandGanttBar) page.insertBefore(demandGanttBar, demandBody);
   demTabsBox = demSmartBar.querySelector(".smart-view-tabs");
   demSearchInput = demSmartBar.querySelector("[data-dem-q]");
   demSmartBar.addEventListener("click", function(e){
@@ -784,7 +872,14 @@ function initDemSmartBar(){
       if(DEM_GROUPS.indexOf(g.value) === -1) return;
       demSmart.group = g.value;
       demSmart.collapsed = {};
-      demStateChanged();
+      /* 分组只在客户端展开，不改变服务端结果集 */
+      if(listPrefs.viewMode("demand-pool") === "gantt"){
+        syncDemControls();
+        render();
+        saveDemState();
+      }else{
+        demStateChanged();
+      }
       return;
     }
     var s = e.target.closest("[data-dem-sort]");
@@ -854,8 +949,8 @@ function renderDemandTable(){
   }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
   var numCols = { expectDate:1, wsjf:1, createdAt:1 };
-  function rowHTML(d){
-    return '<tr>' + cols.map(function(k){
+  function rowHTML(d, grouped){
+    return '<tr' + (grouped ? ' class="dem-group-item-row"' : '') + '>' + cols.map(function(k){
       return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
     }).join("")
       + '<td><span class="demand-row-acts">' + demandActs(d, { subtle: true }) + '</span></td></tr>';
@@ -873,7 +968,9 @@ function renderDemandTable(){
     body = rows.map(rowHTML).join("");
   }else{
     body = groups.map(function(g){
-      return groupHead(g) + (demSmart.collapsed["$" + g.key] ? "" : g.rows.map(rowHTML).join(""));
+      return groupHead(g) + (demSmart.collapsed["$" + g.key] ? "" : g.rows.map(function(d){
+        return rowHTML(d, true);
+      }).join(""));
     }).join("");
   }
   if(demandHasMore){
@@ -884,6 +981,333 @@ function renderDemandTable(){
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
     + '<thead><tr>' + cols.map(function(k){ return '<th' + (numCols[k] ? ' class="num"' : '') + '>' + esc(labels[k] || k) + '</th>'; }).join("") + '<th>操作</th></tr></thead>'
     + '<tbody>' + body + '</tbody></table></div></section>';
+}
+
+/* ---------- 甘特渲染（阶段区间；并行阶段分 lane，缺口用虚线） ---------- */
+
+function demStageName(st){ return DEM_STAGE_NAMES[st] || st; }
+function demStageColor(st){ return DEM_STAGE_COLORS[st] || "var(--text-3)"; }
+function demGanttLabelW(){ return window.innerWidth <= 900 ? 190 : 320; }
+function demgMonthStart(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function demgMonthRange(anchor){
+  var start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  var end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+  return { start:start, end:end, days:GS.dayDiff(end, start) + 1 };
+}
+function demgStages(d){
+  return (d && d.__timeline && d.__timeline.stages) || [];
+}
+/* 甘特按时间轴起点阅读更直观：组内按 timeline.start 升序，缺时间排最后 */
+function demgStartMs(d){
+  var s = GS.parseDate(d && d.__timeline && d.__timeline.start);
+  return s ? s.getTime() : Number.MAX_SAFE_INTEGER;
+}
+function demgSortRows(rows){
+  return rows.slice().sort(function(a, b){
+    return demgStartMs(a) - demgStartMs(b) || String(a.id).localeCompare(String(b.id));
+  });
+}
+function demgAutoRange(rows){
+  var min = null, max = null;
+  rows.forEach(function(d){
+    demgStages(d).forEach(function(s){
+      var a = GS.parseDate(s.start), b = GS.parseDate(s.end);
+      if(a && (!min || a < min)) min = a;
+      if(b && (!max || b > max)) max = b;
+    });
+  });
+  var today = GS.startOfDay(rt.TODAY);
+  if(!min) min = today;
+  if(!max) max = today;
+  if(today < min) min = today;
+  if(today > max) max = today;
+  var start = GS.addDays(min, -3), end = GS.addDays(max, 3);
+  return { start:start, end:end, days:GS.dayDiff(end, start) + 1 };
+}
+function demgRange(rows){
+  demGantt.notice = "";
+  if(demGantt.rangeMode === "month"){
+    if(!demGantt.anchorMonth) demGantt.anchorMonth = demgMonthStart(rt.TODAY);
+    return demgMonthRange(demGantt.anchorMonth);
+  }
+  var range = demgAutoRange(rows);
+  if(range.days > DEMAND_GANTT_MAX_DAYS){
+    demGantt.rangeMode = "month";
+    demGantt.anchorMonth = demgMonthStart(rt.TODAY);
+    demGantt.notice = "时间跨度超过 2 年，已切换到月视图；可用上一月/下一月查看其他区间。";
+    return demgMonthRange(demGantt.anchorMonth);
+  }
+  return range;
+}
+/* 区间端点靠得近的阶段上下错层，避免同一天交接时叠在一起；泳道数按实际并发自动增长 */
+function demgPlace(stages){
+  var laneEnd = [], placed = [];
+  stages.slice().sort(function(a, b){
+    var as = GS.parseDate(a.start), bs = GS.parseDate(b.start);
+    var av = as ? as.getTime() : Number.MAX_SAFE_INTEGER;
+    var bv = bs ? bs.getTime() : Number.MAX_SAFE_INTEGER;
+    return av - bv
+      || DEM_STAGE_ORDER.indexOf(a.stage) - DEM_STAGE_ORDER.indexOf(b.stage);
+  }).forEach(function(s){
+    var start = GS.parseDate(s.start), end = GS.parseDate(s.end);
+    if(!start) return;
+    if(!end || end < start) end = start;
+    var lane = 0;
+    while(laneEnd[lane] && start <= laneEnd[lane]) lane++;
+    laneEnd[lane] = end;
+    placed.push({ stage:s, start:start, end:end, lane:lane });
+  });
+  return placed;
+}
+function demgGapSegment(from, to, lane, range, dayW, label){
+  if(from > to || to < range.start || from > range.end) return "";
+  var s = from < range.start ? range.start : from;
+  var e = to > range.end ? range.end : to;
+  var off = GS.dayDiff(s, range.start);
+  var width = Math.max(2, (GS.dayDiff(e, s) + 1) * dayW - 2);
+  var text = (label ? label : "缺口") + " " + GS.fmtShortMonthDay(s) + " → " + GS.fmtShortMonthDay(e);
+  return '<span class="demg-gap" style="left:' + (off * dayW + 1) + 'px;width:' + width +
+    'px;top:' + (9 + lane * 15) + 'px" title="' + esc(text) + '"></span>';
+}
+function demgGapsHTML(placed, d, range, dayW){
+  var bars = placed.filter(function(p){ return !p.stage.point; })
+    .sort(function(a, b){ return a.start - b.start; });
+  var html = "";
+  for(var i = 1; i < bars.length; i++){
+    var prev = bars[i - 1], next = bars[i];
+    if(next.start > GS.addDays(prev.end, 1)){
+      html += demgGapSegment(GS.addDays(prev.end, 1), GS.addDays(next.start, -1), prev.lane, range, dayW);
+    }
+  }
+  /* 尾部缺口：最后一段结束到今天仍缺记录，按当前卡点补虚线 */
+  var tl = d.__timeline || {};
+  var stages = demgStages(d);
+  var hasDev = stages.some(function(s){ return s.stage === "dev"; });
+  var hasTest = stages.some(function(s){ return s.stage === "test"; });
+  var released = stages.some(function(s){ return s.stage === "release"; });
+  var maxEnd = null;
+  placed.forEach(function(p){ if(!maxEnd || p.end > maxEnd) maxEnd = p.end; });
+  if(!maxEnd || released) return html;
+  var today = GS.startOfDay(rt.TODAY);
+  var tail = GS.addDays(maxEnd, 1);
+  if(tail > today) return html;
+  var label = "";
+  if(d.status === "plan" && !hasDev) label = "已排期未开工";
+  else if(hasDev && (tl.caseCount || 0) > 0 && !hasTest) label = "未执行用例";
+  else if(hasDev && (tl.taskCount || 0) > 0 && (tl.taskDone || 0) >= tl.taskCount) label = "待发布";
+  if(!label) return html;
+  return html + demgGapSegment(tail, today, 1, range, dayW, label);
+}
+function demgStageTitle(s){
+  var start = GS.parseDate(s.start), end = GS.parseDate(s.end);
+  var days = start && end ? (GS.dayDiff(end, start) + 1) : 1;
+  var span = s.point ? GS.fmtFullDate(start) : (GS.fmtFullDate(start) + " → " + GS.fmtFullDate(end));
+  return demStageName(s.stage) + "：" + span + (s.open ? "（进行中）" : "（" + days + " 天）");
+}
+function demgLabelHTML(d, tl){
+  var meta = '<span class="demg-status st-' + esc(d.status) + '"><i></i>' + esc(statusName(d.status)) + '</span>';
+  meta += priTagHTML(d.priority || "P2");
+  var rn = reqNameById(d.reqId) || "";
+  if(rn) meta += '<span class="ellipsis shrink">' + esc(rn) + '</span>';
+  var ver = demandVersionName(d);
+  if(ver) meta += '<span class="tag ghost">' + esc(ver) + '</span>';
+  if(d.expectDate) meta += '<span>期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>';
+  var info = [];
+  if(tl.taskCount) info.push("工作项 " + (tl.taskDone || 0) + "/" + tl.taskCount);
+  if(tl.docCount) info.push("文档 " + tl.docCount);
+  if(tl.caseCount) info.push("用例 " + tl.caseCount + (tl.casePending ? "（待通过 " + tl.casePending + "）" : ""));
+  if(tl.days) info.push("历时 " + tl.days + " 天");
+  return '<button class="gantt-label" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' +
+    '<span class="gantt-title">' + esc(d.title) + '</span>' +
+    '<span class="gantt-meta">' + meta + '</span>' +
+    (info.length ? '<span class="gantt-info">' + esc(info.join(" · ")) + '</span>' : '') +
+  '</button>';
+}
+function demgRowHTML(d, range, dayW, totalW){
+  var tl = d.__timeline || {};
+  var placed = demgPlace(demgStages(d));
+  var laneCount = 0;
+  placed.forEach(function(p){ if(p.lane + 1 > laneCount) laneCount = p.lane + 1; });
+  var rowH = Math.max(56, (laneCount - 1) * 15 + 25);
+  var segs = "";
+  placed.forEach(function(p){
+    var s = p.stage;
+    if(p.end < range.start || p.start > range.end) return;
+    var s2 = p.start < range.start ? range.start : p.start;
+    var e2 = p.end > range.end ? range.end : p.end;
+    var off = GS.dayDiff(s2, range.start);
+    var span = Math.max(1, GS.dayDiff(e2, s2) + 1);
+    var top = 6 + p.lane * 15;
+    var title = demgStageTitle(s);
+    if(s.point){
+      var left = off * dayW + Math.max(0, (dayW - 10) / 2);
+      segs += '<button class="demg-point st-' + esc(s.stage) + '" type="button" data-dem-detail="' +
+        esc(d.id) + '" style="left:' + left + 'px;top:' + (top + 1) + 'px;--dem-stage-color:' +
+        demStageColor(s.stage) + '" title="' + esc(title) + '"></button>';
+      return;
+    }
+    var width = Math.max(4, span * dayW - 1);
+    var label = width >= 52 ? '<span class="demg-seg-label">' + esc(demStageName(s.stage)) + '</span>' : "";
+    segs += '<button class="demg-seg st-' + esc(s.stage) + (s.open ? " is-open" : "") +
+      '" type="button" data-dem-detail="' + esc(d.id) + '" style="left:' + (off * dayW) +
+      'px;width:' + width + 'px;top:' + top + 'px;--dem-stage-color:' + demStageColor(s.stage) +
+      '" title="' + esc(title) + '">' + label + '</button>';
+  });
+  segs += demgGapsHTML(placed, d, range, dayW);
+  var expect = GS.parseDate(d.expectDate);
+  if(expect && expect >= range.start && expect <= range.end){
+    var exOff = GS.dayDiff(expect, range.start);
+    segs += '<span class="demg-expect" style="left:' + (exOff * dayW + dayW / 2) +
+      'px" title="期望交付 ' + esc(GS.fmtFullDate(expect)) + '"></span>';
+  }
+  return '<div class="gantt-row demg-row" data-dem-row="' + esc(d.id) +
+    '" style="--gantt-row-h:' + rowH + 'px">' +
+    demgLabelHTML(d, tl) +
+    '<div class="gantt-track demg-track" style="width:' + totalW + 'px">' + segs + '</div>' +
+  '</div>';
+}
+function demgGroupHeadHTML(g){
+  var collapsed = !!demSmart.collapsed["$" + g.key];
+  return '<div class="gantt-group"><button class="gantt-group-head" type="button" data-dem-group-toggle="' +
+    esc(g.key) + '" aria-expanded="' + (!collapsed) + '">' +
+    '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
+    '<span class="gantt-group-name">' + esc(g.label) + '</span>' +
+    '<span class="gantt-group-cnt">' + g.rows.length + ' 项</span>' +
+  '</button></div>';
+}
+function demgLegendHTML(){
+  return DEM_STAGE_ORDER.map(function(st){
+    return '<span class="gl-item"><i class="demg-legend-dot st-' + st + '"></i>' + demStageName(st) + '</span>';
+  }).join("") +
+  '<span class="gl-item"><i class="demg-legend-gap"></i>缺口</span>' +
+  '<span class="gl-item"><i class="demg-legend-expect"></i>期望交付</span>' +
+  '<span class="gantt-legend-hint">阶段取自真实记录，缺失不补 0 天</span>';
+}
+function syncDemGanttControls(){
+  if(!demandGanttBar) return;
+  var sc = demandGanttBar.querySelector("[data-demg-scale]");
+  if(sc) sc.value = demGantt.scale;
+  var rg = demandGanttBar.querySelector("[data-demg-range]");
+  if(rg) rg.value = demGantt.rangeMode;
+  var zm = demandGanttBar.querySelector("[data-demg-zoom]");
+  if(zm) zm.value = String(demGantt.zoomDayW);
+  var lb = demandGanttBar.querySelector("[data-demg-range-label]");
+  if(lb){
+    if(demGantt.rangeMode === "month"){
+      var anchor = (demGantt.range && demGantt.range.start) || demGantt.anchorMonth || demgMonthStart(rt.TODAY);
+      lb.textContent = anchor.getFullYear() + "年" + (anchor.getMonth() + 1) + "月";
+    }else{
+      lb.textContent = "自动范围";
+    }
+  }
+}
+function renderDemandGantt(){
+  if(!demandBody) return;
+  var rows = demgSortRows(demViewRows());
+  var groups = demSmart.group === "none"
+    ? [{ key:"", label:"", rows:rows }]
+    : demGroups().map(function(g){
+        return { key:g.key, label:g.label, rows:demgSortRows(g.rows) };
+      });
+  var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
+  if(demandsMeta){
+    var text = demandTotal ? ("全空间 · 共 " + demandTotal + " 条") : "全空间";
+    if(hasCond && demandTotal) text += " · 已加载 " + demands.length + " 条";
+    if(demSmart.group !== "none" && groups.length) text += " · " + groups.length + " 组";
+    demandsMeta.textContent = text;
+  }
+  if(!demands.length){
+    demGantt.range = null;
+    demandBody.innerHTML = UI.emptyState({
+      icon: hasCond ? "filterOff" : "calendar",
+      title: hasCond ? "没有符合当前视图条件的需求" : "需求池还是空的",
+      text: hasCond ? "切换视图，或调整、清空筛选条件后重试。"
+        : "点右上角「提需求」录入第一条；评审通过后排期到版本。"
+    });
+    if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
+    syncDemGanttControls();
+    return;
+  }
+
+  var prevScroll = demandBody.querySelector(".demg-scroll");
+  if(prevScroll) demGantt.scrollLeft = prevScroll.scrollLeft;
+
+  var scale = demGantt.scale;
+  var dayW = GS.scaleDayW(scale, demGantt.zoomDayW);
+  var monthMode = demGantt.rangeMode === "month";
+  var range = GS.adjustRange(demgRange(rows), scale);
+  var labelW = demGanttLabelW();
+  /* 自动范围比视口窄时向右补齐，避免时间轴右侧留一大块空白 */
+  var avail = (demandBody.clientWidth || 0) - labelW;
+  if(!monthMode && avail > 0 && range.days * dayW < avail){
+    var need = Math.ceil((avail - range.days * dayW) / dayW);
+    range.end = GS.addDays(range.end, need);
+    range.days = GS.dayDiff(range.end, range.start) + 1;
+  }
+  var totalW = range.days * dayW;
+  demGantt.range = range;
+  demGantt.dayW = dayW;
+
+  var todayOff = GS.dayDiff(rt.TODAY, range.start);
+  var todayIn = todayOff >= 0 && todayOff < range.days;
+  var bodyHTML = "";
+  groups.forEach(function(g){
+    if(demSmart.group !== "none") bodyHTML += demgGroupHeadHTML(g);
+    if(demSmart.group !== "none" && demSmart.collapsed["$" + g.key]) return;
+    g.rows.forEach(function(d){ bodyHTML += demgRowHTML(d, range, dayW, totalW); });
+  });
+
+  demandBody.innerHTML =
+    (demGantt.notice ? '<p class="gantt-notice">' + esc(demGantt.notice) + '</p>' : "") +
+    '<div class="gantt-legend demg-legend">' + demgLegendHTML() + '</div>' +
+    '<div class="gantt-scroll demg-scroll">' +
+      '<div class="gantt-grid demg-grid is-scale-' + esc(scale) + '" style="--gantt-label-w:' + labelW +
+        'px;--gantt-day-w:' + dayW + 'px;--gantt-row-h:56px;--gantt-group-h:32px;">' +
+        '<div class="gantt-head">' +
+          '<div class="gantt-corner">需求 <span class="gantt-corner-meta">' + rows.length + '</span></div>' +
+          '<div class="gantt-axis" style="width:' + totalW + 'px">' +
+            GS.headHTML(range, dayW, scale, rt.TODAY_ISO) +
+          '</div>' +
+        '</div>' +
+        '<div class="gantt-body">' + bodyHTML + '</div>' +
+        (todayIn
+          ? '<div class="gantt-today-col" style="left:calc(var(--gantt-label-w) + ' + (todayOff * dayW) +
+              'px);width:' + dayW + 'px"></div>' +
+            '<div class="gantt-today" style="left:calc(var(--gantt-label-w) + ' + (todayOff * dayW) + 'px)"></div>'
+          : "") +
+      '</div>' +
+    '</div>' +
+    '<div class="demg-foot">' +
+      '<span class="foot-note">阶段时间取自评审日志、关联文档、工作项、用例与版本记录；无记录阶段不推算。</span>' +
+      (demandHasMore
+        ? '<button class="btn ghost sm" type="button" data-dem-more="gantt">加载更多（已加载 ' +
+            demands.length + ' / 共 ' + demandTotal + ' 条）</button>'
+        : "") +
+    '</div>';
+
+  var sc = demandBody.querySelector(".demg-scroll");
+  if(sc){
+    var left = demGantt.scrolled ? demGantt.scrollLeft : Math.max(0, todayOff * dayW - 200);
+    sc.scrollLeft = left;
+    demGantt.scrollLeft = left;
+    sc.addEventListener("scroll", function(){ demGantt.scrollLeft = sc.scrollLeft; });
+  }
+  demGantt.scrolled = true;
+  syncDemGanttControls();
+}
+function demgShiftMonth(delta){
+  var base = demGantt.anchorMonth || demgMonthStart(rt.TODAY);
+  demGantt.rangeMode = "month";
+  demGantt.anchorMonth = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+  demGantt.scrollLeft = 0;
+  render();
+}
+function demgScrollToToday(){
+  var sc = demandBody && demandBody.querySelector(".demg-scroll");
+  if(!sc || !demGantt.range) return;
+  var off = Math.max(0, GS.dayDiff(rt.TODAY, demGantt.range.start));
+  sc.scrollLeft = Math.max(0, off * demGantt.dayW - 200);
+  demGantt.scrollLeft = sc.scrollLeft;
 }
 
 /* ---------- 需求弹窗 ---------- */
@@ -1149,7 +1573,7 @@ function extOfName(filename){
 function loadDemandTasks(layer, id){
   var box = layer.querySelector("#demTasks");
   if(!box) return;
-  API.get("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+  API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
     if(!layer.isConnected) return;
     if(!tasks || !tasks.length){
       box.innerHTML = '<div class="attach-empty">还没有关联工作项；通过「拆分为工作项」把需求拆开执行。</div>';
@@ -1176,7 +1600,7 @@ function loadDemandTasks(layer, id){
 function loadDemandAttachments(layer, id, writable){
   var box = layer.querySelector("#demAtts");
   if(!box) return;
-  API.get("/api/demands/" + encodeURIComponent(id) + "/attachments").then(function(list){
+  API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/attachments").then(function(list){
     if(!layer.isConnected) return;
     box.__attList = list || [];
     if(!box.__attList.length){
@@ -1212,8 +1636,8 @@ function loadDemandDocs(layer, id, reqId, writable){
   var pick = layer.querySelector("#demDocPick");
   if(!box) return;
   Promise.all([
-    API.get("/api/demands/" + encodeURIComponent(id) + "/docs"),
-    API.get("/api/req-docs")
+    API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/docs"),
+    API.getAllPages("/api/req-docs")
   ]).then(function(res){
     if(!layer.isConnected) return;
     var linked = res[0] || [];
@@ -1258,7 +1682,7 @@ function showDemandDetail(id){
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
     ["优先级", priName(d.priority || "P2")],
-    ["目标版本", versionName(d.versionId) || "待规划"],
+    ["目标版本", demandVersionName(d) || "待规划"],
     ["期望交付", d.expectDate || "待评估"],
     ["需求来源", d.source || "—"]
   ];
@@ -1427,7 +1851,7 @@ function showDemandDetail(id){
   loadDemandTasks(layer, id);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
-  API.get("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
+  API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     if(!ul) return;
     ul.innerHTML = logs.length ? logs.map(function(l){
@@ -1476,10 +1900,55 @@ if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
 if($("btnDemandColumns")) $("btnDemandColumns").addEventListener("click", function(){
   listPrefs.openColumnSettings("demand-pool", function(){ render(); });
 });
+if(demandGanttBar){
+  demandGanttBar.addEventListener("change", function(e){
+    var sc = e.target.closest("[data-demg-scale]");
+    if(sc){
+      if(["day", "week", "month"].indexOf(sc.value) === -1) return;
+      demGantt.scale = sc.value;
+      render();
+      saveDemState();
+      return;
+    }
+    var zm = e.target.closest("[data-demg-zoom]");
+    if(zm){
+      var zoom = Number(zm.value);
+      if([20, 28, 40].indexOf(zoom) === -1) return;
+      demGantt.zoomDayW = zoom;
+      demGantt.scrolled = false;
+      render();
+      saveDemState();
+      return;
+    }
+    var rg = e.target.closest("[data-demg-range]");
+    if(rg){
+      if(["auto", "month"].indexOf(rg.value) === -1) return;
+      demGantt.rangeMode = rg.value;
+      if(rg.value === "month"){
+        if(!demGantt.anchorMonth) demGantt.anchorMonth = demgMonthStart(rt.TODAY);
+        demGantt.scrollLeft = 0;
+      }else{
+        demGantt.scrolled = false;
+      }
+      render();
+      saveDemState();
+    }
+  });
+  demandGanttBar.addEventListener("click", function(e){
+    if(e.target.closest("[data-demg-prev]")){ demgShiftMonth(-1); saveDemState(); return; }
+    if(e.target.closest("[data-demg-next]")){ demgShiftMonth(1); saveDemState(); return; }
+    if(e.target.closest("[data-demg-today]")){
+      demGantt.anchorMonth = demgMonthStart(rt.TODAY);
+      if(demGantt.rangeMode === "month") render();
+      else demgScrollToToday();
+    }
+  });
+}
 if(demandBody) demandBody.addEventListener("click", function(e){
   var dm = e.target.closest("[data-dem-more]");
   if(dm){
     if(dm.dataset.demMore === "table") loadMoreDemandTable();
+    else if(dm.dataset.demMore === "gantt") loadMoreDemandGantt();
     else loadMoreDemandColumn(dm.dataset.demMore);
     return;
   }
@@ -1620,7 +2089,7 @@ function openDemandDetailById(id){
  * 层次口径与后端 applyRequest 一致：需求必须属于任务所选项目；
  * 未选项目时可从全空间挑选，选中后由抽屉自动带出需求所属项目。
  * --------------------------------------------------------------------------- */
-var drawerDemandOpts = { reqId: null, list: [], error: null };
+var drawerDemandOpts = { reqId: null, list: [], total: 0, error: null };
 function drawerDemandStatusLabel(st){
   for(var i = 0; i < COLS.length; i++){
     if(COLS[i][0] === st) return COLS[i][1];
@@ -1654,8 +2123,11 @@ function fillDrawerDemandSelect(reqId, keep){
   });
   /* 编辑时原关联已被删除/失效：保留原值展示，保存时后端会静默解绑 */
   if(keep && !matched){
-    html += '<option value="' + esc(keep) + '" data-req="' + esc(reqId) + '">原关联需求（已不在该项目需求池）</option>';
+    html += '<option value="' + esc(keep) + '" data-req="' + esc(reqId) + '">原关联需求（已不在当前候选页）</option>';
     matched = true;
+  }
+  if(drawerDemandOpts.total > drawerDemandOpts.list.length){
+    html += '<option value="" disabled>仅显示前 ' + drawerDemandOpts.list.length + ' 条，共 ' + drawerDemandOpts.total + ' 条</option>';
   }
   sel.innerHTML = html;
   sel.value = keep || "";
@@ -1674,13 +2146,17 @@ function ensureDemandOptions(keep, reqId){
   if(drawerDemandOpts.reqId === want && drawerDemandOpts.loading) return;
   drawerDemandOpts.reqId = want;
   drawerDemandOpts.list = [];
+  drawerDemandOpts.total = 0;
   drawerDemandOpts.error = null;
   sel.innerHTML = '<option value="">需求加载中…</option>';
   sel.value = "";
   syncAssocViewBtns();
-  drawerDemandOpts.loading = API.get("/api/demands", want ? { reqId: want } : {}).then(function(list){
+  drawerDemandOpts.loading = API.get("/api/demands/page", {
+    reqId: want || null, offset: 0, limit: DEMAND_TABLE_PAGE, sort: "created"
+  }).then(function(page){
     if(drawerDemandOpts.reqId !== want) return;
-    drawerDemandOpts.list = list || [];
+    drawerDemandOpts.list = page.items || [];
+    drawerDemandOpts.total = page.total || 0;
     drawerDemandOpts.loading = null;
     fillDrawerDemandSelect(want, keep);
   }).catch(function(ex){

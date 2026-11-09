@@ -41,7 +41,8 @@ var defectCaseId = null;
 var runStatus = "passed";
 var loadSeq = 0;
 /* 项目需求池条目缓存：填充「关联需求」下拉，避免每次开弹窗都请求 */
-var demandOptions = { reqId: null, list: [], loading: null, error: null };
+var DEMAND_OPTIONS_PAGE_SIZE = 100;
+var demandOptions = { reqId: null, list: [], total: 0, loading: null, error: null };
 var caseSaving = false;
 var caseRunning = false;
 var caseDefecting = false;
@@ -234,6 +235,19 @@ function reqNameOf(id){
   var hit = (rt.reqList || []).filter(function(r){ return r.id === id; })[0];
   return hit ? hit.name : (id || "");
 }
+function loadAllCases(params){
+  var items = [], total = 0;
+  function next(){
+    var query = Object.assign({}, params, { offset: items.length, limit: 100 });
+    return API.get("/api/test-cases", query).then(function(page){
+      var rows = (page && page.items) || [];
+      total = (page && page.total) || 0;
+      items = items.concat(rows);
+      return rows.length && items.length < total ? next() : { items: items, total: total };
+    });
+  }
+  return next();
+}
 function loadTestReport(){
   render();
   var box = $("tcReport");
@@ -246,8 +260,8 @@ function loadTestReport(){
   box.innerHTML = UI.skeletonRows(4);
   Promise.all([
     API.get("/api/test-cases/stats", { reqId: reqId }),
-    API.get("/api/test-cases", { reqId: reqId, status: "failed", limit: 500, offset: 0 }),
-    API.get("/api/test-cases", { reqId: reqId, status: "blocked", limit: 200, offset: 0 }),
+    loadAllCases({ reqId: reqId, status: "failed" }),
+    loadAllCases({ reqId: reqId, status: "blocked" }),
     API.get("/api/test-cases/coverage", { reqId: reqId })
   ]).then(function(rs){
     if(seq !== reportSeq || caseReqId !== reqId) return;
@@ -306,7 +320,7 @@ function reportCaseById(id){
   }
   return null;
 }
-/* 报告里的用例可能不在当前列表页，按标题回查一次，再兜底全量前 500 条 */
+/* 报告里的用例可能不在当前列表页，按标题回查一次，再按 100 条一页兜底查找 */
 function openReportCase(id){
   if(caseById(id)){ openEditDialog(id); return; }
   if(!caseReqId){ toast("先选择项目再打开用例", "warn"); return; }
@@ -321,7 +335,7 @@ function openReportCase(id){
     if(caseReqId !== reqId) return;
     var found = ((page && page.items) || []).filter(function(c){ return c.id === id; })[0];
     if(openFound(found)) return;
-    return API.get("/api/test-cases", { reqId: reqId, limit: 500, offset: 0 }).then(function(all){
+    return loadAllCases({ reqId: reqId }).then(function(all){
       if(caseReqId !== reqId) return;
       var hit = ((all && all.items) || []).filter(function(c){ return c.id === id; })[0];
       if(!openFound(hit)) toast("用例不存在或无权查看", "warn");
@@ -360,7 +374,7 @@ function renderTestReport(){
       ? failed.map(function(c){ return reportCaseRow(c, "fail"); }).join("")
       : '<p class="rep-empty">没有失败用例，最近一轮全部通过或未执行。</p>')
     + ((reportData.failedTotal || 0) > failed.length
-      ? '<p class="foot-note">报告最多列出 500 条失败用例，当前展示 ' + failed.length + ' 条。</p>' : '')
+      ? '<p class="foot-note">部分失败用例加载失败，当前展示 ' + failed.length + ' 条。</p>' : '')
     + '</section>';
   var blockBlock = blocked.length
     ? '<section class="rep-section"><div class="rep-section-head"><b>阻塞用例</b><span>'
@@ -485,7 +499,7 @@ function openRunsDialog(id, title){
   $("runsReadonlyHint").hidden = isWritable();
   var seq = ++runsSeq;
   UI.openModal($("dlgCaseRuns"));
-  API.get("/api/test-cases/" + encodeURIComponent(id) + "/runs", { limit: 50 }).then(function(list){
+  API.getAllPages("/api/test-cases/" + encodeURIComponent(id) + "/runs").then(function(list){
     if(seq !== runsSeq) return;
     runsList = list || [];
     renderRuns();
@@ -860,10 +874,14 @@ function loadDemandOptions(reqId){
   if(demandOptions.reqId === reqId && demandOptions.list.length && !demandOptions.error) return Promise.resolve(demandOptions.list);
   demandOptions.reqId = reqId;
   demandOptions.list = [];
+  demandOptions.total = 0;
   demandOptions.error = null;
-  demandOptions.loading = API.get("/api/demands", { reqId: reqId }).then(function(list){
+  demandOptions.loading = API.get("/api/demands/page", {
+    reqId: reqId, offset: 0, limit: DEMAND_OPTIONS_PAGE_SIZE, sort: "created"
+  }).then(function(page){
     if(demandOptions.reqId === reqId){
-      demandOptions.list = list || [];
+      demandOptions.list = page.items || [];
+      demandOptions.total = page.total || 0;
       demandOptions.error = null;
     }
     demandOptions.loading = null;
@@ -896,7 +914,9 @@ function fillDemandSelect(selected, fallbackLabel){
   sel.innerHTML = '<option value="">不关联</option>'
     + list.map(function(d){
       return '<option value="' + esc(d.id) + '">' + esc(demandPickLabel(d)) + '</option>';
-    }).join("");
+    }).join("")
+    + (demandOptions.total > list.length
+      ? '<option value="" disabled>仅显示前 ' + list.length + ' 条，共 ' + demandOptions.total + ' 条</option>' : "");
   sel.value = valid ? selected : "";
   if(selected && !valid && list.length) sel.value = "";
 }
@@ -1321,7 +1341,7 @@ function loadPlans(){
   }
   var seq = ++planSeq;
   box.innerHTML = UI.skeletonRows(3);
-  API.get("/api/test-plans", { reqId: caseReqId }).then(function(rows){
+  API.getAllPages("/api/test-plans", { reqId: caseReqId }).then(function(rows){
     if(seq !== planSeq) return;
     plans = rows || [];
     planDetail = null;
@@ -1337,7 +1357,7 @@ var planListSeq = 0;
 function refreshPlansQuiet(){
   if(!caseReqId) return Promise.resolve();
   var seq = ++planListSeq;
-  return API.get("/api/test-plans", { reqId: caseReqId }).then(function(rows){
+  return API.getAllPages("/api/test-plans", { reqId: caseReqId }).then(function(rows){
     if(seq !== planListSeq || planDetail) return;
     plans = rows || [];
     renderPlans();
@@ -1395,10 +1415,15 @@ function openPlanDetail(id){
   var seq = ++planDetailSeq;
   planSel = {};
   $("tcPlans").innerHTML = UI.skeletonRows(4);
-  API.get("/api/test-plans/" + encodeURIComponent(id)).then(function(d){
+  Promise.all([
+    API.get("/api/test-plans/" + encodeURIComponent(id)),
+    API.getAllPages("/api/test-plans/" + encodeURIComponent(id) + "/cases")
+  ]).then(function(results){
     if(seq !== planDetailSeq) return;
+    var d = results[0];
     planDetail = d && d.plan ? d : null;
     if(!planDetail){ $("tcPlans").innerHTML = UI.errorState("计划不存在或无权查看"); return; }
+    planDetail.cases = results[1] || [];
     renderPlanDetail();
   }).catch(function(ex){
     if(seq !== planDetailSeq) return;
@@ -1599,7 +1624,7 @@ function openPlanPick(){
   $("planPickList").innerHTML = UI.skeletonRows(3);
   $("planPickCount").textContent = "";
   UI.openModal($("dlgPlanPick"), "input");
-  API.get("/api/test-cases", { reqId: d.plan.reqId, offset: 0, limit: 500 }).then(function(page){
+  loadAllCases({ reqId: d.plan.reqId }).then(function(page){
     var inPlan = {};
     (d.cases || []).forEach(function(c){ inPlan[c.caseId] = true; });
     planPickCases = (page && page.items || []).filter(function(c){ return !inPlan[c.id]; });

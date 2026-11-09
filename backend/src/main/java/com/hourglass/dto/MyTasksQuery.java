@@ -27,7 +27,7 @@ public class MyTasksQuery {
     private LocalDate today = LocalDate.now();
     private boolean nameOnly;
     private int offset;
-    private int limit = 200;
+    private int limit = 100;
 
     public String getUserId() {
         return userId;

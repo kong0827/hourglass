@@ -171,6 +171,18 @@
     get: function (path, params) {
       return request("GET", path + buildQuery(params));
     },
+    getAllPages: function (path, params) {
+      var items = [];
+      function next() {
+        var query = Object.assign({}, params, { offset: items.length, limit: 100 });
+        return API.get(path, query).then(function (page) {
+          var rows = (page && page.items) || [];
+          items = items.concat(rows);
+          return rows.length && page.hasMore ? next() : items;
+        });
+      }
+      return next();
+    },
     getGlobal: function (path, params) {
       return withoutWorkspace(function () { return request("GET", path + buildQuery(params)); });
     },

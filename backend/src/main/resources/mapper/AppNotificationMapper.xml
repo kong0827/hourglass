@@ -37,7 +37,16 @@
       <if test="filter == 'mention'"> AND n.type = 'task_mention' </if>
       <include refid="receiverProjectVisibility"/>
     ORDER BY n.created_at DESC, n.id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByUser" resultType="int">
+    SELECT COUNT(*) FROM app_notification n
+    WHERE n.user_id = #{userId}
+      <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
+      <if test="filter == 'unread'"> AND n.read_at IS NULL </if>
+      <if test="filter == 'mention'"> AND n.type = 'task_mention' </if>
+      <include refid="receiverProjectVisibility"/>
   </select>
 
   <select id="countUnread" resultType="int">

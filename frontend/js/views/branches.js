@@ -110,7 +110,7 @@ function loadBranches(force){
   if(branchesLoaded && !force && branchBoard) return Promise.resolve(branchList);
   return Promise.all([
     API.get("/api/branches/board", branchQueryParams({ limit: BRANCH_BOARD_PAGE })),
-    API.get("/api/branches/options", null)
+    API.getAllPages("/api/branches/options")
   ]).then(function(res){
     applyBoard(res[0]);
     branchRefs = res[1] || [];
@@ -146,12 +146,12 @@ function enterBranchesView(){
   loadBranches().then(function(){ renderBranches(); });
   if(branchViewMode === "list") loadBranchRows();
 }
-/* 列表模式不沿用看板「每列先给 50 条」的口径，直接取全量，避免列表看起来少了数据 */
+/* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组 */
 function loadBranchRows(){
   var seq = ++branchRowsSeq;
   branchRowsLoading = true;
   renderBranches();
-  return API.get("/api/branches", branchProjectFilter ? { project: branchProjectFilter } : null)
+  return API.getAllPages("/api/branches", branchQueryParams({ status: branchFilter || null }))
     .then(function(rows){
       if(seq !== branchRowsSeq) return;
       branchRows = rows || [];
@@ -664,7 +664,7 @@ function renderBranchDrawer(b){
   if(ed) ed.addEventListener("click", function(){ openBranchDialog(b.id); });
 }
 function loadBranchLogs(id){
-  API.get("/api/branches/" + encodeURIComponent(id) + "/logs").then(function(logs){
+  API.getAllPages("/api/branches/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var box = $("brLogList");
     if(!box || brDrawerId !== id) return;
     if(!logs || !logs.length){
@@ -682,7 +682,7 @@ function loadBranchLogs(id){
   });
 }
 function loadBranchTasks(id){
-  API.get("/api/branches/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+  API.getAllPages("/api/branches/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
     var box = $("brTaskList");
     if(!box || brDrawerId !== id) return;
     if(!tasks || !tasks.length){
@@ -736,7 +736,7 @@ function populateBranchSelect(keep, projectId){
   if(!rows){
     /* 选项按项目从服务端取，避免把全空间分支一次性灌进下拉 */
     sel.setAttribute("data-ready", "0");
-    API.get("/api/branches/options", projectId ? { project: projectId } : null).then(function(list){
+    API.getAllPages("/api/branches/options", projectId ? { project: projectId } : null).then(function(list){
       branchOptionCache[projectId] = list || [];
       if(branchSelectProject === projectId) populateBranchSelect(cur, projectId);
     }).catch(function(){ /* 分支拉取失败时下拉保持空，不影响工作项保存 */ });

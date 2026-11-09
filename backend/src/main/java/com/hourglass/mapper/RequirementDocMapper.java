@@ -13,7 +13,15 @@ public interface RequirementDocMapper {
 
     /** 空间下的需求列表（带项目名、关联任务数、正文片段）；keyword 非空时按标题/正文模糊匹配 */
     List<ReqDocView> selectViewByWorkspace(@Param("workspaceId") String workspaceId,
-                                           @Param("keyword") String keyword);
+                                           @Param("keyword") String keyword,
+                                           @Param("viewerId") String viewerId,
+                                           @Param("userId") String userId,
+                                           @Param("seeAllDrafts") boolean seeAllDrafts,
+                                           @Param("offset") int offset, @Param("limit") int limit);
+
+    int countVisible(@Param("workspaceId") String workspaceId, @Param("keyword") String keyword,
+                     @Param("viewerId") String viewerId, @Param("userId") String userId,
+                     @Param("seeAllDrafts") boolean seeAllDrafts);
 
     RequirementDoc selectById(@Param("id") String id);
 
@@ -89,11 +97,21 @@ public interface RequirementDocMapper {
     List<RequirementDoc> selectAllByWorkspace(@Param("workspaceId") String workspaceId);
 
     /** 需求池需求关联的文档（带项目名、任务数、摘要） */
-    List<ReqDocView> selectByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+    List<ReqDocView> selectByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                                    @Param("viewerId") String viewerId, @Param("userId") String userId,
+                                    @Param("seeAllDrafts") boolean seeAllDrafts,
+                                    @Param("offset") int offset, @Param("limit") int limit);
+
+    int countByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                      @Param("viewerId") String viewerId, @Param("userId") String userId,
+                      @Param("seeAllDrafts") boolean seeAllDrafts);
 
     /** 文档关联的需求池需求（id / title / status / priority） */
     List<java.util.Map<String, Object>> selectDemandsByDoc(@Param("workspaceId") String workspaceId,
-                                                          @Param("docId") String docId);
+                                                          @Param("docId") String docId,
+                                                          @Param("offset") int offset, @Param("limit") int limit);
+
+    int countDemandsByDoc(@Param("workspaceId") String workspaceId, @Param("docId") String docId);
 
     int linkDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                    @Param("docId") String docId, @Param("userId") String userId);

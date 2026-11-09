@@ -30,6 +30,8 @@ public class Demand {
     private String acceptText;
     /** 目标版本（project_version，排期时选择） */
     private String versionId;
+    /** 目标版本名称（非表字段，分页列表联查返回） */
+    private String versionName;
     /** 评审备注（通过理由/拒绝原因/排期说明） */
     private String reviewNote;
     /** WSJF 分量 0-10（effort 为分母） */

@@ -3,22 +3,22 @@
 <mapper namespace="com.hourglass.mapper.BoardColumnMapper">
 
   <select id="selectAll" resultType="BoardColumn">
-    SELECT id, workspace_id, name, color, sort_order, created_at FROM board_column
+    SELECT id, workspace_id, name, color, processing_rule, sort_order, created_at FROM board_column
     WHERE workspace_id = #{workspaceId} ORDER BY sort_order, id
   </select>
 
   <select id="selectById" resultType="BoardColumn">
-    SELECT id, workspace_id, name, color, sort_order, created_at FROM board_column
+    SELECT id, workspace_id, name, color, processing_rule, sort_order, created_at FROM board_column
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </select>
 
   <insert id="insert">
-    INSERT INTO board_column (id, workspace_id, name, color, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{color}, #{sortOrder})
+    INSERT INTO board_column (id, workspace_id, name, color, processing_rule, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{name}, #{color}, #{processingRule}, #{sortOrder})
   </insert>
 
   <update id="update">
-    UPDATE board_column SET name = #{name}, color = #{color}
+    UPDATE board_column SET name = #{name}, color = #{color}, processing_rule = #{processingRule}
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
 

@@ -108,8 +108,8 @@ public class ListPreferenceService {
                 throw AppException.badRequest("任务列表仅支持 table 模式");
             }
         } else if (DEMAND_POOL.equals(viewKey)) {
-            if (!"board".equals(viewMode) && !"table".equals(viewMode)) {
-                throw AppException.badRequest("需求池仅支持 board/table 模式");
+            if (!"board".equals(viewMode) && !"table".equals(viewMode) && !"gantt".equals(viewMode)) {
+                throw AppException.badRequest("需求池仅支持 board/table/gantt 模式");
             }
         } else if (PROJECT_VIEW.equals(viewKey)) {
             if (!"board".equals(viewMode) && !"drill".equals(viewMode)) {

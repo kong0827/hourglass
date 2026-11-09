@@ -30,9 +30,15 @@ public class SubtaskService {
         this.projectAccess = projectAccess;
     }
 
-    public List<Subtask> list(String workspaceId, String userId, String taskId) {
+    public com.hourglass.dto.PageResult<Subtask> list(
+            String workspaceId, String userId, String taskId, int offset, int limit) {
         projectAccess.assertViewTask(workspaceId, userId, ensureTask(workspaceId, taskId));
-        return subtaskMapper.selectByTaskId(workspaceId, taskId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = subtaskMapper.countByTaskId(workspaceId, taskId);
+        List<Subtask> items = total <= safeOffset ? new java.util.ArrayList<Subtask>()
+                : subtaskMapper.selectPageByTaskId(workspaceId, taskId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     @Transactional

@@ -25,6 +25,8 @@ public interface DevBranchMapper {
     /** 轻量下拉选项：只取 id/name/status 等字段，不带任务数与标签 */
     List<DevBranch> selectOptions(@Param("q") com.hourglass.dto.BranchQuery q);
 
+    int countOptions(@Param("q") com.hourglass.dto.BranchQuery q);
+
     /** 各状态条数（忽略 q.status；与分页同一口径） */
     List<java.util.Map<String, Object>> countGroupByStatus(@Param("q") com.hourglass.dto.BranchQuery q);
 
@@ -90,7 +92,10 @@ public interface DevBranchMapper {
     int insertLog(DevBranchLog log);
 
     /** 某分支的时间线（倒序） */
-    List<DevBranchLog> selectLogs(@Param("branchId") String branchId);
+    List<DevBranchLog> selectLogs(@Param("branchId") String branchId,
+                                  @Param("offset") int offset, @Param("limit") int limit);
+
+    int countLogs(@Param("branchId") String branchId);
 
     int deleteLogsByBranch(@Param("branchId") String branchId);
 

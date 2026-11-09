@@ -41,7 +41,11 @@ public interface TimeLogMapper {
     /** 工时记录列表（任务抽屉展示：已结束的计时 + 手工补记，按时间倒序） */
     List<TimeLog> selectRecordsByTask(@Param("workspaceId") String workspaceId,
                                       @Param("taskId") String taskId,
+                                      @Param("offset") int offset,
                                       @Param("limit") int limit);
+
+    int countRecordsByTask(@Param("workspaceId") String workspaceId,
+                           @Param("taskId") String taskId);
 
     TimeLog selectById(@Param("id") Long id);
 

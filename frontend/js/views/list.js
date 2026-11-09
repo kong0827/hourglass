@@ -23,7 +23,7 @@ var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort")
 var lastItems = [];
 var listLoaded = false;
 var listHasMore = false, listLoadingMore = false;
-var LIST_PAGE_SIZE = 500;
+var LIST_PAGE_SIZE = 100;
 var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", subgroup:"none", hideDone:false,
@@ -38,7 +38,7 @@ var SORT_DEFAULT_DIR = {
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(160px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"70px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
+var COL_WIDTHS = { title:"minmax(200px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"70px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -326,24 +326,26 @@ function minutesText(value){
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
 function taskCell(t, key, hasTypeCol){
-  if(key === "title") return '<span class="lr-task"><span class="lr-t">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title) + '</span></span>';
+  if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title) + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
     return '<span class="cell"><span class="tag" style="background:' + rgbaOf(color,.10) + ';color:' + darken(color) + '">' + esc(colName(t.boardColumn)) + '</span></span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell">' + esc(t.owner || "—") + '</span>';
+  if(key === "owner") return '<span class="cell" title="' + esc(t.owner || "") + '">' + esc(t.owner || "—") + '</span>';
   if(key === "dueDate"){
     var st = dueState(t), txt = t.boardColumn === "done" ? (t.completedAt ? ("完成于 " + fmtShortMD(parseDate(t.completedAt))) : "已完成") : dueText(t);
     return '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(txt) + '</span>';
   }
   if(key === "progress"){
     var p = progressOf(t);
+    /* 未开始且进度为 0 时不画空进度条，与「我的工作」保持一致 */
+    if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell">—</span>';
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
-  if(key === "project") return '<span class="cell">' + (t.reqId ? esc(reqNameById(t.reqId)) : "—") + '</span>';
-  if(key === "version") return '<span class="cell">' + esc(t.versionName || "—") + '</span>';
+  if(key === "project") return '<span class="cell" title="' + esc(t.reqId ? reqNameById(t.reqId) : "") + '">' + (t.reqId ? esc(reqNameById(t.reqId)) : "—") + '</span>';
+  if(key === "version") return '<span class="cell" title="' + esc(t.versionName || "") + '">' + esc(t.versionName || "—") + '</span>';
   if(key === "category") return '<span class="cell">' + (catTag(t.category) || "—") + '</span>';
   if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
   if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';

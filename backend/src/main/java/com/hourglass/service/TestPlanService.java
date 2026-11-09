@@ -53,23 +53,39 @@ public class TestPlanService {
 
     /* ---------- 查询 ---------- */
 
-    public List<TestPlanView> list(String workspaceId, String userId, String reqId) {
+    public com.hourglass.dto.PageResult<TestPlanView> page(String workspaceId, String userId, String reqId,
+                                                            int offset, int limit) {
         projectAccess.assertView(workspaceId, userId, reqId);
-        return planMapper.selectViewByReq(workspaceId, reqId);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = planMapper.countByReq(workspaceId, reqId);
+        List<TestPlanView> items = total <= safeOffset ? new ArrayList<TestPlanView>()
+                : planMapper.selectViewByReq(workspaceId, reqId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
-    /** 计划详情：本体 + 圈选用例（含计划内结果） */
+    /** 计划详情：本体与执行汇总；用例行通过独立分页接口读取 */
     public Map<String, Object> detail(String workspaceId, String userId, String id) {
         TestPlan plan = requirePlan(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, plan.getReqId());
         TestPlanView view = planMapper.selectViewById(id);
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("plan", view);
-        List<TestPlanCaseView> cases = planCaseMapper.selectViewByPlan(id);
-        out.put("cases", cases);
         out.put("passRate", view == null || view.getExecutedCount() == 0
                 ? null : Math.round(view.getPassedCount() * 1000.0 / view.getExecutedCount()) / 10.0);
         return out;
+    }
+
+    public com.hourglass.dto.PageResult<TestPlanCaseView> cases(
+            String workspaceId, String userId, String id, int offset, int limit) {
+        TestPlan plan = requirePlan(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, plan.getReqId());
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = planCaseMapper.countByPlan(id);
+        List<TestPlanCaseView> items = total <= safeOffset ? new ArrayList<TestPlanCaseView>()
+                : planCaseMapper.selectViewByPlan(id, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /* ---------- 写入 ---------- */

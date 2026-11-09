@@ -12,7 +12,11 @@ public interface AppNotificationMapper {
     List<AppNotification> selectByUser(@Param("userId") String userId,
                                        @Param("workspaceId") String workspaceId,
                                        @Param("filter") String filter,
+                                       @Param("offset") int offset,
                                        @Param("limit") int limit);
+
+    int countByUser(@Param("userId") String userId, @Param("workspaceId") String workspaceId,
+                    @Param("filter") String filter);
 
     int countUnread(@Param("userId") String userId, @Param("workspaceId") String workspaceId);
 

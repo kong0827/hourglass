@@ -31,12 +31,17 @@ public class NotificationCenterController {
     @GetMapping("/api/notifications")
     public ApiResult<Map<String, Object>> list(@RequestParam(required = false) String workspace,
                                                @RequestParam(required = false) String filter,
+                                               @RequestParam(required = false) Integer offset,
                                                @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         String wsId = trimToNull(workspace);
-        List<AppNotification> items = notificationService.list(userId, wsId, filter, limit);
+        com.hourglass.dto.PageResult<AppNotification> page = notificationService.list(
+                userId, wsId, filter, offset == null ? 0 : offset, limit == null ? 50 : limit);
         Map<String, Object> res = new LinkedHashMap<String, Object>();
-        res.put("items", items);
+        res.put("items", page.getItems());
+        res.put("offset", page.getOffset());
+        res.put("limit", page.getLimit());
+        res.put("hasMore", page.isHasMore());
         res.put("unread", notificationService.unread(userId, wsId));
         /* total/mentions 一并返回：total 供「共 N 条」这类文字与排障使用（筛选页签不显示），
            mentions 为未读提及数——页签上的数字必须能被读完归零，才不会被读成待办量 */

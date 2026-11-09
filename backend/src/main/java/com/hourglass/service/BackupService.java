@@ -279,6 +279,7 @@ public class BackupService {
             bc.setId(c.getId());
             bc.setName(c.getName());
             bc.setColor(c.getColor());
+            bc.setProcessingRule(c.getProcessingRule());
             columns.add(bc);
         }
         data.setColumns(columns);
@@ -955,6 +956,7 @@ public class BackupService {
                 bc.setWorkspaceId(workspaceId);
                 bc.setName(cname == null ? cid : Texts.cut(cname, 12));
                 bc.setColor(color);
+                bc.setProcessingRule(BoardColumnService.normalizeProcessingRule(c.getProcessingRule()));
                 bc.setSortOrder(boardColumnMapper.maxSortOrder(workspaceId) + 1);
                 boardColumnMapper.insert(bc);
             }

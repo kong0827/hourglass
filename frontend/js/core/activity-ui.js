@@ -16,7 +16,7 @@ function loadInto(el, path){
   var seq = String((Number(el.dataset.activitySeq) || 0) + 1);
   el.dataset.activitySeq = seq;
   el.innerHTML = '<div class="tl-empty">加载中…</div>';
-  return API.get(path).then(function(logs){
+  return API.getAllPages(path).then(function(logs){
     if(el.dataset.activitySeq === seq) el.innerHTML = activityHTML(logs);
     return logs;
   }).catch(function(){

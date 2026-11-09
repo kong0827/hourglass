@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.dto.TaskBucketRow;
 import com.hourglass.dto.WorkSumRow;
+import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.TaskCompletionRecordMapper;
 import com.hourglass.mapper.TaskMapper;
@@ -35,12 +36,14 @@ public class MetricsService {
     private final TaskMapper taskMapper;
     private final TimeLogMapper timeLogMapper;
     private final TaskCompletionRecordMapper completionMapper;
+    private final WorkspaceMetaCache metaCache;
 
     public MetricsService(TaskMapper taskMapper, TimeLogMapper timeLogMapper,
-                          TaskCompletionRecordMapper completionMapper) {
+                          TaskCompletionRecordMapper completionMapper, WorkspaceMetaCache metaCache) {
         this.taskMapper = taskMapper;
         this.timeLogMapper = timeLogMapper;
         this.completionMapper = completionMapper;
+        this.metaCache = metaCache;
     }
 
     /** 该周期内完成的条数（完成快照口径，已排除彻底删除造成的历史丢失） */
@@ -55,11 +58,24 @@ public class MetricsService {
             return out;
         }
         for (Task t : tasks) {
-            if ("over".equals(TaskCalc.dueKind(t, today))) {
+            String rule = processingRuleOf(t.getWorkspaceId(), t.getBoardColumn());
+            if ("over".equals(TaskCalc.dueKind(t.getBoardColumn(), rule, t.getDueDate(), today))) {
                 out.add(t);
             }
         }
         return out;
+    }
+
+    private String processingRuleOf(String workspaceId, String column) {
+        if ("done".equals(column)) {
+            return "done";
+        }
+        if ("backlog".equals(column)) {
+            return "backlog";
+        }
+        BoardColumn c = metaCache.column(workspaceId, column);
+        String rule = c == null ? null : c.getProcessingRule();
+        return rule == null ? "normal" : rule;
     }
 
     /** 当前各列计数 + 逾期（看板/报表/流程体检共用） */

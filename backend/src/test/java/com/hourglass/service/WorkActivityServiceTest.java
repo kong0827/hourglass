@@ -1,5 +1,7 @@
 package com.hourglass.service;
 
+import com.hourglass.dto.PageResult;
+import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.WorkActivity;
 import com.hourglass.mapper.UserMapper;
@@ -52,15 +54,38 @@ class WorkActivityServiceTest {
     }
 
     @Test
-    void listByEntityUsesFixedDescendingLimit() {
+    void listByEntityClampsPageAndReturnsTotal() {
         List<WorkActivity> expected = Collections.singletonList(new WorkActivity());
-        when(activityMapper.selectByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1", 200))
+        when(activityMapper.countByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1")).thenReturn(1);
+        when(activityMapper.selectByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1", 0, 100))
                 .thenReturn(expected);
 
-        List<WorkActivity> actual = service.listByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1");
+        PageResult<WorkActivity> actual = service.listByEntity(
+                "W1", WorkActivityService.REQUIREMENT_DOC, "D1", -1, 500);
 
-        assertSame(expected, actual);
-        verify(activityMapper).selectByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1", 200);
+        assertSame(expected, actual.getItems());
+        assertEquals(1, actual.getTotal());
+        assertEquals(0, actual.getOffset());
+        assertEquals(100, actual.getLimit());
+        verify(activityMapper).selectByEntity("W1", WorkActivityService.REQUIREMENT_DOC, "D1", 0, 100);
+    }
+
+    @Test
+    void docActivitiesPassesVisibilityAndPageParametersToCountAndRows() {
+        List<ReqDocActivityView> expected = Collections.singletonList(new ReqDocActivityView());
+        when(activityMapper.countDocActivities("W1", WorkActivityService.REQUIREMENT_DOC,
+                "U1", "U2", false)).thenReturn(2);
+        when(activityMapper.selectDocActivities("W1", WorkActivityService.REQUIREMENT_DOC,
+                "U1", "U2", false, 1, 100)).thenReturn(expected);
+
+        PageResult<ReqDocActivityView> actual = service.docActivities(
+                "W1", "U1", "U2", false, 1, 500);
+
+        assertSame(expected, actual.getItems());
+        assertEquals(2, actual.getTotal());
+        assertEquals(100, actual.getLimit());
+        verify(activityMapper).selectDocActivities("W1", WorkActivityService.REQUIREMENT_DOC,
+                "U1", "U2", false, 1, 100);
     }
 
     private static String repeat(char value, int count) {

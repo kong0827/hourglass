@@ -47,25 +47,30 @@
 #view-demands .smart-view-spacer{flex:1 1 auto;}
 #view-list .list-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 #view-list .list-group-row > button{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:7px 16px;border:0;
+  display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:7px 12px;border:0;
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
 }
 #view-list .list-group-row > button:hover{background:var(--surface-hover);}
 #view-list .list-group-caret{display:inline-block;color:var(--text-3);font-size:10px;transition:transform var(--dur-fast) var(--ease-out);}
 #view-list .list-group-caret.open{transform:rotate(90deg);}
 #view-list .list-group-name{font-size:12.5px;font-weight:600;color:var(--text);}
-#view-list .list-group-count{font-size:12px;color:var(--text-3);}
+/* 分组计数与「我的工作」同款胶囊，避免纯文字数字被底色吞掉 */
+#view-list .list-group-count{
+  min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);
+  background:var(--surface);border:1px solid var(--border);color:var(--text-2);
+  font-size:12px;font-weight:600;display:inline-grid;place-items:center;
+}
 /* 二级分组：缩进一级，弱化底色，仍可折叠 */
 #view-list .list-subgroup-row{background:var(--surface);border-bottom:1px solid var(--border);}
 #view-list .list-subgroup-row > button{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 16px 6px 32px;border:0;
+  display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 12px 6px 28px;border:0;
   background:transparent;color:var(--text-2);font:inherit;text-align:left;cursor:pointer;
 }
 #view-list .list-subgroup-row > button:hover{background:var(--surface-hover);}
 #view-list .list-subgroup-caret{display:inline-block;color:var(--text-3);font-size:9px;transition:transform var(--dur-fast) var(--ease-out);}
 #view-list .list-subgroup-caret.open{transform:rotate(90deg);}
 #view-list .list-subgroup-name{font-size:12px;font-weight:600;color:var(--text-2);}
-#view-list .list-subgroup-count{font-size:11.5px;color:var(--text-3);}
+#view-list .list-subgroup-count{font-size:12px;color:var(--text-3);}
 #view-list .list-hide-done.on{color:var(--primary-fg);border-color:var(--primary-border);background:var(--primary-soft);}
 /* 透视表：行/列维度选择 + 合计行 */
 .pivot-x{color:var(--text-3);font-size:11.5px;}
@@ -84,6 +89,10 @@
 #view-demands .dem-group-caret.open{transform:rotate(90deg);}
 #view-demands .dem-group-name{font-weight:600;color:var(--text);}
 #view-demands .dem-group-count{font-size:12px;color:var(--text-3);}
+#view-demands .dem-group-item-row > td:first-child{position:relative;padding-left:34px;}
+#view-demands .dem-group-item-row > td:first-child::before{
+  content:"";position:absolute;top:10px;bottom:10px;left:20px;border-left:1px solid var(--border);
+}
 @media (max-width:767px){
   #view-list .smart-view-tabs,
   #view-demands .smart-view-tabs{min-height:40px;padding:4px 6px;}

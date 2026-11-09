@@ -68,13 +68,13 @@ public class BoardQuery {
         query.noDue = Boolean.TRUE.equals(noDue);
         query.doneScope = "all".equals(doneScope) ? "all" : "week";
         if (doneLimit != null) {
-            query.doneLimit = Math.max(1, Math.min(200, doneLimit));
+            query.doneLimit = Math.max(1, Math.min(100, doneLimit));
         }
         if (doneOffset != null) {
             query.doneOffset = Math.max(0, doneOffset);
         }
         if (openLimit != null) {
-            query.openLimit = Math.max(1, Math.min(200, openLimit));
+            query.openLimit = Math.max(1, Math.min(100, openLimit));
         }
         return query;
     }

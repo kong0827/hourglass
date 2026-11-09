@@ -188,10 +188,10 @@ var reqDocSearchList = null;
 var reqDocsError = null;
 function fetchReqDocs(kw, refreshFull){
   var seq = ++reqDocFetchSeq;
-  var main = API.get("/api/req-docs", kw ? { keyword: kw } : null);
+  var main = API.getAllPages("/api/req-docs", kw ? { keyword: kw } : null);
   /* 搜索结果是子集，写操作后只刷新它会让全量列表（下拉、卡片文档名）停在旧数据；
      force 刷新时顺带取一份全量，打字搜索仍然只发一个请求 */
-  var full = (kw && refreshFull) ? API.get("/api/req-docs", null).catch(function(){ return null; }) : null;
+  var full = (kw && refreshFull) ? API.getAllPages("/api/req-docs", null).catch(function(){ return null; }) : null;
   return Promise.all([main, full]).then(function(res){
     if(seq !== reqDocFetchSeq) return;   // 快速连续搜索：丢弃过期响应
     var rows = res[0] || [];
@@ -960,7 +960,7 @@ function loadRrdComments(){
   if(!list || !rrdCommentsDocId) return;
   var docId = rrdCommentsDocId;
   list.innerHTML = '<div class="reqdoc-comment-empty">加载中…</div>';
-  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/comments").then(function(rows){
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/comments").then(function(rows){
     if(rrdCommentsDocId !== docId) return;
     rrdComments = rows || [];
     var title = $("rrdCommentsTitle");
@@ -1491,7 +1491,7 @@ function renderReqDocFeed(){
   if(!box) return;
   var seq = ++feedSeq;
   box.innerHTML = '<div class="reqdoc-empty2">加载中…</div>';
-  API.get("/api/req-docs/activities").then(function(rows){
+  API.getAllPages("/api/req-docs/activities").then(function(rows){
     if(seq !== feedSeq) return;
     rows = rows || [];
     if(!rows.length){
@@ -1593,7 +1593,7 @@ function loadReqDocTasks(id){
   if(!list || !id) return;
   list.innerHTML = '<div class="tl-empty">加载中…</div>';
   if($("reqDocTaskCount")) $("reqDocTaskCount").textContent = "";
-  API.get("/api/req-docs/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
     if(editingDocId !== id) return;
     if($("reqDocTaskCount")) $("reqDocTaskCount").textContent = "（" + tasks.length + "）";
     list.innerHTML = tasks.length ? tasks.map(function(t){
@@ -1618,7 +1618,7 @@ function loadReqDocDemands(id){
   if(!list || !id) return;
   list.innerHTML = '<div class="tl-empty">加载中…</div>';
   if($("reqDocDemandCount")) $("reqDocDemandCount").textContent = "";
-  API.get("/api/req-docs/" + encodeURIComponent(id) + "/demands").then(function(rows){
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(id) + "/demands").then(function(rows){
     if(editingDocId !== id) return;
     rows = rows || [];
     if($("reqDocDemandCount")) $("reqDocDemandCount").textContent = rows.length ? "（" + rows.length + "）" : "";
@@ -2219,7 +2219,7 @@ function loadReqDocComments(docId){
   if(!list) return;
   list.innerHTML = '<div class="reqdoc-comment-empty">加载中…</div>';
   if(form) form.style.display = roleReadOnly() ? "none" : "";
-  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/comments").then(function(rows){
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/comments").then(function(rows){
     if(editingDocId !== docId) return;
     rows = rows || [];
     if(count) count.textContent = rows.length ? "（" + rows.length + "）" : "";
@@ -2305,7 +2305,7 @@ function openReqDocHistory(docId, opts){
   verTitle.textContent = "";
   restore.style.display = reqDocHistoryCanRestore ? "" : "none";
   UI.openModal(layer);
-  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/history").then(function(rows){
+  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/history").then(function(rows){
     if(docId !== reqDocHistoryDocId) return;
     rows = rows || [];
     reqDocHistories = rows;
@@ -3010,20 +3010,34 @@ function populateReqDocSelect(keep){
   if(!sel) return;
   var reqId = $("iReq") ? $("iReq").value : "";
   var cur = (keep === undefined ? sel.value : keep) || "";
-  var opts = reqId ? reqDocList.filter(function(d){ return d.reqId === reqId; }) : [];
+  var opts = reqDocList.slice();
+  if(cur && !reqDocsLoaded && !opts.some(function(d){ return d.id === cur; })){
+    opts.push({ id:cur, reqId:reqId, title:"当前关联文档", docType:"other" });
+  }
   sel.innerHTML = '<option value="">不关联</option>' + opts.map(function(d){
-    return '<option value="' + esc(d.id) + '">' + esc(docTypeName(d.docType)) + ' · ' + esc(d.title) + '</option>';
+    return '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '">' +
+      esc(docTypeName(d.docType)) + ' · ' + esc(d.title) + '</option>';
   }).join("");
-  var ok = false;
-  for(var i = 0; i < opts.length; i++) if(opts[i].id === cur) ok = true;
-  sel.value = ok ? cur : "";
-  /* 文档列表是异步填充的：只读抽屉里不能因为它晚到就把下拉重新放开 */
-  sel.disabled = !reqId || rt.drawerReadOnly;
+  var selected = null;
+  for(var i = 0; i < opts.length; i++) if(opts[i].id === cur) selected = opts[i];
+  sel.value = selected ? cur : "";
+  sel.disabled = !!rt.drawerReadOnly;
+  if(reqDocsLoaded) sel.setAttribute("data-ready", "1");
+  else sel.removeAttribute("data-ready");
+  var trigger = $("iReqDocPicker");
+  var triggerText = $("iReqDocPickerText");
+  if(trigger) trigger.disabled = !!rt.drawerReadOnly;
+  if(triggerText){
+    triggerText.textContent = selected ? selected.title : "搜索并选择文档";
+    triggerText.classList.toggle("placeholder", !selected);
+  }
+  if(trigger) trigger.title = selected ? (selected.title + "\n" + reqDocProjectName(selected.reqId)) : "搜索全部可见文档";
   var hint = $("iReqDocHint");
   if(hint){
     hint.textContent = rt.drawerReadOnly ? "只读项目不可修改关联文档"
-      : (!reqId ? "先选项目，再从该项目的文档里挑"
-        : (opts.length ? "从该项目的文档里挑" : "该项目还没有文档"));
+      : (!reqDocsLoaded && cur ? "文档列表加载失败；现在保存会保留原关联"
+        : (selected ? reqDocProjectName(selected.reqId) + " · " + docTypeName(selected.docType)
+          : "无需先选项目，可搜索全部可见文档"));
   }
   syncAssocViewBtns();
 }
@@ -3474,4 +3488,4 @@ function notifyReqDocChanged(docId, actor){
   openReqDocEditor(editingDocId);
 }
 
-export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, populateReqDocSelect, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, setReqDocProjectFilter, tryCloseReqDocEditor };
+export { aiBtnBusy, aiErrMsg, aiUsageText, ensureReqDocOptions, enterRequirementsView, isReqDocEditing, loadReqDocs, notifyReqDocChanged, openNewReqDocDialog, openReqDocAndJump, populateReqDocSelect, refreshReqDocListIfOpen, refreshReqDocTasksIfOpen, reqDocDirty, reqDocList, reqDocNameById, reqDocStatusLabel, reqDocsError, reqDocsLoaded, setReqDocProjectFilter, tryCloseReqDocEditor };

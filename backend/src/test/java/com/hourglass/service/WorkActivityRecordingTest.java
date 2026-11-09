@@ -318,21 +318,21 @@ class WorkActivityRecordingTest {
         assertEquals("文档不存在：Dmissing",
                 assertThrows(AppException.class, () -> docService.get(WS, "Dmissing")).getMessage());
         assertEquals("需求不存在：DMmissing",
-                assertThrows(AppException.class, () -> docService.docsOfDemand(WS, "DMmissing")).getMessage());
+                assertThrows(AppException.class, () -> docService.docsOfDemand(WS, "DMmissing", USER, 0, 100)).getMessage());
     }
 
     @Test
     void activityQueriesRejectEntitiesFromAnotherWorkspace() {
         when(reqMapper.selectById("R1")).thenReturn(project("R1", "W2", "其他空间项目", null, "active"));
-        assertThrows(AppException.class, () -> requirementService.activities(WS, USER, "R1"));
-        verify(workActivityService, never()).listByEntity(WS, WorkActivityService.PROJECT, "R1");
+        assertThrows(AppException.class, () -> requirementService.activities(WS, USER, "R1", 0, 100));
+        verify(workActivityService, never()).listByEntity(WS, WorkActivityService.PROJECT, "R1", 0, 100);
 
         RequirementDoc other = new RequirementDoc();
         other.setId("D1");
         other.setWorkspaceId("W2");
         when(docMapper.selectById("D1")).thenReturn(other);
-        assertThrows(AppException.class, () -> docService.activities(WS, "D1"));
-        verify(workActivityService, never()).listByEntity(WS, WorkActivityService.REQUIREMENT_DOC, "D1");
+        assertThrows(AppException.class, () -> docService.activities(WS, USER, "D1", 0, 100));
+        verify(workActivityService, never()).listByEntity(WS, WorkActivityService.REQUIREMENT_DOC, "D1", 0, 100);
     }
 
     private void stubDocumentTree() {

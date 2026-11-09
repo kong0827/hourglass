@@ -31,11 +31,15 @@ public class SubtaskController {
     }
 
     @GetMapping("/api/tasks/{taskId}/subtasks")
-    public ApiResult<List<Subtask>> list(@PathVariable String taskId,
-                                         @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<Subtask>> list(
+            @PathVariable String taskId,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(subtaskService.list(ws.getId(), userId, taskId));
+        return ApiResult.ok(subtaskService.list(ws.getId(), userId, taskId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/tasks/{taskId}/subtasks")

@@ -3,6 +3,7 @@ package com.hourglass.controller;
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocActivityView;
 import com.hourglass.dto.ReqDocPublishRequest;
 import com.hourglass.dto.ReqDocRenameRequest;
@@ -34,7 +35,6 @@ import javax.validation.Valid;
 import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,11 +54,14 @@ public class RequirementDocController {
 
     /** 需求列表（含所属项目名、关联任务数、正文摘要），不含完整正文；keyword 按标题/正文模糊搜索 */
     @GetMapping("/api/req-docs")
-    public ApiResult<List<ReqDocView>> list(@RequestParam(required = false) String workspace,
-                                            @RequestParam(required = false) String keyword) {
+    public ApiResult<PageResult<ReqDocView>> list(@RequestParam(required = false) String workspace,
+                                                  @RequestParam(required = false) String keyword,
+                                                  @RequestParam(required = false) Integer offset,
+                                                  @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(docService.list(ws.getId(), userId, keyword));
+        return ApiResult.ok(docService.page(ws.getId(), userId, keyword,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 需求详情（含正文 HTML） */
@@ -72,36 +75,50 @@ public class RequirementDocController {
 
     /** 文档关联的需求池需求（id / title / status / priority） */
     @GetMapping("/api/req-docs/{id}/demands")
-    public ApiResult<List<java.util.Map<String, Object>>> demands(@PathVariable String id,
-                                                                  @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<java.util.Map<String, Object>>> demands(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         docService.getVisible(ws.getId(), CurrentUser.id(), id);
-        return ApiResult.ok(docService.demandsOfDoc(ws.getId(), id));
+        return ApiResult.ok(docService.demandsOfDoc(ws.getId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @GetMapping("/api/req-docs/{id}/tasks")
-    public ApiResult<List<Task>> tasks(@PathVariable String id,
-                                       @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<Task>> tasks(@PathVariable String id,
+                                             @RequestParam(required = false) String workspace,
+                                             @RequestParam(required = false) Integer offset,
+                                             @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         docService.getVisible(ws.getId(), userId, id);
-        return ApiResult.ok(docService.tasks(ws.getId(), id));
+        return ApiResult.ok(docService.taskPage(ws.getId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 需求文档活动轨迹：沿用空间成员权限，并校验文档属于该空间。 */
     @GetMapping("/api/req-docs/{id}/activities")
-    public ApiResult<List<WorkActivity>> activities(@PathVariable String id,
-                                                    @RequestParam(required = false) String workspace) {
-        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        docService.getVisible(ws.getId(), CurrentUser.id(), id);
-        return ApiResult.ok(docService.activities(ws.getId(), id));
+    public ApiResult<PageResult<WorkActivity>> activities(@PathVariable String id,
+                                                          @RequestParam(required = false) String workspace,
+                                                          @RequestParam(required = false) Integer offset,
+                                                          @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(docService.activities(ws.getId(), userId, id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 文档最近动态（空间级）：全部文档的创建/更新/状态流转/发布等活动，按查看人过滤可见性 */
     @GetMapping("/api/req-docs/activities")
-    public ApiResult<List<ReqDocActivityView>> docActivities(@RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<ReqDocActivityView>> docActivities(
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(docService.feedActivities(ws.getId(), CurrentUser.id(), 120));
+        return ApiResult.ok(docService.feedActivities(ws.getId(), CurrentUser.id(),
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/req-docs")
@@ -162,11 +179,15 @@ public class RequirementDocController {
 
     /** 文档历史版本列表（不含正文） */
     @GetMapping("/api/req-docs/{id}/history")
-    public ApiResult<List<RequirementDocHistory>> history(@PathVariable String id,
-                                                          @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<RequirementDocHistory>> history(
+            @PathVariable String id,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(docService.history(ws.getId(), userId, id));
+        return ApiResult.ok(docService.history(ws.getId(), userId, id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 单个历史版本（含正文） */

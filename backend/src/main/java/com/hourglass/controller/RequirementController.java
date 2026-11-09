@@ -6,6 +6,7 @@ import com.hourglass.common.CurrentWorkspace;
 import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.FirstReleaseRequest;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReqSaveRequest;
 import com.hourglass.dto.RequirementDeleteResult;
@@ -28,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import java.util.List;
 
 @RestController
 public class RequirementController {
@@ -48,9 +48,12 @@ public class RequirementController {
 
     /** 项目列表（含任务数、完成数、平均进度） */
     @GetMapping({"/api/reqs", "/api/projects"})
-    public ApiResult<List<ReqProgress>> list(@RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<ReqProgress>> list(@RequestParam(required = false) String workspace,
+                                                   @RequestParam(required = false) Integer offset,
+                                                   @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(requirementService.list(ws.getId(), CurrentUser.id()));
+        return ApiResult.ok(requirementService.page(ws.getId(), CurrentUser.id(),
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping({"/api/reqs", "/api/projects"})
@@ -69,17 +72,23 @@ public class RequirementController {
 
     /** 项目活动轨迹：沿用空间成员权限，并校验项目属于该空间。 */
     @GetMapping({"/api/reqs/{id}/activities", "/api/projects/{id}/activities"})
-    public ApiResult<List<WorkActivity>> activities(@PathVariable String id,
-                                                    @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<WorkActivity>> activities(@PathVariable String id,
+                                                          @RequestParam(required = false) String workspace,
+                                                          @RequestParam(required = false) Integer offset,
+                                                          @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(requirementService.activities(ws.getId(), CurrentUser.id(), id));
+        return ApiResult.ok(requirementService.activities(ws.getId(), CurrentUser.id(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @GetMapping({"/api/reqs/{id}/tasks", "/api/projects/{id}/tasks"})
-    public ApiResult<List<Task>> tasks(@PathVariable String id,
-                                       @RequestParam(required = false) String workspace) {
+    public ApiResult<PageResult<Task>> tasks(@PathVariable String id,
+                                             @RequestParam(required = false) String workspace,
+                                             @RequestParam(required = false) Integer offset,
+                                             @RequestParam(required = false) Integer limit) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(requirementService.tasks(ws.getId(), CurrentUser.id(), id));
+        return ApiResult.ok(requirementService.tasks(ws.getId(), CurrentUser.id(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 标记首版上线（阶段归组口径锚点）：仅空间主可执行；body 可选 date，缺省当天 */

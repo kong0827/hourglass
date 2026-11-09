@@ -25,14 +25,21 @@ public interface TaskMapper {
 
     /* ---- 看板 / 列表 / 日历：筛选与分页下推（BE-Q-1） ---- */
 
-    /** 看板未完成列（board_column <> done），走 idx_board */
-    List<Task> selectOpenTasks(@Param("workspaceId") String workspaceId,
-                               @Param("viewerId") String viewerId);
+    /** 看板未完成单列总数（不受筛选影响） */
+    int countOpenColumn(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+                        @Param("column") String column, @Param("fallback") boolean fallback,
+                        @Param("knownColumns") List<String> knownColumns);
 
-    /** 看板单列未完成任务（滚动加载，走 idx_board） */
-    List<Task> selectOpenColumnTasks(@Param("workspaceId") String workspaceId,
-                                     @Param("viewerId") String viewerId,
-                                     @Param("column") String column);
+    /** 看板未完成单列筛选后总数 */
+    int countOpenMatched(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                         @Param("column") String column, @Param("fallback") boolean fallback,
+                         @Param("knownColumns") List<String> knownColumns);
+
+    /** 看板未完成单列分页 */
+    List<Task> selectOpenPage(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
+                              @Param("column") String column, @Param("fallback") boolean fallback,
+                              @Param("knownColumns") List<String> knownColumns,
+                              @Param("offset") int offset, @Param("limit") int limit);
 
     /** 已完成列：全部条数（不受 doneScope / 筛选影响） */
     int countDoneAll(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
@@ -52,7 +59,7 @@ public interface TaskMapper {
                               @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd,
                               @Param("offset") int offset, @Param("limit") int limit);
 
-    /** 列表视图筛选后的总数（可能大于 500） */
+    /** 列表视图筛选后的总数（可能大于单页上限） */
     int countTaskList(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query);
 
     /** 列表视图分页：筛选 + 排序 + LIMIT 都在 SQL 完成 */
@@ -78,6 +85,10 @@ public interface TaskMapper {
     List<Task> selectGanttUnscheduled(@Param("workspaceId") String workspaceId,
                                       @Param("query") GanttQuery query, @Param("limit") int limit);
 
+    List<Task> selectGanttUnscheduledPage(@Param("workspaceId") String workspaceId,
+                                          @Param("query") GanttQuery query,
+                                          @Param("offset") int offset, @Param("limit") int limit);
+
     int countGanttUnscheduled(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query);
 
     /** 本页任务的评论数（甘特图分页后按 id 批量查，避免全空间扫描） */
@@ -85,6 +96,11 @@ public interface TaskMapper {
             @Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
     List<Task> selectDeleted(@Param("workspaceId") String workspaceId);
+
+    List<Task> selectDeletedPage(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+                                 @Param("offset") int offset, @Param("limit") int limit);
+
+    int countDeletedVisible(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId);
 
     /** 账号删除后清理负责人引用，保留显示名快照 */
     int clearOwnerUser(@Param("userId") String userId);
@@ -158,13 +174,30 @@ public interface TaskMapper {
     List<com.hourglass.entity.Task> selectByBranch(@Param("workspaceId") String workspaceId,
                                                           @Param("branchId") String branchId);
 
+    List<Task> selectByBranchPage(@Param("workspaceId") String workspaceId, @Param("branchId") String branchId,
+                                  @Param("viewerId") String viewerId,
+                                  @Param("offset") int offset, @Param("limit") int limit);
+
+    int countActiveByBranch(@Param("workspaceId") String workspaceId, @Param("branchId") String branchId,
+                            @Param("viewerId") String viewerId);
+
     /** 项目详情：直接查看项目下的全部未删除任务 */
     List<Task> selectByReq(@Param("workspaceId") String workspaceId,
                            @Param("reqId") String reqId);
 
+    List<Task> selectByReqPage(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                               @Param("offset") int offset, @Param("limit") int limit);
+
+    int countActiveByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
     /** 需求详情「关联任务」透视：挂在某条需求池需求上的未删除任务 */
     List<Task> selectByDemand(@Param("workspaceId") String workspaceId,
                               @Param("demandId") String demandId);
+
+    List<Task> selectByDemandPage(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                                  @Param("offset") int offset, @Param("limit") int limit);
+
+    int countActiveByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
     int countByWorkspace(@Param("workspaceId") String workspaceId);
 
@@ -181,7 +214,7 @@ public interface TaskMapper {
 
     /**
      * 跨空间「我的任务」（N-3）：按账号ID匹配，历史数据（owner_user_id 为空）回落显示名文本，
-     * 因此不做数据回填也能立即生效。TOP-6：分页下推 SQL（LIMIT/OFFSET，上限由调用方收敛到 500）。
+     * 因此不做数据回填也能立即生效。TOP-6：分页下推 SQL（LIMIT/OFFSET，上限由调用方收敛到 100）。
      */
     List<Task> selectMyTasks(com.hourglass.dto.MyTasksQuery query);
 
@@ -269,6 +302,11 @@ public interface TaskMapper {
     /** AI 体检：某需求下的任务（只取展示 / 判定所需列） */
     List<Task> selectByReqDoc(@Param("workspaceId") String workspaceId,
                               @Param("reqDocId") String reqDocId);
+
+    List<Task> selectByReqDocPage(@Param("workspaceId") String workspaceId, @Param("reqDocId") String reqDocId,
+                                  @Param("offset") int offset, @Param("limit") int limit);
+
+    int countActiveByReqDoc(@Param("workspaceId") String workspaceId, @Param("reqDocId") String reqDocId);
 
     /** AI 落库去重：空间内当前用户可见的任务标题（viewerId 非空时排除隐藏项目） */
     List<String> selectTitles(@Param("workspaceId") String workspaceId,

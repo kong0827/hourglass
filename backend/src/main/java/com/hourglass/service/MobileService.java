@@ -3,7 +3,6 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.dto.TaskBlockedAt;
-import com.hourglass.entity.Demand;
 import com.hourglass.entity.DevBranch;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkspaceMember;
@@ -385,24 +384,8 @@ public class MobileService {
     }
 
     private int countDemandReview(String workspaceId, String userId) {
-        Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
-        int count = 0;
-        List<Demand> demands = demandMapper.selectByWorkspace(workspaceId);
-        if (demands == null) {
-            return 0;
-        }
-        for (Demand demand : demands) {
-            if (demand == null) {
-                continue;
-            }
-            if (demand.getReqId() != null && hidden.contains(demand.getReqId())) {
-                continue;
-            }
-            if (DEMAND_REVIEW.equals(demand.getStatus())) {
-                count++;
-            }
-        }
-        return count;
+        return demandMapper.countByStatus(workspaceId, DEMAND_REVIEW,
+                projectAccess.viewerScope(workspaceId, userId));
     }
 
     private Map<String, Integer> countBranchPending(String workspaceId, String userId) {

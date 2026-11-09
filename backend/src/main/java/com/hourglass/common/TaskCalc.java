@@ -22,18 +22,23 @@ public final class TaskCalc {
         return t.getProgress() == null ? 0 : t.getProgress();
     }
 
-    /** @return none/done/over/today/soon/ok */
+    /** @return none/done/ended/over/today/soon/ok */
     public static String dueKind(Task t, LocalDate today) {
-        return dueKind(t.getBoardColumn(), t.getDueDate(), today);
+        return dueKind(t.getBoardColumn(), t.getProcessingRule(), t.getDueDate(), today);
     }
 
     /** 窄列投影（看板 meta / counts）复用同一口径 */
     public static String dueKind(String boardColumn, LocalDate dueDate, LocalDate today) {
+        return dueKind(boardColumn, null, dueDate, today);
+    }
+
+    /** 带处理规则的到期判断：ended 列不计执行逾期 */
+    public static String dueKind(String boardColumn, String processingRule, LocalDate dueDate, LocalDate today) {
         if (dueDate == null) {
             return "none";
         }
-        if (Consts.COL_DONE.equals(boardColumn)) {
-            return "done";
+        if (Consts.COL_DONE.equals(boardColumn) || "ended".equals(processingRule)) {
+            return Consts.COL_DONE.equals(boardColumn) ? "done" : "ended";
         }
         long days = ChronoUnit.DAYS.between(today, dueDate);
         if (days < 0) {

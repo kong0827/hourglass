@@ -293,6 +293,7 @@
 .gantt-unplanned-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
 .gantt-unplanned-t{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gantt-unplanned-m{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gantt-unplanned-more{padding:6px 8px;border-top:1px solid var(--border);}
 .gantt-empty-note{font-size:12px;color:var(--text-3);}
 
 /* 图例 */

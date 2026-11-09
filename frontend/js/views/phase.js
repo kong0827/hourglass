@@ -10,7 +10,7 @@ import { showView } from "../core/router.js";
 import { canEditReq, reqNameById, rt, state } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { colName, fmtMinutesShort } from "../lib/format.js";
+import { COLUMNS, colName, fmtMinutesShort } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { branchNameById } from "./branches.js";
 import { openDemandDetailById } from "./demands.js";
@@ -559,7 +559,12 @@ function taskTable(mode){
       group = t.versionId || "";
       groupCell = '<span class="tag ghost">' + esc(t.versionId ? (verName[t.versionId] || "版本") : "待规划") + '</span>';
     }
-    return '<tr data-group="' + esc(group) + '" data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
+    return '<tr data-group="' + esc(group) + '" data-open-task="' + esc(t.id) + '"'
+      + ' data-status="' + esc(t.boardColumn || "") + '"'
+      + ' data-owner="' + esc(t.owner || "") + '"'
+      + ' data-type="' + esc(t.itemType || "task") + '"'
+      + ' data-search="' + esc(String(t.title || "").toLowerCase()) + '"'
+      + ' title="打开工作项详情">'
       + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
       + '<td>' + groupCell + '</td>'
       + '<td>' + esc(typeName(t.itemType)) + '</td>'
@@ -582,12 +587,89 @@ function taskTable(mode){
     return '<button type="button" data-filter="' + esc(o[0]) + '"' + (i === 0 ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + esc(o[1]) + '</button>';
   }).join("") + '</div>';
   var head = mode === "phase" ? "工作项明细 · 按阶段" : "工作项明细 · 按影响版本";
+
+  /* 维度筛选：状态 / 负责人 / 类型 / 标题关键字，与阶段-版本分段叠加生效 */
+  var statusSet = {}, ownerSet = {}, typeSet = {};
+  cache.tasks.forEach(function(t){
+    if(t.boardColumn) statusSet[t.boardColumn] = 1;
+    if(t.owner) ownerSet[t.owner] = 1;
+    typeSet[t.itemType || "task"] = 1;
+  });
+  var statusIds = [];
+  COLUMNS.forEach(function(c){ if(statusSet[c.id]) statusIds.push(c.id); });
+  Object.keys(statusSet).forEach(function(id){ if(statusIds.indexOf(id) < 0) statusIds.push(id); });
+  var statusOpts = statusIds.map(function(id){ return [id, colName(id)]; });
+  var ownerOpts = Object.keys(ownerSet)
+    .sort(function(a, b){ return a.localeCompare(b, "zh-Hans-CN"); })
+    .map(function(n){ return [n, n]; });
+  var typeOrder = ["task", "bug", "story", "epic"];
+  var typeOpts = typeOrder.filter(function(k){ return typeSet[k]; })
+    .map(function(k){ return [k, typeName(k)]; });
+  Object.keys(typeSet).forEach(function(k){
+    if(typeOrder.indexOf(k) < 0) typeOpts.push([k, typeName(k)]);
+  });
+  function filterSelect(attr, label, opts, allLabel){
+    return '<label class="phase-filter"><span>' + esc(label) + '</span>'
+      + '<select class="mini-select" ' + attr + ' aria-label="按' + esc(label) + '筛选">'
+      + '<option value="">' + esc(allLabel) + '</option>'
+      + opts.map(function(o){ return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join("")
+      + '</select></label>';
+  }
+  var tools = cache.tasks.length
+    ? '<div class="phase-tbl-tools">'
+      + filterSelect("data-tbl-status", "状态", statusOpts, "全部状态")
+      + filterSelect("data-tbl-owner", "负责人", ownerOpts, "全部负责人")
+      + filterSelect("data-tbl-type", "类型", typeOpts, "全部类型")
+      + '<label class="phase-filter"><span>关键字</span><input type="search" class="phase-filter-input" data-tbl-kw placeholder="搜索工作项标题" aria-label="搜索工作项标题"></label>'
+      + '<span class="phase-tbl-count" data-tbl-count></span>'
+      + '<button class="btn sm" type="button" data-tbl-reset disabled>重置筛选</button>'
+      + '</div>'
+    : "";
+  var emptyRow = cache.tasks.length
+    ? '<tr data-tbl-empty hidden><td colspan="9" class="foot-note" style="padding:16px;text-align:center">没有符合筛选条件的工作项</td></tr>'
+    : "";
   return '<div class="panel"><div class="panel-head"><h3>' + head + '</h3>'
     + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开工作项</span>' + seg + '</div>'
+    + tools
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr><th>工作项</th>'
     + (mode === "phase" ? "<th>阶段</th>" : "<th>版本</th>")
     + '<th>类型</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>偏差</th><th>状态</th></tr></thead>'
-    + '<tbody id="phaseTblBody">' + rows + '</tbody></table></div></div>';
+    + '<tbody id="phaseTblBody">' + rows + emptyRow + '</tbody></table></div></div>';
+}
+
+/* 阶段/版本分段、状态、负责人、类型、关键字任一变化都按交集重算可见行 */
+function applyPhaseTblFilters(){
+  var body = $("phaseTblBody");
+  if(!body) return;
+  var panel = body.closest(".panel");
+  if(!panel) return;
+  var statusEl = panel.querySelector("[data-tbl-status]");
+  var ownerEl = panel.querySelector("[data-tbl-owner]");
+  var typeEl = panel.querySelector("[data-tbl-type]");
+  var kwEl = panel.querySelector("[data-tbl-kw]");
+  var status = statusEl ? statusEl.value : "";
+  var owner = ownerEl ? ownerEl.value : "";
+  var type = typeEl ? typeEl.value : "";
+  var kw = kwEl ? kwEl.value.trim().toLowerCase() : "";
+  var segBtn = panel.querySelector(".seg.mini button[aria-pressed='true']");
+  var group = segBtn ? segBtn.dataset.filter : "all";
+  var shown = 0, total = 0;
+  body.querySelectorAll("tr[data-open-task]").forEach(function(tr){
+    total++;
+    var ok = (group === "all" || tr.dataset.group === group)
+      && (!status || tr.dataset.status === status)
+      && (!owner || tr.dataset.owner === owner)
+      && (!type || tr.dataset.type === type)
+      && (!kw || (tr.dataset.search || "").indexOf(kw) >= 0);
+    tr.style.display = ok ? "" : "none";
+    if(ok) shown++;
+  });
+  var empty = panel.querySelector("[data-tbl-empty]");
+  if(empty) empty.hidden = !(total > 0 && shown === 0);
+  var count = panel.querySelector("[data-tbl-count]");
+  if(count) count.textContent = "显示 " + shown + " / " + total;
+  var reset = panel.querySelector("[data-tbl-reset]");
+  if(reset) reset.disabled = !(status || owner || type || kw || group !== "all");
 }
 function renderPhaseMode(){
   var p = cache.phase;
@@ -616,6 +698,7 @@ function renderPhaseMode(){
     + '<div class="phase-duo">' + mvpCard + postCard + '</div>'
     + memberTable()
     + taskTable("phase");
+  applyPhaseTblFilters();
 }
 
 /* ===== 按版本 ===== */
@@ -724,6 +807,7 @@ function renderVersionMode(){
     return;
   }
   phaseBody.innerHTML = '<div class="ver-grid">' + cards + unboundCard + '</div>' + caliber + taskTable("version");
+  applyPhaseTblFilters();
 }
 
 /* ---------- 版本弹窗 ---------- */
@@ -1311,12 +1395,23 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
     seg.querySelectorAll("button").forEach(function(b){
       b.setAttribute("aria-pressed", b === flt);
     });
-    var f = flt.dataset.filter;
-    var body = $("phaseTblBody");
-    if(body){
-      body.querySelectorAll("tr[data-group]").forEach(function(tr){
-        tr.style.display = (f === "all" || tr.dataset.group === f) ? "" : "none";
+    applyPhaseTblFilters();
+    return;
+  }
+  var rst = e.target.closest("[data-tbl-reset]");
+  if(rst){
+    var panel = rst.closest(".panel");
+    if(panel){
+      panel.querySelectorAll("[data-tbl-status],[data-tbl-owner],[data-tbl-type]").forEach(function(s){
+        s.value = "";
       });
+      var kw = panel.querySelector("[data-tbl-kw]");
+      if(kw) kw.value = "";
+      var segEl = panel.querySelector(".seg.mini");
+      if(segEl) segEl.querySelectorAll("button").forEach(function(b, i){
+        b.setAttribute("aria-pressed", i === 0);
+      });
+      applyPhaseTblFilters();
     }
     return;
   }
@@ -1336,6 +1431,12 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(nt){ showReleaseNote(nt.dataset.verNote); return; }
   var ua = e.target.closest("[data-unbound-assign]");
   if(ua){ openUnboundTasks(); return; }
+});
+if(phaseBody) phaseBody.addEventListener("change", function(e){
+  if(e.target.closest("[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
+});
+if(phaseBody) phaseBody.addEventListener("input", function(e){
+  if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
 });
 
 export { enterPhaseView, ensureEpicOptions, ensureFoundVersionOptions, ensureVersionOptions, invalidateTaskOptionsCache, loadPhaseData, reloadView, renderPhaseView, showReleaseNote };

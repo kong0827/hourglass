@@ -23,6 +23,9 @@ public class BoardColumnService {
 
     private static final Pattern COLOR = Pattern.compile("^#[0-9a-fA-F]{6}$");
     private static final String DEFAULT_COLOR = "#8a8578";
+    private static final String RULE_NORMAL = "normal";
+    private static final String RULE_WAITING = "waiting";
+    private static final String RULE_ENDED = "ended";
 
     private final BoardColumnMapper boardColumnMapper;
     private final TaskMapper taskMapper;
@@ -51,6 +54,7 @@ public class BoardColumnService {
         c.setWorkspaceId(workspaceId);
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
+        c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
         c.setSortOrder(boardColumnMapper.maxSortOrder(workspaceId) + 1);
         boardColumnMapper.insert(c);
         evictColumns(workspaceId);
@@ -63,10 +67,14 @@ public class BoardColumnService {
         if (c == null) {
             throw AppException.notFound("看板列不存在：" + id);
         }
+        if (Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id)) {
+            throw AppException.badRequest("「待处理」「进行中」为内置列，不可修改处理规则");
+        }
         String name = req.getName().trim();
         checkName(workspaceId, name, id);
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
+        c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
         boardColumnMapper.update(c);
         evictColumns(workspaceId);
         return boardColumnMapper.selectById(workspaceId, id);
@@ -154,5 +162,12 @@ public class BoardColumnService {
     private String normalizeColor(String color) {
         String c = Texts.trimToNull(color);
         return c != null && COLOR.matcher(c).matches() ? c : DEFAULT_COLOR;
+    }
+
+    public static String normalizeProcessingRule(String rule) {
+        if (RULE_WAITING.equals(rule) || RULE_ENDED.equals(rule)) {
+            return rule;
+        }
+        return RULE_NORMAL;
     }
 }

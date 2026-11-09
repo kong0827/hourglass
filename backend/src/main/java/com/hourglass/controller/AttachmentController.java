@@ -77,11 +77,15 @@ public class AttachmentController {
     }
 
     @GetMapping("/api/tasks/{taskId}/attachments")
-    public ApiResult<List<Attachment>> list(@PathVariable String taskId,
-                                            @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<Attachment>> list(
+            @PathVariable String taskId,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(attachmentService.list(ws.getId(), userId, taskId, AttachmentService.KIND_TASK));
+        return ApiResult.ok(attachmentService.list(ws.getId(), userId, taskId, AttachmentService.KIND_TASK,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/tasks/{taskId}/attachments")
@@ -94,11 +98,15 @@ public class AttachmentController {
 
     /** T2.1 / T2.3：需求池需求附件（attachment 泛化 target=demand） */
     @GetMapping("/api/demands/{demandId}/attachments")
-    public ApiResult<List<Attachment>> listDemand(@PathVariable String demandId,
-                                                  @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<Attachment>> listDemand(
+            @PathVariable String demandId,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(attachmentService.list(ws.getId(), userId, demandId, AttachmentService.KIND_DEMAND));
+        return ApiResult.ok(attachmentService.list(ws.getId(), userId, demandId, AttachmentService.KIND_DEMAND,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/demands/{demandId}/attachments")

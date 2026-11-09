@@ -84,9 +84,15 @@ public class AttachmentService {
         return attachmentMapper.selectByTargets(workspaceId, KIND_COMMENT, commentIds);
     }
 
-    public List<Attachment> list(String workspaceId, String userId, String targetId, String kind) {
+    public com.hourglass.dto.PageResult<Attachment> list(
+            String workspaceId, String userId, String targetId, String kind, int offset, int limit) {
         projectAccess.assertView(workspaceId, userId, ensureTarget(workspaceId, targetId, kind));
-        return attachmentMapper.selectByTarget(workspaceId, targetId, kind);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = attachmentMapper.countByTarget(workspaceId, targetId, kind);
+        List<Attachment> items = total <= safeOffset ? new java.util.ArrayList<Attachment>()
+                : attachmentMapper.selectPageByTarget(workspaceId, targetId, kind, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     public Attachment get(String workspaceId, String id) {

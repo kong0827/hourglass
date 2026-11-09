@@ -37,8 +37,9 @@ class TimeLogStartStopTest {
     private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
     private final TaskCompletionService completionService = mock(TaskCompletionService.class);
+    private final TaskSupport taskSupport = mock(TaskSupport.class);
     private final TimeLogService service = new TimeLogService(timeLogMapper, taskMapper, logMapper,
-            workspaceMapper, userMapper, memberMapper, projectAccess, completionService);
+            workspaceMapper, userMapper, memberMapper, projectAccess, completionService, taskSupport);
 
     @BeforeEach
     void setUp() {

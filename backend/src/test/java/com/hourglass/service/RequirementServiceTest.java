@@ -51,10 +51,11 @@ class RequirementServiceTest {
             mock(com.hourglass.mapper.WorkspaceMemberMapper.class));
 
     @Test
-    void listBatchesVersionCountsAndFiltersHiddenProjects() {
-        when(reqs.selectAll(WS)).thenReturn(Arrays.asList(requirement("R1", "项目一"),
-                requirement("R2", "隐藏项目")));
-        when(access.hiddenProjectIds(WS, VIEWER)).thenReturn(Collections.singleton("R2"));
+    void listBatchesVersionCountsAndReadsVisibleProjects() {
+        when(access.viewerScope(WS, VIEWER)).thenReturn(VIEWER);
+        when(reqs.countVisible(WS, VIEWER)).thenReturn(1);
+        when(reqs.selectPage(WS, VIEWER, 0, 100))
+                .thenReturn(Collections.singletonList(requirement("R1", "项目一")));
 
         ReqTaskAggRow agg = new ReqTaskAggRow();
         agg.setReqId("R1");
@@ -69,10 +70,10 @@ class RequirementServiceTest {
         versionRow.put("cnt", 2L);
         when(versions.countGroupByReq(WS)).thenReturn(Collections.singletonList(versionRow));
 
-        Demand demand = new Demand();
-        demand.setId("D1");
-        demand.setReqId("R1");
-        when(demands.selectByWorkspace(WS)).thenReturn(Collections.singletonList(demand));
+        Map<String, Object> demandRow = new HashMap<String, Object>();
+        demandRow.put("reqId", "R1");
+        demandRow.put("cnt", 1L);
+        when(demands.countGroupByReq(WS)).thenReturn(Collections.singletonList(demandRow));
 
         List<ReqProgress> list = service.list(WS, VIEWER);
 
@@ -84,8 +85,10 @@ class RequirementServiceTest {
         assertEquals(2, progress.getVersionCount());
         assertEquals(1, progress.getDemandCount());
 
-        verify(reqs, times(1)).selectAll(WS);
+        verify(reqs, times(1)).selectPage(WS, VIEWER, 0, 100);
+        verify(reqs, never()).selectAll(WS);
         verify(versions, never()).selectByReq(anyString(), anyString());
+        verify(demands, never()).selectByWorkspace(WS);
     }
 
     @Test

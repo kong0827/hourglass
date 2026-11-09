@@ -67,7 +67,12 @@
     SELECT <include refid="cols"/> FROM time_log
     WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
     ORDER BY started_at DESC, id DESC
-    LIMIT #{limit}
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countRecordsByTask" resultType="int">
+    SELECT COUNT(*) FROM time_log
+    WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND ended_at IS NOT NULL
   </select>
 
   <select id="selectById" resultType="TimeLog">

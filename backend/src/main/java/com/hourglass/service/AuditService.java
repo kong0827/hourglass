@@ -95,7 +95,7 @@ public class AuditService {
                                     String actorId, String from, String to,
                                     Integer page, Integer size) {
         int p = page == null || page < 1 ? 1 : page;
-        int s = size == null ? 50 : Math.max(10, Math.min(200, size));
+        int s = size == null ? 50 : Math.max(10, Math.min(100, size));
         LocalDateTime fromTs = startOfDay(parseDate(from));
         LocalDateTime toTs = endOfDayExclusive(parseDate(to));
         String kw = Texts.cut(Texts.trimToNull(q), 80);

@@ -23,13 +23,13 @@ import java.util.Map;
  * 归属判定优先用 owner_user_id（账号）；历史数据该列为空时回落显示名文本，
  * 因此不需要先跑数据回填也能立即生效（回填脚本 sql/04 可选）。
  *
- * TOP-6：结果改为分页（offset/limit，默认 0/200、上限 500），返回全量 total 与 hasMore；
+ * TOP-6：结果改为分页（offset/limit，默认 0/100、上限 100），返回全量 total 与 hasMore；
  * total / 覆盖空间 / 仅显示名匹配数都按筛选后的全量统计，分页不会让统计缩水。
  */
 @RestController
 public class MyTasksController {
 
-    private static final int DEFAULT_LIMIT = 200;
+    private static final int DEFAULT_LIMIT = 100;
 
     private final TaskQueryService taskService;
     private final UserMapper userMapper;
@@ -84,7 +84,7 @@ public class MyTasksController {
         res.put("offset", off);
         res.put("limit", lim);
         res.put("hasMore", hasMore);
-        /* 兼容字段：旧前端用它提示"只显示前 200 项"，语义等同 hasMore */
+        /* 兼容字段：旧前端用它提示结果已截断，语义等同 hasMore */
         res.put("truncated", hasMore);
         res.put("spaces", spaces);
         res.put("matchedByNameOnly", page.getNameOnly());

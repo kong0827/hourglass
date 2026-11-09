@@ -243,19 +243,42 @@ function openNewTaskOnDate(dateIso){
   iDue.value = dateIso;
   syncDateBounds();
   rt.formDirty = false;   // 预填不算用户改动，避免关抽屉时无故挽留
-}function loadUnplanned(){
+}var unplannedState = {items:[], total:0, hasMore:false, loading:false};
+function loadUnplanned(opts){
   if(!unplannedBox) return;
-  API.get("/api/tasks/list", {noDue: true, sort: "priority"}).then(function(d){
+  opts = opts || {};
+  var append = !!opts.more && unplannedState.items.length > 0;
+  if(append && unplannedState.loading) return;
+  if(!append){
+    unplannedState.items = [];
+    unplannedState.total = 0;
+    unplannedState.hasMore = false;
+  }
+  unplannedState.loading = true;
+  API.get("/api/tasks/list", {
+    noDue: true,
+    sort: "priority",
+    offset: unplannedState.items.length,
+    limit: 100
+  }).then(function(d){
+    unplannedState.loading = false;
     var items = (d && d.items) || [];
-    items.forEach(function(t){ taskCacheExtra[t.id] = t; });
-    if(unplannedCount) unplannedCount.textContent = String(items.length);
+    unplannedState.items = append ? unplannedState.items.concat(items) : items;
+    unplannedState.total = Math.max((d && d.total) || 0, unplannedState.items.length);
+    unplannedState.hasMore = !!(d && d.hasMore) && items.length > 0;
+    unplannedState.items.forEach(function(t){ taskCacheExtra[t.id] = t; });
+    if(unplannedCount) unplannedCount.textContent = String(unplannedState.total);
     if(unplannedList){
-      unplannedList.innerHTML = items.length
-        ? items.slice(0, 50).map(function(t){ return cardHTML(t, 0); }).join("") +
-          (items.length > 50 ? '<p class="foot-note">仅显示前 50 项，共 ' + items.length + ' 项未排期</p>' : "")
+      unplannedList.innerHTML = unplannedState.items.length
+        ? unplannedState.items.map(function(t){ return cardHTML(t, 0); }).join("") +
+          (unplannedState.hasMore
+            ? '<div class="unplanned-more"><button class="btn sm block" type="button" data-unplanned-more>加载更多</button></div>'
+            : "")
         : UI.colEmpty("本月没有未排期的工作项：所有工作项都已有截止日期。");
     }
   }).catch(function(){
+    unplannedState.loading = false;
+    if(append) return;
     if(unplannedCount) unplannedCount.textContent = "—";
     if(unplannedList) unplannedList.innerHTML = UI.colEmpty("未排期工作项加载失败（该接口需要后端支持）");
   });
@@ -369,6 +392,9 @@ calDayList.addEventListener("click", function(e){
   if(!card) return;
   var t = taskById(card.dataset.id);
   if(t) openTaskDrawer(null, t);
+});
+if(unplannedList) unplannedList.addEventListener("click", function(e){
+  if(e.target.closest("[data-unplanned-more]")) loadUnplanned({more:true});
 });
 if(unplannedList) wireCardContainer(unplannedList);
 window.addEventListener("ds:layout", function(e){

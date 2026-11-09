@@ -1,6 +1,8 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import com.hourglass.dto.DemandPage;
+import com.hourglass.dto.DemandQuery;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.Requirement;
 import com.hourglass.mapper.DemandMapper;
@@ -9,14 +11,17 @@ import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,38 +39,60 @@ class DemandServiceListTest {
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class));
 
     @Test
-    void listsWholeWorkspaceWithoutProjectAndComputesWsjf() {
-        when(demands.selectByWorkspace("W1")).thenReturn(Collections.singletonList(demand()));
+    void pagesWholeWorkspaceAndComputesWsjf() {
+        when(demands.countGroupByStatus(any(DemandQuery.class)))
+                .thenReturn(Collections.singletonList(countRow("review", 1L)));
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(demand()));
 
-        List<Demand> result = service.list("W1", null);
+        DemandPage result = service.page("W1", "U1", query(null));
 
-        assertEquals(1, result.size());
-        assertEquals(1.5d, result.get(0).getWsjfScore());
+        assertEquals(1, result.getItems().size());
+        assertEquals(1.5d, result.getItems().get(0).getWsjfScore());
+        assertEquals(1, result.getTotal());
         verifyNoInteractions(reqs);
-        verify(demands, never()).selectByReq("W1", null);
+        verify(demands, never()).selectByWorkspace("W1");
     }
 
     @Test
-    void blankProjectFallsBackToWholeWorkspace() {
-        when(demands.selectByWorkspace("W1")).thenReturn(Collections.<Demand>emptyList());
+    void clampsPageSizeToOneHundred() {
+        DemandQuery query = query(null);
+        query.setLimit(500);
 
-        assertEquals(Collections.emptyList(), service.list("W1", "  "));
+        DemandPage result = service.page("W1", "U1", query);
 
-        verifyNoInteractions(reqs);
+        assertEquals(100, result.getLimit());
+        verify(demands, never()).selectPage(any(DemandQuery.class));
     }
 
     @Test
-    void keepsProjectScopedListing() {
+    void normalizesOffsetAndMinimumPageSize() {
+        DemandQuery query = query(null);
+        query.setOffset(-10);
+        query.setLimit(0);
+
+        DemandPage result = service.page("W1", "U1", query);
+
+        assertEquals(0, result.getOffset());
+        assertEquals(1, result.getLimit());
+    }
+
+    @Test
+    void keepsProjectScopedPaging() {
         Requirement req = new Requirement();
         req.setId("R1");
         req.setWorkspaceId("W1");
         when(reqs.selectById("R1")).thenReturn(req);
-        when(demands.selectByReq("W1", "R1")).thenReturn(Arrays.asList(demand(), demand()));
+        when(demands.countGroupByStatus(any(DemandQuery.class)))
+                .thenReturn(Collections.singletonList(countRow("review", 2L)));
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Arrays.asList(demand(), demand()));
 
-        List<Demand> result = service.list("W1", "R1");
+        DemandPage result = service.page("W1", "U1", query("R1"));
 
-        assertEquals(2, result.size());
-        verify(demands, never()).selectByWorkspace("W1");
+        assertEquals(2, result.getItems().size());
+        ArgumentCaptor<DemandQuery> captor = ArgumentCaptor.forClass(DemandQuery.class);
+        verify(demands).selectPage(captor.capture());
+        assertEquals("R1", captor.getValue().getReqId());
+        verify(demands, never()).selectByReq("W1", "R1");
     }
 
     @Test
@@ -75,10 +102,24 @@ class DemandServiceListTest {
         req.setWorkspaceId("W2");
         when(reqs.selectById("R1")).thenReturn(req);
 
-        AppException error = assertThrows(AppException.class, () -> service.list("W1", "R1"));
+        AppException error = assertThrows(AppException.class, () -> service.page("W1", "U1", query("R1")));
 
         assertEquals(404, error.getCode());
-        verify(demands, never()).selectByReq("W1", "R1");
+        verify(demands, never()).selectPage(any(DemandQuery.class));
+    }
+
+    private DemandQuery query(String reqId) {
+        DemandQuery query = new DemandQuery();
+        query.setReqId(reqId);
+        query.setLimit(100);
+        return query;
+    }
+
+    private Map<String, Object> countRow(String status, long count) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("status", status);
+        row.put("cnt", count);
+        return row;
     }
 
     private Demand demand() {

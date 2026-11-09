@@ -35,7 +35,7 @@ var TASK_REF_TYPES = {
   manager_nudge: 1
 };
 function isTaskRef(type){ return !!TASK_REF_TYPES[type]; }
-var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false};
+var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false};
 var noticeMutationSeq = 0, unreadReqSeq = 0, noticeListReqSeq = 0;
 function invalidateNotifications(){ noticeMutationSeq++; }
 var bubbleTimer = null;
@@ -180,6 +180,10 @@ function enterMessagesView(){
   loadAlertPanel();
 }
 function handleNoticeClick(e){
+  if(e.target.closest("[data-ap-more]")){
+    loadNoticeList({more:true});
+    return;
+  }
   /* 通知筛选：全部 / 未读 / 提及 */
   var filterBtn = e.target.closest("[data-ap-filter]");
   if(filterBtn){
@@ -292,6 +296,9 @@ function noticeListHTML(){
     /* 「已读」是历史，数字既不指向待办也清不掉，标题只作分区用 */
     html += '<div class="ap-glabel" style="margin-top:6px">已读</div>' + noticeGroupsHTML(read);
   }
+  if(notifyState.hasMore){
+    html += '<div class="ap-more"><button class="btn sm block" type="button" data-ap-more>加载更多</button></div>';
+  }
   return html;
 }
 /* 连续的同任务 + 同类型通知合并为一条：避免一次编辑/关注刷出十几条近似消息；再按自然日分组 */
@@ -368,15 +375,24 @@ function loadAlertPanel(){
   if(rt.alertTab === "notice") return loadNoticeList();
   return loadDeadlineGroups();
 }
-function loadNoticeList(){
+function loadNoticeList(opts){
+  opts = opts || {};
+  var append = !!opts.more && notifyState.items.length > 0;
+  if(append && notifyState.loading) return Promise.resolve();
   var req = ++noticeListReqSeq, mutation = noticeMutationSeq;
   notifyState.loading = true;
-  if(!notifyState.items.length) renderAlertPanel();
+  if(!append && !notifyState.items.length) renderAlertPanel();
   /* 服务端按 all/unread/mention 过滤，并返回全量计数，避免「加载 200 条再本地数」失真 */
-  return API.getGlobal("/api/notifications", {limit: 100, filter: rt.noticeFilter}).then(function(d){
+  return API.getGlobal("/api/notifications", {
+    offset: append ? notifyState.items.length : 0,
+    limit: 100,
+    filter: rt.noticeFilter
+  }).then(function(d){
     if(req !== noticeListReqSeq || mutation !== noticeMutationSeq) return;
     notifyState.loading = false;
-    notifyState.items = (d && d.items) || [];
+    var rows = (d && d.items) || [];
+    notifyState.items = append ? notifyState.items.concat(rows) : rows;
+    notifyState.hasMore = !!(d && d.hasMore) && rows.length > 0;
     if(d && typeof d.unread === "number") notifyState.unread = d.unread;
     if(d && typeof d.total === "number") notifyState.total = d.total; /* 服务端仍返回总量，前端不展示（见 noticeFilterHTML） */
     if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions; /* 口径：未读的 @ 我的通知数 */
@@ -386,7 +402,9 @@ function loadNoticeList(){
   }).catch(function(){
     if(req !== noticeListReqSeq || mutation !== noticeMutationSeq) return;
     notifyState.loading = false;
+    if(append){ renderAlertPanel(); return; }
     notifyState.items = [];
+    notifyState.hasMore = false;
     renderAlertPanel();
   });
 }

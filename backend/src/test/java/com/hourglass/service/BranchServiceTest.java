@@ -1,7 +1,9 @@
 package com.hourglass.service;
 
 import com.hourglass.dto.BranchProjectTag;
+import com.hourglass.dto.BranchQuery;
 import com.hourglass.dto.BranchStatusRequest;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.BranchVersionTag;
 import com.hourglass.entity.DevBranch;
 import com.hourglass.mapper.DevBranchMapper;
@@ -9,6 +11,7 @@ import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -16,6 +19,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
@@ -184,6 +188,28 @@ class BranchServiceTest {
 
         verifyNoInteractions(events);
         verify(branchMapper).deleteById(WS, "B1");
+    }
+
+    @Test
+    void optionsClampsPageAndCountsWithSameQuery() {
+        when(access.viewerScope(WS, "U1")).thenReturn("U1");
+        when(branchMapper.countOptions(any(BranchQuery.class))).thenReturn(1);
+        when(branchMapper.selectOptions(any(BranchQuery.class)))
+                .thenReturn(Collections.singletonList(branch("B1")));
+
+        PageResult<DevBranch> page = service.options(WS, "U1", " R1 ", -1, 500);
+
+        assertEquals(1, page.getTotal());
+        assertEquals(0, page.getOffset());
+        assertEquals(100, page.getLimit());
+        assertEquals("B1", page.getItems().get(0).getId());
+        ArgumentCaptor<BranchQuery> countQuery = ArgumentCaptor.forClass(BranchQuery.class);
+        ArgumentCaptor<BranchQuery> rowsQuery = ArgumentCaptor.forClass(BranchQuery.class);
+        verify(branchMapper).countOptions(countQuery.capture());
+        verify(branchMapper).selectOptions(rowsQuery.capture());
+        assertEquals("R1", countQuery.getValue().getProjectId());
+        assertEquals(rowsQuery.getValue().getOffset(), countQuery.getValue().getOffset());
+        assertEquals(rowsQuery.getValue().getLimit(), countQuery.getValue().getLimit());
     }
 
     private DevBranch branch(String id) {

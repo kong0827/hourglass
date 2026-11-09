@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
-import java.util.List;
 
 /** 文档评论 */
 @RestController
@@ -32,11 +31,15 @@ public class RequirementDocCommentController {
     }
 
     @GetMapping("/api/req-docs/{docId}/comments")
-    public ApiResult<List<ReqDocCommentView>> list(@PathVariable String docId,
-                                                   @RequestParam(required = false) String workspace) {
+    public ApiResult<com.hourglass.dto.PageResult<ReqDocCommentView>> list(
+            @PathVariable String docId,
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(commentService.list(ws.getId(), userId, docId));
+        return ApiResult.ok(commentService.list(ws.getId(), userId, docId,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/req-docs/{docId}/comments")

@@ -22,11 +22,51 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle"),
     rTemplate = $("rTemplate"), rTemplateHint = $("rTemplateHint"), fReqTemplate = $("fReqTemplate");
 var showArchived = false;
+var PROJECT_SORT_DEFAULT_DIR = {
+  name:"asc", status:"asc", description:"asc", ownerName:"asc", plannedEnd:"asc",
+  taskCount:"desc", doneCount:"desc", progress:"desc", docCount:"desc",
+  firstReleasedAt:"desc", createdAt:"desc", updatedAt:"desc"
+};
+var PROJECT_STATUS_ORDER = { active:0, done:1, hold:2 };
+var projectSort = { key:"", dir:"asc" };
 function visibleReqs(){
   return rt.reqList.filter(function(r){ return showArchived || !r.archivedAt; });
 }
 function archivedCount(){
   return rt.reqList.filter(function(r){ return !!r.archivedAt; }).length;
+}
+function projectSortValue(r, key){
+  if(key === "name" || key === "description") return r[key] || null;
+  if(key === "status") return Object.prototype.hasOwnProperty.call(PROJECT_STATUS_ORDER, r.status) ? PROJECT_STATUS_ORDER[r.status] : null;
+  if(key === "ownerName") return ownerLabelOf(r) || null;
+  if(key === "taskCount" || key === "doneCount" || key === "docCount") return Number(r[key]) || 0;
+  if(key === "progress") return Number(r.progressPct) || 0;
+  if(key === "plannedEnd" || key === "firstReleasedAt" || key === "createdAt" || key === "updatedAt") return r[key] || null;
+  return null;
+}
+function compareProjects(a, b){
+  var x = projectSortValue(a, projectSort.key), y = projectSortValue(b, projectSort.key);
+  if(x === null && y === null) return 0;
+  if(x === null) return 1;
+  if(y === null) return -1;
+  var result = typeof x === "number" && typeof y === "number"
+    ? x - y
+    : String(x).localeCompare(String(y), "zh-Hans-CN");
+  if(result) return projectSort.dir === "desc" ? -result : result;
+  return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN")
+    || String(a.id || "").localeCompare(String(b.id || ""));
+}
+function sortedProjects(rows){
+  return projectSort.key ? rows.slice().sort(compareProjects) : rows;
+}
+function setProjectSort(key){
+  if(!Object.prototype.hasOwnProperty.call(PROJECT_SORT_DEFAULT_DIR, key)) return;
+  if(projectSort.key === key) projectSort.dir = projectSort.dir === "desc" ? "asc" : "desc";
+  else{
+    projectSort.key = key;
+    projectSort.dir = PROJECT_SORT_DEFAULT_DIR[key];
+  }
+  renderReqList();
 }
 function syncArchivedToggle(){
   var btn = $("btnShowArchived");
@@ -93,7 +133,7 @@ function loadProjectTasks(reqId, force){
   projectTaskSeq[reqId] = current;
   projectTasks[reqId] = null;
   delete projectTaskErrors[reqId];
-  return API.get("/api/projects/" + encodeURIComponent(reqId) + "/tasks").then(function(rows){
+  return API.getAllPages("/api/projects/" + encodeURIComponent(reqId) + "/tasks").then(function(rows){
     if(projectTaskSeq[reqId] !== current) return rows;
     projectTasks[reqId] = rows || [];
     if(reqExpanded[reqId]) renderReqList();
@@ -177,7 +217,7 @@ function resetReqForm(){
   renderReqList();
 }
 function renderReqList(){
-  var list = visibleReqs();
+  var list = sortedProjects(visibleReqs());
   var countEl = $("reqCount");
   if(countEl) countEl.textContent = list.length ? "共 " + list.length + " 个" : "";
   syncArchivedToggle();
@@ -282,7 +322,7 @@ function projectCell(r, key){
   if(key === "name") return '<span class="project-cell project-name-cell" title="' + esc(r.name) + '">' + esc(r.name) + '</span>';
   if(key === "status") return '<span><span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(r.status)) + '</span></span>';
   if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + esc(r.description || "—") + '</span>';
-  if(key === "ownerName") return '<span class="project-cell">' + esc(ownerLabelOf(r) || "—") + '</span>';
+  if(key === "ownerName") return '<span class="project-cell" title="' + esc(ownerLabelOf(r) || "") + '">' + esc(ownerLabelOf(r) || "—") + '</span>';
   if(key === "plannedEnd") return '<span class="project-cell">' + (r.plannedEnd ? esc(String(r.plannedEnd).slice(0, 10)) : "—") + '</span>';
   if(key === "taskCount") return '<span class="project-cell">' + (Number(r.taskCount) || 0) + '</span>';
   if(key === "doneCount") return '<span class="project-cell">' + (Number(r.doneCount) || 0) + '</span>';
@@ -314,7 +354,14 @@ function renderProjectTable(list){
   var cols = listPrefs.columns("project-list"), labels = listPrefs.labels("project-list");
   reqListEl.className = "req-list project-table-wrap";
   reqListEl.innerHTML = '<div class="project-table">' +
-    '<div class="project-table-head">' + cols.map(function(key){ return '<span>' + esc(labels[key]) + '</span>'; }).join("") + '<span>操作</span></div>' +
+    '<div class="project-table-head">' + cols.map(function(key){
+      var active = projectSort.key === key;
+      var ind = active ? (projectSort.dir === "desc" ? "↓" : "↑") : "";
+      return '<span aria-sort="' + (active ? (projectSort.dir === "desc" ? "descending" : "ascending") : "none") + '">' +
+        '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-project-sort="' + esc(key) + '"' +
+          ' title="按「' + esc(labels[key]) + '」排序">' + esc(labels[key]) +
+          '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
+    }).join("") + '<span>操作</span></div>' +
     '<div class="project-table-body">' + list.map(function(r){
       return '<div class="project-table-row" data-req-id="' + esc(r.id) + '">' + cols.map(function(key){ return projectCell(r, key); }).join("") + projectActions(r) + '</div>';
     }).join("") + '</div></div>';
@@ -542,6 +589,8 @@ segReqStatus.addEventListener("click", function(e){
   rt.formReqStatus = b.dataset.rst; syncReqStatusSeg();
 });
 reqListEl.addEventListener("click", function(e){
+  var sort = e.target.closest("[data-project-sort]");
+  if(sort){ setProjectSort(sort.dataset.projectSort); return; }
   var activity = e.target.closest("[data-req-activity]");
   if(activity){
     var project = rt.reqList.filter(function(r){ return r.id === activity.dataset.reqActivity; })[0];

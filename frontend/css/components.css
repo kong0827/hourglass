@@ -80,6 +80,18 @@
   font-size:12px;font-weight:600;line-height:18px;color:var(--primary);border-radius:4px;
 }
 .label-link:hover{background:var(--surface-hover);}
+.req-doc-trigger{
+  display:flex;align-items:center;gap:8px;width:100%;height:34px;padding:0 10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  color:var(--text);font-size:14px;text-align:left;cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+.req-doc-trigger:hover{border-color:var(--border-strong);}
+.req-doc-trigger:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.req-doc-trigger:disabled{background:var(--surface-sunken);color:var(--text-3);cursor:not-allowed;}
+.req-doc-trigger-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.req-doc-trigger-text.placeholder{color:var(--text-3);}
+.req-doc-trigger svg{flex:0 0 auto;color:var(--text-3);}
 .type-help-list{padding:4px 10px 10px;display:flex;flex-direction:column;gap:8px;}
 .type-help-row{display:flex;gap:8px;align-items:flex-start;}
 .type-help-row .mini-tag{flex:0 0 auto;margin-top:1px;}
@@ -175,7 +187,7 @@ input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);backgr
 /* ===================== 4.4 / 4.5 Chip · Tag · Badge ===================== */
 .tag{
   display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;
-  border-radius:var(--r-pill);font-size:11.5px;font-weight:600;
+  border-radius:var(--r-pill);font-size:12px;font-weight:600;
   background:var(--surface-sunken);color:var(--text-2);border:1px solid transparent;
   max-width:100%;white-space:nowrap;
 }
@@ -239,7 +251,7 @@ input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);backgr
 }
 
 /* PriorityDot */
-.pdot{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;flex:0 0 auto;}
+.pdot{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;flex:0 0 auto;}
 .pdot i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
 .pdot.P0{color:var(--p0);} .pdot.P1{color:var(--p1);}
 .pdot.P2{color:var(--p2);} .pdot.P3{color:var(--p3);}
@@ -665,6 +677,45 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .menu-foot .btn{flex:1 1 0;}
 .menu-field{padding:4px 6px 8px;}
 .popover{width:320px;}
+.req-doc-picker.menu{z-index:260;padding:0;overflow:hidden;}
+.req-doc-picker-head{padding:10px;border-bottom:1px solid var(--border);}
+.req-doc-search{position:relative;}
+.req-doc-search > svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;}
+.req-doc-search input{
+  width:100%;height:34px;padding:0 10px 0 32px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text);font-size:13px;
+}
+.req-doc-search input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.req-doc-picker-tools{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.req-doc-picker-tools select{
+  flex:1 1 auto;min-width:0;height:30px;padding:0 8px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text);font-size:12px;
+}
+.req-doc-picker-tools select:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.req-doc-picker-count{flex:0 0 auto;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.req-doc-picker-results{max-height:min(340px,calc(70vh - 150px));overflow-y:auto;padding:6px;}
+.req-doc-picker-clear{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:6px 10px;border-radius:var(--r-xs);
+  color:var(--text-2);font-size:12.5px;text-align:left;
+}
+.req-doc-picker-clear:hover,.req-doc-picker-clear:focus-visible{background:var(--surface-hover);}
+.req-doc-picker-clear.selected{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
+.req-doc-picker-group{padding:7px 10px 4px;font-size:11.5px;font-weight:650;line-height:17px;color:var(--text-3);}
+.req-doc-picker-group:not(:first-child){margin-top:4px;border-top:1px solid var(--border);}
+.req-doc-picker-option{
+  display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:var(--r-sm);text-align:left;
+}
+.req-doc-picker-option:hover,.req-doc-picker-option:focus-visible{background:var(--surface-hover);}
+.req-doc-picker-option.selected{background:var(--primary-soft);}
+.req-doc-picker-option-main{flex:1 1 auto;min-width:0;}
+.req-doc-picker-option-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;color:var(--text);}
+.req-doc-picker-option-meta{display:block;margin-top:1px;font-size:11.5px;line-height:16px;color:var(--text-3);}
+.req-doc-picker-option > svg{flex:0 0 auto;color:var(--primary);}
+.req-doc-picker-empty{padding:24px 12px;text-align:center;font-size:12.5px;line-height:1.6;color:var(--text-3);}
+.req-doc-picker-empty .btn{margin-top:10px;}
+.req-doc-picker-error{padding:16px 12px;font-size:12.5px;line-height:1.6;color:var(--danger-fg);text-align:center;}
+.req-doc-picker-error .btn{margin-top:8px;}
+.req-doc-picker-foot{padding:8px 12px;border-top:1px solid var(--border);background:var(--surface-sunken);font-size:11.5px;line-height:17px;color:var(--text-2);}
 /* 筛选下拉（负责人 / 优先级）：可勾选的纵向列表，选项多时滚动 */
 .filter-dd{width:236px;}
 .dd-list{max-height:288px;overflow:auto;padding:2px 6px 6px;display:flex;flex-direction:column;gap:2px;}
@@ -799,9 +850,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .progress.full .bar > i{background:var(--success);}
 .progress.over .bar > i{background:var(--danger);}
-.progress .pv{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.progress .pv{flex:0 0 auto;font-size:12.5px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
 .progress.mini .bar{flex:0 0 auto;width:64px;height:4px;}
-.progress.mini .pv{font-size:12px;font-weight:600;}
+.progress.mini .pv{font-size:12.5px;font-weight:600;}
 
 /* 通用进度条（分布条等复用） */
 .bar{height:8px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;}

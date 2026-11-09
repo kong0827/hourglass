@@ -67,21 +67,20 @@ public class TaskCommentService {
     }
 
     /** 读评论：允许回收站中的任务（保留可读） */
-    public List<TaskComment> list(String workspaceId, String taskId) {
-        Task t = taskMapper.selectById(taskId);
-        if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
-            throw AppException.notFound("任务不存在：" + taskId);
-        }
-        return withAttachments(workspaceId, commentMapper.selectByTaskId(workspaceId, taskId));
-    }
-
-    public List<TaskComment> list(String workspaceId, String userId, String taskId) {
+    public com.hourglass.dto.PageResult<TaskComment> list(
+            String workspaceId, String userId, String taskId, int offset, int limit) {
         Task t = taskMapper.selectById(taskId);
         if (t == null || !workspaceId.equals(t.getWorkspaceId())) {
             throw AppException.notFound("任务不存在：" + taskId);
         }
         projectAccess.assertViewTask(workspaceId, userId, t);
-        return withAttachments(workspaceId, commentMapper.selectByTaskId(workspaceId, taskId));
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        int total = commentMapper.countByTaskId(workspaceId, taskId);
+        List<TaskComment> items = total <= safeOffset ? new ArrayList<TaskComment>()
+                : commentMapper.selectByTaskId(workspaceId, taskId, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(
+                withAttachments(workspaceId, items), total, safeOffset, safeLimit);
     }
 
     /** 一次取回整条讨论的附件，按评论分桶，避免逐条查询 */

@@ -92,9 +92,15 @@ public class AppNotificationService {
         }
     }
 
-    public List<AppNotification> list(String userId, String workspaceId, String filter, Integer limit) {
-        int n = limit == null ? 50 : Math.max(1, Math.min(200, limit));
-        return mapper.selectByUser(userId, workspaceId, normalizeFilter(filter), n);
+    public com.hourglass.dto.PageResult<AppNotification> list(
+            String userId, String workspaceId, String filter, int offset, int limit) {
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = Math.max(1, Math.min(100, limit));
+        String normalized = normalizeFilter(filter);
+        int total = mapper.countByUser(userId, workspaceId, normalized);
+        List<AppNotification> items = total <= safeOffset ? new java.util.ArrayList<AppNotification>()
+                : mapper.selectByUser(userId, workspaceId, normalized, safeOffset, safeLimit);
+        return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     public int unread(String userId, String workspaceId) {

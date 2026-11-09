@@ -39,7 +39,7 @@ var ganttScroll = $("ganttScroll"), ganttMeta = $("ganttMeta"),
 var GANTT_LABEL_W = 280;
 var GANTT_ROW_H = 54, GANTT_GROUP_H = 32, GANTT_HEAD_H = 54;
 var GANTT_LABEL_W_NARROW = 170;
-var GANTT_PAGE = 500;
+var GANTT_PAGE = 100;
 var GANTT_MAX_LOAD = 3000;
 var GANTT_MAX_DAYS = 740;
 var GANTT_DONE    = {c:"var(--success)", soft:"var(--success-soft)", bd:"var(--success-border)"};
@@ -72,7 +72,9 @@ var ganttState = {
   depsLoaded: false,      // false=服务端没返回 deps 字段，渲染时回落 blockedByTaskId
   printAll: false, pendingTop: null,
   loadData: null, loadDoneKey: "", loadKey: "", loadSeq: 0, loadLoading: false,
-  serverUnplanned: null, unplannedTasks: [], unscheduledTotal: 0, exportBusy: false, pendingNotice: "",
+  serverUnplanned: null, unplannedTasks: [], unscheduledTotal: 0,
+  unplannedHasMore: false, unplannedLoading: false,
+  exportBusy: false, pendingNotice: "",
   wsId: null,
   depDrag: null,
   /* ---- V1.4.1 显示密度与左列宽度 ---- */
@@ -235,7 +237,8 @@ function loadGantt(opts){
     depById: ganttState.depById, depsLoaded: ganttState.depsLoaded,
     baseline: ganttState.baseline, baselineAt: ganttState.baselineAt,
     serverUnplanned: ganttState.serverUnplanned, unplannedTasks: ganttState.unplannedTasks,
-    unscheduledTotal: ganttState.unscheduledTotal, paging: ganttState.paging,
+    unscheduledTotal: ganttState.unscheduledTotal,
+    unplannedHasMore: ganttState.unplannedHasMore, paging: ganttState.paging,
     loadData: ganttState.loadData, critical: ganttState.critical, criticalDeps: ganttState.criticalDeps
   } : null;
   if(!silent) ganttState.silentBackup = null;
@@ -252,6 +255,8 @@ function loadGantt(opts){
   ganttState.serverUnplanned = null;
   ganttState.unplannedTasks = [];
   ganttState.unscheduledTotal = 0;
+  ganttState.unplannedHasMore = false;
+  ganttState.unplannedLoading = false;
   if(ganttUnplannedBox) ganttUnplannedBox.hidden = true;
   ganttState.baseline = {};
   ganttState.baselineAt = null;
@@ -292,6 +297,8 @@ function ganttLoadPage(seq, offset){
       ganttState.unplannedTasks = (d && d.unscheduled) || [];
       ganttState.unscheduledTotal = (d && typeof d.unscheduledCount === "number")
         ? d.unscheduledCount : ganttState.unplannedTasks.length;
+      ganttState.unplannedHasMore =
+        ganttState.unplannedTasks.length < ganttState.unscheduledTotal;
       ganttState.unplannedTasks.forEach(function(t){
         ganttState.byId[t.id] = t;
         taskCacheExtra[t.id] = t;
@@ -351,6 +358,7 @@ function ganttLoadPage(seq, offset){
       ganttState.serverUnplanned = b.serverUnplanned;
       ganttState.unplannedTasks = b.unplannedTasks;
       ganttState.unscheduledTotal = b.unscheduledTotal;
+      ganttState.unplannedHasMore = b.unplannedHasMore;
       ganttState.paging = b.paging;
       ganttState.loadData = b.loadData;
       ganttState.critical = b.critical;
@@ -1433,8 +1441,8 @@ function ganttAllTasks(){
 function renderGanttUnplanned(list, openIt){
   if(!ganttUnplannedBox) return;
   var total = ganttState.serverUnplanned !== null ? ganttState.unscheduledTotal : list.length;
-  ganttUnplannedBox.hidden = !list.length;
-  if(!list.length){
+  ganttUnplannedBox.hidden = !list.length && !ganttState.unplannedHasMore;
+  if(!list.length && !ganttState.unplannedHasMore){
     ganttUnplannedList.innerHTML = "";
     ganttUnplannedCount.textContent = String(list.length);
     return;
@@ -1444,7 +1452,7 @@ function renderGanttUnplanned(list, openIt){
     ganttUnplannedBox.open = true;
     ganttState.unplannedAuto = true;
   }
-  ganttUnplannedList.innerHTML = list.slice(0, 50).map(function(t){
+  ganttUnplannedList.innerHTML = list.map(function(t){
     var rn = t.reqId ? reqNameById(t.reqId) : "";
     if(rn === "无") rn = "";
     var meta = [];
@@ -1461,7 +1469,45 @@ function renderGanttUnplanned(list, openIt){
       '<span class="tag tag-ghost">未排期</span>' +
     '</button>';
   }).join("") +
-  (list.length > 50 ? '<p class="foot-note" style="padding:8px 10px">仅显示前 50 项，共 ' + total + ' 项</p>' : "");
+  (ganttState.unplannedHasMore
+    ? '<div class="gantt-unplanned-more">' +
+        '<button class="btn sm block" type="button" data-gantt-unplanned-more' +
+          (ganttState.unplannedLoading ? ' disabled' : '') + '>' +
+          (ganttState.unplannedLoading
+            ? '加载中…'
+            : '加载更多（已加载 ' + ganttState.unplannedTasks.length + ' / 共 ' + total + ' 项）') +
+        '</button>' +
+      '</div>'
+    : "");
+}
+function loadMoreGanttUnplanned(){
+  if(ganttState.unplannedLoading || !ganttState.unplannedHasMore) return;
+  ganttState.unplannedLoading = true;
+  renderGanttUnplanned(ganttState.undated || [], false);
+  API.get("/api/gantt/unscheduled", ganttTaskParams(ganttState.unplannedTasks.length, 100)).then(function(page){
+    ganttState.unplannedLoading = false;
+    var known = {};
+    ganttState.unplannedTasks.forEach(function(t){ known[t.id] = 1; });
+    var rows = (page && page.items) || [];
+    var fresh = [];
+    rows.forEach(function(t){ if(!known[t.id]){ known[t.id] = 1; fresh.push(t); } });
+    ganttState.unplannedTasks = ganttState.unplannedTasks.concat(fresh);
+    if(ganttState.serverUnplanned !== null){
+      ganttState.serverUnplanned = ganttState.serverUnplanned.concat(fresh);
+    }
+    ganttState.unscheduledTotal = (page && typeof page.total === "number")
+      ? page.total : ganttState.unscheduledTotal;
+    ganttState.unplannedHasMore = !!(page && page.hasMore) && fresh.length > 0;
+    fresh.forEach(function(t){
+      ganttState.byId[t.id] = t;
+      taskCacheExtra[t.id] = t;
+    });
+    renderGantt();
+  }).catch(function(ex){
+    ganttState.unplannedLoading = false;
+    toast(ex && ex.message ? ex.message : "未排期工作项加载失败", "bad");
+    renderGanttUnplanned(ganttState.undated || [], false);
+  });
 }
 function renderGantt(){
   if(!ganttScroll) return;
@@ -2505,6 +2551,10 @@ if(ganttScroll){
 }
 if(ganttUnplannedList){
   ganttUnplannedList.addEventListener("click", function(e){
+    if(e.target.closest("[data-gantt-unplanned-more]")){
+      loadMoreGanttUnplanned();
+      return;
+    }
     if(Date.now() < ganttSuppressUnplannedClick) return;
     var open = e.target.closest("[data-gantt-open]");
     if(open) openTaskById(open.dataset.ganttOpen);

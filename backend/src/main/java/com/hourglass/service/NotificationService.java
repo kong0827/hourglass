@@ -4,6 +4,7 @@ import com.hourglass.common.TaskCalc;
 import com.hourglass.common.Texts;
 import com.hourglass.common.Webhooks;
 import com.hourglass.entity.AppUser;
+import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.Workspace;
 import com.hourglass.entity.WorkspaceMember;
@@ -76,6 +77,7 @@ public class NotificationService {
     private final ProjectAccessService projectAccess;
     /** 个人偏好：每日汇总可按人关闭 */
     private final UserNotificationPreferenceService preferenceService;
+    private final WorkspaceMetaCache metaCache;
     private final RestTemplate restTemplate;
     /** 有界发送池：不占用调度线程，同一时间最多 2 个 webhook 在飞 */
     private final ThreadPoolExecutor remindSender;
@@ -99,6 +101,7 @@ public class NotificationService {
                                AppNotificationService appNotificationService,
                                ProjectAccessService projectAccess,
                                UserNotificationPreferenceService preferenceService,
+                               WorkspaceMetaCache metaCache,
                                @Qualifier("webhookRestTemplate") RestTemplate restTemplate) {
         this.taskMapper = taskMapper;
         this.workspaceMapper = workspaceMapper;
@@ -107,6 +110,7 @@ public class NotificationService {
         this.appNotificationService = appNotificationService;
         this.projectAccess = projectAccess;
         this.preferenceService = preferenceService;
+        this.metaCache = metaCache;
         /* OPS-2：webhook 与 AI 共用出站连接池；该 bean 连接 2s / 读 3s、不跟随重定向 */
         this.restTemplate = restTemplate;
         this.remindSender = new ThreadPoolExecutor(2, 2, 60L, TimeUnit.SECONDS,
@@ -448,6 +452,18 @@ public class NotificationService {
         return pushDigest(ws, force, true);
     }
 
+    private String processingRuleOf(String workspaceId, String column) {
+        if ("done".equals(column)) {
+            return "done";
+        }
+        if ("backlog".equals(column)) {
+            return "backlog";
+        }
+        BoardColumn c = metaCache.column(workspaceId, column);
+        String rule = c == null ? null : c.getProcessingRule();
+        return rule == null ? "normal" : rule;
+    }
+
     private Map<String, Object> pushDigest(Workspace ws, boolean force, boolean withInApp) {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         LocalDate today = LocalDate.now();
@@ -458,7 +474,8 @@ public class NotificationService {
             if (t.getDeletedAt() != null) {
                 continue;
             }
-            String kind = TaskCalc.dueKind(t, today);
+            String rule = processingRuleOf(ws.getId(), t.getBoardColumn());
+            String kind = TaskCalc.dueKind(t.getBoardColumn(), rule, t.getDueDate(), today);
             if ("over".equals(kind)) {
                 over.add(t);
             } else if ("today".equals(kind)) {
@@ -526,7 +543,8 @@ public class NotificationService {
             int overN = 0;
             int todayN = 0;
             for (Task t : e.getValue()) {
-                String kind = TaskCalc.dueKind(t, today);
+                String rule = processingRuleOf(ws.getId(), t.getBoardColumn());
+                String kind = TaskCalc.dueKind(t.getBoardColumn(), rule, t.getDueDate(), today);
                 if ("over".equals(kind)) {
                     overN++;
                 } else if ("today".equals(kind)) {

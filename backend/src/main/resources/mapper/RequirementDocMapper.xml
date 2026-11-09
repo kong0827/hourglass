@@ -32,6 +32,27 @@
     LIMIT #{limit}
   </select>
 
+  <sql id="listWhere">
+    d.workspace_id = #{workspaceId}
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId} AND pm.access = 'none')
+    </if>
+    <if test="!seeAllDrafts">
+      AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+    </if>
+    <choose>
+      <when test="keyword != null and keyword != '' and keyword.length() >= 2">
+        AND MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE)
+      </when>
+      <when test="keyword != null and keyword != ''">
+        AND (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+             OR d.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+      </when>
+    </choose>
+  </sql>
+
   <!-- 列表：不读正文，只读 content_brief；任务数一次 GROUP BY 汇总 -->
   <select id="selectViewByWorkspace" resultType="com.hourglass.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.title, d.doc_type, d.format, d.sort_order,
@@ -50,23 +71,26 @@
       WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id IS NOT NULL
       GROUP BY req_doc_id
     ) tc ON tc.req_doc_id = d.id
-    WHERE d.workspace_id = #{workspaceId}
+    WHERE <include refid="listWhere"/>
     <choose>
       <when test="keyword != null and keyword != '' and keyword.length() >= 2">
-        AND MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE)
         ORDER BY MATCH(d.title, d.content_brief, d.content) AGAINST (#{keyword} IN NATURAL LANGUAGE MODE) DESC,
-                 d.updated_at DESC
+                 d.updated_at DESC, d.id
       </when>
       <when test="keyword != null and keyword != ''">
-        AND (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
-             OR d.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
         ORDER BY (d.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\') DESC,
-                 d.updated_at DESC
+                 d.updated_at DESC, d.id
       </when>
       <otherwise>
-        ORDER BY d.req_id, d.sort_order, d.created_at
+        ORDER BY d.req_id, d.sort_order, d.created_at, d.id
       </otherwise>
     </choose>
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countVisible" resultType="int">
+    SELECT COUNT(*) FROM requirement_doc d
+    WHERE <include refid="listWhere"/>
   </select>
 
   <select id="selectById" resultType="RequirementDoc">
@@ -171,6 +195,18 @@
     DELETE FROM requirement_doc WHERE workspace_id = #{workspaceId}
   </delete>
 
+  <sql id="demandDocWhere">
+    l.workspace_id = #{workspaceId} AND l.demand_id = #{demandId}
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = d.workspace_id AND pm.project_id = d.req_id
+                        AND pm.user_id = #{viewerId} AND pm.access = 'none')
+    </if>
+    <if test="!seeAllDrafts">
+      AND (d.published_at IS NOT NULL OR d.owner_user_id = #{userId})
+    </if>
+  </sql>
+
   <!-- 需求池需求 → 文档：列表字段与 selectViewByWorkspace 保持一致 -->
   <select id="selectByDemand" resultType="com.hourglass.dto.ReqDocView">
     SELECT d.id, d.req_id, d.parent_id, d.title, d.doc_type, d.format, d.sort_order,
@@ -183,15 +219,26 @@
     INNER JOIN requirement_doc d ON d.id = l.doc_id AND d.workspace_id = l.workspace_id
     LEFT JOIN requirement r ON r.id = d.req_id AND r.workspace_id = d.workspace_id
     LEFT JOIN (
-      SELECT req_doc_id,
+      SELECT t.req_doc_id,
              COUNT(*) AS task_count,
-             SUM(CASE WHEN board_column = 'done' THEN 1 ELSE 0 END) AS done_count
-      FROM task
-      WHERE workspace_id = #{workspaceId} AND deleted_at IS NULL AND req_doc_id IS NOT NULL
-      GROUP BY req_doc_id
+             SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task t
+      INNER JOIN demand_doc_link linked ON linked.workspace_id = t.workspace_id
+                                       AND linked.doc_id = t.req_doc_id
+      WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.req_doc_id IS NOT NULL
+        AND linked.demand_id = #{demandId}
+      GROUP BY t.req_doc_id
     ) tc ON tc.req_doc_id = d.id
-    WHERE l.workspace_id = #{workspaceId} AND l.demand_id = #{demandId}
-    ORDER BY d.updated_at DESC
+    WHERE <include refid="demandDocWhere"/>
+    ORDER BY d.updated_at DESC, d.id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countByDemand" resultType="int">
+    SELECT COUNT(*)
+    FROM demand_doc_link l
+    INNER JOIN requirement_doc d ON d.id = l.doc_id AND d.workspace_id = l.workspace_id
+    WHERE <include refid="demandDocWhere"/>
   </select>
 
   <select id="selectDemandsByDoc" resultType="java.util.HashMap">
@@ -199,7 +246,15 @@
     FROM demand_doc_link l
     INNER JOIN demand dm ON dm.id = l.demand_id AND dm.workspace_id = l.workspace_id
     WHERE l.workspace_id = #{workspaceId} AND l.doc_id = #{docId}
-    ORDER BY dm.updated_at DESC
+    ORDER BY dm.updated_at DESC, dm.id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countDemandsByDoc" resultType="int">
+    SELECT COUNT(*)
+    FROM demand_doc_link l
+    INNER JOIN demand dm ON dm.id = l.demand_id AND dm.workspace_id = l.workspace_id
+    WHERE l.workspace_id = #{workspaceId} AND l.doc_id = #{docId}
   </select>
 
   <insert id="linkDemand">

@@ -9,6 +9,7 @@ import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.BoardQuery;
 import com.hourglass.dto.BoardResponse;
 import com.hourglass.dto.CalendarResponse;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.TaskBulkMoveRequest;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
@@ -138,8 +139,11 @@ public class TaskController {
 
     /** 回收站 */
     @GetMapping("/api/trash")
-    public ApiResult<List<Task>> trash(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(trashService.trash(ctx.getWsId(), ctx.getUserId()));
+    public ApiResult<PageResult<Task>> trash(@CurrentWorkspace WorkspaceCtx ctx,
+                                             @RequestParam(required = false) Integer offset,
+                                             @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(trashService.trash(ctx.getWsId(), ctx.getUserId(),
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     @PostMapping("/api/tasks/{id}/restore")
@@ -216,8 +220,12 @@ public class TaskController {
 
     /** 任务操作时间线（含操作人） */
     @GetMapping("/api/tasks/{id}/logs")
-    public ApiResult<List<TaskLog>> logs(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(queryService.logs(ctx.getWsId(), ctx.getUserId(), id));
+    public ApiResult<com.hourglass.dto.PageResult<TaskLog>> logs(
+            @PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(queryService.logs(ctx.getWsId(), ctx.getUserId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
     /** 日历视图：按 [开始日, 实际结束日] 取整月任务（IA-4：接入与看板相同的筛选） */

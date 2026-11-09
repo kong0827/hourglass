@@ -47,31 +47,69 @@ function downloadCsv(filename, rows){
   var csv = "\uFEFF" + rows.map(function(row){ return row.map(csvCell).join(","); }).join("\r\n");
   triggerDownload(filename, csv, "text/csv;charset=utf-8;");
 }
-function openTaskTable(title, tasks, description){
-  var rows = (tasks || []).map(function(t){
-    return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
-      + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
-      + '<td>' + esc(t.reqName || "未归类") + '</td>'
-      + '<td><span class="manager-person">' + avatarHTML(t.owner || "未", "sm") + esc(t.owner || "未指派") + '</span></td>'
-      + '<td>' + esc(taskStatusName(t)) + '</td>'
-      + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
-      + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
-      + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
-  }).join("") || '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
+function managerTaskRowHTML(t){
+  return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
+    + '<td><div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div></td>'
+    + '<td>' + esc(t.reqName || "未归类") + '</td>'
+    + '<td><span class="manager-person">' + avatarHTML(t.owner || "未", "sm") + esc(t.owner || "未指派") + '</span></td>'
+    + '<td>' + esc(taskStatusName(t)) + '</td>'
+    + '<td class="num">' + esc(fmtDate(t.dueDate)) + '</td>'
+    + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
+    + '<td class="num">' + (t.totalMinutes ? fmtMinutesShort(t.totalMinutes) : "—") + '</td></tr>';
+}
+/* pager（可选）：{total, hasMore, fetch(offset) -> Promise<page>}，用于服务端分页的钻取表 */
+function openTaskTable(title, tasks, description, pager){
+  var all = (tasks || []).slice();
+  var total = pager && typeof pager.total === "number" ? pager.total : all.length;
+  var hasMore = !!(pager && pager.hasMore && pager.fetch);
+  var loading = false;
+  function rowsHTML(){
+    if(!all.length) return '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
+    return all.map(managerTaskRowHTML).join("")
+      + (hasMore
+        ? '<tr><td colspan="7" class="manager-more-cell"><button class="btn sm block" type="button" data-manager-more'
+          + (loading ? ' disabled' : '') + '>'
+          + (loading ? '加载中…' : '加载更多（已加载 ' + all.length + ' / 共 ' + total + ' 项）')
+          + '</button></td></tr>'
+        : "");
+  }
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + (tasks || []).length + " 项 · 点击工作项行打开详情")) + '</div></div>'
+    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + total + " 项 · 点击工作项行打开详情")) + '</div></div>'
     + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+    + '</tr></thead><tbody>' + rowsHTML() + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
+  var tbody = layer.querySelector("tbody");
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-manager-close]")){ UI.closeModal(layer); return; }
+    if(e.target.closest("[data-manager-more]")){
+      if(loading || !hasMore) return;
+      loading = true;
+      tbody.innerHTML = rowsHTML();
+      pager.fetch(all.length).then(function(page){
+        loading = false;
+        if(!layer.isConnected) return;
+        var known = {};
+        all.forEach(function(t){ known[t.id] = 1; });
+        var rows = ((page && page.items) || []).filter(function(t){ return !known[t.id]; });
+        all = all.concat(rows);
+        if(page && typeof page.total === "number") total = page.total;
+        hasMore = !!(page && page.hasMore) && rows.length > 0;
+        tbody.innerHTML = rowsHTML();
+      }).catch(function(ex){
+        loading = false;
+        if(!layer.isConnected) return;
+        tbody.innerHTML = rowsHTML();
+        UI.toast(ex && ex.message ? ex.message : "加载更多失败", "bad");
+      });
+      return;
+    }
     var row = e.target.closest("[data-open-task]");
     if(row){ UI.closeModal(layer); openTaskById(row.dataset.openTask); }
   });
