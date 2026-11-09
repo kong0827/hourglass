@@ -526,7 +526,7 @@ if [ "$NEED_FRONT" -eq 1 ]; then
   rm -rf "$FRONT_STAGE"
   mkdir -p "${FRONT_STAGE}/hourglass"
   cp -R frontend/. "${FRONT_STAGE}/hourglass/"
-  tar -czf "$FRONT_TAR" -C "$FRONT_STAGE" hourglass
+  COPYFILE_DISABLE=1 tar -czf "$FRONT_TAR" -C "$FRONT_STAGE" hourglass
   LOCAL_FRONT_SIZE="$(wc -c < "$FRONT_TAR" | tr -d ' ')"
   LOCAL_FRONT_SHA="$(sha256sum "$FRONT_TAR" | cut -c1-16)"
   ok "frontend：$(ls -lh "$FRONT_TAR" | awk '{print $5}')  sha256(前16)=${LOCAL_FRONT_SHA}"
@@ -661,7 +661,8 @@ mkdir -m 700 -- "$REMOTE_STAGE/frontend.new"
 tar -xzf "$REMOTE_STAGE/hourglass-frontend.tar.gz.new" -C "$REMOTE_STAGE/frontend.new"
 [ -f "$REMOTE_STAGE/frontend.new/hourglass/index.html" ] || { echo "前端包缺少 hourglass/index.html" >&2; exit 1; }
 chown -R hourglass:hourglass "$REMOTE_STAGE/frontend.new"
-chmod 755 "$REMOTE_STAGE/frontend.new"
+find "$REMOTE_STAGE/frontend.new" -type d -exec chmod 755 {} +
+find "$REMOTE_STAGE/frontend.new" -type f -exec chmod 644 {} +
 # The durable old pair lives in the checkpoint; this displaced directory is ours.
 mv -T -- "$FRONT_DIR" "$REMOTE_STAGE/frontend.displaced"
 mv -T -- "$REMOTE_STAGE/frontend.new" "$FRONT_DIR"
