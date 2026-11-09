@@ -25,4 +25,10 @@ public class TaskBulkMoveRequest {
 
     /** 批量完成默认不接力计时 */
     private Boolean autoResume;
+
+    /** 整批共用一条原因；任一项的流转需要原因时必须填写 */
+    private String reason;
+
+    /** 空间主 / 管理员强制越过「禁止」规则（整批生效） */
+    private Boolean force;
 }

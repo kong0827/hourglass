@@ -101,7 +101,7 @@ public class EstimateService {
                         risk.add(rt);
                     }
                 }
-                /* 分类累计也只用已完成样本，避免进行中的任务把某个分类的系数压低 */
+                /* 模块累计也只用已完成样本，避免进行中的任务把某个模块的系数压低 */
                 continue;
             }
 
@@ -130,11 +130,11 @@ public class EstimateService {
             }
 
             String cat = t.getCategory() == null || t.getCategory().trim().isEmpty()
-                    ? "未分类" : t.getCategory().trim();
+                    ? "未指定模块" : t.getCategory().trim();
             long[] slot = catAgg.get(cat);
             if (slot == null) {
                 /* 必须以 0 起手：这里既做"新建"也做"累加"，初始化时放值会导致
-                   每个分类的第一个任务被算两次（分子分母同倍放大，比值看不出来，但多任务时就偏了） */
+                   每个模块的第一个任务被算两次（分子分母同倍放大，比值看不出来，但多任务时就偏了） */
                 slot = new long[]{0L, 0L, 0L};
                 catAgg.put(cat, slot);
             }

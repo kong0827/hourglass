@@ -58,13 +58,14 @@ public class DemandController {
                                       @RequestParam(required = false) String q,
                                       @RequestParam(required = false) String pris,
                                       @RequestParam(required = false) String kinds,
+                                      @RequestParam(required = false) String cats,
                                       @RequestParam(required = false) String reqs,
                                       @RequestParam(required = false) String sort,
                                       @RequestParam(required = false) Integer offset,
                                       @RequestParam(required = false) Integer limit,
                                       @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.page(ctx.getWsId(), ctx.getUserId(),
-                query(reqId, status, q, pris, kinds, reqs, sort, offset, limit)));
+                query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit)));
     }
 
     /** 需求池甘特：分页口径同列表，额外下发每条需求的阶段时间轴 */
@@ -74,23 +75,25 @@ public class DemandController {
                                             @RequestParam(required = false) String q,
                                             @RequestParam(required = false) String pris,
                                             @RequestParam(required = false) String kinds,
+                                            @RequestParam(required = false) String cats,
                                             @RequestParam(required = false) String reqs,
                                             @RequestParam(required = false) String sort,
                                             @RequestParam(required = false) Integer offset,
                                             @RequestParam(required = false) Integer limit,
                                             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.gantt(ctx.getWsId(), ctx.getUserId(),
-                query(reqId, status, q, pris, kinds, reqs, sort, offset, limit)));
+                query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit)));
     }
 
     private static DemandQuery query(String reqId, String status, String q, String pris, String kinds,
-                                     String reqs, String sort, Integer offset, Integer limit) {
+                                     String cats, String reqs, String sort, Integer offset, Integer limit) {
         DemandQuery query = new DemandQuery();
         query.setReqId(reqId == null || reqId.trim().isEmpty() ? null : reqId.trim());
         query.setStatus(status);
         query.setQ(q == null || q.trim().isEmpty() ? null : q.trim());
         query.setPris(csv(pris));
         query.setKinds(csv(kinds));
+        query.setCats(csv(cats));
         query.setReqs(csv(reqs));
         query.setSort(sort);
         query.setOffset(offset == null ? 0 : offset);

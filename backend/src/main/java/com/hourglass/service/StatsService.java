@@ -27,7 +27,7 @@ public class StatsService {
         this.projectAccess = projectAccess;
     }
 
-    /** 近 N 周：每周新增/完成；窗口内完成按分类与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
+    /** 近 N 周：每周新增/完成；窗口内完成按模块与负责人分布；当前积压与逾期（按空间隔离，工时按"我"统计） */
     public StatsResponse stats(String workspaceId, String userId, Integer weeks) {
         int w = weeks == null ? 8 : Math.max(4, Math.min(26, weeks));
         LocalDate today = LocalDate.now();

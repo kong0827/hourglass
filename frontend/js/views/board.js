@@ -12,6 +12,7 @@ import { activeView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
 import { canEditReq, canEditTask, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
+import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
@@ -746,33 +747,57 @@ function endDrag(){
   cleanupDrag();
   if(!toCol){ render({animate:false}); return; }
 
-  rt.suppressClickUntil = Date.now() + 260;
-  optimisticMove(d.id, toCol, beforeId);
-  render({animate:false, movedId:d.id});
+  var wsId = rt.currentWs && rt.currentWs.id;
+  var lifted = taskById(d.id);
+  var items = [{ from: fromCol, title: lifted ? lifted.title : "" }];
+  guard(wsId, items, toCol).then(function(pass){
+    if(!pass){ render({animate:false}); return; }
 
-  var body = { column: toCol };
-  if(beforeId) body.beforeId = beforeId;
-  API.post("/api/tasks/" + encodeURIComponent(d.id) + "/move", body).then(function(res){
-    var task = res.task;
-    if(res.to === "done" && res.from !== "done"){
-      var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
-      var doneMsg = dd > 0
-        ? ("已完成工作项「" + task.title + "」，延期 " + dd + " 天完成")
-        : ("已完成工作项「" + task.title + "」，按期完成");
-      /* 完成后自动接力了同列的下一个任务，明确说出来，别让人以为计时断了 */
-      if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
-      toast(doneMsg, dd > 0 ? "warn" : "fs");
-    }else if(res.from === "done" && res.to !== "done"){
-      toast("已清除完成时间", "warn");
-    }else if(fromCol !== res.to){
-      toast("「" + task.title + "」移动到「" + colName(res.to) + "」" +
-        (res.autoTimerStarted ? " · 已开始计时（拖到「已完成」会自动停止）" : ""));
+    rt.suppressClickUntil = Date.now() + 260;
+    optimisticMove(d.id, toCol, beforeId);
+    render({animate:false, movedId:d.id});
+
+    var body = { column: toCol };
+    if(beforeId) body.beforeId = beforeId;
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    var retried = false;
+    function fail(ex){
+      if(retried){ toast("移动失败：" + (ex.message || "网络异常"), "bad"); loadBoard({silent:true}); return; }
+      retried = true;
+      serverDecision(wsId, items, toCol, ex).then(function(retry){
+        if(retry){
+          body.reason = retry.reason;
+          body.force = retry.force;
+          send();
+          return;
+        }
+        toast("移动失败：" + (ex.message || "网络异常"), "bad");
+        loadBoard({silent:true});
+      });
     }
-    loadBoard({silent:true});
-    loadReqs();
-  }).catch(function(ex){
-    toast("移动失败：" + (ex.message || "网络异常"), "bad");
-    loadBoard({silent:true});
+    function send(){
+      API.post("/api/tasks/" + encodeURIComponent(d.id) + "/move", body).then(function(res){
+        var task = res.task;
+        if(res.to === "done" && res.from !== "done"){
+          var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
+          var doneMsg = dd > 0
+            ? ("已完成工作项「" + task.title + "」，延期 " + dd + " 天完成")
+            : ("已完成工作项「" + task.title + "」，按期完成");
+          /* 完成后自动接力了同列的下一个任务，明确说出来，别让人以为计时断了 */
+          if(res.autoTimerTask) doneMsg += " · 已接着开始「" + res.autoTimerTask + "」的计时";
+          toast(doneMsg, dd > 0 ? "warn" : "fs");
+        }else if(res.from === "done" && res.to !== "done"){
+          toast("已清除完成时间", "warn");
+        }else if(fromCol !== res.to){
+          toast("「" + task.title + "」移动到「" + colName(res.to) + "」" +
+            (res.autoTimerStarted ? " · 已开始计时（拖到「已完成」会自动停止）" : ""));
+        }
+        loadBoard({silent:true});
+        loadReqs();
+      }).catch(fail);
+    }
+    send();
   });
 }
 function cancelDrag(){ cleanupDrag(); render({animate:false}); }

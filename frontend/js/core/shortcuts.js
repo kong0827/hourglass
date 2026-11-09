@@ -7,6 +7,7 @@ import { toggleRail } from "./shell.js";
 import { calState, canEditTask, rt, state, taskById } from "./state.js";
 import { openDuePopover, toggleTaskDone } from "./task-actions.js";
 import { deleteTask, openTaskDrawer, tryCloseTaskDrawer } from "./task-drawer.js";
+import { guard, serverDecision } from "./transitions.js";
 import { UI, toast } from "./ui.js";
 import { COLUMNS, COL_INDEX, colName, iso, parseDate } from "../lib/format.js";
 import { cancelDrag, drag, loadBoard, loadReqs, openInlineAdd } from "../views/board.js";
@@ -38,12 +39,34 @@ function moveTaskCol(t, delta){
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var idx = COL_INDEX[t.boardColumn] + delta;
   if(idx < 0 || idx >= COLUMNS.length) return;
-  API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", {column: COLUMNS[idx].id}).then(function(res){
+  var to = COLUMNS[idx].id;
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var items = [{ from: t.boardColumn, title: t.title }];
+  function send(pass){
+    var body = { column: to };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    return API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
+  }
+  function ok(res){
     toast("「" + res.task.title + "」移动到「" + colName(res.to) + "」" +
       (res.autoTimerStarted ? " · 已开始计时" : ""));
     if(activeView === "list") loadList(); else loadBoard({animate:false, movedId: t.id});
     loadReqs();
-  }).catch(function(ex){ toast("移动失败：" + (ex.message || "网络异常"), "bad"); });
+  }
+  guard(wsId, items, to).then(function(pass){
+    if(!pass) return;
+    /* 412/422 的补救由 serverDecision 二次确认，这里只重试一次避免循环 */
+    var retried = false;
+    send(pass).then(ok).catch(function(ex){
+      if(retried){ toast("移动失败：" + (ex.message || "网络异常"), "bad"); return; }
+      retried = true;
+      serverDecision(wsId, items, to, ex).then(function(retry){
+        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast("移动失败：" + (ex.message || "网络异常"), "bad"); return; }
+        send(retry).then(ok).catch(function(e){ toast("移动失败：" + (e.message || "网络异常"), "bad"); });
+      });
+    });
+  });
 }
 document.addEventListener("keydown", function(e){
   if(e.isComposing || e.keyCode === 229) return;

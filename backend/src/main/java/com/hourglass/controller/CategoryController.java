@@ -55,13 +55,16 @@ public class CategoryController {
         return ApiResult.ok(categoryService.update(ws.getId(), id, req));
     }
 
-    /** 删除分类（仅空间主），其下任务改到第一个分类 */
+    /** 删除模块（仅空间主），其下任务与需求迁到 targetId 指定模块；缺省迁到最靠前的其他模块 */
     @DeleteMapping("/api/categories/{id}")
-    public ApiResult<Void> delete(@PathVariable String id, @RequestParam(required = false) String workspace) {
+    public ApiResult<Void> delete(@PathVariable String id,
+                                  @RequestParam(required = false) String targetId,
+                                  @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         workspaceService.requireOwner(userId, ws.getId());
-        categoryService.delete(ws.getId(), id);
+        String target = targetId == null || targetId.trim().isEmpty() ? null : targetId.trim();
+        categoryService.delete(ws.getId(), id, target);
         return ApiResult.ok();
     }
 

@@ -45,6 +45,11 @@
     WHERE workspace_id = #{workspaceId} AND category = #{oldName}
   </update>
 
+  <update id="renameInDemands">
+    UPDATE demand SET category = #{newName}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND category = #{oldName}
+  </update>
+
   <select id="countByWorkspace" resultType="int">
     SELECT COUNT(*) FROM category WHERE workspace_id = #{workspaceId}
   </select>

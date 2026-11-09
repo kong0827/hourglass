@@ -53,13 +53,13 @@ app:
     retain-days: ${AUDIT_RETAIN_DAYS:90}
   # 前端登录页（相对 context-path）。前端由 Nginx 独立提供，后端只做 302 跳转
   login-page: ${APP_LOGIN_PAGE:/login.html}
-  # 进程内缓存（单实例部署）：成员关系与列/分类/标签 meta 都存在本进程内存里。
+  # 进程内缓存（单实例部署）：成员关系与列/模块/标签 meta 都存在本进程内存里。
   # 多实例部署时各实例互不通知，成员变更/meta 变更最多延迟一个 TTL 才在其它实例生效；
   # 如需多实例，请去掉本缓存或改用外部共享缓存。
   cache:
     # 成员关系 (userId, workspaceId) 的 TTL；成员增删、空间改名/删除、账号删除会主动失效
     member-ttl-seconds: 60
-    # 列/分类/标签 meta 的兜底 TTL；正常情况下由空间版本号与写入口主动失效
+    # 列/模块/标签 meta 的兜底 TTL；正常情况下由空间版本号与写入口主动失效
     meta-ttl-seconds: 300
   auth:
     username: ${AUTH_USER:admin}

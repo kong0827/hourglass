@@ -17,7 +17,7 @@ public class ReqSaveRequest {
     @Size(max = 40, message = "需求名称不能超过 40 字")
     private String name;
 
-    @Size(max = 160, message = "需求描述不能超过 160 字")
+    @Size(max = 1000, message = "需求描述不能超过 1000 字")
     private String description;
 
     @Size(max = 400, message = "项目目标不能超过 400 字")

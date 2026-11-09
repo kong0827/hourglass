@@ -70,7 +70,8 @@ class PermissionRulesTest {
         WorkspaceMemberCache memberCache = new WorkspaceMemberCache(workspaceMapper, memberMapper,
                 60_000L, new AtomicLong(1_000_000L)::get);
         workspaceService = new WorkspaceService(workspaceMapper, memberMapper, mock(UserMapper.class),
-                mock(BoardColumnMapper.class), mock(CategoryMapper.class),
+                mock(BoardColumnMapper.class), mock(com.hourglass.mapper.ColumnTransitionMapper.class),
+                mock(CategoryMapper.class),
                 mock(com.hourglass.mapper.WorkspacePriorityMapper.class), mock(SavedViewMapper.class),
                 mock(com.hourglass.mapper.AppNotificationMapper.class),
                 mock(com.hourglass.mapper.UserListPreferenceMapper.class),

@@ -13,6 +13,7 @@ import com.hourglass.dto.PageResult;
 import com.hourglass.dto.TaskBulkMoveRequest;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
+import com.hourglass.dto.TaskReopenRequest;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskLog;
@@ -188,8 +189,9 @@ public class TaskController {
     /** 取消完成：回到完成前所在列 */
     @PostMapping("/api/tasks/{id}/reopen")
     public ApiResult<Map<String, Object>> reopen(@PathVariable String id,
+                                                 @RequestBody(required = false) TaskReopenRequest body,
                                                  @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(workflowService.reopen(ctx.getUserId(), ctx.getWsId(), id));
+        return ApiResult.ok(workflowService.reopen(ctx.getUserId(), ctx.getWsId(), id, body));
     }
 
     /** 软删除：进回收站（30 天自动清理），撤销走 restore */

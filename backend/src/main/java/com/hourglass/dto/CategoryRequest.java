@@ -8,8 +8,8 @@ import javax.validation.constraints.Size;
 @Data
 public class CategoryRequest {
 
-    @NotBlank(message = "请填写分类名称")
-    @Size(max = 12, message = "分类名称不能超过 12 字")
+    @NotBlank(message = "请填写模块名称")
+    @Size(max = 12, message = "模块名称不能超过 12 字")
     private String name;
 
     /** #RRGGBB，可选 */

@@ -309,7 +309,7 @@ public class TestCaseService {
             throw AppException.badRequest("只有执行失败的用例才能转缺陷");
         }
         TaskSaveRequest tReq = new TaskSaveRequest();
-        /* 任务标题/描述上限（60/200）比用例口径窄：自动转出时截断，完整信息留在用例本体 */
+        /* 任务标题/描述上限（60/2000）比用例口径窄：自动转出时截断，完整信息留在用例本体 */
         tReq.setTitle(Texts.cut(c.getTitle(), 60));
         tReq.setItemType("bug");
         tReq.setSeverity(req.getSeverity());
@@ -317,7 +317,7 @@ public class TestCaseService {
         tReq.setReqId(c.getReqId());
         /* 用例关联了需求时，缺陷任务沿用该关联，保持追溯链一致 */
         tReq.setDemandId(c.getDemandId());
-        tReq.setDescription(Texts.cut(buildDefectDescription(c), 200));
+        tReq.setDescription(Texts.cut(buildDefectDescription(c), 2000));
         Task task = taskCommandService.create(userId, workspaceId, tReq);
         caseMapper.updateLatestBug(workspaceId, id, task.getId());
         TestCaseRun latest = runMapper.selectLatestByCase(id);

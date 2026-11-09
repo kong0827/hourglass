@@ -1,4 +1,4 @@
-/* core/app · 空间切换、当前用户、分类数据、顶栏 */
+/* core/app · 空间切换、当前用户、模块数据、顶栏 */
 
 import { API } from "./api.js";
 import { $ } from "./dom.js";

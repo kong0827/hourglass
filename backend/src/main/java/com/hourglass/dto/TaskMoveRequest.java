@@ -28,4 +28,10 @@ public class TaskMoveRequest {
      * 批量移动传 false，避免批量整理数据时突然给别人或自己开表。
      */
     private Boolean autoResume;
+
+    /** 流转规则要求「需填原因」时必填；允许的流转传了也会写进移动日志 */
+    private String reason;
+
+    /** 空间主 / 管理员强制越过「禁止」规则；普通成员传了会被拒绝 */
+    private Boolean force;
 }

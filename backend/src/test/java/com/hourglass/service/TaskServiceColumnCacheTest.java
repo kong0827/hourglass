@@ -6,6 +6,7 @@ import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.BoardColumnMapper;
 import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.CategoryMapper;
+import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.RequirementMapper;
@@ -45,7 +46,8 @@ class TaskServiceColumnCacheTest {
         when(columnMapper.selectAll(WS)).thenReturn(Arrays.asList(
                 column("C1", "待处理", 0), column("C2", "进行中", 1)));
         WorkspaceMetaCache metaCache = new WorkspaceMetaCache(columnMapper, mock(CategoryMapper.class),
-                mock(TagMapper.class), new WorkspaceVersionService(), 300_000L, new AtomicLong(0L)::get);
+                mock(TagMapper.class), mock(ColumnTransitionMapper.class), new WorkspaceVersionService(),
+                300_000L, new AtomicLong(0L)::get);
 
         TaskSupport support = new TaskSupport(mock(TaskMapper.class), mock(TagMapper.class), metaCache);
         TaskQueryService service = new TaskQueryService(

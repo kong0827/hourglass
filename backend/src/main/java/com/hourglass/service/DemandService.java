@@ -16,6 +16,7 @@ import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
+import com.hourglass.mapper.CategoryMapper;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.RequirementDocMapper;
@@ -54,13 +55,14 @@ public class DemandService {
     private final AttachmentService attachmentService;
     private final com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper;
     private final com.hourglass.mapper.TestCaseMapper caseMapper;
+    private final CategoryMapper categoryMapper;
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
                          ProjectVersionMapper versionMapper, TaskMapper taskMapper,
                          NotificationEventService notificationEvents, RequirementDocMapper docMapper,
                          ProjectAccessService projectAccess, AttachmentService attachmentService,
                          com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
-                         com.hourglass.mapper.TestCaseMapper caseMapper) {
+                         com.hourglass.mapper.TestCaseMapper caseMapper, CategoryMapper categoryMapper) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -71,6 +73,7 @@ public class DemandService {
         this.attachmentService = attachmentService;
         this.mailDeliveryMapper = mailDeliveryMapper;
         this.caseMapper = caseMapper;
+        this.categoryMapper = categoryMapper;
     }
 
     /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 条件 */
@@ -420,6 +423,7 @@ public class DemandService {
         q.setQ(src.getQ());
         q.setPris(src.getPris());
         q.setKinds(src.getKinds());
+        q.setCats(src.getCats());
         q.setReqs(src.getReqs());
         q.setSort(src.getSort());
         q.setOffset(src.getOffset());
@@ -635,6 +639,7 @@ public class DemandService {
         d.setDescription(Texts.trimToNull(req.getDescription()));
         d.setSource(Texts.trimToNull(req.getSource()));
         d.setItemKind(req.getItemKind() == null ? "新功能" : req.getItemKind());
+        d.setCategory(validCategory(d.getWorkspaceId(), req.getCategory()));
         d.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
         d.setExpectDate(req.getExpectDate());
         d.setAcceptText(Texts.trimToNull(req.getAcceptText()));
@@ -643,6 +648,18 @@ public class DemandService {
         d.setWsjfRisk(req.getWsjfRisk());
         d.setWsjfEffort(req.getWsjfEffort());
         fillWsjf(d);
+    }
+
+    /** 模块可选；非空时必须来自空间模块字典，空串表示未指定（列 NOT NULL） */
+    private String validCategory(String workspaceId, String raw) {
+        String category = Texts.trimToNull(raw);
+        if (category == null) {
+            return "";
+        }
+        if (categoryMapper.selectByName(workspaceId, category) == null) {
+            throw AppException.badRequest("模块不存在：" + category);
+        }
+        return category;
     }
 
     private Requirement requireProject(String workspaceId, String reqId) {

@@ -172,6 +172,7 @@ public class BackupData {
         private String desc;
         private String source;
         private String itemKind;
+        private String category;
         private String priority;
         private String status;
         private String expectDate;

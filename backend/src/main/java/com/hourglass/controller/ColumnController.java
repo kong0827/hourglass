@@ -5,10 +5,13 @@ import com.hourglass.common.Consts;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.ColumnOrderRequest;
 import com.hourglass.dto.ColumnRequest;
+import com.hourglass.dto.ColumnTransitionRequest;
+import com.hourglass.dto.ColumnTransitionView;
 import com.hourglass.dto.BoardResponse;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.BoardColumnService;
+import com.hourglass.service.ColumnTransitionService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,10 +30,14 @@ import java.util.List;
 public class ColumnController {
 
     private final BoardColumnService boardColumnService;
+    private final ColumnTransitionService transitionService;
     private final WorkspaceService workspaceService;
 
-    public ColumnController(BoardColumnService boardColumnService, WorkspaceService workspaceService) {
+    public ColumnController(BoardColumnService boardColumnService,
+                            ColumnTransitionService transitionService,
+                            WorkspaceService workspaceService) {
         this.boardColumnService = boardColumnService;
+        this.transitionService = transitionService;
         this.workspaceService = workspaceService;
     }
 
@@ -56,6 +63,34 @@ public class ColumnController {
         }
         String rule = c.getProcessingRule();
         return rule == null ? "normal" : rule;
+    }
+
+    /** 状态流转矩阵（含默认值，任何成员可查看） */
+    @GetMapping("/api/columns/transitions")
+    public ApiResult<ColumnTransitionView> transitions(@RequestParam(required = false) String workspace) {
+        Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
+        return ApiResult.ok(transitionService.view(ws.getId()));
+    }
+
+    /** 修改单个格子：空间主 / 管理员 */
+    @PutMapping("/api/columns/transitions")
+    public ApiResult<Void> saveTransition(@Valid @RequestBody ColumnTransitionRequest req,
+                                          @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        transitionService.save(ws.getId(), req.getFrom().trim(), req.getTo().trim(), req.getRule());
+        return ApiResult.ok();
+    }
+
+    /** 恢复默认（删除全部显式配置）：空间主 / 管理员 */
+    @PostMapping("/api/columns/transitions/reset")
+    public ApiResult<Void> resetTransitions(@RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireManager(userId, ws.getId());
+        transitionService.reset(ws.getId());
+        return ApiResult.ok();
     }
 
     @PostMapping("/api/columns")

@@ -38,6 +38,15 @@ deploy/部署记录-*.md
 deploy/上线清单.md
 deploy/local/
 sql/seeds/seed_yunying.sql
+# Excel 看板生成的种子与全量初始化数据：含真实成员姓名、账号与统一初始密码，仅本地部署使用
+sql/seeds/seed_from_excel.sql
+sql/seeds/seed_from_excel.sql.bak.*
+sql/seeds/seed_from_excel_report.json
+sql/hourglass_full_init.sql
+# 一次性迁移脚本：输入为私有 Excel，脚本内硬编码真实成员名单
+tools/generate_seed_from_excel.py
+# 数据库转储（含真实业务数据）
+backup/
 # 旧仓库（gitee chc2/workStuio）的完整历史副本，已移出至 内部资料/git-history/
 .git-gitee-history/
 

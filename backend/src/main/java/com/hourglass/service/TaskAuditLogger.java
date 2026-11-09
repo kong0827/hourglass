@@ -67,7 +67,7 @@ public class TaskAuditLogger {
             parts.add("优先级 " + old.getPriority() + "→" + t.getPriority());
         }
         if (!Objects.equals(old.getCategory(), t.getCategory())) {
-            parts.add("分类 " + old.getCategory() + "→" + t.getCategory());
+            parts.add("模块 " + old.getCategory() + "→" + t.getCategory());
         }
         if (!Objects.equals(old.getOwner(), t.getOwner())) {
             parts.add("负责人 " + old.getOwner() + "→" + t.getOwner());

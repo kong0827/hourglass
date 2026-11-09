@@ -188,7 +188,7 @@ function renderMoreFilter(meta){
   var html = '<div class="menu-title">筛选</div>' +
     section("负责人", ownerInner) + section("优先级", priInner) +
     section("类型", typeInner) + section("版本", versionInner) +
-    section("分类", catInner) + section("标签", tagInner) + section("项目", reqInner) +
+    section("模块", catInner) + section("标签", tagInner) + section("项目", reqInner) +
     section("状态", blockedInner);
   if(!ownerInner && !priInner && !typeInner && !versionInner && !catInner && !tagInner && !reqInner){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前空间还没有可筛选的字段。</p></div>';
@@ -518,8 +518,8 @@ function parseViewParams(p){
   var subgroup = (p.subgroup === undefined || p.subgroup === null) ? "none" : p.subgroup;
   var sort = (p.sort === undefined || p.sort === null) ? "default" : p.sort;
   if(["all", "mine", "doing", "over"].indexOf(preset) === -1) return null;
-  if(["none", "status", "owner", "priority", "project"].indexOf(group) === -1) return null;
-  if(["none", "status", "owner", "priority", "project"].indexOf(subgroup) === -1) return null;
+  if(["none", "status", "owner", "priority", "project", "category"].indexOf(group) === -1) return null;
+  if(["none", "status", "owner", "priority", "project", "category"].indexOf(subgroup) === -1) return null;
   if(p.hideDone !== undefined && p.hideDone !== null && typeof p.hideDone !== "boolean") return null;
   if(["default", "due", "priority", "estimate", "actual", "updated",
       "title", "type", "column", "owner", "progress", "project", "version",
@@ -549,13 +549,22 @@ function hasGanttLayout(p){
     return p[k] !== undefined && p[k] !== null;
   });
 }
+/* 应用视图时剔除字典中已不存在的模块：模块改名/删除不会回刷已保存视图，旧名称会筛出空结果。
+   模块缓存尚未加载（空）时无法校验，保持原样，避免把有效筛选误删。 */
+function pruneUnknownCats(cats){
+  var cache = rt.categoriesCache || [];
+  if(!cache.length || !cats.length) return cats;
+  var known = {};
+  cache.forEach(function(c){ known[c.name] = 1; });
+  return cats.filter(function(n){ return known[n]; });
+}
 function applyView(v){
   var p;
   try{ p = JSON.parse(v.params); }
   catch(e){ toast("视图参数损坏，无法应用", "bad"); return; }
   var f = parseViewParams(p);
   if(!f){ toast("视图参数不合法，无法应用（可删除后重新保存）", "bad"); return; }
-  state.q = f.q; state.owners = f.owners; state.pris = f.pris; state.cats = f.cats;
+  state.q = f.q; state.owners = f.owners; state.pris = f.pris; state.cats = pruneUnknownCats(f.cats);
   state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.versions = f.versions;
   state.due = f.due; state.focus = f.focus;
   state.blocked = f.blocked;
@@ -835,4 +844,4 @@ window.addEventListener("ds:view-search", function(){
 });
 updateMobFilterSummary();
 
-export { applyView, clearFilters, deleteView, loadViews, openMobFilterSheet, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };
+export { applyView, clearFilters, deleteView, loadViews, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };

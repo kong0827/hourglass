@@ -123,7 +123,7 @@
                             AND pm.access = 'none'))
       <if test="openOnly"> AND t.board_column != 'done' </if>
       <if test="q != null">
-        <!-- 口径与 ganttWhere 一致：标题/描述/备注/分类 + 项目名 + 标签名 + 附件名 -->
+        <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 -->
         AND (t.title LIKE CONCAT('%', #{q}, '%')
              OR t.description LIKE CONCAT('%', #{q}, '%')
              OR t.note LIKE CONCAT('%', #{q}, '%')
@@ -739,7 +739,7 @@
 
   <!-- ==================== 看板 / 列表 / 日历（BE-Q-1 SQL 下推） ==================== -->
   <!--
-    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/分类/项目名/标签/附件名；
+    与 ganttWhere 共用同一套筛选口径（q 命中标题/描述/备注/模块/项目名/标签/附件名；
     due/focus/blocked/noDue 与 TaskService.match 一致），已完成列再加完成时间范围。
   -->
   <sql id="doneScope">

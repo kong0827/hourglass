@@ -20,7 +20,7 @@ public class TaskCompletionRecord {
     private String taskId;
     /** 任务名称（完成时的快照） */
     private String title;
-    /** 任务详情（完成时的快照，截断到 200 字） */
+    /** 任务详情（完成时的快照，截断到 2000 字） */
     private String description;
     private String reqId;
     /** 归属项目名称（冗余存一份，防项目改名/删除后统计失真） */

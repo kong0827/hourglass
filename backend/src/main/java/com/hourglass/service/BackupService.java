@@ -76,7 +76,7 @@ public class BackupService {
 
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
     private static final String[] REQ_STATUS = {"active", "done", "hold"};
-    /** 旧版内置分类的原配色（导入时保留），其余自定义分类用默认灰 */
+    /** 旧版内置模块的原配色（导入时保留），其余自定义模块用默认灰 */
     private static final java.util.Map<String, String> LEGACY_CAT_COLORS = new java.util.HashMap<String, String>();
     static {
         LEGACY_CAT_COLORS.put("前端", "#5b83ad");
@@ -415,6 +415,7 @@ public class BackupService {
             bd.setDesc(d.getDescription());
             bd.setSource(d.getSource());
             bd.setItemKind(d.getItemKind());
+            bd.setCategory(d.getCategory());
             bd.setPriority(d.getPriority());
             bd.setStatus(d.getStatus());
             bd.setExpectDate(d.getExpectDate() == null ? null : d.getExpectDate().toString());
@@ -510,7 +511,7 @@ public class BackupService {
         st.memberIds = memberIdsOf(workspaceId);
 
         return txTemplate.execute(txStatus -> {
-            // 阶段 1：清空旧数据 + 项目/分支/文档/分类/列/标签
+            // 阶段 1：清空旧数据 + 项目/分支/文档/模块/列/标签
             txTemplate.execute(status -> {
                 clearWorkspaceTaskData(workspaceId, data);
                 importReferenceData(data, st);
@@ -551,7 +552,7 @@ public class BackupService {
         /* 导入会替换项目/文档，旧实体的活动轨迹不能留下，否则同 ID 重建会混入旧历史 */
         workActivityMapper.deleteAllByWorkspace(workspaceId);
         // 覆盖范围：任务类数据（任务/项目/子任务/标签/工时/评论，含回收站）。
-        // 附件文件与记录、操作时间线、保存视图、看板列与分类设置不在这里删除——避免"导入丢得比恢复得多"。
+        // 附件文件与记录、操作时间线、保存视图、看板列与模块设置不在这里删除——避免"导入丢得比恢复得多"。
         // v6：备份带了需求文档/分支时按“覆盖”处理；旧备份没有这两个字段则保留现状。
         // v8：版本/需求池同口径——只有备份确实包含该字段才覆盖，旧备份不误删。
         // v10：用例依赖项目、文档评论依赖文档；字段不全时保留现有数据，避免清了又恢复不回来。
@@ -567,7 +568,7 @@ public class BackupService {
         }
     }
 
-    /** 阶段 1b：项目/分支/需求文档/分类/看板列/标签先落库，供任务引用 */
+    /** 阶段 1b：项目/分支/需求文档/模块/看板列/标签先落库，供任务引用 */
     private void importReferenceData(BackupData data, ImportState st) {
         String workspaceId = st.workspaceId;
         Set<String> reqIds = st.reqIds;
@@ -601,7 +602,7 @@ public class BackupService {
                 req.setWorkspaceId(workspaceId);
                 String name = Texts.trimToNull(r.getName());
                 req.setName(name == null ? "未命名项目" : Texts.cut(name, 40));
-                req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 160));
+                req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 1000));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
                 req.setFirstReleasedAt(parseDate(r.getFirstReleasedAt()));
                 reqMapper.insert(req);
@@ -707,6 +708,8 @@ public class BackupService {
                 demand.setSource(Texts.cut(Texts.trimToNull(bd.getSource()), 40));
                 demand.setItemKind(oneOf(bd.getItemKind(),
                         new String[]{"新功能", "体验优化", "缺陷", "其他"}, "新功能"));
+                String category = Texts.cut(Texts.trimToNull(bd.getCategory()), 16);
+                demand.setCategory(category == null ? "" : category);
                 demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
                 demand.setStatus(oneOf(bd.getStatus(),
                         new String[]{"review", "pass", "plan", "rej"}, "review"));
@@ -904,7 +907,7 @@ public class BackupService {
             st.reqDocReqId.put(doc.getId(), doc.getReqId());
         }
 
-        // 分类：按备份中出现的分类名补齐分类表（旧四类保留原配色），空则落默认分类
+        // 模块：按备份中出现的模块名补齐模块表（旧四类保留原配色），空则落默认模块
         Set<String> catNames = new java.util.LinkedHashSet<String>();
         for (BackupData.BackupTask b : data.getTasks()) {
             if (b == null) {
@@ -927,7 +930,7 @@ public class BackupService {
             try {
                 categoryMapper.insert(cat);
             } catch (Exception ignored) {
-                // 同名分类已存在则跳过
+                // 同名模块已存在则跳过
             }
         }
         workspaceService.ensureDefaultsFor(workspaceId);
@@ -1019,7 +1022,7 @@ public class BackupService {
             t.setWorkspaceId(workspaceId);
             String title = Texts.trimToNull(b.getTitle());
             t.setTitle(title == null ? "未命名任务" : Texts.cut(title, 60));
-            t.setDescription(Texts.cut(Texts.trimToNull(b.getDesc()), 200));
+            t.setDescription(Texts.cut(Texts.trimToNull(b.getDesc()), 2000));
             t.setPriority(oneOf(b.getPri(), PRIORITIES, "P2"));
             String owner = Texts.trimToNull(b.getOwner());
             if (owner != null) {
@@ -1567,7 +1570,7 @@ public class BackupService {
 
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
-        sb.append("ID,标题,描述,优先级,分类,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成日期,创建时间,"
+        sb.append("ID,标题,描述,优先级,模块,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成日期,创建时间,"
                 + "是否阻塞,卡点原因,累计工时(分钟),提醒时间\r\n");
         for (Task t : tasks) {
             List<String> tags = tagMap.get(t.getId());
@@ -1808,8 +1811,8 @@ public class BackupService {
     }
 
     /**
-     * 分类名规范化（与 CategoryService 同规则）：筛选参数用逗号分隔，分类名不允许含逗号，
-     * 统一替换为空格；空名返回 null。导入的分类补表与任务赋值必须用同一规则，否则会产生筛不到的"幽灵分类"。
+     * 模块名规范化（与 CategoryService 同规则）：筛选参数用逗号分隔，模块名不允许含逗号，
+     * 统一替换为空格；空名返回 null。导入的模块补表与任务赋值必须用同一规则，否则会产生筛不到的"幽灵模块"。
      */
     private String normalizeCatName(String raw) {
         String name = Texts.trimToNull(raw);

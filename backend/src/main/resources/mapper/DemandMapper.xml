@@ -3,13 +3,13 @@
 <mapper namespace="com.hourglass.mapper.DemandMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, title, description, source, item_kind, priority, status, expect_date,
+    id, workspace_id, req_id, title, description, source, item_kind, category, priority, status, expect_date,
     accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
     created_by, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
-    d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.priority, d.status,
+    d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.category, d.priority, d.status,
     d.expect_date, d.accept_text, d.version_id, v.name AS versionName, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
@@ -40,7 +40,8 @@
     <if test="q.q != null">
       AND (d.title LIKE CONCAT('%', #{q.q}, '%')
            OR d.description LIKE CONCAT('%', #{q.q}, '%')
-           OR d.source LIKE CONCAT('%', #{q.q}, '%'))
+           OR d.source LIKE CONCAT('%', #{q.q}, '%')
+           OR d.category LIKE CONCAT('%', #{q.q}, '%'))
     </if>
     <if test="q.pris != null and q.pris.size() > 0">
       AND d.priority IN
@@ -49,6 +50,10 @@
     <if test="q.kinds != null and q.kinds.size() > 0">
       AND d.item_kind IN
       <foreach collection="q.kinds" item="k" open="(" separator="," close=")">#{k}</foreach>
+    </if>
+    <if test="q.cats != null and q.cats.size() > 0">
+      AND d.category IN
+      <foreach collection="q.cats" item="c" open="(" separator="," close=")">#{c}</foreach>
     </if>
     <if test="q.reqs != null and q.reqs.size() > 0">
       AND d.req_id IN
@@ -130,10 +135,10 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, priority, status,
+    INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, category, priority, status,
                         expect_date, accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
                         created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{description}, #{source}, #{itemKind}, #{priority}, #{status},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{description}, #{source}, #{itemKind}, #{category}, #{priority}, #{status},
             #{expectDate}, #{acceptText}, #{versionId}, #{reviewNote}, #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -144,6 +149,7 @@
       description = #{description},
       source = #{source},
       item_kind = #{itemKind},
+      category = #{category},
       priority = #{priority},
       status = #{status},
       expect_date = #{expectDate},

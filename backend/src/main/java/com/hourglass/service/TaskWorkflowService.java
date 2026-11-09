@@ -6,6 +6,7 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.TaskBulkMoveRequest;
 import com.hourglass.dto.TaskMoveRequest;
+import com.hourglass.dto.TaskReopenRequest;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.SubtaskMapper;
@@ -48,12 +49,16 @@ public class TaskWorkflowService {
     private final NotificationEventService notificationEvents;
     private final TaskWatchService watchService;
     private final ProjectAccessService projectAccess;
+    /** 状态流转矩阵：所有会改列的入口统一在这里判定 */
+    private final ColumnTransitionService transitions;
+    private final WorkspaceService workspaceService;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
                                TaskCompletionService completionService, TaskAuditLogger audit,
                                NotificationEventService notificationEvents, TaskWatchService watchService,
-                               ProjectAccessService projectAccess) {
+                               ProjectAccessService projectAccess, ColumnTransitionService transitions,
+                               WorkspaceService workspaceService) {
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -64,6 +69,29 @@ public class TaskWorkflowService {
         this.notificationEvents = notificationEvents;
         this.watchService = watchService;
         this.projectAccess = projectAccess;
+        this.transitions = transitions;
+        this.workspaceService = workspaceService;
+    }
+
+    /** 强制移动只给空间主 / 管理员；非强制请求不查角色，避免每次移动多一次成员查询 */
+    private boolean canForce(String userId, String workspaceId, boolean force) {
+        if (!force) {
+            return false;
+        }
+        String role = workspaceService.requireMember(userId, workspaceId).getMyRole();
+        return "owner".equals(role) || "admin".equals(role);
+    }
+
+    /** 移动日志后缀：原因 + 强制标记 */
+    private static String moveSuffix(ColumnTransitionService.Decision decision) {
+        StringBuilder suffix = new StringBuilder();
+        if (decision.getReason() != null) {
+            suffix.append("，原因：").append(decision.getReason());
+        }
+        if (decision.isForced()) {
+            suffix.append("（强制移动）");
+        }
+        return suffix.toString();
     }
 
     private String stopReasonForRule(String rule) {
@@ -100,6 +128,9 @@ public class TaskWorkflowService {
         String from = task.getBoardColumn();
         String to = req.getColumn();
         support.validateColumn(workspaceId, to);
+        boolean force = Boolean.TRUE.equals(req.getForce());
+        ColumnTransitionService.Decision decision = transitions.check(workspaceId, from, to,
+                req.getReason(), force, canForce(userId, workspaceId, force));
 
         List<Task> target = new ArrayList<Task>();
         for (Task t : taskMapper.selectColumnTasks(workspaceId, to)) {
@@ -188,7 +219,8 @@ public class TaskWorkflowService {
 
         String detail = from.equals(to)
                 ? "「" + support.columnName(workspaceId, to) + "」列内顺序调整"
-                : "从「" + support.columnName(workspaceId, from) + "」移动到「" + support.columnName(workspaceId, to) + "」";
+                : "从「" + support.columnName(workspaceId, from) + "」移动到「"
+                        + support.columnName(workspaceId, to) + "」" + moveSuffix(decision);
         /* 列内排序（from==to）不算流程事件，不写 from/to，免得把"停留"切成碎段 */
         audit.log(userId, workspaceId, id, "move", detail,
                 from.equals(to) ? null : from, from.equals(to) ? null : to);
@@ -214,17 +246,36 @@ public class TaskWorkflowService {
     @Transactional
     public Map<String, Object> bulkMove(String userId, String workspaceId, TaskBulkMoveRequest req) {
         support.validateColumn(workspaceId, req.getColumn());
+        List<String> taskIds = new ArrayList<String>();
         Set<String> seen = new HashSet<String>();
-        int moved = 0;
         for (String id : req.getIds()) {
             String taskId = Texts.trimToNull(id);
-            if (taskId == null || !seen.add(taskId)) {
-                continue;
+            if (taskId != null && seen.add(taskId)) {
+                taskIds.add(taskId);
             }
+        }
+        /* 先整批校验再动库：任一项被禁止或缺原因，整批不产生变更，错误信息带任务标题 */
+        boolean force = Boolean.TRUE.equals(req.getForce());
+        boolean canForce = canForce(userId, workspaceId, force);
+        for (String taskId : taskIds) {
+            Task task = support.require(workspaceId, taskId);
+            projectAccess.assertViewTask(workspaceId, userId, task);
+            projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+            try {
+                transitions.check(workspaceId, task.getBoardColumn(), req.getColumn(),
+                        req.getReason(), force, canForce);
+            } catch (AppException e) {
+                throw new AppException(e.getCode(), "「" + task.getTitle() + "」" + e.getMessage());
+            }
+        }
+        int moved = 0;
+        for (String taskId : taskIds) {
             TaskMoveRequest one = new TaskMoveRequest();
             one.setColumn(req.getColumn());
             one.setAutoTimer(req.getAutoTimer() != null && req.getAutoTimer());
             one.setAutoResume(req.getAutoResume() != null && req.getAutoResume());
+            one.setReason(req.getReason());
+            one.setForce(req.getForce());
             move(userId, workspaceId, taskId, one);
             moved++;
         }
@@ -239,7 +290,7 @@ public class TaskWorkflowService {
      * 优先用最近一次移入 done 的移动日志；列已被删除/找不到时依次回退到 doing、第一个非完成列、backlog。
      */
     @Transactional
-    public Map<String, Object> reopen(String userId, String workspaceId, String id) {
+    public Map<String, Object> reopen(String userId, String workspaceId, String id, TaskReopenRequest body) {
         Task task = support.require(workspaceId, id);
         if (!Consts.COL_DONE.equals(task.getBoardColumn())) {
             throw AppException.badRequest("任务不在已完成列，无需取消完成");
@@ -256,6 +307,10 @@ public class TaskWorkflowService {
         req.setColumn(target);
         req.setAutoTimer(false);
         req.setAutoResume(false);
+        if (body != null) {
+            req.setReason(body.getReason());
+            req.setForce(body.getForce());
+        }
         return move(userId, workspaceId, id, req);
     }
 
@@ -264,11 +319,13 @@ public class TaskWorkflowService {
      * 由 {@link TaskCommandService#update} 在落库前调用，保持与拖拽 move 相同的计时口径。
      */
     @org.springframework.transaction.annotation.Transactional
-    public void beforeEditColumnChange(String userId, String workspaceId, String id,
-                                       String from, String to) {
+    public String beforeEditColumnChange(String userId, String workspaceId, String id,
+                                         String from, String to, String reason, boolean force) {
         if (from == null || from.equals(to)) {
-            return;
+            return null;
         }
+        ColumnTransitionService.Decision decision = transitions.check(workspaceId, from, to,
+                reason, force, canForce(userId, workspaceId, force));
         if (Consts.COL_DONE.equals(to)) {
             timeLogService.closeRunningForTask(workspaceId, id, userId, "任务已完成");
             /* 抽屉里改成已完成也接力：进行中不该出现"谁都没在计时"的空档 */
@@ -277,6 +334,7 @@ public class TaskWorkflowService {
             /* 抽屉里改成不可计时列：工时保留，计时停掉 */
             timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
         }
+        return moveSuffix(decision);
     }
 
     /**
@@ -284,7 +342,8 @@ public class TaskWorkflowService {
      * 顺序与拖拽 move 一致；标签由调用方先落库，循环任务才能继承保存后的标签。
      */
     @org.springframework.transaction.annotation.Transactional
-    public void afterEditColumnChange(String userId, String workspaceId, Task task, String from) {
+    public void afterEditColumnChange(String userId, String workspaceId, Task task, String from,
+                                      String moveSuffix) {
         if (from == null || from.equals(task.getBoardColumn())) {
             return;
         }
@@ -300,7 +359,9 @@ public class TaskWorkflowService {
         }
         /* 抽屉里改列也是“移动”：流程体检只读 action=move 的日志，
            只记 update 会让这些移动在停留时长/返工率里凭空消失。 */
-        String detail = "从「" + support.columnName(workspaceId, from) + "」移动到「" + support.columnName(workspaceId, task.getBoardColumn()) + "」";
+        String detail = "从「" + support.columnName(workspaceId, from) + "」移动到「"
+                + support.columnName(workspaceId, task.getBoardColumn()) + "」"
+                + (moveSuffix == null ? "" : moveSuffix);
         audit.log(userId, workspaceId, task.getId(), "move", detail, from, task.getBoardColumn());
         /* 拖拽是独立动作，负责人在此即时通知；抽屉改列由编辑入口合并成一条，这里只发关注者 */
         notifyColumnMove(workspaceId, userId, task, detail, false);

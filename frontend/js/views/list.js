@@ -8,6 +8,7 @@ import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
+import { guard, serverDecision } from "../core/transitions.js";
 import { canEditTask, catTag, dueState, dueText, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
@@ -28,7 +29,7 @@ var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", subgroup:"none", hideDone:false,
   sort:"default", sortDir:"asc", collapsed:{} };
-var LIST_GROUPS = ["none", "status", "owner", "priority", "project"];
+var LIST_GROUPS = ["none", "status", "owner", "priority", "project", "category"];
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
@@ -140,10 +141,12 @@ function initSmartTable(){
     '<div class="smart-view-tools">' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
-        '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
+        '<option value="priority">按优先级</option><option value="project">按项目</option>' +
+        '<option value="category">按模块</option></select></label>' +
       '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-list-subgroup aria-label="二级分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
-        '<option value="priority">按优先级</option><option value="project">按项目</option></select></label>' +
+        '<option value="priority">按优先级</option><option value="project">按项目</option>' +
+        '<option value="category">按模块</option></select></label>' +
       '<button class="btn sm ghost list-hide-done" type="button" data-list-hide-done aria-pressed="false">隐藏已完成</button>' +
       '<span class="smart-list-sort"></span>' +
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
@@ -180,7 +183,7 @@ function initSmartTable(){
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
     [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
-     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按分类"],
+     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按模块"],
      ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
     ].map(function(o){
       return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>';
@@ -447,6 +450,7 @@ function groupInfoBy(t, dim){
   if(dim === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
   if(dim === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
+  if(dim === "category") return {key:t.category || "__none", label:t.category || "未指定模块"};
   return null;
 }
 function groupInfo(t){ return smart.group === "none" ? null : groupInfoBy(t, smart.group); }
@@ -460,6 +464,15 @@ function subgroupInfo(t){
   return dim === "none" ? null : groupInfoBy(t, dim);
 }
 function groupCompare(dim){
+  if(dim === "category"){
+    var order = {};
+    (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+    return function(a, b){
+      var ai = order[a.key] === undefined ? 999 : order[a.key];
+      var bi = order[b.key] === undefined ? 999 : order[b.key];
+      return ai - bi || a.label.localeCompare(b.label, "zh-CN");
+    };
+  }
   return function(a, b){
     if(dim === "status"){
       var ai = -1, bi = -1;
@@ -731,21 +744,46 @@ function bulkApply(patchFor, label){
 function bulkMoveTo(column){
   var ids = bulkIds();
   if(!ids.length) return;
-  UI.syncBusy(true);
-  API.post("/api/tasks/bulk-move", {
-    ids: ids,
-    column: column,
-    autoTimer: false,
-    autoResume: false
-  }).then(function(res){
-    UI.syncBusy(false);
-    toast("已批量移动到「" + colName(column) + "」：" + ((res && res.moved) || ids.length) + " 项", "fs");
-    loadList();
-    loadBoard({silent:true});
-    loadReqs();
-  }).catch(function(ex){
-    UI.syncBusy(false);
-    toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
+  var wsId = rt.currentWs && rt.currentWs.id;
+  var items = ids.map(function(id){
+    var t = rt.listCache[id];
+    return { from: t && t.boardColumn, title: t && t.title };
+  });
+  guard(wsId, items, column).then(function(pass){
+    if(!pass) return;
+    var body = { ids: ids, column: column, autoTimer: false, autoResume: false };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    var retried = false;
+    function fail(ex){
+      if(retried){
+        UI.syncBusy(false);
+        toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
+        return;
+      }
+      retried = true;
+      serverDecision(wsId, items, column, ex).then(function(retry){
+        if(!retry){
+          UI.syncBusy(false);
+          if(ex.code !== 422 && ex.code !== 412) toast("批量移动失败：" + (ex.message || "网络异常"), "bad");
+          return;
+        }
+        body.reason = retry.reason;
+        body.force = retry.force;
+        send();
+      });
+    }
+    function send(){
+      UI.syncBusy(true);
+      API.post("/api/tasks/bulk-move", body).then(function(res){
+        UI.syncBusy(false);
+        toast("已批量移动到「" + colName(column) + "」：" + ((res && res.moved) || ids.length) + " 项", "fs");
+        loadList();
+        loadBoard({silent:true});
+        loadReqs();
+      }).catch(fail);
+    }
+    send();
   });
 }
 function openBulkMenu(anchor, kind){
@@ -981,11 +1019,33 @@ function openRowMenu(anchor, id){
     }
     if(mv){
       var to = mv.dataset.rowMove;
-      API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", {column: to}).then(function(res){
-        toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
-          (res.autoTimerStarted ? " · 已开始计时" : ""));
-        loadList(); loadBoard({silent:true}); loadReqs();
-      }).catch(function(ex){ toast(ex.message || "移动失败", "bad"); });
+      var wsId = rt.currentWs && rt.currentWs.id;
+      var items = [{ from: t.boardColumn, title: t.title }];
+      guard(wsId, items, to).then(function(pass){
+        if(!pass) return;
+        var body = { column: to };
+        if(pass.reason) body.reason = pass.reason;
+        if(pass.force) body.force = true;
+        var retried = false;
+        function fail(ex){
+          if(retried){ toast(ex.message || "移动失败", "bad"); return; }
+          retried = true;
+          serverDecision(wsId, items, to, ex).then(function(retry){
+            if(!retry){ if(ex.code !== 422 && ex.code !== 412) toast(ex.message || "移动失败", "bad"); return; }
+            body.reason = retry.reason;
+            body.force = retry.force;
+            send();
+          });
+        }
+        function send(){
+          API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body).then(function(res){
+            toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
+              (res.autoTimerStarted ? " · 已开始计时" : ""));
+            loadList(); loadBoard({silent:true}); loadReqs();
+          }).catch(fail);
+        }
+        send();
+      });
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});

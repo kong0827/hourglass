@@ -174,7 +174,7 @@ var reviewPivot = (function(){
   }catch(e){ /* 受限环境忽略 */ }
   return {row:"owner", col:"reqId"};
 })();
-var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "分类"], ["column", "状态"]];
+var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "模块"], ["column", "状态"]];
 var reviewPivotState = null;
 function pivotDimLabel(dim){
   for(var i = 0; i < PIVOT_DIMS.length; i++) if(PIVOT_DIMS[i][0] === dim) return PIVOT_DIMS[i][1];
@@ -184,7 +184,7 @@ function pivotValue(t, dim){
   if(dim === "owner") return t.owner || "未分配";
   if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
   if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
-  if(dim === "category") return t.category || "未分类";
+  if(dim === "category") return t.category || "未指定模块";
   if(dim === "column") return colName(t.boardColumn) || "未设置";
   return "—";
 }

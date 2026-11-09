@@ -112,7 +112,7 @@ public class TaskQueryService {
     }
 
     /**
-     * IA-3 / TOP-6：我的任务收件箱接入统一筛选（q / 优先级 / 分类 / 项目 / 标签 / 被阻塞），
+     * IA-3 / TOP-6：我的任务收件箱接入统一筛选（q / 优先级 / 模块 / 项目 / 标签 / 被阻塞），
      * 并按 offset/limit 分页下推 SQL。total / hasMore 基于独立 COUNT，不受本页条目数影响。
      */
     public MyTasksPage myTasksPage(String userId, String displayName, boolean openOnly,
@@ -447,7 +447,7 @@ public class TaskQueryService {
 
     /** 日历视图：与指定月份有交集的全部任务（默认当月）。
      *  区间口径：[start_date, due_date]；没填开始日期（或数据异常）时退化为"只占截止日那一格"，
-     *  与升级前的行为一致。IA-4：支持与看板/列表相同的筛选（负责人、优先级、分类、项目、标签、关键词）。 */
+     *  与升级前的行为一致。IA-4：支持与看板/列表相同的筛选（负责人、优先级、模块、项目、标签、关键词）。 */
     public CalendarResponse calendar(String workspaceId, String userId, Integer year, Integer month) {
         return calendar(workspaceId, userId, year, month, new BoardQuery());
     }
@@ -625,7 +625,7 @@ public class TaskQueryService {
     private boolean match(Task t, BoardQuery query, LocalDate today) {
         if (query.getQ() != null) {
             String q = query.getQ().toLowerCase(Locale.ROOT);
-            /* O-8：搜索范围从「标题/描述/备注」扩到 项目名 / 分类 / 标签 / 附件文件名（searchExtra 在 mergeTaskExtras 里拼好） */
+            /* O-8：搜索范围从「标题/描述/备注」扩到 项目名 / 模块 / 标签 / 附件文件名（searchExtra 在 mergeTaskExtras 里拼好） */
             if (!contains(t.getTitle(), q) && !contains(t.getDescription(), q) && !contains(t.getNote(), q)
                     && !contains(t.getCategory(), q) && !contains(t.getSearchExtra(), q)
                     && !tagContains(t, q)) {

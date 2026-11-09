@@ -147,7 +147,7 @@ public class TimeLogService {
         Task task = ensureTask(workspaceId, taskId);
         projectAccess.assertWrite(workspaceId, userId, task.getReqId());
         if (!support.canTime(workspaceId, task.getBoardColumn())) {
-            throw AppException.badRequest("当前列不允许计时，请先把任务移到「正常处理」列");
+            throw AppException.badRequest("当前列不计时，请先移到处理规则为「正常计时」的列");
         }
         return start(userId, workspaceId, taskId);
     }

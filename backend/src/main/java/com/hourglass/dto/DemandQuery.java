@@ -18,6 +18,8 @@ public class DemandQuery {
     private String q;
     private List<String> pris = new ArrayList<String>();
     private List<String> kinds = new ArrayList<String>();
+    /** 模块名列表（空串表示未指定模块） */
+    private List<String> cats = new ArrayList<String>();
     /** 项目ID列表 */
     private List<String> reqs = new ArrayList<String>();
     /** default/priority/expect/wsjf/created */

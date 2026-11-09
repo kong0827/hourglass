@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * 甘特图 SQL 查询参数。
  *
- * 与看板 BoardQuery 的语义逐条对齐（q 命中标题/描述/备注/分类/项目名/标签/附件名；
+ * 与看板 BoardQuery 的语义逐条对齐（q 命中标题/描述/备注/模块/项目名/标签/附件名；
  * due 的 over/today/soon 与 TaskCalc.dueKind 一致；focus = 逾期/今天到期 或 进行中的 P0）。
  * reqs 里的 __none 拆成 reqNone 标记，避免在 XML 里做列表 contains 判断。
  */

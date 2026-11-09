@@ -290,7 +290,7 @@
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、分类、标签与项目">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、模块、标签与项目">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -345,6 +345,7 @@
                   <option value="priority">按优先级</option>
                   <option value="status">按状态</option>
                   <option value="project">按项目</option>
+                  <option value="category">按模块</option>
                   <option value="none">不分组</option>
                 </select>
               </label>
@@ -502,7 +503,7 @@
                   <option value="project">按项目</option>
                   <option value="owner">按负责人</option>
                   <option value="status">按状态</option>
-                  <option value="category">按分类</option>
+                  <option value="category">按模块</option>
                   <option value="priority">按优先级</option>
                 </select>
               </label>
@@ -616,7 +617,7 @@
                 </div>
                 <div class="field">
                   <label for="rDesc">项目描述</label>
-                  <textarea id="rDesc" maxlength="160" placeholder="选填：目标、范围、验收标准…"></textarea>
+                  <textarea id="rDesc" maxlength="1000" placeholder="选填：目标、范围、验收标准…"></textarea>
                 </div>
                 <div class="field">
                   <label for="rObjective">项目目标</label>
@@ -703,7 +704,7 @@
               </div>
               <div class="field">
                 <label for="vDesc">版本说明</label>
-                <textarea id="vDesc" maxlength="160" placeholder="选填：这一版要交付什么…"></textarea>
+                <textarea id="vDesc" maxlength="500" placeholder="选填：这一版要交付什么…"></textarea>
               </div>
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnSaveVer">创建版本</button>
@@ -805,6 +806,10 @@
                     <option value="其他">其他</option>
                   </select>
                 </div>
+              </div>
+              <div class="field">
+                <label for="dCategory">模块</label>
+                <select id="dCategory"></select>
               </div>
               <div class="field">
                 <label>优先级</label>
@@ -1540,7 +1545,7 @@
               </span>
             </div>
             <div class="tbl-wrap" id="reviewPivot"></div>
-            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
+            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与模块。</p>
           </div>
 
           <div class="panel">
@@ -1563,7 +1568,7 @@
               <div class="people" id="peopleBox"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><h3>分类分布</h3></div>
+              <div class="panel-head"><h3>模块分布</h3></div>
               <div class="dist" id="catDist"></div>
             </div>
           </div>
@@ -1631,7 +1636,7 @@
           </div>
           <div class="duo">
             <div class="panel">
-              <div class="panel-head"><h3>完成分布 · 按分类</h3><span class="meta-right" id="statsRange1">—</span></div>
+              <div class="panel-head"><h3>完成分布 · 按模块</h3><span class="meta-right" id="statsRange1">—</span></div>
               <div class="dist" id="statsCat"></div>
             </div>
             <div class="panel">
@@ -1926,34 +1931,57 @@
                 <h3>看板列</h3>
                 <span class="meta-right">拖拽/按钮调整顺序</span>
               </div>
-              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。自定义列可设处理规则：正常处理（可计时、计逾期）、等待接续（停表、计逾期）、执行结束（停表、不计逾期）。删除列时其工作项移入最靠前的列。</p>
+              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。处理规则决定这一列的工作项还计不计时、算不算逾期：<br>
+                正常计时：可以计时，逾期照常计算；<br>
+                暂停计时：停止计时，逾期照常计算（例如等待外部反馈）；<br>
+                结束计时：停止计时，也不再计算逾期（例如待发布、待验收）。<br>
+                删除列时其工作项移入最靠前的列。</p>
               <div class="cfg-list" id="colCfgList"></div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
                 <input type="text" id="colNewName" maxlength="12" placeholder="新列名，如：待验收" />
-                <select id="colNewRule" class="mini-select" aria-label="新列处理规则">
-                  <option value="normal">正常处理</option>
-                  <option value="waiting">等待接续</option>
-                  <option value="ended">执行结束</option>
+                <select id="colNewRule" class="mini-select" aria-label="新列处理规则" title="正常计时：计时且计逾期；暂停计时：停表仍计逾期；结束计时：停表且不计逾期">
+                  <option value="normal">正常计时（算逾期）</option>
+                  <option value="waiting">暂停计时（算逾期）</option>
+                  <option value="ended">结束计时（不计逾期）</option>
                 </select>
                 <button class="btn sm" type="button" id="btnColAdd">添加列</button>
               </div>
               <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
             </div>
 
+            <div class="panel" data-set-pane="workflow" id="set-transitions">
+              <div class="panel-head">
+                <h3>状态流转</h3>
+                <span class="meta-right" id="colTransSummary"></span>
+              </div>
+              <p class="set-hint">行是当前列，列是目标列；同列内是排序，不在矩阵里。默认全部允许，「已完成」移到其他列默认需填原因。点格子按「允许 → 需填原因 → 禁止」循环，改动立即生效。</p>
+              <div class="trans-matrix-wrap"><div id="colTransMatrix"></div></div>
+              <div class="trans-legend">
+                <span><i class="trans-dot allow"></i>允许</span>
+                <span><i class="trans-dot reason"></i>需填原因</span>
+                <span><i class="trans-dot deny"></i>禁止</span>
+                <span class="foot-note">空间主 / 管理员可强制越过「禁止」</span>
+              </div>
+              <div class="set-actions">
+                <button class="btn" type="button" id="btnTransReset">恢复默认</button>
+                <span class="foot-note" id="colTransHint"></span>
+              </div>
+            </div>
+
             <div class="panel" data-set-pane="workflow" id="set-cats">
               <div class="panel-head">
-                <h3>分类</h3>
+                <h3>模块</h3>
                 <span class="meta-right" id="catCount"></span>
               </div>
-              <p class="set-hint">分类按空间配置，改名会同步到已有工作项；删除分类时其工作项改到第一个分类。</p>
+              <p class="set-hint">模块按空间配置，改名会同步到已有工作项；删除模块时其工作项改到第一个模块。</p>
               <div class="cfg-list" id="catCfgList"></div>
               <div class="cfg-add">
-                <input type="color" id="catNewColor" value="#98A2B3" title="新分类颜色" aria-label="新分类颜色" />
-                <input type="text" id="catNewName" maxlength="12" placeholder="新分类名，如：客户跟进" />
-                <button class="btn sm" type="button" id="btnCatAdd">添加分类</button>
+                <input type="color" id="catNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
+                <input type="text" id="catNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
+                <button class="btn sm" type="button" id="btnCatAdd">添加模块</button>
               </div>
-              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看分类配置，不能新增、改名、改色或排序。</p>
+              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-priorities">
@@ -1991,8 +2019,8 @@
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
-              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/模块/优先级显示设置。</p>
+              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/模块、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-activity">
@@ -2000,7 +2028,7 @@
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
               </div>
-              <p class="set-hint">空间内的工作项操作与配置变更记录（按时间倒序，每次加载 100 条）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
+              <p class="set-hint">空间内的工作项操作与配置变更记录（按时间倒序，每次加载 100 条）。删除列/模块/项目这类破坏性操作也会出现在这里。</p>
               <div class="act-list" id="actList"></div>
             </div>
 
@@ -2347,18 +2375,50 @@
   <form class="drawer" id="taskForm" novalidate>
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="drawer-head">
-      <h2 id="taskDrawerTitle">新建工作项</h2>
-      <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
-        新建工作项
-      </button>
-      <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
-        <span id="taskWatchLabel">关注</span>
-      </button>
-      <button class="icon-btn" type="button" id="btnCloseTask" aria-label="关闭">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
-      </button>
+      <span class="head-icon t-task" id="taskDrawerIcon" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>
+      </span>
+      <div class="head-txt">
+        <h2 id="taskDrawerTitle">新建工作项</h2>
+        <div class="head-sub" id="taskDrawerSub"></div>
+      </div>
+      <div class="head-tools">
+        <button class="btn sm" type="button" id="btnTaskNew" hidden title="按当前工作项所属项目新建工作项">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+          新建工作项
+        </button>
+        <button class="btn sm" type="button" id="btnTaskWatch" hidden aria-pressed="false">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.6 4.6 0 0 1 4.6 4.6c0 3.4 1.1 4.6 1.1 4.6H4.3s1.1-1.2 1.1-4.6A4.6 4.6 0 0 1 10 3.2z"/><path d="M8.4 15.2a1.8 1.8 0 0 0 3.2 0"/></svg>
+          <span id="taskWatchLabel">关注</span>
+        </button>
+        <div class="head-more-wrap">
+          <button class="icon-btn sm" type="button" id="btnTaskMore" aria-label="更多操作" aria-haspopup="true" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="4.6" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="menu" id="taskMoreMenu" hidden>
+            <button class="menu-item" type="button" data-task-more="copy-link">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.4 11.6a3.4 3.4 0 0 0 4.8 0l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8L9.8 5.4"/><path d="M11.6 8.4a3.4 3.4 0 0 0-4.8 0L4.2 11a3.4 3.4 0 0 0 4.8 4.8l1.1-1.1"/></svg>
+              复制工作项链接
+            </button>
+            <button class="menu-item" type="button" data-task-more="copy-title">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
+              复制标题
+            </button>
+            <button class="menu-item" type="button" data-task-more="save-continue" id="taskMoreSaveContinue" hidden>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.6h9.2L16.4 6.8v9.6H3.6z"/><path d="M7 3.6v4.2h5.4V3.6M7 16.4v-3.6h6v3.6"/></svg>
+              保存并继续
+            </button>
+            <div class="menu-sep"></div>
+            <button class="menu-item danger" type="button" data-task-more="trash" id="taskMoreTrash">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
+              移到回收站
+            </button>
+          </div>
+        </div>
+        <button class="icon-btn" type="button" id="btnCloseTask" aria-label="关闭">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+        </button>
+      </div>
     </div>
 
     <div class="drawer-notice" id="drawerNotice" hidden>
@@ -2367,92 +2427,175 @@
       <button type="button" id="drawerNoticeReload">点击刷新</button>
     </div>
 
-    <div class="drawer-status" id="taskStatusBar">
-      <div class="seg mini grid4" id="segPri" style="width:180px"></div>
-      <select class="mini-select" id="iCol" aria-label="所在列"></select>
-      <span style="flex:1 1 auto"></span>
-      <div style="position:relative">
-        <button class="icon-btn sm" type="button" id="btnTaskMore" aria-label="更多操作" aria-haspopup="true" aria-expanded="false">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="4.6" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.4" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg>
-        </button>
-        <div class="menu" id="taskMoreMenu" hidden style="right:0;top:calc(100% + 6px)">
-          <button class="menu-item" type="button" data-task-more="copy-link">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.4 11.6a3.4 3.4 0 0 0 4.8 0l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8L9.8 5.4"/><path d="M11.6 8.4a3.4 3.4 0 0 0-4.8 0L4.2 11a3.4 3.4 0 0 0 4.8 4.8l1.1-1.1"/></svg>
-            复制工作项链接
-          </button>
-          <button class="menu-item" type="button" data-task-more="copy-title">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7.2" y="7.2" width="9.4" height="9.4" rx="2.2"/><path d="M12.8 4.2H5.4a2 2 0 0 0-2 2v7.4"/></svg>
-            复制标题
-          </button>
-          <button class="menu-item" type="button" data-task-more="save-continue" id="taskMoreSaveContinue" hidden>
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.6h9.2L16.4 6.8v9.6H3.6z"/><path d="M7 3.6v4.2h5.4V3.6M7 16.4v-3.6h6v3.6"/></svg>
-            保存并继续
-          </button>
-          <div class="menu-sep"></div>
-          <button class="menu-item danger" type="button" data-task-more="trash" id="taskMoreTrash">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 5.6h12.8M8.2 5.6V3.8h3.6v1.8M5.4 5.6l.8 10.2h7.6l.8-10.2"/></svg>
-            移到回收站
-          </button>
+    <div class="drawer-body">
+      <!-- 标题：最高优先级字段 -->
+      <div class="title-wrap" id="fTitle">
+        <div class="title-row">
+          <label class="sr-only" for="iTitle">工作项标题</label>
+          <input class="title-input" id="iTitle" type="text" maxlength="60" placeholder="一句话说清要做什么，例如：重构权限校验中间件" autocomplete="off" />
+          <span class="req-chip">必填</span>
+        </div>
+        <div class="title-foot">
+          <span class="err">请填写工作项标题</span>
+          <span class="counter" id="iTitleCount">0/60</span>
         </div>
       </div>
-    </div>
 
-    <div class="drawer-body">
-      <div class="task-detail-layout">
-      <div class="stack task-detail-main">
-        <!-- 基本信息 -->
-        <div class="drawer-field-group">
-          <h3 class="drawer-group-title">基本信息</h3>
-          <div class="field" id="fTitle">
-            <label for="iTitle">工作项标题 <span class="req">*</span></label>
-            <input id="iTitle" type="text" maxlength="60" placeholder="例如：重构权限校验中间件" autocomplete="off" />
-            <span class="err">请填写工作项标题</span>
-          </div>
-
-          <div class="field">
-            <label for="iDesc">工作项描述</label>
-            <textarea id="iDesc" maxlength="200" placeholder="选填：目标、验收标准、注意事项…" style="min-height:88px"></textarea>
-          </div>
-
-          <div class="field">
-            <div class="label-row">
-              <label for="iItemType">工作项类型</label>
-              <button type="button" class="label-help" id="iItemTypeHelp" aria-label="查看各类型的区别说明" title="各类型的区别"></button>
-            </div>
-            <select id="iItemType">
-              <option value="task">任务</option>
-              <option value="story">用户故事</option>
-              <option value="bug">缺陷</option>
-              <option value="epic">史诗</option>
-            </select>
-            <span class="hint" id="iItemTypeHint">缺陷计入迭代维护的缺陷口径，用户故事计入新增需求口径</span>
-          </div>
-
-          <div class="field">
-            <label for="iTags">标签 <span class="foot-note" style="font-weight:400">（回车或逗号添加，最多 8 个，每个 ≤16 字）</span></label>
-            <div class="tag-input-wrap" id="tagWrap">
-              <input id="iTags" type="text" maxlength="16" placeholder="输入后回车添加…" autocomplete="off" list="tagOptions" aria-label="添加标签" />
-            </div>
-            <datalist id="tagOptions"></datalist>
-          </div>
+      <!-- 类型 + 优先级：两个分类动作合成一行 -->
+      <div class="classify">
+        <span class="seg-label">类型
+          <button type="button" class="label-help" id="iItemTypeHelp" aria-label="查看各类型的区别说明" title="各类型的区别"></button>
+        </span>
+        <div class="type-group" id="typeGroup" role="group" aria-label="工作项类型">
+          <button class="type-btn" type="button" data-type="task" aria-pressed="true">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.4" y="3.8" width="11.2" height="12.8" rx="2"/><path d="M7.6 3.8V2.6h4.8v1.2M7.4 8.2h5.2M7.4 11.2h3.6"/></svg>任务
+          </button>
+          <button class="type-btn" type="button" data-type="story" aria-pressed="false">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 3.4h9.6v13.2L10 13.6l-4.8 3z"/></svg>用户故事
+          </button>
+          <button class="type-btn" type="button" data-type="bug" aria-pressed="false">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10.6" r="4.6"/><path d="M10 6V3.4M6.2 7.6 4.4 5.8M13.8 7.6l1.8-1.8M5.4 10.6H2.8M17.2 10.6h-2.6M6.2 13.6l-1.8 1.8M13.8 13.6l1.8 1.8"/></svg>缺陷
+          </button>
+          <button class="type-btn" type="button" data-type="epic" aria-pressed="false">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 3.6 6.4 10 9.8l6.4-3.4z"/><path d="m3.6 10 6.4 3.4L16.4 10"/><path d="m3.6 13.4 6.4 3.4 6.4-3.4"/></svg>史诗
+          </button>
         </div>
+        <select id="iItemType" hidden>
+          <option value="task">任务</option>
+          <option value="story">用户故事</option>
+          <option value="bug">缺陷</option>
+          <option value="epic">史诗</option>
+        </select>
+        <span class="vdiv" aria-hidden="true"></span>
+        <span class="seg-label">优先级</span>
+        <div class="pri-group" id="segPri" role="group" aria-label="优先级"></div>
+      </div>
 
-        <!-- 更多字段：低频字段默认收起，编辑已有任务时展开，避免隐藏已填内容 -->
-        <details class="drawer-more" id="drawerMore">
-          <summary>
-            <span>更多字段</span>
-            <span class="foot-note">类型、标签、版本、史诗、分支、循环与提醒</span>
-          </summary>
-          <div class="drawer-more-body" id="drawerMoreBody"></div>
-        </details>
+      <!-- 归属与分配：高亮信息条 -->
+      <div class="ctx" aria-label="归属与分配">
+        <div class="ctx-item">
+          <label class="ctx-label" for="iReq">所属项目 <span class="auto" id="autoProject" hidden>自动</span></label>
+          <select id="iReq"></select>
+        </div>
+        <div class="ctx-item">
+          <label class="ctx-label" for="iOwner">负责人</label>
+          <select id="iOwner"></select>
+        </div>
+        <div class="ctx-item">
+          <label class="ctx-label" for="iCol" id="ctxColLabel">创建到</label>
+          <select id="iCol" aria-label="创建到哪一列"></select>
+        </div>
+      </div>
 
-        <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
-        <div class="drawer-field-group" id="fDefect" hidden>
-          <h3 class="drawer-group-title">缺陷信息</h3>
-          <div class="form-grid">
+      <!-- 主体：内容 / 计划 / 缺陷 / 更多 + 关联 -->
+      <div class="task-detail-layout">
+        <div class="task-detail-main stack">
+          <section class="drawer-card">
+            <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">只有标题必填</span></div>
+            <div class="field">
+              <label class="field-label" for="iDesc">描述</label>
+              <textarea id="iDesc" maxlength="2000" placeholder="目标、验收标准、注意事项…（可选）" style="min-height:76px"></textarea>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <div class="field-label"><label for="iTags">标签</label><span class="foot-note" style="margin-left:auto">回车或逗号添加 · 最多 8 个</span></div>
+              <div class="tag-input-wrap" id="tagWrap">
+                <input id="iTags" type="text" maxlength="16" placeholder="添加标签…" autocomplete="off" list="tagOptions" aria-label="添加标签" />
+              </div>
+              <datalist id="tagOptions"></datalist>
+            </div>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card-head"><h3>计划</h3><span class="foot-note">开始留空则只在截止日出现</span></div>
+            <div class="date-row">
+              <div class="field">
+                <label class="field-label" for="iStart">开始日期</label>
+                <input id="iStart" type="date" />
+              </div>
+              <div class="date-arrow" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M11.6 5.6 16 10l-4.4 4.4"/></svg>
+              </div>
+              <div class="field">
+                <label class="field-label" for="iDue">截止日期</label>
+                <input id="iDue" type="date" />
+              </div>
+            </div>
+            <div class="quick-row" id="segStart" role="group" aria-label="开始日期快捷">
+              <span class="hint-inline">开始快捷</span>
+              <button class="chip" type="button" data-start="0">今天</button>
+              <button class="chip ghost" type="button" data-start="">清空</button>
+            </div>
+            <div class="quick-row" id="segDue" role="group" aria-label="截止日期快捷">
+              <span class="hint-inline">截止快捷</span>
+              <button class="chip" type="button" data-due="0">今天</button>
+              <button class="chip" type="button" data-due="1">明天</button>
+              <button class="chip" type="button" data-due="fri">本周五</button>
+              <button class="chip" type="button" data-due="mon">下周一</button>
+              <button class="chip ghost" type="button" data-due="clear">清空</button>
+              <span class="due-note" id="dueNote"></span>
+            </div>
+            <div class="form-grid" style="margin-top:11px">
+              <div class="field">
+                <label class="field-label" for="iEstimate">预计耗时 <span class="foot-note">可选</span></label>
+                <div class="est-wrap">
+                  <input id="iEstimate" type="number" min="0" max="168" step="0.5" placeholder="例如 4" />
+                  <span class="est-unit">小时</span>
+                </div>
+                <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
+              </div>
+              <div class="field">
+                <div class="field-label">节点</div>
+                <label class="row row-gap" style="gap:8px;height:32px">
+                  <input type="checkbox" class="cbx" id="iMilestone" />
+                  <span class="toolbar-meta is-strong">里程碑（单日节点）</span>
+                </label>
+                <span class="hint">勾选后甘特图用菱形展示，不占工期</span>
+              </div>
+            </div>
+
+            <!-- 进度与投入：编辑已有工作项时展示 -->
+            <div class="drawer-edit-block" id="fProgress" hidden>
+              <div class="form-grid" style="margin-top:12px">
+                <div class="field">
+                  <div class="field-label">实际投入</div>
+                  <div class="est-actual" id="iActual">—</div>
+                  <span class="hint" id="iActualHint">按工作时段折算的计时累计</span>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="iProg">当前进度</label>
+                  <div class="progress" id="progWrap">
+                    <input id="iProg" type="range" min="0" max="100" step="5" value="0" aria-label="当前进度百分比" />
+                    <span class="pv" id="progVal">0%</span>
+                  </div>
+                  <span class="hint" id="progHint">0–100，拖到 100% 不会自动标记完成（完成以「移入已完成列」为准）</span>
+                </div>
+              </div>
+              <div class="seg mini" id="segProg" style="margin-top:8px">
+                <button type="button" data-prog="0">0</button>
+                <button type="button" data-prog="25">25</button>
+                <button type="button" data-prog="50">50</button>
+                <button type="button" data-prog="75">75</button>
+                <button type="button" data-prog="100">100</button>
+              </div>
+              <div class="field" style="margin-top:10px">
+                <label class="field-label" for="iNote">进度备注</label>
+                <input id="iNote" type="text" maxlength="80" placeholder="本次推进到哪一步、卡点在哪里…" autocomplete="off" />
+              </div>
+            </div>
+          </section>
+
+          <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
+          <section class="drawer-card drawer-card-defect" id="fDefect" hidden>
+            <div class="drawer-card-head"><h3>缺陷信息</h3><span class="foot-note">严重度必填，其余可后补</span></div>
             <div class="field" id="fSeverity">
-              <label for="iSeverity">严重度 <span class="req">*</span></label>
-              <select id="iSeverity">
+              <div class="field-label">严重度 <span class="req">*</span></div>
+              <div class="sev-grid" id="sevGrid" role="group" aria-label="严重度" tabindex="-1">
+                <button class="sev" type="button" data-sev="blocker"><i></i>阻断</button>
+                <button class="sev" type="button" data-sev="critical"><i></i>严重</button>
+                <button class="sev" type="button" data-sev="major"><i></i>一般</button>
+                <button class="sev" type="button" data-sev="minor"><i></i>轻微</button>
+              </div>
+              <select id="iSeverity" hidden>
                 <option value="">请选择</option>
                 <option value="blocker">阻断</option>
                 <option value="critical">严重</option>
@@ -2461,41 +2604,174 @@
               </select>
               <span class="err">缺陷必须选择严重度</span>
             </div>
-            <div class="field">
-              <label for="iFoundVersion">发现版本</label>
-              <select id="iFoundVersion"></select>
+            <div class="form-grid" style="margin-top:11px">
+              <div class="field">
+                <label class="field-label" for="iFoundVersion">发现版本</label>
+                <select id="iFoundVersion"></select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="iEnvironment">发现环境</label>
+                <input id="iEnvironment" type="text" maxlength="120" placeholder="浏览器 / 系统 / 环境" autocomplete="off" />
+              </div>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <label class="field-label" for="iReproSteps">复现步骤</label>
+              <textarea id="iReproSteps" maxlength="2000" placeholder="1. 进入…&#10;2. 点击…&#10;3. 期望…实际…" style="min-height:76px"></textarea>
+            </div>
+            <div class="field" id="fRegression" hidden style="margin-top:11px">
+              <label class="field-label" for="iRegression">回归状态</label>
+              <select id="iRegression">
+                <option value="">未开始</option>
+                <option value="pending">待回归</option>
+                <option value="passed">回归通过</option>
+                <option value="failed">回归失败</option>
+              </select>
+              <span class="hint">修复完成后由测试同学回填，管理报表按此口径统计缺陷关闭</span>
+            </div>
+          </section>
+
+          <!-- 低频设置收进折叠区 -->
+          <details class="drawer-more drawer-settings" id="drawerMore">
+            <summary>
+              <span>更多设置</span>
+              <span class="foot-note" id="drawerMoreSummary">· 模块：未设置</span>
+              <span class="caret"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </summary>
+            <div class="drawer-more-body drawer-settings-body" id="drawerMoreBody">
+              <div class="field span2">
+                <div class="field-label">模块</div>
+                <div class="seg" id="segCat"></div>
+              </div>
+              <div class="field">
+                <div class="field-label">循环</div>
+                <div class="seg grid4" id="segRecur"></div>
+              </div>
+              <div class="field">
+                <label class="field-label" for="iRemindTarget">提醒谁</label>
+                <select id="iRemindTarget">
+                  <option value="owner">仅负责人</option>
+                  <option value="owner+admin">负责人 + 空间主</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="iRemind">提醒时间</label>
+                <input id="iRemind" type="datetime-local" />
+              </div>
+              <div class="field">
+                <div class="field-label">阻塞 / 卡点</div>
+                <div class="blocked-row">
+                  <label class="sw"><input type="checkbox" id="iBlocked" /> 被阻塞</label>
+                  <input id="iBlockedReason" class="input" type="text" maxlength="120" placeholder="等谁 / 等什么 / 预计何时解除" disabled />
+                </div>
+              </div>
+              <div class="field span2">
+                <span class="hint">被阻塞的工作项在卡片上会显示橙色条纹，可在筛选栏「更多筛选 → 仅看被阻塞」里集中查看。</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- 检查清单 -->
+          <div class="drawer-sect collapsed" id="fSubtasks" hidden>
+            <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
+              <h3>检查清单</h3><span class="cnt" id="subCount"></span>
+              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </div>
+            <div class="drawer-sect-body">
+              <div class="sub-list" id="subList"></div>
+              <input id="iSubNew" class="input" type="text" maxlength="60" placeholder="添加一项，回车确认" autocomplete="off" style="margin-top:8px" />
             </div>
           </div>
-          <div class="field">
-            <label for="iEnvironment">发现环境</label>
-            <input id="iEnvironment" type="text" maxlength="120" placeholder="例如：生产环境 / Chrome 120 / Windows 11" autocomplete="off" />
+
+          <!-- 附件 -->
+          <div class="drawer-sect collapsed" id="fAttach" hidden>
+            <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
+              <h3>附件</h3><span class="cnt" id="attachCount"></span>
+              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </div>
+            <div class="drawer-sect-body">
+              <div class="attach-list" id="attachList"></div>
+              <div class="row row-gap" style="margin-top:8px">
+                <button class="btn sm" type="button" id="btnAttach">上传文件（≤10MB）</button>
+                <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx</span>
+                <input type="file" id="iAttachFile" hidden />
+              </div>
+            </div>
           </div>
-          <div class="field">
-            <label for="iReproSteps">复现步骤</label>
-            <textarea id="iReproSteps" maxlength="2000" placeholder="1. 进入…&#10;2. 点击…&#10;3. 期望…实际…" style="min-height:88px"></textarea>
+
+          <!-- 工时 -->
+          <div class="drawer-sect collapsed" id="fWork" hidden>
+            <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
+              <h3>工时</h3>
+              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </div>
+            <div class="drawer-sect-body">
+              <div class="work-row">
+                <span class="work-val" id="workVal">—</span>
+                <button class="btn sm" type="button" id="btnTimer">开始计时</button>
+                <button class="btn sm ghost" type="button" id="btnTimerAdd" title="手工补记一条实际工时（忘开表、加班等）">
+                  <span data-icon="plus"></span>&nbsp;补记
+                </button>
+              </div>
+              <div class="work-log" id="workLogList"></div>
+            </div>
           </div>
-          <div class="field">
-            <label for="iRegression">回归状态</label>
-            <select id="iRegression">
-              <option value="">未开始</option>
-              <option value="pending">待回归</option>
-              <option value="passed">回归通过</option>
-              <option value="failed">回归失败</option>
-            </select>
-            <span class="hint">修复完成后由测试同学回填，管理报表按此口径统计缺陷关闭</span>
+
+          <!-- 时间线 -->
+          <div class="drawer-sect collapsed" id="fTimeline" hidden>
+            <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
+              <h3>操作时间线</h3>
+              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+            </div>
+            <div class="drawer-sect-body">
+              <div class="timeline" id="timelineBox"></div>
+            </div>
           </div>
         </div>
 
-        <!-- 归属关系 -->
-        <div class="drawer-field-group">
-          <h3 class="drawer-group-title">归属关系</h3>
-          <div class="form-grid">
-            <div class="field">
-              <label for="iReq">所属项目</label>
-              <select id="iReq"></select>
+        <aside class="task-detail-side">
+          <section class="source-card" id="drawerSource" hidden aria-live="polite">
+            <div class="source-head">
+              <span class="source-badge">来自需求池</span>
+              <button class="link-btn" type="button" id="drawerSourceRemove">移除关联</button>
             </div>
+            <h4 id="drawerSourceTitle"></h4>
+            <div class="source-meta" id="drawerSourceMeta"></div>
+            <div class="source-auto">
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2v13.6M3.2 10h13.6"/></svg>
+              <span>已自动带出：所属项目</span>
+            </div>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">选需求或文档会自动同步项目</span></div>
             <div class="field">
-              <div class="label-row">
+              <label class="field-label" for="iVersion">影响版本</label>
+              <select id="iVersion"></select>
+              <span class="hint" id="iVersionHint">先选项目，再选该项目的版本；不选即「待规划」</span>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <div class="field-label">
+                <label for="iEpic">所属史诗</label>
+                <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
+              </div>
+              <select id="iEpic"></select>
+              <span class="hint" id="iEpicHint">先选项目，再把当前工作项挂到该项目的一个史诗（Epic）下</span>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <label class="field-label" for="iBranch">所属分支</label>
+              <select id="iBranch"></select>
+              <span class="hint" id="iBranchHint">分支在「分支」页里建，这里只负责挂上去</span>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <div class="field-label">
+                <label for="iDemand">关联需求</label>
+                <button type="button" class="label-link" id="iDemandView" hidden>查看</button>
+              </div>
+              <select id="iDemand"></select>
+              <span class="hint" id="iDemandHint">先选项目，再从该项目的需求池条目里挑；未选项目时直接挑需求，会自动带出所属项目</span>
+            </div>
+            <div class="field" style="margin-top:11px">
+              <div class="field-label">
                 <label for="iReqDocPicker">关联文档</label>
                 <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
               </div>
@@ -2506,241 +2782,42 @@
               <select id="iReqDoc" hidden tabindex="-1" aria-hidden="true"></select>
               <span class="hint" id="iReqDocHint">无需先选项目，可搜索全部可见文档</span>
             </div>
-            <div class="field">
-              <div class="label-row">
-                <label for="iDemand">关联需求</label>
-                <button type="button" class="label-link" id="iDemandView" hidden>查看</button>
-              </div>
-              <select id="iDemand"></select>
-              <span class="hint" id="iDemandHint">先选项目，再从该项目的需求池条目里挑；未选项目时直接挑需求，会自动带出所属项目</span>
+          </section>
+
+          <!-- 评论 / 讨论（N-6） -->
+          <div class="drawer-sect" id="fComments" hidden>
+            <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="true">
+              <h3>评论</h3><span class="cnt" id="commentCount"></span>
+              <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
             </div>
-          </div>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="iVersion">影响版本</label>
-              <select id="iVersion"></select>
-              <span class="hint" id="iVersionHint">先选项目，再选该项目的版本；不选即「待规划」</span>
-            </div>
-            <div class="field">
-              <div class="label-row">
-                <label for="iEpic">所属史诗</label>
-                <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
-              </div>
-              <select id="iEpic"></select>
-              <span class="hint" id="iEpicHint">先选项目，再把当前工作项挂到该项目的一个史诗（Epic）下</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="iBranch">所属分支</label>
-            <select id="iBranch"></select>
-            <span class="hint" id="iBranchHint">分支在「分支」页里建，这里只负责挂上去</span>
-          </div>
-        </div>
-
-        <!-- 时间 / 进度 -->
-        <div class="drawer-field-group">
-          <h3 class="drawer-group-title">时间与进度</h3>
-          <div class="field">
-            <label for="iStart">开始日期（选填）</label>
-            <input id="iStart" type="date" />
-            <div class="seg grid4" id="segStart" style="margin-top:0">
-              <button type="button" data-start="0">今天</button>
-              <button type="button" data-start="-1">昨天</button>
-              <button type="button" data-start="week">本周一</button>
-              <button type="button" data-start="">清空</button>
-            </div>
-            <span class="hint">填了之后，日历会在「开始 → 截止」的每一天都展示这个工作项（不填则只出现在截止日）</span>
-          </div>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="iDue">截止日期</label>
-              <input id="iDue" type="date" />
-              <div class="seg grid4" id="segDue" style="margin-top:0">
-                <button type="button" data-due="0">今天</button>
-                <button type="button" data-due="1">明天</button>
-                <button type="button" data-due="w5" title="按 5 个工作日计算，自动跳过周末">一周后</button>
-                <button type="button" data-due="">无期限</button>
-              </div>
-            </div>
-            <div class="field">
-              <label>分类</label>
-              <div class="seg" id="segCat"></div>
-            </div>
-          </div>
-
-          <label class="row row-gap" style="gap:8px;padding:2px 0 6px">
-            <input type="checkbox" class="cbx" id="iMilestone" />
-            <span class="toolbar-meta is-strong">里程碑（单日节点）</span>
-            <span class="foot-note">勾选后甘特图用菱形展示，不占工期</span>
-          </label>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="iEstimate">预计耗时</label>
-              <div class="est-wrap">
-                <input id="iEstimate" type="number" min="0" max="168" step="0.5" placeholder="选填，例如 4" />
-                <span class="est-unit">小时</span>
-              </div>
-              <span class="hint" id="iEstimateHint">填了才能和实际计时比出你的估时系数</span>
-            </div>
-            <div class="field">
-              <label>实际投入</label>
-              <div class="est-actual" id="iActual">—</div>
-              <span class="hint" id="iActualHint">按工作时段折算的计时累计</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="iProg">当前进度</label>
-            <div class="progress" id="progWrap">
-              <input id="iProg" type="range" min="0" max="100" step="5" value="0" aria-label="当前进度百分比" />
-              <span class="pv" id="progVal">0%</span>
-            </div>
-            <div class="seg mini" id="segProg">
-              <button type="button" data-prog="0">0</button>
-              <button type="button" data-prog="25">25</button>
-              <button type="button" data-prog="50">50</button>
-              <button type="button" data-prog="75">75</button>
-              <button type="button" data-prog="100">100</button>
-            </div>
-            <span class="hint" id="progHint">0–100，拖到 100% 不会自动标记完成（完成以「移入已完成列」为准）</span>
-          </div>
-
-          <div class="field">
-            <label for="iNote">进度备注</label>
-            <input id="iNote" type="text" maxlength="80" placeholder="选填：本次推进到哪一步、卡点在哪里…" autocomplete="off" />
-          </div>
-
-          <div class="form-grid three">
-            <div class="field">
-              <label>循环</label>
-              <div class="seg grid4" id="segRecur"></div>
-            </div>
-            <div class="field">
-              <label for="iRemind">提醒时间</label>
-              <input id="iRemind" type="datetime-local" />
-            </div>
-            <div class="field">
-              <label for="iRemindTarget">提醒谁</label>
-              <select id="iRemindTarget">
-                <option value="owner">仅负责人</option>
-                <option value="owner+admin">负责人 + 空间主</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>阻塞 / 卡点</label>
-            <div class="blocked-row">
-              <label class="sw"><input type="checkbox" id="iBlocked" /> 被阻塞</label>
-              <input id="iBlockedReason" class="input" type="text" maxlength="120"
-                     placeholder="卡在什么上（等谁 / 等什么 / 预计何时解除）" disabled />
-            </div>
-            <span class="hint">被阻塞的工作项在卡片上会显示橙色条纹，可在筛选栏「更多筛选 → 仅看被阻塞」里集中查看。</span>
-          </div>
-        </div>
-
-        <!-- 关联 / 子任务 -->
-        <!-- 检查清单 -->
-        <div class="drawer-sect collapsed" id="fSubtasks" hidden>
-          <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-            <h3>检查清单</h3><span class="cnt" id="subCount"></span>
-            <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </div>
-          <div class="drawer-sect-body">
-            <div class="sub-list" id="subList"></div>
-            <input id="iSubNew" class="input" type="text" maxlength="60" placeholder="添加一项，回车确认" autocomplete="off" style="margin-top:8px" />
-          </div>
-        </div>
-
-        <!-- 附件 -->
-        <div class="drawer-sect collapsed" id="fAttach" hidden>
-          <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-            <h3>附件</h3><span class="cnt" id="attachCount"></span>
-            <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </div>
-          <div class="drawer-sect-body">
-            <div class="attach-list" id="attachList"></div>
-            <div class="row row-gap" style="margin-top:8px">
-              <button class="btn sm" type="button" id="btnAttach">上传文件（≤10MB）</button>
-              <span class="foot-note">jpg/png/gif/webp/pdf/txt/md/zip/xlsx/xls/doc/docx/ppt/pptx</span>
-              <input type="file" id="iAttachFile" hidden />
-            </div>
-          </div>
-        </div>
-
-        <!-- 工时 -->
-        <div class="drawer-sect collapsed" id="fWork" hidden>
-          <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-            <h3>工时</h3>
-            <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </div>
-          <div class="drawer-sect-body">
-            <div class="work-row">
-              <span class="work-val" id="workVal">—</span>
-              <button class="btn sm" type="button" id="btnTimer">开始计时</button>
-              <button class="btn sm ghost" type="button" id="btnTimerAdd" title="手工补记一条实际工时（忘开表、加班等）">
-                <span data-icon="plus"></span>&nbsp;补记
-              </button>
-            </div>
-            <div class="work-log" id="workLogList"></div>
-          </div>
-        </div>
-
-        <!-- 时间线 -->
-        <div class="drawer-sect collapsed" id="fTimeline" hidden>
-          <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="false">
-            <h3>操作时间线</h3>
-            <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </div>
-          <div class="drawer-sect-body">
-            <div class="timeline" id="timelineBox"></div>
-          </div>
-        </div>
-
-      </div>
-
-      <aside class="task-detail-side">
-        <div class="drawer-field-group task-people">
-          <h3>人员</h3>
-          <div class="field">
-            <label for="iOwner">负责人</label>
-            <select id="iOwner"></select>
-          </div>
-        </div>
-
-        <!-- 评论 / 讨论（N-6） -->
-        <div class="drawer-sect" id="fComments" hidden>
-          <div class="drawer-sect-head" role="button" tabindex="0" aria-expanded="true">
-            <h3>评论</h3><span class="cnt" id="commentCount"></span>
-            <span class="caret"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
-          </div>
-          <div class="drawer-sect-body">
-            <div class="comment-list" id="commentList"></div>
-            <div class="comment-form">
-              <div class="comment-mention" id="commentMention" hidden></div>
-              <div class="comment-compose">
-                <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
-                <div class="comment-attach-chips" id="commentAttachChips" hidden></div>
-                <div class="comment-compose-actions">
-                  <button class="btn sm soft" type="button" id="btnCommentAttach" title="添加附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）">
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 6.4 7.2 11.8a2.2 2.2 0 0 0 3.1 3.1l5.4-5.4a3.8 3.8 0 0 0-5.4-5.4L4.8 9.6a5.4 5.4 0 0 0 7.6 7.6l3.4-3.4"/></svg>
-                    附件
-                  </button>
-                  <span class="comment-attach-tip" id="commentAttachTip"></span>
-                  <input type="file" id="iCommentFiles" multiple hidden
-                         accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
-                  <span class="spacer"></span>
-                  <button class="btn primary" type="button" id="btnCommentSend">发送</button>
+            <div class="drawer-sect-body">
+              <div class="comment-list" id="commentList"></div>
+              <div class="comment-form">
+                <div class="comment-mention" id="commentMention" hidden></div>
+                <div class="comment-compose">
+                  <textarea id="iComment" maxlength="500" placeholder="写下讨论、结论或卡点…（输入 @ 可提及成员，Ctrl/⌘ + Enter 发送）"></textarea>
+                  <div class="comment-attach-chips" id="commentAttachChips" hidden></div>
+                  <div class="comment-compose-actions">
+                    <button class="btn sm soft" type="button" id="btnCommentAttach" title="添加附件（图片、PDF、Office、txt、md、zip，单个 ≤10MB）">
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 6.4 7.2 11.8a2.2 2.2 0 0 0 3.1 3.1l5.4-5.4a3.8 3.8 0 0 0-5.4-5.4L4.8 9.6a5.4 5.4 0 0 0 7.6 7.6l3.4-3.4"/></svg>
+                      附件
+                    </button>
+                    <span class="comment-attach-tip" id="commentAttachTip"></span>
+                    <input type="file" id="iCommentFiles" multiple hidden
+                           accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                    <span class="spacer"></span>
+                    <button class="btn primary" type="button" id="btnCommentSend">发送</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </aside>
+
+          <div class="after-create" id="afterCreateNote">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><path d="M10 9.2v4M10 6.6h.01"/></svg>
+            <div><b>创建后可继续补充</b><span>检查项、附件、工时、评论与操作时间线在详情里，不再占用创建流程。</span></div>
+          </div>
+        </aside>
       </div>
     </div>
 

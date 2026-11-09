@@ -390,7 +390,7 @@ function render(opts){
 **这是本次改动最大的地方。** 手机档位不并排列，改为：
 
 1. 顶部状态分段器：横向滚动，每段 = `列名 + 数量`，激活段白底 + `--text` 600，容器底色 `--surface-sunken`、radius 14、padding 3。列定义来自 **`js/lib/format.js` 的 `COLUMNS`**，每列数据在 **`state.board.columns[colId]`**（结构 `{items, matched, total, allTotal, hasMore}`，见 `board.js:293`）。
-2. 下方单列纵向卡片流，卡片复用 4.3.1 的结构，额外多一行：`标签组`（分类 / 需求编号）。
+2. 下方单列纵向卡片流，卡片复用 4.3.1 的结构，额外多一行：`标签组`（模块 / 需求编号）。
 3. 列头吸顶：分段器用 `position:sticky; top:0`（实现修正：顶栏在文档流中不固定、`.view` 内部滚动，`top:52px` 会在吸顶时留缝，故取 0）。
 4. 空列：`UI.emptyState({title:"这一列还没有任务", desc:"从下面新建，或把别的列拖过来"})`。
 5. 换列手势：分段器点击切换（**不做横向 swipe 换列**，避免和卡片左滑冲突）。

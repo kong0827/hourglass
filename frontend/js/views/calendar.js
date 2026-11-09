@@ -75,7 +75,7 @@ function loadCalendar(opts){
     calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
     calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
   }
-  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 关键词 / 到期） */
+  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 模块 / 项目 / 标签 / 关键词 / 到期） */
   var months = calendarRequestMonths();
   Promise.all(months.map(function(m){
     return API.get("/api/calendar", boardParams({year: m.year, month: m.month}));

@@ -39,7 +39,7 @@ public class ListPreferenceService {
             "name", "status", "health", "total", "backlog", "doing", "done", "overdue", "blocked",
             "progress", "weekCompleted", "weekWorkMinutes", "members")));
     private static final Set<String> DEMAND_POOL_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-            "title", "kind", "priority", "status", "project", "version", "expectDate", "wsjf", "source", "createdAt")));
+            "title", "kind", "category", "priority", "status", "project", "version", "expectDate", "wsjf", "source", "createdAt")));
     private static final Set<String> PROJECT_VIEW_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "name", "status", "health", "total", "backlog", "doing", "done", "overdue",
             "progress", "owner", "dueDate", "estimate", "actual")));

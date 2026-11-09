@@ -22,10 +22,11 @@ class TaskWorkflowServiceNotificationTest {
     private final TaskSupport support = mock(TaskSupport.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
     private final TaskWatchService watchers = mock(TaskWatchService.class);
+    private final ColumnTransitionService transitions = mock(ColumnTransitionService.class);
     private final TaskWorkflowService service = new TaskWorkflowService(tasks, mock(TaskLogMapper.class),
             mock(SubtaskMapper.class), support, mock(TimeLogService.class),
             mock(TaskCompletionService.class), mock(TaskAuditLogger.class), events, watchers,
-            mock(ProjectAccessService.class));
+            mock(ProjectAccessService.class), transitions, mock(WorkspaceService.class));
 
     @Test
     void moveToAnotherColumnNotifiesOwner() {
@@ -71,7 +72,7 @@ class TaskWorkflowServiceNotificationTest {
         when(support.columnName("W1", "doing")).thenReturn("进行中");
         when(support.columnName("W1", "done")).thenReturn("已完成");
 
-        service.afterEditColumnChange("U2", "W1", task, "doing");
+        service.afterEditColumnChange("U2", "W1", task, "doing", null);
 
         // 负责人由编辑入口合并成一条 task_updated，这里不发；关注者照常，负责人进 skip
         verifyNoInteractions(events);
@@ -96,6 +97,8 @@ class TaskWorkflowServiceNotificationTest {
         req.setColumn(to);
         req.setAutoTimer(false);
         req.setAutoResume(false);
+        when(transitions.check("W1", from, to, null, false, false))
+                .thenReturn(new ColumnTransitionService.Decision("allow", null, false));
 
         service.move(actorId, "W1", "K1", req);
     }

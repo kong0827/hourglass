@@ -11,6 +11,7 @@ import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { canEditTask, catTag, dueState, dueText, progressOf, rt, state, tagChip, timerAllowed } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
+import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, iso, parseDate, priName, priTagHTML } from "../lib/format.js";
@@ -151,7 +152,7 @@ var MINE_GROUPS = [
 /* ---- 排序 / 分组（页内工具栏，state.mineSort / state.mineGroup） ---- */
 var MINE_SORTS = ["default", "due", "priority", "updated", "title"];
 var MINE_SORT_DESC = {updated:true};
-var MINE_GROUP_DIMS = ["due", "workspace", "priority", "status", "project", "none"];
+var MINE_GROUP_DIMS = ["due", "workspace", "priority", "status", "project", "category", "none"];
 function mineSortValue(t, key){
   if(key === "title") return String(t.title || "");
   if(key === "priority"){ var pi = PRIORITIES.indexOf(t.priority); return pi < 0 ? 9 : pi; }
@@ -182,10 +183,18 @@ function mineSectionInfo(t){
   if(dim === "priority") return {key:t.priority || "__none", label:t.priority ? priName(t.priority, t.workspaceId) : "未设置优先级", pri:t.priority || ""};
   if(dim === "status") return {key:t.boardColumn || "__none", label:colName(t.boardColumn) || "未设置状态"};
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqName || (t.reqId ? "未知项目" : "无项目")};
+  if(dim === "category") return {key:t.category || "__none", label:t.category || "未指定模块"};
   return null;
 }
 function mineSectionCompare(a, b){
   var dim = state.mineGroup;
+  if(dim === "category"){
+    var order = {};
+    (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+    var ai = order[a.key] === undefined ? 999 : order[a.key];
+    var bi = order[b.key] === undefined ? 999 : order[b.key];
+    return ai - bi || a.label.localeCompare(b.label, "zh-Hans-CN");
+  }
   if(dim === "priority"){
     return (PRIORITIES.indexOf(a.pri) < 0 ? 9 : PRIORITIES.indexOf(a.pri)) -
       (PRIORITIES.indexOf(b.pri) < 0 ? 9 : PRIORITIES.indexOf(b.pri));
@@ -234,7 +243,7 @@ function mineRowHTML(t){
   /* 待处理/已完成列不能计时（与后端 startManual 同口径）：不渲染这个不可用入口 */
   var tAllowed = timerAllowed(t);
   var isDone = t.boardColumn === "done";
-  /* 分类已在标签行用彩色 pill 表达，同名标签不再重复占位 */
+  /* 模块已在标签行用彩色 pill 表达，同名标签不再重复占位 */
   var tags = (t.tags || []).filter(function(n){ return n && n !== t.category; }).slice(0, 2);
   /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
   var showProgress = p > 0 || t.boardColumn === "doing";
@@ -644,19 +653,38 @@ function mineTaskFromRow(row){
 function mineComplete(t){
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/move", {column:"done"}).then(function(){
+  var items = [{ from: t.boardColumn, title: t.title }];
+  function send(pass){
+    var body = { column: "done" };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    return API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
+  }
+  function ok(){
     toast("已完成「" + t.title + "」", "fs");
     loadMine({silent:true});
     loadBoard({silent:true});
     loadRunningTimer();
-  }).catch(function(ex){ toast(ex.message || "完成失败", "bad"); });
+  }
+  guard(t.workspaceId, items, "done").then(function(pass){
+    if(!pass) return;
+    var retried = false;
+    send(pass).then(ok).catch(function(ex){
+      if(retried){ toast(ex.message || "完成失败", "bad"); return; }
+      retried = true;
+      serverDecision(t.workspaceId, items, "done", ex).then(function(retry){
+        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "完成失败", "bad"); return; }
+        send(retry).then(ok).catch(function(e){ toast(e.message || "完成失败", "bad"); });
+      });
+    });
+  });
 }
 function mineToggleTimer(t){
   if(!t) return;
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 停止自己的计时不受项目可见范围限制（与后端一致），只拦「开始」 */
   if(!running && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(!running && !timerAllowed(t)){ toast("当前列不允许计时，请先把工作项移到「正常处理」列", "warn"); return; }
+  if(!running && !timerAllowed(t)){ toast("当前列不计时，请先移到处理规则为「正常计时」的列", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
       /* 乐观更新本地状态并立即重渲染：不等 /my-running-timer 往返，行内图标即刻切换 */

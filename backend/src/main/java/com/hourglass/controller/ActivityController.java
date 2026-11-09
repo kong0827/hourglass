@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 空间级活动流（O-9）：让删除列/分类/项目、移出成员、清空数据这类破坏性操作可追溯 */
+/** 空间级活动流（O-9）：让删除列/模块/项目、移出成员、清空数据这类破坏性操作可追溯 */
 @RestController
 public class ActivityController {
 

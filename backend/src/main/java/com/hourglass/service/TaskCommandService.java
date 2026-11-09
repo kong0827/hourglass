@@ -235,6 +235,7 @@ public class TaskCommandService {
                 t.setEpicId(null);
             }
         }
+        String moveSuffix = null;
         if (columnChanged) {
             t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
             if (Consts.COL_DONE.equals(t.getBoardColumn())) {
@@ -242,8 +243,9 @@ public class TaskCommandService {
             } else {
                 t.setCompletedAt(null);
             }
-            /* 计时联动：完成停表+接力 / 回待处理停表（与拖拽 move 同一口径） */
-            workflow.beforeEditColumnChange(userId, workspaceId, id, old.getBoardColumn(), t.getBoardColumn());
+            /* 流转校验 + 计时联动：完成停表+接力 / 回待处理停表（与拖拽 move 同一口径） */
+            moveSuffix = workflow.beforeEditColumnChange(userId, workspaceId, id, old.getBoardColumn(),
+                    t.getBoardColumn(), req.getMoveReason(), Boolean.TRUE.equals(req.getForce()));
         } else {
             t.setSortOrder(old.getSortOrder());
             t.setCompletedAt(old.getCompletedAt());
@@ -276,7 +278,7 @@ public class TaskCommandService {
         // 先落最终标签，再派生下一次任务：保证循环任务的后续任务继承本次保存后的标签
         support.saveTags(workspaceId, id, req.getTags());
         /* 完成归档 / 取消完成撤档 / 循环派生 / 移动日志都在流程服务里 */
-        workflow.afterEditColumnChange(userId, workspaceId, t, old.getBoardColumn());
+        workflow.afterEditColumnChange(userId, workspaceId, t, old.getBoardColumn(), moveSuffix);
         if (!columnChanged || !changes.isEmpty()) {
             String detail = changes.isEmpty()
                     ? "更新任务「" + t.getTitle() + "」（无字段变化）"
@@ -341,7 +343,7 @@ public class TaskCommandService {
         String category = Texts.trimToNull(req.getCategory());
         if (category != null) {
             if (categoryMapper.selectByName(workspaceId, category) == null) {
-                throw AppException.badRequest("分类不存在：" + category);
+                throw AppException.badRequest("模块不存在：" + category);
             }
             t.setCategory(category);
         } else {

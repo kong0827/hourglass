@@ -49,7 +49,8 @@ class WorkspaceServiceMemberCacheTest {
         memberCache = new WorkspaceMemberCache(workspaceMapper, memberMapper, 60_000L,
                 new AtomicLong(1_000_000L)::get);
         service = new WorkspaceService(workspaceMapper, memberMapper, userMapper,
-                mock(BoardColumnMapper.class), mock(CategoryMapper.class),
+                mock(BoardColumnMapper.class), mock(com.hourglass.mapper.ColumnTransitionMapper.class),
+                mock(CategoryMapper.class),
                 mock(com.hourglass.mapper.WorkspacePriorityMapper.class),
                 mock(SavedViewMapper.class),
                 mock(com.hourglass.mapper.AppNotificationMapper.class),

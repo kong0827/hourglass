@@ -5,8 +5,9 @@ import { $ } from "./dom.js";
 import { icon } from "./icons.js";
 import { activeView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
-import { state, canEditTask, taskById, taskCacheExtra } from "./state.js";
+import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
+import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
 import { loadBoard, loadReqs, render } from "../views/board.js";
@@ -210,15 +211,36 @@ setInterval(function(){
     }
   });
 }, 60000);
+/** 带流转判定的移动：先本地判定，服务端仍拒绝时按 412/422 补救一次 */
+function guardedMove(t, target, send, onSuccess){
+  var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+  var items = [{ from: t.boardColumn, title: t.title }];
+  return guard(wsId, items, target).then(function(pass){
+    if(!pass) return;
+    var retried = false;
+    function fail(ex){
+      if(retried){ toast(ex.message || "操作失败", "bad"); return; }
+      retried = true;
+      serverDecision(wsId, items, target, ex).then(function(retry){
+        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "操作失败", "bad"); return; }
+        send(retry).then(onSuccess).catch(function(e){ toast(e.message || "操作失败", "bad"); });
+      });
+    }
+    send(pass).then(onSuccess).catch(fail);
+  });
+}
 function toggleTaskDone(taskId){
   var t = taskById(taskId);
   if(!t) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var isDone = t.boardColumn === "done";
   /* 取消完成 = 回到「完成前所在列」，由后端按最后一次进入已完成列的移动日志还原；
-     不是固定回「进行中」。 */
+     不是固定回「进行中」。目标列由后端决定，所以先请求；遇到 412/422 再补原因或强制。 */
   if(isDone){
-    API.post("/api/tasks/" + encodeURIComponent(taskId) + "/reopen", {}).then(function(res){
+    var wsId = t.workspaceId || (rt.currentWs && rt.currentWs.id);
+    var items = [{ from: "done", title: t.title }];
+    var retried = false;
+    function reopenOk(res){
       var backCol = res && res.to ? colName(res.to) : "进行中";
       toast("已取消完成，回到「" + backCol + "」", "warn");
       loadBoard({animate:false, movedId: taskId});
@@ -226,10 +248,25 @@ function toggleTaskDone(taskId){
       refreshListIfOpen();
       refreshCalendarIfOpen();
       refreshGanttIfOpen();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }
+    function reopenFail(ex){
+      if(retried){ toast(ex.message || "操作失败", "bad"); return; }
+      retried = true;
+      serverDecision(wsId, items, null, ex).then(function(retry){
+        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "操作失败", "bad"); return; }
+        API.post("/api/tasks/" + encodeURIComponent(taskId) + "/reopen", retry).then(reopenOk)
+          .catch(function(e){ toast(e.message || "操作失败", "bad"); });
+      });
+    }
+    API.post("/api/tasks/" + encodeURIComponent(taskId) + "/reopen", {}).then(reopenOk).catch(reopenFail);
     return;
   }
-  API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", {column:"done"}).then(function(res){
+  guardedMove(t, "done", function(pass){
+    var body = { column: "done" };
+    if(pass.reason) body.reason = pass.reason;
+    if(pass.force) body.force = true;
+    return API.post("/api/tasks/" + encodeURIComponent(taskId) + "/move", body);
+  }, function(res){
     var task = res.task;
     var dd = (task.dueDate && task.completedAt) ? dayDiff(parseDate(task.completedAt), parseDate(task.dueDate)) : 0;
     var doneMsg = dd > 0
@@ -242,7 +279,7 @@ function toggleTaskDone(taskId){
     refreshListIfOpen();
     refreshCalendarIfOpen();
     refreshGanttIfOpen();
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  });
 }
 function openCardMenu(anchor, taskId){
   var t = taskById(taskId);
@@ -303,11 +340,16 @@ function openCardMenu(anchor, taskId){
     if(mv){
       UI.closeAllPops();
       var to = mv.dataset.cmMove;
-      API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", {column: to}).then(function(res){
+      guardedMove(t, to, function(pass){
+        var body = { column: to };
+        if(pass.reason) body.reason = pass.reason;
+        if(pass.force) body.force = true;
+        return API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
+      }, function(res){
         toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
           (res.autoTimerStarted ? " · 已开始计时" : ""));
         loadBoard({silent:true}); loadReqs(); refreshListIfOpen();
-      }).catch(function(ex){ toast(ex.message || "移动失败", "bad"); });
+      });
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});

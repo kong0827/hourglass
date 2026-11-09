@@ -5,6 +5,7 @@ import com.hourglass.entity.Category;
 import com.hourglass.entity.TagCount;
 import com.hourglass.mapper.BoardColumnMapper;
 import com.hourglass.mapper.CategoryMapper;
+import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.TagMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 列/分类/标签 meta 缓存：按空间版本号失效、TTL 兜底、空间隔离。 */
+/** 列/模块/标签 meta 缓存：按空间版本号失效、TTL 兜底、空间隔离。 */
 class WorkspaceMetaCacheTest {
 
     private static final String W1 = "S1";
@@ -41,7 +42,8 @@ class WorkspaceMetaCacheTest {
         tagMapper = mock(TagMapper.class);
         versions = new WorkspaceVersionService();
         now = new AtomicLong(1_000_000L);
-        cache = new WorkspaceMetaCache(columnMapper, categoryMapper, tagMapper, versions, TTL, now::get);
+        cache = new WorkspaceMetaCache(columnMapper, categoryMapper, tagMapper,
+                mock(ColumnTransitionMapper.class), versions, TTL, now::get);
     }
 
     @Test

@@ -15,6 +15,7 @@ import com.hourglass.entity.Workspace;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.BoardColumnMapper;
 import com.hourglass.mapper.CategoryMapper;
+import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.WorkspacePriorityMapper;
 import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.InviteMapper;
@@ -55,6 +56,7 @@ public class WorkspaceService {
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
     private final BoardColumnMapper boardColumnMapper;
+    private final ColumnTransitionMapper transitionMapper;
     private final CategoryMapper categoryMapper;
     private final WorkspacePriorityMapper workspacePriorityMapper;
     private final SavedViewMapper savedViewMapper;
@@ -70,11 +72,12 @@ public class WorkspaceService {
     private final com.hourglass.service.ActivityService activityService;
     /** 成员关系缓存（单实例进程内，TTL 60 秒，写入口主动失效） */
     private final WorkspaceMemberCache memberCache;
-    /** 空间 meta 缓存（列/分类/标签，按空间版本号失效） */
+    /** 空间 meta 缓存（列/模块/标签，按空间版本号失效） */
     private final WorkspaceMetaCache metaCache;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
+                            ColumnTransitionMapper transitionMapper,
                             CategoryMapper categoryMapper,
                             WorkspacePriorityMapper workspacePriorityMapper,
                             SavedViewMapper savedViewMapper,
@@ -92,6 +95,7 @@ public class WorkspaceService {
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.boardColumnMapper = boardColumnMapper;
+        this.transitionMapper = transitionMapper;
         this.categoryMapper = categoryMapper;
         this.workspacePriorityMapper = workspacePriorityMapper;
         this.savedViewMapper = savedViewMapper;
@@ -260,8 +264,9 @@ public class WorkspaceService {
         ws.setOwnerId(userId);
         workspaceMapper.insert(ws);
         addMemberInternal(wsId, userId, "owner");
-        /* 历史异常删除可能只删了 workspace 行、留下列/分类（主键含 workspace_id），先清理再灌默认，避免启动补齐时主键冲突 */
+        /* 历史异常删除可能只删了 workspace 行、留下列/模块（主键含 workspace_id），先清理再灌默认，避免启动补齐时主键冲突 */
         boardColumnMapper.deleteAllByWorkspace(wsId);
+        transitionMapper.deleteAllByWorkspace(wsId);
         categoryMapper.deleteAllByWorkspace(wsId);
         seedColumns(wsId);
         seedDefaultCategories(wsId);
@@ -343,17 +348,18 @@ public class WorkspaceService {
         });
     }
 
-    /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/分类/列/评论/通知/分支） */
+    /** 清空一个空间的全部数据（任务/项目/需求文档/子任务/日志/标签/附件/工时/视图/模块/列/评论/通知/分支） */
     @Transactional
     public void wipeData(String workspaceId) {
         cascade.wipeWorkspaceData(workspaceId);
-        /* 看板列/分类/保存视图属于空间配置，不属于任务级联，清空空间时单独处理 */
+        /* 看板列/模块/保存视图属于空间配置，不属于任务级联，清空空间时单独处理 */
         savedViewMapper.deleteAllByWorkspace(workspaceId);
         userListPreferenceMapper.deleteAllByWorkspace(workspaceId);
         workActivityService.deleteAllByWorkspace(workspaceId);
         categoryMapper.deleteAllByWorkspace(workspaceId);
         workspacePriorityMapper.deleteAllByWorkspace(workspaceId);
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
+        transitionMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
@@ -513,7 +519,7 @@ public class WorkspaceService {
     @Lazy
     private WorkspaceService self;
 
-    /** 启动时兜底 + 导入后调用：为缺列/缺分类的空间补齐（含历史异常状态下创建的空间） */
+    /** 启动时兜底 + 导入后调用：为缺列/缺模块的空间补齐（含历史异常状态下创建的空间） */
     @EventListener(ApplicationReadyEvent.class)
     public void ensureDefaults() {
         try {
@@ -525,7 +531,7 @@ public class WorkspaceService {
         }
     }
 
-    /** 确保空间至少有内置看板列与一个分类（幂等） */
+    /** 确保空间至少有内置看板列与一个模块（幂等） */
     @Transactional
     public void ensureDefaultsFor(String workspaceId) {
         if (boardColumnMapper.selectAll(workspaceId).isEmpty()) {
@@ -546,6 +552,8 @@ public class WorkspaceService {
     }
 
     private void seedColumns(String workspaceId) {
+        /* 列从零重建时旧规则已失去意义（可能引用自定义列 id） */
+        transitionMapper.deleteAllByWorkspace(workspaceId);
         BoardColumn backlog = new BoardColumn();
         backlog.setId(Consts.COL_BACKLOG);
         backlog.setWorkspaceId(workspaceId);
@@ -565,7 +573,7 @@ public class WorkspaceService {
         boardColumnMapper.insert(doing);
     }
 
-    /** 通用默认分类（非开发场景也适用） */
+    /** 通用默认模块（非开发场景也适用） */
     private void seedDefaultCategories(String workspaceId) {
         String[][] defaults = {
                 {"工作", "#5b83ad"},

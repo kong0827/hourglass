@@ -74,7 +74,7 @@ public class TaskCascade {
 
     /**
      * 清空空间（含删除空间）/覆盖导入时清理的任务与任务归属表，顺序即执行顺序。
-     * 看板列、分类、保存视图属于空间配置，不在此列，由调用方按场景处理。
+     * 看板列、模块、保存视图属于空间配置，不在此列，由调用方按场景处理。
      */
     public static final List<String> WORKSPACE_TASK_TABLES = Collections.unmodifiableList(Arrays.asList(
             "task_log",

@@ -77,7 +77,7 @@ function renderCompletions(rows, month){
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
      计时的首次/最后时间属于内部数据，不展示 */
-  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
+  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>模块</th>" +
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
@@ -113,7 +113,7 @@ function exportCompCSV(){
   var rows = compRowsCache || [];
   if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
   var month = currentCompMonth();
-  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","分类","优先级",
+  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
     "开始时间","结束时间","总耗时(分钟)","总耗时"]];
   rows.forEach(function(r){
     lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
@@ -547,9 +547,9 @@ function renderFlowEstimate(d){
     }
     html += '</div>';
   }
-  /* 分类系数：只有一个分类时没有对比意义 */
+  /* 模块系数：只有一个模块时没有对比意义 */
   if(d.byCategory && d.byCategory.length > 1){
-    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按分类看系数</div>';
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按模块看系数</div>';
     d.byCategory.forEach(function(c){
       var cf = c.factor || 0;
       html += flowRow(c.category + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",

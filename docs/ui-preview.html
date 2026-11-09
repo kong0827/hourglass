@@ -121,7 +121,7 @@
   --drawer-w-lg:800px;
   --board-col-w:300px;
 
-  /* ---- 面板调色板（分类 / 看板列取色器预设） ---- */
+  /* ---- 面板调色板（模块 / 看板列取色器预设） ---- */
   --palette-1:#2563EB; --palette-2:#12B76A; --palette-3:#F79009; --palette-4:#F04438;
   --palette-5:#7A5AF8; --palette-6:#0E9384; --palette-7:#DD2590; --palette-8:#98A2B3;
 
@@ -2061,7 +2061,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .activity-modal .sheet{width:min(720px,calc(100vw - 32px));}
 .activity-modal .activity-list{max-height:60vh;overflow:auto;}
 
-/* 列 / 分类配置行 */
+/* 列 / 模块配置行 */
 .cfg-list{display:flex;flex-direction:column;gap:6px;}
 .cfg-row{
   display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 8px;
@@ -5908,7 +5908,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、分类、标签与项目">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、模块、标签与项目">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -6120,7 +6120,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                   <option value="project">按项目</option>
                   <option value="owner">按负责人</option>
                   <option value="status">按状态</option>
-                  <option value="category">按分类</option>
+                  <option value="category">按模块</option>
                   <option value="priority">按优先级</option>
                 </select>
               </label>
@@ -7124,7 +7124,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               </span>
             </div>
             <div class="tbl-wrap" id="reviewPivot"></div>
-            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与分类。</p>
+            <p class="foot-note" style="margin-top:8px">统计口径：当前周期内移入「已完成」的工作项；切换行/列维度可交叉查看成员、项目、优先级与模块。</p>
           </div>
 
           <div class="panel">
@@ -7147,7 +7147,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               <div class="people" id="peopleBox"></div>
             </div>
             <div class="panel">
-              <div class="panel-head"><h3>分类分布</h3></div>
+              <div class="panel-head"><h3>模块分布</h3></div>
               <div class="dist" id="catDist"></div>
             </div>
           </div>
@@ -7215,7 +7215,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           </div>
           <div class="duo">
             <div class="panel">
-              <div class="panel-head"><h3>完成分布 · 按分类</h3><span class="meta-right" id="statsRange1">—</span></div>
+              <div class="panel-head"><h3>完成分布 · 按模块</h3><span class="meta-right" id="statsRange1">—</span></div>
               <div class="dist" id="statsCat"></div>
             </div>
             <div class="panel">
@@ -7522,17 +7522,17 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
 
             <div class="panel" data-set-pane="workflow" id="set-cats">
               <div class="panel-head">
-                <h3>分类</h3>
+                <h3>模块</h3>
                 <span class="meta-right" id="catCount"></span>
               </div>
-              <p class="set-hint">分类按空间配置，改名会同步到已有工作项；删除分类时其工作项改到第一个分类。</p>
+              <p class="set-hint">模块按空间配置，改名会同步到已有工作项；删除模块时其工作项改到第一个模块。</p>
               <div class="cfg-list" id="catCfgList"></div>
               <div class="cfg-add">
-                <input type="color" id="catNewColor" value="#98A2B3" title="新分类颜色" aria-label="新分类颜色" />
-                <input type="text" id="catNewName" maxlength="12" placeholder="新分类名，如：客户跟进" />
-                <button class="btn sm" type="button" id="btnCatAdd">添加分类</button>
+                <input type="color" id="catNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
+                <input type="text" id="catNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
+                <button class="btn sm" type="button" id="btnCatAdd">添加模块</button>
               </div>
-              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看分类配置，不能新增、改名、改色或排序。</p>
+              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-priorities">
@@ -7570,8 +7570,8 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 </button>
                 <input type="file" id="fileImport" accept=".json,application/json" hidden />
               </div>
-              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/分类/优先级显示设置。</p>
-              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/分类、清空任务数据、导入覆盖仅空间主可操作</p>
+              <p class="foot-note" style="margin-top:12px">任务备份包含：工作项（含回收站）、项目、子任务、标签、工时、评论、甘特依赖/基线、文档与分支（v6）；导入时按工作项与工时重建完成归档。不含附件文件、操作时间线、分支操作记录、保存视图、看板列/模块/优先级显示设置。</p>
+              <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/模块、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-activity">
@@ -7579,7 +7579,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
               </div>
-              <p class="set-hint">空间内的工作项操作与配置变更记录（最近 200 条，倒序）。删除列/分类/项目这类破坏性操作也会出现在这里。</p>
+              <p class="set-hint">空间内的工作项操作与配置变更记录（最近 200 条，倒序）。删除列/模块/项目这类破坏性操作也会出现在这里。</p>
               <div class="act-list" id="actList"></div>
             </div>
 
@@ -8141,7 +8141,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               </div>
             </div>
             <div class="field">
-              <label>分类</label>
+              <label>模块</label>
               <div class="seg" id="segCat"></div>
             </div>
           </div>
@@ -8978,7 +8978,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
     ],
     "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
-    /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
+    /* 设置页「看板列 / 模块」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
       { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, done: false },
       { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, done: false },
@@ -11852,7 +11852,7 @@ var DEFS = {
     mode: "table",
     modes: ["table"],
     required: "title",
-    labels: { title:"工作项", type:"类型", column:"看板列", priority:"优先级", owner:"负责人", dueDate:"截止日期", progress:"进度", project:"项目", version:"影响版本", category:"分类", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新时间" },
+    labels: { title:"工作项", type:"类型", column:"看板列", priority:"优先级", owner:"负责人", dueDate:"截止日期", progress:"进度", project:"项目", version:"影响版本", category:"模块", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新时间" },
     defaults: ["title","type","column","priority","owner","dueDate","progress","project","version"]
   },
   "project-list": {
@@ -17283,7 +17283,7 @@ function loadCalendar(opts){
     calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px">' + UI.skeletonRows(6) + '</div>';
     calDayList.innerHTML = '<div class="skel skel-line" style="width:60%"></div>';
   }
-  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 分类 / 项目 / 标签 / 关键词 / 到期） */
+  /* IA-4：日历接入与看板相同的筛选（负责人 / 优先级 / 模块 / 项目 / 标签 / 关键词 / 到期） */
   var months = calendarRequestMonths();
   Promise.all(months.map(function(m){
     return API.get("/api/calendar", boardParams({year: m.year, month: m.month}));
@@ -17776,7 +17776,7 @@ function initSmartTable(){
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
     [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
-     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按分类"],
+     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按模块"],
      ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
     ].map(function(o){
       return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>';
@@ -22861,7 +22861,7 @@ function openFromNotification(ds){
 })();
 
 /* ---- core/app.js ---- */
-/* core/app · 空间切换、当前用户、分类数据、顶栏 */
+/* core/app · 空间切换、当前用户、模块数据、顶栏 */
 
 
 
@@ -25246,7 +25246,7 @@ function renderMoreFilter(meta){
   var html = '<div class="menu-title">筛选</div>' +
     section("负责人", ownerInner) + section("优先级", priInner) +
     section("类型", typeInner) + section("版本", versionInner) +
-    section("分类", catInner) + section("标签", tagInner) + section("项目", reqInner) +
+    section("模块", catInner) + section("标签", tagInner) + section("项目", reqInner) +
     section("状态", blockedInner);
   if(!ownerInner && !priInner && !typeInner && !versionInner && !catInner && !tagInner && !reqInner){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前空间还没有可筛选的字段。</p></div>';
@@ -27995,7 +27995,7 @@ function ganttGroupFieldValue(t, field){
     var nm = st.key === "done" ? "已完成" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
     return { v: st.key, name: nm };
   }
-  if(field === "category") return { v: t.category || "__none", name: t.category || "未分类" };
+  if(field === "category") return { v: t.category || "__none", name: t.category || "未指定模块" };
   if(field === "priority") return { v: t.priority || "P2", name: priName(t.priority || "P2") };
   return { v: "__all", name: "" };
 }
@@ -29399,7 +29399,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("类型", typeHTML) +
     (verHTML ? ganttFilterSection("版本", verHTML) : "") +
     ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
-    (catHTML ? ganttFilterSection("分类", catHTML) : "") +
+    (catHTML ? ganttFilterSection("模块", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
     ganttFilterSection("到期", dueHTML) +
     ganttFilterSection("状态", blockedHTML) +
@@ -29444,7 +29444,7 @@ function renderGanttViewsMenu(){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">第二级分组</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
-    [["none", "无"], ["project", "项目"], ["owner", "负责人"], ["status", "状态"], ["category", "分类"], ["priority", "优先级"]].map(function(o){
+    [["none", "无"], ["project", "项目"], ["owner", "负责人"], ["status", "状态"], ["category", "模块"], ["priority", "优先级"]].map(function(o){
       return ganttFilterChip("data-gantt-group2", o[0], o[1], ganttState.groupBy2 === o[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">左列字段</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
@@ -30515,7 +30515,7 @@ var reviewPivot = (function(){
   }catch(e){ /* 受限环境忽略 */ }
   return {row:"owner", col:"reqId"};
 })();
-var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "分类"], ["column", "状态"]];
+var PIVOT_DIMS = [["owner", "成员"], ["reqId", "项目"], ["priority", "优先级"], ["category", "模块"], ["column", "状态"]];
 var reviewPivotState = null;
 function pivotDimLabel(dim){
   for(var i = 0; i < PIVOT_DIMS.length; i++) if(PIVOT_DIMS[i][0] === dim) return PIVOT_DIMS[i][1];
@@ -30525,7 +30525,7 @@ function pivotValue(t, dim){
   if(dim === "owner") return t.owner || "未分配";
   if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
   if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
-  if(dim === "category") return t.category || "未分类";
+  if(dim === "category") return t.category || "未指定模块";
   if(dim === "column") return colName(t.boardColumn) || "未设置";
   return "—";
 }
@@ -30982,7 +30982,7 @@ function renderCompletions(rows, month){
   }
   /* 列只留统计用得上的：「开始时间 / 结束时间」成对（结束时间 = 任务完成日期），
      计时的首次/最后时间属于内部数据，不展示 */
-  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>分类</th>" +
+  var head = "<tr><th>工作项</th><th>项目</th><th>文档</th><th>负责人</th><th>模块</th>" +
     "<th>优先级</th><th>开始时间</th><th>结束时间</th><th>总耗时</th></tr>";
   var body = rows.map(function(r){
     return "<tr>" +
@@ -31018,7 +31018,7 @@ function exportCompCSV(){
   var rows = compRowsCache || [];
   if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
   var month = currentCompMonth();
-  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","分类","优先级",
+  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
     "开始时间","结束时间","总耗时(分钟)","总耗时"]];
   rows.forEach(function(r){
     lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
@@ -31452,9 +31452,9 @@ function renderFlowEstimate(d){
     }
     html += '</div>';
   }
-  /* 分类系数：只有一个分类时没有对比意义 */
+  /* 模块系数：只有一个模块时没有对比意义 */
   if(d.byCategory && d.byCategory.length > 1){
-    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按分类看系数</div>';
+    html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按模块看系数</div>';
     d.byCategory.forEach(function(c){
       var cf = c.factor || 0;
       html += flowRow(c.category + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
@@ -35157,8 +35157,8 @@ function openRoleGuide(){
     roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["新增 / 编辑 / 排序看板列与分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新增 / 编辑 / 排序看板列与模块", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除看板列 / 模块", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -35277,7 +35277,7 @@ function enterSettingsView(){
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/模块仅空间主可操作");
   /* 完整备份导入/导出与清空在后端均要求空间主；CSV 导出对所有角色开放 */
   ["btnExport", "btnImport", "btnReset"].forEach(function(id){
     var el = $(id);
@@ -35707,11 +35707,11 @@ function renderCatCfg(){
   catCfgList.innerHTML = rt.catDefsCache.map(function(c, idx){
     return '<div class="cfg-row" data-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色"' + (readOnly ? " disabled" : "") + ' />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
       '<button class="cc-act" type="button" data-cat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-cat-down title="下移"' + (readOnly || idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除分类" : "仅空间主可删除分类") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
   ["catNewColor", "catNewName", "btnCatAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
@@ -35724,9 +35724,9 @@ function saveCatRow(id){
   if(!row) return;
   var name = row.querySelector("[data-cat-name]").value.trim();
   var color = row.querySelector("[data-cat-color]").value;
-  if(!name){ toast("分类名不能为空", "warn"); loadCatCfg(); return; }
+  if(!name){ toast("模块名不能为空", "warn"); loadCatCfg(); return; }
   API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
-    toast("已更新分类「" + name + "」", "fs");
+    toast("已更新模块「" + name + "」", "fs");
     loadCatCfg();
     loadCategories(true);
     loadBoard({silent:true});
@@ -35760,13 +35760,13 @@ catCfgList.addEventListener("click", function(e){
     for(var j = 0; j < rt.catDefsCache.length; j++) if(rt.catDefsCache[j].id === id) cat = rt.catDefsCache[j];
     if(!cat) return;
     UI.showConfirm({
-      title:"删除分类",
-      msg:"删除分类「" + esc(cat.name) + "」？其下工作项将改到第一个分类。",
-      okText:"删除分类"
+      title:"删除模块",
+      msg:"删除模块「" + esc(cat.name) + "」？其下工作项将改到第一个模块。",
+      okText:"删除模块"
     }).then(function(ok){
       if(!ok) return;
       API.del("/api/categories/" + encodeURIComponent(id)).then(function(){
-        toast("已删除分类「" + cat.name + "」", "fs");
+        toast("已删除模块「" + cat.name + "」", "fs");
         loadCatCfg();
         loadCategories(true);
         loadBoard({silent:true});
@@ -35777,9 +35777,9 @@ catCfgList.addEventListener("click", function(e){
 $("btnCatAdd").addEventListener("click", function(){
   if(roleReadOnly()) return;
   var name = catNewName.value.trim();
-  if(!name){ toast("请填写分类名称", "warn"); return; }
+  if(!name){ toast("请填写模块名称", "warn"); return; }
   API.post("/api/categories", { name: name, color: catNewColor.value }).then(function(){
-    toast("已添加分类「" + name + "」", "fs");
+    toast("已添加模块「" + name + "」", "fs");
     catNewName.value = "";
     loadCatCfg();
     loadCategories(true);
@@ -36531,7 +36531,7 @@ $("fileImport").addEventListener("change", function(e){
   UI.showConfirm({
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按工作项重建完成归档；同时清空工作项通知。已选文件：<b>" +
-      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
+      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/模块<b>不会被导入或删除</b>。" +
       "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本工作项绑定、需求池与首版上线日</b>，v10 备份还会恢复<b>测试用例、执行流水与文档评论</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
@@ -36585,7 +36585,7 @@ function disarmReset(){
   if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
   btnReset.classList.remove("armed");
   resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
+  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){

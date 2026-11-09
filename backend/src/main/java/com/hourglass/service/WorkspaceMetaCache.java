@@ -2,9 +2,11 @@ package com.hourglass.service;
 
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.ColumnTransition;
 import com.hourglass.entity.TagCount;
 import com.hourglass.mapper.BoardColumnMapper;
 import com.hourglass.mapper.CategoryMapper;
+import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.TagMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
 /**
- * 空间 meta 缓存：看板列 / 分类 / 标签，按空间 + WorkspaceVersionService 版本号失效。
+ * 空间 meta 缓存：看板列 / 模块 / 标签，按空间 + WorkspaceVersionService 版本号失效。
  *
  * <p>写请求成功后版本号自增，下一次读取自然重新加载；另外各写入口会主动失效，
  * 版本号没来得及 bump（如不带 workspace 参数的写请求）时也不会长期陈旧。
@@ -34,6 +36,7 @@ public class WorkspaceMetaCache {
     private final BoardColumnMapper boardColumnMapper;
     private final CategoryMapper categoryMapper;
     private final TagMapper tagMapper;
+    private final ColumnTransitionMapper columnTransitionMapper;
     private final WorkspaceVersionService versionService;
     private final long ttlMillis;
     private final LongSupplier clock;
@@ -44,21 +47,26 @@ public class WorkspaceMetaCache {
             new ConcurrentHashMap<String, Entry<List<Category>>>();
     private final Map<String, Entry<List<TagCount>>> tags =
             new ConcurrentHashMap<String, Entry<List<TagCount>>>();
+    private final Map<String, Entry<List<ColumnTransition>>> transitions =
+            new ConcurrentHashMap<String, Entry<List<ColumnTransition>>>();
 
     @Autowired
     public WorkspaceMetaCache(BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
-                              TagMapper tagMapper, WorkspaceVersionService versionService,
+                              TagMapper tagMapper, ColumnTransitionMapper columnTransitionMapper,
+                              WorkspaceVersionService versionService,
                               @Value("${app.cache.meta-ttl-seconds:300}") long ttlSeconds) {
-        this(boardColumnMapper, categoryMapper, tagMapper, versionService,
+        this(boardColumnMapper, categoryMapper, tagMapper, columnTransitionMapper, versionService,
                 Math.max(0L, ttlSeconds) * 1000L, System::currentTimeMillis);
     }
 
     WorkspaceMetaCache(BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper,
-                       TagMapper tagMapper, WorkspaceVersionService versionService,
+                       TagMapper tagMapper, ColumnTransitionMapper columnTransitionMapper,
+                       WorkspaceVersionService versionService,
                        long ttlMillis, LongSupplier clock) {
         this.boardColumnMapper = boardColumnMapper;
         this.categoryMapper = categoryMapper;
         this.tagMapper = tagMapper;
+        this.columnTransitionMapper = columnTransitionMapper;
         this.versionService = versionService;
         this.ttlMillis = ttlMillis;
         this.clock = clock;
@@ -124,6 +132,22 @@ public class WorkspaceMetaCache {
         return copyTags(loaded);
     }
 
+    /** 状态流转规则（只读副本）；没有记录即按 ColumnTransitionService 的默认规则 */
+    public List<ColumnTransition> transitions(String workspaceId) {
+        if (workspaceId == null) {
+            return Collections.emptyList();
+        }
+        Entry<List<ColumnTransition>> e = transitions.get(workspaceId);
+        long version = versionService.version(workspaceId);
+        long now = clock.getAsLong();
+        if (e != null && e.version == version && now < e.expiresAt) {
+            return copyTransitions(e.value);
+        }
+        List<ColumnTransition> loaded = columnTransitionMapper.selectByWorkspace(workspaceId);
+        transitions.put(workspaceId, new Entry<List<ColumnTransition>>(version, now + ttlMillis, loaded));
+        return copyTransitions(loaded);
+    }
+
     /** 按查看人过滤的标签统计：owner/admin/viewer 无可见范围限制，直接复用空间级缓存 */
     public List<TagCount> tags(String workspaceId, String viewerId) {
         if (workspaceId == null || viewerId == null) {
@@ -150,6 +174,12 @@ public class WorkspaceMetaCache {
         }
     }
 
+    public void evictTransitions(String workspaceId) {
+        if (workspaceId != null) {
+            transitions.remove(workspaceId);
+        }
+    }
+
     /** 空间配置整体变化（删除空间、导入覆盖、补齐默认配置） */
     public void evict(String workspaceId) {
         if (workspaceId == null) {
@@ -158,6 +188,7 @@ public class WorkspaceMetaCache {
         columns.remove(workspaceId);
         categories.remove(workspaceId);
         tags.remove(workspaceId);
+        transitions.remove(workspaceId);
     }
 
     private static List<BoardColumn> copyColumns(List<BoardColumn> src) {
@@ -184,6 +215,16 @@ public class WorkspaceMetaCache {
         List<TagCount> out = new ArrayList<TagCount>(src.size());
         for (TagCount t : src) {
             TagCount copy = new TagCount();
+            BeanUtils.copyProperties(t, copy);
+            out.add(copy);
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    private static List<ColumnTransition> copyTransitions(List<ColumnTransition> src) {
+        List<ColumnTransition> out = new ArrayList<ColumnTransition>(src.size());
+        for (ColumnTransition t : src) {
+            ColumnTransition copy = new ColumnTransition();
             BeanUtils.copyProperties(t, copy);
             out.add(copy);
         }

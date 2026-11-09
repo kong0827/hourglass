@@ -115,9 +115,8 @@ function loadGanttPrefs(){
   var dw = Number(saved.zoomDayW || saved.dayW);
   if(dw === 20 || dw === 28 || dw === 40) ganttState.zoomDayW = dw;
   if(saved.scale === "day" || saved.scale === "week" || saved.scale === "month") ganttState.scale = saved.scale;
-  if(saved.groupBy === "project" || saved.groupBy === "owner") ganttState.groupBy = saved.groupBy;
-  if(saved.groupBy2 === "project" || saved.groupBy2 === "owner" || saved.groupBy2 === "status"
-    || saved.groupBy2 === "category" || saved.groupBy2 === "priority") ganttState.groupBy2 = saved.groupBy2;
+  if(["project", "owner", "status", "category", "priority"].indexOf(saved.groupBy) !== -1) ganttState.groupBy = saved.groupBy;
+  if(["none", "project", "owner", "status", "category", "priority"].indexOf(saved.groupBy2) !== -1) ganttState.groupBy2 = saved.groupBy2;
   if(saved.sortBy === "start" || saved.sortBy === "due" || saved.sortBy === "priority"
     || saved.sortBy === "owner" || saved.sortBy === "progress") ganttState.sortBy = saved.sortBy;
   if(saved.collapsed && typeof saved.collapsed === "object") ganttState.collapsed = saved.collapsed;
@@ -452,7 +451,7 @@ function ganttGroupFieldValue(t, field){
     var nm = st.key === "done" ? "已完成" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
     return { v: st.key, name: nm };
   }
-  if(field === "category") return { v: t.category || "__none", name: t.category || "未分类" };
+  if(field === "category") return { v: t.category || "__none", name: t.category || "未指定模块" };
   if(field === "priority") return { v: t.priority || "P2", name: priName(t.priority || "P2") };
   return { v: "__all", name: "" };
 }
@@ -1894,7 +1893,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("类型", typeHTML) +
     (verHTML ? ganttFilterSection("版本", verHTML) : "") +
     ganttFilterSection("项目", projHTML || '<span class="foot-note">还没有项目，可到「项目」页新建</span>') +
-    (catHTML ? ganttFilterSection("分类", catHTML) : "") +
+    (catHTML ? ganttFilterSection("模块", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
     ganttFilterSection("到期", dueHTML) +
     ganttFilterSection("状态", blockedHTML) +
@@ -1939,7 +1938,7 @@ function renderGanttViewsMenu(){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">第二级分组</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
-    [["none", "无"], ["project", "项目"], ["owner", "负责人"], ["status", "状态"], ["category", "分类"], ["priority", "优先级"]].map(function(o){
+    [["none", "无"], ["project", "项目"], ["owner", "负责人"], ["status", "状态"], ["category", "模块"], ["priority", "优先级"]].map(function(o){
       return ganttFilterChip("data-gantt-group2", o[0], o[1], ganttState.groupBy2 === o[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">左列字段</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
@@ -2601,7 +2600,7 @@ if(ganttScaleEl){
 if(ganttGroupEl){
   ganttGroupEl.addEventListener("change", function(){
     var v = this.value;
-    ganttState.groupBy = ["project","owner","status","category","priority"].indexOf(v) !== -1 ? v : "none";
+    ganttState.groupBy = GANTT_VIEW_GROUPS.indexOf(v) !== -1 ? v : "none";
     /* 一级选「不分组」= 彻底平铺：二级分组也一起清掉，避免下拉显示不分组却仍在分组 */
     if(ganttState.groupBy === "none") ganttState.groupBy2 = "none";
     saveGanttPrefs();

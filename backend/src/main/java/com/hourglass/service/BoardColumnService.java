@@ -8,6 +8,7 @@ import com.hourglass.dto.ColumnRequest;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.BoardColumnMapper;
+import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.TaskMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,14 +29,17 @@ public class BoardColumnService {
     private static final String RULE_ENDED = "ended";
 
     private final BoardColumnMapper boardColumnMapper;
+    private final ColumnTransitionMapper transitionMapper;
     private final TaskMapper taskMapper;
     private final ActivityService activityService;
     /** 列定义缓存：读列表/查名/排序校验共用，写入口负责失效 */
     private final WorkspaceMetaCache metaCache;
 
-    public BoardColumnService(BoardColumnMapper boardColumnMapper, TaskMapper taskMapper,
-                              ActivityService activityService, WorkspaceMetaCache metaCache) {
+    public BoardColumnService(BoardColumnMapper boardColumnMapper, ColumnTransitionMapper transitionMapper,
+                              TaskMapper taskMapper, ActivityService activityService,
+                              WorkspaceMetaCache metaCache) {
         this.boardColumnMapper = boardColumnMapper;
+        this.transitionMapper = transitionMapper;
         this.taskMapper = taskMapper;
         this.activityService = activityService;
         this.metaCache = metaCache;
@@ -104,8 +108,11 @@ public class BoardColumnService {
         }
         boardColumnMapper.moveTasks(workspaceId, id, target);
         boardColumnMapper.deleteById(workspaceId, id);
+        transitionMapper.deleteByColumn(workspaceId, id);
         renumber(workspaceId, target);
         evictColumns(workspaceId);
+        metaCache.evictTransitions(workspaceId);
+        CacheSync.evictAfterCommitOrNow(() -> metaCache.evictTransitions(workspaceId));
         /* O-9：破坏性配置变更留审计（活动流可见）
            第九轮审查 #9：文案写列名而不是列 ID，否则活动流里会出现「C1a2b3c4」这种不可读内容 */
         activityService.logConfig(workspaceId,

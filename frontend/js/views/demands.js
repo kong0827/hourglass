@@ -3,14 +3,14 @@
 import { API } from "../core/api.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
-import { loadViews, savedViewsFor } from "../core/filters-ui.js";
+import { loadViews, pruneUnknownCats, savedViewsFor } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
-import { canEditReq, reqNameById, rt } from "../core/state.js";
+import { canEditReq, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
@@ -21,7 +21,7 @@ import { loadReqs } from "./board.js";
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
     demandGanttBar = $("demandGanttBar"), demandsPage = $("demandsPage"),
     dReq = $("dReq"), dTitle = $("dTitle"), dDesc = $("dDesc"), dAccept = $("dAccept"),
-    dSource = $("dSource"), dKind = $("dKind"), dExpect = $("dExpect"),
+    dSource = $("dSource"), dKind = $("dKind"), dCategory = $("dCategory"), dExpect = $("dExpect"),
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
     dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan");
@@ -171,6 +171,7 @@ function demandPageParams(offset, limit){
     q: demSmart.q || null,
     pris: demSmart.pris.join(","),
     kinds: demSmart.kinds.join(","),
+    cats: demSmart.cats.join(","),
     reqs: demSmart.reqs.join(","),
     sort: demSmart.sort,
     offset: offset,
@@ -461,6 +462,7 @@ function cardHTML(d, opts){
     : "";
   return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
+    + catTag(d.category)
     + priTagHTML(d.priority || "P2") + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
@@ -486,6 +488,7 @@ function statusTag(st){
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>';
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
+  if(key === "category") return catTag(d.category) || "—";
   if(key === "priority") return priTagHTML(d.priority || "P2");
   if(key === "status") return statusTag(d.status);
   if(key === "project") return esc(reqNameById(d.reqId) || "—");
@@ -499,10 +502,10 @@ function demandCell(d, key){
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
 var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["rej","已拒绝"]];
-var DEM_GROUPS = ["none","status","priority","project","kind"];
+var DEM_GROUPS = ["none","status","priority","project","kind","category"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
-var demSmart = { current:"all", preset:"all", group:"none", sort:"default", pris:[], kinds:[], reqs:[], q:"", collapsed:{} };
+var demSmart = { current:"all", preset:"all", group:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
 var demSmartBar = null, demTabsBox = null, demSearchInput = null, demQTimer = null;
 
 function demBaseRows(){
@@ -512,9 +515,10 @@ function demBaseRows(){
     if(demSmart.preset !== "all" && d.status !== demSmart.preset) return false;
     if(demSmart.pris.length && demSmart.pris.indexOf(d.priority || "P2") === -1) return false;
     if(demSmart.kinds.length && demSmart.kinds.indexOf(d.itemKind || "其他") === -1) return false;
+    if(demSmart.cats.length && demSmart.cats.indexOf(d.category || "") === -1) return false;
     if(demSmart.reqs.length && demSmart.reqs.indexOf(d.reqId) === -1) return false;
     if(demSmart.q){
-      var hay = ((d.title || "") + "\n" + (d.description || "") + "\n" + (d.source || "")).toLowerCase();
+      var hay = ((d.title || "") + "\n" + (d.description || "") + "\n" + (d.source || "") + "\n" + (d.category || "")).toLowerCase();
       if(hay.indexOf(demSmart.q.toLowerCase()) === -1) return false;
     }
     return true;
@@ -540,6 +544,7 @@ function demGroupInfo(d){
   if(demSmart.group === "priority") return {key:d.priority || "P2", label:priName(d.priority || "P2")};
   if(demSmart.group === "project") return {key:d.reqId || "__none", label:d.reqId ? (reqNameById(d.reqId) || "未归类") : "未归类"};
   if(demSmart.group === "kind") return {key:d.itemKind || "其他", label:d.itemKind || "其他"};
+  if(demSmart.group === "category") return {key:d.category || "__none", label:d.category || "未指定模块"};
   return null;
 }
 function demGroups(){
@@ -556,6 +561,13 @@ function demGroups(){
     if(demSmart.group === "status")
       return (STATUS_ORDER[a.key] === undefined ? 9 : STATUS_ORDER[a.key]) - (STATUS_ORDER[b.key] === undefined ? 9 : STATUS_ORDER[b.key]);
     if(demSmart.group === "priority") return priRank(a.key) - priRank(b.key);
+    if(demSmart.group === "category"){
+      var order = {};
+      (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+      var ai = order[a.key] === undefined ? 999 : order[a.key];
+      var bi = order[b.key] === undefined ? 999 : order[b.key];
+      return ai - bi || a.label.localeCompare(b.label, "zh-CN");
+    }
     return a.label.localeCompare(b.label, "zh-CN");
   });
   return groups;
@@ -565,7 +577,7 @@ function demViewRows(){
   return demGroups().reduce(function(all, g){ return all.concat(g.rows); }, []);
 }
 function demFilterCount(){
-  return demSmart.pris.length + demSmart.kinds.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
+  return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
 }
 function renderDemTabs(){
   if(!demTabsBox) return;
@@ -601,7 +613,8 @@ function saveDemState(){
       wsId: ws,
       view: {
         current: demSmart.current, preset: demSmart.preset, group: demSmart.group, sort: demSmart.sort,
-        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(), reqs: demSmart.reqs.slice(),
+        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(),
+        cats: demSmart.cats.slice(), reqs: demSmart.reqs.slice(),
         gantt: { scale: demGantt.scale, rangeMode: demGantt.rangeMode, zoomDayW: demGantt.zoomDayW }
       }
     }));
@@ -635,6 +648,7 @@ function restoreDemState(){
   demSmart.sort = DEM_SORTS.indexOf(v.sort) !== -1 ? v.sort : "default";
   demSmart.pris = demStrArr(v.pris);
   demSmart.kinds = demStrArr(v.kinds);
+  demSmart.cats = demStrArr(v.cats);
   demSmart.reqs = demStrArr(v.reqs);
   demSmart.q = typeof v.q === "string" ? v.q : "";
   if(v.gantt && typeof v.gantt === "object"){
@@ -661,7 +675,7 @@ function activateDemPreset(id){
   demSmart.preset = id;
   demSmart.group = "none";
   demSmart.sort = "default";
-  demSmart.pris = []; demSmart.kinds = []; demSmart.reqs = []; demSmart.q = "";
+  demSmart.pris = []; demSmart.kinds = []; demSmart.cats = []; demSmart.reqs = []; demSmart.q = "";
   demSmart.collapsed = {};
   demStateChanged();
 }
@@ -677,6 +691,7 @@ function applyDemView(v){
   demSmart.sort = DEM_SORTS.indexOf(p.sort) !== -1 ? p.sort : "default";
   demSmart.pris = demStrArr(p.pris);
   demSmart.kinds = demStrArr(p.kinds);
+  demSmart.cats = pruneUnknownCats(demStrArr(p.cats));
   demSmart.reqs = demStrArr(p.reqs);
   demSmart.q = typeof p.q === "string" ? p.q : "";
   demSmart.collapsed = {};
@@ -708,7 +723,8 @@ function saveDemView(){
     var params = JSON.stringify({
       scope:"demand",
       preset:demSmart.preset, group:demSmart.group, sort:demSmart.sort,
-      q:demSmart.q, pris:demSmart.pris.slice(), kinds:demSmart.kinds.slice(), reqs:demSmart.reqs.slice()
+      q:demSmart.q, pris:demSmart.pris.slice(), kinds:demSmart.kinds.slice(),
+      cats:demSmart.cats.slice(), reqs:demSmart.reqs.slice()
     });
     API.post("/api/views", { name:name, params:params }).then(function(saved){
       toast((overwrite ? "已覆盖视图「" : "已保存视图「") + name + "」", "fs");
@@ -732,12 +748,13 @@ function deleteDemView(id){
 }
 function demFilterMenuHTML(){
   var base = demands.filter(function(d){ return demSmart.preset === "all" || d.status === demSmart.preset; });
-  var counts = { pris:{}, kinds:{}, reqs:{} };
+  var counts = { pris:{}, kinds:{}, reqs:{}, cats:{} };
   base.forEach(function(d){
-    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none";
+    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none", c = d.category || "";
     counts.pris[p] = (counts.pris[p] || 0) + 1;
     counts.kinds[k] = (counts.kinds[k] || 0) + 1;
     counts.reqs[r] = (counts.reqs[r] || 0) + 1;
+    counts.cats[c] = (counts.cats[c] || 0) + 1;
   });
   function section(title, inner){
     if(!inner) return "";
@@ -758,6 +775,16 @@ function demFilterMenuHTML(){
     return '<button class="chip" type="button" data-dem-f="kinds" data-dem-fv="' + esc(k) + '" aria-pressed="' + on + '">' +
       esc(k) + ' <span class="n">' + (counts.kinds[k] || 0) + '</span></button>';
   }).join("");
+  /* 模块按字典顺序展示；历史数据里的空模块单独一项，便于筛选出来补齐 */
+  var catNames = (rt.categoriesCache || []).map(function(c){ return c.name; });
+  Object.keys(counts.cats).forEach(function(n){ if(catNames.indexOf(n) === -1) catNames.push(n); });
+  /* 空模块只用于分组呈现，不放进筛选项：服务端筛选按模块名传参，空值无法与"未传"区分 */
+  var catInner = catNames.filter(function(n){ return n !== ""; }).map(function(n){
+    var on = demSmart.cats.indexOf(n) !== -1;
+    if(!(counts.cats[n] > 0) && !on) return "";
+    return '<button class="chip" type="button" data-dem-f="cats" data-dem-fv="' + esc(n) + '" aria-pressed="' + on + '">' +
+      esc(n) + ' <span class="n">' + (counts.cats[n] || 0) + '</span></button>';
+  }).join("");
   var reqInner = rt.reqList.map(function(r){
     var on = demSmart.reqs.indexOf(r.id) !== -1;
     if(!(counts.reqs[r.id] > 0) && !on) return "";
@@ -765,8 +792,8 @@ function demFilterMenuHTML(){
       esc(r.name) + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
   }).join("");
   var html = '<div class="menu-title">筛选需求</div>' +
-    section("优先级", priInner) + section("类型", kindInner) + section("项目", reqInner);
-  if(!priInner && !kindInner && !reqInner){
+    section("优先级", priInner) + section("类型", kindInner) + section("模块", catInner) + section("项目", reqInner);
+  if(!priInner && !kindInner && !catInner && !reqInner){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
   }
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>重置筛选</button></div>';
@@ -778,7 +805,7 @@ function openDemFilterPop(anchor){
   el.innerHTML = demFilterMenuHTML();
   el.addEventListener("click", function(e){
     if(e.target.closest("[data-dem-f-reset]")){
-      demSmart.pris = []; demSmart.kinds = []; demSmart.reqs = [];
+      demSmart.pris = []; demSmart.kinds = []; demSmart.cats = []; demSmart.reqs = [];
       el.innerHTML = demFilterMenuHTML();
       demStateChanged();
       return;
@@ -800,6 +827,7 @@ function demCsvCell(value){
 function demCsvValue(d, key){
   if(key === "title") return d.title || "";
   if(key === "kind") return d.itemKind || "";
+  if(key === "category") return d.category || "";
   if(key === "priority") return d.priority || "";
   if(key === "status") return statusName(d.status);
   if(key === "project") return reqNameById(d.reqId) || "";
@@ -832,11 +860,11 @@ function initDemSmartBar(){
   demSmartBar.innerHTML =
     '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
     '<div class="smart-view-tools">' +
-      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索需求 / 描述 / 来源" aria-label="搜索需求" />' +
-      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索需求 / 描述 / 来源 / 模块" aria-label="搜索需求" />' +
+      '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 模块 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
-        '<option value="project">按项目</option><option value="kind">按类型</option></select></label>' +
+        '<option value="project">按项目</option><option value="kind">按类型</option><option value="category">按模块</option></select></label>' +
       '<label class="smart-view-control"><span>排序</span><select class="mini-select" data-dem-sort aria-label="排序方式">' +
         '<option value="default">默认顺序（状态→优先级）</option><option value="priority">按优先级</option>' +
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
@@ -1111,6 +1139,7 @@ function demgLabelHTML(d, tl){
   if(rn) meta += '<span class="ellipsis shrink">' + esc(rn) + '</span>';
   var ver = demandVersionName(d);
   if(ver) meta += '<span class="tag ghost">' + esc(ver) + '</span>';
+  if(d.category) meta += catTag(d.category);
   if(d.expectDate) meta += '<span>期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>';
   var info = [];
   if(tl.taskCount) info.push("工作项 " + (tl.taskDone || 0) + "/" + tl.taskCount);
@@ -1341,6 +1370,11 @@ function openDemandDialog(d){
   dAccept.value = d ? (d.acceptText || "") : "";
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
+  var cats = rt.categoriesCache || [];
+  dCategory.innerHTML = '<option value="">未指定模块</option>' + cats.map(function(c){
+    return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>';
+  }).join("");
+  dCategory.value = d ? (d.category || "") : (cats.length ? cats[0].name : "");
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
   dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
@@ -1376,6 +1410,7 @@ function saveDemand(){
     acceptText: dAccept.value.trim() || null,
     source: dSource.value.trim() || null,
     itemKind: dKind.value,
+    category: dCategory.value || null,
     priority: formPri,
     expectDate: dExpect.value || null,
     wsjfBusiness: wsNum(dWsjfB, 0),
@@ -1681,6 +1716,7 @@ function showDemandDetail(id){
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
+    ["模块", d.category || "未指定模块"],
     ["优先级", priName(d.priority || "P2")],
     ["目标版本", demandVersionName(d) || "待规划"],
     ["期望交付", d.expectDate || "待评估"],
@@ -1738,7 +1774,8 @@ function showDemandDetail(id){
       if(!writable){ denyDemandReadOnly(); return; }
       UI.closeModal(layer);
       openTaskDrawer("backlog", null, {
-        reqId: d.reqId, demandId: d.id, versionId: d.versionId, dueDate: d.expectDate
+        reqId: d.reqId, demandId: d.id, versionId: d.versionId, dueDate: d.expectDate,
+        category: d.category || null
       });
       return;
     }

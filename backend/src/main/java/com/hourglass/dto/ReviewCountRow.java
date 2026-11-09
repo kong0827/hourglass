@@ -2,7 +2,7 @@ package com.hourglass.dto;
 
 import lombok.Data;
 
-/** 周回顾：未完成任务的分类计数与到期分布 */
+/** 周回顾：未完成任务的模块计数与到期分布 */
 @Data
 public class ReviewCountRow {
 

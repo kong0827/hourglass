@@ -82,8 +82,8 @@ public class SavedViewService {
         copyString(root, out, "due", 16);
         copyString(root, out, "doneScope", 16);
         copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "rej");
-        copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "kind");
-        copyEnum(root, out, "subgroup", "none", "status", "owner", "priority", "project");
+        copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "category", "kind");
+        copyEnum(root, out, "subgroup", "none", "status", "owner", "priority", "project", "category");
         copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created",
                 "title", "type", "column", "owner", "progress", "project", "version",
                 "category", "startDate", "tags", "subtasks", "comments");

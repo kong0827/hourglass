@@ -1,6 +1,7 @@
 /* views/settings · 设置（空间 / 工作流 / 数据 / 活动 / 账号） */
 
 import { API } from "../core/api.js";
+import { invalidateRules, loadRules } from "../core/transitions.js";
 import { loadCategories, loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { saveViewState } from "../core/filters-ui.js";
@@ -110,14 +111,26 @@ var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
     wsMemberList = $("wsMemberList"), wsMemberName = $("wsMemberName"),
     catCfgList = $("catCfgList"), catNewName = $("catNewName"), catNewColor = $("catNewColor"),
     colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor"), colNewRule = $("colNewRule");
+var transMatrix = $("colTransMatrix"), transSummary = $("colTransSummary"),
+    transHint = $("colTransHint"), btnTransReset = $("btnTransReset");
+var transData = null;
+var TRANS_LABELS = { allow:"允许", reason:"需因", deny:"禁止" };
+var TRANS_FULL = { allow:"允许", reason:"需填原因", deny:"禁止" };
+var TRANS_NEXT = { allow:"reason", reason:"deny", deny:"allow" };
 /* 成员搜索选择器：用户先从候选列表选中，再点「添加成员」 */
 var wsMemberSelected = null, wsMemberCandidates = {}, wsMemberTimer = null, wsMemberSeq = 0;
 var ROLE_LABELS = { owner:"空间主", admin:"管理员", member:"成员", viewer:"查看者" };
-var RULE_LABELS = { normal:"正常处理", waiting:"等待接续", ended:"执行结束" };
+var RULE_LABELS = { normal:"正常计时（算逾期）", waiting:"暂停计时（算逾期）", ended:"结束计时（不计逾期）" };
+var RULE_TITLES = {
+  normal:"可以计时，逾期照常计算",
+  waiting:"停止计时，逾期照常计算（例如等待外部反馈）",
+  ended:"停止计时，也不再计算逾期（例如待发布、待验收）"
+};
 function roleLabel(role){ return ROLE_LABELS[role] || ROLE_LABELS.member; }
 function colRuleOptions(selected){
   return Object.keys(RULE_LABELS).map(function(k){
-    return '<option value="' + k + '"' + (k === selected ? " selected" : "") + '>' + RULE_LABELS[k] + '</option>';
+    return '<option value="' + k + '"' + (k === selected ? " selected" : "") +
+      ' title="' + RULE_TITLES[k] + '">' + RULE_LABELS[k] + '</option>';
   }).join("");
 }
 function roleOptions(selected, allowAdmin){
@@ -152,8 +165,8 @@ function openRoleGuide(){
     roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["新增 / 编辑 / 排序看板列与分类", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除看板列 / 分类", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新增 / 编辑 / 排序看板列与模块", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除看板列 / 模块", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -272,7 +285,7 @@ function enterSettingsView(){
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/分类仅空间主可操作");
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/模块仅空间主可操作");
   /* 完整备份导入/导出与清空在后端均要求空间主；CSV 导出对所有角色开放 */
   ["btnExport", "btnImport", "btnReset"].forEach(function(id){
     var el = $(id);
@@ -590,6 +603,7 @@ function loadColCfg(){
   API.get("/api/columns").then(function(defs){
     rt.colDefsCache = (defs || []).filter(function(d){ return !d.done; });
     renderColCfg();
+    loadColTrans();
   }).catch(function(ex){
     colCfgList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
@@ -601,7 +615,7 @@ function renderColCfg(){
     var fixed = (d.id === "backlog" || d.id === "doing");
     var delDisabled = fixed || !canDel;
     var ruleSelect = fixed ? ''
-      : '<select class="mini-select col-rule" data-col-rule aria-label="处理规则"' + (readOnly ? " disabled" : "") + '>' +
+      : '<select class="mini-select col-rule" data-col-rule aria-label="处理规则" title="正常计时：计时且计逾期；暂停计时：停表仍计逾期；结束计时：停表且不计逾期"' + (readOnly ? " disabled" : "") + '>' +
           colRuleOptions(d.processingRule || "normal") + '</select>';
     return '<div class="cfg-row" data-col-id="' + esc(d.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
@@ -634,6 +648,103 @@ function saveColRow(id){
   }).catch(function(ex){
     toast(ex.message || "保存失败", "bad");
     loadColCfg();
+  });
+}
+/* 状态流转矩阵：行 = 当前列，列 = 目标列；点格子按 允许 → 需填原因 → 禁止 循环 */
+function transCanConfig(){
+  var role = rt.currentWs && rt.currentWs.myRole;
+  return !roleReadOnly() && (role === "owner" || role === "admin");
+}
+function loadColTrans(){
+  if(!transMatrix) return;
+  transMatrix.innerHTML = '<div class="foot-note" style="padding:8px 2px">加载中…</div>';
+  loadRules(rt.currentWs && rt.currentWs.id, true).then(function(data){
+    transData = data;
+    renderColTrans();
+  }).catch(function(ex){
+    transMatrix.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function transRuleOf(from, to){
+  if(transData && transData.map && transData.map[from + "|" + to]) return transData.map[from + "|" + to];
+  return from === "done" && to !== "done" ? "reason" : "allow";
+}
+function renderColTrans(){
+  if(!transMatrix || !transData) return;
+  var canConfig = transCanConfig();
+  var cols = transData.columns || [];
+  var html = '<table class="trans-table"><thead><tr>' +
+    '<th class="trans-corner">当前 \\ 目标</th>';
+  cols.forEach(function(c){
+    html += '<th title="' + esc(c.name) + '"><span class="trans-col">' +
+      '<i style="background:' + esc(c.color || "#8a8578") + '"></i>' + esc(c.name) + '</span></th>';
+  });
+  html += '</tr></thead><tbody>';
+  var reasonCount = 0, denyCount = 0;
+  cols.forEach(function(from){
+    html += '<tr><th class="trans-row"><span class="trans-col">' +
+      '<i style="background:' + esc(from.color || "#8a8578") + '"></i>' + esc(from.name) + '</span></th>';
+    cols.forEach(function(to){
+      if(from.id === to.id){
+        html += '<td class="trans-self">—</td>';
+        return;
+      }
+      var rule = transRuleOf(from.id, to.id);
+      if(rule === "reason") reasonCount++;
+      if(rule === "deny") denyCount++;
+      html += '<td><button type="button" class="trans-cell ' + rule + '"' +
+        ' data-trans-from="' + esc(from.id) + '" data-trans-to="' + esc(to.id) + '"' +
+        ' title="' + esc(from.name + " → " + to.name + "：" + TRANS_FULL[rule]) + '"' +
+        (canConfig ? "" : " disabled") + '>' + TRANS_LABELS[rule] + '</button></td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  transMatrix.innerHTML = html;
+  if(transSummary){
+    var parts = [];
+    if(reasonCount) parts.push("需填原因 " + reasonCount + " 格");
+    if(denyCount) parts.push("禁止 " + denyCount + " 格");
+    transSummary.textContent = parts.length ? parts.join(" · ") : "全部允许";
+  }
+  if(btnTransReset) btnTransReset.disabled = !canConfig;
+  if(transHint) transHint.textContent = canConfig
+    ? "改动立即保存；已完成的「重开」默认需填原因"
+    : "仅空间主 / 管理员可配置流转规则";
+  if(UI.wireTooltips) UI.wireTooltips(transMatrix);
+}
+if(transMatrix){
+  transMatrix.addEventListener("click", function(e){
+    var cell = e.target.closest("[data-trans-from]");
+    if(!cell || cell.disabled) return;
+    var from = cell.dataset.transFrom, to = cell.dataset.transTo;
+    var next = TRANS_NEXT[transRuleOf(from, to)] || "allow";
+    cell.disabled = true;
+    API.put("/api/columns/transitions", { from: from, to: to, rule: next }).then(function(){
+      transData.map[from + "|" + to] = next;
+      invalidateRules();
+      renderColTrans();
+    }).catch(function(ex){
+      cell.disabled = false;
+      toast(ex.message || "保存失败", "bad");
+    });
+  });
+}
+if(btnTransReset){
+  btnTransReset.addEventListener("click", function(){
+    if(!transCanConfig()) return;
+    UI.showConfirm({
+      title: "恢复默认",
+      msg: "所有格子恢复默认规则（仅「已完成」移到其他列需填原因），确定？",
+      okText: "恢复默认"
+    }).then(function(ok){
+      if(!ok) return;
+      API.post("/api/columns/transitions/reset", {}).then(function(){
+        invalidateRules();
+        toast("已恢复默认流转规则", "fs");
+        loadColTrans();
+      }).catch(function(ex){ toast(ex.message || "恢复失败", "bad"); });
+    });
   });
 }
 colCfgList.addEventListener("change", function(e){
@@ -709,11 +820,11 @@ function renderCatCfg(){
   catCfgList.innerHTML = rt.catDefsCache.map(function(c, idx){
     return '<div class="cfg-row" data-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="分类颜色"' + (readOnly ? " disabled" : "") + ' />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="分类名称"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
       '<button class="cc-act" type="button" data-cat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-cat-down title="下移"' + (readOnly || idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除分类" : "仅空间主可删除分类") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
   ["catNewColor", "catNewName", "btnCatAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
@@ -726,9 +837,9 @@ function saveCatRow(id){
   if(!row) return;
   var name = row.querySelector("[data-cat-name]").value.trim();
   var color = row.querySelector("[data-cat-color]").value;
-  if(!name){ toast("分类名不能为空", "warn"); loadCatCfg(); return; }
+  if(!name){ toast("模块名不能为空", "warn"); loadCatCfg(); return; }
   API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
-    toast("已更新分类「" + name + "」", "fs");
+    toast("已更新模块「" + name + "」", "fs");
     loadCatCfg();
     loadCategories(true);
     loadBoard({silent:true});
@@ -761,27 +872,44 @@ catCfgList.addEventListener("click", function(e){
     var cat = null;
     for(var j = 0; j < rt.catDefsCache.length; j++) if(rt.catDefsCache[j].id === id) cat = rt.catDefsCache[j];
     if(!cat) return;
-    UI.showConfirm({
-      title:"删除分类",
-      msg:"删除分类「" + esc(cat.name) + "」？其下工作项将改到第一个分类。",
-      okText:"删除分类"
-    }).then(function(ok){
-      if(!ok) return;
-      API.del("/api/categories/" + encodeURIComponent(id)).then(function(){
-        toast("已删除分类「" + cat.name + "」", "fs");
-        loadCatCfg();
-        loadCategories(true);
-        loadBoard({silent:true});
-      }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+    var others = rt.catDefsCache.filter(function(c){ return c.id !== id; });
+    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
+    var menu = document.createElement("div");
+    menu.className = "menu";
+    menu.style.minWidth = "200px";
+    menu.innerHTML = '<div class="menu-title">迁移到</div>' + others.map(function(c){
+      return '<button class="menu-item" type="button" data-cat-target="' + esc(c.id) + '">' + esc(c.name) + '</button>';
+    }).join("");
+    UI.openPop(menu, e.target.closest("[data-cat-del]"), { onClose: function(){ menu.remove(); } });
+    menu.addEventListener("click", function(ev){
+      var b = ev.target.closest("[data-cat-target]");
+      if(!b) return;
+      var target = null;
+      for(var k = 0; k < others.length; k++) if(others[k].id === b.dataset.catTarget) target = others[k];
+      if(!target) return;
+      UI.closeAllPops();
+      UI.showConfirm({
+        title:"删除模块",
+        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
+        okText:"删除模块"
+      }).then(function(ok){
+        if(!ok) return;
+        API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
+          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
+          loadCatCfg();
+          loadCategories(true);
+          loadBoard({silent:true});
+        }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+      });
     });
   }
 });
 $("btnCatAdd").addEventListener("click", function(){
   if(roleReadOnly()) return;
   var name = catNewName.value.trim();
-  if(!name){ toast("请填写分类名称", "warn"); return; }
+  if(!name){ toast("请填写模块名称", "warn"); return; }
   API.post("/api/categories", { name: name, color: catNewColor.value }).then(function(){
-    toast("已添加分类「" + name + "」", "fs");
+    toast("已添加模块「" + name + "」", "fs");
     catNewName.value = "";
     loadCatCfg();
     loadCategories(true);
@@ -1555,7 +1683,7 @@ $("fileImport").addEventListener("change", function(e){
   UI.showConfirm({
     title:"导入任务备份",
     msg:"导入会覆盖当前空间的工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖与基线，并按工作项重建完成归档；同时清空工作项通知。已选文件：<b>" +
-      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/分类<b>不会被导入或删除</b>。" +
+      esc(f.name) + "</b>。<br><br>附件、操作时间线、保存视图、看板列/模块<b>不会被导入或删除</b>。" +
       "<br><br>v6 备份会连同<b>文档与分支</b>一起覆盖恢复，v8 备份还会恢复<b>项目版本、版本工作项绑定、需求池与首版上线日</b>，v10 备份还会恢复<b>测试用例、执行流水与文档评论</b>；旧备份不含这些数据时保留现状。旧备份不含依赖/基线（v4 之前也不含评论）：缺失的部分导入后会被清空。建议先导出一份当前任务备份。导入后当前空间的只读分享链接会失效。",
     okText:"继续导入"
   }).then(function(ok){
@@ -1609,7 +1737,7 @@ function disarmReset(){
   if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
   btnReset.classList.remove("armed");
   resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与分类保留";
+  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
 }
 disarmReset();
 btnReset.addEventListener("click", function(){

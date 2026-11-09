@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ColumnTransitionMapper">
+
+  <select id="selectByWorkspace" resultType="ColumnTransition">
+    SELECT workspace_id, from_column, to_column, rule, updated_at FROM column_transition
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY from_column, to_column
+  </select>
+
+  <insert id="upsert">
+    INSERT INTO column_transition (workspace_id, from_column, to_column, rule)
+    VALUES (#{workspaceId}, #{fromColumn}, #{toColumn}, #{rule})
+    ON DUPLICATE KEY UPDATE rule = VALUES(rule), updated_at = NOW()
+  </insert>
+
+  <delete id="deleteByColumn">
+    DELETE FROM column_transition
+    WHERE workspace_id = #{workspaceId} AND (from_column = #{columnId} OR to_column = #{columnId})
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM column_transition WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

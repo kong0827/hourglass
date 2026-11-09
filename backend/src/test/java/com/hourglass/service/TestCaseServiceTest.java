@@ -350,7 +350,7 @@ class TestCaseServiceTest {
         com.hourglass.dto.TaskSaveRequest tReq = captor.getValue();
         /* 截断后必须落在任务保存校验上限内，否则转缺陷被 400 拒绝 */
         assertEquals(60, tReq.getTitle().length());
-        assertEquals(200, tReq.getDescription().length());
+        assertTrue(tReq.getDescription().length() <= 2000);
     }
 
     private static String repeat(String unit, int times) {

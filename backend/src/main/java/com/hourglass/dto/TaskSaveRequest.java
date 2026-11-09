@@ -22,7 +22,7 @@ public class TaskSaveRequest {
     @Size(max = 60, message = "任务标题不能超过 60 字")
     private String title;
 
-    @Size(max = 200, message = "任务描述不能超过 200 字")
+    @Size(max = 2000, message = "任务描述不能超过 2000 字")
     private String description;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")
@@ -35,8 +35,8 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "负责人账号ID不合法")
     private String ownerUserId;
 
-    /** 分类名（取值来自空间分类表；不填则用空间第一个分类） */
-    @Size(max = 16, message = "分类不能超过 16 字")
+    /** 模块名（取值来自空间模块表；不填则用空间第一个模块） */
+    @Size(max = 16, message = "模块不能超过 16 字")
     private String category;
 
     /** 看板列 id：内置 backlog/doing/done 或自定义列（C 开头）；存在性由服务层校验 */
@@ -143,6 +143,12 @@ public class TaskSaveRequest {
 
     /** 选填：撤销删除恢复时一并重建的子任务 */
     private List<SubtaskItem> subtasks;
+
+    /** 抽屉里改列且流转规则要求原因时必填；原因写入移动日志 */
+    private String moveReason;
+
+    /** 抽屉里改列时，空间主 / 管理员强制越过「禁止」规则 */
+    private Boolean force;
 
     /** 保存时回传打开抽屉时的 updatedAt，用于检测并发覆盖（0 行更新返回 409） */
     private LocalDateTime oldUpdatedAt;

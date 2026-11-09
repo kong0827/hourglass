@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 状态流转配置原型</title>
+<style>
+  :root{
+    --primary:#3370ff; --primary-soft:#e8f0ff;
+    --ok:#389e0d; --ok-soft:#edf8e8;
+    --warn:#d48806; --warn-soft:#fff7e6;
+    --danger:#cf1322; --danger-soft:#fff1f0;
+    --bg:#f6f7f9; --surface:#ffffff; --surface-2:#fafbfc; --surface-hover:#f2f4f7;
+    --text:#1f2329; --text-2:#4e5969; --text-3:#8a94a6;
+    --border:#e5e8ef; --border-strong:#cfd5e0;
+    --shadow:0 6px 20px rgba(31,35,41,.08);
+    --radius:10px; --radius-sm:8px; --radius-xs:6px;
+  }
+  html[data-theme="dark"]{
+    --primary:#5b8cff; --primary-soft:#1d2b4d;
+    --ok:#73bf4a; --ok-soft:#22331a;
+    --warn:#e6a23c; --warn-soft:#3a2c14;
+    --danger:#f0554f; --danger-soft:#3a1e1e;
+    --bg:#14161a; --surface:#1c1f24; --surface-2:#20242a; --surface-hover:#262b32;
+    --text:#e8eaed; --text-2:#b6bcc7; --text-3:#7f8794;
+    --border:#2b3038; --border-strong:#3a414c;
+    --shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:13px/1.6 "PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+  h1,h2,h3,p{margin:0;}
+
+  /* 顶栏 */
+  .topbar{
+    position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;
+    padding:0 20px;height:52px;background:var(--surface);border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:center;gap:8px;font-weight:650;font-size:14px;}
+  .brand .mark{
+    width:22px;height:22px;border-radius:7px;background:var(--primary);color:#fff;
+    display:grid;place-items:center;font-size:12px;font-weight:700;
+  }
+  .brand small{color:var(--text-3);font-weight:400;font-size:12px;}
+  .tabs{display:flex;gap:2px;margin-left:8px;}
+  .tab{
+    padding:6px 12px;border-radius:var(--radius-xs);color:var(--text-2);font-weight:550;
+  }
+  .tab:hover{background:var(--surface-hover);color:var(--text);}
+  .tab[aria-selected="true"]{background:var(--primary-soft);color:var(--primary);}
+  .topbar .spacer{flex:1;}
+  .icon-btn{
+    width:32px;height:32px;border-radius:var(--radius-xs);border:1px solid var(--border);
+    display:grid;place-items:center;color:var(--text-2);background:var(--surface);
+  }
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--text);}
+
+  .page{max-width:1080px;margin:0 auto;padding:20px 20px 60px;}
+  .crumb{color:var(--text-3);font-size:12px;margin-bottom:6px;}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px;}
+  .page-head h1{font-size:19px;line-height:1.3;font-weight:650;}
+  .page-head .desc{margin-top:4px;color:var(--text-2);font-size:12.5px;}
+
+  .panel{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    margin-bottom:16px;overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:14px 16px 0;
+  }
+  .panel-head h2{font-size:14px;font-weight:650;}
+  .panel-head .meta{color:var(--text-3);font-size:12px;}
+  .panel-body{padding:12px 16px 16px;}
+  .hint{color:var(--text-3);font-size:12px;line-height:1.75;}
+
+  /* 看板列配置行 */
+  .cfg-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+  .cfg-row{
+    display:flex;align-items:center;gap:8px;min-height:42px;padding:5px 8px;
+    border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);
+  }
+  .cfg-row:hover{border-color:var(--border-strong);}
+  .cfg-row .handle{color:var(--text-3);cursor:grab;font-size:14px;letter-spacing:-2px;}
+  .dot{width:12px;height:12px;border-radius:4px;flex:0 0 auto;}
+  .cfg-name{flex:1;min-width:0;font-weight:550;}
+  .cfg-row .mini-select,.sel{
+    height:30px;padding:0 28px 0 10px;border-radius:var(--radius-sm);
+    border:1px solid var(--border);background:var(--surface);color:var(--text-2);
+    font:inherit;font-size:12.5px;font-weight:550;appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='%2398A2B3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 7px center;
+  }
+  .cfg-row .mini-select{width:172px;flex:0 0 auto;}
+  .sysmark{font-size:11px;color:var(--text-3);flex:0 0 auto;}
+
+  /* 矩阵 */
+  .matrix-toolbar{
+    display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0 10px;
+  }
+  .legend{display:flex;align-items:center;gap:12px;color:var(--text-3);font-size:12px;flex-wrap:wrap;}
+  .legend i{display:inline-flex;align-items:center;gap:5px;font-style:normal;}
+  .swatch{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  .swatch.allow{background:var(--surface-hover);border:1px solid var(--border-strong);}
+  .swatch.reason{background:var(--warn-soft);border:1px solid var(--warn);}
+  .swatch.deny{background:var(--danger-soft);border:1px solid var(--danger);}
+  .matrix-toolbar .spacer{flex:1;}
+
+  .btn{
+    height:32px;padding:0 12px;border-radius:var(--radius-xs);border:1px solid var(--border);
+    background:var(--surface);color:var(--text-2);font-weight:550;
+  }
+  .btn:hover{border-color:var(--border-strong);color:var(--text);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .btn.primary:hover{filter:brightness(1.05);color:#fff;}
+  .btn.ghost{border-color:transparent;background:var(--primary-soft);color:var(--primary);}
+  .btn.dirty{box-shadow:0 0 0 3px var(--primary-soft);}
+
+  .matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);}
+  table.matrix{border-collapse:separate;border-spacing:0;min-width:100%;background:var(--surface);}
+  .matrix th,.matrix td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+  .matrix tr:last-child th,.matrix tr:last-child td{border-bottom:0;}
+  .matrix th:last-child,.matrix td:last-child{border-right:0;}
+  .matrix thead th{
+    position:sticky;top:0;z-index:2;background:var(--surface-2);
+    padding:8px 10px;font-size:12px;font-weight:600;color:var(--text-2);
+    text-align:center;white-space:nowrap;
+  }
+  .matrix thead th:first-child{text-align:left;min-width:112px;}
+  .matrix tbody th{
+    position:sticky;left:0;z-index:1;background:var(--surface-2);
+    padding:8px 10px;text-align:left;font-size:12.5px;font-weight:550;white-space:nowrap;
+  }
+  .matrix td{padding:5px;text-align:center;background:var(--surface);}
+  .matrix td.diag{background:var(--surface-2);color:var(--text-3);font-size:12px;}
+  .cell{
+    min-width:66px;height:28px;border-radius:var(--radius-xs);border:1px solid transparent;
+    font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  }
+  .cell:hover{border-color:var(--border-strong);}
+  .cell.allow{background:var(--surface-hover);color:var(--text-2);}
+  .cell.reason{background:var(--warn-soft);color:var(--warn);}
+  .cell.deny{background:var(--danger-soft);color:var(--danger);}
+  .cell:focus-visible{outline:none;box-shadow:0 0 0 3px var(--primary-soft);}
+
+  .matrix-foot{display:flex;align-items:center;gap:12px;margin-top:10px;color:var(--text-3);font-size:12px;}
+  .matrix-foot .spacer{flex:1;}
+  .dirty-flag{color:var(--warn);font-weight:600;}
+
+  /* 看板预览 */
+  .board-wrap{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px;margin-top:14px;}
+  .col{
+    background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+    min-height:260px;display:flex;flex-direction:column;
+  }
+  .col-head{
+    display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);
+    font-weight:600;font-size:12.5px;
+  }
+  .col-head .count{margin-left:auto;color:var(--text-3);font-weight:500;font-size:12px;}
+  .col-body{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1;}
+  .col.droppable{outline:2px dashed var(--primary);outline-offset:-4px;}
+  .col.blocked{background:var(--danger-soft);border-color:var(--danger);}
+  .col.blocked .col-head{color:var(--danger);}
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xs);
+    padding:9px 10px;box-shadow:0 1px 2px rgba(31,35,41,.04);cursor:pointer;
+  }
+  .card:hover{border-color:var(--border-strong);}
+  .card.selected{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .card .title{font-weight:550;margin-bottom:3px;}
+  .card .sub{color:var(--text-3);font-size:11.5px;}
+  .board-tip{
+    display:flex;align-items:center;gap:8px;margin-top:12px;padding:9px 12px;
+    background:var(--primary-soft);color:var(--primary);border-radius:var(--radius-sm);font-size:12.5px;
+  }
+  .log{
+    margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:10px 12px;background:var(--surface-2);
+  }
+  .log h3{font-size:12.5px;margin-bottom:6px;color:var(--text-2);}
+  .log ul{margin:0;padding-left:16px;color:var(--text-2);font-size:12px;line-height:1.9;max-height:96px;overflow:auto;}
+  .log .empty{color:var(--text-3);font-size:12px;}
+
+  /* 弹窗 */
+  .modal-mask{
+    position:fixed;inset:0;background:rgba(20,24,30,.45);display:none;place-items:center;z-index:40;padding:20px;
+  }
+  .modal-mask.show{display:grid;}
+  .modal{
+    width:min(460px,100%);background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+    border:1px solid var(--border);overflow:hidden;
+  }
+  .modal-head{padding:16px 18px 0;}
+  .modal-head h3{font-size:15px;font-weight:650;}
+  .modal-head p{margin-top:6px;color:var(--text-2);font-size:12.5px;}
+  .modal-body{padding:12px 18px 4px;}
+  .modal-body label{display:block;font-size:12px;color:var(--text-3);margin-bottom:6px;}
+  .modal-body textarea{
+    width:100%;min-height:84px;resize:vertical;padding:9px 10px;font:inherit;font-size:13px;
+    border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text);
+  }
+  .modal-body textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px;}
+
+  /* Toast */
+  .toast-wrap{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:50;display:flex;flex-direction:column;gap:8px;}
+  .toast{
+    min-width:220px;max-width:420px;padding:9px 14px;border-radius:var(--radius-sm);
+    background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);
+    font-size:12.5px;font-weight:550;display:flex;align-items:center;gap:8px;
+    animation:slideIn .18s ease-out;
+  }
+  .toast.ok{border-left:3px solid var(--ok);}
+  .toast.warn{border-left:3px solid var(--warn);}
+  .toast.bad{border-left:3px solid var(--danger);}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+
+  .hidden{display:none !important;}
+  @media (max-width:900px){
+    .board-wrap{grid-template-columns:repeat(2,minmax(160px,1fr));}
+    .cfg-row .mini-select{width:150px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏 <small>状态流转配置原型</small></div>
+  <div class="tabs" role="tablist" aria-label="视图切换">
+    <button class="tab" role="tab" aria-selected="true" data-view="settings">设置页</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="board">看板效果</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="spec">规则说明</button>
+  </div>
+  <span class="spacer"></span>
+  <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">◐</button>
+</div>
+
+<!-- ============ 设置页 ============ -->
+<main class="page" data-pane="settings">
+  <div class="crumb">空间设置 / 看板列</div>
+  <div class="page-head">
+    <div>
+      <h1>看板列与状态流转</h1>
+      <p class="desc">列决定工作项停在哪一步；流转矩阵决定它能不能从一步走到另一步。</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>看板列</h2>
+      <span class="meta">拖拽 / 按钮调整顺序</span>
+    </div>
+    <div class="panel-body">
+      <p class="hint">「未开始」「进行中」可改名不可删除；「已完成」为系统列。处理规则决定这一列的工作项还计不计时、算不算逾期。</p>
+      <div class="cfg-list">
+        <div class="cfg-row">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#c08a3e"></span>
+          <span class="cfg-name">未开始</span>
+          <select class="mini-select" aria-label="未开始处理规则"><option>正常计时（算逾期）</option></select>
+          <span class="sysmark">内置列</span>
+        </div>
+        <div class="cfg-row">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#5b83ad"></span>
+          <span class="cfg-name">进行中</span>
+          <select class="mini-select" aria-label="进行中处理规则"><option>正常计时（算逾期）</option></select>
+          <span class="sysmark">内置列</span>
+        </div>
+        <div class="cfg-row">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#7a5c86"></span>
+          <span class="cfg-name">待验证</span>
+          <select class="mini-select" aria-label="待验证处理规则">
+            <option>正常计时（算逾期）</option>
+            <option>暂停计时（算逾期）</option>
+            <option>结束计时（不计逾期）</option>
+          </select>
+        </div>
+        <div class="cfg-row">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#5f7a4a"></span>
+          <span class="cfg-name">已完成</span>
+          <span class="sysmark">系统列</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>状态流转</h2>
+      <span class="meta" id="ruleCount">当前全部允许</span>
+    </div>
+    <div class="panel-body">
+      <p class="hint">行是当前所在列，列是目标列。点格子切换：允许 → 需填原因 → 禁止 → 允许。默认全部允许，只改需要收紧的格子。</p>
+      <div class="matrix-toolbar">
+        <div class="legend">
+          <i><span class="swatch allow"></span>允许</i>
+          <i><span class="swatch reason"></span>需填原因</i>
+          <i><span class="swatch deny"></span>禁止</i>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn" id="demoBtn">载入示例</button>
+        <button class="btn" id="resetBtn">全部允许</button>
+        <button class="btn primary" id="saveBtn">保存</button>
+      </div>
+      <div class="matrix-wrap">
+        <table class="matrix" id="matrix" aria-label="状态流转矩阵"></table>
+      </div>
+      <div class="matrix-foot">
+        <span class="dirty-flag hidden" id="dirtyFlag">有未保存的修改</span>
+        <span class="spacer"></span>
+        <span>对「进行中 / 待验证」的阻塞标记不受流转限制</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ 看板效果 ============ -->
+<main class="page hidden" data-pane="board">
+  <div class="crumb">项目 / 资金通 / 看板</div>
+  <div class="page-head">
+    <div>
+      <h1>看板拖拽效果</h1>
+      <p class="desc">先用「设置页」配置规则，再点一张卡片、点目标列，看实际反馈。</p>
+    </div>
+  </div>
+
+  <div class="board-tip" id="boardTip">先点一张卡片，再点目标列；被禁止的目标列会变红并说明原因。</div>
+  <div class="board-wrap" id="board"></div>
+  <div class="log">
+    <h3>活动记录</h3>
+    <ul id="activityLog"><li class="empty">还没有移动记录</li></ul>
+  </div>
+</main>
+
+<!-- ============ 规则说明 ============ -->
+<main class="page hidden" data-pane="spec">
+  <div class="crumb">状态流转 / 规则说明</div>
+  <div class="page-head">
+    <div>
+      <h1>三条规则怎么理解</h1>
+      <p class="desc">矩阵只控制“能不能走过去”，不改变列自己的计时与逾期规则。</p>
+    </div>
+  </div>
+  <section class="panel">
+    <div class="panel-body">
+      <table class="matrix" style="min-width:0;width:100%">
+        <thead>
+          <tr><th style="text-align:left">规则</th><th>拖拽后的行为</th><th>什么时候用</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>允许</th><td style="padding:10px">直接移动，不弹窗</td><td style="padding:10px">默认值，大多数路径</td></tr>
+          <tr><th>需填原因</th><td style="padding:10px">弹窗要求填写原因，确认后才移动；原因写进活动记录</td><td style="padding:10px">退回、重开、跳过验证等需要留痕的操作</td></tr>
+          <tr><th>禁止</th><td style="padding:10px">目标列变红，提示“不能从 X 直接到 Y”，移动失败</td><td style="padding:10px">必须按顺序走的路径，例如进行中不能直接到已完成</td></tr>
+        </tbody>
+      </table>
+      <p class="hint" style="margin-top:12px">
+        例外：删除列时系统自动搬走任务、导入/备份恢复、空间主/管理员的“强制移动”不参与拦截。
+        新建列默认对所有人允许；列改名不影响规则，删除列会连同它的规则一起清理。
+      </p>
+    </div>
+  </section>
+</main>
+
+<div class="modal-mask" id="reasonMask" role="dialog" aria-modal="true" aria-labelledby="reasonTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="reasonTitle">这一步需要填写原因</h3>
+      <p id="reasonDesc">把工作项移到「已完成」后，原因会记入活动记录。</p>
+    </div>
+    <div class="modal-body">
+      <label for="reasonInput">原因（必填）</label>
+      <textarea id="reasonInput" maxlength="200" placeholder="例如：客户要求提前上线，验收单已补签"></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="reasonCancel">取消</button>
+      <button class="btn primary" id="reasonOk">确认移动</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var COLUMNS = [
+    {id:"backlog", name:"未开始", color:"#c08a3e"},
+    {id:"doing",   name:"进行中", color:"#5b83ad"},
+    {id:"testing", name:"待验证", color:"#7a5c86"},
+    {id:"done",    name:"已完成", color:"#5f7a4a"}
+  ];
+  var RULE_TEXT = {allow:"允许", reason:"填原因", deny:"禁止"};
+  var RULE_NEXT = {allow:"reason", reason:"deny", deny:"allow"};
+
+  /* rules[fromId][toId] = allow | reason | deny；缺省即 allow */
+  var rules = {};
+  var saved = {};
+  var dirty = false;
+
+  COLUMNS.forEach(function(f){
+    rules[f.id] = {};
+    COLUMNS.forEach(function(t){ rules[f.id][t.id] = "allow"; });
+  });
+
+  function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
+  function findCol(id){
+    for(var i=0;i<COLUMNS.length;i++) if(COLUMNS[i].id===id) return COLUMNS[i];
+    return null;
+  }
+  function ruleOf(from,to){
+    if(!rules[from] || !rules[from][to]) return "allow";
+    return rules[from][to];
+  }
+  function countLimits(){
+    var n = 0;
+    COLUMNS.forEach(function(f){
+      COLUMNS.forEach(function(t){
+        if(f.id!==t.id && ruleOf(f.id,t.id)!=="allow") n++;
+      });
+    });
+    return n;
+  }
+
+  /* ---------- 主题 ---------- */
+  var themeBtn = document.getElementById("themeBtn");
+  themeBtn.addEventListener("click", function(){
+    var html = document.documentElement;
+    html.setAttribute("data-theme", html.getAttribute("data-theme")==="dark" ? "light" : "dark");
+  });
+
+  /* ---------- 视图切换 ---------- */
+  var tabs = document.querySelectorAll(".tab");
+  var panes = document.querySelectorAll("[data-pane]");
+  tabs.forEach(function(tab){
+    tab.addEventListener("click", function(){
+      tabs.forEach(function(t){ t.setAttribute("aria-selected", t===tab ? "true" : "false"); });
+      panes.forEach(function(p){ p.classList.toggle("hidden", p.getAttribute("data-pane")!==tab.dataset.view); });
+    });
+  });
+
+  /* ---------- Toast ---------- */
+  var toastWrap = document.getElementById("toastWrap");
+  function toast(msg, kind){
+    var el = document.createElement("div");
+    el.className = "toast " + (kind || "");
+    el.textContent = msg;
+    toastWrap.appendChild(el);
+    setTimeout(function(){
+      el.style.opacity = "0";
+      el.style.transform = "translateY(-6px)";
+      el.style.transition = "all .18s";
+      setTimeout(function(){ el.remove(); }, 200);
+    }, 2400);
+  }
+
+  /* ---------- 矩阵渲染 ---------- */
+  var matrixEl = document.getElementById("matrix");
+  var dirtyFlag = document.getElementById("dirtyFlag");
+  var saveBtn = document.getElementById("saveBtn");
+  var ruleCount = document.getElementById("ruleCount");
+
+  function renderMatrix(){
+    var html = "<thead><tr><th>从 \\ 到</th>";
+    COLUMNS.forEach(function(t){ html += "<th>" + t.name + "</th>"; });
+    html += "</tr></thead><tbody>";
+    COLUMNS.forEach(function(f){
+      html += "<tr><th>" + f.name + "</th>";
+      COLUMNS.forEach(function(t){
+        if(f.id===t.id){
+          html += '<td class="diag" title="同一列内是排序，不是流转">—</td>';
+          return;
+        }
+        var r = ruleOf(f.id,t.id);
+        html += '<td><button class="cell ' + r + '" data-from="' + f.id + '" data-to="' + t.id +
+          '" aria-label="' + f.name + ' 到 ' + t.name + '：' + RULE_TEXT[r] + '">' + RULE_TEXT[r] + '</button></td>';
+      });
+      html += "</tr>";
+    });
+    html += "</tbody>";
+    matrixEl.innerHTML = html;
+
+    matrixEl.querySelectorAll(".cell").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var from = btn.dataset.from, to = btn.dataset.to;
+        rules[from][to] = RULE_NEXT[rules[from][to]];
+        dirty = true;
+        syncDirty();
+        renderMatrix();
+      });
+    });
+
+    var n = countLimits();
+    ruleCount.textContent = n ? ("已设置 " + n + " 条限制") : "当前全部允许";
+  }
+  function syncDirty(){
+    dirtyFlag.classList.toggle("hidden", !dirty);
+    saveBtn.classList.toggle("dirty", dirty);
+  }
+
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    COLUMNS.forEach(function(f){
+      COLUMNS.forEach(function(t){ rules[f.id][t.id] = "allow"; });
+    });
+    dirty = true; syncDirty(); renderMatrix();
+    toast("已全部恢复为允许，记得保存", "warn");
+  });
+
+  document.getElementById("demoBtn").addEventListener("click", function(){
+    rules.doing.done = "deny";
+    rules.testing.done = "allow";
+    rules.done.doing = "reason";
+    rules.testing.backlog = "reason";
+    dirty = true; syncDirty(); renderMatrix();
+    toast("已载入示例：进行中不能直接完成；重开与退回需填原因", "ok");
+  });
+
+  saveBtn.addEventListener("click", function(){
+    saved = clone(rules);
+    dirty = false; syncDirty();
+    toast("流转规则已保存，看板立即生效", "ok");
+  });
+
+  renderMatrix();
+
+  /* ---------- 看板 ---------- */
+  var board = document.getElementById("board");
+  var boardTip = document.getElementById("boardTip");
+  var logEl = document.getElementById("activityLog");
+  var tasks = {
+    backlog: [{id:"T1", title:"支付回调幂等处理", sub:"P1 · 林青"}],
+    doing:   [{id:"T2", title:"资金对账规则梳理", sub:"P0 · 周野"}],
+    testing: [{id:"T3", title:"报表导出性能优化", sub:"P2 · 陈默"}],
+    done:    []
+  };
+  var selectedId = null;
+  var selectedCol = null;
+
+  function taskById(id){
+    for(var col in tasks){
+      for(var i=0;i<tasks[col].length;i++) if(tasks[col][i].id===id) return {task:tasks[col][i], col:col};
+    }
+    return null;
+  }
+
+  function renderBoard(highlight){
+    board.innerHTML = COLUMNS.map(function(c){
+      var cards = tasks[c.id] || [];
+      var blocked = highlight && highlight!==c.id && selectedCol && c.id!==selectedCol
+        ? ruleOf(selectedCol, c.id)==="deny" : false;
+      return '<div class="col' + (highlight===c.id ? " droppable" : "") + (blocked ? " blocked" : "") +
+        '" data-col="' + c.id + '">' +
+        '<div class="col-head"><span class="dot" style="background:' + c.color + '"></span>' + c.name +
+        '<span class="count">' + cards.length + '</span></div>' +
+        '<div class="col-body">' + cards.map(function(t){
+          return '<div class="card' + (selectedId===t.id ? " selected" : "") + '" data-task="' + t.id + '">' +
+            '<div class="title">' + t.title + '</div><div class="sub">' + t.sub + '</div></div>';
+        }).join("") + '</div></div>';
+    }).join("");
+
+    board.querySelectorAll(".card").forEach(function(card){
+      card.addEventListener("click", function(e){
+        e.stopPropagation();
+        selectedId = card.dataset.task;
+        var found = taskById(selectedId);
+        selectedCol = found ? found.col : null;
+        boardTip.textContent = "已选中「" + (found ? found.task.title : "") + "」，点目标列尝试移动。";
+        renderBoard(selectedCol);
+      });
+    });
+    board.querySelectorAll(".col").forEach(function(col){
+      col.addEventListener("click", function(){
+        if(!selectedId){ toast("先点一张卡片", "warn"); return; }
+        attemptMove(col.dataset.col);
+      });
+    });
+  }
+
+  function attemptMove(to){
+    var found = taskById(selectedId);
+    if(!found){ return; }
+    var from = found.col;
+    if(from===to){ toast("已经在这一列了", "warn"); return; }
+    var rule = ruleOf(from,to);
+    var fromName = findCol(from).name, toName = findCol(to).name;
+
+    if(rule==="deny"){
+      boardTip.textContent = "不能从「" + fromName + "」直接到「" + toName + "」，请先经过中间状态。";
+      toast("不能从「" + fromName + "」直接到「" + toName + "」", "bad");
+      return;
+    }
+    if(rule==="reason"){
+      openReason(from,to,found.task);
+      return;
+    }
+    doMove(from,to,found.task,null);
+  }
+
+  function doMove(from,to,task,reason){
+    tasks[from] = tasks[from].filter(function(t){ return t.id!==task.id; });
+    tasks[to] = (tasks[to] || []).concat([task]);
+    selectedId = null; selectedCol = null;
+    boardTip.textContent = "先点一张卡片，再点目标列；被禁止的目标列会变红并说明原因。";
+    renderBoard();
+    var line = "「" + task.title + "」由「" + findCol(from).name + "」移到「" + findCol(to).name + "」" +
+      (reason ? "，原因：" + reason : "");
+    addLog(line, reason ? "reason" : "allow");
+    toast("已移到「" + findCol(to).name + "」" + (reason ? "，原因已记录" : ""), "ok");
+  }
+
+  function addLog(text, kind){
+    var empty = logEl.querySelector(".empty");
+    if(empty) empty.remove();
+    var li = document.createElement("li");
+    li.textContent = text;
+    if(kind==="reason") li.style.color = "var(--warn)";
+    logEl.prepend(li);
+  }
+
+  /* ---------- 原因弹窗 ---------- */
+  var mask = document.getElementById("reasonMask");
+  var reasonInput = document.getElementById("reasonInput");
+  var pending = null;
+
+  function openReason(from,to,task){
+    pending = {from:from,to:to,task:task};
+    document.getElementById("reasonTitle").textContent = "移到「" + findCol(to).name + "」需要填写原因";
+    document.getElementById("reasonDesc").textContent =
+      "「" + findCol(from).name + "」到「" + findCol(to).name + "」被设为需填原因，原因会记入活动记录。";
+    reasonInput.value = "";
+    mask.classList.add("show");
+    setTimeout(function(){ reasonInput.focus(); }, 30);
+  }
+  function closeReason(){
+    mask.classList.remove("show");
+    pending = null;
+  }
+  document.getElementById("reasonCancel").addEventListener("click", closeReason);
+  mask.addEventListener("click", function(e){ if(e.target===mask) closeReason(); });
+  document.getElementById("reasonOk").addEventListener("click", function(){
+    var text = reasonInput.value.trim();
+    if(!text){ toast("原因不能为空", "bad"); reasonInput.focus(); return; }
+    var p = pending;
+    closeReason();
+    doMove(p.from,p.to,p.task,text);
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key==="Escape" && mask.classList.contains("show")) closeReason();
+  });
+
+  renderBoard();
+
+  /* 支持 ?view=board / ?theme=dark 直接定位，方便分享具体视图 */
+  (function(){
+    var q = new URLSearchParams(location.search);
+    var view = q.get("view");
+    if(view){
+      tabs.forEach(function(t){
+        if(t.dataset.view===view) t.click();
+      });
+    }
+    if(q.get("theme")==="dark") document.documentElement.setAttribute("data-theme","dark");
+  })();
+})();
+</script>
+</body>
+</html>

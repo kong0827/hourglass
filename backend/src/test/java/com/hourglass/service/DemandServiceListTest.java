@@ -36,7 +36,8 @@ class DemandServiceListTest {
             mock(ProjectVersionMapper.class), mock(TaskMapper.class),
             mock(NotificationEventService.class), mock(RequirementDocMapper.class),
             mock(ProjectAccessService.class), mock(AttachmentService.class),
-            mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class));
+            mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+            mock(com.hourglass.mapper.CategoryMapper.class));
 
     @Test
     void pagesWholeWorkspaceAndComputesWsjf() {

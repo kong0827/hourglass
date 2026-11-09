@@ -26,9 +26,13 @@ public interface CategoryMapper {
     int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
                         @Param("sortOrder") int sortOrder);
 
-    /** 改名/删除时同步任务里的分类名 */
+    /** 改名/删除时同步任务里的模块名 */
     int renameInTasks(@Param("workspaceId") String workspaceId, @Param("oldName") String oldName,
                       @Param("newName") String newName);
+
+    /** 改名/删除时同步需求池里的模块名 */
+    int renameInDemands(@Param("workspaceId") String workspaceId, @Param("oldName") String oldName,
+                        @Param("newName") String newName);
 
     int countByWorkspace(@Param("workspaceId") String workspaceId);
 

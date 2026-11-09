@@ -61,7 +61,7 @@ class EstimateServiceTest {
         assertEquals(1, s.getNoTimeCount());
     }
 
-    /** 估时全景：预警只对进行中、backlog 不算、无预估跳过、系数 = Σ实际/Σ预估、分类只累计已完成样本 */
+    /** 估时全景：预警只对进行中、backlog 不算、无预估跳过、系数 = Σ实际/Σ预估、模块只累计已完成样本 */
     @Test
     void fullScenarioRisksCategoryAndOverrun() {
         EstimateService svc = new EstimateService(null, null);
@@ -118,7 +118,7 @@ class EstimateServiceTest {
 
         assertEquals(2, s.getByCategory().size());
         assertEquals("后端", s.getByCategory().get(0).getCategory(), "系数最高的排第一");
-        // 分类累计只统计已完成：后端 420/240 = 1.75
+        // 模块累计只统计已完成：后端 420/240 = 1.75
         assertEquals(1.75, s.getByCategory().get(0).getFactor(), 0.011);
         assertEquals(240, s.getByCategory().get(0).getEstimateTotal(), "累计预估只算一次");
         // 前端 (130+50)/(120+100) = 0.818

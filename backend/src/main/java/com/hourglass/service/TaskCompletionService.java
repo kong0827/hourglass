@@ -25,7 +25,7 @@ import java.util.List;
 public class TaskCompletionService {
 
     /** 详情快照最大长度（与表字段一致） */
-    private static final int DESC_MAX = 200;
+    private static final int DESC_MAX = 2000;
 
     private final TaskCompletionRecordMapper recordMapper;
     private final TimeLogMapper timeLogMapper;
