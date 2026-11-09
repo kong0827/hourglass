@@ -427,7 +427,7 @@ public class TaskWorkflowService {
         /* N-2 / N-1：下一次循环任务继承身份绑定与提醒对象 */
         nt.setOwnerUserId(doneTask.getOwnerUserId());
         nt.setRemindTarget(doneTask.getRemindTarget());
-        nt.setCategory(doneTask.getCategory());
+        nt.setCategoryId(doneTask.getCategoryId());
         nt.setBoardColumn(firstCol);
         nt.setDueDate(next);
         nt.setReqId(doneTask.getReqId());

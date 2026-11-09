@@ -340,15 +340,6 @@ public class TaskCommandService {
             t.setOwnerUserId(null);
         }
         t.setOwner(owner == null || owner.isEmpty() ? defaultOwner(userId) : Texts.cut(owner, 32));
-        String category = Texts.trimToNull(req.getCategory());
-        if (category != null) {
-            if (categoryMapper.selectByName(workspaceId, category) == null) {
-                throw AppException.badRequest("模块不存在：" + category);
-            }
-            t.setCategory(category);
-        } else {
-            t.setCategory(defaultCategory(workspaceId));
-        }
         t.setBoardColumn(req.getBoardColumn() == null ? Consts.COL_BACKLOG : req.getBoardColumn());
         support.validateColumn(workspaceId, t.getBoardColumn());
         /* 开始日期：日历按 [startDate, dueDate] 区间逐日展示；为空则只在截止日出现 */
@@ -374,6 +365,20 @@ public class TaskCommandService {
             }
         }
         t.setReqId(reqId);
+        /* 模块挂在项目下：必须属于任务所选项目；未选时默认取项目第一个模块；任务未挂项目则保持「未指定」 */
+        String categoryId = Texts.trimToNull(req.getCategoryId());
+        if (categoryId != null) {
+            Category cat = categoryMapper.selectById(workspaceId, categoryId);
+            if (cat == null) {
+                throw AppException.badRequest("模块不存在：" + categoryId);
+            }
+            if (reqId == null || !reqId.equals(cat.getProjectId())) {
+                throw AppException.badRequest("模块不属于该项目");
+            }
+            t.setCategoryId(categoryId);
+        } else {
+            t.setCategoryId(defaultCategory(workspaceId, reqId));
+        }
         /* 关联需求：必须存在、同空间、且属于任务所选的那个项目。
            项目为空 / 换了项目时，旧需求自动失效（前端也会在切项目时清空下拉）。 */
         String reqDocId = Texts.trimToNull(req.getReqDocId());
@@ -596,9 +601,17 @@ public class TaskCommandService {
         return v == null ? versionId : v.getName();
     }
 
-    private String defaultCategory(String workspaceId) {
-        List<Category> list = metaCache.categories(workspaceId);
-        return list.isEmpty() ? "" : list.get(0).getName();
+    /** 默认模块=项目第一个模块；任务未挂项目或项目没有模块时返回空串（「未指定」） */
+    private String defaultCategory(String workspaceId, String projectId) {
+        if (projectId == null) {
+            return "";
+        }
+        for (Category c : metaCache.categories(workspaceId)) {
+            if (projectId.equals(c.getProjectId())) {
+                return c.getId();
+            }
+        }
+        return "";
     }
 
     /** 提醒时间按分钟比较：前端 datetime-local 不带秒，避免编辑其他字段时误重置提醒状态 */

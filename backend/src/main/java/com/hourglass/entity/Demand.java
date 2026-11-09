@@ -20,8 +20,8 @@ public class Demand {
     private String source;
     /** 新功能/体验优化/缺陷/其他 */
     private String itemKind;
-    /** 模块名（取值来自 category 表，空串表示未指定） */
-    private String category;
+    /** 模块ID（category.id；null 表示未指定） */
+    private String categoryId;
     /** P0/P1/P2/P3 */
     private String priority;
     /** review待评审/pass已通过/plan已排期/rej已拒绝 */

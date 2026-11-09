@@ -4,7 +4,7 @@ import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentWorkspace;
 import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
-import com.hourglass.dto.PhaseMemberTask;
+import com.hourglass.dto.PhaseMemberTaskPage;
 import com.hourglass.dto.PhaseStatsResponse;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReleaseNoteResponse;
@@ -54,11 +54,14 @@ public class ProjectVersionController {
         return ApiResult.ok(phaseService.phaseStats(ctx.getWsId(), reqId, ctx.getUserId()));
     }
 
-    /** 成员阶段工时下钻：该成员自己的计时按「任务 × 阶段」聚合 */
+    /** 成员阶段工时下钻：该成员自己的计时按「任务 × 阶段」聚合（汇总 + 明细分页） */
     @GetMapping("/api/phase/member-tasks")
-    public ApiResult<List<PhaseMemberTask>> memberTasks(@RequestParam String reqId, @RequestParam String userId,
-                                                        @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(phaseService.memberTasks(ctx.getWsId(), reqId, userId, ctx.getUserId()));
+    public ApiResult<PhaseMemberTaskPage> memberTasks(@RequestParam String reqId, @RequestParam String userId,
+                                                      @RequestParam(required = false) Integer offset,
+                                                      @RequestParam(required = false) Integer limit,
+                                                      @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(phaseService.memberTasks(ctx.getWsId(), reqId, userId, ctx.getUserId(),
+                offset == null ? 0 : offset, limit == null ? 0 : limit));
     }
 
     /** 管理端总览：全部项目的首版/迭代工时对比、版本节奏与准时率 */

@@ -9,7 +9,7 @@ import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, catTag, dueState, dueText, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { canEditTask, catNameById, catTag, dueState, dueText, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
@@ -349,7 +349,7 @@ function taskCell(t, key, hasTypeCol){
   }
   if(key === "project") return '<span class="cell" title="' + esc(t.reqId ? reqNameById(t.reqId) : "") + '">' + (t.reqId ? esc(reqNameById(t.reqId)) : "—") + '</span>';
   if(key === "version") return '<span class="cell" title="' + esc(t.versionName || "") + '">' + esc(t.versionName || "—") + '</span>';
-  if(key === "category") return '<span class="cell">' + (catTag(t.category) || "—") + '</span>';
+  if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
   if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
   if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
   if(key === "subtasks") return '<span class="cell">' + (Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "—") + '</span>';
@@ -395,7 +395,7 @@ function sortValue(t, key){
   if(key === "progress") return progressOf(t);
   if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
   if(key === "version") return t.versionName || "";
-  if(key === "category") return t.category || "";
+  if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || null;
   if(key === "tags") return (t.tags || []).join(",");
   if(key === "subtasks") return Number(t.subtaskTotal) || 0;
@@ -450,7 +450,7 @@ function groupInfoBy(t, dim){
   if(dim === "owner") return {key:t.owner || "__none", label:t.owner || "未分配"};
   if(dim === "priority") return {key:t.priority || "unknown", label:t.priority ? priName(t.priority) : "未设置优先级"};
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqId ? reqNameById(t.reqId) : "未归类"};
-  if(dim === "category") return {key:t.category || "__none", label:t.category || "未指定模块"};
+  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块"};
   return null;
 }
 function groupInfo(t){ return smart.group === "none" ? null : groupInfoBy(t, smart.group); }
@@ -466,7 +466,7 @@ function subgroupInfo(t){
 function groupCompare(dim){
   if(dim === "category"){
     var order = {};
-    (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+    (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
     return function(a, b){
       var ai = order[a.key] === undefined ? 999 : order[a.key];
       var bi = order[b.key] === undefined ? 999 : order[b.key];
@@ -531,7 +531,7 @@ function taskCsvValue(t, key){
   if(key === "progress") return progressOf(t) + "%";
   if(key === "project") return t.reqId ? reqNameById(t.reqId) : "";
   if(key === "version") return t.versionName || "";
-  if(key === "category") return t.category || "";
+  if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || "";
   if(key === "tags") return (t.tags || []).join(" ");
   if(key === "subtasks") return Number(t.subtaskTotal) ? (Number(t.subtaskDone || 0) + "/" + Number(t.subtaskTotal)) : "";

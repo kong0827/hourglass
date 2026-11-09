@@ -290,7 +290,7 @@ function taskPayloadWith(t, patch){
     title: t.title,
     description: t.description || "",
     priority: t.priority,
-    category: t.category || null,
+    categoryId: t.categoryId || null,
     owner: t.owner || null,
     ownerUserId: t.ownerUserId || null,
     boardColumn: t.boardColumn,

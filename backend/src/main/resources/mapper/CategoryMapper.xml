@@ -3,23 +3,23 @@
 <mapper namespace="com.hourglass.mapper.CategoryMapper">
 
   <select id="selectByWorkspace" resultType="Category">
-    SELECT id, workspace_id, name, color, sort_order, created_at
+    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
     FROM category WHERE workspace_id = #{workspaceId} ORDER BY sort_order, id
   </select>
 
   <select id="selectById" resultType="Category">
-    SELECT id, workspace_id, name, color, sort_order, created_at
+    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
     FROM category WHERE workspace_id = #{workspaceId} AND id = #{id}
   </select>
 
   <select id="selectByName" resultType="Category">
-    SELECT id, workspace_id, name, color, sort_order, created_at
-    FROM category WHERE workspace_id = #{workspaceId} AND name = #{name}
+    SELECT id, workspace_id, project_id, name, color, sort_order, created_at
+    FROM category WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND name = #{name}
   </select>
 
   <insert id="insert">
-    INSERT INTO category (id, workspace_id, name, color, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{color}, #{sortOrder})
+    INSERT INTO category (id, workspace_id, project_id, name, color, sort_order)
+    VALUES (#{id}, #{workspaceId}, #{projectId}, #{name}, #{color}, #{sortOrder})
   </insert>
 
   <update id="update">
@@ -32,7 +32,8 @@
   </delete>
 
   <select id="maxSortOrder" resultType="int">
-    SELECT COALESCE(MAX(sort_order), -1) FROM category WHERE workspace_id = #{workspaceId}
+    SELECT COALESCE(MAX(sort_order), -1) FROM category
+    WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
   </select>
 
   <update id="updateSortOrder">
@@ -40,19 +41,24 @@
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
 
-  <update id="renameInTasks">
-    UPDATE task SET category = #{newName}, updated_at = NOW()
-    WHERE workspace_id = #{workspaceId} AND category = #{oldName}
+  <update id="moveTasksToCategory">
+    UPDATE task SET category_id = #{toId}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{fromId}
   </update>
 
-  <update id="renameInDemands">
-    UPDATE demand SET category = #{newName}, updated_at = NOW()
-    WHERE workspace_id = #{workspaceId} AND category = #{oldName}
+  <update id="moveDemandsToCategory">
+    UPDATE demand SET category_id = #{toId}, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{fromId}
   </update>
 
-  <select id="countByWorkspace" resultType="int">
-    SELECT COUNT(*) FROM category WHERE workspace_id = #{workspaceId}
-  </select>
+  <update id="clearTasksCategory">
+    UPDATE task SET category_id = '', updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId}
+  </update>
+
+  <delete id="deleteByProject">
+    DELETE FROM category WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+  </delete>
 
   <delete id="deleteAllByWorkspace">
     DELETE FROM category WHERE workspace_id = #{workspaceId}

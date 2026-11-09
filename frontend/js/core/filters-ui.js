@@ -133,7 +133,7 @@ function renderVersionChips(meta){
   $("fgVersion").hidden = state.versions.length === 0;
 }
 function renderMoreFilter(meta){
-  var cats = (meta.cats || []).filter(function(c){ return c.count > 0 || state.cats.indexOf(c.name) !== -1; });
+  var cats = (meta.cats || []).filter(function(c){ return c.count > 0 || state.cats.indexOf(c.id) !== -1; });
   var tags = (meta.tags || []).filter(function(t){ return t.count > 0 || state.tags.indexOf(t.name) !== -1; });
   var reqs = (meta.reqs || []).filter(function(r){ return r.count > 0 || state.reqs.indexOf(r.id) !== -1; });
   var noneOn = state.reqs.indexOf("__none") !== -1;
@@ -170,7 +170,7 @@ function renderMoreFilter(meta){
       '<p class="foot-note mf-version-empty" data-mf-version-empty hidden style="margin:4px 0 0">没有匹配的版本</p></div>';
   }
   var catInner = cats.map(function(c){
-    return option("cat", c.name, esc(c.name), c.count, state.cats.indexOf(c.name) !== -1);
+    return option("cat", c.id, esc(c.name), c.count, state.cats.indexOf(c.id) !== -1);
   }).join("");
   var tagInner = tags.map(function(t){
     return option("tag", t.name, esc(t.name), t.count, state.tags.indexOf(t.name) !== -1);
@@ -549,13 +549,13 @@ function hasGanttLayout(p){
     return p[k] !== undefined && p[k] !== null;
   });
 }
-/* 应用视图时剔除字典中已不存在的模块：模块改名/删除不会回刷已保存视图，旧名称会筛出空结果。
+/* 应用视图时剔除字典中已不存在的模块：模块删除不会回刷已保存视图，旧 ID 会筛出空结果。
    模块缓存尚未加载（空）时无法校验，保持原样，避免把有效筛选误删。 */
 function pruneUnknownCats(cats){
   var cache = rt.categoriesCache || [];
   if(!cache.length || !cats.length) return cats;
   var known = {};
-  cache.forEach(function(c){ known[c.name] = 1; });
+  cache.forEach(function(c){ known[c.id] = 1; });
   return cats.filter(function(n){ return known[n]; });
 }
 function applyView(v){

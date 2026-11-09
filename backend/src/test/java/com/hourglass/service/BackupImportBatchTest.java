@@ -260,7 +260,7 @@ class BackupImportBatchTest {
 
         BackupData exported = service.export("W1");
 
-        assertEquals(10, exported.getV());
+        assertEquals(12, exported.getV());
         assertEquals("2026-05-10", exported.getReqs().get(0).getFirstReleasedAt());
         BackupData.BackupTask exportedStory = null;
         for (BackupData.BackupTask task : exported.getTasks()) {

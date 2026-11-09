@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,15 +32,18 @@ public class TaskCompletionService {
     private final TimeLogMapper timeLogMapper;
     private final RequirementMapper reqMapper;
     private final RequirementDocMapper requirementDocMapper;
+    /** 模块ID → 名称解析（快照存完成当时的模块名） */
+    private final WorkspaceMetaCache metaCache;
     private final ProjectAccessService projectAccess;
 
     public TaskCompletionService(TaskCompletionRecordMapper recordMapper, TimeLogMapper timeLogMapper,
                                  RequirementMapper reqMapper, RequirementDocMapper requirementDocMapper,
-                                 ProjectAccessService projectAccess) {
+                                 WorkspaceMetaCache metaCache, ProjectAccessService projectAccess) {
         this.recordMapper = recordMapper;
         this.timeLogMapper = timeLogMapper;
         this.reqMapper = reqMapper;
         this.requirementDocMapper = requirementDocMapper;
+        this.metaCache = metaCache;
         this.projectAccess = projectAccess;
     }
 
@@ -74,7 +78,8 @@ public class TaskCompletionService {
         }
         r.setOwner(t.getOwner());
         r.setOwnerUserId(t.getOwnerUserId());
-        r.setCategory(t.getCategory());
+        /* 快照存完成当时的模块名：解析不到（异常数据）就留空，展示层显示「—」 */
+        r.setCategory(categoryName(t.getWorkspaceId(), t.getCategoryId()));
         r.setPriority(t.getPriority());
         r.setStartDate(t.getStartDate());
         r.setCompletedAt(t.getCompletedAt() == null ? LocalDate.now() : t.getCompletedAt());
@@ -87,6 +92,18 @@ public class TaskCompletionService {
             r.setLastEndedAt(bounds.getLastEndedAt());
         }
         recordMapper.upsert(r);
+    }
+
+    private String categoryName(String workspaceId, String categoryId) {
+        if (categoryId == null || categoryId.isEmpty()) {
+            return "";
+        }
+        for (com.hourglass.entity.Category c : metaCache.categories(workspaceId)) {
+            if (categoryId.equals(c.getId())) {
+                return c.getName();
+            }
+        }
+        return "";
     }
 
     /**
@@ -113,22 +130,37 @@ public class TaskCompletionService {
         recordMapper.deleteByTaskId(workspaceId, taskId);
     }
 
-    /** 按月查询（month 为 null 时取当月）；不可见项目的快照不返回 */
-    public List<TaskCompletionRecord> listByMonth(String workspaceId, String userId, YearMonth month) {
+    /** 按月分页（month 为 null 时取当月）；不可见项目的快照在 SQL 层直接排除，汇总与明细同口径 */
+    public com.hourglass.dto.CompletionPageResponse page(String workspaceId, String userId,
+                                                        YearMonth month, int offset, int limit) {
         YearMonth ym = month == null ? YearMonth.now() : month;
         LocalDate from = ym.atDay(1);
-        List<TaskCompletionRecord> list = recordMapper.selectByRange(workspaceId, from, from.plusMonths(1));
-        java.util.Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
-        if (hidden.isEmpty()) {
-            return list;
+        LocalDate to = from.plusMonths(1);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? 100 : Math.min(limit, 100);
+        /* owner/admin/viewer 返回 null（全量可见），只有普通成员按项目级「不可见」过滤 */
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+
+        com.hourglass.dto.CompletionSummary summary =
+                recordMapper.summaryByRange(workspaceId, from, to, viewerId);
+        List<TaskCompletionRecord> items = summary.getTotal() <= safeOffset ? new ArrayList<TaskCompletionRecord>()
+                : recordMapper.selectPageByRange(workspaceId, from, to, viewerId, safeOffset, safeLimit);
+        com.hourglass.dto.CompletionOwnerCount top =
+                summary.getTotal() == 0 ? null : recordMapper.topOwnerByRange(workspaceId, from, to, viewerId);
+
+        com.hourglass.dto.CompletionPageResponse resp = new com.hourglass.dto.CompletionPageResponse();
+        resp.setTotal(summary.getTotal());
+        resp.setOffset(safeOffset);
+        resp.setLimit(safeLimit);
+        resp.setHasMore(safeOffset + items.size() < summary.getTotal());
+        resp.setItems(items);
+        resp.setTotalMinutes(summary.getTotalMinutes());
+        resp.setOwnerCount(summary.getOwnerCount());
+        if (top != null && top.getOwner() != null) {
+            resp.setTopOwner(top.getOwner());
+            resp.setTopOwnerCount(top.getOwnerCount());
         }
-        List<TaskCompletionRecord> visible = new java.util.ArrayList<TaskCompletionRecord>();
-        for (TaskCompletionRecord r : list) {
-            if (r.getReqId() == null || !hidden.contains(r.getReqId())) {
-                visible.add(r);
-            }
-        }
-        return visible;
+        return resp;
     }
 
     /** 清空空间 / 覆盖导入前清空完成归档，避免旧快照挂在新任务上 */

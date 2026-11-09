@@ -16,7 +16,8 @@ public class Task {
     /** P0/P1/P2/P3 */
     private String priority;
     private String owner;
-    private String category;
+    /** 模块ID（category.id；''=未指定，保存时服务层兜底为空间第一个模块） */
+    private String categoryId;
     /** 看板列 id（board_column 表 + done） */
     private String boardColumn;
     /** 列处理规则（非表字段，查询时由 board_column 填充；built-in 列由调用方推断） */

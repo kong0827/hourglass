@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.TaskMapper">
 
   <sql id="cols">
-    id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
+    id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column, start_date, due_date, req_id, req_doc_id, branch_id,
     progress, is_milestone, estimate_minutes, is_blocked AS blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, recur_next_id,
     remind_at, remind_target, remind_sent, deleted_at, sort_order, created_at, updated_at,
     item_type AS itemType, epic_id AS epicId, demand_id AS demandId,
@@ -127,7 +127,9 @@
         AND (t.title LIKE CONCAT('%', #{q}, '%')
              OR t.description LIKE CONCAT('%', #{q}, '%')
              OR t.note LIKE CONCAT('%', #{q}, '%')
-             OR t.category LIKE CONCAT('%', #{q}, '%')
+             OR EXISTS (SELECT 1 FROM category cg
+                        WHERE cg.id = t.category_id AND cg.workspace_id = t.workspace_id
+                          AND cg.name LIKE CONCAT('%', #{q}, '%'))
              OR EXISTS (SELECT 1 FROM requirement r
                         WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
                           AND r.name LIKE CONCAT('%', #{q}, '%'))
@@ -143,7 +145,7 @@
         <foreach collection="pris" item="p" open="(" separator="," close=")">#{p}</foreach>
       </if>
       <if test="cats != null and cats.size() > 0">
-        AND t.category IN
+        AND t.category_id IN
         <foreach collection="cats" item="c" open="(" separator="," close=")">#{c}</foreach>
       </if>
       <if test="reqs != null and reqs.size() > 0">
@@ -208,7 +210,7 @@
        workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。
        分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
   <select id="selectMyTasks" resultType="Task">
-    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category,
+    SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category_id,
            t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
@@ -241,11 +243,11 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes, is_blocked, blocked_reason, blocked_by_task_id, note, completed_at,
                       recur_type, remind_at, remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
                       severity, environment, reproduce_steps, found_version_id, regression_status, created_at)
-    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{category},
+    VALUES (#{id}, #{workspaceId}, #{title}, #{description}, #{priority}, #{owner}, #{ownerUserId}, #{categoryId},
             #{boardColumn}, #{startDate}, #{dueDate}, #{reqId}, #{reqDocId}, #{branchId}, #{progress}, #{isMilestone}, #{estimateMinutes}, #{blocked}, #{blockedReason}, #{blockedByTaskId},
             #{note}, #{completedAt}, #{recurType}, #{remindAt}, #{remindTarget}, #{remindSent}, #{sortOrder}, COALESCE(#{itemType}, 'task'), #{epicId}, #{demandId},
             #{severity}, #{environment}, #{reproduceSteps}, #{foundVersionId}, #{regressionStatus},
@@ -254,7 +256,7 @@
 
   <!-- 备份导入：多值写入，含回收站任务的 deleted_at（省掉逐行更新） -->
   <insert id="insertBatch">
-    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category, board_column,
+    INSERT INTO task (id, workspace_id, title, description, priority, owner, owner_user_id, category_id, board_column,
                       start_date, due_date, req_id, req_doc_id, branch_id, progress, is_milestone, estimate_minutes,
                       is_blocked, blocked_reason, blocked_by_task_id, note, completed_at, recur_type, remind_at,
                       remind_target, remind_sent, sort_order, item_type, epic_id, demand_id,
@@ -262,7 +264,7 @@
     VALUES
     <foreach collection="list" item="t" separator=",">
       (#{t.id}, #{t.workspaceId}, #{t.title}, #{t.description}, #{t.priority}, #{t.owner}, #{t.ownerUserId},
-       #{t.category}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
+       #{t.categoryId}, #{t.boardColumn}, #{t.startDate}, #{t.dueDate}, #{t.reqId}, #{t.reqDocId}, #{t.branchId},
        #{t.progress}, #{t.isMilestone}, #{t.estimateMinutes}, #{t.blocked}, #{t.blockedReason}, #{t.blockedByTaskId},
        #{t.note}, #{t.completedAt}, #{t.recurType}, #{t.remindAt}, #{t.remindTarget}, #{t.remindSent},
        #{t.sortOrder}, COALESCE(#{t.itemType}, 'task'), #{t.epicId}, #{t.demandId},
@@ -278,7 +280,7 @@
       priority = #{priority},
       owner = #{owner},
       owner_user_id = #{ownerUserId},
-      category = #{category},
+      category_id = #{categoryId},
       board_column = #{boardColumn},
       start_date = #{startDate},
       due_date = #{dueDate},
@@ -568,7 +570,9 @@
         LOCATE(LOWER(#{query.q}), LOWER(t.title)) > 0
         OR LOCATE(LOWER(#{query.q}), LOWER(t.description)) > 0
         OR LOCATE(LOWER(#{query.q}), LOWER(t.note)) > 0
-        OR LOCATE(LOWER(#{query.q}), LOWER(t.category)) > 0
+        OR EXISTS (SELECT 1 FROM category cg
+                   WHERE cg.id = t.category_id AND cg.workspace_id = t.workspace_id
+                     AND LOCATE(LOWER(#{query.q}), LOWER(cg.name)) > 0)
         OR EXISTS (SELECT 1 FROM requirement r
                    WHERE r.id = t.req_id AND r.workspace_id = t.workspace_id
                      AND LOCATE(LOWER(#{query.q}), LOWER(r.name)) > 0)
@@ -589,7 +593,7 @@
       <foreach collection="query.pris" item="p" open="(" separator="," close=")">#{p}</foreach>
     </if>
     <if test="query.cats != null and query.cats.size() > 0">
-      AND t.category IN
+      AND t.category_id IN
       <foreach collection="query.cats" item="cc" open="(" separator="," close=")">#{cc}</foreach>
     </if>
     <if test="query.reqNone">
@@ -833,7 +837,7 @@
 
   <!-- buildMeta / 到期计数：只取窄列，顺序与 selectAll 一致，保证 owners/cats 排列不变 -->
   <select id="selectBoardFacets" resultType="TaskFacetRow">
-    SELECT t.owner, t.priority, t.category, t.req_id, t.board_column, bc.processing_rule, t.due_date, t.item_type, vt.version_id
+    SELECT t.owner, t.priority, t.category_id, t.req_id, t.board_column, bc.processing_rule, t.due_date, t.item_type, vt.version_id
     FROM task t
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
@@ -873,13 +877,14 @@
   </select>
 
   <select id="countCompletedByCategory" resultType="com.hourglass.dto.NameCountRow">
-    SELECT t.category AS name, COUNT(*) AS cnt
+    SELECT COALESCE(cg.name, '') AS name, COUNT(*) AS cnt
     FROM task t
+    LEFT JOIN category cg ON cg.workspace_id = t.workspace_id AND cg.id = t.category_id
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
       AND t.board_column = 'done'
       AND t.completed_at &gt;= #{from} AND t.completed_at &lt; #{before}
-    GROUP BY t.category
+    GROUP BY cg.name
     ORDER BY MAX(t.completed_at) DESC, MIN(t.id)
   </select>
 
@@ -978,7 +983,7 @@
 
   <!-- 估时样本：只取填了预估的窄列 + 对应任务的工时合计（一次 JOIN 聚合） -->
   <select id="selectEstimateTasks" resultType="Task">
-    SELECT t.id, t.title, t.category, t.board_column, t.estimate_minutes,
+    SELECT t.id, t.title, t.category_id, t.board_column, t.estimate_minutes,
            COALESCE(SUM(l.minutes), 0) AS total_minutes
     FROM task t
     LEFT JOIN time_log l
@@ -986,7 +991,7 @@
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
       <include refid="visibleProject"/>
       AND t.estimate_minutes &gt; 0
-    GROUP BY t.id, t.title, t.category, t.board_column, t.estimate_minutes, t.sort_order
+    GROUP BY t.id, t.title, t.category_id, t.board_column, t.estimate_minutes, t.sort_order
     ORDER BY t.board_column, t.sort_order, t.id
   </select>
 

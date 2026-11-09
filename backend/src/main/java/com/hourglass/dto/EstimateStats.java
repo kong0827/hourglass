@@ -46,7 +46,8 @@ public class EstimateStats {
 
     @Data
     public static class CatFactor {
-        private String category;
+        /** 模块ID（category.id），名称由前端经模块缓存解析 */
+        private String categoryId;
         private int sampleCount;
         private int estimateTotal;
         private int actualTotal;
@@ -57,7 +58,7 @@ public class EstimateStats {
     public static class RiskTask {
         private String id;
         private String title;
-        private String category;
+        private String categoryId;
         private String column;
         private int estimateMinutes;
         private int actualMinutes;

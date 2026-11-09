@@ -402,31 +402,37 @@ function openVersionDemandsModal(versionId){
 }
 
 /* 成员阶段工时下钻：按该成员自己的计时记录列出「任务 × 阶段」，合计与阶段卡一致 */
+var memberDrillSeq = 0;
+function memberDrillRowHTML(r){
+  var est = r.estimateMinutes || 0, act = r.minutes || 0;
+  return '<tr data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">'
+    + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(r.title) + '</td>'
+    + '<td>' + (r.phase === "mvp" ? '<span class="tag tag-info">首版</span>' : '<span class="tag tag-plum">迭代</span>') + '</td>'
+    + '<td>' + esc(typeName(r.itemType)) + '</td>'
+    + '<td class="num">' + dateShort(r.startDate) + '</td>'
+    + '<td class="num">' + dateShort(r.dueDate) + '</td>'
+    + '<td class="num">' + (est ? fmtMinutesShort(est) : "—") + '</td>'
+    + '<td class="num">' + (act ? fmtMinutesShort(act) : "—") + '</td>'
+    + '<td>' + (r.boardColumn === "done"
+      ? '<span class="tag tag-success">已完成</span>'
+      : '<span class="tag tag-info">' + esc(colName(r.boardColumn)) + '</span>') + '</td></tr>';
+}
 function openMemberDrill(userId, name){
   if(!cache || !cache.phase || !rt.phaseReqId) return;
   var reqId = rt.phaseReqId;
-  API.get("/api/phase/member-tasks", { reqId: reqId, userId: userId || "" }).then(function(rows){
+  var seq = ++memberDrillSeq;
+  API.get("/api/phase/member-tasks", { reqId: reqId, userId: userId || "", offset: 0, limit: 100 }).then(function(page){
+    if(seq !== memberDrillSeq) return;
     if(rt.phaseReqId !== reqId) return;
-    rows = rows || [];
-    var mvpMin = 0, postMin = 0;
-    rows.forEach(function(r){
-      if(r.phase === "mvp") mvpMin += r.minutes || 0;
-      else postMin += r.minutes || 0;
-    });
-    var body = rows.map(function(r){
-      var est = r.estimateMinutes || 0, act = r.minutes || 0;
-      return '<tr data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">'
-        + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(r.title) + '</td>'
-        + '<td>' + (r.phase === "mvp" ? '<span class="tag tag-info">首版</span>' : '<span class="tag tag-plum">迭代</span>') + '</td>'
-        + '<td>' + esc(typeName(r.itemType)) + '</td>'
-        + '<td class="num">' + dateShort(r.startDate) + '</td>'
-        + '<td class="num">' + dateShort(r.dueDate) + '</td>'
-        + '<td class="num">' + (est ? fmtMinutesShort(est) : "—") + '</td>'
-        + '<td class="num">' + (act ? fmtMinutesShort(act) : "—") + '</td>'
-        + '<td>' + (r.boardColumn === "done"
-          ? '<span class="tag tag-success">已完成</span>'
-          : '<span class="tag tag-info">' + esc(colName(r.boardColumn)) + '</span>') + '</td></tr>';
-    }).join("") || '<tr><td colspan="8" class="foot-note" style="padding:16px;text-align:center">该成员在此项目暂无计时记录</td></tr>';
+    page = page || {};
+    var st = {
+      items: page.items || [],
+      total: Number(page.total) || 0,
+      hasMore: !!page.hasMore,
+      loading: false,
+      mvpMinutes: Number(page.mvpMinutes) || 0,
+      postMinutes: Number(page.postMinutes) || 0
+    };
     var layer = document.createElement("div");
     layer.className = "modal-layer";
     layer.setAttribute("role", "dialog");
@@ -434,15 +440,68 @@ function openMemberDrill(userId, name){
     layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
     layer.innerHTML = '<div class="sheet wide"><div class="sheet-head"><div style="flex:1;min-width:0">'
       + '<h2>' + esc(name) + ' · 阶段工时明细</h2>'
-      + '<div class="desc">共 ' + rows.length + ' 行 · 首版 ' + fmtMinutesShort(mvpMin) + ' · 迭代 ' + fmtMinutesShort(postMin)
-      + ' · 按计时自然日归组，点击工作项行打开详情</div></div>'
+      + '<div class="desc"></div></div>'
       + '<button class="icon-btn sm" type="button" data-drill-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
       + '<div class="sheet-body"><div class="tbl-wrap"><table class="phase-tbl"><thead><tr>'
       + '<th>工作项</th><th>阶段</th><th>类型</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>状态</th>'
-      + '</tr></thead><tbody>' + body + '</tbody></table></div></div></div>';
+      + '</tr></thead><tbody></tbody></table></div></div></div>';
     document.body.appendChild(layer);
+
+    var tbody = layer.querySelector("tbody");
+    var desc = layer.querySelector(".desc");
+    function syncBody(){
+      var body = st.items.map(memberDrillRowHTML).join("");
+      if(!st.items.length){
+        body = '<tr><td colspan="8" class="foot-note" style="padding:16px;text-align:center">该成员在此项目暂无计时记录</td></tr>';
+      } else if(st.hasMore){
+        body += '<tr><td colspan="8" class="foot-note" style="padding:10px;text-align:center">'
+          + '<button class="btn sm block" type="button" data-member-more' + (st.loading ? " disabled" : "") + '>'
+          + (st.loading ? "加载中…" : "加载更多（已加载 " + st.items.length + " / 共 " + st.total + " 行）")
+          + '</button></td></tr>';
+      }
+      tbody.innerHTML = body;
+      desc.textContent = "共 " + st.total + " 行"
+        + (st.items.length < st.total ? "（已加载 " + st.items.length + "）" : "")
+        + " · 首版 " + fmtMinutesShort(st.mvpMinutes) + " · 迭代 " + fmtMinutesShort(st.postMinutes)
+        + " · 按计时自然日归组，点击工作项行打开详情";
+    }
+    function loadMore(){
+      if(st.loading || !st.hasMore) return;
+      st.loading = true;
+      syncBody();
+      API.get("/api/phase/member-tasks", { reqId: reqId, userId: userId || "", offset: st.items.length, limit: 100 }).then(function(next){
+        if(!document.body.contains(layer)) return;
+        if(rt.phaseReqId !== reqId) return;
+        st.loading = false;
+        next = next || {};
+        var known = {};
+        st.items.forEach(function(r){ known[r.taskId + "|" + r.phase] = 1; });
+        var fresh = [];
+        (next.items || []).forEach(function(r){
+          var k = r.taskId + "|" + r.phase;
+          if(known[k]) return;
+          known[k] = 1;
+          fresh.push(r);
+        });
+        st.items = st.items.concat(fresh);
+        if(typeof next.total === "number") st.total = next.total;
+        if(typeof next.mvpMinutes === "number") st.mvpMinutes = next.mvpMinutes;
+        if(typeof next.postMinutes === "number") st.postMinutes = next.postMinutes;
+        /* 整页都是已加载行时停止翻页，避免死循环 */
+        st.hasMore = !!next.hasMore && fresh.length > 0;
+        syncBody();
+      }).catch(function(ex){
+        if(!document.body.contains(layer)) return;
+        st.loading = false;
+        toast("成员阶段工时加载失败：" + (ex && ex.message ? ex.message : "网络异常"), "bad");
+        syncBody();
+      });
+    }
+    syncBody();
+
     layer.addEventListener("click", function(e){
       if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
+      if(e.target.closest("[data-member-more]")){ loadMore(); return; }
       var t = e.target.closest("[data-open-task]");
       if(t){ UI.closeModal(layer); openTaskById(t.dataset.openTask); }
     });

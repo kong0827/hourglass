@@ -4,7 +4,7 @@ import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, catNameById, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -492,7 +492,7 @@ var RECUR_LABELS = { daily:"每天", weekly:"每周", monthly:"每月" };
 function syncMoreSummary(){
   var el = $("drawerMoreSummary");
   if(!el) return;
-  var parts = ["模块：" + (rt.formCat || "未设置")];
+  var parts = ["模块：" + (catNameById(rt.formCat) || "未设置")];
   if(rt.formRecur) parts.push("循环：" + (RECUR_LABELS[rt.formRecur] || rt.formRecur));
   if(iRemind && iRemind.value) parts.push("提醒：" + fmtTs(iRemind.value));
   if(iBlocked && iBlocked.checked) parts.push("已阻塞");
@@ -591,11 +591,32 @@ function buildFormControls(){
   syncCatSeg();
   populateColSelect();
 }
+/* 模块已降到项目级：候选只列指定项目的模块；未挂项目无模块可选（提交后为「未指定」） */
+function projCats(reqId){
+  if(!reqId) return [];
+  return rt.categoriesCache.filter(function(c){ return c.projectId === reqId; });
+}
+function projFirstCat(reqId){
+  return (projCats(reqId)[0] || {}).id || "";
+}
 function syncCatSeg(){
   if(!segCat) return;
-  segCat.innerHTML = rt.categoriesCache.map(function(c){
-    return '<button type="button" data-fcat="' + esc(c.name) + '" aria-pressed="' + (c.name === rt.formCat) + '">' + esc(c.name) + '</button>';
+  if(!currentReqId()){
+    segCat.innerHTML = '<span class="foot-note">未挂项目，模块为「未指定」</span>';
+    return;
+  }
+  segCat.innerHTML = projCats(currentReqId()).map(function(c){
+    return '<button type="button" data-fcat="' + esc(c.id) + '" aria-pressed="' + (c.id === rt.formCat) + '">' + esc(c.name) + '</button>';
   }).join("");
+}
+/* 切换项目后校准模块选中：原模块不属于新项目则回落到新项目第一个模块 */
+function ensureCatForProject(reqId){
+  var cats = projCats(reqId);
+  if(!cats.some(function(c){ return c.id === rt.formCat; })){
+    rt.formCat = (cats[0] || {}).id || "";
+    syncFormSegs(); syncMoreSummary();
+  }
+  syncCatSeg();
 }
 function populateColSelect(){
   if(!iCol) return;
@@ -829,7 +850,8 @@ function openTaskDrawer(colId, task, defaults){
     if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
     renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     rt.formPri = task.priority || "P2";
-    rt.formCat = task.category || (rt.categoriesCache.length ? rt.categoriesCache[0].name : "");
+    /* 模块已删则回落到该项目第一个模块；未挂项目无模块 */
+    rt.formCat = task.categoryId || projFirstCat(task.reqId || "");
     populateColSelect();
     iCol.value = task.boardColumn || "backlog";
     populateReqSelect(task.reqId || "");
@@ -870,7 +892,7 @@ function openTaskDrawer(colId, task, defaults){
     if($("afterCreateNote")) $("afterCreateNote").hidden = true;
     /* 只有确实用了低频设置时才展开，避免编辑态默认撑长表单；模块已填也要展开 */
     var drawerMore = $("drawerMore");
-    if(drawerMore) drawerMore.open = !!(task.category || task.recurType || task.remindAt || task.blocked);
+    if(drawerMore) drawerMore.open = !!(task.categoryId || task.recurType || task.remindAt || task.blocked);
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
@@ -892,10 +914,11 @@ function openTaskDrawer(colId, task, defaults){
     if(iEstimate) iEstimate.value = "";
     renderActualEstimate(0, null);
     rt.formPri = "P2";
-    /* 从需求拆解时沿用需求模块；模块已删则回落到第一个 */
-    var presetCat = defaults && defaults.category;
-    rt.formCat = rt.categoriesCache.some(function(c){ return c.name === presetCat; })
-      ? presetCat : (rt.categoriesCache.length ? rt.categoriesCache[0].name : "");
+    /* 从需求拆解时沿用需求模块；不属于该项目或已删则回落到该项目第一个 */
+    var presetCat = defaults && defaults.categoryId;
+    var catCands = projCats(initialReqId);
+    rt.formCat = catCands.some(function(c){ return c.id === presetCat; })
+      ? presetCat : ((catCands[0] || {}).id || "");
     populateColSelect();
     iCol.value = colId || "backlog";
     populateReqSelect(initialReqId);
@@ -953,6 +976,7 @@ function openTaskDrawer(colId, task, defaults){
   syncProgVal();
   syncProgByCol();
   fTitle.classList.remove("invalid");
+  syncCatSeg();
   syncFormSegs();
   syncMoreSummary();
   applyDrawerReadOnly(readOnly);
@@ -1165,6 +1189,8 @@ if(iReq) iReq.addEventListener("change", function(){
   if(demandSel) demandSel.value = "";
   rt.formDemandId = null;
   ensureDemand("");
+  /* 模块随项目走：原项目模块不再可选，回落到新项目第一个模块或「未指定」 */
+  ensureCatForProject(iReq.value);
   syncAssocViewBtns();
   syncDrawerHead();
   syncDrawerSource();
@@ -1183,6 +1209,7 @@ if(iDemand) iDemand.addEventListener("change", function(){
     iReq.value = wantReq;
     ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
     ensureBranch(($("iBranch") || {}).value, wantReq);
+    ensureCatForProject(wantReq);
     ensureReqDoc("");
     ensureDemand(iDemand.value);
   }
@@ -1789,7 +1816,7 @@ taskForm.addEventListener("submit", function(e){
     title: title,
     description: iDesc.value.trim(),
     priority: rt.formPri,
-    category: rt.formCat || null,
+    categoryId: rt.formCat || null,
     owner: owner.name,
     ownerUserId: owner.userId,
     boardColumn: iCol.value || "backlog",

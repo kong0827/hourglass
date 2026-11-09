@@ -243,7 +243,7 @@
   </select>
 
   <!-- 成员阶段工时下钻：任务 × 阶段，阶段判定与 sumUserDayMinutesByReq / 阶段卡完全同口径 -->
-  <select id="sumMemberTaskPhaseByReq" resultType="com.hourglass.dto.PhaseMemberTask">
+  <sql id="memberTaskPhaseRows">
     SELECT t.id AS taskId,
            t.title,
            t.item_type AS itemType,
@@ -266,6 +266,21 @@
       AND tl.user_id = #{userId}
     GROUP BY t.id, t.title, t.item_type, t.owner, t.start_date, t.due_date,
              t.estimate_minutes, t.board_column, phase
-    ORDER BY (phase = 'post'), t.id
+  </sql>
+
+  <!-- 汇总行数 + 首版/迭代分钟，与明细同源，避免前端按整表求和 -->
+  <select id="summaryMemberTaskPhaseByReq" resultType="com.hourglass.dto.PhaseMemberTaskSummary">
+    SELECT COUNT(*) AS total,
+           COALESCE(SUM(CASE WHEN g.phase = 'mvp' THEN g.minutes ELSE 0 END), 0) AS mvp_minutes,
+           COALESCE(SUM(CASE WHEN g.phase = 'post' THEN g.minutes ELSE 0 END), 0) AS post_minutes
+    FROM (<include refid="memberTaskPhaseRows"/>) g
+  </select>
+
+  <select id="selectMemberTaskPhasePageByReq" resultType="com.hourglass.dto.PhaseMemberTask">
+    SELECT g.taskId, g.title, g.itemType, g.owner, g.startDate, g.dueDate,
+           g.estimateMinutes, g.boardColumn, g.phase, g.minutes
+    FROM (<include refid="memberTaskPhaseRows"/>) g
+    ORDER BY (g.phase = 'post'), g.taskId
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 </mapper>

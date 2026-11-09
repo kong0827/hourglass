@@ -631,7 +631,7 @@ input,textarea,select{font:inherit;color:inherit;}
 | 左色条 | 3px，颜色 = 优先级色；圆角左侧 `10px` |
 | 阴影 | `--shadow-xs`；hover → `--shadow-md` + `translateY(-1px)` |
 | 间距 | 标题→描述 4；描述→标签 8；标签→元信息 8；元信息→进度 10 |
-| 标题 | 14px/600，`--text`，最多 2 行，超出 `-webkit-line-clamp` |
+| 标题 | 14px/500，`--text`，最多 2 行，超出 `-webkit-line-clamp` |
 | 描述 | 13px，`--text-2`，最多 2 行截断 |
 | 逾期态 | 边框 `--danger-border`，截止日期文字 `--danger`/600，元信息行左侧加 `!` 图标 |
 
@@ -998,7 +998,7 @@ input,textarea,select{font:inherit;color:inherit;}
 | 行内边距 | `10px 12px` |
 | 列宽 | 复选框 40 / 任务 flex / 列 100 / 优先级 84 / 负责人 96 / 截止 110 / 进度 128 / 项目 120 / 操作 48 |
 | 复选框 | 16×16，选中 `--primary`；表头复选框 = 全选当前页 |
-| 任务单元格 | 第一行标题 14px/600；第二行标签 `.tag` 组（gap 4，`margin-top:4px`） |
+| 任务单元格 | 第一行标题 14px/500；第二行标签 `.tag` 组（gap 4，`margin-top:4px`） |
 | 列单元格 | `.tag` 样式，底色取列色 10% 透明度，文字取列色加深 |
 | 优先级 | `PriorityDot` |
 | 截止 | 逾期 `--danger`/600；今天 `--warning`/600；其余 `--text-2` |
@@ -1198,7 +1198,7 @@ input,textarea,select{font:inherit;color:inherit;}
 |---|---|
 | 说明条 | 12px `--text-3`，高 44，与其他视图工具栏同位置 |
 | 行卡片 | `--surface`，`--r-lg`，1px `--border`，内边距 14，行之间 gap 8 |
-| 主信息 | 标题 14px/600 + 标签组 |
+| 主信息 | 标题 14px/500 + 标签组 |
 | 次信息 | `删除于 10-14 21:03 · 剩余 28 天` 12px `--text-3`；**剩余 ≤ 3 天时变 `--danger`** |
 | 恢复 | 次按钮；点击后乐观移除该行 + Toast「已恢复「xxx」」 |
 | 彻底删除 | `danger` 变体；点击弹确认框（`.danger-solid`），文案「彻底删除后不可恢复，确定删除「xxx」？」 |

@@ -66,7 +66,7 @@ public class BoardResponse {
     public static class Meta {
         private List<NameCount> owners = new ArrayList<NameCount>();
         private List<NameCount> pris = new ArrayList<NameCount>();
-        private List<NameCount> cats = new ArrayList<NameCount>();
+        private List<CatCount> cats = new ArrayList<CatCount>();
         /** 工作项类型计数（story/task/bug/epic 固定顺序） */
         private List<NameCount> types = new ArrayList<NameCount>();
         /** 有任务绑定的影响版本及计数（含项目名，同名版本跨项目时用于区分） */
@@ -104,6 +104,20 @@ public class BoardResponse {
         private int count;
 
         public NameCount(String name, int count) {
+            this.name = name;
+            this.count = count;
+        }
+    }
+
+    /** 模块筛选计数：值用 ID（改名/删除稳定），名称由服务端随行下发供前端直接展示 */
+    @Data
+    public static class CatCount {
+        private String id;
+        private String name;
+        private int count;
+
+        public CatCount(String id, String name, int count) {
+            this.id = id;
             this.name = name;
             this.count = count;
         }

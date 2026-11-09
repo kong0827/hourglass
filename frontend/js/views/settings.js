@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { invalidateRules, loadRules } from "../core/transitions.js";
-import { loadCategories, loadWorkspaces } from "../core/app.js";
+import { loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
@@ -55,7 +55,7 @@ function renderTrash(list){
         '<span class="ti-t">' + esc(t.title) + '</span>' +
         '<span class="ti-m' + (rem <= 3 ? " urgent" : "") + '">' +
           priTagHTML(t.priority) +
-          catTag(t.category) +
+          catTag(t.categoryId) +
           '<span>删除于 ' + esc(fmtTs(t.deletedAt)) + ' · ' +
             (rem <= 3
               ? '<strong class="trash-soon">剩余 ' + rem + ' 天，即将自动清理</strong>'
@@ -109,7 +109,6 @@ trashList.addEventListener("click", function(e){
 });
 var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
     wsMemberList = $("wsMemberList"), wsMemberName = $("wsMemberName"),
-    catCfgList = $("catCfgList"), catNewName = $("catNewName"), catNewColor = $("catNewColor"),
     colCfgList = $("colCfgList"), colNewName = $("colNewName"), colNewColor = $("colNewColor"), colNewRule = $("colNewRule");
 var transMatrix = $("colTransMatrix"), transSummary = $("colTransSummary"),
     transHint = $("colTransHint"), btnTransReset = $("btnTransReset");
@@ -295,7 +294,6 @@ function enterSettingsView(){
     el.title = isOwner ? el.dataset.ownerTitle : "仅空间主可操作";
   });
   loadColCfg();
-  loadCatCfg();
   loadPriorityCfg();
   loadNotifyStatus();
   loadActivity();
@@ -801,118 +799,6 @@ $("btnColAdd").addEventListener("click", function(){
     colNewName.value = "";
     if(colNewRule) colNewRule.value = "normal";
     loadColCfg();
-    loadBoard({silent:true});
-  }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
-});
-function loadCatCfg(){
-  catCfgList.innerHTML = UI.skeletonRows(2);
-  API.get("/api/categories").then(function(list){
-    rt.catDefsCache = list || [];
-    renderCatCfg();
-  }).catch(function(ex){
-    catCfgList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
-  });
-}
-function renderCatCfg(){
-  $("catCount").textContent = rt.catDefsCache.length ? "共 " + rt.catDefsCache.length + " 个" : "";
-  var readOnly = roleReadOnly();
-  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
-  catCfgList.innerHTML = rt.catDefsCache.map(function(c, idx){
-    return '<div class="cfg-row" data-cat-id="' + esc(c.id) + '">' +
-      '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
-      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-cat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
-      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-cat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
-      '<button class="cc-act" type="button" data-cat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-cat-down title="下移"' + (readOnly || idx === rt.catDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-cat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
-    '</div>';
-  }).join("");
-  ["catNewColor", "catNewName", "btnCatAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
-  if($("catCfgHint")) $("catCfgHint").hidden = !readOnly;
-  UI.wireTooltips(catCfgList);
-}
-function saveCatRow(id){
-  if(roleReadOnly()) return;
-  var row = catCfgList.querySelector('[data-cat-id="' + id + '"]');
-  if(!row) return;
-  var name = row.querySelector("[data-cat-name]").value.trim();
-  var color = row.querySelector("[data-cat-color]").value;
-  if(!name){ toast("模块名不能为空", "warn"); loadCatCfg(); return; }
-  API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
-    toast("已更新模块「" + name + "」", "fs");
-    loadCatCfg();
-    loadCategories(true);
-    loadBoard({silent:true});
-  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); loadCatCfg(); });
-}
-catCfgList.addEventListener("change", function(e){
-  var row = e.target.closest("[data-cat-id]");
-  if(!row) return;
-  if(e.target.matches("[data-cat-name]") || e.target.matches("[data-cat-color]")) saveCatRow(row.dataset.catId);
-});
-catCfgList.addEventListener("click", function(e){
-  if(roleReadOnly()) return;
-  var row = e.target.closest("[data-cat-id]");
-  if(!row) return;
-  var id = row.dataset.catId;
-  if(e.target.closest("[data-cat-up]") || e.target.closest("[data-cat-down]")){
-    var idx = -1;
-    for(var i = 0; i < rt.catDefsCache.length; i++) if(rt.catDefsCache[i].id === id) idx = i;
-    if(idx < 0) return;
-    var to = e.target.closest("[data-cat-up]") ? idx - 1 : idx + 1;
-    if(to < 0 || to >= rt.catDefsCache.length) return;
-    var moved = rt.catDefsCache.splice(idx, 1)[0];
-    rt.catDefsCache.splice(to, 0, moved);
-    API.put("/api/categories/order", { ids: rt.catDefsCache.map(function(c){ return c.id; }) }).then(function(){
-      loadCatCfg();
-    }).catch(function(ex){ toast(ex.message || "排序失败", "bad"); loadCatCfg(); });
-    return;
-  }
-  if(e.target.closest("[data-cat-del]")){
-    var cat = null;
-    for(var j = 0; j < rt.catDefsCache.length; j++) if(rt.catDefsCache[j].id === id) cat = rt.catDefsCache[j];
-    if(!cat) return;
-    var others = rt.catDefsCache.filter(function(c){ return c.id !== id; });
-    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
-    var menu = document.createElement("div");
-    menu.className = "menu";
-    menu.style.minWidth = "200px";
-    menu.innerHTML = '<div class="menu-title">迁移到</div>' + others.map(function(c){
-      return '<button class="menu-item" type="button" data-cat-target="' + esc(c.id) + '">' + esc(c.name) + '</button>';
-    }).join("");
-    UI.openPop(menu, e.target.closest("[data-cat-del]"), { onClose: function(){ menu.remove(); } });
-    menu.addEventListener("click", function(ev){
-      var b = ev.target.closest("[data-cat-target]");
-      if(!b) return;
-      var target = null;
-      for(var k = 0; k < others.length; k++) if(others[k].id === b.dataset.catTarget) target = others[k];
-      if(!target) return;
-      UI.closeAllPops();
-      UI.showConfirm({
-        title:"删除模块",
-        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
-        okText:"删除模块"
-      }).then(function(ok){
-        if(!ok) return;
-        API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
-          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
-          loadCatCfg();
-          loadCategories(true);
-          loadBoard({silent:true});
-        }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
-      });
-    });
-  }
-});
-$("btnCatAdd").addEventListener("click", function(){
-  if(roleReadOnly()) return;
-  var name = catNewName.value.trim();
-  if(!name){ toast("请填写模块名称", "warn"); return; }
-  API.post("/api/categories", { name: name, color: catNewColor.value }).then(function(){
-    toast("已添加模块「" + name + "」", "fs");
-    catNewName.value = "";
-    loadCatCfg();
-    loadCategories(true);
     loadBoard({silent:true});
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });

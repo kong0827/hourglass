@@ -545,13 +545,17 @@ public class TaskQueryService {
         for (TaskCountAgg agg : taskMapper.countCommentsByTaskIds(workspaceId, ids)) {
             commentMap.put(agg.getTaskId(), agg.getCnt());
         }
-        /* O-8：搜索范围扩到「项目名 / 附件文件名」，拼成扩展检索文本（不落库）。
+        /* O-8：搜索范围扩到「项目名 / 模块名 / 附件文件名」，拼成扩展检索文本（不落库）。
            项目名只查任务里出现的 id；附件只查可见任务，不再整空间加载。 */
         Map<String, String> reqNameMap = new HashMap<String, String>();
         if (!reqIds.isEmpty()) {
             for (Requirement r : reqMapper.selectNamesByIds(workspaceId, new ArrayList<String>(reqIds))) {
                 reqNameMap.put(r.getId(), r.getName());
             }
+        }
+        Map<String, String> catNameMap = new HashMap<String, String>();
+        for (Category c : metaCache.categories(workspaceId)) {
+            catNameMap.put(c.getId(), c.getName());
         }
         Map<String, StringBuilder> attachMap = new HashMap<String, StringBuilder>();
         Map<String, Integer> attachCounts = new HashMap<String, Integer>();
@@ -587,6 +591,10 @@ public class TaskQueryService {
                 }
                 /* 项目名随任务下发：跨空间「我的任务」按项目分组/展示用 */
                 t.setReqName(rn);
+            }
+            String catName = catNameMap.get(t.getCategoryId());
+            if (catName != null) {
+                extra.append(catName).append(' ');
             }
             StringBuilder ab = attachMap.get(t.getId());
             if (ab != null) {
@@ -627,7 +635,7 @@ public class TaskQueryService {
             String q = query.getQ().toLowerCase(Locale.ROOT);
             /* O-8：搜索范围从「标题/描述/备注」扩到 项目名 / 模块 / 标签 / 附件文件名（searchExtra 在 mergeTaskExtras 里拼好） */
             if (!contains(t.getTitle(), q) && !contains(t.getDescription(), q) && !contains(t.getNote(), q)
-                    && !contains(t.getCategory(), q) && !contains(t.getSearchExtra(), q)
+                    && !contains(t.getSearchExtra(), q)
                     && !tagContains(t, q)) {
                 return false;
             }
@@ -638,7 +646,7 @@ public class TaskQueryService {
         if (!query.getPris().isEmpty() && !query.getPris().contains(t.getPriority())) {
             return false;
         }
-        if (!query.getCats().isEmpty() && !query.getCats().contains(t.getCategory())) {
+        if (!query.getCats().isEmpty() && !query.getCats().contains(t.getCategoryId())) {
             return false;
         }
         if (!query.getReqs().isEmpty()) {
@@ -761,8 +769,10 @@ public class TaskQueryService {
             typeCount.put(tp, 0);
         }
         List<Category> cats = metaCache.categories(workspaceId);
+        Map<String, String> catNameById = new HashMap<String, String>();
         for (Category c : cats) {
-            catCount.put(c.getName(), 0);
+            catCount.put(c.getId(), 0);
+            catNameById.put(c.getId(), c.getName());
         }
         int unassigned = 0;
         Map<String, Integer> versionCount = new LinkedHashMap<String, Integer>();
@@ -771,8 +781,8 @@ public class TaskQueryService {
             if (priCount.containsKey(t.getPriority())) {
                 priCount.merge(t.getPriority(), 1, Integer::sum);
             }
-            if (catCount.containsKey(t.getCategory())) {
-                catCount.merge(t.getCategory(), 1, Integer::sum);
+            if (catCount.containsKey(t.getCategoryId())) {
+                catCount.merge(t.getCategoryId(), 1, Integer::sum);
             }
             if (typeCount.containsKey(t.getItemType())) {
                 typeCount.merge(t.getItemType(), 1, Integer::sum);
@@ -791,7 +801,7 @@ public class TaskQueryService {
             meta.getPris().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }
         for (Map.Entry<String, Integer> e : catCount.entrySet()) {
-            meta.getCats().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
+            meta.getCats().add(new BoardResponse.CatCount(e.getKey(), catNameById.get(e.getKey()), e.getValue()));
         }
         for (Map.Entry<String, Integer> e : typeCount.entrySet()) {
             meta.getTypes().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));

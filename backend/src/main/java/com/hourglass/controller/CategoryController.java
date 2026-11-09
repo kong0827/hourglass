@@ -31,19 +31,22 @@ public class CategoryController {
         this.workspaceService = workspaceService;
     }
 
+    /** project 为空返回空间内全部项目的模块（跨项目展示/筛选），带 project 只返回该项目清单 */
     @GetMapping("/api/categories")
-    public ApiResult<List<Category>> list(@RequestParam(required = false) String workspace) {
+    public ApiResult<List<Category>> list(@RequestParam(required = false) String project,
+                                          @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
-        return ApiResult.ok(categoryService.list(ws.getId()));
+        return ApiResult.ok(categoryService.list(ws.getId(), project));
     }
 
     @PostMapping("/api/categories")
     public ApiResult<Category> create(@Valid @RequestBody CategoryRequest req,
+                                      @RequestParam String project,
                                       @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         workspaceService.requireWriter(userId, ws.getId());
-        return ApiResult.ok(categoryService.create(ws.getId(), req));
+        return ApiResult.ok(categoryService.create(ws.getId(), project, req));
     }
 
     @PutMapping("/api/categories/{id}")
@@ -55,7 +58,7 @@ public class CategoryController {
         return ApiResult.ok(categoryService.update(ws.getId(), id, req));
     }
 
-    /** 删除模块（仅空间主），其下任务与需求迁到 targetId 指定模块；缺省迁到最靠前的其他模块 */
+    /** 删除项目模块（仅空间主），该项目下任务与需求迁到 targetId 指定模块；缺省迁到项目内最靠前的其他模块 */
     @DeleteMapping("/api/categories/{id}")
     public ApiResult<Void> delete(@PathVariable String id,
                                   @RequestParam(required = false) String targetId,
@@ -70,11 +73,12 @@ public class CategoryController {
 
     @PutMapping("/api/categories/order")
     public ApiResult<Void> order(@Valid @RequestBody ColumnOrderRequest req,
+                                 @RequestParam String project,
                                  @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         workspaceService.requireWriter(userId, ws.getId());
-        categoryService.order(ws.getId(), req.getIds());
+        categoryService.order(ws.getId(), project, req.getIds());
         return ApiResult.ok();
     }
 }

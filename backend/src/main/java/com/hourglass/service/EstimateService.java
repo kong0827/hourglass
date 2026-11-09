@@ -129,8 +129,8 @@ public class EstimateService {
                 overrun.add(brief(t, est, act, ratio));
             }
 
-            String cat = t.getCategory() == null || t.getCategory().trim().isEmpty()
-                    ? "未指定模块" : t.getCategory().trim();
+            String cat = t.getCategoryId() == null || t.getCategoryId().trim().isEmpty()
+                    ? "未指定模块" : t.getCategoryId().trim();
             long[] slot = catAgg.get(cat);
             if (slot == null) {
                 /* 必须以 0 起手：这里既做"新建"也做"累加"，初始化时放值会导致
@@ -161,7 +161,7 @@ public class EstimateService {
                 continue;
             }
             EstimateStats.CatFactor cf = new EstimateStats.CatFactor();
-            cf.setCategory(e.getKey());
+            cf.setCategoryId(e.getKey());
             cf.setSampleCount((int) v[2]);
             cf.setEstimateTotal((int) v[0]);
             cf.setActualTotal((int) v[1]);
@@ -240,7 +240,7 @@ public class EstimateService {
         EstimateStats.RiskTask rt = new EstimateStats.RiskTask();
         rt.setId(t.getId());
         rt.setTitle(t.getTitle());
-        rt.setCategory(t.getCategory());
+        rt.setCategoryId(t.getCategoryId());
         rt.setColumn(t.getBoardColumn());
         rt.setEstimateMinutes(est);
         rt.setActualMinutes(act);

@@ -12,6 +12,7 @@ import com.hourglass.dto.DemandBoardResponse;
 import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
+import com.hourglass.entity.Category;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
@@ -639,7 +640,7 @@ public class DemandService {
         d.setDescription(Texts.trimToNull(req.getDescription()));
         d.setSource(Texts.trimToNull(req.getSource()));
         d.setItemKind(req.getItemKind() == null ? "新功能" : req.getItemKind());
-        d.setCategory(validCategory(d.getWorkspaceId(), req.getCategory()));
+        d.setCategoryId(validCategoryId(d.getWorkspaceId(), d.getReqId(), req.getCategoryId()));
         d.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
         d.setExpectDate(req.getExpectDate());
         d.setAcceptText(Texts.trimToNull(req.getAcceptText()));
@@ -650,16 +651,20 @@ public class DemandService {
         fillWsjf(d);
     }
 
-    /** 模块可选；非空时必须来自空间模块字典，空串表示未指定（列 NOT NULL） */
-    private String validCategory(String workspaceId, String raw) {
-        String category = Texts.trimToNull(raw);
-        if (category == null) {
-            return "";
+    /** 模块可选；非空时必须属于需求所属项目的模块字典，null 表示未指定（列可空） */
+    private String validCategoryId(String workspaceId, String projectId, String raw) {
+        String categoryId = Texts.trimToNull(raw);
+        if (categoryId == null) {
+            return null;
         }
-        if (categoryMapper.selectByName(workspaceId, category) == null) {
-            throw AppException.badRequest("模块不存在：" + category);
+        Category cat = categoryMapper.selectById(workspaceId, categoryId);
+        if (cat == null) {
+            throw AppException.badRequest("模块不存在：" + categoryId);
         }
-        return category;
+        if (!projectId.equals(cat.getProjectId())) {
+            throw AppException.badRequest("模块不属于该项目");
+        }
+        return categoryId;
     }
 
     private Requirement requireProject(String workspaceId, String reqId) {

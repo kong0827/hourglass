@@ -3,6 +3,8 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.dto.PhaseMemberTask;
+import com.hourglass.dto.PhaseMemberTaskPage;
+import com.hourglass.dto.PhaseMemberTaskSummary;
 import com.hourglass.dto.PhaseStatsResponse;
 import com.hourglass.dto.ReleaseNoteResponse;
 import com.hourglass.dto.UserDayRow;
@@ -24,6 +26,7 @@ import com.hourglass.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -640,15 +643,33 @@ public class VersionPhaseService {
     /**
      * 成员阶段工时下钻：返回该成员在本项目的「任务 × 阶段」计时。
      * 与阶段卡 memberHours 同源（time_log 按计时人 + 自然日归组），因此合计能对上。
+     * 汇总（行数 / 首版 / 迭代分钟）由 SQL 直接算出，明细分页返回。
      */
-    public List<PhaseMemberTask> memberTasks(String workspaceId, String reqId, String userId, String viewerId) {
+    public PhaseMemberTaskPage memberTasks(String workspaceId, String reqId, String userId, String viewerId,
+                                          int offset, int limit) {
         requireProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, viewerId, reqId);
         String target = userId == null ? null : userId.trim();
         if (target == null || target.isEmpty()) {
             throw AppException.badRequest("缺少成员参数");
         }
-        return timeLogMapper.sumMemberTaskPhaseByReq(workspaceId, reqId, target);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? 100 : Math.min(limit, 100);
+
+        PhaseMemberTaskSummary summary = timeLogMapper.summaryMemberTaskPhaseByReq(workspaceId, reqId, target);
+        List<PhaseMemberTask> items = summary.getTotal() <= safeOffset
+                ? new ArrayList<PhaseMemberTask>()
+                : timeLogMapper.selectMemberTaskPhasePageByReq(workspaceId, reqId, target, safeOffset, safeLimit);
+
+        PhaseMemberTaskPage page = new PhaseMemberTaskPage();
+        page.setTotal(summary.getTotal());
+        page.setOffset(safeOffset);
+        page.setLimit(safeLimit);
+        page.setHasMore(safeOffset + items.size() < summary.getTotal());
+        page.setItems(items);
+        page.setMvpMinutes(summary.getMvpMinutes());
+        page.setPostMinutes(summary.getPostMinutes());
+        return page;
     }
 
     /** 百分比（四舍五入取整）；分母为 0 时返回 null 表示"无数据" */

@@ -9,11 +9,13 @@ import java.util.List;
 @Mapper
 public interface CategoryMapper {
 
+    /** 空间内全部项目模块（缓存全量口径；展示解析/跨项目筛选共用） */
     List<Category> selectByWorkspace(@Param("workspaceId") String workspaceId);
 
     Category selectById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
-    Category selectByName(@Param("workspaceId") String workspaceId, @Param("name") String name);
+    Category selectByName(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                          @Param("name") String name);
 
     int insert(Category category);
 
@@ -21,20 +23,24 @@ public interface CategoryMapper {
 
     int deleteById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
-    Integer maxSortOrder(@Param("workspaceId") String workspaceId);
+    Integer maxSortOrder(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId);
 
     int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
                         @Param("sortOrder") int sortOrder);
 
-    /** 改名/删除时同步任务里的模块名 */
-    int renameInTasks(@Param("workspaceId") String workspaceId, @Param("oldName") String oldName,
-                      @Param("newName") String newName);
+    /** 删除项目模块时：该项目下任务迁到目标模块（按 ID 关联，无需扫名称） */
+    int moveTasksToCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                            @Param("fromId") String fromId, @Param("toId") String toId);
 
-    /** 改名/删除时同步需求池里的模块名 */
-    int renameInDemands(@Param("workspaceId") String workspaceId, @Param("oldName") String oldName,
-                        @Param("newName") String newName);
+    /** 删除项目模块时：该项目下需求迁到目标模块 */
+    int moveDemandsToCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
+                              @Param("fromId") String fromId, @Param("toId") String toId);
 
-    int countByWorkspace(@Param("workspaceId") String workspaceId);
+    /** 项目删除时：其下任务即将解除项目关联，模块引用先一并清空（未挂项目恒为「未指定」） */
+    int clearTasksCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId);
+
+    /** 项目删除时：模块清单随项目一并清理 */
+    int deleteByProject(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

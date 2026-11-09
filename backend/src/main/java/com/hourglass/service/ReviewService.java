@@ -6,6 +6,7 @@ import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReviewCountRow;
 import com.hourglass.dto.ReviewResponse;
 import com.hourglass.dto.WorkSumRow;
+import com.hourglass.entity.Category;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.WorkspaceMember;
@@ -32,14 +33,18 @@ public class ReviewService {
     private final TimeLogMapper timeLogMapper;
     private final WorkspaceMemberMapper memberMapper;
     private final ProjectAccessService projectAccess;
+    /** 模块ID → 名称解析（catDist 展示名） */
+    private final WorkspaceMetaCache metaCache;
 
     public ReviewService(TaskMapper taskMapper, RequirementService requirementService, TimeLogMapper timeLogMapper,
-                         WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess) {
+                         WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess,
+                         WorkspaceMetaCache metaCache) {
         this.taskMapper = taskMapper;
         this.requirementService = requirementService;
         this.timeLogMapper = timeLogMapper;
         this.memberMapper = memberMapper;
         this.projectAccess = projectAccess;
+        this.metaCache = metaCache;
     }
 
     /** 成员显示名（成员查询已 JOIN 出 display_name，缺省回退登录名/ID） */
@@ -116,7 +121,7 @@ public class ReviewService {
                 }
             }
             memberCount.merge(t.getOwner(), 1, Integer::sum);
-            catCount.merge(t.getCategory(), 1, Integer::sum);
+            catCount.merge(t.getCategoryId(), 1, Integer::sum);
         }
         ReviewResponse.Stats stats = new ReviewResponse.Stats();
         stats.setDone(done);
@@ -184,7 +189,18 @@ public class ReviewService {
             memberStats.add(ms);
         }
         resp.setMembers(memberStats);
-        resp.setCatDist(toNameCounts(catCount));
+        /* catDist 按模块ID聚合、解析出名称再下发：改名后历史分布仍归到同一模块 */
+        Map<String, Integer> catNameCount = new LinkedHashMap<String, Integer>();
+        for (Category c : metaCache.categories(workspaceId)) {
+            Integer n = catCount.remove(c.getId());
+            if (n != null) {
+                catNameCount.put(c.getName(), n);
+            }
+        }
+        for (Map.Entry<String, Integer> e : catCount.entrySet()) {
+            catNameCount.put(e.getKey(), e.getValue());
+        }
+        resp.setCatDist(toNameCounts(catNameCount));
 
         /* N-5：工时（本空间全员 / 我的 / 本周期全空间）一次聚合 */
         WorkSumRow work = timeLogMapper.sumWork(workspaceId, userId,

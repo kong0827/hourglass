@@ -117,7 +117,7 @@
 .list-row:hover{background:var(--surface-hover);}
 .list-row:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary);}
 .list-row .lr-task{min-width:0;display:flex;flex-direction:column;gap:4px;}
-.list-row .lr-t{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.list-row .lr-t{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .list-row .lr-tags{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
 .list-row .cell{font-size:12.5px;color:var(--text-2);font-variant-numeric:tabular-nums;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -217,7 +217,7 @@
 .req-item:hover{box-shadow:var(--shadow-md);}
 .req-item.editing{border-color:var(--primary);box-shadow:var(--ring-focus);}
 .req-top{display:flex;align-items:center;gap:8px;}
-.req-name{font-size:15px;font-weight:650;letter-spacing:-.01em;min-width:0;flex:1 1 auto;
+.req-name{font-size:15px;font-weight:500;letter-spacing:-.01em;min-width:0;flex:1 1 auto;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .req-desc{font-size:13px;line-height:20px;color:var(--text-2);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -237,7 +237,7 @@
 .project-table-row:last-child{border-bottom:none;}
 .project-table-row:hover{background:var(--surface-hover);}
 .project-cell{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.project-name-cell{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--text);}
+.project-name-cell{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);}
 .project-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:2px;}
 .demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
 .manager-tbl .link-title{display:inline;font-size:12.5px;line-height:18px;font-weight:550;color:var(--primary);}
@@ -317,7 +317,7 @@
   padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
 }
 .trash-item .ti-main{flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:4px;}
-.trash-item .ti-t{font-size:14px;font-weight:600;}
+.trash-item .ti-t{font-size:14px;font-weight:500;}
 .trash-item .ti-m{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
 .trash-item .ti-m.urgent{color:var(--danger-fg);font-weight:600;}
 .trash-item .ti-acts{display:flex;gap:8px;flex:0 0 auto;}
@@ -911,11 +911,12 @@
 }
 .comp-table tbody tr:last-child td{border-bottom:none;}
 .comp-table tbody tr:hover{background:var(--surface-hover);}
+.comp-table td.comp-more-cell{padding:8px;border-bottom:none;}
 .comp-table td.nowrap{white-space:nowrap;color:var(--text-2);font-variant-numeric:tabular-nums;}
-.comp-t{display:block;font-weight:600;color:var(--text);}
+.comp-t{display:block;font-weight:500;color:var(--text);}
 .comp-link{
   width:100%;max-width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;
-  font:inherit;font-weight:600;color:var(--text);font-size:13px;
+  font:inherit;font-weight:500;color:var(--text);font-size:13px;
 }
 .comp-link:hover{color:var(--primary-fg);text-decoration:underline;text-underline-offset:2px;}
 .comp-d{
@@ -967,7 +968,7 @@
 }
 .reqdoc-row:hover{background:var(--surface-hover);}
 .rr-main{min-width:0;flex:1;}
-.rr-title{display:block;font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rr-title{display:block;font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .rr-meta{display:block;margin-top:3px;font-size:12px;color:var(--text-3);}
 .rr-excerpt{display:block;margin-top:4px;font-size:12px;color:var(--text-3);opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .rr-go{color:var(--text-3);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
@@ -1281,7 +1282,7 @@
 .rk-card[draggable="true"]{cursor:grab;}
 .rk-card.dragging{opacity:.55;}
 .rk-head{display:flex;align-items:center;gap:6px;min-width:0;}
-.rk-title{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+.rk-title{font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
 .rk-meta{margin-top:4px;font-size:11.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .rk-foot{display:flex;align-items:center;gap:8px;margin-top:7px;}
 .rk-status{font-size:11.5px;color:var(--text-2);padding:2px 4px;border:1px solid transparent;border-radius:var(--r-xs);background:transparent;cursor:pointer;font-family:inherit;max-width:110px;}
@@ -1498,7 +1499,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .flow-ins.warn .fi-dot{background:var(--warning);}
 .flow-ins.good .fi-dot{background:var(--success);}
 .flow-ins .fi-main{min-width:0;}
-.flow-ins .fi-t{font-size:13.5px;font-weight:600;color:var(--text);line-height:20px;}
+.flow-ins .fi-t{font-size:13.5px;font-weight:500;color:var(--text);line-height:20px;}
 .flow-ins .fi-x{font-size:12.5px;color:var(--text-2);line-height:19px;margin-top:2px;}
 
 /* 各列停留：一行一列，条形长度是占比，颜色沿用列自己的颜色 */
@@ -1695,7 +1696,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .br-list tbody tr{cursor:pointer;}
 .br-list tbody tr:hover{background:var(--surface-hover);}
 .br-list tbody tr:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--ring-focus);}
-.br-list .br-name-cell{font-weight:600;color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-list .br-name-cell{font-weight:500;color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 /* 四列分组 */
 .br-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;}
@@ -1760,7 +1761,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .br-badge.br-st-released{color:var(--success-fg);background:var(--success-soft);border-color:var(--success-border);}
 .br-owner{margin-left:auto;display:inline-flex;}
 .br-name{
-  font-family:var(--font-mono);font-size:12.5px;font-weight:600;line-height:1.35;
+  font-family:var(--font-mono);font-size:12.5px;font-weight:500;line-height:1.35;
   color:var(--text);word-break:break-all;
 }
 .br-target{font-family:var(--font-mono);font-size:11.5px;color:var(--text-3);word-break:break-all;}
@@ -1904,6 +1905,13 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   font-size:12px;font-weight:600;display:inline-grid;place-items:center;
 }
 .mine-group-hint{font-size:12px;color:var(--text-3);}
+/* 二级分组：缩进一级、弱化底色（与工作项/需求池子组行同构） */
+.mine-subgroup-row{
+  display:flex;align-items:center;gap:8px;min-height:30px;padding:5px 12px 5px 28px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.mine-subgroup-name{font-size:12px;font-weight:600;color:var(--text-2);}
+.mine-subgroup-n{font-size:12px;color:var(--text-3);}
 /* 逾期分组沿用危险语义，但用「浅底 + 深字」的合法色对，避免数字被底色吞掉 */
 .mine-group[data-mine-group="over"] .mine-group-n{
   background:var(--danger-soft);border-color:transparent;color:var(--danger-fg);
@@ -2086,7 +2094,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 /* 拖动中：合法目标列持续淡光提示，悬停到不合法列给出禁用反馈 */
 .bkl-col-can{background:color-mix(in srgb, var(--primary) 6%, transparent);border-radius:var(--r-md);}
 .bkl-col-no{background:color-mix(in srgb, var(--danger-fg) 6%, transparent);border-radius:var(--r-md);}
-.link-title{display:block;width:100%;text-align:left;background:none;border:none;padding:0;font:inherit;font-size:14px;line-height:21px;font-weight:600;color:var(--text);cursor:pointer;}
+.link-title{display:block;width:100%;text-align:left;background:none;border:none;padding:0;font:inherit;font-size:14px;line-height:21px;font-weight:500;color:var(--text);cursor:pointer;}
 .link-title:hover{color:var(--primary);}
 .wsjf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 .wsjf-item{display:flex;flex-direction:column;gap:4px;min-width:0;}
@@ -2265,7 +2273,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cov-row.cov-link{cursor:pointer;}
 .cov-row.cov-link:hover .cov-name b{color:var(--primary-fg);text-decoration:underline;text-underline-offset:2px;}
 .cov-name{display:flex;flex-direction:column;gap:2px;min-width:0;}
-.cov-name b{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cov-name b{font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .cov-name small{font-size:11px;color:var(--text-3);}
 .cov-pass{color:var(--success);}
 .cov-fail{color:var(--danger);}
@@ -2285,7 +2293,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-row:hover{border-color:var(--border-strong);box-shadow:var(--shadow-xs);}
 .tc-row .mini-tag{margin-top:2px;flex:0 0 auto;}
 .tc-main{flex:1 1 auto;min-width:0;}
-.tc-title{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--text);word-break:break-all;}
+.tc-title{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);word-break:break-all;}
 .tc-pri{margin-left:6px;font-weight:700;}
 .tc-pri .pdot{font-size:12px;font-weight:600;}
 .tc-meta{font-size:12px;color:var(--text-3);margin-top:2px;}
@@ -2334,7 +2342,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .rep-row:last-child{border-bottom:none;}
 .rep-row > .mini-tag{margin-top:2px;flex:0 0 auto;}
 .rep-main{flex:1 1 auto;min-width:0;}
-.rep-main b{display:block;font-size:13px;font-weight:600;color:var(--text);word-break:break-all;}
+.rep-main b{display:block;font-size:13px;font-weight:500;color:var(--text);word-break:break-all;}
 .rep-title{
   display:block;width:100%;max-width:100%;padding:0;border:0;background:none;text-align:left;
   cursor:pointer;font:inherit;

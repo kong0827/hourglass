@@ -9,7 +9,6 @@ import com.hourglass.dto.MemberCandidate;
 import com.hourglass.dto.WorkspaceUpdateRequest;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.BoardColumn;
-import com.hourglass.entity.Category;
 import com.hourglass.entity.ProjectMember;
 import com.hourglass.entity.Workspace;
 import com.hourglass.entity.WorkspaceMember;
@@ -246,7 +245,6 @@ public class WorkspaceService {
         workspaceMapper.insert(ws);
         addMemberInternal(ws.getId(), userId, "owner");
         seedColumns(ws.getId());
-        seedDefaultCategories(ws.getId());
         return workspaceMapper.selectById(ws.getId());
     }
 
@@ -269,7 +267,6 @@ public class WorkspaceService {
         transitionMapper.deleteAllByWorkspace(wsId);
         categoryMapper.deleteAllByWorkspace(wsId);
         seedColumns(wsId);
-        seedDefaultCategories(wsId);
     }
 
     @Transactional
@@ -531,14 +528,11 @@ public class WorkspaceService {
         }
     }
 
-    /** 确保空间至少有内置看板列与一个模块（幂等） */
+    /** 确保空间至少有内置看板列（幂等）；模块挂在项目下，由项目创建时预置，空间级不再补齐 */
     @Transactional
     public void ensureDefaultsFor(String workspaceId) {
         if (boardColumnMapper.selectAll(workspaceId).isEmpty()) {
             seedColumns(workspaceId);
-        }
-        if (categoryMapper.countByWorkspace(workspaceId) == 0) {
-            seedDefaultCategories(workspaceId);
         }
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
@@ -573,22 +567,4 @@ public class WorkspaceService {
         boardColumnMapper.insert(doing);
     }
 
-    /** 通用默认模块（非开发场景也适用） */
-    private void seedDefaultCategories(String workspaceId) {
-        String[][] defaults = {
-                {"工作", "#5b83ad"},
-                {"学习", "#5f7a4a"},
-                {"生活", "#7a5c86"},
-                {"其他", "#8a8578"}
-        };
-        for (int i = 0; i < defaults.length; i++) {
-            Category c = new Category();
-            c.setId(Ids.gen("G"));
-            c.setWorkspaceId(workspaceId);
-            c.setName(defaults[i][0]);
-            c.setColor(defaults[i][1]);
-            c.setSortOrder(i);
-            categoryMapper.insert(c);
-        }
-    }
 }

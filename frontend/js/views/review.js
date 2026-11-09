@@ -3,7 +3,7 @@
 import { API } from "../core/api.js";
 import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
 import { icon } from "../core/icons.js";
-import { catColor, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { catColor, catNameById, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { activeView } from "../core/router.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
@@ -133,7 +133,7 @@ function buildSummary(d){
     var items = list.slice(0, 12).map(function(t){
       var late = t.completedAt && t.dueDate && t.completedAt > t.dueDate;
       var dt = t.completedAt ? (fmtMD(parseDate(t.completedAt)) + " " + weekdayCN(parseDate(t.completedAt))) : "";
-      return "· " + esc(t.title) + "（" + esc(t.category) + " · " + esc(t.owner) +
+      return "· " + esc(t.title) + "（" + esc(catNameById(t.categoryId)) + " · " + esc(t.owner) +
         (dt ? " · " + dt : "") + (late ? " · <span class='up'>延期</span>" : "") + "）";
     });
     parts.push("完成的工作：" + (list.length > 1 ? "<br>" : "") + items.join("<br>") +
@@ -184,7 +184,7 @@ function pivotValue(t, dim){
   if(dim === "owner") return t.owner || "未分配";
   if(dim === "reqId") return t.reqId ? (reqNameById(t.reqId) || "未归类") : "未归类";
   if(dim === "priority") return t.priority ? priName(t.priority) : "未设置";
-  if(dim === "category") return t.category || "未指定模块";
+  if(dim === "category") return catNameById(t.categoryId) || "未指定模块";
   if(dim === "column") return colName(t.boardColumn) || "未设置";
   return "—";
 }
@@ -347,7 +347,7 @@ function renderReview(d){
           '<span class="di-main">' +
             '<span class="di-t">' + esc(t.title) + '</span>' +
             '<span class="di-m">' + priTagHTML(t.priority) + '' +
-              catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
+              catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span></span>' +
           '</span>' +
           '<span class="di-d">' + esc(colName(t.boardColumn)) + ' · 进度 ' + progressOf(t) + '%</span>' +
         '</div>';
@@ -379,7 +379,7 @@ function renderReview(d){
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
         '<span class="di-m">' + priTagHTML(t.priority) + '' +
-          catTag(t.category) + '<span>' + esc(t.owner) + '</span></span>' +
+          catTag(t.categoryId) + '<span>' + esc(t.owner) + '</span></span>' +
       '</span>' +
       '<span class="di-d">' + (doneAt ? (esc(fmtShortMD(doneAt)) + " " + weekdayCN(doneAt)) : "完成时间未记录") + '</span>' +
       '<span class="tag tag-' + badgeKind + '">' + badge + '</span>' +
@@ -393,7 +393,7 @@ function renderReview(d){
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
         '<span class="di-m">' + priTagHTML(t.priority) + '' +
-          catTag(t.category) + (t.reqId ? tagChip(reqNameById(t.reqId)) : '') +
+          catTag(t.categoryId) + (t.reqId ? tagChip(reqNameById(t.reqId)) : '') +
           '<span>进度 ' + progressOf(t) + '%</span></span>' +
         (t.note ? '<span class="di-note">备注：' + esc(t.note) + '</span>' : '') +
       '</span>' +
@@ -435,7 +435,7 @@ function copyReviewPlain(){
       }).join("\n") : "（当前没有进行中的工作项）")
     + "\n\n本周完成（" + doneTasks.length + " 项）：\n"
     + (doneTasks.length ? doneTasks.map(function(t){
-        return "· [" + t.priority + "][" + t.category + "] " + t.title + " — " + t.owner
+        return "· [" + t.priority + "][" + catNameById(t.categoryId) + "] " + t.title + " — " + t.owner
           + (t.completedAt ? "（" + t.completedAt + "）" : "（完成时间未记录）");
       }).join("\n") : "（本周没有完成的工作项）");
   copyToClipboard(text, "已复制本周总结", "复制失败，请手动选择文本");

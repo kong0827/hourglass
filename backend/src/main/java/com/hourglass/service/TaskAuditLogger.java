@@ -26,10 +26,13 @@ public class TaskAuditLogger {
 
     private final TaskLogMapper logMapper;
     private final RequirementMapper reqMapper;
+    /** 模块ID → 名称解析（时间线差异文案展示人话，不展示 ID） */
+    private final WorkspaceMetaCache metaCache;
 
-    public TaskAuditLogger(TaskLogMapper logMapper, RequirementMapper reqMapper) {
+    public TaskAuditLogger(TaskLogMapper logMapper, RequirementMapper reqMapper, WorkspaceMetaCache metaCache) {
         this.logMapper = logMapper;
         this.reqMapper = reqMapper;
+        this.metaCache = metaCache;
     }
 
     public void log(String userId, String workspaceId, String taskId, String action, String detail) {
@@ -66,8 +69,9 @@ public class TaskAuditLogger {
         if (!Objects.equals(old.getPriority(), t.getPriority())) {
             parts.add("优先级 " + old.getPriority() + "→" + t.getPriority());
         }
-        if (!Objects.equals(old.getCategory(), t.getCategory())) {
-            parts.add("模块 " + old.getCategory() + "→" + t.getCategory());
+        if (!Objects.equals(old.getCategoryId(), t.getCategoryId())) {
+            parts.add("模块 " + categoryName(workspaceId, old.getCategoryId())
+                    + "→" + categoryName(workspaceId, t.getCategoryId()));
         }
         if (!Objects.equals(old.getOwner(), t.getOwner())) {
             parts.add("负责人 " + old.getOwner() + "→" + t.getOwner());
@@ -167,5 +171,17 @@ public class TaskAuditLogger {
         }
         Requirement r = reqMapper.selectById(reqId);
         return r == null || !workspaceId.equals(r.getWorkspaceId()) ? "无" : r.getName();
+    }
+
+    private String categoryName(String workspaceId, String categoryId) {
+        if (categoryId == null || categoryId.isEmpty()) {
+            return "未指定";
+        }
+        for (com.hourglass.entity.Category c : metaCache.categories(workspaceId)) {
+            if (categoryId.equals(c.getId())) {
+                return c.getName();
+            }
+        }
+        return "未指定";
     }
 }

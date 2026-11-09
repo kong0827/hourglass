@@ -182,7 +182,7 @@ function cardHTML(t, idx){
   var tip = t.dueDate ? ("截止 " + fmtFull(parseDate(t.dueDate))) : "未设置截止日期";
   if(isDone && t.completedAt) tip += " · 完成于 " + fmtFull(parseDate(t.completedAt));
 
-  var tagsHTML = catTag(t.category);
+  var tagsHTML = catTag(t.categoryId);
   /* 关联文档：点一下跳到正文（不打开任务抽屉，所以单独用 data-open-reqdoc） */
   if(t.reqDocId){
     var docTitle = reqDocNameById(t.reqDocId);

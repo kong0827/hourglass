@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, hoursNote, segWorkScope, statsHoursEl, workScopeTag } from "../core/dom.js";
-import { catTag, rt, state } from "../core/state.js";
+import { catNameById, catTagByName, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
@@ -12,7 +12,7 @@ import { ganttCsvCell } from "./gantt.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
 import { distHTML } from "./review.js";
 
-var compSeq = 0, compRowsCache = [];
+var compSeq = 0, compRowsCache = [], compSummary = null, compHasMore = false, compLoading = false;
 function enterCompletionsView(){ loadCompletions(); }
 function currentCompMonth(){
   if(!state.compMonth){
@@ -31,6 +31,10 @@ function loadCompletions(opts){
   opts = opts || {};
   var month = currentCompMonth();
   var seq = ++compSeq;
+  compRowsCache = [];
+  compSummary = null;
+  compHasMore = false;
+  compLoading = false;
   $("compMonth").textContent = month.replace("-", " 年 ") + " 月";
   if(!opts.silent){
     $("compCount").textContent = "";
@@ -38,34 +42,65 @@ function loadCompletions(opts){
     $("compStats").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +
       '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>';
   }
-  API.get("/api/completions", {month: month}).then(function(rows){
+  API.get("/api/completions", {month: month, offset: 0, limit: 100}).then(function(page){
     if(seq !== compSeq) return;
-    compRowsCache = rows || [];
+    compRowsCache = (page && page.items) || [];
+    compSummary = page || null;
+    compHasMore = !!(page && page.hasMore);
     renderCompletions(compRowsCache, month);
   }).catch(function(ex){
     if(seq !== compSeq) return;
     compRowsCache = [];
+    compSummary = null;
+    compHasMore = false;
     setPageError(ex, ["compStats","compWrap"], function(){ loadCompletions(); });
   });
 }
-function renderCompletions(rows, month){
-  var n = rows.length;
-  var totalMin = rows.reduce(function(a, r){ return a + (Number(r.totalMinutes) || 0); }, 0);
-  var ownerCount = {};
-  rows.forEach(function(r){
-    var o = r.owner || "未指派";
-    ownerCount[o] = (ownerCount[o] || 0) + 1;
+function loadMoreCompletions(){
+  if(compLoading || !compHasMore) return;
+  var month = currentCompMonth();
+  var seq = compSeq;
+  compLoading = true;
+  renderCompletions(compRowsCache, month);
+  API.get("/api/completions", {month: month, offset: compRowsCache.length, limit: 100}).then(function(page){
+    if(seq !== compSeq) return;
+    compLoading = false;
+    var known = {};
+    compRowsCache.forEach(function(r){ if(r.id != null) known[r.id] = 1; });
+    var fresh = [];
+    ((page && page.items) || []).forEach(function(r){
+      if(r.id != null && known[r.id]) return;
+      if(r.id != null) known[r.id] = 1;
+      fresh.push(r);
+    });
+    compRowsCache = compRowsCache.concat(fresh);
+    if(page) compSummary = page;
+    compHasMore = !!(page && page.hasMore) && fresh.length > 0;
+    renderCompletions(compRowsCache, month);
+  }).catch(function(ex){
+    if(seq !== compSeq) return;
+    compLoading = false;
+    toast(ex && ex.message ? ex.message : "完成记录加载失败", "bad");
+    renderCompletions(compRowsCache, month);
   });
-  var ownerKeys = Object.keys(ownerCount);
-  var topOwner = ownerKeys.slice().sort(function(a, b){ return ownerCount[b] - ownerCount[a]; })[0];
+}
+function renderCompletions(rows, month){
+  var s = compSummary || {};
+  var n = Number(s.total) || 0;
+  var totalMin = Number(s.totalMinutes) || 0;
+  var memberCount = Number(s.ownerCount) || 0;
+  var topOwner = s.topOwner || "";
+  var topOwnerCount = Number(s.topOwnerCount) || 0;
 
-  $("compCount").textContent = n ? ("共 " + n + " 条") : "";
+  $("compCount").textContent = n
+    ? (rows.length < n ? ("已加载 " + rows.length + " / 共 " + n + " 条") : ("共 " + n + " 条"))
+    : "";
   $("compStats").innerHTML = [
     { k: "完成工作项", v: n + " 项" },
     { k: "总耗时", v: fmtMinutesShort(totalMin) || "—" },
     { k: "平均每项", v: n ? (fmtMinutesShort(Math.round(totalMin / n)) || "—") : "—" },
-    { k: "参与成员", v: ownerKeys.length ? (ownerKeys.length + " 人") : "—",
-      s: topOwner ? ("最多：" + topOwner + " " + ownerCount[topOwner] + " 项") : "" }
+    { k: "参与成员", v: memberCount ? (memberCount + " 人") : "—",
+      s: topOwner ? ("最多：" + topOwner + " " + topOwnerCount + " 项") : "" }
   ].map(function(x){
     return '<div class="stat"><div class="k">' + esc(x.k) + '</div><div class="v">' + esc(x.v) + '</div>' +
       (x.s ? '<div class="comp-stat-s">' + esc(x.s) + '</div>' : '') + '</div>';
@@ -88,13 +123,19 @@ function renderCompletions(rows, month){
       "<td>" + (r.reqName ? esc(r.reqName) : '<span class="comp-dim">—</span>') + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
       "<td>" + esc(r.owner || "—") + "</td>" +
-      "<td>" + (r.category ? catTag(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
+      "<td>" + (r.category ? catTagByName(r.category) : '<span class="comp-dim">—</span>') + "</td>" +
       '<td>' + priTagHTML(r.priority) + '</td>' +
       '<td class="nowrap" title="工作项开始日期">' + esc(r.startDate || "—") + "</td>" +
       '<td class="nowrap" title="工作项完成日期">' + esc(r.completedAt || "—") + "</td>" +
       '<td class="nowrap"><b>' + (fmtMinutesShort(r.totalMinutes) || "—") + "</b></td>" +
     "</tr>";
   }).join("");
+  if(compHasMore){
+    body += '<tr><td colspan="9" class="comp-more-cell">' +
+      '<button class="btn sm block" type="button" data-comp-more' + (compLoading ? " disabled" : "") + '>' +
+      (compLoading ? "加载中…" : "加载更多（已加载 " + rows.length + " / 共 " + n + " 项）") +
+      '</button></td></tr>';
+  }
   $("compWrap").innerHTML = '<div class="comp-scroll"><table class="comp-table"><thead>' + head +
     "</thead><tbody>" + body + "</tbody></table></div>";
 }
@@ -110,22 +151,29 @@ function compDocCell(r){
   return '<span class="comp-dim" title="该文档已被删除">' + esc(r.reqDocTitle) + '</span>';
 }
 function exportCompCSV(){
-  var rows = compRowsCache || [];
-  if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
   var month = currentCompMonth();
-  var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
-    "开始时间","结束时间","总耗时(分钟)","总耗时"]];
-  rows.forEach(function(r){
-    lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
-      r.startDate, r.completedAt, r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes)]);
+  /* 列表只加载了前几页，导出按同样口径把所有分页取齐后再写文件 */
+  API.getAllPages("/api/completions", {month: month}).then(function(all){
+    var rows = all || [];
+    if(!rows.length){ toast("这个月还没有完成记录", "warn"); return; }
+    var lines = [["工作项名称","详情","归属项目","关联文档","负责人","模块","优先级",
+      "开始时间","结束时间","总耗时(分钟)","总耗时"]];
+    rows.forEach(function(r){
+      lines.push([r.title, r.description, r.reqName, r.reqDocTitle, r.owner, r.category, r.priority,
+        r.startDate, r.completedAt, r.totalMinutes || 0, fmtMinutesShort(r.totalMinutes)]);
+    });
+    var csv = "\uFEFF" + lines.map(function(cols){
+      return cols.map(ganttCsvCell).join(",");
+    }).join("\r\n");
+    triggerDownload("工作项清单-" + month + ".csv", csv, "text/csv;charset=utf-8;");
+    toast("已导出 " + rows.length + " 条记录", "fs");
+  }).catch(function(ex){
+    toast(ex && ex.message ? ex.message : "完成记录导出失败", "bad");
   });
-  var csv = "\uFEFF" + lines.map(function(cols){
-    return cols.map(ganttCsvCell).join(",");
-  }).join("\r\n");
-  triggerDownload("工作项清单-" + month + ".csv", csv, "text/csv;charset=utf-8;");
-  toast("已导出 " + rows.length + " 条记录", "fs");
 }
 if($("compWrap")) $("compWrap").addEventListener("click", function(e){
+  var m = e.target.closest("[data-comp-more]");
+  if(m){ loadMoreCompletions(); return; }
   var t = e.target.closest("[data-open-task]");
   if(t){ openTaskById(t.dataset.openTask); return; }
   var b = e.target.closest("[data-open-reqdoc]");
@@ -552,7 +600,7 @@ function renderFlowEstimate(d){
     html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">按模块看系数</div>';
     d.byCategory.forEach(function(c){
       var cf = c.factor || 0;
-      html += flowRow(c.category + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
+      html += flowRow((catNameById(c.categoryId) || "未指定模块") + " · " + c.sampleCount + " 项", cf.toFixed(2) + "×",
         Math.min(100, cf * 50),
         cf >= 1.15 ? "var(--danger)" : (cf >= 0.87 ? "var(--info)" : "var(--success)"));
     });

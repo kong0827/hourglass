@@ -95,7 +95,7 @@ class TaskPurgeTest {
                 mock(com.hourglass.mapper.TestCaseRunMapper.class));
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
-                new TaskAuditLogger(logMapper, mock(RequirementMapper.class)), mock(ProjectAccessService.class),
+                new TaskAuditLogger(logMapper, mock(RequirementMapper.class), mock(WorkspaceMetaCache.class)), mock(ProjectAccessService.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
                 mock(NotificationEventService.class), mock(TaskWatchService.class), transactionManager);
     }

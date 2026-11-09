@@ -546,7 +546,6 @@
       return { running: true, taskId: "K1", workspaceId: "W1", workspaceName: "我的看板",
                taskTitle: "重构权限校验中间件", startedAt: ts(0, 9, 12), elapsedMinutes: 48 };
     }
-    if (clean === "/api/completions") return completions;
     if (/^\/api\/notifications\/\d+\/read$/.test(clean)) return {};
     if (clean === "/api/notifications/read-all") return {};
     if (/^\/api\/task\/[A-Za-z0-9_-]+$/.test(clean)) {
@@ -581,6 +580,29 @@
     K1: { startDate: shift(-4), dueDate: shift(1) }
   };
   var ganttBaselineAt = ts(-2, 18, 0);
+
+  /* 任务清单分页：明细按 offset/limit 切页，统计字段按全月口径汇总（与后端一致） */
+  function mockCompletions(u) {
+    var off = Number((/[?&]offset=(\d+)/.exec(u) || [])[1] || 0);
+    var lim = Number((/[?&]limit=(\d+)/.exec(u) || [])[1] || 100);
+    lim = Math.min(Math.max(lim, 1), 100);
+    var rows = completions || [];
+    var page = rows.slice(off, off + lim);
+    var totalMinutes = 0, counts = {};
+    rows.forEach(function (r) {
+      totalMinutes += Number(r.totalMinutes) || 0;
+      var o = r.owner || "未指派";
+      counts[o] = (counts[o] || 0) + 1;
+    });
+    var owners = Object.keys(counts);
+    var top = owners.slice().sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    return {
+      items: page, total: rows.length, offset: off, limit: lim,
+      hasMore: off + page.length < rows.length,
+      totalMinutes: totalMinutes, ownerCount: owners.length,
+      topOwner: top || null, topOwnerCount: top ? counts[top] : 0
+    };
+  }
 
   function mockGantt(u) {
     /* 与后端一致：区间只筛已排期任务，未排期单独返回；都在 filters 之后 */
@@ -722,6 +744,8 @@
         eDoc.updatedAt = ts(0, new Date().getHours(), new Date().getMinutes());
       }
       data = eDoc || {};
+    } else if (clean === "/api/completions") {
+      data = mockCompletions(u);
     } else if (clean === "/api/gantt") {
       data = mockGantt(u);
     } else if (clean === "/api/gantt/deps" && method === "GET") {

@@ -35,9 +35,9 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "负责人账号ID不合法")
     private String ownerUserId;
 
-    /** 模块名（取值来自空间模块表；不填则用空间第一个模块） */
-    @Size(max = 16, message = "模块不能超过 16 字")
-    private String category;
+    /** 模块ID（category.id；不填则用空间第一个模块） */
+    @Size(max = 32, message = "模块ID不合法")
+    private String categoryId;
 
     /** 看板列 id：内置 backlog/doing/done 或自定义列（C 开头）；存在性由服务层校验 */
     @Pattern(regexp = "^[A-Za-z0-9_-]{1,16}$", message = "所在列不合法")

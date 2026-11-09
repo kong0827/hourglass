@@ -350,6 +350,18 @@
                 </select>
               </label>
               <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta">二级</span>
+                <select id="mineSubgroup" class="mini-select" aria-label="二级分组方式">
+                  <option value="none">不分组</option>
+                  <option value="due">按截止日期</option>
+                  <option value="workspace">按空间</option>
+                  <option value="priority">按优先级</option>
+                  <option value="status">按状态</option>
+                  <option value="project">按项目</option>
+                  <option value="category">按模块</option>
+                </select>
+              </label>
+              <label class="row row-gap" style="gap:6px">
                 <span class="toolbar-meta">排序</span>
                 <select id="mineSort" class="mini-select" aria-label="排序方式">
                   <option value="default">默认顺序</option>
@@ -649,6 +661,16 @@
                     <button type="button" data-rst="done">已交付</button>
                     <button type="button" data-rst="hold">已搁置</button>
                   </div>
+                </div>
+                <div class="field" id="projCatCfg" hidden>
+                  <label>模块 <small class="tc-optional">按项目配置</small></label>
+                  <div class="cfg-list" id="projCatList"></div>
+                  <div class="cfg-add">
+                    <input type="color" id="projCatNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
+                    <input type="text" id="projCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
+                    <button class="btn sm" type="button" id="btnProjCatAdd">添加模块</button>
+                  </div>
+                  <p class="foot-note" id="projCatHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
                 </div>
                 <div class="row row-gap">
                   <button class="btn primary" type="button" id="btnSaveReq">添加项目</button>
@@ -1967,21 +1989,6 @@
                 <button class="btn" type="button" id="btnTransReset">恢复默认</button>
                 <span class="foot-note" id="colTransHint"></span>
               </div>
-            </div>
-
-            <div class="panel" data-set-pane="workflow" id="set-cats">
-              <div class="panel-head">
-                <h3>模块</h3>
-                <span class="meta-right" id="catCount"></span>
-              </div>
-              <p class="set-hint">模块按空间配置，改名会同步到已有工作项；删除模块时其工作项改到第一个模块。</p>
-              <div class="cfg-list" id="catCfgList"></div>
-              <div class="cfg-add">
-                <input type="color" id="catNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
-                <input type="text" id="catNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
-                <button class="btn sm" type="button" id="btnCatAdd">添加模块</button>
-              </div>
-              <p class="foot-note" id="catCfgHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-priorities">

@@ -113,7 +113,7 @@ class TaskCommandServiceDefectValidationTest {
         req.setId(null);
         req.setTitle("缺陷标题");
         req.setReqId("R1");
-        req.setCategory("general");
+        req.setCategoryId("general");
         req.setBoardColumn("backlog");
         req.setPriority("P2");
         req.setProgress(0);
@@ -134,7 +134,10 @@ class TaskCommandServiceDefectValidationTest {
         r.setWorkspaceId(WS);
         r.setName("项目");
         when(reqs.selectById(reqId)).thenReturn(r);
-        when(categories.selectByName(WS, "general")).thenReturn(new Category());
+        Category cat = new Category();
+        cat.setId("general");
+        cat.setProjectId(reqId);
+        when(categories.selectById(WS, "general")).thenReturn(cat);
     }
 
     private void stubVersion(String id, String reqId) {

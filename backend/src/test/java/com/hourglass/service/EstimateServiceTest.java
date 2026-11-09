@@ -26,7 +26,7 @@ class EstimateServiceTest {
         t.setId(id);
         t.setTitle("任务 " + id);
         t.setBoardColumn(column);
-        t.setCategory(category);
+        t.setCategoryId(category);
         t.setEstimateMinutes(estimate);
         return t;
     }
@@ -117,7 +117,7 @@ class EstimateServiceTest {
         assertEquals(1.75, s.getOverrun().get(0).getRatio(), 0.011);
 
         assertEquals(2, s.getByCategory().size());
-        assertEquals("后端", s.getByCategory().get(0).getCategory(), "系数最高的排第一");
+        assertEquals("后端", s.getByCategory().get(0).getCategoryId(), "系数最高的排第一");
         // 模块累计只统计已完成：后端 420/240 = 1.75
         assertEquals(1.75, s.getByCategory().get(0).getFactor(), 0.011);
         assertEquals(240, s.getByCategory().get(0).getEstimateTotal(), "累计预估只算一次");

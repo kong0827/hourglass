@@ -93,6 +93,11 @@
 #view-demands .dem-group-item-row > td:first-child::before{
   content:"";position:absolute;top:10px;bottom:10px;left:20px;border-left:1px solid var(--border);
 }
+/* 二级分组：缩进一级、弱化底色，样式与任务列表的子组行同构 */
+#view-demands .dem-subgroup-row{background:var(--surface);border-bottom:1px solid var(--border);}
+#view-demands .dem-subgroup-row > td{padding:5px 10px;}
+#view-demands .dem-subgroup-row .dem-group-toggle{padding-left:20px;}
+#view-demands .dem-subgroup-row .dem-group-name{font-size:12px;font-weight:600;color:var(--text-2);}
 @media (max-width:767px){
   #view-list .smart-view-tabs,
   #view-demands .smart-view-tabs{min-height:40px;padding:4px 6px;}

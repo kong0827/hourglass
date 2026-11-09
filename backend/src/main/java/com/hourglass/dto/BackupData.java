@@ -40,6 +40,9 @@ public class BackupData {
     private List<BackupTestCaseRun> testCaseRuns;
     /** 需求文档评论（v10；旧备份没有该字段时保留现有评论） */
     private List<BackupDocComment> docComments;
+    /** 模块字典（v11 起纳入；任务/需求按 ID 关联，导入时补齐缺失模块。旧备份没有该字段时，
+        模块 ID 找不到的条目回落到空间第一个模块） */
+    private List<BackupCategory> categories;
 
     @Data
     public static class BackupDependency {
@@ -72,6 +75,7 @@ public class BackupData {
         private String desc;
         private String pri;
         private String owner;
+        /** 模块ID（category.id；v10 及更早的备份这里是模块名，导入时回落到默认模块） */
         private String cat;
         private String col;
         /** 开始日期（v3 备份没有该字段，导入时为空不影响兼容） */
@@ -165,6 +169,16 @@ public class BackupData {
     }
 
     @Data
+    public static class BackupCategory {
+        private String id;
+        /** 所属项目ID（requirement.id）；模块清单挂在项目下 */
+        private String projectId;
+        private String name;
+        private String color;
+        private Integer sortOrder;
+    }
+
+    @Data
     public static class BackupDemand {
         private String id;
         private String reqId;
@@ -172,7 +186,8 @@ public class BackupData {
         private String desc;
         private String source;
         private String itemKind;
-        private String category;
+        /** 模块ID（category.id；空=未指定） */
+        private String categoryId;
         private String priority;
         private String status;
         private String expectDate;

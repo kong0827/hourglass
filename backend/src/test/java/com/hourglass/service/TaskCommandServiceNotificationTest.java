@@ -57,7 +57,6 @@ class TaskCommandServiceNotificationTest {
         owner.setDisplayName("owner");
         when(users.selectById("U2")).thenReturn(owner);
         when(members.selectMember("W1", "U2")).thenReturn(mock(WorkspaceMember.class));
-        when(categories.selectByName("W1", "general")).thenReturn(new Category());
         when(tasks.selectById(anyString())).thenReturn(oldTask("U2"));
 
         service.create("U1", "W1", req);
@@ -88,7 +87,6 @@ class TaskCommandServiceNotificationTest {
         owner.setDisplayName("owner");
         when(users.selectById("U1")).thenReturn(owner);
         when(members.selectMember("W1", "U1")).thenReturn(mock(WorkspaceMember.class));
-        when(categories.selectByName("W1", "general")).thenReturn(new Category());
         when(tasks.selectById(anyString())).thenReturn(oldTask("U1"));
 
         service.create("U1", "W1", req);
@@ -175,7 +173,6 @@ class TaskCommandServiceNotificationTest {
         owner.setId(req.getOwnerUserId());
         owner.setDisplayName("owner");
         when(users.selectById(req.getOwnerUserId())).thenReturn(owner);
-        when(categories.selectByName("W1", "general")).thenReturn(new Category());
         when(audit.diffParts(eq("W1"), eq(old), any(Task.class), anyList(), any()))
                 .thenReturn(new ArrayList<String>(Arrays.asList("标题", "截止日期")));
     }
@@ -185,7 +182,6 @@ class TaskCommandServiceNotificationTest {
         req.setTitle("new title");
         req.setOwnerUserId(ownerId);
         req.setOwner("owner");
-        req.setCategory("general");
         req.setBoardColumn("backlog");
         req.setPriority("P2");
         req.setProgress(0);

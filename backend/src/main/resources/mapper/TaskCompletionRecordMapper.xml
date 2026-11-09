@@ -60,14 +60,53 @@
       AND completed_at &lt; #{to}
   </select>
 
-  <select id="selectByRange" resultType="TaskCompletionRecord">
-    SELECT id, workspace_id, task_id, title, description, req_id, req_name, req_doc_id, req_doc_title,
-           owner, owner_user_id, category, priority, start_date, completed_at,
-           first_started_at, last_ended_at, total_minutes, created_at
-    FROM task_completion_record
-    WHERE workspace_id = #{workspaceId}
-      AND completed_at &gt;= #{from}
-      AND completed_at &lt; #{to}
-    ORDER BY completed_at DESC, id DESC
+  <!-- 被设为项目「不可见」的成员，不该在清单/统计里看到该项目的完成快照；
+       viewerId 由 ProjectAccessService.viewerScope 给出：owner/admin/viewer 为 null，不过滤。 -->
+  <sql id="visibleToViewer">
+    <if test="viewerId != null">
+      AND NOT EXISTS (
+        SELECT 1 FROM project_member pm
+        WHERE pm.workspace_id = r.workspace_id
+          AND pm.project_id = r.req_id
+          AND pm.user_id = #{viewerId}
+          AND pm.access = 'none'
+      )
+    </if>
+  </sql>
+
+  <select id="summaryByRange" resultType="com.hourglass.dto.CompletionSummary">
+    SELECT COUNT(*) AS total,
+           COALESCE(SUM(r.total_minutes), 0) AS total_minutes,
+           COUNT(DISTINCT COALESCE(r.owner, '未指派')) AS owner_count
+    FROM task_completion_record r
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.completed_at &gt;= #{from}
+      AND r.completed_at &lt; #{to}
+    <include refid="visibleToViewer"/>
+  </select>
+
+  <select id="topOwnerByRange" resultType="com.hourglass.dto.CompletionOwnerCount">
+    SELECT COALESCE(r.owner, '未指派') AS owner, COUNT(*) AS owner_count
+    FROM task_completion_record r
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.completed_at &gt;= #{from}
+      AND r.completed_at &lt; #{to}
+    <include refid="visibleToViewer"/>
+    GROUP BY COALESCE(r.owner, '未指派')
+    ORDER BY owner_count DESC, MAX(r.completed_at) DESC, owner ASC
+    LIMIT 1
+  </select>
+
+  <select id="selectPageByRange" resultType="TaskCompletionRecord">
+    SELECT r.id, r.workspace_id, r.task_id, r.title, r.description, r.req_id, r.req_name,
+           r.req_doc_id, r.req_doc_title, r.owner, r.owner_user_id, r.category, r.priority,
+           r.start_date, r.completed_at, r.first_started_at, r.last_ended_at, r.total_minutes, r.created_at
+    FROM task_completion_record r
+    WHERE r.workspace_id = #{workspaceId}
+      AND r.completed_at &gt;= #{from}
+      AND r.completed_at &lt; #{to}
+    <include refid="visibleToViewer"/>
+    ORDER BY r.completed_at DESC, r.id DESC
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 </mapper>

@@ -326,6 +326,14 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .mob-subgroup-head h4{
   margin:0;font-size:12.5px;font-weight:600;color:var(--text-2);
 }
+/* 我的工作：移动端二级分组头（不折叠，仅展示） */
+[data-layout="mobile"] .mine-mob-subgroup{margin:0 0 10px 10px;}
+[data-layout="mobile"] .mine-mob-subgroup-head{
+  display:flex;align-items:center;gap:8px;margin:0 0 6px;
+}
+[data-layout="mobile"] .mine-mob-subgroup-head h4{
+  margin:0;font-size:12.5px;font-weight:600;color:var(--text-2);
+}
 
 [data-layout="mobile"] .mob-task-card{
   position:relative;
@@ -353,7 +361,7 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .mtc-ico.on{background:var(--success-soft);color:var(--success-fg);}
 [data-layout="mobile"] .mtc-ico:disabled{opacity:.35;}
 [data-layout="mobile"] .mtc-title{
-  margin:5px 0 0;font-size:14px;line-height:20px;font-weight:600;color:var(--text);
+  margin:5px 0 0;font-size:14px;line-height:20px;font-weight:500;color:var(--text);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   letter-spacing:-.01em;word-break:break-word;
 }
@@ -619,7 +627,7 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] button.tl-row{width:100%;padding:6px 0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;}
 [data-layout="mobile"] button.tl-row:active{opacity:.75;}
 [data-layout="mobile"] .tl-top{display:flex;align-items:center;gap:8px;min-width:0;grid-column:1/-1;}
-[data-layout="mobile"] .tl-top b{font-size:13px;font-weight:600;color:var(--text);}
+[data-layout="mobile"] .tl-top b{font-size:13px;font-weight:500;color:var(--text);}
 [data-layout="mobile"] .tl-top span{margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 [data-layout="mobile"] .tl-bar{height:7px;border-radius:99px;background:var(--surface-sunken);overflow:hidden;}
 [data-layout="mobile"] .tl-bar i{display:block;height:100%;border-radius:99px;background:var(--info);}
@@ -682,6 +690,12 @@ body.mob-sheet-open{overflow:hidden;}
   font:inherit;font-size:12.5px;text-align:left;
 }
 [data-layout="mobile"] .dem-mob-cards{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .dem-mob-subgroup{display:flex;flex-direction:column;gap:8px;margin-left:10px;}
+[data-layout="mobile"] .dem-mob-subgroup-head{
+  display:flex;width:100%;align-items:center;gap:8px;
+  padding:2px 2px 4px;border:0;background:transparent;color:var(--text-3);
+  font:inherit;font-size:12px;text-align:left;
+}
 [data-layout="mobile"] .dem-mob-list .bkl-card{padding:14px;}
 
 /* ===================== 测试用例：筛选收进面板 ===================== */

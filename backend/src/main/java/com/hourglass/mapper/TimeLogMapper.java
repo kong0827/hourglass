@@ -128,10 +128,16 @@ public interface TimeLogMapper {
             @Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     /**
-     * 成员阶段工时下钻：按「任务 × 阶段」聚合该成员自己的计时，
+     * 成员阶段工时汇总：按「任务 × 阶段」聚合该成员自己的计时后再汇总行数与首版/迭代分钟，
      * 阶段按计时自然日 vs 首版上线日判定（与阶段卡 memberHours 同口径）。
      */
-    List<com.hourglass.dto.PhaseMemberTask> sumMemberTaskPhaseByReq(
+    com.hourglass.dto.PhaseMemberTaskSummary summaryMemberTaskPhaseByReq(
             @Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
             @Param("userId") String userId);
+
+    /** 成员阶段工时分页明细 */
+    List<com.hourglass.dto.PhaseMemberTask> selectMemberTaskPhasePageByReq(
+            @Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+            @Param("userId") String userId,
+            @Param("offset") int offset, @Param("limit") int limit);
 }

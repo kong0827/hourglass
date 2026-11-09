@@ -184,7 +184,6 @@ class TaskCommandServiceEpicValidationTest {
         when(support.require(WS, "K1")).thenReturn(old);
         when(support.tagNames(WS, "K1")).thenReturn(Collections.emptyList());
         when(tasks.selectById("K1")).thenReturn(old);
-        when(categories.selectByName(WS, "general")).thenReturn(new Category());
         when(audit.diffParts(eq(WS), eq(old), any(Task.class), anyList(), any()))
                 .thenReturn(new ArrayList<String>());
     }
@@ -195,7 +194,10 @@ class TaskCommandServiceEpicValidationTest {
         r.setWorkspaceId(WS);
         r.setName("项目");
         when(reqs.selectById(reqId)).thenReturn(r);
-        when(categories.selectByName(WS, "general")).thenReturn(new Category());
+        Category cat = new Category();
+        cat.setId("general");
+        cat.setProjectId(reqId);
+        when(categories.selectById(WS, "general")).thenReturn(cat);
     }
 
     private TaskSaveRequest request(String id, String itemType, String epicId) {
@@ -205,7 +207,7 @@ class TaskCommandServiceEpicValidationTest {
         req.setItemType(itemType);
         req.setEpicId(epicId);
         req.setReqId("R1");
-        req.setCategory("general");
+        req.setCategoryId("general");
         req.setBoardColumn("backlog");
         req.setPriority("P2");
         req.setProgress(0);

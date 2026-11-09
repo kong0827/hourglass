@@ -179,9 +179,9 @@ function updateTagDatalist(){
 function pruneStaleFilters(meta){
   if(!meta) return false;
   var changed = false;
-  var catNames = {};
-  (meta.cats || []).forEach(function(c){ catNames[c.name] = 1; });
-  var keptCats = state.cats.filter(function(c){ return catNames[c]; });
+  var catIds = {};
+  (meta.cats || []).forEach(function(c){ catIds[c.id] = 1; });
+  var keptCats = state.cats.filter(function(c){ return catIds[c]; });
   if(keptCats.length !== state.cats.length){ state.cats = keptCats; changed = true; }
   var reqIds = {};
   (meta.reqs || []).forEach(function(r){ reqIds[r.id] = 1; });

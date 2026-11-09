@@ -130,7 +130,7 @@
 }
 .gantt-row:hover .gantt-label{background:var(--surface-hover);}
 .gantt-row.is-selected .gantt-label{background:var(--primary-soft);box-shadow:inset 3px 0 0 var(--primary);}
-.gantt-title{font-size:var(--gantt-title-size,12.5px);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
+.gantt-title{font-size:var(--gantt-title-size,12.5px);font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
 .gantt-meta{
   display:flex;align-items:center;gap:5px;min-width:0;
   font-size:var(--gantt-meta-size,10.5px);color:var(--text-3);white-space:nowrap;overflow:hidden;line-height:1.3;

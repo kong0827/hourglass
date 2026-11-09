@@ -1257,7 +1257,7 @@ public class ManagerService {
         item.put("priority", task.getPriority());
         item.put("owner", task.getOwner());
         item.put("ownerUserId", task.getOwnerUserId());
-        item.put("category", task.getCategory());
+        item.put("categoryId", task.getCategoryId());
         item.put("boardColumn", task.getBoardColumn());
         item.put("startDate", task.getStartDate());
         item.put("dueDate", task.getDueDate());

@@ -1,7 +1,7 @@
 /* views/mine · 我的工作（分页 + 分组 + 行内操作） */
 
 import { API } from "../core/api.js";
-import { btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter } from "../core/dom.js";
+import { btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter, mineSubgroup } from "../core/dom.js";
 import { clearFilters } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
@@ -9,7 +9,7 @@ import { isMobile } from "../core/layout.js";
 import { currentMode, saveMode } from "../core/mobile-rules.js";
 import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catTag, dueState, dueText, progressOf, rt, state, tagChip, timerAllowed } from "../core/state.js";
+import { canEditTask, catNameById, catTag, dueState, dueText, progressOf, rt, state, tagChip, timerAllowed } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -72,6 +72,10 @@ function mineFiltering(){ return !!state.mineSpace; }
 function syncMineFilters(){
   /* 统一筛选由顶栏 FilterBar 显示；页内只同步分组/排序/空间控件 */
   if(mineGroup) mineGroup.value = MINE_GROUP_DIMS.indexOf(state.mineGroup) !== -1 ? state.mineGroup : "due";
+  if(mineSubgroup){
+    mineSubgroup.value = MINE_GROUP_DIMS.indexOf(state.mineSubgroup) !== -1 ? state.mineSubgroup : "none";
+    mineSubgroup.disabled = state.mineGroup === "none";
+  }
   if(mineSort) mineSort.value = MINE_SORTS.indexOf(state.mineSort) !== -1 ? state.mineSort : "default";
 }
 function populateMineSpaces(spaces){
@@ -177,20 +181,27 @@ function mineSortRows(rows){
   if(state.mineSort === "default") return rows;
   return rows.slice().sort(mineCompare);
 }
-function mineSectionInfo(t){
-  var dim = state.mineGroup;
+function mineDueInfo(k){
+  for(var i = 0; i < MINE_GROUPS.length; i++) if(MINE_GROUPS[i].k === k) return MINE_GROUPS[i];
+  return MINE_GROUPS[MINE_GROUPS.length - 1];
+}
+function mineSectionInfoBy(t, dim){
+  if(dim === "due"){
+    var g = mineDueInfo(mineGroupOf(t));
+    return {key:g.k, label:g.label, hint:g.hint, order:MINE_GROUPS.indexOf(g)};
+  }
   if(dim === "workspace") return {key:t.workspaceId || "__none", label:t.workspaceName || "未知空间"};
   if(dim === "priority") return {key:t.priority || "__none", label:t.priority ? priName(t.priority, t.workspaceId) : "未设置优先级", pri:t.priority || ""};
   if(dim === "status") return {key:t.boardColumn || "__none", label:colName(t.boardColumn) || "未设置状态"};
   if(dim === "project") return {key:t.reqId || "__none", label:t.reqName || (t.reqId ? "未知项目" : "无项目")};
-  if(dim === "category") return {key:t.category || "__none", label:t.category || "未指定模块"};
+  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块"};
   return null;
 }
-function mineSectionCompare(a, b){
-  var dim = state.mineGroup;
+function mineSectionCompareBy(a, b, dim){
+  if(dim === "due") return (a.order === undefined ? 99 : a.order) - (b.order === undefined ? 99 : b.order);
   if(dim === "category"){
     var order = {};
-    (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+    (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
     var ai = order[a.key] === undefined ? 999 : order[a.key];
     var bi = order[b.key] === undefined ? 999 : order[b.key];
     return ai - bi || a.label.localeCompare(b.label, "zh-Hans-CN");
@@ -200,38 +211,64 @@ function mineSectionCompare(a, b){
       (PRIORITIES.indexOf(b.pri) < 0 ? 9 : PRIORITIES.indexOf(b.pri));
   }
   if(dim === "status"){
-    var ai = -1, bi = -1;
-    COLUMNS.forEach(function(c, i){ if(c.id === a.key) ai = i; if(c.id === b.key) bi = i; });
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    var si = -1, ti = -1;
+    COLUMNS.forEach(function(c, i){ if(c.id === a.key) si = i; if(c.id === b.key) ti = i; });
+    return (si < 0 ? 99 : si) - (ti < 0 ? 99 : ti);
   }
   return a.label.localeCompare(b.label, "zh-Hans-CN");
+}
+/* 二级维度不能与一级重复；一级不分组时二级无意义 */
+function mineSubDim(){
+  return (state.mineGroup === "none" || state.mineSubgroup === "none" || state.mineSubgroup === state.mineGroup)
+    ? "none" : state.mineSubgroup;
 }
 function mineSections(items){
   if(state.mineGroup === "none"){
     return [{key:"all", label:"", rows:mineSortRows(items)}];
   }
+  var subDim = mineSubDim();
+  var sections;
   if(state.mineGroup === "due"){
     var byDue = {};
     MINE_GROUPS.forEach(function(g){ byDue[g.k] = []; });
     items.forEach(function(t){ byDue[mineGroupOf(t)].push(t); });
-    return MINE_GROUPS.map(function(g){
-      return {key:g.k, label:g.label, hint:g.hint, rows:mineSortRows(byDue[g.k])};
+    sections = MINE_GROUPS.map(function(g){
+      return {key:g.k, label:g.label, hint:g.hint, order:MINE_GROUPS.indexOf(g), rows:byDue[g.k], subs:[]};
+    });
+  }else{
+    var map = {}, order = [];
+    items.forEach(function(t){
+      var info = mineSectionInfoBy(t, state.mineGroup);
+      if(!info) return;
+      var sec = map[info.key];
+      if(!sec){
+        sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", order:info.order, rows:[]};
+        order.push(info.key);
+      }
+      sec.rows.push(t);
+    });
+    sections = order.map(function(k){ return map[k]; });
+    sections.sort(function(a, b){ return mineSectionCompareBy(a, b, state.mineGroup); });
+  }
+  sections.forEach(function(s){ s.rows = mineSortRows(s.rows); });
+  if(subDim !== "none"){
+    sections.forEach(function(s){
+      var subMap = {}, subOrder = [];
+      s.rows.forEach(function(t){
+        var info = mineSectionInfoBy(t, subDim);
+        if(!info) return;
+        var sub = subMap[info.key];
+        if(!sub){
+          sub = subMap[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", order:info.order, rows:[]};
+          subOrder.push(info.key);
+        }
+        sub.rows.push(t);
+      });
+      s.subs = subOrder.map(function(k){ return subMap[k]; });
+      s.subs.sort(function(a, b){ return mineSectionCompareBy(a, b, subDim); });
+      s.subs.forEach(function(sub){ sub.rows = mineSortRows(sub.rows); });
     });
   }
-  var map = {}, order = [];
-  items.forEach(function(t){
-    var info = mineSectionInfo(t);
-    if(!info) return;
-    var sec = map[info.key];
-    if(!sec){
-      sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", rows:[]};
-      order.push(info.key);
-    }
-    sec.rows.push(t);
-  });
-  var sections = order.map(function(k){ return map[k]; });
-  sections.sort(mineSectionCompare);
-  sections.forEach(function(s){ s.rows = mineSortRows(s.rows); });
   return sections;
 }
 function mineRowHTML(t){
@@ -244,13 +281,13 @@ function mineRowHTML(t){
   var tAllowed = timerAllowed(t);
   var isDone = t.boardColumn === "done";
   /* 模块已在标签行用彩色 pill 表达，同名标签不再重复占位 */
-  var tags = (t.tags || []).filter(function(n){ return n && n !== t.category; }).slice(0, 2);
+  var tags = (t.tags || []).filter(function(n){ return n && n !== catNameById(t.categoryId); }).slice(0, 2);
   /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
   var showProgress = p > 0 || t.boardColumn === "doing";
   return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
       ' tabindex="0" role="row">' +
     '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      '<span class="lr-tags">' + catTag(t.category) +
+      '<span class="lr-tags">' + catTag(t.categoryId) +
         tags.map(tagChip).join("") +
         (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') + '</span></span>' +
     '<span class="cell" title="' + esc(t.workspaceName || "") + '">' + esc(t.workspaceName || "—") + '</span>' +
@@ -542,12 +579,27 @@ function renderMobileMine(sections){
   var html = '<div class="mob-groups">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
+    var inner;
+    if(s.subs.length){
+      inner = s.subs.map(function(sub){
+        if(!sub.rows.length) return "";
+        return '<section class="mine-mob-subgroup">' +
+          (sub.label
+            ? '<div class="mine-mob-subgroup-head"><h4>' + esc(sub.label) + '</h4>' +
+              '<span class="mob-group-n">' + sub.rows.length + '</span></div>'
+            : '') +
+          '<div class="mob-card-list">' + sub.rows.map(mobileMineCardHTML).join("") + '</div>' +
+        '</section>';
+      }).join("");
+    }else{
+      inner = '<div class="mob-card-list">' + s.rows.map(mobileMineCardHTML).join("") + '</div>';
+    }
     html += '<section class="mob-group" data-mine-group="' + esc(s.key) + '">' +
       (s.label
         ? '<div class="mob-group-head"><h3 class="' + (s.key === "over" ? "over" : "") + '">' + esc(s.label) + '</h3>' +
           '<span class="mob-group-n">' + s.rows.length + '</span></div>'
         : '') +
-      '<div class="mob-card-list">' + s.rows.map(mobileMineCardHTML).join("") + '</div>' +
+      inner +
     '</section>';
   });
   html += '</div>' + mineMoreHTML();
@@ -625,13 +677,25 @@ function renderMine(d, append){
     '</div><div class="list-body">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
+    var inner;
+    if(s.subs.length){
+      inner = s.subs.map(function(sub){
+        if(!sub.rows.length) return "";
+        return '<div class="mine-subgroup-row"><span class="mine-subgroup-name">' + esc(sub.label) + '</span>' +
+          '<span class="mine-subgroup-n">' + sub.rows.length + '</span>' +
+          (sub.hint ? '<span class="mine-group-hint">' + esc(sub.hint) + '</span>' : '') + '</div>' +
+          sub.rows.map(mineRowHTML).join("");
+      }).join("");
+    }else{
+      inner = s.rows.map(mineRowHTML).join("");
+    }
     html += '<section class="mine-group" data-mine-group="' + esc(s.key) + '">' +
       (s.label
         ? '<div class="mine-group-row"><span class="mine-group-name">' + esc(s.label) + '</span>' +
           '<span class="mine-group-n">' + s.rows.length + '</span>' +
           (s.hint ? '<span class="mine-group-hint">' + esc(s.hint) + '</span>' : '') + '</div>'
         : '') +
-      s.rows.map(mineRowHTML).join("") +
+      inner +
     '</section>';
   });
   html += '</div></div></div>' + mineMoreHTML();
@@ -779,6 +843,15 @@ if(mineSpaceFilter){
 if(mineGroup){
   mineGroup.addEventListener("change", function(){
     state.mineGroup = MINE_GROUP_DIMS.indexOf(mineGroup.value) !== -1 ? mineGroup.value : "due";
+    if(state.mineGroup === "none" || state.mineGroup === state.mineSubgroup) state.mineSubgroup = "none";
+    syncMineFilters();
+    rerenderMine();
+  });
+}
+if(mineSubgroup){
+  mineSubgroup.addEventListener("change", function(){
+    if(MINE_GROUP_DIMS.indexOf(mineSubgroup.value) === -1) return;
+    state.mineSubgroup = mineSubgroup.value;
     rerenderMine();
   });
 }

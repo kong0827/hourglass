@@ -42,6 +42,8 @@ public class RequirementService {
     private final TestCaseService caseService;
     private final ProjectTemplateService templateService;
     private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper;
+    /** 新建项目时预置默认模块（模块清单挂在项目下） */
+    private final CategoryService categoryService;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -54,7 +56,8 @@ public class RequirementService {
                               com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                               TestCaseService caseService,
                               ProjectTemplateService templateService,
-                              com.hourglass.mapper.WorkspaceMemberMapper memberMapper) {
+                              com.hourglass.mapper.WorkspaceMemberMapper memberMapper,
+                              CategoryService categoryService) {
         this.reqMapper = reqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -71,6 +74,7 @@ public class RequirementService {
         this.caseService = caseService;
         this.templateService = templateService;
         this.memberMapper = memberMapper;
+        this.categoryService = categoryService;
     }
 
     public List<ReqProgress> list(String workspaceId, String userId) {
@@ -184,6 +188,8 @@ public class RequirementService {
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
         reqMapper.insert(r);
+        /* 项目自带模块清单：预置「其他」，保证一开始就能按模块归类工作项 */
+        categoryService.createDefault(workspaceId, r.getId());
         /* 模板只做增量补齐：列按空间共享、文档/测试模块/版本归属本项目 */
         String template = Texts.trimToNull(req.getTemplate());
         if (template != null && templateService.exists(template)) {
@@ -351,6 +357,8 @@ public class RequirementService {
         /* 统计口径含回收站任务（与 clearReq 解绑范围一致）；时间线用一条 INSERT ... SELECT
            批量补，避免把空间全量任务捞进内存逐条插 */
         int unlinked = taskMapper.countTasksByReq(workspaceId, id);
+        /* 模块按项目配置，随项目一并清理；任务模块引用先清空（须在 clearReq 置空 req_id 之前按项目定位） */
+        categoryService.purgeProject(workspaceId, id);
         logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
                 "解除与已删除项目「" + r.getName() + "」的关联");
         taskMapper.clearReq(workspaceId, id);

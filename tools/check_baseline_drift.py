@@ -41,22 +41,30 @@ def parse_baseline(path):
     return tables
 
 def parse_increments(sql_dir, skip):
-    """返回 (missing_report_fn)：[(file, table, kind, name)] 基线必须满足项"""
+    """返回 (items, dropped)：
+    items 为基线必须满足项 [(file, table, kind, name)]；
+    dropped 为后续增量已删除的 (table, kind, name) —— 列/索引被改名或移除后，
+    早期增量的 ADD 不再要求基线保留（61 号脚本把 demand.category 改成 category_id 即此情形）。"""
     items = []
+    dropped = set()
     for fn in sorted(os.listdir(sql_dir)):
         if not fn.endswith(".sql") or fn in skip or not re.match(r"\d+", fn):
             continue
         sql = open(os.path.join(sql_dir, fn), encoding="utf-8").read()
         for m in re.finditer(r"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+`(\w+)`", sql, re.I):
             items.append((fn, m.group(1), "table", m.group(1)))
-        # ALTER TABLE t ... ;（语句体可能含多个 ADD COLUMN/ADD KEY）
+        # ALTER TABLE t ... ;（语句体可能含多个 ADD/DROP COLUMN/KEY；61 起幂等脚本写在 PREPARE 字符串里，同样能匹配）
         for m in re.finditer(r"ALTER TABLE\s+`?(\w+)`?([^;]*);", sql, re.I | re.S):
             table, body = m.group(1), m.group(2)
             for c in re.finditer(r"ADD COLUMN\s+`(\w+)`", body, re.I):
                 items.append((fn, table, "column", c.group(1)))
             for k in re.finditer(r"ADD (?:UNIQUE\s+)?KEY\s+`(\w+)`", body, re.I):
                 items.append((fn, table, "key", k.group(1)))
-    return items
+            for c in re.finditer(r"DROP COLUMN\s+`(\w+)`", body, re.I):
+                dropped.add((table, "column", c.group(1)))
+            for k in re.finditer(r"DROP KEY\s+`(\w+)`", body, re.I):
+                dropped.add((table, "key", k.group(1)))
+    return items, dropped
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else \
@@ -68,9 +76,11 @@ def main():
         return 1
 
     tables = parse_baseline(baseline_path)
-    items = parse_increments(sql_dir, skip={"01_schema.sql", "01_schema_full.sql"})
+    items, dropped = parse_increments(sql_dir, skip={"01_schema.sql", "01_schema_full.sql"})
     missing = []
     for fn, table, kind, name in items:
+        if (table, kind, name) in dropped:
+            continue
         if kind == "table":
             if table not in tables:
                 missing.append((fn, "表 %s 未进入基线" % table))

@@ -7,7 +7,7 @@ import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catTag, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
+import { canEditTask, catNameById, catTag, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -451,7 +451,7 @@ function ganttGroupFieldValue(t, field){
     var nm = st.key === "done" ? "已完成" : st.key === "blocked" ? "阻塞" : st.key === "overdue" ? "逾期" : "进行中";
     return { v: st.key, name: nm };
   }
-  if(field === "category") return { v: t.category || "__none", name: t.category || "未指定模块" };
+  if(field === "category") return { v: t.categoryId || "__none", name: catNameById(t.categoryId) || "未指定模块" };
   if(field === "priority") return { v: t.priority || "P2", name: priName(t.priority || "P2") };
   return { v: "__all", name: "" };
 }
@@ -1458,7 +1458,7 @@ function renderGanttUnplanned(list, openIt){
     if(rn) meta.push(esc(rn));
     if(t.owner) meta.push(esc(t.owner));
     meta.push(esc(colName(t.boardColumn)));
-    var cat = catTag(t.category);
+    var cat = catTag(t.categoryId);
     return '<button class="gantt-unplanned-row" type="button" data-gantt-open="' + esc(t.id) + '" title="拖到时间轴即可排期">' +
       priTagHTML(t.priority) +
       '<span class="gantt-unplanned-main">' +
@@ -1812,10 +1812,13 @@ function ganttFilterCats(){
   var out = [], seen = {};
   var meta = state.board && state.board.meta;
   if(meta && meta.cats){
-    meta.cats.forEach(function(c){ if(c && c.name && !seen[c.name]){ seen[c.name] = 1; out.push(c.name); } });
+    meta.cats.forEach(function(c){ if(c && c.id && !seen[c.id]){ seen[c.id] = 1; out.push({id:c.id, name:c.name}); } });
   }
   ganttFilterSourceTasks().forEach(function(t){
-    if(t.category && !seen[t.category]){ seen[t.category] = 1; out.push(t.category); }
+    if(t.categoryId && !seen[t.categoryId]){
+      seen[t.categoryId] = 1;
+      out.push({id:t.categoryId, name:catNameById(t.categoryId)});
+    }
   });
   return out;
 }
@@ -1877,7 +1880,7 @@ function renderGanttFilterMenu(){
     projHTML += ganttFilterChip("data-gantt-req", "__none", "未归类", true);
   }
   var catHTML = ganttFilterCats().map(function(c){
-    return ganttFilterChip("data-gantt-cat", c, esc(c), state.cats.indexOf(c) !== -1);
+    return ganttFilterChip("data-gantt-cat", c.id, esc(c.name || "未指定模块"), state.cats.indexOf(c.id) !== -1);
   }).join("");
   var tagHTML = ganttFilterTags().map(function(n){
     return ganttFilterChip("data-gantt-tag", n, esc(n), state.tags.indexOf(n) !== -1);

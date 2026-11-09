@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI 润色周报：把周回顾页已经算好的数据，写成一段能直接发出去的周报。
@@ -39,11 +41,15 @@ public class AiReviewService {
     private final ReviewService reviewService;
     private final AiConfigService configService;
     private final AiClient client;
+    /** 模块ID→名称解析（周报事实块里展示名称，不展示裸 ID） */
+    private final WorkspaceMetaCache metaCache;
 
-    public AiReviewService(ReviewService reviewService, AiConfigService configService, AiClient client) {
+    public AiReviewService(ReviewService reviewService, AiConfigService configService, AiClient client,
+                           WorkspaceMetaCache metaCache) {
         this.reviewService = reviewService;
         this.configService = configService;
         this.client = client;
+        this.metaCache = metaCache;
     }
 
     public AiReviewResponse polish(String userId, String workspaceId, Integer weekOffset, String reqId, String note) {
@@ -67,7 +73,7 @@ public class AiReviewService {
         src.setPendingDone(pending.size());
         src.setWithNote(note != null && !note.trim().isEmpty());
 
-        String facts = buildFacts(d, note);
+        String facts = buildFacts(d, note, workspaceId);
         src.setChars(facts.length());
         src.setTruncated(done.size() > MAX_DONE_ITEMS || progress.size() > MAX_PROGRESS_ITEMS);
 
@@ -112,8 +118,12 @@ public class AiReviewService {
      * 把回顾数据压成"人能读、模型不费劲"的事实块。
      * 刻意不用 JSON：模型读到 JSON 容易开始"补字段"，读到清单更老实。
      */
-    String buildFacts(ReviewResponse d, String note) {
+    String buildFacts(ReviewResponse d, String note, String workspaceId) {
         StringBuilder sb = new StringBuilder();
+        Map<String, String> catNames = new HashMap<String, String>();
+        for (com.hourglass.entity.Category c : metaCache.categories(workspaceId)) {
+            catNames.put(c.getId(), c.getName());
+        }
         String range = fmt(d.getWeekStart()) + " — " + fmt(d.getWeekEnd());
         sb.append("周期：").append(nz(d.getLabel())).append("（").append(range).append("）\n");
         if (d.getReqName() != null && !d.getReqName().isEmpty()) {
@@ -148,7 +158,7 @@ public class AiReviewService {
             for (int i = 0; i < done.size() && i < MAX_DONE_ITEMS; i++) {
                 Task t = done.get(i);
                 sb.append(i + 1).append(". ").append(t.getTitle())
-                        .append("（").append(nz(t.getCategory())).append(" · ").append(nz(t.getOwner()));
+                        .append("（").append(moduleName(catNames, t.getCategoryId())).append(" · ").append(nz(t.getOwner()));
                 if (t.getCompletedAt() != null) {
                     sb.append(" · ").append(fmt(t.getCompletedAt().toString()));
                 }
@@ -271,5 +281,14 @@ public class AiReviewService {
 
     private static String nz(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    /** 模块ID→名称；未指定或已删模块不硬造名字，留空即可 */
+    private static String moduleName(Map<String, String> catNames, String categoryId) {
+        if (categoryId == null || categoryId.isEmpty()) {
+            return "";
+        }
+        String name = catNames.get(categoryId);
+        return name == null ? "" : name.trim();
     }
 }

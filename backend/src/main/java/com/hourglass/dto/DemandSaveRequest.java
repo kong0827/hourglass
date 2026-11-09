@@ -32,9 +32,9 @@ public class DemandSaveRequest {
     @Pattern(regexp = "新功能|体验优化|缺陷|其他", message = "需求类型不合法")
     private String itemKind;
 
-    /** 模块名（可选，需与空间内模块字典一致） */
-    @Size(max = 16, message = "模块不能超过 16 字")
-    private String category;
+    /** 模块ID（category.id；不填=未指定） */
+    @Size(max = 32, message = "模块ID不合法")
+    private String categoryId;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")
     private String priority;

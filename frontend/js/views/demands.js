@@ -10,7 +10,7 @@ import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
-import { canEditReq, catTag, reqNameById, rt } from "../core/state.js";
+import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
@@ -462,7 +462,7 @@ function cardHTML(d, opts){
     : "";
   return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
-    + catTag(d.category)
+    + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2") + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
@@ -488,7 +488,7 @@ function statusTag(st){
 function demandCell(d, key){
   if(key === "title") return '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>';
   if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
-  if(key === "category") return catTag(d.category) || "—";
+  if(key === "category") return catTag(d.categoryId) || "—";
   if(key === "priority") return priTagHTML(d.priority || "P2");
   if(key === "status") return statusTag(d.status);
   if(key === "project") return esc(reqNameById(d.reqId) || "—");
@@ -505,7 +505,7 @@ var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通
 var DEM_GROUPS = ["none","status","priority","project","kind","category"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
-var demSmart = { current:"all", preset:"all", group:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
+var demSmart = { current:"all", preset:"all", group:"none", subgroup:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
 var demSmartBar = null, demTabsBox = null, demSearchInput = null, demQTimer = null;
 
 function demBaseRows(){
@@ -515,10 +515,10 @@ function demBaseRows(){
     if(demSmart.preset !== "all" && d.status !== demSmart.preset) return false;
     if(demSmart.pris.length && demSmart.pris.indexOf(d.priority || "P2") === -1) return false;
     if(demSmart.kinds.length && demSmart.kinds.indexOf(d.itemKind || "其他") === -1) return false;
-    if(demSmart.cats.length && demSmart.cats.indexOf(d.category || "") === -1) return false;
+    if(demSmart.cats.length && demSmart.cats.indexOf(d.categoryId || "") === -1) return false;
     if(demSmart.reqs.length && demSmart.reqs.indexOf(d.reqId) === -1) return false;
     if(demSmart.q){
-      var hay = ((d.title || "") + "\n" + (d.description || "") + "\n" + (d.source || "") + "\n" + (d.category || "")).toLowerCase();
+      var hay = ((d.title || "") + "\n" + (d.description || "") + "\n" + (d.source || "") + "\n" + catNameById(d.categoryId)).toLowerCase();
       if(hay.indexOf(demSmart.q.toLowerCase()) === -1) return false;
     }
     return true;
@@ -539,37 +539,58 @@ function demSorted(rows){
   if(demandServerFiltered) return rows.slice();
   return rows.slice().sort(demCompare);
 }
-function demGroupInfo(d){
-  if(demSmart.group === "status") return {key:d.status, label:statusName(d.status)};
-  if(demSmart.group === "priority") return {key:d.priority || "P2", label:priName(d.priority || "P2")};
-  if(demSmart.group === "project") return {key:d.reqId || "__none", label:d.reqId ? (reqNameById(d.reqId) || "未归类") : "未归类"};
-  if(demSmart.group === "kind") return {key:d.itemKind || "其他", label:d.itemKind || "其他"};
-  if(demSmart.group === "category") return {key:d.category || "__none", label:d.category || "未指定模块"};
+function demGroupInfoBy(d, dim){
+  if(dim === "status") return {key:d.status, label:statusName(d.status)};
+  if(dim === "priority") return {key:d.priority || "P2", label:priName(d.priority || "P2")};
+  if(dim === "project") return {key:d.reqId || "__none", label:d.reqId ? (reqNameById(d.reqId) || "未归类") : "未归类"};
+  if(dim === "kind") return {key:d.itemKind || "其他", label:d.itemKind || "其他"};
+  if(dim === "category") return {key:d.categoryId || "__none", label:catNameById(d.categoryId) || "未指定模块"};
   return null;
 }
-function demGroups(){
-  if(demSmart.group === "none") return [];
-  var groups = [];
-  demBaseRows().forEach(function(d){
-    var info = demGroupInfo(d), group = null;
-    for(var i = 0; i < groups.length; i++) if(groups[i].key === info.key){ group = groups[i]; break; }
-    if(!group){ group = {key:info.key, label:info.label, rows:[]}; groups.push(group); }
-    group.rows.push(d);
-  });
-  groups.forEach(function(g){ g.rows = demSorted(g.rows); });
-  groups.sort(function(a, b){
-    if(demSmart.group === "status")
+/* 二级维度不能与一级重复；一级不分组时二级无意义 */
+function demSubDim(){
+  return (demSmart.group === "none" || demSmart.subgroup === "none" || demSmart.subgroup === demSmart.group)
+    ? "none" : demSmart.subgroup;
+}
+function demGroupCompare(dim){
+  if(dim === "status")
+    return function(a, b){
       return (STATUS_ORDER[a.key] === undefined ? 9 : STATUS_ORDER[a.key]) - (STATUS_ORDER[b.key] === undefined ? 9 : STATUS_ORDER[b.key]);
-    if(demSmart.group === "priority") return priRank(a.key) - priRank(b.key);
-    if(demSmart.group === "category"){
+    };
+  if(dim === "priority") return function(a, b){ return priRank(a.key) - priRank(b.key); };
+  if(dim === "category"){
+    return function(a, b){
       var order = {};
-      (rt.categoriesCache || []).forEach(function(c, i){ order[c.name] = i; });
+      (rt.categoriesCache || []).forEach(function(c, i){ order[c.id] = i; });
       var ai = order[a.key] === undefined ? 999 : order[a.key];
       var bi = order[b.key] === undefined ? 999 : order[b.key];
       return ai - bi || a.label.localeCompare(b.label, "zh-CN");
+    };
+  }
+  return function(a, b){ return a.label.localeCompare(b.label, "zh-CN"); };
+}
+function demGroups(){
+  if(demSmart.group === "none") return [];
+  var subDim = demSubDim();
+  var groups = [];
+  demBaseRows().forEach(function(d){
+    var info = demGroupInfoBy(d, demSmart.group), group = null;
+    for(var i = 0; i < groups.length; i++) if(groups[i].key === info.key){ group = groups[i]; break; }
+    if(!group){ group = {key:info.key, label:info.label, rows:[], subs:[]}; groups.push(group); }
+    group.rows.push(d);
+    if(subDim !== "none"){
+      var sinfo = demGroupInfoBy(d, subDim), sub = null;
+      for(var j = 0; j < group.subs.length; j++) if(group.subs[j].key === sinfo.key){ sub = group.subs[j]; break; }
+      if(!sub){ sub = {key:sinfo.key, label:sinfo.label, rows:[]}; group.subs.push(sub); }
+      sub.rows.push(d);
     }
-    return a.label.localeCompare(b.label, "zh-CN");
   });
+  groups.forEach(function(g){
+    g.rows = demSorted(g.rows);
+    g.subs.forEach(function(s){ s.rows = demSorted(s.rows); });
+    g.subs.sort(demGroupCompare(subDim));
+  });
+  groups.sort(demGroupCompare(demSmart.group));
   return groups;
 }
 function demViewRows(){
@@ -597,6 +618,8 @@ function syncDemControls(){
   if(demSmartBar){
     var g = demSmartBar.querySelector("[data-dem-group]");
     if(g) g.value = demSmart.group;
+    var sg = demSmartBar.querySelector("[data-dem-subgroup]");
+    if(sg){ sg.value = demSmart.subgroup; sg.disabled = demSmart.group === "none"; }
     var s = demSmartBar.querySelector("[data-dem-sort]");
     if(s) s.value = demSmart.sort;
     if(demSearchInput) demSearchInput.value = demSmart.q;
@@ -612,7 +635,7 @@ function saveDemState(){
     localStorage.setItem(DEM_STATE_KEY, JSON.stringify({
       wsId: ws,
       view: {
-        current: demSmart.current, preset: demSmart.preset, group: demSmart.group, sort: demSmart.sort,
+        current: demSmart.current, preset: demSmart.preset, group: demSmart.group, subgroup: demSmart.subgroup, sort: demSmart.sort,
         q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(),
         cats: demSmart.cats.slice(), reqs: demSmart.reqs.slice(),
         gantt: { scale: demGantt.scale, rangeMode: demGantt.rangeMode, zoomDayW: demGantt.zoomDayW }
@@ -645,6 +668,7 @@ function restoreDemState(){
   demSmart.current = typeof v.current === "string" ? v.current : "all";
   demSmart.preset = DEM_PRESETS.some(function(p){ return p[0] === v.preset; }) ? v.preset : "all";
   demSmart.group = DEM_GROUPS.indexOf(v.group) !== -1 ? v.group : "none";
+  demSmart.subgroup = (demSmart.group !== "none" && DEM_GROUPS.indexOf(v.subgroup) !== -1 && v.subgroup !== demSmart.group) ? v.subgroup : "none";
   demSmart.sort = DEM_SORTS.indexOf(v.sort) !== -1 ? v.sort : "default";
   demSmart.pris = demStrArr(v.pris);
   demSmart.kinds = demStrArr(v.kinds);
@@ -674,6 +698,7 @@ function activateDemPreset(id){
   demSmart.current = id;
   demSmart.preset = id;
   demSmart.group = "none";
+  demSmart.subgroup = "none";
   demSmart.sort = "default";
   demSmart.pris = []; demSmart.kinds = []; demSmart.cats = []; demSmart.reqs = []; demSmart.q = "";
   demSmart.collapsed = {};
@@ -688,6 +713,7 @@ function applyDemView(v){
   demSmart.current = String(v.id);
   demSmart.preset = DEM_PRESETS.some(function(x){ return x[0] === p.preset; }) ? p.preset : "all";
   demSmart.group = DEM_GROUPS.indexOf(p.group) !== -1 ? p.group : "none";
+  demSmart.subgroup = (demSmart.group !== "none" && DEM_GROUPS.indexOf(p.subgroup) !== -1 && p.subgroup !== demSmart.group) ? p.subgroup : "none";
   demSmart.sort = DEM_SORTS.indexOf(p.sort) !== -1 ? p.sort : "default";
   demSmart.pris = demStrArr(p.pris);
   demSmart.kinds = demStrArr(p.kinds);
@@ -722,7 +748,7 @@ function saveDemView(){
     var overwrite = savedViewsFor("demand").some(function(v){ return v.name === name; });
     var params = JSON.stringify({
       scope:"demand",
-      preset:demSmart.preset, group:demSmart.group, sort:demSmart.sort,
+      preset:demSmart.preset, group:demSmart.group, subgroup:demSmart.subgroup, sort:demSmart.sort,
       q:demSmart.q, pris:demSmart.pris.slice(), kinds:demSmart.kinds.slice(),
       cats:demSmart.cats.slice(), reqs:demSmart.reqs.slice()
     });
@@ -750,7 +776,7 @@ function demFilterMenuHTML(){
   var base = demands.filter(function(d){ return demSmart.preset === "all" || d.status === demSmart.preset; });
   var counts = { pris:{}, kinds:{}, reqs:{}, cats:{} };
   base.forEach(function(d){
-    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none", c = d.category || "";
+    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none", c = d.categoryId || "";
     counts.pris[p] = (counts.pris[p] || 0) + 1;
     counts.kinds[k] = (counts.kinds[k] || 0) + 1;
     counts.reqs[r] = (counts.reqs[r] || 0) + 1;
@@ -775,15 +801,14 @@ function demFilterMenuHTML(){
     return '<button class="chip" type="button" data-dem-f="kinds" data-dem-fv="' + esc(k) + '" aria-pressed="' + on + '">' +
       esc(k) + ' <span class="n">' + (counts.kinds[k] || 0) + '</span></button>';
   }).join("");
-  /* 模块按字典顺序展示；历史数据里的空模块单独一项，便于筛选出来补齐 */
-  var catNames = (rt.categoriesCache || []).map(function(c){ return c.name; });
-  Object.keys(counts.cats).forEach(function(n){ if(catNames.indexOf(n) === -1) catNames.push(n); });
-  /* 空模块只用于分组呈现，不放进筛选项：服务端筛选按模块名传参，空值无法与"未传"区分 */
-  var catInner = catNames.filter(function(n){ return n !== ""; }).map(function(n){
-    var on = demSmart.cats.indexOf(n) !== -1;
-    if(!(counts.cats[n] > 0) && !on) return "";
-    return '<button class="chip" type="button" data-dem-f="cats" data-dem-fv="' + esc(n) + '" aria-pressed="' + on + '">' +
-      esc(n) + ' <span class="n">' + (counts.cats[n] || 0) + '</span></button>';
+  /* 模块按字典顺序展示；模块删除会级联迁移需求，不存在悬空 ID，字典未加载时暂不展示 */
+  var catOptions = (rt.categoriesCache || []).map(function(c){ return {id:c.id, name:c.name}; });
+  /* 空模块只用于分组呈现，不放进筛选项：服务端筛选按模块ID传参，空值无法与"未传"区分 */
+  var catInner = catOptions.filter(function(o){ return o.id !== ""; }).map(function(o){
+    var on = demSmart.cats.indexOf(o.id) !== -1;
+    if(!(counts.cats[o.id] > 0) && !on) return "";
+    return '<button class="chip" type="button" data-dem-f="cats" data-dem-fv="' + esc(o.id) + '" aria-pressed="' + on + '">' +
+      esc(o.name) + ' <span class="n">' + (counts.cats[o.id] || 0) + '</span></button>';
   }).join("");
   var reqInner = rt.reqList.map(function(r){
     var on = demSmart.reqs.indexOf(r.id) !== -1;
@@ -827,7 +852,7 @@ function demCsvCell(value){
 function demCsvValue(d, key){
   if(key === "title") return d.title || "";
   if(key === "kind") return d.itemKind || "";
-  if(key === "category") return d.category || "";
+  if(key === "category") return catNameById(d.categoryId);
   if(key === "priority") return d.priority || "";
   if(key === "status") return statusName(d.status);
   if(key === "project") return reqNameById(d.reqId) || "";
@@ -865,6 +890,9 @@ function initDemSmartBar(){
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
         '<option value="project">按项目</option><option value="kind">按类型</option><option value="category">按模块</option></select></label>' +
+      '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-dem-subgroup aria-label="二级分组方式">' +
+        '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
+        '<option value="project">按项目</option><option value="kind">按类型</option><option value="category">按模块</option></select></label>' +
       '<label class="smart-view-control"><span>排序</span><select class="mini-select" data-dem-sort aria-label="排序方式">' +
         '<option value="default">默认顺序（状态→优先级）</option><option value="priority">按优先级</option>' +
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
@@ -899,8 +927,23 @@ function initDemSmartBar(){
     if(g){
       if(DEM_GROUPS.indexOf(g.value) === -1) return;
       demSmart.group = g.value;
+      if(demSmart.group === "none" || demSmart.group === demSmart.subgroup) demSmart.subgroup = "none";
       demSmart.collapsed = {};
       /* 分组只在客户端展开，不改变服务端结果集 */
+      if(listPrefs.viewMode("demand-pool") === "gantt"){
+        syncDemControls();
+        render();
+        saveDemState();
+      }else{
+        demStateChanged();
+      }
+      return;
+    }
+    var sg = e.target.closest("[data-dem-subgroup]");
+    if(sg){
+      if(DEM_GROUPS.indexOf(sg.value) === -1) return;
+      demSmart.subgroup = sg.value;
+      demSmart.collapsed = {};
       if(listPrefs.viewMode("demand-pool") === "gantt"){
         syncDemControls();
         render();
@@ -938,12 +981,29 @@ function demandMobileList(rows, groups){
   }else{
     body = groups.map(function(g){
       var collapsed = !!demSmart.collapsed["$" + g.key];
+      var inner;
+      if(collapsed){
+        inner = "";
+      }else if(!g.subs.length){
+        inner = '<div class="dem-mob-cards">' + cards(g.rows) + '</div>';
+      }else{
+        inner = g.subs.map(function(s){
+          var sc = !!demSmart.collapsed["$sub:" + g.key + "/" + s.key];
+          return '<section class="dem-mob-subgroup">'
+            + '<button type="button" class="dem-group-toggle dem-mob-subgroup-head" data-dem-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!sc) + '">'
+            + '<span class="dem-group-caret' + (sc ? '' : ' open') + '">▶</span>'
+            + '<span class="dem-group-name">' + esc(s.label) + '</span>'
+            + '<span class="dem-group-count">' + s.rows.length + ' 项</span></button>'
+            + (sc ? '' : '<div class="dem-mob-cards">' + cards(s.rows) + '</div>')
+            + '</section>';
+        }).join("");
+      }
       return '<section class="dem-mob-group">'
         + '<button type="button" class="dem-group-toggle dem-mob-group-head" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">'
         + '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>'
         + '<span class="dem-group-name">' + esc(g.label) + '</span>'
         + '<span class="dem-group-count">' + g.rows.length + ' 项</span></button>'
-        + (collapsed ? '' : '<div class="dem-mob-cards">' + cards(g.rows) + '</div>')
+        + inner
         + '</section>';
     }).join("");
   }
@@ -991,14 +1051,29 @@ function renderDemandTable(){
       '<span class="dem-group-name">' + esc(g.label) + '</span>' +
       '<span class="dem-group-count">' + g.rows.length + ' 项</span></button></td></tr>';
   }
+  function subGroupHead(g, s){
+    var collapsed = !!demSmart.collapsed["$sub:" + g.key + "/" + s.key];
+    return '<tr class="dem-subgroup-row"><td colspan="' + colspan + '"><button type="button" class="dem-group-toggle" data-dem-subgroup-toggle="' + esc(g.key + "/" + s.key) + '" aria-expanded="' + (!collapsed) + '">' +
+      '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>' +
+      '<span class="dem-group-name">' + esc(s.label) + '</span>' +
+      '<span class="dem-group-count">' + s.rows.length + ' 项</span></button></td></tr>';
+  }
   var body = "";
   if(demSmart.group === "none"){
     body = rows.map(rowHTML).join("");
   }else{
     body = groups.map(function(g){
-      return groupHead(g) + (demSmart.collapsed["$" + g.key] ? "" : g.rows.map(function(d){
+      var head = groupHead(g);
+      if(demSmart.collapsed["$" + g.key]) return head;
+      if(!g.subs.length) return head + g.rows.map(function(d){
         return rowHTML(d, true);
-      }).join(""));
+      }).join("");
+      return head + g.subs.map(function(s){
+        var sc = !!demSmart.collapsed["$sub:" + g.key + "/" + s.key];
+        return subGroupHead(g, s) + (sc ? "" : s.rows.map(function(d){
+          return rowHTML(d, true);
+        }).join(""));
+      }).join("");
     }).join("");
   }
   if(demandHasMore){
@@ -1139,7 +1214,7 @@ function demgLabelHTML(d, tl){
   if(rn) meta += '<span class="ellipsis shrink">' + esc(rn) + '</span>';
   var ver = demandVersionName(d);
   if(ver) meta += '<span class="tag ghost">' + esc(ver) + '</span>';
-  if(d.category) meta += catTag(d.category);
+  if(d.categoryId) meta += catTag(d.categoryId);
   if(d.expectDate) meta += '<span>期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>';
   var info = [];
   if(tl.taskCount) info.push("工作项 " + (tl.taskDone || 0) + "/" + tl.taskCount);
@@ -1202,6 +1277,15 @@ function demgGroupHeadHTML(g){
     '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
     '<span class="gantt-group-name">' + esc(g.label) + '</span>' +
     '<span class="gantt-group-cnt">' + g.rows.length + ' 项</span>' +
+  '</button></div>';
+}
+function demgSubGroupHeadHTML(g, s){
+  var collapsed = !!demSmart.collapsed["$sub:" + g.key + "/" + s.key];
+  return '<div class="gantt-group"><button class="gantt-group-head depth-2" type="button" data-dem-subgroup-toggle="' +
+    esc(g.key + "/" + s.key) + '" aria-expanded="' + (!collapsed) + '">' +
+    '<span class="gantt-group-caret" aria-hidden="true">' + (collapsed ? "▸" : "▾") + '</span>' +
+    '<span class="gantt-group-name">' + esc(s.label) + '</span>' +
+    '<span class="gantt-group-cnt">' + s.rows.length + ' 项</span>' +
   '</button></div>';
 }
 function demgLegendHTML(){
@@ -1283,7 +1367,15 @@ function renderDemandGantt(){
   groups.forEach(function(g){
     if(demSmart.group !== "none") bodyHTML += demgGroupHeadHTML(g);
     if(demSmart.group !== "none" && demSmart.collapsed["$" + g.key]) return;
-    g.rows.forEach(function(d){ bodyHTML += demgRowHTML(d, range, dayW, totalW); });
+    if(g.subs.length){
+      g.subs.forEach(function(s){
+        bodyHTML += demgSubGroupHeadHTML(g, s);
+        if(demSmart.collapsed["$sub:" + g.key + "/" + s.key]) return;
+        s.rows.forEach(function(d){ bodyHTML += demgRowHTML(d, range, dayW, totalW); });
+      });
+    }else{
+      g.rows.forEach(function(d){ bodyHTML += demgRowHTML(d, range, dayW, totalW); });
+    }
   });
 
   demandBody.innerHTML =
@@ -1355,6 +1447,16 @@ function findDemand(id){
   for(var i = 0; i < demands.length; i++) if(demands[i].id === id) return demands[i];
   return null;
 }
+/* 模块候选按所选项目过滤；选中值不属于该项目则回落到第一个模块或「未指定」 */
+function syncDemandCatOptions(reqId, selectedId){
+  var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === reqId; });
+  dCategory.innerHTML = '<option value="">未指定模块</option>' + cats.map(function(c){
+    return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
+  }).join("");
+  var val = (selectedId && cats.some(function(c){ return c.id === selectedId; })) ? selectedId : (cats.length ? cats[0].id : "");
+  dCategory.value = val;
+  return val;
+}
 function openDemandDialog(d){
   if(d && !canWriteDemand(d)){ denyDemandReadOnly(); return; }
   if(!rt.reqList.length){ toast("先在「项目」里创建项目", "warn"); return; }
@@ -1370,11 +1472,8 @@ function openDemandDialog(d){
   dAccept.value = d ? (d.acceptText || "") : "";
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
-  var cats = rt.categoriesCache || [];
-  dCategory.innerHTML = '<option value="">未指定模块</option>' + cats.map(function(c){
-    return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>';
-  }).join("");
-  dCategory.value = d ? (d.category || "") : (cats.length ? cats[0].name : "");
+  /* 模块按所选项目过滤：候选只列该项目下的模块 */
+  syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "");
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
   dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
@@ -1410,7 +1509,7 @@ function saveDemand(){
     acceptText: dAccept.value.trim() || null,
     source: dSource.value.trim() || null,
     itemKind: dKind.value,
-    category: dCategory.value || null,
+    categoryId: dCategory.value || null,
     priority: formPri,
     expectDate: dExpect.value || null,
     wsjfBusiness: wsNum(dWsjfB, 0),
@@ -1716,7 +1815,7 @@ function showDemandDetail(id){
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
-    ["模块", d.category || "未指定模块"],
+    ["模块", catNameById(d.categoryId) || "未指定模块"],
     ["优先级", priName(d.priority || "P2")],
     ["目标版本", demandVersionName(d) || "待规划"],
     ["期望交付", d.expectDate || "待评估"],
@@ -1775,7 +1874,7 @@ function showDemandDetail(id){
       UI.closeModal(layer);
       openTaskDrawer("backlog", null, {
         reqId: d.reqId, demandId: d.id, versionId: d.versionId, dueDate: d.expectDate,
-        category: d.category || null
+        categoryId: d.categoryId || null
       });
       return;
     }
@@ -1916,6 +2015,10 @@ if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
 });
 if($("dlgDemandX")) $("dlgDemandX").addEventListener("click", function(){ UI.closeModal($("dlgDemand")); });
 if(btnSaveDemand) btnSaveDemand.addEventListener("click", saveDemand);
+if(dReq) dReq.addEventListener("change", function(){
+  /* 换项目后原模块不再可选，回落到新项目第一个模块或「未指定」 */
+  syncDemandCatOptions(dReq.value, dCategory.value);
+});
 if(dTitle) dTitle.addEventListener("input", function(){ fDemandTitle.classList.remove("invalid"); });
 if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){
   var b = e.target.closest("[data-dpri]");
@@ -1987,6 +2090,13 @@ if(demandBody) demandBody.addEventListener("click", function(e){
     if(dm.dataset.demMore === "table") loadMoreDemandTable();
     else if(dm.dataset.demMore === "gantt") loadMoreDemandGantt();
     else loadMoreDemandColumn(dm.dataset.demMore);
+    return;
+  }
+  var st = e.target.closest("[data-dem-subgroup-toggle]");
+  if(st){
+    var skey = "$sub:" + st.dataset.demSubgroupToggle;
+    demSmart.collapsed[skey] = !demSmart.collapsed[skey];
+    render();
     return;
   }
   var gt = e.target.closest("[data-dem-group-toggle]");

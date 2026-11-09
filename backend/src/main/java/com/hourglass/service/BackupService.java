@@ -76,14 +76,6 @@ public class BackupService {
 
     private static final String[] PRIORITIES = {"P0", "P1", "P2", "P3"};
     private static final String[] REQ_STATUS = {"active", "done", "hold"};
-    /** 旧版内置模块的原配色（导入时保留），其余自定义模块用默认灰 */
-    private static final java.util.Map<String, String> LEGACY_CAT_COLORS = new java.util.HashMap<String, String>();
-    static {
-        LEGACY_CAT_COLORS.put("前端", "#5b83ad");
-        LEGACY_CAT_COLORS.put("后端", "#5f7a4a");
-        LEGACY_CAT_COLORS.put("设计", "#7a5c86");
-        LEGACY_CAT_COLORS.put("缺陷", "#b23b33");
-    }
     private static final String DEFAULT_CAT_COLOR = "#8a8578";
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter ISO_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
@@ -178,7 +170,8 @@ public class BackupService {
 
     public BackupData export(String workspaceId) {
         BackupData data = new BackupData();
-        data.setV(10);
+        /* v12：模块字典带 projectId（模块挂在项目下） */
+        data.setV(12);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -235,7 +228,7 @@ public class BackupService {
             b.setDesc(t.getDescription());
             b.setPri(t.getPriority());
             b.setOwner(t.getOwner());
-            b.setCat(t.getCategory());
+            b.setCat(t.getCategoryId());
             b.setCol(t.getBoardColumn());
             b.setStart(t.getStartDate() == null ? null : t.getStartDate().toString());
             b.setDue(t.getDueDate() == null ? null : t.getDueDate().toString());
@@ -283,6 +276,19 @@ public class BackupService {
             columns.add(bc);
         }
         data.setColumns(columns);
+
+        /* v11：模块字典随备份导出（任务/需求里的模块已是 ID，导入按 ID 校验补表）；模块挂在项目下 */
+        List<BackupData.BackupCategory> cats = new ArrayList<BackupData.BackupCategory>();
+        for (Category c : categoryMapper.selectByWorkspace(workspaceId)) {
+            BackupData.BackupCategory bc = new BackupData.BackupCategory();
+            bc.setId(c.getId());
+            bc.setProjectId(c.getProjectId());
+            bc.setName(c.getName());
+            bc.setColor(c.getColor());
+            bc.setSortOrder(c.getSortOrder());
+            cats.add(bc);
+        }
+        data.setCategories(cats);
 
         List<BackupData.BackupReq> reqs = new ArrayList<BackupData.BackupReq>();
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
@@ -415,7 +421,7 @@ public class BackupService {
             bd.setDesc(d.getDescription());
             bd.setSource(d.getSource());
             bd.setItemKind(d.getItemKind());
-            bd.setCategory(d.getCategory());
+            bd.setCategoryId(d.getCategoryId());
             bd.setPriority(d.getPriority());
             bd.setStatus(d.getStatus());
             bd.setExpectDate(d.getExpectDate() == null ? null : d.getExpectDate().toString());
@@ -708,8 +714,15 @@ public class BackupService {
                 demand.setSource(Texts.cut(Texts.trimToNull(bd.getSource()), 40));
                 demand.setItemKind(oneOf(bd.getItemKind(),
                         new String[]{"新功能", "体验优化", "缺陷", "其他"}, "新功能"));
-                String category = Texts.cut(Texts.trimToNull(bd.getCategory()), 16);
-                demand.setCategory(category == null ? "" : category);
+                /* v12 存模块ID；映射不到或不属于需求项目（旧备份名称文本 / 已删模块）回落「未指定」 */
+                String demandCatId = st.catIdMap.get(Texts.trimToNull(bd.getCategoryId()));
+                if (demandCatId != null) {
+                    Category dcat = categoryMapper.selectById(workspaceId, demandCatId);
+                    if (dcat == null || !reqId.equals(dcat.getProjectId())) {
+                        demandCatId = null;
+                    }
+                }
+                demand.setCategoryId(demandCatId);
                 demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
                 demand.setStatus(oneOf(bd.getStatus(),
                         new String[]{"review", "pass", "plan", "rej"}, "review"));
@@ -907,35 +920,46 @@ public class BackupService {
             st.reqDocReqId.put(doc.getId(), doc.getReqId());
         }
 
-        // 模块：按备份中出现的模块名补齐模块表（旧四类保留原配色），空则落默认模块
-        Set<String> catNames = new java.util.LinkedHashSet<String>();
-        for (BackupData.BackupTask b : data.getTasks()) {
-            if (b == null) {
+        // 模块：v12 备份带项目级模块字典，按 ID 补齐并建立映射；项目映射不到的模块跳过，
+        // 任务/需求的模块值统一回落该项目默认模块（历史数据不回填）
+        for (BackupData.BackupCategory bc : data.getCategories() == null
+                ? java.util.Collections.<BackupData.BackupCategory>emptyList() : data.getCategories()) {
+            if (bc == null) {
                 continue;
             }
-            String cn = normalizeCatName(b.getCat());
-            if (cn != null) {
-                catNames.add(cn);
+            String original = Texts.trimToNull(bc.getId());
+            String cid = Ids.sanitize(original);
+            String projectId = bc.getProjectId() == null ? null : st.reqIdMap.get(bc.getProjectId());
+            if (cid == null || cid.length() > 32 || Texts.trimToNull(bc.getName()) == null
+                    || projectId == null || st.catIdMap.containsKey(original)) {
+                continue;
             }
-        }
-        int catOrder = 0;
-        for (String cn : catNames) {
+            if (categoryMapper.selectById(workspaceId, cid) != null) {
+                st.catIdMap.put(original, cid);
+                continue;
+            }
             Category cat = new Category();
-            cat.setId(Ids.gen("G"));
+            cat.setId(cid);
             cat.setWorkspaceId(workspaceId);
-            cat.setName(cn);
-            String color = LEGACY_CAT_COLORS.get(cn);
-            cat.setColor(color == null ? DEFAULT_CAT_COLOR : color);
-            cat.setSortOrder(catOrder++);
+            cat.setProjectId(projectId);
+            cat.setName(Texts.cut(bc.getName(), 12));
+            String color = Texts.trimToNull(bc.getColor());
+            cat.setColor(color != null && color.matches("^#[0-9a-fA-F]{6}$") ? color : DEFAULT_CAT_COLOR);
+            cat.setSortOrder(bc.getSortOrder() == null ? 0 : bc.getSortOrder());
             try {
                 categoryMapper.insert(cat);
+                st.catIdMap.put(original, cid);
             } catch (Exception ignored) {
-                // 同名模块已存在则跳过
+                // 同名/同 ID 冲突：映射缺失，相关任务/需求落默认模块
             }
         }
         workspaceService.ensureDefaultsFor(workspaceId);
-        List<Category> cats = categoryMapper.selectByWorkspace(workspaceId);
-        st.defaultCat = cats.isEmpty() ? "" : cats.get(0).getName();
+        /* 项目默认模块映射：projectId → 项目内最靠前的模块（导入任务回落用） */
+        for (Category c : categoryMapper.selectByWorkspace(workspaceId)) {
+            if (!st.projectFirstCat.containsKey(c.getProjectId())) {
+                st.projectFirstCat.put(c.getProjectId(), c.getId());
+            }
+        }
 
         // 看板列定义：按备份补齐缺失列（跨空间导入时自定义列才能落位；已存在的列不覆盖目标设置）
         if (data.getColumns() != null) {
@@ -1029,8 +1053,6 @@ public class BackupService {
                 owner = owner.replace(',', ' ').replace('，', ' ').trim();
             }
             t.setOwner(owner == null || owner.isEmpty() ? "我" : Texts.cut(owner, 32));
-            String cat = normalizeCatName(b.getCat());
-            t.setCategory(cat == null ? st.defaultCat : cat);
             String col = mapColumn(b.getCol(), st.colIds, st.colNameToId);
             t.setBoardColumn(col);
             t.setStartDate(parseDate(b.getStart()));
@@ -1053,6 +1075,21 @@ public class BackupService {
                 }
             }
             t.setReqId(reqId != null && st.reqIds.contains(reqId) ? reqId : null);
+            /* 模块挂在项目下：v12 存模块ID；映射不到或不属于任务项目（旧备份名称文本 / 已删模块）
+               回落该项目第一个模块；无项目任务保持「未指定」 */
+            String catMapped = st.catIdMap.get(Texts.trimToNull(b.getCat()));
+            if (catMapped != null) {
+                Category cat = categoryMapper.selectById(workspaceId, catMapped);
+                if (cat == null || t.getReqId() == null || !t.getReqId().equals(cat.getProjectId())) {
+                    catMapped = null;
+                }
+            }
+            if (catMapped != null) {
+                t.setCategoryId(catMapped);
+            } else {
+                t.setCategoryId(t.getReqId() == null ? ""
+                        : st.projectFirstCat.getOrDefault(t.getReqId(), ""));
+            }
             /* v8：工作项类型 / Epic 归属 / 关联需求 / 所属版本。Epic 与版本绑定要等全部任务落库，先收集 */
             String itemType = oneOf(b.getItemType(), new String[]{"task", "story", "bug", "epic"}, "task");
             t.setItemType(itemType);
@@ -1555,6 +1592,10 @@ public class BackupService {
             colNames.put(c.getId(), c.getName());
         }
         colNames.put(Consts.COL_DONE, "已完成");
+        Map<String, String> catNames = new HashMap<String, String>();
+        for (Category c : categoryMapper.selectByWorkspace(workspaceId)) {
+            catNames.put(c.getId(), c.getName());
+        }
         List<String> ids = new ArrayList<String>();
         for (Task t : tasks) {
             ids.add(t.getId());
@@ -1579,7 +1620,7 @@ public class BackupService {
               .append(csv(t.getTitle())).append(',')
               .append(csv(t.getDescription())).append(',')
               .append(csv(t.getPriority())).append(',')
-              .append(csv(t.getCategory())).append(',')
+              .append(csv(catNames.getOrDefault(t.getCategoryId(), ""))).append(',')
               .append(csv(tags == null ? "" : String.join("/", tags))).append(',')
               .append(csv(t.getOwner())).append(',')
               .append(csv(colNames.containsKey(t.getBoardColumn()) ? colNames.get(t.getBoardColumn()) : t.getBoardColumn())).append(',')
@@ -1627,7 +1668,10 @@ public class BackupService {
         final Set<String> branchIds = new HashSet<String>();
         final Set<String> colIds = new HashSet<String>();
         final Map<String, String> colNameToId = new HashMap<String, String>();
-        String defaultCat = "";
+        /** 项目默认模块：projectId → 项目内最靠前的模块（导入任务回落用；模块挂在项目下） */
+        final Map<String, String> projectFirstCat = new HashMap<String, String>();
+        /** v12：备份模块 id → 落库模块 id（同空间还原为原 ID；查不到映射回落项目默认模块） */
+        final Map<String, String> catIdMap = new HashMap<String, String>();
         /** 标签名 → 标签（阶段 1 预建，阶段 2 只读） */
         final Map<String, Tag> tagByName = new HashMap<String, Tag>();
         final Map<String, Integer> colSeq = new HashMap<String, Integer>();
@@ -1808,22 +1852,6 @@ public class BackupService {
         } catch (Exception e) {
             return tagMapper.selectByName(workspaceId, name);
         }
-    }
-
-    /**
-     * 模块名规范化（与 CategoryService 同规则）：筛选参数用逗号分隔，模块名不允许含逗号，
-     * 统一替换为空格；空名返回 null。导入的模块补表与任务赋值必须用同一规则，否则会产生筛不到的"幽灵模块"。
-     */
-    private String normalizeCatName(String raw) {
-        String name = Texts.trimToNull(raw);
-        if (name == null) {
-            return null;
-        }
-        name = name.replace(',', ' ').replace('，', ' ').trim();
-        if (name.isEmpty()) {
-            return null;
-        }
-        return Texts.cut(name, 12);
     }
 
     private String csv(String value) {

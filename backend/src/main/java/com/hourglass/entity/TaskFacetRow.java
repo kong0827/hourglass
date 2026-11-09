@@ -12,7 +12,7 @@ public class TaskFacetRow {
 
     private String owner;
     private String priority;
-    private String category;
+    private String categoryId;
     private String reqId;
     private String boardColumn;
     private String processingRule;

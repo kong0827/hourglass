@@ -2,14 +2,15 @@
 
 import { API } from "../core/api.js";
 import { $, reqExpanded, reqListEl, searchInput, searchWrap } from "../core/dom.js";
+import { loadCategories } from "../core/app.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
-import { canEditReq, reqNameById, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, reqNameById, roleReadOnly, rt, state, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
 import * as activityUI from "../core/activity-ui.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { loadBoard, loadReqs } from "./board.js";
@@ -20,7 +21,9 @@ var rName = $("rName"), rDesc = $("rDesc"), fReqName = $("fReqName"),
     rObjective = $("rObjective"), rOwner = $("rOwner"), rPlanStart = $("rPlanStart"), rPlanEnd = $("rPlanEnd"),
     segReqStatus = $("segReqStatus"), btnSaveReq = $("btnSaveReq"),
     btnCancelReqEdit = $("btnCancelReqEdit"), reqFormTitle = $("reqFormTitle"),
-    rTemplate = $("rTemplate"), rTemplateHint = $("rTemplateHint"), fReqTemplate = $("fReqTemplate");
+    rTemplate = $("rTemplate"), rTemplateHint = $("rTemplateHint"), fReqTemplate = $("fReqTemplate"),
+    projCatCfg = $("projCatCfg"), projCatList = $("projCatList"),
+    projCatNewName = $("projCatNewName"), projCatNewColor = $("projCatNewColor");
 var showArchived = false;
 var PROJECT_SORT_DEFAULT_DIR = {
   name:"asc", status:"asc", description:"asc", ownerName:"asc", plannedEnd:"asc",
@@ -404,6 +407,8 @@ function saveReq(){
     btnSaveReq.disabled = false;
     toast(editing ? ("已更新项目「" + name + "」") : ("已新增项目「" + name + "」"), "fs");
     resetReqForm();
+    /* 新建项目后端会预置默认模块，模块字典要立即刷新，否则任务抽屉/筛选举不到 */
+    if(!editing) loadCategories(true);
     loadReqs().then(function(){
       renderReqList();
       loadBoard({silent:true});
@@ -491,6 +496,8 @@ function deleteReq(id){
           (extras.length ? "；同时删除 " + extras.join("、") : ""), "fs");
         if(rt.editingReqId === id) resetReqForm();
         loadReqDocs(true);
+        /* 项目的模块清单随删除一并清理，模块字典要立即刷新 */
+        loadCategories(true);
         loadReqs().then(function(){
           renderReqList();
           loadBoard({silent:true});
@@ -500,6 +507,127 @@ function deleteReq(id){
     });
   });
 }
+/* ---------- 项目抽屉 · 模块配置（模块按项目配置，仅编辑已有项目时展示） ---------- */
+var projCatCache = [];
+var projCatReqId = "";
+function loadProjCats(reqId){
+  projCatReqId = reqId || "";
+  if(projCatList) projCatList.innerHTML = UI.skeletonRows(2);
+  return API.get("/api/categories?project=" + encodeURIComponent(projCatReqId)).then(function(list){
+    projCatCache = list || [];
+    renderProjCats();
+  }).catch(function(ex){
+    if(projCatList) projCatList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function renderProjCats(){
+  if(!projCatList) return;
+  var readOnly = roleReadOnly();
+  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  projCatList.innerHTML = projCatCache.map(function(c, idx){
+    return '<div class="cfg-row" data-proj-cat-id="' + esc(c.id) + '">' +
+      '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
+      '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-pcat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
+      '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-pcat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
+      '<button class="cc-act" type="button" data-pcat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+      '<button class="cc-act" type="button" data-pcat-down title="下移"' + (readOnly || idx === projCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+    '</div>';
+  }).join("");
+  ["projCatNewColor", "projCatNewName", "btnProjCatAdd"].forEach(function(id){
+    var el = $(id);
+    if(el) el.disabled = readOnly;
+  });
+  if($("projCatHint")) $("projCatHint").hidden = !readOnly;
+  UI.wireTooltips(projCatList);
+}
+function refreshCatDependents(){
+  loadCategories(true);
+  loadBoard({silent:true});
+}
+function saveProjCatRow(id){
+  if(roleReadOnly()) return;
+  var row = projCatList.querySelector('[data-proj-cat-id="' + id + '"]');
+  if(!row) return;
+  var name = row.querySelector("[data-pcat-name]").value.trim();
+  var color = row.querySelector("[data-pcat-color]").value;
+  if(!name){ toast("模块名不能为空", "warn"); loadProjCats(projCatReqId); return; }
+  API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
+    toast("已更新模块「" + name + "」", "fs");
+    loadProjCats(projCatReqId);
+    refreshCatDependents();
+  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); loadProjCats(projCatReqId); });
+}
+projCatList.addEventListener("change", function(e){
+  var row = e.target.closest("[data-proj-cat-id]");
+  if(!row) return;
+  if(e.target.matches("[data-pcat-name]") || e.target.matches("[data-pcat-color]")) saveProjCatRow(row.dataset.projCatId);
+});
+projCatList.addEventListener("click", function(e){
+  if(roleReadOnly()) return;
+  var row = e.target.closest("[data-proj-cat-id]");
+  if(!row) return;
+  var id = row.dataset.projCatId;
+  if(e.target.closest("[data-pcat-up]") || e.target.closest("[data-pcat-down]")){
+    var idx = -1;
+    for(var i = 0; i < projCatCache.length; i++) if(projCatCache[i].id === id) idx = i;
+    if(idx < 0) return;
+    var to = e.target.closest("[data-pcat-up]") ? idx - 1 : idx + 1;
+    if(to < 0 || to >= projCatCache.length) return;
+    var moved = projCatCache.splice(idx, 1)[0];
+    projCatCache.splice(to, 0, moved);
+    API.put("/api/categories/order?project=" + encodeURIComponent(projCatReqId), { ids: projCatCache.map(function(c){ return c.id; }) }).then(function(){
+      loadProjCats(projCatReqId);
+    }).catch(function(ex){ toast(ex.message || "排序失败", "bad"); loadProjCats(projCatReqId); });
+    return;
+  }
+  if(e.target.closest("[data-pcat-del]")){
+    var cat = null;
+    for(var j = 0; j < projCatCache.length; j++) if(projCatCache[j].id === id) cat = projCatCache[j];
+    if(!cat) return;
+    var others = projCatCache.filter(function(c){ return c.id !== id; });
+    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
+    var menu = document.createElement("div");
+    menu.className = "menu";
+    menu.style.minWidth = "200px";
+    menu.innerHTML = '<div class="menu-title">迁移到</div>' + others.map(function(c){
+      return '<button class="menu-item" type="button" data-pcat-target="' + esc(c.id) + '">' + esc(c.name) + '</button>';
+    }).join("");
+    UI.openPop(menu, e.target.closest("[data-pcat-del]"), { onClose: function(){ menu.remove(); } });
+    menu.addEventListener("click", function(ev){
+      var b = ev.target.closest("[data-pcat-target]");
+      if(!b) return;
+      var target = null;
+      for(var k = 0; k < others.length; k++) if(others[k].id === b.dataset.pcatTarget) target = others[k];
+      if(!target) return;
+      UI.closeAllPops();
+      UI.showConfirm({
+        title:"删除模块",
+        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
+        okText:"删除模块"
+      }).then(function(ok){
+        if(!ok) return;
+        API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
+          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
+          loadProjCats(projCatReqId);
+          refreshCatDependents();
+        }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+      });
+    });
+  }
+});
+$("btnProjCatAdd").addEventListener("click", function(){
+  if(roleReadOnly()) return;
+  var name = projCatNewName.value.trim();
+  if(!name){ toast("请填写模块名称", "warn"); return; }
+  API.post("/api/categories?project=" + encodeURIComponent(projCatReqId), { name: name, color: projCatNewColor.value }).then(function(){
+    toast("已添加模块「" + name + "」", "fs");
+    projCatNewName.value = "";
+    loadProjCats(projCatReqId);
+    refreshCatDependents();
+  }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+});
+
 function openProjectDialog(id){
   rt.editingReqId = id || null;
   rName.value = "";
@@ -535,6 +663,9 @@ function openProjectDialog(id){
   reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
   btnSaveReq.textContent = id ? "保存修改" : "添加项目";
   btnCancelReqEdit.hidden = !id;
+  /* 模块按项目配置：新建时项目尚不存在（首建后后端预置「其他」），仅编辑态展示 */
+  if(projCatCfg) projCatCfg.hidden = !id;
+  if(id) loadProjCats(id);
   projectFormBaseline = projectFormSnapshot();
   UI.openModal($("dlgProject"), "input");
   setTimeout(function(){ try{ rName.focus(); }catch(e){ /* noop */ } }, 40);

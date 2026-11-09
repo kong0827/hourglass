@@ -29,7 +29,6 @@ rt.wsMembersCache = [];
 rt.savedViews = [];
 rt.inviteCache = [];
 rt.colDefsCache = [];
-rt.catDefsCache = [];
 rt.settingsReady = false;
 rt.subtasksCache = [];
 rt.listCache = {};
@@ -50,7 +49,7 @@ var state = {
   due:null, focus:false, doneScope:"week", blocked:false,
   board:null, doneExtra:[], loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
-  mineSpace:"", mineGroup:"due", mineSort:"default",
+  mineSpace:"", mineGroup:"due", mineSubgroup:"none", mineSort:"default",
   collapsedCols:{}, inlineAdd:null,
   runningTimer:null, compMonth:null, reqDocId:null
 };
@@ -59,15 +58,35 @@ var calState = {year:null, month:null, tasks:[], selected:null, seq:0, showDone:
 function safeColor(c){
   return /^#[0-9a-f]{6}$/i.test(String(c == null ? "" : c)) ? c : CAT_DEFAULT_COLOR;
 }
-function catColor(name){
+function catColor(id){
   for(var i = 0; i < rt.categoriesCache.length; i++){
-    if(rt.categoriesCache[i].name === name) return safeColor(rt.categoriesCache[i].color);
+    if(rt.categoriesCache[i].id === id) return safeColor(rt.categoriesCache[i].color);
   }
   return CAT_DEFAULT_COLOR;
 }
-function catTag(name){
+/** 模块ID→名称（实时实体只存 ID，展示前先查缓存） */
+function catNameById(id){
+  for(var i = 0; i < rt.categoriesCache.length; i++){
+    if(rt.categoriesCache[i].id === id) return rt.categoriesCache[i].name;
+  }
+  return "";
+}
+/** 模块ID→彩色标签；未指定/已删模块返回空串 */
+function catTag(id){
+  var name = catNameById(id);
   if(!name) return "";
-  var color = catColor(name);
+  var color = catColor(id);
+  return '<span class="tag" style="background:' + rgbaOf(color,.09) + ';color:' + darken(color) +
+    ';border-color:' + rgbaOf(color,.22) + '">' +
+    '<i class="dot" style="background:' + color + '"></i>' + esc(name) + '</span>';
+}
+/** 直接吃名称的标签：完成快照等历史值没有 ID，只有完成当时的名称 */
+function catTagByName(name){
+  if(!name) return "";
+  var color = CAT_DEFAULT_COLOR;
+  for(var i = 0; i < rt.categoriesCache.length; i++){
+    if(rt.categoriesCache[i].name === name){ color = safeColor(rt.categoriesCache[i].color); break; }
+  }
   return '<span class="tag" style="background:' + rgbaOf(color,.09) + ';color:' + darken(color) +
     ';border-color:' + rgbaOf(color,.22) + '">' +
     '<i class="dot" style="background:' + color + '"></i>' + esc(name) + '</span>';
@@ -194,4 +213,4 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 
-export { calState, canEditReq, canEditTask, catColor, catTag, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
