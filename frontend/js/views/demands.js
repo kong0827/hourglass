@@ -1060,7 +1060,8 @@ function renderDemandTable(){
   }
   var body = "";
   if(demSmart.group === "none"){
-    body = rows.map(rowHTML).join("");
+    /* 不直接传 rowHTML：map 的 index 会漏进 grouped 参数，让第 2 行起误带分组缩进 */
+    body = rows.map(function(d){ return rowHTML(d, false); }).join("");
   }else{
     body = groups.map(function(g){
       var head = groupHead(g);
@@ -1320,7 +1321,10 @@ function renderDemandGantt(){
   var groups = demSmart.group === "none"
     ? [{ key:"", label:"", rows:rows }]
     : demGroups().map(function(g){
-        return { key:g.key, label:g.label, rows:demgSortRows(g.rows) };
+        return { key:g.key, label:g.label, rows:demgSortRows(g.rows),
+          subs:g.subs.map(function(s){
+            return { key:s.key, label:s.label, rows:demgSortRows(s.rows) };
+          }) };
       });
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
   if(demandsMeta){

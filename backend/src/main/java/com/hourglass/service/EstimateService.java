@@ -129,8 +129,7 @@ public class EstimateService {
                 overrun.add(brief(t, est, act, ratio));
             }
 
-            String cat = t.getCategoryId() == null || t.getCategoryId().trim().isEmpty()
-                    ? "未指定模块" : t.getCategoryId().trim();
+            String cat = t.getCategoryId() == null ? "" : t.getCategoryId().trim();
             long[] slot = catAgg.get(cat);
             if (slot == null) {
                 /* 必须以 0 起手：这里既做"新建"也做"累加"，初始化时放值会导致
