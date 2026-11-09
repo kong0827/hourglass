@@ -4,11 +4,11 @@
 
 > 说明：公开仓库的历史是 2026-11-07 为开源发布整理的一次性提交，1.0.0 之前的开发过程未纳入版本历史；数据库结构变更以 `sql/NN_*.sql` 增量脚本编号为准，基线为 `sql/baseline/01_schema_full.sql`。
 
-## 未发布
+## 2026-11-10 · A–E 生产交付（未另发版本标签）
 
-A–E 已实施，最终本地正确性门禁通过；真实 headless Chrome 1440/390px 桌面 / 移动端仿真、权限与未知请求恢复已有完成证据，七对 delivery PNG 已重拍、SHA256 配对一致并视觉查看。生产启用未闭合：`43.156.155.204` 的配置写入被策略拒绝，且缺显式 `DB_NAME`，生产部署 / full seed 阻塞、未执行；提交推送结果以 Git 为准。
+A–E 已实施并实际部署 `124ce05`（已正常 commit / push），完整生产模拟、生产只读验收及 52 表备份空库恢复验证完成；本地正确性门禁、真实 headless Chrome 1440/390px 仿真、权限与未知请求恢复已有完成证据，七对 delivery PNG 已重拍、SHA256 配对一致并视觉查看。**生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误；该生产证据独立于本地仿真与 API 验收。**原库重建是用户本次单独明确授权，不是日常部署的默认删库许可。
 
-### 需求排期与发布闭环（未发布）
+### 需求排期与发布闭环（已部署）
 
 - 需求目标版本默认可空；正式排期由管理者选择同项目未发布版本。计划起止独立于期望日期；调期、撤排、取消、恢复需原因与乐观 revision。新增 `canceled`，恢复到 `pass` 并清目标版本；取消不取消任务，调期不自动改旧任务。
 - 仅 Task 的当前计划版本改为 M:N，读写响应使用 `versionIds/versionNames` 数组；保存省略 / null 保留、`[]` 解绑，显式变更需原因与权限。Demand / TestPlan 仍是单目标 `versionId`；需求调期不改旧任务。
@@ -18,20 +18,25 @@ A–E 已实施，最终本地正确性门禁通过；真实 headless Chrome 144
 - 发布管理仅空间 owner/admin 或项目负责人且可写，提交时重新检查；任务负责人无整版本权，计划负责人元数据不赋权，releasedBy 固定服务器当前登录者。评审仍仅 workspace owner；显式任务改版由管理者或任务负责人按权限操作，不能绕过冻结。
 - 计划列表 / 新建使用 GET/POST release-plans，更新选定计划 PUT release-plan 带 id+revision；preview/release 显式 context，确认另带 result/notes/failureReason/idempotencyKey/planRevision/scopeToken，返回 VersionRelease。未知结果 sessionStorage 保留同 body/key，先 GET release-records?key=...，再同请求重试，明确结果后决定新键，不因刷新清理；任务 release-records 返回全部可见事件。
 - 版本 / 计划 / 实际不可变快照与当前工时分开，M:N 和多事件不放大全局工时；需求取消不抹历史，零任务不能 100% 验收。JSON 搬运任务数组、version.startDate、需求日期与 canceled，不转移正式发布证据；正式证据用完整数据库备份恢复，删除 / 覆盖导入继续保护证据。不新增迭代模块、不做历史迁移。
-- 保留既有需求空目标排期及抽屉并发 / 生命周期规则，JSON 仅接受 v13 工作项搬运，不为历史备份增加兼容。六组使用说明与 frontend 正文副本同步；只有七对 delivery PNG 是本轮真实浏览器新图，已重拍、配对 SHA256 一致并视觉查看，旧 overview 图仍为历史布局。具体接口见 `docs/接口契约.md`。
+- 保留既有需求空目标排期及抽屉并发 / 生命周期规则，JSON 仅接受 v13 工作项搬运，不为历史备份增加兼容。六组使用说明与 frontend 正文副本同步；只有七对本地 delivery PNG 是仓库本轮真实浏览器新图，生产四张私有验证截图未入库，已重拍、配对 SHA256 一致并视觉查看，旧 overview 图仍为历史布局。具体接口见 `docs/接口契约.md`。
 - 浏览器收尾修正：计划 plannedAt 保留本地墙钟，不转 UTC 错移；输入零秒精度归一不会误报计划脏改动，date-only 不伪造时分秒；预览明确分列 selected / omitted；移动端关闭按钮 sticky 可达。事件处理项次、生产曾交付去重数和当前生效数分别显示，不推断待交付数；SW v120。
-- 后台全量验证：Java 8 `test + package` 成功，821 tests / 0 failures / 0 errors / 0 skipped；最终提交候选源快照与当前 backend 提交候选 src（含测试）514 files 零漂移；仅排除无引用的未跟踪旧 TaskPublishRequest DTO，不提交也不删除该本地文件。
+- 后台全量验证：Java 8 `test + package` 成功，821 tests / 0 failures / 0 errors / 0 skipped；514 files source parity 对应当时 `124ce05` 发布候选（含测试，比较时排除旧无引用 TaskPublishRequest DTO），不是当前 HEAD。`2d7fe2e` 为其他会话后续提交，仅包含该旧 DTO 与部署 COPYFILE_DISABLE=1 / 递归权限修正，已在 origin/main；DTO 不再是未跟踪文件。生产 payload 仍为经上述全量测试的 `124ce05`，不对并行变更作全量正确性声明。
 - 真实 API / MySQL 集成：run=`afca027b3341` 的 14 mandatory 场景全部完成，484 passed / 0 failed / 0 unverified，包含 SQL 故障、并发、锁等待期间权限撤销、JSON 原子往返、完整 mysqldump + 空库恢复及五表内容 / 键比较；自建 8 users / 12 workspaces，清理后 remaining=0，原数据保持。此清理范围不包含 full demo 或保留的浏览器 fixture。
 - 本地 full 独立新 namespace 模拟：8 users / 4 spaces / 11 projects / 33 versions / 66 demands / 275 tasks / 792 timeLogs / 44 releasePlans / 66 events，990 回读 checks 通过。这些是本地模拟，不是生产部署或 production full seed。
 - 真实 headless Chrome 最终结果（backend 8120 / frontend 8121）：12 个导航入口，1440/390px，72 assertions；权限 29；恢复 27 / 3 场景（响应丢失、请求丢失及之后页面刷新 + 原键查询失败，保留完整原 body/key，查询失败不盲重试）；planTime 6；截图检查 16。安全摘要 `/tmp/hourglass-ae-validation-20261110-main-7fc2/final-validation-results.json` 为 ok=true；移动端是仿真，不是物理手机实测。
 - 先前 desktop 20 / mobile 12 golden assertions 未重跑，本轮各 3 个 LIVE 记录 / task-state 证据检查通过。最终复跑未建新空间，1 个自建浏览器 fixture 空间保留在本地作正式证据，不能称全部本地数据清理。
 - JS syntax 107 files / 0 failures，3 unit suites passed / 0 failed；3 SVG 视觉确认；部署安全隔离 212 项（含 73 段脚本语法）、文档 14 checker tests 与 baseline convergence 16 项分别通过。Java 821、SQL 484、回读 990 与各浏览器 / 专项计数独立，不相加成一个 suite，也不累计旧 golden。
-- 生产边界：原 `hourglass` 46 表、env/jar/前端/附件受限备份及全量 dump 逐字节恢复证明通过，旧库保留，新 `hourglass_20261110` 不存在。生产写 `/etc/hourglass.env` 和 `/etc/hourglass-backup.cnf` 被策略拒绝、均未执行，显式 DB_NAME 缺失；生产部署 / full seed 阻塞，不绕过权限。提交推送结果以 Git 为准。
+- 实际发布：`124ce05` 已正常 commit / push，生产 jar SHA256=`bd930b8caf43914d4af929ced29a9cb526170f35542f378c3b7ba638c2b46df5`；169 个生产前端文件 HTTP 200，字节 / SHA 与 `124ce05` archive 匹配，SW v120。首次 deploy.sh 因 umask 077 的前端 700 / 600 权限导致 403 / 500 中止；实际权限已修为目录 755 / 文件 644，AppleDouble 元数据移入受限备份，独立完整回读通过，不能称原 deploy.sh exit 0。
+- 原库重建：用户最新明确单独授权替代新库-only 方案。原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；最终认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点。原历史数据保存在备份中，不再原表在线保留；不做历史迁移、不新增迭代，正常脚本仍只支持新空库，此次不是默认部署删库授权。
+- 完整生产模拟完成：8 模拟用户（另有 admin）、4 共享空间（另有自动个人空间）、11 项目、33 版本、66 需求、11 分支、275 任务（11 Epic / 264 非 Epic）、528 子任务、264 评论、792 工时、44 文档 / 44 用例 / 44 执行 / 11 测试计划 / 11 附件 / 11 视图、44 发布计划 / 66 实际事件 / 143 事件范围快照 / 121 计划成员 / 121 实际成员。非 Epic 徽标为 effective 22 / rolled_back 11 / partial 11 / unpublished 220；不与本地 full demo 混算。
+- 生产只读验收：1747 GET / 3 login，7463 有效断言 / 0 失败 / 0 API 错误，无生产变更测试。原执行 8255 含 792 被替换的 harness 日期断言（初 264 失败因误把 UTC manifest 11-09 当本地业务日 11-10）；日期纠正后 0 失败，各计数不可加总。66 产物 SHA 与 44 plan raw UTF-8 SHA 核对；事件 canonical SHA256=`6a085c9735107c21e8fcd56f92769732d552771d88ec508e48f5bf325383490c` 连续三次稳定。全局工时 38940 分钟，版本卡 39930=38940+990 跨版本重叠，不是全局放大。
+- 独立生产 Chrome 验收：主代理真实生产浏览器自然启动，安全结果 `/tmp/hourglass-ae-validation-20261110-main-7fc2/production-browser-results.json` 为 **ok=true；12 入口 × 1440/390px＝24 次导航；93 项有效断言全部通过；0 runtime/console/HTTP 错误**。仅读生产业务数据（登录 / 空间偏好为许可写操作），未新增 / 更改业务 fixture；4 张私有 PNG 已由主代理逐图查看，仅用于本次验证、未入库；移动端是仿真，非物理手机。早期 harness 抢先 import 模块和错误预期 UTC UI 日已替换；最终使用自然启动与本地显示 / UTC API 分别校验，不把早期失败计入 93。本组不与本地导航 72 / 权限 29 / 恢复 27 / planTime 6 / 截图 16 或只读 API 计数合并。
+- 备份恢复：保护目录 `/opt/hourglass/backup/original-rebuild-20261109T224234-d2f13f0fc2d36d2b` 含 `original-hourglass.sql.gz`（原 46 表历史）与 `production-complete.sql.gz`（完整 52 表模拟）。完整生产 SQL 已恢复到主代理自建空库，INSERT 快照逐字节一致，52 表 / 536 列 / 328 索引 / 119 键元数据、捕获的 DDL 自增快照一致；MySQL 字符集规范化使原始 DDL dump 文本不逐字节相同，不能称整个 DDL 文本一致。软件-only 回退不足，需匹配 SQL 恢复且单独授权。manifest 与凭据仅服务器 600，env / backup.cnf 600，既有 AUTH / DB 密码与 AI key 未改；每日 cron 未确认安装。
 
 ### 数据库注意
 
 - 完整基线包含 52 张表；`sql/63_delivery_release.sql` 仅增加列与创建 `version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log` 五张表，不回填、不清空旧数据、不构造历史发布记录。version_task 存当前任务 M:N 计划版本集合，plan_task 存独立计划任务范围，不代表实际交付证据。
-- 本轮只在独立新空库启用，不回放 61/62，不迁移旧历史，保留原库与原数据。完整基线会重建表，不是幂等无损脚本，不得在已有库上重跑。61/62 的破坏性说明仍有效：前者丢弃模块名称文本列，后者删除旧空间级模块并清空任务 / 需求的模块引用，均不做历史回填。
+- 本轮最新授权为原 `hourglass` 46 表受限备份与恢复验证后重建为 52 表，替代新库-only 方案；原历史只在备份中保留，不回放 61/62、不迁移旧历史。完整基线会重建表，不是幂等无损脚本，正常部署脚本仍只支持新空库，不得把此次单独授权当作在已有库随意重跑许可。61/62 的破坏性说明仍有效：前者丢弃模块名称文本列，后者删除旧空间级模块并清空任务 / 需求的模块引用，均不做历史回填。
 
 ### 新增
 

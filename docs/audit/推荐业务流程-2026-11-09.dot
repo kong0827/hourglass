@@ -1,5 +1,5 @@
 digraph TargetFlow {
-  graph [rankdir=TB, bgcolor="#FFFFFF", pad="0.3", nodesep="0.45", ranksep="0.6", fontname="PingFang SC", fontsize=20, label="已实施业务流程\n本地验收通过 · 生产启用受阻\n计划范围 ≠ 实际范围 · 完成 ≠ 发布 · 徽标由事实计算\n不引入迭代 · 不考虑历史数据 · 不涉及数据迁移", labelloc=t];
+  graph [rankdir=TB, bgcolor="#FFFFFF", pad="0.3", nodesep="0.45", ranksep="0.6", fontname="PingFang SC", fontsize=20, label="已实施业务流程\n生产已部署 124ce05 · 原库授权重建 · 完整生产模拟完成\n生产只读验收通过 · 生产浏览器验收通过\n计划范围 ≠ 实际范围 · 完成 ≠ 发布 · 徽标由事实计算\n不引入迭代 · 不迁移历史 · 历史保存在受限备份", labelloc=t];
   node [shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#D0D5DD", fontcolor="#101828", fontname="PingFang SC", fontsize=14, margin="0.65,0.18"];
   edge [color="#98A2B3", fontname="PingFang SC", fontsize=11, fontcolor="#475467", arrowsize=0.7];
   collect [label="需求池提出需求\n业务目标 / 验收标准"];

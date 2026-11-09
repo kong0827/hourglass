@@ -49,7 +49,7 @@
 
 ![沙漏·界面一览（旧版布局示意，不代表新发布弹窗）](docs/diagrams/ui-gallery.png)
 
-> 上方界面一览仍是历史布局；本轮仅手册中的七张 delivery PNG 为新截图，来自真实 headless Chrome 1440/390px 仿真，docs/frontend 配对 SHA256 一致并视觉查看，不声称真实物理手机。操作规则以正文为准。
+> 上方界面一览仍是历史布局；本轮仓库新截图仅为手册中的七张本地 delivery PNG（docs/frontend 七对），生产四张私有验证截图未入库；仓库截图来自真实 headless Chrome 1440/390px 仿真，docs/frontend 配对 SHA256 一致并视觉查看，不声称真实物理手机。操作规则以正文为准。
 
 ### 我的
 
@@ -62,7 +62,7 @@
 - **项目 / 全局健康度**：项目列表与全局健康度双视图；点项目名进入驾驶舱，维护负责人、项目目标与计划起止日期，查看进度、工时、工作项分布与成员负载；支持项目模板、归档与带影响预览的删除（存在发布证据时受保护）
 - **版本**：工作项可关联多个计划版本；版本内容、独立发布计划与每次实际范围分开。支持多环境 / 目标、失败重试、多次成功、redeploy 与 rollback；不可变快照与当前工时分开，多关联 / 多事件不放大全局工时。
 
-> A–E 已实施，本地正确性门禁通过：Java、真实 API / MySQL、full 模拟回读及真实 headless Chrome（backend 8120 / frontend 8121，1440/390px 仿真）；导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 已重拍、SHA256 配对一致并视觉查看，部署安全隔离 212 项（含脚本语法 73）通过；不声称物理手机验收。1 个自建浏览器 fixture 空间保留作本地证据，最终复跑未建新空间。生产因配置写入被策略拒绝及显式 DB_NAME 缺失阻塞，部署 / full seed 未执行；提交推送结果以 Git 为准（独立统计见[更新日志](CHANGELOG.md)）。仅 Task 使用 `versionIds/versionNames` 数组，保存省略 / null 保留、`[]` 解绑；需求和测试计划仍是单目标 `versionId`。生产成功记录推导只读发布徽标（`publishSource=record`），无人工标记 / 撤标；test/staging 与失败不代表生产发布。rollback 追加事件、按目标撤销关联记录引用，保留 ever 历史及后续不同成功。成功事实冻结内容关联，不锁任务完成 / 回退 / 计时。发布管理仅空间 owner/admin 或项目负责人，任务 / 计划负责人不获整版本发布权。操作与 API 详见[用户手册](docs/用户使用手册.md#10-版本与发布)及[接口契约](docs/接口契约.md)。
+> A–E 已实施，本地正确性门禁通过：Java、真实 API / MySQL、full 模拟回读及真实 headless Chrome（backend 8120 / frontend 8121，1440/390px 仿真）；导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 已重拍、SHA256 配对一致并视觉查看，部署安全隔离 212 项（含脚本语法 73）通过；不声称物理手机验收。1 个自建浏览器 fixture 空间保留作本地证据，最终复跑未建新空间。生产已部署并正常提交 / 推送 `124ce05`，完整生产模拟与只读验收已完成（1747 GET / 3 login，7463 有效断言，0 失败 / 0 API 错误）；原 `hourglass` 46 表经单独授权、受限备份与恢复验证后重建为 52 表，认证 JDBC 与 `DB_NAME=hourglass`，历史数据保存在备份而非原表在线，`hourglass_20261110` 保留额外回退点。生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误，不以本地浏览器结果替代（独立统计见[更新日志](CHANGELOG.md)）。仅 Task 使用 `versionIds/versionNames` 数组，保存省略 / null 保留、`[]` 解绑；需求和测试计划仍是单目标 `versionId`。生产成功记录推导只读发布徽标（`publishSource=record`），无人工标记 / 撤标；test/staging 与失败不代表生产发布。rollback 追加事件、按目标撤销关联记录引用，保留 ever 历史及后续不同成功。成功事实冻结内容关联，不锁任务完成 / 回退 / 计时。发布管理仅空间 owner/admin 或项目负责人，任务 / 计划负责人不获整版本发布权。操作与 API 详见[用户手册](docs/用户使用手册.md#10-版本与发布)及[接口契约](docs/接口契约.md)。
 
 ### 交付
 
@@ -116,14 +116,14 @@ java -jar backend/target/hourglass-server.jar
 
 生产部署执行 `bash deploy/deploy.sh`：自动检测改动 → 按需打包前端 / 后端 → 备份数据库 → 执行增量 SQL → 换包 → 健康校验，支持 `--dry-run` / `--rollback`。详见 [`deploy/README.md`](deploy/README.md)。
 
-本轮 A–E **只在独立新空库启用**：完整基线 `sql/baseline/01_schema_full.sql` 包含 52 张表，不回放 61/62、不迁移旧历史，保留原库与原数据。完整基线会重建表，不是幂等无损脚本，不得在已有库上重跑。未发布的 `63_delivery_release.sql` 仅增列与建五张发布相关表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`，不回填、不清空、不构造历史证据；它不是本轮旧库迁移入口。既有已发布结构的升级按发布说明评估所需编号脚本，61/62 的破坏性说明仍有效。详见 [`sql/README.md`](sql/README.md)。
+本轮 A–E **经用户单独明确授权重建原库**：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留。完整基线 `sql/baseline/01_schema_full.sql` 包含 52 张表，不回放 61/62、不迁移旧历史。完整基线会重建表，不是幂等无损脚本；正常部署脚本仍只支持新空库，不能把本次授权泛化为任意部署删库许可。重建后的完整回退须匹配 SQL 恢复并单独授权，软件-only 回退不足。`63_delivery_release.sql` 仅增列与建五张发布相关表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`，不回填、不清空、不构造历史证据；它不是本轮旧库迁移入口。既有已发布结构的升级按发布说明评估所需编号脚本，61/62 的破坏性说明仍有效。详见 [`sql/README.md`](sql/README.md)。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
 | 后端 | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security（会话登录 + CSRF） |
-| 数据库 | MySQL 8（utf8mb4），52 张表（含未发布交付闭环），完整基线仅新空库；编号增量须评估破坏性 |
+| 数据库 | MySQL 8（utf8mb4），52 张表（含已部署交付闭环），完整基线仅新空库；编号增量须评估破坏性 |
 | 实时 | SSE 推送变更与通知 |
 | 前端 | 原生 JavaScript ES Module，**无框架、无构建步骤**；PWA 离线壳 |
 | 部署 | 前端由 Nginx 直接托管，后端只提供 `/api/**`；systemd + 一键部署脚本 |
