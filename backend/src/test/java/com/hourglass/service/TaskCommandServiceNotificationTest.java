@@ -47,7 +47,7 @@ class TaskCommandServiceNotificationTest {
             mock(DevBranchMapper.class), members, mock(ProjectVersionMapper.class),
             mock(VersionTaskMapper.class), mock(DemandMapper.class), mock(WorkspaceMetaCache.class),
             support, mock(TaskCompletionService.class), mock(TaskWorkflowService.class), audit, events,
-            mock(ProjectAccessService.class));
+            mock(ProjectAccessService.class), mock(TimeLogService.class));
 
     @Test
     void createWithBoundOwnerCreatesAssignedEvent() {

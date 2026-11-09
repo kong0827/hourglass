@@ -78,7 +78,18 @@ function tagChip(name){
 function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
 function timerAllowed(t){
   if(!t) return false;
-  return t.boardColumn !== "backlog" && t.boardColumn !== "done";
+  /* 阻塞任务停表不换列 */
+  if(t.blocked) return false;
+  var col = t.boardColumn;
+  if(col === "backlog" || col === "done") return false;
+  if(rt.colDefsCache && rt.colDefsCache.length){
+    for(var i = 0; i < rt.colDefsCache.length; i++){
+      var c = rt.colDefsCache[i];
+      if(c.id === col) return c.processingRule === "normal";
+    }
+  }
+  /* 列定义未加载或旧空间无 processingRule：保持与后端 TaskSupport 相同的默认口径 */
+  return true;
 }
 function dueState(t){
   if(!t.dueDate) return {kind:"none"};

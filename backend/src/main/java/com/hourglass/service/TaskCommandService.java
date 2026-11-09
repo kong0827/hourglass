@@ -65,6 +65,8 @@ public class TaskCommandService {
     private final TaskAuditLogger audit;
     private final NotificationEventService notificationEvents;
     private final ProjectAccessService projectAccess;
+    /** 阻塞停表：标记阻塞时停止该任务上运行中的计时（不改列、不删历史工时） */
+    private final TimeLogService timeLogService;
 
     public TaskCommandService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper,
                               CategoryMapper categoryMapper, UserMapper userMapper,
@@ -75,7 +77,8 @@ public class TaskCommandService {
                               WorkspaceMetaCache metaCache,
                               TaskSupport support, TaskCompletionService completionService,
                               TaskWorkflowService workflow, TaskAuditLogger audit,
-                              NotificationEventService notificationEvents, ProjectAccessService projectAccess) {
+                              NotificationEventService notificationEvents, ProjectAccessService projectAccess,
+                              TimeLogService timeLogService) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -94,6 +97,7 @@ public class TaskCommandService {
         this.audit = audit;
         this.notificationEvents = notificationEvents;
         this.projectAccess = projectAccess;
+        this.timeLogService = timeLogService;
     }
 
     @Transactional
@@ -249,6 +253,11 @@ public class TaskCommandService {
         List<String> changes = audit.diffParts(workspaceId, old, t, oldTags, req.getTags());
         /* T1.2：影响版本绑定变更并入审计（不传=不变；空串=解除；项目变更后旧绑定自动失效） */
         applyVersionBinding(workspaceId, id, t.getReqId(), req.getVersionId(), changes);
+        /* 阻塞停表：标记阻塞时停止该任务上所有人的运行中计时，但保留已记录工时 */
+        boolean becameBlocked = !Boolean.TRUE.equals(old.getBlocked()) && Boolean.TRUE.equals(t.getBlocked());
+        if (becameBlocked) {
+            timeLogService.closeRunningForTask(workspaceId, id, userId, "任务被阻塞");
+        }
         if (req.getOldUpdatedAt() != null) {
             t.setUpdatedAt(req.getOldUpdatedAt());
             t.setVersionCheck(Boolean.TRUE);

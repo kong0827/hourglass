@@ -4,10 +4,10 @@ import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, rt, state, taskById, taskCacheExtra } from "./state.js";
+import { canEditReq, canEditTask, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate } from "../lib/format.js";
+import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
@@ -85,6 +85,240 @@ function ensureReqDoc(v){
     if(assocStillCurrent(seq, taskId, reqId)) m.ensureReqDocOptions(v);
   });
 }
+var reqDocPickerEl = null;
+var reqDocPickerSeq = 0;
+function selectableReqDoc(doc){
+  if(!doc || !doc.reqId || !iReq) return false;
+  return Array.prototype.some.call(iReq.options, function(o){ return o.value === doc.reqId; });
+}
+function reqDocPickerProjectName(doc){
+  var project = rt.reqList.find(function(r){ return r.id === doc.reqId; });
+  return (project && project.name) || doc.reqName || "未归属项目";
+}
+function renderReqDocPickerScope(el){
+  var scope = el.querySelector("[data-req-doc-scope]");
+  if(!scope) return;
+  var current = currentReqId();
+  var projects = {}, ids = [];
+  el._docs.filter(selectableReqDoc).forEach(function(doc){
+    if(projects[doc.reqId]) return;
+    projects[doc.reqId] = { id:doc.reqId, name:reqDocPickerProjectName(doc) };
+    ids.push(doc.reqId);
+  });
+  ids.sort(function(a, b){
+    if(a === current) return -1;
+    if(b === current) return 1;
+    return projects[a].name.localeCompare(projects[b].name, "zh-CN");
+  });
+  var previous = scope.value;
+  scope.innerHTML = '<option value="">全部项目</option>' + ids.map(function(id){
+    return '<option value="' + esc(id) + '">' + esc(projects[id].name) + (id === current ? "（当前）" : "") + '</option>';
+  }).join("");
+  scope.value = ids.indexOf(previous) >= 0 ? previous : "";
+}
+function renderReqDocPickerResults(el){
+  var box = el.querySelector("[data-req-doc-results]");
+  var count = el.querySelector("[data-req-doc-count]");
+  if(!box) return;
+  if(el._loading){
+    box.innerHTML = UI.skeletonRows(4);
+    if(count) count.textContent = "加载中";
+    return;
+  }
+  if(el._error){
+    box.innerHTML = '<div class="req-doc-picker-error">' + esc(el._error) +
+      '<br><button class="btn sm" type="button" data-req-doc-retry>重新加载</button></div>';
+    if(count) count.textContent = "加载失败";
+    return;
+  }
+  var query = (el.querySelector("[data-req-doc-search]").value || "").trim().toLowerCase();
+  var scope = el.querySelector("[data-req-doc-scope]").value;
+  var current = currentReqId();
+  var selectedId = ($("iReqDoc") || {}).value || "";
+  var docs = el._docs.filter(selectableReqDoc).filter(function(doc){
+    if(scope && doc.reqId !== scope) return false;
+    if(!query) return true;
+    return (doc.title || "").toLowerCase().indexOf(query) >= 0
+      || reqDocPickerProjectName(doc).toLowerCase().indexOf(query) >= 0
+      || docTypeName(doc.docType).toLowerCase().indexOf(query) >= 0;
+  });
+  docs.sort(function(a, b){
+    if(a.reqId === current && b.reqId !== current) return -1;
+    if(b.reqId === current && a.reqId !== current) return 1;
+    var byProject = reqDocPickerProjectName(a).localeCompare(reqDocPickerProjectName(b), "zh-CN");
+    if(byProject) return byProject;
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  });
+  if(count) count.textContent = docs.length + " 篇";
+  var html = '<button type="button" class="req-doc-picker-clear' + (!selectedId ? " selected" : "") + '"' +
+    ' data-req-doc-clear aria-pressed="' + (!selectedId) + '">' +
+    icon("close", 13) + '<span>不关联文档</span></button>';
+  if(!docs.length){
+    html += '<div class="req-doc-picker-empty">' +
+      (el._docs.length ? "没有找到匹配文档，试试文档标题、项目名或文档类型。" : "当前暂无可关联文档，可先到文档页新建。") +
+      ((query || scope) ? '<br><button class="btn sm" type="button" data-req-doc-reset>清除搜索与筛选</button>'
+        : '<br><button class="btn sm" type="button" data-req-doc-retry>刷新文档列表</button>') +
+      '</div>';
+    box.innerHTML = html;
+    return;
+  }
+  var lastReqId = null;
+  docs.forEach(function(doc){
+    if(doc.reqId !== lastReqId){
+      lastReqId = doc.reqId;
+      var n = docs.filter(function(d){ return d.reqId === lastReqId; }).length;
+      html += '<div class="req-doc-picker-group">' + esc(reqDocPickerProjectName(doc)) +
+        (doc.reqId === current ? " · 当前项目" : "") + ' · ' + n + ' 篇</div>';
+    }
+    var selected = doc.id === selectedId;
+    html += '<button type="button" class="req-doc-picker-option' + (selected ? " selected" : "") + '"' +
+      ' data-req-doc-id="' + esc(doc.id) + '" aria-pressed="' + selected + '">' +
+      '<span class="req-doc-picker-option-main">' +
+        '<span class="req-doc-picker-option-title">' + esc(doc.title || "未命名文档") + '</span>' +
+        '<span class="req-doc-picker-option-meta">' + esc(docTypeName(doc.docType)) + '</span>' +
+      '</span>' + (selected ? icon("check", 15) : "") + '</button>';
+  });
+  box.innerHTML = html;
+}
+function loadReqDocPickerData(el, module, seq, force){
+  el._loading = true;
+  el._error = "";
+  renderReqDocPickerResults(el);
+  module.loadReqDocs(!!force).then(function(){
+    if(seq !== reqDocPickerSeq || reqDocPickerEl !== el) return;
+    if(module.reqDocsError) throw module.reqDocsError;
+    if(!module.reqDocsLoaded) throw new Error("文档加载失败");
+    el._docs = (module.reqDocList || []).slice();
+    el._loading = false;
+    renderReqDocPickerScope(el);
+    renderReqDocPickerResults(el);
+  }).catch(function(ex){
+    if(seq !== reqDocPickerSeq || reqDocPickerEl !== el) return;
+    el._loading = false;
+    el._error = (ex && ex.message) || "文档加载失败";
+    renderReqDocPickerResults(el);
+  });
+}
+function chooseReqDoc(el, docId){
+  var doc = docId ? el._docs.find(function(d){ return d.id === docId; }) : null;
+  if(docId && !doc) return;
+  var sel = $("iReqDoc");
+  if(!sel) return;
+  var oldReqId = currentReqId();
+  var changedProject = !!(doc && doc.reqId !== oldReqId);
+  if(changedProject){
+    iReq.value = doc.reqId;
+    iReq.dispatchEvent(new Event("change", { bubbles:true }));
+  }
+  ensureReqDoc(docId);
+  sel.value = docId;
+  sel.dispatchEvent(new Event("change", { bubbles:true }));
+  rt.formDirty = true;
+  syncAssocViewBtns();
+  UI.closeAllPops();
+  var anchor = $("iReqDocPicker");
+  if(anchor) anchor.focus({ preventScroll:true });
+  if(changedProject) toast("已关联文档，所属项目已同步为「" + reqDocPickerProjectName(doc) + "」；请确认版本、史诗和关联需求", "fs");
+}
+function openReqDocPicker(){
+  if(rt.drawerReadOnly) return;
+  if(reqDocPickerEl && UI.popOpen(reqDocPickerEl)){ UI.closeAllPops(); return; }
+  var anchor = $("iReqDocPicker");
+  if(!anchor) return;
+  var seq = ++reqDocPickerSeq;
+  var el = document.createElement("div");
+  el.className = "menu req-doc-picker";
+  el.id = "reqDocPickerPop";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "选择关联文档");
+  el._docs = [];
+  el._module = null;
+  el._loading = true;
+  el.innerHTML = '<div class="req-doc-picker-head">' +
+      '<div class="req-doc-search">' + icon("search", 15) +
+        '<input type="search" data-req-doc-search placeholder="搜索文档标题、项目或类型" aria-label="搜索关联文档" autocomplete="off" />' +
+      '</div>' +
+      '<div class="req-doc-picker-tools">' +
+        '<select data-req-doc-scope aria-label="按项目筛选文档"><option value="">全部项目</option></select>' +
+        '<span class="req-doc-picker-count" data-req-doc-count aria-live="polite"></span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="req-doc-picker-results" data-req-doc-results></div>' +
+    '<div class="req-doc-picker-foot">无需先选项目；选择其他项目的文档时，会自动同步所属项目</div>';
+  reqDocPickerEl = el;
+  anchor.setAttribute("aria-controls", el.id);
+  UI.openPop(el, anchor, {
+    align:"left",
+    width:Math.min(440, window.innerWidth - 24),
+    onClose:function(){
+      if(reqDocPickerEl === el){
+        reqDocPickerEl = null;
+        reqDocPickerSeq++;
+      }
+      el.remove();
+    }
+  });
+  el.addEventListener("input", function(e){
+    if(e.target.closest("[data-req-doc-search]")) renderReqDocPickerResults(el);
+  });
+  el.addEventListener("change", function(e){
+    if(e.target.closest("[data-req-doc-scope]")) renderReqDocPickerResults(el);
+  });
+  el.addEventListener("keydown", function(e){
+    if(e.key === "Tab"){
+      var focusable = Array.prototype.slice.call(el.querySelectorAll(
+        'input:not([disabled]),select:not([disabled]),button:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      )).filter(function(node){ return node.offsetParent !== null; });
+      if(!focusable.length){ e.preventDefault(); return; }
+      var first = focusable[0], last = focusable[focusable.length - 1];
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+      return;
+    }
+    if(e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if(e.target.closest("[data-req-doc-scope]")) return;
+    var buttons = Array.prototype.slice.call(boxButtons());
+    if(!buttons.length) return;
+    e.preventDefault();
+    var index = buttons.indexOf(document.activeElement);
+    var next = e.key === "ArrowDown" ? (index + 1) % buttons.length : (index <= 0 ? buttons.length - 1 : index - 1);
+    buttons[next].focus();
+  });
+  function boxButtons(){ return el.querySelectorAll(".req-doc-picker-clear,.req-doc-picker-option"); }
+  el.addEventListener("click", function(e){
+    var option = e.target.closest("[data-req-doc-id]");
+    if(option){ chooseReqDoc(el, option.dataset.reqDocId); return; }
+    if(e.target.closest("[data-req-doc-clear]")){ chooseReqDoc(el, ""); return; }
+    if(e.target.closest("[data-req-doc-reset]")){
+      el.querySelector("[data-req-doc-search]").value = "";
+      el.querySelector("[data-req-doc-scope]").value = "";
+      renderReqDocPickerResults(el);
+      el.querySelector("[data-req-doc-search]").focus();
+      return;
+    }
+    if(e.target.closest("[data-req-doc-retry]")){
+      if(el._module) loadReqDocPickerData(el, el._module, seq, true);
+      else{ UI.closeAllPops(); openReqDocPicker(); }
+    }
+  });
+  renderReqDocPickerResults(el);
+  loadView("requirements").then(function(m){
+    if(seq !== reqDocPickerSeq || reqDocPickerEl !== el) return;
+    el._module = m;
+    loadReqDocPickerData(el, m, seq, false);
+  }).catch(function(ex){
+    if(seq !== reqDocPickerSeq || reqDocPickerEl !== el) return;
+    el._loading = false;
+    el._error = (ex && ex.message) || "文档加载失败";
+    renderReqDocPickerResults(el);
+  });
+  setTimeout(function(){
+    var input = el.querySelector("[data-req-doc-search]");
+    if(input) input.focus();
+  }, 40);
+}
+var reqDocPickerBtn = $("iReqDocPicker");
+if(reqDocPickerBtn) reqDocPickerBtn.addEventListener("click", openReqDocPicker);
 function ensureDemand(v){
   var sel = $("iDemand");
   if(sel) sel.removeAttribute("data-ready");
@@ -177,6 +411,7 @@ function applyDrawerReadOnly(readOnly){
     if(f.id === "iBlockedReason"){ f.disabled = !(iBlocked && iBlocked.checked); continue; }
     f.disabled = false;
   }
+  if(reqDocPickerBtn) reqDocPickerBtn.disabled = !!readOnly;
   if(btnAttach) btnAttach.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
   /* 新建任务保存后仍走“保存并关闭”：留在新建态再保存会重复创建 */
@@ -364,7 +599,7 @@ function drawerLoadErrorHTML(msg, retryAttr){
 function loadTimeline(taskId){
   if(!timelineBox) return;
   timelineBox.innerHTML = '<div class="tl-empty">加载中…</div>';
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/logs").then(function(logs){
+  API.getAllPages("/api/tasks/" + encodeURIComponent(taskId) + "/logs").then(function(logs){
     if(rt.editingId === taskId) renderTimeline(logs);
   }).catch(function(ex){
     if(rt.editingId !== taskId) return;
@@ -822,7 +1057,7 @@ if(iBlocked){
 function loadComments(taskId){
   if(!fComments || !commentList) return;
   commentList.innerHTML = '<div class="sub-empty">加载中…</div>';
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/comments").then(function(list){
+  API.getAllPages("/api/tasks/" + encodeURIComponent(taskId) + "/comments").then(function(list){
     if(rt.editingId === taskId) renderComments(list);
   }).catch(function(ex){
     if(rt.editingId !== taskId) return;
@@ -1359,8 +1594,8 @@ taskForm.addEventListener("submit", function(e){
     dueDate: iDue.value || null,
     isMilestone: !!(($("iMilestone") || {}).checked),
     reqId: iReq.value || null,
-    /* 下拉还没加载完就保存（如 Ctrl+Enter）：保留任务原有关系，不要写成 null */
-    reqDocId: (docSel && docSel.options.length > 1) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
+    /* 文档候选未加载完就保存（如 Ctrl+Enter）：保留原关联，不把加载失败误当成解除关联 */
+    reqDocId: (docSel && docSel.getAttribute("data-ready")) ? (docSel.value || null) : (current ? (current.reqDocId || null) : null),
     /* 分支按项目过滤后可能只剩占位项，不能用 options 数量判断是否加载完 */
     branchId: (branchSel && branchSel.getAttribute("data-ready")) ? (branchSel.value || null) : (current ? (current.branchId || null) : null),
     itemType: itemTypeValue,
@@ -1544,7 +1779,7 @@ function renderSubtasks(list){
 function loadSubtasks(taskId){
   if(!fSubtasks) return;
   subList.innerHTML = '<div class="sub-empty">加载中…</div>';
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/subtasks").then(function(list){
+  API.getAllPages("/api/tasks/" + encodeURIComponent(taskId) + "/subtasks").then(function(list){
     if(rt.editingId === taskId) renderSubtasks(list);
   }).catch(function(ex){
     if(rt.editingId !== taskId) return;
@@ -1624,7 +1859,7 @@ function attThumbUrl(id){
 function loadAttachments(taskId){
   if(!fAttach) return;
   attachList.innerHTML = '<div class="attach-empty">加载中…</div>';
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/attachments").then(function(list){
+  API.getAllPages("/api/tasks/" + encodeURIComponent(taskId) + "/attachments").then(function(list){
     if(rt.editingId === taskId) renderAttachments(list);
   }).catch(function(){
     if(rt.editingId === taskId) attachList.innerHTML = '<div class="attach-empty">加载失败</div>';
@@ -1763,7 +1998,10 @@ function fetchTimer(taskId, seq){
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer").then(function(d){
     if(seq !== workSeq || rt.editingId !== taskId) return;
     renderWork(d);
-    if(btnTimer) btnTimer.disabled = false;
+    if(btnTimer){
+      var task = taskById(taskId);
+      btnTimer.disabled = !d.running && !timerAllowed(task);
+    }
   }).catch(function(){
     if(seq !== workSeq || rt.editingId !== taskId) return;
     if(workVal) workVal.textContent = "—";
@@ -1791,6 +2029,13 @@ btnTimer.addEventListener("click", function(){
   var taskId = rt.editingId;
   var running = btnTimer.textContent.indexOf("停止") !== -1;
   if(!running && rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  if(!running){
+    var task = taskById(taskId);
+    if(!timerAllowed(task)){
+      toast("当前列不允许计时，请先把工作项移到「正常处理」列", "warn");
+      return;
+    }
+  }
   workSeq++;
   workBusy = true;
   var opSeq = workSeq;
@@ -1825,7 +2070,7 @@ var recSeq = 0;
 var workRecCache = {};
 function loadWorkRecords(taskId, seq){
   if(!workLogList) return;
-  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer/records").then(function(list){
+  API.getAllPages("/api/tasks/" + encodeURIComponent(taskId) + "/timer/records").then(function(list){
     if(seq !== recSeq || rt.editingId !== taskId) return;
     renderWorkRecords(list);
   }).catch(function(){
@@ -2005,7 +2250,7 @@ if(btnDrawerStatus){
 (function initDrawerMoreFields(){
   var host = $("drawerMoreBody");
   if(!host) return;
-  ["iItemType", "iTags", "iReqDoc", "iVersion", "iEpic", "iBranch"].forEach(function(id){
+  ["iItemType", "iTags", "iVersion", "iEpic", "iBranch"].forEach(function(id){
     var el = $(id);
     var field = el && el.closest(".field");
     if(field) host.appendChild(field);

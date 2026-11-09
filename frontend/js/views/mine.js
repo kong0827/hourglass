@@ -88,7 +88,7 @@ function populateMineSpaces(spaces){
 }
 var mineCache = {};
 var mineAll = [], mineSpaces = [], mineNameOnly = 0, mineTotal = 0, mineHasMore = false;
-var MINE_PAGE_SIZE = 200;
+var MINE_PAGE_SIZE = 100;
 var mineLoading = false, mineSeq = 0;
 function rerenderMine(){
   renderMine({items: mineAll, spaces: mineSpaces, matchedByNameOnly: mineNameOnly,
@@ -231,26 +231,32 @@ function mineRowHTML(t){
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 跨空间任务的可写性由后端下发；只读项目只保留「停止计时」这一条合法入口 */
   var editable = canEditTask(t);
-  /* 待处理/已完成列不能计时（与后端 startManual 同口径）：按钮置灰并说明原因 */
+  /* 待处理/已完成列不能计时（与后端 startManual 同口径）：不渲染这个不可用入口 */
   var tAllowed = timerAllowed(t);
+  var isDone = t.boardColumn === "done";
+  /* 分类已在标签行用彩色 pill 表达，同名标签不再重复占位 */
+  var tags = (t.tags || []).filter(function(n){ return n && n !== t.category; }).slice(0, 2);
+  /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
+  var showProgress = p > 0 || t.boardColumn === "doing";
   return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
-      ' tabindex="0" role="row" style="grid-template-columns:minmax(0,1fr) 140px 96px 92px 84px 128px 108px">' +
-    '<span class="lr-task"><span class="lr-t">' + esc(t.title) + '</span>' +
+      ' tabindex="0" role="row">' +
+    '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
       '<span class="lr-tags">' + catTag(t.category) +
-        ((t.tags || []).slice(0, 2).map(tagChip).join("")) +
+        tags.map(tagChip).join("") +
         (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') + '</span></span>' +
-    '<span class="cell">' + esc(t.workspaceName || "—") + '</span>' +
+    '<span class="cell" title="' + esc(t.workspaceName || "") + '">' + esc(t.workspaceName || "—") + '</span>' +
     '<span class="cell">' + esc(colName(t.boardColumn)) + '</span>' +
     '<span>' + priTagHTML(t.priority, t.workspaceId) + '</span>' +
     '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' +
       esc(dueText(t)) + '</span>' +
-    '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span>' +
-      '<span class="pv">' + p + '%</span></span></span>' +
+    (showProgress
+      ? '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span>' +
+        '<span class="pv">' + p + '%</span></span></span>'
+      : '<span class="cell">—</span>') +
     '<span class="mine-acts">' +
-      (editable ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
-      ((editable || running) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
-        ((!running && !tAllowed) ? " disabled" : "") +
-        ' title="' + (running ? "停止计时" : (tAllowed ? "开始计时" : "待处理/已完成的工作项不能计时，移到进行中后再开始")) + '"' +
+      ((editable && !isDone) ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
+      ((running || (editable && tAllowed)) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
+        ' title="' + (running ? "停止计时" : "开始计时") + '"' +
         ' aria-label="开始或停止计时">' + icon(running ? "pause" : "clock", 14) + '</button>' : '') +
       (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
     '</span>' +
@@ -326,18 +332,30 @@ function withReqNames(items){
     return t;
   });
 }
+function teamTaskPage(params, offset){
+  return API.get("/api/tasks/list", Object.assign({}, params, { offset: offset || 0, limit: 100 }))
+    .then(function(page){
+      if(page && page.items) withReqNames(page.items);
+      return page;
+    });
+}
+function openTeamTaskTable(title, params, errMsg){
+  teamTaskPage(params, 0).then(function(page){
+    openTaskTable(title, (page && page.items) || [],
+      "团队视图 · 点击工作项行打开详情", {
+        total: (page && page.total) || 0,
+        hasMore: !!(page && page.hasMore),
+        fetch: function(offset){ return teamTaskPage(params, offset); }
+      });
+  }).catch(function(err){ toast(err && err.message ? err.message : errMsg, "bad"); });
+}
 function openTeamRiskTasks(kind){
-  var params = kind === "blocked" ? { blocked: true, limit: 100 } : { due: "over", limit: 100 };
-  API.get("/api/tasks/list", params).then(function(r){
-    openTaskTable(kind === "blocked" ? "被阻塞工作项" : "逾期工作项", withReqNames(r && r.items),
-      "团队视图 · 点击工作项行打开详情");
-  }).catch(function(err){ toast(err && err.message ? err.message : "工作项加载失败", "bad"); });
+  var blocked = kind === "blocked";
+  openTeamTaskTable(blocked ? "被阻塞工作项" : "逾期工作项",
+    blocked ? { blocked: true } : { due: "over" }, "工作项加载失败");
 }
 function openMemberTasks(name){
-  API.get("/api/tasks/list", { owners: name, limit: 100 }).then(function(r){
-    openTaskTable(name + " · 未完成工作项", withReqNames(r && r.items),
-      "团队视图 · 点击工作项行打开详情");
-  }).catch(function(err){ toast(err && err.message ? err.message : "工作项加载失败", "bad"); });
+  openTeamTaskTable(name + " · 未完成工作项", { owners: name }, "工作项加载失败");
 }
 function teamSectionError(err, title){
   if(err && err.code === 4030){
@@ -560,7 +578,7 @@ function renderMine(d, append){
       : ("已加载 " + loaded + (mineTotal > loaded ? (" / " + mineTotal) : "") + " 项");
     mineMeta.textContent = countTxt + " · 覆盖 " + spaces.length + " 个空间" +
       (mineHasMore ? " · 还有更多，可继续加载" : "") +
-      (nameOnly > 0 ? ("　·　其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
+      (nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(!mineAll.length){
     mineBody.innerHTML = UI.emptyState({
@@ -590,19 +608,24 @@ function renderMine(d, append){
   }
   var sections = mineSections(items);
   if(isMobile()){ renderMobileMine(sections); return; }
-  var html = '<div class="mine-groups">';
+  /* 表头只出现一次，分组以内嵌分组行区分，避免每组各带一个卡片与表头 */
+  var html = '<div class="mine-groups"><div class="list-scroll mine-list">' +
+    '<div class="list-head">' +
+      '<span>工作项</span><span>空间</span><span>状态</span><span>优先级</span>' +
+      '<span>截止</span><span>进度</span><span>操作</span>' +
+    '</div><div class="list-body">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
     html += '<section class="mine-group" data-mine-group="' + esc(s.key) + '">' +
       (s.label
-        ? '<div class="mine-group-head"><h3>' + esc(s.label) + '</h3>' +
+        ? '<div class="mine-group-row"><span class="mine-group-name">' + esc(s.label) + '</span>' +
           '<span class="mine-group-n">' + s.rows.length + '</span>' +
-          (s.hint ? '<span class="foot-note">' + esc(s.hint) + '</span>' : '') + '</div>'
+          (s.hint ? '<span class="mine-group-hint">' + esc(s.hint) + '</span>' : '') + '</div>'
         : '') +
-      '<div class="list-scroll"><div class="list-body">' + s.rows.map(mineRowHTML).join("") + '</div></div>' +
+      s.rows.map(mineRowHTML).join("") +
     '</section>';
   });
-  html += '</div>' + mineMoreHTML();
+  html += '</div></div></div>' + mineMoreHTML();
   mineBody.innerHTML = html;
 }
 function mineMoreHTML(){
@@ -633,7 +656,7 @@ function mineToggleTimer(t){
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 停止自己的计时不受项目可见范围限制（与后端一致），只拦「开始」 */
   if(!running && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  if(!running && !timerAllowed(t)){ toast("只有「进行中」的工作项才能计时，请先把工作项移到进行中", "warn"); return; }
+  if(!running && !timerAllowed(t)){ toast("当前列不允许计时，请先把工作项移到「正常处理」列", "warn"); return; }
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
       /* 乐观更新本地状态并立即重渲染：不等 /my-running-timer 往返，行内图标即刻切换 */
