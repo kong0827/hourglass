@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 
 class TaskWorkflowServiceNotificationTest {
 
+    private final DeliveryScopeLock scopeLock = mock(DeliveryScopeLock.class);
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final TaskSupport support = mock(TaskSupport.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
@@ -26,7 +27,13 @@ class TaskWorkflowServiceNotificationTest {
     private final TaskWorkflowService service = new TaskWorkflowService(tasks, mock(TaskLogMapper.class),
             mock(SubtaskMapper.class), support, mock(TimeLogService.class),
             mock(TaskCompletionService.class), mock(TaskAuditLogger.class), events, watchers,
-            mock(ProjectAccessService.class), transitions, mock(WorkspaceService.class));
+            mock(ProjectAccessService.class), transitions, mock(WorkspaceService.class), scopeLock);
+
+    @org.junit.jupiter.api.BeforeEach
+    void setupResponse() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "versionTaskMapper", mock(com.hourglass.mapper.VersionTaskMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", mock(TaskPublicationService.class));
+    }
 
     @Test
     void moveToAnotherColumnNotifiesOwner() {
@@ -90,6 +97,7 @@ class TaskWorkflowServiceNotificationTest {
         task.setOwnerUserId("U1");
         task.setBoardColumn(from);
         when(support.require("W1", "K1")).thenReturn(task);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(task);
         when(tasks.selectColumnTasks("W1", to)).thenReturn(Collections.emptyList());
         when(support.columnName("W1", "doing")).thenReturn("进行中");
         when(support.columnName("W1", "backlog")).thenReturn("待处理");

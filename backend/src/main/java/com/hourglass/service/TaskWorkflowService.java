@@ -52,13 +52,19 @@ public class TaskWorkflowService {
     /** 状态流转矩阵：所有会改列的入口统一在这里判定 */
     private final ColumnTransitionService transitions;
     private final WorkspaceService workspaceService;
+    private final DeliveryScopeLock scopeLock;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskPublicationService publications;
 
     public TaskWorkflowService(TaskMapper taskMapper, TaskLogMapper logMapper, SubtaskMapper subtaskMapper,
                                TaskSupport support, TimeLogService timeLogService,
                                TaskCompletionService completionService, TaskAuditLogger audit,
                                NotificationEventService notificationEvents, TaskWatchService watchService,
                                ProjectAccessService projectAccess, ColumnTransitionService transitions,
-                               WorkspaceService workspaceService) {
+                               WorkspaceService workspaceService, DeliveryScopeLock scopeLock) {
+        this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.subtaskMapper = subtaskMapper;
@@ -78,8 +84,7 @@ public class TaskWorkflowService {
         if (!force) {
             return false;
         }
-        String role = workspaceService.requireMember(userId, workspaceId).getMyRole();
-        return "owner".equals(role) || "admin".equals(role);
+        return projectAccess.canManageForUpdate(workspaceId, userId);
     }
 
     /** 移动日志后缀：原因 + 强制标记 */
@@ -122,9 +127,13 @@ public class TaskWorkflowService {
 
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
-        Task task = support.require(workspaceId, id);
+        return moveLocked(userId, workspaceId, id, req, lockActiveTask(workspaceId, id), true);
+    }
+
+    private Map<String, Object> moveLocked(String userId, String workspaceId, String id, TaskMoveRequest req, Task task,
+                                           boolean returnTask) {
         projectAccess.assertViewTask(workspaceId, userId, task);
-        projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
         String from = task.getBoardColumn();
         String to = req.getColumn();
         support.validateColumn(workspaceId, to);
@@ -229,7 +238,13 @@ public class TaskWorkflowService {
             notifyColumnMove(workspaceId, userId, task, detail, true);
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
-        res.put("task", taskMapper.selectById(id));
+        if (returnTask) {
+            Task result = taskMapper.selectById(id);
+            List<Task> batch = Collections.singletonList(result);
+            versionTaskMapper.enrichTasks(workspaceId, batch);
+            publications.enrichTasks(workspaceId, batch);
+            res.put("task", result);
+        }
         res.put("from", from);
         res.put("to", to);
         res.put("generatedDue", generatedDue);
@@ -255,13 +270,29 @@ public class TaskWorkflowService {
                 taskIds.add(taskId);
             }
         }
+        // 全部项目先锁（helper 排序），再按任务 ID 锁，避免批量请求锁顺序相反。
+        Collections.sort(taskIds);
+        Map<String, Task> observed = new LinkedHashMap<String, Task>();
+        List<String> projectIds = new ArrayList<String>();
+        for (String taskId : taskIds) {
+            Task task = support.require(workspaceId, taskId);
+            observed.put(taskId, task);
+            projectIds.add(task.getReqId());
+        }
+        scopeLock.lockProjects(workspaceId, projectIds.toArray(new String[0]));
+        Map<String, Task> locked = new LinkedHashMap<String, Task>();
+        for (String taskId : taskIds) {
+            Task task = scopeLock.lockTask(workspaceId, taskId);
+            assertSameProject(observed.get(taskId), task);
+            locked.put(taskId, task);
+        }
         /* 先整批校验再动库：任一项被禁止或缺原因，整批不产生变更，错误信息带任务标题 */
         boolean force = Boolean.TRUE.equals(req.getForce());
         boolean canForce = canForce(userId, workspaceId, force);
         for (String taskId : taskIds) {
-            Task task = support.require(workspaceId, taskId);
+            Task task = locked.get(taskId);
             projectAccess.assertViewTask(workspaceId, userId, task);
-            projectAccess.assertWrite(workspaceId, userId, task.getReqId());
+            projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
             try {
                 transitions.check(workspaceId, task.getBoardColumn(), req.getColumn(),
                         req.getReason(), force, canForce);
@@ -277,7 +308,7 @@ public class TaskWorkflowService {
             one.setAutoResume(req.getAutoResume() != null && req.getAutoResume());
             one.setReason(req.getReason());
             one.setForce(req.getForce());
-            move(userId, workspaceId, taskId, one);
+            moveLocked(userId, workspaceId, taskId, one, locked.get(taskId), false);
             moved++;
         }
         Map<String, Object> res = new LinkedHashMap<String, Object>();
@@ -292,7 +323,9 @@ public class TaskWorkflowService {
      */
     @Transactional
     public Map<String, Object> reopen(String userId, String workspaceId, String id, TaskReopenRequest body) {
-        Task task = support.require(workspaceId, id);
+        Task task = lockActiveTask(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
         if (!Consts.COL_DONE.equals(task.getBoardColumn())) {
             throw AppException.badRequest("任务不在已完成列，无需取消完成");
         }
@@ -312,7 +345,7 @@ public class TaskWorkflowService {
             req.setReason(body.getReason());
             req.setForce(body.getForce());
         }
-        return move(userId, workspaceId, id, req);
+        return moveLocked(userId, workspaceId, id, req, task, true);
     }
 
     /**
@@ -327,6 +360,12 @@ public class TaskWorkflowService {
                                          boolean blocked) {
         if (from == null || from.equals(to)) {
             return null;
+        }
+        Task task = lockActiveTask(workspaceId, id);
+        projectAccess.assertViewTask(workspaceId, userId, task);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, task.getReqId());
+        if (!from.equals(task.getBoardColumn())) {
+            throw new AppException(409, "任务所在列已变化，请刷新后重试");
         }
         ColumnTransitionService.Decision decision = transitions.check(workspaceId, from, to,
                 reason, force, canForce(userId, workspaceId, force));
@@ -391,6 +430,23 @@ public class TaskWorkflowService {
                 UserNotificationPreferenceService.TASK_WATCH,
                 "「" + task.getTitle() + "」已流转", detail, task.getReqId(),
                 skipOwner ? Collections.singletonList(owner) : Collections.<String>emptyList());
+    }
+
+    private Task lockActiveTask(String workspaceId, String taskId) {
+        Task observed = support.require(workspaceId, taskId);
+        scopeLock.lockProjects(workspaceId, observed.getReqId());
+        Task task = scopeLock.lockTask(workspaceId, taskId);
+        assertSameProject(observed, task);
+        return task;
+    }
+
+    private void assertSameProject(Task observed, Task task) {
+        if (task.getDeletedAt() != null) {
+            throw AppException.notFound("任务不存在");
+        }
+        if (!java.util.Objects.equals(observed.getReqId(), task.getReqId())) {
+            throw new AppException(409, "任务所属项目已变化，请刷新后重试");
+        }
     }
 
     /** 完成时生成下一次循环任务，返回新生成的截止日期（不循环或复用已有后续任务返回 null） */

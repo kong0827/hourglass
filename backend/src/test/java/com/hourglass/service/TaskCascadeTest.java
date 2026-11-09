@@ -24,6 +24,8 @@ import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.VersionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -80,10 +82,12 @@ class TaskCascadeTest {
     private TestCaseMapper testCaseMapper;
     private TestCaseRunMapper testCaseRunMapper;
     private TaskCascade cascade;
+    private DeliveryScopeLock scopeLock;
 
     @BeforeEach
     void setUp() {
         taskMapper = mock(TaskMapper.class);
+        scopeLock = mock(DeliveryScopeLock.class);
         logMapper = mock(TaskLogMapper.class);
         commentMapper = mock(TaskCommentMapper.class);
         watchMapper = mock(TaskWatchMapper.class);
@@ -112,15 +116,18 @@ class TaskCascadeTest {
                 mock(com.hourglass.mapper.RequirementDocHistoryMapper.class),
                 docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
-                reqDocShareMapper, testCaseMapper, testCaseRunMapper);
+                reqDocShareMapper, testCaseMapper, testCaseRunMapper, scopeLock);
     }
 
-    private static List<Task> tasks(String... workspaceAndIds) {
+    private List<Task> tasks(String... workspaceAndIds) {
         List<Task> list = new ArrayList<Task>();
         for (int i = 0; i < workspaceAndIds.length; i += 2) {
             Task t = new Task();
             t.setWorkspaceId(workspaceAndIds[i]);
             t.setId(workspaceAndIds[i + 1]);
+            t.setDeletedAt(java.time.LocalDateTime.now().minusDays(31));
+            when(taskMapper.selectById(t.getId())).thenReturn(t);
+            when(scopeLock.lockTask(t.getWorkspaceId(), t.getId())).thenReturn(t);
             list.add(t);
         }
         return list;
@@ -129,6 +136,7 @@ class TaskCascadeTest {
     @Test
     void purgeTasksDeletesEveryRegisteredChildTableInOneBatch() {
         List<String> ids = Arrays.asList("K1", "K2");
+        tasks(WS, "K1", WS, "K2");
 
         cascade.purgeTasks(WS, ids);
 
@@ -169,6 +177,134 @@ class TaskCascadeTest {
         // 循环派生关联跨空间一次清完
         verify(taskMapper).clearRecurNextByTaskIds(Arrays.asList("K1", "K2", "K3"));
         verify(completionService, never()).clearWorkspace(WS);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"success", "failed", "emptyDraftPlan", "draftPlan", "versionLog", "releaseItem"})
+    void workspaceWithAnyDeliveryPlanOrHistoryCannotBeWipedOrRebuilt(String history) {
+        if ("success".equals(history) || "failed".equals(history)) {
+            when(taskMapper.selectReleaseIdsForScope(WS)).thenReturn(Collections.singletonList("VR-" + history));
+        } else if (history.endsWith("Plan")) {
+            when(taskMapper.selectReleasePlanIdsForScope(WS)).thenReturn(Collections.singletonList("VP1"));
+        } else if ("versionLog".equals(history)) {
+            when(taskMapper.selectVersionLogIdsForScope(WS)).thenReturn(Collections.singletonList(1L));
+        } else {
+            when(taskMapper.selectReleaseItemIdsForScope(WS)).thenReturn(Collections.singletonList(1L));
+        }
+        com.hourglass.common.AppException error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hourglass.common.AppException.class, () -> cascade.wipeWorkspaceData(WS));
+        assertTrue(error.getMessage().contains("导入新空间"));
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true));
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.purgeWorkspaceTaskData(WS, true, true));
+        verify(taskMapper, never()).deleteAllByWorkspace(WS);
+        verify(reqMapper, never()).deleteAllByWorkspace(WS);
+        verify(versionMapper, never()).deleteByWorkspace(WS);
+        verify(logMapper, never()).deleteAllByWorkspace(WS);
+        org.mockito.Mockito.verifyNoInteractions(attachmentService, completionService);
+        verify(taskMapper, never()).selectSuccessfulReleaseIdsForScope(WS);
+    }
+
+    @Test
+    void workspaceGuardUsesCurrentProjectListAndReadsHistoryAfterProjectMutex() {
+        when(taskMapper.selectProjectIdsForScope(WS)).thenReturn(Arrays.asList("R1", "R2"));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            when(taskMapper.selectReleaseIdsForScope(WS)).thenReturn(Collections.singletonList("VR-failed"));
+            return null;
+        }).when(scopeLock).lockProjects(WS, "R1", "R2");
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.wipeWorkspaceData(WS));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(taskMapper, scopeLock);
+        order.verify(taskMapper).selectProjectIdsForScope(WS);
+        order.verify(scopeLock).lockProjects(WS, "R1", "R2");
+        order.verify(taskMapper).selectReleaseIdsForScope(WS);
+        verify(reqMapper, never()).selectAll(WS);
+        verify(logMapper, never()).deleteAllByWorkspace(WS);
+    }
+
+    @Test
+    void rebuildGuardQueriesAreCurrentWorkspaceReadsWithoutSuccessOrDraftFilters() throws Exception {
+        org.apache.ibatis.session.Configuration cfg = new org.apache.ibatis.session.Configuration();
+        cfg.getTypeAliasRegistry().registerAliases("com.hourglass.entity");
+        cfg.getTypeAliasRegistry().registerAliases("com.hourglass.dto");
+        String resource = "mapper/TaskMapper.xml";
+        try (java.io.InputStream stream = getClass().getClassLoader().getResourceAsStream(resource)) {
+            org.junit.jupiter.api.Assertions.assertNotNull(stream);
+            new org.apache.ibatis.builder.xml.XMLMapperBuilder(stream, cfg, resource, cfg.getSqlFragments()).parse();
+        }
+        for (String statement : new String[] {"selectProjectIdsForScope", "selectTasksByDemandForScope",
+                "selectReleaseIdsForScope", "selectReleasePlanIdsForScope", "selectVersionLogIdsForScope",
+                "selectReleaseItemIdsForScope"}) {
+            String sql = cfg.getMappedStatement("com.hourglass.mapper.TaskMapper." + statement)
+                    .getBoundSql(Collections.emptyMap()).getSql().replaceAll("\\s+", " ");
+            assertTrue(sql.contains("workspace_id = ?"), statement);
+            assertTrue(sql.contains("ORDER BY id FOR UPDATE"), statement);
+            org.junit.jupiter.api.Assertions.assertFalse(sql.contains("result ="), statement);
+            org.junit.jupiter.api.Assertions.assertFalse(sql.contains("status ="), statement);
+            if ("selectTasksByDemandForScope".equals(statement)) {
+                assertTrue(sql.contains("demand_id = ?"));
+                org.junit.jupiter.api.Assertions.assertFalse(sql.contains("deleted_at IS NULL"));
+                org.junit.jupiter.api.Assertions.assertFalse(sql.contains("published_at"), "冻结依据正式记录而非任务人工时间戳");
+            }
+        }
+    }
+
+    @Test
+    void crossWorkspacePurgeLocksEveryProjectBeforeTasksInGlobalIdOrder() {
+        List<Task> batch = tasks("W1", "K3", "W2", "K1", "W1", "K2");
+        batch.get(0).setReqId("R3");
+        batch.get(1).setReqId("R1");
+        batch.get(2).setReqId("R2");
+
+        cascade.purgeTasks(batch);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(scopeLock, taskMapper);
+        order.verify(scopeLock).lockProjects("W2", "R1");
+        order.verify(scopeLock).lockProjects("W1", "R2");
+        order.verify(scopeLock).lockProjects("W1", "R3");
+        order.verify(scopeLock).lockTask("W2", "K1");
+        order.verify(scopeLock).lockTask("W1", "K2");
+        order.verify(scopeLock).lockTask("W1", "K3");
+        order.verify(taskMapper).clearRecurNextByTaskIds(Arrays.asList("K3", "K1", "K2"));
+        org.mockito.Mockito.verifyNoMoreInteractions(scopeLock);
+    }
+
+    @Test
+    void manualTimestampAloneDoesNotProtectWorkspaceWipeOrImportReplacement() {
+        Task current = new Task();
+        current.setPublishedAt(java.time.LocalDate.now());
+        current.setPublishSource("manual");
+        when(taskMapper.selectTasksForScope(WS)).thenReturn(Collections.singletonList(current));
+
+        cascade.wipeWorkspaceData(WS);
+        cascade.clearWorkspaceDataForImport(WS, true, true, true, true, true, true);
+        verify(taskMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
+        verify(reqMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
+        verify(versionMapper, org.mockito.Mockito.times(2)).deleteByWorkspace(WS);
+    }
+
+    @Test
+    void purgeUsesLockedStateAndCannotDeleteConcurrentlyRestoredTask() {
+        tasks(WS, "K1");
+        Task current = new Task();
+        when(scopeLock.lockTask(WS, "K1")).thenReturn(current);
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.purgeTasks(WS, Collections.singletonList("K1")));
+        verify(taskMapper, never()).deleteByIds(anyList());
+    }
+
+    @Test
+    void successfulVersionMembershipRatherThanManualTimestampProtectsPurge() {
+        List<Task> batch = tasks(WS, "K1");
+        when(taskMapper.selectTaskVersionsForScope(WS, "K1")).thenReturn(Collections.singletonList("V1"));
+        when(taskMapper.selectVersionSuccessIdsForScope(WS, "V1")).thenReturn(Collections.singletonList("VR1"));
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.purgeTasks(batch));
+        verify(taskMapper, never()).deleteByIds(anyList());
+        verify(logMapper, never()).deleteByTaskIds(eq(WS), anyList());
     }
 
     @Test
@@ -246,8 +382,13 @@ class TaskCascadeTest {
                 "task_log", "task_comment", "task_watch", "app_notification", "subtask", "task_tag",
                 "attachment", "time_log", "task_dependency", "task_baseline", "version_task"),
                 TaskCascade.TASK_CHILD_TABLES);
-        assertEquals(Collections.singletonList("task_completion_record"),
+        assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
+        assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_task", "version_log"),
+                TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES);
+        for (String table : TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES) {
+            org.junit.jupiter.api.Assertions.assertFalse(TaskCascade.WORKSPACE_TASK_TABLES.contains(table), table);
+        }
 
         List<String> ref = new ArrayList<String>(TaskCascade.TASK_CHILD_TABLES);
         ref.addAll(TaskCascade.PRESERVED_TASK_REF_TABLES);
@@ -263,55 +404,37 @@ class TaskCascadeTest {
                 TaskCascade.WORKSPACE_TASK_TABLES);
     }
 
-    /**
-     * 离线扫描生效中的建表语句：基线（全新安装）+ 根目录增量脚本（已有库升级）。
-     * sql/legacy 与 sql/seeds 是历史结构与旧演示数据，不参与校验。
-     *
-     * <p>两个方向都要查：带 task_id 的表必须登记（漏登记会留下孤儿数据）；
-     * 登记的每张表也必须真实存在（改名或删表后忘了同步清单）。attachment 走
-     * target_id + target_kind 的多态关联，扫描不到 task_id，只参与存在性校验。
-     */
+    /** 后端独立快照不携带仓库 SQL；离线验证 Mapper 中任务引用清理的登记覆盖。 */
     @Test
-    void everyTableWithTaskColumnInSqlIsRegistered() throws IOException {
-        Path sqlDir = Paths.get("sql");
-        if (!Files.isDirectory(sqlDir)) {
-            sqlDir = Paths.get("../sql");
-        }
-        assertTrue(Files.isDirectory(sqlDir), "找不到 sql/ 目录：" + sqlDir.toAbsolutePath());
-
-        Set<String> found = new TreeSet<String>();
-        Map<String, String> tables = new TreeMap<String, String>();
-        Pattern createTable = Pattern.compile(
-                "(?is)CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([a-z0-9_]+)`?\\s*\\((.*?)\\)\\s*ENGINE");
-        Pattern taskColumn = Pattern.compile("(?im)^\\s*`?(?:from_|to_|ref_)?task_id`?\\s");
-
-        List<Path> scanDirs = Arrays.asList(sqlDir, sqlDir.resolve("baseline"));
-        for (Path dir : scanDirs) {
-            if (!Files.isDirectory(dir)) continue;
-            DirectoryStream<Path> files = Files.newDirectoryStream(dir, "*.sql");
-            try {
-                for (Path file : files) {
-                    String sql = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-                    Matcher m = createTable.matcher(sql);
-                    while (m.find()) {
-                        tables.put(m.group(1), m.group(2));
-                        if (taskColumn.matcher(m.group(2)).find()) {
-                            found.add(m.group(1));
-                        }
-                    }
+    void everyTaskReferenceMutationInMappersIsRegistered() throws Exception {
+        Path mapperDir = Paths.get(getClass().getClassLoader().getResource("mapper").toURI());
+        Set<String> mentioned = new TreeSet<String>();
+        Set<String> mutated = new TreeSet<String>();
+        Pattern table = Pattern.compile("(?i)\\b(?:FROM|JOIN|INTO|UPDATE)\\s+([a-z0-9_]+)\\b");
+        Pattern mutation = Pattern.compile("(?is)\\b(?:DELETE\\s+FROM|UPDATE)\\s+([a-z0-9_]+)\\b(.*)");
+        Pattern taskColumn = Pattern.compile("(?i)\\b(?:from_|to_|ref_)?task_id\\b");
+        Pattern statement = Pattern.compile("(?is)<(?:select|insert|update|delete)\\b[^>]*>(.*?)</(?:select|insert|update|delete)>");
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(mapperDir, "*.xml")) {
+            for (Path file : files) {
+                String xml = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                Matcher references = table.matcher(xml);
+                while (references.find()) mentioned.add(references.group(1).toLowerCase(java.util.Locale.ROOT));
+                Matcher statements = statement.matcher(xml);
+                while (statements.find()) {
+                    Matcher changes = mutation.matcher(statements.group(1));
+                    if (changes.find() && taskColumn.matcher(changes.group(2)).find()) mutated.add(changes.group(1));
                 }
-            } finally {
-                files.close();
             }
         }
-
-        for (String ref : TaskCascade.TASK_REF_TABLES) {
-            assertTrue(tables.containsKey(ref),
-                    "TaskCascade 登记了不存在的表：" + ref + "（现存表：" + tables.keySet() + "）");
+        assertTrue(!mutated.isEmpty(), "必须扫描到真实任务引用清理语句");
+        for (String registered : TaskCascade.TASK_REF_TABLES) {
+            assertTrue(mentioned.contains(registered), "登记表缺少 Mapper SQL 覆盖：" + registered);
         }
-        Set<String> unregistered = new TreeSet<String>(found);
-        unregistered.removeAll(TaskCascade.TASK_REF_TABLES);
-        assertTrue(unregistered.isEmpty(),
-                "sql/ 与 sql/baseline/ 中带 task_id 的表必须登记到 TaskCascade.TASK_REF_TABLES，缺少：" + unregistered);
+        for (String preserved : TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES) {
+            assertTrue(mentioned.contains(preserved), "正式历史保留表缺少 Mapper SQL 覆盖：" + preserved);
+        }
+        mutated.remove("task");
+        mutated.removeAll(TaskCascade.TASK_REF_TABLES);
+        assertTrue(mutated.isEmpty(), "任务引用清理表必须登记：" + mutated);
     }
 }

@@ -13,7 +13,7 @@ public class DemandQuery {
 
     private String workspaceId;
     private String reqId;
-    /** review/pass/plan/rej，null = 全部 */
+    /** review/pass/plan/rej/canceled，null = 全部 */
     private String status;
     private String q;
     private List<String> pris = new ArrayList<String>();

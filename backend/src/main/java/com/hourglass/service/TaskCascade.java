@@ -60,8 +60,12 @@ public class TaskCascade {
             "version_task"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失） */
-    public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.singletonList(
-            "task_completion_record");
+    public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
+            "task_completion_record", "version_release_item", "version_release_plan_task"));
+
+    /** 空间清空/覆盖导入不能删除或遗留的交付数据；存在任意行即拒绝重建。 */
+    public static final List<String> PRESERVED_WORKSPACE_DELIVERY_TABLES = Collections.unmodifiableList(Arrays.asList(
+            "version_release", "version_release_item", "version_release_plan", "version_release_plan_task", "version_log"));
 
     /** 所有带任务引用的表，供 schema 扫描测试核对 */
     public static final List<String> TASK_REF_TABLES;
@@ -128,6 +132,7 @@ public class TaskCascade {
     private final RequirementDocCommentMapper docCommentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
+    private final DeliveryScopeLock scopeLock;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
@@ -143,7 +148,9 @@ public class TaskCascade {
                        VersionTaskMapper versionTaskMapper, ProjectVersionMapper versionMapper,
                        DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
                        ReqDocShareMapper reqDocShareMapper,
-                       TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper) {
+                       TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
+                       DeliveryScopeLock scopeLock) {
+        this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -179,6 +186,15 @@ public class TaskCascade {
         if (taskIds == null || taskIds.isEmpty()) {
             return 0;
         }
+        List<Task> tasks = new ArrayList<Task>();
+        for (String id : taskIds) {
+            Task task = taskMapper.selectById(id);
+            if (task == null || !workspaceId.equals(task.getWorkspaceId())) {
+                throw com.hourglass.common.AppException.notFound("任务不存在");
+            }
+            tasks.add(task);
+        }
+        lockPurgeTasks(tasks);
         taskMapper.clearRecurNextByTaskIds(taskIds);
         deleteTaskChildren(workspaceId, taskIds);
         taskMapper.deleteByIds(taskIds);
@@ -190,6 +206,7 @@ public class TaskCascade {
         if (tasks == null || tasks.isEmpty()) {
             return 0;
         }
+        lockPurgeTasks(tasks);
         Map<String, List<String>> idsByWorkspace = new LinkedHashMap<String, List<String>>();
         List<String> allIds = new ArrayList<String>(tasks.size());
         for (Task t : tasks) {
@@ -208,6 +225,54 @@ public class TaskCascade {
             taskMapper.deleteByIds(entry.getValue());
         }
         return allIds.size();
+    }
+
+    private void lockPurgeTasks(List<Task> tasks) {
+        // 跨空间批次也必须先取得全部项目锁，不能锁完一个空间的任务再补另一个空间的项目锁。
+        Map<String, java.util.Set<String>> workspacesByProject = new java.util.TreeMap<String, java.util.Set<String>>();
+        for (Task task : tasks) {
+            if (task.getReqId() != null) {
+                workspacesByProject.computeIfAbsent(task.getReqId(), key -> new java.util.TreeSet<String>())
+                        .add(task.getWorkspaceId());
+            }
+        }
+        for (Map.Entry<String, java.util.Set<String>> entry : workspacesByProject.entrySet()) {
+            for (String workspaceId : entry.getValue()) {
+                scopeLock.lockProjects(workspaceId, entry.getKey());
+            }
+        }
+        List<Task> ordered = new ArrayList<Task>(tasks);
+        ordered.sort(java.util.Comparator.comparing(Task::getId).thenComparing(Task::getWorkspaceId));
+        for (Task observed : ordered) {
+            Task current = scopeLock.lockTask(observed.getWorkspaceId(), observed.getId());
+            if (!java.util.Objects.equals(observed.getReqId(), current.getReqId())) {
+                throw new com.hourglass.common.AppException(409, "任务所属项目已变化，请重新清理");
+            }
+            if (!taskMapper.selectTaskPlanIdsForScope(current.getWorkspaceId(), current.getId()).isEmpty()) {
+                throw com.hourglass.common.AppException.badRequest("任务仍被发布计划引用，不能物理删除；可保留在回收站");
+            }
+            for (String versionId : taskMapper.selectTaskVersionsForScope(current.getWorkspaceId(), current.getId())) {
+                if (!taskMapper.selectVersionSuccessIdsForScope(current.getWorkspaceId(), versionId).isEmpty()) {
+                    throw com.hourglass.common.AppException.badRequest("任务属于已冻结的正式发布版本，不能物理删除；可保留在回收站");
+                }
+            }
+            if (current.getDeletedAt() == null) {
+                throw com.hourglass.common.AppException.badRequest("任务已恢复，不能彻底删除");
+            }
+        }
+    }
+
+    /** 空间级清理先锁项目，再当前读交付数据；备份预检也共用，调用方需在事务内调用。 */
+    public void assertWorkspaceCanBeRebuilt(String workspaceId) {
+        String[] projects = taskMapper.selectProjectIdsForScope(workspaceId).toArray(new String[0]);
+        scopeLock.lockProjects(workspaceId, projects);
+        if (!taskMapper.selectReleaseIdsForScope(workspaceId).isEmpty()
+                || !taskMapper.selectReleasePlanIdsForScope(workspaceId).isEmpty()
+                || !taskMapper.selectReleasePlanTaskIdsForScope(workspaceId).isEmpty()
+                || !taskMapper.selectVersionLogIdsForScope(workspaceId).isEmpty()
+                || !taskMapper.selectReleaseItemIdsForScope(workspaceId).isEmpty()) {
+            throw com.hourglass.common.AppException.badRequest("空间存在交付计划或发布历史（含失败记录），不能覆盖重建或清空，请将备份导入新空间");
+        }
     }
 
     private void deleteTaskChildren(String workspaceId, List<String> taskIds) {
@@ -244,6 +309,7 @@ public class TaskCascade {
      * 不含操作时间线、附件文件、需求文档、分支：这些各场景口径不同，由下面两个方法补充。
      */
     public void purgeWorkspaceTaskData(String workspaceId, boolean clearSnapshots, boolean clearTestCases) {
+        assertWorkspaceCanBeRebuilt(workspaceId);
         /* 先取消引用本空间任务/需求的待发邮件，再删业务行 */
         mailDeliveryMapper.deleteByWorkspaceReferences(workspaceId);
         /* 甘特图数据没有外键，任务删掉后必须显式清，避免空间 ID 残留 */
@@ -280,6 +346,7 @@ public class TaskCascade {
 
     /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档（含历史快照）+ 分支时间线 + 版本/需求池 */
     public void wipeWorkspaceData(String workspaceId) {
+        assertWorkspaceCanBeRebuilt(workspaceId);
         logMapper.deleteAllByWorkspace(workspaceId);
         purgeWorkspaceTaskData(workspaceId, true, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);

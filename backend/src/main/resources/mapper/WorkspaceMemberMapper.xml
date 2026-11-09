@@ -27,6 +27,17 @@
     WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
   </select>
 
+  <!-- Delivery authorization current read: acquire only after project/task locks. -->
+  <select id="selectDeliveryAccessForUpdate" resultType="map" useCache="false" flushCache="true">
+    SELECT m.role, r.owner_user_id AS projectOwnerUserId, pm.access
+    FROM workspace_member m
+    LEFT JOIN requirement r ON r.workspace_id = m.workspace_id AND r.id = #{projectId}
+    LEFT JOIN project_member pm ON pm.workspace_id = m.workspace_id
+      AND pm.project_id = #{projectId} AND pm.user_id = m.user_id
+    WHERE m.workspace_id = #{workspaceId} AND m.user_id = #{userId}
+    FOR UPDATE
+  </select>
+
   <insert id="insert">
     INSERT INTO workspace_member (workspace_id, user_id, role) VALUES (#{workspaceId}, #{userId}, #{role})
   </insert>

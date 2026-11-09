@@ -6,7 +6,7 @@
 
 **In one sentence**: Hourglass packs the entire R&D collaboration pipeline into a system you can deploy yourself:
 
-> Ideas in the demand pool → review & scheduling → docs for the plan → break down into work items → kanban / calendar / Gantt → bind to a release → weekly retrospective & monthly delivery list
+> Ideas in the demand pool → review & scheduling → docs for the plan → break down into work items → kanban / calendar / Gantt → plan a version → complete, preview & confirm publication → weekly retrospective & monthly delivery list
 
 Progress, work hours, member workload, overdue risks, and delivery reports are all generated automatically from everyday actions — nobody has to enter data twice.
 
@@ -50,9 +50,11 @@ Existing tools are either pure task boards (execution without requirements or me
 
 ### Planning
 
-- **Demand Pool**: requirement intake, review, and scheduling; automatic WSJF scoring, fully auditable
-- **Projects / Global Health**: project list and global-health views; open a project cockpit to maintain owner, objective, and planned dates, and review progress, hours, work-item distribution, and member workload; project templates, archiving, and delete with impact preview are supported
-- **Releases**: first-release / iteration dual views, release notes generated automatically
+- **Demand Pool**: scheduling may leave the target version unspecified; any selected target must be nonreleased and in the same project. Planned dates are independent of the expected date. Replanning (including clearing the target), cancellation and restoration require a reason and revision, and never rewrite existing tasks
+- **Projects / Global Health**: project list and global-health views; maintain owner, objective and planned dates, review workload and delivery resources; deletion has impact preview and release-evidence protection
+- **Releases**: tasks may belong to multiple planned versions. Version content, independent release plans and each actual scope are distinct; multiple environments / targets, retries, repeated successes, redeploy and rollback are supported. Immutable snapshots remain separate from current hours; multiple links / events never multiply global work time.
+
+> A–E is implemented and the local correctness gate passed: Java, real API / MySQL, full-demo readbacks, and real headless Chrome against backend 8120 / frontend 8121 at 1440/390px. Independent browser groups passed: navigation 72, permissions 29, recovery 27 (3 scenarios), planTime 6, screenshots 16 assertions. Seven delivery PNG pairs were regenerated, SHA256-matched and visually reviewed; deployment safety passed 212 isolated checks (including 73 script-syntax checks). Mobile evidence is emulation, not physical-phone testing. One owned browser-fixture workspace remains locally as formal evidence; the final rerun created no new workspaces. Production deployment / full seed remain blocked and unexecuted because production configuration writes were denied and explicit DB_NAME is missing; commit/push status is determined by Git (separate counts in the [changelog](CHANGELOG.md)). Only Task uses `versionIds/versionNames` arrays: omitted / null preserves links and `[]` unlinks; Demand and TestPlan retain a single target `versionId`. The read-only publication badge is derived from successful production records (`publishSource=record`), with no manual marking or unmarking; test/staging and failed events do not prove production publication. Rollback appends an event, revokes the referenced scope by target, and retains ever-published history and later independent successes. Successful facts freeze content associations, not task completion, reopening or timers. Release management requires a workspace owner/admin or writable project owner; task ownership and plan-owner metadata grant no version-wide release authority. See the [user manual](docs/用户使用手册.md) and [API contract](docs/接口契约.md). Only the seven delivery PNG pairs are newly captured acceptance images; older overview screenshots remain historical layout references.
 
 ### Delivery
 
@@ -73,7 +75,7 @@ Existing tools are either pure task boards (execution without requirements or me
 - **Notifications**: in-app + SSE real-time push + email + external bots (Webhook / ServerChan / PushPlus)
 - **Attachments**: images, PDF, Markdown, Word, ZIP, Excel; images, PDF, Markdown and Word open in a preview modal (images support zoom, rotation and panning), and `.xlsx` files can be edited right inside the work-item detail
 - **AI assistant**: each user configures their own model and quota for requirement breakdown, doc health checks, and weekly report drafts; results land only after human confirmation
-- **Data security**: rich-text whitelist sanitization, encrypted secret storage, AI endpoints denied intranet access by default; full per-workspace backup export / import
+- **Data security**: rich-text whitelist sanitization, encrypted secrets, AI endpoints denied intranet access by default; per-workspace JSON moves working data (task version arrays, version.startDate, demand dates and canceled status), not official release evidence. Existing evidence prevents destructive overwrite; official evidence requires full database backup / restore
 - **Transition constraints**: a source × target matrix per workspace (allow / require reason / deny), permissive by default; column-level processing rules control timing and overdue independently
 - **Search and audit**: global search across demands, work items, documents, and test cases; audit logs with filters and CSV export, plus system information for admins
 - **Mobile**: three responsive breakpoints; installable PWA
@@ -107,14 +109,14 @@ java -jar backend/target/hourglass-server.jar
 
 For production, run `bash deploy/deploy.sh`: it detects changes → packages frontend / backend as needed → backs up the database → applies incremental SQL → swaps artifacts → health-checks, with `--dry-run` / `--rollback` support. See [`deploy/README.md`](deploy/README.md) (Chinese).
 
-To upgrade an existing database, run the numbered scripts under `sql/` in order (all idempotent); for a fresh install, run only `sql/baseline/01_schema_full.sql`. See [`sql/README.md`](sql/README.md) for the boundary between the two entries.
+This A–E rollout is **for an independent empty database only**. Use `sql/baseline/01_schema_full.sql` for all 52 tables; do not replay 61/62 or migrate old history, and retain the original database and data. The full baseline rebuilds tables: it is not an idempotent, nondestructive script and must not be rerun on an existing database. The unreleased `63_delivery_release.sql` only adds columns and creates five tables: `version_release_plan`, `version_release_plan_task`, `version_release`, `version_release_item`, and `version_log`. It does not backfill, clear data or invent historical evidence, and is not an old-database migration entry point for this rollout. Upgrades of previously released schemas require review of the relevant numbered scripts; the destructive warnings for 61/62 still apply. See [`sql/README.md`](sql/README.md).
 
 ## Tech Stack
 
 | Layer | Choice |
 | --- | --- |
 | Backend | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security (session login + CSRF) |
-| Database | MySQL 8 (utf8mb4), 47 tables, numbered idempotent migration scripts |
+| Database | MySQL 8 (utf8mb4), 52 tables including the unreleased delivery closure; full baseline for empty databases only, numbered increments require impact review |
 | Realtime | SSE push for changes and notifications |
 | Frontend | Vanilla JavaScript ES Modules, **no framework, no build step**; PWA offline shell |
 | Deployment | Frontend served directly by Nginx, backend exposes only `/api/**`; systemd + one-command deploy script |

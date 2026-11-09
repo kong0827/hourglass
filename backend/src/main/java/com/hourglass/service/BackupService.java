@@ -109,6 +109,7 @@ public class BackupService {
     private final ActivityService activityService;
     private final com.hourglass.mapper.WorkActivityMapper workActivityMapper;
     private final BackupExportService exportService;
+    private final DeliveryScopeLock scopeLock;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -131,7 +132,8 @@ public class BackupService {
                          TaskCascade cascade,
                          ActivityService activityService,
                          com.hourglass.mapper.WorkActivityMapper workActivityMapper,
-                         PlatformTransactionManager transactionManager) {
+                         PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock) {
+        this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -176,20 +178,20 @@ public class BackupService {
         return exportService.exportCsv(workspaceId, hiddenProjects);
     }
 
-    /**
-     * 覆盖式导入（与旧版行为一致）：清空当前空间的任务类数据后写入备份内容（附件/时间线保留）。
-     * 事务按阶段/批次拆分：清空 + 基础数据、每 500 条任务一批、关联数据、完成归档各自提交，
-     * 不再把整次导入包成一个长事务。导入是覆盖式且幂等的，中途失败后重新导入同一文件即可恢复。
-     */
+    /** 批量语句共用外层事务，任何阶段失败都恢复导入前状态。 */
     public BackupData.ImportResult importData(String userId, String workspaceId, BackupData data) {
         if (data == null || data.getTasks() == null) {
             throw AppException.badRequest("备份文件中未找到任务数据");
         }
+        validateTransfer(data);
+        validateDemandDates(data);
         ImportState st = new ImportState(userId, workspaceId);
         st.existingTaskIds = existingTaskIdsInOtherWorkspaces(workspaceId, data);
         st.memberIds = memberIdsOf(workspaceId);
 
         return txTemplate.execute(txStatus -> {
+            // 先锁项目并当前读全部交付计划/历史；拒绝时连旧活动轨迹也不能删除。
+            cascade.assertWorkspaceCanBeRebuilt(workspaceId);
             // 阶段 1：清空旧数据 + 项目/分支/文档/模块/列/标签
             txTemplate.execute(status -> {
                 clearWorkspaceTaskData(workspaceId, data);
@@ -331,6 +333,7 @@ public class BackupService {
                 }
                 version.setDescription(Texts.cut(Texts.trimToNull(bv.getDesc()), 500));
                 version.setStatus(oneOf(bv.getStatus(), new String[]{"planned", "active", "released"}, "planned"));
+                version.setStartDate(parseDate(bv.getStartDate()));
                 version.setTargetDate(parseDate(bv.getTargetDate()));
                 version.setReleasedAt(parseTs(bv.getReleasedAt()));
                 version.setCreatedAt(parseTs(bv.getCreatedAt()));
@@ -398,16 +401,19 @@ public class BackupService {
                 demand.setCategoryId(demandCatId);
                 demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
                 demand.setStatus(oneOf(bd.getStatus(),
-                        new String[]{"review", "pass", "plan", "rej"}, "review"));
+                        new String[]{"review", "pass", "plan", "rej", "canceled"}, "review"));
                 demand.setExpectDate(parseDate(bd.getExpectDate()));
+                demand.setPlannedStart(parseDate(bd.getPlannedStart()));
+                demand.setPlannedEnd(parseDate(bd.getPlannedEnd()));
                 demand.setAcceptText(Texts.cut(Texts.trimToNull(bd.getAcceptText()), 2000));
                 String versionId = Texts.trimToNull(bd.getVersionId());
                 if (versionId != null && versionIdMap.containsKey(versionId)) {
                     versionId = versionIdMap.get(versionId);
                 }
-                /* 目标版本必须属于需求所在项目 */
-                demand.setVersionId(versionId != null && reqId.equals(st.versionReqId.get(versionId))
-                        ? versionId : null);
+                if (versionId != null && !reqId.equals(st.versionReqId.get(versionId))) {
+                    throw AppException.badRequest("需求目标版本映射失效，已回滚导入：" + bd.getId());
+                }
+                demand.setVersionId(versionId);
                 demand.setReviewNote(Texts.cut(Texts.trimToNull(bd.getReviewNote()), 500));
                 demand.setWsjfBusiness(clampWsjf(bd.getWsjfBusiness()));
                 demand.setWsjfUrgency(clampWsjf(bd.getWsjfUrgency()));
@@ -550,14 +556,7 @@ public class BackupService {
                 doc.setSortOrder(bd.getSortOrder() == null ? 0 : bd.getSortOrder());
                 doc.setCreatedAt(parseTs(bd.getCreatedAt()));
                 doc.setUpdatedAt(parseTs(bd.getUpdatedAt()));
-                String publishedAt = Texts.trimToNull(bd.getPublishedAt());
-                if (publishedAt == null) {
-                    /* 旧备份没有发布时间：按已发布回填（同 sql/42 迁移口径），
-                       避免覆盖导入后文档全部变草稿、成员不可见 */
-                    doc.setPublishedAt(doc.getCreatedAt() == null ? java.time.LocalDateTime.now() : doc.getCreatedAt());
-                } else {
-                    doc.setPublishedAt(parseTs(publishedAt));
-                }
+                doc.setPublishedAt(parseTs(bd.getPublishedAt()));
                 requirementDocMapper.insert(doc);
                 st.reqDocCount++;
                 if (original != null) {
@@ -779,15 +778,11 @@ public class BackupService {
                 demandId = null;
             }
             t.setDemandId(demandId);
-            String versionId = Texts.trimToNull(b.getVersionId());
-            if (versionId != null && st.versionIdMap.containsKey(versionId)) {
-                versionId = st.versionIdMap.get(versionId);
-            }
-            if (versionId != null && (!st.versionIds.contains(versionId) || t.getReqId() == null
-                    || !t.getReqId().equals(st.versionReqId.get(versionId)))) {
-                versionId = null;
-            }
-            if (versionId != null) {
+            for (String originalVersion : new java.util.TreeSet<String>(b.getVersionIds())) {
+                String versionId = st.versionIdMap.getOrDefault(originalVersion, originalVersion);
+                if (!st.versionIds.contains(versionId) || !java.util.Objects.equals(t.getReqId(), st.versionReqId.get(versionId))) {
+                    throw AppException.badRequest("任务规划版本映射失效，导入已回滚：" + originalVersion);
+                }
                 st.versionLinks.add(new String[]{id, versionId});
             }
             /* v9：缺陷专属字段；非缺陷或引用失效时清空，避免脏数据 */
@@ -1503,6 +1498,106 @@ public class BackupService {
             }
         }
         return fallback;
+    }
+
+    /** Transfer validation is pure and always runs before any destructive statement. */
+    private void validateTransfer(BackupData data) {
+        if (!Integer.valueOf(BackupData.FORMAT_VERSION).equals(data.getV())) {
+            throw AppException.badRequest("仅支持 v13 新格式 JSON 工作项迁移，不支持旧格式或发布历史迁移");
+        }
+        if (data.getReqs() == null || data.getVersions() == null || data.getDemands() == null) {
+            throw AppException.badRequest("新格式必须包含 reqs、versions、demands 字典（可为空数组）");
+        }
+        Set<String> projects = new HashSet<String>();
+        for (BackupData.BackupReq project : data.getReqs()) {
+            if (project == null || Texts.trimToNull(project.getId()) == null || !projects.add(project.getId()))
+                throw AppException.badRequest("项目字典ID为空或重复");
+        }
+        Map<String, BackupData.BackupVersion> versions = new HashMap<String, BackupData.BackupVersion>();
+        Set<String> versionNames = new HashSet<String>();
+        for (BackupData.BackupVersion version : data.getVersions()) {
+            if (version == null || Texts.trimToNull(version.getId()) == null || !projects.contains(version.getReqId())
+                    || versions.put(version.getId(), version) != null)
+                throw AppException.badRequest("版本字典ID或项目引用不合法");
+            String versionName = Texts.trimToNull(version.getName());
+            if (versionName == null || !versionNames.add(version.getReqId() + "\u0000" + versionName))
+                throw AppException.badRequest("版本名称为空或在项目内重复：" + version.getId());
+            LocalDate start = strictTransferDate(version.getStartDate());
+            LocalDate end = strictTransferDate(version.getTargetDate());
+            if (start != null && end != null && start.isAfter(end)) throw AppException.badRequest("版本开始日期不能晚于目标日期");
+            if ("released".equals(version.getStatus()) || Texts.trimToNull(version.getReleasedAt()) != null)
+                throw AppException.badRequest("JSON 不迁移已发布版本内容或正式事实，请使用数据库备份；版本：" + version.getId());
+        }
+        Map<String, BackupData.BackupDemand> demands = new HashMap<String, BackupData.BackupDemand>();
+        for (BackupData.BackupDemand demand : data.getDemands()) {
+            if (demand == null || Texts.trimToNull(demand.getId()) == null || !projects.contains(demand.getReqId())
+                    || demands.put(demand.getId(), demand) != null)
+                throw AppException.badRequest("需求字典ID或项目引用不合法");
+            String target = Texts.trimToNull(demand.getVersionId());
+            if (target != null && (versions.get(target) == null || !demand.getReqId().equals(versions.get(target).getReqId())))
+                throw AppException.badRequest("需求目标版本不存在或跨项目：" + demand.getId());
+        }
+        Map<String, BackupData.BackupTask> tasks = new HashMap<String, BackupData.BackupTask>();
+        for (BackupData.BackupTask task : data.getTasks()) {
+            if (task == null || Texts.trimToNull(task.getId()) == null || tasks.put(task.getId(), task) != null)
+                throw AppException.badRequest("任务ID为空或重复");
+            if (task.getReqId() != null && !projects.contains(task.getReqId())) throw AppException.badRequest("任务引用不存在的项目");
+            if (task.getVersionIds() == null) throw AppException.badRequest("每个任务必须显式提供 versionIds 数组");
+            Set<String> unique = new HashSet<String>();
+            for (String id : task.getVersionIds()) {
+                BackupData.BackupVersion version = versions.get(id);
+                if (version == null || !unique.add(id) || !java.util.Objects.equals(task.getReqId(), version.getReqId()))
+                    throw AppException.badRequest("任务规划版本不存在、重复或跨项目：" + task.getId());
+            }
+            if (task.getFoundVersionId() != null && (versions.get(task.getFoundVersionId()) == null
+                    || !java.util.Objects.equals(task.getReqId(), versions.get(task.getFoundVersionId()).getReqId())))
+                throw AppException.badRequest("缺陷发现版本引用不合法：" + task.getId());
+            if (task.getDemandId() != null && (demands.get(task.getDemandId()) == null
+                    || !java.util.Objects.equals(task.getReqId(), demands.get(task.getDemandId()).getReqId())))
+                throw AppException.badRequest("任务需求引用不合法：" + task.getId());
+        }
+        for (BackupData.BackupTask task : data.getTasks()) {
+            if (task.getEpicId() == null) continue;
+            BackupData.BackupTask epic = tasks.get(task.getEpicId());
+            if (epic == null || epic == task || !"epic".equals(epic.getItemType()) || "epic".equals(task.getItemType())
+                    || !java.util.Objects.equals(task.getReqId(), epic.getReqId()))
+                throw AppException.badRequest("Epic 引用必须是同项目的独立史诗：" + task.getId());
+        }
+    }
+
+    private LocalDate strictTransferDate(String raw) {
+        if (Texts.trimToNull(raw) == null) return null;
+        try { return LocalDate.parse(raw); }
+        catch (RuntimeException ex) { throw AppException.badRequest("备份日期格式不合法：" + raw); }
+    }
+
+    /** 在覆盖删除前校验新增需求日期，与 DemandService 一样允许空/单边日期，拒绝倒置区间。 */
+    private void validateDemandDates(BackupData data) {
+        if (data.getDemands() == null) {
+            return;
+        }
+        for (BackupData.BackupDemand demand : data.getDemands()) {
+            if (demand == null) {
+                continue;
+            }
+            LocalDate start = parseDemandDate(demand.getPlannedStart(), "plannedStart");
+            LocalDate end = parseDemandDate(demand.getPlannedEnd(), "plannedEnd");
+            if (start != null && end != null && start.isAfter(end)) {
+                throw AppException.badRequest("计划开始日期不能晚于计划结束日期");
+            }
+        }
+    }
+
+    private LocalDate parseDemandDate(String value, String field) {
+        String text = Texts.trimToNull(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(text);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw AppException.badRequest("需求计划日期格式不合法：" + field);
+        }
     }
 
     private LocalDate parseDate(String value) {

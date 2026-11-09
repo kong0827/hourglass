@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ReleaseMapper">
+  <resultMap id="plan" type="VersionReleasePlan" autoMapping="true">
+    <id column="id" property="id"/>
+    <result column="target_keys" property="targetKeys" typeHandler="com.hourglass.mapper.ReleaseMapper$StringListTypeHandler"/>
+  </resultMap>
+  <resultMap id="record" type="VersionRelease" autoMapping="true">
+    <id column="id" property="id"/>
+    <result column="target_keys" property="targetKeys" typeHandler="com.hourglass.mapper.ReleaseMapper$StringListTypeHandler"/>
+  </resultMap>
+  <resultMap id="recordWithItems" type="VersionRelease" extends="record" autoMapping="true">
+    <collection property="items" ofType="VersionReleaseItem" columnPrefix="item_" autoMapping="true">
+      <id column="id" property="id"/>
+    </collection>
+  </resultMap>
+  <sql id="itemColumns">
+    i.id AS item_id, i.workspace_id AS item_workspace_id, i.release_id AS item_release_id,
+    i.task_id AS item_task_id, i.title AS item_title, i.item_type AS item_item_type,
+    i.owner_user_id AS item_owner_user_id, i.owner_name AS item_owner_name,
+    i.demand_id AS item_demand_id, i.demand_title AS item_demand_title,
+    i.target_version_id AS item_target_version_id, i.target_version_name AS item_target_version_name,
+    i.board_column AS item_board_column, i.completed_at AS item_completed_at, i.disposition AS item_disposition, i.reason AS item_reason,
+    i.content_summary AS item_content_summary, i.work_minutes AS item_work_minutes, i.estimate_minutes AS item_estimate_minutes
+  </sql>
+  <select id="lockProject" resultType="string">
+    SELECT id FROM requirement WHERE workspace_id = #{workspaceId} AND id = #{reqId} FOR UPDATE
+  </select>
+  <!-- These reads run after the project mutex. Bypass both MyBatis caches and RR snapshot reads. -->
+  <select id="selectTaskForUpdate" resultType="Task" useCache="false" flushCache="true">
+    SELECT t.*, t.is_blocked AS blocked,
+      (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+       WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL FOR UPDATE) AS total_minutes
+    FROM task t WHERE t.workspace_id = #{workspaceId} AND t.id = #{taskId} FOR UPDATE
+  </select>
+  <select id="selectScope" resultType="Task" useCache="false" flushCache="true">
+    SELECT t.*, t.is_blocked AS blocked,
+      (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+       WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL FOR UPDATE) AS total_minutes
+    FROM task t
+    INNER JOIN version_task vt ON vt.workspace_id = t.workspace_id AND vt.task_id = t.id
+    INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.version_id = #{versionId}
+      AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+    ORDER BY t.id FOR UPDATE
+  </select>
+  <select id="selectTaskVersionRowsForUpdate" resultType="com.hourglass.dto.TaskVersionBinding" useCache="false" flushCache="true">
+    SELECT vt.task_id AS taskId, vt.version_id AS versionId, pv.name AS versionName
+    FROM version_task vt
+    INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
+    INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
+      AND pv.req_id = t.req_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.task_id IN
+    <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+    ORDER BY vt.task_id, vt.version_id FOR UPDATE
+  </select>
+  <sql id="projectTasks">
+    SELECT t.*, t.is_blocked AS blocked
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId}
+  </sql>
+  <select id="selectActiveTasksByProjectForUpdate" resultType="Task" useCache="false" flushCache="true">
+    <include refid="projectTasks"/> AND t.deleted_at IS NULL
+    ORDER BY t.id FOR UPDATE
+  </select>
+  <select id="selectAllTasksByProjectForUpdate" resultType="Task" useCache="false" flushCache="true">
+    <include refid="projectTasks"/>
+    ORDER BY t.id FOR UPDATE
+  </select>
+  <select id="selectRecordsByProjectForUpdate" resultMap="record" useCache="false" flushCache="true">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+    ORDER BY id FOR UPDATE
+  </select>
+  <select id="selectRecordsForUpdate" resultMap="record" useCache="false" flushCache="true">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+    ORDER BY id FOR UPDATE
+  </select>
+  <select id="selectProjectForUpdate" resultType="Requirement" useCache="false" flushCache="true">
+    SELECT * FROM requirement WHERE workspace_id = #{workspaceId} AND id = #{reqId} FOR UPDATE
+  </select>
+  <select id="selectDemandsByProjectForUpdate" resultType="Demand" useCache="false" flushCache="true">
+    SELECT d.*, pv.name AS version_name FROM demand d
+    LEFT JOIN project_version pv ON pv.workspace_id = d.workspace_id AND pv.id = d.version_id
+    WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+    ORDER BY d.id FOR UPDATE
+  </select>
+  <select id="selectPlanForUpdate" resultMap="plan" useCache="false" flushCache="true">
+    SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND id = #{planId} FOR UPDATE
+  </select>
+  <select id="selectPlannedTaskIds" resultType="string">
+    SELECT task_id FROM version_release_plan_task WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} ORDER BY task_id
+  </select>
+  <select id="selectPlannedTaskIdsForUpdate" resultType="string" useCache="false" flushCache="true">
+    SELECT task_id FROM version_release_plan_task WHERE workspace_id = #{workspaceId} AND plan_id = #{planId} ORDER BY task_id FOR UPDATE
+  </select>
+  <delete id="deletePlanTasks">
+    DELETE FROM version_release_plan_task WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </delete>
+  <insert id="insertPlanTask">
+    INSERT INTO version_release_plan_task (workspace_id, plan_id, task_id) VALUES (#{workspaceId}, #{planId}, #{taskId})
+  </insert>
+  <select id="selectRecordForUpdate" resultMap="record" useCache="false" flushCache="true">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND id = #{releaseId} FOR UPDATE
+  </select>
+  <select id="selectByKeyForUpdate" resultMap="record" useCache="false" flushCache="true">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND idempotency_key = #{key} FOR UPDATE
+  </select>
+  <select id="selectItemsForUpdate" resultType="VersionReleaseItem" useCache="false" flushCache="true">
+    SELECT * FROM version_release_item WHERE workspace_id = #{workspaceId} AND release_id = #{releaseId}
+    ORDER BY id FOR UPDATE
+  </select>
+  <select id="selectPlans" resultMap="plan">
+    SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY created_at DESC, id DESC
+  </select>
+  <insert id="insertPlan">
+    INSERT INTO version_release_plan
+      (id, workspace_id, version_id, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)
+    VALUES (#{id}, #{workspaceId}, #{versionId}, #{plannedAt}, #{ownerUserId}, #{notes}, #{risks}, #{status}, 0, #{scopeToken},
+      #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, #{coverage})
+  </insert>
+  <update id="updatePlan">
+    UPDATE version_release_plan SET planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
+      notes = #{notes}, risks = #{risks}, status = #{status}, scope_token = #{scopeToken},
+      environment = #{environment}, target_keys = #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, coverage = #{coverage},
+      revision = revision + 1, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision} AND status != 'completed'
+  </update>
+  <update id="completePlan">
+    UPDATE version_release_plan SET status = 'completed', revision = revision + 1, updated_at = NOW()
+    WHERE workspace_id = #{workspaceId} AND id = #{id} AND revision = #{revision} AND status IN ('ready','draft','canceled')
+  </update>
+  <select id="selectByKey" resultMap="record">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND idempotency_key = #{key}
+  </select>
+  <select id="selectSuccess" resultMap="record">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND result = 'success' AND environment = 'production' AND operation IN ('deploy','redeploy')
+    ORDER BY occurred_at DESC, recorded_at DESC, id DESC LIMIT 1
+  </select>
+  <select id="selectRecords" resultMap="record">
+    SELECT * FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+    ORDER BY occurred_at DESC, recorded_at DESC, id DESC
+  </select>
+  <select id="selectTaskRecords" resultMap="record">
+    SELECT vr.* FROM version_release vr
+    INNER JOIN version_release_item i ON i.release_id = vr.id AND i.workspace_id = vr.workspace_id
+    WHERE vr.workspace_id = #{workspaceId} AND i.task_id = #{taskId}
+    ORDER BY vr.occurred_at DESC, vr.recorded_at DESC, vr.id DESC
+  </select>
+  <select id="selectDemandRecords" resultMap="recordWithItems">
+    SELECT vr.*, <include refid="itemColumns"/>
+    FROM version_release vr INNER JOIN version_release_item i ON i.release_id = vr.id AND i.workspace_id = vr.workspace_id
+    WHERE vr.workspace_id = #{workspaceId}
+      AND EXISTS (SELECT 1 FROM version_release_item d WHERE d.release_id = vr.id AND d.workspace_id = vr.workspace_id AND d.demand_id = #{demandId})
+    ORDER BY vr.occurred_at DESC, vr.recorded_at DESC, vr.id DESC, i.id
+  </select>
+  <select id="selectPublicationRecords" resultMap="recordWithItems">
+    SELECT vr.*, <include refid="itemColumns"/>
+    FROM version_release vr INNER JOIN version_release_item i ON i.release_id = vr.id AND i.workspace_id = vr.workspace_id
+    WHERE vr.workspace_id = #{workspaceId} AND vr.result = 'success'
+      AND i.task_id IN <foreach collection="taskIds" item="taskId" open="(" close=")" separator=",">#{taskId}</foreach>
+    ORDER BY vr.occurred_at, vr.recorded_at, vr.id, i.id
+  </select>
+  <insert id="insertRecord">
+    INSERT INTO version_release
+      (id, workspace_id, req_id, version_id, plan_id, plan_revision, result, published_on, recorded_at,
+       released_by, released_by_name, version_name, project_name, notes, failure_reason,
+       published_count, excluded_count, idempotency_key, request_hash, plan_snapshot,
+       occurred_at, environment, target_keys, coverage, artifact_ref, artifact_digest, operation, related_release_id,
+       executor_user_id, executor_name, deviation_reason)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{versionId}, #{planId}, #{planRevision}, #{result}, #{publishedOn},
+      #{recordedAt}, #{releasedBy}, #{releasedByName}, #{versionName}, #{projectName}, #{notes}, #{failureReason},
+      #{publishedCount}, #{excludedCount}, #{idempotencyKey}, #{requestHash}, #{planSnapshot},
+      #{occurredAt}, #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler},
+      #{coverage}, #{artifactRef}, #{artifactDigest}, #{operation}, #{relatedReleaseId}, #{executorUserId}, #{executorName}, #{deviationReason})
+  </insert>
+  <insert id="insertItem" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO version_release_item
+      (workspace_id, release_id, task_id, title, item_type, owner_user_id, owner_name, demand_id, demand_title,
+       target_version_id, target_version_name, board_column, completed_at, disposition, work_minutes, estimate_minutes, reason, content_summary)
+    VALUES (#{workspaceId}, #{releaseId}, #{taskId}, #{title}, #{itemType}, #{ownerUserId}, #{ownerName}, #{demandId},
+      #{demandTitle}, #{targetVersionId}, #{targetVersionName}, #{boardColumn}, #{completedAt}, #{disposition}, #{workMinutes}, #{estimateMinutes}, #{reason}, #{contentSummary})
+  </insert>
+  <select id="selectItems" resultType="VersionReleaseItem">
+    SELECT * FROM version_release_item WHERE workspace_id = #{workspaceId} AND release_id = #{releaseId}
+    ORDER BY id
+  </select>
+  <insert id="insertLog">
+    INSERT INTO version_log (workspace_id, version_id, action, actor_id, reason, change_data)
+    VALUES (#{workspaceId}, #{versionId}, #{action}, #{actorId}, #{reason}, #{changeData})
+  </insert>
+  <insert id="insertTaskChangeLog">
+    INSERT INTO task_log (workspace_id, task_id, action, actor_id, detail, change_data)
+    VALUES (#{workspaceId}, #{taskId}, 'version_change', #{actorId}, #{detail}, #{changeData})
+  </insert>
+  <select id="selectLogs" resultType="java.util.HashMap">
+    SELECT l.id, l.version_id AS versionId, l.action, l.actor_id AS actorId,
+      u.display_name AS actorName, l.reason, l.change_data AS changeData, l.created_at AS createdAt
+    FROM version_log l LEFT JOIN app_user u ON u.id = l.actor_id
+    WHERE l.workspace_id = #{workspaceId} AND l.version_id = #{versionId} ORDER BY l.id DESC
+  </select>
+  <select id="countRecordsByProject" resultType="int">
+    SELECT COUNT(*) FROM version_release WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </select>
+  <select id="countSuccessByProject" resultType="int">
+    SELECT COUNT(*) FROM version_release WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND result = 'success'
+  </select>
+  <select id="countSuccessByWorkspace" resultType="int">
+    SELECT COUNT(*) FROM version_release WHERE workspace_id = #{workspaceId} AND result = 'success'
+  </select>
+  <select id="countSuccessByTask" resultType="int">
+    SELECT COUNT(*) FROM version_release_item i INNER JOIN version_release vr ON vr.id = i.release_id AND vr.workspace_id = i.workspace_id
+    WHERE i.workspace_id = #{workspaceId} AND i.task_id = #{taskId} AND vr.result = 'success' AND i.disposition = 'published'
+  </select>
+  <delete id="deletePlansByVersion">
+    DELETE FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </delete>
+</mapper>

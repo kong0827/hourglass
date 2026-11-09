@@ -6,11 +6,32 @@
 
 ## 未发布
 
-工作区在制改动，尚未提交、尚未打标签（计划打 `v1.1.0-rc1`）。
+A–E 已实施，最终本地正确性门禁通过；真实 headless Chrome 1440/390px 桌面 / 移动端仿真、权限与未知请求恢复已有完成证据，七对 delivery PNG 已重拍、SHA256 配对一致并视觉查看。生产启用未闭合：`43.156.155.204` 的配置写入被策略拒绝，且缺显式 `DB_NAME`，生产部署 / full seed 阻塞、未执行；提交推送结果以 Git 为准。
+
+### 需求排期与发布闭环（未发布）
+
+- 需求目标版本默认可空；正式排期由管理者选择同项目未发布版本。计划起止独立于期望日期；调期、撤排、取消、恢复需原因与乐观 revision。新增 `canceled`，恢复到 `pass` 并清目标版本；取消不取消任务，调期不自动改旧任务。
+- 仅 Task 的当前计划版本改为 M:N，读写响应使用 `versionIds/versionNames` 数组；保存省略 / null 保留、`[]` 解绑，显式变更需原因与权限。Demand / TestPlan 仍是单目标 `versionId`；需求调期不改旧任务。
+- 发布徽标只读，由成功 production 实际记录推导，`publishSource=record`，含 `publishedAt/publishedReleaseId/everPublished/publicationState/publicationTargets`；状态为 unpublished/effective/partial/rolled_back/unknown。取消人工标记 / 撤标；test/staging 或失败不代表生产已发布。
+- 一个版本支持多个独立计划、失败重试、多次成功、redeploy、rollback；成功事实冻结内容关联而非任务完成 / 回退 / 计时。rollback 追加事件、按目标撤销关联记录的引用范围，保留 ever 历史及后续不同成功，不解锁内容关联。
+- 版本内容、计划 plannedTaskIds、实际 actualTaskIds 三范围分开；计划完成不可改，后续新计划或有偏离理由的紧急无计划事实。实际 context 明确发生时间（带 UTC offset，与 recordedAt 分开）、环境、目标、覆盖、制品及 SHA256、操作、关联事件、执行人与唯一 ≤500 项任务数组；预览显示 not_selected、候选与警告，不静默排除未完成等实际事实，未完成事实需管理权限及偏离理由。
+- 发布管理仅空间 owner/admin 或项目负责人且可写，提交时重新检查；任务负责人无整版本权，计划负责人元数据不赋权，releasedBy 固定服务器当前登录者。评审仍仅 workspace owner；显式任务改版由管理者或任务负责人按权限操作，不能绕过冻结。
+- 计划列表 / 新建使用 GET/POST release-plans，更新选定计划 PUT release-plan 带 id+revision；preview/release 显式 context，确认另带 result/notes/failureReason/idempotencyKey/planRevision/scopeToken，返回 VersionRelease。未知结果 sessionStorage 保留同 body/key，先 GET release-records?key=...，再同请求重试，明确结果后决定新键，不因刷新清理；任务 release-records 返回全部可见事件。
+- 版本 / 计划 / 实际不可变快照与当前工时分开，M:N 和多事件不放大全局工时；需求取消不抹历史，零任务不能 100% 验收。JSON 搬运任务数组、version.startDate、需求日期与 canceled，不转移正式发布证据；正式证据用完整数据库备份恢复，删除 / 覆盖导入继续保护证据。不新增迭代模块、不做历史迁移。
+- 保留既有需求空目标排期及抽屉并发 / 生命周期规则，JSON 仅接受 v13 工作项搬运，不为历史备份增加兼容。六组使用说明与 frontend 正文副本同步；只有七对 delivery PNG 是本轮真实浏览器新图，已重拍、配对 SHA256 一致并视觉查看，旧 overview 图仍为历史布局。具体接口见 `docs/接口契约.md`。
+- 浏览器收尾修正：计划 plannedAt 保留本地墙钟，不转 UTC 错移；输入零秒精度归一不会误报计划脏改动，date-only 不伪造时分秒；预览明确分列 selected / omitted；移动端关闭按钮 sticky 可达。事件处理项次、生产曾交付去重数和当前生效数分别显示，不推断待交付数；SW v120。
+- 后台全量验证：Java 8 `test + package` 成功，821 tests / 0 failures / 0 errors / 0 skipped；最终提交候选源快照与当前 backend 提交候选 src（含测试）514 files 零漂移；仅排除无引用的未跟踪旧 TaskPublishRequest DTO，不提交也不删除该本地文件。
+- 真实 API / MySQL 集成：run=`afca027b3341` 的 14 mandatory 场景全部完成，484 passed / 0 failed / 0 unverified，包含 SQL 故障、并发、锁等待期间权限撤销、JSON 原子往返、完整 mysqldump + 空库恢复及五表内容 / 键比较；自建 8 users / 12 workspaces，清理后 remaining=0，原数据保持。此清理范围不包含 full demo 或保留的浏览器 fixture。
+- 本地 full 独立新 namespace 模拟：8 users / 4 spaces / 11 projects / 33 versions / 66 demands / 275 tasks / 792 timeLogs / 44 releasePlans / 66 events，990 回读 checks 通过。这些是本地模拟，不是生产部署或 production full seed。
+- 真实 headless Chrome 最终结果（backend 8120 / frontend 8121）：12 个导航入口，1440/390px，72 assertions；权限 29；恢复 27 / 3 场景（响应丢失、请求丢失及之后页面刷新 + 原键查询失败，保留完整原 body/key，查询失败不盲重试）；planTime 6；截图检查 16。安全摘要 `/tmp/hourglass-ae-validation-20261110-main-7fc2/final-validation-results.json` 为 ok=true；移动端是仿真，不是物理手机实测。
+- 先前 desktop 20 / mobile 12 golden assertions 未重跑，本轮各 3 个 LIVE 记录 / task-state 证据检查通过。最终复跑未建新空间，1 个自建浏览器 fixture 空间保留在本地作正式证据，不能称全部本地数据清理。
+- JS syntax 107 files / 0 failures，3 unit suites passed / 0 failed；3 SVG 视觉确认；部署安全隔离 212 项（含 73 段脚本语法）、文档 14 checker tests 与 baseline convergence 16 项分别通过。Java 821、SQL 484、回读 990 与各浏览器 / 专项计数独立，不相加成一个 suite，也不累计旧 golden。
+- 生产边界：原 `hourglass` 46 表、env/jar/前端/附件受限备份及全量 dump 逐字节恢复证明通过，旧库保留，新 `hourglass_20261110` 不存在。生产写 `/etc/hourglass.env` 和 `/etc/hourglass-backup.cnf` 被策略拒绝、均未执行，显式 DB_NAME 缺失；生产部署 / full seed 阻塞，不绕过权限。提交推送结果以 Git 为准。
 
 ### 数据库注意
 
-- `sql/61_category_id.sql` 与 `sql/62_category_project.sql` 不做历史回填：前者丢弃模块名称文本列，后者删除旧空间级模块并清空任务 / 需求的模块引用。当前仅适用于模拟数据或开发库重建；已有真实数据的库执行前必须先备份，或跳过这两个脚本并自行补数据。
+- 完整基线包含 52 张表；`sql/63_delivery_release.sql` 仅增加列与创建 `version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log` 五张表，不回填、不清空旧数据、不构造历史发布记录。version_task 存当前任务 M:N 计划版本集合，plan_task 存独立计划任务范围，不代表实际交付证据。
+- 本轮只在独立新空库启用，不回放 61/62，不迁移旧历史，保留原库与原数据。完整基线会重建表，不是幂等无损脚本，不得在已有库上重跑。61/62 的破坏性说明仍有效：前者丢弃模块名称文本列，后者删除旧空间级模块并清空任务 / 需求的模块引用，均不做历史回填。
 
 ### 新增
 
@@ -67,7 +88,7 @@
 - 测试四模式（用例 / 测试计划 / 覆盖矩阵 / 测试报告）由页内分段器改为全局二级导航，与工作项、报表采用同一套交互；刷新、深链与页内跳转后高亮仍正确
 - 首次登录（未带页面链接）固定进入「我的工作」，不再按角色跳转；刷新、收藏与分享链接仍保留当前页面
 - 设置 → 成员与权限的角色说明按实际侧栏校正为「同一套 12 个菜单」（原写 16 个）
-- 需求池拖拽支持两级回退：「已通过 → 待评审」撤回评审、「已排期 → 已通过」撤销排期并解除版本关联（二次确认）；非法落点给出明确提示而非静默失败
+- 需求池拖拽支持两级回退：「已通过 → 待评审」撤回评审、「已排期 → 已通过」撤销排期（须原因与 revision，仅清需求目标，不改已有任务）；非法落点给出明确提示而非静默失败
 - 版本筛选超过 8 个时提供搜索框与限高滚动，避免上百个版本撑爆筛选弹层
 - 测试计划页签下「新建计划」入口始终可见，未选项目或只读项目时点按给出提示，不再整块消失
 - 左上角品牌标识点击固定回到「我的工作」，与登录首屏一致（不再按角色跳到全局健康度或项目列表）
@@ -84,8 +105,8 @@
 
 ### 待办
 
-- 左上角品牌标识的角色落点需在真实后端环境用成员 / 空间主 / 查看者账号回归（静态预览只有演示数据，当前仅代码验证）
-- 项目档案的浏览器回归与单元测试、相关文档同步
+- 后续功能级专项覆盖以实际运行记录为准；本轮 A–E 已有真实后端 Chrome 导航 / 权限完成证据，不再以静态预览或「仅代码验证」描述本轮结果
+- 项目档案独立专项按实际测试记录登记，不从 A–E 导航通过推断所有字段与操作均已逐项验证
 - MySQL Connector/J 的再分发处置（详见 `THIRD-PARTY-NOTICES.md`）
 - Univer telemetry 上报关闭确认
 

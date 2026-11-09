@@ -67,6 +67,10 @@ public class TaskCommandService {
     private final ProjectAccessService projectAccess;
     /** 阻塞停表：标记阻塞时停止该任务上运行中的计时（不改列、不删历史工时） */
     private final TimeLogService timeLogService;
+    private final DeliveryScopeLock scopeLock;
+    private final ReleasePermissionService releasePermissions;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskPublicationService publications;
 
     public TaskCommandService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper,
                               CategoryMapper categoryMapper, UserMapper userMapper,
@@ -78,7 +82,10 @@ public class TaskCommandService {
                               TaskSupport support, TaskCompletionService completionService,
                               TaskWorkflowService workflow, TaskAuditLogger audit,
                               NotificationEventService notificationEvents, ProjectAccessService projectAccess,
-                              TimeLogService timeLogService) {
+                              TimeLogService timeLogService, DeliveryScopeLock scopeLock,
+                              ReleasePermissionService releasePermissions) {
+        this.scopeLock = scopeLock;
+        this.releasePermissions = releasePermissions;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -121,11 +128,15 @@ public class TaskCommandService {
             throw new AppException(409, "该ID的历史完成快照仍保留（任务清单），不能复用：" + id);
         }
 
+        String demandProject = demandProject(workspaceId, req.getDemandId());
+        lockBindingProjects(workspaceId, null, req, demandProject);
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, null);
-        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+        assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
+        validateNewDemandLink(workspaceId, null, t);
+        projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         applyDefectFields(workspaceId, t, req, null);
         t.setRecurType(Texts.trimToNull(req.getRecurType()));
         t.setRemindSent(Boolean.FALSE);
@@ -136,7 +147,8 @@ public class TaskCommandService {
         taskMapper.insert(t);
         support.saveTags(workspaceId, id, req.getTags());
         /* T1.2：影响版本绑定（version_task，一任务一版本；不选=待规划） */
-        String versionNote = applyVersionBinding(workspaceId, id, t.getReqId(), req.getVersionId(), null);
+        String versionNote = applyVersionBinding(userId, workspaceId, t, null, req, null);
+        logDemandChange(userId, workspaceId, null, t);
         /* 直接建成已完成（含备份恢复）也要补完成快照，否则完成统计里查不到这条任务 */
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
             completionService.archive(t);
@@ -169,19 +181,28 @@ public class TaskCommandService {
                     UserNotificationPreferenceService.TASK_ASSIGNED,
                     "新任务指派：" + t.getTitle(), "任务「" + t.getTitle() + "」已指派给你", id, t.getReqId());
         }
-        return taskMapper.selectById(id);
+        return savedTaskResponse(userId, workspaceId, id);
     }
 
     @Transactional
     public Task update(String userId, String workspaceId, String id, TaskSaveRequest req) {
-        Task old = support.require(workspaceId, id);
+        Task observed = support.require(workspaceId, id);
+        String demandProject = demandProject(workspaceId, req.getDemandId());
+        lockBindingProjects(workspaceId, observed, req, demandProject);
+        Task old = scopeLock.lockTask(workspaceId, id);
+        if (old.getDeletedAt() != null) {
+            throw AppException.notFound("任务不存在");
+        }
+        if (!java.util.Objects.equals(observed.getReqId(), old.getReqId())) {
+            throw new AppException(409, "任务所属项目已变化，请刷新后重试");
+        }
         projectAccess.assertViewTask(workspaceId, userId, old);
-        projectAccess.assertWrite(workspaceId, userId, old.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, old.getReqId());
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
         applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
-        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
         if (req.getIsMilestone() == null) {
             t.setIsMilestone(old.getIsMilestone());
@@ -220,10 +241,23 @@ public class TaskCommandService {
             t.setDemandId(old.getDemandId());
         }
         if (t.getDemandId() != null) {
-            Demand demand = demandMapper.selectById(t.getDemandId());
+            Demand demand = taskMapper.selectDemandForScope(workspaceId, t.getDemandId());
             if (demand == null || !workspaceId.equals(demand.getWorkspaceId())
                     || !java.util.Objects.equals(demand.getReqId(), t.getReqId())) {
                 t.setDemandId(null);
+            }
+        }
+        if (req.getDemandId() != null) {
+            assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
+        }
+        validateNewDemandLink(workspaceId, old, t);
+        if (!java.util.Objects.equals(old.getReqId(), t.getReqId())) {
+            if (!taskMapper.selectTaskRecordIdsForScope(workspaceId, id).isEmpty()) {
+                throw AppException.badRequest("任务已有正式发布记录，不能改变项目；执行状态仍可独立调整");
+            }
+            if ("epic".equals(old.getItemType()) && "epic".equals(t.getItemType())
+                    && !taskMapper.selectEpicChildIdsForScope(workspaceId, id).isEmpty()) {
+                throw AppException.badRequest("史诗仍有子任务（含回收站），不能单独移动到其他项目");
             }
         }
         /* 保留的 Epic 归属失效时自动解除：换了项目 / Epic 被删或改了类型（与版本绑定同一语义，不阻断保存） */
@@ -254,19 +288,18 @@ public class TaskCommandService {
         /* 缺陷专属字段：未传保留原值；类型改为非缺陷时一并清空 */
         applyDefectFields(workspaceId, t, req, old);
         List<String> changes = audit.diffParts(workspaceId, old, t, oldTags, req.getTags());
-        /* T1.2：影响版本绑定变更并入审计（不传=不变；空串=解除；项目变更后旧绑定自动失效） */
-        applyVersionBinding(workspaceId, id, t.getReqId(), req.getVersionId(), changes);
+        /* 版本调整独立结构化审计：null 保留，空串解除；跨项目旧绑定须显式调整。 */
+        applyVersionBinding(userId, workspaceId, t, old, req, changes);
+        logDemandChange(userId, workspaceId, old, t);
         /* 阻塞停表：标记阻塞时停止该任务上所有人的运行中计时，但保留已记录工时 */
         boolean becameBlocked = !Boolean.TRUE.equals(old.getBlocked()) && Boolean.TRUE.equals(t.getBlocked());
         if (becameBlocked) {
             timeLogService.closeRunningForTask(workspaceId, id, userId, "任务被阻塞");
         }
-        if (req.getOldUpdatedAt() != null) {
-            t.setUpdatedAt(req.getOldUpdatedAt());
-            t.setVersionCheck(Boolean.TRUE);
-        }
+        t.setUpdatedAt(req.getOldUpdatedAt() == null ? old.getUpdatedAt() : req.getOldUpdatedAt());
+        t.setVersionCheck(t.getUpdatedAt() != null);
         int updatedRows = taskMapper.update(t);
-        if (Boolean.TRUE.equals(t.getVersionCheck()) && updatedRows == 0) {
+        if (updatedRows != 1) {
             throw new AppException(409, "任务已被其他人修改，请刷新后重新编辑");
         }
         /* Epic 改成其他类型时，其下子任务一并解除归属，避免悬空的 epic_id */
@@ -305,8 +338,18 @@ public class TaskCommandService {
                     UserNotificationPreferenceService.TASK_UPDATED,
                     "任务更新：" + t.getTitle(), detail, id, t.getReqId());
         }
+        return savedTaskResponse(userId, workspaceId, id);
+    }
+
+    /** 保存响应与详情一致：读取落库后的绑定，并按最终项目/负责人重新计算发布权限。 */
+    private Task savedTaskResponse(String userId, String workspaceId, String id) {
         Task result = taskMapper.selectById(id);
+        if (result == null) {
+            return null;
+        }
         result.setTags(support.tagNames(workspaceId, id));
+        versionTaskMapper.enrichTasks(workspaceId, java.util.Collections.singletonList(result));
+        publications.enrichTasks(workspaceId, java.util.Collections.singletonList(result));
         return result;
     }
 
@@ -433,7 +476,7 @@ public class TaskCommandService {
         /* 关联需求池需求：须同空间且属于任务所选项目；基于需求创建时未选项目则自动带上需求所在项目 */
         String demandId = Texts.trimToNull(req.getDemandId());
         if (demandId != null) {
-            Demand demand = demandMapper.selectById(demandId);
+            Demand demand = taskMapper.selectDemandForScope(workspaceId, demandId);
             if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
                 throw AppException.badRequest("关联需求不存在：" + demandId);
             }
@@ -479,8 +522,12 @@ public class TaskCommandService {
             foundVersion = old.getFoundVersionId();
         }
         foundVersion = Texts.trimToNull(foundVersion);
-        if (foundVersion != null && !targetBelongsToReq(workspaceId, foundVersion, t.getReqId())) {
-            throw AppException.badRequest("发现版本不属于任务所属项目");
+        if (foundVersion != null) {
+            ProjectVersion found = versionMapper.selectById(foundVersion);
+            if (found == null || !workspaceId.equals(found.getWorkspaceId())
+                    || !java.util.Objects.equals(t.getReqId(), found.getReqId())) {
+                throw AppException.badRequest("发现版本不属于任务所属项目");
+            }
         }
         t.setFoundVersionId(foundVersion);
         String regression = req.getRegressionStatus();
@@ -545,52 +592,174 @@ public class TaskCommandService {
         return epicId;
     }
 
-    /**
-     * T1.2 影响版本绑定（version_task，一任务一版本）。
-     * requestedRaw 为 null=保持现状（create 时即不绑定）；空串=解除绑定=待规划。
-     * 任务换项目后旧绑定不再属于新项目时自动解绑，不阻断保存。
-     *
-     * @return create 审计用的说明（"影响版本 V1.2"）；update 时写进 changes 传 null 即可
-     */
-    private String applyVersionBinding(String workspaceId, String taskId, String reqId,
-                                       String requestedRaw, List<String> changes) {
-        String current = versionTaskMapper.selectVersionIdByTask(workspaceId, taskId);
-        String target;
-        if (requestedRaw == null) {
-            target = current;
-            if (target != null && !targetBelongsToReq(workspaceId, target, reqId)) {
-                target = null;
-            }
+    private void lockBindingProjects(String workspaceId, Task observed, TaskSaveRequest request, String demandProject) {
+        java.util.Set<String> projects = new java.util.TreeSet<String>();
+        if (observed != null && observed.getReqId() != null) projects.add(observed.getReqId());
+        if (Texts.trimToNull(request.getReqId()) != null) projects.add(Texts.trimToNull(request.getReqId()));
+        if (demandProject != null) projects.add(demandProject);
+        java.util.Set<String> versions = new java.util.TreeSet<String>();
+        if (observed != null) versions.addAll(versionTaskMapper.selectVersionIdsByTask(workspaceId, observed.getId()));
+        if (request.getVersionIds() != null) {
+            for (String id : request.getVersionIds()) if (Texts.trimToNull(id) != null) versions.add(Texts.trimToNull(id));
+        }
+        for (String id : versions) {
+            ProjectVersion version = versionMapper.selectById(id);
+            if (version != null && workspaceId.equals(version.getWorkspaceId())) projects.add(version.getReqId());
+        }
+        scopeLock.lockProjects(workspaceId, projects.toArray(new String[0]));
+    }
+
+    /** Explicit M:N planning adjustment, under sorted project locks and the task CAS. */
+    private String applyVersionBinding(String userId, String workspaceId, Task task, Task old,
+                                       TaskSaveRequest req, List<String> changes) {
+        String taskId = task.getId();
+        java.util.Set<String> current = new java.util.TreeSet<String>();
+        if (old != null) current.addAll(taskMapper.selectTaskVersionsForScope(workspaceId, taskId));
+        Demand demand = task.getDemandId() == null ? null : taskMapper.selectDemandForScope(workspaceId, task.getDemandId());
+        String demandVersion = demand != null && "plan".equals(demand.getStatus()) ? demand.getVersionId() : null;
+        java.util.Set<String> target = new java.util.TreeSet<String>();
+        if (req.getVersionIds() == null) {
+            if (old != null) target.addAll(current);
+            else if (demandVersion != null) target.add(demandVersion);
         } else {
-            target = Texts.trimToNull(requestedRaw);
-            if (target != null) {
-                if (reqId == null) {
-                    throw AppException.badRequest("请先选择所属项目，再绑定影响版本");
+            for (String raw : req.getVersionIds()) {
+                String versionId = Texts.trimToNull(raw);
+                if (versionId == null || versionId.length() > 32) {
+                    throw AppException.badRequest("影响版本ID不合法");
                 }
-                if (!targetBelongsToReq(workspaceId, target, reqId)) {
-                    throw AppException.badRequest("影响版本不存在或不属于任务所在项目：" + target);
-                }
+                target.add(versionId);
             }
         }
-        if (java.util.Objects.equals(current, target)) {
+        for (String versionId : target) {
+            if (!targetBelongsToReq(workspaceId, versionId, task.getReqId())) {
+                throw AppException.badRequest("影响版本不存在或不属于任务所在项目，请显式调整 versionIds 并填写原因：" + versionId);
+            }
+        }
+        boolean changed = !current.equals(target);
+        boolean overrideDemand = old == null && req.getVersionIds() != null && demandVersion != null
+                && !target.contains(demandVersion);
+        String reason = Texts.trimToNull(req.getVersionChangeReason());
+        if ((old != null && changed) || overrideDemand) {
+            assertAdjustVersion(userId, workspaceId, old == null ? task : old);
+            if (reason == null) throw AppException.badRequest("调整版本必须填写 versionChangeReason");
+        }
+        java.util.Set<String> delta = new java.util.TreeSet<String>(current);
+        delta.addAll(target);
+        java.util.Set<String> unchanged = new java.util.HashSet<String>(current);
+        unchanged.retainAll(target);
+        delta.removeAll(unchanged);
+        for (String versionId : delta) {
+            if (!taskMapper.selectVersionSuccessIdsForScope(workspaceId, versionId).isEmpty()) {
+                throw AppException.badRequest("版本已有成功正式发布记录，内容成员关系已冻结：" + versionId);
+            }
+        }
+        task.setVersionIds(new java.util.ArrayList<String>(target));
+        if (!changed && !overrideDemand) return null;
+        for (String versionId : delta) {
+            if (target.contains(versionId)) {
+                if (versionTaskMapper.insertBatch(workspaceId, versionId, java.util.Collections.singletonList(taskId)) != 1)
+                    throw new AppException(409, "任务版本关系已变化，请刷新后重试");
+            } else if (versionTaskMapper.deleteBinding(workspaceId, taskId, versionId) != 1) {
+                throw new AppException(409, "任务版本关系已变化，请刷新后重试");
+            }
+        }
+        String note = "影响版本：" + current + " → " + target;
+        java.util.Map<String, Object> after = versionState(workspaceId, target);
+        after.put("inheritanceSource", old == null && req.getVersionIds() == null ? "demand" : "explicit");
+        after.put("demandId", task.getDemandId());
+        after.put("demandVersionId", demandVersion);
+        audit.logChange(userId, workspaceId, taskId, "version_change", note,
+                versionState(workspaceId, current), after, reason);
+        if (changes != null) changes.add(note);
+        return note;
+    }
+
+    private void assertAdjustVersion(String userId, String workspaceId, Task task) {
+        // Project/task locks are already held; ordinary access reads may still see an RR snapshot.
+        java.util.Map<String, Object> snapshot = memberMapper.selectDeliveryAccessForUpdate(
+                workspaceId, userId, task.getReqId());
+        if (snapshot == null || snapshot.get("role") == null) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + task.getReqId());
+        }
+        String role = (String) snapshot.get("role");
+        boolean privileged = ProjectAccessService.isPrivileged(role);
+        if (!privileged && !ProjectAccessService.isViewer(role)
+                && ProjectAccessService.ACCESS_NONE.equals(snapshot.get("access"))) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + task.getReqId());
+        }
+        if (ProjectAccessService.isViewer(role)
+                || (!privileged && ProjectAccessService.ACCESS_READ.equals(snapshot.get("access")))) {
+            throw new AppException(403, "你对该项目只有查看权限");
+        }
+        if (!privileged && !userId.equals(snapshot.get("projectOwnerUserId"))
+                && !userId.equals(task.getOwnerUserId())) {
+            throw new AppException(403, "只有项目管理角色或任务负责人可以调整版本");
+        }
+    }
+
+    private java.util.Map<String, Object> versionState(String workspaceId, java.util.Set<String> versionIds) {
+        java.util.Map<String, Object> state = new java.util.LinkedHashMap<String, Object>();
+        state.put("versionIds", new java.util.ArrayList<String>(versionIds));
+        List<String> names = new java.util.ArrayList<String>();
+        for (String id : versionIds) names.add(versionDisplayName(workspaceId, id));
+        state.put("versionNames", names);
+        return state;
+    }
+
+    private String demandProject(String workspaceId, String demandId) {
+        demandId = Texts.trimToNull(demandId);
+        if (demandId == null) {
             return null;
         }
-        versionTaskMapper.deleteByTaskId(workspaceId, taskId);
-        if (target != null) {
-            versionTaskMapper.insertBatch(workspaceId, target, java.util.Collections.singletonList(taskId));
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand == null || !workspaceId.equals(demand.getWorkspaceId())) {
+            throw AppException.badRequest("关联需求不存在：" + demandId);
         }
-        String note = "影响版本：" + versionDisplayName(workspaceId, current) + " → " + versionDisplayName(workspaceId, target);
-        if (changes != null) {
-            changes.add(note);
+        return demand.getReqId();
+    }
+
+    private void assertDemandProjectUnchanged(String workspaceId, String demandId, String observedProject) {
+        if (demandId != null) {
+            Demand current = taskMapper.selectDemandForScope(workspaceId, demandId);
+            if (current == null || !java.util.Objects.equals(observedProject, current.getReqId())) {
+                throw new AppException(409, "需求所属项目已变化，请刷新后重试");
+            }
         }
-        return note;
+    }
+
+    private void validateNewDemandLink(String workspaceId, Task old, Task task) {
+        if (task.getDemandId() == null || (old != null
+                && java.util.Objects.equals(old.getDemandId(), task.getDemandId()))) {
+            return;
+        }
+        Demand demand = taskMapper.selectDemandForScope(workspaceId, task.getDemandId());
+        if (demand != null && "canceled".equals(demand.getStatus())) {
+            throw AppException.badRequest("已取消需求不能新建关联任务");
+        }
+    }
+
+    private void logDemandChange(String userId, String workspaceId, Task old, Task task) {
+        String beforeId = old == null ? null : old.getDemandId();
+        if (!java.util.Objects.equals(beforeId, task.getDemandId())) {
+            audit.logChange(userId, workspaceId, task.getId(), "demand_change", "关联需求变更",
+                    demandState(workspaceId, beforeId), demandState(workspaceId, task.getDemandId()), null);
+        }
+    }
+
+    private java.util.Map<String, Object> demandState(String workspaceId, String demandId) {
+        java.util.Map<String, Object> state = new java.util.LinkedHashMap<String, Object>();
+        Demand demand = demandId == null ? null : taskMapper.selectDemandForScope(workspaceId, demandId);
+        state.put("demandId", demandId);
+        state.put("demandTitle", demand == null ? null : demand.getTitle());
+        state.put("reqId", demand == null ? null : demand.getReqId());
+        return state;
     }
 
     private boolean targetBelongsToReq(String workspaceId, String versionId, String reqId) {
         if (reqId == null) {
             return false;
         }
-        ProjectVersion v = versionMapper.selectById(versionId);
+        ProjectVersion v = taskMapper.selectVersionForScope(workspaceId, versionId);
         return v != null && workspaceId.equals(v.getWorkspaceId()) && reqId.equals(v.getReqId());
     }
 
@@ -598,7 +767,7 @@ public class TaskCommandService {
         if (versionId == null) {
             return "待规划";
         }
-        ProjectVersion v = versionMapper.selectById(versionId);
+        ProjectVersion v = taskMapper.selectVersionForScope(workspaceId, versionId);
         return v == null ? versionId : v.getName();
     }
 

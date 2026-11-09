@@ -43,15 +43,22 @@ public class TaskTrashService {
     private final com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper;
     private final NotificationEventService notificationEvents;
     private final TaskWatchService watchService;
+    private final DeliveryScopeLock scopeLock;
+    private final com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskPublicationService publications;
 
     public TaskTrashService(TaskMapper taskMapper, TaskSupport support, TaskCascade cascade,
                             TimeLogService timeLogService, TaskAuditLogger audit,
                             ProjectAccessService projectAccess,
                             com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                             NotificationEventService notificationEvents, TaskWatchService watchService,
-                            PlatformTransactionManager transactionManager) {
+                            PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
+                            com.hourglass.mapper.VersionTaskMapper versionTaskMapper) {
+        this.scopeLock = scopeLock;
+        this.versionTaskMapper = versionTaskMapper;
         this.taskMapper = taskMapper;
         this.support = support;
         this.cascade = cascade;
@@ -72,15 +79,17 @@ public class TaskTrashService {
         int total = taskMapper.countDeletedVisible(workspaceId, viewerId);
         List<Task> items = total <= safeOffset ? new ArrayList<Task>()
                 : taskMapper.selectDeletedPage(workspaceId, viewerId, safeOffset, safeLimit);
+        versionTaskMapper.enrichTasks(workspaceId, items);
+        publications.enrichTasks(workspaceId, items);
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 
     /** 软删除：进回收站，30 天后由定时任务清理 */
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
-        Task t = support.require(workspaceId, id);
+        Task t = lockTask(workspaceId, id, false);
         projectAccess.assertViewTask(workspaceId, userId, t);
-        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         taskMapper.softDelete(id);
         mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         /* Epic 进回收站后其子任务立即解除归属，避免指向已删除的任务 */
@@ -94,9 +103,10 @@ public class TaskTrashService {
 
     @Transactional
     public void restore(String userId, String workspaceId, String id) {
-        Task t = support.requireDeleted(workspaceId, id);
+        Task t = lockTask(workspaceId, id, true);
         projectAccess.assertViewTask(workspaceId, userId, t);
-        projectAccess.assertWrite(workspaceId, userId, t.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
+        // Restoring execution visibility does not change planning membership or immutable release evidence.
         taskMapper.restore(id);
         /* O-26：把"刚删就撤销"和"从回收站恢复"在时间线上区分开，让"这条任务为什么又回来了"可解释 */
         boolean undo = t.getDeletedAt() != null
@@ -110,8 +120,21 @@ public class TaskTrashService {
 
     @Transactional
     public void purge(String workspaceId, String id) {
-        support.requireDeleted(workspaceId, id);
+        Task task = lockTask(workspaceId, id, true);
         cascade.purgeTasks(workspaceId, Collections.singletonList(id));
+    }
+
+    private Task lockTask(String workspaceId, String id, boolean deleted) {
+        Task observed = deleted ? support.requireDeleted(workspaceId, id) : support.require(workspaceId, id);
+        scopeLock.lockProjects(workspaceId, observed.getReqId());
+        Task task = scopeLock.lockTask(workspaceId, id);
+        if (!java.util.Objects.equals(observed.getReqId(), task.getReqId())) {
+            throw new com.hourglass.common.AppException(409, "任务所属项目已变化，请刷新后重试");
+        }
+        if (deleted != (task.getDeletedAt() != null)) {
+            throw com.hourglass.common.AppException.badRequest("任务删除状态已变化，请刷新后重试");
+        }
+        return task;
     }
 
     /** 删除/恢复通知负责人与关注者；操作者不做打扰，负责人已单独通知时不重复 */

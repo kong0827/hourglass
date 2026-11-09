@@ -2,6 +2,9 @@ package com.hourglass.service;
 
 import com.hourglass.entity.MailDelivery;
 import com.hourglass.mapper.MailDeliveryMapper;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -70,6 +73,22 @@ class MailDeliveryServiceTest {
         service.dispatchDue();
 
         verify(mapper, never()).selectDue(any(), anyInt());
+    }
+
+    @Test
+    void workspaceCleanupNormalizesCrossTableCollationAndKeepsBothScopes() throws Exception {
+        Configuration configuration = new Configuration();
+        configuration.getTypeAliasRegistry().registerAlias("MailDelivery", MailDelivery.class);
+        try (java.io.InputStream input = getClass().getResourceAsStream("/mapper/MailDeliveryMapper.xml")) {
+            new XMLMapperBuilder(input, configuration, "mapper/MailDeliveryMapper.xml", configuration.getSqlFragments()).parse();
+        }
+        BoundSql bound = configuration.getMappedStatement("com.hourglass.mapper.MailDeliveryMapper.deleteByWorkspaceReferences")
+                .getBoundSql(Collections.singletonMap("workspaceId", "W1"));
+        assertEquals("DELETE FROM mail_delivery WHERE reference_id COLLATE utf8mb4_unicode_ci IN "
+                + "(SELECT id FROM task WHERE workspace_id = ?) OR reference_id COLLATE utf8mb4_unicode_ci IN "
+                + "(SELECT id FROM demand WHERE workspace_id = ?)", bound.getSql().replaceAll("\\s+", " ").trim());
+        assertEquals(2, bound.getParameterMappings().size());
+        assertTrue(bound.getParameterMappings().stream().allMatch(mapping -> "workspaceId".equals(mapping.getProperty())));
     }
 
     private MailDelivery delivery(Long id, int attempts) {

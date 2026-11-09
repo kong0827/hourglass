@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 /** P0 修复回归：Epic 进回收站（软删除）后其子任务立即解除归属。 */
 class TaskTrashServiceEpicCleanupTest {
 
+    private final DeliveryScopeLock scopeLock = mock(DeliveryScopeLock.class);
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final TaskSupport support = mock(TaskSupport.class);
     private final TaskCascade cascade = mock(TaskCascade.class);
@@ -24,7 +25,8 @@ class TaskTrashServiceEpicCleanupTest {
     private final TaskTrashService service = new TaskTrashService(tasks, support, cascade, timeLog, audit,
             access, mock(com.hourglass.mapper.MailDeliveryMapper.class),
             mock(NotificationEventService.class), mock(TaskWatchService.class),
-            mock(PlatformTransactionManager.class));
+            mock(PlatformTransactionManager.class), scopeLock,
+            mock(com.hourglass.mapper.VersionTaskMapper.class));
 
     @Test
     void softDeletingEpicClearsChildrenEpicRefs() {
@@ -34,6 +36,7 @@ class TaskTrashServiceEpicCleanupTest {
         epic.setTitle("Epic");
         epic.setItemType("epic");
         when(support.require("W1", "K1")).thenReturn(epic);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(epic);
 
         service.delete("U1", "W1", "K1");
 
@@ -48,7 +51,9 @@ class TaskTrashServiceEpicCleanupTest {
         Task epic = new Task();
         epic.setId("K1");
         epic.setWorkspaceId("W1");
+        epic.setDeletedAt(java.time.LocalDateTime.now());
         when(support.requireDeleted("W1", "K1")).thenReturn(epic);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(epic);
 
         service.purge("W1", "K1");
 

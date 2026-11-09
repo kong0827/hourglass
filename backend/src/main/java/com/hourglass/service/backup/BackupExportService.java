@@ -102,9 +102,11 @@ public class BackupExportService {
     }
 
     public BackupData export(String workspaceId) {
+        if (!taskMapper.selectSuccessfulVersionIds(workspaceId).isEmpty()) {
+            throw com.hourglass.common.AppException.badRequest("JSON 不迁移已冻结的正式发布版本内容，请使用数据库备份");
+        }
         BackupData data = new BackupData();
-        /* v12：模块字典带 projectId（模块挂在项目下） */
-        data.setV(12);
+        data.setV(BackupData.FORMAT_VERSION);
         data.setExportedAt(LocalDateTime.now().format(ISO_TS));
 
         /* 回收站任务也要进备份：导入会清空空间任务（含回收站），不导出就等于把回收站丢掉 */
@@ -116,12 +118,9 @@ public class BackupExportService {
         }
         Map<String, List<String>> tagMap = tagsOf(workspaceId, ids);
 
-        /* v8：任务→版本是 1:1（version_task 以 task_id 为主键），直接挂回任务 */
-        Map<String, String> versionByTask = new HashMap<String, String>();
-        for (Task binding : versionTaskMapper.selectBindingsByWorkspace(workspaceId)) {
-            if (binding != null && binding.getId() != null) {
-                versionByTask.put(binding.getId(), binding.getVersionId());
-            }
+        Map<String, List<String>> versionByTask = new HashMap<String, List<String>>();
+        for (com.hourglass.dto.TaskVersionBinding binding : versionTaskMapper.selectBindingsByWorkspace(workspaceId)) {
+            versionByTask.computeIfAbsent(binding.getTaskId(), key -> new ArrayList<String>()).add(binding.getVersionId());
         }
 
         Map<String, List<BackupData.BackupSubtask>> subMap = new LinkedHashMap<String, List<BackupData.BackupSubtask>>();
@@ -194,7 +193,7 @@ public class BackupExportService {
             b.setReproduceSteps(t.getReproduceSteps());
             b.setFoundVersionId(t.getFoundVersionId());
             b.setRegressionStatus(t.getRegressionStatus());
-            b.setVersionId(versionByTask.get(t.getId()));
+            b.setVersionIds(new ArrayList<String>(versionByTask.getOrDefault(t.getId(), java.util.Collections.emptyList())));
             tasks.add(b);
         }
         data.setTasks(tasks);
@@ -331,12 +330,16 @@ public class BackupExportService {
            需求流转日志属于审计记录，与分支时间线同口径不随备份迁移 */
         List<BackupData.BackupVersion> versions = new ArrayList<BackupData.BackupVersion>();
         for (ProjectVersion v : versionMapper.selectByWorkspace(workspaceId)) {
+            if ("released".equals(v.getStatus()) || v.getReleasedAt() != null) {
+                throw com.hourglass.common.AppException.badRequest("JSON 不迁移已发布版本内容或正式事实，请使用数据库备份；版本：" + v.getId());
+            }
             BackupData.BackupVersion bv = new BackupData.BackupVersion();
             bv.setId(v.getId());
             bv.setReqId(v.getReqId());
             bv.setName(v.getName());
             bv.setDesc(v.getDescription());
             bv.setStatus(v.getStatus());
+            bv.setStartDate(v.getStartDate() == null ? null : v.getStartDate().toString());
             bv.setTargetDate(v.getTargetDate() == null ? null : v.getTargetDate().toString());
             bv.setReleasedAt(v.getReleasedAt() == null ? null : v.getReleasedAt().format(ISO_TS));
             bv.setCreatedAt(v.getCreatedAt() == null ? null : v.getCreatedAt().format(ISO_TS));
@@ -358,6 +361,8 @@ public class BackupExportService {
             bd.setPriority(d.getPriority());
             bd.setStatus(d.getStatus());
             bd.setExpectDate(d.getExpectDate() == null ? null : d.getExpectDate().toString());
+            bd.setPlannedStart(d.getPlannedStart() == null ? null : d.getPlannedStart().toString());
+            bd.setPlannedEnd(d.getPlannedEnd() == null ? null : d.getPlannedEnd().toString());
             bd.setAcceptText(d.getAcceptText());
             bd.setVersionId(d.getVersionId());
             bd.setReviewNote(d.getReviewNote());
@@ -440,6 +445,7 @@ public class BackupExportService {
     /** CSV 导出（Excel 可直接打开，带 BOM） */
     public byte[] exportCsv(String workspaceId, java.util.Set<String> hiddenProjects) {
         List<Task> tasks = visibleTasks(hiddenProjects, taskMapper.selectAll(workspaceId));
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
         Map<String, String> reqNames = new HashMap<String, String>();
         for (Requirement r : reqMapper.selectAll(workspaceId)) {
             reqNames.put(r.getId(), r.getName());
@@ -469,7 +475,7 @@ public class BackupExportService {
         StringBuilder sb = new StringBuilder();
         sb.append('\uFEFF');
         sb.append("ID,标题,描述,优先级,模块,标签,负责人,看板列,截止日期,所属项目,进度%,进度备注,完成日期,创建时间,"
-                + "是否阻塞,卡点原因,累计工时(分钟),提醒时间\r\n");
+                + "是否阻塞,卡点原因,累计工时(分钟),提醒时间,规划版本\r\n");
         for (Task t : tasks) {
             List<String> tags = tagMap.get(t.getId());
             Integer minutes = minutesByTask.get(t.getId());
@@ -490,7 +496,8 @@ public class BackupExportService {
               .append(Boolean.TRUE.equals(t.getBlocked()) ? "是" : "").append(',')
               .append(csv(t.getBlockedReason())).append(',')
               .append(minutes == null ? 0 : minutes).append(',')
-              .append(csv(t.getRemindAt() == null ? "" : t.getRemindAt().format(TS)))
+              .append(csv(t.getRemindAt() == null ? "" : t.getRemindAt().format(TS))).append(',')
+              .append(csv(String.join("/", t.getVersionNames())))
               .append("\r\n");
         }
         return sb.toString().getBytes(StandardCharsets.UTF_8);

@@ -40,6 +40,12 @@ public class DemandSaveRequest {
     private String priority;
 
     private LocalDate expectDate;
+    private LocalDate plannedStart;
+    private LocalDate plannedEnd;
+
+    /** 编辑时必填，创建时由服务端初始化为 0 */
+    @Min(value = 0, message = "revision 不合法")
+    private Long revision;
 
     @Size(max = 2000, message = "验收标准不能超过 2000 字")
     private String acceptText;

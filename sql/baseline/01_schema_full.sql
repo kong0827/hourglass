@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Regenerated 2026-11-09: full schema after migrations 01-62 (47 tables).
+-- Updated 2026-11-09: full schema after migrations 01-63 (52 tables).
 --
--- 生成方式：在空库按序重放 sql/01-62 号升级脚本后导出（2026-11-09，47 张表），与增量链等效。
+-- 完整结构与 sql/01-63 增量链等效；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -189,8 +189,11 @@ CREATE TABLE `demand` (
   `item_kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '新功能' COMMENT '类型：新功能/体验优化/缺陷/其他',
   `category_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '模块ID（category.id，空=未指定）',
   `priority` varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'P2' COMMENT '优先级 P0/P1/P2/P3',
-  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review' COMMENT '状态机：review待评审/pass已通过/plan已排期/rej已拒绝',
+  `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review' COMMENT '状态机：review待评审/pass已通过/plan已排期/rej已拒绝/canceled已取消',
   `expect_date` date DEFAULT NULL COMMENT '期望交付时间',
+  `planned_start` date DEFAULT NULL,
+  `planned_end` date DEFAULT NULL,
+  `revision` bigint NOT NULL DEFAULT 0,
   `accept_text` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '验收标准',
   `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '目标版本（project_version，排期时选择）',
   `review_note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '评审备注（通过理由/拒绝原因/排期说明）',
@@ -230,6 +233,7 @@ CREATE TABLE `demand_log` (
   `demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求ID',
   `action` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：create/pass/rej/plan/reopen/update',
   `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注（拒绝原因/排期说明等）',
+  `change_data` json DEFAULT NULL,
   `operator` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人账号ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
   PRIMARY KEY (`id`),
@@ -373,7 +377,8 @@ CREATE TABLE `project_version` (
   `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned' COMMENT 'planned/active/released',
   `start_date` date DEFAULT NULL COMMENT '计划开始日期',
   `target_date` date DEFAULT NULL COMMENT '计划发布日期',
-  `released_at` datetime DEFAULT NULL COMMENT '实际发布时间',
+  `released_at` datetime DEFAULT NULL COMMENT '实际发布日期（补录日期按当日零点保存）',
+  `revision` bigint NOT NULL DEFAULT 0,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -556,6 +561,9 @@ CREATE TABLE `task` (
   `blocked_by_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '等待的任务ID（可选的依赖关系）',
   `note` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度备注',
   `completed_at` date DEFAULT NULL COMMENT '完成日期',
+  `published_at` date DEFAULT NULL,
+  `publish_source` varchar(16) DEFAULT NULL,
+  `published_release_id` varchar(32) DEFAULT NULL,
   `recur_type` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '循环：daily/weekly/monthly，空为不循环',
   `recur_next_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '循环派生的下一次任务ID（重复完成时复用，防重复生成）',
   `remind_at` datetime DEFAULT NULL COMMENT '任务级提醒时间',
@@ -567,6 +575,7 @@ CREATE TABLE `task` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `gantt_end` date GENERATED ALWAYS AS (greatest(coalesce(`start_date`,`due_date`),coalesce(`due_date`,`start_date`))) STORED COMMENT '有效截止日（max(start,due)，甘特区间索引用）',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_task_release_workspace` (`id`,`workspace_id`),
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_board` (`workspace_id`,`board_column`,`sort_order`),
   KEY `idx_req` (`req_id`),
@@ -675,6 +684,7 @@ CREATE TABLE `task_log` (
   `actor_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人用户ID（历史数据可空）',
   `action` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作：create/update/move/delete/restore/undo',
   `detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '变更摘要',
+  `change_data` json DEFAULT NULL,
   `from_column` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动前所在看板列 id（仅 action=move 且跨列时非空）',
   `to_column` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移动后所在看板列 id（仅 action=move 且跨列时非空）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
@@ -864,13 +874,13 @@ DROP TABLE IF EXISTS `version_task`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `version_task` (
-  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID，一个任务最多归属一个版本',
+  `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID，显式多版本规划关联',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '版本ID',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '关联时间',
-  PRIMARY KEY (`task_id`),
-  KEY `idx_version` (`version_id`),
-  KEY `idx_workspace` (`workspace_id`)
+  PRIMARY KEY (`workspace_id`,`task_id`,`version_id`),
+  KEY `idx_version` (`workspace_id`,`version_id`,`task_id`),
+  KEY `idx_task` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='版本任务关联';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `work_activity`;
@@ -937,6 +947,121 @@ CREATE TABLE `workspace_priority` (
   UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `version_release_plan`;
+CREATE TABLE `version_release_plan` (
+  `id` varchar(32) NOT NULL,
+  `workspace_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `planned_at` datetime DEFAULT NULL,
+  `owner_user_id` varchar(32) DEFAULT NULL,
+  `notes` varchar(2000) DEFAULT NULL,
+  `risks` varchar(1000) DEFAULT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'draft',
+  `revision` bigint NOT NULL DEFAULT 0,
+  `scope_token` varchar(64) DEFAULT NULL,
+  `environment` varchar(16) NOT NULL,
+  `target_keys` json NOT NULL,
+  `coverage` varchar(16) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_plan_workspace` (`id`,`workspace_id`),
+  KEY `idx_plan_version` (`workspace_id`,`version_id`),
+  KEY `idx_plan_workspace` (`workspace_id`,`status`),
+  CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release_plan_task`;
+CREATE TABLE `version_release_plan_task` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `task_id` varchar(32) NOT NULL,
+  PRIMARY KEY (`plan_id`,`task_id`),
+  KEY `idx_plan_task_workspace` (`task_id`,`workspace_id`),
+  CONSTRAINT `fk_plan_task_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_plan_task_task` FOREIGN KEY (`task_id`,`workspace_id`) REFERENCES `task` (`id`,`workspace_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release`;
+CREATE TABLE `version_release` (
+  `id` varchar(32) NOT NULL,
+  `workspace_id` varchar(32) NOT NULL,
+  `req_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) DEFAULT NULL,
+  `plan_revision` bigint DEFAULT NULL,
+  `occurred_at` datetime(6) NOT NULL,
+  `environment` varchar(16) NOT NULL,
+  `target_keys` json NOT NULL,
+  `coverage` varchar(16) NOT NULL,
+  `artifact_ref` varchar(500) NOT NULL,
+  `artifact_digest` varchar(64) NOT NULL,
+  `operation` varchar(16) NOT NULL,
+  `related_release_id` varchar(32) DEFAULT NULL,
+  `executor_user_id` varchar(32) NOT NULL,
+  `executor_name` varchar(50) NOT NULL,
+  `deviation_reason` varchar(1000) DEFAULT NULL,
+  `result` varchar(8) NOT NULL,
+  `published_on` date DEFAULT NULL,
+  `recorded_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `released_by` varchar(32) NOT NULL,
+  `released_by_name` varchar(50) NOT NULL,
+  `version_name` varchar(40) NOT NULL,
+  `project_name` varchar(40) NOT NULL,
+  `notes` varchar(2000) DEFAULT NULL,
+  `failure_reason` varchar(1000) DEFAULT NULL,
+  `published_count` int NOT NULL DEFAULT 0,
+  `excluded_count` int NOT NULL DEFAULT 0,
+  `idempotency_key` varchar(64) NOT NULL,
+  `request_hash` varchar(64) NOT NULL,
+  `plan_snapshot` json NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_release_workspace` (`id`,`workspace_id`),
+  UNIQUE KEY `uk_release_request` (`workspace_id`,`version_id`,`idempotency_key`),
+  KEY `idx_release_project` (`workspace_id`,`req_id`,`occurred_at`),
+  CONSTRAINT `fk_release_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_release_related` FOREIGN KEY (`related_release_id`,`workspace_id`) REFERENCES `version_release` (`id`,`workspace_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_release_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_release_project` FOREIGN KEY (`req_id`) REFERENCES `requirement` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release_item`;
+CREATE TABLE `version_release_item` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `workspace_id` varchar(32) NOT NULL,
+  `release_id` varchar(32) NOT NULL,
+  `task_id` varchar(32) NOT NULL,
+  `title` varchar(60) NOT NULL,
+  `item_type` varchar(16) NOT NULL,
+  `owner_user_id` varchar(32) DEFAULT NULL,
+  `owner_name` varchar(32) DEFAULT NULL,
+  `demand_id` varchar(32) DEFAULT NULL,
+  `demand_title` varchar(80) DEFAULT NULL,
+  `target_version_id` varchar(32) DEFAULT NULL,
+  `target_version_name` varchar(40) DEFAULT NULL,
+  `board_column` varchar(32) DEFAULT NULL,
+  `completed_at` date DEFAULT NULL,
+  `disposition` varchar(24) NOT NULL,
+  `reason` varchar(1000) DEFAULT NULL,
+  `content_summary` varchar(2000) DEFAULT NULL,
+  `work_minutes` int NOT NULL DEFAULT 0,
+  `estimate_minutes` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_release_task` (`release_id`,`task_id`),
+  KEY `idx_release_task_history` (`workspace_id`,`task_id`),
+  KEY `idx_release_demand` (`workspace_id`,`demand_id`),
+  CONSTRAINT `fk_release_item_record` FOREIGN KEY (`release_id`,`workspace_id`) REFERENCES `version_release` (`id`,`workspace_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_log`;
+CREATE TABLE `version_log` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `workspace_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `action` varchar(32) NOT NULL,
+  `actor_id` varchar(32) NOT NULL,
+  `reason` varchar(500) DEFAULT NULL,
+  `change_data` json DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_version_log` (`workspace_id`,`version_id`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

@@ -86,6 +86,7 @@
     bell: function (s) { return svg(s, '<path d="M10 2.6a5.2 5.2 0 0 0-5.2 5.2c0 3.6-1.4 4.8-1.4 4.8h13.2s-1.4-1.2-1.4-4.8A5.2 5.2 0 0 0 10 2.6Z"/><path d="M8.2 15.4a1.9 1.9 0 0 0 3.6 0"/>'); },
     alert: function (s) { return svg(s, '<path d="M10 3.2 18 16.6H2Z"/><path d="M10 8.2v3.4"/><path d="M10 14.2h.01"/>'); },
     alertCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M10 6.2v4.2"/><path d="M10 13.6h.01"/>'); },
+    helpCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M7.9 7.4a2.2 2.2 0 0 1 4.2.9c0 1.4-2.1 1.6-2.1 2.9"/><path d="M10 14.2h.01"/>'); },
     checkCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M6.6 10.3 8.9 12.6l4.5-5"/>'); },
     infoCircle: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.6"/><path d="M10 13.8V9.4"/><path d="M10 6.6h.01"/>'); },
     clock: function (s) { return svg(s, '<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>'); },

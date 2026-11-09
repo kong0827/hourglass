@@ -37,11 +37,13 @@ class MyTasksPaginationTest {
     private TaskQueryService service() {
         WorkspaceMetaCache metaCache = mock(WorkspaceMetaCache.class);
         TaskSupport support = new TaskSupport(taskMapper, mock(TagMapper.class), metaCache);
-        return new TaskQueryService(taskMapper, mock(RequirementMapper.class), mock(ProjectVersionMapper.class),
+        TaskQueryService service = new TaskQueryService(taskMapper, mock(RequirementMapper.class), mock(ProjectVersionMapper.class),
                 mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
-                mock(ProjectAccessService.class));
+                mock(ProjectAccessService.class), mock(ReleasePermissionService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", mock(TaskPublicationService.class));
+        return service;
     }
 
     @Test

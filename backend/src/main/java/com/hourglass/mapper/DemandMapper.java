@@ -32,7 +32,17 @@ public interface DemandMapper {
 
     Demand selectById(String id);
 
+    /** 项目锁之后使用当前读，避免 REPEATABLE READ 的旧快照。 */
+    Demand selectByIdForUpdate(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    com.hourglass.entity.ProjectVersion selectScheduleVersion(@Param("workspaceId") String workspaceId,
+            @Param("reqId") String reqId, @Param("id") String id);
+
     List<Demand> selectByVersion(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+
+    /** 需求详情关联任务：任务实际版本与发布时间，区别于需求目标版本。 */
+    List<com.hourglass.entity.Task> selectDemandTasks(@Param("workspaceId") String workspaceId,
+            @Param("demandId") String demandId, @Param("offset") int offset, @Param("limit") int limit);
 
     int insert(Demand demand);
 
@@ -49,7 +59,7 @@ public interface DemandMapper {
     /** 单条需求被删除时清掉它的流转日志，避免留下指向已删记录的孤儿行 */
     int deleteLogsByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
-    /** 甘特批量：每条需求最后一次通过/拒绝/排期时间 */
+    /** 甘特批量：每条需求最后一次通过/拒绝/排期/调期/取消时间 */
     List<Map<String, Object>> selectLogTimeline(@Param("workspaceId") String workspaceId,
                                                 @Param("ids") List<String> ids);
 
@@ -60,20 +70,32 @@ public interface DemandMapper {
                                                 @Param("userId") String userId,
                                                 @Param("seeAllDrafts") boolean seeAllDrafts);
 
-    /** 甘特批量：关联工作项起止与完成数 */
+    /** 甘特批量：关联工作项完成数与最晚完成日 */
     List<Map<String, Object>> selectTaskTimeline(@Param("workspaceId") String workspaceId,
                                                  @Param("ids") List<String> ids);
 
-    /** 甘特批量：用例执行起止与最近一次未通过数 */
+    /** 甘特批量：真实开工日（首次离开待处理 / 首次计时），不含计划开始日期 */
+    List<Map<String, Object>> selectTaskStartTimeline(@Param("workspaceId") String workspaceId,
+                                                      @Param("ids") List<String> ids);
+
+    /** 甘特批量：用例执行起止与未执行 / 未通过数 */
     List<Map<String, Object>> selectTestTimeline(@Param("workspaceId") String workspaceId,
                                                  @Param("ids") List<String> ids);
 
-    /** 甘特批量：目标版本实际发布时间 */
-    List<Map<String, Object>> selectVersionTimeline(@Param("workspaceId") String workspaceId,
-                                                    @Param("ids") List<String> ids);
+    /** 甘特批量：需求快照中成功产品发布条目的最晚实际发布日期，不依赖当前目标或任务关联。 */
+    List<Map<String, Object>> selectDemandReleaseTimeline(@Param("workspaceId") String workspaceId,
+                                                         @Param("ids") List<String> ids);
+
+    List<com.hourglass.entity.VersionRelease> selectActualRecords(@Param("workspaceId") String workspaceId,
+                                                                 @Param("ids") List<String> ids);
 
     int insertLog(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                   @Param("action") String action, @Param("note") String note, @Param("operator") String operator);
+
+    /** 保留文字日志，并追加结构化 before/after 快照（JSON 字符串） */
+    int insertChangeLog(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
+                        @Param("action") String action, @Param("note") String note,
+                        @Param("operator") String operator, @Param("changeData") String changeData);
 
     List<Map<String, Object>> selectLogs(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId,
                                          @Param("offset") int offset, @Param("limit") int limit);
@@ -83,8 +105,28 @@ public interface DemandMapper {
     int deleteLogsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     /** 版本被覆盖重建、需求池未随备份恢复时：清掉指向旧版本ID的目标版本 */
-    int clearVersionRefsByWorkspace(@Param("workspaceId") String workspaceId);
+    default int clearVersionRefsByWorkspace(String workspaceId) {
+        return clearVersionRefs(workspaceId, null);
+    }
 
-    /** 删除版本时：需求池中指向该版本的目标版本置空，避免排期指向不存在的版本 */
-    int clearVersionRefsByVersion(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    /** 删除版本/恢复备份时，同样逐条使用旧 revision CAS，不能绕过需求并发保护。 */
+    default int clearVersionRefsByVersion(String workspaceId, String versionId) {
+        return clearVersionRefs(workspaceId, versionId);
+    }
+
+    default int clearVersionRefs(String workspaceId, String versionId) {
+        int changed = 0;
+        for (Demand demand : selectByWorkspace(workspaceId)) {
+            if (demand.getVersionId() == null
+                    || (versionId != null && !versionId.equals(demand.getVersionId()))) {
+                continue;
+            }
+            demand.setVersionId(null);
+            if (update(demand) != 1) {
+                throw com.hourglass.common.AppException.conflict("需求已被其他人修改，请刷新后重试");
+            }
+            changed++;
+        }
+        return changed;
+    }
 }

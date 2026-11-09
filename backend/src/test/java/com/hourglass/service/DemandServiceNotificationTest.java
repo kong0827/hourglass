@@ -23,17 +23,26 @@ class DemandServiceNotificationTest {
 
     private final DemandMapper demands = mock(DemandMapper.class);
     private final ProjectVersionMapper versions = mock(ProjectVersionMapper.class);
+    private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
-    private final DemandService service = new DemandService(demands, mock(RequirementMapper.class),
+    private final DemandService service = new DemandService(demands, reqs,
             versions, mock(TaskMapper.class), events, mock(RequirementDocMapper.class),
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
-            mock(com.hourglass.mapper.CategoryMapper.class));
+            mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
+            mock(ReleasePermissionService.class));
+
+    @org.junit.jupiter.api.BeforeEach
+    void successfulUpdates() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "releases", mock(com.hourglass.mapper.ReleaseMapper.class));
+        when(demands.update(org.mockito.ArgumentMatchers.any(Demand.class))).thenReturn(1);
+    }
 
     @Test
     void passNotifiesSubmitter() {
         Demand d = demand("review");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
 
         service.pass("admin", "W1", "D1", null);
 
@@ -45,6 +54,7 @@ class DemandServiceNotificationTest {
     void rejectNotifiesSubmitter() {
         Demand d = demand("review");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
         DemandActionRequest body = new DemandActionRequest();
         body.setNote("not ready");
 
@@ -58,14 +68,17 @@ class DemandServiceNotificationTest {
     void planNotifiesSubmitter() {
         Demand d = demand("pass");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
         ProjectVersion version = new ProjectVersion();
         version.setId("V1");
         version.setWorkspaceId("W1");
         version.setReqId("R1");
         version.setName("1.0");
         when(versions.selectById("V1")).thenReturn(version);
+        when(demands.selectScheduleVersion("W1", "R1", "V1")).thenReturn(version);
         DemandActionRequest body = new DemandActionRequest();
         body.setVersionId("V1");
+        body.setRevision(0L);
 
         service.plan("admin", "W1", "D1", body);
 
@@ -77,6 +90,7 @@ class DemandServiceNotificationTest {
     void reopenNotifiesSubmitter() {
         Demand d = demand("rej");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
 
         service.reopen("admin", "W1", "D1", null);
 
@@ -88,9 +102,15 @@ class DemandServiceNotificationTest {
     void updateNotifiesSubmitter() {
         Demand d = demand("review");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
         DemandSaveRequest req = new DemandSaveRequest();
         req.setReqId("R1");
         req.setTitle("Demand2");
+        req.setRevision(0L);
+        com.hourglass.entity.Requirement project = new com.hourglass.entity.Requirement();
+        project.setId("R1");
+        project.setWorkspaceId("W1");
+        when(reqs.selectById("R1")).thenReturn(project);
 
         service.update("admin", "W1", "D1", req);
 
@@ -102,6 +122,7 @@ class DemandServiceNotificationTest {
     void deleteNotifiesSubmitter() {
         Demand d = demand("review");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
 
         service.delete("admin", "W1", "D1");
 
@@ -113,6 +134,7 @@ class DemandServiceNotificationTest {
     void reviewBySubmitterDoesNotNotifySelf() {
         Demand d = demand("review");
         when(demands.selectById("D1")).thenReturn(d);
+        when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
 
         service.pass("U-submit", "W1", "D1", null);
 

@@ -152,6 +152,40 @@ public class ProjectAccessService {
         }
     }
 
+    /** Delivery writes only: caller must hold project/task scope locks before this current read. */
+    private Map<String, Object> writableSnapshotForUpdate(String workspaceId, String userId, String projectId) {
+        Map<String, Object> snapshot = memberMapper.selectDeliveryAccessForUpdate(workspaceId, userId, projectId);
+        if (snapshot == null || snapshot.get("role") == null) {
+            throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+        }
+        String role = (String) snapshot.get("role");
+        if (isPrivileged(role)) {
+            return snapshot;
+        }
+        if (isViewer(role)) {
+            throw new AppException(403, "你在此空间是查看者，只能查看不能修改");
+        }
+        if (projectId != null) {
+            if (ACCESS_NONE.equals(snapshot.get("access"))) {
+                throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+            }
+            if (ACCESS_READ.equals(snapshot.get("access"))) {
+                throw new AppException(403, "你对该项目只有查看权限");
+            }
+        }
+        return snapshot;
+    }
+
+    public void assertWriteForUpdate(String workspaceId, String userId, String projectId) {
+        writableSnapshotForUpdate(workspaceId, userId, projectId);
+    }
+
+    /** Delivery force privilege only, after scope locks; never trust an ordinary role read or member cache. */
+    public boolean canManageForUpdate(String workspaceId, String userId) {
+        Map<String, Object> snapshot = memberMapper.selectDeliveryAccessForUpdate(workspaceId, userId, null);
+        return snapshot != null && isPrivileged((String) snapshot.get("role"));
+    }
+
     /**
      * 需要按项目可见范围过滤时的 viewerId：owner/admin/viewer 返回 null（全量可见）。
      * viewer 是全局只读角色，不做项目级隐藏。

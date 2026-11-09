@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 
 class TaskCommandServiceNotificationTest {
 
+    private final DeliveryScopeLock scopeLock = mock(DeliveryScopeLock.class);
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final UserMapper users = mock(UserMapper.class);
     private final CategoryMapper categories = mock(CategoryMapper.class);
@@ -47,7 +48,13 @@ class TaskCommandServiceNotificationTest {
             mock(DevBranchMapper.class), members, mock(ProjectVersionMapper.class),
             mock(VersionTaskMapper.class), mock(DemandMapper.class), mock(WorkspaceMetaCache.class),
             support, mock(TaskCompletionService.class), mock(TaskWorkflowService.class), audit, events,
-            mock(ProjectAccessService.class), mock(TimeLogService.class));
+            mock(ProjectAccessService.class), mock(TimeLogService.class), scopeLock, mock(ReleasePermissionService.class));
+
+    @org.junit.jupiter.api.BeforeEach
+    void setupResponse() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", mock(TaskPublicationService.class));
+        when(tasks.update(any(Task.class))).thenReturn(1);
+    }
 
     @Test
     void createWithBoundOwnerCreatesAssignedEvent() {
@@ -167,6 +174,7 @@ class TaskCommandServiceNotificationTest {
 
     private void prepareUpdate(Task old, TaskSaveRequest req) {
         when(support.require("W1", "K1")).thenReturn(old);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(old);
         when(support.tagNames("W1", "K1")).thenReturn(Collections.emptyList());
         when(tasks.selectById("K1")).thenReturn(old);
         AppUser owner = new AppUser();

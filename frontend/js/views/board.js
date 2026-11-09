@@ -16,7 +16,7 @@ import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
+import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -291,8 +291,9 @@ function cardHTML(t, idx){
       '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity) + esc(t.title) + '</h3>' +
     '</div>' +
     (t.description ? '<p class="card-desc">' + mdLite(t.description) + '</p>' : '') +
-    ((tagsHTML || blockedTag || !editable)
+    ((tagsHTML || blockedTag || !editable || taskPublicationHTML(t))
       ? '<div class="card-tags">' +
+          taskPublicationHTML(t) +
           (editable ? '' : '<span class="tag tag-ghost" title="你对该项目只有查看权限">' + icon("eye", 11) + '只读</span>') +
           blockedTag + tagsHTML + '</div>'
       : '') +

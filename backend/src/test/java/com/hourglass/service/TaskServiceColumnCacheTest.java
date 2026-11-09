@@ -55,7 +55,7 @@ class TaskServiceColumnCacheTest {
                 mock(TaskLogMapper.class),
                 mock(SubtaskMapper.class), mock(TagMapper.class), mock(TimeLogMapper.class),
                 mock(AttachmentMapper.class), metaCache, support, mock(VersionTaskMapper.class),
-                mock(ProjectAccessService.class));
+                mock(ProjectAccessService.class), mock(ReleasePermissionService.class));
 
         assertEquals("待处理", support.columnName(WS, "C1"));
         assertEquals("进行中", support.columnName(WS, "C2"));

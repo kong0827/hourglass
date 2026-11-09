@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface WorkspaceMemberMapper {
@@ -15,6 +16,11 @@ public interface WorkspaceMemberMapper {
     List<String> selectUserIds(@Param("workspaceId") String workspaceId);
 
     WorkspaceMember selectMember(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
+
+    /** Current delivery permission snapshot; caller must hold project/task scope locks first. */
+    Map<String, Object> selectDeliveryAccessForUpdate(@Param("workspaceId") String workspaceId,
+                                                    @Param("userId") String userId,
+                                                    @Param("projectId") String projectId);
 
     int insert(WorkspaceMember member);
 

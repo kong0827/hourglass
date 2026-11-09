@@ -28,8 +28,11 @@ public class TaskAuditLogger {
     private final RequirementMapper reqMapper;
     /** 模块ID → 名称解析（时间线差异文案展示人话，不展示 ID） */
     private final WorkspaceMetaCache metaCache;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
-    public TaskAuditLogger(TaskLogMapper logMapper, RequirementMapper reqMapper, WorkspaceMetaCache metaCache) {
+    public TaskAuditLogger(TaskLogMapper logMapper, RequirementMapper reqMapper, WorkspaceMetaCache metaCache,
+                           com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         this.logMapper = logMapper;
         this.reqMapper = reqMapper;
         this.metaCache = metaCache;
@@ -54,6 +57,27 @@ public class TaskAuditLogger {
         taskLog.setDetail(detail);
         taskLog.setFromColumn(fromColumn);
         taskLog.setToColumn(toColumn);
+        logMapper.insert(taskLog);
+    }
+
+    /** 结构数据完整保存；序列化失败使业务事务回滚，不降级丢失证据。 */
+    public void logChange(String userId, String workspaceId, String taskId, String action, String detail,
+                          Object before, Object after, String reason) {
+        java.util.Map<String, Object> data = new java.util.LinkedHashMap<String, Object>();
+        data.put("before", before);
+        data.put("after", after);
+        data.put("reason", reason);
+        TaskLog taskLog = new TaskLog();
+        taskLog.setTaskId(taskId);
+        taskLog.setWorkspaceId(workspaceId);
+        taskLog.setActorId(userId);
+        taskLog.setAction(action);
+        taskLog.setDetail(Texts.cut(detail, 250));
+        try {
+            taskLog.setChangeData(objectMapper.writeValueAsString(data));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("任务变更审计序列化失败", e);
+        }
         logMapper.insert(taskLog);
     }
 

@@ -67,6 +67,8 @@ public class BranchService {
     private final ProjectAccessService projectAccess;
     private final RequirementMapper requirementMapper;
     private final NotificationEventService notificationEvents;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskQueryService taskQueries;
 
     public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
                          ProjectAccessService projectAccess, RequirementMapper requirementMapper,
@@ -536,6 +538,7 @@ public class BranchService {
         int total = taskMapper.countActiveByBranch(workspaceId, id, viewerId);
         List<Task> items = total <= safeOffset ? new ArrayList<Task>()
                 : taskMapper.selectByBranchPage(workspaceId, id, viewerId, safeOffset, safeLimit);
+        taskQueries.mergeTaskExtras(workspaceId, items);
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 

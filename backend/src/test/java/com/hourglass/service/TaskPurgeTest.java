@@ -62,10 +62,12 @@ class TaskPurgeTest {
     private AttachmentService attachmentService;
     private PlatformTransactionManager transactionManager;
     private TaskTrashService service;
+    private DeliveryScopeLock scopeLock;
 
     @BeforeEach
     void setUp() {
         taskMapper = mock(TaskMapper.class);
+        scopeLock = mock(DeliveryScopeLock.class);
         subtaskMapper = mock(SubtaskMapper.class);
         tagMapper = mock(TagMapper.class);
         timeLogMapper = mock(TimeLogMapper.class);
@@ -92,20 +94,24 @@ class TaskPurgeTest {
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
                 mock(com.hourglass.mapper.ReqDocShareMapper.class),
                 mock(com.hourglass.mapper.TestCaseMapper.class),
-                mock(com.hourglass.mapper.TestCaseRunMapper.class));
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), scopeLock);
         TaskSupport support = new TaskSupport(taskMapper, tagMapper, mock(WorkspaceMetaCache.class));
         service = new TaskTrashService(taskMapper, support, cascade, mock(TimeLogService.class),
-                new TaskAuditLogger(logMapper, mock(RequirementMapper.class), mock(WorkspaceMetaCache.class)), mock(ProjectAccessService.class),
+                new TaskAuditLogger(logMapper, mock(RequirementMapper.class), mock(WorkspaceMetaCache.class),
+                        new com.fasterxml.jackson.databind.ObjectMapper()), mock(ProjectAccessService.class),
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
-                mock(NotificationEventService.class), mock(TaskWatchService.class), transactionManager);
+                mock(NotificationEventService.class), mock(TaskWatchService.class), transactionManager, scopeLock,
+                mock(VersionTaskMapper.class));
     }
 
-    private static List<Task> expiredTasks(int count, String workspaceId) {
+    private List<Task> expiredTasks(int count, String workspaceId) {
         List<Task> list = new ArrayList<Task>(count);
         for (int i = 1; i <= count; i++) {
             Task t = new Task();
             t.setId("K" + i);
             t.setWorkspaceId(workspaceId);
+            t.setDeletedAt(LocalDateTime.now().minusDays(31));
+            when(scopeLock.lockTask(workspaceId, t.getId())).thenReturn(t);
             list.add(t);
         }
         return list;
@@ -118,6 +124,7 @@ class TaskPurgeTest {
         epic.setWorkspaceId("W1");
         epic.setTitle("epic");
         when(taskMapper.selectById("K1")).thenReturn(epic);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(epic);
 
         service.delete("U1", "W1", "K1");
 
@@ -127,8 +134,9 @@ class TaskPurgeTest {
 
     @Test
     void purgeExpiredSplitsIntoBatchesOf100() {
+        List<Task> expired = expiredTasks(250, "W1");
         when(taskMapper.selectPurgeable(any(LocalDateTime.class), anyInt()))
-                .thenReturn(expiredTasks(250, "W1")).thenReturn(new ArrayList<Task>());
+                .thenReturn(expired).thenReturn(new ArrayList<Task>());
 
         int purged = service.purgeExpired(LocalDateTime.now());
 
@@ -148,8 +156,9 @@ class TaskPurgeTest {
 
     @Test
     void failedBatchRollsBackAloneAndOthersContinue() {
+        List<Task> expired = expiredTasks(250, "W1");
         when(taskMapper.selectPurgeable(any(LocalDateTime.class), anyInt()))
-                .thenReturn(expiredTasks(250, "W1")).thenReturn(new ArrayList<Task>());
+                .thenReturn(expired).thenReturn(new ArrayList<Task>());
         doThrow(new IllegalStateException("boom")).when(subtaskMapper)
                 .deleteByTaskIds(eq("W1"), argThat(batch -> batch != null && batch.contains("K150")));
 

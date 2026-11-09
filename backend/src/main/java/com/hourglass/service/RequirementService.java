@@ -44,6 +44,8 @@ public class RequirementService {
     private final com.hourglass.mapper.WorkspaceMemberMapper memberMapper;
     /** 新建项目时预置默认模块（模块清单挂在项目下） */
     private final CategoryService categoryService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskQueryService taskQueries;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -284,6 +286,7 @@ public class RequirementService {
         int total = taskMapper.countActiveByReq(workspaceId, id);
         List<Task> items = total <= safeOffset ? new ArrayList<Task>()
                 : taskMapper.selectByReqPage(workspaceId, id, safeOffset, safeLimit);
+        taskQueries.mergeTaskExtras(workspaceId, items);
         return PageResult.of(items, total, safeOffset, safeLimit);
     }
 
@@ -340,6 +343,7 @@ public class RequirementService {
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
+        versionService.assertProjectDeletable(workspaceId, id);
         int docs = docService.countByReq(workspaceId, id);
         /* 版本与需求池强归属项目，删除时一并清理：数量先统计，供确认提示与审计说明 */
         int versions = versionMapper.selectByReq(workspaceId, id).size();

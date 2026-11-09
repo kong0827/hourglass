@@ -16,6 +16,14 @@ public interface ProjectVersionMapper {
 
     ProjectVersion selectById(String id);
 
+    /** Current reads used only after acquiring the project delivery mutex. */
+    ProjectVersion selectByIdForUpdate(@Param("workspaceId") String workspaceId, @Param("id") String id);
+
+    List<ProjectVersion> selectByReqForUpdate(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
+    List<ProjectVersion> selectByNameForUpdate(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                                             @Param("name") String name, @Param("excludeId") String excludeId);
+
     int countByName(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
                     @Param("name") String name, @Param("excludeId") String excludeId);
 
@@ -26,7 +34,8 @@ public interface ProjectVersionMapper {
 
     int update(ProjectVersion version);
 
-    int release(@Param("workspaceId") String workspaceId, @Param("id") String id);
+    int releaseOn(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                  @Param("publishedOn") java.time.LocalDate publishedOn);
 
     int deleteById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

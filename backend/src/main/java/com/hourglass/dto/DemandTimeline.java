@@ -21,7 +21,16 @@ public class DemandTimeline {
     /** 关联工作项 / 已完成数 */
     private int taskCount;
     private int taskDone;
-    /** 执行过用例数 / 最近一次未通过数 */
+    /** 关联用例总数 / 从未执行数 / 执行过但最近一次未通过数；casePending = 未执行 + 未通过 */
     private int caseCount;
+    private int caseUntested;
+    private int caseFailed;
     private int casePending;
+    /** Immutable actual events; never inferred from the current target version. */
+    private List<com.hourglass.entity.VersionRelease> releaseRecords = new ArrayList<com.hourglass.entity.VersionRelease>();
+    private int productionEffectiveTaskCount;
+    private int productionPartialTaskCount;
+    private int publicationUnknownTaskCount;
+    /** Delivery evidence does not constitute demand acceptance. */
+    private String acceptanceState = "not_recorded";
 }

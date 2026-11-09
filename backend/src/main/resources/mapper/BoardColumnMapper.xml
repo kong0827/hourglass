@@ -36,7 +36,7 @@
   </update>
 
   <update id="moveTasks">
-    UPDATE task SET board_column = #{target}, updated_at = NOW()
+    UPDATE task SET board_column = #{target}, updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
     WHERE workspace_id = #{workspaceId} AND board_column = #{source}
   </update>
 

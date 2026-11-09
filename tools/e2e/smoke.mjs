@@ -172,6 +172,7 @@ async function main(){
     await waitFor(`location.pathname.indexOf("/login") === -1 && document.body && document.body.dataset.view`, "登录完成", 20000);
     const auth = await evaluate(`fetch(${JSON.stringify(BASE)} + "/api/auth/me", { credentials: "same-origin" }).then(r => r.status)`);
     assert(auth === 200, "登录后 /api/auth/me 返回 " + auth);
+    await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 20000);
     pass("登录 " + USER);
 
     /* 2. 12 个侧栏入口 */
@@ -194,6 +195,54 @@ async function main(){
       pass(`入口 ${entry} → ${expected}`);
     }
 
+    /* 可选逐模块走查：真实 ES Module 路由，桌面/平板/手机布局与子页签。
+       E2E_MODULE_AUDIT_DIR 指定本地证据目录；不使用拼接预览稿。 */
+    if(process.env.E2E_MODULE_AUDIT_DIR){
+      const out = path.resolve(process.env.E2E_MODULE_AUDIT_DIR);
+      fs.mkdirSync(out, { recursive:true });
+      const checks = [];
+      const modules = ["mine", "review", "demands", "projects", "portfolio", "phase",
+        "board", "list", "calendar", "gantt", "requirements", "testcases", "branches",
+        "analysis", "report", "workload", "risks", "messages", "settings", "profile"];
+      for(const width of [1440, 800, 390]){
+        await call("Emulation.setDeviceMetricsOverride", { width, height:900, deviceScaleFactor:1, mobile:false });
+        for(const view of modules){
+          await evaluate(`import('./js/core/router.js').then(m => m.showView(${JSON.stringify(view)}))`);
+          await waitFor(`document.body.dataset.view === ${JSON.stringify(view)}`, view + " 路由");
+          /* 连续三次正文相同才采样，等待异步渲染而非固定等待后宣称成功。 */
+          let last = "", stable = 0;
+          await waitFor(`(() => { const v=document.querySelector('.view.on');return v && v.innerText; })()`, view + " 正文");
+          const deadline = Date.now() + 15000;
+          while(Date.now() < deadline && stable < 3){
+            const text = await evaluate("document.querySelector('.view.on').innerText");
+            stable = text === last ? stable + 1 : 0; last = text;
+            if(stable < 3) await sleep(180);
+          }
+          const layout = await evaluate(`(() => {
+            const v=document.querySelector('.view.on'), rect=v.getBoundingClientRect();
+            const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
+            return { view:document.body.dataset.view, width:innerWidth,
+              rootWidth:document.documentElement.scrollWidth, bodyWidth:document.body.scrollWidth,
+              viewWidth:rect.width, text:v.innerText.slice(0,320),
+              errors:[...v.querySelectorAll('.error-state,.load-error')].filter(visible).map(e=>e.innerText),
+              subnav:[...document.querySelectorAll('#subNav button')].filter(visible).map(e=>e.innerText) };
+          })()`);
+          const exceptions = cdp.takeExceptions();
+          const shot = await call("Page.captureScreenshot", { format:"png", captureBeyondViewport:false });
+          fs.writeFileSync(path.join(out, `${view}-${width}.png`), Buffer.from(shot.data,"base64"));
+          const row = { ...layout, exceptions, settled:stable>=3,
+            ok:layout.rootWidth<=width+1 && layout.bodyWidth<=width+1 && !exceptions.length && !layout.errors.length };
+          checks.push(row);
+          fs.writeFileSync(path.join(out,"module-layout.json"), JSON.stringify(checks,null,2));
+          console.log(`  ${row.ok ? "PASS" : "FAIL"} 模块 ${view} @ ${width}px`);
+        }
+      }
+      await call("Emulation.clearDeviceMetricsOverride");
+      const bad = checks.filter(c=>!c.ok);
+      assert(!bad.length, "逐模块布局/脚本检查失败："+bad.map(c=>c.view+"@"+c.width).join(", "));
+      pass(`逐模块三尺寸检查 ${checks.length} 项`);
+    }
+
     /* 3. 建一个临时项目，验证驾驶舱交付卡片 */
     const projectName = "E2E 冒烟 " + new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
     created = await evaluate(`(async () => {
@@ -213,8 +262,7 @@ async function main(){
     /* 整页重载：rt.reqList 是首屏缓存，不重载的话驾驶舱选不到刚建的项目 */
     await navigate(BASE + "/index.html#/portfolio");
     await waitFor(`document.body.dataset.view === "portfolio"`, "项目列表");
-    await waitFor(`!!document.querySelector('[data-open-project="${created.id}"]')`, "临时项目行");
-    await evaluate(`document.querySelector('[data-open-project="${created.id}"]').click()`);
+    await waitFor(`(() => { const row = document.querySelector('[data-open-project="${created.id}"]'); if(row) row.click(); return !!row; })()`, "临时项目行");
     await waitFor(`document.body.dataset.view === "project"`, "项目驾驶舱");
     await waitFor(`document.querySelectorAll(".project-delivery-card").length === 3`, "交付卡片");
     await waitFor(`[...document.querySelectorAll(".project-delivery-card b")].every(b => b.textContent !== "—")`, "交付卡片数据", 15000);
@@ -227,11 +275,10 @@ async function main(){
       if(view !== "project"){
         await evaluate("location.hash = '#/portfolio'");
         await waitFor(`document.body.dataset.view === "portfolio"`, "回到项目列表");
-        await evaluate(`document.querySelector('[data-open-project="${created.id}"]').click()`);
+        await waitFor(`(() => { const row = document.querySelector('[data-open-project="${created.id}"]'); if(row) row.click(); return !!row; })()`, "再次打开项目");
         await waitFor(`document.body.dataset.view === "project"`, "再进驾驶舱");
       }
-      await waitFor(`!!document.querySelector('[data-project-open="${kind}"]')`, kind + " 卡片");
-      await evaluate(`document.querySelector('[data-project-open="${kind}"]').click()`);
+      await waitFor(`(() => { const card = document.querySelector('[data-project-open="${kind}"]'); if(card) card.click(); return !!card; })()`, kind + " 卡片");
       await waitFor(`document.body.dataset.view === ${JSON.stringify(expected)}`, kind + " 跳转");
       pass(`交付卡片 ${kind} → ${expected}`);
     }

@@ -30,7 +30,7 @@ import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
-/** M2 需求池（T2.1）：提交/编辑所有成员可做；评审流转（pass/rej/plan/reopen）与删除仅空间主 */
+/** 需求池：评审与删除仅空间主；计划动作由服务端管理权限校验，空间成员校验不变。 */
 @RestController
 public class DemandController {
 
@@ -180,7 +180,7 @@ public class DemandController {
     @RequireRole
     @PostMapping("/api/demands/{id}/pass")
     public ApiResult<Demand> pass(@PathVariable String id,
-                                  @RequestBody(required = false) DemandActionRequest body,
+                                  @Valid @RequestBody(required = false) DemandActionRequest body,
                                   @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.pass(CurrentUser.id(), ctx.getWsId(), id, body));
     }
@@ -188,31 +188,50 @@ public class DemandController {
     @RequireRole
     @PostMapping("/api/demands/{id}/rej")
     public ApiResult<Demand> reject(@PathVariable String id,
-                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @Valid @RequestBody(required = false) DemandActionRequest body,
                                     @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.reject(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole
     @PostMapping("/api/demands/{id}/plan")
     public ApiResult<Demand> plan(@PathVariable String id,
-                                  @RequestBody(required = false) DemandActionRequest body,
+                                  @Valid @RequestBody(required = false) DemandActionRequest body,
                                   @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.plan(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    @PostMapping("/api/demands/{id}/replan")
+    public ApiResult<Demand> replan(@PathVariable String id,
+                                    @Valid @RequestBody DemandActionRequest body,
+                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.replan(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    @PostMapping("/api/demands/{id}/cancel")
+    public ApiResult<Demand> cancel(@PathVariable String id,
+                                    @Valid @RequestBody DemandActionRequest body,
+                                    @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.cancel(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    @PostMapping("/api/demands/{id}/restore")
+    public ApiResult<Demand> restore(@PathVariable String id,
+                                     @Valid @RequestBody DemandActionRequest body,
+                                     @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.restore(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
     @RequireRole
     @PostMapping("/api/demands/{id}/unpass")
     public ApiResult<Demand> unpass(@PathVariable String id,
-                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @Valid @RequestBody(required = false) DemandActionRequest body,
                                     @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.unpass(CurrentUser.id(), ctx.getWsId(), id, body));
     }
 
-    @RequireRole
     @PostMapping("/api/demands/{id}/unplan")
     public ApiResult<Demand> unplan(@PathVariable String id,
-                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @Valid @RequestBody(required = false) DemandActionRequest body,
                                     @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.unplan(CurrentUser.id(), ctx.getWsId(), id, body));
     }
@@ -220,7 +239,7 @@ public class DemandController {
     @RequireRole
     @PostMapping("/api/demands/{id}/reopen")
     public ApiResult<Demand> reopen(@PathVariable String id,
-                                    @RequestBody(required = false) DemandActionRequest body,
+                                    @Valid @RequestBody(required = false) DemandActionRequest body,
                                     @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.reopen(CurrentUser.id(), ctx.getWsId(), id, body));
     }

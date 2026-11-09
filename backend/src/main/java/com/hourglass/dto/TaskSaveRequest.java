@@ -88,9 +88,12 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "所属史诗不合法")
     private String epicId;
 
-    /** 影响版本ID（project_version，须属于任务所选项目）；空=待规划（更新时不传保持原值） */
-    @Size(max = 32, message = "影响版本不合法")
-    private String versionId;
+    /** 规划版本：null 保留已有关系（创建时继承需求目标），空数组明确解除全部绑定。 */
+    @Size(max = 100, message = "影响版本最多 100 个")
+    private List<String> versionIds;
+
+    /** 已有任务调整版本，以及创建时偏离需求目标版本的原因。 */
+    private String versionChangeReason;
 
     /** 关联需求池需求ID（demand，须属于任务所选项目）；空=解除关联（更新时不传保持原值） */
     @Size(max = 32, message = "关联需求不合法")

@@ -37,7 +37,8 @@ class DemandServiceListTest {
             mock(NotificationEventService.class), mock(RequirementDocMapper.class),
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
-            mock(com.hourglass.mapper.CategoryMapper.class));
+            mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
+            mock(ReleasePermissionService.class));
 
     @Test
     void pagesWholeWorkspaceAndComputesWsjf() {
@@ -52,6 +53,22 @@ class DemandServiceListTest {
         assertEquals(1, result.getTotal());
         verifyNoInteractions(reqs);
         verify(demands, never()).selectByWorkspace("W1");
+    }
+
+    @Test
+    void canceledStatusIsFilterableAndCountedInAll() {
+        when(demands.countGroupByStatus(any(DemandQuery.class))).thenReturn(Arrays.asList(
+                countRow("review", 2L), countRow("canceled", 1L)));
+        Demand canceled = demand();
+        canceled.setStatus("canceled");
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(canceled));
+        DemandQuery query = query(null);
+        query.setStatus("canceled");
+        DemandPage page = service.page("W1", "U1", query);
+        assertEquals("canceled", query.getStatus());
+        assertEquals(1, page.getTotal());
+        assertEquals(3, page.getCounts().get("all"));
+        assertEquals("canceled", page.getItems().get(0).getStatus());
     }
 
     @Test

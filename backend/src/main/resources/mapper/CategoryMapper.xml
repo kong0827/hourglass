@@ -42,7 +42,7 @@
   </update>
 
   <update id="moveTasksToCategory">
-    UPDATE task SET category_id = #{toId}, updated_at = NOW()
+    UPDATE task SET category_id = #{toId}, updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
     WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{fromId}
   </update>
 
@@ -52,7 +52,7 @@
   </update>
 
   <update id="clearTasksCategory">
-    UPDATE task SET category_id = '', updated_at = NOW()
+    UPDATE task SET category_id = '', updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
     WHERE workspace_id = #{workspaceId} AND req_id = #{projectId}
   </update>
 

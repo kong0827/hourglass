@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 /** 抽屉里改列的计时口径必须与看板拖拽 / 列表行内移动一致。 */
 class TaskWorkflowServiceTimerTest {
 
+    private final DeliveryScopeLock scopeLock = mock(DeliveryScopeLock.class);
     private final TaskMapper tasks = mock(TaskMapper.class);
     private final TaskSupport support = mock(TaskSupport.class);
     private final TimeLogService timeLogs = mock(TimeLogService.class);
@@ -30,7 +31,13 @@ class TaskWorkflowServiceTimerTest {
             mock(SubtaskMapper.class), support, timeLogs, mock(TaskCompletionService.class),
             mock(TaskAuditLogger.class), mock(NotificationEventService.class),
             mock(TaskWatchService.class), mock(ProjectAccessService.class), transitions,
-            mock(WorkspaceService.class));
+            mock(WorkspaceService.class), scopeLock);
+
+    @org.junit.jupiter.api.BeforeEach
+    void setupResponse() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "versionTaskMapper", mock(com.hourglass.mapper.VersionTaskMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", mock(TaskPublicationService.class));
+    }
 
     @Test
     void editMoveToNormalColumnStartsTimer() {
@@ -53,9 +60,12 @@ class TaskWorkflowServiceTimerTest {
         blocked.setBoardColumn("backlog");
         blocked.setBlocked(true);
         when(support.require("W1", "K1")).thenReturn(blocked);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(blocked);
         when(support.canTime("W1", "doing")).thenReturn(true);
         when(tasks.selectColumnTasks("W1", "doing")).thenReturn(Collections.<Task>emptyList());
         allow("backlog", "doing");
+        when(support.require("W1", "K1")).thenReturn(blocked);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(blocked);
         TaskMoveRequest req = new TaskMoveRequest();
         req.setColumn("doing");
 
@@ -99,6 +109,7 @@ class TaskWorkflowServiceTimerTest {
 
     @Test
     void editMoveRejectedByTransitionDoesNotTouchTimer() {
+        prepareTask("doing");
         when(transitions.check("W1", "doing", "done", null, false, false))
                 .thenThrow(new AppException(412, "该流转需要填写原因"));
 
@@ -117,7 +128,17 @@ class TaskWorkflowServiceTimerTest {
         verifyNoInteractions(transitions);
     }
 
+    private void prepareTask(String from) {
+        Task task = new Task();
+        task.setId("K1");
+        task.setWorkspaceId("W1");
+        task.setBoardColumn(from);
+        when(support.require("W1", "K1")).thenReturn(task);
+        when(scopeLock.lockTask("W1", "K1")).thenReturn(task);
+    }
+
     private void allow(String from, String to) {
+        prepareTask(from);
         when(transitions.check("W1", from, to, null, false, false))
                 .thenReturn(new ColumnTransitionService.Decision("allow", null, false));
     }

@@ -15,6 +15,9 @@ public interface TaskMapper {
 
     List<Task> selectAll(@Param("workspaceId") String workspaceId);
 
+    /** 空间整体删除前的当前读，包含回收站；调用方须先锁全部涉及项目。 */
+    List<Task> selectTasksForScope(@Param("workspaceId") String workspaceId);
+
     /** 全量任务，但排除 viewer 被显式设为不可见的项目（viewerId 为 null 时等同 selectAll） */
     List<Task> selectAllVisible(@Param("workspaceId") String workspaceId,
                                 @Param("viewerId") String viewerId);
@@ -107,6 +110,52 @@ public interface TaskMapper {
 
     Task selectById(String id);
 
+    /** 项目锁后的当前读，避免 MySQL REPEATABLE READ 使用锁前的一致性快照。 */
+    com.hourglass.entity.Demand selectDemandForScope(@Param("workspaceId") String workspaceId,
+                                                   @Param("demandId") String demandId);
+
+    com.hourglass.entity.ProjectVersion selectVersionForScope(@Param("workspaceId") String workspaceId,
+                                                              @Param("versionId") String versionId);
+
+    List<String> selectTaskVersionsForScope(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    List<String> selectSuccessfulVersionIds(@Param("workspaceId") String workspaceId);
+
+    List<String> selectVersionReferenceTaskIdsForScope(@Param("workspaceId") String workspaceId,
+                                                      @Param("versionId") String versionId);
+
+    List<String> selectVersionDemandIdsForScope(@Param("workspaceId") String workspaceId,
+                                               @Param("versionId") String versionId);
+
+    List<String> selectReleasePlanTaskIdsForScope(@Param("workspaceId") String workspaceId);
+
+    List<String> selectTaskPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+
+    List<String> selectTaskRecordIdsForScope(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
+    List<String> selectVersionSuccessIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    List<String> selectVersionPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    List<Long> selectVersionAuditIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    List<String> selectEpicChildIdsForScope(@Param("workspaceId") String workspaceId, @Param("epicId") String epicId);
+
+    /** 空间重建先用当前读锁住全部项目，不能用锁前的项目列表快照。 */
+    List<String> selectProjectIdsForScope(@Param("workspaceId") String workspaceId);
+
+    /** 包括回收站中的关联任务；项目锁后按 ID 顺序取得任务行锁。 */
+    List<Task> selectTasksByDemandForScope(@Param("workspaceId") String workspaceId,
+                                         @Param("demandId") String demandId);
+
+    /** 不可变发布尝试，包括失败记录；空间覆盖/清空必须保留。 */
+    List<String> selectReleaseIdsForScope(@Param("workspaceId") String workspaceId);
+
+    List<String> selectReleasePlanIdsForScope(@Param("workspaceId") String workspaceId);
+
+    List<Long> selectVersionLogIdsForScope(@Param("workspaceId") String workspaceId);
+
+    List<Long> selectReleaseItemIdsForScope(@Param("workspaceId") String workspaceId);
+
+    /** 仅成功记录的旧查询；不能用于判断空间是否可破坏性重建。 */
+    List<String> selectSuccessfulReleaseIdsForScope(@Param("workspaceId") String workspaceId);
+
     int insert(Task task);
 
     /** 备份导入：按批多值写入（含回收站的 deleted_at） */
@@ -117,6 +166,9 @@ public interface TaskMapper {
                                             @Param("ids") List<String> ids);
 
     int update(Task task);
+
+    /** 版本范围真实变化后仅推进抽屉 CAS 时间戳；秒精度下也严格递增，调用方须持有项目/任务锁。 */
+    int touchDeliveryRevision(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
 
     int deleteById(String id);
 

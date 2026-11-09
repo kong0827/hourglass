@@ -30,6 +30,20 @@ public class VersionStatsResponse {
         private LocalDate startDate;
         private LocalDate targetDate;
         private LocalDateTime releasedAt;
+        private Long revision;
+        /** 当前用户是否可管理发布计划 */
+        private Boolean canManageReleasePlan;
+        /** 按真实版本绑定 scope 判断，不含首版统计折算任务 */
+        private Boolean canPublish;
+        private String releaseEvidenceKind;
+        private String releaseRecordId;
+        private Integer publishedTaskCount;
+        private Integer excludedTaskCount;
+        private Integer releaseEventCount;
+        private Integer successfulReleaseEventCount;
+        /** Unique historical production snapshots, not an acceptance or effective-delivery flag. */
+        private Integer uniqueProductionTaskCount;
+        private Integer effectiveProductionTaskCount;
         /** 绑定任务数 */
         private Integer taskCount;
         private Integer doneCount;

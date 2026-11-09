@@ -18,6 +18,6 @@ public class TaskFacetRow {
     private String processingRule;
     private LocalDate dueDate;
     private String itemType;
-    /** 影响版本ID（LEFT JOIN version_task，未绑定为 null） */
-    private String versionId;
+    private String id;
+    private java.util.List<String> versionIds = new java.util.ArrayList<String>();
 }

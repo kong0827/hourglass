@@ -4,13 +4,15 @@
 
   <sql id="cols">
     id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status, expect_date,
+    planned_start, planned_end, revision,
     accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
     created_by, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
     d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
-    d.expect_date, d.accept_text, d.version_id, v.name AS versionName, d.review_note,
+    d.expect_date, d.planned_start, d.planned_end, d.revision,
+    d.accept_text, d.version_id, v.name AS versionName, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
 
@@ -18,18 +20,33 @@
   <select id="selectByReq" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <select id="selectById" resultType="Demand">
-    SELECT <include refid="cols"/> FROM demand WHERE id = #{id}
+    SELECT <include refid="pageCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    WHERE d.id = #{id}
+  </select>
+
+  <select id="selectByIdForUpdate" resultType="Demand">
+    SELECT <include refid="pageCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    WHERE d.workspace_id = #{workspaceId} AND d.id = #{id}
+    FOR UPDATE
+  </select>
+
+  <select id="selectScheduleVersion" resultType="com.hourglass.entity.ProjectVersion">
+    SELECT * FROM project_version
+    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId} AND id = #{id}
+    FOR UPDATE
   </select>
 
   <!-- 需求池列表模式：跨项目全量展示，不按项目切换 -->
   <select id="selectByWorkspace" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <!-- 分页查询的共享 WHERE：看板单列 / 列表筛选 / 计数复用同一口径 -->
@@ -86,7 +103,7 @@
         ORDER BY d.created_at DESC, d.id
       </when>
       <otherwise>
-        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej'),
+        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej', 'canceled'),
                  FIELD(d.priority, 'P0', 'P1', 'P2', 'P3'), d.created_at DESC, d.id
       </otherwise>
     </choose>
@@ -132,16 +149,26 @@
   <!-- 发布说明：目标版本指向该版本的需求（不含已拒绝） -->
   <select id="selectByVersion" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
-    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status &lt;&gt; 'rej'
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status NOT IN ('rej', 'canceled')
     ORDER BY FIELD(status, 'plan', 'pass', 'review'), created_at, id
+  </select>
+
+  <select id="selectDemandTasks" resultType="Task">
+    SELECT <include refid="com.hourglass.mapper.TaskMapper.cols"/>
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.demand_id = #{demandId} AND t.deleted_at IS NULL
+    ORDER BY (t.board_column = 'done'), FIELD(t.priority, 'P0', 'P1', 'P2', 'P3'), t.sort_order, t.created_at, t.id
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <insert id="insert">
     INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status,
-                        expect_date, accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
+                        expect_date, planned_start, planned_end, revision, accept_text, version_id, review_note,
+                        wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
                         created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{description}, #{source}, #{itemKind}, #{categoryId}, #{priority}, #{status},
-            #{expectDate}, #{acceptText}, #{versionId}, #{reviewNote}, #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
+            #{expectDate}, #{plannedStart}, #{plannedEnd}, #{revision}, #{acceptText}, #{versionId}, #{reviewNote},
+            #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
@@ -155,6 +182,9 @@
       priority = #{priority},
       status = #{status},
       expect_date = #{expectDate},
+      planned_start = #{plannedStart},
+      planned_end = #{plannedEnd},
+      revision = revision + 1,
       accept_text = #{acceptText},
       version_id = #{versionId},
       review_note = #{reviewNote},
@@ -163,7 +193,7 @@
       wsjf_risk = #{wsjfRisk},
       wsjf_effort = #{wsjfEffort},
       updated_at = NOW()
-    WHERE id = #{id} AND workspace_id = #{workspaceId}
+    WHERE id = #{id} AND workspace_id = #{workspaceId} AND revision = #{revision}
   </update>
 
   <delete id="deleteById">
@@ -191,8 +221,13 @@
     VALUES (#{workspaceId}, #{demandId}, #{action}, #{note}, #{operator})
   </insert>
 
+  <insert id="insertChangeLog">
+    INSERT INTO demand_log (workspace_id, demand_id, action, note, operator, change_data)
+    VALUES (#{workspaceId}, #{demandId}, #{action}, #{note}, #{operator}, #{changeData})
+  </insert>
+
   <select id="selectLogs" resultType="map">
-    SELECT dl.id, dl.demand_id AS demandId, dl.action, dl.note, dl.operator,
+    SELECT dl.id, dl.demand_id AS demandId, dl.action, dl.note, dl.operator, dl.change_data AS changeData,
            u.display_name AS operatorName, dl.created_at AS createdAt
     FROM demand_log dl
     LEFT JOIN app_user u ON u.id = dl.operator
@@ -211,7 +246,10 @@
     SELECT demand_id AS demandId,
            MAX(CASE WHEN action = 'pass' THEN created_at END) AS passAt,
            MAX(CASE WHEN action = 'rej' THEN created_at END) AS rejAt,
-           MAX(CASE WHEN action = 'plan' THEN created_at END) AS planAt
+           MAX(CASE WHEN action = 'plan' THEN created_at END) AS planAt,
+           MAX(CASE WHEN action = 'replan' THEN created_at END) AS replanAt,
+           MAX(CASE WHEN action = 'cancel' THEN created_at END) AS cancelAt,
+           MAX(CASE WHEN action IN ('unpass', 'reopen') THEN created_at END) AS reviewReopenAt
     FROM demand_log
     WHERE workspace_id = #{workspaceId}
       AND demand_id IN
@@ -246,8 +284,6 @@
            COUNT(*) AS taskCount,
            SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone,
            SUM(CASE WHEN t.board_column &lt;&gt; 'done' THEN 1 ELSE 0 END) AS taskOpen,
-           MIN(CASE WHEN t.start_date IS NOT NULL THEN t.start_date
-                    WHEN t.board_column &lt;&gt; 'backlog' THEN DATE(t.created_at) END) AS devStart,
            MAX(CASE WHEN t.board_column = 'done'
                     THEN COALESCE(t.completed_at, DATE(t.updated_at)) END) AS devEnd
     FROM task t
@@ -258,12 +294,54 @@
     GROUP BY t.demand_id
   </select>
 
+  <!-- 真实开工日：首次跨列移出待处理 / 首次计时 / 直接建在执行列（取创建日）。
+       建在哪一列＝第一条跨列移动的来源列，没有跨列移动就是当前列；早期未记列 id 的日志不参与推断。
+       刻意不读 task.start_date——那是计划字段，填了计划不等于开过工。 -->
+  <select id="selectTaskStartTimeline" resultType="map">
+    SELECT u.demandId AS demandId, MIN(u.started) AS devStart
+    FROM (
+      SELECT t.demand_id AS demandId, DATE(l.created_at) AS started
+      FROM task t
+      INNER JOIN task_log l ON l.workspace_id = t.workspace_id AND l.task_id = t.id
+      WHERE t.workspace_id = #{workspaceId}
+        AND t.deleted_at IS NULL
+        AND l.action = 'move' AND l.to_column IS NOT NULL AND l.to_column &lt;&gt; 'backlog'
+        AND (l.from_column IS NULL OR l.from_column &lt;&gt; l.to_column)
+        AND t.demand_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+      UNION ALL
+      SELECT t.demand_id AS demandId, DATE(tl.started_at) AS started
+      FROM task t
+      INNER JOIN time_log tl ON tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+      WHERE t.workspace_id = #{workspaceId}
+        AND t.deleted_at IS NULL
+        AND t.demand_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+      UNION ALL
+      SELECT t.demand_id AS demandId, DATE(t.created_at) AS started
+      FROM task t
+      WHERE t.workspace_id = #{workspaceId}
+        AND t.deleted_at IS NULL
+        AND COALESCE((SELECT l2.from_column FROM task_log l2
+                      WHERE l2.workspace_id = t.workspace_id AND l2.task_id = t.id
+                        AND l2.action = 'move' AND l2.from_column IS NOT NULL
+                        AND l2.to_column IS NOT NULL AND l2.from_column &lt;&gt; l2.to_column
+                      ORDER BY l2.created_at, l2.id LIMIT 1),
+                     t.board_column) &lt;&gt; 'backlog'
+        AND t.demand_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    ) u
+    GROUP BY u.demandId
+  </select>
+
   <select id="selectTestTimeline" resultType="map">
     SELECT x.demandId AS demandId,
            COUNT(*) AS caseCount,
            MIN(x.firstAt) AS testStart,
            MAX(x.lastAt) AS testEnd,
-           SUM(CASE WHEN x.lastStatus IS NULL OR x.lastStatus &lt;&gt; 'passed' THEN 1 ELSE 0 END) AS testPending
+           SUM(CASE WHEN x.lastStatus IS NULL THEN 1 ELSE 0 END) AS caseUntested,
+           SUM(CASE WHEN x.lastStatus IS NOT NULL AND x.lastStatus &lt;&gt; 'passed'
+                    THEN 1 ELSE 0 END) AS caseFailed
     FROM (
       SELECT tc.demand_id AS demandId,
              tc.id AS caseId,
@@ -280,12 +358,28 @@
     GROUP BY x.demandId
   </select>
 
-  <select id="selectVersionTimeline" resultType="map">
-    SELECT id AS id, target_date AS targetDate, released_at AS releasedAt
-    FROM project_version
-    WHERE workspace_id = #{workspaceId}
-      AND id IN
+  <select id="selectActualRecords" resultMap="com.hourglass.mapper.ReleaseMapper.recordWithItems">
+    SELECT vr.*, <include refid="com.hourglass.mapper.ReleaseMapper.itemColumns"/>
+    FROM version_release vr
+    INNER JOIN version_release_item i ON i.workspace_id = vr.workspace_id AND i.release_id = vr.id
+    WHERE vr.workspace_id = #{workspaceId} AND EXISTS
+      (SELECT 1 FROM version_release_item d WHERE d.workspace_id = vr.workspace_id AND d.release_id = vr.id
+       AND d.demand_id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>)
+    ORDER BY vr.occurred_at, vr.recorded_at, vr.id, i.id
+  </select>
+
+  <select id="selectDemandReleaseTimeline" resultType="map">
+    SELECT i.demand_id AS demandId,
+           MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) AS releasedAt
+    FROM version_release_item i
+    INNER JOIN version_release vr ON vr.workspace_id = i.workspace_id AND vr.id = i.release_id
+    WHERE i.workspace_id = #{workspaceId}
+      AND vr.result = 'success'
+      AND vr.environment = 'production'
+      AND i.disposition = 'published'
+      AND i.demand_id IN
       <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    GROUP BY i.demand_id
   </select>
 
 
@@ -295,13 +389,4 @@
     WHERE dl.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
   </delete>
 
-  <update id="clearVersionRefsByWorkspace">
-    UPDATE demand SET version_id = NULL, updated_at = NOW()
-    WHERE workspace_id = #{workspaceId} AND version_id IS NOT NULL
-  </update>
-
-  <update id="clearVersionRefsByVersion">
-    UPDATE demand SET version_id = NULL, updated_at = NOW()
-    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
-  </update>
 </mapper>

@@ -6,19 +6,29 @@ import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.ProjectMemberMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class ProjectAccessServiceTest {
@@ -167,6 +177,123 @@ class ProjectAccessServiceTest {
 
         assertEquals(2, visible.size());
         verify(grants, never()).selectByWorkspace(WS);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "owner,viewer,,403", "admin,viewer,none,403",
+            "owner,member,read,403", "admin,member,read,403",
+            "owner,member,none,404", "admin,member,none,404",
+            "owner,,,404", "admin,,,404"
+    })
+    void currentWriteSnapshotOverridesStalePrivilegedOrdinaryReads(
+            String staleRole, String currentRole, String access, int code) {
+        member("U1", staleRole);
+        assertDoesNotThrow(() -> service.assertWrite(WS, "U1", "R1"));
+        currentSnapshot("R1", currentRole, access);
+        clearInvocations(members, grants);
+
+        assertEquals(code, assertThrows(AppException.class,
+                () -> service.assertWriteForUpdate(WS, "U1", "R1")).getCode());
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", "R1");
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"default", "pm", "dev", "qa"})
+    void currentDefaultAndLegacyGrantsAllowOrdinaryNonOwnerWriter(String access) {
+        member("U1", "member");
+        when(grants.selectOne(WS, "R1", "U1")).thenReturn(grant("R1", "U1", "read"));
+        assertFalse(service.canWrite(WS, "U1", "R1"));
+        currentSnapshot("R1", "member", access);
+        clearInvocations(members, grants);
+
+        assertDoesNotThrow(() -> service.assertWriteForUpdate(WS, "U1", "R1"));
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", "R1");
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"owner,read", "owner,none", "admin,read", "admin,none"})
+    void currentPrivilegedWriteSnapshotIgnoresProjectRestrictions(String role, String access) {
+        currentSnapshot("R1", role, access);
+        assertDoesNotThrow(() -> service.assertWriteForUpdate(WS, "U1", "R1"));
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", "R1");
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"viewer,403", ",404"})
+    void uncategorizedCurrentWriteStillDeniesViewerAndRemovedMember(String role, int code) {
+        member("U1", "admin");
+        assertDoesNotThrow(() -> service.assertWrite(WS, "U1", null));
+        currentSnapshot(null, role, null);
+        clearInvocations(members, grants);
+
+        assertEquals(code, assertThrows(AppException.class,
+                () -> service.assertWriteForUpdate(WS, "U1", null)).getCode());
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", null);
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"owner", "admin", "member"})
+    void uncategorizedCurrentWriteAllowsWritableMembers(String role) {
+        currentSnapshot(null, role, null);
+        assertDoesNotThrow(() -> service.assertWriteForUpdate(WS, "U1", null));
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", null);
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @Test
+    void currentWriteDoesNotDefaultMissingRoleOrAnonymousUserToWriter() {
+        when(members.selectDeliveryAccessForUpdate(WS, "U1", "R1"))
+                .thenReturn(Collections.<String, Object>singletonMap("access", "dev"));
+        assertEquals(404, assertThrows(AppException.class,
+                () -> service.assertWriteForUpdate(WS, "U1", "R1")).getCode());
+        assertEquals(404, assertThrows(AppException.class,
+                () -> service.assertWriteForUpdate(WS, null, null)).getCode());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "owner,member,false", "admin,member,false", "member,owner,true", "member,admin,true",
+            "owner,viewer,false", "admin,,false"
+    })
+    void currentForcePrivilegeIgnoresStaleRole(String staleRole, String currentRole, boolean allowed) {
+        member("U1", staleRole);
+        currentSnapshot(null, currentRole, null);
+        assertEquals(allowed, service.canManageForUpdate(WS, "U1"));
+        verify(members).selectDeliveryAccessForUpdate(WS, "U1", null);
+        verifyNoMoreInteractions(members);
+        verifyNoInteractions(grants);
+    }
+
+    @Test
+    void ordinaryAccessChecksDoNotAcquireDeliveryPermissionLocks() {
+        member("U1", "admin");
+        assertTrue(service.canWrite(WS, "U1", "R1"));
+        assertTrue(service.canManage(WS, "U1"));
+        service.assertWrite(WS, "U1", "R1");
+        verify(members, never()).selectDeliveryAccessForUpdate(anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    private void currentSnapshot(String projectId, String role, String access) {
+        Map<String, Object> snapshot = null;
+        if (role != null) {
+            snapshot = new HashMap<String, Object>();
+            snapshot.put("role", role);
+            snapshot.put("access", access);
+            snapshot.put("projectOwnerUserId", "U-other");
+        }
+        when(members.selectDeliveryAccessForUpdate(WS, "U1", projectId)).thenReturn(snapshot);
     }
 
     private WorkspaceMember rawMember(String userId, String role) {

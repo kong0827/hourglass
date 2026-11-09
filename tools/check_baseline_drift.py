@@ -53,6 +53,8 @@ def parse_increments(sql_dir, skip):
         sql = open(os.path.join(sql_dir, fn), encoding="utf-8").read()
         for m in re.finditer(r"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+`(\w+)`", sql, re.I):
             items.append((fn, m.group(1), "table", m.group(1)))
+        for m in re.finditer(r"CALL\s+hg_delivery_column\(\s*'([^']+)'\s*,\s*'([^']+)'", sql, re.I):
+            items.append((fn, m.group(1), "column", m.group(2)))
         # ALTER TABLE t ... ;（语句体可能含多个 ADD/DROP COLUMN/KEY；61 起幂等脚本写在 PREPARE 字符串里，同样能匹配）
         for m in re.finditer(r"ALTER TABLE\s+`?(\w+)`?([^;]*);", sql, re.I | re.S):
             table, body = m.group(1), m.group(2)

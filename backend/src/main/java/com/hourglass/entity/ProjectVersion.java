@@ -19,6 +19,9 @@ public class ProjectVersion {
     private LocalDate startDate;
     private LocalDate targetDate;
     private LocalDateTime releasedAt;
+    private Long revision = 0L;
+    private Boolean canManageReleasePlan;
+    private Boolean canPublish;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

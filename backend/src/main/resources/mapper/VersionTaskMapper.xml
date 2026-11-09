@@ -4,52 +4,68 @@
 
   <!-- 任务明细表 + 任务抽屉版本回填共用：带日期/类型/预估/实际工时 -->
   <select id="selectOptionsByReq" resultType="Task">
-    SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
-           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+    SELECT t.id, t.workspace_id, t.req_id, t.demand_id, t.title, t.board_column, t.progress,
+           t.completed_at,
+           t.due_date, t.start_date, t.updated_at,
+           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id,
            t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
              WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
     FROM task t
-    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
     ORDER BY (t.board_column = 'done'), t.board_column, t.sort_order, t.id
   </select>
 
   <!-- M1 版本阶段统计：项目全部任务 + 绑定版本 + 分支 + 累计实际工时，一次取回由服务层归组 -->
   <select id="selectStatsByReq" resultType="Task">
-    SELECT t.id, t.title, t.board_column, t.progress, t.completed_at, t.due_date, t.start_date,
-           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id, vt.version_id,
+    SELECT t.id, t.workspace_id, t.req_id, t.demand_id, t.title, t.board_column, t.progress,
+           t.completed_at,
+           t.due_date, t.start_date, t.updated_at,
+           t.estimate_minutes, t.item_type AS itemType, t.owner, t.owner_user_id,
            t.branch_id AS branchId,
            (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
              WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
     FROM task t
-    LEFT JOIN version_task vt ON vt.task_id = t.id AND vt.workspace_id = t.workspace_id
     WHERE t.workspace_id = #{workspaceId} AND t.req_id = #{reqId} AND t.deleted_at IS NULL
     ORDER BY (t.board_column = 'done'), t.completed_at, t.id
   </select>
 
-  <select id="selectVersionIdByTask" resultType="string">
-    SELECT version_id FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  <select id="selectReleaseRecordsByReq" resultMap="com.hourglass.mapper.ReleaseMapper.recordWithItems">
+    SELECT vr.*, <include refid="com.hourglass.mapper.ReleaseMapper.itemColumns"/>
+    FROM version_release vr LEFT JOIN version_release_item i
+      ON i.workspace_id = vr.workspace_id AND i.release_id = vr.id
+    WHERE vr.workspace_id = #{workspaceId} AND vr.req_id = #{reqId}
+    ORDER BY vr.occurred_at, vr.recorded_at, vr.id, i.id
+  </select>
+
+  <select id="selectVersionIdsByTask" resultType="string">
+    SELECT version_id FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} ORDER BY version_id
   </select>
 
   <!-- 列表视图「影响版本」列：按本页任务 id 批量取绑定版本ID与名称 -->
-  <select id="selectVersionRowsByTaskIds" resultType="Task">
-    SELECT vt.task_id AS id, vt.version_id AS versionId, pv.name AS versionName
+  <select id="selectVersionRowsByTaskIds" resultType="com.hourglass.dto.TaskVersionBinding">
+    SELECT vt.task_id AS taskId, vt.version_id AS versionId, pv.name AS versionName
     FROM version_task vt
     LEFT JOIN project_version pv ON pv.id = vt.version_id AND pv.workspace_id = vt.workspace_id
     WHERE vt.workspace_id = #{workspaceId} AND vt.task_id IN
     <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
+    ORDER BY vt.task_id, vt.version_id
   </select>
 
   <!-- 备份导出：整空间绑定，按 taskId 挂回任务 -->
-  <select id="selectBindingsByWorkspace" resultType="Task">
-    SELECT task_id AS id, version_id AS versionId
+  <select id="selectBindingsByWorkspace" resultType="com.hourglass.dto.TaskVersionBinding">
+    SELECT task_id AS taskId, version_id AS versionId
     FROM version_task
     WHERE workspace_id = #{workspaceId}
+    ORDER BY task_id, version_id
   </select>
 
   <delete id="deleteByTaskId">
     DELETE FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId}
+  </delete>
+
+  <delete id="deleteBinding">
+    DELETE FROM version_task WHERE workspace_id = #{workspaceId} AND task_id = #{taskId} AND version_id = #{versionId}
   </delete>
 
   <insert id="insertBatch">

@@ -71,13 +71,16 @@ public class TaskQueryService {
     private final TaskSupport support;
     private final com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     private final ProjectAccessService projectAccess;
+    private final ReleasePermissionService permissions;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskPublicationService publications;
 
     public TaskQueryService(TaskMapper taskMapper, RequirementMapper reqMapper, ProjectVersionMapper projectVersionMapper,
                             TaskLogMapper logMapper,
                             SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
                             AttachmentMapper attachmentMapper, WorkspaceMetaCache metaCache,
                             TaskSupport support, com.hourglass.mapper.VersionTaskMapper versionTaskMapper,
-                            ProjectAccessService projectAccess) {
+                            ProjectAccessService projectAccess, ReleasePermissionService permissions) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.projectVersionMapper = projectVersionMapper;
@@ -90,6 +93,7 @@ public class TaskQueryService {
         this.support = support;
         this.versionTaskMapper = versionTaskMapper;
         this.projectAccess = projectAccess;
+        this.permissions = permissions;
     }
 
     /* ==================== 2026-10-16 评估报告改造新增查询 ==================== */
@@ -103,11 +107,7 @@ public class TaskQueryService {
         if (!projectAccess.canViewTask(t.getWorkspaceId(), userId, t)) {
             return null;
         }
-        if (t.getDeletedAt() == null) {
-            mergeTaskExtras(t.getWorkspaceId(), Collections.singletonList(t));
-        }
-        /* T1.2：任务详情带上影响版本（编辑表单回显用） */
-        t.setVersionId(versionTaskMapper.selectVersionIdByTask(t.getWorkspaceId(), id));
+        mergeTaskExtras(t.getWorkspaceId(), Collections.singletonList(t));
         return t;
     }
 
@@ -231,7 +231,6 @@ public class TaskQueryService {
         List<Task> items = matched <= safeOffset ? new ArrayList<Task>()
                 : taskMapper.selectOpenPage(workspaceId, openQuery, column, fallback, knownColumns,
                         safeOffset, safeLimit);
-        mergeVersionInfo(workspaceId, items);
         mergeTaskExtras(workspaceId, items);
 
         BoardResponse.ColumnData data = new BoardResponse.ColumnData();
@@ -312,7 +311,6 @@ public class TaskQueryService {
         List<Task> items = total <= safeOffset || total == 0 ? new ArrayList<Task>()
                 : taskMapper.selectTaskList(workspaceId, gq, columnOrder(workspaceId), s, safeLimit, safeOffset);
         mergeTaskExtras(workspaceId, items);
-        mergeVersionInfo(workspaceId, items);
 
         TaskListResponse resp = new TaskListResponse();
         resp.setTotal(total);
@@ -328,21 +326,7 @@ public class TaskQueryService {
         if (tasks == null || tasks.isEmpty()) {
             return;
         }
-        List<String> ids = new ArrayList<String>(tasks.size());
-        for (Task t : tasks) {
-            ids.add(t.getId());
-        }
-        Map<String, Task> byId = new HashMap<String, Task>();
-        for (Task row : versionTaskMapper.selectVersionRowsByTaskIds(workspaceId, ids)) {
-            byId.put(row.getId(), row);
-        }
-        for (Task t : tasks) {
-            Task row = byId.get(t.getId());
-            if (row != null) {
-                t.setVersionId(row.getVersionId());
-                t.setVersionName(row.getVersionName());
-            }
-        }
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
     }
 
     /* ---- 甘特图（V1.4）：复用看板的扩展字段与筛选口径，避免两套语义 ---- */
@@ -372,6 +356,8 @@ public class TaskQueryService {
         if (tasks == null || tasks.isEmpty()) {
             return;
         }
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
+        publications.enrichTasks(workspaceId, tasks);
         List<String> ids = new ArrayList<String>();
         for (Task t : tasks) {
             ids.add(t.getId());
@@ -488,7 +474,6 @@ public class TaskQueryService {
         }
         /* 筛选要读项目名/标签等扩展字段：先补齐再按统一 match 过滤（月份已由 SQL 收窄，量可控） */
         mergeTaskExtras(workspaceId, tasks);
-        mergeVersionInfo(workspaceId, tasks);
         if (query != null) {
             List<Task> filtered = new ArrayList<Task>(tasks.size());
             for (Task t : tasks) {
@@ -516,6 +501,8 @@ public class TaskQueryService {
         if (tasks == null || tasks.isEmpty()) {
             return;
         }
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
+        publications.enrichTasks(workspaceId, tasks);
         List<String> ids = new ArrayList<String>(tasks.size());
         Set<String> reqIds = new HashSet<String>();
         for (Task t : tasks) {
@@ -681,7 +668,7 @@ public class TaskQueryService {
         if (!query.getVersions().isEmpty()) {
             boolean hit = false;
             for (String value : query.getVersions()) {
-                if (Consts.REQ_NONE.equals(value) ? t.getVersionId() == null : value.equals(t.getVersionId())) {
+                if (Consts.REQ_NONE.equals(value) ? t.getVersionIds().isEmpty() : t.getVersionIds().contains(value)) {
                     hit = true;
                     break;
                 }
@@ -756,6 +743,16 @@ public class TaskQueryService {
 
     private BoardResponse.Meta buildMeta(String workspaceId, List<TaskFacetRow> facets, String viewerId) {
         BoardResponse.Meta meta = new BoardResponse.Meta();
+        Map<String, TaskFacetRow> byId = new HashMap<String, TaskFacetRow>();
+        for (TaskFacetRow facet : facets) byId.put(facet.getId(), facet);
+        List<String> ids = new ArrayList<String>(byId.keySet());
+        Collections.sort(ids);
+        for (int from = 0; from < ids.size(); from += 500) {
+            for (com.hourglass.dto.TaskVersionBinding row : versionTaskMapper.selectVersionRowsByTaskIds(
+                    workspaceId, ids.subList(from, Math.min(from + 500, ids.size())))) {
+                byId.get(row.getTaskId()).getVersionIds().add(row.getVersionId());
+            }
+        }
         Set<String> hiddenReqs = viewerId == null ? Collections.<String>emptySet()
                 : projectAccess.hiddenProjectIds(workspaceId, viewerId);
 
@@ -791,8 +788,8 @@ public class TaskQueryService {
             if (t.getReqId() == null) {
                 unassigned++;
             }
-            if (t.getVersionId() != null) {
-                versionCount.merge(t.getVersionId(), 1, Integer::sum);
+            for (String versionId : t.getVersionIds()) {
+                versionCount.merge(versionId, 1, Integer::sum);
             }
         }
         for (Map.Entry<String, Integer> e : ownerCount.entrySet()) {
@@ -834,7 +831,7 @@ public class TaskQueryService {
         }
         int versionUnassigned = 0;
         for (TaskFacetRow t : facets) {
-            if (t.getVersionId() == null) {
+            if (t.getVersionIds().isEmpty()) {
                 versionUnassigned++;
             }
         }

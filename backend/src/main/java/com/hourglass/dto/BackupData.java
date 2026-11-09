@@ -9,6 +9,7 @@ import java.util.List;
  */
 @Data
 public class BackupData {
+    public static final int FORMAT_VERSION = 13;
 
     private Integer v;
     private String exportedAt;
@@ -112,8 +113,8 @@ public class BackupData {
         private String epicId;
         /** 关联需求池需求（v8 起；导入时按需求 ID 映射回指） */
         private String demandId;
-        /** 所属版本（v8 起；一个任务最多归属一个版本） */
-        private String versionId;
+        /** 规划版本数组；不携带正式发布事实或发布徽标。 */
+        private List<String> versionIds;
         /** 缺陷严重度 blocker/critical/major/minor（v9 起） */
         private String severity;
         /** 发现环境（v9 起） */
@@ -162,6 +163,7 @@ public class BackupData {
         private String desc;
         /** planned/active/released */
         private String status;
+        private String startDate;
         private String targetDate;
         private String releasedAt;
         private String createdAt;
@@ -191,6 +193,9 @@ public class BackupData {
         private String priority;
         private String status;
         private String expectDate;
+        /** 需求层计划日期；旧备份缺字段时保持为空，不从任务或版本日期推导 */
+        private String plannedStart;
+        private String plannedEnd;
         private String acceptText;
         private String versionId;
         private String reviewNote;

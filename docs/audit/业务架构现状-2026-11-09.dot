@@ -1,0 +1,38 @@
+digraph CurrentBusiness {
+  graph [rankdir=TB, bgcolor="#FFFFFF", pad="0.3", nodesep="0.4", ranksep="0.6", fontname="PingFang SC", fontsize=20, label="实施前基线：轻量单版本发布闭环\n2026-11-09 分析时点 · HEAD 747866e + 当时工作区\n静态证据 E01–E09 · 不代表实施中的最新代码或生产验证", labelloc=t];
+  node [shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#D0D5DD", fontcolor="#101828", fontname="PingFang SC", fontsize=14, margin="0.65,0.18"];
+  edge [color="#98A2B3", fontname="PingFang SC", fontsize=11, fontcolor="#475467", arrowsize=0.7];
+  project [label="项目 · requirement\n版本归属与项目权限", fillcolor="#EFF4FF"];
+  demand [label="需求 · demand\n需求池是视图\n评审 / 独立排期 / 目标版本"];
+  task [label="任务 · task\n执行状态 / 完成日期 / 工时\n一个当前目标版本"];
+  version [label="项目版本 · project_version\nplanned / active / released\n成功后不允许再次确认", fillcolor="#EFF4FF"];
+  binding [label="version_task\nPK(task_id)\n当前规划绑定，不是实际发布"];
+  plan [label="发布计划 · version_release_plan\n每版本一个可修订计划\n时间 / 负责人 / 风险 / 就绪令牌", fillcolor="#EFF4FF"];
+  record [label="实际记录 · version_release\n可多次失败，最多一次成功\n发布日 / 录入时间 / 结果 / 录入者", fillcolor="#ECFDF3", color="#A6F4C5"];
+  snapshot [label="快照 · version_release_item\n实际 published 与尝试 / 排除项\n任务 / 需求 / 负责人 / 工时快照", fillcolor="#ECFDF3", color="#A6F4C5"];
+  history [shape=folder, label="正式发布记录 / 发布说明\n读取成功记录与冻结快照", fillcolor="#ECFDF3", color="#A6F4C5"];
+  metrics [shape=folder, label="版本卡\n快照交付数量 + 当前执行统计\n两类统计已有区分", fillcolor="#F2F4F7"];
+  badge [label="任务徽标字段\npublished_at / publish_source\n仍可被人工维护", fillcolor="#FFFAEB", color="#FEDF89"];
+  manual [label="人工 publish / unpublish 入口\n可无正式记录标记或撤标\n影响正式发布的排除判断", fillcolor="#FEF3F2", color="#FDA29B"];
+  gap [label="仍缺：独立计划任务范围\n环境 / 产物 / 时刻 / 部署范围\n多次成功与回滚事件", fillcolor="#FEF3F2", color="#FDA29B", style="rounded,filled,dashed"];
+  project -> demand [label="1 : N"];
+  project -> task [label="1 : N · 可存在无项目任务"];
+  project -> version [label="1 : N · 已实现"];
+  demand -> task [label="1 : N · 任务可无需求"];
+  demand -> version [label="目标意向，非实际交付", style=dashed, constraint=false];
+  version -> binding [label="1 : N"];
+  binding -> task [label="0..1 : 1"];
+  version -> plan [label="1 : 0..1 · UNIQUE(version_id)"];
+  plan -> record [label="1 : N · 就绪后可确认"];
+  version -> record [label="1 : N · SUCCESS最多1次", color="#2563EB"];
+  binding -> record [label="自动取当前完成候选范围", style=dashed, color="#B54708", constraint=false];
+  record -> snapshot [label="保存范围快照"];
+  snapshot -> history [label="仅成功 published 明细"];
+  record -> badge [label="写徽标", color="#067647"];
+  manual -> badge [label="独立设置 / 清空", color="#B42318"];
+  badge -> record [label="标记即排除", style=dashed, color="#B42318", constraint=false];
+  badge -> demand [label="交付计数仍消费徽标", style=dashed, color="#B54708", constraint=false];
+  snapshot -> metrics [label="实际交付数量", color="#067647"];
+  task -> metrics [label="当前完成 / 工时"];
+  plan -> gap [label="能力差距，不是尚无计划", style=dashed, color="#B42318"];
+}

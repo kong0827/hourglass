@@ -8,7 +8,7 @@ import { canEditReq, canEditTask, catNameById, colRuleOf, rt, state, taskById, t
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, weekdayCN } from "../lib/format.js";
+import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
@@ -207,6 +207,7 @@ function chooseReqDoc(el, docId){
   if(!sel) return;
   var oldReqId = currentReqId();
   var changedProject = !!(doc && doc.reqId !== oldReqId);
+  var task = rt.editingId ? taskCacheExtra[rt.editingId] : null;
   if(changedProject){
     iReq.value = doc.reqId;
     iReq.dispatchEvent(new Event("change", { bubbles:true }));
@@ -479,6 +480,7 @@ function syncDrawerSource(){
   var box = $("drawerSource");
   if(!box) return;
   var opt = demandOption();
+  syncDemandTarget();
   if(!opt){ box.hidden = true; return; }
   box.hidden = false;
   var title = $("drawerSourceTitle"), meta = $("drawerSourceMeta");
@@ -487,6 +489,107 @@ function syncDrawerSource(){
   var project = (reqSel && reqSel.value && reqSel.selectedIndex >= 0) ? reqSel.options[reqSel.selectedIndex].textContent : "";
   if(meta) meta.textContent = (project ? project + " · " : "") + "关联需求";
   syncAutoProject();
+}
+/* 只在抽屉读取需求目标，不对看板/列表逐卡请求；缓存随抽屉重开失效。 */
+var demandTargetCache = {}, demandTargetPending = {};
+var newVersionExplicit = false, newInheritedTarget = null;
+function drawerDemandId(){
+  var sel = $("iDemand");
+  return sel && sel.getAttribute("data-ready") ? (sel.value || "") : (rt.formDemandId || "");
+}
+function loadDemandTarget(id){
+  if(!id) return Promise.resolve(null);
+  if(demandTargetCache[id]) return Promise.resolve(demandTargetCache[id]);
+  if(demandTargetPending[id]) return demandTargetPending[id];
+  var cacheAtRequest = demandTargetCache, pendingAtRequest = demandTargetPending;
+  pendingAtRequest[id] = API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
+    cacheAtRequest[id] = d;
+    delete pendingAtRequest[id];
+    return d;
+  }, function(ex){ delete pendingAtRequest[id]; throw ex; });
+  return pendingAtRequest[id];
+}
+function targetVersionOf(d){ return d ? (d.targetVersionId || d.versionId || "") : ""; }
+function versionReasonNeeded(d){
+  var task = rt.editingId ? taskCacheExtra[rt.editingId] : null;
+  var sel = $("iVersion");
+  if(!sel || !sel.getAttribute("data-ready")) return false;
+  var ids = selectedVersionIds(sel);
+  if(task) return !sameIds(taskVersionIds(task), ids);
+  return !task && d && d.status === "plan" && !!targetVersionOf(d) && ids.indexOf(targetVersionOf(d)) === -1;
+}
+function syncVersionReason(){
+  var d = demandTargetCache[drawerDemandId()];
+  var field = $("fVersionChangeReason");
+  if(field) field.hidden = !versionReasonNeeded(d);
+}
+function syncDemandTarget(){
+  var el = $("iDemandTarget"), id = drawerDemandId();
+  if(!el) return;
+  syncVersionReason();
+  if(!id){ el.textContent = "未关联需求目标版本"; return; }
+  el.textContent = "需求目标版本加载中…";
+  var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
+  loadDemandTarget(id).then(function(d){
+    if(!assocStillCurrent(seq, taskId, reqId) || drawerDemandId() !== id) return;
+    var target = targetVersionOf(d);
+    if(!rt.editingId && !newVersionExplicit && newInheritedTarget !== target && d.status === "plan"){
+      newInheritedTarget = target;
+      ensureVersion(target ? [target] : []);
+    }
+    var name = d.targetVersionName || d.versionName || "";
+    if(target && !name){
+      var sel = $("iVersion");
+      if(sel) Array.prototype.forEach.call(sel.options, function(o){ if(o.value === target) name = o.textContent; });
+    }
+    el.textContent = target ? "需求目标版本：" + (name || target) + "（只读，任务计划可按理由调整）" : "需求尚未设置目标版本";
+    syncVersionReason();
+  }).catch(function(ex){
+    if(assocStillCurrent(seq, taskId, reqId) && drawerDemandId() === id) el.textContent = "需求目标加载失败：" + (ex.message || "请重开抽屉重试");
+  });
+}
+function syncTaskPublication(task){
+  var box = $("taskPublication");
+  if(!box) return;
+  box.hidden = !task;
+  if(!task) return;
+  $("taskPublishedBadge").innerHTML = taskPublicationHTML(task);
+  $("taskPublicationInfo").textContent = "正式发布记录派生的只读事实；已完成不等于生产生效，执行状态可独立修改。"
+    + (task.publishedAt ? " 最近生产发布：" + fmtReleaseTime(task.publishedAt) + "。" : "")
+    + (Array.isArray(task.publicationTargets) && task.publicationTargets.length ? " 目标：" + task.publicationTargets.map(function(t){ return typeof t === "string" ? t : (t.targetKey || t.key || "") + "（" + (t.state || t.publicationState || "unknown") + "）"; }).join("、") : "");
+}
+function loadTaskReleaseRecords(task){
+  var box = $("taskReleaseRecords");
+  if(!box) return;
+  box.innerHTML = "";
+  if(!task) return;
+  var seq = rt.taskFormSeq, reqId = currentReqId();
+  box.textContent = "交付记录加载中…";
+  Promise.all([
+    API.get("/api/task/" + encodeURIComponent(task.id)),
+    API.get("/api/tasks/" + encodeURIComponent(task.id) + "/release-records")
+  ]).then(function(results){
+    if(!assocStillCurrent(seq, task.id, reqId)) return;
+    var fresh = results[0], records = results[1] || [];
+    if(!fresh || (fresh.reqId || "") !== (task.reqId || "")){
+      box.textContent = "工作项已变化或不可见，请刷新详情后查看交付记录。";
+      showDrawerNotice("工作项已变化，请刷新后继续操作");
+      return;
+    }
+    if(fresh){
+      var current = taskCacheExtra[task.id];
+      ["publicationState", "everPublished", "publicationTargets", "publishedAt", "publishSource", "publishedReleaseId"].forEach(function(key){ current[key] = fresh[key]; });
+      syncTaskPublication(current);
+    }
+    box.innerHTML = records.length ? '<h4>正式发布历史（含失败 / 测试 / 回滚）</h4>' + records.map(function(record){ return releaseSnapshotHTML(record, task.id); }).join("") : '<p class="hint">未留正式发布记录，不反推或伪造历史。</p>';
+  }).catch(function(ex){
+    if(assocStillCurrent(seq, task.id, reqId)) box.textContent = "交付记录加载失败：" + (ex.message || "请重开详情重试");
+  });
+}
+var versionSel = $("iVersion");
+if(versionSel){
+  versionSel.addEventListener("change", function(){ if(!rt.editingId) newVersionExplicit = true; syncVersionReason(); });
+  if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
 }
 function syncAutoProject(){
   var badge = $("autoProject");
@@ -548,6 +651,7 @@ function applyDrawerReadOnly(readOnly){
   for(var i = 0; i < fields.length; i++){
     var f = fields[i];
     if(readOnly){ f.disabled = true; continue; }
+    if(f.id === "iVersion" && !f.getAttribute("data-ready")){ f.disabled = true; continue; }
     if(f.id === "iProg"){ syncProgByCol(); continue; }
     if(f.id === "iBlockedReason"){ f.disabled = !(iBlocked && iBlocked.checked); continue; }
     f.disabled = false;
@@ -752,8 +856,15 @@ function renderTimeline(logs){
   timelineBox.innerHTML = logs.map(function(l){
     var txt = l.detail || l.action || "";
     var actor = l.actorName ? (esc(l.actorName) + " · ") : "";
+    var change = null, extra = "";
+    if(l.changeData){ try{ change = typeof l.changeData === "string" ? JSON.parse(l.changeData) : l.changeData; }catch(e){} }
+    if(change){
+      var before = change.before || {}, after = change.after || {};
+      if(l.action === "version_change") extra += '<br>计划版本：' + esc(taskVersionsText(before) || "待规划") + ' → ' + esc(taskVersionsText(after) || "待规划");
+      if(change.reason) extra += '<br>理由：' + esc(change.reason);
+    }
     return '<div class="tl-item"><span class="tl-time">' + esc(fmtTs(l.createdAt)) + '</span>' +
-      '<span class="tl-detail">' + actor + esc(txt) + '</span></div>';
+      '<span class="tl-detail">' + actor + esc(txt) + extra + '</span></div>';
   }).join("");
 }
 /* 附属数据失败显示“加载失败 + 重试”，不能伪装成空态 */
@@ -827,6 +938,12 @@ function openTaskDrawer(colId, task, defaults){
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
   rt.taskFormSeq++;
+  setSaveLoading(false); // 新抽屉独立管理 loading，后续再应用当前表单的只读权限
+  demandTargetCache = {}; demandTargetPending = {};
+  newVersionExplicit = !!(defaults && normalizedIds(defaults.versionIds).length);
+  newInheritedTarget = null;
+  $("iVersionChangeReason").value = (defaults && defaults.versionChangeReason) || "";
+  $("fVersionChangeReason").hidden = true;
   rt.editingId = task ? task.id : null;
   rt.formDirty = false;
   mentionPicked = [];
@@ -869,8 +986,8 @@ function openTaskDrawer(colId, task, defaults){
     if(iEnvironment) iEnvironment.value = task.environment || "";
     if(iReproSteps) iReproSteps.value = task.reproduceSteps || "";
     if(iRegression) iRegression.value = task.regressionStatus || "";
-    /* versionId 只有深链取回的任务带；看板缓存里没有，交给 phase 模块查项目任务表回填 */
-    ensureVersion(task.versionId, task.id);
+    /* 尚未加载的数组关系由项目任务选项回填；失败时保存 null 保留原关联。 */
+    ensureVersion(task.versionIds, task.id);
     ensureFoundVersion(task.foundVersionId || "");
     ensureEpic(task.epicId, task.id);
     rt.formDemandId = task.demandId || null;
@@ -943,7 +1060,7 @@ function openTaskDrawer(colId, task, defaults){
     if($("iDemand")) $("iDemand").value = rt.formDemandId || "";
     if(iItemType) iItemType.value = "task";
     clearDefectFields();
-    ensureVersion((defaults && defaults.versionId) || "");
+    ensureVersion(normalizedIds(defaults && defaults.versionIds));
     ensureFoundVersion("");
     ensureEpic((defaults && defaults.epicId) || "");
     ensureReqDoc((defaults && defaults.reqDocId) || "");
@@ -988,9 +1105,11 @@ function openTaskDrawer(colId, task, defaults){
   syncFormSegs();
   syncMoreSummary();
   applyDrawerReadOnly(readOnly);
+  syncTaskPublication(task);
   /* 手机端新建走半屏抽屉，编辑走全屏；桌面端样式不区分 */
   taskForm.classList.toggle("is-create", !task);
   openDrawer();
+  loadTaskReleaseRecords(task);
   UI.wireTooltips(taskDrawer);
   setTimeout(function(){ try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ } }, 60);
 }
@@ -1047,6 +1166,7 @@ function tryCloseTaskDrawer(){
 }
 function forceCloseTaskDrawer(){
   rt.taskFormSeq++;
+  setSaveLoading(false);
   var opener = rt.drawerOpener;
   closeDrawer();
   clearWorkTick();
@@ -1188,9 +1308,24 @@ if(epicHelp){
     UI.openPop(el, epicHelp, { align:"left", width:360, onClose:function(){ el.remove(); epicHelpPop = null; } });
   });
 }
-/* 换项目时影响版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
+/* 「计划版本」旁的 ? 图标：解释版本与首版/迭代为什么不是同一个可选维度 */
+var versionHelp = $("iVersionHelp");
+var versionHelpPop = null;
+if(versionHelp){
+  versionHelp.innerHTML = icon("helpCircle", 13);
+  versionHelp.addEventListener("click", function(){
+    if(UI.popOpen(versionHelpPop)){ UI.closeAllPops(); return; }
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop";
+    el.innerHTML = versionPhaseInfoHTML();
+    versionHelpPop = el;
+    UI.openPop(el, versionHelp, { align:"left", width:Math.max(280, Math.min(380, window.innerWidth - 16)), onClose:function(){ el.remove(); versionHelpPop = null; } });
+  });
+}
+/* 换项目时计划版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
 if(iReq) iReq.addEventListener("change", function(){
-  ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
+  if(!rt.editingId){ newVersionExplicit = false; newInheritedTarget = null; }
+  ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
   ensureBranch(($("iBranch") || {}).value, iReq.value);
   /* 换项目后原需求池关联失效：立即清空下拉并按新项目重载候选（后端同口径静默解绑） */
   var demandSel = $("iDemand");
@@ -1205,6 +1340,10 @@ if(iReq) iReq.addEventListener("change", function(){
 });
 var iDemand = $("iDemand");
 if(iDemand) iDemand.addEventListener("change", function(){
+  if(!rt.editingId && !newVersionExplicit){
+    if(newInheritedTarget !== null) ensureVersion([]);
+    newInheritedTarget = null;
+  }
   rt.formDemandId = iDemand.value || null;
   syncAssocViewBtns();
   syncDrawerSource();
@@ -1215,7 +1354,7 @@ if(iDemand) iDemand.addEventListener("change", function(){
   var wantReq = opt ? (opt.getAttribute("data-req") || "") : "";
   if(wantReq && wantReq !== iReq.value){
     iReq.value = wantReq;
-    ensureVersion(""); ensureFoundVersion(""); ensureEpic("");
+    ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
     ensureBranch(($("iBranch") || {}).value, wantReq);
     ensureCatForProject(wantReq);
     ensureReqDoc("");
@@ -1756,7 +1895,7 @@ if(btnTaskNew) btnTaskNew.addEventListener("click", function(){
   var vSel = $("iVersion"), eSel = $("iEpic");
   openTaskDrawer(t.boardColumn || "backlog", null, {
     reqId: currentReqId() || t.reqId || "",
-    versionId: (vSel && vSel.value) || "",
+    versionIds: selectedVersionIds(vSel).filter(function(id){ return Array.from(vSel.options).some(function(o){ return o.value === id && !o.disabled; }); }),
     epicId: (eSel && eSel.value) || ""
   });
 });
@@ -1797,6 +1936,9 @@ taskForm.addEventListener("submit", function(e){
     fTitle.classList.add("invalid");
     focusField(iTitle);
     return;
+  }
+  if(!rt.editingId && iReq.value && !$("iVersion").getAttribute("data-ready")){
+    toast("请等待计划版本加载完成；加载失败时请重开抽屉重试", "warn"); return;
   }
   var pendingTag = iTags.value.trim().replace(/[,，]/g, "");
   if(pendingTag && rt.tagsCache.indexOf(pendingTag) === -1 && rt.tagsCache.length < 8) rt.tagsCache.push(pendingTag.slice(0, 16));
@@ -1848,12 +1990,10 @@ taskForm.addEventListener("submit", function(e){
       return current ? (current.foundVersionId || null) : null;
     })(),
     regressionStatus: itemTypeValue === "bug" ? (iRegression ? (iRegression.value || "") : "") : null,
-    /* 版本下拉 data-ready 由 phase 模块置位：没就绪说明选项还没回来，保留原绑定（null=不改）；
-       就绪后空值是明确的「待规划」（空串=解绑），与后端口径一一对应 */
-    versionId: (function(){
+    /* null 保留原关联，已就绪后的 [] 明确解除全部版本。 */
+    versionIds: (function(){
       var vs = $("iVersion");
-      if(vs && vs.getAttribute("data-ready")) return vs.value || "";
-      return current ? (current.versionId || null) : null;
+      return vs && vs.getAttribute("data-ready") ? selectedVersionIds(vs) : null;
     })(),
     epicId: (function(){
       var es = $("iEpic");
@@ -1908,33 +2048,42 @@ taskForm.addEventListener("submit", function(e){
   })();
   var retried = false;
   function onSaved(nt){
-    setSaveLoading(false);
-    if(seq !== rt.taskFormSeq) return;   // 抽屉已切换：界面由新的打开流程管理
-    rememberReqId(nt && nt.reqId);
-    if(saveAndContinue && wasEdit && rt.editingId === editId){
-      /* 连续编辑：留在抽屉里；同步缓存与标题，后续保存不会带着旧值 */
-      var changedDuringSave = formRev !== revAtSubmit;
-      if(nt && taskCacheExtra[editId]) taskCacheExtra[editId] = Object.assign({}, taskCacheExtra[editId], nt);
-      if(nt && nt.title && !changedDuringSave) taskDrawerTitle.textContent = nt.title;
-      if(!changedDuringSave) rt.formDirty = false;
-      var stayHint = $("taskFormHint");
-      if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
-      if(changedDuringSave) toast("已保存提交时的内容 · 保存期间的新改动还未保存", "warn");
-      else toast("已保存「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""));
-    }else{
-      forceCloseTaskDrawer();
-      if(wasEdit){
-        toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
-      }else{
-        var tip = "已创建工作项「" + nt.title + "」";
-        var kind = "fs";
-        if(nt.dueDate){
-          var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
-          if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
-          else if(d === 0) tip += "，今天到期";
-          else if(d <= 3) tip += "，剩余 " + d + " 天";
+    if(seq === rt.taskFormSeq){ // 只有当前抽屉可修改 loading 和表单；旧成功响应仍刷新视图缓存
+      setSaveLoading(false);
+      rememberReqId(nt && nt.reqId);
+      if(saveAndContinue && wasEdit && rt.editingId === editId){
+        /* 连续编辑：留在抽屉里；同步缓存与标题，后续保存不会带着旧值 */
+        var changedDuringSave = formRev !== revAtSubmit;
+        if(nt && taskCacheExtra[editId]){
+          taskCacheExtra[editId] = Object.assign({}, taskCacheExtra[editId], nt);
+          if(payload.versionIds !== null && !Array.isArray(nt.versionIds)) taskCacheExtra[editId].versionIds = payload.versionIds.slice();
         }
-        toast(tip, kind);
+        if(nt && nt.title && !changedDuringSave) taskDrawerTitle.textContent = nt.title;
+        if(!changedDuringSave){
+          $("iVersionChangeReason").value = "";
+          syncVersionReason();
+          syncTaskPublication(taskCacheExtra[editId]);
+          rt.formDirty = false;
+        }
+        var stayHint = $("taskFormHint");
+        if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
+        if(changedDuringSave) toast("已保存提交时的内容 · 保存期间的新改动还未保存", "warn");
+        else toast("已保存「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""));
+      }else{
+        forceCloseTaskDrawer();
+        if(wasEdit){
+          toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
+        }else{
+          var tip = "已创建工作项「" + nt.title + "」";
+          var kind = "fs";
+          if(nt.dueDate){
+            var d = dayDiff(parseDate(nt.dueDate), rt.TODAY);
+            if(d < 0){ tip += "，已逾期 " + Math.abs(d) + " 天"; kind = "warn"; }
+            else if(d === 0) tip += "，今天到期";
+            else if(d <= 3) tip += "，剩余 " + d + " 天";
+          }
+          toast(tip, kind);
+        }
       }
     }
     loadBoard({animate:true});
@@ -1955,33 +2104,56 @@ taskForm.addEventListener("submit", function(e){
       ? API.put("/api/tasks/" + encodeURIComponent(editId), body)
       : API.post("/api/tasks", body);
     req.then(onSaved).catch(function(ex){
+      if(seq !== rt.taskFormSeq) return;
       if(columnChanged && !retried && (ex.code === 412 || ex.code === 422)){
         retried = true;
         serverDecision(wsId, items, toCol, ex).then(function(retry){
+          if(seq !== rt.taskFormSeq) return;
           if(!retry){
             setSaveLoading(false);
             if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "保存失败", "bad");
             return;
           }
-          if(seq !== rt.taskFormSeq) return;
           saveWith(retry);
         });
         return;
       }
       setSaveLoading(false);
-      if(seq !== rt.taskFormSeq) return;
       toast(ex.message || "保存失败", "bad");
     });
   }
   setSaveLoading(true);
-  if(!columnChanged){
-    saveWith(null);
-    return;
-  }
-  guard(wsId, items, toCol).then(function(pass){
+  /* 只有实际改版/新建偏离需求目标才要求理由；编辑其他字段不写版本调整理由。 */
+  var demandId = payload.demandId === null ? (rt.formDemandId || "") : payload.demandId;
+  var needsTarget = !wasEdit && !!demandId;
+  (needsTarget ? loadDemandTarget(demandId) : Promise.resolve(null)).then(function(d){
+    if(seq !== rt.taskFormSeq) return null;
+    var changed = wasEdit && payload.versionIds !== null && !sameIds(payload.versionIds, taskVersionIds(current));
+    var deviated = !wasEdit && d && d.status === "plan" && !!targetVersionOf(d) && normalizedIds(payload.versionIds).indexOf(targetVersionOf(d)) === -1;
+    if(!changed && !deviated) return true;
+    var field = $("fVersionChangeReason"), input = $("iVersionChangeReason");
+    field.hidden = false;
+    if(input.value.trim()){ payload.versionChangeReason = input.value.trim(); return true; }
+    return UI.showPrompt({title:"版本调整理由", desc:changed ? "计划版本发生变化，请说明调整原因。" : "当前计划版本偏离需求目标，请说明原因。", label:"理由（必填）"}).then(function(reason){
+      if(seq !== rt.taskFormSeq) return false;
+      if(reason === null) return false;
+      reason = reason.trim();
+      if(!reason || reason.length > 500){ toast("请填写 1–500 字的版本调整理由", "warn"); focusField(input); return false; }
+      input.value = reason; payload.versionChangeReason = reason; return true;
+    });
+  }).then(function(ready){
     if(seq !== rt.taskFormSeq) return;
-    if(!pass){ setSaveLoading(false); return; }
-    saveWith(pass);
+    if(!ready){ setSaveLoading(false); return; }
+    if(formRev !== revAtSubmit){ setSaveLoading(false); toast("填写理由期间表单已变化，请重新保存", "warn"); return; }
+    if(!columnChanged){ saveWith(null); return; }
+    guard(wsId, items, toCol).then(function(pass){
+      if(seq !== rt.taskFormSeq) return;
+      if(!pass){ setSaveLoading(false); return; }
+      saveWith(pass);
+    });
+  }).catch(function(ex){
+    if(seq !== rt.taskFormSeq) return;
+    setSaveLoading(false); toast("需求目标校验失败：" + (ex.message || "请重试"), "bad");
   });
 });
 $("btnCloseTask").addEventListener("click", tryCloseTaskDrawer);
@@ -2514,7 +2686,8 @@ if($("iMilestone")){
 var btnDrawerStatus = document.getElementById("btnDrawerStatus");
 if(btnDrawerStatus){
   btnDrawerStatus.addEventListener("click", function(){
-    if(!iCol) return;
+    if(!iCol || denyReadOnly()) return;
+    var task = rt.editingId ? taskCacheExtra[rt.editingId] : null;
     var el = document.createElement("div");
     el.className = "menu";
     el.innerHTML = COLUMNS.map(function(c){

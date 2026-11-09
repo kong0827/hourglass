@@ -8,6 +8,14 @@ import com.hourglass.dto.PhaseMemberTaskPage;
 import com.hourglass.dto.PhaseStatsResponse;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReleaseNoteResponse;
+import com.hourglass.dto.ReleasePlanRequest;
+import com.hourglass.dto.ReleasePreviewRequest;
+import com.hourglass.dto.ReleasePreviewResponse;
+import com.hourglass.dto.ReleaseConfirmRequest;
+import com.hourglass.entity.VersionReleasePlan;
+import com.hourglass.entity.VersionRelease;
+import com.hourglass.service.VersionReleaseService;
+import java.util.Map;
 import com.hourglass.dto.VersionOverviewResponse;
 import com.hourglass.dto.VersionStatsResponse;
 import com.hourglass.entity.ProjectVersion;
@@ -31,10 +39,13 @@ public class ProjectVersionController {
 
     private final ProjectVersionService versionService;
     private final VersionPhaseService phaseService;
+    private final VersionReleaseService releaseService;
 
-    public ProjectVersionController(ProjectVersionService versionService, VersionPhaseService phaseService) {
+    public ProjectVersionController(ProjectVersionService versionService, VersionPhaseService phaseService,
+                                    VersionReleaseService releaseService) {
         this.versionService = versionService;
         this.phaseService = phaseService;
+        this.releaseService = releaseService;
     }
 
     @GetMapping("/api/versions")
@@ -94,9 +105,50 @@ public class ProjectVersionController {
         return ApiResult.ok(versionService.update(ctx.getUserId(), ctx.getWsId(), id, req));
     }
 
+    @GetMapping("/api/versions/{id}/release-plans")
+    public ApiResult<List<VersionReleasePlan>> releasePlans(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.plans(ctx.getUserId(), ctx.getWsId(), id));
+    }
+
+    @PostMapping("/api/versions/{id}/release-plans")
+    public ApiResult<VersionReleasePlan> createReleasePlan(@PathVariable String id,
+                                                          @Valid @RequestBody ReleasePlanRequest request,
+                                                          @CurrentWorkspace WorkspaceCtx ctx) {
+        if (request.getId() != null) throw com.hourglass.common.AppException.badRequest("新建计划不能提供id");
+        return ApiResult.ok(releaseService.savePlan(ctx.getUserId(), ctx.getWsId(), id, request));
+    }
+
+    @PutMapping("/api/versions/{id}/release-plan")
+    public ApiResult<VersionReleasePlan> saveReleasePlan(@PathVariable String id,
+                                                        @Valid @RequestBody ReleasePlanRequest request,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        if (request.getId() == null) throw com.hourglass.common.AppException.badRequest("更新必须指定独立计划id");
+        return ApiResult.ok(releaseService.savePlan(ctx.getUserId(), ctx.getWsId(), id, request));
+    }
+
+    @PostMapping("/api/versions/{id}/release-preview")
+    public ApiResult<ReleasePreviewResponse> releasePreview(@PathVariable String id,
+                                                            @Valid @RequestBody ReleasePreviewRequest request,
+                                                            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.preview(ctx.getUserId(), ctx.getWsId(), id, request));
+    }
+
     @PostMapping("/api/versions/{id}/release")
-    public ApiResult<ProjectVersion> publish(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(versionService.publish(ctx.getUserId(), ctx.getWsId(), id));
+    public ApiResult<VersionRelease> publish(@PathVariable String id,
+                                            @Valid @RequestBody ReleaseConfirmRequest request,
+                                            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.confirm(ctx.getUserId(), ctx.getWsId(), id, request));
+    }
+
+    @GetMapping("/api/versions/{id}/release-records")
+    public ApiResult<List<VersionRelease>> releaseRecords(@PathVariable String id, @RequestParam(required = false) String key,
+                                                         @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.records(ctx.getUserId(), ctx.getWsId(), id, key));
+    }
+
+    @GetMapping("/api/versions/{id}/release-history")
+    public ApiResult<List<Map<String, Object>>> releaseHistory(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.history(ctx.getUserId(), ctx.getWsId(), id));
     }
 
     @PostMapping("/api/versions/{id}/start")

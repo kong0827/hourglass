@@ -417,7 +417,7 @@
               <span>截止</span>
               <span>进度</span>
               <span>项目</span>
-              <span>影响版本</span>
+              <span>计划版本</span>
               <span></span>
             </div>
             <div class="list-body" id="listBody"></div>
@@ -688,6 +688,7 @@
         <div class="view-page" id="phasePage">
           <div class="page-toolbar">
             <span class="toolbar-meta" id="phaseMeta"></span>
+            <button type="button" class="label-help" id="phaseHelp" aria-label="查看版本与首版/迭代的区分逻辑" title="版本与首版/迭代怎么区分"></button>
             <span class="toolbar-right">
               <select id="phaseReq" class="mini-select" aria-label="选择项目"></select>
               <div class="seg" id="phaseModeSeg">
@@ -731,7 +732,7 @@
               <div class="row row-gap">
                 <button class="btn primary" type="button" id="btnSaveVer">创建版本</button>
               </div>
-              <p class="foot-note">版本属于所选项目；工作项在详情抽屉选「影响版本」，需求池排期时选「目标版本」</p>
+              <p class="foot-note">版本属于所选项目；工作项在详情抽屉选「计划版本」，需求池排期时选「目标版本」</p>
             </div>
           </div>
         </div></div></div>
@@ -748,6 +749,7 @@
                 <button type="button" data-dem-mode="table" aria-pressed="false">列表</button>
                 <button type="button" data-dem-mode="gantt" aria-pressed="false">甘特</button>
               </div>
+              <button type="button" class="label-help" id="demandGanttHelp" aria-label="查看需求池甘特的计算逻辑" title="甘特怎么画" hidden></button>
               <button class="btn sm" type="button" id="btnDemandColumns" hidden>显示字段</button>
               <select id="demandReq" class="mini-select" aria-label="选择项目"></select>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
@@ -870,9 +872,22 @@
             <div class="panel-head"><h3 id="demandPlanTitle">排期进入版本</h3><button class="icon-btn sm" type="button" id="dlgDemandPlanX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
               <div class="field" id="fDemandPlanVer">
-                <label for="dpVersion">目标版本 <span class="req">*</span></label>
+                <label for="dpVersion">目标版本（选填）</label>
                 <select id="dpVersion"></select>
-                <span class="err">请选择目标版本</span>
+              </div>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="dpPlannedStart">计划开始</label>
+                  <input id="dpPlannedStart" type="date" />
+                </div>
+                <div class="field">
+                  <label for="dpPlannedEnd">计划结束</label>
+                  <input id="dpPlannedEnd" type="date" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="dpPriority">排期优先级</label>
+                <select id="dpPriority"><option value="P0">P0</option><option value="P1">P1</option><option value="P2" selected>P2</option><option value="P3">P3</option></select>
               </div>
               <div class="field">
                 <label for="dpNote">排期备注</label>

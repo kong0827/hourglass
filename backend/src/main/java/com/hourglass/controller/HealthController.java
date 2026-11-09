@@ -1,9 +1,13 @@
 package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
+import com.hourglass.common.LoginUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,6 +39,11 @@ public class HealthController {
         try {
             jdbcTemplate.queryForObject("SELECT 1", Integer.class);
             data.put("db", "up");
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof LoginUser
+                    && "admin".equals(((LoginUser) auth.getPrincipal()).getRole())) {
+                data.put("database", jdbcTemplate.execute((ConnectionCallback<String>) connection -> connection.getCatalog()));
+            }
         } catch (Exception e) {
             log.error("数据库连通检查失败", e);
             data.put("db", "down");

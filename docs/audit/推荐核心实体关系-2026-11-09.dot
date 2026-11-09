@@ -1,0 +1,36 @@
+digraph TargetEntities {
+  graph [rankdir=TB, bgcolor="#FFFFFF", pad="0.3", nodesep="0.4", ranksep="0.65", fontname="PingFang SC", fontsize=20, label="已实施核心关系：正式发布闭环\n本地验收通过 · 生产启用受阻\n任务管执行 · 发布记录管交付 · 徽标只读计算\n不引入迭代 · 不考虑历史数据 · 不涉及数据迁移", labelloc=t];
+  node [shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#D0D5DD", fontcolor="#101828", fontname="PingFang SC", fontsize=14, margin="0.65,0.18"];
+  edge [color="#98A2B3", fontname="PingFang SC", fontsize=11, fontcolor="#475467", arrowsize=0.7];
+  project [label="项目\n版本独立归属与权限边界", fillcolor="#EFF4FF"];
+  demand [label="需求 · 复用 demand\n要做什么 / 验收标准\n需求池是同一实体的管理视图"];
+  task [label="任务 · 复用 task\n做什么 / 谁来做 / 工作状态\n关联目标版本，不依赖计划状态"];
+  version [label="项目版本 · project_version\n交付内容 / 内容就绪目标\n不等于某一次部署", fillcolor="#EFF4FF"];
+  version_task [label="version_task · M : N 规划关联\n任务 versionIds / versionNames 数组\n成功事实后冻结内容，不锁工作状态"];
+  plan [label="发布计划 · 扩展 version_release_plan\n目标版本 / 环境 / 计划时间\n负责人 / 本次任务范围", fillcolor="#EFF4FF"];
+  plan_task [label="新增 version_release_plan_task\n保存本次明确 plannedTaskIds\n计划修订有审计，完成后不可修改", fillcolor="#FFFAEB", color="#FEDF89"];
+  record [label="实际记录 · 扩展 version_release\nUTC 发生时间 ≠ 服务端录入时间\n环境 / 目标 / 结果 / 产物 SHA256\n执行人 / 记录人 / actualTaskIds", fillcolor="#ECFDF3", color="#A6F4C5"];
+  snapshot [label="实际明细 · version_release_item\n真正发布任务 + 身份 / 工作状态快照\n失败尝试与实际交付分别标识", fillcolor="#ECFDF3", color="#A6F4C5"];
+  published [shape=folder, label="已发布 · 只读历史视图\n成功生产记录与实际快照\n保留灰度 / 重部署 / 后续回滚信息", fillcolor="#F2F4F7"];
+  badge [shape=folder, label="任务徽标 · 只读投影\n生产成功及目标范围 / 回滚事件\n无独立 publish / unpublish 写入口", fillcolor="#ECFDF3", color="#A6F4C5"];
+  project -> demand [label="1 : N"];
+  project -> task [label="1 : N · 可无需求"];
+  project -> version [label="1 : N · 项目维护版本"];
+  demand -> task [label="1 : N"];
+  demand -> version [label="目标意向，不是交付事实", style=dashed, constraint=false];
+  version -> version_task [label="1 : N"];
+  version_task -> task [label="N : 1 · 规划关系"];
+  version -> plan [label="1 : N · 不再每版唯一"];
+  plan -> plan_task [label="1 : N · 明确任务范围"];
+  plan_task -> task [label="计划任务关联", constraint=false];
+  plan -> record [label="1 : N\n紧急无计划必须说明偏离原因"];
+  version -> record [label="1 : N · 实际版本同项目", color="#2563EB"];
+  record -> record [label="重试 / 重部署 / 回滚\n追加事件，不覆盖旧结果", constraint=false];
+  record -> snapshot [label="1 : N · 明确本次实际范围"];
+  snapshot -> task [label="历史身份引用", style=dashed, constraint=false];
+  record -> published [label="按环境 / 结果查询", color="#067647"];
+  snapshot -> published [label="冻结实际内容", color="#067647"];
+  record -> badge [label="唯一发布事实来源", color="#067647"];
+  snapshot -> badge [label="任务ID / 实际范围匹配", color="#067647"];
+  badge -> task [label="返回派生字段，不手工维护", style=dashed, color="#067647", constraint=false];
+}

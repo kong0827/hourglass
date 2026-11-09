@@ -8,6 +8,7 @@
 import os
 import re
 import sys
+from urllib.parse import unquote, urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, "docs")
@@ -63,9 +64,25 @@ def check_links(issues):
                     if target.startswith("/"):
                         issues.append("%s 使用绝对路径链接：%s" % (rel_path, target))
                         continue
-                    target = target.split("#", 1)[0]
+                    try:
+                        parsed = urlsplit(target)
+                    except ValueError:
+                        issues.append("%s 链接格式无效：%s" % (rel_path, target))
+                        continue
+                    if parsed.scheme == "file":
+                        if parsed.netloc.lower() not in ("", "localhost"):
+                            issues.append("%s 使用非本地主机 file URI：%s" % (rel_path, target))
+                            continue
+                        target = unquote(parsed.path)
+                    else:
+                        # 避免把普通相对文件名中的冒号当作 URI scheme。
+                        target = unquote(urlsplit("./" + target).path[2:])
+                    if parsed.scheme != "file" and target.startswith("/"):
+                        issues.append("%s 使用绝对路径链接：%s" % (rel_path, target))
+                        continue
                     if not target:
                         continue
+                    # 本地 file URI 的绝对路径不拼接文档目录；相对路径仍以文档目录为基准。
                     resolved = os.path.normpath(os.path.join(root, target))
                     if not os.path.exists(resolved):
                         issues.append("%s 链接目标不存在：%s" % (rel_path, target))

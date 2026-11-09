@@ -75,6 +75,7 @@ class WorkActivityRecordingTest {
                 mock(NotificationEventService.class),
                 mock(com.hourglass.mapper.ReqDocShareMapper.class),
                 mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(docService, "taskQueries", mock(TaskQueryService.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
                 mock(ProjectVersionService.class), mock(com.hourglass.mapper.ProjectVersionMapper.class),

@@ -16,9 +16,12 @@ import com.hourglass.entity.DevBranch;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.VersionRelease;
+import com.hourglass.entity.VersionReleaseItem;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.DevBranchMapper;
 import com.hourglass.mapper.ProjectVersionMapper;
+import com.hourglass.mapper.ReleaseMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.UserMapper;
@@ -26,7 +29,6 @@ import com.hourglass.mapper.VersionTaskMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,11 +56,16 @@ public class VersionPhaseService {
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
     private final DevBranchMapper branchMapper;
+    private final ReleasePermissionService permissions;
+    private final ReleaseMapper releaseMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskPublicationService publications;
 
     public VersionPhaseService(ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper,
                                RequirementMapper reqMapper, DemandMapper demandMapper,
                                TimeLogMapper timeLogMapper, UserMapper userMapper,
-                               ProjectAccessService projectAccess, DevBranchMapper branchMapper) {
+                               ProjectAccessService projectAccess, DevBranchMapper branchMapper,
+                               ReleasePermissionService permissions, ReleaseMapper releaseMapper) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.reqMapper = reqMapper;
@@ -67,6 +74,8 @@ public class VersionPhaseService {
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
         this.branchMapper = branchMapper;
+        this.permissions = permissions;
+        this.releaseMapper = releaseMapper;
     }
 
     /** T1.3：按版本聚合（含待规划任务桶与需求池排期计数） */
@@ -78,32 +87,23 @@ public class VersionPhaseService {
         Requirement req = requireProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, reqId);
         return versionStats(workspaceId, req, versionMapper.selectByReq(workspaceId, reqId),
-                versionTaskMapper.selectStatsByReq(workspaceId, reqId), branchBriefs(workspaceId));
+                versionTaskMapper.selectStatsByReq(workspaceId, reqId), branchBriefs(workspaceId), userId);
     }
 
     /** 总览复用：项目、版本、任务数据由调用方一次取好，避免逐视图重复查询；分支简表也由总览一次取好共用 */
     private VersionStatsResponse versionStats(String workspaceId, Requirement req,
                                               List<ProjectVersion> versions, List<Task> tasks,
-                                              Map<String, DevBranch> branchBriefs) {
+                                              Map<String, DevBranch> branchBriefs, String userId) {
         String reqId = req.getId();
-        LocalDate firstReleased = req.getFirstReleasedAt();
-        /* 计划第 6 节：首版上线前未绑版本的任务自动归入最早已发布版本（通常是 V1.0） */
-        String preLaunchVersionId = firstReleased == null ? null : earliestReleasedVersionId(versions);
-        int preLaunchCount = 0;
-
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
+        publications.enrichTasks(workspaceId, tasks);
         Map<String, Agg> byVersion = new HashMap<String, Agg>();
         Agg unbound = new Agg();
+        java.util.Set<String> seen = new java.util.HashSet<String>();
         for (Task t : tasks) {
-            if (t.getVersionId() == null && preLaunchVersionId != null) {
-                LocalDate day = groupDay(t);
-                if (day != null && !day.isAfter(firstReleased)) {
-                    aggOf(byVersion, preLaunchVersionId).tasks.add(t);
-                    preLaunchCount++;
-                    continue;
-                }
-            }
-            Agg agg = t.getVersionId() == null ? unbound : aggOf(byVersion, t.getVersionId());
-            agg.tasks.add(t);
+            if (!seen.add(t.getId())) continue;
+            if (t.getVersionIds().isEmpty()) unbound.tasks.add(t);
+            for (String versionId : t.getVersionIds()) aggOf(byVersion, versionId).tasks.add(t);
         }
 
         Map<String, int[]> demandCounts = new HashMap<String, int[]>();
@@ -125,6 +125,12 @@ public class VersionPhaseService {
         VersionStatsResponse resp = new VersionStatsResponse();
         fillBucket(resp.getUnbound(), unbound);
         resp.getUnbound().setBranches(branchStatsOf(unbound.tasks, branchBriefs));
+        boolean identified = userId != null && !userId.trim().isEmpty();
+        boolean canManage = identified && permissions.canManageProject(userId, workspaceId, reqId);
+        List<VersionRelease> projectRecords = versionTaskMapper.selectReleaseRecordsByReq(workspaceId, reqId);
+        Map<String, List<VersionRelease>> recordsByVersion = new HashMap<String, List<VersionRelease>>();
+        for (VersionRelease record : projectRecords)
+            recordsByVersion.computeIfAbsent(record.getVersionId(), key -> new ArrayList<VersionRelease>()).add(record);
         for (ProjectVersion version : versions) {
             VersionStatsResponse.VersionStat stat = new VersionStatsResponse.VersionStat();
             stat.setId(version.getId());
@@ -134,7 +140,39 @@ public class VersionPhaseService {
             stat.setStartDate(version.getStartDate());
             stat.setTargetDate(version.getTargetDate());
             stat.setReleasedAt(version.getReleasedAt());
-            stat.setPreLaunchCount(version.getId().equals(preLaunchVersionId) ? preLaunchCount : 0);
+            stat.setRevision(version.getRevision());
+            List<VersionRelease> records = recordsByVersion.getOrDefault(version.getId(), java.util.Collections.emptyList());
+            VersionRelease latest = latestSuccess(records);
+            stat.setReleaseEvidenceKind(latest == null ? "planned_scope" : "release_snapshot");
+            stat.setReleaseRecordId(latest == null ? null : latest.getId());
+            stat.setReleaseEventCount(records.size());
+            int successCount = 0, published = 0, excluded = 0;
+            java.util.Set<String> productionTasks = new java.util.HashSet<String>();
+            for (VersionRelease record : records) {
+                if (!"success".equals(record.getResult())) continue;
+                successCount++;
+                for (VersionReleaseItem item : record.getItems()) {
+                    if ("published".equals(item.getDisposition())) {
+                        published++;
+                        if ("production".equals(record.getEnvironment()) && !"rollback".equals(record.getOperation()))
+                            productionTasks.add(item.getTaskId());
+                    } else excluded++;
+                }
+            }
+            stat.setSuccessfulReleaseEventCount(successCount);
+            stat.setPublishedTaskCount(published);
+            stat.setExcludedTaskCount(excluded);
+            stat.setUniqueProductionTaskCount(productionTasks.size());
+            int effective = 0;
+            for (String taskId : productionTasks) {
+                TaskPublicationService.PublicationSummary summary = publications.project(taskId, projectRecords);
+                if ("effective".equals(summary.getPublicationState()) && summary.getLatestEffectiveRecord() != null
+                        && version.getId().equals(summary.getLatestEffectiveRecord().getVersionId())) effective++;
+            }
+            stat.setEffectiveProductionTaskCount(effective);
+            stat.setCanManageReleasePlan(canManage);
+            stat.setCanPublish(canManage);
+            stat.setPreLaunchCount(0);
             Agg agg = aggOf(byVersion, version.getId());
             stat.setTaskCount(agg.tasks.size());
             fillDoneStats(stat, agg.tasks);
@@ -234,7 +272,7 @@ public class VersionPhaseService {
             List<Task> projectTasks = versionTaskMapper.selectStatsByReq(workspaceId, p.getId());
             PhaseStatsResponse ps = phaseStats(workspaceId, p, projectTasks, userId, userNameCache);
             VersionStatsResponse vs = versionStats(workspaceId, p,
-                    versionMapper.selectByReq(workspaceId, p.getId()), projectTasks, branchBriefs);
+                    versionMapper.selectByReq(workspaceId, p.getId()), projectTasks, branchBriefs, userId);
 
             VersionOverviewResponse.ProjectOverview po = new VersionOverviewResponse.ProjectOverview();
             po.setReqId(p.getId());
@@ -350,30 +388,23 @@ public class VersionPhaseService {
             throw AppException.notFound("版本不存在：" + versionId);
         }
         projectAccess.assertView(workspaceId, userId, version.getReqId());
+        VersionRelease record = latestSuccess(releaseMapper.selectRecords(workspaceId, versionId));
+        if (record != null) return snapshotReleaseNote(workspaceId, record);
         ReleaseNoteResponse resp = new ReleaseNoteResponse();
+        /* 历史无记录只保留动态统计兼容，不把统计折算制造成实际发布证据。 */
+        resp.setEvidenceKind("released".equals(version.getStatus()) ? "no_release_record" : "planned_scope");
         resp.setVersion(version);
         resp.setGeneratedAt(version.getReleasedAt() != null
                 ? version.getReleasedAt().toLocalDate() : LocalDate.now());
 
         List<Task> all = versionTaskMapper.selectStatsByReq(workspaceId, version.getReqId());
-        /* 与 versionStats 同一口径：上线前未绑版本的任务归入最早已发布版本，
-           发布说明的任务清单/统计同步纳入，避免版本卡 9 项、说明只有 8 项的错位 */
-        Requirement req = reqMapper.selectById(version.getReqId());
-        LocalDate firstReleased = req == null ? null : req.getFirstReleasedAt();
-        boolean isPreLaunchVersion = firstReleased != null
-                && versionId.equals(earliestReleasedVersionId(versionMapper.selectByReq(workspaceId, version.getReqId())));
+        versionTaskMapper.enrichTasks(workspaceId, all);
+        publications.enrichTasks(workspaceId, all);
         int done = 0;
         int workMinutes = 0;
         int estimateMinutes = 0;
         for (Task t : all) {
-            boolean inVersion = versionId.equals(t.getVersionId());
-            if (!inVersion && isPreLaunchVersion && t.getVersionId() == null) {
-                LocalDate day = groupDay(t);
-                inVersion = day != null && !day.isAfter(firstReleased);
-                if (inVersion) {
-                    t.setPreLaunchFold(true);
-                }
-            }
+            boolean inVersion = t.getVersionIds().contains(versionId);
             if (!inVersion) {
                 continue;
             }
@@ -385,6 +416,85 @@ public class VersionPhaseService {
             }
         }
         resp.setDemands(demandMapper.selectByVersion(workspaceId, versionId));
+        resp.setTotalCount(resp.getTasks().size());
+        resp.setDoneCount(done);
+        resp.setWorkMinutes(workMinutes);
+        resp.setEstimateMinutes(estimateMinutes);
+        return resp;
+    }
+
+    private VersionRelease latestSuccess(List<VersionRelease> records) {
+        return records.stream().filter(r -> "success".equals(r.getResult()))
+                .max(java.util.Comparator.comparing(VersionRelease::getOccurredAt,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                        .thenComparing(VersionRelease::getRecordedAt,
+                                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                        .thenComparing(VersionRelease::getId)).orElse(null);
+    }
+
+    /** 实际发布证据仅来自不可变记录；不查询当前任务、需求或版本日期补齐缺失字段。 */
+    private ReleaseNoteResponse snapshotReleaseNote(String workspaceId, VersionRelease record) {
+        ReleaseNoteResponse resp = new ReleaseNoteResponse();
+        resp.setEvidenceKind("release_snapshot");
+        resp.setReleaseRecordId(record.getId());
+        resp.setRecordedAt(record.getRecordedAt());
+        resp.setGeneratedAt(record.getPublishedOn());
+
+        ProjectVersion capturedVersion = new ProjectVersion();
+        capturedVersion.setId(record.getVersionId());
+        capturedVersion.setWorkspaceId(record.getWorkspaceId());
+        capturedVersion.setReqId(record.getReqId());
+        capturedVersion.setName(record.getVersionName());
+        capturedVersion.setStatus("released");
+        capturedVersion.setRevision(null);
+        capturedVersion.setReleasedAt(record.getPublishedOn() == null ? null : record.getPublishedOn().atStartOfDay());
+        resp.setVersion(capturedVersion);
+
+        Map<String, Demand> capturedDemands = new java.util.LinkedHashMap<String, Demand>();
+        int done = 0;
+        int workMinutes = 0;
+        int estimateMinutes = 0;
+        for (VersionReleaseItem item : releaseMapper.selectItems(workspaceId, record.getId())) {
+            if (!"published".equals(item.getDisposition())) {
+                continue;
+            }
+            Task task = new Task();
+            task.setId(item.getTaskId());
+            task.setWorkspaceId(record.getWorkspaceId());
+            task.setReqId(record.getReqId());
+            task.setReqName(record.getProjectName());
+            task.setTitle(item.getTitle());
+            task.setItemType(item.getItemType());
+            task.setOwnerUserId(item.getOwnerUserId());
+            task.setOwner(item.getOwnerName());
+            task.setDemandId(item.getDemandId());
+            task.setVersionIds(new ArrayList<String>(java.util.Collections.singletonList(record.getVersionId())));
+            task.setVersionNames(new ArrayList<String>(java.util.Collections.singletonList(record.getVersionName())));
+            task.setBoardColumn(item.getBoardColumn());
+            task.setCompletedAt(item.getCompletedAt());
+            if (Consts.COL_DONE.equals(item.getBoardColumn())) {
+                done++;
+            }
+            task.setTotalMinutes(item.getWorkMinutes());
+            task.setEstimateMinutes(item.getEstimateMinutes());
+            resp.getTasks().add(task);
+            workMinutes += nz(item.getWorkMinutes());
+            estimateMinutes += nz(item.getEstimateMinutes());
+
+            if (item.getDemandId() != null && !capturedDemands.containsKey(item.getDemandId())) {
+                Demand demand = new Demand();
+                demand.setId(item.getDemandId());
+                demand.setWorkspaceId(record.getWorkspaceId());
+                demand.setReqId(record.getReqId());
+                demand.setTitle(item.getDemandTitle());
+                demand.setVersionId(item.getTargetVersionId());
+                demand.setVersionName(item.getTargetVersionName());
+                demand.setRevision(null);
+                capturedDemands.put(demand.getId(), demand);
+            }
+        }
+        publications.enrichTasks(workspaceId, resp.getTasks());
+        resp.setDemands(new ArrayList<Demand>(capturedDemands.values()));
         resp.setTotalCount(resp.getTasks().size());
         resp.setDoneCount(done);
         resp.setWorkMinutes(workMinutes);

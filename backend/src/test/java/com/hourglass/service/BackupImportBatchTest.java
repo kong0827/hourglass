@@ -1,5 +1,8 @@
 package com.hourglass.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hourglass.common.AppException;
 import com.hourglass.dto.BackupData;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.DocumentType;
@@ -30,6 +33,7 @@ import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -46,8 +50,12 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -71,10 +79,13 @@ class BackupImportBatchTest {
     private DemandMapper demandMapper;
     private PlatformTransactionManager transactionManager;
     private BackupService service;
+    private DeliveryScopeLock scopeLock;
+    private com.hourglass.mapper.WorkActivityMapper workActivityMapper;
 
     @BeforeEach
     void setUp() {
         taskMapper = mock(TaskMapper.class);
+        scopeLock = mock(DeliveryScopeLock.class);
         reqMapper = mock(RequirementMapper.class);
         subtaskMapper = mock(SubtaskMapper.class);
         timeLogMapper = mock(TimeLogMapper.class);
@@ -98,8 +109,14 @@ class BackupImportBatchTest {
         when(branchMapper.selectByWorkspace(anyString(), any())).thenReturn(Collections.emptyList());
 
         versionMapper = mock(ProjectVersionMapper.class);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            ProjectVersion version = invocation.getArgument(0);
+            when(taskMapper.selectVersionForScope("W1", version.getId())).thenReturn(version);
+            return 1;
+        }).when(versionMapper).insert(any(ProjectVersion.class));
         versionTaskMapper = mock(VersionTaskMapper.class);
         demandMapper = mock(DemandMapper.class);
+        workActivityMapper = mock(com.hourglass.mapper.WorkActivityMapper.class);
         service = new BackupService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, columnMapper, categoryMapper, mock(WorkspaceService.class), memberMapper,
                 mock(TaskCommentMapper.class),
@@ -123,23 +140,185 @@ class BackupImportBatchTest {
                         mock(DemandMapper.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
                         mock(com.hourglass.mapper.ReqDocShareMapper.class),
                         mock(com.hourglass.mapper.TestCaseMapper.class),
-                        mock(com.hourglass.mapper.TestCaseRunMapper.class)),
+                        mock(com.hourglass.mapper.TestCaseRunMapper.class), scopeLock),
                 mock(ActivityService.class),
-                mock(com.hourglass.mapper.WorkActivityMapper.class),
-                transactionManager);
+                workActivityMapper, transactionManager, scopeLock);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"success", "failed", "emptyDraftPlan", "draftPlan", "versionLog", "releaseItem"})
+    void overwriteWithAnyDeliveryPlanOrHistoryIsRejectedBeforeAnyDeletion(String history) {
+        if ("success".equals(history) || "failed".equals(history)) {
+            when(taskMapper.selectReleaseIdsForScope("W1")).thenReturn(Collections.singletonList("VR-" + history));
+        } else if (history.endsWith("Plan")) {
+            when(taskMapper.selectReleasePlanIdsForScope("W1")).thenReturn(Collections.singletonList("VP1"));
+        } else if ("versionLog".equals(history)) {
+            when(taskMapper.selectVersionLogIdsForScope("W1")).thenReturn(Collections.singletonList(1L));
+        } else {
+            when(taskMapper.selectReleaseItemIdsForScope("W1")).thenReturn(Collections.singletonList(1L));
+        }
+        com.hourglass.common.AppException error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hourglass.common.AppException.class, () -> service.importData("U1", "W1", backup(1)));
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("新空间"));
+        verify(taskMapper, never()).deleteAllByWorkspace(anyString());
+        verify(reqMapper, never()).deleteAllByWorkspace(anyString());
+        verify(versionMapper, never()).deleteByWorkspace(anyString());
+        verify(workActivityMapper, never()).deleteAllByWorkspace(anyString());
+        verify(taskMapper, never()).insertBatch(anyList());
+        verify(taskMapper, never()).selectSuccessfulReleaseIdsForScope(anyString());
+        verify(transactionManager).rollback(any(TransactionStatus.class));
+    }
+
+    @Test
+    void emptyWorkspaceCanImportAfterLockedCurrentHistoryChecks() {
+        BackupData.ImportResult result = service.importData("U1", "W1", backup(0));
+
+        assertEquals(0, result.getTasks());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(taskMapper, scopeLock, workActivityMapper);
+        order.verify(taskMapper).selectProjectIdsForScope("W1");
+        order.verify(scopeLock).lockProjects("W1");
+        order.verify(taskMapper).selectReleaseIdsForScope("W1");
+        order.verify(taskMapper).selectReleasePlanIdsForScope("W1");
+        order.verify(taskMapper).selectReleasePlanTaskIdsForScope("W1");
+        order.verify(taskMapper).selectVersionLogIdsForScope("W1");
+        order.verify(taskMapper).selectReleaseItemIdsForScope("W1");
+        verify(taskMapper, never()).selectTasksForScope(anyString());
+        order.verify(workActivityMapper).deleteAllByWorkspace("W1");
+        order.verify(taskMapper).deleteAllByWorkspace("W1");
+    }
+
+    @Test
+    void manualTimestampAloneDoesNotProtectOverwriteOrTransferBadge() {
+        Task current = new Task();
+        current.setPublishedAt(LocalDate.now());
+        current.setPublishSource("manual");
+        when(taskMapper.selectTasksForScope("W1")).thenReturn(Collections.singletonList(current));
+
+        assertEquals(1, service.importData("U1", "W1", backup(1)).getTasks());
+        verify(taskMapper).deleteAllByWorkspace("W1");
+        ArgumentCaptor<List<Task>> imported = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(imported.capture());
+        assertNull(imported.getValue().get(0).getPublishedAt());
+        assertNull(imported.getValue().get(0).getPublishedReleaseId());
+    }
+
+    @Test
+    void importCannotAddBindingToReleasedVersion() {
+        BackupData data = backup(1);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        BackupData.BackupVersion version = new BackupData.BackupVersion();
+        version.setId("V1");
+        version.setReqId("R1");
+        version.setName("正式首版");
+        version.setStatus("released");
+        data.setVersions(Collections.singletonList(version));
+        data.getTasks().get(0).setReqId("R1");
+        data.getTasks().get(0).setVersionIds(Collections.singletonList("V1"));
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> service.importData("U1", "W1", data));
+        verify(versionTaskMapper, never()).insertBatch(anyString(), anyString(), anyList());
+        verify(taskMapper, never()).insertBatch(anyList());
+    }
+
+    @Test
+    void missingVersionDictionaryCannotResolveReferencesFromCurrentWorkspace() {
+        BackupData data = backup(1);
+        data.setVersions(null);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        data.getTasks().get(0).setReqId("R1");
+        data.getTasks().get(0).setVersionIds(Collections.singletonList("V1"));
+        ProjectVersion retainedVersion = new ProjectVersion();
+        retainedVersion.setId("V1");
+        retainedVersion.setWorkspaceId("W1");
+        retainedVersion.setReqId("R1");
+        retainedVersion.setName("保留正式版本");
+        retainedVersion.setStatus("released");
+        when(taskMapper.selectVersionForScope("W1", "V1")).thenReturn(retainedVersion);
+
+        com.hourglass.common.AppException error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.hourglass.common.AppException.class, () -> service.importData("U1", "W1", data));
+
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("字典"));
+        verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+        verify(versionTaskMapper, never()).insertBatch(anyString(), anyString(), anyList());
+        verify(taskMapper, never()).insertBatch(anyList());
     }
 
     private BackupData backup(int taskCount) {
         BackupData data = new BackupData();
+        data.setV(BackupData.FORMAT_VERSION);
+        data.setReqs(Collections.emptyList());
+        data.setVersions(Collections.emptyList());
+        data.setDemands(Collections.emptyList());
         List<BackupData.BackupTask> tasks = new ArrayList<BackupData.BackupTask>();
         for (int i = 1; i <= taskCount; i++) {
             BackupData.BackupTask t = new BackupData.BackupTask();
             t.setId("K" + i);
             t.setTitle("任务" + i);
+            t.setVersionIds(Collections.emptyList());
             tasks.add(t);
         }
         data.setTasks(tasks);
         return data;
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 8, 12})
+    void oldScalarFormatsAreRejectedBeforeAnyTransaction(int format) {
+        BackupData data = backup(1);
+        data.setV(format);
+        assertEquals(400, org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> service.importData("U1", "W1", data)).getCode());
+        verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+        verify(taskMapper, never()).deleteAllByWorkspace(anyString());
+    }
+
+    @Test
+    void missingVersionArrayIsRejectedInsteadOfSilentlyClearingMembership() {
+        BackupData data = backup(1);
+        data.getTasks().get(0).setVersionIds(null);
+        assertEquals(400, org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> service.importData("U1", "W1", data)).getCode());
+        verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+        verify(taskMapper, never()).insertBatch(anyList());
+    }
+
+    @Test
+    void jsonTransferRestoresBothVersionBindingsWithoutFormalPublicationFields() throws Exception {
+        BackupData data = backup(1);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1"); project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        List<BackupData.BackupVersion> versions = new ArrayList<>();
+        for (String id : Arrays.asList("V1", "V2")) {
+            BackupData.BackupVersion version = new BackupData.BackupVersion();
+            version.setId(id); version.setReqId("R1"); version.setName(id); version.setStatus("planned");
+            versions.add(version);
+        }
+        data.setVersions(versions);
+        data.getTasks().get(0).setReqId("R1");
+        data.getTasks().get(0).setVersionIds(Arrays.asList("V1", "V2"));
+        ObjectMapper json = new ObjectMapper();
+        String payload = json.writeValueAsString(data);
+        JsonNode item = json.readTree(payload).path("tasks").get(0);
+        assertTrue(item.path("versionIds").isArray());
+        assertFalse(item.has("versionId"));
+        assertFalse(item.has("publishedAt"));
+        assertFalse(item.has("publishedReleaseId"));
+        assertEquals(1, service.importData("U1", "W1", json.readValue(payload, BackupData.class)).getTasks());
+        verify(versionTaskMapper).insertBatch("W1", "V1", Collections.singletonList("K1"));
+        verify(versionTaskMapper).insertBatch("W1", "V2", Collections.singletonList("K1"));
+        verify(versionTaskMapper, never()).deleteByTaskId(anyString(), anyString());
+        ArgumentCaptor<List<Task>> imported = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(imported.capture());
+        assertNull(imported.getValue().get(0).getPublishedAt());
+        assertNull(imported.getValue().get(0).getPublishedReleaseId());
     }
 
     @ParameterizedTest
@@ -195,8 +374,8 @@ class BackupImportBatchTest {
         ArgumentCaptor<RequirementDoc> imported = ArgumentCaptor.forClass(RequirementDoc.class);
         verify(docMapper).insert(imported.capture());
         assertEquals(DocumentType.OTHER.getCode(), imported.getValue().getDocType());
-        /* 旧备份没有发布时间：按已发布回填，避免导入后全员不可见 */
-        org.junit.jupiter.api.Assertions.assertNotNull(imported.getValue().getPublishedAt());
+        /* 新格式保留缺省日期，不凭空制造文档发布状态。 */
+        assertNull(imported.getValue().getPublishedAt());
     }
 
     @Test
@@ -216,7 +395,7 @@ class BackupImportBatchTest {
     }
 
     @Test
-    void v8RoundTripKeepsVersionsTaskBindingsEpicAndDemandPool() {
+    void v13RoundTripKeepsVersionArraysEpicAndScalarDemandTarget() {
         Requirement project = new Requirement();
         project.setId("R1");
         project.setWorkspaceId("W1");
@@ -228,6 +407,7 @@ class BackupImportBatchTest {
         epic.setId("T9");
         epic.setTitle("史诗");
         epic.setItemType("epic");
+        epic.setReqId("R1");
         Task story = new Task();
         story.setId("T1");
         story.setTitle("故事");
@@ -237,8 +417,8 @@ class BackupImportBatchTest {
         story.setDemandId("D1");
         when(taskMapper.selectAll("W1")).thenReturn(Arrays.asList(epic, story));
 
-        Task binding = new Task();
-        binding.setId("T1");
+        com.hourglass.dto.TaskVersionBinding binding = new com.hourglass.dto.TaskVersionBinding();
+        binding.setTaskId("T1");
         binding.setVersionId("V1");
         when(versionTaskMapper.selectBindingsByWorkspace("W1"))
                 .thenReturn(Collections.singletonList(binding));
@@ -247,7 +427,7 @@ class BackupImportBatchTest {
         version.setWorkspaceId("W1");
         version.setReqId("R1");
         version.setName("V1.0");
-        version.setStatus("released");
+        version.setStatus("planned");
         when(versionMapper.selectByWorkspace("W1")).thenReturn(Collections.singletonList(version));
         Demand demand = new Demand();
         demand.setId("D1");
@@ -260,7 +440,7 @@ class BackupImportBatchTest {
 
         BackupData exported = service.export("W1");
 
-        assertEquals(12, exported.getV());
+        assertEquals(13, exported.getV());
         assertEquals("2026-05-10", exported.getReqs().get(0).getFirstReleasedAt());
         BackupData.BackupTask exportedStory = null;
         for (BackupData.BackupTask task : exported.getTasks()) {
@@ -269,7 +449,7 @@ class BackupImportBatchTest {
             }
         }
         assertNotNull(exportedStory);
-        assertEquals("V1", exportedStory.getVersionId());
+        assertEquals(Collections.singletonList("V1"), exportedStory.getVersionIds());
         assertEquals("D1", exportedStory.getDemandId());
         assertEquals("T9", exportedStory.getEpicId());
         assertEquals(1, exported.getVersions().size());
@@ -283,13 +463,258 @@ class BackupImportBatchTest {
         verify(versionMapper).insert(versionCaptor.capture());
         assertEquals("V1", versionCaptor.getValue().getId());
         assertEquals("R1", versionCaptor.getValue().getReqId());
-        assertEquals("released", versionCaptor.getValue().getStatus());
+        assertEquals("planned", versionCaptor.getValue().getStatus());
         ArgumentCaptor<Demand> demandCaptor = ArgumentCaptor.forClass(Demand.class);
         verify(demandMapper).insert(demandCaptor.capture());
         assertEquals("D1", demandCaptor.getValue().getId());
         assertEquals("V1", demandCaptor.getValue().getVersionId());
         verify(versionTaskMapper).insertBatch(eq("W1"), eq("V1"), anyList());
         verify(taskMapper).setEpic("T1", "T9");
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+            "review|2026-12-01|2026-12-10",
+            "pass|2026-12-01|2026-12-10",
+            "plan|2026-12-01|2026-12-10",
+            "rej|2026-12-01|2026-12-10",
+            "canceled|2026-12-01|2026-12-10",
+            "plan|NULL|NULL",
+            "plan|2026-12-01|NULL",
+            "plan|NULL|2026-12-10",
+            "plan|2026-12-01|2026-12-01",
+            "canceled|NULL|NULL"
+    }, delimiter = '|', nullValues = "NULL")
+    void demandDatesAndStatusSurviveJsonRoundTripWithoutChangingTaskEvidence(
+            String status, String start, String end) throws Exception {
+        Requirement project = new Requirement();
+        project.setId("R1");
+        project.setName("项目");
+        when(reqMapper.selectAll("W1")).thenReturn(Collections.singletonList(project));
+        ProjectVersion version = new ProjectVersion();
+        version.setId("V1");
+        version.setReqId("R1");
+        version.setName("目标版本");
+        version.setStatus("planned");
+        version.setTargetDate(LocalDate.of(2026, 12, 30));
+        when(versionMapper.selectByWorkspace("W1")).thenReturn(Collections.singletonList(version));
+        Demand source = new Demand();
+        source.setId("D1");
+        source.setReqId("R1");
+        source.setTitle("需求");
+        source.setStatus(status);
+        source.setVersionId("V1");
+        source.setExpectDate(LocalDate.of(2026, 12, 20));
+        source.setPlannedStart(start == null ? null : LocalDate.parse(start));
+        source.setPlannedEnd(end == null ? null : LocalDate.parse(end));
+        source.setRevision(42L);
+        when(demandMapper.selectByWorkspace("W1")).thenReturn(Collections.singletonList(source));
+        Task task = new Task();
+        task.setId("K1");
+        task.setTitle("独立执行任务");
+        task.setReqId("R1");
+        task.setDemandId("D1");
+        task.setBoardColumn("done");
+        task.setStartDate(LocalDate.of(2026, 11, 1));
+        task.setDueDate(LocalDate.of(2026, 11, 5));
+        task.setCompletedAt(LocalDate.of(2026, 11, 5));
+        task.setPublishedAt(LocalDate.of(2026, 11, 9));
+        task.setPublishSource("version_release");
+        task.setPublishedReleaseId("VR-old");
+        when(taskMapper.selectAll("W1")).thenReturn(Collections.singletonList(task));
+
+        ObjectMapper json = new ObjectMapper();
+        String payload = json.writeValueAsString(service.export("W1"));
+        JsonNode tree = json.readTree(payload);
+        assertFalse(tree.has("releases"));
+        assertFalse(tree.has("releasePlans"));
+        assertFalse(tree.path("tasks").get(0).has("publishedAt"));
+        assertFalse(tree.path("tasks").get(0).has("publishSource"));
+        assertFalse(tree.path("tasks").get(0).has("publishedReleaseId"));
+        assertFalse(tree.path("demands").get(0).has("revision"));
+        BackupData exported = json.readValue(payload, BackupData.class);
+        assertEquals(start, exported.getDemands().get(0).getPlannedStart());
+        assertEquals(end, exported.getDemands().get(0).getPlannedEnd());
+        assertEquals(status, exported.getDemands().get(0).getStatus());
+
+        BackupData.ImportResult result = service.importData("U1", "W1", exported);
+
+        assertEquals(1, result.getDemands());
+        Demand saved = capturedDemand();
+        assertEquals(status, saved.getStatus());
+        assertEquals("V1", saved.getVersionId());
+        assertEquals(source.getPlannedStart(), saved.getPlannedStart());
+        assertEquals(source.getPlannedEnd(), saved.getPlannedEnd());
+        assertEquals(source.getExpectDate(), saved.getExpectDate());
+        assertEquals(Long.valueOf(0L), saved.getRevision());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Task>> tasks = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(tasks.capture());
+        Task savedTask = tasks.getValue().get(0);
+        assertEquals(task.getStartDate(), savedTask.getStartDate());
+        assertEquals(task.getDueDate(), savedTask.getDueDate());
+        assertEquals(task.getCompletedAt(), savedTask.getCompletedAt());
+        assertNull(savedTask.getPublishedAt());
+        assertNull(savedTask.getPublishSource());
+        assertNull(savedTask.getPublishedReleaseId());
+        verify(versionTaskMapper, never()).insertBatch(anyString(), anyString(), anyList());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"plan", "canceled"})
+    void newFormatDemandJsonWithoutPlannedDatesDoesNotInferDates(String status) throws Exception {
+        BackupData data = new ObjectMapper().readValue("{\"v\":13,\"tasks\":[],"
+                + "\"reqs\":[{\"id\":\"R1\",\"name\":\"项目\"}],"
+                + "\"versions\":[{\"id\":\"V1\",\"reqId\":\"R1\",\"name\":\"目标版本\","
+                + "\"targetDate\":\"2026-12-30\"}],"
+                + "\"demands\":[{\"id\":\"D1\",\"reqId\":\"R1\",\"title\":\"旧需求\","
+                + "\"status\":\"" + status + "\",\"versionId\":\"V1\",\"expectDate\":\"2026-12-20\"}]}",
+                BackupData.class);
+        assertNull(data.getDemands().get(0).getPlannedStart());
+        assertNull(data.getDemands().get(0).getPlannedEnd());
+
+        service.importData("U1", "W1", data);
+
+        Demand saved = capturedDemand();
+        assertEquals(status, saved.getStatus());
+        assertEquals("V1", saved.getVersionId());
+        assertEquals(LocalDate.of(2026, 12, 20), saved.getExpectDate());
+        assertNull(saved.getPlannedStart());
+        assertNull(saved.getPlannedEnd());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"plan", "canceled"})
+    void demandScheduleSurvivesCrossWorkspaceProjectAndVersionIdRemapping(String status) {
+        BackupData data = backupWithDemand(status);
+        Requirement occupiedProject = new Requirement();
+        occupiedProject.setWorkspaceId("W2");
+        when(reqMapper.selectById("R1")).thenReturn(occupiedProject);
+        ProjectVersion occupiedVersion = new ProjectVersion();
+        occupiedVersion.setWorkspaceId("W2");
+        when(versionMapper.selectById("V1")).thenReturn(occupiedVersion);
+        Demand occupiedDemand = new Demand();
+        occupiedDemand.setWorkspaceId("W2");
+        when(demandMapper.selectById("D1")).thenReturn(occupiedDemand);
+
+        service.importData("U1", "W1", data);
+
+        ArgumentCaptor<ProjectVersion> versions = ArgumentCaptor.forClass(ProjectVersion.class);
+        verify(versionMapper).insert(versions.capture());
+        Demand saved = capturedDemand();
+        assertNotEquals("D1", saved.getId());
+        assertNotEquals("R1", saved.getReqId());
+        assertNotEquals("V1", saved.getVersionId());
+        assertEquals("W1", saved.getWorkspaceId());
+        assertEquals(versions.getValue().getReqId(), saved.getReqId());
+        assertEquals(versions.getValue().getId(), saved.getVersionId());
+        assertEquals(status, saved.getStatus());
+        assertEquals(LocalDate.of(2026, 12, 1), saved.getPlannedStart());
+        assertEquals(LocalDate.of(2026, 12, 10), saved.getPlannedEnd());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"plan, missing", "plan, omitted", "plan, unknown", "plan, crossProject", "plan, skipped",
+            "canceled, missing", "canceled, omitted", "canceled, unknown", "canceled, crossProject", "canceled, skipped"})
+    void invalidDemandTargetRejectsBeforeOverwriteButMissingScalarTargetKeepsDates(String status, String condition) {
+        BackupData data = backupWithDemand(status);
+        BackupData.BackupDemand demand = data.getDemands().get(0);
+        if ("missing".equals(condition)) {
+            demand.setVersionId(null);
+        } else if ("omitted".equals(condition)) {
+            data.setVersions(null);
+        } else if ("unknown".equals(condition)) {
+            demand.setVersionId("V404");
+        } else if ("crossProject".equals(condition)) {
+            BackupData.BackupReq otherProject = new BackupData.BackupReq();
+            otherProject.setId("R2");
+            otherProject.setName("其他项目");
+            data.setReqs(Arrays.asList(data.getReqs().get(0), otherProject));
+            data.getVersions().get(0).setReqId("R2");
+        } else {
+            data.getVersions().get(0).setName(" ");
+        }
+
+        if ("missing".equals(condition)) {
+            service.importData("U1", "W1", data);
+            Demand saved = capturedDemand();
+            assertNull(saved.getVersionId());
+            assertEquals(status, saved.getStatus());
+            assertEquals(LocalDate.of(2026, 12, 20), saved.getExpectDate());
+            assertEquals(LocalDate.of(2026, 12, 1), saved.getPlannedStart());
+            assertEquals(LocalDate.of(2026, 12, 10), saved.getPlannedEnd());
+        } else {
+            assertEquals(400, assertThrows(AppException.class, () -> service.importData("U1", "W1", data)).getCode());
+            verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+            verify(taskMapper, never()).deleteAllByWorkspace(anyString());
+            verify(demandMapper, never()).insert(any(Demand.class));
+        }
+        verify(taskMapper, never()).insertBatch(anyList());
+        verify(versionTaskMapper, never()).insertBatch(anyString(), anyString(), anyList());
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+            "plan|2026-12-10|2026-12-01",
+            "canceled|2026-12-10|2026-12-01",
+            "plan|not-a-date|2026-12-10",
+            "plan|2026-12-01|not-a-date",
+            "canceled|2026-02-30|2026-12-10",
+            "review|2026-12-01|2026-12-10T12:00:00"
+    }, delimiter = '|')
+    void invalidDemandDatesAreRejectedBeforeOverwrite(String status, String start, String end) {
+        BackupData data = backupWithDemand(status);
+        data.getDemands().get(0).setPlannedStart(start);
+        data.getDemands().get(0).setPlannedEnd(end);
+
+        AppException error = assertThrows(AppException.class, () -> service.importData("U1", "W1", data));
+
+        assertEquals(400, error.getCode());
+        verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+        verify(workActivityMapper, never()).deleteAllByWorkspace(anyString());
+        verify(taskMapper, never()).deleteAllByWorkspace(anyString());
+        verify(reqMapper, never()).insert(any(Requirement.class));
+        verify(demandMapper, never()).insert(any(Demand.class));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "unknown", "published", "done", "CANCELED"})
+    void unknownDemandStatusStillFallsBackToReview(String status) {
+        service.importData("U1", "W1", backupWithDemand(status));
+
+        assertEquals("review", capturedDemand().getStatus());
+    }
+
+    private BackupData backupWithDemand(String status) {
+        BackupData data = backup(0);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        BackupData.BackupVersion version = new BackupData.BackupVersion();
+        version.setId("V1");
+        version.setReqId("R1");
+        version.setName("目标版本");
+        version.setStatus("planned");
+        data.setVersions(Collections.singletonList(version));
+        BackupData.BackupDemand demand = new BackupData.BackupDemand();
+        demand.setId("D1");
+        demand.setReqId("R1");
+        demand.setTitle("需求");
+        demand.setStatus(status);
+        demand.setVersionId("V1");
+        demand.setExpectDate("2026-12-20");
+        demand.setPlannedStart("2026-12-01");
+        demand.setPlannedEnd("2026-12-10");
+        data.setDemands(Collections.singletonList(demand));
+        return data;
+    }
+
+    private Demand capturedDemand() {
+        ArgumentCaptor<Demand> demand = ArgumentCaptor.forClass(Demand.class);
+        verify(demandMapper).insert(demand.capture());
+        return demand.getValue();
     }
 
     @Test

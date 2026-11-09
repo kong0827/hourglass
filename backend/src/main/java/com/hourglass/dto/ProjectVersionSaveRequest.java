@@ -31,4 +31,9 @@ public class ProjectVersionSaveRequest {
 
     @Size(max = 500, message = "单个版本最多关联 500 个任务")
     private List<String> taskIds;
+
+    private Long revision;
+
+    @Size(max = 500)
+    private String taskChangeReason;
 }

@@ -5,6 +5,7 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 
 @Data
 public class Task {
@@ -38,6 +39,22 @@ public class Task {
     private Integer estimateMinutes;
     private String note;
     private LocalDate completedAt;
+    /** Derived readonly projection of immutable formal records; never persisted by task writes. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Boolean everPublished = Boolean.FALSE;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String publicationState = "unpublished";
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private List<String> publicationTargets = new ArrayList<String>();
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private LocalDate publishedAt;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String publishSource;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String publishedReleaseId;
+    /** 非表字段：详情查询按当前身份计算，客户端不能通过普通保存授予发布权限。 */
+    private Boolean canPublish = Boolean.FALSE;
+    private Boolean canUnpublish = Boolean.FALSE;
     /** daily/weekly/monthly，空为不循环 */
     private String recurType;
     /** 循环任务派生的下一次任务ID（重新打开后再次完成时复用，不重复生成） */
@@ -105,10 +122,9 @@ public class Task {
     /** 关联需求池需求ID（sql/24，demand 表；基于需求创建任务时写入） */
     private String demandId;
 
-    /** 绑定版本ID（非表字段，version_task 查询填充） */
-    private String versionId;
-    /** 影响版本名（非表字段，列表/详情展示用） */
-    private String versionName;
+    /** Planning memberships, batch-enriched from version_task; not publication authority. */
+    private List<String> versionIds = new ArrayList<String>();
+    private List<String> versionNames = new ArrayList<String>();
     /** 上线前未绑版本、自动归入首版的标记（非表字段，发布说明标注用） */
     private Boolean preLaunchFold;
 }

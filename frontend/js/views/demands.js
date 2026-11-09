@@ -13,27 +13,29 @@ import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { colName, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
 
 var demandReq = $("demandReq"), demandsMeta = $("demandsMeta"), demandBody = $("demandBody"),
-    demandGanttBar = $("demandGanttBar"), demandsPage = $("demandsPage"),
+    demandGanttBar = $("demandGanttBar"), demandGanttHelp = $("demandGanttHelp"), demandsPage = $("demandsPage"),
     dReq = $("dReq"), dTitle = $("dTitle"), dDesc = $("dDesc"), dAccept = $("dAccept"),
     dSource = $("dSource"), dKind = $("dKind"), dCategory = $("dCategory"), dExpect = $("dExpect"),
     dWsjfB = $("dWsjfB"), dWsjfU = $("dWsjfU"), dWsjfR = $("dWsjfR"), dWsjfE = $("dWsjfE"),
     fDemandTitle = $("fDemandTitle"), btnSaveDemand = $("btnSaveDemand"), demandFormTitle = $("demandFormTitle"),
-    dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan");
+    dpVersion = $("dpVersion"), dpNote = $("dpNote"), fDemandPlanVer = $("fDemandPlanVer"), btnDoPlan = $("btnDoPlan"),
+    dpPlannedStart = $("dpPlannedStart"), dpPlannedEnd = $("dpPlannedEnd"), dpPriority = $("dpPriority");
 
 var COLS = [
   ["review", "待评审", "var(--text-3)"],
   ["pass", "已通过", "var(--info)"],
   ["plan", "已排期", "var(--success)"],
-  ["rej", "已拒绝", "var(--danger)"]
+  ["rej", "已拒绝", "var(--danger)"],
+  ["canceled", "已取消", "var(--text-3)"]
 ];
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
-var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3 };
+var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
 function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
@@ -54,6 +56,8 @@ var versions = [];           /* 当前项目的版本（目标版本展示/排�
 var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
 var planDemandId = null;
+var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null;
+var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
 /* 项目页「查看需求池」的跨视图定位参数；enterDemandsView 应用后清空 */
@@ -62,6 +66,12 @@ var pendingFocusReq = null;
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
 /* 需求写权限跟随所属项目：成员在只读项目下不显示/不放行任何写入口 */
 function canWriteDemand(d){ return !!d && canEditReq(d.reqId); }
+function canScheduleDemand(d){ return !!d && d.canSchedule === true; }
+function denySchedule(){ toast("仅空间主、管理员或可写项目负责人可管理需求排期", "warn"); }
+function plannedText(d){
+  if(!d || (!d.plannedStart && !d.plannedEnd)) return "";
+  return (d.plannedStart || "未定") + " → " + (d.plannedEnd || "未定");
+}
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
 function statusName(st){
@@ -342,6 +352,7 @@ function syncModeUI(mode){
   /* 智能视图条承载搜索/筛选/分组/排序：列表与甘特共用，看板保持评审状态机原貌 */
   if(demSmartBar) demSmartBar.hidden = mode === "board";
   if(demandGanttBar) demandGanttBar.hidden = mode !== "gantt";
+  if(demandGanttHelp) demandGanttHelp.hidden = mode !== "gantt";
   if(demandsPage){
     demandsPage.classList.toggle("dem-gantt", mode === "gantt");
     var vw = demandsPage.closest(".view");
@@ -391,31 +402,40 @@ function render(){
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
 function demandMenuItems(d){
-  if(!isOwner()) return [];
+  if(!d) return [];
   var out = [];
-  if(d.status === "review"){
-    out.push({ act: "rej", label: "拒绝" });
+  if(canWriteDemand(d) && d.status === "review"){
+    if(isOwner()) out.push({ act: "rej", label: "拒绝" });
     out.push({ act: "edit", label: "编辑" });
   }
-  if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
-  if(d.status === "plan") out.push({ act: "unplan", label: "撤销排期" });
-  out.push({ act: "del", label: "删除", danger: true });
+  if(isOwner() && canWriteDemand(d)){
+    if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
+    out.push({ act: "del", label: "删除", danger: true });
+  }
+  if(canScheduleDemand(d)){
+    if(d.status === "plan"){
+      out.push({ act: "replan", label: "调整排期" });
+      out.push({ act: "unplan", label: "撤销排期" });
+    }
+    if(d.status !== "canceled") out.push({ act: "cancel", label: "取消需求", danger: true });
+  }
   return out;
 }
 function demandActs(d, opts){
   /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为普通按钮，避免整屏都是主色 */
   var cls = (opts && opts.subtle) ? "btn sm" : "btn sm primary";
   var acts = "";
-  if(isOwner()){
+  if(isOwner() && canWriteDemand(d)){
     if(d.status === "review"){
       acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
-    }
-    if(d.status === "pass"){
-      acts += '<button class="' + cls + '" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
     }
     if(d.status === "rej"){
       acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
     }
+  }
+  if(canScheduleDemand(d)){
+    if(d.status === "pass") acts += '<button class="' + cls + '" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
+    if(d.status === "canceled") acts += '<button class="btn sm" type="button" data-dem-restore="' + esc(d.id) + '">恢复需求</button>';
   }
   if(demandMenuItems(d).length){
     acts += '<button class="btn sm ghost" type="button" data-dem-menu-btn="' + esc(d.id) +
@@ -423,7 +443,7 @@ function demandActs(d, opts){
   }
   return acts;
 }
-function openDemandRowMenu(anchor, d){
+function openDemandRowMenu(anchor, d, onAction){
   if(!anchor || !d) return;
   var items = demandMenuItems(d);
   if(!items.length) return;
@@ -438,9 +458,12 @@ function openDemandRowMenu(anchor, d){
     var b = e.target.closest("[data-dem-menu]");
     if(!b) return;
     UI.closeAllPops();
+    if(onAction) onAction();
     if(b.dataset.demMenu === "rej") rejectDemand(d.id);
     else if(b.dataset.demMenu === "unpass") unpassDemand(d.id);
     else if(b.dataset.demMenu === "unplan") unplanDemand(d.id);
+    else if(b.dataset.demMenu === "replan") openPlanDialog(d.id, true);
+    else if(b.dataset.demMenu === "cancel") cancelDemand(d.id);
     else if(b.dataset.demMenu === "edit") openDemandDialog(d);
     else if(b.dataset.demMenu === "del") deleteDemand(d.id);
   });
@@ -457,22 +480,24 @@ function dragHint(status){
 function cardHTML(d, opts){
   var acts = demandActs(d);
   /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
-  var drag = (isOwner() && !(opts && opts.noDrag))
+  var drag = (isOwner() && canWriteDemand(d) && d.status !== "canceled" && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
   return '<div class="bkl-card"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + catTag(d.categoryId)
-    + priTagHTML(d.priority || "P2") + '</div>'
+    + priTagHTML(d.priority || "P2")
+    + (d.status === "canceled" ? '<span class="tag ghost">已取消</span>' : '') + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
     + '<div class="bkl-tags">'
     + (demandVersionName(d) ? '<span class="tag ghost">' + esc(demandVersionName(d)) + '</span>' : '')
     + (d.expectDate ? '<span class="tag tag-info">期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>' : '')
+    + (plannedText(d) ? '<span class="tag ghost">计划 ' + esc(plannedText(d)) + '</span>' : '')
     + (wsjfText(d) ? '<span class="tag tag-plum">' + esc(wsjfText(d)) + '</span>' : '')
     + '</div>'
     + (d.source ? '<div class="bkl-src">来源：' + esc(d.source) + '</div>' : '')
-    + (d.status === "rej" && d.reviewNote ? '<div class="bkl-why">' + esc(d.reviewNote) + '</div>' : '')
+    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="bkl-why">' + esc(d.reviewNote) + '</div>' : '')
     + (acts ? '<div class="bkl-acts">' + acts + '</div>' : '')
     + '</div>';
 }
@@ -483,6 +508,7 @@ function statusTag(st){
   if(st === "plan") return '<span class="tag tag-success">已排期</span>';
   if(st === "pass") return '<span class="tag tag-info">已通过</span>';
   if(st === "rej") return '<span class="tag tag-danger">已拒绝</span>';
+  if(st === "canceled") return '<span class="tag ghost">已取消</span>';
   return '<span class="tag ghost">待评审</span>';
 }
 function demandCell(d, key){
@@ -492,7 +518,8 @@ function demandCell(d, key){
   if(key === "priority") return priTagHTML(d.priority || "P2");
   if(key === "status") return statusTag(d.status);
   if(key === "project") return esc(reqNameById(d.reqId) || "—");
-  if(key === "version") return esc(demandVersionName(d) || "—");
+  if(key === "version") return esc(demandVersionName(d) || "—")
+    + (plannedText(d) ? '<div class="foot-note">计划 ' + esc(plannedText(d)) + '</div>' : '');
   if(key === "expectDate") return esc(d.expectDate ? String(d.expectDate).substring(0, 10) : "—");
   if(key === "wsjf") return d.wsjfScore === null || d.wsjfScore === undefined ? "—" : (Math.round(d.wsjfScore * 10) / 10);
   if(key === "source") return esc(d.source || "—");
@@ -501,7 +528,7 @@ function demandCell(d, key){
 }
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
-var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["rej","已拒绝"]];
+var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["rej","已拒绝"],["canceled","已取消"]];
 var DEM_GROUPS = ["none","status","priority","project","kind","category"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
@@ -1191,7 +1218,7 @@ function demgGapsHTML(placed, d, range, dayW){
   var released = stages.some(function(s){ return s.stage === "release"; });
   var maxEnd = null;
   placed.forEach(function(p){ if(!maxEnd || p.end > maxEnd) maxEnd = p.end; });
-  if(!maxEnd || released) return html;
+  if(!maxEnd || released || d.status === "canceled") return html;
   var today = GS.startOfDay(rt.TODAY);
   var tail = GS.addDays(maxEnd, 1);
   if(tail > today) return html;
@@ -1217,11 +1244,18 @@ function demgLabelHTML(d, tl){
   if(ver) meta += '<span class="tag ghost">' + esc(ver) + '</span>';
   if(d.categoryId) meta += catTag(d.categoryId);
   if(d.expectDate) meta += '<span>期望 ' + esc(String(d.expectDate).substring(5, 10)) + '</span>';
+  if(plannedText(d)) meta += '<span>计划 ' + esc(plannedText(d)) + '</span>';
   var info = [];
   if(tl.taskCount) info.push("工作项 " + (tl.taskDone || 0) + "/" + tl.taskCount);
   if(tl.docCount) info.push("文档 " + tl.docCount);
-  if(tl.caseCount) info.push("用例 " + tl.caseCount + (tl.casePending ? "（待通过 " + tl.casePending + "）" : ""));
-  if(tl.days) info.push("历时 " + tl.days + " 天");
+  if(tl.caseCount){
+    /* 未执行与未通过分开报：混成「待通过」会让人以为用例跑过了却没通过 */
+    var pend = [];
+    if(tl.caseUntested) pend.push("未执行 " + tl.caseUntested);
+    if(tl.caseFailed) pend.push("未通过 " + tl.caseFailed);
+    info.push("用例 " + tl.caseCount + (pend.length ? "（" + pend.join(" · ") + "）" : ""));
+  }
+  if(tl.days) info.push("跨度 " + tl.days + " 天");
   return '<button class="gantt-label" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' +
     '<span class="gantt-title">' + esc(d.title) + '</span>' +
     '<span class="gantt-meta">' + meta + '</span>' +
@@ -1371,7 +1405,7 @@ function renderDemandGantt(){
   groups.forEach(function(g){
     if(demSmart.group !== "none") bodyHTML += demgGroupHeadHTML(g);
     if(demSmart.group !== "none" && demSmart.collapsed["$" + g.key]) return;
-    if(g.subs.length){
+    if(g.subs && g.subs.length){
       g.subs.forEach(function(s){
         bodyHTML += demgSubGroupHeadHTML(g, s);
         if(demSmart.collapsed["$sub:" + g.key + "/" + s.key]) return;
@@ -1467,10 +1501,14 @@ function openDemandDialog(d){
   var opts = writableReqs();
   if(!opts.length){ toast("你在当前空间没有可写项目，无法提需求", "warn"); return; }
   editingDemandId = d ? d.id : null;
+  editingDemandRevision = d ? d.revision : null;
+  editingPlannedStart = d ? d.plannedStart : null;
+  editingPlannedEnd = d ? d.plannedEnd : null;
   dReq.innerHTML = opts.map(function(r){
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + '</option>';
   }).join("");
   dReq.value = d ? d.reqId : (canEditReq(rt.demandReqId) ? rt.demandReqId : opts[0].id);
+  dReq.disabled = !!d;
   dTitle.value = d ? d.title : "";
   dDesc.value = d ? (d.description || "") : "";
   dAccept.value = d ? (d.acceptText || "") : "";
@@ -1516,6 +1554,9 @@ function saveDemand(){
     categoryId: dCategory.value || null,
     priority: formPri,
     expectDate: dExpect.value || null,
+    plannedStart: editingPlannedStart || null,
+    plannedEnd: editingPlannedEnd || null,
+    revision: editingDemandRevision,
     wsjfBusiness: wsNum(dWsjfB, 0),
     wsjfUrgency: wsNum(dWsjfU, 0),
     wsjfRisk: wsNum(dWsjfR, 0),
@@ -1564,7 +1605,7 @@ function passDemand(id){
   if(!d) return;
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   function doPass(){
-    API.post("/api/demands/" + encodeURIComponent(id) + "/pass", {}).then(function(){
+    API.post("/api/demands/" + encodeURIComponent(id) + "/pass", { revision: d.revision }).then(function(){
       toast("已通过「" + d.title + "」，可排期进入版本", "fs");
       loadDemands();
     }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
@@ -1593,7 +1634,7 @@ function rejectDemand(id){
   }).then(function(note){
     if(note === null) return;
     if(!note.trim()){ toast("请填写拒绝原因", "warn"); return; }
-    API.post("/api/demands/" + encodeURIComponent(id) + "/rej", { note: note.trim() }).then(function(){
+    API.post("/api/demands/" + encodeURIComponent(id) + "/rej", { note: note.trim(), revision: d.revision }).then(function(){
       toast("已拒绝「" + d.title + "」", "fs");
       loadDemands();
     }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
@@ -1603,7 +1644,7 @@ function reopenDemand(id){
   var d = findDemand(id);
   if(!d) return;
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
-  API.post("/api/demands/" + encodeURIComponent(id) + "/reopen", {}).then(function(){
+  API.post("/api/demands/" + encodeURIComponent(id) + "/reopen", { revision: d.revision }).then(function(){
     toast("已重新打开「" + d.title + "」，回到待评审", "fs");
     loadDemands();
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
@@ -1612,38 +1653,58 @@ function unpassDemand(id){
   var d = findDemand(id);
   if(!d) return;
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
-  API.post("/api/demands/" + encodeURIComponent(id) + "/unpass", {}).then(function(){
+  API.post("/api/demands/" + encodeURIComponent(id) + "/unpass", { revision: d.revision }).then(function(){
     toast("已撤回「" + d.title + "」，回到待评审", "fs");
     loadDemands();
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
 }
-function unplanDemand(id){
+function reasonAction(id, action, title, desc){
   var d = findDemand(id);
   if(!d) return;
-  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
-  var ver = d.versionId ? versionNames[d.versionId] : "";
-  UI.showConfirm({
-    title:"撤销排期",
-    msg:"「" + esc(d.title) + "」将退回「已通过」" + (ver ? "，并解除与版本「" + esc(ver) + "」的关联" : "") + "。确定继续？",
-    okText:"撤销排期",
-    cancelText:"取消"
-  }).then(function(ok){
-    if(!ok) return;
-    API.post("/api/demands/" + encodeURIComponent(id) + "/unplan", {}).then(function(){
-      toast("已撤销「" + d.title + "」的排期", "fs");
+  if(!canScheduleDemand(d)){ denySchedule(); return; }
+  var revision = d.revision;
+  UI.showPrompt({ title:title, desc:desc, label:"原因（必填）", required:true, maxLength:500, okText:title }).then(function(note){
+    if(note === null) return;
+    if(!note.trim()){ toast("请填写原因", "warn"); return; }
+    API.post("/api/demands/" + encodeURIComponent(id) + "/" + action, { note:note.trim(), revision:revision }).then(function(){
+      toast(title + "成功，关联任务未改变", "fs");
+      drawerDemandOpts.reqId = null;
       loadDemands();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }).catch(function(ex){
+      toast(ex.message || "操作失败", "bad");
+      if(ex.code === 409) loadDemands();
+    });
   });
 }
-function openPlanDialog(id){
+function unplanDemand(id){
+  reasonAction(id, "unplan", "撤销排期", "退回已通过，清除需求目标版本和计划时间；关联任务的版本与日期保持不变。");
+}
+function cancelDemand(id){
+  reasonAction(id, "cancel", "取消需求", "取消后不能新拆工作项；已有任务不自动取消或改期。原因会保存到流转日志。");
+}
+function restoreDemand(id){
+  reasonAction(id, "restore", "恢复需求", "恢复为已通过，清除原目标版本和计划时间，需要重新排期；已有任务保持不变。");
+}
+function openPlanDialog(id, replan){
   var d = findDemand(id);
   if(!d) return;
-  if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
+  if(!canScheduleDemand(d)){ denySchedule(); return; }
   planDemandId = id;
+  planDemandRevision = d.revision;
+  planAction = replan ? "replan" : "plan";
+  if($("demandPlanTitle")) $("demandPlanTitle").textContent = replan ? "调整需求排期" : "安排需求排期";
+  btnDoPlan.textContent = replan ? "保存调期" : "排期";
   fDemandPlanVer.classList.remove("invalid");
   dpNote.value = "";
+  dpNote.required = !!replan;
+  dpNote.placeholder = replan ? "必填：调期原因（不修改关联任务）" : "选填：排期说明";
+  dpNote.setAttribute("aria-label", replan ? "调期原因（必填）" : "排期备注（选填）");
+  if(dpPlannedStart) dpPlannedStart.value = d.plannedStart || "";
+  if(dpPlannedEnd) dpPlannedEnd.value = d.plannedEnd || "";
+  if(dpPriority) dpPriority.value = d.priority || "P2";
   UI.openModal($("dlgDemandPlan"), "select");
   dpVersion.innerHTML = '<option value="">加载中…</option>';
+  dpVersion.disabled = true;
   /* 列表模式跨项目，版本要按需求所属项目取 */
   API.get("/api/versions", { reqId: d.reqId }).then(function(list){
     if(planDemandId !== id) return;
@@ -1658,35 +1719,38 @@ function openPlanDialog(id){
 }
 function fillPlanVersions(d, list){
   var usable = list.filter(function(v){ return v.status !== "released"; });
-  dpVersion.innerHTML = usable.length
-    ? usable.map(function(v){
-        return '<option value="' + esc(v.id) + '">' + esc(v.name) + (v.targetDate ? (" · 目标 " + String(v.targetDate).substring(5, 10)) : "") + '</option>';
-      }).join("")
-    : '<option value="">（该项目还没有未发布版本）</option>';
-  if(!usable.length) toast("先在「规划 > 版本」里创建版本，再排期需求", "warn");
+  dpVersion.innerHTML = '<option value="">暂不指定目标版本</option>' + usable.map(function(v){
+    return '<option value="' + esc(v.id) + '">' + esc(v.name) + (v.targetDate ? (" · 目标 " + String(v.targetDate).substring(5, 10)) : "") + '</option>';
+  }).join("");
+  dpVersion.disabled = false;
   dpVersion.value = d.versionId && usable.some(function(v){ return v.id === d.versionId; }) ? d.versionId : "";
 }
 function doPlan(){
   if(!planDemandId) return;
-  if(!canWriteDemand(findDemand(planDemandId))){ denyDemandReadOnly(); return; }
-  var verId = dpVersion.value;
-  if(!verId){
-    fDemandPlanVer.classList.add("invalid");
-    return;
-  }
+  if(!canScheduleDemand(findDemand(planDemandId))){ denySchedule(); return; }
+  var verId = dpVersion.value, start = dpPlannedStart && dpPlannedStart.value, end = dpPlannedEnd && dpPlannedEnd.value;
+  if(dpVersion.disabled) return;
+  if(start && end && start > end){ toast("计划开始日期不能晚于计划结束日期", "warn"); return; }
+  if(planAction === "replan" && !dpNote.value.trim()){ toast("请填写调期原因", "warn"); dpNote.focus(); return; }
   btnDoPlan.disabled = true;
-  API.post("/api/demands/" + encodeURIComponent(planDemandId) + "/plan", {
-    versionId: verId,
+  API.post("/api/demands/" + encodeURIComponent(planDemandId) + "/" + planAction, {
+    versionId: verId || null,
+    plannedStart: start || null,
+    plannedEnd: end || null,
+    priority: dpPriority ? dpPriority.value : findDemand(planDemandId).priority,
+    revision: planDemandRevision,
     note: dpNote.value.trim() || null
   }).then(function(){
     btnDoPlan.disabled = false;
     UI.closeModal($("dlgDemandPlan"));
-    toast("已排期到「" + versionName(verId) + "」", "fs");
+    toast("已" + (planAction === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本") + "，关联任务不变", "fs");
     planDemandId = null;
+    drawerDemandOpts.reqId = null;
     loadDemands();
   }).catch(function(ex){
     btnDoPlan.disabled = false;
     toast(ex.message || "排期失败", "bad");
+    if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; loadDemands(); }
   });
 }
 
@@ -1708,7 +1772,7 @@ function extOfName(filename){
   var idx = String(filename || "").lastIndexOf(".");
   return idx >= 0 ? String(filename).substring(idx + 1) : "";
 }
-function loadDemandTasks(layer, id){
+function loadDemandTasks(layer, id, targetVersionId){
   var box = layer.querySelector("#demTasks");
   if(!box) return;
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
@@ -1717,8 +1781,14 @@ function loadDemandTasks(layer, id){
       box.innerHTML = '<div class="attach-empty">还没有关联工作项；通过「拆分为工作项」把需求拆开执行。</div>';
       return;
     }
-    box.innerHTML = '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
-      + '<th>工作项</th><th>类型</th><th>负责人</th><th class="num">预估</th><th>状态</th></tr></thead><tbody>'
+    var published = tasks.filter(function(t){ return t.publicationState === "effective"; }).length;
+    var partial = tasks.filter(function(t){ return t.publicationState === "partial"; }).length;
+    var historical = tasks.filter(function(t){ return t.everPublished === true; }).length;
+    var delivery = "当前生产全量生效 " + published + " 项，部分生效 " + partial + " 项；曾生产发布 " + historical + " 项";
+    box.innerHTML = '<p class="foot-note">' + esc(delivery) + '（' + published + '/' + tasks.length
+      + '）。任务发布不等于需求业务验收；下列版本为当前计划，实际交付以工作项详情中的版本发布记录为准。</p>'
+      + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr>'
+      + '<th>工作项</th><th>类型</th><th>负责人</th><th class="num">预估</th><th>状态</th><th>当前计划版本</th><th>生产发布事实</th><th>最近生产发布时间</th></tr></thead><tbody>'
       + tasks.map(function(t){
         var done = t.boardColumn === "done";
         return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
@@ -1728,6 +1798,10 @@ function loadDemandTasks(layer, id){
           + '<td class="num">' + (t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) : "—") + '</td>'
           + '<td>' + (done ? '<span class="tag tag-success">已完成</span>'
             : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
+          + '<td>' + esc(taskVersionsText(t) || "未绑版本")
+          + (targetVersionId && taskVersionIds(t).indexOf(targetVersionId) === -1 ? ' <span class="tag ghost">尚未关联需求目标版本</span>' : '') + '</td>'
+          + '<td>' + (taskPublicationHTML(t) || '未生产发布') + '</td>'
+          + '<td>' + esc(t.publishedAt ? fmtReleaseTime(t.publishedAt) : "—") + '</td>'
           + '</tr>';
       }).join("")
       + '</tbody></table></div>';
@@ -1813,15 +1887,26 @@ function loadDemandDocs(layer, id, reqId, writable){
 }
 
 function showDemandDetail(id){
-  var d = findDemand(id);
-  if(!d) return;
-  var writable = canWriteDemand(d);
+  var wsId = rt.currentWs && rt.currentWs.id;
+  return API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
+    if(wsId && (!rt.currentWs || wsId !== rt.currentWs.id)) return false;
+    var cached = findDemand(id);
+    if(cached) Object.assign(cached, d); else demands.push(d);
+    renderDemandDetail(d);
+    return true;
+  }).catch(function(ex){ toast(ex.message || "需求不存在或无权查看", "warn"); return false; });
+}
+function renderDemandDetail(d){
+  var id = d.id;
+  var writable = canWriteDemand(d), canSplit = writable && d.status !== "canceled";
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
     ["模块", catNameById(d.categoryId) || "未指定模块"],
     ["优先级", priName(d.priority || "P2")],
-    ["目标版本", demandVersionName(d) || "待规划"],
+    ["需求目标版本", demandVersionName(d) || "待规划"],
+    ["计划开始", d.plannedStart || "未定"],
+    ["计划结束", d.plannedEnd || "未定"],
     ["期望交付", d.expectDate || "待评估"],
     ["需求来源", d.source || "—"]
   ];
@@ -1839,15 +1924,18 @@ function showDemandDetail(id){
   layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(d.title) + '</h2>'
     + '<div class="desc">' + esc(reqNameById(d.reqId)) + ' · 提交于 ' + esc(fmtTs(d.createdAt) || "—") + '</div></div>'
-    + (writable ? '<button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
+    + (canSplit ? '<button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
     + '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body phase-note">'
     + '<div class="detail-grid">' + grid.map(function(g){
         return '<div class="detail-item"><span>' + esc(g[0]) + '</span><b>' + esc(g[1]) + '</b></div>';
       }).join("") + '</div>'
+    + '<p class="foot-note">需求调期、撤排与取消不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
+    + (demandActs(d) ? '<div class="row row-gap">' + demandActs(d) + '</div>' : '')
     + (d.description ? '<div class="detail-section"><span class="section-title">需求描述</span><div class="detail-copy">' + esc(d.description) + '</div></div>' : '')
     + (d.acceptText ? '<div class="detail-section"><span class="section-title">验收标准</span><div class="detail-copy">' + esc(d.acceptText) + '</div></div>' : '')
-    + (d.status === "rej" && d.reviewNote ? '<div class="detail-section"><span class="section-title">拒绝原因</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
+    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="detail-section"><span class="section-title">'
+      + (d.status === "canceled" ? '取消原因' : '拒绝原因') + '</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
     + wsjf
     + '<div class="detail-section"><span class="section-title">关联文档</span>'
     + '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
@@ -1856,7 +1944,7 @@ function showDemandDetail(id){
     + '</div>'
     + '<div class="detail-section"><span class="section-title">关联工作项</span>'
     + '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
-    + (writable ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
+    + (canSplit ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">附件</span>'
     + '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
@@ -1872,12 +1960,15 @@ function showDemandDetail(id){
     var r = e.target.closest("[data-dem-rej]"); if(r){ UI.closeModal(layer); rejectDemand(r.dataset.demRej); return; }
     var pl = e.target.closest("[data-dem-plan]"); if(pl){ UI.closeModal(layer); openPlanDialog(pl.dataset.demPlan); return; }
     var ro = e.target.closest("[data-dem-reopen]"); if(ro){ UI.closeModal(layer); reopenDemand(ro.dataset.demReopen); return; }
+    var restore = e.target.closest("[data-dem-restore]"); if(restore){ UI.closeModal(layer); restoreDemand(restore.dataset.demRestore); return; }
+    var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d, function(){ UI.closeModal(layer); }); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
-      if(!writable){ denyDemandReadOnly(); return; }
+      if(!canSplit){ toast("已取消的需求不能新拆工作项", "warn"); return; }
       UI.closeModal(layer);
       openTaskDrawer("backlog", null, {
-        reqId: d.reqId, demandId: d.id, versionId: d.versionId, dueDate: d.expectDate,
+        reqId: d.reqId, demandId: d.id, versionIds: d.status === "plan" && d.versionId ? [d.versionId] : [],
+        startDate: d.plannedStart, dueDate: d.plannedEnd || d.expectDate,
         categoryId: d.categoryId || null
       });
       return;
@@ -1988,7 +2079,7 @@ function showDemandDetail(id){
     }).catch(function(ex){ toast(ex && ex.message ? ex.message : "上传失败", "bad"); });
   });
   UI.openModal(layer);
-  loadDemandTasks(layer, id);
+  loadDemandTasks(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
@@ -1999,12 +2090,28 @@ function showDemandDetail(id){
         + '<b>' + esc(l.action || "") + '</b>'
         + (l.operatorName || l.operator ? '<span class="dem-log-op">' + esc(l.operatorName || l.operator) + '</span>' : '')
         + (l.note ? '<span class="dem-log-note">' + esc(l.note) + '</span>' : '')
+        + (demandLogChange(l) ? '<span class="dem-log-note">' + esc(demandLogChange(l)) + '</span>' : '')
         + '</li>';
     }).join("") : '<li class="foot-note">暂无流转记录</li>';
   }).catch(function(){
     var ul = layer.querySelector("#demLogs");
     if(ul) ul.innerHTML = '<li class="foot-note">时间线加载失败</li>';
   });
+}
+
+function demandLogChange(log){
+  if(!log.changeData) return "";
+  try{
+    var data = typeof log.changeData === "string" ? JSON.parse(log.changeData) : log.changeData;
+    var before = data.before || {}, after = data.after || {}, parts = [];
+    [["versionName", "目标版本"], ["plannedStart", "计划开始"], ["plannedEnd", "计划结束"], ["priority", "优先级"], ["status", "状态"]].forEach(function(field){
+      var key = field[0], a = before[key], b = after[key];
+      if(a === b) return;
+      if(key === "status"){ a = a ? statusName(a) : "未设置"; b = b ? statusName(b) : "未设置"; }
+      parts.push(field[1] + "：" + (a || "未设置") + " → " + (b || "未设置"));
+    });
+    return parts.join("；");
+  }catch(e){ return ""; }
 }
 
 /* ---------- 事件 ---------- */
@@ -2041,6 +2148,19 @@ if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
     loadDemands();
   }).catch(function(ex){ toast(ex.message || "切换失败", "bad"); });
 });
+/* 甘特模式旁的 ?：解释阶段条形、缺口与时间范围的计算口径 */
+var demandGanttHelpPop = null;
+if(demandGanttHelp){
+  demandGanttHelp.innerHTML = icon("helpCircle", 13);
+  demandGanttHelp.addEventListener("click", function(){
+    if(UI.popOpen(demandGanttHelpPop)){ UI.closeAllPops(); return; }
+    var el = document.createElement("div");
+    el.className = "menu popover type-help-pop";
+    el.innerHTML = demandGanttInfoHTML();
+    demandGanttHelpPop = el;
+    UI.openPop(el, demandGanttHelp, { align:"right", width:Math.max(280, Math.min(400, window.innerWidth - 16)), onClose:function(){ el.remove(); demandGanttHelpPop = null; } });
+  });
+}
 if($("btnDemandColumns")) $("btnDemandColumns").addEventListener("click", function(){
   listPrefs.openColumnSettings("demand-pool", function(){ render(); });
 });
@@ -2112,6 +2232,8 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   }
   var dt = e.target.closest("[data-dem-detail]");
   if(dt){ showDemandDetail(dt.dataset.demDetail); return; }
+  var restore = e.target.closest("[data-dem-restore]");
+  if(restore){ restoreDemand(restore.dataset.demRestore); return; }
   var mb = e.target.closest("[data-dem-menu-btn]");
   if(mb){ openDemandRowMenu(mb, findDemand(mb.dataset.demMenuBtn)); return; }
   var p = e.target.closest("[data-dem-pass]");
@@ -2223,16 +2345,7 @@ function openDemandById(id){
 
 /* 只读详情入口：供用例覆盖矩阵等外部视图跳转，查看者 / 无写权限也能打开 */
 function openDemandDetailById(id){
-  var hit = findDemand(id);
-  if(hit){ showDemandDetail(id); return Promise.resolve(true); }
-  return API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
-    if(!findDemand(d.id)) demands.push(d);
-    showDemandDetail(d.id);
-    return true;
-  }).catch(function(ex){
-    toast(ex.message || "需求不存在或无权查看", "warn");
-    return false;
-  });
+  return showDemandDetail(id);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2267,6 +2380,8 @@ function fillDrawerDemandSelect(reqId, keep){
   var matched = false;
   (drawerDemandOpts.list || []).forEach(function(d){
     var on = d.id === keep;
+    // 已有关联可保留；已取消需求不作为新拆任务的候选。
+    if(d.status === "canceled" && !on) return;
     if(on) matched = true;
     var tag = drawerDemandStatusLabel(d.status);
     html += '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '">'
@@ -2294,27 +2409,30 @@ function ensureDemandOptions(keep, reqId){
     fillDrawerDemandSelect(want, keep);
     return;
   }
-  if(drawerDemandOpts.reqId === want && drawerDemandOpts.loading) return;
-  drawerDemandOpts.reqId = want;
-  drawerDemandOpts.list = [];
-  drawerDemandOpts.total = 0;
-  drawerDemandOpts.error = null;
+  if(drawerDemandOpts.reqId === want && drawerDemandOpts.loading){
+    drawerDemandOpts.keep = keep;
+    drawerDemandOpts.formSeq = rt.taskFormSeq;
+    return;
+  }
+  var request = {reqId:want, list:[], total:0, error:null, keep:keep, formSeq:rt.taskFormSeq};
+  drawerDemandOpts = request;
+  sel.removeAttribute("data-ready");
   sel.innerHTML = '<option value="">需求加载中…</option>';
   sel.value = "";
   syncAssocViewBtns();
-  drawerDemandOpts.loading = API.get("/api/demands/page", {
+  request.loading = API.get("/api/demands/page", {
     reqId: want || null, offset: 0, limit: DEMAND_TABLE_PAGE, sort: "created"
   }).then(function(page){
-    if(drawerDemandOpts.reqId !== want) return;
-    drawerDemandOpts.list = page.items || [];
-    drawerDemandOpts.total = page.total || 0;
-    drawerDemandOpts.loading = null;
-    fillDrawerDemandSelect(want, keep);
+    if(drawerDemandOpts !== request) return;
+    request.list = page.items || [];
+    request.total = page.total || 0;
+    request.loading = null;
+    if(request.formSeq === rt.taskFormSeq) fillDrawerDemandSelect(want, request.keep);
   }).catch(function(ex){
-    if(drawerDemandOpts.reqId !== want) return;
-    drawerDemandOpts.error = ex || new Error("需求候选加载失败");
-    drawerDemandOpts.loading = null;
-    fillDrawerDemandSelect(want, keep);
+    if(drawerDemandOpts !== request) return;
+    request.error = ex || new Error("需求候选加载失败");
+    request.loading = null;
+    if(request.formSeq === rt.taskFormSeq) fillDrawerDemandSelect(want, request.keep);
   });
 }
 

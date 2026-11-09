@@ -12,9 +12,11 @@ public class TaskLog {
     private String workspaceId;
     /** 操作人用户ID（历史数据可空） */
     private String actorId;
-    /** create/update/move/delete/restore/config（配置类，task_id 为 CFG 哨兵） */
+    /** create/update/move/delete/restore/version_change/demand_change/config（配置类 task_id=CFG） */
     private String action;
     private String detail;
+    /** 不截断的结构化变更证据，对应 change_data JSON。 */
+    private String changeData;
     /** 移动前所在列 id（仅 action=move 且跨列时非空；流程体检据此算列停留与回退） */
     private String fromColumn;
     /** 移动后所在列 id（仅 action=move 且跨列时非空） */

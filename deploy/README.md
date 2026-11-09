@@ -1,6 +1,6 @@
 # 部署指南（腾讯云轻量服务器 · Ubuntu）
 
-前置说明：服务器已有 **JDK8、MySQL8、Nginx**，本项目**不使用 Redis**。以下命令在服务器上执行（root 或 sudo），我未接触你的服务器。
+前置说明：服务器已有 **JDK8、MySQL8、Nginx**，本项目**不使用 Redis**。以下是具备权限后在服务器执行的操作说明（root 或 sudo），不代表本轮已部署；当前生产写入阻塞见第 2 节，禁止绕过权限。
 
 ## 0. 本地打包（开发机）
 
@@ -57,7 +57,7 @@ which java
 date
 sudo timedatectl set-timezone Asia/Shanghai
 
-# 建库 + 建应用账号 + 建表（全新部署只需这一个文件，需 root 执行，可重复执行）
+# 建库 + 建应用账号 + 建表（仅用于全新空库，需 root 执行；重跑会删表）
 # 内含：CREATE DATABASE hourglass、随机口令创建账号 'hourglass'@'%'（库内全部权限）、全部表结构
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
@@ -65,11 +65,30 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 > 应用账号不再内置固定口令：脚本首次执行时用 `RANDOM_BYTES` 随机生成一次性密码，并在结束时以「沙漏部署提示」输出一次。**请立即把该密码写进第 3 步 `/etc/hourglass.env` 的 `DB_PASSWORD`（用单引号包裹）**；这条提示不会再次出现，也不要把建库输出重定向或记录到日志文件里。
 > 账号已存在时脚本不改动其密码，只输出提示；重置密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。若你的 MySQL 禁用了 `RANDOM_BYTES`，按脚本内注释改用 `SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)`，或先手工建号再执行脚本。
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
-> 已部署过的库升级仍执行 `sql/` 下对应的增量脚本（如 `31_branch_project.sql`），不要重跑完整基线（会重建表）。
+> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得在已有库上重跑。本轮 A–E 只在独立新空库启用 52 张表，不回放 61/62，不迁移旧历史，保留原库与原数据。
 
 ## 2. 上传后端与前端
 
-自动部署（推荐）：本地执行 `bash deploy/deploy.sh`，脚本会按改动范围只发布 jar 或只发布前端，并完成校验与备份。
+自动部署（推荐）：本地执行 `bash deploy/deploy.sh`，脚本会按改动范围只发布 jar 或只发布前端，并完成校验与备份。部署脚本保留已有备份，不自动清理。
+
+**本轮只在独立新空库启用，不迁移历史数据**：使用不存在的 `hourglass_` 前缀数据库。脚本先备份当前数据库、配置和附件，再创建新库、执行 52 表完整基线，最后仅修改 `DB_NAME` 并发布前后端；不回放 61/62、不重放旧清理脚本、不删除原库，也不复制旧历史。正式证据包括 `version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log` 五表，须随 MySQL 全库备份恢复。
+
+A–E 最终本地正确性门禁通过：Java 821 tests（0 failures/errors/skipped，514 个提交候选源文件 parity）、真实 MySQL 14 mandatory 484 passed / 0 failed / 0 unverified、本地 full demo 990 回读分别通过；真实 headless Chrome backend 8120 / frontend 8121 在 1440/390px 的导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 重拍、SHA256 配对一致并视觉查看，非物理手机测试；JS syntax 107 files / 3 unit suites、3 SVG、文档 14 checks / baseline convergence 16、部署安全隔离 212（含脚本语法 73）分别通过。1 个自建浏览器 fixture 空间留作本地证据，最终复跑未建新空间，不称全部本地数据已清理；独立统计见 [`CHANGELOG.md`](../CHANGELOG.md)。
+
+**生产仍 BLOCKED，以下命令只是解除阻塞后的操作说明，不得执行或改用其他入口绕过权限。**目标 `43.156.155.204` 的生产写入 `/etc/hourglass.env` 与 `/etc/hourglass-backup.cnf` 被策略拒绝、均未执行，显式 `DB_NAME` 仍缺失。原 `hourglass` 46 表、env/jar/前端/附件的受限备份及原库全量 dump 逐字节恢复证明已通过，原库保留；新 `hourglass_20261110` 不存在，生产部署 / full seed 未执行，本地 full seed 不是生产 seed。提交推送结果以 Git 为准。
+
+```bash
+DEPLOY_HOST=43.156.155.204 NGINX_PORT=80 APP_PORT=8080 \
+  bash deploy/deploy.sh --new-database=hourglass_20261110 --dry-run
+# 仅在生产权限阻塞解除、经备份补齐显式 DB_NAME 并核实原库保留后，才可去掉 --dry-run。
+# 后续日常部署明确当前数据库：
+DEPLOY_HOST=43.156.155.204 NGINX_PORT=80 APP_PORT=8080 DEPLOY_DB_NAME=hourglass_20261110 \
+  bash deploy/deploy.sh
+```
+
+新库首次启动继续读取现有 `AUTH_USER/AUTH_PASSWORD` 创建管理员，不重置旧库账号。部署与回滚共用运行锁；每次修改前建立同批 jar、权限 600 的 `.env`、完整前端及 SHA256 清单，校验完整后才标记 checkpoint 可回退。`--rollback` 只恢复最近完整 checkpoint，同时保留失败现场，数据库内容保持不变；旧的独立 jar/frontend/env 备份不能自动配对或用于跨库回退。未知锁不自动清理，需人工核对。完整备份仅保存在服务器受保护目录，含凭据的配置备份不得上传 Git。
+
+完整模拟数据由 `tools/seed_delivery_demo.py` 经 API 写入独立命名空间；只新增，不清空现有记录。必须设置 `ALLOW_DEMO_INSERT=new-namespaced-data`，并指定仓库外的 `SEED_MANIFEST`（权限 600，保存新账号凭据和对象 ID）；`SEED_BASE`、`SEED_USER`、`SEED_PASSWORD` 通过环境传入。先在隔离验收库执行 `--small`，正式插入通过服务器本机回环地址执行，避免经明文公网传输凭据。
 
 手动部署：
 
@@ -89,7 +108,9 @@ sudo chown -R hourglass:hourglass /opt/hourglass/frontend
 ## 3. 环境变量文件（密码不写进代码库）
 
 ```bash
+# 仅全新安装；已有文件须先备份并保留现有密码与密钥，不能直接覆盖。
 sudo bash -c 'cat > /etc/hourglass.env' <<'EOF'
+DB_NAME=hourglass
 DB_PASSWORD=更换为上面数据库账号的密码
 AUTH_USER=admin
 AUTH_PASSWORD=更换为管理员登录密码（也可填 bcrypt 哈希，$2a$/$2b$ 开头的完整 60 位）
@@ -100,7 +121,7 @@ sudo chmod 600 /etc/hourglass.env
 > 说明：`AUTH_USER/AUTH_PASSWORD` 仅用于**首次启动引导创建管理员**（库中已有用户后不再读取）；后续账号由管理员在「用户」管理中创建下发，不开放注册。每个账号自动有个人空间；可另建共享空间邀请成员协作（空间主按登录名添加）。
 > **值的写法（systemd 解析，和 shell 不同）**：每行的说明必须单独一行用 `#` 开头，**不要写在值后面**（行尾的 `#` 及其后内容会整个算进变量值里）；含 `$`、空格等特殊字符的值建议用单引号包裹（如 `AUTH_PASSWORD='$2y$10$...'`），引号会被剥掉、值保持不变。应用侧仅接受完整 60 位 bcrypt 格式，格式不符时按普通明文处理。
 
-可选项（有默认值）：`DB_HOST`（默认 127.0.0.1）、`DB_NAME`（默认 hourglass）、`DB_USER`（默认 hourglass）、`SERVER_PORT`（默认 8080）、`BIND_ADDR`（默认 127.0.0.1）、`ATTACH_DIR`（附件目录，默认 `/opt/hourglass/data/attachments`，需确保 hourglass 用户可写）。
+自动部署要求 `/etc/hourglass.env` 显式设置经核实的 `DB_NAME`，不能依赖应用的默认库名。其余可选项（有默认值）：`DB_HOST`（默认 127.0.0.1）、`DB_USER`（默认 hourglass）、`SERVER_PORT`（默认 8080）、`BIND_ADDR`（默认 127.0.0.1）、`ATTACH_DIR`（附件目录，默认 `/opt/hourglass/data/attachments`，需确保 hourglass 用户可写）。
 
 **提醒推送渠道**（可选）：`NOTIFY_TYPE=webhook|serverchan|pushplus`（默认 webhook），`NOTIFY_TOKEN`（pushplus 的 token）。推送 webhook 已改为**按空间配置**（页面「空间设置」里填写，由空间主维护），环境变量里不再需要 `NOTIFY_WEBHOOK`；渠道说明见第 9 节。
 
@@ -194,7 +215,7 @@ sudo systemctl restart hourglass
 
 ## 10. 升级流程
 
-1. 若本次升级涉及数据库结构变化（看发布说明），先在服务器执行对应升级脚本（见 `sql/` 目录，均为幂等、可重复执行）。
+1. 既有已发布结构的升级按发布说明评估所需编号脚本；幂等不等于无损，先备份并确认影响。本轮 A–E 不迁移旧库，只按第 2 节使用独立新空库，不回放 61/62；完整基线不得在已有库重跑。
 2. 替换产物：
    - 只改前端：覆盖 `/opt/hourglass/frontend/hourglass/`，无需重启后端；
    - 只改后端：替换 `/opt/hourglass/hourglass-server.jar` 后 `sudo systemctl restart hourglass`；

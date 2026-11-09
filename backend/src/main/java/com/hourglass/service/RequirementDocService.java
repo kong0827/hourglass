@@ -100,6 +100,8 @@ public class RequirementDocService {
     private final ReqDocShareMapper shareMapper;
     private final WorkspaceMapper workspaceMapper;
     private final DocPreviewService docPreviewService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskQueryService taskQueries;
 
     public RequirementDocService(RequirementDocMapper docMapper, RequirementDocHistoryMapper historyMapper,
                                  RequirementDocCommentMapper commentMapper,
@@ -196,7 +198,9 @@ public class RequirementDocService {
 
     public List<Task> tasks(String workspaceId, String id) {
         get(workspaceId, id);
-        return taskMapper.selectByReqDoc(workspaceId, id);
+        List<Task> tasks = taskMapper.selectByReqDoc(workspaceId, id);
+        taskQueries.mergeTaskExtras(workspaceId, tasks);
+        return tasks;
     }
 
     public com.hourglass.dto.PageResult<Task> taskPage(String workspaceId, String id, int offset, int limit) {
@@ -206,6 +210,7 @@ public class RequirementDocService {
         int total = taskMapper.countActiveByReqDoc(workspaceId, id);
         List<Task> items = total <= safeOffset ? new java.util.ArrayList<Task>()
                 : taskMapper.selectByReqDocPage(workspaceId, id, safeOffset, safeLimit);
+        taskQueries.mergeTaskExtras(workspaceId, items);
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
     }
 

@@ -35,6 +35,8 @@ public class ReviewService {
     private final ProjectAccessService projectAccess;
     /** 模块ID → 名称解析（catDist 展示名） */
     private final WorkspaceMetaCache metaCache;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TaskQueryService taskQueries;
 
     public ReviewService(TaskMapper taskMapper, RequirementService requirementService, TimeLogMapper timeLogMapper,
                          WorkspaceMemberMapper memberMapper, ProjectAccessService projectAccess,
@@ -259,6 +261,10 @@ public class ReviewService {
             resp.setBacklog(rc.getBacklog());
         }
         resp.setCounts(counts);
+        List<Task> returned = new ArrayList<Task>(completed);
+        returned.addAll(resp.getPendingDone());
+        returned.addAll(resp.getProgressTasks());
+        taskQueries.mergeTaskExtras(workspaceId, returned);
         return resp;
     }
 

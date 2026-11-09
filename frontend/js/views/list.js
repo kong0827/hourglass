@@ -14,10 +14,13 @@ import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../co
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
+
+/* 共用显示列设置读取同一份可变标签表，统一任务列表及其列设置的版本术语。 */
+listPrefs.labels("task-list").version = "计划版本";
 
 var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort"),
     btnListBulk = $("btnListBulk"), listHead = $("listHead");
@@ -39,7 +42,7 @@ var SORT_DEFAULT_DIR = {
 };
 var HEAD_SORT_MAP = { dueDate:"due", updatedAt:"updated", work:"actual" };
 var LIST_SORTS = ["default"].concat(Object.keys(SORT_DEFAULT_DIR));
-var COL_WIDTHS = { title:"minmax(200px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"70px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
+var COL_WIDTHS = { title:"minmax(200px,1fr)", type:"80px", column:"96px", priority:"72px", owner:"96px", dueDate:"108px", progress:"108px", project:"120px", version:"110px", category:"100px", startDate:"110px", tags:"160px", subtasks:"90px", work:"100px", comments:"80px", updatedAt:"150px" };
 
 function renderSmartTabs(){
   updateMobFilterSummary();
@@ -183,7 +186,7 @@ function initSmartTable(){
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
     '<option value="updated">按更新时间</option>' +
     [["title", "按标题"], ["type", "按类型"], ["column", "按状态"], ["owner", "按负责人"],
-     ["progress", "按进度"], ["project", "按项目"], ["version", "按版本"], ["category", "按模块"],
+     ["progress", "按进度"], ["project", "按项目"], ["version", "按计划版本"], ["category", "按模块"],
      ["startDate", "按开始日期"], ["tags", "按标签"], ["subtasks", "按子任务"], ["comments", "按评论数"]
     ].map(function(o){
       return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>';
@@ -329,7 +332,8 @@ function minutesText(value){
   return n < 60 ? (n + " 分钟") : ((Math.round(n / 60 * 10) / 10) + " 小时");
 }
 function taskCell(t, key, hasTypeCol){
-  if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title) + '</span></span>';
+  if(key === "title") return '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + (hasTypeCol ? "" : typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity)) + esc(t.title)
+    + taskPublicationHTML(t) + '</span></span>';
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
@@ -348,7 +352,7 @@ function taskCell(t, key, hasTypeCol){
     return '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span></span>';
   }
   if(key === "project") return '<span class="cell" title="' + esc(t.reqId ? reqNameById(t.reqId) : "") + '">' + (t.reqId ? esc(reqNameById(t.reqId)) : "—") + '</span>';
-  if(key === "version") return '<span class="cell" title="' + esc(t.versionName || "") + '">' + esc(t.versionName || "—") + '</span>';
+  if(key === "version") return '<span class="cell" title="' + esc('计划版本：' + (taskVersionsText(t) || '待规划') + '；不代表实际交付。调整版本请在详情填写理由。') + '">' + esc(taskVersionsText(t) || "待规划") + '</span>';
   if(key === "category") return '<span class="cell">' + (catTag(t.categoryId) || "—") + '</span>';
   if(key === "startDate") return '<span class="cell">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
   if(key === "tags") return '<span class="cell lr-tags">' + ((t.tags || []).map(tagChip).join("") || "—") + '</span>';
@@ -394,7 +398,7 @@ function sortValue(t, key){
   if(key === "due") return t.dueDate || null;
   if(key === "progress") return progressOf(t);
   if(key === "project") return t.reqId ? String(reqNameById(t.reqId) || "") : "";
-  if(key === "version") return t.versionName || "";
+  if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || null;
   if(key === "tags") return (t.tags || []).join(",");
@@ -530,7 +534,7 @@ function taskCsvValue(t, key){
   if(key === "dueDate") return t.dueDate || "";
   if(key === "progress") return progressOf(t) + "%";
   if(key === "project") return t.reqId ? reqNameById(t.reqId) : "";
-  if(key === "version") return t.versionName || "";
+  if(key === "version") return taskVersionsText(t);
   if(key === "category") return catNameById(t.categoryId) || "";
   if(key === "startDate") return t.startDate || "";
   if(key === "tags") return (t.tags || []).join(" ");
@@ -566,7 +570,7 @@ function mobileListCardHTML(t){
       '<span class="sp"></span>' +
       '<button class="mtc-ico" type="button" data-row-menu="' + esc(t.id) + '" aria-label="更多操作" title="更多操作">' + icon("more", 16) + '</button>' +
     '</div>' +
-    '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
+    '<h3 class="mtc-title">' + esc(t.title) + '</h3>' + taskPublicationHTML(t) +
     '<div class="mtc-meta">' +
       '<span class="mtc-path">' + esc(projectName || "未关联项目") + '</span>' +
       '<span class="mtc-due ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(dueText(t)) + '</span>' +
@@ -1010,7 +1014,9 @@ function openRowMenu(anchor, id){
       if(k === "due"){
         setTimeout(function(){ openDuePopover(anchor, t.id); }, 0);
       }else if(k === "edit") openTaskDrawer(null, t);
-      else if(k === "done") toggleTaskDone(t.id);
+      else if(k === "done"){
+        toggleTaskDone(t.id);
+      }
       else if(k === "timer") toggleTaskTimer(t.id);
       else if(k === "link") copyToClipboard(taskLink(t.id), "工作项链接已复制（可直接定位到该工作项）");
       else if(k === "copy") copyToClipboard(t.title, "标题已复制到剪贴板");

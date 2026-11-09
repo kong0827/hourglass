@@ -361,6 +361,11 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         </div>
 
         <aside class="task-detail-side">
+          <section class="drawer-card" id="taskPublication" hidden>
+            <div class="drawer-card-head"><h3>生产发布事实（只读）</h3><span id="taskPublishedBadge"></span></div>
+            <p class="hint" id="taskPublicationInfo"></p>
+            <div id="taskReleaseRecords" aria-live="polite"></div>
+          </section>
           <section class="source-card" id="drawerSource" hidden aria-live="polite">
             <div class="source-head">
               <span class="source-badge">来自需求池</span>
@@ -377,9 +382,17 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <section class="drawer-card">
             <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">选需求或文档会自动同步项目</span></div>
             <div class="field">
-              <label class="field-label" for="iVersion">影响版本</label>
-              <select id="iVersion"></select>
-              <span class="hint" id="iVersionHint">先选项目，再选该项目的版本；不选即「待规划」</span>
+              <div class="field-label">
+                <label for="iVersion">计划版本</label>
+                <button type="button" class="label-help" id="iVersionHelp" aria-label="查看版本与首版/迭代的区分逻辑" title="版本与首版/迭代怎么区分"></button>
+              </div>
+              <select id="iVersion" multiple size="4" aria-label="计划版本（可多选）"></select>
+              <span class="hint" id="iVersionHint">可同时关联多个版本；按住 Cmd / Ctrl 增减选择，全部取消即「待规划」。计划关联不代表实际交付。</span>
+              <span class="hint" id="iDemandTarget" aria-live="polite"></span>
+            </div>
+            <div class="field" id="fVersionChangeReason" hidden style="margin-top:11px">
+              <label class="field-label" for="iVersionChangeReason">版本调整理由 <span class="req">*</span></label>
+              <input id="iVersionChangeReason" type="text" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因" />
             </div>
             <div class="field" style="margin-top:11px">
               <div class="field-label">

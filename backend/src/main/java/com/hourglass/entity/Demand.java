@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/** 需求池条目（sql/23 demand 表）。状态机：review → pass / rej；pass → plan；rej 可 reopen。 */
+/** 需求池条目：评审、需求目标排期与取消状态；任务执行/发布状态独立。 */
 @Data
 public class Demand {
 
@@ -24,10 +24,17 @@ public class Demand {
     private String categoryId;
     /** P0/P1/P2/P3 */
     private String priority;
-    /** review待评审/pass已通过/plan已排期/rej已拒绝 */
+    /** review待评审/pass已通过/plan已排期/rej已拒绝/canceled已取消 */
     private String status;
     /** 期望交付时间 */
     private LocalDate expectDate;
+    /** 需求层计划时间，与任务执行日期独立 */
+    private LocalDate plannedStart;
+    private LocalDate plannedEnd;
+    /** 乐观锁：每次写更新递增 */
+    private Long revision = 0L;
+    /** 当前用户是否可排期/调期/取消/恢复（非表字段） */
+    private Boolean canSchedule;
     /** 验收标准 */
     private String acceptText;
     /** 目标版本（project_version，排期时选择） */
