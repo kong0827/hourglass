@@ -701,7 +701,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .alert-panel .ap-body{max-height:420px;overflow-y:auto;}
 /* 消息页：复用通知面板结构与样式，只去掉浮层宽度与滚动高度限制 */
-.msg-center{width:auto;max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
+.msg-center{width:auto;max-width:none;margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
 .msg-center .ap-body{max-height:none;min-height:240px;}
 #messagesBody{padding-top:20px;}
 

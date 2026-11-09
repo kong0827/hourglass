@@ -67,7 +67,9 @@ function reqDocNameById(id){
 function reqDocStatusLabel(s){
   if(s === "active") return "进行中";
   if(s === "done") return "已完成";
-  return "草稿";
+  if(s === "draft") return "草稿";
+  /* 历史数据可能出现非法状态：不冒充草稿，避免与「已发布」徽标自相矛盾 */
+  return "未设置";
 }
 function reqDocProjectName(reqId){
   for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i].name;
@@ -308,7 +310,7 @@ function reqDocPlanMove(srcId, targetId, zone){
 function reqDocRowHTML(r, depth, hasChild, collapsed){
   var meta = [esc(docTypeName(r.docType)), esc(r.owner || "—") + " 创建"];
   if(r.createdAt) meta.push(esc(fmtTs(r.createdAt)));
-  if(r.status && r.status !== "draft") meta.push(reqDocStatusLabel(r.status));
+  if(r.status && r.status !== "draft") meta.push("状态：" + reqDocStatusLabel(r.status));
   if(r.taskCount) meta.push(r.doneCount + "/" + r.taskCount + " 工作项");
   var fmt = r.format === "markdown"
     ? '<span class="rr-fmt md">MD</span>'

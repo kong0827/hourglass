@@ -55,6 +55,11 @@ function renderSmartTabs(){
       '<button class="smart-view-del" type="button" data-list-del="' + esc(id) + '" title="删除视图" aria-label="删除视图：' + esc(v.name) + '">' + icon("close", 11) + '</button></span>';
   }).join("");
   smartTabs.innerHTML = html;
+  /* 计数挂在视图标签行右侧；这行会被整体重绘，所以每次重绘后都重新挂回 */
+  if(listMeta){
+    listMeta.classList.add("smart-view-meta");
+    smartTabs.appendChild(listMeta);
+  }
 }
 function syncSmartControls(){
   if(smartGroup) smartGroup.value = smart.group;
@@ -163,6 +168,13 @@ function initSmartTable(){
   var sortLabel = listSort.closest("label");
   smartBar.querySelector(".smart-list-sort").appendChild(sortLabel);
   sortLabel.classList.add("smart-view-control");
+  /* 合并控制层：计数并入视图标签行、显示字段并入工具行，去掉原来单独的一层 list-toolbar */
+  var listColsBtn = $("btnListColumns");
+  if(listColsBtn){
+    var spacer = smartBar.querySelector(".smart-view-spacer");
+    if(spacer) spacer.parentNode.insertBefore(listColsBtn, spacer);
+  }
+  toolbar.hidden = true;
   listSort.innerHTML = '<option value="default">默认顺序（沿用服务端）</option>' +
     '<option value="due">按截止日期</option><option value="priority">按优先级</option>' +
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +

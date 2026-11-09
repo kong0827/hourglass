@@ -1,5 +1,6 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import com.hourglass.dto.ReqDocSaveRequest;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.RequirementDoc;
@@ -12,6 +13,7 @@ import com.hourglass.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -48,6 +50,19 @@ class RequirementDocServiceNotificationTest {
         assertEquals("U2", d.getOwnerUserId(), "未带负责人时编辑不能把负责人换成操作者");
         verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "文档「文档」已更新", "文档内容或属性有更新", "doc", "D1", "R1");
+    }
+
+    @Test
+    void updateRejectsUnknownStatus() {
+        when(docs.selectById("D1")).thenReturn(doc());
+        when(reqs.selectById("R1")).thenReturn(project());
+        ReqDocSaveRequest req = request("<p>new</p>");
+        /* published 是发布可见性，不是流转状态；历史误写会让列表状态全部落到「草稿」 */
+        req.setStatus("published");
+
+        AppException ex = assertThrows(AppException.class, () -> service.update("U1", WS, "D1", req));
+
+        assertEquals(400, ex.getCode());
     }
 
     @Test

@@ -817,7 +817,15 @@ public class RequirementDocService {
         /* 列表摘要随正文同步维护：列表接口不再读 MEDIUMTEXT */
         d.setContentBrief("markdown".equals(format) ? excerptOfMarkdown(d.getContent()) : excerptOf(d.getContent()));
         String status = Texts.trimToNull(req.getStatus());
-        d.setStatus(status == null ? "draft" : status);
+        if (status == null) {
+            status = "draft";
+        }
+        /* 状态与发布可见性是两个维度：status 只允许 draft/active/done，
+           未知值（如历史误写的 published）会让前端全部落到「草稿」 */
+        if (!"draft".equals(status) && !"active".equals(status) && !"done".equals(status)) {
+            throw AppException.badRequest("文档状态不合法");
+        }
+        d.setStatus(status);
         String owner = Texts.trimToNull(req.getOwner());
         if (owner != null) {
             d.setOwner(Texts.cut(owner, 32));

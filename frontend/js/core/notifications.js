@@ -239,16 +239,17 @@ function handleNoticeClick(e){
   }
 }
 function noticeFilterHTML(){
-  /* 计数来自服务端全量统计；列表只返回当前筛选的一页，不能拿列表长度当计数 */
+  /* 计数只给「读完能归零」的行动量：未读与未读提及。
+     「全部」是保留期内的历史库存，标记已读也不会让它变小，显示数字反而会被读成待办量，故只留标签。
+     计数来自服务端全量统计；列表只返回当前筛选的一页，不能拿列表长度当计数。 */
   var unread = notifyState.unread || 0;
   var mentions = notifyState.mentions || 0;
-  var total = notifyState.total || 0;
   function tab(key, label, n){
     return '<button class="ap-filter" type="button" data-ap-filter="' + key + '" aria-pressed="' + (rt.noticeFilter === key) + '">'
-      + label + (n ? '<span class="n">' + n + '</span>' : '') + '</button>';
+      + label + (n ? '<span class="n">' + (n > 99 ? "99+" : n) + '</span>' : '') + '</button>';
   }
   return '<div class="ap-filters" role="group" aria-label="通知筛选">'
-    + tab("all", "全部", total) + tab("unread", "未读", unread) + tab("mention", "提及", mentions)
+    + tab("all", "全部") + tab("unread", "未读", unread) + tab("mention", "提及", mentions)
     + '</div>';
 }
 function dayKey(v){
@@ -288,7 +289,8 @@ function noticeListHTML(){
     html += '<div class="ap-glabel">未读 ' + unread.length + '</div>' + noticeGroupsHTML(unread);
   }
   if(read.length){
-    html += '<div class="ap-glabel" style="margin-top:6px">已读 ' + read.length + '</div>' + noticeGroupsHTML(read);
+    /* 「已读」是历史，数字既不指向待办也清不掉，标题只作分区用 */
+    html += '<div class="ap-glabel" style="margin-top:6px">已读</div>' + noticeGroupsHTML(read);
   }
   return html;
 }
@@ -376,8 +378,8 @@ function loadNoticeList(){
     notifyState.loading = false;
     notifyState.items = (d && d.items) || [];
     if(d && typeof d.unread === "number") notifyState.unread = d.unread;
-    if(d && typeof d.total === "number") notifyState.total = d.total;
-    if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions;
+    if(d && typeof d.total === "number") notifyState.total = d.total; /* 服务端仍返回总量，前端不展示（见 noticeFilterHTML） */
+    if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions; /* 口径：未读的 @ 我的通知数 */
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();

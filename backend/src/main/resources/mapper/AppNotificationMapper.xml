@@ -36,7 +36,7 @@
       <if test="filter == 'unread'"> AND n.read_at IS NULL </if>
       <if test="filter == 'mention'"> AND n.type = 'task_mention' </if>
       <include refid="receiverProjectVisibility"/>
-    ORDER BY n.id DESC
+    ORDER BY n.created_at DESC, n.id DESC
     LIMIT #{limit}
   </select>
 
@@ -54,9 +54,10 @@
       <include refid="receiverProjectVisibility"/>
   </select>
 
+  <!-- 提及计数只算未读：筛选页签上的数字要能被「读完归零」，否则和「全部」一样只是历史库存 -->
   <select id="countMentions" resultType="int">
     SELECT COUNT(*) FROM app_notification n
-    WHERE n.user_id = #{userId} AND n.type = 'task_mention'
+    WHERE n.user_id = #{userId} AND n.type = 'task_mention' AND n.read_at IS NULL
       <if test="workspaceId != null and workspaceId != ''"> AND n.workspace_id = #{workspaceId} </if>
       <include refid="receiverProjectVisibility"/>
   </select>

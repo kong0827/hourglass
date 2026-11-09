@@ -1642,12 +1642,18 @@ function renderAttachments(list){
     var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
     var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
     var canPrev = previewable(a.filename);
+    /* 可预览的附件点缩略图/文件名直接开弹框，表格开 Univer，其余（zip、ppt）仍走新标签下载 */
+    var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+      : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+    var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+    var isOpen = canPrev || isSheet;
+    var openCls = isOpen ? ' class="att-open"' : "";
     var url = attUrl(a.id);
     var head = isImg
-      ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
-      : '<span class="att-icon">' + esc(extOfName(a.filename).toUpperCase().slice(0,4) || "FILE") + '</span>';
+      ? '<img class="att-thumb' + (isOpen ? " is-open" : "") + '" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy"' + openKey + ' />'
+      : '<span class="att-icon' + (isOpen ? " is-open" : "") + '"' + openKey + '>' + esc(extOfName(a.filename).toUpperCase().slice(0,4) || "FILE") + '</span>';
     return '<div class="attach-item">' + head +
-      '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
+      '<span class="att-name"><a' + openCls + ' href="' + url + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' + esc(a.filename) + '</a></span>' +
       '<span class="att-size">' + fmtSize(a.size) + '</span>' +
       '<span class="att-acts">' +
         (canPrev ? '<button class="icon-btn sm" type="button" data-att-prev="' + esc(a.id) + '" title="在线预览" aria-label="在线预览">' + icon("eye", 14) + '</button>' : '') +

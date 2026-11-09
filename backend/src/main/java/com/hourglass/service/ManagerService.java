@@ -48,6 +48,8 @@ public class ManagerService {
     private static final int DEFECT_WEEKS = 8;
     private static final int PROJECT_WEEKS = 8;
     private static final int WEEK_DAYS = 7;
+    /** 手机端团队视图的区间上限：再长就退化成「全部历史」，快照与七日格表格都吃不消 */
+    private static final int MAX_RANGE_DAYS = 92;
     private static final int STAGNANT_DAYS = 7;
     private static final int RED_OVERDUE_PERCENT = 10;
     private static final int PERCENT = 100;
@@ -197,9 +199,33 @@ public class ManagerService {
     }
 
     public Map<String, Object> workload(String workspaceId, String userId) {
+        return workload(workspaceId, userId, null, null);
+    }
+
+    /**
+     * 成员负载。
+     *
+     * <p>周口径（{@code weekStart} / {@code dayMinutes} / {@code lastWeekMinutes}）始终按本周与上周计算，
+     * 不传区间时与桌面端历史行为完全一致；传入 {@code rangeFrom}/{@code rangeTo} 时额外产出
+     * {@code rangeMinutes}（成员在该区间内的实际计时）与 {@code rangeFrom}/{@code rangeTo}/{@code rangeWorkdays}，
+     * 供手机端团队视图按「本月 / 近 30 天」等区间统计投入。区间超过 {@link #MAX_RANGE_DAYS} 天会被从终点往前截断。</p>
+     */
+    public Map<String, Object> workload(String workspaceId, String userId,
+                                        LocalDate rangeFrom, LocalDate rangeTo) {
         LocalDate today = today();
         LocalDate weekStart = mondayOf(today);
-        Snapshot snapshot = load(workspaceId, weekStart.minusWeeks(1), weekStart.plusWeeks(1), userId);
+        LocalDate[] range = normalizeRange(rangeFrom, rangeTo);
+        LocalDate logFrom = weekStart.minusWeeks(1);
+        LocalDate logBefore = weekStart.plusWeeks(1);
+        if (range != null) {
+            if (range[0].isBefore(logFrom)) {
+                logFrom = range[0];
+            }
+            if (range[1].plusDays(1).isAfter(logBefore)) {
+                logBefore = range[1].plusDays(1);
+            }
+        }
+        Snapshot snapshot = load(workspaceId, logFrom, logBefore, userId);
         Map<String, String> reqNames = requirementNames(snapshot.requirements);
         List<Task> openTasks = openTasks(snapshot.tasks);
         LinkedHashMap<String, MemberAccumulator> accumulators = memberAccumulators(openTasks, snapshot.members);
@@ -220,7 +246,11 @@ public class ManagerService {
 
         List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : accumulators.values()) {
-            members.add(workloadMember(member, snapshot.logs, weekStart, today, reqNames, tasksById));
+            Map<String, Object> item = workloadMember(member, snapshot.logs, weekStart, today, reqNames, tasksById);
+            if (range != null) {
+                item.put("rangeMinutes", minutesInRange(member.userId, snapshot.logs, range[0], range[1]));
+            }
+            members.add(item);
         }
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
@@ -228,6 +258,11 @@ public class ManagerService {
         result.put("workdays", DEFAULT_WORKDAYS);
         result.put("weekStart", weekStart.toString());
         result.put("lastWeekStart", weekStart.minusWeeks(1).toString());
+        if (range != null) {
+            result.put("rangeFrom", range[0].toString());
+            result.put("rangeTo", range[1].toString());
+            result.put("rangeWorkdays", countWorkdays(range[0], range[1]));
+        }
         result.put("projects", projects);
         result.put("members", members);
         return result;
@@ -1107,6 +1142,53 @@ public class ManagerService {
 
     private int actual(Task task) {
         return minutes(task.getTotalMinutes());
+    }
+
+    /** 区间规范化：任一缺失即视为不按区间统计（桌面端口径）；起终点反了自动交换；超长时从终点往前截断 */
+    private LocalDate[] normalizeRange(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            return null;
+        }
+        LocalDate start = from;
+        LocalDate end = to;
+        if (start.isAfter(end)) {
+            LocalDate swap = start;
+            start = end;
+            end = swap;
+        }
+        if (end.minusDays(MAX_RANGE_DAYS - 1L).isAfter(start)) {
+            start = end.minusDays(MAX_RANGE_DAYS - 1L);
+        }
+        return new LocalDate[]{start, end};
+    }
+
+    /** 成员在区间内的实际计时（snapshot.logs 已按项目可见性裁剪） */
+    private int minutesInRange(String userId, List<TimeLog> logs, LocalDate from, LocalDate to) {
+        if (userId == null) {
+            return 0;
+        }
+        int result = 0;
+        for (TimeLog log : logs) {
+            if (log == null || !userId.equals(log.getUserId()) || log.getStartedAt() == null) {
+                continue;
+            }
+            LocalDate date = log.getStartedAt().toLocalDate();
+            if (!date.isBefore(from) && !date.isAfter(to)) {
+                result += minutes(log.getMinutes());
+            }
+        }
+        return result;
+    }
+
+    /** 区间内的标准工作日数（周一~周五），负载容量按它折算 */
+    private int countWorkdays(LocalDate from, LocalDate to) {
+        int days = 0;
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            if (WorkTime.isWorkday(date)) {
+                days++;
+            }
+        }
+        return days;
     }
 
     private int workdays(LocalDate latestDue, LocalDate today) {

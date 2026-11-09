@@ -29,9 +29,12 @@ public class MobileController {
         return ApiResult.ok(mobileService.teamOverview(ctx.getWsId(), ctx.getUserId(), from, to));
     }
 
+    /** 成员负载：from/to 为统计区间（团队视图的本周、本月、近 30 天）；缺省回落到截至今天的最近 7 天，与团队概览同口径 */
     @GetMapping("/workload")
-    public ApiResult<Map<String, Object>> workload(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(mobileService.workload(ctx.getWsId(), ctx.getUserId()));
+    public ApiResult<Map<String, Object>> workload(@RequestParam(required = false) String from,
+                                                   @RequestParam(required = false) String to,
+                                                   @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(mobileService.workload(ctx.getWsId(), ctx.getUserId(), from, to));
     }
 
     @GetMapping("/risks")

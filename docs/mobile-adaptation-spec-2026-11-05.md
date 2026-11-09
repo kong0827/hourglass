@@ -521,7 +521,9 @@ DOM 只需加两处（`index.html` 的 `#taskDrawer` 内）：
 | 参数 | 必填 | 说明 |
 |---|---|---|
 | `workspace` | 是 | 空间 id |
-| `from` `to` | 是 | `yyyy-MM-dd`，通常为本周边界 |
+| `from` `to` | 否 | `yyyy-MM-dd`；团队视图的统计区间（本周 = 周一~周日，本月 = 1 日~月末，近 30 天 = 今天往前 30 天）。缺省为「最近 7 天」。 |
+
+区间只作用于**统计类**指标：`doneRate` / `doneCount` / `planCount` / `deltaWeek`。`overdue`、`blocked` 与 `pending` 是「此刻」的待办快照，不随区间变化——前端在卡片上明确标注「截止此刻」，避免用户以为切了区间这些数字也该变。`deltaWeek` 是环比：与**前一等长周期**比较（区间 30 天则对比再往前 30 天），字段名沿用历史。
 
 ```json
 {
@@ -544,13 +546,20 @@ DOM 只需加两处（`index.html` 的 `#taskDrawer` 内）：
 
 ### 6.2 `GET /api/mobile/workload`
 
+| 参数 | 必填 | 说明 |
+|---|---|---|
+| `workspace` | 是 | 空间 id |
+| `from` `to` | 否 | `yyyy-MM-dd`，与 6.1 同一区间；缺省为截至今天的最近 7 天。响应里的 `rangeFrom`/`rangeTo` 是服务端截断后的实际区间（上限 92 天）。 |
+
 ```json
-{ "code":0, "data": { "members": [
-  { "userId":"u1","name":"李睿","role":"后端","percent":1.28,"plannedMinutes":2400,"actualMinutes":3072,"overload":true }
+{ "code":0, "data": { "capacityMinutesPerDay":480, "workdays":5,
+  "rangeFrom":"2026-11-01", "rangeTo":"2026-11-30", "rangeWorkdays":21,
+  "members": [
+  { "userId":"u1","name":"李睿","role":"后端","percent":0.3,"plannedMinutes":10080,"actualMinutes":3072,"overload":false }
 ]}}
 ```
 
-- `percent` = `actualMinutes / plannedMinutes`，`plannedMinutes` 用周工时容量（沿用 `WorkTime` 配置里的每日上限 × 工作日）。
+- `percent` = `actualMinutes / plannedMinutes`；`actualMinutes` = **区间内**计时，`plannedMinutes` = `capacityMinutesPerDay × rangeWorkdays`（区间内周一~周五天数）。切到「本月」时容量随之变成 21 个工作日 = 168h，不会拿一周容量去比一个月的投入。
 - 阈值口径**沿用现有状态**（前端渲染规则，服务端只给数值）：`>100%` 红、`90–100%` 黄、其余蓝。
 
 ### 6.3 `GET /api/mobile/risks?workspace=&type=blocked|overdue`

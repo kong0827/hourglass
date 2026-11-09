@@ -333,14 +333,16 @@ function demandMenuItems(d){
   out.push({ act: "del", label: "删除", danger: true });
   return out;
 }
-function demandActs(d){
+function demandActs(d, opts){
+  /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为普通按钮，避免整屏都是主色 */
+  var cls = (opts && opts.subtle) ? "btn sm" : "btn sm primary";
   var acts = "";
   if(isOwner()){
     if(d.status === "review"){
-      acts += '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
+      acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
     }
     if(d.status === "pass"){
-      acts += '<button class="btn sm primary" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
+      acts += '<button class="' + cls + '" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
     }
     if(d.status === "rej"){
       acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
@@ -383,9 +385,10 @@ function dragHint(status){
   if(status === "plan") return "可拖回「已通过」撤销排期";
   return "拖到其他列流转状态";
 }
-function cardHTML(d){
+function cardHTML(d, opts){
   var acts = demandActs(d);
-  var drag = isOwner()
+  /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
+  var drag = (isOwner() && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
   return '<div class="bkl-card"' + drag + '>'
@@ -802,6 +805,30 @@ function initDemSmartBar(){
   syncDemControls();
 }
 
+function demandMobileList(rows, groups){
+  function cards(list){
+    return list.map(function(d){ return cardHTML(d, { noDrag: true }); }).join("");
+  }
+  var body;
+  if(demSmart.group === "none"){
+    body = '<div class="dem-mob-cards">' + cards(rows) + '</div>';
+  }else{
+    body = groups.map(function(g){
+      var collapsed = !!demSmart.collapsed["$" + g.key];
+      return '<section class="dem-mob-group">'
+        + '<button type="button" class="dem-group-toggle dem-mob-group-head" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">'
+        + '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>'
+        + '<span class="dem-group-name">' + esc(g.label) + '</span>'
+        + '<span class="dem-group-count">' + g.rows.length + ' 项</span></button>'
+        + (collapsed ? '' : '<div class="dem-mob-cards">' + cards(g.rows) + '</div>')
+        + '</section>';
+    }).join("");
+  }
+  var more = demandHasMore
+    ? '<button class="bkl-more" type="button" data-dem-more="table">加载更多（已加载 ' + demands.length + ' / 共 ' + demandTotal + ' 条）</button>'
+    : "";
+  return '<div class="dem-mob-list">' + body + more + '</div>';
+}
 function renderDemandTable(){
   var rows = demViewRows(), groups = demGroups();
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
@@ -820,13 +847,18 @@ function renderDemandTable(){
     if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
     return;
   }
+  /* 手机没有横向空间容纳 8 列表格：列表模式改用看板同款需求卡，字段按卡片的标签行折叠 */
+  if(isMobile()){
+    demandBody.innerHTML = demandMobileList(rows, groups);
+    return;
+  }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
   var numCols = { expectDate:1, wsjf:1, createdAt:1 };
   function rowHTML(d){
     return '<tr>' + cols.map(function(k){
       return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
     }).join("")
-      + '<td><span class="demand-row-acts">' + demandActs(d) + '</span></td></tr>';
+      + '<td><span class="demand-row-acts">' + demandActs(d, { subtle: true }) + '</span></td></tr>';
   }
   var colspan = cols.length + 1;
   function groupHead(g){

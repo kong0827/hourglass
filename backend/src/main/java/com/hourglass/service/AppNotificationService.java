@@ -105,6 +105,7 @@ public class AppNotificationService {
         return mapper.countAll(userId, workspaceId);
     }
 
+    /** 未读的 @ 提及数量（筛选页签计数用；口径与 unread 一致，读完即归零） */
     public int mentions(String userId, String workspaceId) {
         return mapper.countMentions(userId, workspaceId);
     }

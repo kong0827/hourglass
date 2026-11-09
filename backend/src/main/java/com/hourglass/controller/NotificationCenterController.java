@@ -38,6 +38,8 @@ public class NotificationCenterController {
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("items", items);
         res.put("unread", notificationService.unread(userId, wsId));
+        /* total/mentions 一并返回：total 供「共 N 条」这类文字与排障使用（筛选页签不显示），
+           mentions 为未读提及数——页签上的数字必须能被读完归零，才不会被读成待办量 */
         res.put("total", notificationService.total(userId, wsId));
         res.put("mentions", notificationService.mentions(userId, wsId));
         return ApiResult.ok(res);

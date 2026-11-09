@@ -133,13 +133,25 @@ public class MobileService {
         return result;
     }
 
-    public Map<String, Object> workload(String workspaceId, String userId) {
+    /**
+     * 手机端成员负载。
+     *
+     * <p>实际 = 区间内的计时，计划 = 每日上限 × 区间内工作日数——拿一周容量去比三十天的投入，
+     * 负载率会假性爆表。前端团队视图显式传「本周 / 本月 / 近 30 天」的起止日期；
+     * 不传时回落到「截至今天的最近 7 天」，与 {@link #teamOverview} 同口径。
+     * 区间以服务端截断后的 {@code rangeFrom}/{@code rangeTo} 为准（上限 92 天），前端标签与数字同源。</p>
+     */
+    public Map<String, Object> workload(String workspaceId, String userId, String from, String to) {
         requireManager(workspaceId, userId);
-        Map<String, Object> raw = managerService.workload(workspaceId, userId);
-        /* 手机端口径：计划 = 周容量（每日上限 × 标准工作日），实际 = 本周已录工时 */
+        /* 缺省区间与 teamOverview 同口径：截至今天的最近 7 天，避免两个接口各自为政 */
+        LocalDate toDate = parseDate(to, today());
+        LocalDate fromDate = parseDate(from, toDate.minusDays(6));
+        Map<String, Object> raw = managerService.workload(workspaceId, userId, fromDate, toDate);
+        LocalDate rangeFrom = parseDate(text(raw.get("rangeFrom")), fromDate);
+        LocalDate rangeTo = parseDate(text(raw.get("rangeTo")), toDate);
         int perDay = intValue(raw.get("capacityMinutesPerDay"));
-        int weekDays = intValue(raw.get("workdays"));
-        int weeklyCapacity = perDay > 0 && weekDays > 0 ? perDay * weekDays : 0;
+        int rangeWorkdays = intValue(raw.get("rangeWorkdays"));
+        int rangeCapacity = perDay > 0 ? perDay * rangeWorkdays : 0;
 
         Map<String, WorkspaceMember> membersById = new HashMap<String, WorkspaceMember>();
         Map<String, String> userIdsByName = new HashMap<String, String>();
@@ -179,12 +191,12 @@ public class MobileService {
                 row.put("userId", canonicalId);
                 row.put("name", display);
                 row.put("role", member == null || member.getRole() == null ? "" : member.getRole());
-                row.put("plannedMinutes", weeklyCapacity > 0
-                        ? weeklyCapacity : intValue(item.get("capacityMinutes")));
+                row.put("plannedMinutes", rangeCapacity > 0
+                        ? rangeCapacity : intValue(item.get("capacityMinutes")));
                 row.put("actualMinutes", 0);
                 merged.put(canonicalId, row);
             }
-            int actual = intValue(item.get("weekMinutes"));
+            int actual = intValue(item.get("rangeMinutes"));
             row.put("actualMinutes", intValue(row.get("actualMinutes")) + actual);
         }
 
@@ -200,6 +212,9 @@ public class MobileService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("capacityMinutesPerDay", raw.get("capacityMinutesPerDay"));
         result.put("workdays", raw.get("workdays"));
+        result.put("rangeFrom", rangeFrom.toString());
+        result.put("rangeTo", rangeTo.toString());
+        result.put("rangeWorkdays", rangeWorkdays);
         result.put("members", members);
         return result;
     }

@@ -143,6 +143,10 @@
 .tb-sub.breadcrumb span:last-child{max-width:none;flex:1 1 auto;}
 .tb-sub.breadcrumb .sep{color:var(--border-strong);font-weight:400;flex:0 0 auto;max-width:none;}
 .tb-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+/* 设置、个人设置与消息页没有可新建对象，隐藏全局「新建」与手机 FAB */
+body[data-view="settings"] #btnNew,
+body[data-view="profile"] #btnNew,
+body[data-view="messages"] #btnNew{display:none !important;}
 
 /* ===================== 子导航：同一业务域内的视图切换 ===================== */
 .subnav{

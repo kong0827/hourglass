@@ -102,6 +102,12 @@
 }
 [data-layout="mobile"] #btnNew svg:first-child{width:20px;height:20px;}
 [data-layout="mobile"] #btnNew svg:last-child{display:none;}
+/* FAB 悬在列表右下角：有 FAB 的页面底部预留一行，末条内容不被盖住 */
+[data-layout="mobile"] body:not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view{
+  padding-bottom:calc(var(--tabbar-space) + 56px);
+}
+[data-layout="mobile"] body[data-view="board"] .mob-board{padding-bottom:calc(var(--tabbar-space) + 56px);}
+[data-layout="mobile"] #view-calendar{padding-bottom:calc(var(--tabbar-space) + 56px);}
 /* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
 
 /* ===================== 筛选：首屏只留一行摘要，完整条件进底部面板 ===================== */
@@ -470,13 +476,13 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .cwd-dw{font-size:12px;font-weight:600;color:var(--text-3);}
 [data-layout="mobile"] .cwd-n{font-size:11.5px;color:var(--text-3);margin-left:auto;}
 [data-layout="mobile"] .cwd-head .cal-add{
-  position:static;width:28px;height:28px;border-radius:50%;
+  position:static;width:32px;height:32px;border-radius:50%;
   display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-2);
 }
 [data-layout="mobile"] .cwd-tasks{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
 [data-layout="mobile"] .cwd-task{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:34px;
-  padding:6px 9px;border-radius:9px;background:var(--surface-sunken);
+  display:flex;align-items:center;gap:8px;width:100%;min-height:40px;
+  padding:8px 10px;border-radius:9px;background:var(--surface-sunken);
   text-align:left;font-size:12.5px;color:var(--text);
 }
 [data-layout="mobile"] .cwd-task .cbar{width:3px;height:18px;border-radius:2px;background:var(--border-strong);flex:0 0 auto;}
@@ -555,6 +561,20 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .th-grid span{font-size:11px;opacity:.82;}
 [data-layout="mobile"] .th-grid .danger b{color:#FEE4E2;}
 [data-layout="mobile"] .th-grid .warn b{color:#FEF0C7;}
+[data-layout="mobile"] .th-note{margin-top:10px;font-size:11px;line-height:1.5;opacity:.82;}
+
+/* 团队视图统计区间：只作用于完成率、工时与环比；待办和风险始终是当前快照 */
+[data-layout="mobile"] .team-range{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+[data-layout="mobile"] .team-range .tr-btn{
+  padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);
+  color:var(--text-2);font:inherit;font-size:12.5px;font-weight:600;
+}
+[data-layout="mobile"] .team-range .tr-btn[aria-pressed="true"]{
+  border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);
+}
+[data-layout="mobile"] .team-range .tr-dates{
+  margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;
+}
 
 [data-layout="mobile"] .team-card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
@@ -653,10 +673,57 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .toolbar-right{margin-left:0;flex-wrap:wrap;gap:8px;}
 [data-layout="mobile"] .duo{grid-template-columns:1fr;}
 
+/* ===================== 需求池：列表模式改卡片 ===================== */
+[data-layout="mobile"] .dem-mob-list{display:flex;flex-direction:column;gap:10px;}
+[data-layout="mobile"] .dem-mob-group{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .dem-mob-group-head{
+  display:flex;width:100%;align-items:center;gap:8px;
+  padding:2px 2px 4px;border:0;background:transparent;color:var(--text-2);
+  font:inherit;font-size:12.5px;text-align:left;
+}
+[data-layout="mobile"] .dem-mob-cards{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .dem-mob-list .bkl-card{padding:14px;}
+
+/* ===================== 测试用例：筛选收进面板 ===================== */
+[data-layout="mobile"] .tc-filter-toggle{display:inline-flex;}
+[data-layout="mobile"] .tc-actionbar{order:1;gap:6px;}
+[data-layout="mobile"] .tc-actionbar #btnCaseCsvOut,
+[data-layout="mobile"] .tc-actionbar #btnCaseCsvIn,
+[data-layout="mobile"] .tc-actionbar [data-view-fullscreen]{display:none !important;}
+[data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 auto;min-width:0;max-width:150px;}
+[data-layout="mobile"] .tc-filterbar{display:none;}
+[data-layout="mobile"] .tc-filterbar.is-open{
+  display:flex;flex:1 0 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
+  padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
+}
+[data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
+[data-layout="mobile"] .tc-filterbar.is-open #tcViewsBtn,
+[data-layout="mobile"] .tc-filterbar.is-open #tcBug{width:auto;align-self:flex-start;justify-content:flex-start;}
+[data-layout="mobile"] .tc-filterbar.is-open .tc-search,
+[data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
+[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg{width:100%;}
+[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg button{flex:1 1 0;min-width:0;padding:0 2px;font-size:11.5px;}
+
+/* ===================== 版本阶段：时间轴竖排、表格本地滚动 ===================== */
+[data-layout="mobile"] .phase-tl{flex-wrap:wrap;gap:6px;padding:6px 0 2px;}
+[data-layout="mobile"] .phase-tl-head{flex-wrap:wrap;align-items:flex-start;}
+[data-layout="mobile"] .phase-tl-head .meta-right{flex:1 0 100%;margin-left:0;line-height:1.5;}
+[data-layout="mobile"] .phase-bar{flex:1 0 100%;flex-direction:column;height:auto;margin:0;gap:6px;}
+[data-layout="mobile"] .phase-bar > *{width:100% !important;flex:0 0 auto;min-height:34px;}
+[data-layout="mobile"] .pseg{white-space:normal;text-align:center;line-height:1.35;padding:6px 8px;border-radius:var(--r-sm) !important;}
+[data-layout="mobile"] .plaunch{flex:0 0 2px;width:100%;margin:20px 0 16px;}
+[data-layout="mobile"] .plaunch::after{top:-18px;}
+[data-layout="mobile"] .tl-node{flex:1 1 0;min-width:0;}
+
+/* 平板：宽表在容器内滚动，指标值允许换行，避免被 390/768 两档断点夹住裁切 */
+[data-layout="tablet"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+[data-layout="tablet"] .pcell b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3;}
+
 /* 甘特图允许表格内横向滚动；页面本身不滚 */
 [data-layout="mobile"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
 [data-layout="mobile"] .gantt-grid{min-width:max-content;}
 [data-layout="mobile"] .access-matrix{overflow-x:auto;}
+[data-layout="mobile"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 
 /* 测试用例视图：行内操作区整行左排；步骤行改网格，操作/预期各占整行 */
 [data-layout="mobile"] .tc-row{flex-wrap:wrap;gap:8px;padding:12px;}

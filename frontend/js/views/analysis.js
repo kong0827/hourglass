@@ -7,7 +7,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { avatarColor, fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
+import { fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
 import { distHTML } from "./review.js";
@@ -182,7 +182,6 @@ function applyAnalysisPeriod(v){
   else if(v === "month"){ state.statsWeeks = 4; state.flowDays = 30; }
   else if(v === "days90"){ state.statsWeeks = 26; state.flowDays = 90; }
   else { state.statsWeeks = 8; state.flowDays = 90; }
-  if($("statsWeeks")) $("statsWeeks").value = String(state.statsWeeks);
   if($("flowDays")) $("flowDays").value = String(state.flowDays);
   refreshAnalysisTab(false);
 }
@@ -198,6 +197,7 @@ function loadStats(opts){
     $("statsCat").innerHTML = UI.skeletonRows(3);
     $("statsOwner").innerHTML = UI.skeletonRows(3);
   }
+  if($("statsRange0")) $("statsRange0").textContent = "近 " + weeks + " 周";
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(function(d){
@@ -217,17 +217,21 @@ function renderStatsHours(c){
   var base = (scope === "all") ? (all === null ? mine : all) : mine;
   var week = (scope === "all") ? (allWeek === null ? mineWeek : allWeek) : mineWeek;
   var doneCount = c.done || 0;
+  /* 0 分钟不是缺失值：直接显示 0m，避免三张卡同时出现「—」像加载失败 */
+  var hoursValue = function(m){ return m ? fmtMinutesShort(m) : "0m"; };
   var cards = [
-    {k:"累计工时", v:fmtMinutesShort(base)},
-    {k:"本周工时", v:fmtMinutesShort(week)},
-    {k:"平均每项", v:fmtMinutesShort(doneCount ? Math.round(base / doneCount) : 0)}
+    {k:"累计工时", v:hoursValue(base)},
+    {k:"本周工时", v:hoursValue(week)},
+    {k:"平均每项", v:(doneCount && base) ? fmtMinutesShort(Math.round(base / doneCount)) : "—"}
   ];
   statsHoursEl.innerHTML = cards.map(function(x){
     return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
   }).join("");
   if(workScopeTag) workScopeTag.textContent = (scope === "all") ? "全空间" : "仅我";
   if(hoursNote){
-    if(scope === "all" && all === null){
+    if(!base && !week){
+      hoursNote.textContent = "还没有计时记录：在工作项详情里开始计时后，这里会显示累计与本周工时。";
+    }else if(scope === "all" && all === null){
       hoursNote.textContent = "服务端暂未返回全空间工时，当前回退显示我的工时（需后端支持）。";
     }else{
       hoursNote.textContent = (scope === "all")
@@ -301,13 +305,9 @@ function renderStats(d){
     function(){ return "var(--primary)"; },
     function(x){ return x.count; });
   $("statsOwner").innerHTML = distHTML(d.byOwner,
-    function(x){ return avatarColor(x.name); },
+    function(){ return "var(--primary)"; },
     function(x){ return x.count; });
 }
-$("statsWeeks").addEventListener("change", function(){
-  state.statsWeeks = $("statsWeeks").value;
-  loadStats();
-});
 function enterFlowView(){ loadFlowHealth(); }
 function spanParts(sec){
   var s = Number(sec) || 0;

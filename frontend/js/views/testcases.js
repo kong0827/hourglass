@@ -780,6 +780,13 @@ function syncModeUI(){
   syncTcSubnav();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = isWritable() && !cov && !rep && !plan ? "" : "none";
+  /* 手机把筛选收进可展开面板：非用例模式没有筛选内容，入口一并收起 */
+  var filterBtn = $("tcFilterBtn"), filterBar = $("tcFilterBar");
+  if(filterBtn) filterBtn.style.display = tcMode === "cases" ? "" : "none";
+  if(tcMode !== "cases" && filterBar && filterBar.classList.contains("is-open")){
+    filterBar.classList.remove("is-open");
+    if(filterBtn) filterBtn.setAttribute("aria-expanded", "false");
+  }
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
   if(csvOut) csvOut.style.display = tcMode === "cases" && caseReqId ? "" : "none";
   if(csvIn) csvIn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
@@ -1718,6 +1725,14 @@ $("tcBug").addEventListener("click", function(){
   bugOnly = !bugOnly;
   loadCases();
 });
+var tcFilterBtn = $("tcFilterBtn"), tcFilterBar = $("tcFilterBar");
+if(tcFilterBtn && tcFilterBar){
+  tcFilterBtn.addEventListener("click", function(){
+    var open = !tcFilterBar.classList.contains("is-open");
+    tcFilterBar.classList.toggle("is-open", open);
+    tcFilterBtn.setAttribute("aria-expanded", String(open));
+  });
+}
 $("tcSearch").addEventListener("input", function(){
   var value = this.value.trim().toLowerCase();
   if(value === searchText) return;

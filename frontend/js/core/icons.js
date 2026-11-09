@@ -61,6 +61,12 @@
     plus: function (s) { return svg(s, '<path d="M10 4.4v11.2M4.4 10h11.2"/>', 1.8); },
     minus: function (s) { return svg(s, '<path d="M4.4 10h11.2"/>', 1.8); },
     search: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>'); },
+    /* 图片预览：放大镜 + 加减号 */
+    zoomIn: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4M8.8 6.6v4.4"/>'); },
+    zoomOut: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4"/>'); },
+    /* 旋转 90°：与 refresh 同形的左右两支 */
+    rotateLeft: function (s) { return svg(s, '<path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.6"/><path d="M3.4 3.6v4.2h4.2"/>'); },
+    rotateRight: function (s) { return svg(s, '<path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/>'); },
     filter: function (s) { return svg(s, '<path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/>'); },
     sort: function (s) { return svg(s, '<path d="M6 4.4v11.2M6 15.6 3.6 13.2M6 15.6l2.4-2.4M14 15.6V4.4M14 4.4l-2.4 2.4M14 4.4l2.4 2.4"/>'); },
     close: function (s) { return svg(s, '<path d="M3 3l14 14M17 3 3 17"/>', 1.8); },

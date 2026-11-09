@@ -469,6 +469,10 @@ a:hover{text-decoration:underline;}
 .tb-sub.breadcrumb span:last-child{max-width:none;flex:1 1 auto;}
 .tb-sub.breadcrumb .sep{color:var(--border-strong);font-weight:400;flex:0 0 auto;max-width:none;}
 .tb-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+/* 设置、个人设置与消息页没有可新建对象，隐藏全局「新建」与手机 FAB */
+body[data-view="settings"] #btnNew,
+body[data-view="profile"] #btnNew,
+body[data-view="messages"] #btnNew{display:none !important;}
 
 /* ===================== 子导航：同一业务域内的视图切换 ===================== */
 .subnav{
@@ -1486,7 +1490,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .alert-panel .ap-body{max-height:420px;overflow-y:auto;}
 /* 消息页：复用通知面板结构与样式，只去掉浮层宽度与滚动高度限制 */
-.msg-center{width:auto;max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
+.msg-center{width:auto;max-width:none;margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
 .msg-center .ap-body{max-height:none;min-height:240px;}
 #messagesBody{padding-top:20px;}
 
@@ -2241,6 +2245,11 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   background:var(--surface-sunken);color:var(--text-3);font-size:10px;font-weight:700;
 }
 .attach-item .att-name{flex:1 1 auto;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 可在线预览的附件：缩略图/图标/文件名都是打开弹框的入口 */
+.attach-item .att-thumb.is-open,.attach-item .att-icon.is-open{cursor:pointer;}
+.attach-item .att-thumb.is-open:hover{border-color:var(--primary);}
+.attach-item .att-icon.is-open:hover{background:var(--surface-hover);color:var(--text-2);}
+.attach-item .att-name a.att-open:hover{color:var(--primary);}
 .attach-item .att-size{font-size:12px;color:var(--text-3);flex:0 0 auto;font-variant-numeric:tabular-nums;}
 .attach-item .att-acts{display:flex;gap:4px;flex:0 0 auto;}
 .attach-empty{font-size:12.5px;color:var(--text-3);padding:4px 0;}
@@ -2410,6 +2419,23 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .req-taskbar input::placeholder{color:var(--text-3);}
 .req-taskbar input:focus{outline:none;border-style:solid;border-color:var(--primary);background:var(--surface);box-shadow:var(--ring-focus);}
+/* 桌面：就地新建默认只留一枚轻量入口，悬停或聚焦时才展开输入框 */
+.req-quick-trigger{
+  display:none;align-items:center;height:28px;padding:0 10px;
+  border:1px dashed var(--border-strong);border-radius:var(--r-sm);
+  background:transparent;color:var(--text-3);font:inherit;font-size:12px;cursor:text;
+}
+.req-quick-trigger:hover{color:var(--primary);border-color:var(--primary-border);background:var(--primary-soft);}
+[data-layout="desktop"] .req-quick-trigger{display:inline-flex;}
+[data-layout="desktop"] .req-item:hover .req-quick-trigger{display:none;}
+[data-layout="desktop"] .req-item .req-taskbar input{
+  flex:0 0 0;width:0;min-width:0;padding:0;opacity:0;border-color:transparent;
+  transition:flex-basis var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out),padding var(--dur-fast) var(--ease-out);
+}
+[data-layout="desktop"] .req-item:hover .req-taskbar input,
+[data-layout="desktop"] .req-item:focus-within .req-taskbar input{
+  flex:1 1 auto;width:auto;min-width:120px;padding:0 9px;opacity:1;border-color:var(--border-strong);
+}
 
 /* ===================== 设置页：通知渠道卡（O-1） ===================== */
 .notify-status{
@@ -3504,6 +3530,8 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .summary-panel .sh .meta-right{margin-left:auto;font-size:12px;font-weight:600;color:var(--primary-fg);opacity:.75;}
 
 /* IA-3：我的任务收件箱（逾期 / 今天 / 本周 / 以后） */
+/* 没有工作项时分分组/排序/空间控件没有作用对象，收起后空态更干净（刷新保留） */
+#view-mine.is-empty .toolbar-right label{display:none;}
 .mine-groups{display:flex;flex-direction:column;gap:18px;padding-bottom:24px;}
 .mine-group-head{display:flex;align-items:center;gap:8px;margin:0 0 8px;}
 .mine-group-head h3{margin:0;font-size:14px;font-weight:700;color:var(--text);}
@@ -3579,7 +3607,7 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .phase-pend-desc b{color:var(--text-2);}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}
 .pcell{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:var(--r-sm);background:var(--surface-sunken);min-width:0;}
-.pcell b{font-size:15px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pcell b{font-size:15px;font-weight:650;color:var(--text);line-height:1.3;white-space:normal;overflow:visible;word-break:break-word;}
 .pcell span{font-size:11px;color:var(--text-3);}
 /* 指标格下钻（原型 pcell drillable）：按钮化但不改变格子的视觉基线，悬停才露出可点提示 */
 button.pcell.drillable{border:none;font:inherit;text-align:left;cursor:pointer;color:inherit;}
@@ -3716,6 +3744,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 /* 工具栏分两组：筛选组可在中间自由换行，操作组始终整体靠右不拆散 */
 .tc-filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
 .tc-actionbar{display:flex;align-items:center;gap:8px;flex:0 0 auto;flex-wrap:nowrap;}
+/* 手机才出现：把筛选条件收进可展开面板，首屏只留筛选入口 / 项目 / 新增 */
+.tc-filter-toggle{display:none;}
 .tc-stats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px;}
 .tc-stat{display:inline-flex;align-items:baseline;gap:6px;padding:6px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--text-2);}
 .tc-stat b{font-size:16px;font-weight:650;color:var(--text);}
@@ -4599,6 +4629,11 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 }
 #view-list .smart-view-del:hover,
 #view-demands .smart-view-del:hover{background:var(--surface-hover);color:var(--danger-fg);}
+#view-list .smart-view-meta{
+  margin-left:auto;flex:0 0 auto;padding-left:8px;
+  font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+[data-layout="mobile"] #view-list .smart-view-meta{display:none;}
 #view-list .smart-view-tools,
 #view-demands .smart-view-tools{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;
@@ -4880,6 +4915,12 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 }
 [data-layout="mobile"] #btnNew svg:first-child{width:20px;height:20px;}
 [data-layout="mobile"] #btnNew svg:last-child{display:none;}
+/* FAB 悬在列表右下角：有 FAB 的页面底部预留一行，末条内容不被盖住 */
+[data-layout="mobile"] body:not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view{
+  padding-bottom:calc(var(--tabbar-space) + 56px);
+}
+[data-layout="mobile"] body[data-view="board"] .mob-board{padding-bottom:calc(var(--tabbar-space) + 56px);}
+[data-layout="mobile"] #view-calendar{padding-bottom:calc(var(--tabbar-space) + 56px);}
 /* #newMenu 交给 UI.openPop 按 FAB 的位置自动定位（上方/下方避让），不要再用 CSS 固定 top/bottom */
 
 /* ===================== 筛选：首屏只留一行摘要，完整条件进底部面板 ===================== */
@@ -5248,13 +5289,13 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .cwd-dw{font-size:12px;font-weight:600;color:var(--text-3);}
 [data-layout="mobile"] .cwd-n{font-size:11.5px;color:var(--text-3);margin-left:auto;}
 [data-layout="mobile"] .cwd-head .cal-add{
-  position:static;width:28px;height:28px;border-radius:50%;
+  position:static;width:32px;height:32px;border-radius:50%;
   display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-2);
 }
 [data-layout="mobile"] .cwd-tasks{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
 [data-layout="mobile"] .cwd-task{
-  display:flex;align-items:center;gap:8px;width:100%;min-height:34px;
-  padding:6px 9px;border-radius:9px;background:var(--surface-sunken);
+  display:flex;align-items:center;gap:8px;width:100%;min-height:40px;
+  padding:8px 10px;border-radius:9px;background:var(--surface-sunken);
   text-align:left;font-size:12.5px;color:var(--text);
 }
 [data-layout="mobile"] .cwd-task .cbar{width:3px;height:18px;border-radius:2px;background:var(--border-strong);flex:0 0 auto;}
@@ -5333,6 +5374,20 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .th-grid span{font-size:11px;opacity:.82;}
 [data-layout="mobile"] .th-grid .danger b{color:#FEE4E2;}
 [data-layout="mobile"] .th-grid .warn b{color:#FEF0C7;}
+[data-layout="mobile"] .th-note{margin-top:10px;font-size:11px;line-height:1.5;opacity:.82;}
+
+/* 团队视图统计区间：只作用于完成率、工时与环比；待办和风险始终是当前快照 */
+[data-layout="mobile"] .team-range{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+[data-layout="mobile"] .team-range .tr-btn{
+  padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);
+  color:var(--text-2);font:inherit;font-size:12.5px;font-weight:600;
+}
+[data-layout="mobile"] .team-range .tr-btn[aria-pressed="true"]{
+  border-color:var(--primary);background:var(--primary-soft);color:var(--primary-fg);
+}
+[data-layout="mobile"] .team-range .tr-dates{
+  margin-left:auto;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;
+}
 
 [data-layout="mobile"] .team-card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);
@@ -5431,10 +5486,57 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .toolbar-right{margin-left:0;flex-wrap:wrap;gap:8px;}
 [data-layout="mobile"] .duo{grid-template-columns:1fr;}
 
+/* ===================== 需求池：列表模式改卡片 ===================== */
+[data-layout="mobile"] .dem-mob-list{display:flex;flex-direction:column;gap:10px;}
+[data-layout="mobile"] .dem-mob-group{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .dem-mob-group-head{
+  display:flex;width:100%;align-items:center;gap:8px;
+  padding:2px 2px 4px;border:0;background:transparent;color:var(--text-2);
+  font:inherit;font-size:12.5px;text-align:left;
+}
+[data-layout="mobile"] .dem-mob-cards{display:flex;flex-direction:column;gap:8px;}
+[data-layout="mobile"] .dem-mob-list .bkl-card{padding:14px;}
+
+/* ===================== 测试用例：筛选收进面板 ===================== */
+[data-layout="mobile"] .tc-filter-toggle{display:inline-flex;}
+[data-layout="mobile"] .tc-actionbar{order:1;gap:6px;}
+[data-layout="mobile"] .tc-actionbar #btnCaseCsvOut,
+[data-layout="mobile"] .tc-actionbar #btnCaseCsvIn,
+[data-layout="mobile"] .tc-actionbar [data-view-fullscreen]{display:none !important;}
+[data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 auto;min-width:0;max-width:150px;}
+[data-layout="mobile"] .tc-filterbar{display:none;}
+[data-layout="mobile"] .tc-filterbar.is-open{
+  display:flex;flex:1 0 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
+  padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
+}
+[data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
+[data-layout="mobile"] .tc-filterbar.is-open #tcViewsBtn,
+[data-layout="mobile"] .tc-filterbar.is-open #tcBug{width:auto;align-self:flex-start;justify-content:flex-start;}
+[data-layout="mobile"] .tc-filterbar.is-open .tc-search,
+[data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
+[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg{width:100%;}
+[data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg button{flex:1 1 0;min-width:0;padding:0 2px;font-size:11.5px;}
+
+/* ===================== 版本阶段：时间轴竖排、表格本地滚动 ===================== */
+[data-layout="mobile"] .phase-tl{flex-wrap:wrap;gap:6px;padding:6px 0 2px;}
+[data-layout="mobile"] .phase-tl-head{flex-wrap:wrap;align-items:flex-start;}
+[data-layout="mobile"] .phase-tl-head .meta-right{flex:1 0 100%;margin-left:0;line-height:1.5;}
+[data-layout="mobile"] .phase-bar{flex:1 0 100%;flex-direction:column;height:auto;margin:0;gap:6px;}
+[data-layout="mobile"] .phase-bar > *{width:100% !important;flex:0 0 auto;min-height:34px;}
+[data-layout="mobile"] .pseg{white-space:normal;text-align:center;line-height:1.35;padding:6px 8px;border-radius:var(--r-sm) !important;}
+[data-layout="mobile"] .plaunch{flex:0 0 2px;width:100%;margin:20px 0 16px;}
+[data-layout="mobile"] .plaunch::after{top:-18px;}
+[data-layout="mobile"] .tl-node{flex:1 1 0;min-width:0;}
+
+/* 平板：宽表在容器内滚动，指标值允许换行，避免被 390/768 两档断点夹住裁切 */
+[data-layout="tablet"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+[data-layout="tablet"] .pcell b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3;}
+
 /* 甘特图允许表格内横向滚动；页面本身不滚 */
 [data-layout="mobile"] .gantt-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
 [data-layout="mobile"] .gantt-grid{min-width:max-content;}
 [data-layout="mobile"] .access-matrix{overflow-x:auto;}
+[data-layout="mobile"] .tbl-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 
 /* 测试用例视图：行内操作区整行左排；步骤行改网格，操作/预期各占整行 */
 [data-layout="mobile"] .tc-row{flex-wrap:wrap;gap:8px;padding:12px;}
@@ -6180,7 +6282,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       <section class="view" id="view-phase" aria-label="版本">
         <div class="view-page" id="phasePage">
           <div class="page-toolbar">
-            <span class="toolbar-title">版本</span>
             <span class="toolbar-meta" id="phaseMeta"></span>
             <span class="toolbar-right">
               <select id="phaseReq" class="mini-select" aria-label="选择项目"></select>
@@ -6235,7 +6336,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       <section class="view" id="view-demands" aria-label="需求池">
         <div class="view-page" id="demandsPage">
           <div class="page-toolbar">
-            <span class="toolbar-title">需求池</span>
             <span class="toolbar-meta" id="demandsMeta"></span>
             <span class="toolbar-right">
               <div class="seg mini" id="demandModeSeg" role="group" aria-label="需求池展示形式">
@@ -6347,7 +6447,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
         <!-- 列表页：按项目分级，可展开收起 -->
         <div class="view-page reqdoc-listpage" id="reqDocListPage">
           <div class="page-toolbar">
-            <span class="toolbar-title">文档</span>
             <span class="reqdoc-filter" id="reqDocProjFilter" hidden>
               <span class="rpf-label">项目：</span><span id="reqDocProjFilterName"></span>
               <button class="rpf-clear" type="button" id="reqDocProjFilterClear" aria-label="清除项目筛选" title="清除项目筛选">&times;</button>
@@ -6659,7 +6758,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       <section class="view" id="view-testcases" aria-label="测试">
         <div class="view-page tc-page">
           <div class="page-toolbar">
-            <span class="toolbar-title">测试</span>
             <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试模块使用说明"></button>
             <span class="seg mini" id="tcModeSeg" role="group" aria-label="测试视图">
               <button type="button" data-tc-mode="cases" aria-pressed="true">用例</button>
@@ -6669,7 +6767,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
             </span>
             <span class="toolbar-meta" id="tcMeta"></span>
             <span class="toolbar-right">
-              <span class="tc-filterbar">
+              <span class="tc-filterbar" id="tcFilterBar">
                 <span class="views-menu-wrap">
                   <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
                   <div class="menu popover" id="tcViewsMenu" hidden></div>
@@ -6688,6 +6786,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 </div>
               </span>
               <span class="tc-actionbar">
+                <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
                 <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
                 <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
@@ -6878,7 +6977,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       <section class="view" id="view-branches" aria-label="分支">
         <div class="view-page br-page">
           <div class="page-toolbar">
-            <span class="toolbar-title">分支</span>
             <span class="toolbar-meta" id="branchMeta"></span>
             <span class="toolbar-right">
               <span class="seg mini" id="branchModeSeg" role="group" aria-label="分支视图">
@@ -7098,15 +7196,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           <div class="panel">
             <div class="panel-head">
               <h3>每周新增 / 完成</h3>
-              <span class="meta-right row row-gap" style="gap:6px">
-                <span>近</span>
-                <select id="statsWeeks" class="mini-select" aria-label="统计周数">
-                  <option value="4">4 周</option>
-                  <option value="8" selected>8 周</option>
-                  <option value="12">12 周</option>
-                  <option value="26">26 周</option>
-                </select>
-              </span>
+              <span class="meta-right" id="statsRange0">近 8 周</span>
             </div>
             <div id="chartWeeks"></div>
           </div>
@@ -7808,7 +7898,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
   <div class="tabbar-pill">
     <button class="tab" type="button" data-tab="mine" aria-label="我的工作">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="4"/><path d="M6.9 10.2 9.2 12.5 13.2 8.1"/></svg>
-      <span>待办</span>
+      <span>我的工作</span>
     </button>
     <button class="tab" type="button" data-tab="board" aria-label="工作项">
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="3.6" width="3.8" height="12.8" rx="1.4"/><rect x="8.2" y="3.6" width="3.8" height="8.6" rx="1.4"/><rect x="13.4" y="3.6" width="3.6" height="11" rx="1.4"/></svg>
@@ -9793,6 +9883,12 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
     plus: function (s) { return svg(s, '<path d="M10 4.4v11.2M4.4 10h11.2"/>', 1.8); },
     minus: function (s) { return svg(s, '<path d="M4.4 10h11.2"/>', 1.8); },
     search: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>'); },
+    /* 图片预览：放大镜 + 加减号 */
+    zoomIn: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4M8.8 6.6v4.4"/>'); },
+    zoomOut: function (s) { return svg(s, '<circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/><path d="M6.6 8.8h4.4"/>'); },
+    /* 旋转 90°：与 refresh 同形的左右两支 */
+    rotateLeft: function (s) { return svg(s, '<path d="M3.6 10a6.4 6.4 0 1 0 1.9-4.6"/><path d="M3.4 3.6v4.2h4.2"/>'); },
+    rotateRight: function (s) { return svg(s, '<path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/>'); },
     filter: function (s) { return svg(s, '<path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/>'); },
     sort: function (s) { return svg(s, '<path d="M6 4.4v11.2M6 15.6 3.6 13.2M6 15.6l2.4-2.4M14 15.6V4.4M14 4.4l-2.4 2.4M14 4.4l2.4 2.4"/>'); },
     close: function (s) { return svg(s, '<path d="M3 3l14 14M17 3 3 17"/>', 1.8); },
@@ -11111,19 +11207,39 @@ if($("btnRail")) $("btnRail").addEventListener("click", toggleRail);
 })();
 
 /* ---- core/att-preview.js ---- */
-/* core/att-preview · 附件 md/txt/doc/docx 在线预览（md 用 marked 渲染，doc/docx 走服务端转 HTML 放入沙箱 iframe） */
+/* core/att-preview · 附件在线预览弹框
+   图片：灯箱舞台，支持放大缩小（按钮/滚轮/双击）、左右旋转 90°、复位、放大后拖拽平移；
+   PDF：浏览器内置查看器（沙箱 iframe 里插件不渲染，所以单独用无 sandbox 的 frame）；
+   md/txt/doc/docx：marked + DOMPurify / 纯文本 / 服务端转 HTML 放入沙箱 iframe；
+   xlsx/xls 不在此处，走 core/sheet-viewer.js 的 Univer 表格。 */
 
 
-var rootEl = null, headName = null, headMeta = null, bodyEl = null;
-var frameEl = null, textEl = null, statusEl = null;
-var current = null; /* { attachment } */
+var rootEl = null, headName = null, headMeta = null, bodyEl = null, toolsEl = null, zoomEl = null;
+var frameEl = null, pdfEl = null, imgEl = null, stageEl = null, textEl = null, statusEl = null;
+var current = null; /* { attachment, kind } */
 var mdLibPromise = null;
 
-var PREVIEW_RE = /\.(md|markdown|txt|docx?)$/i;
+/* 图片变换：scale 以「适配窗口」为 1 倍，tx/ty 为屏幕位移（px） */
+var MIN_ZOOM = 0.2, MAX_ZOOM = 8, WHEEL_STEP = 1.15, BTN_STEP = 1.25;
+var view = { scale: 1, rot: 0, tx: 0, ty: 0 };
+var animTimer = null;
+
+var IMAGE_RE = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+var PDF_RE = /\.pdf$/i;
+var DOC_RE = /\.(md|markdown|txt|docx?)$/i;
+
+/** 附件的预览方式：image / pdf / doc / none（xlsx/xls 由 sheet-viewer 处理） */
+function kindOf(filename){
+  var f = String(filename || "");
+  if(IMAGE_RE.test(f)) return "image";
+  if(PDF_RE.test(f)) return "pdf";
+  if(DOC_RE.test(f)) return "doc";
+  return "none";
+}
 
 /** 是否支持在线预览（xlsx/xls 走 sheet-viewer，不在这里） */
 function previewable(filename){
-  return PREVIEW_RE.test(String(filename || ""));
+  return kindOf(filename) !== "none";
 }
 
 function downloadUrl(id){
@@ -11165,8 +11281,21 @@ function ensureDom(){
     ".att-modal-head .ap-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
     ".att-modal-head .ap-meta{font-size:12px;color:var(--text-2);white-space:nowrap;}",
     ".att-modal-head .ap-sp{flex:1;}",
+    /* 图片工具栏：缩小 / 百分比 / 放大 / 左转 / 右转 / 复位，仅图片预览时出现 */
+    ".att-modal-head .ap-tools{display:flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--bg);}",
+    ".att-modal-head .ap-tools[hidden]{display:none;}",
+    ".ap-tool{width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:var(--r-xs);background:none;color:var(--text-2);cursor:pointer;}",
+    ".ap-tool:hover{background:var(--surface-hover);color:var(--text);}",
+    ".ap-tool:disabled{opacity:.4;cursor:default;background:none;color:var(--text-3);}",
+    ".ap-zoom{min-width:46px;text-align:center;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;cursor:pointer;user-select:none;}",
+    ".ap-zoom:hover{color:var(--text);}",
     ".att-modal-body{flex:1;position:relative;min-height:0;}",
     ".att-modal-body iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;}",
+    /* 图片舞台：overflow 裁掉放大后的溢出部分，平移靠 transform 位移 */
+    ".att-img-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;cursor:grab;touch-action:none;}",
+    ".att-img-stage.dragging{cursor:grabbing;}",
+    ".att-img-stage img{max-width:100%;max-height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none;box-shadow:var(--shadow-md);transform-origin:center center;}",
+    ".att-img-stage img.ap-anim{transition:transform .16s ease;}",
     ".att-modal-status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:13px;color:var(--text-2);white-space:pre-wrap;}",
     ".att-md-body{position:absolute;inset:0;overflow:auto;padding:28px 40px;background:var(--surface);color:var(--text);font-size:14px;line-height:1.75;}",
     ".att-md-body h1,.att-md-body h2,.att-md-body h3,.att-md-body h4{margin:1.2em 0 .5em;line-height:1.35;}",
@@ -11198,11 +11327,21 @@ function ensureDom(){
       '<span class="ap-name"></span>' +
       '<span class="ap-meta"></span>' +
       '<span class="ap-sp"></span>' +
+      '<span class="ap-tools" hidden>' +
+        '<button type="button" class="ap-tool ap-zoom-out" title="缩小（-）" aria-label="缩小">' + icon("zoomOut", 15) + '</button>' +
+        '<span class="ap-zoom" title="恢复适配窗口">100%</span>' +
+        '<button type="button" class="ap-tool ap-zoom-in" title="放大（+）" aria-label="放大">' + icon("zoomIn", 15) + '</button>' +
+        '<button type="button" class="ap-tool ap-rot-l" title="向左旋转 90°（Shift+R）" aria-label="向左旋转">' + icon("rotateLeft", 15) + '</button>' +
+        '<button type="button" class="ap-tool ap-rot-r" title="向右旋转 90°（R）" aria-label="向右旋转">' + icon("rotateRight", 15) + '</button>' +
+        '<button type="button" class="ap-tool ap-reset" title="复位（0）" aria-label="复位">' + icon("refresh", 15) + '</button>' +
+      '</span>' +
       '<button type="button" class="btn sm ap-dl" title="下载原文件"></button>' +
       '<button type="button" class="btn sm ap-close" title="关闭（Esc）"></button>' +
     '</div>' +
     '<div class="att-modal-body">' +
       '<iframe hidden sandbox=""></iframe>' +
+      '<iframe class="ap-pdf" hidden></iframe>' +
+      '<div class="att-img-stage" hidden><img alt="" draggable="false" /></div>' +
       '<div class="att-md-body" hidden></div>' +
       '<div class="att-plain-body" hidden></div>' +
       '<div class="att-modal-status" hidden></div>' +
@@ -11211,8 +11350,13 @@ function ensureDom(){
 
   headName = rootEl.querySelector(".ap-name");
   headMeta = rootEl.querySelector(".ap-meta");
+  toolsEl = rootEl.querySelector(".ap-tools");
+  zoomEl = rootEl.querySelector(".ap-zoom");
   bodyEl = rootEl.querySelector(".att-modal-body");
-  frameEl = rootEl.querySelector("iframe");
+  frameEl = rootEl.querySelector("iframe:not(.ap-pdf)");
+  pdfEl = rootEl.querySelector(".ap-pdf");
+  stageEl = rootEl.querySelector(".att-img-stage");
+  imgEl = stageEl.querySelector("img");
   textEl = rootEl.querySelector(".att-md-body");
   statusEl = rootEl.querySelector(".att-modal-status");
 
@@ -11222,10 +11366,137 @@ function ensureDom(){
     if(current) window.open(downloadUrl(current.attachment.id), "_blank", "noopener");
   });
   rootEl.querySelector(".ap-close").addEventListener("click", closeAttPreview);
+
+  rootEl.querySelector(".ap-zoom-out").addEventListener("click", function(){ zoomBy(1 / BTN_STEP, true); });
+  rootEl.querySelector(".ap-zoom-in").addEventListener("click", function(){ zoomBy(BTN_STEP, true); });
+  rootEl.querySelector(".ap-rot-l").addEventListener("click", function(){ rotateBy(-90); });
+  rootEl.querySelector(".ap-rot-r").addEventListener("click", function(){ rotateBy(90); });
+  rootEl.querySelector(".ap-reset").addEventListener("click", resetView);
+  zoomEl.addEventListener("click", resetView);
+
+  /* 滚轮缩放；双击在「适配窗口」与「实际像素」之间切换 */
+  stageEl.addEventListener("wheel", function(e){
+    if(!isImageMode()) return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP, false);
+  }, { passive: false });
+  stageEl.addEventListener("dblclick", function(e){
+    if(!isImageMode()) return;
+    e.preventDefault();
+    toggleActual();
+  });
+  bindPan();
+
   document.addEventListener("keydown", function(e){
     if(rootEl.hidden) return;
-    if(e.key === "Escape"){ e.stopPropagation(); closeAttPreview(); }
+    if(e.key === "Escape"){ e.stopPropagation(); closeAttPreview(); return; }
+    if(!isImageMode() || e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if(t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || "")) return;
+    if(e.key === "+" || e.key === "="){ e.preventDefault(); zoomBy(BTN_STEP, true); }
+    else if(e.key === "-" || e.key === "_"){ e.preventDefault(); zoomBy(1 / BTN_STEP, true); }
+    else if(e.key === "0"){ e.preventDefault(); resetView(); }
+    else if(e.key === "r" || e.key === "R"){ e.preventDefault(); rotateBy(e.shiftKey ? -90 : 90); }
   }, true);
+}
+
+function isImageMode(){
+  return !!current && current.kind === "image" && !!rootEl && !rootEl.hidden;
+}
+
+/** 按住拖动平移：放大或旋转后看图的其他部位；缩放回 1 倍时自动归位 */
+function bindPan(){
+  var dragging = false, startX = 0, startY = 0, baseX = 0, baseY = 0;
+  stageEl.addEventListener("pointerdown", function(e){
+    if(!isImageMode() || e.button !== 0) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    baseX = view.tx; baseY = view.ty;
+    stageEl.classList.add("dragging");
+    try{ stageEl.setPointerCapture(e.pointerId); }catch(err){ /* 不支持指针捕获时降级为不可拖拽 */ }
+    e.preventDefault();
+  });
+  stageEl.addEventListener("pointermove", function(e){
+    if(!dragging) return;
+    view.tx = baseX + (e.clientX - startX);
+    view.ty = baseY + (e.clientY - startY);
+    applyView(false);
+  });
+  function end(e){
+    if(!dragging) return;
+    dragging = false;
+    stageEl.classList.remove("dragging");
+    try{ stageEl.releasePointerCapture(e.pointerId); }catch(err){ /* 同上 */ }
+  }
+  stageEl.addEventListener("pointerup", end);
+  stageEl.addEventListener("pointercancel", end);
+}
+
+/* ---------- 图片视图状态 ---------- */
+
+function applyView(animate){
+  if(view.scale <= 1.001){ view.tx = 0; view.ty = 0; }
+  imgEl.style.transform = "translate(" + view.tx + "px," + view.ty + "px) rotate(" + view.rot + "deg) scale(" + view.scale + ")";
+  zoomEl.textContent = Math.round(view.scale * 100) + "%";
+  rootEl.querySelector(".ap-zoom-out").disabled = view.scale <= MIN_ZOOM + 0.001;
+  rootEl.querySelector(".ap-zoom-in").disabled = view.scale >= MAX_ZOOM - 0.001;
+  if(!animate) return;
+  imgEl.classList.add("ap-anim");
+  clearTimeout(animTimer);
+  animTimer = setTimeout(function(){ imgEl.classList.remove("ap-anim"); }, 190);
+}
+
+function zoomBy(factor, animate){
+  var next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale * factor));
+  if(Math.abs(next - view.scale) < 0.0001) return;
+  view.scale = next;
+  applyView(animate);
+}
+
+function rotateBy(deg){
+  view.rot = (view.rot + deg + 36000) % 360;
+  applyView(true);
+}
+
+function resetView(){
+  view.scale = 1; view.rot = 0; view.tx = 0; view.ty = 0;
+  applyView(true);
+}
+
+/** 无动画复位：打开与关闭时用，避免复位过程被看到 */
+function resetSilently(){
+  view.scale = 1; view.rot = 0; view.tx = 0; view.ty = 0;
+  imgEl.style.transform = "";
+  zoomEl.textContent = "100%";
+  rootEl.querySelector(".ap-zoom-out").disabled = false;
+  rootEl.querySelector(".ap-zoom-in").disabled = false;
+}
+
+/** 双击：适配窗口与实际像素切换（实际倍率按图片未缩放时的显示宽度换算） */
+function toggleActual(){
+  if(view.scale > 1.001 || view.rot !== 0){ resetView(); return; }
+  var laid = imgEl.clientWidth || imgEl.offsetWidth;
+  var actual = laid > 0 ? imgEl.naturalWidth / laid : 1;
+  view.scale = Math.min(MAX_ZOOM, Math.max(1.05, actual));
+  applyView(true);
+}
+
+function showImage(att){
+  resetSilently();
+  toolsEl.hidden = false;
+  stageEl.hidden = false;
+  headMeta.textContent = "图片";
+  imgEl.onload = function(){
+    setStatus(null);
+    headMeta.textContent = "图片 · " + imgEl.naturalWidth + "×" + imgEl.naturalHeight;
+    applyView(false);
+  };
+  imgEl.onerror = function(){
+    stageEl.hidden = true;
+    toolsEl.hidden = true;
+    setStatus("图片预览加载失败，可下载后本地打开");
+  };
+  imgEl.src = downloadUrl(att.id);
 }
 
 function setStatus(text){
@@ -11236,9 +11507,12 @@ function setStatus(text){
 
 function hideBody(){
   frameEl.hidden = true;
+  pdfEl.hidden = true;
+  stageEl.hidden = true;
   textEl.hidden = true;
   var plain = rootEl.querySelector(".att-plain-body");
   plain.hidden = true;
+  toolsEl.hidden = true;
 }
 
 function fetchText(url){
@@ -11310,32 +11584,43 @@ function openAttPreview(opts){
   var att = opts && opts.attachment;
   if(!att || !att.id) return;
   ensureDom();
-  current = { attachment: att };
+  var kind = kindOf(att.filename);
+  current = { attachment: att, kind: kind };
   headName.textContent = att.filename || "附件预览";
   headMeta.textContent = "加载中…";
   hideBody();
   setStatus("正在加载预览…");
+  resetSilently();
   rootEl.hidden = false;
   document.body.style.overflow = "hidden";
 
   var ext = (String(att.filename || "").split(".").pop() || "").toLowerCase();
-  if(ext === "md" || ext === "markdown"){
+  if(kind === "image"){
+    showImage(att);
+  }else if(kind === "pdf"){
+    pdfEl.hidden = false;
+    headMeta.textContent = "PDF";
+    setStatus(null);
+    pdfEl.src = downloadUrl(att.id);
+  }else if(kind === "doc" && (ext === "md" || ext === "markdown")){
     textEl.hidden = false;
     headMeta.textContent = "Markdown";
     fetchText(downloadUrl(att.id)).then(showMarkdown).catch(function(ex){
       setStatus(ex.message || "预览加载失败");
     });
-  }else if(ext === "txt"){
+  }else if(kind === "doc" && ext === "txt"){
     var plain = rootEl.querySelector(".att-plain-body");
     plain.hidden = false;
     headMeta.textContent = "文本";
     fetchText(downloadUrl(att.id)).then(showPlain).catch(function(ex){
       setStatus(ex.message || "预览加载失败");
     });
-  }else{
+  }else if(kind === "doc"){
     frameEl.hidden = false;
     headMeta.textContent = "Word 文档";
     showDocPreview(att);
+  }else{
+    setStatus("该文件类型暂不支持在线预览，请下载后用本地应用打开");
   }
 }
 
@@ -11343,7 +11628,13 @@ function closeAttPreview(){
   if(!rootEl || rootEl.hidden) return;
   rootEl.hidden = true;
   current = null;
+  toolsEl.hidden = true;
   frameEl.removeAttribute("srcdoc");
+  pdfEl.removeAttribute("src");
+  imgEl.onload = null;
+  imgEl.onerror = null;
+  imgEl.removeAttribute("src");
+  resetSilently();
   textEl.innerHTML = "";
   var plain = rootEl.querySelector(".att-plain-body");
   plain.textContent = "";
@@ -12078,14 +12369,16 @@ function demandMenuItems(d){
   out.push({ act: "del", label: "删除", danger: true });
   return out;
 }
-function demandActs(d){
+function demandActs(d, opts){
+  /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为普通按钮，避免整屏都是主色 */
+  var cls = (opts && opts.subtle) ? "btn sm" : "btn sm primary";
   var acts = "";
   if(isOwner()){
     if(d.status === "review"){
-      acts += '<button class="btn sm primary" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
+      acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
     }
     if(d.status === "pass"){
-      acts += '<button class="btn sm primary" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
+      acts += '<button class="' + cls + '" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
     }
     if(d.status === "rej"){
       acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
@@ -12128,9 +12421,10 @@ function dragHint(status){
   if(status === "plan") return "可拖回「已通过」撤销排期";
   return "拖到其他列流转状态";
 }
-function cardHTML(d){
+function cardHTML(d, opts){
   var acts = demandActs(d);
-  var drag = isOwner()
+  /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
+  var drag = (isOwner() && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
   return '<div class="bkl-card"' + drag + '>'
@@ -12547,6 +12841,30 @@ function initDemSmartBar(){
   syncDemControls();
 }
 
+function demandMobileList(rows, groups){
+  function cards(list){
+    return list.map(function(d){ return cardHTML(d, { noDrag: true }); }).join("");
+  }
+  var body;
+  if(demSmart.group === "none"){
+    body = '<div class="dem-mob-cards">' + cards(rows) + '</div>';
+  }else{
+    body = groups.map(function(g){
+      var collapsed = !!demSmart.collapsed["$" + g.key];
+      return '<section class="dem-mob-group">'
+        + '<button type="button" class="dem-group-toggle dem-mob-group-head" data-dem-group-toggle="' + esc(g.key) + '" aria-expanded="' + (!collapsed) + '">'
+        + '<span class="dem-group-caret' + (collapsed ? '' : ' open') + '">▶</span>'
+        + '<span class="dem-group-name">' + esc(g.label) + '</span>'
+        + '<span class="dem-group-count">' + g.rows.length + ' 项</span></button>'
+        + (collapsed ? '' : '<div class="dem-mob-cards">' + cards(g.rows) + '</div>')
+        + '</section>';
+    }).join("");
+  }
+  var more = demandHasMore
+    ? '<button class="bkl-more" type="button" data-dem-more="table">加载更多（已加载 ' + demands.length + ' / 共 ' + demandTotal + ' 条）</button>'
+    : "";
+  return '<div class="dem-mob-list">' + body + more + '</div>';
+}
 function renderDemandTable(){
   var rows = demViewRows(), groups = demGroups();
   var hasCond = demFilterCount() > 0 || demSmart.preset !== "all";
@@ -12565,13 +12883,18 @@ function renderDemandTable(){
     if(hasCond) bindRetry(demandBody, function(){ activateDemPreset("all"); });
     return;
   }
+  /* 手机没有横向空间容纳 8 列表格：列表模式改用看板同款需求卡，字段按卡片的标签行折叠 */
+  if(isMobile()){
+    demandBody.innerHTML = demandMobileList(rows, groups);
+    return;
+  }
   var cols = listPrefs.columns("demand-pool"), labels = listPrefs.labels("demand-pool");
   var numCols = { expectDate:1, wsjf:1, createdAt:1 };
   function rowHTML(d){
     return '<tr>' + cols.map(function(k){
       return '<td' + (numCols[k] ? ' class="num"' : '') + '>' + demandCell(d, k) + '</td>';
     }).join("")
-      + '<td><span class="demand-row-acts">' + demandActs(d) + '</span></td></tr>';
+      + '<td><span class="demand-row-acts">' + demandActs(d, { subtle: true }) + '</span></td></tr>';
   }
   var colspan = cols.length + 1;
   function groupHead(g){
@@ -13475,7 +13798,9 @@ function reqDocNameById(id){
 function reqDocStatusLabel(s){
   if(s === "active") return "进行中";
   if(s === "done") return "已完成";
-  return "草稿";
+  if(s === "draft") return "草稿";
+  /* 历史数据可能出现非法状态：不冒充草稿，避免与「已发布」徽标自相矛盾 */
+  return "未设置";
 }
 function reqDocProjectName(reqId){
   for(var i = 0; i < rt.reqList.length; i++) if(rt.reqList[i].id === reqId) return rt.reqList[i].name;
@@ -13716,7 +14041,7 @@ function reqDocPlanMove(srcId, targetId, zone){
 function reqDocRowHTML(r, depth, hasChild, collapsed){
   var meta = [esc(docTypeName(r.docType)), esc(r.owner || "—") + " 创建"];
   if(r.createdAt) meta.push(esc(fmtTs(r.createdAt)));
-  if(r.status && r.status !== "draft") meta.push(reqDocStatusLabel(r.status));
+  if(r.status && r.status !== "draft") meta.push("状态：" + reqDocStatusLabel(r.status));
   if(r.taskCount) meta.push(r.doneCount + "/" + r.taskCount + " 工作项");
   var fmt = r.format === "markdown"
     ? '<span class="rr-fmt md">MD</span>'
@@ -17326,6 +17651,11 @@ function renderSmartTabs(){
       '<button class="smart-view-del" type="button" data-list-del="' + esc(id) + '" title="删除视图" aria-label="删除视图：' + esc(v.name) + '">' + icon("close", 11) + '</button></span>';
   }).join("");
   smartTabs.innerHTML = html;
+  /* 计数挂在视图标签行右侧；这行会被整体重绘，所以每次重绘后都重新挂回 */
+  if(listMeta){
+    listMeta.classList.add("smart-view-meta");
+    smartTabs.appendChild(listMeta);
+  }
 }
 function syncSmartControls(){
   if(smartGroup) smartGroup.value = smart.group;
@@ -17434,6 +17764,13 @@ function initSmartTable(){
   var sortLabel = listSort.closest("label");
   smartBar.querySelector(".smart-list-sort").appendChild(sortLabel);
   sortLabel.classList.add("smart-view-control");
+  /* 合并控制层：计数并入视图标签行、显示字段并入工具行，去掉原来单独的一层 list-toolbar */
+  var listColsBtn = $("btnListColumns");
+  if(listColsBtn){
+    var spacer = smartBar.querySelector(".smart-view-spacer");
+    if(spacer) spacer.parentNode.insertBefore(listColsBtn, spacer);
+  }
+  toolbar.hidden = true;
   listSort.innerHTML = '<option value="default">默认顺序（沿用服务端）</option>' +
     '<option value="due">按截止日期</option><option value="priority">按优先级</option>' +
     '<option value="estimate">按预估工时</option><option value="actual">按实际工时</option>' +
@@ -19911,12 +20248,18 @@ function renderAttachments(list){
     var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
     var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
     var canPrev = previewable(a.filename);
+    /* 可预览的附件点缩略图/文件名直接开弹框，表格开 Univer，其余（zip、ppt）仍走新标签下载 */
+    var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+      : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+    var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+    var isOpen = canPrev || isSheet;
+    var openCls = isOpen ? ' class="att-open"' : "";
     var url = attUrl(a.id);
     var head = isImg
-      ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
-      : '<span class="att-icon">' + esc(extOfName(a.filename).toUpperCase().slice(0,4) || "FILE") + '</span>';
+      ? '<img class="att-thumb' + (isOpen ? " is-open" : "") + '" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy"' + openKey + ' />'
+      : '<span class="att-icon' + (isOpen ? " is-open" : "") + '"' + openKey + '>' + esc(extOfName(a.filename).toUpperCase().slice(0,4) || "FILE") + '</span>';
     return '<div class="attach-item">' + head +
-      '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
+      '<span class="att-name"><a' + openCls + ' href="' + url + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' + esc(a.filename) + '</a></span>' +
       '<span class="att-size">' + fmtSize(a.size) + '</span>' +
       '<span class="att-acts">' +
         (canPrev ? '<button class="icon-btn sm" type="button" data-att-prev="' + esc(a.id) + '" title="在线预览" aria-label="在线预览">' + icon("eye", 14) + '</button>' : '') +
@@ -21470,11 +21813,38 @@ function hm(minutes){
   var h = (Number(minutes) || 0) / 60;
   return (Math.round(h * 10) / 10) + "h";
 }
-function teamWeekRange(){
-  var dow = (rt.TODAY.getDay() + 6) % 7;
-  var from = addDays(rt.TODAY, -dow);
-  var to = addDays(from, 6);
-  return {from: iso(from), to: iso(to)};
+/* 团队视图统计区间：区间只作用于完成率、工时、环比这类统计量；
+   待办（待评审/待验收/待合并）与风险始终是「此刻」的快照，见 renderTeam 里的「截止此刻」标注。 */
+var TEAM_RANGE_KEYS = ["week", "month", "days30"];
+var TEAM_RANGE_LABELS = {week: "本周", month: "本月", days30: "近 30 天"};
+function teamRangeKey(){
+  var k = null;
+  try{ k = localStorage.getItem("ds.teamRange"); }catch(e){ /* 受限环境回落本周 */ }
+  return TEAM_RANGE_KEYS.indexOf(k) >= 0 ? k : "week";
+}
+function teamRange(){
+  var key = teamRangeKey(), t = rt.TODAY, from, to;
+  if(key === "month"){
+    from = new Date(t.getFullYear(), t.getMonth(), 1);
+    to = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  }else if(key === "days30"){
+    to = t;
+    from = addDays(t, -29);
+  }else{
+    var dow = (t.getDay() + 6) % 7;
+    from = addDays(t, -dow);
+    to = addDays(from, 6);
+  }
+  return {key: key, label: TEAM_RANGE_LABELS[key], from: iso(from), to: iso(to)};
+}
+function teamRangeBarHTML(range){
+  return '<div class="team-range" role="group" aria-label="统计区间">'
+    + TEAM_RANGE_KEYS.map(function(k){
+        return '<button type="button" class="tr-btn' + (k === range.key ? " on" : "") + '" data-team-range="' + k + '"'
+          + ' aria-pressed="' + (k === range.key) + '">' + TEAM_RANGE_LABELS[k] + '</button>';
+      }).join("")
+    + '<span class="tr-dates">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span>'
+    + '</div>';
 }
 function withReqNames(items){
   return (items || []).map(function(t){
@@ -21507,17 +21877,20 @@ function teamSectionError(err, title){
 function renderTeam(opts){
   opts = opts || {};
   syncMineModeUI();
-  if(mineMeta) mineMeta.textContent = "团队视图 · 本周";
+  var mineView = document.getElementById("view-mine");
+  if(mineView) mineView.classList.remove("is-empty");
+  var range = teamRange();
+  if(mineMeta) mineMeta.textContent = "团队视图 · " + range.label;
   if(!mineBody) return;
   /* 刷新途中收到新的进入/刷新请求：只保留尾随一次，避免旧响应覆盖新模式 */
   if(teamLoading){ teamQueued = true; return; }
   if(!opts.silent) mineBody.innerHTML = UI.skeletonRows(6);
   teamLoading = true;
   var seq = ++teamSeq;
-  var range = teamWeekRange();
+  var params = {from: range.from, to: range.to};
   Promise.all([
-    API.get("/api/mobile/team-overview", range),
-    API.get("/api/mobile/workload").catch(function(err){ return {__err: err}; }),
+    API.get("/api/mobile/team-overview", params),
+    API.get("/api/mobile/workload", params).catch(function(err){ return {__err: err}; }),
     API.get("/api/mobile/risks").catch(function(err){ return {__err: err}; })
   ]).then(function(res){
     teamLoading = false;
@@ -21539,25 +21912,26 @@ function renderTeam(opts){
 
     var rate = Math.round((Number(h.doneRate) || 0) * 100);
     var delta = Math.round((Number(h.deltaWeek) || 0) * 100);
-    var html = '<div class="team-panel">' +
+    var html = '<div class="team-panel">' + teamRangeBarHTML(range) +
       '<section class="team-hero">' +
-        '<div class="th-main"><b>' + rate + '%</b><span>本周完成率</span>' +
-          '<em class="' + (delta >= 0 ? "up" : "down") + '">' +
+        '<div class="th-main"><b>' + rate + '%</b><span>' + range.label + '完成率</span>' +
+          '<em class="' + (delta >= 0 ? "up" : "down") + '" title="与前一等长周期比较">' +
             (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
         '<div class="th-grid">' +
           '<div><b>' + (h.doneCount || 0) + '/' + (h.planCount || 0) + '</b><span>完成 / 计划</span></div>' +
           '<button type="button" class="danger" data-team-risk="over" title="查看逾期工作项"><b>' + (h.overdue || 0) + '</b><span>已逾期</span></button>' +
           '<button type="button" class="warn" data-team-risk="blocked" title="查看被阻塞工作项"><b>' + (h.blocked || 0) + '</b><span>被阻塞</span></button>' +
         '</div>' +
+        '<div class="th-note">完成率与工时按「' + esc(range.label) + '」统计；逾期、阻塞与待处理是当前快照，不随区间变化。</div>' +
       '</section>' +
-      '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>' +
+      '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">截止此刻</span></div>' +
         '<div class="team-pending">' +
           '<button type="button" data-team-go="demands"><b>' + (pending.review || 0) + '</b><span>待评审</span></button>' +
           '<button type="button" data-team-go="branches"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
           '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
         '</div></section>';
 
-    html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项</span></div>' +
+    html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项 · 截止此刻</span></div>' +
       (riskList.length ? '<div class="team-risks">' + riskList.map(function(r){
         var lv = r.level === "high" ? "high" : "mid";
         return '<div class="team-risk ' + lv + '" data-team-task="' + esc(r.taskId) + '" role="button" tabindex="0">' +
@@ -21566,14 +21940,15 @@ function renderTeam(opts){
             '<span>' + esc(r.ownerName || "未指派") + ' · ' + esc(r.reason || "") + '</span></div>' +
           (r.dayCount ? '<span class="tr-days">' + r.dayCount + ' 天</span>' : '') +
         '</div>';
-      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"本周没有风险工作项", compact:true})) +
+      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"此刻没有风险工作项", compact:true})) +
       '</section>';
 
     if(workload.__err){
       html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3></div>' + teamSectionError(workload.__err, "成员负载不可见") + '</section>';
     } else {
       var members = workload.members || [];
-      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">本周计时 / 周容量</span></div>' +
+      var capDays = Number(workload.rangeWorkdays) || 0;
+      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">' + range.label + '计时 / ' + capDays + ' 个工作日容量</span></div>' +
         (members.length ? '<div class="team-load">' + members.map(function(m){
           var pct = Math.round((Number(m.percent) || 0) * 100);
           var cls = pct > 100 ? "over" : (pct >= 90 ? "near" : "");
@@ -21582,13 +21957,22 @@ function renderTeam(opts){
             '<div class="tl-bar"><i class="' + cls + '" style="width:' + Math.min(pct, 100) + '%"></i></div>' +
             '<span class="tl-pct ' + cls + '">' + pct + '%</span>' +
           '</button>';
-        }).join("") + '</div>' : UI.emptyState({icon:"inbox", title:"本周还没有成员计时", compact:true})) +
+        }).join("") + '</div>' : UI.emptyState({icon:"inbox", title:"该区间还没有成员计时", compact:true})) +
         '</section>';
     }
     html += '</div>';
     mineBody.innerHTML = html;
     var retry = mineBody.querySelector("[data-empty-action]");
     if(retry) retry.addEventListener("click", function(){ renderTeam(); });
+    mineBody.querySelectorAll("[data-team-range]").forEach(function(el){
+      el.addEventListener("click", function(){
+        var key = el.dataset.teamRange;
+        if(key === teamRangeKey()) return;
+        try{ localStorage.setItem("ds.teamRange", key); }catch(e){ /* 受限环境仅本次生效 */ }
+        /* 静默重绘：切区间是常规操作，不该闪一次骨架屏 */
+        renderTeam({silent: true});
+      });
+    });
     mineBody.querySelectorAll("[data-team-task]").forEach(function(el){
       el.addEventListener("click", function(){ openTaskById(el.dataset.teamTask); });
       el.addEventListener("keydown", function(ev){
@@ -21694,6 +22078,9 @@ function renderMine(d, append){
   mineAll.forEach(function(t){ mineCache[t.workspaceId + "|" + t.id] = t; });
   var items = mineFiltered(mineAll);
   var filtering = mineFiltering();
+  /* 空态时分组/排序/空间控件没有可作用的对象，先收起，避免空页面顶着一排设置 */
+  var mineView = document.getElementById("view-mine");
+  if(mineView) mineView.classList.toggle("is-empty", !items.length);
   if(mineMeta){
     var nameOnly = mineNameOnly;
     var loaded = mineAll.length;
@@ -22152,16 +22539,17 @@ function handleNoticeClick(e){
   }
 }
 function noticeFilterHTML(){
-  /* 计数来自服务端全量统计；列表只返回当前筛选的一页，不能拿列表长度当计数 */
+  /* 计数只给「读完能归零」的行动量：未读与未读提及。
+     「全部」是保留期内的历史库存，标记已读也不会让它变小，显示数字反而会被读成待办量，故只留标签。
+     计数来自服务端全量统计；列表只返回当前筛选的一页，不能拿列表长度当计数。 */
   var unread = notifyState.unread || 0;
   var mentions = notifyState.mentions || 0;
-  var total = notifyState.total || 0;
   function tab(key, label, n){
     return '<button class="ap-filter" type="button" data-ap-filter="' + key + '" aria-pressed="' + (rt.noticeFilter === key) + '">'
-      + label + (n ? '<span class="n">' + n + '</span>' : '') + '</button>';
+      + label + (n ? '<span class="n">' + (n > 99 ? "99+" : n) + '</span>' : '') + '</button>';
   }
   return '<div class="ap-filters" role="group" aria-label="通知筛选">'
-    + tab("all", "全部", total) + tab("unread", "未读", unread) + tab("mention", "提及", mentions)
+    + tab("all", "全部") + tab("unread", "未读", unread) + tab("mention", "提及", mentions)
     + '</div>';
 }
 function dayKey(v){
@@ -22201,7 +22589,8 @@ function noticeListHTML(){
     html += '<div class="ap-glabel">未读 ' + unread.length + '</div>' + noticeGroupsHTML(unread);
   }
   if(read.length){
-    html += '<div class="ap-glabel" style="margin-top:6px">已读 ' + read.length + '</div>' + noticeGroupsHTML(read);
+    /* 「已读」是历史，数字既不指向待办也清不掉，标题只作分区用 */
+    html += '<div class="ap-glabel" style="margin-top:6px">已读</div>' + noticeGroupsHTML(read);
   }
   return html;
 }
@@ -22289,8 +22678,8 @@ function loadNoticeList(){
     notifyState.loading = false;
     notifyState.items = (d && d.items) || [];
     if(d && typeof d.unread === "number") notifyState.unread = d.unread;
-    if(d && typeof d.total === "number") notifyState.total = d.total;
-    if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions;
+    if(d && typeof d.total === "number") notifyState.total = d.total; /* 服务端仍返回总量，前端不展示（见 noticeFilterHTML） */
+    if(d && typeof d.mentions === "number") notifyState.mentions = d.mentions; /* 口径：未读的 @ 我的通知数 */
     renderBellBadge();
     updateBellTitle();
     renderAlertPanel();
@@ -30698,7 +31087,6 @@ function applyAnalysisPeriod(v){
   else if(v === "month"){ state.statsWeeks = 4; state.flowDays = 30; }
   else if(v === "days90"){ state.statsWeeks = 26; state.flowDays = 90; }
   else { state.statsWeeks = 8; state.flowDays = 90; }
-  if($("statsWeeks")) $("statsWeeks").value = String(state.statsWeeks);
   if($("flowDays")) $("flowDays").value = String(state.flowDays);
   refreshAnalysisTab(false);
 }
@@ -30714,6 +31102,7 @@ function loadStats(opts){
     $("statsCat").innerHTML = UI.skeletonRows(3);
     $("statsOwner").innerHTML = UI.skeletonRows(3);
   }
+  if($("statsRange0")) $("statsRange0").textContent = "近 " + weeks + " 周";
   $("statsRange1").textContent = "近 " + weeks + " 周 · 全空间";
   $("statsRange2").textContent = "近 " + weeks + " 周 · 全空间";
   API.get("/api/stats", {weeks: weeks}).then(function(d){
@@ -30733,17 +31122,21 @@ function renderStatsHours(c){
   var base = (scope === "all") ? (all === null ? mine : all) : mine;
   var week = (scope === "all") ? (allWeek === null ? mineWeek : allWeek) : mineWeek;
   var doneCount = c.done || 0;
+  /* 0 分钟不是缺失值：直接显示 0m，避免三张卡同时出现「—」像加载失败 */
+  var hoursValue = function(m){ return m ? fmtMinutesShort(m) : "0m"; };
   var cards = [
-    {k:"累计工时", v:fmtMinutesShort(base)},
-    {k:"本周工时", v:fmtMinutesShort(week)},
-    {k:"平均每项", v:fmtMinutesShort(doneCount ? Math.round(base / doneCount) : 0)}
+    {k:"累计工时", v:hoursValue(base)},
+    {k:"本周工时", v:hoursValue(week)},
+    {k:"平均每项", v:(doneCount && base) ? fmtMinutesShort(Math.round(base / doneCount)) : "—"}
   ];
   statsHoursEl.innerHTML = cards.map(function(x){
     return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
   }).join("");
   if(workScopeTag) workScopeTag.textContent = (scope === "all") ? "全空间" : "仅我";
   if(hoursNote){
-    if(scope === "all" && all === null){
+    if(!base && !week){
+      hoursNote.textContent = "还没有计时记录：在工作项详情里开始计时后，这里会显示累计与本周工时。";
+    }else if(scope === "all" && all === null){
       hoursNote.textContent = "服务端暂未返回全空间工时，当前回退显示我的工时（需后端支持）。";
     }else{
       hoursNote.textContent = (scope === "all")
@@ -30817,13 +31210,9 @@ function renderStats(d){
     function(){ return "var(--primary)"; },
     function(x){ return x.count; });
   $("statsOwner").innerHTML = distHTML(d.byOwner,
-    function(x){ return avatarColor(x.name); },
+    function(){ return "var(--primary)"; },
     function(x){ return x.count; });
 }
-$("statsWeeks").addEventListener("change", function(){
-  state.statsWeeks = $("statsWeeks").value;
-  loadStats();
-});
 function enterFlowView(){ loadFlowHealth(); }
 function spanParts(sec){
   var s = Number(sec) || 0;
@@ -31599,7 +31988,7 @@ function phaseTimeline(firstRel){
   }else{
     inner = '<button type="button" class="pseg mvp" style="width:100%" data-drill-scope="phase" data-drill-val="mvp" data-drill-metric="完成工作项" title="查看首版开发阶段的工作项明细">' + mvpLabel + '</button>';
   }
-  return '<div class="panel"><div class="panel-head"><h3>阶段时间轴与投入</h3>'
+  return '<div class="panel"><div class="panel-head phase-tl-head"><h3>阶段时间轴与投入</h3>'
     + '<span class="meta-right">' + (min ? (dateShort(min) + " ~ " + dateShort(end)) : "暂无工作项日期") + ' · 点击色块查看工作项</span></div>'
     + '<div class="phase-tl"><span class="tl-node">' + (min ? dateShort(min) : "—") + '<br>首版启动</span>'
     + '<div class="phase-bar">' + inner + '</div>'
@@ -33897,10 +34286,9 @@ function renderReqList(){
         return bits.length ? '<div class="req-profile">' + bits.join("") + '</div>' : '';
       })() +
       (readOnly ? '' : '<div class="req-taskbar">' +
+        '<button class="req-quick-trigger" type="button" data-req-quick="' + esc(r.id) + '">＋ 新建工作项</button>' +
         '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
           ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
-        '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
-          icon("edit", 14) + '</button>' +
       '</div>') +
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
         '<section class="req-expand-section">' +
@@ -34195,6 +34583,12 @@ reqListEl.addEventListener("click", function(e){
   if(activity){
     var project = rt.reqList.filter(function(r){ return r.id === activity.dataset.reqActivity; })[0];
     activityUI.openDialog(project ? project.name : "项目", "/api/projects/" + encodeURIComponent(activity.dataset.reqActivity) + "/activities");
+    return;
+  }
+  var quick = e.target.closest("[data-req-quick]");
+  if(quick){
+    var qinp = quick.parentNode.querySelector("[data-req-new-input]");
+    if(qinp) qinp.focus();
     return;
   }
   var openNew = e.target.closest("[data-req-open]");
@@ -37442,6 +37836,13 @@ function syncModeUI(){
   syncTcSubnav();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = isWritable() && !cov && !rep && !plan ? "" : "none";
+  /* 手机把筛选收进可展开面板：非用例模式没有筛选内容，入口一并收起 */
+  var filterBtn = $("tcFilterBtn"), filterBar = $("tcFilterBar");
+  if(filterBtn) filterBtn.style.display = tcMode === "cases" ? "" : "none";
+  if(tcMode !== "cases" && filterBar && filterBar.classList.contains("is-open")){
+    filterBar.classList.remove("is-open");
+    if(filterBtn) filterBtn.setAttribute("aria-expanded", "false");
+  }
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
   if(csvOut) csvOut.style.display = tcMode === "cases" && caseReqId ? "" : "none";
   if(csvIn) csvIn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
@@ -38380,6 +38781,14 @@ $("tcBug").addEventListener("click", function(){
   bugOnly = !bugOnly;
   loadCases();
 });
+var tcFilterBtn = $("tcFilterBtn"), tcFilterBar = $("tcFilterBar");
+if(tcFilterBtn && tcFilterBar){
+  tcFilterBtn.addEventListener("click", function(){
+    var open = !tcFilterBar.classList.contains("is-open");
+    tcFilterBar.classList.toggle("is-open", open);
+    tcFilterBtn.setAttribute("aria-expanded", String(open));
+  });
+}
 $("tcSearch").addEventListener("input", function(){
   var value = this.value.trim().toLowerCase();
   if(value === searchText) return;
@@ -38997,6 +39406,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-08 23:37</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-09 00:38</span></div>
 </body>
 </html>

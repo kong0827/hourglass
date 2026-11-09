@@ -284,11 +284,38 @@ function hm(minutes){
   var h = (Number(minutes) || 0) / 60;
   return (Math.round(h * 10) / 10) + "h";
 }
-function teamWeekRange(){
-  var dow = (rt.TODAY.getDay() + 6) % 7;
-  var from = addDays(rt.TODAY, -dow);
-  var to = addDays(from, 6);
-  return {from: iso(from), to: iso(to)};
+/* 团队视图统计区间：区间只作用于完成率、工时、环比这类统计量；
+   待办（待评审/待验收/待合并）与风险始终是「此刻」的快照，见 renderTeam 里的「截止此刻」标注。 */
+var TEAM_RANGE_KEYS = ["week", "month", "days30"];
+var TEAM_RANGE_LABELS = {week: "本周", month: "本月", days30: "近 30 天"};
+function teamRangeKey(){
+  var k = null;
+  try{ k = localStorage.getItem("ds.teamRange"); }catch(e){ /* 受限环境回落本周 */ }
+  return TEAM_RANGE_KEYS.indexOf(k) >= 0 ? k : "week";
+}
+function teamRange(){
+  var key = teamRangeKey(), t = rt.TODAY, from, to;
+  if(key === "month"){
+    from = new Date(t.getFullYear(), t.getMonth(), 1);
+    to = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  }else if(key === "days30"){
+    to = t;
+    from = addDays(t, -29);
+  }else{
+    var dow = (t.getDay() + 6) % 7;
+    from = addDays(t, -dow);
+    to = addDays(from, 6);
+  }
+  return {key: key, label: TEAM_RANGE_LABELS[key], from: iso(from), to: iso(to)};
+}
+function teamRangeBarHTML(range){
+  return '<div class="team-range" role="group" aria-label="统计区间">'
+    + TEAM_RANGE_KEYS.map(function(k){
+        return '<button type="button" class="tr-btn' + (k === range.key ? " on" : "") + '" data-team-range="' + k + '"'
+          + ' aria-pressed="' + (k === range.key) + '">' + TEAM_RANGE_LABELS[k] + '</button>';
+      }).join("")
+    + '<span class="tr-dates">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span>'
+    + '</div>';
 }
 function withReqNames(items){
   return (items || []).map(function(t){
@@ -321,17 +348,20 @@ function teamSectionError(err, title){
 function renderTeam(opts){
   opts = opts || {};
   syncMineModeUI();
-  if(mineMeta) mineMeta.textContent = "团队视图 · 本周";
+  var mineView = document.getElementById("view-mine");
+  if(mineView) mineView.classList.remove("is-empty");
+  var range = teamRange();
+  if(mineMeta) mineMeta.textContent = "团队视图 · " + range.label;
   if(!mineBody) return;
   /* 刷新途中收到新的进入/刷新请求：只保留尾随一次，避免旧响应覆盖新模式 */
   if(teamLoading){ teamQueued = true; return; }
   if(!opts.silent) mineBody.innerHTML = UI.skeletonRows(6);
   teamLoading = true;
   var seq = ++teamSeq;
-  var range = teamWeekRange();
+  var params = {from: range.from, to: range.to};
   Promise.all([
-    API.get("/api/mobile/team-overview", range),
-    API.get("/api/mobile/workload").catch(function(err){ return {__err: err}; }),
+    API.get("/api/mobile/team-overview", params),
+    API.get("/api/mobile/workload", params).catch(function(err){ return {__err: err}; }),
     API.get("/api/mobile/risks").catch(function(err){ return {__err: err}; })
   ]).then(function(res){
     teamLoading = false;
@@ -353,25 +383,26 @@ function renderTeam(opts){
 
     var rate = Math.round((Number(h.doneRate) || 0) * 100);
     var delta = Math.round((Number(h.deltaWeek) || 0) * 100);
-    var html = '<div class="team-panel">' +
+    var html = '<div class="team-panel">' + teamRangeBarHTML(range) +
       '<section class="team-hero">' +
-        '<div class="th-main"><b>' + rate + '%</b><span>本周完成率</span>' +
-          '<em class="' + (delta >= 0 ? "up" : "down") + '">' +
+        '<div class="th-main"><b>' + rate + '%</b><span>' + range.label + '完成率</span>' +
+          '<em class="' + (delta >= 0 ? "up" : "down") + '" title="与前一等长周期比较">' +
             (delta >= 0 ? "↑ +" + delta : "↓ " + Math.abs(delta)) + '%</em></div>' +
         '<div class="th-grid">' +
           '<div><b>' + (h.doneCount || 0) + '/' + (h.planCount || 0) + '</b><span>完成 / 计划</span></div>' +
           '<button type="button" class="danger" data-team-risk="over" title="查看逾期工作项"><b>' + (h.overdue || 0) + '</b><span>已逾期</span></button>' +
           '<button type="button" class="warn" data-team-risk="blocked" title="查看被阻塞工作项"><b>' + (h.blocked || 0) + '</b><span>被阻塞</span></button>' +
         '</div>' +
+        '<div class="th-note">完成率与工时按「' + esc(range.label) + '」统计；逾期、阻塞与待处理是当前快照，不随区间变化。</div>' +
       '</section>' +
-      '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">' + esc(range.from) + ' ~ ' + esc(range.to) + '</span></div>' +
+      '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">截止此刻</span></div>' +
         '<div class="team-pending">' +
           '<button type="button" data-team-go="demands"><b>' + (pending.review || 0) + '</b><span>待评审</span></button>' +
           '<button type="button" data-team-go="branches"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
           '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
         '</div></section>';
 
-    html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项</span></div>' +
+    html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项 · 截止此刻</span></div>' +
       (riskList.length ? '<div class="team-risks">' + riskList.map(function(r){
         var lv = r.level === "high" ? "high" : "mid";
         return '<div class="team-risk ' + lv + '" data-team-task="' + esc(r.taskId) + '" role="button" tabindex="0">' +
@@ -380,14 +411,15 @@ function renderTeam(opts){
             '<span>' + esc(r.ownerName || "未指派") + ' · ' + esc(r.reason || "") + '</span></div>' +
           (r.dayCount ? '<span class="tr-days">' + r.dayCount + ' 天</span>' : '') +
         '</div>';
-      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"本周没有风险工作项", compact:true})) +
+      }).join("") + '</div>' : UI.emptyState({icon:"checkCircle", title:"此刻没有风险工作项", compact:true})) +
       '</section>';
 
     if(workload.__err){
       html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3></div>' + teamSectionError(workload.__err, "成员负载不可见") + '</section>';
     } else {
       var members = workload.members || [];
-      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">本周计时 / 周容量</span></div>' +
+      var capDays = Number(workload.rangeWorkdays) || 0;
+      html += '<section class="team-card"><div class="tc-head"><h3>成员负载</h3><span class="foot-note">' + range.label + '计时 / ' + capDays + ' 个工作日容量</span></div>' +
         (members.length ? '<div class="team-load">' + members.map(function(m){
           var pct = Math.round((Number(m.percent) || 0) * 100);
           var cls = pct > 100 ? "over" : (pct >= 90 ? "near" : "");
@@ -396,13 +428,22 @@ function renderTeam(opts){
             '<div class="tl-bar"><i class="' + cls + '" style="width:' + Math.min(pct, 100) + '%"></i></div>' +
             '<span class="tl-pct ' + cls + '">' + pct + '%</span>' +
           '</button>';
-        }).join("") + '</div>' : UI.emptyState({icon:"inbox", title:"本周还没有成员计时", compact:true})) +
+        }).join("") + '</div>' : UI.emptyState({icon:"inbox", title:"该区间还没有成员计时", compact:true})) +
         '</section>';
     }
     html += '</div>';
     mineBody.innerHTML = html;
     var retry = mineBody.querySelector("[data-empty-action]");
     if(retry) retry.addEventListener("click", function(){ renderTeam(); });
+    mineBody.querySelectorAll("[data-team-range]").forEach(function(el){
+      el.addEventListener("click", function(){
+        var key = el.dataset.teamRange;
+        if(key === teamRangeKey()) return;
+        try{ localStorage.setItem("ds.teamRange", key); }catch(e){ /* 受限环境仅本次生效 */ }
+        /* 静默重绘：切区间是常规操作，不该闪一次骨架屏 */
+        renderTeam({silent: true});
+      });
+    });
     mineBody.querySelectorAll("[data-team-task]").forEach(function(el){
       el.addEventListener("click", function(){ openTaskById(el.dataset.teamTask); });
       el.addEventListener("keydown", function(ev){
@@ -508,6 +549,9 @@ function renderMine(d, append){
   mineAll.forEach(function(t){ mineCache[t.workspaceId + "|" + t.id] = t; });
   var items = mineFiltered(mineAll);
   var filtering = mineFiltering();
+  /* 空态时分组/排序/空间控件没有可作用的对象，先收起，避免空页面顶着一排设置 */
+  var mineView = document.getElementById("view-mine");
+  if(mineView) mineView.classList.toggle("is-empty", !items.length);
   if(mineMeta){
     var nameOnly = mineNameOnly;
     var loaded = mineAll.length;

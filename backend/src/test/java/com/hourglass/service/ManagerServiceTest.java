@@ -251,6 +251,44 @@ class ManagerServiceTest {
     }
 
     @Test
+    void workloadRangeSumsOnlyInsideRangeAndScalesCapacityByWorkdays() {
+        Requirement requirement = requirement("R1", "项目一");
+        Task task = openTask("T1", "R1", Consts.COL_DOING, 700);
+        task.setOwnerUserId("U1");
+        task.setDueDate(TODAY);
+        WorkspaceMember member = new WorkspaceMember();
+        member.setUserId("U1");
+        member.setDisplayName("Alice");
+
+        TimeLog inside = timeLog("U1", "T1", TODAY.atTime(9, 0), 60);
+        TimeLog alsoInside = timeLog("U1", "T1", TODAY.minusDays(5).atTime(9, 0), 90);
+        TimeLog outside = timeLog("U1", "T1", TODAY.minusDays(30).atTime(9, 0), 500);
+        ManagerService service = service(Collections.singletonList(task), Collections.singletonList(requirement),
+                Collections.<TimeAgg>emptyList(), Arrays.asList(inside, alsoInside, outside),
+                Collections.singletonList(member));
+
+        /* 连续 14 天必含 10 个工作日，与起算日是周几无关 */
+        Map<String, Object> range = service.workload(WORKSPACE, VIEWER, TODAY.minusDays(13), TODAY);
+        assertEquals("2026-10-29", range.get("rangeFrom"));
+        assertEquals(TODAY.toString(), range.get("rangeTo"));
+        assertEquals(10, range.get("rangeWorkdays"), "区间容量按区间内工作日折算，不能沿用 5 天周容量");
+        Map<String, Object> alice = member(castList(range.get("members")), "U1");
+        assertEquals(150, alice.get("rangeMinutes"), "区间外的计时不能混进区间合计");
+        assertEquals(60, alice.get("weekMinutes"), "周口径与区间口径同时产出，桌面端不受影响");
+
+        Map<String, Object> clamped = service.workload(WORKSPACE, VIEWER, TODAY.minusDays(200), TODAY);
+        assertEquals(TODAY.minusDays(91).toString(), clamped.get("rangeFrom"), "超长区间从终点往前截到 92 天");
+
+        Map<String, Object> swapped = service.workload(WORKSPACE, VIEWER, TODAY, TODAY.minusDays(3));
+        assertEquals(TODAY.minusDays(3).toString(), swapped.get("rangeFrom"), "起终点写反要自动交换");
+        assertEquals(TODAY.toString(), swapped.get("rangeTo"));
+
+        Map<String, Object> plain = service.workload(WORKSPACE, VIEWER);
+        assertNull(plain.get("rangeFrom"), "桌面端不传区间时不产出区间字段");
+        assertNull(member(castList(plain.get("members")), "U1").get("rangeMinutes"));
+    }
+
+    @Test
     void defectTrendCountsOpenedClosedAndOpenByWeek() {
         Task openBug = openTask("T1", "R1", Consts.COL_DOING, 100);
         openBug.setItemType("bug");

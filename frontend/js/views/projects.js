@@ -249,10 +249,9 @@ function renderReqList(){
         return bits.length ? '<div class="req-profile">' + bits.join("") + '</div>' : '';
       })() +
       (readOnly ? '' : '<div class="req-taskbar">' +
+        '<button class="req-quick-trigger" type="button" data-req-quick="' + esc(r.id) + '">＋ 新建工作项</button>' +
         '<input type="text" maxlength="60" data-req-new-input="' + esc(r.id) + '"' +
           ' placeholder="在此项目下新建工作项，回车确认" aria-label="在项目 ' + esc(r.name) + ' 下新建工作项" />' +
-        '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="打开完整新建抽屉" aria-label="打开完整新建抽屉">' +
-          icon("edit", 14) + '</button>' +
       '</div>') +
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
         '<section class="req-expand-section">' +
@@ -547,6 +546,12 @@ reqListEl.addEventListener("click", function(e){
   if(activity){
     var project = rt.reqList.filter(function(r){ return r.id === activity.dataset.reqActivity; })[0];
     activityUI.openDialog(project ? project.name : "项目", "/api/projects/" + encodeURIComponent(activity.dataset.reqActivity) + "/activities");
+    return;
+  }
+  var quick = e.target.closest("[data-req-quick]");
+  if(quick){
+    var qinp = quick.parentNode.querySelector("[data-req-new-input]");
+    if(qinp) qinp.focus();
     return;
   }
   var openNew = e.target.closest("[data-req-open]");

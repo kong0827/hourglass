@@ -45,7 +45,7 @@ Existing tools are either pure task boards (execution without requirements or me
 
 ### My
 
-- **My Work**: all work items assigned to you, aggregated across workspaces with batched loading; a team view on mobile
+- **My Work**: all work items assigned to you, aggregated across workspaces with batched loading; a team view on mobile, where completion rate and hours can be scoped to this week, this month, or the last 30 days
 - **Weekly Retrospective**: automatically summarizes the week's completed, pending-confirmation, and in-progress work; optional AI-drafted weekly report
 
 ### Planning
@@ -71,7 +71,7 @@ Existing tools are either pure task boards (execution without requirements or me
 - **Time tracking**: dragging into "In Progress" starts the timer; dragging into "Done" stops it and chains to the next task; manual backfill with void-and-recompute
 - **Permissions**: workspace roles (owner / admin / member / viewer) plus per-project visibility control
 - **Notifications**: in-app + SSE real-time push + email + external bots (Webhook / ServerChan / PushPlus)
-- **Attachments**: images, PDF, Markdown, ZIP, Excel; `.xlsx` files can be edited right inside the work-item detail
+- **Attachments**: images, PDF, Markdown, Word, ZIP, Excel; images, PDF, Markdown and Word open in a preview modal (images support zoom, rotation and panning), and `.xlsx` files can be edited right inside the work-item detail
 - **AI assistant**: each user configures their own model and quota for requirement breakdown, doc health checks, and weekly report drafts; results land only after human confirmation
 - **Data security**: rich-text whitelist sanitization, encrypted secret storage, AI endpoints denied intranet access by default; full per-workspace backup export / import
 - **Mobile**: three responsive breakpoints; installable PWA
