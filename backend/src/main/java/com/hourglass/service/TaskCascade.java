@@ -65,7 +65,8 @@ public class TaskCascade {
 
     /** 空间清空/覆盖导入不能删除或遗留的交付数据；存在任意行即拒绝重建。 */
     public static final List<String> PRESERVED_WORKSPACE_DELIVERY_TABLES = Collections.unmodifiableList(Arrays.asList(
-            "version_release", "version_release_item", "version_release_plan", "version_release_plan_task", "version_log"));
+            "version_release", "version_release_item", "version_release_plan", "version_release_plan_version",
+            "version_release_plan_task", "version_log"));
 
     /** 所有带任务引用的表，供 schema 扫描测试核对 */
     public static final List<String> TASK_REF_TABLES;

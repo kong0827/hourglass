@@ -16,6 +16,10 @@ public class ReleasePlanRow {
     private LocalDate versionTargetDate;
     private String reqId;
     private String projectName;
+    /** 计划包含的全部版本/项目（多版本计划用 / 连接）；first version 字段仍保留用于打开入口。 */
+    private String versionNames;
+    private String projectNames;
+    private Integer versionCount;
     private LocalDateTime plannedAt;
     private String ownerUserId;
     private String ownerName;

@@ -389,7 +389,7 @@ class TaskCascadeTest {
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
-        assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_task", "version_log"),
+        assertEquals(Arrays.asList("version_release", "version_release_item", "version_release_plan", "version_release_plan_version", "version_release_plan_task", "version_log"),
                 TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES);
         for (String table : TaskCascade.PRESERVED_WORKSPACE_DELIVERY_TABLES) {
             org.junit.jupiter.api.Assertions.assertFalse(TaskCascade.WORKSPACE_TASK_TABLES.contains(table), table);

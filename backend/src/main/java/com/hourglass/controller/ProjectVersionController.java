@@ -8,6 +8,7 @@ import com.hourglass.dto.PhaseMemberTaskPage;
 import com.hourglass.dto.PhaseStatsResponse;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReleaseNoteResponse;
+import com.hourglass.dto.ReleasePlanOptions;
 import com.hourglass.dto.ReleasePlanRequest;
 import com.hourglass.dto.ReleasePlanRow;
 import com.hourglass.dto.ReleasePreviewRequest;
@@ -115,6 +116,17 @@ public class ProjectVersionController {
                                             @Valid @RequestBody ProjectVersionSaveRequest req,
                                             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(versionService.update(ctx.getUserId(), ctx.getWsId(), id, req));
+    }
+
+    /** 计划编辑器：当前用户可管理的项目/版本选项；实际记录仍按单个版本提交。 */
+    @GetMapping("/api/release-plan-options")
+    public ApiResult<ReleasePlanOptions> planOptions(@CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.planOptions(ctx.getUserId(), ctx.getWsId()));
+    }
+
+    @GetMapping("/api/release-plan-tasks")
+    public ApiResult<List<Task>> planTasks(@RequestParam List<String> versionIds, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.planTaskOptions(ctx.getUserId(), ctx.getWsId(), versionIds));
     }
 
     @GetMapping("/api/versions/{id}/release-plans")

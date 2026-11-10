@@ -2082,6 +2082,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .phase-tbl tbody tr[data-schedule-open]{cursor:pointer;}
 .phase-tbl tbody tr[data-schedule-open]:hover{background:var(--surface-hover);}
 .phase-tbl tbody tr[data-schedule-open] td:nth-child(2){color:var(--primary);font-weight:550;}
+.phase-tbl tbody tr[data-schedule-open] td:nth-child(2) .release-chip:not(.is-more){background:var(--primary-soft);border-color:transparent;color:var(--primary);font-weight:550;}
 /* 日程筛选在窄屏换行，避免时间范围与刷新按钮被裁掉 */
 .schedule-filters{flex-wrap:wrap;padding:0 0 10px;}
 /* 可点击行的首列用主色标识，避免"看起来不能点" */
@@ -2240,6 +2241,27 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .release-version-item:hover{border-color:var(--primary);background:var(--primary-soft);}
 .release-version-item b{font-size:14px;font-weight:600;color:var(--text);}
 .release-version-item small{font-size:12px;color:var(--text-3);}
+.release-version-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;max-height:min(38dvh,320px);overflow:auto;padding:2px;}
+.release-version-group{display:flex;flex-direction:column;gap:2px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.release-version-project{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:2px 4px 6px;border-bottom:1px solid var(--border);}
+.release-version-project-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text-2);}
+.release-version-project-count{flex:0 0 auto;padding:0 7px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-size:11px;line-height:18px;font-variant-numeric:tabular-nums;}
+.release-version-project-count.is-on{background:var(--primary-soft);color:var(--primary);font-weight:600;}
+.release-version-row{position:relative;display:flex;align-items:flex-start;gap:8px;min-width:0;min-height:36px;padding:6px;border-radius:var(--r-sm);cursor:pointer;}
+.release-version-row:hover{background:var(--surface-sunken);}
+.release-version-row.is-selected{background:var(--primary-soft);box-shadow:inset 2px 0 0 var(--primary);}
+.release-version-row.is-fixed{cursor:default;background:var(--surface-sunken);}
+.release-version-row.is-fixed.is-selected{background:var(--primary-soft);}
+.release-version-row:focus-within{outline:2px solid var(--primary);outline-offset:-2px;}
+.release-version-row input{flex:0 0 auto;width:16px;height:16px;margin-top:2px;accent-color:var(--primary);}
+.release-version-row span{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.release-version-row b{font-size:13px;font-weight:600;overflow-wrap:anywhere;}
+.release-version-row small{font-size:12px;color:var(--text-3);}
+/* 跨项目日程：项目/版本名可能很长，最多两枚标签，其余以 +N 收起 */
+.release-chips{display:inline-flex;align-items:center;gap:4px;max-width:100%;vertical-align:middle;}
+.release-chip{display:inline-block;max-width:180px;height:20px;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-size:12px;line-height:18px;vertical-align:middle;}
+.release-chip.is-more{flex:0 0 auto;background:var(--primary-soft);border-color:transparent;color:var(--primary);font-weight:600;font-variant-numeric:tabular-nums;}
+.release-chip.is-empty{background:transparent;border-style:dashed;color:var(--text-3);}
 #iDemandTarget{white-space:normal;overflow-wrap:anywhere;}
 #demTasks .tbl-wrap{max-width:100%;overflow-x:auto;}
 @media(max-width:600px){
@@ -2264,6 +2286,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   .release-picker-tools .btn{flex:1 1 auto;}
   .release-picker-count{flex:1 1 100%;margin-left:0;}
   .release-task-picker{max-height:46dvh;}
+  .release-version-picker{grid-template-columns:1fr;max-height:36dvh;}
+  .release-version-row{min-height:44px;}
+  .release-chip{max-width:150px;}
   .phase-acts .btn{min-height:44px;}
 }
 @media (max-width:900px){

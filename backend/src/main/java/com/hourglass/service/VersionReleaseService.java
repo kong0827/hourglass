@@ -6,7 +6,10 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
+import com.hourglass.dto.PlanVersionRow;
 import com.hourglass.dto.ReleaseConfirmRequest;
+import com.hourglass.dto.ReleasePlanOptionRow;
+import com.hourglass.dto.ReleasePlanOptions;
 import com.hourglass.dto.ReleasePlanRequest;
 import com.hourglass.dto.ReleasePlanRow;
 import com.hourglass.dto.ReleasePreviewResponse;
@@ -21,6 +24,7 @@ import java.util.TreeSet;
 import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.SortedSet;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
@@ -34,6 +38,7 @@ import com.hourglass.mapper.ProjectVersionMapper;
 import com.hourglass.mapper.ReleaseMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.UserMapper;
+import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -57,6 +62,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 public class VersionReleaseService {
@@ -66,6 +72,7 @@ public class VersionReleaseService {
     private final RequirementMapper reqMapper;
     private final DemandMapper demandMapper;
     private final UserMapper userMapper;
+    private final VersionTaskMapper versionTaskMapper;
     private final WorkspaceMemberMapper memberMapper;
     private final DeliveryScopeLock scopeLock;
     private final ReleasePermissionService permissions;
@@ -77,6 +84,7 @@ public class VersionReleaseService {
 
     public VersionReleaseService(ReleaseMapper mapper, ProjectVersionMapper versionMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper, UserMapper userMapper,
+                                 VersionTaskMapper versionTaskMapper,
                                  WorkspaceMemberMapper memberMapper, DeliveryScopeLock scopeLock,
                                  ReleasePermissionService permissions, ProjectAccessService access,
                                  TaskPublicationService taskPublication, NotificationEventService notifications,
@@ -86,6 +94,7 @@ public class VersionReleaseService {
         this.reqMapper = reqMapper;
         this.demandMapper = demandMapper;
         this.userMapper = userMapper;
+        this.versionTaskMapper = versionTaskMapper;
         this.memberMapper = memberMapper;
         this.scopeLock = scopeLock;
         this.permissions = permissions;
@@ -118,8 +127,87 @@ public class VersionReleaseService {
     public List<VersionReleasePlan> plans(String userId, String workspaceId, String versionId) {
         requireVersion(userId, workspaceId, versionId);
         List<VersionReleasePlan> plans = mapper.selectPlans(workspaceId, versionId);
-        for (VersionReleasePlan plan : plans) plan.setPlannedTaskIds(mapper.selectPlannedTaskIds(workspaceId, plan.getId()));
+        for (VersionReleasePlan plan : plans) {
+            plan.setPlannedTaskIds(mapper.selectPlannedTaskIds(workspaceId, plan.getId()));
+            hydratePlan(workspaceId, plan);
+        }
         return plans;
+    }
+
+    /** 计划编辑器：只返回当前用户可管理的项目与版本，避免选出必然保存失败的组合。 */
+    public ReleasePlanOptions planOptions(String userId, String workspaceId) {
+        ReleasePlanOptions options = new ReleasePlanOptions();
+        Map<String, ReleasePlanOptions.ProjectOption> projects = new LinkedHashMap<String, ReleasePlanOptions.ProjectOption>();
+        for (ReleasePlanOptionRow row : mapper.selectPlanVersionOptions(workspaceId)) {
+            if (!permissions.canManageProject(userId, workspaceId, row.getReqId())) continue;
+            ReleasePlanOptions.ProjectOption project = projects.get(row.getReqId());
+            if (project == null) {
+                project = new ReleasePlanOptions.ProjectOption();
+                project.setId(row.getReqId());
+                project.setName(row.getProjectName());
+                projects.put(row.getReqId(), project);
+            }
+            ReleasePlanOptions.VersionOption version = new ReleasePlanOptions.VersionOption();
+            version.setId(row.getVersionId());
+            version.setName(row.getVersionName());
+            version.setStatus(row.getVersionStatus());
+            version.setTargetDate(row.getTargetDate());
+            project.getVersions().add(version);
+        }
+        options.getProjects().addAll(projects.values());
+        return options;
+    }
+
+    /** 多版本计划的任务池：只返回所选版本已绑定的工作项，避免把其他版本任务混入计划。 */
+    public List<Task> planTaskOptions(String userId, String workspaceId, List<String> versionIds) {
+        List<String> ids = identities(versionIds, 32, "计划版本");
+        if (ids.size() > 50) throw AppException.badRequest("一个计划最多包含 50 个版本");
+        Map<String, String> projectNames = new HashMap<String, String>();
+        for (String id : ids) {
+            ProjectVersion version = requireVersion(userId, workspaceId, id);
+            if (!projectNames.containsKey(version.getReqId())) {
+                Requirement project = reqMapper.selectById(version.getReqId());
+                if (project == null) throw AppException.notFound("项目不存在");
+                projectNames.put(version.getReqId(), project.getName());
+            }
+        }
+        List<Task> tasks = mapper.selectScopeForVersions(workspaceId, ids);
+        versionTaskMapper.enrichTasks(workspaceId, tasks);
+        for (Task task : tasks) task.setReqName(projectNames.get(task.getReqId()));
+        return tasks;
+    }
+
+    private List<PlanVersionRow> planVersions(String workspaceId, VersionReleasePlan plan) {
+        List<PlanVersionRow> versions = mapper.selectPlanVersions(workspaceId, plan.getId());
+        if (!versions.isEmpty() || Texts.trimToNull(plan.getVersionId()) == null) return versions;
+        ProjectVersion version = versionMapper.selectById(plan.getVersionId());
+        if (version == null) return versions;
+        PlanVersionRow row = new PlanVersionRow();
+        row.setVersionId(version.getId());
+        row.setVersionName(version.getName());
+        row.setReqId(version.getReqId());
+        Requirement project = reqMapper.selectById(version.getReqId());
+        row.setProjectName(project == null ? null : project.getName());
+        row.setVersionStatus(version.getStatus());
+        row.setTargetDate(version.getTargetDate());
+        row.setReleased(Boolean.FALSE);
+        versions.add(row);
+        return versions;
+    }
+
+    private VersionReleasePlan hydratePlan(String workspaceId, VersionReleasePlan plan) {
+        List<PlanVersionRow> versions = planVersions(workspaceId, plan);
+        List<String> ids = new ArrayList<String>();
+        int released = 0;
+        for (PlanVersionRow row : versions) {
+            ids.add(row.getVersionId());
+            if (Boolean.TRUE.equals(row.getReleased())) released++;
+        }
+        plan.setVersions(versions);
+        plan.setVersionIds(ids);
+        plan.setVersionCount(ids.size());
+        plan.setReleasedVersionCount(released);
+        return plan;
     }
 
     /** 跨项目发布日程：只读汇总，可见范围与项目列表一致；不返回计划任务明细。 */
@@ -182,7 +270,22 @@ public class VersionReleaseService {
     @Transactional
     public VersionReleasePlan savePlan(String userId, String workspaceId, String versionId, ReleasePlanRequest request) {
         String owner = Texts.trimToNull(request.getOwnerUserId());
-        ProjectVersion version = lockVersion(userId, workspaceId, versionId, owner);
+        VersionReleasePlan old = null;
+        if (Texts.trimToNull(request.getId()) != null) {
+            old = mapper.selectPlanForUpdate(workspaceId, request.getId());
+            if (old == null || !planVersions(workspaceId, old).stream()
+                    .anyMatch(row -> versionId.equals(row.getVersionId())))
+                throw AppException.notFound("发布计划不存在");
+            old.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, old.getId()));
+            if (!Objects.equals(old.getRevision(), request.getRevision()) || "completed".equals(old.getStatus()))
+                throw new AppException(409, "计划已变化或已完成，请新建计划而非覆盖");
+        }
+        List<String> requestedVersions = request.getVersionIds() == null || request.getVersionIds().isEmpty()
+                ? Collections.emptyList() : identities(request.getVersionIds(), 32, "计划版本");
+        if (requestedVersions.size() > 50) throw AppException.badRequest("一个计划最多包含 50 个版本");
+        List<ProjectVersion> versions = lockPlanVersions(userId, workspaceId, versionId, requestedVersions, old);
+        List<String> versionIds = new ArrayList<String>();
+        for (ProjectVersion version : versions) versionIds.add(version.getId());
         if (owner != null) {
             Map<String, Object> membership = memberMapper.selectDeliveryAccessForUpdate(workspaceId, owner, null);
             if (membership == null || membership.get("role") == null) throw AppException.badRequest("计划负责人必须是当前空间成员");
@@ -190,8 +293,9 @@ public class VersionReleaseService {
         List<String> ids = identities(request.getPlannedTaskIds(), 32, "计划任务");
         List<String> targets = identities(request.getTargetKeys(), 128, "发布目标");
         dimensions(request.getEnvironment(), request.getCoverage(), targets);
-        Map<String, Task> scope = taskMap(mapper.selectScope(workspaceId, versionId));
-        if (!scope.keySet().containsAll(ids)) throw AppException.badRequest("计划任务必须属于当前空间、项目及版本范围");
+        Map<String, Task> scope = new TreeMap<String, Task>();
+        for (Task task : mapper.selectScopeForVersions(workspaceId, versionIds)) scope.put(task.getId(), task);
+        if (!scope.keySet().containsAll(ids)) throw AppException.badRequest("计划任务必须属于计划包含的版本范围");
         String status = request.getStatus();
         if (!"draft".equals(status) && !"ready".equals(status) && !"canceled".equals(status)) {
             throw AppException.badRequest("请选择草稿、就绪或已取消状态");
@@ -199,22 +303,16 @@ public class VersionReleaseService {
         if ("ready".equals(status) && (request.getPlannedAt() == null || owner == null || ids.isEmpty())) {
             throw AppException.badRequest("就绪计划必须填写时间、负责人及任务范围");
         }
-        VersionReleasePlan old = null;
-        if (Texts.trimToNull(request.getId()) != null) {
-            old = mapper.selectPlanForUpdate(workspaceId, request.getId());
-            if (old == null || !versionId.equals(old.getVersionId())) throw AppException.notFound("发布计划不存在");
-            old.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, old.getId()));
-            if (!Objects.equals(old.getRevision(), request.getRevision()) || "completed".equals(old.getStatus()))
-                throw new AppException(409, "计划已变化或已完成，请新建计划而非覆盖");
-        }
         String reason = Texts.trimToNull(request.getReason());
         if ((old != null && "ready".equals(old.getStatus()) || "canceled".equals(status)) && reason == null) {
             throw AppException.badRequest("调整就绪计划或取消计划必须填写原因");
         }
+        String primaryVersion = old != null && versionIds.contains(old.getVersionId()) ? old.getVersionId() : versionIds.get(0);
         VersionReleasePlan next = new VersionReleasePlan();
         next.setId(old == null ? Ids.gen("RP") : old.getId());
         next.setWorkspaceId(workspaceId);
-        next.setVersionId(versionId);
+        next.setVersionId(primaryVersion);
+        next.setVersionIds(versionIds);
         next.setPlannedAt(request.getPlannedAt());
         next.setOwnerUserId(owner);
         next.setNotes(Texts.trimToNull(request.getNotes()));
@@ -225,17 +323,57 @@ public class VersionReleaseService {
         next.setTargetKeys(targets);
         next.setCoverage(request.getCoverage());
         next.setPlannedTaskIds(ids);
-        next.setScopeToken(digest(encode(Arrays.asList(versionId, ids, targets, next.getEnvironment(), next.getCoverage()))));
+        next.setScopeToken(digest(encode(Arrays.asList(versionIds, ids, targets, next.getEnvironment(), next.getCoverage()))));
         int rows = old == null ? mapper.insertPlan(next) : mapper.updatePlan(next);
         if (rows != 1) {
             throw new AppException(409, "发布计划已被其他人修改");
         }
-        if (old != null) mapper.deletePlanTasks(workspaceId, next.getId());
+        if (old != null) {
+            mapper.deletePlanTasks(workspaceId, next.getId());
+            mapper.deletePlanVersions(workspaceId, next.getId());
+        }
+        for (ProjectVersion version : versions) {
+            if (mapper.insertPlanVersion(workspaceId, next.getId(), version.getId(), version.getReqId()) != 1)
+                throw new AppException(409, "计划版本写入冲突");
+        }
         for (String id : ids) if (mapper.insertPlanTask(workspaceId, next.getId(), id) != 1) throw new AppException(409, "计划范围写入冲突");
         VersionReleasePlan saved = mapper.selectPlanForUpdate(workspaceId, next.getId());
         saved.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, saved.getId()));
-        log(userId, workspaceId, versionId, "release_plan", reason, old, saved);
+        hydratePlan(workspaceId, saved);
+        for (String id : versionIds) log(userId, workspaceId, id, "release_plan", reason, old, saved);
         return saved;
+    }
+
+    /** 锁定计划涉及的全部项目与版本；任一项目无管理权限即拒绝，避免跨项目越权写入。 */
+    private List<ProjectVersion> lockPlanVersions(String userId, String workspaceId, String anchorId,
+                                                  List<String> requested, VersionReleasePlan old) {
+        List<String> ids = new ArrayList<String>(requested);
+        if (ids.isEmpty()) {
+            if (old == null) {
+                ids.add(anchorId);
+            } else {
+                for (PlanVersionRow row : planVersions(workspaceId, old)) ids.add(row.getVersionId());
+                if (ids.isEmpty()) ids.add(old.getVersionId());
+            }
+        }
+        if (!ids.contains(anchorId)) throw AppException.badRequest("当前版本必须包含在计划中");
+        Map<String, ProjectVersion> initial = new TreeMap<String, ProjectVersion>();
+        for (String id : ids) initial.put(id, requireVersion(userId, workspaceId, id));
+        SortedSet<String> projectIds = new TreeSet<String>();
+        for (ProjectVersion version : initial.values()) {
+            projectIds.add(version.getReqId());
+            permissions.assertManageProject(userId, workspaceId, version.getReqId());
+        }
+        scopeLock.lockProjects(workspaceId, projectIds.toArray(new String[0]));
+        List<ProjectVersion> versions = new ArrayList<ProjectVersion>();
+        for (ProjectVersion before : initial.values()) {
+            ProjectVersion version = versionMapper.selectByIdForUpdate(workspaceId, before.getId());
+            if (version == null || !Objects.equals(version.getReqId(), before.getReqId()))
+                throw new AppException(409, "版本项目已变化");
+            permissions.assertManageProjectForUpdate(userId, workspaceId, version.getReqId());
+            versions.add(version);
+        }
+        return versions;
     }
 
     @Transactional
@@ -251,7 +389,14 @@ public class VersionReleaseService {
         response.setPublishedOn(request.getOccurredAt().toLocalDate());
         response.setEnvironment(request.getEnvironment()); response.setTargetKeys(request.getTargetKeys()); response.setCoverage(request.getCoverage());
         response.setActualTaskIds(request.getActualTaskIds());
-        response.setPlannedTaskIds(c.plan == null ? Collections.emptyList() : c.plan.getPlannedTaskIds());
+        /* 多版本计划只在当前版本的预检里展示本版本的计划任务，其他版本由各自记录核对。 */
+        List<String> scopedPlanned = new ArrayList<String>();
+        if (c.plan != null) {
+            Set<String> scopeIds = new HashSet<String>();
+            for (Task task : c.scope) scopeIds.add(task.getId());
+            for (String taskId : c.plan.getPlannedTaskIds()) if (scopeIds.contains(taskId)) scopedPlanned.add(taskId);
+        }
+        response.setPlannedTaskIds(scopedPlanned);
         response.setCandidates(new ArrayList<Task>(c.actual.values()));
         for (String id : c.omitted) {
             response.getExcluded().add(new ReleasePreviewResponse.ExcludedTask(c.planned.get(id),
@@ -336,8 +481,16 @@ public class VersionReleaseService {
             item.setReason(request.getDeviationReason() != null ? request.getDeviationReason() : Objects.toString(failure, "本次实际范围未选择"));
             insertItem(record, item);
         }
-        if (success && c.plan != null
-                && mapper.completePlan(workspaceId, c.plan.getId(), c.plan.getRevision()) != 1) throw new AppException(409, "计划状态写入冲突");
+        /* 多版本计划只有全部包含版本都完成成功的生产部署/重部署才收口；测试、预发、回滚与部分成功不完成计划。 */
+        if (success && c.plan != null && "production".equals(record.getEnvironment())
+                && !"rollback".equals(request.getOperation())) {
+            int total = mapper.countPlanVersions(workspaceId, c.plan.getId());
+            /* 没有版本关联行的历史计划按单版本处理，本次成功记录即视为全部完成。 */
+            int released = total == 0 ? 1 : mapper.countPlanVersionsReleased(workspaceId, c.plan.getId());
+            if (released >= Math.max(total, 1)
+                    && mapper.completePlan(workspaceId, c.plan.getId(), c.plan.getRevision()) != 1)
+                throw new AppException(409, "计划状态写入冲突");
+        }
         log(userId, workspaceId, versionId, "rollback".equals(request.getOperation()) ? "release_rollback" : success ? "release_success" : "release_failed",
                 request.getDeviationReason() != null ? request.getDeviationReason() : success ? request.getNotes() : failure, null, record);
         if (success && "production".equals(record.getEnvironment()) && !"rollback".equals(record.getOperation()))
@@ -460,23 +613,25 @@ public class VersionReleaseService {
         if (r.getPlanId() != null) {
             c.plan = mapper.selectPlanForUpdate(workspaceId, r.getPlanId());
             if (c.plan == null) throw AppException.notFound("发布计划不存在");
-            ProjectVersion plannedVersion = version.getId().equals(c.plan.getVersionId()) ? version
-                    : versionMapper.selectByIdForUpdate(workspaceId, c.plan.getVersionId());
-            if (plannedVersion == null || !version.getReqId().equals(plannedVersion.getReqId())) throw AppException.badRequest("计划与实际版本必须属于同一项目");
-            c.plannedVersion = plannedVersion;
-            c.plannedScope = version.getId().equals(plannedVersion.getId()) ? c.scope
-                    : new ArrayList<Task>(taskMap(mapper.selectScope(workspaceId, plannedVersion.getId())).values());
+            hydratePlan(workspaceId, c.plan);
+            List<String> planVersionIds = c.plan.getVersionIds();
+            if (planVersionIds.isEmpty()) planVersionIds = Collections.singletonList(c.plan.getVersionId());
+            if (!planVersionIds.contains(version.getId()))
+                throw AppException.badRequest("实际版本必须属于计划包含的版本");
             if ("completed".equals(c.plan.getStatus())) throw new AppException(409, "完成计划不可复用，请新建计划或紧急记录");
+            c.plannedVersion = version;
             c.plan.setPlannedTaskIds(mapper.selectPlannedTaskIdsForUpdate(workspaceId, c.plan.getId()));
+            TreeSet<String> planProjects = new TreeSet<String>();
+            for (PlanVersionRow row : c.plan.getVersions()) planProjects.add(row.getReqId());
+            Map<String, Task> plannedScope = taskMap(mapper.selectScopeForVersions(workspaceId, planVersionIds));
+            plannedScope.putAll(scope);
+            c.plannedScope = new ArrayList<Task>(plannedScope.values());
             for (String id : c.plan.getPlannedTaskIds()) {
-                Task task = scope.get(id);
+                Task task = plannedScope.get(id);
                 if (task == null) task = mapper.selectTaskForUpdate(workspaceId, id);
-                if (task == null || !workspaceId.equals(task.getWorkspaceId()) || !version.getReqId().equals(task.getReqId())) throw new AppException(409, "计划任务身份或项目已变化");
+                if (task == null || !workspaceId.equals(task.getWorkspaceId()) || !planProjects.contains(task.getReqId()))
+                    throw new AppException(409, "计划任务身份或项目已变化");
                 c.planned.put(id, task);
-            }
-            if (!version.getId().equals(c.plan.getVersionId())) {
-                c.scopeDeviation = true;
-                c.warnings.add("实际版本偏离计划目标版本");
             }
             if (!"ready".equals(c.plan.getStatus())) c.warnings.add("计划非就绪状态，受控记录已发生事实");
             if (!Objects.equals(c.plan.getEnvironment(), r.getEnvironment()) || !Objects.equals(c.plan.getCoverage(), r.getCoverage())
@@ -499,12 +654,7 @@ public class VersionReleaseService {
                 if (task != null && version.getReqId().equals(task.getReqId())) c.actual.put(id, task);
                 continue;
             }
-            if (task == null) {
-                task = c.planned.get(id);
-                if (task == null || task.getDeletedAt() != null) throw AppException.badRequest("实际任务不存在或不在当前版本及受控计划范围");
-                c.scopeDeviation = true;
-                c.warnings.add("任务 " + id + " 偏离实际版本范围");
-            }
+            if (task == null) throw AppException.badRequest("实际任务不存在或不在当前版本范围");
             if (!workspaceId.equals(task.getWorkspaceId()) || !version.getReqId().equals(task.getReqId())) throw AppException.badRequest("实际任务必须属于同一空间及项目");
             c.actual.put(id, task);
             if (c.plan != null && !c.planned.containsKey(id)) c.warnings.add("任务 " + id + " 不在计划范围");
@@ -514,7 +664,10 @@ public class VersionReleaseService {
             if (demand != null && ("canceled".equals(demand.getStatus()) || !Objects.equals(version.getId(), demand.getVersionId()))) c.warnings.add("任务 " + id + " 的需求已取消或目标版本不同");
         }
         if (c.plan != null) {
-            c.omitted.addAll(c.plan.getPlannedTaskIds()); c.omitted.removeAll(r.getActualTaskIds());
+            c.omitted.addAll(c.plan.getPlannedTaskIds());
+            /* 多版本计划：本次实际记录只对比当前版本的计划任务，其他版本在其自己的记录中核对。 */
+            c.omitted.retainAll(scope.keySet());
+            c.omitted.removeAll(r.getActualTaskIds());
             if (!c.omitted.isEmpty()) c.warnings.add("部分计划任务未包含在本次实际交付");
         }
         if ("production".equals(r.getEnvironment()) && !"rollback".equals(r.getOperation())) {

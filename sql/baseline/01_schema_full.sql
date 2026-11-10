@@ -1,6 +1,6 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-09: full schema after migrations 01-63 (52 tables).
+-- Updated 2026-11-10: full schema after migrations 01-65 (53 tables).
 --
 -- 完整结构与 sql/01-63 增量链等效；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
@@ -949,6 +949,7 @@ CREATE TABLE `workspace_priority` (
   UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `version_release_plan_version`;
 DROP TABLE IF EXISTS `version_release_plan`;
 CREATE TABLE `version_release_plan` (
   `id` varchar(32) NOT NULL,
@@ -972,6 +973,18 @@ CREATE TABLE `version_release_plan` (
   KEY `idx_plan_workspace` (`workspace_id`,`status`),
   CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release_plan_version`;
+CREATE TABLE `version_release_plan_version` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `req_id` varchar(32) NOT NULL,
+  PRIMARY KEY (`plan_id`,`version_id`),
+  KEY `idx_plan_version_scope` (`workspace_id`,`version_id`),
+  KEY `idx_plan_version_project` (`workspace_id`,`req_id`),
+  CONSTRAINT `fk_plan_version_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_plan_version_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布计划包含的版本（多版本/多项目）';
 DROP TABLE IF EXISTS `version_release_plan_task`;
 CREATE TABLE `version_release_plan_task` (
   `workspace_id` varchar(32) NOT NULL,

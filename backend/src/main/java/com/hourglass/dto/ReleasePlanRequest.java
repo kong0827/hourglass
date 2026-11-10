@@ -12,6 +12,9 @@ import javax.validation.constraints.NotBlank;
 public class ReleasePlanRequest {
     @Size(max = 32, message = "发布计划ID不合法")
     private String id;
+    /** 计划覆盖的版本；省略时使用 URL 中的版本（更新时沿用原计划版本）。 */
+    @Size(max = 50, message = "一个计划最多包含 50 个版本")
+    private List<@NotBlank(message = "计划版本ID不能为空") @Size(max = 32, message = "计划版本ID不合法") String> versionIds;
     @NotNull(message = "请提供计划任务列表 plannedTaskIds")
     @Size(max = 500, message = "计划任务最多 500 项")
     private List<@NotBlank(message = "计划任务ID不能为空") @Size(max = 32, message = "计划任务ID不合法") String> plannedTaskIds;

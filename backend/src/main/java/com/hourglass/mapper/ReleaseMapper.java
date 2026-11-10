@@ -1,5 +1,7 @@
 package com.hourglass.mapper;
 
+import com.hourglass.dto.PlanVersionRow;
+import com.hourglass.dto.ReleasePlanOptionRow;
 import com.hourglass.dto.TaskVersionBinding;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.Requirement;
@@ -19,6 +21,14 @@ public interface ReleaseMapper {
     String lockProject(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     Task selectTaskForUpdate(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
     List<Task> selectScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    List<Task> selectScopeForVersions(@Param("workspaceId") String workspaceId, @Param("versionIds") List<String> versionIds);
+    List<PlanVersionRow> selectPlanVersions(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+    List<ReleasePlanOptionRow> selectPlanVersionOptions(@Param("workspaceId") String workspaceId);
+    int insertPlanVersion(@Param("workspaceId") String workspaceId, @Param("planId") String planId,
+                          @Param("versionId") String versionId, @Param("reqId") String reqId);
+    int deletePlanVersions(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+    int countPlanVersions(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
+    int countPlanVersionsReleased(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<TaskVersionBinding> selectTaskVersionRowsForUpdate(@Param("workspaceId") String workspaceId,
                                                           @Param("taskIds") List<String> taskIds);
     /** Project-scoped current reads; the all-tasks guard deliberately includes trash and unbound tasks. */

@@ -21,6 +21,7 @@ class VersionReleaseServiceTest {
     private final ReleaseMapper mapper = mock(ReleaseMapper.class);
     private final ProjectVersionMapper versions = mock(ProjectVersionMapper.class);
     private final UserMapper users = mock(UserMapper.class);
+    private final VersionTaskMapper versionTasks = mock(VersionTaskMapper.class);
     private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
     private final ReleasePermissionService permissions = mock(ReleasePermissionService.class);
     private final DeliveryScopeLock locks = mock(DeliveryScopeLock.class);
@@ -28,12 +29,16 @@ class VersionReleaseServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final PlatformTransactionManager tx = mock(PlatformTransactionManager.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
-    private final VersionReleaseService service = new VersionReleaseService(mapper, versions, mock(RequirementMapper.class),
-            mock(DemandMapper.class), users, members, locks, permissions, access,
+    private final RequirementMapper reqMapper = mock(RequirementMapper.class);
+    private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
+            mock(DemandMapper.class), users, versionTasks, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx);
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
     private final Map<String, List<VersionReleaseItem>> items = new HashMap<String, List<VersionReleaseItem>>();
+    private final Map<String, ProjectVersion> versionObjects = new HashMap<String, ProjectVersion>();
+    private final Map<String, List<Task>> versionScopes = new HashMap<String, List<Task>>();
+    private final Map<String, List<PlanVersionRow>> planVersionRows = new HashMap<String, List<PlanVersionRow>>();
     private final List<Task> scope = new ArrayList<Task>();
     private final List<TaskVersionBinding> bindings = new ArrayList<TaskVersionBinding>();
     private ProjectVersion version;
@@ -45,15 +50,25 @@ class VersionReleaseServiceTest {
         TransactionSynchronizationManager.setActualTransactionActive(true);
         version = new ProjectVersion(); version.setId("V"); version.setWorkspaceId("W"); version.setReqId("P");
         version.setName("1.0"); version.setRevision(0L); version.setStatus("active");
-        when(versions.selectById("V")).thenReturn(version);
-        when(versions.selectByIdForUpdate("W", "V")).thenReturn(version);
+        versionObjects.put("V", version);
+        when(versions.selectById(anyString())).thenAnswer(i -> versionObjects.get(i.getArgument(0)));
+        when(versions.selectByIdForUpdate(eq("W"), anyString())).thenAnswer(i -> versionObjects.get(i.getArgument(1)));
         when(members.selectDeliveryAccessForUpdate(eq("W"), anyString(), isNull())).thenReturn(Collections.singletonMap("role", "admin"));
         Requirement project = new Requirement(); project.setId("P"); project.setWorkspaceId("W"); project.setName("Project");
         when(mapper.selectProjectForUpdate("W", "P")).thenReturn(project);
+        when(reqMapper.selectById("P")).thenReturn(project);
         AppUser actor = new AppUser(); actor.setDisplayName("Recorder"); when(users.selectById("U")).thenReturn(actor);
         AppUser executor = new AppUser(); executor.setDisplayName("Executor"); when(users.selectById("E")).thenReturn(executor);
         scope.add(task("T1")); scope.add(task("T2"));
-        when(mapper.selectScope("W", "V")).thenAnswer(i -> scope);
+        versionScopes.put("V", scope);
+        when(mapper.selectScope(eq("W"), anyString())).thenAnswer(i ->
+                versionScopes.getOrDefault(i.getArgument(1), Collections.<Task>emptyList()));
+        when(mapper.selectScopeForVersions(eq("W"), anyList())).thenAnswer(i -> {
+            List<String> ids = i.getArgument(1);
+            Map<String, Task> union = new LinkedHashMap<String, Task>();
+            for (String id : ids) for (Task task : versionScopes.getOrDefault(id, Collections.<Task>emptyList())) union.put(task.getId(), task);
+            return new ArrayList<Task>(union.values());
+        });
         bindings.add(binding("T1", "V", "1.0")); bindings.add(binding("T2", "V", "1.0"));
         when(mapper.selectTaskVersionRowsForUpdate(eq("W"), anyList())).thenAnswer(i -> {
             List<String> ids = i.getArgument(1);
@@ -65,13 +80,36 @@ class VersionReleaseServiceTest {
         when(mapper.insertPlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); plans.put(p.getId(), p); return 1; });
         when(mapper.updatePlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); p.setRevision(p.getRevision() + 1); plans.put(p.getId(), p); return 1; });
         when(mapper.insertPlanTask(anyString(), anyString(), anyString())).thenReturn(1);
+        when(mapper.insertPlanVersion(anyString(), anyString(), anyString(), anyString())).thenAnswer(i -> {
+            PlanVersionRow row = new PlanVersionRow(); row.setVersionId(i.getArgument(2)); row.setReqId(i.getArgument(3));
+            planVersionRows.computeIfAbsent(i.getArgument(1), k -> new ArrayList<PlanVersionRow>()).add(row);
+            return 1;
+        });
+        when(mapper.deletePlanVersions(anyString(), anyString())).thenAnswer(i -> planVersionRows.remove(i.getArgument(1)) == null ? 0 : 1);
+        when(mapper.selectPlanVersions(eq("W"), anyString())).thenAnswer(i ->
+                new ArrayList<PlanVersionRow>(planVersionRows.getOrDefault(i.getArgument(1), Collections.<PlanVersionRow>emptyList())));
+        when(mapper.countPlanVersions(eq("W"), anyString())).thenAnswer(i ->
+                planVersionRows.getOrDefault(i.getArgument(1), Collections.<PlanVersionRow>emptyList()).size());
+        when(mapper.countPlanVersionsReleased(eq("W"), anyString())).thenAnswer(i -> {
+            String planId = i.getArgument(1);
+            int released = 0;
+            for (PlanVersionRow row : planVersionRows.getOrDefault(planId, Collections.<PlanVersionRow>emptyList())) {
+                boolean done = records.values().stream().anyMatch(r -> planId.equals(r.getPlanId())
+                        && row.getVersionId().equals(r.getVersionId())
+                        && "success".equals(r.getResult()) && "production".equals(r.getEnvironment())
+                        && !"rollback".equals(r.getOperation()));
+                if (done) released++;
+            }
+            return released;
+        });
         when(mapper.completePlan(eq("W"), anyString(), anyLong())).thenAnswer(i -> { VersionReleasePlan p = plans.get(i.getArgument(1)); p.setStatus("completed"); p.setRevision(p.getRevision() + 1); return 1; });
-        when(mapper.selectByKeyForUpdate(eq("W"), eq("V"), anyString())).thenAnswer(i -> records.get(i.getArgument(2)));
+        when(mapper.selectByKeyForUpdate(eq("W"), anyString(), anyString())).thenAnswer(i -> records.get(i.getArgument(2)));
         when(mapper.insertRecord(any())).thenAnswer(i -> { VersionRelease r = i.getArgument(0); records.put(r.getIdempotencyKey(), r); return 1; });
         when(mapper.insertItem(any())).thenAnswer(i -> { VersionReleaseItem item = i.getArgument(0); items.computeIfAbsent(item.getReleaseId(), k -> new ArrayList<VersionReleaseItem>()).add(item); return 1; });
         when(mapper.selectItemsForUpdate(eq("W"), anyString())).thenAnswer(i -> new ArrayList<VersionReleaseItem>(items.getOrDefault(i.getArgument(1), Collections.emptyList())));
         when(mapper.selectRecordForUpdate(eq("W"), anyString())).thenAnswer(i -> records.values().stream().filter(r -> r.getId().equals(i.getArgument(1))).findFirst().orElse(null));
-        when(mapper.selectRecordsForUpdate("W", "V")).thenAnswer(i -> new ArrayList<VersionRelease>(records.values()));
+        when(mapper.selectRecordsForUpdate(eq("W"), anyString())).thenAnswer(i -> records.values().stream()
+                .filter(r -> i.getArgument(1).equals(r.getVersionId())).collect(java.util.stream.Collectors.toList()));
         when(mapper.insertLog(anyString(), anyString(), anyString(), anyString(), any(), anyString())).thenReturn(1);
         when(tx.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
@@ -250,35 +288,15 @@ class VersionReleaseServiceTest {
         assertEquals(2, records.size());
     }
 
-    @Test void sameProjectPlanVersionDeviationRequiresReasonAndKeepsBothIdentities() {
+    @Test void actualVersionMustBelongToPlanVersions() {
         VersionReleasePlan planned = plan("production");
-        ProjectVersion actual = new ProjectVersion();
-        actual.setId("V2"); actual.setWorkspaceId("W"); actual.setReqId("P"); actual.setName("2.0"); actual.setRevision(0L);
-        when(versions.selectById("V2")).thenReturn(actual);
-        when(versions.selectByIdForUpdate("W", "V2")).thenReturn(actual);
+        ProjectVersion other = new ProjectVersion();
+        other.setId("V2"); other.setWorkspaceId("W"); other.setReqId("P"); other.setName("2.0"); other.setRevision(0L);
+        when(versions.selectById("V2")).thenReturn(other);
+        when(versions.selectByIdForUpdate("W", "V2")).thenReturn(other);
         when(mapper.selectScope("W", "V2")).thenReturn(Collections.emptyList());
-        List<Task> plannedScope = Arrays.asList(task("T1"), task("T2"));
-        when(mapper.selectScope("W", "V")).thenReturn(plannedScope);
-        bindings.add(binding("T1", "V2", "2.0"));
-        when(mapper.selectByKeyForUpdate(eq("W"), eq("V2"), anyString())).thenAnswer(i -> records.get(i.getArgument(2)));
-        ReleaseConfirmRequest r = request(planned, "deviation");
-        ReleasePreviewResponse preview = service.preview("U", "W", "V2", r);
-        assertTrue(preview.isRequiresDeviationReason());
-        assertEquals(2, preview.getCandidates().size());
-        assertNotSame(plannedScope.get(0), preview.getCandidates().get(0));
-        for (Task task : Arrays.asList(plannedScope.get(0), preview.getCandidates().get(0))) {
-            assertEquals(Arrays.asList("V", "V2"), task.getVersionIds());
-            assertEquals(Arrays.asList("1.0", "2.0"), task.getVersionNames());
-        }
-        r.setPlanRevision(preview.getPlanRevision()); r.setScopeToken(preview.getScopeToken());
-        code(422, () -> service.confirm("U", "W", "V2", r));
-        r.setResult("failed"); r.setFailureReason("External deployment failed");
-        code(422, () -> service.confirm("U", "W", "V2", r));
-        r.setResult("success");
-        r.setDeviationReason("Actually delivered in another version of the same project");
-        preview = service.preview("U", "W", "V2", r); r.setScopeToken(preview.getScopeToken());
-        VersionRelease saved = service.confirm("U", "W", "V2", r);
-        assertEquals("V2", saved.getVersionId()); assertEquals(planned.getId(), saved.getPlanId());
+        ReleaseConfirmRequest r = request(planned, "outside-plan");
+        code(400, () -> service.preview("U", "W", "V2", r));
     }
 
     @Test void canceledPlanCanOnlyRecordAnomalousSuccessWithReason() {
@@ -370,6 +388,89 @@ class VersionReleaseServiceTest {
         code(400, () -> service.planSchedule("U", "W", "2026-12-31", "2026-11-01", null, null, null));
         code(400, () -> service.planSchedule("U", "W", null, null, null, "prod", null));
         code(400, () -> service.planSchedule("U", "W", null, null, null, null, "done"));
+    }
+
+    @Test void multiVersionPlanSavesUnionScopeAcrossProjectsAndKeepsAnchor() {
+        ProjectVersion second = new ProjectVersion(); second.setId("V2"); second.setWorkspaceId("W"); second.setReqId("P2");
+        second.setName("2.0"); second.setStatus("active"); versionObjects.put("V2", second);
+        Requirement other = new Requirement(); other.setId("P2"); other.setWorkspaceId("W"); other.setName("Other");
+        when(reqMapper.selectById("P2")).thenReturn(other);
+        Task t3 = task("T3"); t3.setReqId("P2");
+        versionScopes.put("V2", Collections.singletonList(t3));
+        bindings.add(binding("T3", "V2", "2.0"));
+        ReleasePlanRequest request = planRequest("production");
+        request.setVersionIds(Arrays.asList("V2", "V"));
+        request.setPlannedTaskIds(Arrays.asList("T1", "T3"));
+
+        VersionReleasePlan saved = service.savePlan("U", "W", "V", request);
+
+        assertEquals(Arrays.asList("V", "V2"), saved.getVersionIds());
+        assertEquals(2, saved.getVersionCount());
+        assertEquals(0, saved.getReleasedVersionCount());
+        assertEquals(Arrays.asList("T1", "T3"), saved.getPlannedTaskIds());
+        verify(mapper).insertPlanVersion("W", saved.getId(), "V", "P");
+        verify(mapper).insertPlanVersion("W", saved.getId(), "V2", "P2");
+        verify(locks).lockProjects("W", "P", "P2");
+        verify(permissions).assertManageProject("U", "W", "P2");
+    }
+
+    @Test void planCompletesOnlyWhenEveryVersionHasProductionSuccess() {
+        VersionReleasePlan plan = multiVersionPlan();
+        confirmVersion(plan, "V", "v-production", "production", "T1");
+        assertEquals("ready", plan.getStatus());
+        confirmVersion(plan, "V2", "v2-test", "test", "T3");
+        assertEquals("ready", plan.getStatus());
+        confirmVersion(plan, "V2", "v2-production", "production", "T3");
+        assertEquals("completed", plan.getStatus());
+    }
+
+    @Test void legacyPlanWithoutVersionRowsKeepsSingleVersionCompletion() {
+        VersionReleasePlan plan = plan("production");
+        planVersionRows.remove(plan.getId());
+        confirm(request(plan, "legacy"));
+        assertEquals("completed", plan.getStatus());
+    }
+
+    @Test void planTaskOptionsReturnsUnionOfSelectedVersions() {
+        ProjectVersion second = new ProjectVersion(); second.setId("V2"); second.setWorkspaceId("W"); second.setReqId("P2");
+        second.setName("2.0"); versionObjects.put("V2", second);
+        Requirement other = new Requirement(); other.setId("P2"); other.setWorkspaceId("W"); other.setName("Other");
+        when(reqMapper.selectById("P2")).thenReturn(other);
+        Task t3 = task("T3"); t3.setReqId("P2");
+        versionScopes.put("V2", Collections.singletonList(t3));
+
+        List<Task> tasks = service.planTaskOptions("U", "W", Arrays.asList("V", "V2"));
+
+        assertEquals(Arrays.asList("T1", "T2", "T3"), tasks.stream().map(Task::getId).collect(java.util.stream.Collectors.toList()));
+        assertEquals("Project", tasks.get(0).getReqName());
+        assertEquals("Other", tasks.get(2).getReqName());
+        verify(versionTasks).enrichTasks(eq("W"), eq(tasks));
+    }
+
+    private VersionReleasePlan multiVersionPlan() {
+        ProjectVersion second = new ProjectVersion(); second.setId("V2"); second.setWorkspaceId("W"); second.setReqId("P2");
+        second.setName("2.0"); second.setStatus("active"); versionObjects.put("V2", second);
+        Requirement other = new Requirement(); other.setId("P2"); other.setWorkspaceId("W"); other.setName("Other");
+        when(reqMapper.selectById("P2")).thenReturn(other);
+        when(mapper.selectProjectForUpdate("W", "P2")).thenReturn(other);
+        Task t3 = task("T3"); t3.setReqId("P2");
+        versionScopes.put("V2", Collections.singletonList(t3));
+        bindings.add(binding("T3", "V2", "2.0"));
+        ReleasePlanRequest request = planRequest("production");
+        request.setVersionIds(Arrays.asList("V", "V2"));
+        request.setPlannedTaskIds(Arrays.asList("T1", "T3"));
+        return service.savePlan("U", "W", "V", request);
+    }
+
+    private VersionRelease confirmVersion(VersionReleasePlan plan, String versionId, String key, String environment, String taskId) {
+        ReleaseConfirmRequest r = request(plan, key);
+        r.setEnvironment(environment);
+        r.setActualTaskIds(Collections.singletonList(taskId));
+        if (!environment.equals(plan.getEnvironment())) r.setDeviationReason("Environment differs from plan");
+        ReleasePreviewResponse p = service.preview("U", "W", versionId, r);
+        r.setPlanRevision(p.getPlanRevision());
+        r.setScopeToken(p.getScopeToken());
+        return service.confirm("U", "W", versionId, r);
     }
 
     private VersionRelease confirm(ReleaseConfirmRequest r) { preview(r); return service.confirm("U", "W", "V", r); }

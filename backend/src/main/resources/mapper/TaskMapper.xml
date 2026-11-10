@@ -171,7 +171,11 @@
       AND r.result = 'success' AND r.environment = 'production' AND r.operation IN ('deploy', 'redeploy')
   </select>
   <select id="selectVersionPlanIdsForScope" resultType="string">
-    SELECT id FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY id FOR UPDATE
+    SELECT id FROM version_release_plan WHERE workspace_id = #{workspaceId}
+      AND (version_id = #{versionId}
+           OR id IN (SELECT plan_id FROM version_release_plan_version
+                     WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}))
+    ORDER BY id FOR UPDATE
   </select>
   <select id="selectVersionAuditIdsForScope" resultType="long">
     SELECT id FROM version_log WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY id FOR UPDATE

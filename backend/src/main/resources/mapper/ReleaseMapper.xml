@@ -44,6 +44,58 @@
       AND t.req_id = pv.req_id AND t.deleted_at IS NULL
     ORDER BY t.id FOR UPDATE
   </select>
+  <select id="selectScopeForVersions" resultType="Task" useCache="false" flushCache="true">
+    SELECT DISTINCT t.*, t.is_blocked AS blocked,
+      (SELECT COALESCE(SUM(tl.minutes), 0) FROM time_log tl
+       WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id AND tl.ended_at IS NOT NULL) AS total_minutes
+    FROM task t
+    INNER JOIN version_task vt ON vt.workspace_id = t.workspace_id AND vt.task_id = t.id
+    INNER JOIN project_version pv ON pv.workspace_id = vt.workspace_id AND pv.id = vt.version_id
+    WHERE vt.workspace_id = #{workspaceId} AND vt.version_id IN
+    <foreach collection="versionIds" item="versionId" open="(" separator="," close=")">#{versionId}</foreach>
+      AND t.req_id = pv.req_id AND t.deleted_at IS NULL
+    ORDER BY t.id
+  </select>
+  <select id="selectPlanVersions" resultType="com.hourglass.dto.PlanVersionRow">
+    SELECT prv.version_id AS versionId, pv.name AS versionName, pv.req_id AS reqId,
+      r.name AS projectName, pv.status AS versionStatus, pv.target_date AS targetDate,
+      CASE WHEN EXISTS (SELECT 1 FROM version_release vr
+                        WHERE vr.workspace_id = prv.workspace_id AND vr.version_id = prv.version_id
+                          AND vr.plan_id = prv.plan_id AND vr.result = 'success'
+                          AND vr.environment = 'production' AND vr.operation IN ('deploy','redeploy'))
+           THEN 1 ELSE 0 END AS released
+    FROM version_release_plan_version prv
+    INNER JOIN project_version pv ON pv.workspace_id = prv.workspace_id AND pv.id = prv.version_id
+    INNER JOIN requirement r ON r.workspace_id = pv.workspace_id AND r.id = pv.req_id
+    WHERE prv.workspace_id = #{workspaceId} AND prv.plan_id = #{planId}
+    ORDER BY r.name, pv.name, pv.id
+  </select>
+  <select id="selectPlanVersionOptions" resultType="com.hourglass.dto.ReleasePlanOptionRow">
+    SELECT r.id AS reqId, r.name AS projectName, v.id AS versionId, v.name AS versionName,
+      v.status AS versionStatus, v.target_date AS targetDate
+    FROM project_version v
+    INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
+    WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
+    ORDER BY r.name, v.name, v.id
+  </select>
+  <insert id="insertPlanVersion">
+    INSERT INTO version_release_plan_version (workspace_id, plan_id, version_id, req_id)
+    VALUES (#{workspaceId}, #{planId}, #{versionId}, #{reqId})
+  </insert>
+  <delete id="deletePlanVersions">
+    DELETE FROM version_release_plan_version WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </delete>
+  <select id="countPlanVersions" resultType="int">
+    SELECT COUNT(*) FROM version_release_plan_version WHERE workspace_id = #{workspaceId} AND plan_id = #{planId}
+  </select>
+  <select id="countPlanVersionsReleased" resultType="int">
+    SELECT COUNT(*) FROM version_release_plan_version prv
+    WHERE prv.workspace_id = #{workspaceId} AND prv.plan_id = #{planId}
+      AND EXISTS (SELECT 1 FROM version_release vr
+                  WHERE vr.workspace_id = prv.workspace_id AND vr.version_id = prv.version_id
+                    AND vr.plan_id = prv.plan_id AND vr.result = 'success'
+                    AND vr.environment = 'production' AND vr.operation IN ('deploy','redeploy'))
+  </select>
   <select id="selectTaskVersionRowsForUpdate" resultType="com.hourglass.dto.TaskVersionBinding" useCache="false" flushCache="true">
     SELECT vt.task_id AS taskId, vt.version_id AS versionId, pv.name AS versionName
     FROM version_task vt
@@ -111,13 +163,32 @@
     ORDER BY id FOR UPDATE
   </select>
   <select id="selectPlans" resultMap="plan">
-    SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY created_at DESC, id DESC
+    SELECT p.* FROM version_release_plan p
+    WHERE p.workspace_id = #{workspaceId}
+      AND (EXISTS (SELECT 1 FROM version_release_plan_version x
+                   WHERE x.workspace_id = p.workspace_id AND x.plan_id = p.id AND x.version_id = #{versionId})
+           OR (p.version_id = #{versionId}
+               AND NOT EXISTS (SELECT 1 FROM version_release_plan_version y
+                               WHERE y.workspace_id = p.workspace_id AND y.plan_id = p.id)))
+    ORDER BY p.created_at DESC, p.id DESC
   </select>
   <!-- 跨项目发布日程：只读；项目可见范围与项目列表同口径，归档项目不进入日程。 -->
   <select id="selectPlanSchedule" resultType="com.hourglass.dto.ReleasePlanRow">
     SELECT rp.id AS id, rp.workspace_id AS workspaceId, rp.version_id AS versionId,
       pv.name AS versionName, pv.status AS versionStatus, pv.target_date AS versionTargetDate,
       pv.req_id AS reqId, r.name AS projectName,
+      (SELECT GROUP_CONCAT(v2.name ORDER BY r2.name, v2.name, v2.id SEPARATOR ' / ')
+         FROM version_release_plan_version x2
+         INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
+         INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionNames,
+      (SELECT GROUP_CONCAT(DISTINCT r2.name ORDER BY r2.name SEPARATOR ' / ')
+         FROM version_release_plan_version x2
+         INNER JOIN project_version v2 ON v2.workspace_id = x2.workspace_id AND v2.id = x2.version_id
+         INNER JOIN requirement r2 ON r2.workspace_id = v2.workspace_id AND r2.id = v2.req_id
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS projectNames,
+      (SELECT COUNT(*) FROM version_release_plan_version x2
+        WHERE x2.workspace_id = rp.workspace_id AND x2.plan_id = rp.id) AS versionCount,
       rp.planned_at AS plannedAt, rp.owner_user_id AS ownerUserId, u.display_name AS ownerName,
       rp.environment AS environment, rp.coverage AS coverage, rp.status AS status,
       rp.revision AS revision, rp.notes AS notes, rp.risks AS risks,
@@ -128,18 +199,24 @@
     INNER JOIN requirement r ON r.workspace_id = pv.workspace_id AND r.id = pv.req_id
     LEFT JOIN app_user u ON u.id = rp.owner_user_id
     WHERE rp.workspace_id = #{workspaceId}
-      AND r.archived_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM version_release_plan_version x
+        INNER JOIN project_version v ON v.workspace_id = x.workspace_id AND v.id = x.version_id
+        INNER JOIN requirement pr ON pr.workspace_id = v.workspace_id AND pr.id = v.req_id
+        WHERE x.workspace_id = rp.workspace_id AND x.plan_id = rp.id
+          AND pr.archived_at IS NULL
+          <if test="reqId != null">AND v.req_id = #{reqId}</if>
+          <if test="viewerId != null">
+            AND NOT EXISTS (SELECT 1 FROM project_member pm
+              WHERE pm.workspace_id = x.workspace_id AND pm.project_id = v.req_id
+                AND pm.user_id = #{viewerId} AND pm.access = 'none')
+          </if>
+      )
       <if test="from != null">AND rp.planned_at &gt;= #{from}</if>
       <if test="to != null">AND rp.planned_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)</if>
-      <if test="reqId != null">AND pv.req_id = #{reqId}</if>
       <if test="environment != null">AND rp.environment = #{environment}</if>
       <if test="statuses != null">
         AND rp.status IN <foreach collection="statuses" item="status" open="(" separator="," close=")">#{status}</foreach>
-      </if>
-      <if test="viewerId != null">
-        AND NOT EXISTS (SELECT 1 FROM project_member pm
-          WHERE pm.workspace_id = rp.workspace_id AND pm.project_id = pv.req_id
-            AND pm.user_id = #{viewerId} AND pm.access = 'none')
       </if>
     ORDER BY (rp.planned_at IS NULL), rp.planned_at, rp.id
     LIMIT #{limit}
@@ -151,7 +228,7 @@
       #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, #{coverage})
   </insert>
   <update id="updatePlan">
-    UPDATE version_release_plan SET planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
+    UPDATE version_release_plan SET version_id = #{versionId}, planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
       notes = #{notes}, risks = #{risks}, status = #{status}, scope_token = #{scopeToken},
       environment = #{environment}, target_keys = #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, coverage = #{coverage},
       revision = revision + 1, updated_at = NOW()
@@ -246,6 +323,9 @@
     WHERE i.workspace_id = #{workspaceId} AND i.task_id = #{taskId} AND vr.result = 'success' AND i.disposition = 'published'
   </select>
   <delete id="deletePlansByVersion">
-    DELETE FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+    DELETE p FROM version_release_plan p
+    WHERE p.workspace_id = #{workspaceId} AND p.version_id = #{versionId}
+      AND NOT EXISTS (SELECT 1 FROM version_release_plan_version x
+                      WHERE x.workspace_id = p.workspace_id AND x.plan_id = p.id AND x.version_id != #{versionId})
   </delete>
 </mapper>
