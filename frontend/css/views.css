@@ -2429,6 +2429,16 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   border-left:1px dashed var(--danger);opacity:1;background:none;
 }
 .demg-legend .demg-legend-expect::before{display:none;}
+/* 甘特「?」入口与阶段口径弹层 */
+.demg-help-btn{width:20px;height:20px;margin-left:2px;}
+.demg-help-stages{display:flex;flex-direction:column;gap:6px;padding:6px 10px 10px;border-bottom:1px solid var(--border);}
+.demg-help-row{display:grid;grid-template-columns:8px 30px minmax(0,1fr) auto;gap:6px;align-items:start;font-size:12px;line-height:17px;}
+.demg-help-row .demg-legend-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-top:5px;}
+.demg-help-name{font-weight:600;color:var(--text);white-space:nowrap;}
+.demg-help-method{color:var(--text-2);min-width:0;}
+.demg-help-form{font-size:11px;font-style:normal;color:var(--text-3);white-space:nowrap;margin-top:1px;}
+.demg-help-rules{padding-top:10px;}
+@media (max-width:1279px){.demg-help-btn{margin-left:auto;}}
 .demg-legend .demg-legend-gap{
   position:static;width:14px;height:0;border-radius:0;top:auto;bottom:auto;
   border-top:1px dashed var(--border-strong);background:none;

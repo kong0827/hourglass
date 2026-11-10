@@ -250,19 +250,35 @@ function versionPhaseInfoHTML(){
 }
 /* 需求池甘特的计算口径：甘特页「?」说明弹层的文案源 */
 function demandGanttInfoHTML(){
-  return '<div class="menu-title">需求池甘特怎么画</div><div class="type-help-list">' +
-    '<div class="type-help-row"><span class="mini-tag type-story">阶段来源</span>' +
-      '<span class="type-help-desc">七段全部按真实记录回放：评审＝需求创建到最后一次通过（待评审算到今天，已拒绝停在最后一次拒绝）；排期＝评审通过到最后一次排期或调期，撤排之后这段历史仍然保留；设计＝关联文档的起止；开发＝工作项首次离开「待处理」或首次计时，到最后一个工作项完成；测试＝用例执行起止，或工作项进入「测试中」的开始测试时间到转出「测试中」的结束测试时间，两者取最早开始、最晚结束；完成＝工作项全部完成且用例全部通过；发布＝不可变实际记录中捕获本需求的成功生产交付事件，不从当前目标版本日期补齐。</span></div>' +
-    '<div class="type-help-row"><span class="mini-tag type-bug">缺失不补</span>' +
-      '<span class="type-help-desc">某阶段没有记录就不画，也不补 0 天；相邻段之间没有记录覆盖的日期画虚线缺口；最后一段结束到今天仍缺记录时，按卡点标出「已排期未开工 / 未执行用例 / 待发布」。单日阶段画成圆点。已取消的需求工作阶段停在取消日，不再往今天生长；既有实际发布事实仍保留。</span></div>' +
-    '<div class="type-help-row"><span class="mini-tag type-epic">并行分层</span>' +
-      '<span class="type-help-desc">时间重叠的阶段自动上下分层，泳道数按实际并发增长；行高随层数增加，不会把重叠阶段叠在一条线上。</span></div>' +
-    '<div class="type-help-row"><span class="mini-tag mute">阶段天数</span>' +
-      '<span class="type-help-desc">条形够宽时直接标出该阶段自然日天数；进行中显示「8天+」，虚线右端表示仍在延续。单日节点只标日期，不把排期、完成、发布算成一天耗时。天数含周末与缺口，不是投入工时；条形太窄时不标，悬停可看完整起止与天数。</span></div>' +
-    '<div class="type-help-row"><span class="mini-tag mute">用例与跨度</span>' +
-      '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过用例，或还有工作项停在「测试中」，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
-    '<div class="type-help-row"><span class="mini-tag mute">时间范围</span>' +
-      '<span class="type-help-desc">默认自动适配已加载的需求并包含今天，甘特按页加载，加载越多范围越宽；跨度超过 2 年自动切到按月查看。可切日 / 周 / 月刻度与缩放。左侧「计划」是计划日期，条形是记录回放，计划日期不参与阶段计算。</span></div>' +
+  var stages = [
+    ["review", "评审", "需求创建 → 最后一次评审通过；待评审算到今天，已拒绝停在最后一次拒绝", "区间"],
+    ["plan", "排期", "评审通过 → 最后一次排期或调期决定；撤排后这段历史仍保留", "区间或单点"],
+    ["design", "设计", "关联文档最早创建 → 最晚发布；还有文档未发布就画到今天并标「+」", "区间"],
+    ["dev", "开发", "工作项首次离开「待处理」或首次计时 → 最后一个工作项完成；计划开始日不参与", "区间"],
+    ["test", "测试", "用例执行记录与工作项「测试中」窗口合并，取最早开始、最晚结束", "区间"],
+    ["complete", "完成", "工作项全部完成且用例无未执行、未通过时，取开发与测试较晚的收口日", "单点"],
+    ["release", "发布", "成功生产发布记录中的本需求快照，不按目标版本日期推算", "单点或短条"]
+  ];
+  return '<div class="menu-title">需求池甘特 · 阶段口径</div>' +
+    '<div class="demg-help-stages">' +
+      stages.map(function(s){
+        return '<div class="demg-help-row">' +
+          '<i class="demg-legend-dot st-' + s[0] + '"></i>' +
+          '<b class="demg-help-name">' + s[1] + '</b>' +
+          '<span class="demg-help-method">' + s[2] + '</span>' +
+          '<em class="demg-help-form">' + s[3] + '</em>' +
+        '</div>';
+      }).join("") +
+    '</div>' +
+    '<div class="type-help-list demg-help-rules">' +
+      '<div class="type-help-row"><span class="mini-tag type-story">缺失不补</span>' +
+        '<span class="type-help-desc">没有记录就不画，也不补 0 天；相邻阶段之间没有记录覆盖的日期画虚线缺口；最后一段结束到今天仍缺记录时，按卡点标出「已排期未开工 / 未执行用例 / 待发布」。</span></div>' +
+      '<div class="type-help-row"><span class="mini-tag mute">天数口径</span>' +
+        '<span class="type-help-desc">条形标注的是阶段首尾的自然日天数，含周末和中间缺口，不是投入工时；进行中显示「N 天+」，不随缩放或可视范围裁剪。条形太窄时不标，悬停可看完整起止与天数。</span></div>' +
+      '<div class="type-help-row"><span class="mini-tag type-bug">并行与取消</span>' +
+        '<span class="type-help-desc">时间重叠的阶段自动上下分层；已取消的需求工作阶段停在取消日，不再往今天生长，既有发布事实仍保留。</span></div>' +
+      '<div class="type-help-row"><span class="mini-tag type-epic">范围与计划</span>' +
+        '<span class="type-help-desc">默认自动适配已加载需求并包含今天，甘特按页加载，加载越多范围越宽；跨度超过 2 年切到按月查看。左侧「计划」是计划日期，不参与阶段计算。</span></div>' +
     '</div>';
 }
 function recurLabel(type){

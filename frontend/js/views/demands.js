@@ -1354,7 +1354,10 @@ function demgLegendHTML(){
   }).join("") +
   '<span class="gl-item"><i class="demg-legend-gap"></i>缺口</span>' +
   '<span class="gl-item"><i class="demg-legend-expect"></i>期望交付</span>' +
-  '<span class="gantt-legend-hint">阶段取自真实记录，缺失不补 0 天</span>';
+  '<span class="gantt-legend-hint">阶段取自真实记录，缺失不补 0 天</span>' +
+  '<button class="label-help demg-help-btn" type="button" data-demg-help aria-label="查看各阶段统计方法" title="各阶段怎么算">' +
+    icon("helpCircle", 13) +
+  '</button>';
 }
 function syncDemGanttControls(){
   if(!demandGanttBar) return;
@@ -2232,18 +2235,20 @@ if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
     loadDemands();
   }).catch(function(ex){ toast(ex.message || "切换失败", "bad"); });
 });
-/* 甘特模式旁的 ?：解释阶段条形、缺口与时间范围的计算口径 */
+/* 甘特「?」：解释七个阶段的口径、缺口与时间范围；工具条与图例两个入口共用 */
 var demandGanttHelpPop = null;
+function openDemandGanttHelp(anchor){
+  if(!anchor) return;
+  if(UI.popOpen(demandGanttHelpPop)){ UI.closeAllPops(); return; }
+  var el = document.createElement("div");
+  el.className = "menu popover type-help-pop";
+  el.innerHTML = demandGanttInfoHTML();
+  demandGanttHelpPop = el;
+  UI.openPop(el, anchor, { align:"right", width:Math.max(300, Math.min(460, window.innerWidth - 16)), onClose:function(){ el.remove(); demandGanttHelpPop = null; } });
+}
 if(demandGanttHelp){
   demandGanttHelp.innerHTML = icon("helpCircle", 13);
-  demandGanttHelp.addEventListener("click", function(){
-    if(UI.popOpen(demandGanttHelpPop)){ UI.closeAllPops(); return; }
-    var el = document.createElement("div");
-    el.className = "menu popover type-help-pop";
-    el.innerHTML = demandGanttInfoHTML();
-    demandGanttHelpPop = el;
-    UI.openPop(el, demandGanttHelp, { align:"right", width:Math.max(280, Math.min(400, window.innerWidth - 16)), onClose:function(){ el.remove(); demandGanttHelpPop = null; } });
-  });
+  demandGanttHelp.addEventListener("click", function(){ openDemandGanttHelp(demandGanttHelp); });
 }
 if($("btnDemandColumns")) $("btnDemandColumns").addEventListener("click", function(){
   listPrefs.openColumnSettings("demand-pool", function(){ render(); });
@@ -2293,6 +2298,8 @@ if(demandGanttBar){
   });
 }
 if(demandBody) demandBody.addEventListener("click", function(e){
+  var dh = e.target.closest("[data-demg-help]");
+  if(dh){ openDemandGanttHelp(dh); return; }
   var dm = e.target.closest("[data-dem-more]");
   if(dm){
     if(dm.dataset.demMore === "table") loadMoreDemandTable();
