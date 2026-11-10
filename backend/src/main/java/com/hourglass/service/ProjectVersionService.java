@@ -74,7 +74,9 @@ public class ProjectVersionService {
                 tasksByVersion.computeIfAbsent(versionId, key -> new ArrayList<Task>()).add(task);
             }
         }
+        Set<String> locked = new java.util.HashSet<String>(taskMapper.selectFormalSuccessVersionIdsByReq(workspaceId, reqId));
         for (ProjectVersion version : versions) {
+            version.setContentLocked("released".equals(version.getStatus()) || locked.contains(version.getId()));
             List<Task> tasks = tasksByVersion.get(version.getId());
             if (tasks == null) {
                 tasks = Collections.emptyList();
@@ -158,6 +160,10 @@ public class ProjectVersionService {
         if ("released".equals(old.getStatus())) {
             throw AppException.badRequest("已发布的版本不能编辑");
         }
+        /* 与前端 contentLocked 同口径：正式交付后版本内容只读；新范围请创建新版本或独立发布事件 */
+        if (!taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, id).isEmpty()) {
+            throw AppException.badRequest("版本已有成功正式发布记录，版本内容只读");
+        }
         old.setName(name);
         old.setDescription(Texts.trimToNull(req.getDescription()));
         old.setStartDate(req.getStartDate());
@@ -184,6 +190,10 @@ public class ProjectVersionService {
         projectAccess.assertWriteForUpdate(workspaceId, userId, version.getReqId());
         if ("released".equals(version.getStatus())) {
             throw AppException.badRequest("已发布的版本不能重新开始开发");
+        }
+        if (!"active".equals(version.getStatus())
+                && !taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, id).isEmpty()) {
+            throw AppException.badRequest("版本已有成功正式发布记录，版本内容只读");
         }
         if (!"active".equals(version.getStatus())) {
             if (version.getStartDate() == null) {
@@ -231,6 +241,8 @@ public class ProjectVersionService {
         if (versionMapper.deleteById(workspaceId, id) != 1) {
             throw new AppException(409, "版本已变化，请刷新后重试");
         }
+        /* 测试计划不阻塞版本删除，但不能留悬空 version_id（否则计划再保存会因版本校验失败） */
+        versionMapper.clearTestPlanVersion(workspaceId, id);
     }
 
     @Transactional
@@ -328,7 +340,7 @@ public class ProjectVersionService {
             if (ids.contains(version.getId()) != selected.contains(task.getId())) changed.add(task);
         }
         if (changed.isEmpty()) return;
-        if (!taskMapper.selectVersionSuccessIdsForScope(version.getWorkspaceId(), version.getId()).isEmpty()) {
+        if (!taskMapper.selectVersionFormalSuccessIdsForScope(version.getWorkspaceId(), version.getId()).isEmpty()) {
             throw AppException.badRequest("版本已有成功正式发布记录，内容成员关系已冻结");
         }
         String reason = Texts.trimToNull(reasonRaw);

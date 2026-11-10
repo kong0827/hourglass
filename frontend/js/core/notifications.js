@@ -339,7 +339,8 @@ function noticeItemHTML(g){
   return '<button class="apn' + (x.readAt ? "" : " unread") + '" type="button"' +
     ' data-apn="' + esc(x.id) + '" data-apn-ids="' + esc(ids) + '"' +
     (isTaskRef(x.type) && x.refTaskId ? ' data-apn-task="' + esc(x.refTaskId) + '"' : "") +
-    (!isTaskRef(x.type) && x.refKind && x.refId
+    /* 「已被移出空间」不带深链：历史数据里的 workspace 链接指向已无权进入的空间 */
+    (!isTaskRef(x.type) && x.type !== "member_removed" && x.refKind && x.refId
       ? ' data-apn-kind="' + esc(x.refKind) + '" data-apn-ref="' + esc(x.refId) + '"' : "") +
     (x.workspaceId ? ' data-apn-ws="' + esc(x.workspaceId) + '"' : "") +
     ' title="' + esc(x.title) + '">' +

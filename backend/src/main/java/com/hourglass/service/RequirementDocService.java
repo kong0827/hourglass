@@ -321,11 +321,11 @@ public class RequirementDocService {
         if (req == null || req.getItems() == null || req.getItems().isEmpty()) {
             return;
         }
-        // 先按 id 查出文档，校验权限与项目一致性
+        // 先按 id 查出文档，校验可见性（他人草稿按不存在处理）、写权限与项目一致性
         java.util.Map<String, RequirementDoc> docs = new java.util.HashMap<String, RequirementDoc>();
         String commonReqId = null;
         for (ReqDocReorderRequest.Item item : req.getItems()) {
-            RequirementDoc d = get(workspaceId, item.getId());
+            RequirementDoc d = getVisible(workspaceId, userId, item.getId());
             projectAccess.assertWrite(workspaceId, userId, d.getReqId());
             if (commonReqId == null) {
                 commonReqId = d.getReqId();
@@ -334,27 +334,35 @@ public class RequirementDocService {
             }
             docs.put(d.getId(), d);
         }
-        // 落库
+        // 先按「本批调整后的最终父子关系」整体校验，再落库：逐条校验会用到尚未生效的旧父级，
+        // 同一批里 A→B、B→A 这类互挂会被漏掉
+        java.util.Map<String, String> finalParent = new java.util.HashMap<String, String>();
         for (ReqDocReorderRequest.Item item : req.getItems()) {
-            RequirementDoc d = docs.get(item.getId());
             String newParentId = item.getParentId();
+            finalParent.put(item.getId(), newParentId == null || newParentId.isEmpty() ? null : newParentId);
+        }
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
+            String newParentId = finalParent.get(item.getId());
             // 父文档必须同项目；空表示根级
-            if (newParentId != null && !newParentId.isEmpty()) {
-                RequirementDoc parent = docMapper.selectById(newParentId);
-                if (parent == null || !workspaceId.equals(parent.getWorkspaceId())) {
+            if (newParentId != null) {
+                RequirementDoc parent = docs.containsKey(newParentId) ? docs.get(newParentId) : docMapper.selectById(newParentId);
+                if (parent == null || !workspaceId.equals(parent.getWorkspaceId())
+                        || !canSeeDraft(parent.getOwnerUserId(), parent.getPublishedAt(), userId,
+                                projectAccess.roleOf(workspaceId, userId))) {
                     throw AppException.badRequest("父文档不存在：" + newParentId);
                 }
                 if (!commonReqId.equals(parent.getReqId())) {
                     throw AppException.badRequest("父文档必须属于同一项目");
                 }
-                // 不能形成环：新父级不能是当前文档本身或其任何后代
-                if (item.getId().equals(newParentId) || isDescendant(item.getId(), newParentId, docs)) {
+                if (formsCycle(item.getId(), finalParent, docs)) {
                     throw AppException.badRequest("不能将文档放到自己的子文档下");
                 }
             }
+        }
+        // 落库
+        for (ReqDocReorderRequest.Item item : req.getItems()) {
             docMapper.updateSortOrder(workspaceId, item.getId(),
-                    item.getSortOrder() == null ? 0 : item.getSortOrder(),
-                    newParentId == null || newParentId.isEmpty() ? null : newParentId);
+                    item.getSortOrder() == null ? 0 : item.getSortOrder(), finalParent.get(item.getId()));
         }
         // 记录一条活动：用第一个文档的标题代表这次排序操作
         RequirementDoc first = docs.get(req.getItems().get(0).getId());
@@ -362,19 +370,25 @@ public class RequirementDocService {
                 "update", "调整了文档「" + first.getTitle() + "」的顺序/层级");
     }
 
-    /** 判断 descendant 是否是 ancestor 的后代（仅用于排序时防环） */
-    private boolean isDescendant(String ancestorId, String descendantId, java.util.Map<String, RequirementDoc> cache) {
-        String cursor = descendantId;
+    /** 沿最终父级链（本批调整优先，其余取库内现值）向上走，回到自身即成环；链过深也按成环拒绝 */
+    private boolean formsCycle(String id, java.util.Map<String, String> finalParent,
+                               java.util.Map<String, RequirementDoc> cache) {
+        String cursor = finalParent.get(id);
         int guard = 0;
-        while (cursor != null && guard++ < 100) {
+        while (cursor != null) {
+            if (cursor.equals(id) || ++guard > 200) {
+                return true;
+            }
+            if (finalParent.containsKey(cursor)) {
+                cursor = finalParent.get(cursor);
+                continue;
+            }
             RequirementDoc d = cache.get(cursor);
             if (d == null) {
                 d = docMapper.selectById(cursor);
                 if (d != null) cache.put(cursor, d);
             }
-            if (d == null) return false;
-            if (ancestorId.equals(d.getParentId())) return true;
-            cursor = d.getParentId();
+            cursor = d == null ? null : d.getParentId();
         }
         return false;
     }
@@ -519,6 +533,10 @@ public class RequirementDocService {
             return d;
         }
         docMapper.updatePublished(id, published ? java.time.LocalDateTime.now() : null);
+        if (!published) {
+            /* 收回发布即吊销分享：旧链接不能在再次发布后自动复活，需重新生成 */
+            shareMapper.deleteByDoc(workspaceId, id);
+        }
         workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, id, userId, "update",
                 published ? "发布了文档「" + d.getTitle() + "」，成员可见"
                         : "收回了文档「" + d.getTitle() + "」的发布，转为草稿");

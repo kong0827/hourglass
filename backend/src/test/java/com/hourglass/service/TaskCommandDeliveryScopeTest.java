@@ -212,9 +212,10 @@ class TaskCommandDeliveryScopeTest {
     @Test
     void releasedTargetCannotReceiveNewBindingsIncludingInheritance() {
         version("V1", "active", "R1");
-        when(tasks.selectVersionSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
+        when(tasks.selectVersionFormalSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
         assertThrows(AppException.class, () -> service.create("U1", "W1", request()));
         verify(bindings, never()).insertBatch(anyString(), anyString(), anyList());
+        verify(versions, never()).touchRevision(anyString(), anyString());
     }
 
     @Test
@@ -444,6 +445,7 @@ class TaskCommandDeliveryScopeTest {
         verify(bindings).deleteBinding("W1", "K1", "V1");
         verify(bindings, never()).deleteByTaskId(anyString(), anyString());
         verify(bindings, never()).insertBatch(anyString(), anyString(), anyList());
+        verify(versions).touchRevision("W1", "V1");
     }
 
     @Test
@@ -455,6 +457,9 @@ class TaskCommandDeliveryScopeTest {
         req.setVersionChangeReason("首版未交付，顺延");
         update(req);
         verify(bindings).insertBatch("W1", "V2", Collections.singletonList("K1"));
+        /* 任务侧换版本：迁出与迁入两个版本的 revision 都推进，版本侧打开中的成员表单会得到 409 */
+        verify(versions).touchRevision("W1", "V1");
+        verify(versions).touchRevision("W1", "V2");
         verify(audit).logChange(eq("U1"), eq("W1"), eq("K1"), eq("version_change"), anyString(),
                 any(), any(), eq("首版未交付，顺延"));
     }
@@ -607,7 +612,7 @@ class TaskCommandDeliveryScopeTest {
         old.setBoardColumn("done");
         old.setDemandId("D1");
         persistedBindings.put("K1", new ArrayList<String>(Collections.singletonList("V1")));
-        when(tasks.selectVersionSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
+        when(tasks.selectVersionFormalSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
         TaskSaveRequest req = request();
         req.setBoardColumn("done");
         req.setVersionIds(Collections.emptyList());
@@ -656,7 +661,7 @@ class TaskCommandDeliveryScopeTest {
     @Test
     void incrementalBindingRetainsSuccessfulOtherVersionWithoutReinsertionOrStealing() {
         persistedBindings.put("K1", new ArrayList<String>(Collections.singletonList("V1")));
-        when(tasks.selectVersionSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
+        when(tasks.selectVersionFormalSuccessIdsForScope("W1", "V1")).thenReturn(Collections.singletonList("VR1"));
         TaskSaveRequest req = request();
         req.setVersionIds(Arrays.asList("V2", "V1", "V2"));
         req.setVersionChangeReason("增加迭代版本，保留首版历史");

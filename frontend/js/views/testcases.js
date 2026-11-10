@@ -225,7 +225,7 @@ function renderCoverage(){
     '</div>';
   }).join("");
   box.innerHTML = head + '<div class="cov-table">' +
-    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span>未执行</span><span>缺陷</span><span>通过率</span><span>覆盖</span></div>' +
+    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>' +
     rows + '</div>';
 }
 
@@ -1312,6 +1312,7 @@ var planSel = {};             /* 详情页批量执行勾选：caseId -> true */
 var planBatchStatus = "passed";
 var editingPlanId = null;
 var planSaving = false;
+var planDialogSeq = 0;
 var planPickCases = [];
 var pickingPlan = false;
 
@@ -1515,17 +1516,25 @@ function renderPlanDetail(){
 function planCaseIds(){
   return (planDetail && planDetail.cases || []).map(function(c){ return c.caseId; });
 }
+var planRunBusy = false;
 function doPlanBatchRun(){
+  /* 执行记录是追加写：连点会重复记一批结果，提交中直接忽略 */
+  if(planRunBusy || !planDetail) return;
   var ids = [];
   for(var k in planSel) if(planSel[k]) ids.push(k);
   if(!ids.length){ toast("先勾选要标记结果的用例", "warn"); return; }
   var note = $("planRunNote") ? $("planRunNote").value.trim() : "";
-  API.post("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/runs",
+  var planId = planDetail.plan.id;
+  var btn = document.querySelector("[data-plan-runs]");
+  planRunBusy = true;
+  if(btn) btn.disabled = true;
+  API.post("/api/test-plans/" + encodeURIComponent(planId) + "/runs",
     { caseIds: ids, status: planBatchStatus, note: note || null })
   .then(function(n){
     toast("已记录 " + (n || 0) + " 条执行结果", "fs");
-    openPlanDetail(planDetail.plan.id);
-  }).catch(function(ex){ toast(ex.message || "批量记录失败", "bad"); });
+    if(planDetail && planDetail.plan.id === planId) openPlanDetail(planId);
+  }).catch(function(ex){ toast(ex.message || "批量记录失败", "bad"); })
+  .then(function(){ planRunBusy = false; if(btn) btn.disabled = false; });
 }
 function planStatusTo(status){
   API.put("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/status?status=" + encodeURIComponent(status), {})
@@ -1558,17 +1567,26 @@ function openPlanDialog(id){
   $("pStart").value = p && p.plannedStart ? p.plannedStart : "";
   $("pEnd").value = p && p.plannedEnd ? p.plannedEnd : "";
   $("pNote").value = p && p.note ? p.note : "";
-  $("pVersion").innerHTML = '<option value="">不关联版本</option>';
+  /* 编辑时先放入当前关联版本：版本列表未回来（或加载失败）就保存，也不会把关联清成 null */
+  var keepVersion = p && p.versionId ? p.versionId : "";
+  $("pVersion").innerHTML = '<option value="">不关联版本</option>' +
+    (keepVersion ? '<option value="' + esc(keepVersion) + '">当前关联版本</option>' : "");
+  $("pVersion").value = keepVersion;
   $("btnSavePlan").textContent = "保存";
   UI.openModal($("dlgPlan"), "input");
+  var dialogSeq = ++planDialogSeq;
   API.get("/api/versions", { reqId: caseReqId }).then(function(vs){
-    var html = '<option value="">不关联版本</option>';
+    if(dialogSeq !== planDialogSeq) return;
+    var cur = $("pVersion").value;
+    var html = '<option value="">不关联版本</option>', found = false;
     (vs || []).forEach(function(v){
+      if(v.id === cur) found = true;
       html += '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>';
     });
+    if(cur && !found) html += '<option value="' + esc(cur) + '">当前关联版本（不在列表中）</option>';
     $("pVersion").innerHTML = html;
-    if(p && p.versionId) $("pVersion").value = p.versionId;
-  }).catch(function(){ /* 版本下拉失败不阻塞：保持仅「不关联版本」 */ });
+    $("pVersion").value = cur;
+  }).catch(function(){ /* 版本下拉失败不阻塞：保留当前关联 */ });
 }
 function savePlan(){
   if(planSaving) return;

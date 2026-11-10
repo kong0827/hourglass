@@ -54,6 +54,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResult.error(400, "参数不合法：" + e.getName()));
     }
 
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResult<Void>> handleMissingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException e, HttpServletRequest request) {
+        markFailed(request);
+        return ResponseEntity.badRequest().body(ApiResult.error(400, "缺少必要参数：" + e.getParameterName()));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResult<Void>> handleUnreadable(HttpMessageNotReadableException e, HttpServletRequest request) {
         markFailed(request);

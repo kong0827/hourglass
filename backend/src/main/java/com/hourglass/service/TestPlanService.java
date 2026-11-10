@@ -40,15 +40,18 @@ public class TestPlanService {
     private final TestCaseMapper caseMapper;
     private final TestCaseService caseService;
     private final ProjectAccessService projectAccess;
+    private final com.hourglass.mapper.ProjectVersionMapper versionMapper;
 
     public TestPlanService(TestPlanMapper planMapper, TestPlanCaseMapper planCaseMapper,
                            TestCaseMapper caseMapper, TestCaseService caseService,
-                           ProjectAccessService projectAccess) {
+                           ProjectAccessService projectAccess,
+                           com.hourglass.mapper.ProjectVersionMapper versionMapper) {
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.caseMapper = caseMapper;
         this.caseService = caseService;
         this.projectAccess = projectAccess;
+        this.versionMapper = versionMapper;
     }
 
     /* ---------- 查询 ---------- */
@@ -99,10 +102,11 @@ public class TestPlanService {
         p.setWorkspaceId(workspaceId);
         p.setReqId(req.getReqId());
         p.setName(Texts.cut(req.getName().trim(), 100));
-        p.setVersionId(Texts.trimToNull(req.getVersionId()));
+        p.setVersionId(checkVersion(workspaceId, req.getReqId(), req.getVersionId()));
         p.setPlannedStart(req.getPlannedStart());
         p.setPlannedEnd(req.getPlannedEnd());
-        p.setStatus(req.getStatus() == null ? "draft" : req.getStatus());
+        /* 新计划一律从草稿开始：running / done 只能走 setStatus（done 需先圈选用例） */
+        p.setStatus("draft");
         p.setNote(Texts.trimToNull(req.getNote()));
         p.setCreatedBy(CurrentUser.get().getDisplayName());
         p.setCreatedByUserId(userId);
@@ -115,16 +119,36 @@ public class TestPlanService {
         TestPlan p = requirePlan(workspaceId, id);
         projectAccess.assertWrite(workspaceId, userId, p.getReqId());
         assertEditable(p);
-        projectAccess.assertWrite(workspaceId, userId, req.getReqId());
+        /* 计划圈选的用例都属于原项目：所属项目不可改，否则计划与用例跨项目错位 */
+        if (req.getReqId() != null && !req.getReqId().equals(p.getReqId())) {
+            throw AppException.badRequest("测试计划的所属项目不可修改");
+        }
         checkDates(req);
-        p.setReqId(req.getReqId());
         p.setName(Texts.cut(req.getName().trim(), 100));
-        p.setVersionId(Texts.trimToNull(req.getVersionId()));
+        String keepVersion = Texts.trimToNull(req.getVersionId());
+        if (keepVersion != null && keepVersion.equals(p.getVersionId()) && versionMapper.selectById(keepVersion) == null) {
+            /* 历史悬空引用（版本已删）：保存时顺手解除，而不是让整个计划无法保存 */
+            keepVersion = null;
+        }
+        p.setVersionId(checkVersion(workspaceId, p.getReqId(), keepVersion));
         p.setPlannedStart(req.getPlannedStart());
         p.setPlannedEnd(req.getPlannedEnd());
         p.setNote(Texts.trimToNull(req.getNote()));
         planMapper.update(p);
         return planMapper.selectViewById(id);
+    }
+
+    /** 关联版本必须属于本空间、本项目；空值表示不关联 */
+    private String checkVersion(String workspaceId, String reqId, String versionId) {
+        String id = Texts.trimToNull(versionId);
+        if (id == null) {
+            return null;
+        }
+        com.hourglass.entity.ProjectVersion v = versionMapper.selectById(id);
+        if (v == null || !workspaceId.equals(v.getWorkspaceId()) || !java.util.Objects.equals(reqId, v.getReqId())) {
+            throw AppException.badRequest("关联版本不存在或不属于该项目");
+        }
+        return id;
     }
 
     /** 状态流转：done 前必须已圈选用例；done 后禁止再改内容（快照口径） */

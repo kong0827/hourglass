@@ -202,6 +202,7 @@ class TaskCascadeTest {
         verify(reqMapper, never()).deleteAllByWorkspace(WS);
         verify(versionMapper, never()).deleteByWorkspace(WS);
         verify(logMapper, never()).deleteAllByWorkspace(WS);
+        verify(testCaseMapper, never()).deletePlansByWorkspace(WS);
         org.mockito.Mockito.verifyNoInteractions(attachmentService, completionService);
         verify(taskMapper, never()).selectSuccessfulReleaseIdsForScope(WS);
     }
@@ -284,6 +285,10 @@ class TaskCascadeTest {
         verify(taskMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
         verify(reqMapper, org.mockito.Mockito.times(2)).deleteAllByWorkspace(WS);
         verify(versionMapper, org.mockito.Mockito.times(2)).deleteByWorkspace(WS);
+        /* 测试计划/模块不在备份里：只有整空间删除清理，导入覆盖保留 */
+        verify(testCaseMapper).deletePlanCasesByWorkspace(WS);
+        verify(testCaseMapper).deletePlansByWorkspace(WS);
+        verify(testCaseMapper).deleteModulesByWorkspace(WS);
     }
 
     @Test

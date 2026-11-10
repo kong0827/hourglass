@@ -145,12 +145,13 @@ public class WorkspaceController {
         audit.recordCurrent(id, "member_remove", "member", userId, userId, true,
                 self ? "退出空间「" + before.getName() + "」"
                         : ("移除成员 " + userId + "（空间「" + before.getName() + "」）"), request);
-        /* 被移除的人已不是成员，普通通知的成员校验会拦掉，必须走系统通道 */
+        /* 被移除的人已不是成员，普通通知的成员校验会拦掉，必须走系统通道；
+           不带深链：该空间已无权进入，点击只展示正文 */
         if (!self) {
             notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_REMOVED,
                     "你已被移出空间「" + before.getName() + "」",
                     "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主",
-                    null, "workspace", id);
+                    null);
         }
         return ApiResult.ok();
     }

@@ -216,7 +216,11 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
-        reqMapper.update(r);
+        /* 乐观锁：表单打开后项目被别人改过则拒绝整表覆盖（不传 updatedAt 的旧客户端保持原行为） */
+        r.setUpdatedAt(req.getUpdatedAt());
+        if (reqMapper.update(r) == 0) {
+            throw new AppException(409, "项目已被其他人修改，请刷新后重试");
+        }
         recordChange(workspaceId, id, "名称", old.getName(), r.getName());
         recordChange(workspaceId, id, "描述", old.getDescription(), r.getDescription());
         recordChange(workspaceId, id, "状态", old.getStatus(), r.getStatus());
@@ -321,11 +325,13 @@ public class RequirementService {
      * 删除影响预览（A5）：不落库，只统计"删掉这个项目会发生什么"。
      * 与 delete() 的统计口径一致（任务含回收站；分支退回空间级、数量单独给出供提示）。
      */
-    public RequirementDeleteResult deleteImpact(String workspaceId, String id) {
+    public RequirementDeleteResult deleteImpact(String workspaceId, String userId, String id) {
         Requirement r = reqMapper.selectById(id);
         if (r == null || !workspaceId.equals(r.getWorkspaceId())) {
             throw AppException.notFound("项目不存在：" + id);
         }
+        /* 预览会返回项目名与各类数量：与其它项目读接口一致，无查看权限按不存在处理 */
+        projectAccess.assertView(workspaceId, userId, id);
         RequirementDeleteResult result = new RequirementDeleteResult();
         result.setName(r.getName());
         result.setUnlinked(taskMapper.countTasksByReq(workspaceId, id));
@@ -366,7 +372,8 @@ public class RequirementService {
         logMapper.insertUnlinkReqLogs(workspaceId, id, userId,
                 "解除与已删除项目「" + r.getName() + "」的关联");
         taskMapper.clearReq(workspaceId, id);
-        /* 直接归属该项目的分支退回空间级公共分支（分支本身保留） */
+        /* 直接归属该项目的分支退回空间级公共分支（分支本身保留）；与公共分支重名的先改名避免唯一键冲突 */
+        branchMapper.renameClashesBeforeDetach(workspaceId, id);
         branchMapper.clearReqIdByReq(workspaceId, id);
         /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);

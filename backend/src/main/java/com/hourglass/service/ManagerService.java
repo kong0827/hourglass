@@ -176,6 +176,7 @@ public class ManagerService {
         result.put("weekly", weekly(tasks, today));
         result.put("epics", epics(tasks));
         result.put("members", projectMembers(tasks, snapshot.members, snapshot.logs, today));
+        result.put("capacityMinutesPerDay", DAILY_CAPACITY_MINUTES);
         result.put("tasks", taskMaps(tasks, requirementNames(snapshot.requirements)));
         return result;
     }
@@ -404,6 +405,7 @@ public class ManagerService {
         LocalDate today = today();
         int sent = 0;
         int skipped = 0;
+        int deduped = 0;
         for (Task task : selected) {
             String ownerUserId = null;
             if (hasText(task.getOwnerUserId())) {
@@ -421,14 +423,19 @@ public class ManagerService {
                 skipped++;
                 continue;
             }
-            notificationService.push(ownerUserId, workspaceId, "manager_nudge",
-                    "管理催办：" + safe(task.getTitle()), nudgeBody(task, today), task.getId());
-            sent++;
+            /* 同一任务 6 小时内已催办过会被去重：不计入「已发送」，单独返回，避免提示虚高 */
+            if (notificationService.push(ownerUserId, workspaceId, "manager_nudge",
+                    "管理催办：" + safe(task.getTitle()), nudgeBody(task, today), task.getId())) {
+                sent++;
+            } else {
+                deduped++;
+            }
         }
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("sent", sent);
         result.put("skipped", skipped);
+        result.put("deduped", deduped);
         return result;
     }
 
@@ -473,6 +480,7 @@ public class ManagerService {
         item.put("total", counts.total);
         item.put("backlog", counts.backlog);
         item.put("doing", counts.doing);
+        item.put("ended", counts.ended);
         item.put("done", counts.done);
         item.put("overdue", counts.overdue);
         item.put("blocked", counts.blocked);
@@ -631,9 +639,11 @@ public class ManagerService {
                     userId = key;
                 }
             } else if (hasText(task.getOwner())) {
-                key = task.getOwner().trim();
-                name = key;
-                userId = userIdsByName.get(key);
+                name = task.getOwner().trim();
+                userId = userIdsByName.get(name);
+                /* 历史文本负责人能解析到成员时并入该账号：否则同一人一半任务按ID、一半按名字，
+                   成员负载出现两行，两行又各按账号统计一遍工时（移动端合并后翻倍） */
+                key = userId == null ? name : userId;
             } else {
                 key = UNASSIGNED_KEY;
                 name = UNASSIGNED_NAME;
@@ -738,6 +748,7 @@ public class ManagerService {
             int backlog = 0;
             int doing = 0;
             int done = 0;
+            int ended = 0;
             for (Task task : tasks) {
                 LocalDate created = date(task.getCreatedAt());
                 if (created != null && created.isAfter(weekEnd)) {
@@ -745,7 +756,13 @@ public class ManagerService {
                 }
                 if (isDone(task) && (task.getCompletedAt() == null || !task.getCompletedAt().isAfter(weekEnd))) {
                     done++;
-                } else if (Consts.COL_DOING.equals(task.getBoardColumn())) {
+                    continue;
+                }
+                /* 完成日晚于该周的任务沿用原口径计待处理；其余只有当前列状态，按处理规则归类 */
+                String bucket = isDone(task) ? "backlog" : TaskCalc.statusBucket(task.getBoardColumn(), task.getProcessingRule());
+                if ("ended".equals(bucket)) {
+                    ended++;
+                } else if ("doing".equals(bucket)) {
                     doing++;
                 } else {
                     backlog++;
@@ -755,6 +772,7 @@ public class ManagerService {
             week.put("start", start);
             week.put("backlog", backlog);
             week.put("doing", doing);
+            week.put("ended", ended);
             week.put("done", done);
             weeks.add(week);
         }
@@ -1009,7 +1027,10 @@ public class ManagerService {
             if (isDone(task)) {
                 counts.done++;
             } else {
-                if (Consts.COL_DOING.equals(task.getBoardColumn())) {
+                String bucket = TaskCalc.statusBucket(task.getBoardColumn(), task.getProcessingRule());
+                if ("ended".equals(bucket)) {
+                    counts.ended++;
+                } else if ("doing".equals(bucket)) {
                     counts.doing++;
                 } else {
                     counts.backlog++;
@@ -1029,6 +1050,7 @@ public class ManagerService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("backlog", counts.backlog);
         result.put("doing", counts.doing);
+        result.put("ended", counts.ended);
         result.put("done", counts.done);
         result.put("overdue", counts.overdue);
         result.put("blocked", counts.blocked);
@@ -1459,6 +1481,7 @@ public class ManagerService {
         private int total;
         private int backlog;
         private int doing;
+        private int ended;
         private int done;
         private int overdue;
         private int blocked;

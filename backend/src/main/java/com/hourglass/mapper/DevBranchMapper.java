@@ -56,6 +56,13 @@ public interface DevBranchMapper {
 
     DevBranch selectById(@Param("id") String id);
 
+    /**
+     * 单条分支的关联工作项计数（口径同列表：viewerId 非空时排除其无权查看项目下的任务）。
+     * 返回 DevBranch 仅填 taskCount / doneCount。
+     */
+    DevBranch selectTaskStats(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+                              @Param("branchId") String branchId);
+
     /** 账号删除后清理分支负责人引用 */
     int clearOwnerUser(@Param("userId") String userId);
 
@@ -65,6 +72,9 @@ public interface DevBranchMapper {
      */
     int countByName(@Param("workspaceId") String workspaceId, @Param("name") String name,
                     @Param("reqId") String reqId, @Param("excludeId") String excludeId);
+
+    /** 项目删除前把与公共分支同名的项目分支改名（原名-项目ID），返回改名条数 */
+    int renameClashesBeforeDetach(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     /** 项目删除时把直接归属它的分支退回空间级公共分支 */
     int clearReqIdByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);

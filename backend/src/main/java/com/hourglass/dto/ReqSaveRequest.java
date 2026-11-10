@@ -32,6 +32,12 @@ public class ReqSaveRequest {
     @Pattern(regexp = "active|done|hold", message = "需求状态不合法")
     private String status = "active";
 
+    /**
+     * 选填，仅编辑生效：打开表单时项目的 updatedAt。传了就做乐观锁，
+     * 别人已保存过（updated_at 变了）返回 409，避免整表覆盖对方的修改。
+     */
+    private java.time.LocalDateTime updatedAt;
+
     /** 仅新建时生效：blank / standard / test；留空按空白项目处理 */
     @Pattern(regexp = "^(blank|standard|test)?$", message = "项目模板不合法")
     private String template;

@@ -20,6 +20,8 @@ var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBo
     fVerName = $("fVerName"), btnSaveVer = $("btnSaveVer"), verFormTitle = $("verFormTitle");
 
 var editingVerId = null;
+/* 打开编辑时的版本令牌：保存时不能从缓存重读（缓存可能已被迟到的列表响应换掉，静默覆盖并发修改） */
+var editingVerRevision = null, editingVerStatus = null;
 var viewMode = "phase";            /* phase | version | overview */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
@@ -300,11 +302,12 @@ function drillRows(scope, val, metric){
     return false;
   });
   var isDone = function(t){ return t.boardColumn === "done"; };
-  if(metric === "完成工作项" || metric === "当前完成工作项" || metric === "已完成") rows = rows.filter(isDone);
+  /* 下钻口径与指标卡一致：卡片只统计已完成工作项（fillPhase 先跳过未完成） */
+  if(metric === "完成工作项" || metric === "当前完成工作项" || metric === "已完成" || metric === "工作项均耗时") rows = rows.filter(isDone);
   else if(metric === "进行中" || metric === "剩余预估") rows = rows.filter(function(t){ return !isDone(t); });
   else if(metric.indexOf("偏差") >= 0) rows = rows.filter(function(t){ return isDone(t) && t.estimateMinutes; });
   else if(metric === "准时完成率") rows = rows.filter(function(t){ return isDone(t) && t.dueDate; });
-  else if(metric === "新增需求 / 缺陷维护") rows = rows.filter(function(t){ return t.itemType === "story" || t.itemType === "bug"; });
+  else if(metric === "新增需求 / 缺陷维护") rows = rows.filter(function(t){ return isDone(t) && (t.itemType === "story" || t.itemType === "bug"); });
   return rows;
 }
 function openDrillModal(scope, val, metric){
@@ -789,8 +792,9 @@ function versionDeliverySummary(v){
   }
   return '<p class="foot-note">' + (v.status === "released" ? '无正式发布记录，不能从完成数量或首版统计推断实际交付。' : '当前规划统计，完成不等于实际发布。') + '</p>';
 }
+/* 内容只读由后端 contentLocked 判定（成功的生产部署 / 重部署）；测试环境部署与回滚不锁定，前端不再自行拼条件 */
 function versionContentLocked(v){
-  return !!v && (v.status === "released" || v.hasSuccessfulRelease === true || Number(v.successfulReleaseCount) > 0 || Number(v.successfulReleaseEventCount) > 0 || v.releaseEvidenceKind === "release_snapshot");
+  return !!v && (v.contentLocked === true || v.status === "released");
 }
 function versionCardHTML(v){
   var st = v.status;
@@ -840,7 +844,7 @@ function versionCardHTML(v){
   acts += '<button class="btn sm ghost" type="button" data-ver-note="' + esc(v.id) + '">' + (st === "released" ? '发布说明' : '当前规划说明') + '</button>';
   if(permissions.canPublish === true) acts += '<button class="btn sm primary" type="button" data-ver-release="' + esc(v.id) + '">记录实际发布</button>';
   var contentLocked = versionContentLocked(permissions) || versionContentLocked(v);
-  if(contentLocked) acts += '<span class="tag tag-neutral">成功发布内容只读</span>';
+  if(contentLocked) acts += '<span class="tag tag-neutral">正式发布后内容只读</span>';
   if(!contentLocked && writable){
     if(st === "planned"){
       acts += '<button class="btn sm" type="button" data-ver-start="' + esc(v.id) + '">开始开发</button>';
@@ -916,11 +920,10 @@ function openVersionDialog(id, fresh){
     versionDialogContext = {seq:seq, reqId:reqId, wsId:wsId, userId:userId, route:route};
     if(id){
       btnSaveVer.disabled = true;
-      Promise.all([API.get("/api/versions", {reqId:reqId}), API.get("/api/versions/" + encodeURIComponent(id) + "/release-records")]).then(function(rs){
+      Promise.all([API.get("/api/versions", {reqId:reqId})]).then(function(rs){
         if(!versionDialogCurrent() || seq !== versionDialogSeq || !cache) return;
         cache.versions = rs[0];
         var v = findVersion(id);
-        if(v && (rs[1] || []).some(function(r){ return r.result === "success"; })) v.hasSuccessfulRelease = true;
         openVersionDialog(id, true);
       }).catch(function(ex){ if(versionDialogCurrent() && seq === versionDialogSeq) toast(ex.message || "加载版本失败", "bad"); });
       return;
@@ -929,7 +932,9 @@ function openVersionDialog(id, fresh){
   editingVerId = id || null;
   var v = id ? findVersion(id) : null;
   if(id && !v){ editingVerId = null; toast("版本已不可见，请刷新", "warn"); return; }
-  if(v && versionContentLocked(v)){ editingVerId = null; toast("已有成功发布事实，版本内容只读", "warn"); return; }
+  if(v && versionContentLocked(v)){ editingVerId = null; toast("已有成功正式发布，版本内容只读", "warn"); return; }
+  editingVerRevision = v ? v.revision : null;
+  editingVerStatus = v ? v.status : null;
   $("dlgVersion").__uiOnClose = function(){ versionDialogSeq++; versionDialogContext = null; editingVerId = null; };
   btnSaveVer.disabled = false;
   vName.value = v ? v.name : "";
@@ -952,7 +957,7 @@ function saveVersion(){
   }
   var savedId = editingVerId, seq = versionDialogSeq;
   var editing = savedId ? findVersion(savedId) : null;
-  if(editing && versionContentLocked(editing)){ toast("已有成功发布事实，版本内容只读", "warn"); return; }
+  if(editing && versionContentLocked(editing)){ toast("已有成功正式发布，版本内容只读", "warn"); return; }
   var body = {
     reqId: rt.phaseReqId,
     name: name,
@@ -960,15 +965,20 @@ function saveVersion(){
     startDate: vStart.value || null,
     targetDate: vTarget.value || null,
     /* 编辑时保持原状态；新建一律 planned；已发布版本的编辑入口已隐藏（服务端亦拒绝） */
-    status: editing && editing.status === "active" ? "active" : "planned",
-    revision: editing ? editing.revision : null
+    status: savedId && editingVerStatus === "active" ? "active" : "planned",
+    revision: savedId ? editingVerRevision : null
   };
   btnSaveVer.disabled = true;
   var p = savedId
     ? API.put("/api/versions/" + encodeURIComponent(savedId), body)
     : API.post("/api/versions", body);
   p.then(function(v){
-    if(!versionDialogCurrent() || seq !== versionDialogSeq) return;
+    if(!versionDialogCurrent() || seq !== versionDialogSeq){
+      /* 弹窗已关：不碰新表单，但保存确实成功了，仍要告知并刷新列表 */
+      toast((savedId ? "已更新版本「" : "已创建版本「") + v.name + "」", "fs");
+      if(document.body.dataset.view === "phase") reloadView();
+      return;
+    }
     btnSaveVer.disabled = false;
     UI.closeModal($("dlgVersion"));
     toast((savedId ? "已更新版本「" : "已创建版本「") + v.name + "」", "fs");
@@ -1096,6 +1106,12 @@ function openReleaseDetail(id, wantPreview){
     var b = planBody();
     return b.plannedAt !== (p && p.plannedAt ? p.plannedAt : null) || b.ownerUserId !== ((p || {}).ownerUserId || null) || b.status !== ((p || {}).status || "draft") || b.notes !== ((p || {}).notes || "") || b.risks !== ((p || {}).risks || "") || b.environment !== ((p || {}).environment || "production") || b.coverage !== ((p || {}).coverage || "full") || !sameIds(b.targetKeys, (p || {}).targetKeys) || !sameIds(b.plannedTaskIds, (p || {}).plannedTaskIds);
   }
+  /* 刷新 / 切换计划 / 新建计划都会按已保存内容重绘计划区：有未保存改动先确认，避免静默丢草稿 */
+  function confirmDiscardPlan(proceed, revert){
+    if(!planDirty()){ proceed(); return; }
+    UI.showConfirm({ title:"放弃未保存的计划修改？", msg:"发布计划还有未保存的改动，继续将按已保存内容重新显示。", okText:"放弃修改", cancelText:"继续编辑" })
+      .then(function(ok){ if(!current()) return; if(ok) proceed(); else if(revert) revert(); });
+  }
   function recordTaskIds(record){
     if(Array.isArray(record.actualTaskIds)) return normalizedIds(record.actualTaskIds);
     return normalizedIds((record.items || []).filter(function(i){ return i.disposition === "published" || i.disposition === "candidate" || i.disposition === "rolled_back"; }).map(function(i){ return i.taskId; }));
@@ -1174,7 +1190,7 @@ function openReleaseDetail(id, wantPreview){
     dlg.body.innerHTML = '<p class="release-error" data-release-error role="alert"></p><div class="row row-gap"><button class="btn sm" data-release-refresh type="button">刷新内容 / 能力 / 历史</button></div>'
       + (recoveryMessage || storageError ? '<section class="release-section"><h3>请求恢复</h3><p class="release-text">' + esc(storageError || recoveryMessage) + '</p>' + (recoveredRecord ? releaseRecordHTML(recoveredRecord) : '') + '</section>' : '')
       + (pending ? '<section class="release-section"><h3>原请求待确认</h3><p class="hint">键：' + esc(pending.body.idempotencyKey) + ' · ' + esc(releaseEnvironmentName(pending.body.environment)) + ' · ' + esc(releaseOperationName(pending.body.operation)) + ' · ' + esc(fmtReleaseTime(pending.body.occurredAt)) + ' · 明确选择 ' + esc(pending.body.actualTaskIds.length) + ' 项</p><button class="btn sm" data-release-reconcile type="button">查询原键</button> ' + (mayPublish ? '<button class="btn sm primary" data-release-retry type="button">重试原完整请求 / 原键</button> ' : '') + (pending.rejection ? '<button class="btn sm danger" data-release-reset type="button">明确重置已拒绝请求</button>' : '') + '</section>' : '')
-      + '<section class="release-section"><h3>内容</h3><p class="hint">目标就绪日：' + esc(v.targetDate || "未设置") + '。当前版本内容不等于发布计划范围，更不等于实际发布范围。' + (versionContentLocked(v) ? '已有成功发布事实，内容范围只读；可创建新计划和独立事件。' : '') + '</p><ul class="release-scope">' + tasks.filter(function(t){ return taskVersionIds(t).indexOf(id) !== -1; }).map(function(t){ return '<li>' + esc(t.title) + ' · ' + esc(colName(t.boardColumn)) + ' ' + taskPublicationHTML(t) + '</li>'; }).join('') + '</ul></section>'
+      + '<section class="release-section"><h3>内容</h3><p class="hint">目标就绪日：' + esc(v.targetDate || "未设置") + '。当前版本内容不等于发布计划范围，更不等于实际发布范围。' + (versionContentLocked(v) ? '已有成功正式发布，内容范围只读；可创建新计划和独立事件。' : '') + '</p><ul class="release-scope">' + tasks.filter(function(t){ return taskVersionIds(t).indexOf(id) !== -1; }).map(function(t){ return '<li>' + esc(t.title) + ' · ' + esc(colName(t.boardColumn)) + ' ' + taskPublicationHTML(t) + '</li>'; }).join('') + '</ul></section>'
       + '<section class="release-section"><h3>发布计划</h3><div class="row row-gap"><select data-plan-select aria-label="选择独立发布计划"' + (pending ? ' disabled' : '') + '>' + options([["", "新独立计划"]].concat(planOptions), planId || "") + '</select>' + (mayManage ? '<button class="btn sm" data-plan-new type="button">新建独立计划</button>' : '') + '</div><p class="hint">计划 #' + esc(p.id || "未保存") + ' · 修订 ' + esc(p.revision || "—") + ' · ' + esc(releaseStatusName(p.status)) + '。已完成计划不可修改，但不阻止后续计划或事件。</p>'
       + '<div class="form-grid"><label class="field">计划发布时间（本地）<input type="datetime-local" step="1" data-plan-planned value="' + esc(p.plannedAt ? localDatetime(p.plannedAt) : "") + '"' + disabled + '></label><label class="field">计划负责人<select data-plan-owner' + disabled + '>' + memberOptions(p.ownerUserId || "", true) + '</select></label><label class="field">计划环境<select data-plan-environment' + disabled + '>' + options(envs, p.environment || "production") + '</select></label><label class="field">计划覆盖<select data-plan-coverage' + disabled + '>' + options(coverage, p.coverage || "full") + '</select></label></div>'
       + '<label class="field">计划目标键（每行一个）<textarea data-plan-targets' + disabled + '>' + esc(normalizedIds(p.targetKeys).join('\n')) + '</textarea></label><h4>明确计划范围（' + normalizedIds(p.plannedTaskIds).length + ' 项）</h4>' + taskRows("plan", normalizedIds(p.plannedTaskIds), locked)
@@ -1207,7 +1223,6 @@ function openReleaseDetail(id, wantPreview){
     }).then(function(rs){
       if(!current() || seq !== loadSeq) return;
       plans = rs[0] || []; records = (rs[1] || []).slice(0, 200); tasks = rs[2] || []; members = rs[3] || [];
-      if(records.some(function(r){ return r.result === "success"; })) v.hasSuccessfulRelease = true;
       taskOptionsCache[reqId] = tasks; if(cache && rt.phaseReqId === reqId) cache.tasks = tasks;
       if(planId === null) planId = plans.length ? plans[0].id : "";
       if(planId && !plans.some(function(p){ return p.id === planId; })) planId = "";
@@ -1300,7 +1315,11 @@ function openReleaseDetail(id, wantPreview){
       filters = {result:value("history", "result"), environment:value("history", "environment"), operation:value("history", "operation")}; page = 0; renderHistory(); return;
     }
     if(pending || storageError) return;
-    if(e.target.matches('[data-plan-select]')){ readActual(); planId = e.target.value; invalidatePreview(); render(); return; }
+    if(e.target.matches('[data-plan-select]')){
+      var sel = e.target, nextPlan = sel.value;
+      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; invalidatePreview(); render(); }, function(){ sel.value = planId || ""; });
+      return;
+    }
     if(e.target.matches('input,select,textarea')){
       readActual(); invalidatePreview();
       if(e.target.matches('[data-release-operation], [data-release-environment], [data-release-relatedReleaseId], [data-release-planId]')){
@@ -1314,7 +1333,7 @@ function openReleaseDetail(id, wantPreview){
     var exp = e.target.closest('[data-release-export]');
     if(exp){ var r = records.concat(recoveredRecord ? [recoveredRecord] : []).find(function(r){ return String(r.id) === exp.dataset.releaseExport; }); if(r) exportReleaseRecordCSV(r); return; }
     if(busy || !current()) return;
-    if(e.target.closest('[data-release-refresh], [data-release-reconcile]')){ load(); return; }
+    if(e.target.closest('[data-release-refresh], [data-release-reconcile]')){ confirmDiscardPlan(load); return; }
     if(e.target.closest('[data-history-prev], [data-history-next]')){ page += e.target.closest('[data-history-prev]') ? -1 : 1; renderHistory(); return; }
     if(e.target.closest('[data-release-reset]')){
       if(!pending || !pending.rejection) return;
@@ -1334,7 +1353,7 @@ function openReleaseDetail(id, wantPreview){
       setBusy(true); reconcile().then(function(){ if(!current()) return; setBusy(false); if(pending && retryAllowed) sendPending(); else render(); }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "查询失败，原请求保留"); } }); return;
     }
     if(pending || storageError) return;
-    if(e.target.closest('[data-plan-new]')){ if(mayManage){ readActual(); planId = ""; invalidatePreview(); render(); } return; }
+    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; invalidatePreview(); render(); }); return; }
     if(e.target.closest('[data-release-preview]')){ runPreview(); return; }
     if(e.target.closest('[data-release-save]')){
       var p = selectedPlan(); if(!mayManage || (p && p.status === "completed")) return;
@@ -1411,16 +1430,15 @@ function openVersionTasks(id, fresh){
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   if(!fresh){
     var seq = ++versionBindingSeq, reqId = rt.phaseReqId, wsId = (rt.currentWs || {}).id, userId = (rt.currentUser || {}).id, route = document.body.dataset.view;
-    Promise.all([API.get("/api/versions", {reqId:reqId}), API.get("/api/versions/task-options", {reqId:reqId}), API.get("/api/versions/" + encodeURIComponent(id) + "/release-records")]).then(function(rs){
+    Promise.all([API.get("/api/versions", {reqId:reqId}), API.get("/api/versions/task-options", {reqId:reqId})]).then(function(rs){
       if(seq !== versionBindingSeq || reqId !== rt.phaseReqId || wsId !== (rt.currentWs || {}).id || userId !== (rt.currentUser || {}).id || route !== document.body.dataset.view || !cache) return;
       cache.versions = rs[0]; cache.tasks = rs[1];
       var current = findVersion(id);
-      if(current && (rs[2] || []).some(function(r){ return r.result === "success"; })) current.hasSuccessfulRelease = true;
       openVersionTasks(id, true);
     }).catch(function(ex){ if(seq === versionBindingSeq && reqId === rt.phaseReqId && wsId === (rt.currentWs || {}).id && userId === (rt.currentUser || {}).id && route === document.body.dataset.view) toast(ex.message || "加载版本内容范围失败", "bad"); });
     return;
   }
-  if(versionContentLocked(v)){ toast("已有成功发布事实，版本内容范围只读", "warn"); return; }
+  if(versionContentLocked(v)){ toast("已有成功正式发布，版本内容范围只读", "warn"); return; }
   var selected = {}, query = "";
   cache.tasks.forEach(function(t){ if(taskVersionIds(t).indexOf(id) !== -1) selected[t.id] = true; });
   var versionNames = {};
@@ -1521,7 +1539,7 @@ function openVersionTasks(id, fresh){
   });
   UI.openModal(layer);
 }
-/* 待规划卡片入口：分配到无成功发布事实的版本（并入已有成员，保留其他版本关联）。 */
+/* 待规划卡片入口：分配到无成功正式发布的版本（并入已有成员，保留其他版本关联）。 */
 function openUnboundTasks(){
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   var targets = cache.versions.filter(function(v){ return !versionContentLocked(v); });
@@ -1542,7 +1560,7 @@ function openUnboundTasks(){
   var guard = bindingDialogGuard(layer);
   layer.innerHTML = '<div class="sheet version-task-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>分配工作项到版本</h2>'
-    + '<div class="desc">把未绑定版本的工作项批量关联到所选版本，保留其他版本关联；已有任何成功发布事实的版本内容只读。</div></div>'
+    + '<div class="desc">把未绑定版本的工作项批量关联到所选版本，保留其他版本关联；已有成功正式发布的版本内容只读。</div></div>'
     + '<button class="icon-btn sm" type="button" data-unbound-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body"><div class="version-task-tools">'
     + '<select aria-label="目标版本" data-unbound-ver>' + opts + '</select>'
@@ -1599,15 +1617,14 @@ function openUnboundTasks(){
     if(!reason){ toast("请填写版本调整理由", "warn"); layer.querySelector('[data-task-change-reason]').focus(); return; }
     guard.setBusy(true);
     var targetId = target.id;
-    /* 提交前重新读取目标和成员范围；已有任何成功事实的内容不可编辑。 */
-    Promise.all([API.get("/api/versions", {reqId:target.reqId}), API.get("/api/versions/task-options", {reqId:target.reqId}), API.get("/api/versions/" + encodeURIComponent(targetId) + "/release-records")]).then(function(rs){
+    /* 提交前重新读取目标和成员范围；已有正式交付（后端 contentLocked）的内容不可编辑。 */
+    Promise.all([API.get("/api/versions", {reqId:target.reqId}), API.get("/api/versions/task-options", {reqId:target.reqId})]).then(function(rs){
       if(!guard.current()) return false;
       if(!canWritePhase()) throw new Error("当前项目已变为只读");
       target = (rs[0] || []).find(function(v){ return v.id === targetId; });
       if(!target) throw new Error("目标版本已不可见，请刷新");
-      if((rs[2] || []).some(function(r){ return r.result === "success"; })) target.hasSuccessfulRelease = true;
       cache.versions = rs[0]; cache.tasks = rs[1];
-      if(versionContentLocked(target)) throw new Error("目标版本已有成功发布事实，内容范围只读");
+      if(versionContentLocked(target)) throw new Error("目标版本已有成功正式发布，内容范围只读");
       /* 只增加本版本成员，保留最新已有成员与工作项的其他版本关联。 */
       var bound = {};
       cache.tasks.forEach(function(t){ if(taskVersionIds(t).indexOf(targetId) !== -1) bound[t.id] = true; });
@@ -1682,13 +1699,17 @@ function showReleaseNote(id){
     var cached = findVersion(id);
     (cached ? Promise.resolve(cached) : API.get(base)).then(function(v){
       if(!dlg.current()) return null;
-      if(v.status === "released") return API.get(base + "/release-records").then(function(records){ return {version:v, records:records || []}; });
+      /* 有成功生产发布事实就展示实际快照：新版本不会再被置为 released，不能只看 status */
+      if(v.status === "released" || v.releaseEvidenceKind === "release_snapshot") return API.get(base + "/release-records").then(function(records){ return {version:v, records:records || [], actual:true}; });
       return API.get(base + "/release-note").then(function(data){ return {version:v, note:data}; });
     }).then(function(data){
       if(!data || !dlg.current()) return;
       note = null; snapshot = null;
-      if(data.version.status === "released"){
-        snapshot = data.records.filter(function(r){ return r.result === "success" && r.environment === "production" && r.operation !== "rollback"; }).sort(function(a,b){ return String(b.recordedAt || "").localeCompare(String(a.recordedAt || "")); })[0] || null;
+      if(data.actual){
+        /* 与服务端 latestSuccess 同口径：按实际发生时间、再按记录时间取最新 */
+        snapshot = data.records.filter(function(r){ return r.result === "success" && r.environment === "production" && r.operation !== "rollback"; }).sort(function(a,b){
+          return String(b.occurredAt || "").localeCompare(String(a.occurredAt || "")) || String(b.recordedAt || "").localeCompare(String(a.recordedAt || ""));
+        })[0] || null;
         dlg.body.innerHTML = '<h3>' + esc(data.version.name) + ' · 实际发布快照</h3>'
           + (snapshot ? '<p class="hint">以下为成功发布时的不可变快照，不是当前规划，也不以首版统计推断交付。</p>' + releaseRecordHTML(snapshot)
             : '<p class="hint">该历史已发布版本未留成功发布记录，不反推实际交付，也不生成伪造快照。</p>');
@@ -1777,7 +1798,7 @@ function ensureVersionOptions(keep, taskId){
     var vs = results[0], ids = normalizedIds(results[1]);
     if(!taskId) ids = ids.filter(function(id){ return vs.some(function(v){ return v.id === id && !versionContentLocked(v); }); });
     sel.innerHTML = vs.filter(function(v){ return !versionContentLocked(v) || ids.indexOf(v.id) !== -1; }).map(function(v){
-      return '<option value="' + esc(v.id) + '"' + (ids.indexOf(v.id) !== -1 ? ' selected' : '') + (versionContentLocked(v) ? ' disabled' : '') + '>' + esc(v.name) + (versionContentLocked(v) ? '（成功发布内容只读，保留关联）' : '') + '</option>';
+      return '<option value="' + esc(v.id) + '"' + (ids.indexOf(v.id) !== -1 ? ' selected' : '') + (versionContentLocked(v) ? ' disabled' : '') + '>' + esc(v.name) + (versionContentLocked(v) ? '（正式发布后内容只读，保留关联）' : '') + '</option>';
     }).join('');
     ids.forEach(function(id){
       if(!vs.some(function(v){ return v.id === id; })){

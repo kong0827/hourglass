@@ -34,12 +34,15 @@ public interface ProjectVersionMapper {
 
     int update(ProjectVersion version);
 
-    int releaseOn(@Param("workspaceId") String workspaceId, @Param("id") String id,
-                  @Param("publishedOn") java.time.LocalDate publishedOn);
+    /** 成员关系在任务侧变化时推进 revision（版本侧表单据此识别过期快照） */
+    int touchRevision(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     int deleteById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     int deleteByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 版本删除时解除测试计划对它的关联（计划保留，回到「不关联版本」） */
+    int clearTestPlanVersion(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
 }

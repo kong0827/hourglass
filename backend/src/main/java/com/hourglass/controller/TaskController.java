@@ -102,13 +102,14 @@ public class TaskController {
                 offset == null ? 0 : offset, limit == null ? 0 : limit));
     }
 
-    /** 列表视图：筛选后的分页任务，sort: due/priority/updated/column */
+    /** 列表视图：筛选后的分页任务，sort: due/priority/updated/column；open=true 只取未完成（团队成员下钻） */
     @GetMapping("/api/tasks/list")
     public ResponseEntity<ApiResult<TaskListResponse>> list(@CurrentWorkspace WorkspaceCtx ctx,
                                             @BoardFilter BoardQuery query,
                                             @RequestParam(required = false) String sort,
                                             @RequestParam(required = false) Integer offset,
                                             @RequestParam(required = false) Integer limit,
+                                            @RequestParam(required = false) Boolean open,
                                             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String inm,
                                             HttpServletRequest request) {
         String wsId = ctx.getWsId();
@@ -120,7 +121,7 @@ public class TaskController {
         return ResponseEntity.ok().header(HttpHeaders.ETAG, etag)
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-cache")
                 .body(ApiResult.ok(queryService.list(wsId, ctx.getUserId(), query, sort,
-                        offset == null ? 0 : offset, limit == null ? 0 : limit)));
+                        offset == null ? 0 : offset, limit == null ? 0 : limit, !Boolean.TRUE.equals(open))));
     }
 
     /**

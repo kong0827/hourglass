@@ -52,8 +52,17 @@ function branchStatusMeta(id){
   for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return BRANCH_STATUS[i];
   return { id: id, name: id || "未知", cls: "", timeKey: "", hint: "" };
 }
+var brDrawerData = null;     /* 抽屉按 ID 拉取的最新分支（深链 / 加载更多 / 列表模式时不在看板首屏里） */
 function branchById(id){
+  if(!id) return null;
+  if(brDrawerData && brDrawerData.id === id) return brDrawerData;
   for(var i = 0; i < branchList.length; i++) if(branchList[i].id === id) return branchList[i];
+  for(var k in branchExtra){
+    if(!Object.prototype.hasOwnProperty.call(branchExtra, k)) continue;
+    var extra = branchExtra[k] || [];
+    for(var j = 0; j < extra.length; j++) if(extra[j].id === id) return extra[j];
+  }
+  for(var r = 0; r < branchRows.length; r++) if(branchRows[r].id === id) return branchRows[r];
   return null;
 }
 function branchNameById(id){
@@ -106,12 +115,16 @@ function applyBoard(board){
     if(col && col.items) branchList = branchList.concat(col.items);
   });
 }
+var branchLoadSeq = 0;
 function loadBranches(force){
   if(branchesLoaded && !force && branchBoard) return Promise.resolve(branchList);
+  /* 筛选/搜索连续触发时只认最后一次请求，避免慢响应把新筛选结果盖回旧的 */
+  var seq = ++branchLoadSeq;
   return Promise.all([
     API.get("/api/branches/board", branchQueryParams({ limit: BRANCH_BOARD_PAGE })),
     API.getAllPages("/api/branches/options")
   ]).then(function(res){
+    if(seq !== branchLoadSeq) return;
     applyBoard(res[0]);
     branchRefs = res[1] || [];
     branchOptionCache = {};
@@ -499,8 +512,20 @@ function fillBranchReqOptions(sel, cur){
   sel.innerHTML = html;
 }
 function openBranchDialog(id){
+  var known = id ? branchById(id) : null;
+  if(id && !known){
+    /* 本地缓存里找不到时先按 ID 拉取，绝不以空表单进入编辑（否则保存会把名称外的字段清空） */
+    API.get("/api/branches/" + encodeURIComponent(id)).then(function(b){
+      if(brDrawerId === b.id) brDrawerData = b;
+      openBranchDialogWith(id, b);
+    }).catch(function(ex){ toast(ex.message || "分支加载失败", "bad"); });
+    return;
+  }
+  openBranchDialogWith(id, known);
+}
+function openBranchDialogWith(id, b){
   brEditingId = id || null;
-  var b = brEditingId ? branchById(brEditingId) : null;
+  b = brEditingId ? b : null;
   $("dlgBranchTitle").textContent = b ? "编辑分支" : "新建分支";
   $("dlgBranchMsg").textContent = b
     ? "状态不在这里改 —— 点分支卡片上的状态标签切换，那样才会记进时间线。"
@@ -543,6 +568,8 @@ function closeBranchDialog(){
   brEditingId = null;
 }
 function submitBranchDialog(){
+  /* 回车提交不经过按钮的禁用状态：请求在途时忽略 */
+  if($("dlgBranchOk") && $("dlgBranchOk").disabled) return;
   var name = ($("brName").value || "").trim();
   if(!name){ toast("请填写分支名", "warn"); try{ $("brName").focus(); }catch(e){} return; }
   if(!/^[\p{L}\p{N}._/-]{1,80}$/u.test(name)){
@@ -603,6 +630,7 @@ function deleteBranch(id){
 function openBranchDrawer(id){
   API.get("/api/branches/" + encodeURIComponent(id)).then(function(b){
     brDrawerId = b.id;
+    brDrawerData = b;
     renderBranchDrawer(b);
     $("branchDrawer").classList.add("on");
     loadBranchLogs(b.id);
@@ -613,6 +641,7 @@ function closeBranchDrawer(){
   var d = $("branchDrawer");
   if(d) d.classList.remove("on");
   brDrawerId = null;
+  brDrawerData = null;
 }
 function renderBranchDrawer(b){
   var body = $("brDrawerBody");
@@ -714,8 +743,14 @@ function fillBranchSelect(sel, cur, rows){
     });
     html += '</optgroup>';
   });
-  sel.innerHTML = html;
   var ok = rows.some(function(b){ return b.id === cur; });
+  if(cur && !ok){
+    /* 当前关联的分支不在本项目选项里（如被多个项目共用的公共分支）：保留原值，避免保存时被静默解除关联 */
+    var curName = branchNameById(cur);
+    html += '<option value="' + esc(cur) + '">' + esc(curName || "当前分支") + '（当前关联）</option>';
+    ok = true;
+  }
+  sel.innerHTML = html;
   sel.value = ok ? cur : "";
   /* 标记选项已就绪：保存时区分「确实不关联」与「选项还没加载完」 */
   sel.setAttribute("data-ready", "1");

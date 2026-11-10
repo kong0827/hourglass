@@ -196,11 +196,12 @@ public class ReviewService {
         for (Category c : metaCache.categories(workspaceId)) {
             Integer n = catCount.remove(c.getId());
             if (n != null) {
-                catNameCount.put(c.getName(), n);
+                /* 模块按项目隔离后不同项目常有同名模块（如「前端」）：累加，不能互相覆盖 */
+                catNameCount.merge(c.getName(), n, Integer::sum);
             }
         }
         for (Map.Entry<String, Integer> e : catCount.entrySet()) {
-            catNameCount.put(e.getKey(), e.getValue());
+            catNameCount.merge(e.getKey(), e.getValue(), Integer::sum);
         }
         resp.setCatDist(toNameCounts(catNameCount));
 
@@ -259,6 +260,7 @@ public class ReviewService {
             resp.setOpenP0(rc.getOpenP0());
             resp.setDoing(rc.getDoing());
             resp.setBacklog(rc.getBacklog());
+            resp.setEnded(rc.getEnded());
         }
         resp.setCounts(counts);
         List<Task> returned = new ArrayList<Task>(completed);

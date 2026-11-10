@@ -59,4 +59,10 @@
     JOIN test_plan p ON p.id = pc.plan_id
     WHERE p.workspace_id = #{workspaceId} AND p.req_id = #{reqId}
   </delete>
+  <select id="selectOpenPlanNamesByCase" resultType="string">
+    SELECT p.name FROM test_plan_case pc
+    JOIN test_plan p ON p.id = pc.plan_id
+    WHERE p.workspace_id = #{workspaceId} AND pc.case_id = #{caseId} AND p.status &lt;&gt; 'done'
+    ORDER BY p.created_at, p.id
+  </select>
 </mapper>

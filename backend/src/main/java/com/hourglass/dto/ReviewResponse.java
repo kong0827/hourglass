@@ -35,6 +35,8 @@ public class ReviewResponse {
     private int openP0;
     private int doing;
     private int backlog;
+    /** 「执行结束」列任务数：不计入进行中 / 待处理 */
+    private int ended;
     /** N-5：工时（本周期内 / 全空间累计） */
     private WorkMinutes workMinutes = new WorkMinutes();
 

@@ -173,6 +173,9 @@ function syncReqStatusSeg(){
   });
 }
 var projectFormBaseline = null;
+/* 一次打开对应一个序号：关掉 A 再打开 B 后，A 迟到的保存响应不能关闭/清空 B；
+   editingReqUpdatedAt 是打开时的版本令牌，服务端据此拒绝覆盖别人刚保存的修改 */
+var projectFormSeq = 0, editingReqUpdatedAt = null;
 function projectFormSnapshot(){
   return JSON.stringify([
     rName.value, rDesc.value,
@@ -203,7 +206,11 @@ function tryCloseProjectDialog(afterClose){
 }
 function resetReqForm(){
   projectFormBaseline = null;
+  projectFormSeq++;
   rt.editingReqId = null;
+  editingReqUpdatedAt = null;
+  projCatReqId = "";
+  btnSaveReq.disabled = false;
   rName.value = ""; rDesc.value = "";
   if(rObjective) rObjective.value = "";
   if(rOwner) rOwner.value = "";
@@ -401,12 +408,13 @@ function saveReq(){
   };
   var editing = !!rt.editingReqId;
   if(!editing) body.template = (rTemplate && rTemplate.value) || "blank";
+  else if(editingReqUpdatedAt) body.updatedAt = editingReqUpdatedAt;
+  var seq = projectFormSeq;
   var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
   btnSaveReq.disabled = true;
   p.then(function(){
-    btnSaveReq.disabled = false;
     toast(editing ? ("已更新项目「" + name + "」") : ("已新增项目「" + name + "」"), "fs");
-    resetReqForm();
+    if(seq === projectFormSeq) resetReqForm();
     /* 新建项目后端会预置默认模块，模块字典要立即刷新，否则任务抽屉/筛选举不到 */
     if(!editing) loadCategories(true);
     loadReqs().then(function(){
@@ -414,8 +422,10 @@ function saveReq(){
       loadBoard({silent:true});
     });
   }).catch(function(ex){
-    btnSaveReq.disabled = false;
+    if(seq === projectFormSeq) btnSaveReq.disabled = false;
     toast(ex.message || "保存失败", "bad");
+    /* 409：项目已被别人修改，刷新列表让下次打开拿到最新内容 */
+    if(ex.code === 409) loadReqs().then(function(){ renderReqList(); });
   });
 }
 function toggleArchive(id){
@@ -511,12 +521,16 @@ function deleteReq(id){
 var projCatCache = [];
 var projCatReqId = "";
 function loadProjCats(reqId){
-  projCatReqId = reqId || "";
+  var forReq = reqId || "";
+  projCatReqId = forReq;
   if(projCatList) projCatList.innerHTML = UI.skeletonRows(2);
-  return API.get("/api/categories?project=" + encodeURIComponent(projCatReqId)).then(function(list){
+  return API.get("/api/categories?project=" + encodeURIComponent(forReq)).then(function(list){
+    /* 已切到另一个项目：旧项目的模块不能填进新弹窗（否则排序/新增会写错项目） */
+    if(projCatReqId !== forReq) return;
     projCatCache = list || [];
     renderProjCats();
   }).catch(function(ex){
+    if(projCatReqId !== forReq) return;
     if(projCatList) projCatList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
@@ -629,7 +643,10 @@ $("btnProjCatAdd").addEventListener("click", function(){
 });
 
 function openProjectDialog(id){
+  projectFormSeq++;
+  btnSaveReq.disabled = false;
   rt.editingReqId = id || null;
+  editingReqUpdatedAt = null;
   rName.value = "";
   rDesc.value = "";
   if(rObjective) rObjective.value = "";
@@ -657,6 +674,7 @@ function openProjectDialog(id){
       if(rPlanStart) rPlanStart.value = r.plannedStart ? String(r.plannedStart).slice(0, 10) : "";
       if(rPlanEnd) rPlanEnd.value = r.plannedEnd ? String(r.plannedEnd).slice(0, 10) : "";
       rt.formReqStatus = r.status || "active";
+      editingReqUpdatedAt = r.updatedAt || null;
     }
   }
   syncReqStatusSeg();

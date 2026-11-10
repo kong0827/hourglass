@@ -72,9 +72,10 @@
     WHERE id = #{id} AND workspace_id = #{workspaceId} AND revision = #{revision}
   </update>
 
-  <update id="releaseOn">
-    UPDATE project_version SET status = 'released', released_at = #{publishedOn}, revision = revision + 1, updated_at = NOW()
-    WHERE id = #{id} AND workspace_id = #{workspaceId} AND status &lt;&gt; 'released'
+  <!-- 任务侧调整版本成员：推进版本 revision，让版本侧打开中的成员表单按并发冲突处理，不再整表覆盖 -->
+  <update id="touchRevision">
+    UPDATE project_version SET revision = revision + 1, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
   <delete id="deleteById">
@@ -88,4 +89,8 @@
   <delete id="deleteByWorkspace">
     DELETE FROM project_version WHERE workspace_id = #{workspaceId}
   </delete>
+  <update id="clearTestPlanVersion">
+    UPDATE test_plan SET version_id = NULL
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+  </update>
 </mapper>

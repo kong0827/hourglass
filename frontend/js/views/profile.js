@@ -395,7 +395,7 @@ $("mePwdSave") && $("mePwdSave").addEventListener("click", function(){
   API.post("/api/auth/password", { oldPassword: oldPwd, newPassword: newPwd }).then(function(){
     btn.disabled = false;
     ["meOldPwd","meNewPwd","meAgainPwd"].forEach(function(id){ var el = $(id); if(el) el.value = ""; });
-    toast("密码已修改（已登录的设备保持有效，直到会话过期）", "fs");
+    toast("密码已修改，其他设备上的登录已失效，当前设备保持登录", "fs");
   }).catch(function(ex){
     btn.disabled = false;
     toast(ex.message || "修改失败", "bad");

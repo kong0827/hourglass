@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -79,7 +80,7 @@ class TaskControllerResolveTest {
 
     @Test
     void boardFilterParsesCsvAndPaging() throws Exception {
-        when(taskService.list(eq("W1"), eq("U1"), any(BoardQuery.class), isNull(), eq(0), eq(0)))
+        when(taskService.list(eq("W1"), eq("U1"), any(BoardQuery.class), isNull(), eq(0), eq(0), anyBoolean()))
                 .thenReturn(new TaskListResponse());
 
         mvc.perform(get("/api/tasks/list")
@@ -94,7 +95,13 @@ class TaskControllerResolveTest {
                         && q.getOwners().contains("小明")
                         && q.getPris().size() == 2
                         && q.isFocus()
-                        && q.getDoneLimit() == 30), isNull(), eq(0), eq(0));
+                        && q.getDoneLimit() == 30), isNull(), eq(0), eq(0), eq(true));
+
+        /* 团队成员下钻「未完成工作项」：open=1 必须排除已完成 */
+        mvc.perform(get("/api/tasks/list").param("owners", "小明").param("open", "1"))
+                .andExpect(status().isOk());
+        verify(taskService).list(eq("W1"), eq("U1"), argThat(q -> q.getOwners().size() == 1),
+                isNull(), eq(0), eq(0), eq(false));
     }
 
     @Test

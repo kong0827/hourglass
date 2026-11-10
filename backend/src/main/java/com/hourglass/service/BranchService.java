@@ -291,6 +291,10 @@ public class BranchService {
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         fillVersions(workspaceId, viewerId, java.util.Collections.singletonList(b));
         fillProjects(workspaceId, viewerId, java.util.Collections.singletonList(b));
+        /* selectById 不带计数：抽屉「关联工作项 x / y」与删除确认里的解除数量都依赖它 */
+        DevBranch stats = branchMapper.selectTaskStats(workspaceId, viewerId, b.getId());
+        b.setTaskCount(stats != null && stats.getTaskCount() != null ? stats.getTaskCount() : 0);
+        b.setDoneCount(stats != null && stats.getDoneCount() != null ? stats.getDoneCount() : 0);
         return b;
     }
 

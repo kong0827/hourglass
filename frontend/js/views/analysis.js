@@ -225,12 +225,51 @@ function enterAnalysisView(){
   initAnalysisTabs();
   setAnalysisTab(rt.analysisTab, {silent:false});
 }
+/* 周期口径：本周 = 周一至今的天数，本月 = 1 日至今的天数（按当月实际天数）；
+   周趋势图按自然周分桶且服务端至少返回 4 周，所以本周/本月仍以近 4 周（或覆盖本月的周数）为趋势背景 */
+function analysisPeriodSpec(v, today){
+  today = today || new Date();
+  var dow = today.getDay() || 7;
+  if(v === "week") return {statsWeeks:4, flowDays:dow, label:"本周"};
+  if(v === "month"){
+    var dom = today.getDate();
+    var first = new Date(today.getFullYear(), today.getMonth(), 1);
+    var firstDow = first.getDay() || 7;
+    var spanWeeks = Math.ceil((dom + firstDow - 1) / 7);
+    return {statsWeeks:Math.max(4, spanWeeks), flowDays:dom, label:"本月"};
+  }
+  if(v === "days90") return {statsWeeks:13, flowDays:90, label:"近 90 天"};
+  return {statsWeeks:8, flowDays:90, label:"近 8 周"};
+}
+function syncFlowDaysOption(days, label){
+  var sel = $("flowDays");
+  if(!sel) return;
+  var dyn = sel.querySelector("option[data-dynamic]");
+  var fixed = Array.prototype.some.call(sel.options, function(o){ return !o.hasAttribute("data-dynamic") && o.value === String(days); });
+  if(fixed){
+    if(dyn) dyn.remove();
+  }else{
+    if(!dyn){
+      dyn = document.createElement("option");
+      dyn.setAttribute("data-dynamic", "");
+      sel.insertBefore(dyn, sel.firstChild);
+    }
+    if(label || dyn.value !== String(days)) dyn.textContent = (label ? label + " · " : "近 ") + days + " 天";
+    dyn.value = String(days);
+  }
+  sel.value = String(days);
+}
 function applyAnalysisPeriod(v){
-  if(v === "week"){ state.statsWeeks = 4; state.flowDays = 7; }
-  else if(v === "month"){ state.statsWeeks = 4; state.flowDays = 30; }
-  else if(v === "days90"){ state.statsWeeks = 26; state.flowDays = 90; }
-  else { state.statsWeeks = 8; state.flowDays = 90; }
-  if($("flowDays")) $("flowDays").value = String(state.flowDays);
+  var spec = analysisPeriodSpec(v);
+  state.statsWeeks = spec.statsWeeks;
+  state.flowDays = spec.flowDays;
+  var note = $("analysisPeriodNote");
+  if(note){
+    note.textContent = (v === "week" || v === "month")
+      ? spec.label + "：流程体检按 " + spec.flowDays + " 天统计；周趋势按自然周分桶，展示近 " + spec.statsWeeks + " 周作为背景"
+      : spec.label + "：周趋势近 " + spec.statsWeeks + " 周，流程体检近 " + spec.flowDays + " 天";
+  }
+  syncFlowDaysOption(state.flowDays, (v === "week" || v === "month") ? spec.label : "");
   refreshAnalysisTab(false);
 }
 function enterStatsView(){ loadStats(); }
@@ -385,7 +424,7 @@ function loadFlowHealth(opts){
   opts = opts || {};
   var days = Number(state.flowDays) || 90;
   var current = ++flowSeq;
-  if($("flowDays")) $("flowDays").value = String(days);
+  syncFlowDaysOption(days, "");
   if(!opts.silent){
     $("flowInsights").innerHTML = UI.skeletonRows(3);
     $("flowKpi").innerHTML = '<div class="skel skel-stat"></div><div class="skel skel-stat"></div>' +

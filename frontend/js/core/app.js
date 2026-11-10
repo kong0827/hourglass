@@ -118,6 +118,7 @@ $("btnWsSettings").addEventListener("click", function(){
 });
 $("dlgWsCreateForm").addEventListener("submit", function(e){
   e.preventDefault();
+  if($("dlgWsCreateOk").disabled) return;
   var name = $("dlgWsName").value.trim();
   if(!name){ $("fDlgWsName").classList.add("invalid"); return; }
   if(name.length > 20) name = name.slice(0, 20);

@@ -82,6 +82,18 @@
   </select>
 
   <!-- 分页列表的共享 WHERE（与旧 selectViewByReq 保持同样的关联与排序口径） -->
+  <!-- 有效未关闭缺陷：latest_bug_task_id 保留为历史关联，统计与筛选只认未删除、未完成的缺陷工作项 -->
+  <sql id="openBugExists">
+    EXISTS (SELECT 1 FROM task bt
+            WHERE bt.id = c.latest_bug_task_id AND bt.workspace_id = c.workspace_id
+              AND bt.deleted_at IS NULL AND bt.board_column &lt;&gt; 'done')
+  </sql>
+  <sql id="openBugJoin">
+    LEFT JOIN task bt
+      ON bt.id = c.latest_bug_task_id AND bt.workspace_id = c.workspace_id
+     AND bt.deleted_at IS NULL AND bt.board_column &lt;&gt; 'done'
+  </sql>
+
   <sql id="pageWhere">
     WHERE c.workspace_id = #{q.workspaceId} AND c.req_id = #{q.reqId}
     <choose>
@@ -97,7 +109,7 @@
       <when test="q.pri != null"> AND c.priority = #{q.pri} </when>
     </choose>
     <if test="q.owner != null"> AND c.latest_by = #{q.owner} </if>
-    <if test="q.bugOnly"> AND c.latest_bug_task_id IS NOT NULL </if>
+    <if test="q.bugOnly"> AND <include refid="openBugExists"/> </if>
     <if test="q.q != null">
       AND (c.title LIKE CONCAT('%', #{q.q}, '%')
            OR c.precondition LIKE CONCAT('%', #{q.q}, '%')
@@ -147,10 +159,11 @@
            COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
            COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
            COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested,
-           COUNT(DISTINCT c.latest_bug_task_id) AS bug_count
+           COUNT(DISTINCT bt.id) AS bug_count
     FROM demand d
     LEFT JOIN test_case c
       ON c.demand_id = d.id AND c.workspace_id = d.workspace_id AND c.req_id = d.req_id
+    <include refid="openBugJoin"/>
     WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
     GROUP BY d.id, d.title, d.status, d.priority, d.created_at
     ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej'), d.created_at DESC, d.id
@@ -162,8 +175,9 @@
            COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
            COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
            COALESCE(SUM(CASE WHEN c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested,
-           COUNT(DISTINCT c.latest_bug_task_id) AS bug_count
+           COUNT(DISTINCT bt.id) AS bug_count
     FROM test_case c
+    <include refid="openBugJoin"/>
     WHERE c.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
       AND (c.demand_id IS NULL OR c.demand_id NOT IN (
         SELECT d.id FROM demand d WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
@@ -233,4 +247,17 @@
     DELETE FROM test_case WHERE workspace_id = #{workspaceId}
   </delete>
 
+  <delete id="deletePlanCasesByWorkspace">
+    DELETE pc FROM test_plan_case pc
+    JOIN test_plan p ON p.id = pc.plan_id
+    WHERE p.workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deletePlansByWorkspace">
+    DELETE FROM test_plan WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteModulesByWorkspace">
+    DELETE FROM test_module WHERE workspace_id = #{workspaceId}
+  </delete>
 </mapper>

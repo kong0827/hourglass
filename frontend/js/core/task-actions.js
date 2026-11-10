@@ -158,7 +158,10 @@ function updateElapsedTexts(){
     el.textContent = fmtElapsed(rt.elapsedMinutes);
   });
 }
+/* 计时开始/停止进行中时忽略重复触发：双击或连按会基于同一份旧状态发出两次请求 */
+var timerToggleBusy = false;
 function toggleTaskTimer(taskId){
+  if(timerToggleBusy) return;
   var prev = state.runningTimer;
   var on = !!(prev && prev.taskId === taskId);
   var t = taskById(taskId);
@@ -166,7 +169,9 @@ function toggleTaskTimer(taskId){
   if(!on && t && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   var name = t ? t.title : ((prev && prev.taskTitle) || "工作项");
   var url = "/api/tasks/" + encodeURIComponent(taskId) + "/timer/" + (on ? "stop" : "start");
+  timerToggleBusy = true;
   API.post(url, {}).then(function(d){
+    timerToggleBusy = false;
     if(on){
       var total = (d && typeof d.totalMinutes === "number") ? d.totalMinutes : 0;
       toast("已停止「" + name + "」的计时" + (total ? "，累计 " + fmtMinutesShort(total) : ""), "fs");
@@ -185,6 +190,7 @@ function toggleTaskTimer(taskId){
       }
     });
   }).catch(function(ex){
+    timerToggleBusy = false;
     toast(ex.message || "计时操作失败", "bad");
   });
 }

@@ -157,6 +157,18 @@
   <select id="selectVersionSuccessIdsForScope" resultType="string">
     SELECT id FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND result = 'success' ORDER BY id FOR UPDATE
   </select>
+  <!-- 内容冻结口径：只有成功的生产部署 / 重部署才是正式交付；测试 / 预发部署与回滚不冻结版本内容（与 ReleaseMapper.selectSuccess 同口径） -->
+  <select id="selectVersionFormalSuccessIdsForScope" resultType="string">
+    SELECT id FROM version_release WHERE workspace_id = #{workspaceId} AND version_id = #{versionId}
+      AND result = 'success' AND environment = 'production' AND operation IN ('deploy', 'redeploy')
+    ORDER BY id FOR UPDATE
+  </select>
+  <select id="selectFormalSuccessVersionIdsByReq" resultType="string">
+    SELECT DISTINCT r.version_id FROM version_release r
+    JOIN project_version v ON v.workspace_id = r.workspace_id AND v.id = r.version_id
+    WHERE r.workspace_id = #{workspaceId} AND v.req_id = #{reqId}
+      AND r.result = 'success' AND r.environment = 'production' AND r.operation IN ('deploy', 'redeploy')
+  </select>
   <select id="selectVersionPlanIdsForScope" resultType="string">
     SELECT id FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY id FOR UPDATE
   </select>
@@ -305,6 +317,7 @@
   </sql>
 
   <!-- 跨空间「我的任务」（N-3）：优先按账号ID匹配；历史数据 owner_user_id 为空时回落显示名文本。
+       estimate_minutes 必须带上：「我的工作」改期走整对象 PUT，缺这一列会把预估清空。
        workspace_name 必须 JOIN 出来：不加这列，前端「空间」列只能显示「—」。
        分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
   <select id="selectMyTasks" resultType="Task">
@@ -312,7 +325,7 @@
            t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
-           bc.processing_rule, w.name AS workspace_name
+           t.estimate_minutes, bc.processing_rule, w.name AS workspace_name
     FROM task t
     JOIN workspace_member m ON m.workspace_id = t.workspace_id AND m.user_id = #{userId}
     LEFT JOIN workspace w ON w.id = t.workspace_id
@@ -1069,10 +1082,15 @@
     ORDER BY (t.due_date IS NULL), t.due_date, t.progress DESC, t.board_column, t.sort_order, t.id
   </select>
 
+  <!-- 分桶与 TaskCalc.statusBucket 同口径：待处理列 / 等待接续 → backlog，执行结束 → ended，其余未完成 → doing -->
   <select id="countReviewStatus" resultType="com.hourglass.dto.ReviewCountRow">
     SELECT COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.priority = 'P0' THEN 1 ELSE 0 END), 0) AS open_p0,
-           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog' THEN 1 ELSE 0 END), 0) AS doing,
-           COALESCE(SUM(CASE WHEN t.board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN t.board_column NOT IN ('done', 'backlog')
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule NOT IN ('waiting', 'ended')) THEN 1 ELSE 0 END), 0) AS doing,
+           COALESCE(SUM(CASE WHEN t.board_column = 'backlog'
+                              OR (t.board_column &lt;&gt; 'done' AND bc.processing_rule = 'waiting') THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN t.board_column NOT IN ('done', 'backlog')
+                              AND bc.processing_rule = 'ended' THEN 1 ELSE 0 END), 0) AS ended,
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
                               AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
                               AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS `over`,

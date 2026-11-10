@@ -74,11 +74,23 @@ function loadReport(opts){
   var body = $("reportBody");
   if(!body) return;
   var current = ++seq;
+  /* 选中的项目已被删除/隐藏或切换了空间：退回全部项目，避免卡在 404 错误页且无法再切换 */
+  if(reqId && rt.reqsLoaded && !rt.reqList.some(function(r){ return r.id === reqId; })) reqId = "";
   if(!opts.silent) body.innerHTML = UI.skeletonCards(4);
   API.get("/api/manager/reports", {reqId:reqId || null}).then(function(data){
     if(current !== seq) return;
     cache = data; renderReport();
-  }).catch(function(ex){ if(current === seq) body.innerHTML = UI.errorState(ex.message); });
+  }).catch(function(ex){
+    if(current !== seq) return;
+    var status = ex && ex.code;
+    if(reqId && (status === 403 || status === 404)){
+      reqId = "";
+      toast("所选项目已不可访问，已切换为全部项目", "warn");
+      loadReport(opts);
+      return;
+    }
+    body.innerHTML = UI.errorState(ex.message);
+  });
 }
 function svgLine(points, max, cls, dashed){
   if(!points.length) return "";
@@ -140,22 +152,26 @@ function flowPolygon(weeks, lower, upper, max, cls){
 }
 function flowChart(d){
   var weeks = d.weeks || [], max = 1;
-  weeks.forEach(function(w){ max = Math.max(max, w.backlog + w.doing + w.done); });
-  var zero = function(){ return 0; }, done = function(w){ return w.done; }, doing = function(w){ return w.done + w.doing; };
+  var endedOf = function(w){ return Number(w.ended) || 0; };
+  weeks.forEach(function(w){ max = Math.max(max, w.backlog + w.doing + endedOf(w) + w.done); });
+  var hasEnded = weeks.some(function(w){ return endedOf(w) > 0; });
+  var zero = function(){ return 0; }, done = function(w){ return w.done; };
+  var ended = function(w){ return w.done + endedOf(w); }, doing = function(w){ return w.done + endedOf(w) + w.doing; };
   var hoverRects = "";
   if(weeks.length > 1){
     var step = 488 / (weeks.length - 1), band = step * 0.75;
     hoverRects = weeks.map(function(w, i){
       var x = 36 + i * step - band / 2;
-      var tip = esc(w.start) + '：已完成 ' + w.done + ' / 进行中 ' + w.doing + ' / 待处理 ' + w.backlog;
+      var tip = esc(w.start) + '：已完成 ' + w.done + (endedOf(w) ? ' / 执行结束 ' + endedOf(w) : '') + ' / 进行中 ' + w.doing + ' / 待处理 ' + w.backlog;
       return '<rect x="' + x + '" y="36" width="' + band + '" height="148" rx="3" class="flow-hover" data-chart-tip="' + tip + '" />';
     }).join("");
   }
-  return '<section class="manager-chart-panel" data-chart="flow"><div class="manager-panel-head"><b>累积流图</b><span>近 8 周 · 三态快照</span></div>'
+  return '<section class="manager-chart-panel" data-chart="flow"><div class="manager-panel-head"><b>累积流图</b><span>近 8 周 · 按列处理规则归类</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近8周累积流图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/>'
-    + flowPolygon(weeks, zero, done, max, "flow-done") + flowPolygon(weeks, done, function(w){ return w.doing; }, max, "flow-doing")
+    + flowPolygon(weeks, zero, done, max, "flow-done") + (hasEnded ? flowPolygon(weeks, done, endedOf, max, "flow-ended") : "")
+    + flowPolygon(weeks, ended, function(w){ return w.doing; }, max, "flow-doing")
     + flowPolygon(weeks, doing, function(w){ return w.backlog; }, max, "flow-backlog") + hoverRects + '</svg>'
-    + '<div class="manager-chart-legend"><span><i class="done-block"></i>已完成</span><span><i class="doing-block"></i>进行中</span><span><i class="backlog-block"></i>待处理</span></div></section>';
+    + '<div class="manager-chart-legend"><span><i class="done-block"></i>已完成</span>' + (hasEnded ? '<span><i class="ended-block"></i>执行结束</span>' : '') + '<span><i class="doing-block"></i>进行中</span><span><i class="backlog-block"></i>待处理</span></div></section>';
 }
 function deliveryChart(d){
   return '<section class="manager-chart-panel" data-chart="delivery"><div class="manager-panel-head"><b>交付周期分布</b><span>P50 ' + (d.p50Days === null ? "—" : d.p50Days + " 天") + ' · P85 ' + (d.p85Days === null ? "—" : d.p85Days + " 天") + '</span></div>'
@@ -192,7 +208,7 @@ function projectOptions(){
 }
 function renderReport(){
   $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>交付图表</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
-    + caliberHTML('燃尽 = 总预估 − 截至当日已完成工作项实际工时；速度按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
+    + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
 }
@@ -203,8 +219,8 @@ function exportCsv(){
   ((cache.burndown || {}).points || []).forEach(function(p){ rows.push([p.date,p.remainingMinutes,p.idealMinutes]); });
   rows.push([],["速度周开始","完成分钟","完成工作项数"]);
   ((cache.velocity || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.completedMinutes,w.completedCount]); });
-  rows.push([],["累积流周开始","待处理","进行中","已完成"]);
-  ((cache.flow || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.backlog,w.doing,w.done]); });
+  rows.push([],["累积流周开始","待处理","进行中","执行结束","已完成"]);
+  ((cache.flow || {}).weeks || []).forEach(function(w){ rows.push([w.start,w.backlog,w.doing,Number(w.ended) || 0,w.done]); });
   rows.push([],["交付周期","工作项数","占比"]);
   ((cache.delivery || {}).buckets || []).forEach(function(b){ rows.push([b.label,b.count,b.pct + "%"]); });
   rows.push([],["缺陷周开始","新增","关闭","周末存量"]);
@@ -228,8 +244,8 @@ function exportPng(){
   var velocity=cache.velocity||{}, weeks=velocity.weeks||[], vmax=Math.max(1,velocity.averageMinutes||0);weeks.forEach(function(w){vmax=Math.max(vmax,w.completedMinutes);});
   ctx.fillStyle=c.primary;weeks.forEach(function(w,i){var h=w.completedMinutes/vmax*230;ctx.fillRect(790+i*140,410-h,70,h);});
   panel(40,550,"累积流图 · 近 8 周"); axes(40,550);
-  var flow=(cache.flow||{}).weeks||[], fmax=1;flow.forEach(function(w){fmax=Math.max(fmax,w.backlog+w.doing+w.done);});
-  [["done",c.success,0],["doing",c.info,1],["backlog",c.text3,2]].forEach(function(s){ctx.fillStyle=s[1];flow.forEach(function(w,i){var lower=s[2]===0?0:(s[2]===1?w.done:w.done+w.doing),h=w[s[0]]/fmax*210,x=80+i*560/Math.max(1,flow.length-1),base=850-lower/fmax*210;ctx.fillRect(x,base-h,Math.max(8,560/Math.max(1,flow.length-1)),h);});});
+  var flow=(cache.flow||{}).weeks||[], fmax=1;flow=flow.map(function(w){return Object.assign({},w,{ended:Number(w.ended)||0});});flow.forEach(function(w){fmax=Math.max(fmax,w.backlog+w.doing+w.ended+w.done);});
+  [["done",c.success,0],["ended",c.warning,1],["doing",c.info,2],["backlog",c.text3,3]].forEach(function(s){ctx.fillStyle=s[1];flow.forEach(function(w,i){var lower=s[2]===0?0:(s[2]===1?w.done:(s[2]===2?w.done+w.ended:w.done+w.ended+w.doing)),h=w[s[0]]/fmax*210,x=80+i*560/Math.max(1,flow.length-1),base=850-lower/fmax*210;ctx.fillRect(x,base-h,Math.max(8,560/Math.max(1,flow.length-1)),h);});});
   panel(720,550,"交付周期分布"); var buckets=(cache.delivery||{}).buckets||[];
   buckets.forEach(function(b,i){var y=640+i*65;ctx.fillStyle=c.text3;ctx.font="16px sans-serif";ctx.fillText(b.label,750,y);ctx.fillStyle=c.border;ctx.fillRect(850,y-18,350,20);ctx.fillStyle=c.primary;ctx.fillRect(850,y-18,350*Math.min(100,b.pct)/100,20);ctx.fillStyle=c.text;ctx.fillText(b.count+" 项 · "+b.pct+"%",1210,y);});
   panel(40,990,"缺陷趋势 · 近 8 周"); axes(40,990);

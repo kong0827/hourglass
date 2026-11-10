@@ -97,6 +97,51 @@ class RequirementDocPublishShareTest {
         service.publish(AUTHOR, WS, DOC_ID, false);
 
         verify(docs).updatePublished(DOC_ID, null);
+        verify(shares).deleteByDoc(WS, DOC_ID);
+    }
+
+    @Test
+    void publishDoesNotTouchExistingShares() {
+        RequirementDoc d = doc(false);
+        stubVisible(d, AUTHOR, "member");
+
+        service.publish(AUTHOR, WS, DOC_ID, true);
+
+        verify(shares, never()).deleteByDoc(anyString(), anyString());
+    }
+
+    @Test
+    void republishAfterUnpublishNeedsFreshShare() {
+        RequirementDoc d = doc(true);
+        stubVisible(d, AUTHOR, "member");
+        service.publish(AUTHOR, WS, DOC_ID, false);
+        verify(shares).deleteByDoc(WS, DOC_ID);
+
+        /* 旧令牌已删除：再次发布后按旧令牌访问应 404，而不是复活 */
+        when(shares.selectByToken("TOKEN1")).thenReturn(null);
+        d.setPublishedAt(LocalDateTime.now());
+        assertThrows(AppException.class, () -> service.publicShare("TOKEN1"));
+    }
+
+    @Test
+    void editingPublishedDocKeepsPublishStateOutOfFullUpdate() throws Exception {
+        org.apache.ibatis.session.Configuration cfg = new org.apache.ibatis.session.Configuration();
+        cfg.getTypeAliasRegistry().registerAliases("com.hourglass.entity");
+        cfg.getTypeAliasRegistry().registerAliases("com.hourglass.dto");
+        String file = "mapper/RequirementDocMapper.xml";
+        try (java.io.InputStream input = getClass().getClassLoader().getResourceAsStream(file)) {
+            assertNotNull(input);
+            new org.apache.ibatis.builder.xml.XMLMapperBuilder(input, cfg, file, cfg.getSqlFragments()).parse();
+        }
+        java.util.Map<String, Object> params = new java.util.HashMap<String, Object>();
+        params.put("doc", doc(true));
+        params.put("oldUpdatedAt", null);
+        String update = cfg.getMappedStatement("com.hourglass.mapper.RequirementDocMapper.update")
+                .getBoundSql(params).getSql();
+        assertFalse(update.contains("published_at"), "正文编辑不能改写发布状态");
+        String publish = cfg.getMappedStatement("com.hourglass.mapper.RequirementDocMapper.updatePublished")
+                .getBoundSql(params).getSql();
+        assertTrue(publish.contains("updated_at = updated_at"), "发布/收回不推进乐观锁版本，打开中的编辑仍可保存");
     }
 
     @Test
@@ -196,6 +241,41 @@ class RequirementDocPublishShareTest {
 
         AppException ex = assertThrows(AppException.class, () -> service.revokeShare(OTHER, WS, DOC_ID));
         assertEquals(403, ex.getCode());
+    }
+
+    /* ---------------- 排序与草稿可见性 ---------------- */
+
+    private com.hourglass.dto.ReqDocReorderRequest reorderOf(String id, String parentId) {
+        com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
+        com.hourglass.dto.ReqDocReorderRequest.Item item = new com.hourglass.dto.ReqDocReorderRequest.Item();
+        item.setId(id);
+        item.setParentId(parentId);
+        item.setSortOrder(1);
+        req.setItems(java.util.Collections.singletonList(item));
+        return req;
+    }
+
+    @Test
+    void reorderOthersDraftIsNotFoundForMember() {
+        RequirementDoc draft = doc(false);
+        stubVisible(draft, OTHER, "member");
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.reorder(OTHER, WS, reorderOf(DOC_ID, null)));
+        assertEquals(404, ex.getCode());
+        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void reorderUnderOthersDraftParentRejected() {
+        RequirementDoc mine = doc(true);
+        stubVisible(mine, OTHER, "member");
+        RequirementDoc hiddenParent = doc(false);
+        hiddenParent.setId("D2");
+        when(docs.selectById("D2")).thenReturn(hiddenParent);
+
+        assertThrows(AppException.class, () -> service.reorder(OTHER, WS, reorderOf(DOC_ID, "D2")));
+        verify(docs, never()).updateSortOrder(anyString(), anyString(), any(), any());
     }
 
     /* ---------------- 公开只读 ---------------- */

@@ -44,14 +44,14 @@ function renderRisks(){
 }
 function postBatches(ids){
   var batches=[];for(var i=0;i<ids.length;i+=100)batches.push(ids.slice(i,i+100));
-  var sent=0,skipped=0;
-  return batches.reduce(function(p,batch){return p.then(function(){return API.post("/api/manager/nudges",{taskIds:batch}).then(function(r){sent+=r.sent||0;skipped+=r.skipped||0;});});},Promise.resolve())
-    .then(function(){return {sent:sent,skipped:skipped};});
+  var sent=0,skipped=0,deduped=0;
+  return batches.reduce(function(p,batch){return p.then(function(){return API.post("/api/manager/nudges",{taskIds:batch}).then(function(r){sent+=r.sent||0;skipped+=r.skipped||0;deduped+=r.deduped||0;});});},Promise.resolve())
+    .then(function(){return {sent:sent,skipped:skipped,deduped:deduped};});
 }
 function nudge(ids){
   if(!canManage()){toast("仅空间主或管理员可发起催办","warn");return;}
   if(sending||!ids.length)return;sending=true;
-  postBatches(ids).then(function(r){toast("已催办 "+r.sent+" 项"+(r.skipped?"，"+r.skipped+" 项未匹配负责人":""),r.sent?"fs":"warn");})
+  postBatches(ids).then(function(r){toast("已催办 "+r.sent+" 项"+(r.deduped?"，"+r.deduped+" 项 6 小时内已催办过":"")+(r.skipped?"，"+r.skipped+" 项未匹配负责人":""),r.sent?"fs":"warn");})
     .catch(function(ex){toast(ex.message||"催办失败","bad");}).then(function(){sending=false;});
 }
 if($("risksBody"))$("risksBody").addEventListener("click",function(e){

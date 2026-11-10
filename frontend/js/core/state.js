@@ -109,6 +109,16 @@ function colRuleOf(id, task){
   }
   return "normal";
 }
+/** 统计分桶：与后端 TaskCalc.statusBucket 同口径（待处理列/等待接续→backlog，执行结束→ended，已完成→done，其余→doing） */
+function statusBucket(t){
+  if(!t) return "backlog";
+  if(t.boardColumn === "done") return "done";
+  if(t.boardColumn === "backlog") return "backlog";
+  var rule = colRuleOf(t.boardColumn, t);
+  if(rule === "waiting") return "backlog";
+  if(rule === "ended") return "ended";
+  return "doing";
+}
 function timerAllowed(t){
   if(!t) return false;
   /* 阻塞任务停表不换列 */
@@ -223,4 +233,4 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 
-export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

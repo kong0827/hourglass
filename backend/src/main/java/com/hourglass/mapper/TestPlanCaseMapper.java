@@ -35,6 +35,9 @@ public interface TestPlanCaseMapper {
     /** 用例被删除时解除计划圈选（保留计划本体） */
     int deleteByCase(@Param("caseId") String caseId);
 
+    /** 包含该用例的未完成计划名（draft / running），用于阻止用例被改到其他项目 */
+    List<String> selectOpenPlanNamesByCase(@Param("workspaceId") String workspaceId, @Param("caseId") String caseId);
+
     /** 项目删除级联：计划随项目走 */
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 }

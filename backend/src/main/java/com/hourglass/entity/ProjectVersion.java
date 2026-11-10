@@ -22,6 +22,8 @@ public class ProjectVersion {
     private Long revision = 0L;
     private Boolean canManageReleasePlan;
     private Boolean canPublish;
+    /** 内容只读：已有成功的生产部署 / 重部署（正式交付）；测试环境部署与回滚不锁定。非持久化字段 */
+    private Boolean contentLocked;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

@@ -649,7 +649,7 @@ public class TaskCommandService {
         unchanged.retainAll(target);
         delta.removeAll(unchanged);
         for (String versionId : delta) {
-            if (!taskMapper.selectVersionSuccessIdsForScope(workspaceId, versionId).isEmpty()) {
+            if (!taskMapper.selectVersionFormalSuccessIdsForScope(workspaceId, versionId).isEmpty()) {
                 throw AppException.badRequest("版本已有成功正式发布记录，内容成员关系已冻结：" + versionId);
             }
         }
@@ -662,6 +662,8 @@ public class TaskCommandService {
             } else if (versionTaskMapper.deleteBinding(workspaceId, taskId, versionId) != 1) {
                 throw new AppException(409, "任务版本关系已变化，请刷新后重试");
             }
+            /* 版本侧成员表单带 revision 整表提交：这里不推进，它会把刚移除/加入的任务悄悄改回去 */
+            versionMapper.touchRevision(workspaceId, versionId);
         }
         String note = "影响版本：" + current + " → " + target;
         java.util.Map<String, Object> after = versionState(workspaceId, target);

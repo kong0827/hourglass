@@ -239,7 +239,7 @@ function itemTypeInfoHTML(){
 function versionPhaseInfoHTML(){
   return '<div class="menu-title">版本与首版 / 迭代</div><div class="type-help-list">' +
     '<div class="type-help-row"><span class="mini-tag type-story">版本</span>' +
-      '<span class="type-help-desc">显式多选。一个工作项可同时关联多个版本；增减当前版本不会移走其他关联，全部取消即「待规划」。需求目标版本是独立的排期身份。已有成功发布事实的版本内容只读，工作项仍可有因关联其他活动版本；执行状态与生产发布事实独立。</span></div>' +
+      '<span class="type-help-desc">显式多选。一个工作项可同时关联多个版本；增减当前版本不会移走其他关联，全部取消即「待规划」。需求目标版本是独立的排期身份。已有成功正式（生产）发布的版本内容只读，工作项仍可有因关联其他活动版本；执行状态与生产发布事实独立。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag type-epic">首版 / 迭代</span>' +
       '<span class="type-help-desc">不是可选项，也不单独存表。系统按项目的「首版上线日」实时归组：完成日（未完成取开始日，再取截止日）不晚于上线日算首版，晚于上线日算迭代；未标记上线日时全部算首版。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">关系</span>' +

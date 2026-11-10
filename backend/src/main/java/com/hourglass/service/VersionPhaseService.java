@@ -144,6 +144,7 @@ public class VersionPhaseService {
             List<VersionRelease> records = recordsByVersion.getOrDefault(version.getId(), java.util.Collections.emptyList());
             VersionRelease latest = latestSuccess(records);
             stat.setReleaseEvidenceKind(latest == null ? "planned_scope" : "release_snapshot");
+            stat.setContentLocked(latest != null || "released".equals(version.getStatus()));
             stat.setReleaseRecordId(latest == null ? null : latest.getId());
             stat.setReleaseEventCount(records.size());
             int successCount = 0, published = 0, excluded = 0;
@@ -423,8 +424,13 @@ public class VersionPhaseService {
         return resp;
     }
 
+    /**
+     * 「实际交付」证据只取成功的生产发布：回滚是独立事实（其影响已体现在当前生效数），
+     * 测试环境部署也不代表交付——否则回滚后「查看实际记录」会指向一条没有发布项的回滚记录。
+     */
     private VersionRelease latestSuccess(List<VersionRelease> records) {
-        return records.stream().filter(r -> "success".equals(r.getResult()))
+        return records.stream().filter(r -> "success".equals(r.getResult())
+                        && "production".equals(r.getEnvironment()) && !"rollback".equals(r.getOperation()))
                 .max(java.util.Comparator.comparing(VersionRelease::getOccurredAt,
                         java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
                         .thenComparing(VersionRelease::getRecordedAt,

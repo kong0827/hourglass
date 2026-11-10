@@ -1500,6 +1500,7 @@ $("dlgWsDeleteInput").addEventListener("input", function(){
 });
 $("dlgWsDeleteForm").addEventListener("submit", function(e){
   e.preventDefault();
+  if($("dlgWsDeleteOk").disabled) return;
   var inp = $("dlgWsDeleteInput");
   if(!rt.currentWs || inp.value !== rt.currentWs.name){
     $("fDlgWsDelete").classList.add("invalid");
@@ -1954,6 +1955,7 @@ function openUserEdit(u){
 }
 $("dlgUserEditForm").addEventListener("submit", function(e){
   e.preventDefault();
+  if($("dlgUserEditOk").disabled) return;
   if(!editingUserId) return;
   var name = $("dlgUserName").value.trim();
   var email = $("dlgUserEmail").value.trim();
@@ -2017,6 +2019,7 @@ function openUserPwdDialog(id, display){
 }
 $("dlgUserPwdForm").addEventListener("submit", function(e){
   e.preventDefault();
+  if($("dlgUserPwdOk").disabled) return;
   var pwd = $("dlgUserPwdInput").value;
   if(pwd.length < 6){ $("fDlgUserPwd").classList.add("invalid"); return; }
   if(!userPwdTargetId) return;

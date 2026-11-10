@@ -67,7 +67,8 @@ class ManagerServiceTest {
         assertEquals("red", project(projects, "R1").get("health"));
         assertEquals("orange", project(projects, "R2").get("health"));
         assertEquals("green", project(projects, "R3").get("health"));
-        assertEquals(1, project(projects, "R3").get("backlog"), "自定义非 done 列必须计待处理");
+        assertEquals(1, project(projects, "R3").get("doing"), "未配置规则的自定义列按正常处理计进行中");
+        assertEquals(0, project(projects, "R3").get("backlog"));
         assertEquals(1, project(projects, "R2").get("doing"));
     }
 
@@ -83,7 +84,43 @@ class ManagerServiceTest {
                 Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
         List<Map<String, Object>> projects = castList(service.portfolio(WORKSPACE, VIEWER).get("projects"));
 
-        assertEquals(1, project(projects, "R1").get("backlog"));
+        assertEquals(1, project(projects, "R1").get("doing"));
+        assertEquals(1, project(projects, "R1").get("total"), "回收站任务不计入");
+    }
+
+    @Test
+    void statusBucketsFollowColumnProcessingRule() {
+        Requirement req = requirement("R1", "项目一");
+        Task backlog = openTask("T1", "R1", Consts.COL_BACKLOG, 60);
+        backlog.setProcessingRule("normal");
+        Task testing = openTask("T2", "R1", "testing", 60);
+        testing.setProcessingRule("normal");
+        Task waiting = openTask("T3", "R1", "waiting", 60);
+        waiting.setProcessingRule("waiting");
+        Task ended = openTask("T4", "R1", "accept", 60);
+        ended.setProcessingRule("ended");
+        Task done = openTask("T5", "R1", Consts.COL_DONE, 60);
+        done.setCompletedAt(TODAY);
+
+        ManagerService service = service(Arrays.asList(backlog, testing, waiting, ended, done),
+                Collections.singletonList(req), Collections.<TimeAgg>emptyList(),
+                Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
+        Map<String, Object> p = project(castList(service.portfolio(WORKSPACE, VIEWER).get("projects")), "R1");
+        assertEquals(2, p.get("backlog"), "待处理列（库内规则为 normal）与等待接续列计待处理");
+        assertEquals(1, p.get("doing"), "正常处理的自定义列计进行中");
+        assertEquals(1, p.get("ended"), "执行结束列单独计数，不计未完成");
+        assertEquals(1, p.get("done"));
+
+        Map<String, Object> counts = castMap(service.project(WORKSPACE, "R1", VIEWER).get("counts"));
+        assertEquals(2, counts.get("backlog"));
+        assertEquals(1, counts.get("doing"));
+        assertEquals(1, counts.get("ended"));
+        List<Map<String, Object>> weeks = castList(castMap(service.reports(WORKSPACE, "R1", VIEWER).get("flow")).get("weeks"));
+        Map<String, Object> current = weeks.get(weeks.size() - 1);
+        assertEquals(2, current.get("backlog"));
+        assertEquals(1, current.get("doing"));
+        assertEquals(1, current.get("ended"));
+        assertEquals(1, current.get("done"));
     }
 
     @Test
@@ -308,6 +345,31 @@ class ManagerServiceTest {
     }
 
     @Test
+    void legacyTextOwnerMergesIntoResolvedAccountWithoutDoublingHours() {
+        Requirement requirement = requirement("R1", "项目一");
+        Task byId = openTask("T1", "R1", Consts.COL_DOING, 120);
+        byId.setOwnerUserId("U1");
+        byId.setDueDate(TODAY);
+        /* 历史数据：只有负责人文本，没有账号ID */
+        Task byName = openTask("T2", "R1", Consts.COL_BACKLOG, 60);
+        byName.setOwner("Alice");
+        byName.setDueDate(TODAY);
+        WorkspaceMember member = new WorkspaceMember();
+        member.setUserId("U1");
+        member.setDisplayName("Alice");
+        TimeLog log = timeLog("U1", "T1", TODAY.atTime(9, 0), 90);
+        ManagerService service = service(Arrays.asList(byId, byName), Collections.singletonList(requirement),
+                Collections.<TimeAgg>emptyList(), Collections.singletonList(log),
+                Collections.singletonList(member));
+
+        Map<String, Object> range = service.workload(WORKSPACE, VIEWER, TODAY.minusDays(6), TODAY);
+        List<Map<String, Object>> members = castList(range.get("members"));
+        assertEquals(1, members.size(), "同一账号的按ID与按名字任务必须合成一行");
+        assertNull(member(members, "Alice"), "能解析到成员的文本负责人不能单独成行");
+        assertEquals(90, member(members, "U1").get("rangeMinutes"), "工时只统计一遍");
+    }
+
+    @Test
     void defectTrendCountsOpenedClosedAndOpenByWeek() {
         Task openBug = openTask("T1", "R1", Consts.COL_DOING, 100);
         openBug.setItemType("bug");
@@ -346,6 +408,31 @@ class ManagerServiceTest {
         assertEquals(1, historical.get("opened"));
         assertEquals(1, historical.get("closed"));
         assertEquals(1, historical.get("open"), "当周即关闭的缺陷不计入周末存量（否则为 2）");
+    }
+
+    @Test
+    void nudgesCountOnlyNotificationsActuallyWrittenAndReportDeduped() {
+        Task fresh = openTask("T1", "R1", Consts.COL_BACKLOG, 60);
+        fresh.setOwnerUserId("U1");
+        Task recent = openTask("T2", "R1", Consts.COL_BACKLOG, 60);
+        recent.setOwnerUserId("U1");
+        WorkspaceMember member = new WorkspaceMember();
+        member.setUserId("U1");
+        member.setDisplayName("Alice");
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.canManage(WORKSPACE, "M1")).thenReturn(true);
+        when(access.hiddenProjectIds(WORKSPACE, "M1")).thenReturn(Collections.<String>emptySet());
+        when(access.canViewTask(eq(WORKSPACE), eq("U1"), any(Task.class))).thenReturn(true);
+        ManagerService service = service(Arrays.asList(fresh, recent), Collections.<Requirement>emptyList(),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(),
+                Collections.singletonList(member), access);
+        when(notificationService.push(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T1"))).thenReturn(true);
+        when(notificationService.push(eq("U1"), eq(WORKSPACE), eq("manager_nudge"), any(), any(), eq("T2"))).thenReturn(false);
+
+        Map<String, Object> result = service.nudges(WORKSPACE, "M1", Arrays.asList("T1", "T2"));
+        assertEquals(1, result.get("sent"), "6 小时去重命中的不计入已发送");
+        assertEquals(1, result.get("deduped"));
+        assertEquals(0, result.get("skipped"));
     }
 
     private ManagerService service(List<Task> tasks, List<Requirement> requirements, List<TimeAgg> actual,

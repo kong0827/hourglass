@@ -206,7 +206,12 @@ public class AttachmentService {
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         Attachment a = get(workspaceId, id);
-        projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
+        if (targetExists(workspaceId, a.getTargetId(), a.getTargetKind())) {
+            projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
+        } else if (userId != null && !ProjectAccessService.isPrivileged(projectAccess.roleOf(workspaceId, userId))) {
+            /* 目标已不存在的孤儿附件无法再判定所属项目：只允许空间 owner/admin 清理，普通成员按不存在处理 */
+            throw AppException.notFound("附件不存在：" + id);
+        }
         attachmentMapper.deleteById(id);
         /* 记录先删、文件等事务提交后再删；回滚时记录和文件都还在 */
         deleteFilesAfterCommit(Collections.singletonList(a));
@@ -220,6 +225,9 @@ public class AttachmentService {
     @Transactional
     public Attachment overwriteContent(String userId, String workspaceId, String id, MultipartFile file) {
         Attachment a = get(workspaceId, id);
+        if (!targetExists(workspaceId, a.getTargetId(), a.getTargetKind())) {
+            throw AppException.notFound("附件所属对象不存在或已删除");
+        }
         projectAccess.assertWrite(workspaceId, userId, targetReqId(workspaceId, a.getTargetId(), a.getTargetKind()));
         if (file == null || file.isEmpty()) {
             throw AppException.badRequest("文件内容为空");
@@ -393,6 +401,22 @@ public class AttachmentService {
             return null;
         }
         return t;
+    }
+
+    /** 附件目标是否仍存在（任务在回收站中仍算存在）；未归类任务 reqId 为空但目标存在，需与孤儿区分 */
+    private boolean targetExists(String workspaceId, String targetId, String kind) {
+        if (KIND_DEMAND.equals(kind)) {
+            Demand d = demandMapper.selectById(targetId);
+            return d != null && workspaceId.equals(d.getWorkspaceId());
+        }
+        if (KIND_CASE_RUN.equals(kind)) {
+            return caseOfRun(workspaceId, targetId) != null;
+        }
+        if (KIND_COMMENT.equals(kind)) {
+            return taskOfComment(workspaceId, targetId) != null;
+        }
+        Task t = taskMapper.selectById(targetId);
+        return t != null && workspaceId.equals(t.getWorkspaceId());
     }
 
     /** 已存在的附件反查所属项目；任务在回收站中也允许追溯 */

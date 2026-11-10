@@ -89,7 +89,8 @@ class VersionReleaseServiceTest {
         verifyNoInteractions(notifications); assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
         TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
         verify(notifications).notifyLinked(anyString(), eq("W"), anyString(), anyString(), anyString(), anyString(), eq("V"), eq("P"));
-        verify(versions, never()).releaseOn(anyString(), anyString(), any());
+        verify(versions, never()).update(any());
+        verify(versions, never()).touchRevision(anyString(), anyString());
     }
     @ParameterizedTest @ValueSource(strings = {"", "Only first batch deployed"})
     void previewIncludesOmittedTaskDetailAndExplicitReason(String reason) {

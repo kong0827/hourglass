@@ -62,7 +62,8 @@
       planned_start = #{plannedStart},
       planned_end = #{plannedEnd},
       updated_at = NOW()
-    WHERE id = #{id}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+    <if test="updatedAt != null">AND updated_at = #{updatedAt}</if>
   </update>
 
   <update id="setArchived">

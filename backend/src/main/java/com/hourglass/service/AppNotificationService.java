@@ -67,17 +67,20 @@ public class AppNotificationService {
         }
     }
 
-    /** 推一条应用内通知（幂等窗口内去重；任何异常都只记日志） */
-    public void push(String userId, String workspaceId, String type, String title, String body, String refTaskId) {
+    /**
+     * 推一条应用内通知（幂等窗口内去重；任何异常都只记日志）。
+     * 返回是否真的写入了一条新通知：去重命中或写入失败为 false，调用方据此如实统计「已发送」。
+     */
+    public boolean push(String userId, String workspaceId, String type, String title, String body, String refTaskId) {
         if (userId == null || workspaceId == null || title == null) {
-            return;
+            return false;
         }
         try {
             boolean recent = refTaskId != null
                     ? mapper.countRecent(userId, refTaskId, type, LocalDateTime.now().minusHours(DEDUP_HOURS)) > 0
                     : mapper.countRecentNoRef(workspaceId, userId, type, LocalDateTime.now().minusHours(DEDUP_HOURS)) > 0;
             if (recent) {
-                return;
+                return false;
             }
             AppNotification n = new AppNotification();
             n.setUserId(userId);
@@ -87,8 +90,10 @@ public class AppNotificationService {
             n.setBody(cut(body, MAX_BODY));
             n.setRefTaskId(refTaskId);
             mapper.insert(n);
+            return true;
         } catch (Exception e) {
             log.warn("应用内通知写入失败（不影响主流程）：user={} type={}", userId, type, e);
+            return false;
         }
     }
 

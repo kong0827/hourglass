@@ -55,6 +55,17 @@
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC
   </select>
 
+  <!-- 关键词经由工作项命中版本/项目名时，只认查看人可见项目里的工作项（与列表任务数、版本/项目标签同口径） -->
+  <sql id="searchTaskVisible">
+    <if test="q.viewerId != null and q.viewerId != ''">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = ${alias}.workspace_id
+                        AND pm.project_id = ${alias}.req_id
+                        AND pm.user_id = #{q.viewerId}
+                        AND pm.access = 'none')
+    </if>
+  </sql>
+
   <!-- 分页/计数共用的筛选条件：可见范围、项目、状态、关键词全部下推 -->
   <sql id="pageWhere">
     b.workspace_id = #{q.workspaceId}
@@ -84,10 +95,12 @@
                    JOIN version_task vt3 ON vt3.task_id = t3.id AND vt3.workspace_id = t3.workspace_id
                    JOIN project_version pv3 ON pv3.id = vt3.version_id AND pv3.workspace_id = t3.workspace_id
                    WHERE t3.branch_id = b.id AND t3.deleted_at IS NULL
+                     <include refid="searchTaskVisible"><property name="alias" value="t3"/></include>
                      AND pv3.name LIKE CONCAT('%', #{q.q}, '%'))
         OR EXISTS (SELECT 1 FROM task t4
                    JOIN requirement r4 ON r4.id = t4.req_id AND r4.workspace_id = t4.workspace_id
                    WHERE t4.branch_id = b.id AND t4.deleted_at IS NULL
+                     <include refid="searchTaskVisible"><property name="alias" value="t4"/></include>
                      AND (r4.name LIKE CONCAT('%', #{q.q}, '%')
                           OR r4.id LIKE CONCAT('%', #{q.q}, '%'))))
     </if>
@@ -149,6 +162,20 @@
 
   <select id="selectById" resultType="DevBranch">
     SELECT <include refid="cols"/> FROM dev_branch WHERE id = #{id}
+  </select>
+
+  <select id="selectTaskStats" resultType="DevBranch">
+    SELECT COUNT(*) AS task_count,
+           COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done_count
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.branch_id = #{branchId} AND t.deleted_at IS NULL
+    <if test="viewerId != null and viewerId != ''">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
   </select>
 
   <!-- 影响版本标签：分支 → 任务 → version_task → project_version 推导（方案A，无独立绑定） -->
@@ -241,6 +268,14 @@
       <if test="merging">, merge_at = COALESCE(merge_at, NOW())</if>
       <if test="released">, released_at = COALESCE(released_at, NOW())</if>
     WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 项目删除前：与同名公共分支冲突的项目分支先改名为「原名-项目ID」，否则退回公共分支时撞 uk_ws_req_name -->
+  <update id="renameClashesBeforeDetach">
+    UPDATE dev_branch b
+    JOIN dev_branch pub ON pub.workspace_id = b.workspace_id AND pub.req_id IS NULL AND pub.name = b.name
+    SET b.name = CONCAT(LEFT(b.name, 79 - CHAR_LENGTH(b.req_id)), '-', b.req_id)
+    WHERE b.workspace_id = #{workspaceId} AND b.req_id = #{reqId}
   </update>
 
   <update id="clearReqIdByReq">

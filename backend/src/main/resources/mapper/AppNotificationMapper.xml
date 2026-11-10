@@ -24,6 +24,14 @@
             AND wm.role IN ('owner', 'admin', 'viewer')
         )
     )
+    <!--
+      接收人已被移出（或已退出）的空间：该空间的历史通知都指向已无权访问的内容，
+      列表/未读数一并隐藏；只保留「你已被移出空间」这条系统通知本身作为告知。
+    -->
+    AND (n.type = 'member_removed' OR EXISTS (
+      SELECT 1 FROM workspace_member wsm
+      WHERE wsm.workspace_id = n.workspace_id AND wsm.user_id = n.user_id
+    ))
   </sql>
 
   <select id="selectByUser" resultType="AppNotification">

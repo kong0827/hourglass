@@ -117,7 +117,9 @@ public class RequirementController {
                                                            @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(requirementService.deleteImpact(ws.getId(), id));
+        /* 只为删除确认服务，删除仅空间主可执行：预览口径保持一致，不对其他成员暴露项目规模 */
+        workspaceService.requireOwner(userId, ws.getId());
+        return ApiResult.ok(requirementService.deleteImpact(ws.getId(), userId, id));
     }
 
     /**

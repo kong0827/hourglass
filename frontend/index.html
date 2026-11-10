@@ -1234,7 +1234,7 @@
                 <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
                 <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
                 <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
-                <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false">有缺陷</button>
+                <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
                 <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
                   <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
                   <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
@@ -1645,6 +1645,7 @@
               <option value="days90">近 90 天</option>
             </select>
           </label>
+          <span class="toolbar-meta" id="analysisPeriodNote">近 8 周：周趋势近 8 周，流程体检近 90 天</span>
           <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false" style="margin-left:auto">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
           </button>

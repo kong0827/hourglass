@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -116,6 +119,34 @@ class RequirementServiceTest {
         verify(demands).deleteByReq(WS, "R1");
         verify(access).clearProject(WS, "R1");
         verify(reqs).deleteById("R1");
+    }
+
+    @Test
+    void staleUpdateTokenIsRejectedInsteadOfOverwriting() {
+        when(reqs.selectById("R1")).thenReturn(requirement("R1", "项目一"));
+        when(reqs.update(any(Requirement.class))).thenReturn(0);
+        com.hourglass.dto.ReqSaveRequest req = new com.hourglass.dto.ReqSaveRequest();
+        req.setName("项目一改");
+        req.setUpdatedAt(java.time.LocalDateTime.of(2026, 11, 1, 10, 0));
+
+        com.hourglass.common.AppException ex = assertThrows(com.hourglass.common.AppException.class,
+                () -> service.update(WS, VIEWER, "R1", req));
+
+        assertEquals(409, ex.getCode());
+        verify(reqs).update(org.mockito.ArgumentMatchers.argThat(r ->
+                WS.equals(r.getWorkspaceId())
+                        && java.time.LocalDateTime.of(2026, 11, 1, 10, 0).equals(r.getUpdatedAt())));
+    }
+
+    @Test
+    void deleteImpactRequiresProjectViewAccess() {
+        when(reqs.selectById("R1")).thenReturn(requirement("R1", "项目一"));
+        doThrow(com.hourglass.common.AppException.notFound("项目不存在"))
+                .when(access).assertView(WS, VIEWER, "R1");
+
+        assertThrows(com.hourglass.common.AppException.class, () -> service.deleteImpact(WS, VIEWER, "R1"));
+
+        verify(tasks, never()).countTasksByReq(anyString(), anyString());
     }
 
     private Requirement requirement(String id, String name) {

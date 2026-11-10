@@ -121,7 +121,7 @@
       format        = #{doc.format},
       content_brief = #{doc.contentBrief},
       status        = #{doc.status},
-      published_at  = #{doc.publishedAt},
+      <!-- published_at 只由 updatePublished 维护：编辑已发布文档不改变发布状态，也不会覆盖并发的发布/收回 -->
       sort_order    = COALESCE(#{doc.sortOrder}, 0),
       owner         = #{doc.owner},
       owner_user_id = #{doc.ownerUserId},
@@ -132,8 +132,10 @@
     </if>
   </update>
 
+  <!-- 发布不改正文：保持 updated_at（亦是编辑乐观锁令牌）不变，显式赋值以覆盖 ON UPDATE CURRENT_TIMESTAMP，
+       否则已打开的编辑器下一次保存会被误判为并发冲突 -->
   <update id="updatePublished">
-    UPDATE requirement_doc SET published_at = #{publishedAt}, updated_at = NOW()
+    UPDATE requirement_doc SET published_at = #{publishedAt}, updated_at = updated_at
     WHERE id = #{id}
   </update>
 

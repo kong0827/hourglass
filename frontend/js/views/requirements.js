@@ -2097,8 +2097,12 @@ function fillReqDocEditor(doc){
     format: doc.format === "markdown" ? "markdown" : "html",
     docType: doc.docType || "other",
     parentId: doc.parentId || "",
+    /* 发布状态与作者必须随正文一起回填：否则打开/保存已发布文档后按钮误显示「发布」、分享提示「尚未发布」 */
+    publishedAt: doc.publishedAt || null,
+    ownerUserId: doc.ownerUserId || "",
     updatedAt: doc.updatedAt || ""
   };
+  refreshReqDocPublishBtn();
   setDocFormatUI(editingMeta.format);
   fillDocTypeSelect("reqDocType", editingMeta.docType);
   fillDocParentSelect(doc);
@@ -2249,6 +2253,8 @@ function submitReqDocComment(){
   var content = (ta && ta.value || "").trim();
   if(!content){ toast("评论内容不能为空", "warn"); if(ta) ta.focus(); return; }
   var btn = $("reqDocCommentSend");
+  /* Ctrl/⌘+Enter 不经过按钮：在途时直接忽略，避免同一条评论发两次 */
+  if(btn && btn.disabled) return;
   if(btn) btn.disabled = true;
   var body = { content: content };
   if(reqDocCommentQuote) body.quoteText = reqDocCommentQuote;
@@ -2910,7 +2916,7 @@ function refreshReqDocPublishBtn(){
   if(!b) return;
   var published = !!editingMeta.publishedAt;
   b.textContent = published ? "收回发布" : "发布";
-  b.title = published ? "收回后仅作者与空间管理员可见" : "发布后项目成员可见";
+  b.title = published ? "收回后仅作者与空间管理员可见，已生成的分享链接同时失效；收回不影响继续编辑" : "发布后项目成员可见，发布后仍可继续编辑";
   b.classList.toggle("is-published", published);
 }
 function toggleReqDocPublish(){
@@ -2930,7 +2936,7 @@ function toggleReqDocPublish(){
       }
     });
     renderReqDocMode();
-    toast(published ? "已收回发布，文档转为草稿" : "已发布，项目成员现在可以查看", "fs");
+    toast(published ? "已收回发布，文档转为草稿，原分享链接已失效" : "已发布，项目成员现在可以查看；仍可继续编辑", "fs");
   }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); })
     .then(function(){ if(btn) btn.disabled = false; });
 }

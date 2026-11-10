@@ -68,6 +68,7 @@ class WorkActivityRecordingTest {
         workActivityService = mock(WorkActivityService.class);
         /* 乐观锁：这些用例只关心活动记录，默认按更新成功返回 */
         when(docMapper.update(any(RequirementDoc.class), any())).thenReturn(1);
+        when(reqMapper.update(any(Requirement.class))).thenReturn(1);
         docService = new RequirementDocService(docMapper, mock(RequirementDocHistoryMapper.class),
                 mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
                 reqMapper, userMapper, taskMapper,
@@ -108,6 +109,47 @@ class WorkActivityRecordingTest {
         requirementService.markFirstRelease(WS, "R1", LocalDate.of(2026, 11, 3));
         verify(workActivityService).recordCurrent(WS, WorkActivityService.PROJECT, "R1", "first_release",
                 "首版上线日期：2026-10-01 → 2026-11-03");
+    }
+
+    private RequirementDoc doc(String id, String parentId) {
+        RequirementDoc d = new RequirementDoc();
+        d.setId(id);
+        d.setWorkspaceId(WS);
+        d.setReqId("R1");
+        d.setTitle("文档" + id);
+        d.setParentId(parentId);
+        d.setPublishedAt(java.time.LocalDateTime.now());   // 排序先校验可见性：已发布文档对项目写者可见
+        when(docMapper.selectById(id)).thenReturn(d);
+        return d;
+    }
+
+    private static com.hourglass.dto.ReqDocReorderRequest.Item item(String id, String parentId) {
+        com.hourglass.dto.ReqDocReorderRequest.Item it = new com.hourglass.dto.ReqDocReorderRequest.Item();
+        it.setId(id);
+        it.setParentId(parentId);
+        it.setSortOrder(0);
+        return it;
+    }
+
+    @Test
+    void reorderRejectsCycleFormedWithinTheSameBatchAndWritesNothing() {
+        doc("A", null);
+        doc("B", null);
+        com.hourglass.dto.ReqDocReorderRequest req = new com.hourglass.dto.ReqDocReorderRequest();
+        req.setItems(Arrays.asList(item("A", "B"), item("B", "A")));
+        assertThrows(AppException.class, () -> docService.reorder(USER, WS, req));
+        verify(docMapper, never()).updateSortOrder(anyString(), anyString(), any(), any());
+
+        /* 与库内既有链成环：C 现挂在 A 下，再把 A 挂到 C 下 */
+        doc("C", "A");
+        req.setItems(Collections.singletonList(item("A", "C")));
+        assertThrows(AppException.class, () -> docService.reorder(USER, WS, req));
+
+        /* 正常移动仍可落库 */
+        req.setItems(Arrays.asList(item("B", "A"), item("C", null)));
+        docService.reorder(USER, WS, req);
+        verify(docMapper).updateSortOrder(WS, "B", 0, "A");
+        verify(docMapper).updateSortOrder(WS, "C", 0, null);
     }
 
     @Test

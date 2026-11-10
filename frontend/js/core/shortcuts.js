@@ -150,6 +150,9 @@ document.addEventListener("keydown", function(e){
     var openForm = document.querySelector(".modal-layer.open form");
     if(openForm){
       e.preventDefault();
+      /* 合成的 submit 事件不经过按钮：提交按钮处于禁用（请求在途）时不再重复提交 */
+      var submitBtn = openForm.querySelector('button[type="submit"]');
+      if(submitBtn && submitBtn.disabled) return;
       openForm.dispatchEvent(new Event("submit", {cancelable:true, bubbles:true}));
       return;
     }

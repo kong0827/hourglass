@@ -36,6 +36,8 @@ public class VersionStatsResponse {
         /** 按真实版本绑定 scope 判断，不含首版统计折算任务 */
         private Boolean canPublish;
         private String releaseEvidenceKind;
+        /** 内容只读：存在成功的生产非回滚发布（与 releaseEvidenceKind=release_snapshot 同源），前端只读此字段 */
+        private Boolean contentLocked;
         private String releaseRecordId;
         private Integer publishedTaskCount;
         private Integer excludedTaskCount;

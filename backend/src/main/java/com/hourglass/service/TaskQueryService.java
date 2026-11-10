@@ -301,8 +301,13 @@ public class TaskQueryService {
 
     public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort,
                                  int offset, int limit) {
+        return list(workspaceId, userId, query, sort, offset, limit, true);
+    }
+
+    public TaskListResponse list(String workspaceId, String userId, BoardQuery query, String sort,
+                                 int offset, int limit, boolean includeDone) {
         LocalDate today = LocalDate.now();
-        GanttQuery gq = GanttQuery.from(query, today, null, null, true);
+        GanttQuery gq = GanttQuery.from(query, today, null, null, includeDone);
         gq.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         String s = "due".equals(sort) || "priority".equals(sort) || "updated".equals(sort) ? sort : "column";
         int safeOffset = Math.max(0, offset);

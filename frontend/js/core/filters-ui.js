@@ -618,6 +618,7 @@ function promptSaveView(){
 $("btnSaveView").addEventListener("click", promptSaveView);
 $("dlgViewNameForm").addEventListener("submit", function(e){
   e.preventDefault();
+  if($("dlgViewNameOk").disabled) return;
   var name = $("dlgViewInput").value.trim();
   if(!name){ $("fDlgViewName").classList.add("invalid"); return; }
   if(name.length > 20) name = name.slice(0, 20);

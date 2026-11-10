@@ -76,4 +76,11 @@ public interface TestCaseMapper {
 
     /** 空间级清理：删除/清空空间与覆盖导入共用 */
     int deleteByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 整空间删除专用：测试计划圈选行 / 测试计划 / 用例模块（备份不含这三类，导入覆盖时不清） */
+    int deletePlanCasesByWorkspace(@Param("workspaceId") String workspaceId);
+
+    int deletePlansByWorkspace(@Param("workspaceId") String workspaceId);
+
+    int deleteModulesByWorkspace(@Param("workspaceId") String workspaceId);
 }

@@ -53,6 +53,24 @@ public final class TaskCalc {
         return "ok";
     }
 
+    /**
+     * 统计分桶：按列的处理规则而不是硬编码列 ID 归类（组合 / 项目驾驶舱 / 周回顾 / 前端项目页同一口径）。
+     * 待处理列与「等待接续」列 → backlog；「执行结束」列 → ended（不计未完成）；已完成 → done；
+     * 其余（含进行中与未配置规则的自定义列，后端默认 normal）→ doing。
+     */
+    public static String statusBucket(String boardColumn, String processingRule) {
+        if (Consts.COL_DONE.equals(boardColumn)) {
+            return "done";
+        }
+        if (Consts.COL_BACKLOG.equals(boardColumn) || "waiting".equals(processingRule)) {
+            return "backlog";
+        }
+        if ("ended".equals(processingRule)) {
+            return "ended";
+        }
+        return "doing";
+    }
+
     public static BoardResponse.Counts countDue(List<Task> tasks, LocalDate today) {
         BoardResponse.Counts counts = new BoardResponse.Counts();
         for (Task t : tasks) {

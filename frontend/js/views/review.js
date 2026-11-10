@@ -86,6 +86,8 @@ function enterReviewView(){
 function navWeek(delta){
   var base = rt.reviewTarget !== null ? rt.reviewTarget : (state.reviewData ? state.reviewData.weekOffset : -1);
   var off = base + delta;
+  /* 先记下目标周：响应回来前连点，以目标周为基准继续翻，不会两次都落在同一周 */
+  rt.reviewTarget = off;
   setReviewLoading();
   var seq = ++rt.reviewSeq;
   API.get("/api/review", reviewParams(off)).then(function(d){
@@ -96,6 +98,9 @@ function navWeek(delta){
   }).catch(function(ex){
     if(seq !== rt.reviewSeq) return;
     rt.reviewTarget = state.reviewData ? state.reviewData.weekOffset : null;
+    /* 骨架屏已覆盖内容：有上一周数据就恢复，否则给可重试的错误态 */
+    if(state.reviewData) renderReview(state.reviewData);
+    else setPageError(ex, ["summaryText","progList","reqDist","doneList"], function(){ enterReviewView(); });
     toast("加载失败：" + (ex.message || "网络异常"), "bad");
   });
 }
@@ -113,7 +118,7 @@ function buildSummary(d){
   var scope = d.reqName ? ("项目「<b>" + esc(d.reqName) + "</b>」 · ") : "";
   var rangeTxt = fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
   var progTasks = d.progressTasks || [];
-  if(!n && !progTasks.length && !d.doing && !d.backlog){
+  if(!n && !progTasks.length && !d.doing && !d.backlog && !d.ended){
     return scope + label + "（" + rangeTxt + "）暂无工作记录。把卡片拖入「已完成」列会自动记录完成时间；在工作项里填上进度，回顾里就能看到这一周你做了什么。";
   }
   var parts = [];
@@ -148,8 +153,9 @@ function buildSummary(d){
     parts.push("进行中的工作（" + progTasks.length + " 项）：" + (progTasks.length > 1 ? "<br>" : "") +
       pl.join("<br>") + (progTasks.length > 8 ? "<br>…等" : ""));
   }
-  if(d.doing || d.backlog){
+  if(d.doing || d.backlog || d.ended){
     parts.push("当前看板：进行中 <b>" + d.doing + "</b> 项、待处理 <b>" + d.backlog + "</b> 项" +
+      (d.ended ? "、执行结束 <b>" + d.ended + "</b> 项" : "") +
       (progTasks.length ? "，详细进度见下方「进行中」。" : "。"));
   }
   var c = d.counts || {over:0, today:0};

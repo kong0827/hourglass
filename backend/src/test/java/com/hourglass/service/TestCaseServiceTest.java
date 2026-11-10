@@ -53,12 +53,13 @@ class TestCaseServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final AttachmentService attachments = mock(AttachmentService.class);
+    private final com.hourglass.mapper.TestPlanCaseMapper planCases = mock(com.hourglass.mapper.TestPlanCaseMapper.class);
     private final TestCaseService service =
             new TestCaseService(cases, runs, taskCommand, access, reqs,
                     mock(com.hourglass.mapper.DemandMapper.class), mock(com.hourglass.mapper.TestModuleMapper.class),
                     mock(com.hourglass.mapper.AttachmentMapper.class), attachments,
                     mock(com.hourglass.mapper.TestPlanMapper.class),
-                    mock(com.hourglass.mapper.TestPlanCaseMapper.class));
+                    planCases);
 
     @BeforeEach
     void setUp() {
@@ -71,6 +72,24 @@ class TestCaseServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void movingCaseToAnotherProjectIsBlockedWhileInOpenPlan() {
+        TestCase c = new TestCase();
+        c.setId("C1");
+        c.setWorkspaceId(WS);
+        c.setReqId(REQ);
+        c.setTitle("登录");
+        when(cases.selectById("C1")).thenReturn(c);
+        when(reqs.selectById("R2")).thenReturn(requirement(WS));
+        when(planCases.selectOpenPlanNamesByCase(WS, "C1")).thenReturn(java.util.Collections.singletonList("v1.2 回归"));
+        com.hourglass.dto.TestCaseSaveRequest req = new com.hourglass.dto.TestCaseSaveRequest();
+        req.setReqId("R2");
+        req.setTitle("登录");
+        AppException ex = assertThrows(AppException.class, () -> service.update(USER, WS, "C1", req));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("v1.2 回归"));
+        verify(cases, never()).update(any(TestCase.class));
     }
 
     private static Requirement requirement(String wsId) {

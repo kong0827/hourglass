@@ -6,7 +6,7 @@ import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
-import { dueState, rt } from "../core/state.js";
+import { dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
@@ -224,7 +224,7 @@ function renderProject(){
     + '<button class="btn sm ghost" type="button" id="btnProjectBack" title="返回项目列表">← 项目列表</button>'
     + '<b>' + esc(p.name || "项目驾驶舱") + '</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
     + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
-  var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。')
+  var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
     + projectBrief(p, m, c, cache.members)
     + '<div class="manager-kpis">'
     + metric("计划周期", '<span class="manager-date-value">' + fmtDate(m.startDate) + ' → ' + fmtDate(m.dueDate) + '</span>', total + " 个工作项", "all")
@@ -233,6 +233,7 @@ function renderProject(){
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
+    + (c.ended ? distRow("执行结束", c.ended, total, "ended") : "")
     + distRow("已完成", done, total, "done", "success") + distRow("逾期", c.overdue || 0, total, "overdue", "danger")
     + distRow("被阻塞", c.blocked || 0, total, "blocked", "warning") + '</section>'
     + '<section class="manager-panel"><div class="manager-panel-head"><b>近 8 周新增 / 完成</b><span>按周汇总</span></div>' + weeklyChart(cache.weekly || []) + '</section></div>'
@@ -241,7 +242,7 @@ function renderProject(){
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × 6h）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
@@ -293,11 +294,9 @@ function avgPct(tasks){
   return Math.round(sum / tasks.length);
 }
 function countCols(tasks){
-  var c = { backlog:0, doing:0, done:0, overdue:0 };
+  var c = { backlog:0, doing:0, ended:0, done:0, overdue:0 };
   tasks.forEach(function(t){
-    if(t.boardColumn === "doing") c.doing++;
-    else if(isDone(t)) c.done++;
-    else c.backlog++;
+    c[statusBucket(t)]++;
     if(dueState(t).kind === "over") c.overdue++;
   });
   return c;
@@ -314,8 +313,12 @@ function sumMinutes(tasks, key){
   tasks.forEach(function(t){ n += Number(t[key]) || 0; });
   return n;
 }
+/** 「执行结束」不计未完成：附在已完成后单独标注，避免与已完成混算 */
+function doneCell(done, ended){
+  return (done || 0) + (ended ? ' <span class="muted" title="另有 ' + ended + ' 项在「执行结束」列">+' + ended + '</span>' : "");
+}
 function nums4(c){
-  return '<td class="num">' + c.backlog + '</td><td class="num">' + c.doing + '</td><td class="num">' + c.done + '</td>'
+  return '<td class="num">' + c.backlog + '</td><td class="num">' + c.doing + '</td><td class="num">' + doneCell(c.done, c.ended) + '</td>'
     + '<td class="num"' + (c.overdue ? ' style="color:var(--danger-fg)"' : "") + '>' + c.overdue + '</td>';
 }
 function caretBtn(key, open, label){
@@ -374,7 +377,7 @@ function drillProjectRow(p){
     + drillName(0, name)
     + '<td><span class="tag ghost">' + esc(statusName(p.status)) + '</span></td>'
     + '<td class="num">' + miniBar(p.progressPct) + '</td>'
-    + '<td class="num">' + (p.backlog || 0) + '</td><td class="num">' + (p.doing || 0) + '</td><td class="num">' + (p.done || 0) + '</td>'
+    + '<td class="num">' + (p.backlog || 0) + '</td><td class="num">' + (p.doing || 0) + '</td><td class="num">' + doneCell(p.done, p.ended) + '</td>'
     + '<td class="num"' + (p.overdue ? ' style="color:var(--danger-fg)"' : "") + '>' + (p.overdue || 0) + '</td>'
     + '<td><span class="manager-avatars">' + (p.members || []).slice(0, 4).map(function(n){ return avatarHTML(n, "sm"); }).join("") + '</span></td>'
     + '<td class="num">' + esc(fmtDate(maxDue(plainTasks(p.reqId)))) + '</td>'
@@ -456,20 +459,20 @@ function hoursNum(minutes){
 function exportDrill(){
   if(!pfCache) return;
   var rows = [["项目透视", pfCache.today], [],
-    ["层级","名称","所属项目","状态","健康度","进度","待处理","进行中","已完成","逾期","负责人","截止","预估(小时)","实际(小时)"]];
+    ["层级","名称","所属项目","状态","健康度","进度","待处理","进行中","执行结束","已完成","逾期","负责人","截止","预估(小时)","实际(小时)"]];
   function taskRow(p, t){
-    rows.push(["工作项", t.title, p.name, taskStatusName(t), "", taskPct(t) + "%", "", "", "", "",
+    rows.push(["工作项", t.title, p.name, taskStatusName(t), "", taskPct(t) + "%", "", "", "", "", "",
       t.owner || "未指派", fmtDate(t.dueDate), hoursNum(t.estimateMinutes), hoursNum(t.totalMinutes)]);
   }
   function groupRow(p, name, kids){
     var c = countCols(kids);
-    rows.push(["史诗", name, p.name, "", "", avgPct(kids) + "%", c.backlog, c.doing, c.done, c.overdue, "",
+    rows.push(["史诗", name, p.name, "", "", avgPct(kids) + "%", c.backlog, c.doing, c.ended, c.done, c.overdue, "",
       fmtDate(maxDue(kids)), hoursNum(sumMinutes(kids, "estimateMinutes")), hoursNum(sumMinutes(kids, "totalMinutes"))]);
     kids.forEach(function(t){ taskRow(p, t); });
   }
   (pfCache.projects || []).forEach(function(p){
     rows.push(["项目", p.name, p.name, statusName(p.status), p.health === "green" ? "正常" : "需关注",
-      (p.progressPct || 0) + "%", p.backlog || 0, p.doing || 0, p.done || 0, p.overdue || 0,
+      (p.progressPct || 0) + "%", p.backlog || 0, p.doing || 0, p.ended || 0, p.done || 0, p.overdue || 0,
       (p.members || []).join("、"), fmtDate(maxDue(plainTasks(p.reqId))),
       hoursNum(p.estimateMinutes), hoursNum(p.actualMinutes)]);
     epicTasks(p.reqId).forEach(function(ep){ groupRow(p, ep.title, childrenOf(ep.id)); });
@@ -481,9 +484,7 @@ function exportDrill(){
 }
 function metricTasks(kind){
   var rows = cache.tasks || [];
-  if(kind === "backlog") return rows.filter(function(t){ return t.boardColumn !== "done" && t.boardColumn !== "doing"; });
-  if(kind === "doing") return rows.filter(function(t){ return t.boardColumn === "doing"; });
-  if(kind === "done") return rows.filter(function(t){ return t.boardColumn === "done"; });
+  if(kind === "backlog" || kind === "doing" || kind === "ended" || kind === "done") return rows.filter(function(t){ return statusBucket(t) === kind; });
   if(kind === "overdue") return rows.filter(function(t){ return dueState(t).kind === "over"; });
   if(kind === "blocked") return rows.filter(function(t){ return t.boardColumn !== "done" && t.blocked; });
   if(kind === "estimate") return rows.filter(function(t){ return t.estimateMinutes > 0; });
@@ -576,7 +577,7 @@ function onClick(e){
   var metricBtn = e.target.closest("[data-project-metric]");
   if(metricBtn){
     var kind = metricBtn.dataset.projectMetric;
-    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",done:"已完成",overdue:"逾期",blocked:"被阻塞",estimate:"有预估的工作项",actual:"有实际工时的工作项",variance:"已完成工作项工时偏差"};
+    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",ended:"执行结束",done:"已完成",overdue:"逾期",blocked:"被阻塞",estimate:"有预估的工作项",actual:"有实际工时的工作项",variance:"已完成工作项工时偏差"};
     openTaskTable((cache.project.name || "项目") + " · " + names[kind], metricTasks(kind)); return;
   }
   var epic = e.target.closest("[data-epic]");

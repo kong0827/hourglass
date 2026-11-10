@@ -18,7 +18,7 @@ public class CaseQuery {
     private String pri;
     /** 最近执行人 */
     private String owner;
-    /** 仅看已关联缺陷 */
+    /** 仅看关联缺陷仍有效未完成（未删除、未进入完成列）的用例 */
     private boolean bugOnly;
     private String q;
     private int offset;

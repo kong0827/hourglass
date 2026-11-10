@@ -187,7 +187,7 @@ class AttachmentServiceTest {
     void overwriteContentKeepsIdAndUpdatesSize() throws Exception {
         AttachmentMapper mapper = mock(AttachmentMapper.class);
         TaskLogMapper logMapper = mock(TaskLogMapper.class);
-        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), logMapper,
+        AttachmentService svc = new AttachmentService(mapper, liveTask(), logMapper,
                 mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
                 mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(TaskCommentMapper.class),
                 mock(ProjectAccessService.class));
@@ -212,7 +212,7 @@ class AttachmentServiceTest {
     @Test
     void overwriteContentRejectsMismatchedExt() throws Exception {
         AttachmentMapper mapper = mock(AttachmentMapper.class);
-        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
+        AttachmentService svc = new AttachmentService(mapper, liveTask(), mock(TaskLogMapper.class),
                 mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
                 mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(TaskCommentMapper.class),
                 mock(ProjectAccessService.class));
@@ -226,5 +226,75 @@ class AttachmentServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "改后缀.png", "image/png", new byte[]{9});
         assertThrows(AppException.class, () -> svc.overwriteContent("U1", "W1", "A9", file));
         assertTrue(Arrays.equals(new byte[]{1, 2}, Files.readAllBytes(dir.resolve("A9.xlsx"))), "拒绝时原件不动");
+    }
+
+    private TaskMapper liveTask() {
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        Task task = new Task();
+        task.setId("K1");
+        task.setWorkspaceId("W1");
+        task.setReqId("R1");
+        when(taskMapper.selectById("K1")).thenReturn(task);
+        return taskMapper;
+    }
+
+    private AttachmentService orphanService(AttachmentMapper mapper, ProjectAccessService access) {
+        AttachmentService svc = new AttachmentService(mapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(TaskCommentMapper.class), access);
+        ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
+        when(mapper.selectById("A9")).thenReturn(attachment("A9", "A9.png"));
+        return svc;
+    }
+
+    @Test
+    void orphanAttachmentDeleteIsLimitedToWorkspaceAdmins() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.roleOf("W1", "U1")).thenReturn("member");
+        AttachmentService svc = orphanService(mapper, access);
+
+        AppException ex = assertThrows(AppException.class, () -> svc.delete("U1", "W1", "A9"));
+        assertEquals(404, ex.getCode(), "目标已删除的孤儿附件：普通成员按不存在处理");
+        verify(mapper, org.mockito.Mockito.never()).deleteById(anyString());
+
+        when(access.roleOf("W1", "U2")).thenReturn("admin");
+        svc.delete("U2", "W1", "A9");
+        verify(mapper).deleteById("A9");
+    }
+
+    @Test
+    void orphanAttachmentCannotBeOverwritten() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.roleOf("W1", "U2")).thenReturn("admin");
+        AttachmentService svc = orphanService(mapper, access);
+        MockMultipartFile file = new MockMultipartFile("file", "A9.png", "image/png", new byte[]{9});
+
+        AppException ex = assertThrows(AppException.class, () -> svc.overwriteContent("U2", "W1", "A9", file));
+        assertEquals(404, ex.getCode());
+        verify(mapper, org.mockito.Mockito.never()).updateContent(any());
+    }
+
+    @Test
+    void unclassifiedTaskAttachmentStillUsesNormalWriteCheck() throws Exception {
+        AttachmentMapper mapper = mock(AttachmentMapper.class);
+        TaskMapper taskMapper = mock(TaskMapper.class);
+        Task task = new Task();
+        task.setId("K1");
+        task.setWorkspaceId("W1");
+        when(taskMapper.selectById("K1")).thenReturn(task);
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.roleOf("W1", "U1")).thenReturn("member");
+        AttachmentService svc = new AttachmentService(mapper, taskMapper, mock(TaskLogMapper.class),
+                mock(DemandMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
+                mock(com.hourglass.mapper.TestCaseRunMapper.class), mock(TaskCommentMapper.class), access);
+        ReflectionTestUtils.setField(svc, "attachDir", dir.toString());
+        when(mapper.selectById("A9")).thenReturn(attachment("A9", "A9.png"));
+
+        svc.delete("U1", "W1", "A9");
+
+        verify(access).assertWrite("W1", "U1", null);
+        verify(mapper).deleteById("A9");
     }
 }

@@ -443,7 +443,7 @@ class ProjectVersionServiceTest {
         when(lock.lockTask(WS, "T1")).thenReturn(current);
         int code = 409;
         if ("formal-success".equals(state)) {
-            when(tasks.selectVersionSuccessIdsForScope(WS, "V1")).thenReturn(Collections.singletonList("VR1"));
+            when(tasks.selectVersionFormalSuccessIdsForScope(WS, "V1")).thenReturn(Collections.singletonList("VR1"));
             code = 400;
         }
         if ("permission".equals(state)) {

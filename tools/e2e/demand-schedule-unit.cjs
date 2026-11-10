@@ -12,11 +12,14 @@ function element(value = "") {
     setAttribute() {}, removeAttribute() {}, addEventListener() {}, focus() {} };
 }
 const elements = {};
-["dpVersion", "dpNote", "fDemandPlanVer", "btnDoPlan", "dpPlannedStart", "dpPlannedEnd", "dpPriority"]
+["dpVersion", "dpNote", "fDemandPlanVer", "btnDoPlan", "dpPlannedStart", "dpPlannedEnd", "dpPriority",
+  "dReq", "dTitle", "dDesc", "dAccept", "dSource", "dKind", "dCategory", "dExpect", "dWsjfB", "dWsjfU", "dWsjfR", "dWsjfE",
+  "fDemandTitle", "btnSaveDemand", "demandFormTitle"]
   .forEach(id => { elements[id] = element(); });
 const requests = [], notices = [];
 const context = vm.createContext({
   console, setTimeout, clearTimeout,
+  window:{ addEventListener() {}, dispatchEvent() {} }, CustomEvent:function(){},
   $: id => elements[id] || null,
   rt:{ currentWs:{ id:"W1", myRole:"member" }, reqList:[], demandReqId:"R1" },
   canEditReq: () => true,
@@ -221,5 +224,32 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
   elements.iVersion.options[0].selected = false;
   assert.equal(context.versionReasonNeeded(demand()), true);
   assert.equal(context.versionReasonNeeded(demand("canceled")), false);
+  // 需求表单：编辑「未指定模块」不能被改成第一个模块；关闭后迟到的保存响应不能关闭/改写新表单。
+  context.rt.reqList = [{ id:"R1", name:"项目" }];
+  context.rt.categoriesCache = [{ id:"C1", projectId:"R1", name:"模块一" }];
+  context.openDemandDialog({ ...demand("review"), categoryId:null });
+  assert.equal(elements.dCategory.value, "", "未指定模块的需求编辑时保持未指定");
+  context.openDemandDialog({ ...demand("review"), categoryId:"C9" });
+  assert.equal(elements.dCategory.value, "C9", "模块缓存过期时保留原模块");
+  context.openDemandDialog(null);
+  assert.equal(elements.dCategory.value, "C1", "新建需求仍默认第一个模块");
+  let saveResolve, closes = 0;
+  context.UI.closeModal = () => { closes++; };
+  context.API.put = () => new Promise(resolve => { saveResolve = resolve; });
+  context.openDemandDialog({ ...demand("review"), categoryId:null });
+  elements.dTitle.value = "需求 A";
+  context.saveDemand();
+  assert.equal(elements.btnSaveDemand.disabled, true);
+  context.closeDemandDialog();
+  context.openDemandDialog({ ...demand("review"), id:"D2", title:"需求 B", categoryId:null });
+  assert.equal(elements.btnSaveDemand.disabled, false, "新表单不能继承上一次保存的禁用态");
+  const closesBefore = closes;
+  saveResolve({});
+  await flush();
+  assert.equal(closes, closesBefore, "迟到的保存响应不能关闭新表单");
+  assert.equal(elements.dTitle.value, "需求 B");
+  assert.equal(context.demandFormDirty(), false);
+  elements.dTitle.value = "需求 B 改";
+  assert.equal(context.demandFormDirty(), true, "改动后关闭需要确认");
   console.log("Demand frontend focused unit checks passed (permissions, revision, dates, delivery, async selection and publication controls).");
 })().catch(error => { console.error(error); process.exitCode = 1; });

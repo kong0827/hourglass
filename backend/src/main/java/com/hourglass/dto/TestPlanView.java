@@ -29,6 +29,6 @@ public class TestPlanView {
     private int passedCount;
     private int failedCount;
     private int blockedCount;
-    /** 计划内批量执行后转出缺陷的流水数（口径：test_case_run.plan_id 且 bug_task_id 非空） */
+    /** 计划内转出的缺陷数（口径：仍在计划内的用例、test_case_run.plan_id 关联、缺陷未进回收站，按缺陷去重） */
     private int defectCount;
 }

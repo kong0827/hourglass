@@ -267,9 +267,14 @@ function exportMonthHours(){
     toast(ex && ex.message ? ex.message : "月度工时导出失败", "bad");
   });
 }
+/* 每日容量以后端 capacityMinutesPerDay 为准（当前 480 分钟），避免口径文案与计算不一致 */
+function capacityHoursLabel(data){
+  var perDay = Number(data && data.capacityMinutesPerDay) || 480;
+  return (Math.round(perDay / 6) / 10) + "h";
+}
 function renderWorkload(){
   $("workloadBody").innerHTML='<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="'+(mode==='person')+'">按人</button><button type="button" data-load-mode="week" aria-pressed="'+(mode==='week')+'">按周</button></div><button class="btn sm ghost" type="button" data-load-export title="导出当前自然月各成员的实际工时">导出本月工时</button>'+fullscreenButtonHTML()+'</div>'
-    +caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × 6h）；无截止日默认 5 个剩余工作日，容量上限按 20 天计算。')
+    +caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × '+capacityHoursLabel(cache)+'）；无截止日默认 5 个剩余工作日，容量上限按 20 天计算。')
     +(mode==='person'?matrix():weekTable());
 }
 if($("workloadBody"))$("workloadBody").addEventListener("click",function(e){

@@ -43,8 +43,9 @@ class TestPlanServiceTest {
     private final TestCaseMapper cases = mock(TestCaseMapper.class);
     private final TestCaseService caseService = mock(TestCaseService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
+    private final com.hourglass.mapper.ProjectVersionMapper versions = mock(com.hourglass.mapper.ProjectVersionMapper.class);
     private final TestPlanService service =
-            new TestPlanService(plans, planCases, cases, caseService, access);
+            new TestPlanService(plans, planCases, cases, caseService, access, versions);
 
     @BeforeEach
     void setUp() {
@@ -172,6 +173,45 @@ class TestPlanServiceTest {
         save.setReqId(REQ);
         save.setName("改名");
         assertThrows(AppException.class, () -> service.update(USER, WS, PLAN, save));
+    }
+
+    @Test
+    void createForcesDraftAndValidatesVersionOwnership() {
+        com.hourglass.entity.ProjectVersion own = new com.hourglass.entity.ProjectVersion();
+        own.setId("V1"); own.setWorkspaceId(WS); own.setReqId(REQ);
+        com.hourglass.entity.ProjectVersion foreign = new com.hourglass.entity.ProjectVersion();
+        foreign.setId("V9"); foreign.setWorkspaceId("W2"); foreign.setReqId(REQ);
+        com.hourglass.entity.ProjectVersion otherProject = new com.hourglass.entity.ProjectVersion();
+        otherProject.setId("V8"); otherProject.setWorkspaceId(WS); otherProject.setReqId("R2");
+        when(versions.selectById("V1")).thenReturn(own);
+        when(versions.selectById("V9")).thenReturn(foreign);
+        when(versions.selectById("V8")).thenReturn(otherProject);
+
+        TestPlanSaveRequest req = new TestPlanSaveRequest();
+        req.setReqId(REQ);
+        req.setName("回归");
+        req.setStatus("done");
+        req.setVersionId("V1");
+        service.create(USER, WS, req);
+        org.mockito.ArgumentCaptor<TestPlan> saved = org.mockito.ArgumentCaptor.forClass(TestPlan.class);
+        verify(plans).insert(saved.capture());
+        assertEquals("draft", saved.getValue().getStatus(), "完成态只能经 setStatus，且需先圈选用例");
+        assertEquals("V1", saved.getValue().getVersionId());
+
+        req.setVersionId("V9");
+        assertThrows(AppException.class, () -> service.create(USER, WS, req), "跨空间版本拒绝");
+        req.setVersionId("V8");
+        assertThrows(AppException.class, () -> service.create(USER, WS, req), "其他项目的版本拒绝");
+    }
+
+    @Test
+    void updateCannotMovePlanToAnotherProject() {
+        when(plans.selectById(PLAN)).thenReturn(plan("draft"));
+        TestPlanSaveRequest save = new TestPlanSaveRequest();
+        save.setReqId("R2");
+        save.setName("改项目");
+        assertThrows(AppException.class, () -> service.update(USER, WS, PLAN, save));
+        verify(plans, never()).update(any(TestPlan.class));
     }
 
     @Test

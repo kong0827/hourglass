@@ -116,7 +116,7 @@ class TaskAuditPublicationMappingTest {
     void scopeReadsUseCurrentReadRatherThanConsistentSnapshots() throws Exception {
         Configuration cfg = configuration();
         for (String statement : new String[]{"selectTasksForScope", "selectDemandForScope", "selectVersionForScope",
-                "selectTaskVersionsForScope", "selectTaskRecordIdsForScope", "selectVersionSuccessIdsForScope", "selectSuccessfulReleaseIdsForScope"}) {
+                "selectTaskVersionsForScope", "selectTaskRecordIdsForScope", "selectVersionSuccessIdsForScope", "selectVersionFormalSuccessIdsForScope", "selectSuccessfulReleaseIdsForScope"}) {
             String sql = cfg.getMappedStatement("com.hourglass.mapper.TaskMapper." + statement)
                     .getBoundSql(Collections.emptyMap()).getSql();
             assertTrue(sql.contains("FOR UPDATE"), statement);

@@ -104,8 +104,9 @@ function loadMine(opts){
   if(!mineBody) return;
   /* 团队模式下搜索/筛选仍可能走到这里：不要用 my-tasks 骨架覆盖团队面板 */
   if(isMobile() && currentMineMode() === "team"){ renderTeam({silent:true}); return; }
-  if(mineLoading) return;
   var append = !!opts.append;
+  /* 只有「加载更多」需要排队；筛选/搜索变化必须作废在途请求（seq 丢弃旧响应），否则新条件被吞掉 */
+  if(mineLoading && append) return;
   mineLoading = true;
   var seq = ++mineSeq;
   var offset = append ? mineAll.length : 0;
@@ -226,7 +227,7 @@ function mineSubDim(){
 }
 function mineSections(items){
   if(state.mineGroup === "none"){
-    return [{key:"all", label:"", rows:mineSortRows(items)}];
+    return [{key:"all", label:"", rows:mineSortRows(items), subs:[]}];
   }
   var subDim = mineSubDim();
   var sections;
@@ -244,7 +245,7 @@ function mineSections(items){
       if(!info) return;
       var sec = map[info.key];
       if(!sec){
-        sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", order:info.order, rows:[]};
+        sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", order:info.order, rows:[], subs:[]};
         order.push(info.key);
       }
       sec.rows.push(t);
@@ -403,7 +404,7 @@ function openTeamRiskTasks(kind){
     blocked ? { blocked: true } : { due: "over" }, "工作项加载失败");
 }
 function openMemberTasks(name){
-  openTeamTaskTable(name + " · 未完成工作项", { owners: name }, "工作项加载失败");
+  openTeamTaskTable(name + " · 未完成工作项", { owners: name, open: 1 }, "工作项加载失败");
 }
 function teamSectionError(err, title){
   if(err && err.code === 4030){
@@ -745,14 +746,18 @@ function mineComplete(t){
     });
   });
 }
+/* 同一时刻只允许一个计时请求在途：双击会基于同一份旧状态连发两次开始/停止 */
+var mineTimerBusy = false;
 function mineToggleTimer(t){
-  if(!t) return;
+  if(!t || mineTimerBusy) return;
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   /* 停止自己的计时不受项目可见范围限制（与后端一致），只拦「开始」 */
   if(!running && !canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
   if(!running && !timerAllowed(t)){ toast("当前列不计时，请先移到处理规则为「正常计时」的列", "warn"); return; }
+  mineTimerBusy = true;
   API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/timer/" + (running ? "stop" : "start"), {})
     .then(function(){
+      mineTimerBusy = false;
       /* 乐观更新本地状态并立即重渲染：不等 /my-running-timer 往返，行内图标即刻切换 */
       state.runningTimer = running ? null : {
         running:true, taskId:t.id, taskTitle:t.title,
@@ -763,7 +768,7 @@ function mineToggleTimer(t){
       toast(running ? ("已停止「" + t.title + "」计时") : ("已开始「" + t.title + "」计时"), "fs");
       /* 权威同步：刷新顶部计时胶囊；服务端状态与本地不一致时经 ds:running-timer 纠正 */
       loadRunningTimer();
-    }).catch(function(ex){ toast(ex.message || "计时操作失败", "bad"); });
+    }).catch(function(ex){ mineTimerBusy = false; toast(ex.message || "计时操作失败", "bad"); });
 }
 function mineReschedule(anchor, t){
   if(!t) return;

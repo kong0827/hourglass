@@ -81,6 +81,21 @@ class BranchServiceTest {
     }
 
     @Test
+    void getDetailFillsViewerScopedTaskCounts() {
+        DevBranch b1 = branch("B1");
+        DevBranch stats = new DevBranch();
+        stats.setTaskCount(5);
+        stats.setDoneCount(2);
+        when(access.viewerScope(WS, "U1")).thenReturn("U1");
+        when(branchMapper.selectById("B1")).thenReturn(b1);
+        when(branchMapper.selectTaskStats(WS, "U1", "B1")).thenReturn(stats);
+
+        DevBranch out = service.getDetail(WS, "U1", "B1");
+        assertEquals(Integer.valueOf(5), out.getTaskCount(), "抽屉与删除确认依赖详情里的计数");
+        assertEquals(Integer.valueOf(2), out.getDoneCount());
+    }
+
+    @Test
     void listByProjectFiltersBranchesByDerivedProjectTag() {
         when(access.viewerScope(WS, "U1")).thenReturn("U1");
         when(branchMapper.selectVisibleByWorkspace(WS, "U1", "R1")).thenReturn(Arrays.asList(

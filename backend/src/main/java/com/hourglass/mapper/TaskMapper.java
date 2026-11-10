@@ -133,6 +133,12 @@ public interface TaskMapper {
 
     List<String> selectTaskRecordIdsForScope(@Param("workspaceId") String workspaceId, @Param("taskId") String taskId);
     List<String> selectVersionSuccessIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+
+    /** 版本内容冻结：成功的生产部署 / 重部署记录（加锁读） */
+    List<String> selectVersionFormalSuccessIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+
+    /** 项目下已有正式交付（成功生产部署 / 重部署）的版本 ID */
+    List<String> selectFormalSuccessVersionIdsByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     List<String> selectVersionPlanIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<Long> selectVersionAuditIdsForScope(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
     List<String> selectEpicChildIdsForScope(@Param("workspaceId") String workspaceId, @Param("epicId") String epicId);

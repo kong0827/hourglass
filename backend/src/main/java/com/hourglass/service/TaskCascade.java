@@ -348,6 +348,10 @@ public class TaskCascade {
     public void wipeWorkspaceData(String workspaceId) {
         assertWorkspaceCanBeRebuilt(workspaceId);
         logMapper.deleteAllByWorkspace(workspaceId);
+        /* 测试计划与用例模块强归属项目：整空间删除时一起清，避免留下指向已删项目/用例的孤儿行 */
+        testCaseMapper.deletePlanCasesByWorkspace(workspaceId);
+        testCaseMapper.deletePlansByWorkspace(workspaceId);
+        testCaseMapper.deleteModulesByWorkspace(workspaceId);
         purgeWorkspaceTaskData(workspaceId, true, true);
         requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
         docCommentMapper.deleteByWorkspace(workspaceId);

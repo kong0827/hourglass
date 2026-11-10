@@ -1485,15 +1485,49 @@ function findDemand(id){
   for(var i = 0; i < demands.length; i++) if(demands[i].id === id) return demands[i];
   return null;
 }
-/* 模块候选按所选项目过滤；选中值不属于该项目则回落到第一个模块或「未指定」 */
-function syncDemandCatOptions(reqId, selectedId){
+/* 模块候选按所选项目过滤。新建/换项目时（fallbackFirst）选中值不可用才回落到第一个模块；
+   编辑已有需求时必须保留原值：「未指定模块」不能被悄悄改成第一个模块，
+   模块缓存过期找不到原模块时也保留原 id，避免一次普通保存把模块改掉。 */
+function syncDemandCatOptions(reqId, selectedId, fallbackFirst){
   var cats = (rt.categoriesCache || []).filter(function(c){ return c.projectId === reqId; });
+  var known = !!selectedId && cats.some(function(c){ return c.id === selectedId; });
+  var keepUnknown = !fallbackFirst && !!selectedId && !known;
   dCategory.innerHTML = '<option value="">未指定模块</option>' + cats.map(function(c){
     return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
-  }).join("");
-  var val = (selectedId && cats.some(function(c){ return c.id === selectedId; })) ? selectedId : (cats.length ? cats[0].id : "");
+  }).join("") + (keepUnknown ? '<option value="' + esc(selectedId) + '">当前模块（列表未加载）</option>' : "");
+  var val = (known || keepUnknown) ? selectedId : (fallbackFirst && cats.length ? cats[0].id : "");
   dCategory.value = val;
   return val;
+}
+/* 弹窗一次打开对应一个序号：关掉 A 再打开 B 后，A 迟到的保存响应不能关闭/改写 B */
+var demandFormSeq = 0, demandFormBaseline = null;
+function demandFormSnapshot(){
+  return JSON.stringify([dReq.value, dTitle.value, dDesc.value, dAccept.value, dSource.value, dKind.value,
+    dCategory.value, dExpect.value, formPri, dWsjfB.value, dWsjfU.value, dWsjfR.value, dWsjfE.value]);
+}
+function demandFormDirty(){
+  return !!demandFormBaseline && demandFormSnapshot() !== demandFormBaseline;
+}
+function closeDemandDialog(){
+  demandFormSeq++;
+  demandFormBaseline = null;
+  editingDemandId = null;
+  btnSaveDemand.disabled = false;
+  UI.closeModal($("dlgDemand"));
+}
+/* X、Esc、遮罩与路由切换都走这里，避免误关闭丢失填写内容 */
+function tryCloseDemandDialog(afterClose){
+  function finish(){
+    closeDemandDialog();
+    if(afterClose) afterClose();
+  }
+  if(!demandFormDirty()){ finish(); return; }
+  UI.showConfirm({
+    title: "放弃未保存的修改？",
+    msg: "需求内容还没有保存，关闭后填写的内容会丢失。",
+    okText: "放弃修改",
+    cancelText: "继续编辑"
+  }).then(function(ok){ if(ok) finish(); });
 }
 function openDemandDialog(d){
   if(d && !canWriteDemand(d)){ denyDemandReadOnly(); return; }
@@ -1515,7 +1549,7 @@ function openDemandDialog(d){
   dSource.value = d ? (d.source || "") : "";
   dKind.value = d ? (d.itemKind || "其他") : "新功能";
   /* 模块按所选项目过滤：候选只列该项目下的模块 */
-  syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "");
+  syncDemandCatOptions(dReq.value, d ? (d.categoryId || "") : "", !d);
   dExpect.value = d ? (d.expectDate || "") : "";
   formPri = d ? (d.priority || "P2") : "P2";
   dWsjfB.value = d && d.wsjfBusiness != null ? d.wsjfBusiness : "";
@@ -1525,7 +1559,10 @@ function openDemandDialog(d){
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
   btnSaveDemand.textContent = d ? "保存修改" : "提交评审";
+  btnSaveDemand.disabled = false;
+  demandFormSeq++;
   syncPriSeg();
+  demandFormBaseline = demandFormSnapshot();
   UI.openModal($("dlgDemand"), "input");
 }
 function saveDemand(){
@@ -1563,21 +1600,23 @@ function saveDemand(){
     wsjfEffort: wsNum(dWsjfE, 1)
   };
   btnSaveDemand.disabled = true;
+  var seq = demandFormSeq, wasEdit = !!editingDemandId;
   var p = editingDemandId
     ? API.put("/api/demands/" + encodeURIComponent(editingDemandId), body)
     : API.post("/api/demands", body);
   p.then(function(){
-    btnSaveDemand.disabled = false;
-    UI.closeModal($("dlgDemand"));
-    toast(editingDemandId ? "已更新需求「" + title + "」" : "已提交评审「" + title + "」", "fs");
-    editingDemandId = null;
-    if(body.reqId !== rt.demandReqId){
-      rt.demandReqId = body.reqId;
-      if(demandReq) demandReq.value = body.reqId;
+    toast(wasEdit ? "已更新需求「" + title + "」" : "已提交评审「" + title + "」", "fs");
+    /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
+    if(seq === demandFormSeq){
+      closeDemandDialog();
+      if(body.reqId !== rt.demandReqId){
+        rt.demandReqId = body.reqId;
+        if(demandReq) demandReq.value = body.reqId;
+      }
     }
     loadDemands();
   }).catch(function(ex){
-    btnSaveDemand.disabled = false;
+    if(seq === demandFormSeq) btnSaveDemand.disabled = false;
     toast(ex.message || "保存失败", "bad");
   });
 }
@@ -2124,11 +2163,21 @@ if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
   if(!rt.reqList.length){ toast("先在「项目」里创建项目", "warn"); return; }
   openDemandDialog(null);
 });
-if($("dlgDemandX")) $("dlgDemandX").addEventListener("click", function(){ UI.closeModal($("dlgDemand")); });
+if($("dlgDemandX")) $("dlgDemandX").addEventListener("click", function(){ tryCloseDemandDialog(); });
+if($("dlgDemand")) UI.setModalCloseGuard($("dlgDemand"), function(){ tryCloseDemandDialog(); });
+window.addEventListener("ds:before-route", function(e){
+  var dlg = $("dlgDemand");
+  if(!dlg || !dlg.classList.contains("open")) return;
+  e.preventDefault();
+  var to = e.detail && e.detail.to;
+  tryCloseDemandDialog(function(){
+    if(to) window.dispatchEvent(new CustomEvent("ds:route-go", { detail: { view: to } }));
+  });
+});
 if(btnSaveDemand) btnSaveDemand.addEventListener("click", saveDemand);
 if(dReq) dReq.addEventListener("change", function(){
   /* 换项目后原模块不再可选，回落到新项目第一个模块或「未指定」 */
-  syncDemandCatOptions(dReq.value, dCategory.value);
+  syncDemandCatOptions(dReq.value, dCategory.value, true);
 });
 if(dTitle) dTitle.addEventListener("input", function(){ fDemandTitle.classList.remove("invalid"); });
 if($("segDemandPri")) $("segDemandPri").addEventListener("click", function(e){

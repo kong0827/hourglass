@@ -254,6 +254,14 @@ public class TestCaseService {
         projectAccess.assertWrite(workspaceId, userId, c.getReqId());
         String reqId = ensureProject(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
+        if (!reqId.equals(c.getReqId())) {
+            /* 计划只圈选本项目用例：改项目会让原项目计划里留下跨项目行（已完成计划是快照，不受限） */
+            List<String> open = planCaseMapper.selectOpenPlanNamesByCase(workspaceId, id);
+            if (open != null && !open.isEmpty()) {
+                throw AppException.badRequest("用例仍在测试计划「" + open.get(0) + "」"
+                        + (open.size() > 1 ? "等 " + open.size() + " 个计划" : "") + "中，请先移出再改所属项目");
+            }
+        }
         apply(c, reqId, req);
         caseMapper.update(c);
         return caseMapper.selectById(id);
