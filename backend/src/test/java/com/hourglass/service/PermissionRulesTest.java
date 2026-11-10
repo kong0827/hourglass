@@ -142,6 +142,33 @@ class PermissionRulesTest {
         verify(memberMapper).delete(WS, VIEWER);
     }
 
+    @Test
+    void onlyPrivilegedOrProjectOwnerCanManageModules() {
+        com.hourglass.mapper.RequirementMapper requirementMapper = mock(com.hourglass.mapper.RequirementMapper.class);
+        com.hourglass.entity.Requirement project = new com.hourglass.entity.Requirement();
+        project.setId(PROJECT);
+        project.setWorkspaceId(WS);
+        project.setOwnerUserId(MEMBER);
+        when(requirementMapper.selectById(PROJECT)).thenReturn(project);
+        ReleasePermissionService release = new ReleasePermissionService(memberMapper, requirementMapper, projectAccessService);
+        CategoryService categories = new CategoryService(mock(CategoryMapper.class), requirementMapper,
+                mock(ActivityService.class), projectAccessService, release, mock(WorkspaceMetaCache.class));
+
+        categories.assertManage(WS, OWNER, PROJECT);
+        categories.assertManage(WS, ADMIN, PROJECT);
+        categories.assertManage(WS, MEMBER, PROJECT);
+        assertEquals(403, assertThrows(AppException.class,
+                () -> categories.assertManage(WS, VIEWER, PROJECT)).getCode());
+        roles.put("U6", ProjectAccessService.ROLE_MEMBER);
+        assertEquals(403, assertThrows(AppException.class,
+                () -> categories.assertManage(WS, "U6", PROJECT)).getCode());
+
+        when(projectMemberMapper.selectOne(WS, PROJECT, MEMBER))
+                .thenReturn(grant(PROJECT, MEMBER, ProjectAccessService.ACCESS_READ));
+        assertEquals(403, assertThrows(AppException.class,
+                () -> categories.assertManage(WS, MEMBER, PROJECT)).getCode(), "项目负责人被设为只读时也不能维护模块");
+    }
+
     /* ==================== ProjectAccessService ==================== */
 
     @Test

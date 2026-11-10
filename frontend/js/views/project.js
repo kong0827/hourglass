@@ -8,6 +8,7 @@ import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
 import { dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { loadCategories } from "../core/app.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
@@ -16,6 +17,7 @@ var VIEW_KEY = "project-view";
 var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
+var moduleUi = { adding:false, deleting:"" };
 var deliveryCache = Object.create(null);
 /* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
 window.addEventListener("ds:delivery-changed", function(e){
@@ -70,6 +72,9 @@ function loadProject(opts){
   if(!selected){
     body.innerHTML = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
     return;
+  }
+  if(!cache || !cache.project || cache.project.id !== selected.id){
+    moduleUi = { adding:false, deleting:"" };
   }
   var current = ++seq;
   if(!opts.silent) body.innerHTML = UI.skeletonCards(3);
@@ -173,8 +178,144 @@ function deliveryPanel(p){
     + card("versions", "版本", valueOf("versions"), footOf("versions", "加载中", "加载失败") || "首版 / 迭代")
     + '</div></section>';
 }
-function loadProjectDelivery(p){
-  if(!p || !p.id || deliveryCache[p.id]) return;
+function moduleDeviation(value){
+  return value === null || value === undefined ? "—" : ((value > 0 ? "+" : "") + value + "%");
+}
+function moduleRisk(row){
+  var tags = [];
+  if(row.overdue) tags.push('<span class="mini-tag over">逾期 ' + row.overdue + '</span>');
+  if(row.blocked) tags.push('<span class="mini-tag warn">阻塞 ' + row.blocked + '</span>');
+  if(!tags.length && row.total && row.done === row.total) tags.push('<span class="mini-tag ok">已完成</span>');
+  return tags.length ? tags.join("") : "—";
+}
+function moduleTasksOf(id){
+  var modules = cache.modules || [];
+  return (cache.tasks || []).filter(function(t){
+    var cid = t.categoryId || "";
+    if(id === "__none") return !cid || !modules.some(function(x){ return x.id === cid; });
+    return cid === id;
+  });
+}
+function moduleMetricCells(row){
+  var pct = Math.max(0, Math.min(100, Math.round(Number(row.progressPct) || 0)));
+  return '<td data-label="进度"><span class="project-module-progress"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></span></td>'
+    + '<td class="num" data-label="工作项">' + (Number(row.done) || 0) + ' / ' + (Number(row.total) || 0) + '</td>'
+    + '<td class="num" data-label="预估">' + fmtHours(row.estimateMinutes) + '</td>'
+    + '<td class="num" data-label="实际工时">' + fmtHours(row.actualMinutes) + '</td>'
+    + '<td class="num" data-label="剩余">' + fmtHours(row.remainingMinutes) + '</td>'
+    + '<td class="num" data-label="偏差">' + moduleDeviation(row.deviationPct) + '</td>';
+}
+function moduleDeleteRow(row, colspan){
+  var taskCount = Number(row.total) || 0;
+  var options = (cache.modules || []).filter(function(x){ return x.id !== row.id; }).map(function(x){
+    return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>';
+  }).join("");
+  var hint = taskCount
+    ? taskCount + ' 个工作项及其需求将迁到目标模块，历史工时随工作项一起迁移，无法恢复。'
+    : '该模块暂无工作项，删除后不可恢复。';
+  return '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-del">'
+    + '<span class="project-module-del-icon" aria-hidden="true">' + icon("trash", 14) + '</span>'
+    + '<span class="project-module-del-text"><b>删除「' + esc(row.name) + '」？</b><small>' + hint + '</small></span>'
+    + (taskCount ? '<label class="project-module-target">迁到 <select data-module-target>' + options + '</select></label>' : '')
+    + '<button class="btn sm danger" type="button" data-module-del-confirm="' + esc(row.id) + '">确认删除</button>'
+    + '<button class="btn sm ghost" type="button" data-module-del-cancel>取消</button></div></td></tr>';
+}
+function moduleRowHTML(row, canManage, moduleCount){
+  var ops = canManage
+    ? '<td class="project-module-ops" data-label="操作"><button class="icon-btn sm danger" type="button" data-module-del="' + esc(row.id) + '" title="删除模块" aria-label="删除模块"' + (moduleCount <= 1 ? " disabled" : "") + '>' + icon("trash", 14) + '</button></td>'
+    : "";
+  return '<tr class="project-module-row' + (moduleUi.deleting === row.id ? ' is-deleting' : '') + '" data-module-open="' + esc(row.id) + '" tabindex="0" title="查看该模块的工作项">'
+    + '<td class="project-module-name"><i class="project-module-dot" style="background:' + esc(row.color || "#8a8578") + '"></i><span>' + esc(row.name) + '</span></td>'
+    + moduleMetricCells(row)
+    + '<td data-label="风险">' + moduleRisk(row) + '</td>' + ops + '</tr>'
+    + (moduleUi.deleting === row.id ? moduleDeleteRow(row, canManage ? 9 : 8) : "");
+}
+function moduleEmptyRow(colspan, canManage){
+  return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有模块'
+    + (canManage ? '，点右上角「新增模块」添加第一个' : '') + '</td></tr>';
+}
+function moduleUnassignedRow(row){
+  return '<tr class="project-module-row is-unassigned" data-module-open="__none" tabindex="0" title="查看未归属模块的工作项">'
+    + '<td class="project-module-name"><i class="project-module-dot"></i><span>未指定</span><span class="mini-tag">未归类</span></td>'
+    + moduleMetricCells(row)
+    + '<td data-label="风险">' + moduleRisk(row) + '</td>'
+    + (cache.canManageModules ? '<td class="project-module-ops"></td>' : '') + '</tr>';
+}
+function moduleTotalRow(m, c, total, canManage){
+  var pct = Math.max(0, Math.min(100, Math.round(Number(m.progressPct) || 0)));
+  return '<tr class="project-modules-total"><td class="project-module-name"><b>合计</b></td>'
+    + '<td data-label="进度"><span class="project-module-progress"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></span></td>'
+    + '<td class="num" data-label="工作项">' + (c.done || 0) + ' / ' + total + '</td>'
+    + '<td class="num" data-label="预估">' + fmtHours(m.estimateMinutes) + '</td>'
+    + '<td class="num" data-label="实际工时">' + fmtHours(m.actualMinutes) + '</td>'
+    + '<td class="num" data-label="剩余">' + fmtHours(m.remainingMinutes) + '</td>'
+    + '<td class="num" data-label="偏差" title="项目整体偏差见上方工时偏差卡片">—</td>'
+    + '<td data-label="风险">' + moduleRisk({ overdue:c.overdue, blocked:c.blocked, done:c.done, total:total }) + '</td>'
+    + (canManage ? '<td class="project-module-ops"></td>' : '') + '</tr>';
+}
+function modulePanel(p, m, c){
+  var modules = cache.modules || [];
+  var unassigned = cache.unassigned || {};
+  var canManage = !!cache.canManageModules;
+  var colspan = canManage ? 9 : 8;
+  var total = (cache.tasks || []).length;
+  var body = modules.map(function(row){ return moduleRowHTML(row, canManage, modules.length); }).join("");
+  if(!modules.length) body = moduleEmptyRow(colspan, canManage);
+  if(Number(unassigned.total)) body += moduleUnassignedRow(unassigned);
+  body += moduleTotalRow(m, c, total, canManage);
+  if(canManage && moduleUi.adding){
+    body += '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-inline">'
+      + '<b>新增模块</b>'
+      + '<input type="color" data-module-new-color value="#8a8578" aria-label="模块颜色" />'
+      + '<input type="text" data-module-new-name maxlength="12" placeholder="模块名称，最多 12 个字" aria-label="模块名称" />'
+      + '<button class="btn sm primary" type="button" data-module-save>添加</button>'
+      + '<button class="btn sm ghost" type="button" data-module-cancel>取消</button>'
+      + '<span class="foot-note">名称不可与现有模块重复，新模块排在最后。</span></div></td></tr>';
+  }
+  return '<section class="manager-panel project-modules">'
+    + '<div class="manager-panel-head project-modules-head"><div class="project-modules-title"><b>模块</b><span>'
+    + modules.length + ' 个模块 · ' + total + ' 个工作项</span></div>'
+    + '<div class="project-modules-tools">'
+    + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
+    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；偏差只取已完成且填了预估的工作项。'
+    + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
+    + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 新增模块</button>' : '')
+    + '</div></div>'
+    + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
+    + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
+    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
+    + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
+    + '<span>未指定为没有模块归属的工作项，单独统计；模块合计 + 未指定 = 项目合计。项目整体进度仍按全部工作项计算，不是模块百分比的平均。</span></span>'
+    + (canManage ? "" : "<span>仅空间主、管理员或项目负责人可维护模块。</span>") + '</p>'
+    + '</section>';
+}
+function saveModule(){
+  var nameEl = document.querySelector("[data-module-new-name]");
+  var colorEl = document.querySelector("[data-module-new-color]");
+  var name = nameEl ? nameEl.value.trim() : "";
+  if(!name){ toast("请填写模块名称", "warn"); if(nameEl) nameEl.focus(); return; }
+  var pid = cache && cache.project && cache.project.id;
+  if(!pid) return;
+  API.post("/api/categories?project=" + encodeURIComponent(pid), { name: name, color: colorEl ? colorEl.value : "" }).then(function(){
+    toast("已添加模块「" + name + "」", "fs");
+    moduleUi.adding = false;
+    loadCategories(true);
+    loadProject({ silent:true });
+  }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+}
+function deleteModule(id){
+  var targetEl = document.querySelector("[data-module-target]");
+  var target = targetEl ? targetEl.value : "";
+  var query = target ? "?targetId=" + encodeURIComponent(target) : "";
+  API.del("/api/categories/" + encodeURIComponent(id) + query).then(function(){
+    toast(target ? "模块已删除，工作项与需求已迁移" : "模块已删除", "fs");
+    moduleUi.deleting = "";
+    loadCategories(true);
+    loadProject({ silent:true });
+  }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+}
+function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
   deliveryCache[p.id] = {};
   var id = p.id;
   function paint(){
@@ -238,6 +379,7 @@ function renderProject(){
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
     + metric("实际投入", fmtHours(m.actualMinutes), "含进行中工作项", "actual")
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
+    + modulePanel(p, m, c)
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + (c.ended ? distRow("执行结束", c.ended, total, "ended") : "")
@@ -253,7 +395,11 @@ function renderProject(){
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
-  if(projectTab === "overview") loadProjectDelivery(p);
+  if(projectTab === "overview"){
+    loadProjectDelivery(p);
+    var moduleInput = document.querySelector("[data-module-new-name]");
+    if(moduleUi.adding && moduleInput) moduleInput.focus();
+  }
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
 function loadDrill(opts){
@@ -533,6 +679,32 @@ function onClick(e){
   }
   var tabBtn = e.target.closest("[data-project-tab]");
   if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
+  if(e.target.closest("[data-module-add]")){
+    moduleUi.adding = true;
+    moduleUi.deleting = "";
+    renderProject();
+    return;
+  }
+  if(e.target.closest("[data-module-cancel]")){ moduleUi.adding = false; renderProject(); return; }
+  if(e.target.closest("[data-module-save]")){ saveModule(); return; }
+  var moduleDel = e.target.closest("[data-module-del]");
+  if(moduleDel){
+    if((cache.modules || []).length <= 1){ toast("至少需要保留一个模块", "warn"); return; }
+    moduleUi.deleting = moduleDel.dataset.moduleDel;
+    moduleUi.adding = false;
+    renderProject();
+    return;
+  }
+  if(e.target.closest("[data-module-del-cancel]")){ moduleUi.deleting = ""; renderProject(); return; }
+  var moduleDelConfirm = e.target.closest("[data-module-del-confirm]");
+  if(moduleDelConfirm){ deleteModule(moduleDelConfirm.dataset.moduleDelConfirm); return; }
+  var moduleRow = e.target.closest("[data-module-open]");
+  if(moduleRow){
+    var moduleId = moduleRow.dataset.moduleOpen;
+    var moduleHit = moduleId === "__none" ? null : (cache.modules || []).filter(function(x){ return x.id === moduleId; })[0];
+    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未指定"), moduleTasksOf(moduleId));
+    return;
+  }
   var pvMode = e.target.closest("[data-pv-mode]");
   if(pvMode){
     var m = pvMode.dataset.pvMode;
@@ -610,9 +782,16 @@ function onChange(e){
 }
 /* 透视树行键盘可达：聚焦任务行后 Enter/空格打开详情 */
 function onKeydown(e){
+  if(e.key === "Enter" && e.target.matches && e.target.matches("[data-module-new-name]")){
+    e.preventDefault();
+    saveModule();
+    return;
+  }
   if(e.key !== "Enter" && e.key !== " ") return;
   var row = e.target.closest ? e.target.closest("tr[data-open-task]") : null;
-  if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); }
+  if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); return; }
+  var moduleRow = e.target.closest ? e.target.closest("tr[data-module-open]") : null;
+  if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); }
 }
 if($("projectBody")){
   $("projectBody").addEventListener("click", onClick);

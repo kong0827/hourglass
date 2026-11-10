@@ -4,6 +4,7 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.common.WorkTime;
+import com.hourglass.entity.Category;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
@@ -64,25 +65,31 @@ public class ManagerService {
     private final WorkspaceMemberMapper memberMapper;
     private final AppNotificationService notificationService;
     private final ProjectAccessService projectAccess;
+    private final CategoryService categoryService;
+    private final ReleasePermissionService releasePermission;
     private final Clock clock;
 
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                           TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
-                          AppNotificationService notificationService, ProjectAccessService projectAccess) {
+                          AppNotificationService notificationService, ProjectAccessService projectAccess,
+                          CategoryService categoryService, ReleasePermissionService releasePermission) {
         this(taskMapper, requirementMapper, timeLogMapper, memberMapper, notificationService,
-                projectAccess, Clock.systemDefaultZone());
+                projectAccess, categoryService, releasePermission, Clock.systemDefaultZone());
     }
 
     ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                    TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
-                   AppNotificationService notificationService, ProjectAccessService projectAccess, Clock clock) {
+                   AppNotificationService notificationService, ProjectAccessService projectAccess,
+                   CategoryService categoryService, ReleasePermissionService releasePermission, Clock clock) {
         this.taskMapper = taskMapper;
         this.requirementMapper = requirementMapper;
         this.timeLogMapper = timeLogMapper;
         this.memberMapper = memberMapper;
         this.notificationService = notificationService;
         this.projectAccess = projectAccess;
+        this.categoryService = categoryService;
+        this.releasePermission = releasePermission;
         this.clock = clock;
     }
 
@@ -148,31 +155,53 @@ public class ManagerService {
         project.put("createdAt", requirement.getCreatedAt());
         project.put("updatedAt", requirement.getUpdatedAt());
 
-        int estimateMinutes = sumEstimate(tasks);
-        int actualMinutes = sumActual(tasks);
-        int completedEstimateMinutes = 0;
-        int completedActualMinutes = 0;
-        for (Task task : tasks) {
-            if (isDone(task)) {
-                completedEstimateMinutes += Math.max(0, minutes(task.getEstimateMinutes()));
-                completedActualMinutes += actual(task);
-            }
-        }
         Map<String, Object> metrics = new LinkedHashMap<String, Object>();
         metrics.put("startDate", minStartDate(tasks));
         metrics.put("dueDate", maxDueDate(tasks));
-        metrics.put("estimateMinutes", estimateMinutes);
-        metrics.put("actualMinutes", actualMinutes);
-        metrics.put("remainingMinutes", sumRemaining(tasks));
-        metrics.put("progressPct", averageProgress(tasks));
-        metrics.put("deviationPct", completedEstimateMinutes == 0 ? null
-                : round1((completedActualMinutes - completedEstimateMinutes) * (double) PERCENT / completedEstimateMinutes));
+        metrics.putAll(metricTotals(tasks));
+
+        /* 模块统计与项目统计共用同一批任务和同一套公式：Σ模块 + 未指定 = 项目合计 */
+        List<Category> modules = categoryService.list(workspaceId, requirement.getId());
+        Set<String> moduleIds = new HashSet<String>();
+        for (Category category : modules) {
+            moduleIds.add(category.getId());
+        }
+        Map<String, List<Task>> grouped = new HashMap<String, List<Task>>();
+        List<Task> unassignedTasks = new ArrayList<Task>();
+        for (Task task : tasks) {
+            String categoryId = task.getCategoryId();
+            if (!hasText(categoryId) || !moduleIds.contains(categoryId)) {
+                unassignedTasks.add(task);
+                continue;
+            }
+            List<Task> bucket = grouped.get(categoryId);
+            if (bucket == null) {
+                bucket = new ArrayList<Task>();
+                grouped.put(categoryId, bucket);
+            }
+            bucket.add(task);
+        }
+        List<Map<String, Object>> moduleStats = new ArrayList<Map<String, Object>>();
+        for (Category category : modules) {
+            List<Task> moduleTasks = grouped.get(category.getId());
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            row.put("id", category.getId());
+            row.put("name", category.getName());
+            row.put("color", category.getColor());
+            row.put("sortOrder", category.getSortOrder());
+            row.putAll(bucketMetrics(moduleTasks == null ? Collections.<Task>emptyList() : moduleTasks, today));
+            moduleStats.add(row);
+        }
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("today", today);
         result.put("project", project);
         result.put("metrics", metrics);
         result.put("counts", countsMap(counts));
+        result.put("modules", moduleStats);
+        result.put("unassigned", bucketMetrics(unassignedTasks, today));
+        result.put("canManageModules", releasePermission.canManageProject(
+                userId, workspaceId, requirement.getId()));
         result.put("weekly", weekly(tasks, today));
         result.put("epics", epics(tasks));
         result.put("members", projectMembers(tasks, snapshot.members, snapshot.logs, today));
@@ -1127,6 +1156,34 @@ public class ManagerService {
             total += Math.max(0, Math.min(PERCENT, TaskCalc.progressOf(task)));
         }
         return (int) Math.round(total * 1.0 / tasks.size());
+    }
+
+    /** 项目级与模块级共用的工时 / 进度口径，保证两边数字可以直接对账 */
+    private Map<String, Object> metricTotals(List<Task> tasks) {
+        int completedEstimate = 0;
+        int completedActual = 0;
+        for (Task task : tasks) {
+            if (isDone(task)) {
+                completedEstimate += Math.max(0, minutes(task.getEstimateMinutes()));
+                completedActual += actual(task);
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("estimateMinutes", sumEstimate(tasks));
+        result.put("actualMinutes", sumActual(tasks));
+        result.put("remainingMinutes", sumRemaining(tasks));
+        result.put("progressPct", averageProgress(tasks));
+        result.put("deviationPct", completedEstimate == 0 ? null
+                : round1((completedActual - completedEstimate) * (double) PERCENT / completedEstimate));
+        return result;
+    }
+
+    private Map<String, Object> bucketMetrics(List<Task> tasks, LocalDate today) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("total", tasks.size());
+        result.putAll(metricTotals(tasks));
+        result.putAll(countsMap(countTasks(tasks, today)));
+        return result;
     }
 
     private int sumEstimate(List<Task> tasks) {

@@ -1,6 +1,7 @@
 package com.hourglass.service;
 
 import com.hourglass.common.Consts;
+import com.hourglass.entity.Category;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
@@ -44,6 +45,8 @@ class ManagerServiceTest {
     private final TimeLogMapper timeLogMapper = mock(TimeLogMapper.class);
     private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
     private final AppNotificationService notificationService = mock(AppNotificationService.class);
+    private final CategoryService categoryService = mock(CategoryService.class);
+    private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
 
     @Test
     void portfolioHealthUsesOverdueStagnationAndOverload() {
@@ -435,6 +438,63 @@ class ManagerServiceTest {
         assertEquals(0, result.get("skipped"));
     }
 
+    @Test
+    void projectModulesReconcileWithProjectTotals() {
+        Requirement req = requirement("R1", "项目一");
+        Category sales = category("G1", "客户与会员");
+        Category empty = category("G2", "空模块");
+
+        Task done = openTask("T1", "R1", Consts.COL_DONE, 60);
+        done.setCategoryId("G1");
+        done.setTotalMinutes(120);
+        done.setCompletedAt(TODAY);
+        Task doing = openTask("T2", "R1", Consts.COL_DOING, 60);
+        doing.setCategoryId("G1");
+        doing.setTotalMinutes(30);
+        doing.setProgress(50);
+        Task unassigned = openTask("T3", "R1", Consts.COL_BACKLOG, 30);
+        unassigned.setCategoryId("");
+        unassigned.setTotalMinutes(0);
+
+        ManagerService service = service(Arrays.asList(done, doing, unassigned),
+                Collections.singletonList(req), Arrays.asList(actual("T1", 120), actual("T2", 30)),
+                Collections.<TimeLog>emptyList(), Collections.<WorkspaceMember>emptyList());
+        when(categoryService.list(WORKSPACE, "R1")).thenReturn(Arrays.asList(sales, empty));
+        Map<String, Object> result = service.project(WORKSPACE, "R1", VIEWER);
+
+        List<Map<String, Object>> modules = castList(result.get("modules"));
+        assertEquals(2, modules.size(), "零工作项的模块也要列出");
+        Map<String, Object> first = modules.get(0);
+        assertEquals("客户与会员", first.get("name"));
+        assertEquals(2, first.get("total"));
+        assertEquals(1, first.get("done"));
+        assertEquals(120, first.get("estimateMinutes"));
+        assertEquals(150, first.get("actualMinutes"));
+        assertEquals(30, first.get("remainingMinutes"), "只剩未完成工作项的预估差额");
+        assertEquals(75, first.get("progressPct"), "模块进度按工作项完成度平均");
+        assertEquals(100.0, ((Number) first.get("deviationPct")).doubleValue(), 0.001);
+        Map<String, Object> emptyModule = modules.get(1);
+        assertEquals(0, emptyModule.get("total"));
+        assertEquals(0, emptyModule.get("progressPct"));
+        assertNull(emptyModule.get("deviationPct"));
+
+        Map<String, Object> unassignedRow = castMap(result.get("unassigned"));
+        assertEquals(1, unassignedRow.get("total"));
+        assertEquals(30, unassignedRow.get("estimateMinutes"));
+
+        Map<String, Object> projectMetrics = castMap(result.get("metrics"));
+        assertEquals(150, projectMetrics.get("estimateMinutes"));
+        assertEquals(150, projectMetrics.get("actualMinutes"));
+        assertEquals(60, projectMetrics.get("remainingMinutes"), "模块剩余 30 + 未指定 30");
+        assertEquals(50, projectMetrics.get("progressPct"), "项目进度按全部工作项计算，不是模块百分比平均");
+        assertEquals((Integer) 150, (Integer) first.get("estimateMinutes") + (Integer) unassignedRow.get("estimateMinutes"),
+                "Σ模块 + 未指定 = 项目合计");
+        assertFalse((Boolean) result.get("canManageModules"));
+
+        when(releasePermission.canManageProject(VIEWER, WORKSPACE, "R1")).thenReturn(true);
+        assertTrue((Boolean) service.project(WORKSPACE, "R1", VIEWER).get("canManageModules"));
+    }
+
     private ManagerService service(List<Task> tasks, List<Requirement> requirements, List<TimeAgg> actual,
                                    List<TimeLog> logs, List<WorkspaceMember> members) {
         return service(tasks, requirements, actual, logs, members, mock(ProjectAccessService.class));
@@ -448,8 +508,10 @@ class ManagerServiceTest {
         when(timeLogMapper.selectByWorkspaceBetween(eq(WORKSPACE), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(logs);
         when(memberMapper.selectByWorkspace(WORKSPACE)).thenReturn(members);
+        when(categoryService.list(eq(WORKSPACE), any())).thenReturn(Collections.<Category>emptyList());
+        when(releasePermission.canManageProject(any(), eq(WORKSPACE), any())).thenReturn(false);
         return new ManagerService(taskMapper, requirementMapper, timeLogMapper, memberMapper,
-                notificationService, access, CLOCK);
+                notificationService, access, categoryService, releasePermission, CLOCK);
     }
 
     private Requirement requirement(String id, String name) {
@@ -459,6 +521,17 @@ class ManagerServiceTest {
         requirement.setName(name);
         requirement.setStatus("active");
         return requirement;
+    }
+
+    private Category category(String id, String name) {
+        Category category = new Category();
+        category.setId(id);
+        category.setWorkspaceId(WORKSPACE);
+        category.setProjectId("R1");
+        category.setName(name);
+        category.setColor("#2563eb");
+        category.setSortOrder(0);
+        return category;
     }
 
     private Task openTask(String id, String reqId, String column, Integer estimateMinutes) {

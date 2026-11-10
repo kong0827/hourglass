@@ -226,6 +226,20 @@ function projectAccess(reqId){
 function canEditReq(reqId){
   return projectAccess(reqId) === "write";
 }
+/** 项目设置类操作（模块维护等）：空间主/管理员，或项目负责人；仍需具备项目写权限 */
+function canManageProject(reqId, ownerUserId){
+  if(projectAccess(reqId) !== "write") return false;
+  var role = currentRole();
+  if(role === "owner" || role === "admin") return true;
+  var owner = ownerUserId;
+  if(!owner && reqId){
+    for(var i = 0; i < rt.reqList.length; i++){
+      if(rt.reqList[i].id === reqId){ owner = rt.reqList[i].ownerUserId; break; }
+    }
+  }
+  var me = rt.currentUser && rt.currentUser.id;
+  return !!(owner && me && String(owner) === String(me));
+}
 function canEditTask(t){
   if(!t) return false;
   /* 跨空间「我的任务」由后端逐条下发 write/read，优先采用（rt.currentWs 未必是任务所属空间） */
@@ -233,4 +247,4 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 
-export { calState, canEditReq, canEditTask, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

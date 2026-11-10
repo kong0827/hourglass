@@ -28,14 +28,19 @@ public class CategoryService {
     private final CategoryMapper categoryMapper;
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
+    private final ProjectAccessService projectAccess;
+    private final ReleasePermissionService releasePermission;
     /** 模块列表缓存（空间全量，按项目内存过滤）：读列表/删除时选目标模块共用，写入口负责失效 */
     private final WorkspaceMetaCache metaCache;
 
     public CategoryService(CategoryMapper categoryMapper, RequirementMapper requirementMapper,
-                           ActivityService activityService, WorkspaceMetaCache metaCache) {
+                           ActivityService activityService, ProjectAccessService projectAccess,
+                           ReleasePermissionService releasePermission, WorkspaceMetaCache metaCache) {
         this.categoryMapper = categoryMapper;
         this.requirementMapper = requirementMapper;
         this.activityService = activityService;
+        this.projectAccess = projectAccess;
+        this.releasePermission = releasePermission;
         this.metaCache = metaCache;
     }
 
@@ -55,8 +60,9 @@ public class CategoryService {
     }
 
     @Transactional
-    public Category create(String workspaceId, String projectId, CategoryRequest req) {
+    public Category create(String workspaceId, String userId, String projectId, CategoryRequest req) {
         Requirement project = requireProject(workspaceId, projectId);
+        assertManage(workspaceId, userId, project.getId());
         String name = cleanName(req.getName());
         if (categoryMapper.selectByName(workspaceId, projectId, name) != null) {
             throw new AppException(409, "已存在同名模块：" + name);
@@ -92,11 +98,12 @@ public class CategoryService {
     }
 
     @Transactional
-    public Category update(String workspaceId, String id, CategoryRequest req) {
+    public Category update(String workspaceId, String userId, String id, CategoryRequest req) {
         Category c = categoryMapper.selectById(workspaceId, id);
         if (c == null) {
             throw AppException.notFound("模块不存在：" + id);
         }
+        assertManage(workspaceId, userId, c.getProjectId());
         String name = cleanName(req.getName());
         if (!name.equals(c.getName())) {
             Category other = categoryMapper.selectByName(workspaceId, c.getProjectId(), name);
@@ -118,11 +125,12 @@ public class CategoryService {
 
     /** 删除项目模块：该项目下任务与需求迁到指定模块；未指定时迁到项目内最靠前的其他模块（至少保留一个） */
     @Transactional
-    public void delete(String workspaceId, String id, String targetId) {
+    public void delete(String workspaceId, String userId, String id, String targetId) {
         Category c = categoryMapper.selectById(workspaceId, id);
         if (c == null) {
             throw AppException.notFound("模块不存在：" + id);
         }
+        assertManage(workspaceId, userId, c.getProjectId());
         Category targetCat = null;
         for (Category other : metaCache.categories(workspaceId)) {
             if (other.getId().equals(id) || !c.getProjectId().equals(other.getProjectId())) {
@@ -143,14 +151,16 @@ public class CategoryService {
         if (targetCat == null) {
             throw AppException.badRequest("至少需要保留一个模块");
         }
-        categoryMapper.moveTasksToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
-        categoryMapper.moveDemandsToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
+        int movedTasks = categoryMapper.moveTasksToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
+        int movedDemands = categoryMapper.moveDemandsToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
         categoryMapper.deleteById(workspaceId, id);
         evictCategories(workspaceId);
-        /* O-9：破坏性配置变更留审计（活动流可见） */
+        /* O-9：破坏性配置变更留审计（活动流可见）；空模块没有迁移动作，不能写「已改到」 */
+        String migration = movedTasks + movedDemands == 0
+                ? "，该模块没有工作项与需求"
+                : "，其下 " + movedTasks + " 个工作项与 " + movedDemands + " 个需求已改到「" + targetCat.getName() + "」";
         activityService.logConfig(workspaceId,
-                "项目「" + projectName(workspaceId, c.getProjectId()) + "」删除模块「" + c.getName()
-                        + "」，其下任务与需求已改到「" + targetCat.getName() + "」");
+                "项目「" + projectName(workspaceId, c.getProjectId()) + "」删除模块「" + c.getName() + "」" + migration);
     }
 
     /** 项目删除时随项目清理：清空其下任务的模块引用并删除模块清单（需求已随项目删除） */
@@ -162,8 +172,9 @@ public class CategoryService {
     }
 
     @Transactional
-    public void order(String workspaceId, String projectId, List<String> ids) {
+    public void order(String workspaceId, String userId, String projectId, List<String> ids) {
         requireProject(workspaceId, projectId);
+        assertManage(workspaceId, userId, projectId);
         List<Category> all = metaCache.categories(workspaceId);
         Set<String> known = new HashSet<String>();
         for (Category c : all) {
@@ -179,6 +190,14 @@ public class CategoryService {
             categoryMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
         evictCategories(workspaceId);
+    }
+
+    /** 模块维护口径：空间主 / 管理员，或该项目的负责人；查看者与普通成员只读 */
+    public void assertManage(String workspaceId, String userId, String projectId) {
+        projectAccess.assertView(workspaceId, userId, projectId);
+        if (!releasePermission.canManageProject(userId, workspaceId, projectId)) {
+            throw new AppException(403, "仅空间主、管理员或项目负责人可管理项目模块");
+        }
     }
 
     /** 校验项目存在且属于该空间，返回项目实体 */

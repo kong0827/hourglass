@@ -64,8 +64,7 @@ public class CategoryController {
                                       @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        workspaceService.requireWriter(userId, ws.getId());
-        return ApiResult.ok(categoryService.create(ws.getId(), project, req));
+        return ApiResult.ok(categoryService.create(ws.getId(), userId, project, req));
     }
 
     @PutMapping("/api/categories/{id}")
@@ -73,20 +72,18 @@ public class CategoryController {
                                       @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        workspaceService.requireWriter(userId, ws.getId());
-        return ApiResult.ok(categoryService.update(ws.getId(), id, req));
+        return ApiResult.ok(categoryService.update(ws.getId(), userId, id, req));
     }
 
-    /** 删除项目模块（仅空间主），该项目下任务与需求迁到 targetId 指定模块；缺省迁到项目内最靠前的其他模块 */
+    /** 删除项目模块（空间主/管理员或项目负责人），该项目下任务与需求迁到 targetId 指定模块；缺省迁到项目内最靠前的其他模块 */
     @DeleteMapping("/api/categories/{id}")
     public ApiResult<Void> delete(@PathVariable String id,
                                   @RequestParam(required = false) String targetId,
                                   @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        workspaceService.requireOwner(userId, ws.getId());
         String target = targetId == null || targetId.trim().isEmpty() ? null : targetId.trim();
-        categoryService.delete(ws.getId(), id, target);
+        categoryService.delete(ws.getId(), userId, id, target);
         return ApiResult.ok();
     }
 
@@ -96,8 +93,7 @@ public class CategoryController {
                                  @RequestParam(required = false) String workspace) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        workspaceService.requireWriter(userId, ws.getId());
-        categoryService.order(ws.getId(), project, req.getIds());
+        categoryService.order(ws.getId(), userId, project, req.getIds());
         return ApiResult.ok();
     }
 }

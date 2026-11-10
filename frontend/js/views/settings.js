@@ -8,7 +8,7 @@ import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { saveViewState } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { loadPriorities } from "../core/priorities.js";
-import { catTag, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
+import { canManageProject, catTag, roleReadOnly, rt, state, totalTaskCount } from "../core/state.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
@@ -849,6 +849,13 @@ var wsCatProjects = [], wsCatCache = [], wsCatSeq = 0;
 function wsCatProjectId(){
   return wsCatProjectSel ? wsCatProjectSel.value : "";
 }
+function wsCatProjectOwner(){
+  var pid = wsCatProjectId();
+  for(var i = 0; i < wsCatProjects.length; i++){
+    if(wsCatProjects[i].id === pid) return wsCatProjects[i].ownerUserId;
+  }
+  return null;
+}
 function wsCatRefreshDependents(){
   loadCategories(true);
   loadBoard({silent:true});
@@ -901,8 +908,9 @@ function loadWsCatCfg(){
 }
 function renderWsCatCfg(){
   if(!wsCatList) return;
-  var readOnly = roleReadOnly() || !wsCatProjectId();
-  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  var canManage = !!wsCatProjectId() && canManageProject(wsCatProjectId(), wsCatProjectOwner());
+  var readOnly = !canManage;
+  var canDel = canManage;
   if($("wsCatCount")) $("wsCatCount").textContent = wsCatCache.length ? "共 " + wsCatCache.length + " 个" : "";
   if(!wsCatCache.length){
     if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有模块，用下方输入框添加第一个");
@@ -915,7 +923,7 @@ function renderWsCatCfg(){
         '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-wscat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
         '<button class="cc-act" type="button" data-wscat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
         '<button class="cc-act" type="button" data-wscat-down title="下移"' + (readOnly || idx === wsCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
       '</div>';
     }).join("");
   }

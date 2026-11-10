@@ -6,7 +6,7 @@ import { loadCategories } from "../core/app.js";
 import { reloadFilteredViews } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
-import { canEditReq, reqNameById, roleReadOnly, rt, state, taskCacheExtra } from "../core/state.js";
+import { canEditReq, canManageProject, reqNameById, roleReadOnly, rt, state, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
@@ -536,8 +536,9 @@ function loadProjCats(reqId){
 }
 function renderProjCats(){
   if(!projCatList) return;
-  var readOnly = roleReadOnly();
-  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  var canManage = !!projCatReqId && canManageProject(projCatReqId);
+  var readOnly = !canManage;
+  var canDel = canManage;
   projCatList.innerHTML = projCatCache.map(function(c, idx){
     return '<div class="cfg-row" data-proj-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
@@ -545,7 +546,7 @@ function renderProjCats(){
       '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-pcat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
       '<button class="cc-act" type="button" data-pcat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-pcat-down title="下移"' + (readOnly || idx === projCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
   ["projCatNewColor", "projCatNewName", "btnProjCatAdd"].forEach(function(id){
