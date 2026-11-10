@@ -625,7 +625,7 @@ DB_PW="$(read_env DB_PASSWORD)"
 DB_USER="$(read_env DB_USER)"
 DB_USER="${DB_USER:-hourglass}"
 [ -n "$DB_PW" ] || exit 1
-MYSQL_PWD="$DB_PW" mysql -u "$DB_USER" "$DB_NAME" < "$REMOTE_STAGE/deploy-sql-${SQL_BASE}"
+MYSQL_PWD="$DB_PW" mysql --default-character-set=utf8mb4 -u "$DB_USER" "$DB_NAME" < "$REMOTE_STAGE/deploy-sql-${SQL_BASE}"
 echo "    $(MYSQL_PWD="$DB_PW" mysql -u "$DB_USER" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}'") 张表"
 REMOTE
   done

@@ -25,6 +25,16 @@ class TaskCalcTest {
     }
 
     @Test
+    void statusBucketFollowsProcessingRuleNotColumnId() {
+        assertEquals("backlog", TaskCalc.statusBucket(Consts.COL_TEST, "waiting"));
+        assertEquals("doing", TaskCalc.statusBucket("testing", "normal"));
+        assertEquals("doing", TaskCalc.statusBucket("custom", "normal"));
+        assertEquals("backlog", TaskCalc.statusBucket("custom", "waiting"));
+        assertEquals("ended", TaskCalc.statusBucket("ended", "ended"));
+        assertEquals("done", TaskCalc.statusBucket(Consts.COL_DONE, "ended"));
+    }
+
+    @Test
     void dueKindBoundaries() {
         LocalDate today = LocalDate.of(2026, 10, 31);
         assertEquals("none", TaskCalc.dueKind(task(Consts.COL_DOING, 0, null), today));

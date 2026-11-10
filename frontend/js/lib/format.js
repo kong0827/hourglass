@@ -258,7 +258,7 @@ function demandGanttInfoHTML(){
     '<div class="type-help-row"><span class="mini-tag type-epic">并行分层</span>' +
       '<span class="type-help-desc">时间重叠的阶段自动上下分层，泳道数按实际并发增长；行高随层数增加，不会把重叠阶段叠在一条线上。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">用例与跨度</span>' +
-      '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过用例，或还有工作项停在「待测试 / 测试中」，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
+      '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过用例，或还有工作项停在「测试中」，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">时间范围</span>' +
       '<span class="type-help-desc">默认自动适配已加载的需求并包含今天，甘特按页加载，加载越多范围越宽；跨度超过 2 年自动切到按月查看。可切日 / 周 / 月刻度与缩放。左侧「计划」是计划日期，条形是记录回放，计划日期不参与阶段计算。</span></div>' +
     '</div>';

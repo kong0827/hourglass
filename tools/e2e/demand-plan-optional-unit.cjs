@@ -17,9 +17,10 @@ const context = vm.createContext({
   listPrefs:{viewMode:() => 'table'}, drawerDemandOpts:{reqId:'R1'},
   API:{get:() => new Promise(resolve => {resolveVersions = resolve;}),post:(url,body) => {requests.push({url,body});return Promise.resolve({});}},
   UI:{openModal(){},closeModal(){}}, toast:message => notices.push(message),
-  esc:value => String(value), versionName:id => id, loadDemands(){}
+  esc:value => String(value), versionName:id => id, loadDemands(){},
+  PRIORITIES:["P0","P1","P2","P3"], priName:code => ({P0:"紧急",P1:"高",P2:"中",P3:"低"}[code] || code)
 });
-vm.runInContext(source.slice(source.indexOf('function openPlanDialog('), source.indexOf('/* ---------- 详情')), context);
+vm.runInContext(source.slice(source.indexOf('function syncPlanPriOptions('), source.indexOf('/* ---------- 详情')), context);
 async function flush(){await Promise.resolve();await Promise.resolve();}
 (async () => {
   context.openPlanDialog('D1',false);

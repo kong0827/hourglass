@@ -32,6 +32,8 @@ WHERE has_test.workspace_id IS NULL AND bc.sort_order >= 2;
 
 UPDATE board_column bc
 JOIN workspace w ON w.id = bc.workspace_id
+JOIN (SELECT DISTINCT workspace_id FROM board_column WHERE id = 'test') has_test
+  ON has_test.workspace_id = w.id
 LEFT JOIN (SELECT DISTINCT workspace_id FROM board_column WHERE id = 'testing') has_testing
        ON has_testing.workspace_id = w.id
 SET bc.sort_order = bc.sort_order + 1

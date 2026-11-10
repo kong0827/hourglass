@@ -40,7 +40,8 @@ const context = vm.createContext({
   fmtMinutesShort: value => String(value),
   esc: value => String(value == null ? "" : value),
   icon:() => "",
-  syncAssocViewBtns:() => {}
+  syncAssocViewBtns:() => {},
+  PRIORITIES:["P0","P1","P2","P3"], priName:code => ({P0:"紧急",P1:"高",P2:"中",P3:"低"}[code] || code)
 });
 const formatSource = fs.readFileSync(path.join(root, "frontend/js/lib/format.js"), "utf8");
 context.pad2 = value => String(value).padStart(2, "0");

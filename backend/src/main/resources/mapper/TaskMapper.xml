@@ -1033,10 +1033,15 @@
   </select>
 
   <select id="countBuckets" resultType="com.hourglass.dto.TaskBucketRow">
-    SELECT COALESCE(SUM(CASE WHEN t.board_column = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog,
-           COALESCE(SUM(CASE WHEN t.board_column = 'doing' THEN 1 ELSE 0 END), 0) AS doing,
+    SELECT COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
+                              AND (t.board_column = 'backlog' OR bc.processing_rule = 'waiting')
+                              THEN 1 ELSE 0 END), 0) AS backlog,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog'
+                              AND (bc.processing_rule IS NULL OR bc.processing_rule NOT IN ('waiting', 'ended'))
+                              THEN 1 ELSE 0 END), 0) AS doing,
            COALESCE(SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END), 0) AS done,
-           COALESCE(SUM(CASE WHEN t.board_column NOT IN ('backlog', 'doing', 'done') THEN 1 ELSE 0 END), 0) AS other,
+           COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done' AND t.board_column &lt;&gt; 'backlog'
+                              AND bc.processing_rule = 'ended' THEN 1 ELSE 0 END), 0) AS other,
            COALESCE(SUM(CASE WHEN t.board_column &lt;&gt; 'done'
                               AND t.due_date IS NOT NULL AND t.due_date &lt; #{today}
                               AND (bc.processing_rule IS NULL OR bc.processing_rule &lt;&gt; 'ended') THEN 1 ELSE 0 END), 0) AS overdue
