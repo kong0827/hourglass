@@ -112,6 +112,10 @@ function invalidateVersionCache(reqId){
   delete versionOptionsCache[reqId];
   delete taskOptionsCache[reqId];
 }
+/* 版本 / 发布记录变化后通知项目驾驶舱等缓存方失效，避免「新建了版本但项目里还是旧数量」 */
+function notifyDeliveryChanged(reqId){
+  try{ window.dispatchEvent(new CustomEvent("ds:delivery-changed", { detail:{ reqId: reqId || rt.phaseReqId } })); }catch(e){ /* noop */ }
+}
 function loadPhaseData(){
   if(!rt.phaseReqId || !rt.reqList.length){
     phaseBody.innerHTML = UI.emptyState({
@@ -125,7 +129,7 @@ function loadPhaseData(){
   phaseBody.innerHTML = UI.skeletonRows(4);
   var reqId = rt.phaseReqId;
   var current = ++loadSeq;
-  Promise.all([
+  return Promise.all([
     API.get("/api/phase/stats", { reqId: reqId }),
     API.get("/api/versions/stats", { reqId: reqId }),
     API.get("/api/versions", { reqId: reqId }),
@@ -643,6 +647,7 @@ function taskTable(mode){
       + '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">' + esc(t.title) + '</td>'
       + '<td>' + groupCell + '</td>'
       + '<td>' + esc(typeName(t.itemType)) + '</td>'
+      + '<td class="phase-owner">' + (t.owner ? esc(t.owner) : '<span class="muted">未指派</span>') + '</td>'
       + '<td class="num">' + dateShort(t.startDate) + '</td>'
       + '<td class="num">' + dateShort(t.dueDate) + '</td>'
       + '<td class="num">' + (est ? fmtMinutesShort(est) : "—") + '</td>'
@@ -650,7 +655,7 @@ function taskTable(mode){
       + '<td><span class="mini-tag ' + devCls(dev) + '">' + (dev === null ? "—" : ((dev > 0 ? "+" : "") + dev + "%")) + '</span></td>'
       + '<td>' + (isDone(t) ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
       + '</tr>';
-  }).join("") || '<tr><td colspan="9" class="foot-note" style="padding:16px;text-align:center">该项目还没有工作项</td></tr>';
+  }).join("") || '<tr><td colspan="10" class="foot-note" style="padding:16px;text-align:center">该项目还没有工作项</td></tr>';
   var segOpts;
   if(mode === "phase"){
     segOpts = [["all", "全部"], ["mvp", "首版开发"], ["post", "迭代维护"]];
@@ -701,14 +706,14 @@ function taskTable(mode){
       + '</div>'
     : "";
   var emptyRow = cache.tasks.length
-    ? '<tr data-tbl-empty hidden><td colspan="9" class="foot-note" style="padding:16px;text-align:center">没有符合筛选条件的工作项</td></tr>'
+    ? '<tr data-tbl-empty hidden><td colspan="10" class="foot-note" style="padding:16px;text-align:center">没有符合筛选条件的工作项</td></tr>'
     : "";
   return '<div class="panel"><div class="panel-head"><h3>' + head + '</h3>'
     + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开工作项</span>' + seg + '</div>'
     + tools
     + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl"><thead><tr><th>工作项</th>'
     + (mode === "phase" ? "<th>阶段</th>" : "<th>版本</th>")
-    + '<th>类型</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>偏差</th><th>状态</th></tr></thead>'
+    + '<th>类型</th><th>负责人</th><th class="num">计划开始</th><th class="num">计划结束</th><th class="num">预估</th><th class="num">实际</th><th>偏差</th><th>状态</th></tr></thead>'
     + '<tbody id="phaseTblBody">' + rows + emptyRow + '</tbody></table></div></div>';
 }
 
@@ -944,6 +949,7 @@ function openVersionDialog(id, fresh){
   fVerName.classList.remove("invalid");
   verFormTitle.textContent = id ? "编辑版本" : "新建版本";
   btnSaveVer.textContent = id ? "保存修改" : "创建版本";
+  if($("vProjectName")) $("vProjectName").textContent = reqNameById(rt.phaseReqId) || "—";
   UI.openModal($("dlgVersion"), "input");
 }
 function saveVersion(){
@@ -976,6 +982,7 @@ function saveVersion(){
     if(!versionDialogCurrent() || seq !== versionDialogSeq){
       /* 弹窗已关：不碰新表单，但保存确实成功了，仍要告知并刷新列表 */
       toast((savedId ? "已更新版本「" : "已创建版本「") + v.name + "」", "fs");
+      notifyDeliveryChanged(v.reqId || rt.phaseReqId);
       if(document.body.dataset.view === "phase") reloadView();
       return;
     }
@@ -983,6 +990,7 @@ function saveVersion(){
     UI.closeModal($("dlgVersion"));
     toast((savedId ? "已更新版本「" : "已创建版本「") + v.name + "」", "fs");
     editingVerId = null;
+    notifyDeliveryChanged(v.reqId || rt.phaseReqId);
     reloadView();
   }).catch(function(ex){
     if(!versionDialogCurrent() || seq !== versionDialogSeq) return;
@@ -991,6 +999,26 @@ function saveVersion(){
   });
 }
 function releaseStatusName(status){ return {draft:"草稿", ready:"就绪", completed:"已完成", canceled:"已取消"}[status] || "未创建"; }
+/* 工具栏「发布计划」：切到按版本视图，直接打开最相关版本的发布计划 / 记录 */
+function openProjectReleasePlan(){
+  if(!rt.phaseReqId){ toast("先选择项目，再查看发布计划", "warn"); return; }
+  var fromOverview = viewMode === "overview";
+  viewMode = "version";
+  syncModeSeg();
+  var ready;
+  if(cache && !fromOverview){ renderPhaseView(); ready = Promise.resolve(); }
+  else ready = loadPhaseData() || Promise.resolve();
+  ready.then(function(){
+    if(document.body.dataset.view !== "phase" || viewMode !== "version") return;
+    var versions = (cache && cache.versions) || [];
+    if(!versions.length){ toast("该项目还没有版本，先新建版本再制定发布计划", "warn"); return; }
+    var pick = versions.find(function(v){ return v.status === "active"; })
+      || versions.find(function(v){ return v.status === "planned"; })
+      || versions.find(function(v){ return v.status === "released"; })
+      || versions[0];
+    openReleaseDetail(pick.id, false);
+  }).catch(function(){});
+}
 /* 独立真实 ESM 弹窗：关闭/切项目/切路由/切空间后不渲染迟到响应。 */
 function releaseDialog(v, title){
   var layer = document.createElement("div"), disposed = false;
@@ -1291,7 +1319,7 @@ function openReleaseDetail(id, wantPreview){
       recoveredRecord = record; recoveryMessage = "已记录正式事件 #" + record.id + "（" + record.result + "）。";
       persist(null, body.idempotencyKey); retryAllowed = false;
       if(!current()) return;
-      setBusy(false); invalidatePreview(); invalidateVersionCache(reqId); reloadFilteredViews();
+      setBusy(false); invalidatePreview(); invalidateVersionCache(reqId); notifyDeliveryChanged(reqId); reloadFilteredViews();
       actualDraft.actualTaskIds = []; actualDraft.artifactRef = ""; actualDraft.artifactDigest = "";
       toast("已记录" + releaseEnvironmentName(record.environment) + " · " + releaseOperationName(record.operation) + " · " + (record.result === "success" ? "成功" : "失败"), "fs"); render(); load();
     }).catch(function(ex){
@@ -1386,6 +1414,7 @@ function startVersion(id){
     if(!ok) return;
     API.post("/api/versions/" + encodeURIComponent(id) + "/start", {}).then(function(){
       toast("已开始开发「" + v.name + "」", "fs");
+      notifyDeliveryChanged(v.reqId || rt.phaseReqId);
       reloadView();
     }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
   });
@@ -1402,6 +1431,7 @@ function deleteVersion(id){
     if(!ok) return;
     API.del("/api/versions/" + encodeURIComponent(id)).then(function(){
       toast("已删除「" + v.name + "」（无工作项绑定或需求目标引用，未自动解绑）", "fs");
+      notifyDeliveryChanged(v.reqId || rt.phaseReqId);
       reloadView();
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
@@ -1919,6 +1949,7 @@ if($("btnVerNew")) $("btnVerNew").addEventListener("click", function(){
   if(!canWritePhase()){ denyPhaseReadOnly(); return; }
   openVersionDialog(null);
 });
+if($("btnReleasePlan")) $("btnReleasePlan").addEventListener("click", openProjectReleasePlan);
 if($("dlgVersionX")) $("dlgVersionX").addEventListener("click", function(){ UI.closeModal($("dlgVersion")); });
 if(btnSaveVer) btnSaveVer.addEventListener("click", saveVersion);
 if(vName) vName.addEventListener("input", function(){ fVerName.classList.remove("invalid"); });
@@ -1994,10 +2025,11 @@ if(phaseBody) phaseBody.addEventListener("input", function(e){
   if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
 });
 
-function setPhaseProject(reqId){
+function setPhaseProject(reqId, mode){
   if(!reqId) return;
   rt.phaseReqId = reqId;
-  if(viewMode === "overview") viewMode = "phase";
+  if(mode === "phase" || mode === "version" || mode === "overview") viewMode = mode;
+  else if(viewMode === "overview") viewMode = "phase";
   if(document.body.dataset.view === "phase"){
     syncModeSeg();
     loadPhaseData();

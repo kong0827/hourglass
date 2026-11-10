@@ -699,6 +699,7 @@
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
+              <button class="btn sm" type="button" id="btnReleasePlan" title="查看当前项目的版本发布计划与发布记录">发布计划</button>
               <button class="btn sm primary" type="button" id="btnVerNew">+ 新建版本</button>
             </span>
           </div>
@@ -710,6 +711,10 @@
           <div class="panel">
             <div class="panel-head"><h3 id="verFormTitle">新建版本</h3><button class="icon-btn sm" type="button" id="dlgVersionX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
+              <div class="field">
+                <label>所属项目</label>
+                <div class="ver-project-bind"><b id="vProjectName">—</b><span>版本跟随项目创建；切换上方项目后，这里只显示该项目的版本</span></div>
+              </div>
               <div class="field" id="fVerName">
                 <label for="vName">版本名称 <span class="req">*</span></label>
                 <input id="vName" type="text" maxlength="40" placeholder="例如：V1.2" autocomplete="off" />
@@ -887,7 +892,7 @@
               </div>
               <div class="field">
                 <label for="dpPriority">排期优先级</label>
-                <select id="dpPriority"><option value="P0">P0</option><option value="P1">P1</option><option value="P2" selected>P2</option><option value="P3">P3</option></select>
+                <select id="dpPriority"><option value="P0">P0 · 紧急</option><option value="P1">P1 · 高</option><option value="P2" selected>P2 · 中</option><option value="P3">P3 · 低</option></select>
               </div>
               <div class="field">
                 <label for="dpNote">排期备注</label>
@@ -2019,6 +2024,25 @@
                 <button class="btn" type="button" id="btnPriorityReset">恢复默认</button>
                 <span class="foot-note" id="priorityCfgHint"></span>
               </div>
+            </div>
+
+            <div class="panel" data-set-pane="workflow" id="set-categories">
+              <div class="panel-head">
+                <h3>模块</h3>
+                <span class="meta-right" id="wsCatCount"></span>
+              </div>
+              <p class="set-hint">模块挂在项目下，用于筛选与统计。先选择项目，再添加、改名、改色或排序；删除模块时，其工作项与需求会迁到同项目的另一个模块。</p>
+              <div class="cfg-pick">
+                <label for="wsCatProject">项目</label>
+                <select id="wsCatProject" class="mini-select" aria-label="选择要配置模块的项目"></select>
+              </div>
+              <div class="cfg-list" id="wsCatList"></div>
+              <div class="cfg-add">
+                <input type="color" id="wsCatNewColor" value="#98A2B3" title="新模块颜色" aria-label="新模块颜色" />
+                <input type="text" id="wsCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
+                <button class="btn sm" type="button" id="btnWsCatAdd">添加模块</button>
+              </div>
+              <p class="foot-note" id="wsCatHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-data">

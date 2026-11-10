@@ -20,6 +20,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `63_delivery_release.sql` 的契约已随 A–E 部署，仅增列与创建五张表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`；新增需求计划日期 / revision、任务发布徽标及日志结构字段。已有 `version_task` 存任务当前 M:N 计划版本集合，`version_release_plan_task` 存独立计划的任务范围，不替代实际事件范围。本轮授权重建原库使用 52 表基线，不以 63 对旧库迁移；脚本不回填、不清空，不根据首版统计、旧版本状态或完成任务构造历史发布证据，旧记录缺失必须明确显示无正式证据。JSON 任务备份不是正式发布凭证；以上五表应随 MySQL 全库备份保留，恢复包含计划任务范围。
 
+`64_task_test_flow.sql` 增量补齐测试流程：`task` 增加 `test_started_at` / `test_finished_at`，并为每个空间补「待测试」「测试中」两个内置列。新列插在「进行中」之后，同位置的自定义列按原相对顺序顺延；不回填历史测试时间，旧数据没有可靠记录时不伪造时间。执行时须带 `--default-character-set=utf8mb4`，否则列名中文会写成乱码。
+
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 
 ## 3. 基线漂移校验

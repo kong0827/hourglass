@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { invalidateRules, loadRules } from "../core/transitions.js";
-import { loadWorkspaces } from "../core/app.js";
+import { loadCategories, loadWorkspaces } from "../core/app.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { saveViewState } from "../core/filters-ui.js";
@@ -114,7 +114,7 @@ var wsNameInput = $("wsNameInput"), wsWebhook = $("wsWebhook"),
 var transMatrix = $("colTransMatrix"), transSummary = $("colTransSummary"),
     transHint = $("colTransHint"), btnTransReset = $("btnTransReset");
 var transData = null;
-var TRANS_LABELS = { allow:"允许", reason:"需因", deny:"禁止" };
+var TRANS_LABELS = { allow:"允许", reason:"需填原因", deny:"禁止" };
 var TRANS_FULL = { allow:"允许", reason:"需填原因", deny:"禁止" };
 var TRANS_NEXT = { allow:"reason", reason:"deny", deny:"allow" };
 /* 成员搜索选择器：用户先从候选列表选中，再点「添加成员」 */
@@ -333,6 +333,7 @@ function setSettingsTab(tab){
   /* SMTP 配置在「通知与集成」页里，仅平台管理员可见 */
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
+  if(tab === "workflow") loadWsCatProjects();
   if(tab === "members" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration" && isAdmin) loadMailSettings();
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
@@ -611,7 +612,7 @@ function renderColCfg(){
   var readOnly = roleReadOnly();
   var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
   colCfgList.innerHTML = rt.colDefsCache.map(function(d, idx){
-    var fixed = (d.id === "backlog" || d.id === "doing");
+    var fixed = (d.id === "backlog" || d.id === "doing" || d.id === "test" || d.id === "testing");
     var delDisabled = fixed || !canDel;
     var ruleSelect = fixed ? ''
       : '<select class="mini-select col-rule" data-col-rule aria-label="处理规则" title="正常计时：计时且计逾期；暂停计时：停表仍计逾期；结束计时：停表且不计逾期"' + (readOnly ? " disabled" : "") + '>' +
@@ -801,6 +802,173 @@ $("btnColAdd").addEventListener("click", function(){
     if(colNewRule) colNewRule.value = "normal";
     loadColCfg();
     loadBoard({silent:true});
+  }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+});
+/* 模块配置：模块挂在项目下，设置页提供统一入口（项目页编辑项目里也有同一份配置） */
+var wsCatProjectSel = $("wsCatProject"), wsCatList = $("wsCatList"),
+    wsCatNewName = $("wsCatNewName"), wsCatNewColor = $("wsCatNewColor"), btnWsCatAdd = $("btnWsCatAdd");
+var wsCatProjects = [], wsCatCache = [], wsCatSeq = 0;
+function wsCatProjectId(){
+  return wsCatProjectSel ? wsCatProjectSel.value : "";
+}
+function wsCatRefreshDependents(){
+  loadCategories(true);
+  loadBoard({silent:true});
+}
+function loadWsCatProjects(){
+  if(!wsCatProjectSel || !wsCatList) return;
+  var seq = ++wsCatSeq;
+  wsCatList.innerHTML = UI.skeletonRows(2);
+  API.getAllPages("/api/reqs").then(function(list){
+    if(seq !== wsCatSeq) return;
+    wsCatProjects = list || [];
+    var current = wsCatProjectSel.value;
+    if(!wsCatProjects.length){
+      wsCatProjectSel.innerHTML = '<option value="">暂无项目</option>';
+      wsCatProjectSel.disabled = true;
+      if($("wsCatCount")) $("wsCatCount").textContent = "";
+      wsCatList.innerHTML = UI.emptyState({
+        icon:"folder", title:"还没有项目",
+        text:"模块按项目配置，请先在「项目」中新建项目，再回来添加模块。"
+      });
+      renderWsCatCfg();
+      return;
+    }
+    wsCatProjectSel.disabled = false;
+    wsCatProjectSel.innerHTML = wsCatProjects.map(function(r){
+      return '<option value="' + esc(r.id) + '">' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>';
+    }).join("");
+    if(wsCatProjects.some(function(r){ return r.id === current; })) wsCatProjectSel.value = current;
+    loadWsCatCfg();
+  }).catch(function(ex){
+    if(seq !== wsCatSeq) return;
+    wsCatList.innerHTML = '<div class="foot-note">项目加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function loadWsCatCfg(){
+  if(!wsCatList) return;
+  var pid = wsCatProjectId();
+  var seq = ++wsCatSeq;
+  wsCatCache = [];
+  if(!pid){ renderWsCatCfg(); return; }
+  wsCatList.innerHTML = UI.skeletonRows(2);
+  API.get("/api/categories?project=" + encodeURIComponent(pid)).then(function(list){
+    if(seq !== wsCatSeq) return;
+    wsCatCache = list || [];
+    renderWsCatCfg();
+  }).catch(function(ex){
+    if(seq !== wsCatSeq) return;
+    wsCatList.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
+  });
+}
+function renderWsCatCfg(){
+  if(!wsCatList) return;
+  var readOnly = roleReadOnly() || !wsCatProjectId();
+  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  if($("wsCatCount")) $("wsCatCount").textContent = wsCatCache.length ? "共 " + wsCatCache.length + " 个" : "";
+  if(!wsCatCache.length){
+    if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有模块，用下方输入框添加第一个");
+  }
+  if(wsCatCache.length){
+    wsCatList.innerHTML = wsCatCache.map(function(c, idx){
+      return '<div class="cfg-row" data-wscat-id="' + esc(c.id) + '">' +
+        '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
+        '<input type="color" value="' + esc(c.color || CAT_DEFAULT_COLOR) + '" data-wscat-color aria-label="模块颜色"' + (readOnly ? " disabled" : "") + ' />' +
+        '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-wscat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
+        '<button class="cc-act" type="button" data-wscat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+        '<button class="cc-act" type="button" data-wscat-down title="下移"' + (readOnly || idx === wsCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '</div>';
+    }).join("");
+  }
+  [wsCatNewColor, wsCatNewName, btnWsCatAdd].forEach(function(el){ if(el) el.disabled = readOnly; });
+  if($("wsCatHint")) $("wsCatHint").hidden = !readOnly || !wsCatProjectId();
+  UI.wireTooltips(wsCatList);
+}
+function saveWsCatRow(id){
+  if(roleReadOnly()) return;
+  var row = wsCatList.querySelector('[data-wscat-id="' + id + '"]');
+  if(!row) return;
+  var name = row.querySelector("[data-wscat-name]").value.trim();
+  var color = row.querySelector("[data-wscat-color]").value;
+  if(!name){ toast("模块名不能为空", "warn"); loadWsCatCfg(); return; }
+  API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
+    toast("已更新模块「" + name + "」", "fs");
+    loadWsCatCfg();
+    wsCatRefreshDependents();
+  }).catch(function(ex){ toast(ex.message || "保存失败", "bad"); loadWsCatCfg(); });
+}
+if(wsCatProjectSel) wsCatProjectSel.addEventListener("change", function(){ loadWsCatCfg(); });
+if(wsCatList) wsCatList.addEventListener("change", function(e){
+  var row = e.target.closest("[data-wscat-id]");
+  if(!row) return;
+  if(e.target.matches("[data-wscat-name]") || e.target.matches("[data-wscat-color]")) saveWsCatRow(row.dataset.wscatId);
+});
+if(wsCatList) wsCatList.addEventListener("click", function(e){
+  if(roleReadOnly()) return;
+  var row = e.target.closest("[data-wscat-id]");
+  if(!row) return;
+  var id = row.dataset.wscatId;
+  if(e.target.closest("[data-wscat-up]") || e.target.closest("[data-wscat-down]")){
+    var idx = -1;
+    for(var i = 0; i < wsCatCache.length; i++) if(wsCatCache[i].id === id) idx = i;
+    if(idx < 0) return;
+    var to = e.target.closest("[data-wscat-up]") ? idx - 1 : idx + 1;
+    if(to < 0 || to >= wsCatCache.length) return;
+    var moved = wsCatCache.splice(idx, 1)[0];
+    wsCatCache.splice(to, 0, moved);
+    API.put("/api/categories/order?project=" + encodeURIComponent(wsCatProjectId()), { ids: wsCatCache.map(function(c){ return c.id; }) }).then(function(){
+      loadWsCatCfg();
+      wsCatRefreshDependents();
+    }).catch(function(ex){ toast(ex.message || "排序失败", "bad"); loadWsCatCfg(); });
+    return;
+  }
+  if(e.target.closest("[data-wscat-del]")){
+    var cat = null;
+    for(var j = 0; j < wsCatCache.length; j++) if(wsCatCache[j].id === id) cat = wsCatCache[j];
+    if(!cat) return;
+    var others = wsCatCache.filter(function(c){ return c.id !== id; });
+    if(!others.length){ toast("至少需要保留一个模块", "warn"); return; }
+    var menu = document.createElement("div");
+    menu.className = "menu";
+    menu.style.minWidth = "200px";
+    menu.innerHTML = '<div class="menu-title">迁移到</div>' + others.map(function(c){
+      return '<button class="menu-item" type="button" data-wscat-target="' + esc(c.id) + '">' + esc(c.name) + '</button>';
+    }).join("");
+    UI.openPop(menu, e.target.closest("[data-wscat-del]"), { onClose: function(){ menu.remove(); } });
+    menu.addEventListener("click", function(ev){
+      var b = ev.target.closest("[data-wscat-target]");
+      if(!b) return;
+      var target = null;
+      for(var k = 0; k < others.length; k++) if(others[k].id === b.dataset.wscatTarget) target = others[k];
+      if(!target) return;
+      UI.closeAllPops();
+      UI.showConfirm({
+        title:"删除模块",
+        msg:"删除模块「" + esc(cat.name) + "」？其下工作项与需求将改到「" + esc(target.name) + "」。",
+        okText:"删除模块"
+      }).then(function(ok){
+        if(!ok) return;
+        API.del("/api/categories/" + encodeURIComponent(id) + "?targetId=" + encodeURIComponent(target.id)).then(function(){
+          toast("已删除模块「" + cat.name + "」，工作项与需求已迁到「" + target.name + "」", "fs");
+          loadWsCatCfg();
+          wsCatRefreshDependents();
+        }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+      });
+    });
+  }
+});
+if(btnWsCatAdd) btnWsCatAdd.addEventListener("click", function(){
+  if(roleReadOnly()) return;
+  var pid = wsCatProjectId();
+  if(!pid){ toast("请先选择项目", "warn"); return; }
+  var name = wsCatNewName.value.trim();
+  if(!name){ toast("请填写模块名称", "warn"); return; }
+  API.post("/api/categories?project=" + encodeURIComponent(pid), { name: name, color: wsCatNewColor.value }).then(function(){
+    toast("已添加模块「" + name + "」", "fs");
+    wsCatNewName.value = "";
+    loadWsCatCfg();
+    wsCatRefreshDependents();
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });
 var priorityCfgCache = [];

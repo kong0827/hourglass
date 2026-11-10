@@ -345,7 +345,16 @@ public class DemandService {
         timeline.setCasePending(casePending);
         LocalDate testStart = toDate(value(test, "testStart"));
         LocalDate testEnd = toDate(value(test, "testEnd"));
-        boolean testRunning = casePending > 0;
+        /* 工作项测试列的实际测试窗口与用例执行记录合并：任一来源都能撑起测试阶段 */
+        LocalDate taskTestStart = toDate(value(task, "testStart"));
+        LocalDate taskTestEnd = toDate(value(task, "testEnd"));
+        if (taskTestStart != null && (testStart == null || taskTestStart.isBefore(testStart))) {
+            testStart = taskTestStart;
+        }
+        if (taskTestEnd != null && (testEnd == null || taskTestEnd.isAfter(testEnd))) {
+            testEnd = taskTestEnd;
+        }
+        boolean testRunning = casePending > 0 || intValue(value(task, "testOpen")) > 0;
         if (testStart != null) {
             addStage(stages, "test", testStart, stageEnd(testRunning, testEnd, horizon),
                     testRunning && !canceled, false);

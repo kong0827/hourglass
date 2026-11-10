@@ -39,6 +39,10 @@ public class Task {
     private Integer estimateMinutes;
     private String note;
     private LocalDate completedAt;
+    /** 进入「测试中」的日期（可重复测试，每轮重新记录开始日） */
+    private LocalDate testStartedAt;
+    /** 离开「测试中」的日期：测试通过或退回 / 重开时记录 */
+    private LocalDate testFinishedAt;
     /** Derived readonly projection of immutable formal records; never persisted by task writes. */
     @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     private Boolean everPublished = Boolean.FALSE;

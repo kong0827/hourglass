@@ -94,6 +94,9 @@ public class BackupData {
         private String ownerUserId;
         private String remindTarget;
         private String completedAt;
+        /** 测试窗口：进入测试中 / 离开测试中的日期 */
+        private String testStartedAt;
+        private String testFinishedAt;
         private List<BackupSubtask> subtasks;
         private List<String> tags;
         private String recurType;

@@ -285,7 +285,10 @@
            SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone,
            SUM(CASE WHEN t.board_column &lt;&gt; 'done' THEN 1 ELSE 0 END) AS taskOpen,
            MAX(CASE WHEN t.board_column = 'done'
-                    THEN COALESCE(t.completed_at, DATE(t.updated_at)) END) AS devEnd
+                    THEN COALESCE(t.completed_at, DATE(t.updated_at)) END) AS devEnd,
+           MIN(t.test_started_at) AS testStart,
+           MAX(t.test_finished_at) AS testEnd,
+           SUM(CASE WHEN t.board_column IN ('test','testing') THEN 1 ELSE 0 END) AS testOpen
     FROM task t
     WHERE t.workspace_id = #{workspaceId}
       AND t.deleted_at IS NULL

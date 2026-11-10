@@ -62,7 +62,7 @@ function projectCard(p){
     + '<div class="manager-project-head"><i class="manager-light ' + esc(p.health) + '"></i>'
     + '<button class="manager-project-name" type="button" data-open-project="' + esc(p.reqId) + '">' + esc(p.name) + '</button>'
     + '<span class="tag ' + tagCls + '">' + healthName + '</span></div>'
-    + '<div class="manager-project-main"><span class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '"><b>' + p.progressPct + '%</b></span>'
+    + '<div class="manager-project-main"><button type="button" class="manager-ring ' + esc(p.health) + '" style="--p:' + p.progressPct + '" data-project-drill="' + esc(p.reqId) + '" data-metric="all" title="查看该项目全部工作项" aria-label="' + esc(p.name) + ' 完成率 ' + p.progressPct + '%，查看工作项明细"><b>' + p.progressPct + '%</b></button>'
     + '<div class="manager-project-stats">'
     + [["backlog","待处理",p.backlog],["doing","进行中",p.doing]].concat(p.ended ? [["ended","执行结束",p.ended]] : [], [["done","已完成",p.done],["overdue","逾期",p.overdue]]).map(function(x){
       return '<button type="button" class="' + (x[0] === "overdue" && x[2] ? "over" : "") + '" data-project-drill="' + esc(p.reqId) + '" data-metric="' + x[0] + '"><span>' + x[1] + '</span><b>' + x[2] + '</b></button>';
@@ -195,7 +195,7 @@ function onClick(e){
   if(drill){
     var p = (cache.projects || []).filter(function(x){ return x.reqId === drill.dataset.projectDrill; })[0];
     var metric = drill.dataset.metric;
-    var names = {backlog:"待处理",doing:"进行中",ended:"执行结束",done:"已完成",overdue:"逾期"};
+    var names = {all:"全部工作项",backlog:"待处理",doing:"进行中",ended:"执行结束",done:"已完成",overdue:"逾期"};
     openTaskTable((p ? p.name : "项目") + " · " + names[metric], tasksFor(drill.dataset.projectDrill, metric));
     return;
   }

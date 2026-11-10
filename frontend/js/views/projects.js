@@ -268,7 +268,7 @@ function renderReqList(){
       '<div class="req-top">' +
         '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
           icon("chevronRight", 14) + '</button>' +
-        '<span class="req-name">' + esc(r.name) + '</span>' +
+        '<button class="req-name req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱">' + esc(r.name) + '</button>' +
         '<span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' +
           reqStatusName(r.status) + '</span>' +
         (r.archivedAt ? '<span class="tag tag-ghost" title="已归档：默认视图隐藏">已归档</span>' : '') +
@@ -329,7 +329,7 @@ function projectGrid(el){
   el.style.gridTemplateColumns = widths.concat(["224px"]).join(" ");
 }
 function projectCell(r, key){
-  if(key === "name") return '<span class="project-cell project-name-cell" title="' + esc(r.name) + '">' + esc(r.name) + '</span>';
+  if(key === "name") return '<button class="project-cell project-name-cell req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱：' + esc(r.name) + '">' + esc(r.name) + '</button>';
   if(key === "status") return '<span><span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(r.status)) + '</span></span>';
   if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + esc(r.description || "—") + '</span>';
   if(key === "ownerName") return '<span class="project-cell" title="' + esc(ownerLabelOf(r) || "") + '">' + esc(ownerLabelOf(r) || "—") + '</span>';
@@ -738,6 +738,12 @@ segReqStatus.addEventListener("click", function(e){
   rt.formReqStatus = b.dataset.rst; syncReqStatusSeg();
 });
 reqListEl.addEventListener("click", function(e){
+  var cockpit = e.target.closest("[data-req-cockpit]");
+  if(cockpit){
+    rt.managerProjectId = cockpit.dataset.reqCockpit;
+    showView("project");
+    return;
+  }
   var sort = e.target.closest("[data-project-sort]");
   if(sort){ setProjectSort(sort.dataset.projectSort); return; }
   var activity = e.target.closest("[data-req-activity]");

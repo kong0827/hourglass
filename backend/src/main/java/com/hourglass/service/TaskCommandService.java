@@ -144,6 +144,9 @@ public class TaskCommandService {
         if (Consts.COL_DONE.equals(t.getBoardColumn())) {
             t.setCompletedAt(req.getCompletedAt() != null ? req.getCompletedAt() : LocalDate.now());
         }
+        if (Consts.COL_TESTING.equals(t.getBoardColumn())) {
+            t.setTestStartedAt(LocalDate.now());
+        }
         taskMapper.insert(t);
         support.saveTags(workspaceId, id, req.getTags());
         /* T1.2：影响版本绑定（version_task，一任务一版本；不选=待规划） */
@@ -270,6 +273,8 @@ public class TaskCommandService {
             }
         }
         String moveSuffix = null;
+        t.setTestStartedAt(old.getTestStartedAt());
+        t.setTestFinishedAt(old.getTestFinishedAt());
         if (columnChanged) {
             t.setSortOrder(taskMapper.maxSortOrder(workspaceId, t.getBoardColumn()) + SORT_STEP);
             if (Consts.COL_DONE.equals(t.getBoardColumn())) {
@@ -277,6 +282,7 @@ public class TaskCommandService {
             } else {
                 t.setCompletedAt(null);
             }
+            workflow.applyTestTimestamps(t, old.getBoardColumn(), t.getBoardColumn());
             /* 流转校验 + 计时联动：完成停表+接力 / 进入可计时列开表 / 进入不可计时列停表（与拖拽 move 同一口径） */
             moveSuffix = workflow.beforeEditColumnChange(userId, workspaceId, id, old.getBoardColumn(),
                     t.getBoardColumn(), req.getMoveReason(), Boolean.TRUE.equals(req.getForce()),

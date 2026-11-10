@@ -13,7 +13,7 @@ import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { PRIORITIES, taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
@@ -34,6 +34,14 @@ var COLS = [
   ["rej", "已拒绝", "var(--danger)"],
   ["canceled", "已取消", "var(--text-3)"]
 ];
+/* 列头提示：直接回答「已拒绝和已取消有什么区别」，避免只靠手册 */
+var STATUS_HINTS = {
+  review: "需求录入后的评审中状态；通过后进入「已通过」，不通过进入「已拒绝」",
+  pass: "评审通过、等待排期；可直接排期到目标版本，也可撤回重新评审",
+  plan: "已指定目标版本或计划时间；可拖回「已通过」撤销排期",
+  rej: "评审结论为不通过，历史保留；可重新打开回到「待评审」",
+  canceled: "需求中途作废/暂不做，可恢复为「已通过」；交付完成由版本发布记录体现，不需要额外的已完成状态"
+};
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
@@ -60,6 +68,7 @@ var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd 
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
 var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
+var dragOverCol = null;       /* 最近悬停的列：drop 未触发时用 dragend 兜底提示 */
 /* 项目页「查看需求池」的跨视图定位参数；enterDemandsView 应用后清空 */
 var pendingFocusReq = null;
 
@@ -392,13 +401,16 @@ function render(){
       ? '<button class="bkl-more" type="button" data-dem-more="' + esc(c[0]) + '">加载更多（还有 '
         + Math.max((col.matched || 0) - items.length, 0) + ' 条）</button>'
       : "";
-    return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title">'
+    return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title" title="' +
+      esc(STATUS_HINTS[c[0]] || "") + '">'
       + '<span class="pdot" style="background:' + c[2] + '"></span>' + c[1] + '</span>'
       + '<span class="bkl-count">' + (col.matched || 0) + '</span></div>'
       + (items.map(cardHTML).join("") || '<p class="foot-note" style="padding:10px 2px">暂无需求</p>')
       + more
       + '</div>';
-  }).join("") + '</div>';
+  }).join("") + '</div>'
+    + '<p class="foot-note dem-status-hint">已拒绝是评审不通过，可重新打开；已取消是中途作废或暂不做，可恢复为已通过。'
+    + '两者都会保留历史，也都不需要额外的「已完成」状态 —— 是否交付以版本发布记录为准。</p>';
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
 function demandMenuItems(d){
@@ -483,7 +495,7 @@ function cardHTML(d, opts){
   var drag = (isOwner() && canWriteDemand(d) && d.status !== "canceled" && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
-  return '<div class="bkl-card"' + drag + '>'
+  return '<div class="bkl-card" data-dem-card="' + esc(d.id) + '"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2")
@@ -1724,6 +1736,13 @@ function cancelDemand(id){
 function restoreDemand(id){
   reasonAction(id, "restore", "恢复需求", "恢复为已通过，清除原目标版本和计划时间，需要重新排期；已有任务保持不变。");
 }
+/* 优先级档位固定 P0-P3，显示名随空间优先级配置变化，开弹窗时刷新 */
+function syncPlanPriOptions(){
+  if(!dpPriority) return;
+  dpPriority.innerHTML = PRIORITIES.map(function(p){
+    return '<option value="' + p + '">' + p + ' · ' + esc(priName(p)) + '</option>';
+  }).join("");
+}
 function openPlanDialog(id, replan){
   var d = findDemand(id);
   if(!d) return;
@@ -1731,6 +1750,7 @@ function openPlanDialog(id, replan){
   planDemandId = id;
   planDemandRevision = d.revision;
   planAction = replan ? "replan" : "plan";
+  syncPlanPriOptions();
   if($("demandPlanTitle")) $("demandPlanTitle").textContent = replan ? "调整需求排期" : "安排需求排期";
   btnDoPlan.textContent = replan ? "保存调期" : "排期";
   fDemandPlanVer.classList.remove("invalid");
@@ -2297,6 +2317,11 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   if(ed){ openDemandDialog(findDemand(ed.dataset.demEdit)); return; }
   var dl = e.target.closest("[data-dem-del]");
   if(dl){ deleteDemand(dl.dataset.demDel); return; }
+  /* 整卡可点开详情；卡片上的按钮/菜单/输入仍走各自的处理 */
+  var card = e.target.closest("[data-dem-card]");
+  if(card && !e.target.closest("button,a,input,select,textarea,label,[contenteditable='true']")){
+    showDemandDetail(card.dataset.demCard);
+  }
 });
 
 /* ---------- 卡片拖动：跨列状态流转（仅空间主；状态机同按钮） ---------- */
@@ -2322,11 +2347,22 @@ function markCanDrop(from){
   });
 }
 /* 不合法落点给出明确文案，而不是静默吞掉 */
-function dropDenied(status){
-  if(status === "pass") toast("已通过的需求可拖到「已排期」，或拖回「待评审」撤回", "warn");
-  else if(status === "plan") toast("已排期的需求可拖回「已通过」撤销排期", "warn");
-  else if(status === "rej") toast("已拒绝的需求只能拖回「待评审」重新打开", "warn");
-  else toast("待评审的需求可以拖到「已通过」或「已拒绝」", "warn");
+function dropDenied(status, to){
+  if(status === "plan" && to === "rej"){
+    toast("已排期的需求不能直接拒绝：请先拖回「已通过」撤销排期，再拖到「已拒绝」；若不再推进，可在「⋯」里取消需求并填写原因", "warn");
+  }else if(status === "plan" && to === "canceled"){
+    toast("已排期的需求不能直接取消：请先在「⋯」里取消需求并填写原因", "warn");
+  }else if(to){
+    toast("「" + statusName(status) + "」不能拖到「" + statusName(to) + "」：" + (dragHint(status) || "请按状态流转规则操作"), "warn");
+  }else if(status === "pass"){
+    toast("已通过的需求可拖到「已排期」，或拖回「待评审」撤回", "warn");
+  }else if(status === "plan"){
+    toast("已排期的需求可拖回「已通过」撤销排期", "warn");
+  }else if(status === "rej"){
+    toast("已拒绝的需求只能拖回「待评审」重新打开", "warn");
+  }else{
+    toast("待评审的需求可以拖到「已通过」或「已拒绝」", "warn");
+  }
 }
 function applyDrop(src, to){
   if(src.status === "review" && to === "rej"){ rejectDemand(src.id); }
@@ -2341,6 +2377,7 @@ if(demandBody){
     var card = e.target.closest(".bkl-card");
     if(!card || !isOwner()) return;
     dragSrc = { id: card.dataset.cardId, status: card.dataset.cardStatus };
+    dragOverCol = null;
     e.dataTransfer.setData("text/plain", dragSrc.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("bkl-dragging");
@@ -2353,6 +2390,7 @@ if(demandBody){
       c.classList.remove("bkl-col-over");
       c.classList.remove("bkl-col-no");
     });
+    dragOverCol = col ? col.dataset.col : null;
     if(!col) return;
     /* 非法列也要 preventDefault：否则 drop 不触发，用户得不到“为什么不让我放”的提示 */
     e.preventDefault();
@@ -2370,7 +2408,8 @@ if(demandBody){
     if(!dragSrc || !col) return;
     var src = dragSrc;
     dragSrc = null;
-    if(!allowedDrop(src.status, col.dataset.col)){ dropDenied(src.status); return; }
+    dragOverCol = null;
+    if(!allowedDrop(src.status, col.dataset.col)){ dropDenied(src.status, col.dataset.col); return; }
     e.preventDefault();
     applyDrop(src, col.dataset.col);
   });
@@ -2378,7 +2417,12 @@ if(demandBody){
     clearColOver();
     var card = e.target.closest(".bkl-card");
     if(card) card.classList.remove("bkl-dragging");
+    /* 某些浏览器在非法落点不派发 drop：dragend 兜底，保证用户始终拿到原因 */
+    if(dragSrc && dragOverCol && !allowedDrop(dragSrc.status, dragOverCol)){
+      dropDenied(dragSrc.status, dragOverCol);
+    }
     dragSrc = null;
+    dragOverCol = null;
   });
 }
 

@@ -565,6 +565,25 @@ public class WorkspaceService {
         doing.setProcessingRule("normal");
         doing.setSortOrder(1);
         boardColumnMapper.insert(doing);
+
+        /* 测试流程：待测试是排队等待（不计时），测试中才实际执行（计时） */
+        BoardColumn test = new BoardColumn();
+        test.setId(Consts.COL_TEST);
+        test.setWorkspaceId(workspaceId);
+        test.setName("待测试");
+        test.setColor("#8b6fb5");
+        test.setProcessingRule("waiting");
+        test.setSortOrder(2);
+        boardColumnMapper.insert(test);
+
+        BoardColumn testing = new BoardColumn();
+        testing.setId(Consts.COL_TESTING);
+        testing.setWorkspaceId(workspaceId);
+        testing.setName("测试中");
+        testing.setColor("#b06f9a");
+        testing.setProcessingRule("normal");
+        testing.setSortOrder(3);
+        boardColumnMapper.insert(testing);
     }
 
 }

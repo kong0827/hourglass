@@ -561,6 +561,8 @@ CREATE TABLE `task` (
   `blocked_by_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '等待的任务ID（可选的依赖关系）',
   `note` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度备注',
   `completed_at` date DEFAULT NULL COMMENT '完成日期',
+  `test_started_at` date DEFAULT NULL COMMENT '进入测试中的日期（新一轮测试重新记录）',
+  `test_finished_at` date DEFAULT NULL COMMENT '离开测试中的日期：测试通过或退回',
   `published_at` date DEFAULT NULL,
   `publish_source` varchar(16) DEFAULT NULL,
   `published_release_id` varchar(32) DEFAULT NULL,

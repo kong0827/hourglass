@@ -176,6 +176,8 @@ public class BackupExportService {
             b.setOwnerUserId(t.getOwnerUserId());
             b.setRemindTarget(t.getRemindTarget());
             b.setCompletedAt(t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
+            b.setTestStartedAt(t.getTestStartedAt() == null ? null : t.getTestStartedAt().toString());
+            b.setTestFinishedAt(t.getTestFinishedAt() == null ? null : t.getTestFinishedAt().toString());
             b.setSubtasks(subMap.get(t.getId()));
             b.setTags(tagMap.get(t.getId()));
             b.setRecurType(t.getRecurType());

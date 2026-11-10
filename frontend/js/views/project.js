@@ -17,6 +17,13 @@ var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
 var deliveryCache = Object.create(null);
+/* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
+window.addEventListener("ds:delivery-changed", function(e){
+  var id = e && e.detail && e.detail.reqId;
+  if(id) delete deliveryCache[id];
+  else deliveryCache = Object.create(null);
+  if(document.body.dataset.view === "project" && currentMode() === "board") loadProject({ silent:true });
+});
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
 var projectTab = (function(){
   try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
@@ -507,7 +514,7 @@ function onClick(e){
     import("../core/view-loader.js").then(function(m){
       if(kind === "versions"){
         return m.loadView("phase").then(function(mod){
-          if(mod && mod.setPhaseProject) mod.setPhaseProject(pid);
+          if(mod && mod.setPhaseProject) mod.setPhaseProject(pid, "version");
           go("phase");
         });
       }

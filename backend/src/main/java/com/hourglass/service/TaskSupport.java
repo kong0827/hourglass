@@ -138,7 +138,9 @@ class TaskSupport {
         if (column == null) {
             return false;
         }
-        if (Consts.COL_BACKLOG.equals(column) || Consts.COL_DOING.equals(column) || Consts.COL_DONE.equals(column)) {
+        if (Consts.COL_BACKLOG.equals(column) || Consts.COL_DOING.equals(column)
+                || Consts.COL_TEST.equals(column) || Consts.COL_TESTING.equals(column)
+                || Consts.COL_DONE.equals(column)) {
             return true;
         }
         return metaCache.column(workspaceId, column) != null;

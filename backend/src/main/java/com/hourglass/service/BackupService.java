@@ -738,6 +738,8 @@ public class BackupService {
                 }
             }
             t.setCompletedAt(parseDate(b.getCompletedAt()));
+            t.setTestStartedAt(parseDate(b.getTestStartedAt()));
+            t.setTestFinishedAt(parseDate(b.getTestFinishedAt()));
             t.setCreatedAt(parseTs(b.getCreatedAt()));
             String reqId = Texts.trimToNull(b.getReqId());
             if (reqId != null) {

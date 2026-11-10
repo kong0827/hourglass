@@ -38,7 +38,9 @@
 .manager-project-name{min-width:0;flex:1;text-align:left;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .manager-project-name:hover{color:var(--primary);}
 .manager-project-main{display:flex;align-items:center;gap:18px;}
-.manager-ring{--ring:var(--success);position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring) calc(var(--p)*1%),var(--surface-sunken) 0);}
+.manager-ring{--ring:var(--success);position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring) calc(var(--p)*1%),var(--surface-sunken) 0);border:0;padding:0;font:inherit;color:inherit;cursor:pointer;transition:box-shadow var(--dur-fast) var(--ease-out);}
+.manager-ring:hover{box-shadow:0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);}
+.manager-ring:focus-visible{outline:2px solid var(--primary);outline-offset:3px;}
 .manager-ring.orange{--ring:var(--warning);}
 .manager-ring.red{--ring:var(--danger);}
 .manager-ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--surface);}

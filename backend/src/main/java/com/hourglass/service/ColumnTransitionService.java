@@ -155,9 +155,16 @@ public class ColumnTransitionService {
         return defaultRule(from, to);
     }
 
-    /** 默认只收紧「已完成」的重开，其余全部允许 */
+    /** 默认收紧「已完成」的重开与「测试中」的退回；其余全部允许 */
     public static String defaultRule(String from, String to) {
-        return Consts.COL_DONE.equals(from) && !Consts.COL_DONE.equals(to) ? RULE_REASON : RULE_ALLOW;
+        if (Consts.COL_DONE.equals(from) && !Consts.COL_DONE.equals(to)) {
+            return RULE_REASON;
+        }
+        if (Consts.COL_TESTING.equals(from)
+                && (Consts.COL_BACKLOG.equals(to) || Consts.COL_DOING.equals(to))) {
+            return RULE_REASON;
+        }
+        return RULE_ALLOW;
     }
 
     private static String key(String from, String to) {

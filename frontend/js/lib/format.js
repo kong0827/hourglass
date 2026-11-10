@@ -7,6 +7,8 @@ import { GS } from "./gantt-shared.js";
 var COLUMNS = [
   {id:"backlog", name:"待处理", color:"#98A2B3", processingRule:"backlog"},
   {id:"doing",   name:"进行中", color:"#2E90FA", processingRule:"normal"},
+  {id:"test",    name:"待测试", color:"#8b6fb5", processingRule:"waiting"},
+  {id:"testing", name:"测试中", color:"#b06f9a", processingRule:"normal"},
   {id:"done",    name:"已完成", color:"#12B76A", processingRule:"done", done:true}
 ];
 var COL_INDEX = {};
@@ -250,13 +252,13 @@ function versionPhaseInfoHTML(){
 function demandGanttInfoHTML(){
   return '<div class="menu-title">需求池甘特怎么画</div><div class="type-help-list">' +
     '<div class="type-help-row"><span class="mini-tag type-story">阶段来源</span>' +
-      '<span class="type-help-desc">七段全部按真实记录回放：评审＝需求创建到最后一次通过（待评审算到今天，已拒绝停在最后一次拒绝）；排期＝评审通过到最后一次排期或调期，撤排之后这段历史仍然保留；设计＝关联文档的起止；开发＝工作项首次离开「待处理」或首次计时，到最后一个工作项完成；测试＝用例执行起止；完成＝工作项全部完成且用例全部通过；发布＝不可变实际记录中捕获本需求的成功生产交付事件，不从当前目标版本日期补齐。</span></div>' +
+      '<span class="type-help-desc">七段全部按真实记录回放：评审＝需求创建到最后一次通过（待评审算到今天，已拒绝停在最后一次拒绝）；排期＝评审通过到最后一次排期或调期，撤排之后这段历史仍然保留；设计＝关联文档的起止；开发＝工作项首次离开「待处理」或首次计时，到最后一个工作项完成；测试＝用例执行起止，或工作项进入「测试中」的开始测试时间到转出「测试中」的结束测试时间，两者取最早开始、最晚结束；完成＝工作项全部完成且用例全部通过；发布＝不可变实际记录中捕获本需求的成功生产交付事件，不从当前目标版本日期补齐。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag type-bug">缺失不补</span>' +
       '<span class="type-help-desc">某阶段没有记录就不画，也不补 0 天；相邻段之间没有记录覆盖的日期画虚线缺口；最后一段结束到今天仍缺记录时，按卡点标出「已排期未开工 / 未执行用例 / 待发布」。单日阶段画成圆点。已取消的需求工作阶段停在取消日，不再往今天生长；既有实际发布事实仍保留。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag type-epic">并行分层</span>' +
       '<span class="type-help-desc">时间重叠的阶段自动上下分层，泳道数按实际并发增长；行高随层数增加，不会把重叠阶段叠在一条线上。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">用例与跨度</span>' +
-      '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
+      '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过用例，或还有工作项停在「待测试 / 测试中」，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">时间范围</span>' +
       '<span class="type-help-desc">默认自动适配已加载的需求并包含今天，甘特按页加载，加载越多范围越宽；跨度超过 2 年自动切到按月查看。可切日 / 周 / 月刻度与缩放。左侧「计划」是计划日期，条形是记录回放，计划日期不参与阶段计算。</span></div>' +
     '</div>';

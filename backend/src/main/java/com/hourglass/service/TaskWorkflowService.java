@@ -125,6 +125,25 @@ public class TaskWorkflowService {
         return n - p > 1 ? p + (n - p) / 2 : -1;
     }
 
+    /**
+     * 测试时间口径：进入「测试中」记开始日（新一轮测试重置开始日并清空结束日）；
+     * 离开「测试中」记结束日 —— 测试通过和退回都代表这一轮测试结束。
+     */
+    public void applyTestTimestamps(Task task, String from, String to) {
+        if (task == null || from == null || to == null || from.equals(to)) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        if (Consts.COL_TESTING.equals(to)) {
+            if (task.getTestStartedAt() == null || task.getTestFinishedAt() != null) {
+                task.setTestStartedAt(today);
+            }
+            task.setTestFinishedAt(null);
+        } else if (Consts.COL_TESTING.equals(from)) {
+            task.setTestFinishedAt(today);
+        }
+    }
+
     @Transactional
     public Map<String, Object> move(String userId, String workspaceId, String id, TaskMoveRequest req) {
         return moveLocked(userId, workspaceId, id, req, lockActiveTask(workspaceId, id), true);
@@ -167,6 +186,7 @@ public class TaskWorkflowService {
         boolean autoTimerStarted = false;
         Task resumed = null;
         if (!from.equals(to)) {
+            applyTestTimestamps(task, from, to);
             if (Consts.COL_DONE.equals(to)) {
                 task.setCompletedAt(LocalDate.now());
                 /* 拖到已完成：把这个任务上所有人的计时都停掉（口径：每天 8 小时、跳过周末） */

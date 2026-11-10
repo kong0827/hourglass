@@ -103,6 +103,32 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         <div class="pri-group" id="segPri" role="group" aria-label="优先级"></div>
       </div>
 
+      <!-- 编辑态速览：关键信息前置，避免在长表单里来回找 -->
+      <div class="drawer-facts" id="drawerFacts" hidden aria-label="工作项概览">
+        <button class="fact fact-status" type="button" id="factStatus" title="切换工作项状态">
+          <span class="fact-k">状态</span>
+          <span class="fact-v"><i class="fact-dot" id="factStatusDot"></i><b id="factStatusName">—</b>
+            <span class="fact-caret"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+          </span>
+        </button>
+        <div class="fact">
+          <span class="fact-k">进度</span>
+          <span class="fact-v"><span class="fact-bar"><i id="factProgBar"></i></span><b id="factProg">0%</b></span>
+        </div>
+        <div class="fact">
+          <span class="fact-k">实际 / 预估</span>
+          <span class="fact-v"><b id="factActual">—</b><span class="fact-sub" id="factEstimate"></span></span>
+        </div>
+        <div class="fact fact-due" id="factDueWrap">
+          <span class="fact-k">截止</span>
+          <span class="fact-v"><b id="factDue">—</b><span class="fact-sub" id="factDueNote"></span></span>
+        </div>
+        <div class="fact" id="factTestWrap" hidden>
+          <span class="fact-k">测试</span>
+          <span class="fact-v"><b id="factTest">—</b></span>
+        </div>
+      </div>
+
       <!-- 归属与分配：高亮信息条 -->
       <div class="ctx" aria-label="归属与分配">
         <div class="ctx-item">
@@ -113,7 +139,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <label class="ctx-label" for="iOwner">负责人</label>
           <select id="iOwner"></select>
         </div>
-        <div class="ctx-item">
+        <div class="ctx-item" id="ctxColItem">
           <label class="ctx-label" for="iCol" id="ctxColLabel">创建到</label>
           <select id="iCol" aria-label="创建到哪一列"></select>
         </div>
@@ -213,6 +239,21 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <label class="field-label" for="iNote">进度备注</label>
                 <input id="iNote" type="text" maxlength="80" placeholder="本次推进到哪一步、卡点在哪里…" autocomplete="off" />
               </div>
+            </div>
+
+            <!-- 测试窗口：进入测试中后自动记录 -->
+            <div class="drawer-edit-block" id="fTestWindow" hidden>
+              <div class="form-grid" style="margin-top:12px">
+                <div class="field">
+                  <div class="field-label">开始测试</div>
+                  <div class="est-actual" id="iTestStart">—</div>
+                </div>
+                <div class="field">
+                  <div class="field-label">结束测试</div>
+                  <div class="est-actual" id="iTestEnd">—</div>
+                </div>
+              </div>
+              <span class="hint">进入「测试中」自动记录开始测试；测试通过或退回时记录结束测试</span>
             </div>
           </section>
 
@@ -361,11 +402,6 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         </div>
 
         <aside class="task-detail-side">
-          <section class="drawer-card" id="taskPublication" hidden>
-            <div class="drawer-card-head"><h3>生产发布事实（只读）</h3><span id="taskPublishedBadge"></span></div>
-            <p class="hint" id="taskPublicationInfo"></p>
-            <div id="taskReleaseRecords" aria-live="polite"></div>
-          </section>
           <section class="source-card" id="drawerSource" hidden aria-live="polite">
             <div class="source-head">
               <span class="source-badge">来自需求池</span>
@@ -380,53 +416,69 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           </section>
 
           <section class="drawer-card">
-            <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">选需求或文档会自动同步项目</span></div>
+            <div class="drawer-card-head"><h3>关联</h3><span class="foot-note">关联需求或文档会同步项目</span></div>
             <div class="field">
               <div class="field-label">
                 <label for="iVersion">计划版本</label>
                 <button type="button" class="label-help" id="iVersionHelp" aria-label="查看版本与首版/迭代的区分逻辑" title="版本与首版/迭代怎么区分"></button>
               </div>
-              <select id="iVersion" multiple size="4" aria-label="计划版本（可多选）"></select>
-              <span class="hint" id="iVersionHint">可同时关联多个版本；按住 Cmd / Ctrl 增减选择，全部取消即「待规划」。计划关联不代表实际交付。</span>
+              <select id="iVersion" multiple size="3" aria-label="计划版本（可多选）" title="按住 Cmd / Ctrl 增减选择"></select>
+              <span class="hint" id="iVersionHint">可多选；全部取消即「待规划」。计划关联不代表实际交付。</span>
               <span class="hint" id="iDemandTarget" aria-live="polite"></span>
             </div>
-            <div class="field" id="fVersionChangeReason" hidden style="margin-top:11px">
+            <div class="field" id="fVersionChangeReason" hidden>
               <label class="field-label" for="iVersionChangeReason">版本调整理由 <span class="req">*</span></label>
               <input id="iVersionChangeReason" type="text" maxlength="500" placeholder="说明顺延、解除计划或偏离需求目标的原因" />
             </div>
-            <div class="field" style="margin-top:11px">
-              <div class="field-label">
-                <label for="iEpic">所属史诗</label>
-                <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
-              </div>
-              <select id="iEpic"></select>
-              <span class="hint" id="iEpicHint">先选项目，再把当前工作项挂到该项目的一个史诗（Epic）下</span>
-            </div>
-            <div class="field" style="margin-top:11px">
-              <label class="field-label" for="iBranch">所属分支</label>
-              <select id="iBranch"></select>
-              <span class="hint" id="iBranchHint">分支在「分支」页里建，这里只负责挂上去</span>
-            </div>
-            <div class="field" style="margin-top:11px">
+            <div class="field">
               <div class="field-label">
                 <label for="iDemand">关联需求</label>
                 <button type="button" class="label-link" id="iDemandView" hidden>查看</button>
               </div>
               <select id="iDemand"></select>
-              <span class="hint" id="iDemandHint">先选项目，再从该项目的需求池条目里挑；未选项目时直接挑需求，会自动带出所属项目</span>
+              <span class="hint" id="iDemandHint">先选项目；未选项目时会自动带出需求所属项目。</span>
             </div>
-            <div class="field" style="margin-top:11px">
-              <div class="field-label">
-                <label for="iReqDocPicker">关联文档</label>
-                <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
+            <details class="assoc-more" id="assocMore">
+              <summary>
+                <span>更多关联</span>
+                <span class="foot-note" id="assocMoreSummary">史诗 / 分支 / 文档</span>
+                <span class="caret"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+              </summary>
+              <div class="assoc-more-body">
+                <div class="field">
+                  <div class="field-label">
+                    <label for="iEpic">所属史诗</label>
+                    <button type="button" class="label-help" id="iEpicHelp" aria-label="查看史诗（Epic）的说明" title="史诗（Epic）是什么"></button>
+                  </div>
+                  <select id="iEpic"></select>
+                  <span class="hint" id="iEpicHint">先选项目，再挂到该项目的史诗下。</span>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="iBranch">所属分支</label>
+                  <select id="iBranch"></select>
+                  <span class="hint" id="iBranchHint">分支在「分支」页创建，这里负责挂接。</span>
+                </div>
+                <div class="field">
+                  <div class="field-label">
+                    <label for="iReqDocPicker">关联文档</label>
+                    <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
+                  </div>
+                  <button type="button" class="req-doc-trigger" id="iReqDocPicker" aria-haspopup="dialog" aria-expanded="false">
+                    <span class="req-doc-trigger-text placeholder" id="iReqDocPickerText">搜索并选择文档</span>
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+                  </button>
+                  <select id="iReqDoc" hidden tabindex="-1" aria-hidden="true"></select>
+                  <span class="hint" id="iReqDocHint">可搜索全部可见文档。</span>
+                </div>
               </div>
-              <button type="button" class="req-doc-trigger" id="iReqDocPicker" aria-haspopup="dialog" aria-expanded="false">
-                <span class="req-doc-trigger-text placeholder" id="iReqDocPickerText">搜索并选择文档</span>
-                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
-              </button>
-              <select id="iReqDoc" hidden tabindex="-1" aria-hidden="true"></select>
-              <span class="hint" id="iReqDocHint">无需先选项目，可搜索全部可见文档</span>
-            </div>
+            </details>
+          </section>
+
+          <!-- 生产发布事实：有正式发布数据时才出现，避免占用首屏 -->
+          <section class="drawer-card" id="taskPublication" hidden>
+            <div class="drawer-card-head"><h3>生产发布事实（只读）</h3><span id="taskPublishedBadge"></span></div>
+            <p class="hint" id="taskPublicationInfo"></p>
+            <div id="taskReleaseRecords" aria-live="polite"></div>
           </section>
 
           <!-- 评论 / 讨论（N-6） -->

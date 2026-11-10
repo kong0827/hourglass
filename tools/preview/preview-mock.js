@@ -308,10 +308,14 @@
     "/api/workspaces": [ws, { id: "W2", name: "团队空间", type: "shared", myRole: "owner", memberCount: 3, ownerId: "U1" }],
     "/api/board": board,
     "/api/tasks/list": { items: tasks, total: tasks.length },
-    "/api/reqs": [
-      { id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" },
-      { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
-    ],
+    /* 生产接口分页返回 {items,total,hasMore}，前端统一走 getAllPages */
+    "/api/reqs": {
+      items: [
+        { id: "R1", name: "流程引擎", status: "active", progressPct: 62, taskCount: 4, doneCount: 2, owner: "我" },
+        { id: "R2", name: "结算改造", status: "active", progressPct: 20, taskCount: 2, doneCount: 0, owner: "我" }
+      ],
+      total: 2, hasMore: false
+    },
     "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
     /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
@@ -319,10 +323,29 @@
       { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, done: false },
       { id: "done", name: "已完成", color: "#12B76A", sortOrder: 2, done: true }
     ],
+    /* 工作流页的优先级显示名；缺这条会让整块配置显示「加载失败」 */
+    "/api/priorities": [
+      { code: "P0", name: "紧急", color: "#F04438" },
+      { code: "P1", name: "高", color: "#F79009" },
+      { code: "P2", name: "中", color: "#2E90FA" },
+      { code: "P3", name: "低", color: "#98A2B3" }
+    ],
+    /* 状态流转矩阵：列定义 + 规则；带一条「需填原因」才看得到三种按钮样式 */
+    "/api/columns/transitions": {
+      columns: [
+        { id: "backlog", name: "待处理", color: "#8a8578" },
+        { id: "doing", name: "进行中", color: "#2563EB" },
+        { id: "done", name: "已完成", color: "#12B76A" }
+      ],
+      rules: [
+        { from: "done", to: "doing", rule: "reason" },
+        { from: "backlog", to: "done", rule: "deny" }
+      ]
+    },
     "/api/categories": [
-      { id: "C1", name: "后端", color: "#2563EB", sortOrder: 0 },
-      { id: "C2", name: "前端", color: "#7C3AED", sortOrder: 1 },
-      { id: "C3", name: "数据", color: "#0E9384", sortOrder: 2 }
+      { id: "C1", name: "后端", color: "#2563EB", sortOrder: 0, projectId: "R1" },
+      { id: "C2", name: "前端", color: "#7C3AED", sortOrder: 1, projectId: "R1" },
+      { id: "C3", name: "数据", color: "#0E9384", sortOrder: 2, projectId: "R2" }
     ],
     "/api/trash": [T({ id: "X1", title: "旧的定时任务配置", deletedAt: ts(-29, 10, 0) })],
     "/api/notifications/unread": { unread: 2 },
@@ -744,6 +767,41 @@
         eDoc.updatedAt = ts(0, new Date().getHours(), new Date().getMinutes());
       }
       data = eDoc || {};
+    } else if (clean === "/api/categories" && method === "GET") {
+      var cpm = /[?&]project=([^&]+)/.exec(u);
+      var cpid = cpm ? decodeURIComponent(cpm[1]) : "";
+      var allCats = routes["/api/categories"];
+      data = cpid ? allCats.filter(function (c) { return c.projectId === cpid; }) : allCats;
+    } else if (clean === "/api/categories" && method === "POST") {
+      var npm = /[?&]project=([^&]+)/.exec(u);
+      var np = npm ? decodeURIComponent(npm[1]) : "";
+      var cats = routes["/api/categories"];
+      var nc = { id: "C" + (cats.length + 1), name: (reqBody && reqBody.name) || "新模块",
+                 color: (reqBody && reqBody.color) || "#98A2B3", sortOrder: cats.length, projectId: np };
+      cats.push(nc);
+      data = nc;
+    } else if (clean === "/api/categories/order" && method === "PUT") {
+      var orderIds = (reqBody && reqBody.ids) || [];
+      var catAll = routes["/api/categories"].slice(), catOrdered = [];
+      orderIds.forEach(function (id) {
+        for (var oi = 0; oi < catAll.length; oi++) if (catAll[oi].id === id) { catOrdered.push(catAll[oi]); break; }
+      });
+      catAll.forEach(function (c) { if (orderIds.indexOf(c.id) < 0) catOrdered.push(c); });
+      routes["/api/categories"] = catOrdered;
+      data = {};
+    } else if (/^\/api\/categories\/[A-Za-z0-9_-]+$/.test(clean) && method === "PUT") {
+      var cedit = clean.split("/").pop();
+      routes["/api/categories"].forEach(function (c) {
+        if (c.id === cedit && reqBody) {
+          if (reqBody.name) c.name = reqBody.name;
+          if (reqBody.color) c.color = reqBody.color;
+        }
+      });
+      data = {};
+    } else if (/^\/api\/categories\/[A-Za-z0-9_-]+$/.test(clean) && method === "DELETE") {
+      var cdel = clean.split("/").pop();
+      routes["/api/categories"] = routes["/api/categories"].filter(function (c) { return c.id !== cdel; });
+      data = {};
     } else if (clean === "/api/completions") {
       data = mockCompletions(u);
     } else if (clean === "/api/gantt") {

@@ -76,7 +76,7 @@ public class BoardColumnService {
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
         /* 内置列只冻结处理规则，名称/颜色仍允许调整（与删除提示「可改名」一致） */
-        if (!Consts.COL_BACKLOG.equals(id) && !Consts.COL_DOING.equals(id)) {
+        if (!isBuiltIn(id)) {
             c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
         }
         boardColumnMapper.update(c);
@@ -84,15 +84,15 @@ public class BoardColumnService {
         return boardColumnMapper.selectById(workspaceId, id);
     }
 
-    /** 删除列：任务移入最靠前的其他列（backlog/doing 为内置列不可删） */
+    /** 删除列：任务移入最靠前的其他列（内置四列不可删） */
     @Transactional
     public void delete(String workspaceId, String id) {
         BoardColumn c = boardColumnMapper.selectById(workspaceId, id);
         if (c == null) {
             throw AppException.notFound("看板列不存在：" + id);
         }
-        if (Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id)) {
-            throw AppException.badRequest("「待处理」「进行中」为内置列，不可删除（可改名）");
+        if (isBuiltIn(id)) {
+            throw AppException.badRequest("「待处理」「进行中」「待测试」「测试中」为内置列，不可删除（可改名）");
         }
         String target = null;
         String targetName = null;
@@ -134,6 +134,11 @@ public class BoardColumnService {
             boardColumnMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
         evictColumns(workspaceId);
+    }
+
+    private static boolean isBuiltIn(String id) {
+        return Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id)
+                || Consts.COL_TEST.equals(id) || Consts.COL_TESTING.equals(id);
     }
 
     private void renumber(String workspaceId, String columnId) {

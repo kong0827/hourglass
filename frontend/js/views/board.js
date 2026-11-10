@@ -209,11 +209,12 @@ function cardHTML(t, idx){
 
   var metaHTML = "";
   if(t.dueDate) metaHTML += '<span class="' + dueMetaClass(s.kind) + '" title="' + esc(tip) + '">' +
-    icon("calSmall", 14) + dueText(t) + '</span>';
+    icon("calSmall", 14) + (s.kind === "ok" ? "截止 " : "") + dueText(t) + '</span>';
   if(t.subtaskTotal){
     var allSub = t.subtaskDone >= t.subtaskTotal;
-    metaHTML += '<span class="meta' + (allSub ? " full" : "") + '" title="检查清单进度">' +
-      icon("checklist", 14) + t.subtaskDone + '/' + t.subtaskTotal + '</span>';
+    metaHTML += '<span class="meta' + (allSub ? " full" : "") + '" title="子任务（检查清单）完成 ' +
+      t.subtaskDone + '/' + t.subtaskTotal + '">' +
+      icon("checklist", 14) + '子任务 ' + t.subtaskDone + '/' + t.subtaskTotal + '</span>';
   }
   if(Number(t.attachmentCount) > 0){
     metaHTML += '<span class="meta" title="附件">' + icon("clip", 14) + t.attachmentCount + '</span>';
