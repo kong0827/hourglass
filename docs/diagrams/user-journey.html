@@ -63,7 +63,7 @@
     .uj-lane.manager .uj-role { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
     .uj-quote { font-size: 14px; color: var(--text-3); }
 
-    .uj-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .uj-steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
     .uj-step {
       background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
       padding: 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
@@ -135,6 +135,12 @@
         <span class="uj-chip">工作项 · 自动计时</span>
       </div>
       <div class="uj-step">
+        <div class="uj-when">做完开发</div>
+        <div class="uj-what">提测并挂分支</div>
+        <div class="uj-how">分支从开发中转到待测试；工作项进「待测试 / 测试中」，记录测试起止日期。</div>
+        <span class="uj-chip">分支 · 提测流转</span>
+      </div>
+      <div class="uj-step">
         <div class="uj-when">做完</div>
         <div class="uj-what">拖进「已完成」</div>
         <div class="uj-how">停表并自动接力原列的下一个任务，工时随动作落到事实表。</div>
@@ -186,6 +192,12 @@
         <div class="uj-what">逾期与阻塞</div>
         <div class="uj-how">集中处理逾期、阻塞、停滞工作项，站内一键催办。</div>
         <span class="uj-chip">逾期与阻塞</span>
+      </div>
+      <div class="uj-step">
+        <div class="uj-when">管发布</div>
+        <div class="uj-what">发布计划 → 实际记录</div>
+        <div class="uj-how">计划可跨版本、跨项目；预览后确认，记录生产环境与实际范围，偏差留在历史里。</div>
+        <span class="uj-chip">版本 · 发布计划与记录</span>
       </div>
       <div class="uj-step">
         <div class="uj-when">验收与复盘</div>

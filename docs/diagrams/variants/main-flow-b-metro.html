@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 协作主链路 B 线路图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-flow-b">
+  <style>
+    #hg-flow-b {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      width: 1680px;
+      margin: 0 auto;
+      padding: 44px 56px 40px;
+      color: var(--text);
+    }
+    #hg-flow-b * { box-sizing: border-box; margin: 0; }
+
+    .fb-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+    .fb-head h1 { font-size: 31px; font-weight: 700; letter-spacing: -0.4px; }
+    .fb-head p { font-size: 15px; color: var(--text-2); margin-top: 7px; }
+    .fb-legend { display: flex; align-items: center; gap: 16px; padding-bottom: 4px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+    .fb-legend .item { display: flex; align-items: center; gap: 7px; }
+    .fb-legend .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+    .fb-legend .dash { width: 20px; border-top: 1.5px dashed var(--border-strong); }
+    .fb-legend .square { width: 8px; height: 8px; border-radius: 2px; background: var(--surface-sunken); border: 1px solid var(--border-strong); }
+
+    .fb-grid { display: grid; grid-template-columns: repeat(6, 1fr); column-gap: 20px; row-gap: 0; }
+    .fb-card {
+      background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--primary);
+      border-radius: 10px; padding: 13px 14px 12px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex; flex-direction: column; align-self: stretch;
+    }
+    .fb-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .fb-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .fb-desc { font-size: 11.5px; line-height: 1.6; color: var(--text-2); flex: 1; }
+    .fb-rec {
+      margin-top: 9px; font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 10px; color: var(--text-3); line-height: 1.5;
+      border-top: 1px dashed var(--border); padding-top: 7px; word-break: break-all;
+    }
+    .c-blue { border-top-color: var(--primary); }
+    .c-blue .fb-kicker { color: var(--primary-fg); }
+    .c-plum { border-top-color: var(--plum); }
+    .c-plum .fb-kicker { color: var(--plum-fg); }
+    .c-green { border-top-color: var(--success); }
+    .c-green .fb-kicker { color: var(--success-fg); }
+    .c-warn { border-top-color: var(--warning); }
+    .c-warn .fb-kicker { color: var(--warning-fg); }
+
+    .fb-stem { height: 22px; display: flex; justify-content: center; }
+    .fb-stem::before { content: ""; height: 100%; border-left: 1.5px dashed var(--border-strong); }
+
+    .fb-track { grid-column: 1 / -1; height: 30px; position: relative; display: grid; grid-template-columns: repeat(6, 1fr); column-gap: 20px; }
+    .fb-line {
+      position: absolute; left: calc(100% / 12 - 7px); right: calc(100% / 12 - 7px); top: 50%;
+      height: 3px; border-radius: 2px; background: var(--primary); transform: translateY(-50%);
+    }
+    .fb-station { position: relative; display: flex; align-items: center; justify-content: center; }
+    .fb-dot {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--surface);
+      border: 3px solid var(--primary); color: var(--primary-fg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; position: relative; z-index: 1;
+    }
+    .fb-dot.done { border-color: var(--success); color: var(--success-fg); }
+
+    .fb-note {
+      margin-top: 22px; position: relative;
+      border: 1px dashed var(--border-strong); border-left: 3px solid var(--border-strong);
+      border-radius: 8px; padding: 9px 10px; background: var(--surface);
+      display: flex; flex-direction: column; gap: 3px; align-self: stretch;
+    }
+    .fb-note::before {
+      content: ""; position: absolute; left: 50%; top: -22px; height: 20px;
+      border-left: 1.5px dashed var(--border-strong);
+    }
+    .fb-note .nt { font-size: 10.5px; font-weight: 700; color: var(--text-2); }
+    .fb-note .nd { font-size: 11px; line-height: 1.5; color: var(--text-3); }
+    .fb-note.warn { border-left-color: var(--warning); background: var(--warning-soft); border-color: var(--warning-border); }
+    .fb-note.warn .nt { color: var(--warning-fg); }
+    .fb-note.ok { border-left-color: var(--success); background: var(--success-soft); border-color: var(--success-border); }
+    .fb-note.ok .nt { color: var(--success-fg); }
+    .fb-note.info { border-left-color: var(--plum); background: var(--plum-soft); border-color: var(--plum-border); }
+    .fb-note.info .nt { color: var(--plum-fg); }
+    .fb-note.empty { visibility: hidden; }
+
+    .fb-return {
+      margin-top: 16px; display: flex; align-items: center; gap: 12px;
+      border: 1px dashed var(--success-border); background: var(--success-soft);
+      border-radius: 10px; padding: 10px 16px;
+    }
+    .fb-return .arrow { font-size: 15px; color: var(--success-fg); font-weight: 700; }
+    .fb-return .txt { font-size: 12.5px; color: var(--success-fg); line-height: 1.5; }
+    .fb-return .txt b { font-weight: 700; }
+    .fb-return .path { margin-left: auto; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+    .fb-facts {
+      margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .fb-facts .lbl { font-size: 11px; font-weight: 700; color: var(--text-3); letter-spacing: 0.4px; }
+    .fb-facts code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 10.5px;
+      background: var(--surface-sunken); border: 1px solid var(--border);
+      border-radius: 5px; padding: 3px 6px; color: var(--text);
+    }
+    .fb-facts .sep { color: var(--border-strong); }
+    .fb-facts .tail { font-size: 11px; color: var(--text-3); margin-left: auto; }
+
+    .fb-foot { text-align: center; font-size: 12px; color: var(--text-3); margin-top: 18px; }
+    .fb-foot b { color: var(--text-2); font-weight: 600; }
+
+    @media (max-width: 760px) {
+      #hg-flow-b { width: 100%; padding: 26px 18px; }
+      .fb-head { flex-direction: column; align-items: flex-start; }
+      .fb-grid { grid-template-columns: 1fr 1fr; row-gap: 24px; }
+      .fb-track { display: none; }
+      .fb-stem { display: none; }
+      .fb-note { margin-top: 0; }
+      .fb-note::before { display: none; }
+      .fb-note.empty { display: none; }
+      .fb-facts .tail { margin-left: 0; }
+    }
+  </style>
+
+  <div class="fb-head">
+    <div>
+      <h1>沙漏 · 协作主链路</h1>
+      <p>一条交付主线，串起需求、执行、发布与回顾 · 支线与旁注不改变主线方向</p>
+    </div>
+    <div class="fb-legend">
+      <span class="item"><span class="dot"></span>主线</span>
+      <span class="item"><span class="dash"></span>支线 / 旁注</span>
+      <span class="item"><span class="square"></span>留痕记录</span>
+    </div>
+  </div>
+
+  <div class="fb-grid">
+    <div class="fb-card c-blue">
+      <div class="fb-kicker">01 · 收集</div>
+      <div class="fb-name">需求池</div>
+      <div class="fb-desc">提想法，WSJF 按业务价值、紧迫度、风险与工作量自动打分；四项填齐才计分，评审流转留痕。</div>
+      <div class="fb-rec">demand · WSJF</div>
+    </div>
+    <div class="fb-card c-blue">
+      <div class="fb-kicker">02 · 方案</div>
+      <div class="fb-name">需求文档</div>
+      <div class="fb-desc">多级文档树、全文检索与历史快照；方案与需求互链，可发布分享。</div>
+      <div class="fb-rec">requirement_doc</div>
+    </div>
+    <div class="fb-card c-plum">
+      <div class="fb-kicker">03 · 执行</div>
+      <div class="fb-name">工作项</div>
+      <div class="fb-desc">拆成任务 / 故事 / 缺陷 / 史诗；看板、日历、甘特共用筛选与口径。拖入「进行中」自动开表。</div>
+      <div class="fb-rec">task · time_log</div>
+    </div>
+    <div class="fb-card c-green">
+      <div class="fb-kicker">04 · 编排</div>
+      <div class="fb-name">版本与计划</div>
+      <div class="fb-desc">工作项可关联多个计划版本；发布计划跨版本、跨项目，只描述打算怎么发。</div>
+      <div class="fb-rec">project_version · version_task</div>
+    </div>
+    <div class="fb-card c-warn">
+      <div class="fb-kicker">05 · 发布</div>
+      <div class="fb-name">实际发布</div>
+      <div class="fb-desc">预览后确认，记录环境、目标、制品与覆盖；部署 / 重部署 / 回滚追加事件，形成不可变快照。</div>
+      <div class="fb-rec">version_release</div>
+    </div>
+    <div class="fb-card c-green">
+      <div class="fb-kicker">06 · 回顾</div>
+      <div class="fb-name">周回顾</div>
+      <div class="fb-desc">从工时与流转事实自动汇总本周完成、待确认与进行中；AI 可起周报草稿。</div>
+      <div class="fb-rec">task_completion_record</div>
+    </div>
+
+    <div class="fb-stem"></div>
+    <div class="fb-stem"></div>
+    <div class="fb-stem"></div>
+    <div class="fb-stem"></div>
+    <div class="fb-stem"></div>
+    <div class="fb-stem"></div>
+
+    <div class="fb-track">
+      <div class="fb-line"></div>
+      <div class="fb-station"><div class="fb-dot">1</div></div>
+      <div class="fb-station"><div class="fb-dot">2</div></div>
+      <div class="fb-station"><div class="fb-dot">3</div></div>
+      <div class="fb-station"><div class="fb-dot">4</div></div>
+      <div class="fb-station"><div class="fb-dot">5</div></div>
+      <div class="fb-station"><div class="fb-dot done">6</div></div>
+    </div>
+
+    <div class="fb-note warn">
+      <span class="nt">不通过 → 归档</span>
+      <span class="nd">补充说明后可重开；已取消需求可恢复。</span>
+    </div>
+    <div class="fb-note info">
+      <span class="nt">AI 拆任务草稿</span>
+      <span class="nd">从文档派生工作项草稿，人工确认后才落库。</span>
+    </div>
+    <div class="fb-note warn">
+      <span class="nt">测试失败 → 转缺陷</span>
+      <span class="nd">一键生成缺陷工作项，回到同一看板流转。</span>
+    </div>
+    <div class="fb-note">
+      <span class="nt">计划完成条件</span>
+      <span class="nd">包含的版本全部成功生产部署；计划本身不产生发布。</span>
+    </div>
+    <div class="fb-note warn">
+      <span class="nt">这些不算发布</span>
+      <span class="nd">test / staging、失败、回滚与部分成功都不完成计划。</span>
+    </div>
+    <div class="fb-note ok">
+      <span class="nt">完成 / 待确认 / 进行中</span>
+      <span class="nd">按快照与事实汇总，不回头改历史。</span>
+    </div>
+  </div>
+
+  <div class="fb-return">
+    <span class="arrow">◀</span>
+    <span class="txt"><b>周回顾反哺下一轮</b>：本周工时与流转结果，回到需求优先级、估时与排期。</span>
+    <span class="path">06 → 01</span>
+  </div>
+
+  <div class="fb-facts">
+    <span class="lbl">同一套事实</span>
+    <code>time_log</code><span class="sep">·</span>
+    <code>task_log</code><span class="sep">·</span>
+    <code>version_release</code><span class="sep">·</span>
+    <code>task_completion_record</code>
+    <span class="tail">统计与回顾直读，不由状态反推</span>
+  </div>
+
+  <div class="fb-foot"><b>主线决定协作顺序</b> · 支线与旁注只补充路径与边界，不改变证据口径</div>
+</div>
+</body>
+</html>

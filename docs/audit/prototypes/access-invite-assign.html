@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>邀请成员 · 邀请时预分配项目权限</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  body{overflow:hidden}
+  .wrap{max-width:1180px}
+  .modal{width:720px}
+  .modal-head{padding-top:20px}
+  .modal-body{padding:14px 22px 2px}
+  .step-strip{margin:14px 22px 0;padding:10px 12px;background:#FBFCFE;border:1px solid var(--border);border-radius:9px}
+  .step-line{width:32px}
+  .field-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 7px}
+  .field-row .field-label{margin:0}
+  .quick{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-3)}
+  .qbtn{border:1px solid var(--border);background:#fff;border-radius:6px;font-size:11px;padding:2px 7px;color:var(--text-2);font-family:var(--font);cursor:pointer}
+  .qbtn:hover{color:var(--primary-fg);border-color:var(--primary-border)}
+  .proj-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;background:#fff;margin-bottom:7px}
+  .proj-row .p-main{flex:1;min-width:0}
+  .proj-row .p-name{font-size:12.5px;font-weight:650}
+  .proj-row .p-meta{font-size:11px;color:var(--text-3);margin-top:2px}
+  .seg.compact span{padding:4px 9px;font-size:11px}
+  .summary-row{display:flex;align-items:center;gap:10px;background:#FBFCFE;border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-top:12px}
+  .summary-row .m-avatar{background:#E0EAFF;color:#1D4ED8}
+  .summary-row .txt{flex:1;font-size:11.5px;color:var(--text-3);line-height:1.55}
+  .summary-row .txt b{display:block;font-size:12.5px;color:var(--text);margin-bottom:1px}
+  .kbd{font-family:var(--font);background:var(--surface-sunken);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:11px;color:var(--text-2)}
+  .link-input{height:32px;font-size:11.5px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏</div>
+  <div class="ws-pick">共享空间 <b>支付业务部</b> ▾</div>
+  <div class="spacer"></div>
+  <div class="top-ic">⌕</div>
+  <div class="top-ic">⌘</div>
+  <div class="avatar">管</div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>设置</h1>
+      <div class="sub">支付业务部 · 共享空间 · 你是空间主</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <span class="tab">空间</span>
+    <span class="tab on">成员与权限</span>
+    <span class="tab">工作流</span>
+    <span class="tab">通知与集成</span>
+    <span class="tab">数据与审计</span>
+    <span class="tab">平台</span>
+  </nav>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h3>成员与角色</h3>
+      <span class="meta">共 9 人</span>
+    </div>
+    <div class="member-list" style="margin-top:12px">
+      <div class="member-row">
+        <span class="m-avatar">管</span>
+        <span class="m-info"><span class="m-name">平台管理员</span><span class="m-sub">@admin · 可见全部 3 个项目</span></span>
+        <span class="pill owner">空间主</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">孙</span>
+        <span class="m-info"><span class="m-name">孙琪</span><span class="m-sub">@sunqi · 可见全部 3 个项目</span></span>
+        <span class="pill admin">管理员</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">周</span>
+        <span class="m-info"><span class="m-name">周敏</span><span class="m-sub">@zhoumin · 可见 2/3 个项目</span></span>
+        <span class="pill member">成员</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="scrim">
+  <div class="modal" role="dialog" aria-label="邀请成员并分配项目">
+    <div class="modal-head">
+      <div>
+        <h2>邀请成员加入「支付业务部」</h2>
+        <div class="sub" style="font-size:12px;color:var(--text-3);margin-top:5px">对方通过邀请链接登录后加入，链接 7 天有效。</div>
+      </div>
+      <span style="color:var(--text-3);font-size:16px">×</span>
+    </div>
+
+    <div class="step-strip">
+      <span class="step on"><span class="n">1</span>邀请加入</span>
+      <span class="step-line"></span>
+      <span class="step on"><span class="n">2</span>项目权限</span>
+      <span class="step-line"></span>
+      <span class="step"><span class="n">3</span>加入后仍可调整</span>
+    </div>
+
+    <div class="modal-body">
+      <div class="notice">
+        <span class="ico">!</span>
+        <span><b>没有设为「可参与 / 只读」的项目，加入后对 TA 完全不可见。</b><br>邀请时就可以先分好；加入后你也可以在 成员与权限 → 项目可见范围 里再调整。</span>
+      </div>
+
+      <div class="field-label">邀请链接</div>
+      <div class="link-row">
+        <div class="link-input">https://hourglass.example.com/join.html?code=F4QBM8YQ24</div>
+        <button class="btn sm">复制</button>
+        <button class="btn sm">重新生成</button>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">项目权限 <span class="meta">· 3 个项目</span></div>
+        <div class="quick">全部设为
+          <button class="qbtn">可参与</button>
+          <button class="qbtn">只读</button>
+          <button class="qbtn">不可见</button>
+        </div>
+      </div>
+
+      <div class="proj-row">
+        <div class="p-main">
+          <div class="p-name">支付网关</div>
+          <div class="p-meta">12 个工作项 · 负责人 张伟</div>
+        </div>
+        <span class="seg compact"><span>可参与</span><span>只读</span><span class="danger on">不可见</span></span>
+      </div>
+
+      <div class="proj-row">
+        <div class="p-main">
+          <div class="p-name">清结算重构</div>
+          <div class="p-meta">8 个工作项 · 负责人 孙琪</div>
+        </div>
+        <span class="seg compact"><span class="ok on">可参与</span><span>只读</span><span>不可见</span></span>
+      </div>
+
+      <div class="proj-row">
+        <div class="p-main">
+          <div class="p-name">风控规则引擎</div>
+          <div class="p-meta">5 个工作项 · 负责人 李娜</div>
+        </div>
+        <span class="seg compact"><span>可参与</span><span class="warn on">只读</span><span>不可见</span></span>
+      </div>
+
+      <div class="summary-row">
+        <span class="m-avatar">周</span>
+        <span class="txt"><b>周敏 加入后</b>可参与 1 个 · 只读 1 个 · 不可见 1 个 → 可见 2/3 个项目，未分配的新项目默认不可见</span>
+        <span class="pill ok">已分配 2/3</span>
+      </div>
+
+      <p class="hint" style="margin:10px 0 0">
+        邀请链接可以被多人使用，这些项目权限会应用到每位通过该链接加入的人；成员加入后，你随时可以在 <span class="kbd">项目可见范围</span> 里调整或收回。
+      </p>
+    </div>
+
+    <div class="modal-foot">
+      <span class="foot-note" style="margin-right:auto">仅空间主 / 管理员可分配项目权限</span>
+      <button class="btn">取消</button>
+      <button class="btn primary">生成链接并邀请</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

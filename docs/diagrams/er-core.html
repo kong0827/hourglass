@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 核心 ER 图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-er-core">
+  <style>
+    #hg-er-core {
+      --bg-app: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      --gray: #667085;
+      --gray-soft: #F2F4F7;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text);
+      width: 1680px;
+      margin: 0 auto;
+      padding: 42px 44px 34px;
+    }
+    #hg-er-core * { box-sizing: border-box; margin: 0; }
+
+    .er-head { text-align: center; margin-bottom: 24px; }
+    .er-head h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; }
+    .er-head p { font-size: 14.5px; color: var(--text-2); margin-top: 8px; }
+
+    .er-grid { display: grid; grid-template-columns: 1.16fr 1.1fr 1.24fr; gap: 18px; align-items: start; }
+    .er-col { min-width: 0; }
+    .er-domain {
+      display: inline-flex; align-items: center; gap: 7px;
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+      margin-bottom: 10px; border: 1px solid;
+    }
+    .er-domain .dot { width: 7px; height: 7px; border-radius: 999px; }
+    .er-domain.d1 { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .er-domain.d1 .dot { background: var(--primary); }
+    .er-domain.d2 { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .er-domain.d2 .dot { background: var(--success); }
+    .er-domain.d3 { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .er-domain.d3 .dot { background: var(--plum); }
+
+    .er-table {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+      overflow: hidden; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .er-table + .er-table { margin-top: 9px; }
+    .er-thead {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 6px 11px; color: #fff;
+    }
+    .er-thead code { font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 12.5px; font-weight: 700; }
+    .er-thead span { font-size: 10.5px; opacity: 0.9; white-space: nowrap; }
+    .th-primary { background: var(--primary); }
+    .th-success { background: var(--success); }
+    .th-plum { background: var(--plum); }
+    .th-gray { background: var(--gray); }
+
+    .er-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      padding: 4px 11px; font-size: 11.5px; border-top: 1px solid var(--bg-app);
+    }
+    .er-row:first-of-type { border-top: 0; }
+    .er-row code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 11px; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .er-row code .pk { color: var(--primary-fg); font-weight: 700; }
+    .er-row code .fk { color: var(--plum-fg); }
+    .er-row em { font-style: normal; font-size: 10.5px; color: var(--text-3); text-align: right; white-space: nowrap; }
+
+    .er-legend {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 22px;
+      margin-top: 18px; font-size: 12px; color: var(--text-2);
+    }
+    .er-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .lg-dot { width: 8px; height: 8px; border-radius: 999px; }
+
+    .er-rel {
+      margin-top: 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px 15px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .er-rel h2 { font-size: 14px; font-weight: 700; margin-bottom: 9px; }
+    .er-rel-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; row-gap: 6px; }
+    .er-rel-item { font-size: 11.8px; color: var(--text-2); line-height: 1.55; display: flex; gap: 7px; }
+    .er-rel-item .arrow { color: var(--text-3); flex: none; }
+    .er-rel-item code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 11px;
+      background: var(--surface-sunken); border-radius: 4px; padding: 0 4px; color: var(--text);
+    }
+    .er-rel-item b { color: var(--text); font-weight: 650; }
+
+    .er-foot { text-align: center; font-size: 12.5px; color: var(--text-3); margin-top: 16px; }
+    .er-foot b { color: var(--text-2); }
+
+    @media (max-width: 760px) {
+      #hg-er-core { width: 100%; padding: 24px 16px; }
+      .er-grid { grid-template-columns: 1fr; }
+      .er-rel-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="er-head">
+    <h1>沙漏 · 核心 ER 图</h1>
+    <p>54 张表中的核心 21 张 · 实线为外键关联，⊸ 为快照 / 派生关系</p>
+  </div>
+
+  <div class="er-grid">
+    <div class="er-col">
+      <div class="er-domain d1"><span class="dot"></span>协作主体 · 空间 / 项目 / 需求</div>
+
+      <div class="er-table">
+        <div class="er-thead th-primary"><code>workspace</code><span>空间 · 协作边界</span></div>
+        <div class="er-row"><code><span class="pk">id</span></code><em>PK</em></div>
+        <div class="er-row"><code>owner_id</code><em>空间主</em></div>
+        <div class="er-row"><code>type · notify_*</code><em>personal / shared</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>workspace_member</code><span>空间成员与角色</span></div>
+        <div class="er-row"><code><span class="pk">workspace_id</span> + user_id</code><em>复合 PK</em></div>
+        <div class="er-row"><code>role</code><em>owner/admin/member/viewer</em></div>
+        <div class="er-row"><code>project_access_mode</code><em>all 默认全部 / assigned 按分配</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-primary"><code>requirement</code><span>项目 · 交付单元</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">workspace_id</span></code><em>PK · 归属空间</em></div>
+        <div class="er-row"><code>status</code><em>active / done / hold</em></div>
+        <div class="er-row"><code>first_released_at</code><em>首版上线日</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-primary"><code>demand</code><span>需求池 · 评审状态机</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>所属项目</em></div>
+        <div class="er-row"><code>status</code><em>review/pass/plan/rej/canceled</em></div>
+        <div class="er-row"><code>wsjf_business / urgency / risk / effort</code><em>自动打分</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>requirement_doc</code><span>文档树</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>项目内多级树</em></div>
+        <div class="er-row"><code>parent_id · doc_type</code><em>需求 / 方案 / 验收</em></div>
+        <div class="er-row"><code>status · published_at</code><em>草稿 / 已发布</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>category</code><span>项目模块</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">project_id</span></code><em>按项目分组</em></div>
+        <div class="er-row"><code>name · color</code><em>模块统计口径</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>board_column</code><span>看板列 · 状态定义</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">workspace_id</span></code><em>列可自定义</em></div>
+        <div class="er-row"><code>name · done</code><em>完成列标记驱动判定</em></div>
+      </div>
+    </div>
+
+    <div class="er-col">
+      <div class="er-domain d2"><span class="dot"></span>执行核心 · 工作项 / 版本 / 测试</div>
+
+      <div class="er-table">
+        <div class="er-thead th-primary"><code>task</code><span>工作项 · 执行与计时最小单位</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">workspace_id</span></code><em>前端生成字符串 ID</em></div>
+        <div class="er-row"><code>item_type</code><em>story / task / bug / epic</em></div>
+        <div class="er-row"><code><span class="fk">demand_id</span> · <span class="fk">req_id</span> · <span class="fk">req_doc_id</span></code><em>四向挂接</em></div>
+        <div class="er-row"><code><span class="fk">branch_id</span> · <span class="fk">blocked_by_task_id</span></code><em>分支 / 阻塞</em></div>
+        <div class="er-row"><code><span class="fk">published_release_id</span></code><em>徽标只读派生</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>task_dependency</code><span>依赖 FS/SS/FF/SF</span></div>
+        <div class="er-row"><code><span class="fk">from_task_id</span> → <span class="fk">to_task_id</span></code><em>关键路径数据源</em></div>
+        <div class="er-row"><code>dep_type · lag_days</code><em>滞后可为负</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-success"><code>project_version</code><span>版本</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>版本归属项目</em></div>
+        <div class="er-row"><code>status</code><em>planned / active / released</em></div>
+        <div class="er-row"><code>target_date · released_at</code><em>计划 / 实际发布日</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>version_task</code><span>版本内容</span></div>
+        <div class="er-row"><code><span class="fk">task_id</span> + <span class="fk">version_id</span></code><em>多对多</em></div>
+        <div class="er-row"><code>workspace_id</code><em>版本内容 ≠ 发布范围</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-success"><code>dev_branch</code><span>分支</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span></code><em>空 = 空间级公共分支</em></div>
+        <div class="er-row"><code>status</code><em>dev/testing/merging/released</em></div>
+        <div class="er-row"><code><span class="fk">owner_user_id</span> · target_branch</code><em>负责人 / 要合到哪</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>test_case</code><span>用例 · 最近执行结果</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">req_id</span> · <span class="fk">demand_id</span></code><em>项目下，可挂需求</em></div>
+        <div class="er-row"><code>latest_status</code><em>passed/failed/blocked</em></div>
+        <div class="er-row"><code><span class="fk">latest_bug_task_id</span></code><em>失败转缺陷</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>test_case_run</code><span>执行流水</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">case_id</span> · <span class="fk">plan_id</span></code><em>每次执行一行</em></div>
+        <div class="er-row"><code>status · <span class="fk">bug_task_id</span></code><em>失败可转缺陷</em></div>
+      </div>
+    </div>
+
+    <div class="er-col">
+      <div class="er-domain d3"><span class="dot"></span>留痕事实 · 发布证据与统计直读</div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>time_log</code><span>工时记录</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">task_id</span> · <span class="fk">user_id</span></code><em>计时归属人</em></div>
+        <div class="er-row"><code>started_at · ended_at · minutes</code><em>timer / manual</em></div>
+        <div class="er-row"><code>origin · note</code><em>补记与作废重算</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>task_log</code><span>任务操作日志</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">task_id</span></code><em>时间线</em></div>
+        <div class="er-row"><code>action</code><em>create/update/move/delete/restore</em></div>
+        <div class="er-row"><code>from_column → to_column</code><em>move 留痕</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>task_completion_record</code><span>完成快照</span></div>
+        <div class="er-row"><code><span class="fk">task_id</span> + workspace_id</code><em>任务删除后仍保留</em></div>
+        <div class="er-row"><code>title / owner / total_minutes</code><em>完成时快照 · 月度统计</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>version_release_plan</code><span>发布计划</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">version_id</span></code><em>主版本，可跨版本 / 项目</em></div>
+        <div class="er-row"><code>status</code><em>draft / ready / completed / canceled</em></div>
+        <div class="er-row"><code>planned_at · owner_user_id · revision</code><em>改计划需带修订号</em></div>
+        <div class="er-row"><code>environment · coverage · target_keys</code><em>发布范围</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-gray"><code>version_release_plan_version</code><span>计划包含的版本</span></div>
+        <div class="er-row"><code><span class="pk">plan_id</span> + <span class="fk">version_id</span></code><em>多版本 / 多项目</em></div>
+        <div class="er-row"><code>req_id</code><em>项目维度汇总</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>version_release</code><span>实际发布 · 不可变快照</span></div>
+        <div class="er-row"><code><span class="pk">id</span> · <span class="fk">plan_id</span> · <span class="fk">version_id</span></code><em>计划可空（紧急记录）</em></div>
+        <div class="er-row"><code>operation · result · occurred_at</code><em>部署 / 重部署 / 回滚</em></div>
+        <div class="er-row"><code>environment · coverage · artifact_digest</code><em>生产证据</em></div>
+        <div class="er-row"><code>plan_snapshot · plan_revision</code><em>计划时间冻结</em></div>
+        <div class="er-row"><code>idempotency_key · request_hash</code><em>防重复提交</em></div>
+      </div>
+
+      <div class="er-table">
+        <div class="er-thead th-plum"><code>version_release_item</code><span>发布内容逐项处置</span></div>
+        <div class="er-row"><code><span class="fk">release_id</span> + <span class="fk">task_id</span></code><em>唯一约束</em></div>
+        <div class="er-row"><code>disposition · reason</code><em>发布 / 排除 / 顺延</em></div>
+        <div class="er-row"><code>work_minutes · estimate_minutes</code><em>发布偏差统计</em></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="er-legend">
+    <span><i class="lg-dot" style="background:var(--primary-fg)"></i>主键 PK</span>
+    <span><i class="lg-dot" style="background:var(--plum-fg)"></i>外键 / 关联字段</span>
+    <span><i class="lg-dot" style="background:var(--plum)"></i>事实表（统计直读）</span>
+    <span><i class="lg-dot" style="background:var(--gray)"></i>支撑 / 关联表</span>
+  </div>
+
+  <div class="er-rel">
+    <h2>关系清单 · 只画关键边，不画蜘蛛网</h2>
+    <div class="er-rel-grid">
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>task.demand_id</code> → <code>demand</code>：需求评审通过后拆解为工作项，自动关联</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>task.req_doc_id</code> → <code>requirement_doc</code>：文档可拆任务草稿，方案与执行对齐</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>task.branch_id</code> → <code>dev_branch</code>：分支状态独立流转，从开发到已发布</span></div>
+      <div class="er-rel-item"><span class="arrow">↔</span><span><code>version_task</code> ↔ <code>task</code> / <code>project_version</code>：多对多，版本内容 ≠ 发布范围</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>category.project_id</code> → <code>requirement</code>：模块合计 + 未指定 = 项目合计</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>version_release.plan_id</code> → <code>version_release_plan</code>：计划可空，确认时冻结 <code>plan_snapshot</code></span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>version_release_item.release_id</code> → <code>version_release</code>：逐项处置与工时，构成发布偏差</span></div>
+      <div class="er-rel-item"><span class="arrow">⊸</span><span><code>task.published_release_id</code> ⊸ <code>version_release</code>：徽标由成功 production 记录派生，不人工写</span></div>
+      <div class="er-rel-item"><span class="arrow">→</span><span><code>test_case_run.case_id</code> → <code>test_case</code>：执行流水；失败可转出缺陷任务</span></div>
+      <div class="er-rel-item"><span class="arrow">⊸</span><span><code>task_completion_record</code> ⊸ <code>task</code>：完成时冗余快照，任务改名 / 删除后统计不失真</span></div>
+    </div>
+  </div>
+
+  <div class="er-foot"><b>全库 54 张表 · 每张事实表都带 workspace_id</b> —— 这是备份按空间导出/导入的物理基础；发布证据以 MySQL 备份为准</div>
+</div>
+</body>
+</html>

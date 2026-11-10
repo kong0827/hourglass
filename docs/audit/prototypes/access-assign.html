@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>分配项目 · 新成员默认无权限</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  body{overflow:hidden}
+  .wrap{max-width:1180px}
+  .member-row .row-actions{display:flex;align-items:center;gap:9px}
+  .btn.assign{border-color:var(--primary-border);color:var(--primary-fg);background:var(--primary-soft);font-weight:600}
+  .drawer{width:590px}
+  .drawer-head .who{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .drawer-head .who .m-avatar{width:34px;height:34px}
+  .drawer-head .who b{font-size:13px}
+  .drawer-head .who .who-meta{display:block;font-size:11.5px;color:var(--text-3);margin-top:2px}
+  .drawer-head .who .pill{display:inline-flex;vertical-align:1px;margin-left:4px}
+  .assign-summary{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+  .assign-summary b{font-size:12.5px}
+  .assign-summary .quick{display:flex;gap:8px}
+  .seg span{cursor:default}
+  .proj-card.off{background:#FCFCFD}
+  .proj-card .why{font-size:11px;color:var(--text-3);margin-top:6px}
+  .drawer-foot .left{font-size:11.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏</div>
+  <div class="ws-pick">共享空间 <b>支付业务部</b> ▾</div>
+  <div class="spacer"></div>
+  <div class="top-ic">⌕</div>
+  <div class="top-ic">⌘</div>
+  <div class="avatar">管</div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>设置</h1>
+      <div class="sub">支付业务部 · 共享空间 · 你是空间主</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <span class="tab">空间</span>
+    <span class="tab on">成员与权限</span>
+    <span class="tab">工作流</span>
+    <span class="tab">通知与集成</span>
+    <span class="tab">数据与审计</span>
+    <span class="tab">平台</span>
+  </nav>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h3>成员与角色</h3>
+      <span class="meta">共 9 人</span>
+    </div>
+    <p class="hint">新成员加入后默认不参与任何项目，请在右侧为其分配可访问的项目。</p>
+    <div class="member-list">
+      <div class="member-row">
+        <span class="m-avatar">管</span>
+        <span class="m-info"><span class="m-name">平台管理员</span><span class="m-sub">@admin · 可见全部 3 个项目</span></span>
+        <span class="pill owner">空间主</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">孙</span>
+        <span class="m-info"><span class="m-name">孙琪</span><span class="m-sub">@sunqi · 可见全部 3 个项目</span></span>
+        <span class="pill admin">管理员</span>
+      </div>
+      <div class="member-row hl">
+        <span class="m-avatar">周</span>
+        <span class="m-info"><span class="m-name">周敏</span><span class="m-sub">@zhoumin · 2026-11-10 加入 · 可见 0/3 个项目</span></span>
+        <span class="pill member">成员</span>
+        <span class="row-actions">
+          <span class="pill warn">待分配</span>
+          <button class="btn sm assign">分配项目</button>
+        </span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">张</span>
+        <span class="m-info"><span class="m-name">张伟</span><span class="m-sub">@zhangwei · 可见 3/3 个项目</span></span>
+        <span class="pill member">成员</span>
+        <button class="btn sm">调整</button>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">吴</span>
+        <span class="m-info"><span class="m-name">吴军</span><span class="m-sub">@wujun · 查看者，全空间只读</span></span>
+        <span class="pill viewer">查看者</span>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot-note">成员只能看到管理员分配的项目；成员自己不能修改分配结果。</p>
+</main>
+
+<div class="drawer-scrim"></div>
+<aside class="drawer" role="dialog" aria-label="分配项目">
+  <div class="drawer-head">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between">
+      <h2>分配项目</h2>
+      <span style="color:var(--text-3);font-size:16px">×</span>
+    </div>
+    <div class="who">
+      <span class="m-avatar">周</span>
+      <span class="who-meta" style="margin-top:0"><b>周敏 <span class="pill member">成员</span></b><span class="who-meta">@zhoumin · 2026-11-10 加入</span></span>
+    </div>
+  </div>
+
+  <div class="drawer-body">
+    <div class="notice" style="margin-top:0">
+      <span class="ico">!</span>
+      <span>未选择「可参与 / 只读」的项目，对周敏完全不可见。<br>分配后立即生效，无需对方重新登录。</span>
+    </div>
+
+    <div class="assign-summary">
+      <b>已分配 <span style="color:var(--primary-fg)">2</span> / 3 个项目</b>
+      <span class="quick">
+        <button class="btn sm">全部可参与</button>
+        <button class="btn sm">全部不可见</button>
+      </span>
+    </div>
+
+    <div class="proj-card off">
+      <div class="proj-top">
+        <div>
+          <div class="proj-name">统一支付网关</div>
+          <div class="proj-meta">负责人 李娜 · 25 个工作项 · 2 个进行中版本</div>
+        </div>
+        <div class="seg">
+          <span>可参与</span>
+          <span>只读</span>
+          <span class="danger">不可见</span>
+        </div>
+      </div>
+      <div class="why">该项目对周敏隐藏：列表、搜索、报表与直接链接均不可见。</div>
+    </div>
+
+    <div class="proj-card">
+      <div class="proj-top">
+        <div>
+          <div class="proj-name">清结算与对账平台</div>
+          <div class="proj-meta">负责人 张伟 · 26 个工作项 · 3 个版本</div>
+        </div>
+        <div class="seg">
+          <span class="ok">可参与</span>
+          <span>只读</span>
+          <span>不可见</span>
+        </div>
+      </div>
+      <div class="why">可查看、创建与修改该项目的工作项；可写入需求文档与测试。</div>
+    </div>
+
+    <div class="proj-card">
+      <div class="proj-top">
+        <div>
+          <div class="proj-name">风控规则引擎</div>
+          <div class="proj-meta">负责人 赵磊 · 24 个工作项 · 2 个版本</div>
+        </div>
+        <div class="seg">
+          <span>可参与</span>
+          <span class="warn">只读</span>
+          <span>不可见</span>
+        </div>
+      </div>
+      <div class="why">可查看项目与工作项，但不能新建、修改、评论或计时。</div>
+    </div>
+
+    <div style="margin-top:16px;padding:12px 13px;border:1px solid var(--border);border-radius:9px;background:#FBFCFE">
+      <div style="font-size:12px;font-weight:650;margin-bottom:4px">后续新增项目时</div>
+      <div class="foot-note">周敏不会自动获得新项目权限；新项目默认仅空间主 / 管理员可见，需要回来重新分配。</div>
+    </div>
+  </div>
+
+  <div class="drawer-foot">
+    <span class="left">仅空间主 / 管理员可修改</span>
+    <span style="display:flex;gap:10px">
+      <button class="btn">取消</button>
+      <button class="btn primary">保存分配</button>
+    </span>
+  </div>
+</aside>
+
+<div class="toast">已为周敏分配 2 个项目</div>
+</body>
+</html>

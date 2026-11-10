@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 协作主链路 C 泳道矩阵</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-flow-c">
+  <style>
+    #hg-flow-c {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --surface-soft: #FAFBFC;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      width: 1680px;
+      margin: 0 auto;
+      padding: 44px 56px 40px;
+      color: var(--text);
+    }
+    #hg-flow-c * { box-sizing: border-box; margin: 0; }
+
+    .fc-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .fc-head h1 { font-size: 31px; font-weight: 700; letter-spacing: -0.4px; }
+    .fc-head p { font-size: 15px; color: var(--text-2); margin-top: 7px; }
+    .fc-legend { display: flex; align-items: center; gap: 14px; padding-bottom: 4px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+    .fc-legend .item { display: flex; align-items: center; gap: 6px; }
+    .fc-legend .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    .fc-grid { display: grid; grid-template-columns: 150px repeat(6, 1fr); column-gap: 12px; row-gap: 10px; }
+
+    .fc-stage { display: flex; align-items: center; gap: 7px; padding: 0 2px 2px; }
+    .fc-stage .n {
+      width: 21px; height: 21px; border-radius: 6px; flex: 0 0 21px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: #fff;
+    }
+    .fc-stage .t { font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .s-blue .n { background: var(--primary); }
+    .s-plum .n { background: var(--plum); }
+    .s-green .n { background: var(--success); }
+    .s-warn .n { background: var(--warning); }
+
+    .fc-label {
+      display: flex; flex-direction: column; justify-content: center; gap: 3px;
+      padding: 10px 12px; border-radius: 9px; background: var(--surface);
+      border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
+    }
+    .fc-label .lt { font-size: 12.5px; font-weight: 700; }
+    .fc-label .ld { font-size: 10.5px; line-height: 1.45; color: var(--text-3); }
+    .fc-label.l1 { border-left-color: var(--primary); }
+    .fc-label.l2 { border-left-color: var(--plum); background: var(--surface-soft); }
+    .fc-label.l3 { border-left-color: var(--warning); }
+
+    .fc-act {
+      position: relative; background: var(--surface); border: 1px solid var(--border);
+      border-top: 3px solid var(--primary); border-radius: 10px; padding: 11px 12px 12px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .fc-act::after {
+      content: ""; position: absolute; right: -9px; top: 50%;
+      width: 6px; height: 6px; margin-top: -4px;
+      border-top: 1.5px solid #98A2B3; border-right: 1.5px solid #98A2B3;
+      transform: rotate(45deg);
+    }
+    .fc-act.last::after { display: none; }
+    .fc-act .at { font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+    .fc-act .ad { font-size: 11px; line-height: 1.55; color: var(--text-2); }
+    .a-blue { border-top-color: var(--primary); }
+    .a-plum { border-top-color: var(--plum); }
+    .a-green { border-top-color: var(--success); }
+    .a-warn { border-top-color: var(--warning); }
+
+    .fc-rec {
+      background: var(--surface-soft); border: 1px dashed var(--border-strong); border-radius: 8px;
+      padding: 8px 9px; display: flex; align-items: center; justify-content: center; text-align: center;
+    }
+    .fc-rec code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 10.5px; color: var(--text); line-height: 1.5; word-break: break-all;
+    }
+
+    .fc-edge {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--warning); border-radius: 8px;
+      padding: 9px 10px; display: flex; flex-direction: column; gap: 3px;
+    }
+    .fc-edge .et { font-size: 10.5px; font-weight: 700; color: var(--warning-fg); }
+    .fc-edge .ed { font-size: 10.5px; line-height: 1.5; color: var(--text-2); }
+    .fc-edge.ok { border-left-color: var(--success); }
+    .fc-edge.ok .et { color: var(--success-fg); }
+
+    .fc-return {
+      margin-top: 16px; display: flex; align-items: center; gap: 12px;
+      background: var(--success-soft); border: 1px dashed var(--success-border);
+      border-radius: 10px; padding: 10px 16px;
+    }
+    .fc-return .arrow { font-size: 15px; font-weight: 700; color: var(--success-fg); }
+    .fc-return .txt { font-size: 12.5px; color: var(--success-fg); line-height: 1.5; }
+    .fc-return .txt b { font-weight: 700; }
+    .fc-return .path { margin-left: auto; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+    .fc-foot { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; font-size: 12px; color: var(--text-3); }
+    .fc-foot b { color: var(--text-2); font-weight: 600; }
+    .fc-foot .sep { color: var(--border-strong); }
+
+    @media (max-width: 760px) {
+      #hg-flow-c { width: 100%; padding: 26px 18px; }
+      .fc-head { flex-direction: column; align-items: flex-start; }
+      .fc-grid { grid-template-columns: 1fr; }
+      .fc-label { flex-direction: row; align-items: baseline; gap: 8px; }
+      .fc-stage { padding-top: 10px; }
+      .fc-act::after { display: none; }
+      .fc-return { flex-wrap: wrap; }
+    }
+  </style>
+
+  <div class="fc-head">
+    <div>
+      <h1>沙漏 · 协作主链路</h1>
+      <p>同一列是一次交接：动作向下沉淀为记录，再标出不能混淆的边界</p>
+    </div>
+    <div class="fc-legend">
+      <span class="item"><span class="dot" style="background: var(--primary);"></span>协作动作</span>
+      <span class="item"><span class="dot" style="background: var(--plum);"></span>系统留痕</span>
+      <span class="item"><span class="dot" style="background: var(--warning);"></span>边界与支线</span>
+    </div>
+  </div>
+
+  <div class="fc-grid">
+    <div></div>
+    <div class="fc-stage s-blue"><span class="n">01</span><span class="t">需求池</span></div>
+    <div class="fc-stage s-blue"><span class="n">02</span><span class="t">文档</span></div>
+    <div class="fc-stage s-plum"><span class="n">03</span><span class="t">工作项</span></div>
+    <div class="fc-stage s-green"><span class="n">04</span><span class="t">版本与计划</span></div>
+    <div class="fc-stage s-warn"><span class="n">05</span><span class="t">实际发布</span></div>
+    <div class="fc-stage s-green"><span class="n">06</span><span class="t">周回顾</span></div>
+
+    <div class="fc-label l1">
+      <span class="lt">协作动作</span>
+      <span class="ld">人推动工作向前</span>
+    </div>
+    <div class="fc-act a-blue">
+      <span class="at">提需求 · 评审</span>
+      <span class="ad">WSJF 自动打分，评审流转全程留痕。</span>
+    </div>
+    <div class="fc-act a-blue">
+      <span class="at">写文档 · 拆方案</span>
+      <span class="ad">多级文档树，AI 可拆任务草稿。</span>
+    </div>
+    <div class="fc-act a-plum">
+      <span class="at">拆工作项 · 推进</span>
+      <span class="ad">看板 / 日历 / 甘特，拖拽即开停表。</span>
+    </div>
+    <div class="fc-act a-green">
+      <span class="at">编排版本 · 定计划</span>
+      <span class="ad">关联多个计划版本，计划可跨项目。</span>
+    </div>
+    <div class="fc-act a-warn">
+      <span class="at">预览 · 确认发布</span>
+      <span class="ad">记录环境、制品与覆盖，形成快照。</span>
+    </div>
+    <div class="fc-act a-green last">
+      <span class="at">回看整周</span>
+      <span class="ad">生成周回顾与月度清单，起草周报。</span>
+    </div>
+
+    <div class="fc-label l2">
+      <span class="lt">系统留痕</span>
+      <span class="ld">每步落一条事实</span>
+    </div>
+    <div class="fc-rec"><code>demand · WSJF</code></div>
+    <div class="fc-rec"><code>requirement_doc</code></div>
+    <div class="fc-rec"><code>task · time_log</code></div>
+    <div class="fc-rec"><code>project_version · version_task</code></div>
+    <div class="fc-rec"><code>version_release</code></div>
+    <div class="fc-rec"><code>task_completion_record</code></div>
+
+    <div class="fc-label l3">
+      <span class="lt">边界与支线</span>
+      <span class="ld">容易混淆的地方</span>
+    </div>
+    <div class="fc-edge">
+      <span class="et">不通过 → 归档</span>
+      <span class="ed">补充说明后可重开，已取消需求可恢复。</span>
+    </div>
+    <div class="fc-edge">
+      <span class="et">AI 草稿需确认</span>
+      <span class="ed">文档派生的任务草稿，人工确认后才落库。</span>
+    </div>
+    <div class="fc-edge">
+      <span class="et">完成 ≠ 发布</span>
+      <span class="ed">完成写快照；测试失败可转缺陷回看板。</span>
+    </div>
+    <div class="fc-edge">
+      <span class="et">计划 ≠ 已发布</span>
+      <span class="ed">计划只描述打算怎么发；全部版本成功生产部署才完成。</span>
+    </div>
+    <div class="fc-edge">
+      <span class="et">非生产不算</span>
+      <span class="ed">test / staging、失败、回滚与部分成功都不完成计划。</span>
+    </div>
+    <div class="fc-edge ok">
+      <span class="et">统计读事实</span>
+      <span class="ed">周回顾读工时与完成快照，不由状态反推。</span>
+    </div>
+  </div>
+
+  <div class="fc-return">
+    <span class="arrow">↩</span>
+    <span class="txt"><b>周回顾反哺下一轮</b>：本周工时、完成快照与流转结果，回到需求优先级、估时与排期。</span>
+    <span class="path">06 → 01</span>
+  </div>
+
+  <div class="fc-foot"><b>同一条数据链</b><span class="sep">·</span>需求 → 计划 → 执行 → 发布 → 回顾<span class="sep">·</span>每一步都能回到具体任务、时段与操作</div>
+</div>
+</body>
+</html>

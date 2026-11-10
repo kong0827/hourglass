@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 数据流转</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-data-flow">
+  <style>
+    #hg-data-flow {
+      --bg-app: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text);
+      width: 1680px;
+      margin: 0 auto;
+      padding: 44px 48px 36px;
+    }
+    #hg-data-flow * { box-sizing: border-box; margin: 0; }
+
+    .df-head { text-align: center; margin-bottom: 30px; }
+    .df-head h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; }
+    .df-head p { font-size: 15.5px; color: var(--text-2); margin-top: 8px; }
+
+    .df-stages { display: flex; align-items: stretch; gap: 8px; }
+    .df-stage {
+      flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 13px; padding: 15px 16px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .df-stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .df-num {
+      width: 22px; height: 22px; border-radius: 999px; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff;
+    }
+    .n1 { background: var(--primary); }
+    .n2 { background: var(--plum); }
+    .n3 { background: var(--warning); }
+    .n4 { background: var(--success); }
+    .df-stage-head b { font-size: 15px; font-weight: 700; }
+    .df-stage-sub { font-size: 12px; color: var(--text-3); margin-bottom: 11px; padding-left: 30px; }
+    .df-item {
+      background: var(--surface-sunken); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.55;
+      color: var(--text-2);
+    }
+    .df-item + .df-item { margin-top: 7px; }
+    .df-item b { color: var(--text); font-weight: 650; }
+    .df-item code, .df-table code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 11.5px; color: var(--text);
+    }
+    .df-table {
+      background: var(--plum-soft); border: 1px solid var(--plum-border);
+      border-radius: 8px; padding: 8px 10px; font-size: 12.5px; color: var(--plum-fg);
+    }
+    .df-table + .df-table { margin-top: 7px; }
+    .df-table b { font-weight: 700; }
+    .df-table span { display: block; font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+
+    .df-arrow { width: 28px; flex: none; display: flex; align-items: center; justify-content: center; }
+    .df-arrow svg { display: block; }
+
+    .df-out {
+      margin-top: 16px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 13px; padding: 16px 20px 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .df-out-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .df-out-head h2 { font-size: 16px; font-weight: 700; }
+    .df-out-head span { font-size: 12.5px; color: var(--text-3); }
+    .df-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .df-chip {
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+      background: var(--success-soft); border: 1px solid var(--success-border); color: var(--success-fg);
+    }
+    .df-chip.pub { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .df-chip.warn { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning-fg); }
+
+    .df-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .df-note {
+      border-radius: 11px; padding: 11px 15px; font-size: 12.5px; line-height: 1.65;
+    }
+    .df-note b { font-weight: 700; }
+    .df-note.warn { background: var(--warning-soft); border: 1px solid var(--warning-border); color: var(--warning-fg); }
+    .df-note.info { background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg); }
+    .df-note code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 11.5px;
+      background: rgba(255, 255, 255, 0.7); border-radius: 4px; padding: 0 4px;
+    }
+
+    .df-foot { text-align: center; font-size: 12.5px; color: var(--text-3); margin-top: 20px; }
+    .df-foot b { color: var(--text-2); }
+
+    @media (max-width: 760px) {
+      #hg-data-flow { width: 100%; padding: 24px 16px; }
+      .df-stages { flex-direction: column; }
+      .df-arrow { width: 100%; height: 24px; }
+      .df-arrow svg { transform: rotate(90deg); }
+      .df-notes { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="df-head">
+    <h1>沙漏 · 数据流转</h1>
+    <p>一次拖拽、一条发布记录 → 同一个数字 · 不维护第二套汇总数据</p>
+  </div>
+
+  <div class="df-stages">
+    <div class="df-stage">
+      <div class="df-stage-head"><span class="df-num n1">1</span><b>日常操作</b></div>
+      <div class="df-stage-sub">动作即数据</div>
+      <div class="df-item"><b>拖入「进行中」</b>· 自动开表</div>
+      <div class="df-item"><b>拖入「已完成」</b>· 停表并接力</div>
+      <div class="df-item"><b>手工补记 / 作废重算</b>· 事后修正</div>
+      <div class="df-item"><b>需求评审 / 分支流转</b>· 状态变化即留痕</div>
+      <div class="df-item"><b>制定计划 → 确认发布</b>· 预览后写入事实</div>
+    </div>
+
+    <div class="df-arrow">
+      <svg width="22" height="14" viewBox="0 0 22 14" fill="none" aria-hidden="true">
+        <path d="M1 7h17" stroke="#D0D5DD" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M14 2l6 5-6 5" stroke="#D0D5DD" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="df-stage">
+      <div class="df-stage-head"><span class="df-num n2">2</span><b>事实表</b></div>
+      <div class="df-stage-sub">留痕即存储 · 全部带 workspace_id</div>
+      <div class="df-table"><b><code>time_log</code></b><span>工时记录 · 归属到人 / 任务 / 时段</span></div>
+      <div class="df-table"><b><code>task_log</code></b><span>流转记录 · 状态变化全程可回溯</span></div>
+      <div class="df-table"><b><code>task_completion_record</code></b><span>完成快照 · 改名 / 删除后仍可统计</span></div>
+      <div class="df-table"><b><code>version_release_plan</code> + <code>plan_version</code> / <code>plan_task</code></b><span>发布计划 · 已计划，尚未发生</span></div>
+      <div class="df-table"><b><code>version_release</code> + <code>release_item</code></b><span>实际发布 · 不可变快照与逐项处置</span></div>
+      <div class="df-item"><b>需求 / 分支日志</b>· <code>demand_log</code>、<code>dev_branch_log</code></div>
+    </div>
+
+    <div class="df-arrow">
+      <svg width="22" height="14" viewBox="0 0 22 14" fill="none" aria-hidden="true">
+        <path d="M1 7h17" stroke="#D0D5DD" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M14 2l6 5-6 5" stroke="#D0D5DD" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="df-stage">
+      <div class="df-stage-head"><span class="df-num n3">3</span><b>统一规则</b></div>
+      <div class="df-stage-sub">口径只有一套 · 查询时现算</div>
+      <div class="df-item"><b>有效工时</b>· 跳过周末，每人每天封顶 8 小时</div>
+      <div class="df-item"><b>计时归属</b>· 一人同一时刻只计一个任务</div>
+      <div class="df-item"><b>完成 ≠ 发布</b>· 徽标只由成功 production 记录派生</div>
+      <div class="df-item"><b>计划 ≠ 事实</b>· 计划可改，确认后的发布记录不可变</div>
+      <div class="df-item"><b>模块合计 + 未指定 = 项目合计</b>· 整体进度仍按全部工作项算</div>
+    </div>
+
+    <div class="df-arrow">
+      <svg width="22" height="14" viewBox="0 0 22 14" fill="none" aria-hidden="true">
+        <path d="M1 7h17" stroke="#D0D5DD" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M14 2l6 5-6 5" stroke="#D0D5DD" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="df-stage">
+      <div class="df-stage-head"><span class="df-num n4">4</span><b>输出</b></div>
+      <div class="df-stage-sub">同一数据长出所有视图</div>
+      <div class="df-item"><b>我的工作</b>· 跨空间汇总，按筛选与计时状态</div>
+      <div class="df-item"><b>看板 / 甘特 / 日历 / 列表</b>· 共享筛选与逾期判定</div>
+      <div class="df-item"><b>项目驾驶舱</b>· 整体健康度 + 按模块统计</div>
+      <div class="df-item"><b>版本 / 发布日程 / 发布历史</b>· 计划、实际与偏差</div>
+      <div class="df-item"><b>周回顾 / 报表 / 成员负载</b>· 工时与流转的聚合</div>
+    </div>
+  </div>
+
+  <div class="df-out">
+    <div class="df-out-head">
+      <h2>所有视图从同一条数据生长出来</h2>
+      <span>点任何一个数字都能下钻到具体工作项、耗时与发布记录</span>
+    </div>
+    <div class="df-chips">
+      <span class="df-chip">项目健康度</span>
+      <span class="df-chip">模块统计</span>
+      <span class="df-chip">看板进度</span>
+      <span class="df-chip">甘特成员负载</span>
+      <span class="df-chip">燃尽图</span>
+      <span class="df-chip">累积流图</span>
+      <span class="df-chip">速度图</span>
+      <span class="df-chip">交付周期分布</span>
+      <span class="df-chip">周回顾</span>
+      <span class="df-chip">月度清单</span>
+      <span class="df-chip">流程体检</span>
+      <span class="df-chip pub">发布日程</span>
+      <span class="df-chip pub">发布历史</span>
+      <span class="df-chip pub">发布偏差</span>
+      <span class="df-chip warn">逾期与阻塞</span>
+    </div>
+  </div>
+
+  <div class="df-notes">
+    <div class="df-note warn"><b>为什么不汇总：</b>汇总表一旦存在，就和明细对不上——「补了工时但报表没变」这类问题会消耗大量解释成本。统计直读事实表，补记或作废后自动重算。</div>
+    <div class="df-note info"><b>代价与边界：</b>统计现算依赖单实例内的数据量可控——50 人以下团队实测够用，这也是定位单实例的原因之一。发布证据以 MySQL 备份为准，任务 JSON / 表格导出只是副本。</div>
+  </div>
+
+  <div class="df-foot"><b>同一个动作，在所有页面得到同一个数字</b> · 计划说明打算怎么发，发布记录证明实际发生了什么</div>
+</div>
+</body>
+</html>

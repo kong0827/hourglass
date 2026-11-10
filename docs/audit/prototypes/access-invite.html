@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>邀请成员 · 默认不参与项目</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  body{overflow:hidden}
+  .wrap{max-width:1180px}
+  .modal{width:620px}
+  .modal-head{padding-top:20px}
+  .step-strip{margin:14px 22px 0;padding:10px 12px;background:#FBFCFE;border:1px solid var(--border);border-radius:9px}
+  .step-line{width:32px}
+  .inline-link{color:var(--primary-fg);font-weight:600}
+  .preview-row{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:9px;padding:11px 12px;background:#fff;margin-top:10px}
+  .preview-row .txt{flex:1;font-size:12px;color:var(--text-3)}
+  .preview-row .txt b{display:block;font-size:12.5px;color:var(--text);margin-bottom:2px}
+  .kbd{font-family:var(--font);background:var(--surface-sunken);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:11px;color:var(--text-2)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏</div>
+  <div class="ws-pick">共享空间 <b>支付业务部</b> ▾</div>
+  <div class="spacer"></div>
+  <div class="top-ic">⌕</div>
+  <div class="top-ic">⌘</div>
+  <div class="avatar">管</div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>设置</h1>
+      <div class="sub">支付业务部 · 共享空间 · 你是空间主</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <span class="tab">空间</span>
+    <span class="tab on">成员与权限</span>
+    <span class="tab">工作流</span>
+    <span class="tab">通知与集成</span>
+    <span class="tab">数据与审计</span>
+    <span class="tab">平台</span>
+  </nav>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h3>成员与角色</h3>
+      <span class="meta">共 9 人</span>
+    </div>
+    <div class="member-list" style="margin-top:12px">
+      <div class="member-row">
+        <span class="m-avatar">管</span>
+        <span class="m-info"><span class="m-name">平台管理员</span><span class="m-sub">@admin · 可见全部 3 个项目</span></span>
+        <span class="pill owner">空间主</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">孙</span>
+        <span class="m-info"><span class="m-name">孙琪</span><span class="m-sub">@sunqi · 可见全部 3 个项目</span></span>
+        <span class="pill admin">管理员</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">周</span>
+        <span class="m-info"><span class="m-name">周敏</span><span class="m-sub">@zhoumin · 可见 2/3 个项目</span></span>
+        <span class="pill member">成员</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="scrim">
+  <div class="modal" role="dialog" aria-label="邀请成员">
+    <div class="modal-head">
+      <div>
+        <h2>邀请成员加入「支付业务部」</h2>
+        <div class="sub" style="font-size:12px;color:var(--text-3);margin-top:5px">对方通过邀请链接登录后即可加入，链接 7 天有效。</div>
+      </div>
+      <span style="color:var(--text-3);font-size:16px">×</span>
+    </div>
+
+    <div class="step-strip">
+      <span class="step on"><span class="n">1</span>邀请加入</span>
+      <span class="step-line"></span>
+      <span class="step"><span class="n">2</span>分配可访问项目</span>
+    </div>
+
+    <div class="modal-body">
+      <div class="notice">
+        <span class="ico">!</span>
+        <span><b>加入后默认不参与任何项目。</b><br>新成员看不到空间里的项目、工作项、文档与报表，需要你在第 2 步分配后才能访问。空间主与管理员不受此限制。</span>
+      </div>
+
+      <div class="field-label">邀请链接</div>
+      <div class="link-row">
+        <div class="link-input">https://hourglass.example.com/join.html?code=F4QBM8YQ24</div>
+        <button class="btn">复制</button>
+        <button class="btn">重新生成</button>
+      </div>
+      <div class="foot-note" style="margin-top:8px">链接仅用于加入空间，不代表获得任何项目权限。</div>
+
+      <div class="preview-row">
+        <span class="m-avatar">周</span>
+        <span class="txt"><b>周敏 加入后</b>成员 · 可见 0/3 个项目 · <span style="color:var(--warning-fg);font-weight:600">待分配</span></span>
+        <span class="pill warn">待分配</span>
+      </div>
+
+      <p class="hint" style="margin-bottom:0">
+        对方加入后，成员列表会出现「待分配」标记；你也可以在 <span class="kbd">成员与权限 → 项目可见范围</span> 里随时调整。
+      </p>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn">完成</button>
+      <button class="btn primary">生成链接并去分配项目</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -89,7 +89,7 @@
     .im-node-note { font-size: 12px; color: var(--text-3); margin-top: 14px; }
     .im-arrow { display: flex; align-items: center; color: var(--text-3); font-size: 15px; flex: 0 0 18px; justify-content: center; }
 
-    .im-rel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .im-rel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     .im-rel-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--surface); }
     .im-rel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .im-rel-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
@@ -144,7 +144,7 @@
       <div class="im-logo">⏳</div>
       <div class="im-title">沙漏 <span>Hourglass</span></div>
     </div>
-    <div class="im-sub">信息模型 · 一套数据贯穿需求、工作项、版本与工时 · 每个统计数字都可回溯</div>
+    <div class="im-sub">信息模型 · 一套数据贯穿需求、工作项、版本、发布与工时 · 每个统计数字都可回溯</div>
   </div>
 
   <div class="im-band">
@@ -156,8 +156,8 @@
         <div class="im-node-chips">
           <span class="im-node-chip">成员与角色</span>
           <span class="im-node-chip">看板列</span>
-          <span class="im-node-chip">分类</span>
-          <span class="im-node-chip">分支</span>
+          <span class="im-node-chip">空间级分支</span>
+          <span class="im-node-chip">通知配置</span>
         </div>
         <div class="im-node-note">决定谁看得见、谁可以改</div>
       </div>
@@ -168,6 +168,8 @@
         <div class="im-node-chips">
           <span class="im-node-chip">项目驾驶舱</span>
           <span class="im-node-chip">全局健康度</span>
+          <span class="im-node-chip">模块（分类）</span>
+          <span class="im-node-chip">版本</span>
         </div>
         <div class="im-node-note">一次交付的时间盒，版本在此切分</div>
       </div>
@@ -186,7 +188,7 @@
   </div>
 
   <div class="im-band">
-    <span class="im-band-tag tag-green"><span class="dot"></span>横向关联 · 四类对象围绕工作项</span>
+    <span class="im-band-tag tag-green"><span class="dot"></span>横向关联 · 六类对象围绕工作项</span>
     <div class="im-rel">
       <div class="im-rel-card">
         <div class="im-rel-head"><span class="dot"></span><span class="name">需求池</span></div>
@@ -200,13 +202,23 @@
       </div>
       <div class="im-rel-card">
         <div class="im-rel-head"><span class="dot"></span><span class="name">版本</span></div>
-        <div class="im-rel-desc">工作项可绑定影响版本；发布说明自动汇总，首版 / 迭代双口径对比。</div>
-        <span class="im-rel-chip">工作项 → 绑定版本</span>
+        <div class="im-rel-desc">工作项可绑定多个计划版本；版本内容、计划范围与实际发布范围三者分开统计。</div>
+        <span class="im-rel-chip">工作项 ↔ 计划版本（多对多）</span>
+      </div>
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">发布计划</span></div>
+        <div class="im-rel-desc">一份计划可跨版本、跨项目，确定计划时间、负责人、环境与覆盖；发布日程跨项目汇总。</div>
+        <span class="im-rel-chip">计划 → 预览 → 确认发布</span>
       </div>
       <div class="im-rel-card">
         <div class="im-rel-head"><span class="dot"></span><span class="name">分支</span></div>
-        <div class="im-rel-desc">工作项可挂分支，跟踪一条分支从开发、测试、合并到发布的流转状态。</div>
+        <div class="im-rel-desc">工作项可挂分支，记录负责人与目标分支，跟踪从开发、测试、合并到发布的状态。</div>
         <span class="im-rel-chip">工作项 → 挂载分支</span>
+      </div>
+      <div class="im-rel-card">
+        <div class="im-rel-head"><span class="dot"></span><span class="name">测试</span></div>
+        <div class="im-rel-desc">用例库与测试计划覆盖项目需求；执行失败可一键转出缺陷工作项，进入同一看板。</div>
+        <span class="im-rel-chip">失败 → 转缺陷任务</span>
       </div>
     </div>
   </div>
@@ -224,12 +236,12 @@
         </div>
       </div>
       <div class="im-fact-card fact">
-        <div class="im-fact-name">time_log · task_log</div>
-        <div class="im-fact-desc">工时与流转的事实表，留痕可回溯，补记后自动重算；每条记录带任务、时段、操作者</div>
+        <div class="im-fact-name">time_log · task_log · version_release</div>
+        <div class="im-fact-desc">工时与流转事实 + 不可变的发布证据；每条记录带任务、时段、操作者，发布带环境、覆盖与计划快照</div>
         <div class="im-fact-chips">
-          <span class="im-fact-chip">写入 · 拖拽、计时、补记、作废</span>
-          <span class="im-fact-chip">字段 · 任务 / 时段 / 操作者 / 来源</span>
-          <span class="im-fact-chip">读取 · 全部视图与 AI 周回顾</span>
+          <span class="im-fact-chip">写入 · 拖拽、计时、补记、预览确认发布</span>
+          <span class="im-fact-chip">字段 · 任务 / 时段 / 操作者 / 环境 / 计划修订</span>
+          <span class="im-fact-chip">读取 · 全部视图、发布历史与 AI 周回顾</span>
         </div>
       </div>
       <div class="im-fact-card">
@@ -237,7 +249,8 @@
         <div class="im-rules">
           <div class="im-rule"><b>有效工时</b>：跳过周末，每人每天封顶 8 小时</div>
           <div class="im-rule"><b>计时归属</b>：一人同一时刻只计一个任务</div>
-          <div class="im-rule"><b>口径统一</b>：逾期、工时、完成数各由一套规则计算</div>
+          <div class="im-rule"><b>完成 ≠ 发布</b>：徽标只由成功 production 记录派生</div>
+          <div class="im-rule"><b>模块口径</b>：模块合计 + 未指定 = 项目合计</div>
         </div>
       </div>
     </div>
@@ -245,7 +258,10 @@
       <span class="im-view primary">看板</span>
       <span class="im-view primary">日历</span>
       <span class="im-view primary">甘特图</span>
-      <span class="im-view primary">报表</span>
+      <span class="im-view primary">项目驾驶舱</span>
+      <span class="im-view">报表</span>
+      <span class="im-view">发布日程</span>
+      <span class="im-view">发布历史</span>
       <span class="im-view">成员负载</span>
       <span class="im-view">周回顾</span>
     </div>

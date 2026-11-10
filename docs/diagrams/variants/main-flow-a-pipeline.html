@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 协作主链路 A 阶段流水线</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-flow-a">
+  <style>
+    #hg-flow-a {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      width: 1680px;
+      margin: 0 auto;
+      padding: 44px 56px 40px;
+      color: var(--text);
+    }
+    #hg-flow-a * { box-sizing: border-box; margin: 0; }
+
+    .fa-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+    .fa-head h1 { font-size: 31px; font-weight: 700; letter-spacing: -0.4px; }
+    .fa-head p { font-size: 15px; color: var(--text-2); margin-top: 7px; }
+    .fa-legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); white-space: nowrap; padding-bottom: 4px; }
+    .fa-legend .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+    .fa-legend .div { width: 1px; height: 12px; background: var(--border-strong); }
+
+    .fa-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 26px 26px; }
+
+    .fa-stage {
+      position: relative; background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--primary); border-radius: 10px;
+      padding: 14px 15px 15px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .fa-stage::after {
+      content: ""; position: absolute; right: -19px; top: 50%;
+      width: 9px; height: 9px; margin-top: -5px;
+      border-top: 1.5px solid #98A2B3; border-right: 1.5px solid #98A2B3;
+      transform: rotate(45deg);
+    }
+    .fa-stage.last::after { display: none; }
+
+    .fa-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    .fa-num {
+      width: 24px; height: 24px; border-radius: 50%; flex: 0 0 24px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 11px; font-weight: 700;
+    }
+    .fa-name { font-size: 15px; font-weight: 700; letter-spacing: -0.1px; }
+    .fa-kicker { font-size: 11.5px; font-weight: 600; margin-bottom: 7px; }
+    .fa-desc { font-size: 12px; line-height: 1.65; color: var(--text-2); }
+    .fa-desc b { color: var(--text); font-weight: 600; }
+
+    .p-blue { border-left-color: var(--primary); }
+    .p-blue .fa-num { background: var(--primary); }
+    .p-blue .fa-kicker { color: var(--primary-fg); }
+    .p-plum { border-left-color: var(--plum); }
+    .p-plum .fa-num { background: var(--plum); }
+    .p-plum .fa-kicker { color: var(--plum-fg); }
+    .p-green { border-left-color: var(--success); }
+    .p-green .fa-num { background: var(--success); }
+    .p-green .fa-kicker { color: var(--success-fg); }
+    .p-warn { border-left-color: var(--warning); }
+    .p-warn .fa-num { background: var(--warning); }
+    .p-warn .fa-kicker { color: var(--warning-fg); }
+
+    .fa-rec {
+      position: relative; justify-self: stretch;
+      display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap;
+      background: var(--surface-sunken); border: 1px dashed var(--border-strong);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    .fa-rec::before {
+      content: ""; position: absolute; left: 50%; top: -14px; height: 12px;
+      border-left: 1px dashed var(--border-strong);
+    }
+    .fa-rec .rk { font-size: 10px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-3); }
+    .fa-rec code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 11px; color: var(--text); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; white-space: nowrap;
+    }
+    .fa-rec .rd { font-size: 10.5px; color: var(--text-3); }
+
+    .fa-branches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; }
+    .fa-branch {
+      display: flex; align-items: flex-start; gap: 8px;
+      background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 9px;
+      padding: 10px 12px; font-size: 11.5px; line-height: 1.55; color: var(--text-2);
+    }
+    .fa-branch .sign { flex: 0 0 auto; font-size: 12px; font-weight: 700; color: var(--warning-fg); }
+    .fa-branch b { color: var(--text); font-weight: 600; }
+
+    .fa-loop {
+      margin-top: 14px; display: flex; align-items: center; gap: 12px;
+      background: var(--success-soft); border: 1px dashed var(--success-border);
+      border-radius: 10px; padding: 11px 16px;
+    }
+    .fa-loop .icon {
+      width: 24px; height: 24px; border-radius: 50%; flex: 0 0 24px;
+      background: var(--success); color: #fff; font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fa-loop .txt { font-size: 12.5px; color: var(--success-fg); line-height: 1.5; }
+    .fa-loop .txt b { font-weight: 700; }
+    .fa-loop .from { margin-left: auto; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+    .fa-foot { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 18px; font-size: 12px; color: var(--text-3); }
+    .fa-foot .sep { color: var(--border-strong); }
+    .fa-foot b { color: var(--text-2); font-weight: 600; }
+
+    @media (max-width: 760px) {
+      #hg-flow-a { width: 100%; padding: 26px 18px; }
+      .fa-head { flex-direction: column; align-items: flex-start; }
+      .fa-grid { grid-template-columns: 1fr 1fr; }
+      .fa-stage::after { display: none; }
+      .fa-branches { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="fa-head">
+    <div>
+      <h1>沙漏 · 协作主链路</h1>
+      <p>从想法到发布的六段协作 · 每一步都留下可回溯的事实</p>
+    </div>
+    <div class="fa-legend"><span class="dot"></span>主线阶段<span class="div"></span>虚线为留痕与支线</div>
+  </div>
+
+  <div class="fa-grid">
+    <div class="fa-stage p-blue">
+      <div class="fa-top"><span class="fa-num">01</span><span class="fa-name">需求池</span></div>
+      <div class="fa-kicker">收集与评审</div>
+      <div class="fa-desc">提想法，<b>WSJF 自动打分</b>；四项填齐才计分。评审通过进入拆解，不通过归档，补充后可重开。</div>
+    </div>
+    <div class="fa-stage p-blue">
+      <div class="fa-top"><span class="fa-num">02</span><span class="fa-name">需求文档</span></div>
+      <div class="fa-kicker">沉淀方案</div>
+      <div class="fa-desc">多级文档树、全文检索与历史快照；<b>AI 可把文档拆成任务草稿</b>，人工确认后才落库。</div>
+    </div>
+    <div class="fa-stage p-plum">
+      <div class="fa-top"><span class="fa-num">03</span><span class="fa-name">工作项</span></div>
+      <div class="fa-kicker">拆解与执行</div>
+      <div class="fa-desc">任务 / 故事 / 缺陷 / 史诗；看板、日历、甘特共用一套筛选与口径，可挂模块、分支与史诗。</div>
+    </div>
+    <div class="fa-stage p-green">
+      <div class="fa-top"><span class="fa-num">04</span><span class="fa-name">版本与计划</span></div>
+      <div class="fa-kicker">编排发布内容</div>
+      <div class="fa-desc">工作项可关联多个计划版本；<b>计划可跨版本、跨项目</b>，只描述打算怎么发。</div>
+    </div>
+    <div class="fa-stage p-warn">
+      <div class="fa-top"><span class="fa-num">05</span><span class="fa-name">实际发布</span></div>
+      <div class="fa-kicker">确认发了什么</div>
+      <div class="fa-desc">预览后确认，形成<b>不可变记录</b>；部署、重部署、回滚追加事件，完成不等于发布。</div>
+    </div>
+    <div class="fa-stage p-green last">
+      <div class="fa-top"><span class="fa-num">06</span><span class="fa-name">周回顾</span></div>
+      <div class="fa-kicker">回看与反哺</div>
+      <div class="fa-desc">工时与流转自动汇总为周回顾、月度清单；AI 可起周报草稿，结论回到下一轮需求与排期。</div>
+    </div>
+
+    <div class="fa-rec"><span class="rk">留痕</span><code>demand</code><span class="rd">WSJF 评分</span></div>
+    <div class="fa-rec"><span class="rk">留痕</span><code>requirement_doc</code><span class="rd">历史快照</span></div>
+    <div class="fa-rec"><span class="rk">留痕</span><code>task</code><span class="rd">+ time_log</span></div>
+    <div class="fa-rec"><span class="rk">留痕</span><code>project_version</code><span class="rd">version_task</span></div>
+    <div class="fa-rec"><span class="rk">留痕</span><code>version_release</code><span class="rd">不可变</span></div>
+    <div class="fa-rec"><span class="rk">留痕</span><code>task_completion_record</code></div>
+  </div>
+
+  <div class="fa-branches">
+    <div class="fa-branch"><span class="sign">↳</span><span><b>评审不通过</b>：归档保留说明，补充后可重开，已取消需求可恢复。</span></div>
+    <div class="fa-branch"><span class="sign">↳</span><span><b>测试失败</b>：一键转出缺陷工作项，回到同一看板继续流转。</span></div>
+    <div class="fa-branch"><span class="sign">↳</span><span><b>非生产动作</b>：test / staging、失败与回滚都不算生产发布。</span></div>
+  </div>
+
+  <div class="fa-loop">
+    <span class="icon">↩</span>
+    <span class="txt"><b>周回顾反哺下一轮</b>：本周工时、完成快照与流转事实，决定下周需求优先级和估时。</span>
+    <span class="from">06 → 01</span>
+  </div>
+
+  <div class="fa-foot"><b>时间从拖拽产生</b><span class="sep">·</span><b>统计直读事实表</b><span class="sep">·</span><b>发布徽标只读派生</b></div>
+</div>
+</body>
+</html>

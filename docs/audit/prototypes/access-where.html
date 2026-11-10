@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>项目可见范围 · 配置入口</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  .wrap{max-width:1180px}
+  .panel.focus{outline:2px solid #F79009;outline-offset:2px}
+  .result-strip{display:flex;gap:10px;align-items:center;background:#F0F9FF;border:1px solid #B2DDFF;border-radius:9px;padding:10px 13px;font-size:12px;color:#175CD3;margin-top:12px}
+  .result-strip b{font-weight:650}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">沙</span>沙漏</div>
+  <div class="ws-pick">共享空间 <b>支付业务部</b> ▾</div>
+  <div class="spacer"></div>
+  <div class="top-ic">⌕</div>
+  <div class="top-ic">⌘</div>
+  <div class="avatar">管</div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>设置</h1>
+      <div class="sub">支付业务部 · 共享空间 · 你是空间主</div>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <span class="tab">空间</span>
+    <span class="tab on">成员与权限</span>
+    <span class="tab">工作流</span>
+    <span class="tab">通知与集成</span>
+    <span class="tab">数据与审计</span>
+    <span class="tab">平台</span>
+  </nav>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h3>成员与角色</h3>
+      <span class="meta">共 9 人</span>
+    </div>
+    <div class="member-list" style="margin-top:12px">
+      <div class="member-row">
+        <span class="m-avatar">管</span>
+        <span class="m-info"><span class="m-name">平台管理员</span><span class="m-sub">@admin · 可见全部 3 个项目</span></span>
+        <span class="pill owner">空间主</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">孙</span>
+        <span class="m-info"><span class="m-name">孙琪</span><span class="m-sub">@sunqi · 可见全部 3 个项目</span></span>
+        <span class="pill admin">管理员</span>
+      </div>
+      <div class="member-row">
+        <span class="m-avatar">周</span>
+        <span class="m-info"><span class="m-name">周敏</span><span class="m-sub">@zhoumin · 可见 2/3 个项目（其中 2 个只读）</span></span>
+        <span class="pill member">成员</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel focus">
+    <div class="arrow-note">配置入口就在这一块</div>
+    <div class="panel-head">
+      <h3>项目可见范围</h3>
+      <span class="meta">9 位成员 · 3 个项目</span>
+    </div>
+    <div class="callout">
+      <span>●</span>
+      <span>位置：<span class="path">空间设置 → 成员与权限 → 项目可见范围</span>。仅空间主 / 管理员可见，成员自己看不到、也不能修改。</span>
+    </div>
+    <p class="hint">按「成员 × 项目」配置参与范围：<b>默认（参与）</b>可读写；<b>只读</b>只能查看该项目；<b>不可见</b>后，该项目在项目列表、工作项、看板、报表、搜索中都不出现。空间主与管理员天然拥有全部项目，查看者为全局只读。</p>
+
+    <div class="tbl-wrap">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th style="min-width:150px">成员</th>
+            <th style="width:80px">角色</th>
+            <th>统一支付网关</th>
+            <th>清结算与对账平台</th>
+            <th>风控规则引擎</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mx-name">平台管理员<span class="mx-sub">@admin</span></span></td>
+            <td><span class="pill owner">空间主</span></td>
+            <td colspan="3"><span class="cell-all">全部项目</span></td>
+          </tr>
+          <tr>
+            <td><span class="mx-name">孙琪<span class="mx-sub">@sunqi</span></span></td>
+            <td><span class="pill admin">管理员</span></td>
+            <td colspan="3"><span class="cell-all">全部项目</span></td>
+          </tr>
+          <tr>
+            <td><span class="mx-name">周敏<span class="mx-sub">@zhoumin</span></span></td>
+            <td><span class="pill member">成员</span></td>
+            <td><span class="sel none">不可见</span></td>
+            <td><span class="sel read">只读</span></td>
+            <td><span class="sel read">只读</span></td>
+          </tr>
+          <tr>
+            <td><span class="mx-name">张伟<span class="mx-sub">@zhangwei</span></span></td>
+            <td><span class="pill member">成员</span></td>
+            <td><span class="sel default">默认（参与）</span></td>
+            <td><span class="sel default">默认（参与）</span></td>
+            <td><span class="sel default">默认（参与）</span></td>
+          </tr>
+          <tr>
+            <td><span class="mx-name">吴军<span class="mx-sub">@wujun</span></span></td>
+            <td><span class="pill viewer">查看者</span></td>
+            <td colspan="3"><span class="cell-all">全部项目（只读）</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <span><i class="dot" style="background:#12B76A"></i>默认（参与）：可读写</span>
+      <span><i class="dot" style="background:#F79009"></i>只读：可见但不可写</span>
+      <span><i class="dot" style="background:#F04438"></i>不可见：等同于不存在</span>
+    </div>
+
+    <div class="result-strip">
+      <b>配置后的效果：</b>周敏登录后只看到「清结算与对账平台」「风控规则引擎」，且都只能查看；直接访问「统一支付网关」的任务或文档会得到 404。
+    </div>
+  </section>
+
+  <p class="foot-note">说明：这是当前线上界面的复刻，用于指认配置位置；配色与文案沿用现有设计令牌。</p>
+</main>
+</body>
+</html>

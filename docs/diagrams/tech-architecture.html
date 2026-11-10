@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 技术架构</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-tech-arch">
+  <style>
+    #hg-tech-arch {
+      --bg-app: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      --gray-soft: #F2F4F7;
+      --gray-fg: #344054;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-app);
+      padding: 44px 52px 40px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-tech-arch * { box-sizing: border-box; margin: 0; }
+
+    .ta-head { text-align: center; margin-bottom: 28px; }
+    .ta-head h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; }
+    .ta-head p { font-size: 15.5px; color: var(--text-2); margin-top: 8px; }
+    .ta-head p b { color: var(--text); }
+
+    .ta-body { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 22px; align-items: start; }
+    .ta-stack { display: flex; flex-direction: column; gap: 12px; }
+
+    .ta-layer {
+      border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+      padding: 14px 16px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .ta-layer-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+    .ta-tag {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+      border: 1px solid transparent; white-space: nowrap;
+    }
+    .ta-tag .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .tag-blue { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .tag-blue .dot { background: var(--primary); }
+    .tag-green { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .tag-green .dot { background: var(--success); }
+    .tag-plum { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .tag-plum .dot { background: var(--plum); }
+    .tag-warn { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning-fg); }
+    .tag-warn .dot { background: var(--warning); }
+    .tag-gray { background: var(--gray-soft); border-color: var(--border-strong); color: var(--gray-fg); }
+    .tag-gray .dot { background: #98A2B3; }
+    .ta-layer-note { font-size: 11.5px; color: var(--text-3); margin-left: auto; }
+
+    .ta-items { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ta-item {
+      flex: 1 1 190px; min-width: 170px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface); padding: 11px 13px;
+    }
+    .ta-item.hot { background: var(--primary-soft); border-color: var(--primary-border); }
+    .ta-item.hot-plum { background: var(--plum-soft); border-color: var(--plum-border); }
+    .ta-item-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .ta-item-desc { font-size: 11.8px; line-height: 1.55; color: var(--text-2); }
+    .ta-item.hot .ta-item-name { color: var(--primary-fg); }
+    .ta-item.hot-plum .ta-item-name { color: var(--plum-fg); }
+    .ta-item code, .ta-side code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 11px;
+      background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 4px;
+      padding: 1px 4px; color: var(--text);
+    }
+
+    .ta-flow { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .ta-flow .line { height: 1px; flex: 1; background: var(--border); }
+    .ta-flow .lbl { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+    .ta-side { display: flex; flex-direction: column; gap: 12px; }
+    .ta-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 15px 17px 16px; position: relative; overflow: hidden;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .ta-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+    .ta-card.c1::before { background: var(--primary); }
+    .ta-card.c2::before { background: var(--success); }
+    .ta-card.c3::before { background: var(--warning); }
+    .ta-card h3 { font-size: 13.5px; font-weight: 700; margin-bottom: 8px; }
+    .ta-card p { font-size: 12.4px; line-height: 1.7; color: var(--text-2); }
+    .ta-card p + p { margin-top: 7px; }
+    .ta-card b { color: var(--text); }
+
+    .ta-foot { text-align: center; font-size: 12.5px; color: var(--text-3); margin-top: 20px; }
+
+    @media (max-width: 760px) {
+      #hg-tech-arch { width: 100%; padding: 26px 18px; }
+      .ta-body { grid-template-columns: 1fr; }
+      .ta-items { flex-direction: column; }
+      .ta-layer-note { display: none; }
+    }
+  </style>
+
+  <div class="ta-head">
+    <h1>沙漏 · 技术架构</h1>
+    <p>单实例自托管 · <b>一个 jar + MySQL</b> · 不需要 Redis / MQ / 对象存储</p>
+  </div>
+
+  <div class="ta-body">
+    <div class="ta-stack">
+
+      <div class="ta-layer">
+        <div class="ta-layer-head">
+          <span class="ta-tag tag-green"><span class="dot"></span>客户端</span>
+          <span class="ta-layer-note">浏览器 · PWA</span>
+        </div>
+        <div class="ta-items">
+          <div class="ta-item">
+            <div class="ta-item-name">桌面 Web</div>
+            <div class="ta-item-desc">原生 ES Module，零构建、静态发布</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">移动端</div>
+            <div class="ta-item-desc">三档断点自适应，可添加到主屏幕</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">离线壳</div>
+            <div class="ta-item-desc">Service Worker 缓存静态资源，按版本更新</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ta-flow"><span class="line"></span><span class="lbl">HTTPS · 同源 Cookie / CSRF / SSE</span><span class="line"></span></div>
+
+      <div class="ta-layer">
+        <div class="ta-layer-head">
+          <span class="ta-tag tag-blue"><span class="dot"></span>接入层</span>
+          <span class="ta-layer-note">Nginx</span>
+        </div>
+        <div class="ta-items">
+          <div class="ta-item hot">
+            <div class="ta-item-name">静态托管 frontend/</div>
+            <div class="ta-item-desc">前端独立发布，不经过后端</div>
+          </div>
+          <div class="ta-item hot">
+            <div class="ta-item-name">/hourglass/api/ 反代</div>
+            <div class="ta-item-desc">转发到 127.0.0.1:8080，保持同源</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ta-flow"><span class="line"></span><span class="lbl">↓</span><span class="line"></span></div>
+
+      <div class="ta-layer">
+        <div class="ta-layer-head">
+          <span class="ta-tag tag-plum"><span class="dot"></span>应用层</span>
+          <span class="ta-layer-note">Spring Boot 2.7.18 · Java 8 · 单 jar 只含 API</span>
+        </div>
+        <div class="ta-items">
+          <div class="ta-item">
+            <div class="ta-item-name">Spring Security</div>
+            <div class="ta-item-desc">数据库账号登录 · 会话 + CSRF · 角色与项目可见性</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">MyBatis</div>
+            <div class="ta-item-desc">SQL 即时构造，统计直读事实表</div>
+          </div>
+          <div class="ta-item hot-plum">
+            <div class="ta-item-name">SSE 推送</div>
+            <div class="ta-item-desc">变更与通知即时触达</div>
+          </div>
+          <div class="ta-item hot-plum">
+            <div class="ta-item-name">进程内缓存</div>
+            <div class="ta-item-desc">TTL + 空间版本号失效，单实例定位</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">AI 外呼</div>
+            <div class="ta-item-desc">每人自配模型与额度，默认禁止访问内网</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ta-flow"><span class="line"></span><span class="lbl">JDBC</span><span class="line"></span></div>
+
+      <div class="ta-layer">
+        <div class="ta-layer-head">
+          <span class="ta-tag tag-warn"><span class="dot"></span>数据层</span>
+          <span class="ta-layer-note">MySQL 8 · utf8mb4 · 54 张表</span>
+        </div>
+        <div class="ta-items">
+          <div class="ta-item">
+            <div class="ta-item-name">54 张表</div>
+            <div class="ta-item-desc">工时、流转与发布事实直读；每个统计数字可回溯</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">编号增量 + 完整基线</div>
+            <div class="ta-item-desc">增量脚本按发布说明评估；完整基线只用于新空库，不是幂等升级</div>
+          </div>
+          <div class="ta-item">
+            <div class="ta-item-name">按空间备份</div>
+            <div class="ta-item-desc">任务 JSON / 表格导出；正式发布证据用 MySQL 备份</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="ta-side">
+      <div class="ta-card c1">
+        <h3>刻意的取舍</h3>
+        <p><b>不用 Redis</b>：元数据放进程内缓存，靠 TTL 与空间版本号失效——因此定位是单实例部署，不为此引入中间件。</p>
+        <p><b>前后端分离但同源</b>：前端零构建、独立发布，同源保证会话 Cookie、CSRF 与 SSE 行为不变。</p>
+      </div>
+      <div class="ta-card c2">
+        <h3>部署形态</h3>
+        <p>systemd 托管后端；<code>deploy.sh</code> 一键部署：检测改动 → 打包 → 备份数据库 → 增量 SQL → 换包 → 健康检查，支持 <code>--dry-run</code> / <code>--rollback</code>。</p>
+        <p>Nginx 只做静态托管与同源反代，不承担业务逻辑。</p>
+      </div>
+      <div class="ta-card c3">
+        <h3>外部依赖</h3>
+        <p>仅通知渠道可选外联：邮件、Webhook、Server酱、PushPlus；AI 模型地址由用户自配，默认禁止访问内网。</p>
+        <p>没有隐藏的中间件——看得见的每个组件都可以在自己服务器上审计。</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="ta-foot">没有隐藏的中间件 —— 看得见的每一个组件都可以在自己服务器上审计</div>
+</div>
+</body>
+</html>

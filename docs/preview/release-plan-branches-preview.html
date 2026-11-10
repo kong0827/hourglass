@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 发布计划涉及分支（实时派生）原型</title>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg-app);color:var(--text);font:13px/1.6 var(--font-sans);-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,p{margin:0;}
+  .page{min-height:100vh;padding:28px 24px 48px;}
+  .modal{max-width:960px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;}
+  .modal-head{display:flex;align-items:flex-start;gap:12px;padding:18px 22px 14px;border-bottom:1px solid var(--border);}
+  .modal-head h1{font-size:17px;font-weight:650;letter-spacing:-.01em;}
+  .modal-head p{margin-top:3px;color:var(--text-3);font-size:12px;}
+  .modal-head .icon-btn{margin-left:auto;width:28px;height:28px;border:0;border-radius:var(--r-sm);background:none;color:var(--text-3);font-size:16px;cursor:pointer;}
+  .tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--border);}
+  .tab{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:10px 10px 9px;font:inherit;font-weight:550;color:var(--text-3);border-radius:var(--r-sm) var(--r-sm) 0 0;cursor:pointer;}
+  .tab.is-active{color:var(--primary-fg);background:var(--primary-soft);box-shadow:inset 0 -2px 0 var(--primary);}
+  .tab-count{font-size:11px;line-height:16px;padding:0 6px;border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .tab.is-active .tab-count{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--primary-fg);}
+  .body{padding:18px 22px 24px;}
+  .section{display:flex;flex-direction:column;gap:12px;}
+  .section-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  .section h2{font-size:14px;font-weight:650;}
+  .hint{margin:0;font-size:12px;line-height:18px;color:var(--text-3);}
+  .form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .field label{font-size:12px;font-weight:600;color:var(--text-2);}
+  .control{height:34px;display:flex;align-items:center;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .control.muted{color:var(--text-3);}
+  .versions{display:flex;flex-wrap:wrap;gap:8px;}
+  .ver-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;color:var(--text-2);}
+  .ver-chip.is-on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+  .check{width:14px;height:14px;border:1px solid var(--border-strong);border-radius:4px;display:inline-grid;place-items:center;background:var(--surface);color:#fff;font-size:10px;line-height:1;flex:0 0 auto;}
+  .is-on .check,.task-check.on .check{background:var(--primary);border-color:var(--primary);}
+  .tasks{border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;}
+  .task{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border-bottom:1px solid var(--border);}
+  .task:last-child{border-bottom:0;}
+  .task-main{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .task-main b{font-size:13px;font-weight:550;color:var(--text);}
+  .task-main small{font-size:11.5px;color:var(--text-3);}
+  .task-check{margin-top:2px;}
+  .task-check.on .check{background:var(--primary);border-color:var(--primary);}
+  .task-check .check:after{content:"✓";}
+  .task.unchecked{color:var(--text-3);}
+  .task.unchecked .task-main b{font-weight:450;color:var(--text-2);}
+
+  /* ===== 新增：计划涉及分支（实时） ===== */
+  .plan-branches{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:13px 14px 12px;display:flex;flex-direction:column;gap:10px;}
+  .pb-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .pb-head h3{font-size:13px;font-weight:650;color:var(--text);}
+  .pb-live{display:inline-flex;align-items:center;gap:5px;padding:1px 7px;border:1px solid var(--primary-border);border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);font-size:11px;line-height:17px;font-weight:600;}
+  .pb-live i{width:5px;height:5px;border-radius:50%;background:var(--primary);}
+  .pb-summary{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .pb-summary b{font-weight:600;color:var(--text-2);}
+  .pb-stats{display:flex;flex-wrap:wrap;gap:6px;}
+  .pb-stat{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums;}
+  .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:var(--text-3);}
+  .dot.dev{background:var(--primary);}
+  .dot.testing{background:var(--warning);}
+  .dot.merging{background:var(--plum);}
+  .dot.released{background:var(--success);}
+  .pb-list{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+  .pb-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) 82px 54px minmax(0,.8fr);align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .pb-row:last-child{border-bottom:0;}
+  .pb-name{display:flex;align-items:center;gap:7px;min-width:0;font-weight:600;color:var(--text);}
+  .pb-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pb-target{display:flex;align-items:center;gap:5px;min-width:0;color:var(--text-2);}
+  .pb-target em{font-style:normal;color:var(--text-3);font-size:11px;}
+  .pb-target span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;}
+  .pb-target.is-empty{color:var(--warning-fg);}
+  .pb-target.is-empty span{font-family:inherit;font-size:12px;}
+  .pb-badge{justify-self:start;display:inline-flex;align-items:center;padding:1px 7px;border:1px solid var(--border);border-radius:var(--r-pill);font-size:11px;line-height:17px;white-space:nowrap;background:var(--surface-sunken);color:var(--text-2);}
+  .pb-badge.merging{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum);}
+  .pb-badge.testing{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+  .pb-badge.dev{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .pb-badge.released{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+  .pb-count{color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .pb-project{min-width:0;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pb-row.is-released{opacity:.62;}
+  .pb-foot{font-size:11.5px;line-height:17px;color:var(--text-3);}
+  .pb-foot b{font-weight:600;color:var(--text-2);}
+  .pb-unbound{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-2);}
+  .pb-unbound b{font-weight:600;color:var(--text);}
+
+  @media (max-width:720px){
+    .page{padding:0;background:var(--surface);}
+    .modal{max-width:none;min-height:100vh;border:0;border-radius:0;box-shadow:none;}
+    .modal-head{padding:14px 16px 12px;}
+    .tabs{padding:0 10px;overflow-x:auto;scrollbar-width:none;}
+    .tabs::-webkit-scrollbar{display:none;}
+    .tab{white-space:nowrap;padding:9px 8px;}
+    .body{padding:14px 16px 32px;}
+    .form-grid{grid-template-columns:1fr 1fr;gap:10px;}
+    .form-grid .field:nth-child(n+3){grid-column:1 / -1;}
+    .pb-head{gap:6px;}
+    .pb-summary{flex:1 1 100%;margin-left:0;line-height:17px;}
+    .pb-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 11px;}
+    .pb-name{grid-column:1 / 2;}
+    .pb-target{grid-column:1 / 2;font-size:12px;}
+    .pb-badge{grid-column:2 / 3;grid-row:1 / 2;}
+    .pb-count{grid-column:2 / 3;grid-row:2 / 3;justify-self:end;color:var(--text-3);font-size:11.5px;}
+    .pb-project{grid-column:1 / -1;font-size:11.5px;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h1>版本 2.4.0 · 发布工作区</h1>
+        <p>发布计划只描述打算怎么发，不改变实际交付事实。</p>
+      </div>
+      <button class="icon-btn" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab is-active" type="button">计划<span class="tab-count">1</span></button>
+      <button class="tab" type="button">实际<span class="tab-count">5</span></button>
+      <button class="tab" type="button">历史<span class="tab-count">12</span></button>
+      <button class="tab" type="button">内容<span class="tab-count">14</span></button>
+    </div>
+    <div class="body">
+      <section class="section">
+        <div class="section-head">
+          <h2>发布计划</h2>
+          <span class="hint">计划 #RP7F3A · 修订 3 · 就绪 · 生产 · 全量 · 2026-11-12 20:00</span>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>计划发布时间（本地）</label><div class="control">2026-11-12 20:00</div></div>
+          <div class="field"><label>计划负责人</label><div class="control">林知远</div></div>
+          <div class="field"><label>计划环境</label><div class="control">生产</div></div>
+          <div class="field"><label>计划覆盖</label><div class="control">全量</div></div>
+        </div>
+
+        <div class="section-head" style="margin-top:2px">
+          <h2 style="font-size:13px">计划包含的版本</h2>
+          <span class="hint">2 个 · 2 个项目</span>
+        </div>
+        <div class="versions">
+          <span class="ver-chip is-on"><i class="check">✓</i>2.4.0 · 开发中 · 当前版本</span>
+          <span class="ver-chip is-on"><i class="check">✓</i>支付重构 1.2 · 待发布</span>
+          <span class="ver-chip"><i class="check"></i>2.5.0 · 待规划</span>
+        </div>
+        <p class="hint">可跨版本、跨项目选择；当前版本固定包含。计划包含的所有版本都完成生产部署 / 重部署后，计划才自动完成。</p>
+
+        <div class="section-head" style="margin-top:2px">
+          <h2 style="font-size:13px">这次计划发布哪些工作项（<b style="font-weight:650">5</b> 项）</h2>
+          <span class="hint">实际记录会独立选择，不自动继承计划范围。</span>
+        </div>
+        <div class="tasks">
+          <div class="task"><span class="task-check on"><i class="check"></i></span><span class="task-main"><b>登录页支持企业 SSO</b><small>已完成 · 版本 2.4.0 · 分支 feature/login</small></span></div>
+          <div class="task"><span class="task-check on"><i class="check"></i></span><span class="task-main"><b>统一身份校验错误码</b><small>已完成 · 版本 2.4.0 · 分支 feature/login</small></span></div>
+          <div class="task"><span class="task-check on"><i class="check"></i></span><span class="task-main"><b>支付回调幂等</b><small>已完成 · 版本 支付重构 1.2 · 分支 feature/pay</small></span></div>
+          <div class="task"><span class="task-check on"><i class="check"></i></span><span class="task-main"><b>搜索结果高亮</b><small>已完成 · 版本 2.4.0 · 分支 feature/search</small></span></div>
+          <div class="task"><span class="task-check on"><i class="check"></i></span><span class="task-main"><b>发布公告文案</b><small>已完成 · 版本 2.4.0 · 未关联分支</small></span></div>
+          <div class="task unchecked"><span class="task-check"><i class="check"></i></span><span class="task-main"><b>导航菜单分组调整</b><small>未完成 · 版本 2.5.0</small></span></div>
+        </div>
+
+        <!-- 新增区块：实时派生，不落库 -->
+        <div class="plan-branches" role="region" aria-label="计划涉及分支（实时）">
+          <div class="pb-head">
+            <h3>计划涉及分支</h3>
+            <span class="pb-live"><i></i>实时</span>
+            <span class="pb-summary">5 项工作项 · <b>4</b> 条分支 · 1 项未关联分支</span>
+          </div>
+          <div class="pb-stats">
+            <span class="pb-stat"><i class="dot merging"></i>待合并 1</span>
+            <span class="pb-stat"><i class="dot testing"></i>待测试 1</span>
+            <span class="pb-stat"><i class="dot dev"></i>开发中 1</span>
+            <span class="pb-stat"><i class="dot released"></i>已发布 1</span>
+          </div>
+          <div class="pb-list">
+            <div class="pb-row">
+              <span class="pb-name"><i class="dot merging"></i><span>feature/login</span></span>
+              <span class="pb-target"><em>→</em><span>main</span></span>
+              <span class="pb-badge merging">待合并</span>
+              <span class="pb-count">3 项</span>
+              <span class="pb-project">项目 A · 协同门户</span>
+            </div>
+            <div class="pb-row">
+              <span class="pb-name"><i class="dot testing"></i><span>feature/pay</span></span>
+              <span class="pb-target"><em>→</em><span>release/2.4</span></span>
+              <span class="pb-badge testing">待测试</span>
+              <span class="pb-count">1 项</span>
+              <span class="pb-project">项目 B · 支付重构</span>
+            </div>
+            <div class="pb-row">
+              <span class="pb-name"><i class="dot dev"></i><span>feature/search</span></span>
+              <span class="pb-target is-empty"><em>→</em><span>未指定目标分支</span></span>
+              <span class="pb-badge dev">开发中</span>
+              <span class="pb-count">2 项</span>
+              <span class="pb-project">项目 A · 协同门户</span>
+            </div>
+            <div class="pb-row is-released">
+              <span class="pb-name"><i class="dot released"></i><span>hotfix/header</span></span>
+              <span class="pb-target"><em>→</em><span>main</span></span>
+              <span class="pb-badge released">已发布</span>
+              <span class="pb-count">1 项</span>
+              <span class="pb-project">项目 A · 协同门户</span>
+            </div>
+          </div>
+          <div class="pb-unbound"><span>还有 <b>1</b> 项工作项未关联分支，未计入上方清单。</span></div>
+          <p class="pb-foot">按所选工作项<b>实时汇总并按分支去重</b>；分支状态以分支模块为准，会随分支变化，不代表“已合并”，也不作为发布证据。计划完成仍以版本生产发布为准。</p>
+        </div>
+
+        <div class="field" style="margin-top:2px"><label>计划说明</label><div class="control muted" style="height:48px;align-items:flex-start;padding-top:7px">双十一前完成 SSO 与支付回调上线，搜索高亮随版本发布。</div></div>
+      </section>
+    </div>
+  </div>
+</div>
+</body>
+</html>

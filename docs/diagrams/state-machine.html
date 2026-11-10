@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 状态机全景</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-state-machine">
+  <style>
+    #hg-state-machine {
+      --bg-app: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --warning: #F79009;
+      --warning-soft: #FFFAEB;
+      --warning-border: #FEDF89;
+      --warning-fg: #B54708;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      --gray-soft: #F2F4F7;
+      --gray-fg: #344054;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-app);
+      color: var(--text);
+      width: 1680px;
+      margin: 0 auto;
+      padding: 42px 46px 34px;
+    }
+    #hg-state-machine * { box-sizing: border-box; margin: 0; }
+
+    .sm-head { text-align: center; margin-bottom: 26px; }
+    .sm-head h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.4px; }
+    .sm-head p { font-size: 14.5px; color: var(--text-2); margin-top: 8px; }
+
+    .sm-band {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
+      padding: 16px 20px 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .sm-band + .sm-band { margin-top: 13px; }
+    .sm-band-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .sm-band-head h2 { font-size: 15px; font-weight: 700; }
+    .sm-band-head span { font-size: 12px; color: var(--text-3); }
+
+    .sm-chain { display: flex; align-items: center; flex-wrap: wrap; row-gap: 14px; }
+    .sm-chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      border-radius: 999px; border: 1.5px solid; padding: 6px 14px;
+      font-size: 12.5px; font-weight: 650; line-height: 1.2; white-space: nowrap;
+    }
+    .sm-chip code { font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 10.5px; font-weight: 400; opacity: 0.75; }
+    .sm-chip .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+    .c-gray { background: var(--gray-soft); border-color: var(--border-strong); color: var(--gray-fg); }
+    .c-gray .dot { background: #98A2B3; }
+    .c-primary { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .c-primary .dot { background: var(--primary); }
+    .c-warning { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning-fg); }
+    .c-warning .dot { background: var(--warning); }
+    .c-plum { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .c-plum .dot { background: var(--plum); }
+    .c-success { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .c-success .dot { background: var(--success); }
+    .c-dash { background: var(--surface); border-style: dashed; border-color: var(--border-strong); color: var(--text-2); }
+    .c-dash .dot { background: #98A2B3; }
+
+    .sm-conn { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 84px; flex: none; padding: 0 4px; }
+    .sm-conn span { font-size: 10.5px; color: var(--text-3); margin-bottom: 3px; white-space: nowrap; }
+    .sm-conn svg { display: block; }
+    .sm-conn.sub { width: 66px; }
+
+    .sm-derived { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+    .sm-derived .hint { font-size: 11.5px; color: var(--text-3); line-height: 1.5; }
+    .sm-derived .hint code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 10.8px;
+      background: var(--surface-sunken); border-radius: 4px; padding: 0 4px; color: var(--text);
+    }
+
+    .sm-rules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; }
+    .sm-rule {
+      background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 9px;
+      padding: 9px 12px 10px; font-size: 11.8px; line-height: 1.55; color: var(--text-2);
+    }
+    .sm-rule b { display: block; font-size: 12px; color: var(--text); margin-bottom: 3px; }
+    .sm-rule code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 10.8px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--text);
+    }
+
+    .sm-compare { display: grid; grid-template-columns: 1.18fr 1.12fr 1fr; gap: 14px; margin-top: 13px; }
+    .sm-compare .sm-conn { width: 60px; }
+    .sm-compare .sm-small { padding: 4px 8px; }
+    .sm-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 15px 17px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .sm-card h3 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .sm-card h3 .tag {
+      font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+      background: var(--gray-soft); border: 1px solid var(--border); color: var(--text-2);
+    }
+    .sm-card .desc { font-size: 11.5px; color: var(--text-3); margin: 4px 0 11px; line-height: 1.55; }
+    .sm-row { display: flex; align-items: center; flex-wrap: wrap; row-gap: 8px; }
+    .sm-row + .sm-row { margin-top: 8px; }
+    .sm-row .note { font-size: 10.8px; color: var(--text-3); margin-left: 4px; }
+    .sm-small { font-size: 11.5px; padding: 4px 10px; gap: 6px; }
+    .sm-small .dot { width: 6px; height: 6px; }
+
+    .sm-foot { text-align: center; font-size: 12.5px; color: var(--text-3); margin-top: 18px; }
+    .sm-foot b { color: var(--text-2); }
+
+    @media (max-width: 760px) {
+      #hg-state-machine { width: 100%; padding: 24px 16px; }
+      .sm-rules { grid-template-columns: 1fr; }
+      .sm-compare { grid-template-columns: 1fr; }
+      .sm-conn { width: 54px; }
+      .sm-chain { flex-direction: column; align-items: flex-start; }
+      .sm-conn { width: auto; align-items: flex-start; margin-left: 22px; }
+      .sm-conn span { display: none; }
+      .sm-conn svg { transform: rotate(90deg); }
+    }
+  </style>
+
+  <div class="sm-head">
+    <h1>沙漏 · 状态机全景</h1>
+    <p>工作项由看板列驱动，需求 / 发布计划 / 分支各自独立流转 · 判定只看留痕，不靠人工口头同步</p>
+  </div>
+
+  <div class="sm-band">
+    <div class="sm-band-head">
+      <h2>工作项主链</h2>
+      <span>默认五列可自定义 · 判定只认语义标记：起始列 / 完成列</span>
+    </div>
+
+    <div class="sm-chain">
+      <span class="sm-chip c-gray"><span class="dot"></span>待处理<code>backlog</code></span>
+      <span class="sm-conn"><span>开始计时</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="sm-chip c-primary"><span class="dot"></span>进行中<code>doing</code></span>
+      <span class="sm-conn"><span>提测</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="sm-chip c-warning"><span class="dot"></span>待测试<code>test</code></span>
+      <span class="sm-conn"><span>开始验证</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="sm-chip c-plum"><span class="dot"></span>测试中<code>testing</code></span>
+      <span class="sm-conn"><span>测试通过</span>
+        <svg width="56" height="12" viewBox="0 0 56 12" fill="none" aria-hidden="true"><path d="M1 6h48" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M45 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="sm-chip c-success"><span class="dot"></span>已完成<code>done</code></span>
+    </div>
+
+    <div class="sm-derived">
+      <span class="sm-chip c-dash"><span class="dot"></span>待确认 · 派生态</span>
+      <span class="hint">进度 100% 但尚未归入完成列 → 进入周回顾「待确认完成」分区；完成时写一条 <code>task_completion_record</code> 快照用于月度统计</span>
+    </div>
+
+    <div class="sm-rules">
+      <div class="sm-rule"><b>计时</b>拖入「进行中」自动开表；一人同一时刻只计一个任务，开始新的会自动停掉旧的。</div>
+      <div class="sm-rule"><b>接力</b>计时中的任务完成后，若原列还有任务，自动接上第一个；仅本人无运行中计时时生效。</div>
+      <div class="sm-rule"><b>提测 / 验证</b>进入「待测试」或「测试中」记录 <code>test_started_at</code>；离开时写 <code>test_finished_at</code>，测试通过不等于发布。</div>
+      <div class="sm-rule"><b>回退</b>已完成可拖回任意列，<code>task_log</code> 记录 <code>from_column → to_column</code>；工时按区间重算。</div>
+      <div class="sm-rule"><b>阻塞</b>任意状态可标记阻塞，填原因与可选等待任务；集中出现在「逾期与阻塞」视图。</div>
+      <div class="sm-rule"><b>逾期</b>判定只看截止日与当前列：未进完成列且已过截止日即逾期，看板 / 日历 / 度量同一口径。</div>
+      <div class="sm-rule"><b>删除</b>软删除进回收站（<code>deleted_at</code>），可恢复；完成快照不随任务删除而丢失。</div>
+      <div class="sm-rule"><b>不改口径</b>自定义列不参与语义判定；工作项类型（故事 / 任务 / 缺陷 / 史诗）与列状态相互独立。</div>
+    </div>
+  </div>
+
+  <div class="sm-compare">
+    <div class="sm-card">
+      <h3>需求池状态机 <span class="tag">空间主评审</span></h3>
+      <div class="desc">评审流转仅空间主可执行；排期 / 调期 / 撤排 / 取消 / 恢复由管理角色执行，全部动作写 <code>demand_log</code>。</div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-gray"><span class="dot"></span>待评审</span>
+        <span class="sm-conn sub"><span>通过</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-primary"><span class="dot"></span>已通过</span>
+        <span class="sm-conn sub"><span>排期</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-success"><span class="dot"></span>已排期</span>
+        <span class="sm-conn sub"><span>拆解</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-primary"><span class="dot"></span>工作项</span>
+      </div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-dash"><span class="dot"></span>已拒绝</span>
+        <span class="sm-conn sub"><span>重开</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-gray"><span class="dot"></span>待评审</span>
+        <span class="note">需求不消失，WSJF 分数保留</span>
+      </div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-dash"><span class="dot"></span>已取消</span>
+        <span class="sm-conn sub"><span>恢复</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-primary"><span class="dot"></span>已通过</span>
+        <span class="note">回到已通过，须重新排期；关联任务不变</span>
+      </div>
+    </div>
+
+    <div class="sm-card">
+      <h3>发布计划状态机 <span class="tag">完成由事实推进</span></h3>
+      <div class="desc">计划只是意图。状态只允许草稿 / 就绪 / 已取消手动设置；完成由全部包含版本的生产发布自动推进。</div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-gray"><span class="dot"></span>草稿</span>
+        <span class="sm-conn sub"><span>满足条件</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-primary"><span class="dot"></span>就绪</span>
+        <span class="sm-conn sub"><span>全部成功</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-success"><span class="dot"></span>已完成</span>
+      </div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-gray"><span class="dot"></span>草稿 / 就绪</span>
+        <span class="sm-conn sub"><span>取消需理由</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-dash"><span class="dot"></span>已取消</span>
+        <span class="note">就绪 → 草稿等调整也须填原因</span>
+      </div>
+      <div class="sm-row"><span class="note">就绪必须填写计划时间、负责人与任务范围；已完成计划不可修改，后续另建计划。</span></div>
+    </div>
+
+    <div class="sm-card">
+      <h3>分支状态机 <span class="tag">时间线留痕</span></h3>
+      <div class="desc">分支状态在分支模块维护，每次变更写 <code>dev_branch_log</code>；计划里的分支汇总只读，不作为发布证据。</div>
+      <div class="sm-row">
+        <span class="sm-chip sm-small c-primary"><span class="dot"></span>开发中</span>
+        <span class="sm-conn sub"><span>提交测试</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-warning"><span class="dot"></span>待测试</span>
+        <span class="sm-conn sub"><span>测试通过</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-plum"><span class="dot"></span>待合并</span>
+        <span class="sm-conn sub"><span>合并上线</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" aria-hidden="true"><path d="M1 6h32" stroke="#98A2B3" stroke-width="1.4" stroke-linecap="round"/><path d="M30 1.5l5.5 4.5-5.5 4.5" stroke="#98A2B3" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="sm-chip sm-small c-success"><span class="dot"></span>已发布</span>
+      </div>
+      <div class="sm-row"><span class="note">发布周期 = 已发布时间 − 创建时间；负责人与目标分支在分支上维护，工作项只做关联。</span></div>
+      <div class="sm-row"><span class="note">分支「已发布」只表示合并上线，不等于版本已完成生产发布。</span></div>
+    </div>
+  </div>
+
+  <div class="sm-foot"><b>列名可以自定义，判定只认语义标记（起始列 / 完成列）</b> —— 自定义列不会破坏统计口径；发布事实只认 production 记录</div>
+</div>
+</body>
+</html>

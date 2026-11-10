@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 协作层级</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-hierarchy">
+  <style>
+    #hg-hierarchy {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --surface-soft: #FAFBFC;
+      --border: #E4E7EC;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 48px 56px 46px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+    #hg-hierarchy * { box-sizing: border-box; margin: 0; }
+
+    .hr-head { text-align: center; margin-bottom: 28px; }
+    .hr-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .hr-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .hr-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .hr-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .hr-sub { font-size: 17px; color: var(--text-2); line-height: 1.6; }
+
+    .hr-main { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: stretch; }
+
+    .hr-levels { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 24px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); }
+    .lv1 { border-left: 4px solid var(--primary); border-radius: 0 14px 14px 0; padding-left: 22px; }
+    .lv2 { border-left: 4px solid var(--success); border-radius: 0 14px 14px 0; padding-left: 20px; }
+    .lv3 { border-left: 4px solid var(--plum); border-radius: 0 14px 14px 0; padding-left: 18px; }
+
+    .lv-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+    .lv-badge {
+      font-size: 11.5px; font-weight: 700; letter-spacing: 0.4px;
+      padding: 5px 9px; border-radius: 6px; line-height: 1;
+    }
+    .lv1 > .lv-head .lv-badge { background: var(--primary); color: #fff; }
+    .lv2 > .lv-head .lv-badge { background: var(--success); color: #fff; }
+    .lv3 > .lv-head .lv-badge { background: var(--plum); color: #fff; }
+    .lv-name { font-size: 21px; font-weight: 700; letter-spacing: -0.2px; }
+    .lv-role { font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; line-height: 1; }
+    .lv1 > .lv-head .lv-role { background: var(--primary-soft); border: 1px solid var(--primary-border); color: var(--primary-fg); }
+    .lv2 > .lv-head .lv-role { background: var(--success-soft); border: 1px solid var(--success-border); color: var(--success-fg); }
+    .lv3 > .lv-head .lv-role { background: var(--plum-soft); border: 1px solid var(--plum-border); color: var(--plum-fg); }
+    .lv-desc { font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip {
+      font-size: 12px; line-height: 1; padding: 7px 11px; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--primary-border); color: var(--primary-fg);
+      white-space: nowrap;
+    }
+    .chip.neutral { background: var(--surface-sunken); border-color: var(--border); color: var(--text-2); }
+
+    .lv-bridge { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; }
+    .lv-bridge .line { flex: 1; border-top: 1px dashed var(--border); }
+    .lv-bridge .txt { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+
+    .lv2-box { background: var(--surface-soft); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px 18px 20px; }
+    .lv3-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+
+    .obj-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .obj {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .obj-name { font-size: 13.5px; font-weight: 700; }
+    .obj-name .must {
+      font-size: 10.5px; font-weight: 700; padding: 3px 6px; border-radius: 5px; margin-left: 6px;
+      background: var(--success-soft); border: 1px solid var(--success-border); color: var(--success-fg);
+      vertical-align: 1px; white-space: nowrap;
+    }
+    .obj-desc { font-size: 11.5px; color: var(--text-2); line-height: 1.5; }
+
+    .type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+    .type {
+      background: var(--plum-soft); border: 1px solid var(--plum-border); border-radius: 10px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .type-name { font-size: 13px; font-weight: 700; color: var(--plum-fg); }
+    .type-desc { font-size: 11.5px; color: var(--text-2); line-height: 1.5; }
+
+    .lite { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .lite span {
+      font-size: 11.5px; line-height: 1; padding: 6px 9px; border-radius: 6px;
+      background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .lv-note { font-size: 12px; color: var(--text-3); line-height: 1.6; margin-top: 10px; }
+
+    .hr-rail { display: flex; flex-direction: column; gap: 14px; }
+    .rail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 18px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); }
+    .rail-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+    .rail-title .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    .cross { display: flex; flex-direction: column; gap: 10px; }
+    .cross-item { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 8px; padding: 10px 11px; background: var(--surface-soft); }
+    .cross-item .name { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 700; }
+    .cross-item .scope { font-size: 10.5px; font-weight: 500; color: var(--primary-fg); white-space: nowrap; }
+    .cross-item .desc { font-size: 11.5px; color: var(--text-2); line-height: 1.55; margin-top: 4px; }
+    .cross-item.warn { border-left-color: var(--plum); }
+    .cross-item.warn .scope { color: var(--plum-fg); }
+    .cross-item.neutral { border-left-color: var(--success); }
+    .cross-item.neutral .scope { color: var(--success-fg); }
+
+    .rules { display: flex; flex-direction: column; gap: 8px; }
+    .rule {
+      font-size: 12px; color: var(--text-2); line-height: 1.5;
+      background: var(--surface-soft); border: 1px solid var(--border); border-left: 3px solid var(--plum);
+      border-radius: 8px; padding: 8px 10px;
+    }
+    .rule b { color: var(--text); font-weight: 700; }
+
+    .hr-foot {
+      display: grid; grid-template-columns: 1fr 560px; gap: 26px; align-items: center;
+      margin-top: 18px; padding: 16px 22px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .foot-segs { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 7px; }
+    .hr-foot .seg { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+    .hr-foot .seg b { color: var(--text); font-weight: 700; }
+    .hr-foot .seg .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .hr-foot .divider { width: 1px; height: 16px; background: var(--border); }
+    .hr-foot .concl { font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
+    .foot-views { border-left: 1px solid var(--border); padding-left: 24px; }
+    .views-label { font-size: 11.5px; color: var(--text-3); margin-bottom: 7px; }
+
+    .views { display: flex; flex-wrap: wrap; gap: 6px; }
+    .views span {
+      font-size: 11px; line-height: 1; padding: 5px 8px; border-radius: 999px;
+      background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2);
+      white-space: nowrap;
+    }
+    .views span.primary { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+
+    @media (max-width: 760px) {
+      #hg-hierarchy { width: 100%; padding: 28px 20px; }
+      .hr-main { grid-template-columns: 1fr; }
+      .obj-grid { grid-template-columns: 1fr; }
+      .type-grid { grid-template-columns: 1fr 1fr; }
+      .hr-foot { grid-template-columns: 1fr; }
+      .foot-views { border-left: 0; padding-left: 0; }
+    }
+  </style>
+
+  <div class="hr-head">
+    <div class="hr-brand">
+      <div class="hr-logo">⏳</div>
+      <div class="hr-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="hr-sub">协作层级 · 空间定边界，项目定交付，工作项定执行 · 每条数据都能找回它属于谁</div>
+  </div>
+
+  <div class="hr-main">
+    <div class="hr-levels">
+      <section class="lv1">
+        <div class="lv-head">
+          <span class="lv-badge">L1</span>
+          <span class="lv-name">空间</span>
+          <span class="lv-role">协作边界</span>
+        </div>
+        <div class="lv-desc">一个团队一个空间。成员与角色、看板列、标签、分支池、通知与 AI 配置都在空间层维护，决定谁看得见、谁可以改。</div>
+        <div class="chips">
+          <span class="chip">成员与角色</span>
+          <span class="chip">看板列</span>
+          <span class="chip">标签</span>
+          <span class="chip">分支池（含空间级公共分支）</span>
+          <span class="chip">通知与 AI 配置</span>
+        </div>
+
+        <div class="lv-bridge">
+          <span class="line"></span>
+          <span class="txt">1 个空间包含多个项目 · 项目之间数据隔离，跨项目汇总另设视图</span>
+          <span class="line"></span>
+        </div>
+
+        <div class="lv2-box">
+          <section class="lv2">
+            <div class="lv-head">
+              <span class="lv-badge">L2</span>
+              <span class="lv-name">项目</span>
+              <span class="lv-role">交付单元</span>
+            </div>
+            <div class="lv-desc">一次交付的时间盒。版本在项目内切分，模块随项目配置；需求、文档、测试与版本都以项目为归属。</div>
+
+            <div class="obj-grid">
+              <div class="obj">
+                <div class="obj-name">需求池</div>
+                <div class="obj-desc">需求入池评审，通过后拆成工作项；WSJF 打分排序</div>
+              </div>
+              <div class="obj">
+                <div class="obj-name">需求文档<span class="must">必须归属</span></div>
+                <div class="obj-desc">多级文档树，可派生工作项与 AI 拆解草稿</div>
+              </div>
+              <div class="obj">
+                <div class="obj-name">版本</div>
+                <div class="obj-desc">项目内的时间盒；目标版本与计划交付版本分开</div>
+              </div>
+              <div class="obj">
+                <div class="obj-name">测试用例与计划<span class="must">必须归属</span></div>
+                <div class="obj-desc">覆盖项目需求，失败可一键转出缺陷工作项</div>
+              </div>
+              <div class="obj">
+                <div class="obj-name">模块（分类）</div>
+                <div class="obj-desc">按项目一套清单；模块合计 + 未指定 = 项目合计</div>
+              </div>
+              <div class="obj">
+                <div class="obj-name">项目驾驶舱</div>
+                <div class="obj-desc">健康度、模块统计与成员负载，按项目口径汇总</div>
+              </div>
+            </div>
+
+            <div class="lv-bridge">
+              <span class="line"></span>
+              <span class="txt">1 个项目包含多个工作项 · 工作项与分支允许暂不归属项目</span>
+              <span class="line"></span>
+            </div>
+
+            <div class="lv3-box">
+              <section class="lv3">
+                <div class="lv-head">
+                  <span class="lv-badge">L3</span>
+                  <span class="lv-name">工作项</span>
+                  <span class="lv-role">执行与计时最小单位</span>
+                </div>
+                <div class="lv-desc">状态由看板列驱动，四类工作项按通用敏捷定义区分；时间与完成都落在工作项上。</div>
+
+                <div class="type-grid">
+                  <div class="type">
+                    <div class="type-name">任务</div>
+                    <div class="type-desc">具体工作单元，常由需求或故事拆出，约 1–2 天</div>
+                  </div>
+                  <div class="type">
+                    <div class="type-name">用户故事</div>
+                    <div class="type-desc">从用户视角描述的功能，一个迭代内可交付</div>
+                  </div>
+                  <div class="type">
+                    <div class="type-name">缺陷</div>
+                    <div class="type-desc">已交付功能与预期不符，来自测试或反馈</div>
+                  </div>
+                  <div class="type">
+                    <div class="type-name">史诗</div>
+                    <div class="type-desc">大粒度需求集合，需拆解为故事 / 任务再排期</div>
+                  </div>
+                </div>
+
+                <div class="lite">
+                  <span>状态 · 看板列驱动</span>
+                  <span>分支 · 可挂载并跟踪流转</span>
+                  <span>版本 · 可关联多个计划版本</span>
+                  <span>计时 · 拖动即开停表</span>
+                  <span>完成快照 · 完成 ≠ 发布</span>
+                  <span>子任务与依赖</span>
+                </div>
+                <div class="lv-note">未挂项目的工作项与分支作为待整理事项保留，不进入项目统计；文档、测试用例与测试计划不允许游离在项目之外。</div>
+              </section>
+            </div>
+          </section>
+        </div>
+        <div class="lv-note">项目之间数据隔离；空间级配置（看板列、标签、分支池、通知）对所有项目生效，跨项目视图只做汇总，不改变归属。</div>
+      </section>
+    </div>
+
+    <aside class="hr-rail">
+      <div class="rail-card">
+        <div class="rail-title"><span class="dot" style="background: var(--primary);"></span>跨层对象 · 不改变归属</div>
+        <div class="cross">
+          <div class="cross-item">
+            <div class="name">发布计划<span class="scope">空间级 · 可跨版本 / 跨项目</span></div>
+            <div class="desc">把多个版本的交付内容编排进一次发布；全部包含版本成功生产部署后计划才完成。</div>
+          </div>
+          <div class="cross-item warn">
+            <div class="name">实际发布<span class="scope">归属单一版本 · 不可变</span></div>
+            <div class="desc">test / staging、失败、回滚与部分成功都不算发布完成；发布徽标只由成功 production 记录派生。</div>
+          </div>
+          <div class="cross-item neutral">
+            <div class="name">工时与完成快照<span class="scope">按工作项留痕</span></div>
+            <div class="desc">拖拽、计时、补记写入同一套事实；报表、发布历史与周回顾直读，不做二次录入。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail-card">
+        <div class="rail-title"><span class="dot" style="background: var(--plum);"></span>归属规则</div>
+        <div class="rules">
+          <div class="rule"><b>必须挂项目</b>：需求文档、测试用例、测试计划，删除项目前先看影响预览</div>
+          <div class="rule"><b>可以暂不挂</b>：工作项与分支，作为个人或临时事项待整理，不进入项目口径</div>
+          <div class="rule"><b>版本不跨项目</b>：工作项可关联多个计划版本，但都须属于所在项目；成功发布后成员冻结</div>
+          <div class="rule"><b>计划不拥数据</b>：发布计划只引用版本与工作项，完成与发布事实仍落在版本上</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="hr-foot">
+    <div class="foot-left">
+      <div class="foot-segs">
+        <div class="seg"><span class="dot" style="background: var(--primary);"></span><b>空间</b>管配置</div>
+        <div class="divider"></div>
+        <div class="seg"><span class="dot" style="background: var(--success);"></span><b>项目</b>管交付</div>
+        <div class="divider"></div>
+        <div class="seg"><span class="dot" style="background: var(--plum);"></span><b>工作项</b>管执行</div>
+      </div>
+      <div class="concl">层级是归属，不是权限树 —— 版本与发布计划是横跨工作项的交付视图；不同视角只是同一套数据的切片。</div>
+    </div>
+    <div class="foot-views">
+      <div class="views-label">读取视角</div>
+      <div class="views">
+        <span class="primary">我的工作</span>
+        <span class="primary">全局健康度</span>
+        <span class="primary">项目驾驶舱</span>
+        <span>看板</span>
+        <span>甘特图</span>
+        <span>发布日程</span>
+        <span>周回顾</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

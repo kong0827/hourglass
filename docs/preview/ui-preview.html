@@ -4324,6 +4324,51 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .release-chip{display:inline-block;max-width:180px;height:20px;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-size:12px;line-height:18px;vertical-align:middle;}
 .release-chip.is-more{flex:0 0 auto;background:var(--primary-soft);border-color:transparent;color:var(--primary);font-weight:600;font-variant-numeric:tabular-nums;}
 .release-chip.is-empty{background:transparent;border-style:dashed;color:var(--text-3);}
+/* 计划涉及分支：按所选工作项实时推导，只读、不落库 */
+.plan-branches{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);}
+.plan-br-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.plan-br-head h4{margin:0;font-size:13px;font-weight:650;color:var(--text);}
+.plan-br-live{display:inline-flex;align-items:center;gap:5px;padding:1px 7px;border:1px solid var(--primary-border);border-radius:var(--r-pill);background:var(--primary-soft);color:var(--primary-fg);font-size:11px;line-height:17px;font-weight:600;}
+.plan-br-live i{width:5px;height:5px;border-radius:50%;background:var(--primary);}
+.plan-br-summary{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.plan-br-summary b{font-weight:600;color:var(--text-2);}
+.plan-br-stats{display:flex;flex-wrap:wrap;gap:6px;}
+.plan-br-stat{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface);font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.plan-br-list{display:flex;flex-direction:column;min-width:0;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);overflow:hidden;}
+.plan-br-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto 50px minmax(0,86px) minmax(0,.85fr);align-items:center;gap:8px 10px;min-width:0;padding:8px 11px;border-bottom:1px solid var(--border);font-size:12.5px;}
+.plan-br-row:last-child{border-bottom:0;}
+.plan-br-row.is-released{opacity:.62;}
+.plan-br-name{display:flex;align-items:center;gap:7px;min-width:0;font-weight:600;color:var(--text);}
+.plan-br-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.plan-br-target{display:flex;align-items:center;gap:5px;min-width:0;color:var(--text-2);}
+.plan-br-target em{font-style:normal;color:var(--text-3);font-size:11px;}
+.plan-br-target span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:11.5px;}
+.plan-br-target.is-empty{color:var(--warning-fg);}
+.plan-br-target.is-empty span{font-family:inherit;font-size:12px;}
+.plan-br-badge{justify-self:start;display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--surface-sunken);color:var(--text-2);font-family:inherit;font-size:11px;line-height:17px;white-space:nowrap;}
+.plan-br-badge.is-dev{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.plan-br-badge.is-testing{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+.plan-br-badge.is-merging{background:var(--plum-soft);border-color:var(--plum-border);color:var(--plum);}
+.plan-br-badge.is-released{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+.plan-br-badge.is-editable{cursor:pointer;}
+.plan-br-badge.is-editable:hover{filter:brightness(.97);}
+.plan-br-badge.is-editable:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.plan-br-badge svg{flex:0 0 auto;}
+.plan-br-count{color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.plan-br-owner{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--text-2);font-size:12.5px;}
+.plan-br-owner svg{flex:0 0 auto;color:var(--text-3);}
+.plan-br-owner span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.plan-br-owner.is-empty{color:var(--text-3);}
+.plan-br-project{min-width:0;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 弹层内的菜单必须高于 .modal-layer（200），否则会被盖在发布弹窗下面 */
+.plan-br-status-menu{min-width:160px;z-index:260;}
+.plan-br-status-menu .menu-item{display:flex;align-items:center;gap:8px;}
+.plan-br-status-menu .menu-item.on{color:var(--text);font-weight:650;}
+.plan-br-unbound{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-2);}
+.plan-br-unbound b{font-weight:600;color:var(--text);}
+.plan-br-note{margin:0;font-size:11.5px;line-height:17px;color:var(--text-3);}
+.plan-br-note b{font-weight:600;color:var(--text-2);}
+.plan-br-empty{margin:0;padding:10px 11px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-3);}
 #iDemandTarget{white-space:normal;overflow-wrap:anywhere;}
 #demTasks .tbl-wrap{max-width:100%;overflow-x:auto;}
 @media(max-width:600px){
@@ -4351,6 +4396,14 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   .release-version-picker{grid-template-columns:1fr;max-height:36dvh;}
   .release-version-row{min-height:44px;}
   .release-chip{max-width:150px;}
+  .plan-br-summary{flex:1 1 100%;margin-left:0;line-height:17px;}
+  .plan-br-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 11px;}
+  .plan-br-name{grid-column:1 / 2;}
+  .plan-br-target{grid-column:1 / 2;font-size:12px;}
+  .plan-br-badge{grid-column:2 / 3;grid-row:1 / 2;}
+  .plan-br-count{grid-column:2 / 3;grid-row:2 / 3;justify-self:end;color:var(--text-3);font-size:11.5px;}
+  .plan-br-project{grid-column:1 / 2;grid-row:3 / 4;font-size:11.5px;}
+  .plan-br-owner{grid-column:2 / 3;grid-row:3 / 4;justify-self:end;font-size:11.5px;}
   .phase-acts .btn{min-height:44px;}
 }
 @media (max-width:900px){
@@ -4493,6 +4546,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .demg-legend .demg-legend-expect::before{display:none;}
 /* 甘特「?」入口与阶段口径弹层 */
 .demg-help-btn{width:20px;height:20px;margin-left:2px;}
+.demg-help-pop{max-height:min(640px,78vh);}
 .demg-help-stages{display:flex;flex-direction:column;gap:6px;padding:6px 10px 10px;border-bottom:1px solid var(--border);}
 .demg-help-row{display:grid;grid-template-columns:8px 30px minmax(0,1fr) auto;gap:6px;align-items:start;font-size:12px;line-height:17px;}
 .demg-help-row .demg-legend-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-top:5px;}
@@ -4556,6 +4610,11 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .plan-stats{margin:4px 0 6px;}
 .plan-case{align-items:center;gap:10px;}
 .plan-case input[type=checkbox]{flex:none;}
+/* 批量勾选条：全选 / 按结果快选 / 清除，右侧显示已选计数 */
+.plan-selbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 8px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12px;color:var(--text-2);}
+.plan-selbar label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);}
+.plan-selbar .btn[disabled]{opacity:.5;cursor:not-allowed;}
+.plan-sel-count{margin-left:auto;color:var(--text-3);font-variant-numeric:tabular-nums;}
 .pick-row{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px;}
 .pick-row:hover{background:var(--surface-hover);}
 .pick-row input{flex:none;}
@@ -5385,6 +5444,72 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .project-delivery-card span{font-size:12.5px;font-weight:600;color:var(--text-2);}
 .project-delivery-card small{font-size:11.5px;color:var(--text-3);}
 @media(max-width:760px){.project-delivery-grid{grid-template-columns:1fr;}}
+
+/* 项目驾驶舱：模块统计与就地维护 */
+.project-modules-head{align-items:flex-start;}
+.project-modules-title{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap;}
+.project-modules-title>b{font-size:13.5px;font-weight:650;}
+.project-modules-title>span{font-size:12px;color:var(--text-3);}
+.project-modules-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.project-modules-caliber{margin:0;font-size:12px;}
+.project-modules-note{margin:-6px 0 12px;font-size:12px;line-height:18px;color:var(--text-3);}
+.project-modules-tbl .project-module-row{cursor:pointer;}
+.project-modules-tbl .project-module-row:hover{background:var(--surface-hover);}
+.project-modules-tbl .project-module-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px;}
+.project-module-name{display:flex;align-items:center;gap:8px;color:var(--text);font-weight:500;white-space:nowrap;}
+.project-module-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--text-3);}
+.project-module-progress{display:flex;align-items:center;gap:8px;min-width:110px;}
+.project-module-progress .progress{flex:1;min-width:56px;}
+.project-module-progress b{min-width:34px;font-size:12px;color:var(--text-2);text-align:right;font-variant-numeric:tabular-nums;}
+.project-modules-tbl tr.is-unassigned td{color:var(--text-3);}
+.project-modules-tbl tr.is-unassigned .project-module-name{font-weight:500;color:var(--text-2);}
+.project-modules-total td{background:var(--surface-sunken);font-weight:600;color:var(--text);}
+.project-modules-total .project-module-name b{font-weight:650;}
+.project-modules-total .progress>i{background:var(--text-2);}
+.project-module-ops{text-align:right;white-space:nowrap;}
+.project-modules-tbl tr.is-deleting td{background:var(--danger-soft);}
+.project-module-editor td{padding:8px 0;background:transparent;border-bottom:0;}
+.project-module-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--surface-2);border-radius:var(--r-sm);}
+.project-module-del{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--danger-soft);border:1px solid var(--danger-border);border-radius:var(--r-md);}
+.project-module-del-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--surface);border:1px solid var(--danger-border);color:var(--danger);}
+.project-module-inline>b,.project-module-del-text b{font-size:12.5px;color:var(--text);}
+.project-module-inline input[type="text"],.project-module-target select{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:12.5px;}
+.project-module-inline input[type="text"]{width:220px;}
+.project-module-inline input[type="color"]{width:32px;height:30px;padding:2px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.project-module-inline .foot-note{margin-left:auto;}
+.project-module-del-text{display:flex;flex-direction:column;gap:2px;flex:1 1 320px;min-width:0;}
+.project-module-del-text small{font-size:11.5px;color:var(--text-3);line-height:17px;}
+.project-module-target{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);}
+.project-modules-foot-note{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 0;font-size:11.5px;line-height:17px;color:var(--text-3);}
+.project-modules-foot-main{display:inline-flex;gap:6px;align-items:flex-start;}
+.project-modules-foot-info{display:inline-flex;flex:0 0 auto;margin-top:2px;color:var(--text-3);}
+@media(max-width:760px){
+  .project-modules-head{flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px;}
+  .project-modules-title{flex:1 1 auto;min-width:0;flex-wrap:nowrap;}
+  .project-modules-title>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .project-modules-tools{width:auto;flex:0 0 auto;justify-content:flex-end;}
+  .project-modules-caliber{display:none;}
+  .project-modules-tbl thead{display:none;}
+  .project-modules-tbl tbody tr.project-module-row,
+  .project-modules-tbl tbody tr.project-modules-total{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;padding:12px 2px;border-bottom:1px solid var(--border);}
+  .project-modules-tbl tbody tr.project-module-row td,
+  .project-modules-tbl tbody tr.project-modules-total td{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:0;border:0;text-align:left;}
+  .project-modules-tbl tbody tr.project-module-row td:first-child{grid-column:1;grid-row:1;}
+  .project-modules-tbl tbody tr.is-unassigned td:first-child,
+  .project-modules-tbl tbody tr.project-modules-total td:first-child{grid-column:1/-1;}
+  .project-modules-tbl td[data-label]::before{content:attr(data-label);font-size:11.5px;font-weight:500;color:var(--text-3);}
+  .project-modules-tbl .project-module-ops{grid-column:2;grid-row:1;justify-self:end;align-items:flex-end;}
+  .project-modules-tbl td.project-module-ops::before{content:none;}
+  .project-module-name{white-space:normal;}
+  .project-modules-tbl tbody tr.project-module-row td[data-label="进度"],
+  .project-modules-tbl tbody tr.project-modules-total td[data-label="进度"]{grid-column:1/-1;}
+  .project-module-progress{width:100%;}
+  .project-modules-total{background:var(--surface-sunken);border-radius:var(--r-sm);padding:10px 8px !important;}
+  .project-modules-total td{background:none;}
+  .project-module-editor td{padding:10px 0;}
+  .project-module-inline input[type="text"]{width:100%;}
+  .project-module-inline .foot-note{margin-left:0;}
+}
 
 </style>
 <style>
@@ -7120,7 +7245,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                     <input type="text" id="projCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
                     <button class="btn sm" type="button" id="btnProjCatAdd">添加模块</button>
                   </div>
-                  <p class="foot-note" id="projCatHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
+                  <p class="foot-note" id="projCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
                 </div>
                 <div class="row row-gap">
                   <button class="btn primary" type="button" id="btnSaveReq">添加项目</button>
@@ -7919,45 +8044,6 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           <div class="br-groups" id="branchGroups"></div>
         </div>
 
-        <!-- 新建 / 编辑分支 -->
-        <div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
-          <div class="sheet reqdoc-dlg br-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
-            <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
-            <div class="reqdoc-dlg-form">
-              <label class="reqdoc-dlg-field">
-                <span>分支名</span>
-                <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>目标分支</span>
-                <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>所属项目</span>
-                <select id="brReq"><option value="">空间级公共分支</option></select>
-              </label>
-              <div class="br-dlg-2col">
-                <label class="reqdoc-dlg-field">
-                  <span>负责人</span>
-                  <select id="brOwner"></select>
-                </label>
-                <label class="reqdoc-dlg-field" id="brStatusField">
-                  <span>初始状态</span>
-                  <select id="brStatus"></select>
-                </label>
-              </div>
-              <label class="reqdoc-dlg-field">
-                <span>备注</span>
-                <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
-              </label>
-            </div>
-            <div class="reqdoc-dlg-foot">
-              <button class="btn" type="button" id="dlgBranchCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
-            </div>
-          </div>
-        </div>
       </section>
 
       <!-- ===== 周回顾 ===== -->
@@ -8507,7 +8593,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 <input type="text" id="wsCatNewName" maxlength="12" placeholder="新模块名，如：客户跟进" />
                 <button class="btn sm" type="button" id="btnWsCatAdd">添加模块</button>
               </div>
-              <p class="foot-note" id="wsCatHint" hidden>查看者只能查看模块配置，不能新增、改名、改色或排序。</p>
+              <p class="foot-note" id="wsCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
             </div>
 
             <div class="panel" data-set-pane="data" id="set-data">
@@ -8820,6 +8906,46 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
       </section>
 
     </main>
+  </div>
+</div>
+
+<!-- 新建 / 编辑分支：放在视图外，工作项抽屉 / 分支页都能打开 -->
+<div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
+  <div class="sheet reqdoc-dlg br-dlg">
+    <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
+    <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
+    <div class="reqdoc-dlg-form">
+      <label class="reqdoc-dlg-field">
+        <span>分支名</span>
+        <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
+      </label>
+      <label class="reqdoc-dlg-field">
+        <span>目标分支</span>
+        <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
+      </label>
+      <label class="reqdoc-dlg-field">
+        <span>所属项目</span>
+        <select id="brReq"><option value="">空间级公共分支</option></select>
+      </label>
+      <div class="br-dlg-2col">
+        <label class="reqdoc-dlg-field">
+          <span>负责人</span>
+          <select id="brOwner"></select>
+        </label>
+        <label class="reqdoc-dlg-field" id="brStatusField">
+          <span>初始状态</span>
+          <select id="brStatus"></select>
+        </label>
+      </div>
+      <label class="reqdoc-dlg-field">
+        <span>备注</span>
+        <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
+      </label>
+    </div>
+    <div class="reqdoc-dlg-foot">
+      <button class="btn" type="button" id="dlgBranchCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
+    </div>
   </div>
 </div>
 
@@ -10304,9 +10430,12 @@ var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§7.1） 
                   <span class="hint" id="iEpicHint">先选项目，再挂到该项目的史诗下。</span>
                 </div>
                 <div class="field">
-                  <label class="field-label" for="iBranch">所属分支</label>
+                  <div class="field-label">
+                    <label for="iBranch">所属分支</label>
+                    <button type="button" class="label-link" id="iBranchNew" hidden>新建分支</button>
+                  </div>
                   <select id="iBranch"></select>
-                  <span class="hint" id="iBranchHint">分支在「分支」页创建，这里负责挂接。</span>
+                  <span class="hint" id="iBranchHint">找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。</span>
                 </div>
                 <div class="field">
                   <div class="field-label">
@@ -12497,6 +12626,20 @@ function projectAccess(reqId){
 }
 function canEditReq(reqId){
   return projectAccess(reqId) === "write";
+}
+/** 项目设置类操作（模块维护等）：空间主/管理员，或项目负责人；仍需具备项目写权限 */
+function canManageProject(reqId, ownerUserId){
+  if(projectAccess(reqId) !== "write") return false;
+  var role = currentRole();
+  if(role === "owner" || role === "admin") return true;
+  var owner = ownerUserId;
+  if(!owner && reqId){
+    for(var i = 0; i < rt.reqList.length; i++){
+      if(rt.reqList[i].id === reqId){ owner = rt.reqList[i].ownerUserId; break; }
+    }
+  }
+  var me = rt.currentUser && rt.currentUser.id;
+  return !!(owner && me && String(owner) === String(me));
 }
 function canEditTask(t){
   if(!t) return false;
@@ -15464,12 +15607,18 @@ function loadDemandAttachments(layer, id, writable){
       var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
       var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
       var canPrev = previewable(a.filename);
+      /* 与任务抽屉一致：可预览的缩略图/文件名直接开弹框，表格开 Univer，其余（zip、ppt）走新标签 */
+      var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+        : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+      var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+      var isOpen = canPrev || isSheet;
+      var openCls = isOpen ? ' class="att-open"' : "";
       var url = attUrl(a.id);
       var head = isImg
-        ? '<img class="att-thumb" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" />'
-        : '<span class="att-icon">' + esc(extOfName(a.filename).toUpperCase().slice(0, 4) || "FILE") + '</span>';
+        ? '<img class="att-thumb' + (isOpen ? " is-open" : "") + '" src="' + attThumbUrl(a.id) + '" alt="" loading="lazy"' + openKey + ' />'
+        : '<span class="att-icon' + (isOpen ? " is-open" : "") + '"' + openKey + '>' + esc(extOfName(a.filename).toUpperCase().slice(0, 4) || "FILE") + '</span>';
       return '<div class="attach-item">' + head +
-        '<span class="att-name"><a href="' + url + '" target="_blank" rel="noopener" title="预览 / 下载">' + esc(a.filename) + '</a></span>' +
+        '<span class="att-name"><a' + openCls + ' href="' + url + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' + esc(a.filename) + '</a></span>' +
         '<span class="att-size">' + fmtSize(a.size) + '</span>' +
         '<span class="att-acts">' +
           (canPrev ? '<button class="icon-btn sm" type="button" data-att-prev="' + esc(a.id) + '" title="在线预览" aria-label="在线预览">' + icon("eye", 14) + '</button>' : '') +
@@ -15652,6 +15801,7 @@ function renderDemandDetail(d){
     if(ot){ UI.closeModal(layer); openTaskById(ot.dataset.openTask); return; }
     var pv = e.target.closest("[data-att-prev]");
     if(pv){
+      e.preventDefault();
       var boxP = layer.querySelector("#demAtts");
       var attP = ((boxP && boxP.__attList) || []).find(function(a){ return a.id === pv.dataset.attPrev; });
       if(attP) openAttPreview({ attachment: attP });
@@ -15659,6 +15809,7 @@ function renderDemandDetail(d){
     }
     var sh = e.target.closest("[data-att-sheet]");
     if(sh){
+      e.preventDefault();
       var boxS = layer.querySelector("#demAtts");
       var attS = ((boxS && boxS.__attList) || []).find(function(a){ return a.id === sh.dataset.attSheet; });
       if(!attS) return;
@@ -15807,7 +15958,7 @@ function openDemandGanttHelp(anchor){
   if(!anchor) return;
   if(UI.popOpen(demandGanttHelpPop)){ UI.closeAllPops(); return; }
   var el = document.createElement("div");
-  el.className = "menu popover type-help-pop";
+  el.className = "menu popover type-help-pop demg-help-pop";
   el.innerHTML = demandGanttInfoHTML();
   demandGanttHelpPop = el;
   UI.openPop(el, anchor, { align:"right", width:Math.max(300, Math.min(460, window.innerWidth - 16)), onClose:function(){ el.remove(); demandGanttHelpPop = null; } });
@@ -20282,11 +20433,18 @@ function enterListView(){
   });
   loadList();
 }
-function refreshListIfOpen(){ if(activeView === "list") loadList(); }
-function listRequestParams(offset){
+/* 保存 / 删除 / 批量操作后的刷新：保留已加载分页与滚动位置，
+   不闪骨架屏、不把 offset 归零；筛选或排序变化仍走普通 loadList。 */
+function refreshListIfOpen(){
+  if(activeView !== "list") return null;
+  var view = document.getElementById("view-list");
+  var top = view ? view.scrollTop : 0;
+  return loadList({silent:true, keepLoaded:true, restoreScroll:top});
+}
+function listRequestParams(offset, limit){
   var requestSort = smart.sort === "default" ? serverSort : smart.sort;
   if(requestSort === "estimate" || requestSort === "actual") requestSort = serverSort;
-  var extra = {sort:requestSort, offset:offset || 0, limit:LIST_PAGE_SIZE};
+  var extra = {sort:requestSort, offset:offset || 0, limit:limit || LIST_PAGE_SIZE};
   /* 能下推的预置条件下推，避免 500 条上限截断后本地预置结果偏少。 */
   if(smart.preset === "mine" && !state.owners.length && rt.currentUser){
     var myName = rt.currentUser.displayName || rt.currentUser.username;
@@ -20307,11 +20465,14 @@ function updateListMeta(rawCount){
 function loadList(opts){
   opts = opts || {};
   var append = !!(opts.more && lastItems.length);
+  /* 保留已加载分页：一次重新拉取与当前加载量等量的数据，避免回到第一页 */
+  var keep = !!(opts.keepLoaded && lastItems.length && !append);
   var offset = append ? lastItems.length : 0;
+  var limit = keep ? Math.min(500, Math.max(LIST_PAGE_SIZE, lastItems.length)) : LIST_PAGE_SIZE;
   var seq = ++rt.listSeq;
   listLoadingMore = append;
   if(!append) listHasMore = false;
-  if(!opts.silent && !append){
+  if(!opts.silent && !append && !keep){
     listBody.innerHTML = UI.skeletonRows(8);
     listMeta.textContent = "加载中…";
   }
@@ -20319,7 +20480,7 @@ function loadList(opts){
   /* 选中态不在重载时清空：批量操作后会重载，清空让人误以为操作没生效；
      真正失效的 id 在 renderListItems 里按可见行裁剪 */
   syncListSelectionUI();
-  API.get("/api/tasks/list", listRequestParams(offset)).then(function(d){
+  return API.get("/api/tasks/list", listRequestParams(offset, limit)).then(function(d){
     if(seq !== rt.listSeq) return;
     rt.listTotal = d.total || 0;
     listHasMore = !!d.hasMore;
@@ -20328,12 +20489,19 @@ function loadList(opts){
     var items = d.items || [];
     renderListItems(append ? lastItems.concat(items) : items);
     updateListMeta((append ? lastItems.length : items.length));
+    if(opts.restoreScroll != null){
+      var view = document.getElementById("view-list");
+      if(view){
+        view.scrollTop = opts.restoreScroll;
+        requestAnimationFrame(function(){ view.scrollTop = opts.restoreScroll; });
+      }
+    }
   }).catch(function(ex){
     if(seq !== rt.listSeq) return;
     listLoadingMore = false;
-    if(append){
-      toast(ex.message || "加载更多失败", "bad");
-      renderListItems(lastItems);
+    if(append || keep || opts.silent){
+      toast(ex.message || "列表刷新失败", "bad");
+      if(append) renderListItems(lastItems);
       return;
     }
     listMeta.textContent = "";
@@ -21175,6 +21343,9 @@ function formSnapshot(){
     regression: (iRegression && iRegression.value) || "",
     prog: formProgressValue(),
     note: (iNote.value || "").trim(),
+    /* 评论草稿与待上传附件也纳入基线：关闭/切页前不能静默丢掉 */
+    comment: (iComment && iComment.value || "").trim(),
+    commentFiles: pendingCommentFiles.map(function(f){ return f.name + "\u0001" + f.size; }).join("\u0001"),
     recur: rt.formRecur || "",
     remind: (iRemind && iRemind.value) || "",
     remindTarget: (iRemindTarget && iRemindTarget.value) || "owner",
@@ -21196,6 +21367,37 @@ function formSnapshot(){
   var bsel = $("iBranch");
   if(formReady(bsel)) snap.branch = bsel.value || "";
   return snap;
+}
+/* 只比较表单字段：重新加载会用服务器内容覆盖表单，但评论草稿会按任务保留 */
+function formFieldsDirty(){
+  if(!formBase) return false;
+  var cur = formSnapshot();
+  for(var k in formBase){
+    if(k === "comment" || k === "commentFiles") continue;
+    if(cur[k] === undefined) continue;
+    if(formBase[k] !== cur[k]) return true;
+  }
+  return false;
+}
+/* 409 冲突：列出服务器相对本次打开时已变化的字段，供用户选择重载或覆盖 */
+var CONFLICT_FIELDS = [
+  ["title", "标题"], ["description", "描述"], ["priority", "优先级"], ["categoryId", "模块"],
+  ["owner", "负责人"], ["boardColumn", "状态"], ["startDate", "开始日期"], ["dueDate", "截止日期"],
+  ["reqId", "所属项目"], ["itemType", "类型"], ["severity", "严重度"], ["environment", "环境"],
+  ["progress", "进度"], ["estimateMinutes", "预计耗时"], ["note", "备注"], ["branchId", "分支"],
+  ["epicId", "史诗"], ["demandId", "需求"], ["versionIds", "版本"], ["tags", "标签"]
+];
+function conflictValue(v){
+  if(v === null || v === undefined) return "";
+  if(Object.prototype.toString.call(v) === "[object Array]") return v.slice().sort().join("\u0001");
+  return String(v);
+}
+function conflictChangedLabels(before, after){
+  var labels = [];
+  CONFLICT_FIELDS.forEach(function(pair){
+    if(conflictValue(before && before[pair[0]]) !== conflictValue(after && after[pair[0]])) labels.push(pair[1]);
+  });
+  return labels;
 }
 function resetFormBaseline(){
   formBase = formSnapshot();
@@ -21987,6 +22189,13 @@ function applyDrawerReadOnly(readOnly){
   var factStatus = $("factStatus");
   if(factStatus) factStatus.disabled = !!readOnly;
   if(reqDocPickerBtn) reqDocPickerBtn.disabled = !!readOnly;
+  /* 就地新建分支属于写操作：只读项目里连同入口一起收起，提示也不能再引导去点它 */
+  var branchNewBtn = $("iBranchNew");
+  if(branchNewBtn) branchNewBtn.hidden = !!readOnly;
+  var branchHint = $("iBranchHint");
+  if(branchHint) branchHint.textContent = readOnly
+    ? "当前项目为只读项目，不能新建分支；可查看已有分支。"
+    : "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。";
   if(btnAttach) btnAttach.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
   /* 新建任务保存后仍走“保存并关闭”：留在新建态再保存会重复创建 */
@@ -22271,6 +22480,8 @@ function loadWatchStatus(taskId){
 function openTaskDrawer(colId, task, defaults){
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
+  /* 切任务前先收好上一条未发送的评论草稿 */
+  stashCommentDraft(lastCommentDraftId || rt.editingId);
   rt.taskFormSeq++;
   setSaveLoading(false); // 新抽屉独立管理 loading，后续再应用当前表单的只读权限
   demandTargetCache = {}; demandTargetPending = {};
@@ -22362,7 +22573,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
-    clearPendingCommentFiles();
+    restoreCommentDraft(task.id);
     loadComments(task.id);
     loadWatchStatus(task.id);
     loadTimeline(task.id);
@@ -22428,7 +22639,7 @@ function openTaskDrawer(colId, task, defaults){
     var drawerMoreNew = $("drawerMore");
     if(drawerMoreNew) drawerMoreNew.open = false;
     commentsCache = [];
-    clearPendingCommentFiles();
+    restoreCommentDraft(null);
     loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
     if(commentCount) commentCount.textContent = "";
@@ -22490,12 +22701,12 @@ window.addEventListener("ds:before-route", function(e){
   var to = e.detail && e.detail.to;
   UI.showConfirm({
     title:"离开当前工作项？",
-    msg:"表单有未保存的修改，切换页面后会丢失。",
+    msg:"表单、评论草稿或待上传附件尚未保存，切换页面后会丢失。",
     okText:"放弃并离开",
     cancelText:"继续编辑"
   }).then(function(ok){
     if(!ok) return;
-    forceCloseTaskDrawer();
+    forceCloseTaskDrawer({discardCommentDraft:true});
     window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:to } }));
   });
 });
@@ -22504,15 +22715,20 @@ function tryCloseTaskDrawer(){
   if(rt.formDirty){
     UI.showConfirm({
       title:"放弃未保存的改动？",
-      msg:"当前表单有未保存的修改，关闭后将会丢失。",
+      msg:"当前表单、评论草稿或待上传附件有未保存的内容，关闭后将会丢失。",
       okText:"放弃改动",
       cancelText:"继续编辑"
-    }).then(function(ok){ if(ok) forceCloseTaskDrawer(); });
+    }).then(function(ok){ if(ok) forceCloseTaskDrawer({discardCommentDraft:true}); });
     return;
   }
   forceCloseTaskDrawer();
 }
-function forceCloseTaskDrawer(){
+function forceCloseTaskDrawer(opts){
+  opts = opts || {};
+  var closingId = lastCommentDraftId || rt.editingId;
+  if(opts.discardCommentDraft) discardCommentDraft(closingId);
+  else stashCommentDraft(closingId);
+  lastCommentDraftId = null;
   rt.taskFormSeq++;
   setSaveLoading(false);
   var opener = rt.drawerOpener;
@@ -22616,7 +22832,8 @@ function inTaskAuxSection(target){
 taskForm.addEventListener("input", function(e){
   if(e.target === iProg) return;
   if(formSettling(e.target)) return; // 异步下拉回填期间的伪 input 不算用户改动
-  if(!inTaskAuxSection(e.target)) rt.formDirty = true;
+  /* 评论草稿单独计入未保存内容；检查清单/附件区仍按各自的即时操作处理 */
+  if(e.target === iComment || !inTaskAuxSection(e.target)) rt.formDirty = true;
   if(e.target === iTitle){
     fTitle.classList.remove("invalid");
     syncTitleCount();
@@ -22822,7 +23039,13 @@ function renderComments(list){
         '</span>' +
         (c.content ? '<span class="ci-body">' + esc(c.content) + '</span>' : '') +
         (files.length ? '<span class="ci-files">' + files.map(function(a){
-          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="预览 / 下载">' +
+          /* 与附件区一致：可预览的开弹框，表格开 Univer，其余仍走新标签 */
+          var canPrev = previewable(a.filename);
+          var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+          var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+            : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+          var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' +
             icon("clip", 12) +
             '<span class="cf-name">' + esc(a.filename) + '</span>' +
             '<span class="cf-size">' + esc(fmtSize(a.size)) + '</span>' +
@@ -22832,11 +23055,42 @@ function renderComments(list){
     '</div>';
   }).join("");
 }
+/* 评论附件按 id 找回对象：预览/表格弹层都需要文件名与大小 */
+function findCommentAtt(attId){
+  for(var i = 0; i < commentsCache.length; i++){
+    var files = (commentsCache[i] && commentsCache[i].attachments) || [];
+    for(var j = 0; j < files.length; j++){
+      if(files[j].id === attId) return files[j];
+    }
+  }
+  return null;
+}
 /* ==================== 评论附件 ==================== */
 var pendingCommentFiles = [];
+/* 按任务保留未发送的评论草稿：切任务、保存表单或临时关闭抽屉后还能找回 */
+var commentDrafts = Object.create(null);
+var lastCommentDraftId = null;
 var COMMENT_FILE_RE = /\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i;
 var COMMENT_FILE_MAX = 10 * 1024 * 1024;
 var COMMENT_FILE_MAX_COUNT = 5;
+
+function stashCommentDraft(taskId){
+  if(!taskId) return;
+  var text = iComment ? iComment.value : "";
+  if(!text.trim() && !pendingCommentFiles.length){ delete commentDrafts[taskId]; return; }
+  commentDrafts[taskId] = { text:text, files:pendingCommentFiles.slice() };
+}
+function restoreCommentDraft(taskId){
+  var draft = taskId ? commentDrafts[taskId] : null;
+  if(iComment) iComment.value = draft ? draft.text : "";
+  pendingCommentFiles = draft ? draft.files.slice() : [];
+  renderPendingCommentFiles();
+  lastCommentDraftId = taskId || null;
+}
+function discardCommentDraft(taskId){
+  if(taskId) delete commentDrafts[taskId];
+  if(lastCommentDraftId === taskId) lastCommentDraftId = null;
+}
 
 function renderPendingCommentFiles(){
   if(!commentAttachChips || !commentAttachTip) return;
@@ -22861,6 +23115,7 @@ function pickCommentFiles(){
   if(iCommentFiles) iCommentFiles.click();
 }
 function addCommentFiles(picked){
+  var before = pendingCommentFiles.length;
   picked.forEach(function(f){
     if(!f.size){ toast("「" + f.name + "」是空文件，已跳过", "warn"); return; }
     if(f.size > COMMENT_FILE_MAX){ toast("「" + f.name + "」超过 10MB，已跳过", "warn"); return; }
@@ -22878,6 +23133,7 @@ function addCommentFiles(picked){
     pendingCommentFiles.push(f);
   });
   renderPendingCommentFiles();
+  if(pendingCommentFiles.length !== before) rt.formDirty = true;
 }
 /* 评论先落库，再逐个上传附件；单个失败不影响其它文件，最后汇总提示 */
 function uploadCommentFiles(commentId, files){
@@ -22939,6 +23195,10 @@ function sendComment(){
     closeMention();
     mentionPicked = [];
     clearPendingCommentFiles();
+    discardCommentDraft(id);
+    /* 评论已发表：把这部分从脏基线里移走，不影响表单其他未保存字段 */
+    if(formBase){ formBase.comment = ""; formBase.commentFiles = ""; }
+    syncDrawerDirty();
     loadComments(id);
   }).catch(function(ex){
     rt.commentSending = false;
@@ -22961,6 +23221,7 @@ if(commentAttachChips) commentAttachChips.addEventListener("click", function(e){
   if(!btn) return;
   pendingCommentFiles.splice(Number(btn.dataset.commentFileRemove), 1);
   renderPendingCommentFiles();
+  rt.formDirty = true;
 });
 
 /* ==================== 评论 @提及 ==================== */
@@ -23154,6 +23415,24 @@ if(commentMention){
 if(commentList){
   commentList.addEventListener("click", function(e){
     if(e.target.closest("[data-retry-comments]") && rt.editingId){ loadComments(rt.editingId); return; }
+    var prev = e.target.closest("[data-att-prev]");
+    if(prev){
+      e.preventDefault();
+      var att = findCommentAtt(prev.dataset.attPrev);
+      if(att) openAttPreview({ attachment: att });
+      return;
+    }
+    var sheet = e.target.closest("[data-att-sheet]");
+    if(sheet){
+      e.preventDefault();
+      var attSheet = findCommentAtt(sheet.dataset.attSheet);
+      if(!attSheet) return;
+      /* 评论附件只读打开，避免从讨论区改写附件内容 */
+      import("./sheet-viewer.js").then(function(m){
+        m.openSheet({ attachment: attSheet, canEdit: false });
+      }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+      return;
+    }
     var del = e.target.closest("[data-comment-del]");
     if(!del || !rt.editingId) return;
     if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
@@ -23170,15 +23449,25 @@ function showDrawerNotice(text){
   drawerNotice.hidden = false;
 }
 if(drawerNoticeReload){
-  drawerNoticeReload.addEventListener("click", function(){
+  function reloadDrawerFromServer(){
     if(!rt.editingId) return;
     var id = rt.editingId;
     drawerNotice.hidden = true;
     API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
       if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return; }
       taskCacheExtra[t.id] = t;
+      /* 评论草稿按任务保存，重新加载表单不会丢掉未发送的评论 */
       openTaskDrawer(null, t);
     }).catch(function(){ toast("刷新失败，请稍后重试", "bad"); });
+  }
+  drawerNoticeReload.addEventListener("click", function(){
+    if(!formFieldsDirty()){ reloadDrawerFromServer(); return; }
+    UI.showConfirm({
+      title:"重新加载最新版本？",
+      msg:"表单有未保存的修改，重新加载会用服务器最新内容覆盖表单；评论草稿会按任务保留。",
+      okText:"放弃表单修改并刷新",
+      cancelText:"继续编辑"
+    }).then(function(ok){ if(ok) reloadDrawerFromServer(); });
   });
 }
 iTags.addEventListener("keydown", function(e){
@@ -23407,6 +23696,50 @@ taskForm.addEventListener("submit", function(e){
     return false;
   })();
   var retried = false;
+  var conflictOverwriteTried = false;
+  /* 409：先读服务器最新版本，展示变化字段；重载或明确覆盖都由用户决定 */
+  function handleSaveConflict(){
+    API.get("/api/task/" + encodeURIComponent(editId)).then(function(fresh){
+      if(seq !== rt.taskFormSeq) return;
+      if(!fresh){ setSaveLoading(false); toast("保存冲突，且无法读取最新版本；请关闭抽屉后重新打开", "bad"); return; }
+      var labels = conflictChangedLabels(current, fresh);
+      var changedText = labels.length
+        ? ("服务器上已更新：" + labels.slice(0, 6).join("、") + (labels.length > 6 ? " 等" : "") + "。")
+        : "服务器上的内容已变化。";
+      UI.showConfirm({
+        title:"工作项已被他人修改",
+        msg:esc(changedText) + "重新加载会放弃你当前的修改；也可以选择用当前表单覆盖服务器最新版本。",
+        okText:"重新加载最新版本",
+        cancelText:"用我的修改覆盖",
+        danger:false
+      }).then(function(reload){
+        if(reload){
+          taskCacheExtra[fresh.id] = fresh;
+          openTaskDrawer(null, fresh);
+          return;
+        }
+        return UI.showConfirm({
+          title:"覆盖服务器最新版本？",
+          msg:"这会用当前表单覆盖他人刚刚保存的内容。请确认你已核对差异。",
+          okText:"覆盖保存",
+          cancelText:"继续编辑"
+        }).then(function(force){
+          if(!force || seq !== rt.taskFormSeq) return;
+          if(formRev !== revAtSubmit){ toast("表单已继续变化，请重新保存", "warn"); return; }
+          if(conflictOverwriteTried){ toast("仍与其他修改冲突，请重新加载最新版本", "bad"); return; }
+          conflictOverwriteTried = true;
+          payload.oldUpdatedAt = fresh.updatedAt || null;
+          taskCacheExtra[editId] = Object.assign({}, taskCacheExtra[editId] || fresh, { updatedAt:fresh.updatedAt });
+          setSaveLoading(true);
+          saveWith();
+        });
+      });
+    }).catch(function(ex){
+      if(seq !== rt.taskFormSeq) return;
+      setSaveLoading(false);
+      toast("保存冲突，且无法读取最新版本：" + (ex.message || "请稍后重试"), "bad");
+    });
+  }
   function onSaved(nt){
     if(seq === rt.taskFormSeq){ // 只有当前抽屉可修改 loading 和表单；旧成功响应仍刷新视图缓存
       setSaveLoading(false);
@@ -23480,6 +23813,7 @@ taskForm.addEventListener("submit", function(e){
         return;
       }
       setSaveLoading(false);
+      if(ex.code === 409 && wasEdit){ handleSaveConflict(); return; }
       toast(ex.message || "保存失败", "bad");
     });
   }
@@ -23552,7 +23886,7 @@ function deleteTask(id){
       t.deletedAt = t.deletedAt || new Date().toISOString();
       delete taskCacheExtra[id];
       delete rt.listCache[id];
-      if(rt.editingId === id) forceCloseTaskDrawer();
+      if(rt.editingId === id) forceCloseTaskDrawer({discardCommentDraft:true});
       loadBoard({animate:false});
       loadReqs();
       refreshCalendarIfOpen();
@@ -26865,6 +27199,7 @@ var branchSearchTimer = null;
 var branchOptionCache = {};      /* projectId → 下拉选项 */
 var brDrawerId = null;
 var brEditingId = null;
+var brDialogTask = null;      /* 从工作项抽屉就地新建时记录上下文，创建成功后自动挂接 */
 var dragBranch = null;        /* 拖动中的分支卡片 { id, status } */
 var branchSelectProject = ""; /* 工作项抽屉里「所属分支」当前的项目过滤（后台刷新时不能丢） */
 var reqsPending = null;       /* 项目列表加载中，避免多个下拉各自重复请求 */
@@ -26896,6 +27231,16 @@ function branchNameById(id){
   for(var i = 0; i < branchRefs.length; i++) if(branchRefs[i].id === id) return branchRefs[i].name;
   var b = branchById(id);
   return b ? b.name : "";
+}
+/* 分支的修改 / 改状态 / 删除与后端一致：按所属项目写权限；空间级公共分支对非查看者开放 */
+function canEditBranch(b){
+  return !!b && canEditReq(b.reqId);
+}
+/* 只读元数据：发布计划按工作项实时推导分支时使用，避免只拿到名称而丢失状态/目标分支 */
+function branchMetaById(id){
+  if(!id) return null;
+  for(var i = 0; i < branchRefs.length; i++) if(branchRefs[i].id === id) return branchRefs[i];
+  return branchById(id);
 }
 function branchDurText(ms){
   if(!ms || ms < 0) return "刚刚";
@@ -27031,11 +27376,14 @@ function renderBranchList(rows){
   var body = rows.length ? rows.map(function(b){
     var sm = branchStatusMeta(b.status);
     var stay = branchStay(b);
+    var writable = canEditBranch(b);
     var taskTxt = b.taskCount ? ((b.doneCount || 0) + "/" + b.taskCount) : "—";
     return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
       '<td class="br-name-cell" title="' + esc(b.name) + '">' + esc(b.name) + '</td>' +
-      '<td><button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
-        '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button></td>' +
+      '<td>' + (writable
+        ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
+          '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
+        : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + '</td>' +
       '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指定</span>') + '</td>' +
       '<td>' + esc(branchProjectsText(b)) + '</td>' +
       '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
@@ -27096,9 +27444,9 @@ function renderBranches(){
   var hasFilter = !!(branchFilter || branchProjectFilter || (($("branchSearch") || {}).value || "").trim());
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
   var branchNewBtn = $("branchNew");
-  var canCreate = !!branchNewBtn;
+  var canCreate = !!branchNewBtn && !roleReadOnly();
   var totalForBtn = isList ? branchRows.length : st.total;
-  if(branchNewBtn) branchNewBtn.hidden = !totalForBtn && !hasFilter;
+  if(branchNewBtn) branchNewBtn.hidden = !canCreate || (!totalForBtn && !hasFilter);
   if(isList){
     if(branchRowsLoading && !branchRows.length){
       box.innerHTML = '<div class="br-list-wrap" style="padding:16px">' + UI.skeletonRows(5) + '</div>';
@@ -27254,15 +27602,18 @@ function branchProjectChips(b){
 function branchCardHTML(b){
   var sm = branchStatusMeta(b.status);
   var stay = branchStay(b);
+  var writable = canEditBranch(b);
   var taskTxt = b.taskCount
     ? ((b.doneCount || 0) + "/" + b.taskCount + " 工作项")
     : "无关联工作项";
   return '<article class="br-card" data-branch="' + esc(b.id) + '" data-br-st="' + esc(b.status) + '"' +
-      ' draggable="true" title="拖到其他状态列" tabindex="0" role="button"' +
+      ' draggable="' + (writable ? "true" : "false") + '" title="' + (writable ? "拖到其他状态列" : "只读分支，不能改状态") + '" tabindex="0" role="button"' +
       ' aria-label="' + esc(b.name) + '，' + esc(sm.name) + '">' +
     '<div class="br-card-top">' +
-      '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) + '"' +
-        ' title="点击切换状态">' + sm.name + icon("down", 11) + '</button>' +
+      (writable
+        ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) + '"' +
+          ' title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
+        : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') +
       (b.owner ? '<span class="br-owner" title="负责人：' + esc(b.owner) + '">' + avatarHTML(b.owner) + '</span>' : '') +
     '</div>' +
     '<div class="br-name" title="' + esc(b.name) + '">' + esc(b.name) + '</div>' +
@@ -27279,6 +27630,7 @@ function branchCardHTML(b){
 function openBranchStatusMenu(anchor, id){
   var b = branchById(id);
   if(!b) return;
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能修改分支", "warn"); return; }
   var el = document.createElement("div");
   el.className = "menu br-status-menu";
   el.innerHTML = BRANCH_STATUS.map(function(s){
@@ -27290,8 +27642,7 @@ function openBranchStatusMenu(anchor, id){
   }).join("") +
     '<div class="menu-sep"></div>' +
     '<button class="menu-item" type="button" data-br-edit="1">编辑分支信息</button>' +
-    (rt.currentWs && rt.currentWs.myRole === "owner"
-      ? '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>' : '');
+    '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>';
   el.addEventListener("click", function(e){
     var set = e.target.closest("[data-br-set]");
     if(set){
@@ -27304,12 +27655,16 @@ function openBranchStatusMenu(anchor, id){
   });
   UI.openPop(el, anchor, { align: "left" });
 }
-function setBranchStatus(id, status){
-  var b = branchById(id);
+function setBranchStatus(id, status, after){
+  var b = branchMetaById(id);
   if(!b || b.status === status) return;
   API.post("/api/branches/" + encodeURIComponent(id) + "/status", { status: status })
     .then(function(nb){
+      /* 先就地更新引用，调用方（如发布计划）不必等列表重拉就能重画 */
+      var meta = branchMetaById(id);
+      if(meta) meta.status = nb.status;
       toast("「" + nb.name + "」→ " + branchStatusMeta(nb.status).name, "fs");
+      if(typeof after === "function"){ try{ after(nb); }catch(e){ /* 调用方刷新失败不影响分支保存 */ } }
       return loadBranches(true);
     })
     .then(function(){
@@ -27334,11 +27689,14 @@ function fillBranchReqOptions(sel, cur){
   }
   var html = '<option value="">空间级公共分支</option>';
   (rt.reqList || []).forEach(function(r){
+    /* 只读项目不提供新建入口；保留当前值以免编辑已有分支时下拉变空 */
+    if(r.id !== cur && !canEditReq(r.id)) return;
     html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   });
   sel.innerHTML = html;
 }
 function openBranchDialog(id){
+  brDialogTask = null;
   var known = id ? branchById(id) : null;
   if(id && !known){
     /* 本地缓存里找不到时先按 ID 拉取，绝不以空表单进入编辑（否则保存会把名称外的字段清空） */
@@ -27350,30 +27708,55 @@ function openBranchDialog(id){
   }
   openBranchDialogWith(id, known);
 }
-function openBranchDialogWith(id, b){
+/** 从任务表单读取当前负责人，供就地新建分支时预填；没有负责人时返回 null */
+function taskOwnerSelection(){
+  var sel = $("iOwner");
+  if(!sel || sel.tagName !== "SELECT" || sel.selectedIndex < 0) return null;
+  var opt = sel.options[sel.selectedIndex];
+  if(!opt) return null;
+  var name = ((opt.dataset && opt.dataset.name) || opt.textContent || "").replace(/\s+/g, " ").trim();
+  if(!name) return null;
+  return { name: name, userId: opt.value && opt.value !== "__text__" ? opt.value : "" };
+}
+/** 工作项抽屉里就地新建：按当前项目预填，创建后自动挂到当前工作项 */
+function openBranchDialogForTask(projectId){
+  brDialogTask = { projectId: projectId || "" };
+  openBranchDialogWith(null, null, { fromTask: true, projectId: projectId || "" });
+}
+function openBranchDialogWith(id, b, options){
+  var dialogOpts = options || {};
+  var fromTask = !!dialogOpts.fromTask;
+  var taskProjectId = dialogOpts.projectId || "";
   brEditingId = id || null;
   b = brEditingId ? b : null;
   $("dlgBranchTitle").textContent = b ? "编辑分支" : "新建分支";
   $("dlgBranchMsg").textContent = b
     ? "状态不在这里改 —— 点分支卡片上的状态标签切换，那样才会记进时间线。"
-    : "分支名照 git 里的写法填，建好之后就能跟状态和时间。";
-  $("dlgBranchOk").textContent = b ? "保存" : "创建分支";
+    : (fromTask
+      ? "建好后会自动选中并挂到当前工作项；保存工作项后关联生效。分支名照 git 里的写法填。"
+      : "分支名照 git 里的写法填，建好之后就能跟状态和时间。");
+  $("dlgBranchOk").textContent = b ? "保存" : (fromTask ? "创建并选中" : "创建分支");
   /* 编辑时隐藏「初始状态」（状态只能走状态切换接口） */
   if($("brStatusField")) $("brStatusField").hidden = !!b;
   $("brName").value = b ? (b.name || "") : "";
   $("brTarget").value = b ? (b.targetBranch || "") : "";
   $("brNote").value = b ? (b.note || "") : "";
   fillBranchStatusOptions($("brStatus"), b ? b.status : "dev");
-  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : "");
+  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : (fromTask ? taskProjectId : ""));
 
-  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定） */
+  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定）。
+     从任务里就地新建时默认跟任务负责人走，避免把分支指派给「当前操作人」；
+     任务没有负责人时再回落到当前用户。 */
   var sel = $("brOwner");
   if(sel){
-    var opts = ownerOptions();
-    var curName = b ? (b.owner || "") : (rt.currentUser ? (rt.currentUser.displayName || "") : "");
-    var curId = b ? (b.ownerUserId || "") : (rt.currentUser ? rt.currentUser.id : "");
+    var ownerOpts = ownerOptions();
+    var taskOwner = fromTask ? taskOwnerSelection() : null;
+    var curName = b ? (b.owner || "")
+      : (taskOwner ? taskOwner.name : (rt.currentUser ? (rt.currentUser.displayName || "") : ""));
+    var curId = b ? (b.ownerUserId || "")
+      : (taskOwner ? (taskOwner.userId || "") : (rt.currentUser ? rt.currentUser.id : ""));
     var html = "", matched = false;
-    opts.forEach(function(o){
+    ownerOpts.forEach(function(o){
       var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
       if(on) matched = true;
       html += '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (on ? " selected" : "") + '>' +
@@ -27385,7 +27768,7 @@ function openBranchDialogWith(id, b){
     sel.innerHTML = html;
   }
 
-  $("dlgBranch").__uiOnClose = function(){ brEditingId = null; };
+  $("dlgBranch").__uiOnClose = function(){ brEditingId = null; brDialogTask = null; };
   UI.openModal($("dlgBranch"));
   setTimeout(function(){ try{ $("brName").focus(); }catch(e){ /* noop */ } }, 40);
 }
@@ -27393,6 +27776,37 @@ function closeBranchDialog(){
   var d = $("dlgBranch");
   if(d) UI.closeModal(d);
   brEditingId = null;
+  brDialogTask = null;
+}
+/** 新建成功后就地挂到任务抽屉的下拉，不要求用户再回分支页刷新 */
+function attachCreatedBranchToTask(b){
+  var sel = $("iBranch");
+  if(!sel || !b) return;
+  var projectId = (($("iReq") || {}).value) || "";
+  var rows = branchOptionCache[projectId];
+  if(rows){
+    var found = false;
+    for(var i = 0; i < rows.length; i++) if(rows[i].id === b.id){ found = true; break; }
+    if(!found) rows.push(b);
+    branchOptionCache[projectId] = rows;
+    if(projectId) delete branchOptionCache[""];  /* 全量缓存已过期，下次按需重拉 */
+    fillBranchSelect(sel, b.id, rows);
+  }else{
+    /* 选项还在加载 / 加载失败：先把新分支塞进当前下拉，避免用户等一次刷新 */
+    var opt = null;
+    for(var j = 0; j < sel.options.length; j++) if(sel.options[j].value === b.id){ opt = sel.options[j]; break; }
+    if(!opt){
+      opt = document.createElement("option");
+      opt.value = b.id;
+      opt.textContent = b.name + (b.targetBranch ? " → " + b.targetBranch : "");
+      sel.appendChild(opt);
+    }
+    sel.value = b.id;
+    sel.setAttribute("data-ready", "1");
+  }
+  var hint = $("iBranchHint");
+  if(hint) hint.textContent = "已创建并选中「" + b.name + "」，保存工作项后关联生效。";
+  try{ sel.dispatchEvent(new Event("change", { bubbles: true })); }catch(e){ /* noop：事件派发失败不影响选中 */ }
 }
 function submitBranchDialog(){
   /* 回车提交不经过按钮的禁用状态：请求在途时忽略 */
@@ -27424,9 +27838,15 @@ function submitBranchDialog(){
   var btn = $("dlgBranchOk");
   btn.disabled = true;
   req.then(function(b){
+    var taskCtx = brDialogTask;
     btn.disabled = false;
     closeBranchDialog();
-    toast(wasEdit ? ("已更新「" + b.name + "」") : ("已创建分支「" + b.name + "」"), "fs");
+    if(taskCtx){
+      attachCreatedBranchToTask(b);
+      toast("已创建「" + b.name + "」，保存工作项后关联生效", "fs");
+    }else{
+      toast(wasEdit ? ("已更新「" + b.name + "」") : ("已创建分支「" + b.name + "」"), "fs");
+    }
     loadBranches(true).then(function(){
       if(brDrawerId === b.id) openBranchDrawer(b.id);
     });
@@ -27438,7 +27858,7 @@ function submitBranchDialog(){
 function deleteBranch(id){
   var b = branchById(id);
   if(!b) return;
-  if(!(rt.currentWs && rt.currentWs.myRole === "owner")){ toast("仅空间主可删除分支", "warn"); return; }
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能删除分支", "warn"); return; }
   var n = b.taskCount || 0;
   UI.showConfirm({
     title: "删除分支",
@@ -27508,10 +27928,11 @@ function renderBranchDrawer(b){
     '<div class="br-sect"><h4>关联工作项</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
-      (rt.currentWs && rt.currentWs.myRole === "owner"
-        ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>' : '') +
+      (canEditBranch(b)
+        ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>'
+        : '<span class="foot-note">你对该项目只有查看权限，不能修改或删除分支</span>') +
       '<span style="flex:1 1 auto"></span>' +
-      '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' +
+      (canEditBranch(b) ? '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' : '') +
     '</div>';
 
   var del = $("brDrawerDelete");
@@ -27558,6 +27979,17 @@ function loadBranchTasks(id){
     if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">关联工作项加载失败</div>';
   });
 }
+/** 分支字段提示：只读项目里不能出现「点新建分支」这种做不到的引导 */
+function branchFieldHint(rows){
+  if(rt.drawerReadOnly){
+    return rows.length
+      ? "当前项目为只读项目，不能新建分支；可查看已有分支。"
+      : "当前项目为只读项目，且还没有分支。";
+  }
+  return rows.length
+    ? "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。"
+    : "还没有分支，点「新建分支」就地创建，建好自动选中，保存后生效。";
+}
 function fillBranchSelect(sel, cur, rows){
   var html = '<option value="">不关联分支</option>';
   BRANCH_STATUS.forEach(function(s){
@@ -27581,12 +28013,10 @@ function fillBranchSelect(sel, cur, rows){
   sel.value = ok ? cur : "";
   /* 标记选项已就绪：保存时区分「确实不关联」与「选项还没加载完」 */
   sel.setAttribute("data-ready", "1");
+  var newBtn = $("iBranchNew");
+  if(newBtn) newBtn.hidden = !!rt.drawerReadOnly;
   var hint = $("iBranchHint");
-  if(hint){
-    hint.textContent = rows.length
-      ? "分支在「分支」页里建，这里只负责挂上去"
-      : "还没有分支 —— 先去「分支」页建一条，再回来挂";
-  }
+  if(hint) hint.textContent = branchFieldHint(rows);
 }
 function populateBranchSelect(keep, projectId){
   var sel = $("iBranch");
@@ -27664,10 +28094,12 @@ function clearGroupOver(){
       var card = e.target.closest("[data-branch]");
       if(card){ e.preventDefault(); openBranchDrawer(card.dataset.branch); }
     });
-    /* 卡片拖动：跨状态列流转（同列无效；状态切换全员可用，与状态菜单口径一致） */
+    /* 卡片拖动：跨状态列流转（同列无效；与后端一致，仅项目可写者可改状态） */
     box.addEventListener("dragstart", function(e){
       var card = e.target.closest(".br-card");
       if(!card) return;
+      var b = branchById(card.dataset.branch);
+      if(!canEditBranch(b)){ e.preventDefault(); return; }
       dragBranch = { id: card.dataset.branch, status: card.dataset.brSt };
       e.dataTransfer.setData("text/plain", dragBranch.id);
       e.dataTransfer.effectAllowed = "move";
@@ -27733,6 +28165,11 @@ function clearGroupOver(){
     });
   }
   if($("branchNew")) $("branchNew").addEventListener("click", function(){ openBranchDialog(null); });
+  /* 工作项抽屉里的「新建分支」：按当前项目预填，建好自动挂到当前工作项 */
+  if($("iBranchNew")) $("iBranchNew").addEventListener("click", function(){
+    var projectId = (($("iReq") || {}).value) || "";
+    openBranchDialogForTask(projectId);
+  });
   if($("branchSearch")) $("branchSearch").addEventListener("input", function(){
     if(branchViewMode === "list"){ renderBranches(); return; }  /* 列表数据已全量在手，本地过滤即可 */
     clearTimeout(branchSearchTimer);
@@ -30113,7 +30550,7 @@ function refreshActiveView(opts){
   /* 看板在 SSE 流程里已由 refreshBoardPreserving 刷新，这里只在手动下拉刷新时兜底 */
   if(activeView === "board"){ if(opts && opts.manual) loadBoard({silent:true}); }
   else if(activeView === "calendar") loadCalendar({silent:true});
-  else if(activeView === "list") loadList({silent:true});
+  else if(activeView === "list") loadList({silent:true, keepLoaded:true});
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
   else if(activeView === "branches") loadBranches(true).then(renderBranches);
@@ -36811,12 +37248,13 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
   var plans = [], planId = null, records = [], tasks = [], members = [], preview = null, previewContext = null;
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
-  var planOptions = null, planScopeVersionIds = null, planTaskPoolCache = {}, planTaskFetchKey = "", planTaskSeq = 0;
+  var planOptions = null, planScopeVersionIds = null, planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
   var pending = null, storageError = "", recoveryMessage = "", recoveredRecord = null, retryAllowed = false, resetAllowed = false;
   var page = 0, filters = {result:"", environment:"", operation:""}, advancedOpen = false;
   /* 计划 / 实际 / 历史 / 内容 四个工作面，入口决定初始页；入口只决定看哪页，不再用顶部报错兜底 */
   var activeTab = entry === "actual" ? "actual" : "plan", planJustSaved = false, planSavedRevision = null, restoreScroll = null, entryFocus = entry === "actual";
   var actualDraft = {planId:"", occurredAt:localMinute(), environment:"production", targetKeys:"", coverage:"full", artifactRef:"", artifactDigest:"", operation:"deploy", relatedReleaseId:"", executorUserId:"", actualTaskIds:[], deviationReason:"", result:"success", notes:"", failureReason:""};
+  var actualPlanTouched = false;
   try{
     var stored = sessionStorage.getItem(storageKey);
     if(stored){
@@ -36945,6 +37383,23 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
   function actualPlanOptions(a){
     return options([["", "无计划（紧急记录，理由必填）"]].concat(plans.map(function(item){ return [item.id, planOptionForActual(item, a)]; })), a.planId);
   }
+  /* 默认关联当前版本、当前环境下最新的就绪计划；没有就绪计划才回落到“无计划”
+     用户一旦手动选择（包括明确选择无计划），后续重绘不再覆盖。 */
+  function preferredActualPlanId(){
+    var best = null, bestScore = -1;
+    plans.forEach(function(p){
+      if(p.status !== "ready") return;
+      if((p.environment || "production") !== actualDraft.environment) return;
+      var vids = normalizedIds(p.versionIds);
+      if(vids.length && vids.indexOf(id) === -1) return;
+      var score = (p.coverage || "full") === actualDraft.coverage ? 2 : 0;
+      score += vids.indexOf(id) !== -1 ? 1 : 0;
+      if(score > bestScore || (score === bestScore && String(p.plannedAt || "") > String(best && best.plannedAt || ""))){
+        best = p; bestScore = score;
+      }
+    });
+    return best ? best.id : "";
+  }
   /* 原生 select 会截断长选项，另起一行把所选计划的完整信息与偏差提示露出来 */
   function planSummaryInfo(a){
     var p = plans.find(function(item){ return item.id === a.planId; });
@@ -36997,6 +37452,125 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       + '<p class="hint" data-' + prefix + '-empty hidden>没有匹配的工作项，试试清空搜索或切换状态。</p>'
       + '</div>';
   }
+  var PLAN_BRANCH_RANK = { merging:0, testing:1, dev:2, released:3 };
+  function planBranchProjectName(pid){
+    if(!pid) return "空间公共分支";
+    var groups = planVersionGroups();
+    for(var i = 0; i < groups.length; i++){
+      if(String(groups[i].id) === String(pid)) return groups[i].name || "项目 " + pid;
+    }
+    var name = reqNameById(pid);
+    return name && name !== "无" ? name : "项目 " + pid;
+  }
+  /* 只按计划选中的工作项实时推导；不写库、不做快照，变更后随选择重算 */
+  function planBranchData(ids){
+    var selected = normalizedIds(ids);
+    var multi = planVersionSelection().length > 1;
+    var pool = planPool();
+    var loading = multi && !pool && planTaskFetchKey === planPoolKey();
+    var failed = multi && !pool && planTaskErrorKey === planPoolKey();
+    var source = pool || tasks || [];
+    var byTask = {}, groups = {}, order = [], unknownBranches = {}, unknownTasks = 0, unbound = 0, missing = 0;
+    source.forEach(function(t){ byTask[t.id] = t; });
+    selected.forEach(function(tid){
+      var t = byTask[tid];
+      if(!t){
+        if(!loading) missing++;
+        return;
+      }
+      if(!t.branchId){ unbound++; return; }
+      var meta = branchMetaById(t.branchId);
+      if(!meta){
+        if(!unknownBranches[t.branchId]) unknownBranches[t.branchId] = 0;
+        unknownBranches[t.branchId]++; unknownTasks++;
+        return;
+      }
+      var g = groups[t.branchId];
+      if(!g){
+        g = groups[t.branchId] = { id:t.branchId, name:meta.name || t.branchId, status:meta.status || "", target:meta.targetBranch || "", reqId:meta.reqId || t.reqId || "", owner:meta.owner || "", count:0 };
+        order.push(g);
+      }
+      g.count++;
+      if(!g.reqId && t.reqId) g.reqId = t.reqId;
+    });
+    order.sort(function(a, b){
+      var ra = PLAN_BRANCH_RANK[a.status]; if(ra == null) ra = 9;
+      var rb = PLAN_BRANCH_RANK[b.status]; if(rb == null) rb = 9;
+      return ra - rb || String(a.name).localeCompare(String(b.name), "zh-CN");
+    });
+    return { selected:selected, groups:order, branchCount:order.length + Object.keys(unknownBranches).length, unknownBranchCount:Object.keys(unknownBranches).length, unknownTasks:unknownTasks, unbound:unbound, missing:missing, loading:loading, failed:failed };
+  }
+  function planBranchesHTML(ids){
+    var d = planBranchData(ids);
+    var head = '<div class="plan-br-head"><h4>计划涉及分支</h4><span class="plan-br-live"><i></i>实时</span><span class="plan-br-summary">' + d.selected.length + ' 项工作项 · <b>' + d.branchCount + '</b> 条分支' + (d.unbound ? ' · ' + d.unbound + ' 项未关联分支' : '') + '</span></div>';
+    if(!d.selected.length){
+      return '<div class="plan-branches" data-plan-branches role="region" aria-label="计划涉及分支（实时）">' + head + '<p class="plan-br-empty">尚未选择工作项；选择后会按分支去重汇总。</p></div>';
+    }
+    var counts = { merging:0, testing:0, dev:0, released:0 };
+    d.groups.forEach(function(g){ if(counts[g.status] != null) counts[g.status]++; });
+    var stats = ["merging", "testing", "dev", "released"].filter(function(st){ return counts[st] > 0; }).map(function(st){
+      return '<span class="plan-br-stat"><i class="br-dot ' + BRANCH_ST[st].cls + '"></i>' + BRANCH_ST[st].name + ' ' + counts[st] + '</span>';
+    }).join('');
+    var rows = d.groups.map(function(g){
+      var st = BRANCH_ST[g.status] || { name:g.status || "未知", cls:"" };
+      var target = g.target
+        ? '<span class="plan-br-target" title="' + esc(g.target) + '"><em>→</em><span>' + esc(g.target) + '</span></span>'
+        : '<span class="plan-br-target is-empty" title="该分支未填写目标分支"><em>→</em><span>未指定目标分支</span></span>';
+      var project = planBranchProjectName(g.reqId);
+      var editable = canEditReq(g.reqId);
+      var badge = editable
+        ? '<button type="button" class="plan-br-badge is-' + esc(g.status || "unknown") + ' is-editable" data-plan-br-status="' + esc(g.id) + '" title="修改分支状态（当前：' + esc(st.name) + '）" aria-label="' + esc(g.name + "，当前" + st.name + "，点击修改状态") + '">' + esc(st.name) + icon("down", 10) + '</button>'
+        : '<span class="plan-br-badge is-' + esc(g.status || "unknown") + '">' + esc(st.name) + '</span>';
+      var owner = '<span class="plan-br-owner' + (g.owner ? '' : ' is-empty') + '" title="分支负责人：' + esc(g.owner || "未设置") + '">' + (g.owner ? icon("user", 12) : '') + '<span>' + esc(g.owner || "—") + '</span></span>';
+      return '<div class="plan-br-row' + (g.status === "released" ? ' is-released' : '') + '">'
+        + '<span class="plan-br-name" title="' + esc(g.name) + '"><i class="br-dot ' + st.cls + '"></i><span>' + esc(g.name) + '</span></span>'
+        + target
+        + badge
+        + '<span class="plan-br-count">' + g.count + ' 项</span>'
+        + owner
+        + '<span class="plan-br-project" title="' + esc(project) + '">' + esc(project) + '</span>'
+        + '</div>';
+    }).join('');
+    var notes = '';
+    if(d.loading) notes += '<p class="plan-br-note">所选版本的工作项正在加载，当前仅统计已加载部分；加载完成后自动刷新。</p>';
+    if(d.failed) notes += '<p class="plan-br-note">所选版本的工作项加载失败，当前仅统计已加载部分；可刷新后重试。</p>';
+    if(d.unknownBranchCount) notes += '<p class="plan-br-note">另有 <b>' + d.unknownBranchCount + '</b> 条分支信息暂不可见（' + d.unknownTasks + ' 项工作项），可能无权限或分支已删除。</p>';
+    if(d.missing) notes += '<p class="plan-br-note"><b>' + d.missing + '</b> 项工作项暂不可加载，未计入分支清单。</p>';
+    return '<div class="plan-branches" data-plan-branches role="region" aria-label="计划涉及分支（实时）">'
+      + head
+      + (stats ? '<div class="plan-br-stats">' + stats + '</div>' : '')
+      + (rows ? '<div class="plan-br-list">' + rows + '</div>' : '')
+      + (d.unbound ? '<div class="plan-br-unbound">还有 <b>' + d.unbound + '</b> 项工作项未关联分支，未计入上方清单。</div>' : '')
+      + notes
+      + '<p class="plan-br-note">按所选工作项<b>实时汇总并按分支去重</b>；分支状态以分支模块为准，会随分支变化，不代表“已合并”，也不作为发布证据。计划完成仍以版本生产发布为准。</p>'
+      + '</div>';
+  }
+  function refreshPlanBranches(){
+    var host = layer.querySelector('[data-plan-branches-host]'); if(!host) return;
+    var picker = pickerBox("plan");
+    var ids = picker ? checks("plan") : normalizedIds((selectedPlan() || {}).plannedTaskIds);
+    host.innerHTML = planBranchesHTML(ids);
+  }
+  /* 状态改在分支本身上：这里只提供快捷入口，不写计划；成功后重算实时区块 */
+  function openPlanBranchStatusMenu(anchor, branchId){
+    var meta = branchMetaById(branchId);
+    if(!meta) return;
+    var el = document.createElement("div");
+    el.className = "menu plan-br-status-menu";
+    el.setAttribute("role", "menu");
+    el.innerHTML = ["dev", "testing", "merging", "released"].map(function(key){
+      var st = BRANCH_ST[key], cur = meta.status === key;
+      return '<button class="menu-item' + (cur ? " on" : "") + '" type="button" role="menuitem" data-plan-br-set="' + key + '">'
+        + '<i class="br-dot ' + st.cls + '"></i>' + st.name + (cur ? '<span class="k">当前</span>' : '') + '</button>';
+    }).join("");
+    el.addEventListener("click", function(e){
+      var btn = e.target.closest("[data-plan-br-set]");
+      if(!btn) return;
+      UI.closeAllPops();
+      setBranchStatus(branchId, btn.getAttribute("data-plan-br-set"), function(){ refreshPlanBranches(); });
+    });
+    UI.openPop(el, anchor, { align:"left" });
+  }
   function pickerBox(prefix){ return layer.querySelector('[data-' + prefix + '-picker]'); }
   /* 多版本计划的工作项池来自所选版本并集；按排序后的版本键缓存，避免重复请求。 */
   function ensurePlanTaskPool(){
@@ -37005,12 +37579,12 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
     planTaskFetchKey = key; var seq = ++planTaskSeq;
     API.get("/api/release-plan-tasks", {versionIds: ids}).then(function(rows){
       if(seq !== planTaskSeq || !current()) return;
-      planTaskFetchKey = ""; planTaskPoolCache[key] = rows || [];
+      planTaskFetchKey = ""; planTaskErrorKey = ""; planTaskPoolCache[key] = rows || [];
       if(planPoolKey() === key) rerenderPlanPicker(true);
     }).catch(function(ex){
       if(seq !== planTaskSeq) return;
-      planTaskFetchKey = "";
-      if(current()) toast(ex.message || "所选版本的工作项加载失败", "bad");
+      planTaskFetchKey = ""; planTaskErrorKey = key;
+      if(current()){ refreshPlanBranches(); toast(ex.message || "所选版本的工作项加载失败", "bad"); }
     });
   }
   function rerenderPlanPicker(dropStale){
@@ -37031,7 +37605,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       if(q && next.querySelector('[data-plan-search]')) next.querySelector('[data-plan-search]').value = q;
       if(f && next.querySelector('[data-plan-filter]')) next.querySelector('[data-plan-filter]').value = f;
     }
-    filterPicker("plan"); updateChecklists();
+    filterPicker("plan"); updateChecklists(); refreshPlanBranches();
   }
   function setTabCount(key, n){
     var el = layer.querySelector('[data-release-tab="' + key + '"] .release-tab-count');
@@ -37071,7 +37645,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
     invalidatePreview();
     if(prefix === "plan") dropSavedBanner();
     error("", prefix);
-    pickerCount(prefix); updateChecklists();
+    pickerCount(prefix); updateChecklists(); if(prefix === "plan") refreshPlanBranches();
   }
   function updateChecklists(){
     var planEl = layer.querySelector("[data-plan-readiness]");
@@ -37243,6 +37817,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       + heading('计划包含的版本（<span data-plan-version-count>' + planVersionSelection().length + '</span> 个 · <span data-plan-version-project-count>' + planSelectionProjects(planVersionSelection()) + '</span> 个项目）', "可跨版本、跨项目选择；当前版本固定包含。计划包含的所有版本都完成生产部署 / 重部署后，计划才自动完成。") + planVersionPicker(locked)
       + field("计划目标键（每行一个）", '<textarea data-plan-targets placeholder="如 prod-shanghai-a，每行一个"' + disabled + '>' + esc(normalizedIds(p.targetKeys).join('\n')) + '</textarea>', "计划影响的部署目标或服务键，每行一个；与实际目标键一致才不构成偏差。")
       + heading('这次计划发布哪些工作项（<span data-plan-task-count>' + normalizedIds(p.plannedTaskIds).length + '</span> 项）', "勾选这次计划发布的工作项；设为「就绪」时至少 1 项。实际记录会独立选择，不自动继承计划范围。") + taskRows("plan", normalizedIds(p.plannedTaskIds), locked)
+      + '<div data-plan-branches-host></div>'
       + (!locked ? '<p class="release-readiness" data-plan-readiness></p>' : '')
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
@@ -37282,7 +37857,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       + (mayPublish ? '<div class="release-panel" role="tabpanel" id="release-panel-actual" aria-labelledby="release-tab-actual" data-release-panel="actual"' + (activeTab === "actual" ? '' : ' hidden') + '>' + actualSection + '</div>' : '')
       + '<div class="release-panel" role="tabpanel" id="release-panel-history" aria-labelledby="release-tab-history" data-release-panel="history"' + (activeTab === "history" ? '' : ' hidden') + '>' + historySection + '</div>'
       + '<div class="release-panel" role="tabpanel" id="release-panel-content" aria-labelledby="release-tab-content" data-release-panel="content"' + (activeTab === "content" ? '' : ' hidden') + '>' + contentSection + '</div>';
-    renderHistory(); syncControls(); syncAdvanced(); updateChecklists(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
+    renderHistory(); syncControls(); syncAdvanced(); updateChecklists(); refreshPlanBranches(); filterPicker("plan"); filterPicker("actual"); error(storageError); UI.wireTooltips(dlg.body);
     if(restoreScroll != null){ dlg.body.scrollTop = restoreScroll; restoreScroll = null; }
     if(entryFocus){ entryFocus = false; focusActual(); }
     if(mayManage && activeTab === "plan") ensurePlanTaskPool();
@@ -37305,10 +37880,12 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       if(!current() || seq !== loadSeq) return;
       plans = rs[0] || []; records = (rs[1] || []).slice(0, 200); tasks = rs[2] || []; members = rs[3] || [];
       if(rs[4]) planOptions = rs[4];
-      planScopeVersionIds = null; planTaskPoolCache = {}; planTaskFetchKey = ""; planTaskSeq++;
+      planScopeVersionIds = null; planTaskPoolCache = {}; planTaskFetchKey = ""; planTaskErrorKey = ""; planTaskSeq++;
       taskOptionsCache[reqId] = tasks; if(cache && rt.phaseReqId === reqId) cache.tasks = tasks;
       if(planId === null) planId = plans.length ? plans[0].id : "";
       if(planId && !plans.some(function(p){ return p.id === planId; })) planId = "";
+      /* 首次进入实际记录面：自动带出匹配版本与环境的就绪计划，避免误记成紧急发布 */
+      if(!pending && !storageError && !actualPlanTouched && !actualDraft.planId) actualDraft.planId = preferredActualPlanId();
       busy = false; render();
     }).catch(function(ex){
       if(!current() || seq !== loadSeq) return;
@@ -37413,7 +37990,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
     if(pending || storageError) return;
     if(e.target.matches('[data-plan-select]')){
       var sel = e.target, nextPlan = sel.value;
-      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planTaskFetchKey = ""; invalidatePreview(); render(); }, function(){ sel.value = planId || ""; });
+      confirmDiscardPlan(function(){ readActual(); planId = nextPlan; planJustSaved = false; planScopeVersionIds = null; planTaskFetchKey = ""; planTaskErrorKey = ""; invalidatePreview(); render(); }, function(){ sel.value = planId || ""; });
       return;
     }
     if(e.target.matches('[data-plan-version]')){
@@ -37425,15 +38002,17 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       });
       syncPlanVersionMeta();
       dropSavedBanner(); error("", "plan"); invalidatePreview();
-      rerenderPlanPicker(false); ensurePlanTaskPool(); updateChecklists();
+      rerenderPlanPicker(false); ensurePlanTaskPool(); refreshPlanBranches(); updateChecklists();
       return;
     }
     if(e.target.matches('input,select,textarea')){
       var scope = e.target.closest('[data-release-panel="plan"]') ? "plan" : e.target.closest('[data-release-panel="actual"]') ? "actual" : "";
       if(scope){ error("", scope); if(scope === "plan") dropSavedBanner(); }
+      /* 用户亲自选过计划（含“无计划”）后，环境变化或重绘都不再自动改选 */
+      if(e.target.matches('[data-release-planId]')) actualPlanTouched = true;
       readActual(); invalidatePreview(); syncAdvanced();
       if(e.target.matches('[data-actual-task]')) pickerCount("actual");
-      if(e.target.matches('[data-plan-task]')) pickerCount("plan");
+      if(e.target.matches('[data-plan-task]')){ pickerCount("plan"); refreshPlanBranches(); }
       updateChecklists();
       if(e.target.matches('[data-release-operation], [data-release-environment], [data-release-coverage], [data-release-relatedReleaseId], [data-release-planId]')){
         if(e.target.matches('[data-release-operation], [data-release-environment]')) actualDraft.relatedReleaseId = "";
@@ -37485,13 +38064,15 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       setBusy(true); reconcile().then(function(){ if(!current()) return; setBusy(false); if(pending && retryAllowed) sendPending(); else render(); }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "查询失败，原请求保留"); } }); return;
     }
     if(pending || storageError) return;
+    var statusBtn = e.target.closest('[data-plan-br-status]');
+    if(statusBtn){ openPlanBranchStatusMenu(statusBtn, statusBtn.getAttribute("data-plan-br-status")); return; }
     var bulk = e.target.closest('[data-plan-all], [data-plan-done], [data-plan-clear], [data-actual-all], [data-actual-done], [data-actual-clear]');
     if(bulk){
       var bulkKey = bulk.hasAttribute("data-actual-all") || bulk.hasAttribute("data-actual-done") || bulk.hasAttribute("data-actual-clear") ? "actual" : "plan";
       var bulkMode = (bulk.hasAttribute("data-plan-all") || bulk.hasAttribute("data-actual-all")) ? "all" : (bulk.hasAttribute("data-plan-done") || bulk.hasAttribute("data-actual-done")) ? "done" : "clear";
       bulkPick(bulkKey, bulkMode); return;
     }
-    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planTaskFetchKey = ""; invalidatePreview(); render(); }); return; }
+    if(e.target.closest('[data-plan-new]')){ if(mayManage) confirmDiscardPlan(function(){ readActual(); planId = ""; planJustSaved = false; planScopeVersionIds = null; planTaskFetchKey = ""; planTaskErrorKey = ""; invalidatePreview(); render(); }); return; }
     if(e.target.closest('[data-release-preview]')){ runPreview(); return; }
     if(e.target.closest('[data-release-save]')){
       var p = selectedPlan(); if(!mayManage || (p && p.status === "completed")) return;
@@ -38855,11 +39436,13 @@ var listPrefs = __NS["core/list-preferences.js"];
 var esc = esc2;
 
 
+
 var { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } = __NS["views/manager-shared.js"];
 var VIEW_KEY = "project-view";
 var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
+var moduleUi = { adding:false, deleting:"" };
 var deliveryCache = Object.create(null);
 /* 版本 / 发布记录有变更时清掉交付资源缓存，避免项目驾驶舱继续显示旧数量 */
 window.addEventListener("ds:delivery-changed", function(e){
@@ -38914,6 +39497,9 @@ function loadProject(opts){
   if(!selected){
     body.innerHTML = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
     return;
+  }
+  if(!cache || !cache.project || cache.project.id !== selected.id){
+    moduleUi = { adding:false, deleting:"" };
   }
   var current = ++seq;
   if(!opts.silent) body.innerHTML = UI.skeletonCards(3);
@@ -39017,8 +39603,144 @@ function deliveryPanel(p){
     + card("versions", "版本", valueOf("versions"), footOf("versions", "加载中", "加载失败") || "首版 / 迭代")
     + '</div></section>';
 }
-function loadProjectDelivery(p){
-  if(!p || !p.id || deliveryCache[p.id]) return;
+function moduleDeviation(value){
+  return value === null || value === undefined ? "—" : ((value > 0 ? "+" : "") + value + "%");
+}
+function moduleRisk(row){
+  var tags = [];
+  if(row.overdue) tags.push('<span class="mini-tag over">逾期 ' + row.overdue + '</span>');
+  if(row.blocked) tags.push('<span class="mini-tag warn">阻塞 ' + row.blocked + '</span>');
+  if(!tags.length && row.total && row.done === row.total) tags.push('<span class="mini-tag ok">已完成</span>');
+  return tags.length ? tags.join("") : "—";
+}
+function moduleTasksOf(id){
+  var modules = cache.modules || [];
+  return (cache.tasks || []).filter(function(t){
+    var cid = t.categoryId || "";
+    if(id === "__none") return !cid || !modules.some(function(x){ return x.id === cid; });
+    return cid === id;
+  });
+}
+function moduleMetricCells(row){
+  var pct = Math.max(0, Math.min(100, Math.round(Number(row.progressPct) || 0)));
+  return '<td data-label="进度"><span class="project-module-progress"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></span></td>'
+    + '<td class="num" data-label="工作项">' + (Number(row.done) || 0) + ' / ' + (Number(row.total) || 0) + '</td>'
+    + '<td class="num" data-label="预估">' + fmtHours(row.estimateMinutes) + '</td>'
+    + '<td class="num" data-label="实际工时">' + fmtHours(row.actualMinutes) + '</td>'
+    + '<td class="num" data-label="剩余">' + fmtHours(row.remainingMinutes) + '</td>'
+    + '<td class="num" data-label="偏差">' + moduleDeviation(row.deviationPct) + '</td>';
+}
+function moduleDeleteRow(row, colspan){
+  var taskCount = Number(row.total) || 0;
+  var options = (cache.modules || []).filter(function(x){ return x.id !== row.id; }).map(function(x){
+    return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>';
+  }).join("");
+  var hint = taskCount
+    ? taskCount + ' 个工作项及其需求将迁到目标模块，历史工时随工作项一起迁移，无法恢复。'
+    : '该模块暂无工作项，删除后不可恢复。';
+  return '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-del">'
+    + '<span class="project-module-del-icon" aria-hidden="true">' + icon("trash", 14) + '</span>'
+    + '<span class="project-module-del-text"><b>删除「' + esc(row.name) + '」？</b><small>' + hint + '</small></span>'
+    + (taskCount ? '<label class="project-module-target">迁到 <select data-module-target>' + options + '</select></label>' : '')
+    + '<button class="btn sm danger" type="button" data-module-del-confirm="' + esc(row.id) + '">确认删除</button>'
+    + '<button class="btn sm ghost" type="button" data-module-del-cancel>取消</button></div></td></tr>';
+}
+function moduleRowHTML(row, canManage, moduleCount){
+  var ops = canManage
+    ? '<td class="project-module-ops" data-label="操作"><button class="icon-btn sm danger" type="button" data-module-del="' + esc(row.id) + '" title="删除模块" aria-label="删除模块"' + (moduleCount <= 1 ? " disabled" : "") + '>' + icon("trash", 14) + '</button></td>'
+    : "";
+  return '<tr class="project-module-row' + (moduleUi.deleting === row.id ? ' is-deleting' : '') + '" data-module-open="' + esc(row.id) + '" tabindex="0" title="查看该模块的工作项">'
+    + '<td class="project-module-name"><i class="project-module-dot" style="background:' + esc(row.color || "#8a8578") + '"></i><span>' + esc(row.name) + '</span></td>'
+    + moduleMetricCells(row)
+    + '<td data-label="风险">' + moduleRisk(row) + '</td>' + ops + '</tr>'
+    + (moduleUi.deleting === row.id ? moduleDeleteRow(row, canManage ? 9 : 8) : "");
+}
+function moduleEmptyRow(colspan, canManage){
+  return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有模块'
+    + (canManage ? '，点右上角「新增模块」添加第一个' : '') + '</td></tr>';
+}
+function moduleUnassignedRow(row){
+  return '<tr class="project-module-row is-unassigned" data-module-open="__none" tabindex="0" title="查看未归属模块的工作项">'
+    + '<td class="project-module-name"><i class="project-module-dot"></i><span>未指定</span><span class="mini-tag">未归类</span></td>'
+    + moduleMetricCells(row)
+    + '<td data-label="风险">' + moduleRisk(row) + '</td>'
+    + (cache.canManageModules ? '<td class="project-module-ops"></td>' : '') + '</tr>';
+}
+function moduleTotalRow(m, c, total, canManage){
+  var pct = Math.max(0, Math.min(100, Math.round(Number(m.progressPct) || 0)));
+  return '<tr class="project-modules-total"><td class="project-module-name"><b>合计</b></td>'
+    + '<td data-label="进度"><span class="project-module-progress"><span class="progress"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></span></td>'
+    + '<td class="num" data-label="工作项">' + (c.done || 0) + ' / ' + total + '</td>'
+    + '<td class="num" data-label="预估">' + fmtHours(m.estimateMinutes) + '</td>'
+    + '<td class="num" data-label="实际工时">' + fmtHours(m.actualMinutes) + '</td>'
+    + '<td class="num" data-label="剩余">' + fmtHours(m.remainingMinutes) + '</td>'
+    + '<td class="num" data-label="偏差" title="项目整体偏差见上方工时偏差卡片">—</td>'
+    + '<td data-label="风险">' + moduleRisk({ overdue:c.overdue, blocked:c.blocked, done:c.done, total:total }) + '</td>'
+    + (canManage ? '<td class="project-module-ops"></td>' : '') + '</tr>';
+}
+function modulePanel(p, m, c){
+  var modules = cache.modules || [];
+  var unassigned = cache.unassigned || {};
+  var canManage = !!cache.canManageModules;
+  var colspan = canManage ? 9 : 8;
+  var total = (cache.tasks || []).length;
+  var body = modules.map(function(row){ return moduleRowHTML(row, canManage, modules.length); }).join("");
+  if(!modules.length) body = moduleEmptyRow(colspan, canManage);
+  if(Number(unassigned.total)) body += moduleUnassignedRow(unassigned);
+  body += moduleTotalRow(m, c, total, canManage);
+  if(canManage && moduleUi.adding){
+    body += '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-inline">'
+      + '<b>新增模块</b>'
+      + '<input type="color" data-module-new-color value="#8a8578" aria-label="模块颜色" />'
+      + '<input type="text" data-module-new-name maxlength="12" placeholder="模块名称，最多 12 个字" aria-label="模块名称" />'
+      + '<button class="btn sm primary" type="button" data-module-save>添加</button>'
+      + '<button class="btn sm ghost" type="button" data-module-cancel>取消</button>'
+      + '<span class="foot-note">名称不可与现有模块重复，新模块排在最后。</span></div></td></tr>';
+  }
+  return '<section class="manager-panel project-modules">'
+    + '<div class="manager-panel-head project-modules-head"><div class="project-modules-title"><b>模块</b><span>'
+    + modules.length + ' 个模块 · ' + total + ' 个工作项</span></div>'
+    + '<div class="project-modules-tools">'
+    + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
+    + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；偏差只取已完成且填了预估的工作项。'
+    + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
+    + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 新增模块</button>' : '')
+    + '</div></div>'
+    + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
+    + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
+    + '<th>模块</th><th>进度</th><th class="num">工作项</th><th class="num">预估</th><th class="num">实际工时</th><th class="num">剩余</th><th class="num">偏差</th><th>风险</th>'
+    + (canManage ? '<th class="num" aria-label="操作"></th>' : '') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<p class="project-modules-foot-note"><span class="project-modules-foot-main"><i class="project-modules-foot-info" aria-hidden="true">' + icon("infoCircle", 13) + '</i>'
+    + '<span>未指定为没有模块归属的工作项，单独统计；模块合计 + 未指定 = 项目合计。项目整体进度仍按全部工作项计算，不是模块百分比的平均。</span></span>'
+    + (canManage ? "" : "<span>仅空间主、管理员或项目负责人可维护模块。</span>") + '</p>'
+    + '</section>';
+}
+function saveModule(){
+  var nameEl = document.querySelector("[data-module-new-name]");
+  var colorEl = document.querySelector("[data-module-new-color]");
+  var name = nameEl ? nameEl.value.trim() : "";
+  if(!name){ toast("请填写模块名称", "warn"); if(nameEl) nameEl.focus(); return; }
+  var pid = cache && cache.project && cache.project.id;
+  if(!pid) return;
+  API.post("/api/categories?project=" + encodeURIComponent(pid), { name: name, color: colorEl ? colorEl.value : "" }).then(function(){
+    toast("已添加模块「" + name + "」", "fs");
+    moduleUi.adding = false;
+    loadCategories(true);
+    loadProject({ silent:true });
+  }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
+}
+function deleteModule(id){
+  var targetEl = document.querySelector("[data-module-target]");
+  var target = targetEl ? targetEl.value : "";
+  var query = target ? "?targetId=" + encodeURIComponent(target) : "";
+  API.del("/api/categories/" + encodeURIComponent(id) + query).then(function(){
+    toast(target ? "模块已删除，工作项与需求已迁移" : "模块已删除", "fs");
+    moduleUi.deleting = "";
+    loadCategories(true);
+    loadProject({ silent:true });
+  }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
+}
+function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
   deliveryCache[p.id] = {};
   var id = p.id;
   function paint(){
@@ -39082,6 +39804,7 @@ function renderProject(){
     + metric("预估工时合计", fmtHours(m.estimateMinutes), "剩余 " + fmtHours(m.remainingMinutes), "estimate")
     + metric("实际投入", fmtHours(m.actualMinutes), "含进行中工作项", "actual")
     + metric("工时偏差（已完成工作项口径）", deviation, "（实际−预估）÷预估", "variance") + '</div>'
+    + modulePanel(p, m, c)
     + '<div class="manager-two-col"><section class="manager-panel"><div class="manager-panel-head"><b>工作项分布</b><span>' + total + ' 个工作项</span></div>'
     + distRow("待处理", c.backlog || 0, total, "backlog") + distRow("进行中", c.doing || 0, total, "doing", "info")
     + (c.ended ? distRow("执行结束", c.ended, total, "ended") : "")
@@ -39097,7 +39820,11 @@ function renderProject(){
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
-  if(projectTab === "overview") loadProjectDelivery(p);
+  if(projectTab === "overview"){
+    loadProjectDelivery(p);
+    var moduleInput = document.querySelector("[data-module-new-name]");
+    if(moduleUi.adding && moduleInput) moduleInput.focus();
+  }
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
 function loadDrill(opts){
@@ -39377,6 +40104,32 @@ function onClick(e){
   }
   var tabBtn = e.target.closest("[data-project-tab]");
   if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
+  if(e.target.closest("[data-module-add]")){
+    moduleUi.adding = true;
+    moduleUi.deleting = "";
+    renderProject();
+    return;
+  }
+  if(e.target.closest("[data-module-cancel]")){ moduleUi.adding = false; renderProject(); return; }
+  if(e.target.closest("[data-module-save]")){ saveModule(); return; }
+  var moduleDel = e.target.closest("[data-module-del]");
+  if(moduleDel){
+    if((cache.modules || []).length <= 1){ toast("至少需要保留一个模块", "warn"); return; }
+    moduleUi.deleting = moduleDel.dataset.moduleDel;
+    moduleUi.adding = false;
+    renderProject();
+    return;
+  }
+  if(e.target.closest("[data-module-del-cancel]")){ moduleUi.deleting = ""; renderProject(); return; }
+  var moduleDelConfirm = e.target.closest("[data-module-del-confirm]");
+  if(moduleDelConfirm){ deleteModule(moduleDelConfirm.dataset.moduleDelConfirm); return; }
+  var moduleRow = e.target.closest("[data-module-open]");
+  if(moduleRow){
+    var moduleId = moduleRow.dataset.moduleOpen;
+    var moduleHit = moduleId === "__none" ? null : (cache.modules || []).filter(function(x){ return x.id === moduleId; })[0];
+    openTaskTable((cache.project.name || "项目") + " · " + (moduleHit ? moduleHit.name : "未指定"), moduleTasksOf(moduleId));
+    return;
+  }
   var pvMode = e.target.closest("[data-pv-mode]");
   if(pvMode){
     var m = pvMode.dataset.pvMode;
@@ -39454,9 +40207,16 @@ function onChange(e){
 }
 /* 透视树行键盘可达：聚焦任务行后 Enter/空格打开详情 */
 function onKeydown(e){
+  if(e.key === "Enter" && e.target.matches && e.target.matches("[data-module-new-name]")){
+    e.preventDefault();
+    saveModule();
+    return;
+  }
   if(e.key !== "Enter" && e.key !== " ") return;
   var row = e.target.closest ? e.target.closest("tr[data-open-task]") : null;
-  if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); }
+  if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); return; }
+  var moduleRow = e.target.closest ? e.target.closest("tr[data-module-open]") : null;
+  if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); }
 }
 if($("projectBody")){
   $("projectBody").addEventListener("click", onClick);
@@ -40004,8 +40764,9 @@ function loadProjCats(reqId){
 }
 function renderProjCats(){
   if(!projCatList) return;
-  var readOnly = roleReadOnly();
-  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  var canManage = !!projCatReqId && canManageProject(projCatReqId);
+  var readOnly = !canManage;
+  var canDel = canManage;
   projCatList.innerHTML = projCatCache.map(function(c, idx){
     return '<div class="cfg-row" data-proj-cat-id="' + esc(c.id) + '">' +
       '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
@@ -40013,7 +40774,7 @@ function renderProjCats(){
       '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-pcat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
       '<button class="cc-act" type="button" data-pcat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
       '<button class="cc-act" type="button" data-pcat-down title="下移"' + (readOnly || idx === projCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+      '<button class="cc-act dan" type="button" data-pcat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
     '</div>';
   }).join("");
   ["projCatNewColor", "projCatNewName", "btnProjCatAdd"].forEach(function(id){
@@ -40832,9 +41593,12 @@ function openRoleGuide(){
     roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["新增 / 编辑 / 排序看板列与模块", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除看板列 / 模块", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新增 / 编辑 / 排序看板列", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除看板列", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["维护项目模块（新增 / 改名 / 排序 / 删除）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["创建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["调整成员角色", "除空间主外的角色", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -40952,7 +41716,7 @@ function enterSettingsView(){
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/模块仅空间主可操作");
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖与删除看板列仅空间主可操作");
   /* 完整备份导入/导出与清空在后端均要求空间主；CSV 导出对所有角色开放 */
   ["btnExport", "btnImport", "btnReset"].forEach(function(id){
     var el = $(id);
@@ -41511,6 +42275,13 @@ var wsCatProjects = [], wsCatCache = [], wsCatSeq = 0;
 function wsCatProjectId(){
   return wsCatProjectSel ? wsCatProjectSel.value : "";
 }
+function wsCatProjectOwner(){
+  var pid = wsCatProjectId();
+  for(var i = 0; i < wsCatProjects.length; i++){
+    if(wsCatProjects[i].id === pid) return wsCatProjects[i].ownerUserId;
+  }
+  return null;
+}
 function wsCatRefreshDependents(){
   loadCategories(true);
   loadBoard({silent:true});
@@ -41563,8 +42334,9 @@ function loadWsCatCfg(){
 }
 function renderWsCatCfg(){
   if(!wsCatList) return;
-  var readOnly = roleReadOnly() || !wsCatProjectId();
-  var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
+  var canManage = !!wsCatProjectId() && canManageProject(wsCatProjectId(), wsCatProjectOwner());
+  var readOnly = !canManage;
+  var canDel = canManage;
   if($("wsCatCount")) $("wsCatCount").textContent = wsCatCache.length ? "共 " + wsCatCache.length + " 个" : "";
   if(!wsCatCache.length){
     if(wsCatProjectId()) wsCatList.innerHTML = UI.colEmpty("该项目还没有模块，用下方输入框添加第一个");
@@ -41577,7 +42349,7 @@ function renderWsCatCfg(){
         '<input type="text" value="' + esc(c.name) + '" maxlength="12" data-wscat-name aria-label="模块名称"' + (readOnly ? " disabled" : "") + ' />' +
         '<button class="cc-act" type="button" data-wscat-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
         '<button class="cc-act" type="button" data-wscat-down title="下移"' + (readOnly || idx === wsCatCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
+        '<button class="cc-act dan" type="button" data-wscat-del title="' + (canDel ? "删除模块" : "仅空间主、管理员或项目负责人可删除模块") + '"' + (canDel ? "" : " disabled") + '>' + icon("trash", 14) + '</button>' +
       '</div>';
     }).join("");
   }
@@ -42494,38 +43266,46 @@ if(btnNavTelemetry) btnNavTelemetry.addEventListener("click", function(){
   toast("已导出导航使用记录", "fs");
 });
 var btnReset = $("btnReset"), resetLabel = $("resetLabel");
-function disarmReset(){
-  if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
-  btnReset.classList.remove("armed");
-  resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
-}
-disarmReset();
+if(resetLabel) resetLabel.textContent = "清空任务数据";
+if(btnReset) btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
 btnReset.addEventListener("click", function(){
-  if(rt.resetArmed){
-    disarmReset();
-    var n = totalTaskCount(), m = rt.reqList.length;
-    API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]}).then(function(){
+  var n = totalTaskCount(), m = rt.reqList.length;
+  var desc = "将删除当前空间的 " + n + " 项工作项与 " + m + " 个项目，以及评论、依赖/基线、文档、文档评论、测试用例、版本与需求池、工作项通知和完成归档；分支、附件、时间线、视图、看板列与模块保留。"
+    + "执行前会自动导出当前空间的完整备份。此操作不可撤销。";
+  UI.showPrompt({
+    title:"清空任务数据",
+    desc:desc,
+    label:"输入「清空」确认",
+    placeholder:"清空",
+    maxLength:2,
+    required:true,
+    okText:"导出备份并清空"
+  }).then(function(word){
+    if(word === null) return;
+    if(word.trim() !== "清空"){ toast("确认文字不正确，未执行清空", "warn"); return; }
+    btnReset.disabled = true;
+    toast("正在导出备份…", "fs");
+    return API.get("/api/export").then(function(data){
+      triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
+      return API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]});
+    }).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       saveViewState();
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项工作项与 " + m + " 个项目（含回收站、评论、工作项通知、完成归档、文档、文档评论、测试用例、版本与需求池）")
-        : "任务数据已清空（分支、附件、时间线保留）", "warn");
+        ? ("已清空 " + n + " 项工作项与 " + m + " 个项目；清空前备份已下载")
+        : "任务数据已清空（分支、附件、时间线保留）；清空前备份已下载", "warn");
       ganttState.undo = [];
       syncGanttUndoUI();
       loadBoard({animate:true});
       loadReqs();
       loadReqDocs(true);
-    }).catch(function(ex){ toast("清空失败：" + (ex.message || "网络异常"), "bad"); });
-    return;
-  }
-  btnReset.classList.add("armed");
-  resetLabel.textContent = "再次点击清空任务数据";
-  toast("再次点击确认：删除工作项/回收站/项目/评论/甘特依赖与基线/工作项通知/完成归档/文档/版本与需求池，分享链接失效；分支、附件、时间线保留", "warn");
-  rt.resetArmed = setTimeout(disarmReset, 3500);
+    }).catch(function(ex){
+      toast("清空失败（备份可能已下载）：" + (ex.message || "网络异常"), "bad");
+    }).then(function(){ btnReset.disabled = false; });
+  });
 });
 var SHORTCUT_ROWS = [
   ["N","新建工作项：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],
@@ -42972,6 +43752,7 @@ return {enterSettingsView: enterSettingsView, loadTrash: loadTrash, loadUsers: l
 /* ---- views/testcases.js ---- */
 __NS["views/testcases.js"] = (function(){
 /* views/testcases · 测试用例：用例库、执行结果标记、失败一键转缺陷 */
+
 
 
 
@@ -43450,14 +44231,31 @@ function fmtSize(n){
 }
 function evidenceHTML(a, writable){
   var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
+  var canPrev = previewable(a.filename);
+  var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+  /* 与附件区一致：点击证据缩略图/文件名开弹框，表格开 Univer，其余仍走新标签 */
+  var openKey = canPrev ? ' data-run-att-prev="' + esc(a.id) + '"'
+    : (isSheet ? ' data-run-att-sheet="' + esc(a.id) + '"' : "");
+  var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+  var anchorTitle = esc(a.filename) + " · " + openTitle;
   var del = writable
     ? '<button class="icon-btn sm danger" type="button" data-run-att-del="' + esc(a.id) + '" title="删除证据" aria-label="删除证据">' + icon("trash", 13) + '</button>'
     : "";
   return '<span class="run-ev' + (isImg ? " is-img" : "") + '">'
     + (isImg
-      ? '<a href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '"><img src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" /></a>'
-      : '<a class="run-ev-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '">' + icon("download", 13) + '<span>' + esc(cut(a.filename, 12)) + '</span></a>')
+      ? '<a href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + anchorTitle + '"' + openKey + '><img src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" /></a>'
+      : '<a class="run-ev-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + anchorTitle + '"' + openKey + '>' + icon("clip", 13) + '<span>' + esc(cut(a.filename, 12)) + '</span></a>')
     + del + '</span>';
+}
+/* 证据附件按 id 找回对象：预览/表格弹层都需要文件名与大小 */
+function findRunAtt(attId){
+  for(var i = 0; i < runsList.length; i++){
+    var files = (runsList[i] && runsList[i].attachments) || [];
+    for(var j = 0; j < files.length; j++){
+      if(files[j].id === attId) return files[j];
+    }
+  }
+  return null;
 }
 function openRunsDialog(id, title){
   var c = caseById(id);
@@ -44451,6 +45249,23 @@ function renderPlanDetail(){
   }
   acts += '<button class="btn sm ghost" type="button" data-plan-csv>' + icon("download", 13) + ' 导出报告</button>';
   acts += '</div>';
+  var selBar = "";
+  if(editable && cs.length){
+    var noneN = 0, failedN = 0, blockedN = 0;
+    cs.forEach(function(c){
+      if(!c.result) noneN++;
+      else if(c.result === "failed") failedN++;
+      else if(c.result === "blocked") blockedN++;
+    });
+    selBar = '<div class="plan-selbar" data-plan-selbar>'
+      + '<label><input type="checkbox" class="cbx" data-plan-select-all aria-label="全选计划内用例" />全选</label>'
+      + '<button class="btn sm ghost" type="button" data-plan-pick-status="none" title="替换当前选择">选未执行 (' + noneN + ')</button>'
+      + (failedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="failed" title="替换当前选择">选失败 (' + failedN + ')</button>' : "")
+      + (blockedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="blocked" title="替换当前选择">选阻塞 (' + blockedN + ')</button>' : "")
+      + '<button class="btn sm ghost" type="button" data-plan-clear' + (selCount ? "" : " disabled") + '>清除选择</button>'
+      + '<span class="plan-sel-count" data-plan-sel-count>已选 ' + selCount + ' / ' + cs.length + '</span>'
+      + '</div>';
+  }
   var rows = "";
   if(!cs.length){
     rows = UI.emptyState({
@@ -44482,7 +45297,31 @@ function renderPlanDetail(){
         + '</div>';
     }).join("");
   }
-  box.innerHTML = head + acts + '<div class="tc-list">' + rows + '</div>';
+  box.innerHTML = head + acts + selBar + '<div class="tc-list">' + rows + '</div>';
+  syncPlanSelUI();
+}
+/* 勾选状态与批量按钮、表头全选保持同步：所有变更都走这里收口 */
+function syncPlanSelUI(){
+  var box = $("tcPlans");
+  if(!box) return;
+  var rows = Array.prototype.slice.call(box.querySelectorAll("[data-pcase]"));
+  var n = 0;
+  rows.forEach(function(c){
+    c.checked = !!planSel[c.dataset.pcase];
+    if(c.checked) n++;
+  });
+  var all = box.querySelector("[data-plan-select-all]");
+  if(all){
+    all.checked = rows.length > 0 && n === rows.length;
+    all.indeterminate = n > 0 && n < rows.length;
+    all.disabled = !rows.length;
+  }
+  var cnt = box.querySelector("[data-plan-sel-count]");
+  if(cnt) cnt.textContent = "已选 " + n + " / " + rows.length;
+  var clr = box.querySelector("[data-plan-clear]");
+  if(clr) clr.disabled = n === 0;
+  var btn = box.querySelector("[data-plan-runs]");
+  if(btn) btn.textContent = "记录选中 " + n + " 条";
 }
 function planCaseIds(){
   return (planDetail && planDetail.cases || []).map(function(c){ return c.caseId; });
@@ -44841,6 +45680,19 @@ $("tcPlans").addEventListener("click", function(e){
   if((b = e.target.closest("[data-plan-del]"))){ deletePlan(b.dataset.planDel); return; }
   if((b = e.target.closest("[data-plan-status]"))){ planStatusTo(b.dataset.planStatus); return; }
   if((b = e.target.closest("[data-plan-pick]"))){ openPlanPick(); return; }
+  if((b = e.target.closest("[data-plan-pick-status]"))){
+    var st = b.dataset.planPickStatus;
+    planSel = {};
+    (planDetail && planDetail.cases || []).forEach(function(c){
+      var r = c.result || "";
+      if((st === "none" && !r) || (st === "failed" && r === "failed") || (st === "blocked" && r === "blocked")){
+        planSel[c.caseId] = true;
+      }
+    });
+    syncPlanSelUI();
+    return;
+  }
+  if(e.target.closest("[data-plan-clear]")){ planSel = {}; syncPlanSelUI(); return; }
   if((b = e.target.closest("[data-plan-runs]"))){ doPlanBatchRun(); return; }
   if((b = e.target.closest("[data-plan-csv]"))){ exportPlanCsv(); return; }
   if((b = e.target.closest("[data-pbatch]"))){
@@ -44862,15 +45714,18 @@ $("tcPlans").addEventListener("click", function(e){
   }
 });
 $("tcPlans").addEventListener("change", function(e){
+  if(e.target.closest("[data-plan-select-all]")){
+    var allOn = e.target.checked;
+    planSel = {};
+    if(allOn) (planDetail && planDetail.cases || []).forEach(function(c){ planSel[c.caseId] = true; });
+    syncPlanSelUI();
+    return;
+  }
   var c = e.target.closest("[data-pcase]");
   if(!c) return;
   planSel[c.dataset.pcase] = c.checked;
-  var btn = $("tcPlans").querySelector("[data-plan-runs]");
-  if(btn){
-    var n = 0;
-    for(var k in planSel) if(planSel[k]) n++;
-    btn.textContent = "记录选中 " + n + " 条";
-  }
+  if(!c.checked) delete planSel[c.dataset.pcase];
+  syncPlanSelUI();
 });
 $("btnSavePlan").addEventListener("click", savePlan);
 $("pName").addEventListener("input", function(){ $("fPlanName").classList.remove("invalid"); });
@@ -44977,6 +45832,24 @@ UI.setModalSubmit($("dlgCaseDefect"), function(){ if(!caseDefecting) doDefect();
 $("dlgCaseRunsX").addEventListener("click", function(){ closeRunsDialog(); });
 UI.setModalCloseGuard($("dlgCaseRuns"), function(){ closeRunsDialog(); });
 $("runsList").addEventListener("click", function(e){
+  var prev = e.target.closest("[data-run-att-prev]");
+  if(prev){
+    e.preventDefault();
+    var att = findRunAtt(prev.dataset.runAttPrev);
+    if(att) openAttPreview({ attachment: att });
+    return;
+  }
+  var sheet = e.target.closest("[data-run-att-sheet]");
+  if(sheet){
+    e.preventDefault();
+    var attSheet = findRunAtt(sheet.dataset.runAttSheet);
+    if(!attSheet) return;
+    /* 执行证据只读打开，避免从历史记录改写证据原文件 */
+    import("../core/sheet-viewer.js").then(function(m){
+      m.openSheet({ attachment: attSheet, canEdit: false });
+    }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+    return;
+  }
   var del = e.target.closest("[data-run-att-del]");
   if(del){
     var caseId = runsCaseId;
@@ -45405,6 +46278,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-10 11:08</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-10 13:45</span></div>
 </body>
 </html>
