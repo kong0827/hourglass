@@ -2194,6 +2194,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .release-section{display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:var(--r-md);padding:16px;background:var(--surface);min-width:0;}
 .release-section h3,.release-section h4,.release-section p{margin:0;}
 .release-section .field{display:flex;flex-direction:column;gap:6px;}
+.release-section .field>.label-row>label{font-size:12px;font-weight:600;color:var(--text-2);}
+.release-plan-summary{font-size:12px;line-height:18px;color:var(--text-3);}
+.release-plan-summary.is-warn{color:var(--warning-fg);}
 .release-section textarea{min-height:72px;}
 .release-section details.release-advanced{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;background:var(--surface-sunken);min-width:0;}
 .release-section details.release-advanced>summary{cursor:pointer;font-size:13px;font-weight:550;color:var(--text-2);}
