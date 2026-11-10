@@ -99,11 +99,13 @@
 .tc-help-note{margin:0;padding:0 10px 10px;line-height:18px;}
 
 .input,.textarea,.select,
-.field input[type="text"],.field input[type="password"],.field input[type="date"],
-.field input[type="datetime-local"],.field input[type="search"],.field input[type="number"],
+.field input[type="text"],.field input[type="password"],.field input[type="email"],
+.field input[type="url"],.field input[type="tel"],.field input[type="date"],
+.field input[type="datetime-local"],.field input[type="time"],.field input[type="month"],
+.field input[type="week"],.field input[type="search"],.field input[type="number"],
 .field textarea,.field select{
   width:100%;height:34px;padding:0 10px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  background-color:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
   font-size:14px;color:var(--text);
   transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
 }
@@ -121,45 +123,186 @@
 .field .err.on,.field.invalid .err{display:block;}
 .field.invalid input,.field.invalid textarea,.field.invalid select{border-color:var(--danger);}
 
-/* Select：自定义箭头 */
-.field select,.select{
+/* ---------- 下拉选择：全局统一外观 ----------
+   原生箭头在 macOS / Windows / Linux 粗细与留白都不同，且宿主控件会破坏圆角边框；
+   这里统一关掉原生外观，用同一枚 16px chevron，边框 / 圆角 / 焦点与输入框一致。
+   尺寸由局部覆盖：.mini-select 30px，行内紧凑控件 26–30px。 */
+select:where(:not([multiple]):not([size])){
   appearance:none;-webkit-appearance:none;
-  padding-right:30px;
-  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 8px center;
+  height:34px;padding:0 36px 0 12px;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background-color:var(--surface);
+  background-image:var(--select-chevron);
+  background-repeat:no-repeat;background-position:right 11px center;
+  color:var(--text);font-size:13.5px;line-height:1.5;
+  cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),
+             box-shadow var(--dur-fast) var(--ease-out),
+             background-color var(--dur-fast) var(--ease-out);
 }
+select:where(:not([multiple]):not([size])):hover{border-color:var(--border-strong);}
+select:where(:not([multiple]):not([size])):focus{
+  outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);
+}
+select:where(:not([multiple]):not([size])):disabled{
+  background-color:var(--surface-sunken);color:var(--text-3);cursor:not-allowed;
+}
+select option{background-color:var(--surface);color:var(--text);}
+
+/* 表单里的选择框与输入框同宽同高 */
+.field select:not([multiple]):not([size]){width:100%;height:34px;padding:0 36px 0 12px;font-size:14px;}
+select.select{padding-right:36px;}
+
+/* 多选 / size 选择保持列表形态：不加箭头、不锁高度 */
+select[multiple],select[size]{
+  height:auto;min-height:100px;padding:4px;
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  background-color:var(--surface);color:var(--text);font-size:13.5px;line-height:1.5;
+}
+select[multiple] option,select[size] option{padding:5px 8px;border-radius:4px;}
 
 .mini-select{
   appearance:none;-webkit-appearance:none;
-  height:30px;padding:0 28px 0 10px;border-radius:var(--r-sm);
-  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:550;
-  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='%2398A2B3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 7px center;
+  height:30px;padding:0 30px 0 10px;border-radius:var(--r-sm);
+  border:1px solid var(--border);background-color:var(--surface);color:var(--text-2);
+  font-size:12.5px;font-weight:550;
+  background-image:var(--select-chevron);
+  background-repeat:no-repeat;background-position:right 8px center;
 }
 .mini-select:hover{border-color:var(--border-strong);color:var(--text);}
 .mini-select:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 
-/* 复选框 */
-input[type="checkbox"].cbx{
+/* ---------- 复选框：统一自绘 ----------
+   原生复选框在 macOS / Windows 上的尺寸、圆角、勾线都不一致；这里统一为 16px
+   圆角方块：未选描边，选中填充主色并叠白色对勾，半选显示横线。开关见下方 .sw。 */
+input[type="checkbox"]{
   appearance:none;-webkit-appearance:none;
-  width:16px;height:16px;flex:0 0 auto;border-radius:4px;
-  border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;
-  transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out);
+  width:16px;height:16px;flex:0 0 auto;margin:0;border-radius:4px;
+  border:1px solid var(--border-strong);background-color:var(--surface);
+  cursor:pointer;vertical-align:middle;
+  transition:background-color var(--dur-fast) var(--ease-out),
+             border-color var(--dur-fast) var(--ease-out),
+             box-shadow var(--dur-fast) var(--ease-out);
 }
-input[type="checkbox"].cbx:hover{border-color:var(--primary);}
-input[type="checkbox"].cbx:checked{
-  background:var(--primary);border-color:var(--primary);
-  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.6 10.6l3.6 3.6 7.2-8'/%3E%3C/svg%3E");
+input[type="checkbox"]:hover{border-color:var(--primary);}
+input[type="checkbox"]:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate{
+  background-color:var(--primary);border-color:var(--primary);
   background-repeat:no-repeat;background-position:center;
 }
-input[type="checkbox"].cbx:indeterminate{background:var(--primary);border-color:var(--primary);}
-
-/* 原生取色器统一尺寸 */
-input[type="color"]{
-  width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:var(--r-xs);
-  background:var(--surface);cursor:pointer;flex:0 0 auto;
+input[type="checkbox"]:checked{
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.6 10.6l3.6 3.6 7.2-8'/%3E%3C/svg%3E");
 }
-input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);background:transparent;cursor:pointer;}
+input[type="checkbox"]:indeterminate{
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M5 10h10'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:disabled{cursor:not-allowed;opacity:.5;}
+input[type="checkbox"]:checked:disabled{background-color:var(--text-3);border-color:var(--text-3);}
+
+/* ---------- 开关：.sw 包一层，用于布尔设置 ----------
+   胶囊轨道 + 白色滑块；开启用主色，警示语义另行覆盖。 */
+.sw{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:13.5px;font-weight:550;color:var(--text-2);
+  cursor:pointer;user-select:none;
+}
+.sw input[type="checkbox"]{
+  width:34px;height:20px;border-radius:999px;position:relative;
+  border:1px solid var(--border);background-color:var(--surface-active);
+  background-image:none;
+  transition:background-color var(--dur-fast) var(--ease-out),
+             border-color var(--dur-fast) var(--ease-out),
+             box-shadow var(--dur-fast) var(--ease-out);
+}
+.sw input[type="checkbox"]::after{
+  content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+  background:#fff;box-shadow:var(--shadow-xs);
+  transition:transform var(--dur-fast) var(--ease-out);
+}
+.sw input[type="checkbox"]:checked,
+.sw input[type="checkbox"]:indeterminate{
+  background-image:none;background-color:var(--primary);border-color:var(--primary);
+}
+.sw input[type="checkbox"]:checked::after{transform:translateX(14px);}
+
+/* ---------- 文件选择：可见入口统一虚线框 + 次级按钮 ---------- */
+input[type="file"]{
+  width:100%;padding:3px 6px;
+  border:1px dashed var(--border-strong);border-radius:var(--r-sm);
+  background-color:var(--surface);color:var(--text-2);font-size:12.5px;
+  cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);
+}
+input[type="file"]:hover{border-color:var(--primary);}
+input[type="file"]:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+input[type="file"]::file-selector-button{
+  appearance:none;margin-right:10px;height:26px;padding:0 12px;
+  border:1px solid var(--border);border-radius:var(--r-xs);
+  background-color:var(--surface);color:var(--text-2);
+  font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:background-color var(--dur-fast) var(--ease-out),
+             border-color var(--dur-fast) var(--ease-out),
+             color var(--dur-fast) var(--ease-out);
+}
+input[type="file"]::file-selector-button:hover{
+  background-color:var(--surface-hover);border-color:var(--border-strong);color:var(--text);
+}
+
+/* 取色器：去掉宿主控件的内边距与描边，只留一枚圆角色块 */
+input[type="color"]{
+  width:26px;height:26px;padding:2px;border:1px solid var(--border);border-radius:var(--r-xs);
+  background-color:var(--surface);cursor:pointer;flex:0 0 auto;
+}
+input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
+input[type="color"]::-webkit-color-swatch,
+input[type="color"]::-moz-color-swatch{border:none;border-radius:calc(var(--r-xs) - 2px);}
+input[type="color"]:hover{border-color:var(--border-strong);}
+input[type="color"]:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+input[type="color"]:disabled{opacity:.5;cursor:not-allowed;}
+
+/* 滑块：统一轨道与滑块，替代各系统原生外观 */
+input[type="range"]{
+  appearance:none;-webkit-appearance:none;
+  flex:1 1 auto;height:20px;background:transparent;cursor:pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--surface-active);}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;
+  background:#fff;border:2px solid var(--primary);box-shadow:var(--shadow-xs);
+  transition:box-shadow var(--dur-fast) var(--ease-out);
+}
+input[type="range"]:focus-visible{outline:none;}
+input[type="range"]:focus-visible::-webkit-slider-thumb{box-shadow:var(--ring-focus);}
+input[type="range"]::-moz-range-track{height:4px;border-radius:2px;background:var(--surface-active);}
+input[type="range"]::-moz-range-thumb{
+  width:12px;height:12px;border-radius:50%;
+  background:#fff;border:2px solid var(--primary);box-shadow:var(--shadow-xs);
+}
+
+/* 数字微调按钮、搜索清除按钮、日期图标：统一为跨平台一致的小图标 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0;}
+input[type="search"]::-webkit-search-cancel-button{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;margin-left:6px;cursor:pointer;
+  background-color:var(--text-3);
+  -webkit-mask:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='10' cy='10' r='7.2'/%3E%3Cpath d='M7.6 7.6l4.8 4.8M12.4 7.6l-4.8 4.8'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='10' cy='10' r='7.2'/%3E%3Cpath d='M7.6 7.6l4.8 4.8M12.4 7.6l-4.8 4.8'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover{background-color:var(--text-2);}
+/* 顶栏全局搜索自带清空按钮，隐藏原生清除避免并排出现两个 × */
+.global-search input[type="search"]::-webkit-search-cancel-button{display:none;}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator{
+  opacity:.5;cursor:pointer;border-radius:3px;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
 
 /* ===================== 4.3 Segmented ===================== */
 .seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken);flex-wrap:wrap;}
@@ -199,6 +342,18 @@ input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);backgr
 .tag.tag-info{background:var(--info-soft);color:var(--info-fg);}
 .tag.tag-plum{background:var(--plum-soft);color:var(--plum);}
 .tag.ghost{background:transparent;border-color:var(--border);color:var(--text-3);font-weight:500;}
+/* 模块/列标签：用模块原色与主题文字混合派生，色相不漂移、两套主题各自对比度达标 */
+.tag.tag-cat{
+  background:color-mix(in srgb, var(--tag-c) 12%, var(--surface));
+  border-color:color-mix(in srgb, var(--tag-c) 34%, transparent);
+  color:color-mix(in srgb, var(--tag-c) 58%, var(--text));
+}
+.tag.tag-cat .dot{background:var(--tag-c);}
+html[data-theme="dark"] .tag.tag-cat{
+  background:color-mix(in srgb, var(--tag-c) 20%, var(--surface));
+  border-color:color-mix(in srgb, var(--tag-c) 42%, transparent);
+  color:color-mix(in srgb, var(--tag-c) 60%, var(--text));
+}
 
 .chip{
   display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;
@@ -251,10 +406,11 @@ input[type="range"]{flex:1 1 auto;height:20px;accent-color:var(--primary);backgr
 }
 
 /* PriorityDot */
-.pdot{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;flex:0 0 auto;}
-.pdot i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto;}
-.pdot.P0{color:var(--p0);} .pdot.P1{color:var(--p1);}
-.pdot.P2{color:var(--p2);} .pdot.P3{color:var(--p3);}
+.pdot{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;flex:0 0 auto;
+  color:color-mix(in srgb, var(--p-c, var(--text-2)) 62%, var(--text));}
+.pdot i{width:6px;height:6px;border-radius:50%;background:var(--p-c, currentColor);flex:0 0 auto;}
+.pdot.P0{--p-c:var(--p0);} .pdot.P1{--p-c:var(--p1);}
+.pdot.P2{--p-c:var(--p2);} .pdot.P3{--p-c:var(--p3);}
 
 /* MetaIcon：14px 图标 + 12px 文字 */
 .meta{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -642,7 +798,7 @@ body.dragging-active{cursor:grabbing;user-select:none;}
   border:1px solid var(--primary-border);border-radius:var(--r-lg);background:var(--primary-soft);box-shadow:var(--shadow-xs);}
 .ctx-item{display:flex;flex-direction:column;gap:5px;min-width:0;}
 .ctx-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--primary-fg);}
-.ctx select{height:32px;background:var(--surface);font-size:12.5px;}
+.ctx select{height:34px;padding:0 32px 0 10px;background-color:var(--surface);font-size:13px;}
 .auto{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--success-fg);line-height:1;}
 .auto::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--success);}
 
@@ -874,8 +1030,9 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .req-doc-search input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .req-doc-picker-tools{display:flex;align-items:center;gap:8px;margin-top:8px;}
 .req-doc-picker-tools select{
-  flex:1 1 auto;min-width:0;height:30px;padding:0 8px;background:var(--surface);border:1px solid var(--border);
+  flex:1 1 auto;min-width:0;height:30px;padding:0 28px 0 8px;background-color:var(--surface);border:1px solid var(--border);
   border-radius:var(--r-sm);color:var(--text);font-size:12px;
+  background-position:right 7px center;
 }
 .req-doc-picker-tools select:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .req-doc-picker-count{flex:0 0 auto;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}

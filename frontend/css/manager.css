@@ -5,7 +5,7 @@
 .manager-toolbar>div:first-child{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap;}
 .manager-toolbar b{font-size:15px;font-weight:650;}
 .manager-toolbar span{font-size:12.5px;color:var(--text-3);}
-.manager-project-picker select{height:32px;min-width:180px;max-width:300px;padding:0 30px 0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:13px;}
+.manager-project-picker select{height:32px;min-width:180px;max-width:300px;padding:0 32px 0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background-color:var(--surface);color:var(--text);font-size:13px;background-position:right 9px center;}
 .project-tabs{align-self:flex-start;margin-top:-2px;}
 .project-tab-panel{display:flex;flex-direction:column;gap:14px;min-width:0;}
 @media(max-width:760px){.project-tabs{width:100%;}.project-tabs button{flex:1 1 0;}}

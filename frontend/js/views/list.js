@@ -14,7 +14,7 @@ import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../co
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { taskVersionsText, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, darken, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, rgbaOf, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
+import { taskVersionsText, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, avatarHTML, colMeta, colName, duePresetDate, fmtShortMD, fmtTs, parseDate, priName, priTagHTML, severityBadgeHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
@@ -325,6 +325,15 @@ function renderListHead(){
           '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
     }).join("") + '<span></span>';
   applyGrid(listHead);
+  syncListColumnsBtn();
+}
+function syncListColumnsBtn(){
+  var btn = $("btnListColumns");
+  if(!btn) return;
+  var shown = listPrefs.columns("task-list").length;
+  var total = Object.keys(listPrefs.labels("task-list")).length;
+  btn.textContent = "显示字段 " + shown + "/" + total;
+  btn.title = "当前显示 " + shown + "/" + total + " 个字段；点击勾选或调整顺序";
 }
 function minutesText(value){
   var n = Number(value) || 0;
@@ -337,7 +346,7 @@ function taskCell(t, key, hasTypeCol){
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
-    return '<span class="cell"><span class="tag" style="background:' + rgbaOf(color,.10) + ';color:' + darken(color) + '">' + esc(colName(t.boardColumn)) + '</span></span>';
+    return '<span class="cell"><span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span></span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
   if(key === "owner") return '<span class="cell" title="' + esc(t.owner || "") + '">' + esc(t.owner || "—") + '</span>';

@@ -55,7 +55,7 @@
 .gantt-notice[hidden]{display:none;}
 
 .gantt-scroll{
-  flex:1 1 auto;min-height:240px;position:relative;overflow:auto;
+  flex:1 1 auto;min-height:240px;position:relative;overflow:auto;overscroll-behavior:contain;
   border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface);
 }
 .gantt-grid{position:relative;min-width:max-content;width:100%;}

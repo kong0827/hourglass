@@ -57,21 +57,14 @@ a:hover{text-decoration:underline;}
   text-transform:uppercase;color:var(--text-3);
 }
 
-/* ---------- 滚动条（§3.4） ---------- */
-.view::-webkit-scrollbar,.board::-webkit-scrollbar,
-.board-col-body::-webkit-scrollbar,.drawer-body::-webkit-scrollbar,
-.menu::-webkit-scrollbar,.ws-list::-webkit-scrollbar,.side-nav::-webkit-scrollbar{width:10px;height:10px;}
-.view::-webkit-scrollbar-thumb,.board::-webkit-scrollbar-thumb,
-.board-col-body::-webkit-scrollbar-thumb,.drawer-body::-webkit-scrollbar-thumb,
-.menu::-webkit-scrollbar-thumb,.ws-list::-webkit-scrollbar-thumb,.side-nav::-webkit-scrollbar-thumb{
-  background:var(--border-strong);border-radius:999px;border:3px solid transparent;background-clip:content-box;}
-.view::-webkit-scrollbar-thumb:hover,.board::-webkit-scrollbar-thumb:hover,
-.board-col-body::-webkit-scrollbar-thumb:hover,.drawer-body::-webkit-scrollbar-thumb:hover,
-.menu::-webkit-scrollbar-thumb:hover,.ws-list::-webkit-scrollbar-thumb:hover,.side-nav::-webkit-scrollbar-thumb:hover{
-  background:var(--text-3);background-clip:content-box;}
-.view::-webkit-scrollbar-track,.board::-webkit-scrollbar-track,
-.board-col-body::-webkit-scrollbar-track,.drawer-body::-webkit-scrollbar-track,
-.menu::-webkit-scrollbar-track,.ws-list::-webkit-scrollbar-track,.side-nav::-webkit-scrollbar-track{background:transparent;}
+/* ---------- 滚动条（§3.4）：6px 细条，默认隐形、悬停显形 ---------- */
+*{scrollbar-width:thin;scrollbar-color:transparent transparent;}
+*:hover{scrollbar-color:rgba(120,130,145,.38) transparent;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent;}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:999px;background-clip:content-box;}
+:hover::-webkit-scrollbar-thumb{background:rgba(120,130,145,.32);background-clip:content-box;}
+::-webkit-scrollbar-thumb:hover{background:rgba(120,130,145,.58);background-clip:content-box;}
 
 /* ---------- 通用动画 ---------- */
 @keyframes ds-spin{to{transform:rotate(360deg);}}
@@ -85,15 +78,3 @@ a:hover{text-decoration:underline;}
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
 }
 
-/* ===================== 细滚动条 ===================== */
-/* 默认很淡、悬停加深，接近 macOS 的 overlay 观感（用户要求去掉笨重的灰色滚动条） */
-*{scrollbar-width:thin;scrollbar-color:rgba(120,130,145,.32) transparent;}
-::-webkit-scrollbar{width:10px;height:10px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{
-  background:rgba(120,130,145,.26);
-  border:3px solid transparent;border-radius:999px;
-  background-clip:content-box;
-}
-::-webkit-scrollbar-thumb:hover{background:rgba(120,130,145,.48);background-clip:content-box;}
-::-webkit-scrollbar-corner{background:transparent;}

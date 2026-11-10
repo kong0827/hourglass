@@ -49,7 +49,7 @@
   flex:1 1 0;min-width:0;height:100%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:3px;border:0;border-radius:26px;background:transparent;
-  color:var(--text-3);font-size:10px;font-weight:600;
+  color:var(--text-3);font-size:11px;font-weight:600;
 }
 [data-layout="mobile"] .tabbar .tab.on{background:var(--primary);color:#fff;}
 [data-layout="mobile"] .tabbar .tab.on svg{stroke:#fff;}
@@ -99,6 +99,11 @@
   z-index:105;width:48px;height:48px;padding:0;border-radius:50%;
   font-size:0;gap:0;justify-content:center;
   box-shadow:var(--shadow-lg);
+  transition:transform .2s var(--ease-out),opacity .2s var(--ease-out);
+}
+/* 滚动时收起、停稳后恢复：避免固定按钮长时间压住列表内容 */
+[data-layout="mobile"] body.fab-away #btnNew{
+  transform:translateY(14px) scale(.92);opacity:0;pointer-events:none;
 }
 [data-layout="mobile"] #btnNew svg:first-child{width:20px;height:20px;}
 [data-layout="mobile"] #btnNew svg:last-child{display:none;}
@@ -430,12 +435,20 @@ body.mob-sheet-open{overflow:hidden;}
   margin:12px 0 10px;padding:3px;
   background:var(--surface-sunken);border-radius:14px;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  scroll-snap-type:x proximity;scroll-padding-inline:12px;
+  /* 溢出时两端渐隐，提示还有未显示的列；滚动到头自动收起对应侧 */
+  --seg-fade-l:0px;--seg-fade-r:0px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--seg-fade-l),#000 calc(100% - var(--seg-fade-r)),transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 var(--seg-fade-l),#000 calc(100% - var(--seg-fade-r)),transparent 100%);
 }
+[data-layout="mobile"] .mob-col-seg.seg-more{--seg-fade-r:26px;}
+[data-layout="mobile"] .mob-col-seg.seg-less{--seg-fade-l:18px;}
 [data-layout="mobile"] .mob-col-seg::-webkit-scrollbar{display:none;}
 [data-layout="mobile"] .mob-col-btn{
   flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
   height:34px;padding:0 12px;border:0;border-radius:10px;
   background:transparent;color:var(--text-2);font-size:12.5px;font-weight:600;white-space:nowrap;
+  scroll-snap-align:center;
 }
 [data-layout="mobile"] .mob-col-btn i{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
 [data-layout="mobile"] .mob-col-btn b{

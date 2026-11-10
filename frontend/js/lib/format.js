@@ -65,7 +65,7 @@ function priName(code, workspaceId){ return priMeta(code, workspaceId).name; }
 function priColor(code, workspaceId){ return priMeta(code, workspaceId).color; }
 function priTagHTML(code, workspaceId, dotOnly){
   var p = code || "P2";
-  return '<span class="pdot ' + esc(p) + '" style="color:' + esc(priColor(p, workspaceId)) + '"><i></i>' +
+  return '<span class="pdot ' + esc(p) + '" style="--p-c:' + esc(priColor(p, workspaceId)) + '"><i></i>' +
     (dotOnly ? "" : esc(priName(p, workspaceId))) + '</span>';
 }
 CURRENT_PRIORITIES = buildPriorityMeta();
@@ -257,6 +257,8 @@ function demandGanttInfoHTML(){
       '<span class="type-help-desc">某阶段没有记录就不画，也不补 0 天；相邻段之间没有记录覆盖的日期画虚线缺口；最后一段结束到今天仍缺记录时，按卡点标出「已排期未开工 / 未执行用例 / 待发布」。单日阶段画成圆点。已取消的需求工作阶段停在取消日，不再往今天生长；既有实际发布事实仍保留。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag type-epic">并行分层</span>' +
       '<span class="type-help-desc">时间重叠的阶段自动上下分层，泳道数按实际并发增长；行高随层数增加，不会把重叠阶段叠在一条线上。</span></div>' +
+    '<div class="type-help-row"><span class="mini-tag mute">阶段天数</span>' +
+      '<span class="type-help-desc">条形够宽时直接标出该阶段自然日天数；进行中显示「8天+」，虚线右端表示仍在延续。单日节点只标日期，不把排期、完成、发布算成一天耗时。天数含周末与缺口，不是投入工时；条形太窄时不标，悬停可看完整起止与天数。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">用例与跨度</span>' +
       '<span class="type-help-desc">「用例 N（未执行 X · 未通过 Y）」按每条用例最近一次执行结果算，从未执行记为未执行；只要还有未执行或未通过用例，或还有工作项停在「测试中」，测试段就仍在进行，也不会出现完成点。行尾「跨度 N 天」是首尾阶段之间的日历天数，含中间缺口，不是投入工时。</span></div>' +
     '<div class="type-help-row"><span class="mini-tag mute">时间范围</span>' +
@@ -313,9 +315,5 @@ function hexToRgb(hex){
   return {r:parseInt(h.substr(0,2),16), g:parseInt(h.substr(2,2),16), b:parseInt(h.substr(4,2),16)};
 }
 function rgbaOf(hex, a){ var c = hexToRgb(hex); return "rgba("+c.r+","+c.g+","+c.b+","+a+")"; }
-function darken(hex, k){
-  var c = hexToRgb(hex), f = 1 - (k == null ? .30 : k);
-  return "rgb("+Math.round(c.r*f)+","+Math.round(c.g*f)+","+Math.round(c.b*f)+")";
-}
 
-export { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, darken, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

@@ -333,7 +333,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
               <div class="field">
                 <div class="field-label">阻塞 / 卡点</div>
                 <div class="blocked-row">
-                  <label class="sw"><input type="checkbox" id="iBlocked" /> 被阻塞</label>
+                  <label class="sw sw-warn"><input type="checkbox" id="iBlocked" /> 被阻塞</label>
                   <input id="iBlockedReason" class="input" type="text" maxlength="120" placeholder="等谁 / 等什么 / 预计何时解除" disabled />
                 </div>
               </div>

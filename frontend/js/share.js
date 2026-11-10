@@ -108,7 +108,7 @@ import { API } from "./core/api.js";
       var t = x.t, st = statusOf(t), done = t.boardColumn === "done";
       var off = dayDiff(x.s, range.start), span = Math.max(1, dayDiff(x.e, x.s) + 1);
       var left = off * dayW, width = span * dayW;
-      var meta = '<span class="pdot ' + esc(t.priority) + '" style="color:' + esc(priorityColor(t.priority)) + '"><i></i>' + esc(priorityName(t.priority)) + '</span>';
+      var meta = '<span class="pdot ' + esc(t.priority) + '" style="--p-c:' + esc(priorityColor(t.priority)) + '"><i></i>' + esc(priorityName(t.priority)) + '</span>';
       if (t.owner) meta += '<span class="ellipsis shrink">' + esc(t.owner) + '</span>';
       meta += '<span>' + fmtMD(x.s) + '→' + fmtMD(x.e) + '</span>';
       var p = done ? 100 : (Number(t.progress) || 0);

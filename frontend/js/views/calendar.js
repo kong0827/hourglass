@@ -222,7 +222,7 @@ function renderCalendar(){
         (t.owner ? '<span class="cal-own" aria-label="负责人 ' + esc(t.owner) + '">' + esc(t.owner.slice(-1)) + '</span>' : '') +
         '</button>';
     }
-    if(visible.length > 3) chips += '<button type="button" class="cal-more" title="查看当天全部工作项">+' + (visible.length - 3) + ' 更多</button>';
+    if(visible.length > 3) chips += '<button type="button" class="cal-more" title="查看当天全部工作项" aria-label="查看当天全部 ' + visible.length + ' 项工作项">+' + (visible.length - 3) + ' 更多</button>';
     if(doneItems.length && !expanded){
       chips += '<button type="button" class="cal-chip done cal-done-toggle" data-cal-show-done="' + dateIso +
         '" title="展开当天已完成的工作项">' + (doneItems.length === 1 ? "1 项已完成" : doneItems.length + " 项已完成") + '</button>';

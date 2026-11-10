@@ -152,10 +152,26 @@ function loadMe(prefetched){
 }
 function renderSideUser(u){
   var name = (u && (u.displayName || u.username)) || "?";
-  var av = $("sideUserAv"), nm = $("sideUserName");
+  var av = $("sideUserAv"), nm = $("sideUserName"), btn = $("sideUserBtn");
   if(av){ av.className = "avatar avatar-c" + avatarColorIndex(name); av.textContent = initial(name); }
-  if(nm) nm.textContent = name;
+  /* 侧栏宽度有限，长名字会被省略：补 title 让悬停可看全名 */
+  if(nm){ nm.textContent = name; nm.title = name; }
+  if(btn) btn.title = name + " · 个人设置（账号 / 计时 / 密码）";
 }
+/* 手机端 FAB 在滚动时收起、停稳后恢复，避免盖住列表内容 */
+var fabScrollLast = new WeakMap(), fabRevealTimer = 0;
+function onAppScroll(e){
+  if(!isMobile()) return;
+  var el = e.target;
+  if(!el || el.nodeType !== 1) return;
+  var y = el.scrollTop || 0, prev = fabScrollLast.get(el) || 0;
+  fabScrollLast.set(el, y);
+  if(y <= 24 || prev - y > 4) document.body.classList.remove("fab-away");
+  else if(y - prev > 4) document.body.classList.add("fab-away");
+  clearTimeout(fabRevealTimer);
+  fabRevealTimer = setTimeout(function(){ document.body.classList.remove("fab-away"); }, 900);
+}
+document.addEventListener("scroll", onAppScroll, true);
 var lastCatLoad = 0;
 function loadCategories(force){
   if(!force && Date.now() - lastCatLoad < 30000) return Promise.resolve();

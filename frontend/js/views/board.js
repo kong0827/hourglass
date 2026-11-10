@@ -93,6 +93,7 @@ function loadReqs(){
     rt.reqList = list || [];
     rt.reqsLoaded = true;
     populateReqSelect();
+    try{ window.dispatchEvent(new CustomEvent("ds:reqs-loaded")); }catch(e){ /* 非浏览器环境 */ }
     if(activeView === "projects") loadView("projects").then(function(m){ m.renderReqList(); });
   }).catch(function(){
     if(seq !== reqLoadSeq) return;
@@ -287,7 +288,7 @@ function cardHTML(t, idx){
                 icon(isDone ? "undo" : "check", 11) + '</button>'
             : '') +
         '</span>' +
-        (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '" style="color:' + esc(priColor(t.priority)) + '">' + esc(priName(t.priority)) + '</span>') +
+        (isDone ? '' : '<span class="pdot ' + esc(t.priority) + '" style="--p-c:' + esc(priColor(t.priority)) + '">' + esc(priName(t.priority)) + '</span>') +
       '</span>' +
       '<h3 class="card-title">' + typeBadgeHTML(t.itemType) + severityBadgeHTML(t.severity) + esc(t.title) + '</h3>' +
     '</div>' +
@@ -314,6 +315,21 @@ function mobileColId(){
   mobCol = COLUMNS.length ? COLUMNS[0].id : "backlog";
   return mobCol;
 }
+function syncMobSegEdges(seg){
+  if(!seg) return;
+  var max = seg.scrollWidth - seg.clientWidth;
+  seg.classList.toggle("seg-less", seg.scrollLeft > 2);
+  seg.classList.toggle("seg-more", max - seg.scrollLeft > 2);
+}
+function centerMobSegActive(seg){
+  var active = seg.querySelector(".mob-col-btn.on");
+  if(!active || seg.scrollWidth <= seg.clientWidth) return;
+  var sr = seg.getBoundingClientRect(), ar = active.getBoundingClientRect();
+  seg.scrollLeft += (ar.left - sr.left) - (sr.width - ar.width) / 2;
+}
+window.addEventListener("resize", function(){
+  syncMobSegEdges(document.querySelector(".mob-col-seg"));
+});
 function renderMobileBoard(opts){
   opts = opts || {};
   updateBrand();
@@ -367,6 +383,13 @@ function renderMobileBoard(opts){
 
   board.innerHTML = '<div class="mob-board">' + seg +
     '<div class="mob-board-list" role="list">' + listHTML + cardAddHTML(active) + '</div></div>';
+
+  var mobSeg = board.querySelector(".mob-col-seg");
+  if(mobSeg){
+    centerMobSegActive(mobSeg);
+    syncMobSegEdges(mobSeg);
+    mobSeg.addEventListener("scroll", function(){ syncMobSegEdges(mobSeg); }, {passive:true});
+  }
 
   var emptyBtn = board.querySelector(".empty-state [data-empty-action]");
   if(emptyBtn) emptyBtn.addEventListener("click", function(){ openTaskDrawer(active); });

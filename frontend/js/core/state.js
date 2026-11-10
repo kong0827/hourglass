@@ -1,7 +1,7 @@
 /* core/state · 全局可变状态（跨视图共享的写入统一走 rt） */
 
 import { esc } from "./ui.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, darken, dayDiff, fmtShortMD, iso, parseDate, rgbaOf, startOfDay } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, dayDiff, fmtShortMD, iso, parseDate, startOfDay } from "../lib/format.js";
 
 /* 跨视图共享的可变状态：import 绑定只读，写入一律走 rt */
 export const rt = {};
@@ -72,14 +72,13 @@ function catNameById(id){
   }
   return "";
 }
-/** 模块ID→彩色标签；未指定/已删模块返回空串 */
+/** 模块ID→彩色标签；未指定/已删模块返回空串。
+    颜色通过 CSS 变量交给样式层派生，浅/深主题各自保证对比度，避免在 JS 里压暗成脏色 */
 function catTag(id){
   var name = catNameById(id);
   if(!name) return "";
-  var color = catColor(id);
-  return '<span class="tag" style="background:' + rgbaOf(color,.09) + ';color:' + darken(color) +
-    ';border-color:' + rgbaOf(color,.22) + '">' +
-    '<i class="dot" style="background:' + color + '"></i>' + esc(name) + '</span>';
+  return '<span class="tag tag-cat" style="--tag-c:' + catColor(id) + '">' +
+    '<i class="dot"></i>' + esc(name) + '</span>';
 }
 /** 直接吃名称的标签：完成快照等历史值没有 ID，只有完成当时的名称 */
 function catTagByName(name){
@@ -88,9 +87,8 @@ function catTagByName(name){
   for(var i = 0; i < rt.categoriesCache.length; i++){
     if(rt.categoriesCache[i].name === name){ color = safeColor(rt.categoriesCache[i].color); break; }
   }
-  return '<span class="tag" style="background:' + rgbaOf(color,.09) + ';color:' + darken(color) +
-    ';border-color:' + rgbaOf(color,.22) + '">' +
-    '<i class="dot" style="background:' + color + '"></i>' + esc(name) + '</span>';
+  return '<span class="tag tag-cat" style="--tag-c:' + color + '">' +
+    '<i class="dot"></i>' + esc(name) + '</span>';
 }
 function tagChip(name){
   return '<span class="tag tag-ghost">' + esc(name) + '</span>';

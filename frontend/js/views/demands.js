@@ -40,7 +40,7 @@ var STATUS_HINTS = {
   pass: "评审通过、等待排期；可直接排期到目标版本，也可撤回重新评审",
   plan: "已指定目标版本或计划时间；可拖回「已通过」撤销排期",
   rej: "评审结论为不通过，历史保留；可重新打开回到「待评审」",
-  canceled: "需求中途作废/暂不做，可恢复为「已通过」；交付完成由版本发布记录体现，不需要额外的已完成状态"
+  canceled: "需求中途作废/暂不做，历史保留；可恢复为「已通过」。不需要额外的已完成状态，是否交付以版本发布记录为准"
 };
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
 var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3, canceled: 4 };
@@ -56,6 +56,8 @@ var DEMAND_BOARD_PAGE = 50;
 var DEMAND_TABLE_PAGE = 100;
 var DEMAND_GANTT_PAGE = 100;
 var DEMAND_GANTT_MAX_DAYS = 730;
+/* 条内要放下「开发 12天+」这类文字所需的最小宽度 */
+var DEMG_SEG_LABEL_MIN_W = 68;
 var DEM_STAGE_ORDER = ["review", "plan", "design", "dev", "test", "complete", "release"];
 var DEM_STAGE_NAMES = { review:"评审", plan:"排期", design:"设计", dev:"开发", test:"测试", complete:"完成", release:"发布" };
 var DEM_STAGE_COLORS = { review:"var(--text-3)", plan:"var(--info)", design:"var(--plum)", dev:"var(--primary)", test:"var(--warning)", complete:"var(--success)", release:"var(--success)" };
@@ -408,9 +410,7 @@ function render(){
       + (items.map(cardHTML).join("") || '<p class="foot-note" style="padding:10px 2px">暂无需求</p>')
       + more
       + '</div>';
-  }).join("") + '</div>'
-    + '<p class="foot-note dem-status-hint">已拒绝是评审不通过，可重新打开；已取消是中途作废或暂不做，可恢复为已通过。'
-    + '两者都会保留历史，也都不需要额外的「已完成」状态 —— 是否交付以版本发布记录为准。</p>';
+  }).join("") + '</div>';
 }
 /* 行内只保留当前状态的主操作，其余动作收进“更多”，删除仍走危险色与确认 */
 function demandMenuItems(d){
@@ -489,6 +489,13 @@ function dragHint(status){
   if(status === "plan") return "可拖回「已通过」撤销排期";
   return "拖到其他列流转状态";
 }
+/* 状态语义跟着卡片走：底部总注离卡片太远，窄屏与长列里都看不到 */
+function demandStateNote(d){
+  if(!d) return "";
+  if(d.status === "rej") return "评审不通过 · 可重新打开";
+  if(d.status === "canceled") return "中途作废或暂不做 · 可恢复为已通过";
+  return "";
+}
 function cardHTML(d, opts){
   var acts = demandActs(d);
   /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
@@ -509,7 +516,8 @@ function cardHTML(d, opts){
     + (wsjfText(d) ? '<span class="tag tag-plum">' + esc(wsjfText(d)) + '</span>' : '')
     + '</div>'
     + (d.source ? '<div class="bkl-src">来源：' + esc(d.source) + '</div>' : '')
-    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="bkl-why">' + esc(d.reviewNote) + '</div>' : '')
+    + (demandStateNote(d) ? '<div class="bkl-state">' + demandStateNote(d) + '</div>' : '')
+    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="bkl-why' + (d.status === "canceled" ? " is-canceled" : "") + '">' + esc(d.reviewNote) + '</div>' : '')
     + (acts ? '<div class="bkl-acts">' + acts + '</div>' : '')
     + '</div>';
 }
@@ -1245,7 +1253,8 @@ function demgStageTitle(s){
   var start = GS.parseDate(s.start), end = GS.parseDate(s.end);
   var days = start && end ? (GS.dayDiff(end, start) + 1) : 1;
   var span = s.point ? GS.fmtFullDate(start) : (GS.fmtFullDate(start) + " → " + GS.fmtFullDate(end));
-  return demStageName(s.stage) + "：" + span + (s.open ? "（进行中）" : "（" + days + " 天）");
+  var tail = s.point ? "" : (s.open ? "（已 " + days + " 天，进行中）" : "（" + days + " 天）");
+  return demStageName(s.stage) + "：" + span + tail;
 }
 function demgLabelHTML(d, tl){
   var meta = '<span class="demg-status st-' + esc(d.status) + '"><i></i>' + esc(statusName(d.status)) + '</span>';
@@ -1298,7 +1307,11 @@ function demgRowHTML(d, range, dayW, totalW){
       return;
     }
     var width = Math.max(4, span * dayW - 1);
-    var label = width >= 52 ? '<span class="demg-seg-label">' + esc(demStageName(s.stage)) + '</span>' : "";
+    /* 天数取阶段真实区间，不按可视范围裁剪；进行中带 + 表示仍在延续 */
+    var segDays = GS.dayDiff(p.end, p.start) + 1;
+    var label = width >= DEMG_SEG_LABEL_MIN_W
+      ? '<span class="demg-seg-label">' + esc(demStageName(s.stage) + " " + segDays + "天" + (s.open ? "+" : "")) + '</span>'
+      : "";
     segs += '<button class="demg-seg st-' + esc(s.stage) + (s.open ? " is-open" : "") +
       '" type="button" data-dem-detail="' + esc(d.id) + '" style="left:' + (off * dayW) +
       'px;width:' + width + 'px;top:' + top + 'px;--dem-stage-color:' + demStageColor(s.stage) +
@@ -1989,6 +2002,8 @@ function renderDemandDetail(d){
     + '<div class="detail-grid">' + grid.map(function(g){
         return '<div class="detail-item"><span>' + esc(g[0]) + '</span><b>' + esc(g[1]) + '</b></div>';
       }).join("") + '</div>'
+    + (d.status === "rej" ? '<p class="foot-note">评审不通过，历史保留；可重新打开回到「待评审」。</p>' : '')
+    + (d.status === "canceled" ? '<p class="foot-note">中途作废或暂不做，历史保留；可恢复为「已通过」后重新排期，是否交付以版本发布记录为准。</p>' : '')
     + '<p class="foot-note">需求调期、撤排与取消不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
     + (demandActs(d) ? '<div class="row row-gap">' + demandActs(d) + '</div>' : '')
     + (d.description ? '<div class="detail-section"><span class="section-title">需求描述</span><div class="detail-copy">' + esc(d.description) + '</div></div>' : '')

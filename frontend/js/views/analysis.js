@@ -316,7 +316,13 @@ function renderStatsHours(c){
   }).join("");
   if(workScopeTag) workScopeTag.textContent = (scope === "all") ? "全空间" : "仅我";
   if(hoursNote){
-    if(!base && !week){
+    var teamHasHours = (all !== null && all > 0) || (allWeek !== null && allWeek > 0);
+    if(scope === "mine" && !mine && !mineWeek && teamHasHours){
+      /* 仅我无记录但团队有：提示可切换，而不是误报“还没有计时记录” */
+      hoursNote.textContent = all
+        ? "你还没有计时记录；切到「全空间」可查看团队合计（" + fmtMinutesShort(all) + "）。"
+        : "你还没有计时记录；切到「全空间」可查看团队合计。";
+    }else if(!base && !week){
       hoursNote.textContent = "还没有计时记录：在工作项详情里开始计时后，这里会显示累计与本周工时。";
     }else if(scope === "all" && all === null){
       hoursNote.textContent = "服务端暂未返回全空间工时，当前回退显示我的工时（需后端支持）。";
