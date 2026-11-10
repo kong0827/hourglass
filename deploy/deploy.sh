@@ -716,7 +716,7 @@ if [ "$DO_VERIFY" -eq 1 ]; then
   step "5/6 校验（健康检查 / 产物一致性 / 前端哈希 / 登录）"
   # 校验脚本先落临时文件：heredoc 直接放在 $( ) 里时，内嵌引号会让本地 bash 解析报错
   VERIFY_TMP="${LOCAL_TMP}/verify.out"
-  sudo_do >"$VERIFY_TMP" 2>&1 <<'REMOTE'
+  if ! sudo_do >"$VERIFY_TMP" 2>&1 <<'REMOTE'
 VERIFY_DIR="$(mktemp -d "$REMOTE_STAGE/verify.XXXXXX")"
 chmod 700 "$VERIFY_DIR"
 trap 'rm -rf -- "$VERIFY_DIR"' EXIT
@@ -726,7 +726,15 @@ B="http://127.0.0.1:${NGINX_PORT}"
 COOKIE="$VERIFY_DIR/cookies.txt"
 # Bootstrap CSRF, then obtain authenticated health after login to verify the live
 # JDBC catalog, not merely the configured DB_NAME.
-curl -fsS -c "$COOKIE" -b "$COOKIE" -m 10 "$B/hourglass/api/health" -o "$VERIFY_DIR/health.json"
+# 重启后端口先通、Spring 上下文与连接池可能还没就绪，首个健康请求会 503；
+# 有界重试，避免把正常启动误判为部署失败。
+for attempt in $(seq 1 30); do
+  if curl -fsS -c "$COOKIE" -b "$COOKIE" -m 5 "$B/hourglass/api/health" -o "$VERIFY_DIR/health.json"; then
+    break
+  fi
+  [ "$attempt" -lt 30 ] || { echo "健康检查在 60 秒内未就绪" >&2; exit 1; }
+  sleep 2
+done
 echo "HEALTH $(< "$VERIFY_DIR/health.json")"
 echo "ROOT $(curl -s -o /dev/null -w '%{http_code}' -m 10 "$B/hourglass/")"
 echo "LOCAL_JAR $(sha256sum "$APP_DIR/$JAR_NAME" | cut -c1-16)"
@@ -763,6 +771,12 @@ PY
 echo "DATABASE $ACTUAL_DB"
 echo "MEM $(systemctl show "$SERVICE" -p MemoryCurrent --value | awk '{printf "%.0f", $1/1048576}')"
 REMOTE
+  then
+    err "线上校验中断，远端输出如下："
+    sed 's/^/      /' "$VERIFY_TMP" >&2
+    rm -f "$VERIFY_TMP"
+    die "校验未完成；jar/前端/数据库可能已更新，请按上方输出核对或回滚"
+  fi
   VERIFY_OUT="$(cat "$VERIFY_TMP")"
   rm -f "$VERIFY_TMP"
 
