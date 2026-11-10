@@ -27,6 +27,20 @@
     ON DUPLICATE KEY UPDATE access = VALUES(access), updated_at = CURRENT_TIMESTAMP
   </insert>
 
+  <!-- 新成员加入 / 新建项目 / 启动自检：补齐 assigned 成员的「不可见」种子，已有授权不覆盖 -->
+  <insert id="seedAssignedNone">
+    INSERT INTO project_member (workspace_id, project_id, user_id, access)
+    SELECT m.workspace_id, r.id, m.user_id, 'none'
+    FROM workspace_member m
+    JOIN requirement r ON r.workspace_id = m.workspace_id
+    LEFT JOIN project_member pm
+      ON pm.workspace_id = m.workspace_id AND pm.project_id = r.id AND pm.user_id = m.user_id
+    WHERE m.workspace_id = #{workspaceId}
+      AND m.project_access_mode = 'assigned'
+      AND m.role = 'member'
+      AND pm.user_id IS NULL
+  </insert>
+
   <delete id="deleteOne">
     DELETE FROM project_member
     WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND user_id = #{userId}

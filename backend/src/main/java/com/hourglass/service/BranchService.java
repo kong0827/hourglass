@@ -506,7 +506,7 @@ public class BranchService {
         return branchMapper.selectById(id);
     }
 
-    /** 删除分支：先把挂在它上面的任务解绑（任务保留），再删时间线与分支本身。 */
+    /** 删除分支：按项目写权限判定（空间级公共分支由非查看者操作）；先解绑任务，再删时间线与分支本身。 */
     @Transactional
     public void delete(String userId, String workspaceId, String id) {
         DevBranch b = get(workspaceId, id);

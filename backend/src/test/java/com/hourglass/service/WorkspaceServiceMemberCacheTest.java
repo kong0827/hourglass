@@ -56,7 +56,8 @@ class WorkspaceServiceMemberCacheTest {
                 mock(com.hourglass.mapper.AppNotificationMapper.class),
                 mock(com.hourglass.mapper.UserListPreferenceMapper.class),
                 mock(WorkActivityService.class),
-                mock(InviteMapper.class), mock(ProjectMemberMapper.class),
+                mock(InviteMapper.class), mock(com.hourglass.mapper.InviteProjectGrantMapper.class),
+                mock(ProjectMemberMapper.class),
                 taskWatchMapper, mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
 

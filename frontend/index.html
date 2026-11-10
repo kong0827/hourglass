@@ -1469,45 +1469,6 @@
           <div class="br-groups" id="branchGroups"></div>
         </div>
 
-        <!-- 新建 / 编辑分支 -->
-        <div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
-          <div class="sheet reqdoc-dlg br-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
-            <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
-            <div class="reqdoc-dlg-form">
-              <label class="reqdoc-dlg-field">
-                <span>分支名</span>
-                <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>目标分支</span>
-                <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
-              </label>
-              <label class="reqdoc-dlg-field">
-                <span>所属项目</span>
-                <select id="brReq"><option value="">空间级公共分支</option></select>
-              </label>
-              <div class="br-dlg-2col">
-                <label class="reqdoc-dlg-field">
-                  <span>负责人</span>
-                  <select id="brOwner"></select>
-                </label>
-                <label class="reqdoc-dlg-field" id="brStatusField">
-                  <span>初始状态</span>
-                  <select id="brStatus"></select>
-                </label>
-              </div>
-              <label class="reqdoc-dlg-field">
-                <span>备注</span>
-                <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
-              </label>
-            </div>
-            <div class="reqdoc-dlg-foot">
-              <button class="btn" type="button" id="dlgBranchCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
-            </div>
-          </div>
-        </div>
       </section>
 
       <!-- ===== 周回顾 ===== -->
@@ -1930,7 +1891,7 @@
               <div class="perm-guide" id="permGuide">
                 <div class="perm-guide-row"><span class="perm-chip owner">空间主</span><span>全部项目；调整所有成员（含管理员）、删除空间、配置推送</span></div>
                 <div class="perm-guide-row"><span class="perm-chip admin">管理员</span><span>全部项目；邀请 / 移出成员与查看者、配置项目可见范围</span></div>
-                <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>默认参与全部项目，可按项目设为只读或不可见</span></div>
+                <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>新成员只看到已分配的项目（可参与 / 只读）；早期成员默认全部，可按项目设为不可见</span></div>
                 <div class="perm-guide-row"><span class="perm-chip viewer">查看者</span><span>全部项目只读，不能修改任何数据</span></div>
               </div>
               <div class="member-list" id="wsMemberList"></div>
@@ -1949,7 +1910,7 @@
                   <h3 style="font-size:14px">邀请链接</h3>
                   <span class="meta-right">7 天有效</span>
                 </div>
-                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。</p>
+                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。</p>
                 <p class="set-hint" id="inviteNoAccountHint">
                   <span id="inviteNoAccountText">对方还没有账号？请联系平台管理员先创建账号。</span>
                   <button class="link-btn" type="button" id="btnInviteCreateAccount" hidden>去创建账号</button>
@@ -1964,7 +1925,7 @@
                 <h3>项目可见范围</h3>
                 <span class="meta-right" id="accessSummary"></span>
               </div>
-              <p class="set-hint">按「成员 × 项目」配置参与范围：默认参与可读写；设为「只读」后只能查看该项目；设为「不可见」后，该项目在项目、工作项、看板、报表中都不出现。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
+              <p class="set-hint">按「成员 × 项目」配置：可参与可读写；只读只能查看；不可见时该项目在项目、工作项、看板、报表中都不出现。新成员默认不参与任何项目，可用成员行的「分配项目」或邀请时先分配；早期加入的成员沿用「默认全部可参与」，只需把不该看到的项目设为不可见。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
               <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
                 <div class="foot-note">加载中…</div>
               </div>
@@ -2370,6 +2331,46 @@
       </section>
 
     </main>
+  </div>
+</div>
+
+<!-- 新建 / 编辑分支：放在视图外，工作项抽屉 / 分支页都能打开 -->
+<div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
+  <div class="sheet reqdoc-dlg br-dlg">
+    <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
+    <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>
+    <div class="reqdoc-dlg-form">
+      <label class="reqdoc-dlg-field">
+        <span>分支名</span>
+        <input id="brName" type="text" maxlength="80" placeholder="例如 feature/login" autocomplete="off" />
+      </label>
+      <label class="reqdoc-dlg-field">
+        <span>目标分支</span>
+        <input id="brTarget" type="text" maxlength="80" placeholder="选填，要合到哪，例如 main" autocomplete="off" />
+      </label>
+      <label class="reqdoc-dlg-field">
+        <span>所属项目</span>
+        <select id="brReq"><option value="">空间级公共分支</option></select>
+      </label>
+      <div class="br-dlg-2col">
+        <label class="reqdoc-dlg-field">
+          <span>负责人</span>
+          <select id="brOwner"></select>
+        </label>
+        <label class="reqdoc-dlg-field" id="brStatusField">
+          <span>初始状态</span>
+          <select id="brStatus"></select>
+        </label>
+      </div>
+      <label class="reqdoc-dlg-field">
+        <span>备注</span>
+        <input id="brNote" type="text" maxlength="200" placeholder="选填：为什么拉这条分支、联调对象…" autocomplete="off" />
+      </label>
+    </div>
+    <div class="reqdoc-dlg-foot">
+      <button class="btn" type="button" id="dlgBranchCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
+    </div>
   </div>
 </div>
 

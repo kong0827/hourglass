@@ -126,6 +126,53 @@ class DemandServiceListTest {
         verify(demands, never()).selectPage(any(DemandQuery.class));
     }
 
+    @Test
+    void boardFacetsIgnoreSelectedFiltersButKeepKeywordAndProject() {
+        Requirement req = new Requirement();
+        req.setId("R1");
+        req.setWorkspaceId("W1");
+        when(reqs.selectById("R1")).thenReturn(req);
+        when(demands.countGroupByStatus(any(DemandQuery.class)))
+                .thenReturn(Collections.singletonList(countRow("review", 1L)));
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(demand()));
+        when(demands.countGroupByFacets(any(DemandQuery.class))).thenReturn(Arrays.asList(
+                facetRow("P0", "新功能", "C1", 2L),
+                facetRow("P0", "缺陷", null, 1L),
+                facetRow("P2", "新功能", "C1", 3L)));
+        DemandQuery query = query("R1");
+        query.setQ("支付");
+        query.setPris(new java.util.ArrayList<String>(Collections.singletonList("P0")));
+        query.setKinds(new java.util.ArrayList<String>(Collections.singletonList("缺陷")));
+
+        com.hourglass.dto.DemandBoardResponse resp = service.board("W1", "U1", query);
+
+        Map<String, Map<String, Integer>> f = resp.getFacets();
+        assertEquals(3, f.get("pris").get("P0"));
+        assertEquals(3, f.get("pris").get("P2"));
+        assertEquals(5, f.get("kinds").get("新功能"));
+        assertEquals(1, f.get("kinds").get("缺陷"));
+        assertEquals(5, f.get("cats").get("C1"));
+        assertEquals(1, f.get("cats").get(""));
+        ArgumentCaptor<DemandQuery> captor = ArgumentCaptor.forClass(DemandQuery.class);
+        verify(demands).countGroupByFacets(captor.capture());
+        DemandQuery scope = captor.getValue();
+        assertEquals("R1", scope.getReqId());
+        assertEquals("支付", scope.getQ());
+        assertNull(scope.getStatus());
+        assertEquals(0, scope.getPris().size());
+        assertEquals(0, scope.getKinds().size());
+        assertEquals(1, query.getPris().size(), "看板列查询仍按所选优先级过滤");
+    }
+
+    private Map<String, Object> facetRow(String pri, String kind, String cat, long count) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("pri", pri);
+        row.put("kind", kind);
+        if (cat != null) row.put("cat", cat);
+        row.put("cnt", count);
+        return row;
+    }
+
     private DemandQuery query(String reqId) {
         DemandQuery query = new DemandQuery();
         query.setReqId(reqId);

@@ -226,6 +226,28 @@ function resetReqForm(){
   if($("dlgProject")) UI.closeModal($("dlgProject"));
   renderReqList();
 }
+/* 共享空间里成员 / 只读成员看到空列表，多半是还没被分配项目，而不是空间里真的没有项目 */
+function emptyProjectsState(){
+  var ws = rt.currentWs;
+  var role = ws && ws.type !== "personal" ? ws.myRole : "";
+  /* 查看者全局只读、不受项目级范围限制：列表为空只可能是空间里还没有项目 */
+  if(role === "viewer"){
+    return UI.emptyState({
+      icon:"folder", title:"还没有项目",
+      text:"你在此空间是查看者，空间主或管理员创建项目后会显示在这里。"
+    });
+  }
+  if(role === "member"){
+    return UI.emptyState({
+      icon:"folder", title:"暂无可见项目",
+      text:"你还没有被分配到任何项目，可联系空间主或管理员分配；也可以点右上角「新建项目」自己创建。"
+    });
+  }
+  return UI.emptyState({
+    icon:"folder", title:"还没有项目",
+    text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
+  });
+}
 function renderReqList(){
   var list = sortedProjects(visibleReqs());
   var countEl = $("reqCount");
@@ -239,12 +261,9 @@ function renderReqList(){
   if($("btnProjectColumns")) $("btnProjectColumns").hidden = listPrefs.viewMode("project-list") !== "table";
   if(!list.length){
     reqListEl.className = "req-list";
-    reqListEl.innerHTML = showArchived ? UI.emptyState({
-      icon:"folder", title:"还没有项目",
-      text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
-    }) : UI.emptyState({
-      icon:"folder", title: archivedCount() ? "全部项目已归档" : "还没有项目",
-      text: archivedCount() ? "点上方「显示已归档」查看或恢复已归档项目。" : "点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
+    reqListEl.innerHTML = (showArchived || !archivedCount()) ? emptyProjectsState() : UI.emptyState({
+      icon:"folder", title:"全部项目已归档",
+      text:"点上方「显示已归档」查看或恢复已归档项目。"
     });
     return;
   }

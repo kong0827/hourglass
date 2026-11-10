@@ -100,6 +100,11 @@ class WorkspaceControllerProjectAccessTest {
         project.setWorkspaceId(WS);
         project.setName("项目A");
         when(requirementMapper.selectById("P1")).thenReturn(project);
+        when(projectAccessService.effectiveAccess(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.eq("P1"),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class)))
+                .thenReturn("write");
+        when(projectAccessService.saveGrant(WS, "U2", "P1", "pm")).thenReturn("");
 
         mvc.perform(put("/api/workspaces/" + WS + "/project-access")
                         .contentType(APPLICATION_JSON)
@@ -107,7 +112,8 @@ class WorkspaceControllerProjectAccessTest {
                 .andExpect(status().isOk());
 
         verify(projectAccessService).saveGrant(WS, "U2", "P1", "pm");
-        verify(activityService).logConfig(WS, "U1", "调整项目可见范围「项目A」→ default");
+        /* 历史 pm 归一化为空（存量成员默认参与）：日志写有效权限「可参与」，不再出现 default 码值 */
+        verify(activityService).logConfig(WS, "U1", "调整成员「U2」对项目「项目A」的可见范围 → 可参与");
         verifyNoInteractions(notificationEvents);
     }
 
@@ -120,6 +126,11 @@ class WorkspaceControllerProjectAccessTest {
         project.setWorkspaceId(WS);
         project.setName("项目A");
         when(requirementMapper.selectById("P1")).thenReturn(project);
+        when(projectAccessService.effectiveAccess(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.eq("P1"),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class)))
+                .thenReturn("write");
+        when(projectAccessService.saveGrant(WS, "U2", "P1", "none")).thenReturn("none");
 
         mvc.perform(put("/api/workspaces/" + WS + "/project-access")
                         .contentType(APPLICATION_JSON)
@@ -140,7 +151,11 @@ class WorkspaceControllerProjectAccessTest {
         project.setWorkspaceId(WS);
         project.setName("项目A");
         when(requirementMapper.selectById("P1")).thenReturn(project);
-        when(projectAccessService.configuredAccess(WS, "P1", "U2")).thenReturn("read");
+        when(projectAccessService.effectiveAccess(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.eq("P1"),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class)))
+                .thenReturn("read");
+        when(projectAccessService.saveGrant(WS, "U2", "P1", "read")).thenReturn("read");
 
         mvc.perform(put("/api/workspaces/" + WS + "/project-access")
                         .contentType(APPLICATION_JSON)
@@ -160,6 +175,82 @@ class WorkspaceControllerProjectAccessTest {
         verify(notificationEvents).notifySystem("U2", WS, NotificationEventService.MEMBER_REMOVED,
                 "你已被移出空间「W1」",
                 "你在该空间的成员身份与项目可见范围已被移除；如有疑问请联系空间主", null);
+    }
+
+    @Test
+    void batchMemberGrantsAuditsAndNotifiesOnce() throws Exception {
+        workspace("shared");
+        when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
+        Requirement p1 = new Requirement();
+        p1.setId("P1");
+        p1.setWorkspaceId(WS);
+        p1.setName("项目A");
+        Requirement p2 = new Requirement();
+        p2.setId("P2");
+        p2.setWorkspaceId(WS);
+        p2.setName("项目B");
+        when(requirementMapper.selectById("P1")).thenReturn(p1);
+        when(requirementMapper.selectById("P2")).thenReturn(p2);
+        java.util.Map<String, String> changed = new java.util.LinkedHashMap<String, String>();
+        changed.put("P2", "write");
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<String, String>();
+        wanted.put("P1", "read");
+        wanted.put("P2", "write");
+        when(projectAccessService.saveMemberGrants(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class),
+                org.mockito.ArgumentMatchers.eq(wanted)))
+                .thenReturn(changed);
+
+        mvc.perform(put("/api/workspaces/" + WS + "/members/U2/project-access")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"grants\":[{\"projectId\":\"P1\",\"access\":\"read\"},"
+                                + "{\"projectId\":\"P2\",\"access\":\"write\"}]}"))
+                .andExpect(status().isOk());
+
+        verify(activityService, org.mockito.Mockito.times(1))
+                .logConfig(WS, "U1", "调整成员「U2」的项目权限：项目B→可参与");
+        verify(notificationEvents, org.mockito.Mockito.times(1)).notifySystem(
+                "U2", WS, NotificationEventService.PROJECT_ACCESS,
+                "项目可见范围已调整（1 个项目）",
+                "你在空间「W1」中的项目权限已调整：项目B→可参与",
+                null, "member", "U2");
+    }
+
+    @Test
+    void batchMemberGrantsRejectsUnknownAccess() throws Exception {
+        workspace("shared");
+        when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
+
+        mvc.perform(put("/api/workspaces/" + WS + "/members/U2/project-access")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"grants\":[{\"projectId\":\"P1\",\"access\":\"superuser\"}]}"))
+                .andExpect(status().isBadRequest());
+
+        verify(projectAccessService, never()).saveGrant(anyString(), anyString(), anyString(), anyString());
+        verify(projectAccessService, never()).saveMemberGrants(anyString(),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class), org.mockito.ArgumentMatchers.anyMap());
+    }
+
+    @Test
+    void batchMemberGrantsWithoutChangesSkipsAuditAndNotice() throws Exception {
+        workspace("shared");
+        when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
+        Requirement p1 = new Requirement();
+        p1.setId("P1");
+        p1.setWorkspaceId(WS);
+        p1.setName("项目A");
+        when(requirementMapper.selectById("P1")).thenReturn(p1);
+        when(projectAccessService.saveMemberGrants(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.any(WorkspaceMember.class), org.mockito.ArgumentMatchers.anyMap()))
+                .thenReturn(new java.util.LinkedHashMap<String, String>());
+
+        mvc.perform(put("/api/workspaces/" + WS + "/members/U2/project-access")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"grants\":[{\"projectId\":\"P1\",\"access\":\"write\"}]}"))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(activityService);
+        verifyNoInteractions(notificationEvents);
     }
 
     private void workspace(String type) {

@@ -85,6 +85,55 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
   </form>
 </div>
 
+<!-- 生成邀请链接：先选项目权限（未选即加入后不可见，后续可调） -->
+<div class="modal-layer" id="dlgInviteCreate" role="dialog" aria-modal="true" aria-labelledby="dlgInviteCreateTitle">
+  <div class="sheet sm grant-sheet">
+    <div class="sheet-head">
+      <div style="flex:1 1 auto;min-width:0">
+        <h2 id="dlgInviteCreateTitle">生成邀请链接</h2>
+        <div class="desc">对方通过链接加入后，默认可看到你在这里分配的项目；未分配的项目不可见。</div>
+      </div>
+      <button class="icon-btn sm" type="button" id="dlgInviteCreateX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="grant-tip">邀请链接可被多人使用，同样的项目权限会应用到每位通过该链接加入的人。加入后仍可在「成员与权限」中调整。</div>
+      <div class="grant-list" id="inviteGrantList"><div class="foot-note">加载中…</div></div>
+      <div class="grant-summary" id="inviteGrantSummary"></div>
+    </div>
+    <div class="sheet-foot">
+      <span class="hint">链接 7 天有效，可随时撤销</span>
+      <button class="btn" type="button" id="dlgInviteCreateCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgInviteCreateOk">生成链接</button>
+    </div>
+  </div>
+</div>
+
+<!-- 成员行「分配项目」：一次保存该成员在本空间全部项目的权限 -->
+<div class="modal-layer" id="dlgMemberGrants" role="dialog" aria-modal="true" aria-labelledby="dlgMemberGrantsTitle">
+  <div class="sheet sm grant-sheet">
+    <div class="sheet-head">
+      <div style="flex:1 1 auto;min-width:0">
+        <h2 id="dlgMemberGrantsTitle">分配项目</h2>
+        <div class="desc" id="dlgMemberGrantsDesc">未选择「可参与 / 只读」的项目，该成员看不到。</div>
+      </div>
+      <button class="icon-btn sm" type="button" id="dlgMemberGrantsX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="grant-list" id="memberGrantList"><div class="foot-note">加载中…</div></div>
+      <div class="grant-summary" id="memberGrantSummary"></div>
+    </div>
+    <div class="sheet-foot">
+      <span class="hint">保存后立即生效</span>
+      <button class="btn" type="button" id="dlgMemberGrantsCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgMemberGrantsOk">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 管理员重置密码 -->
 <div class="modal-layer" id="dlgUserPwd" role="dialog" aria-modal="true" aria-labelledby="dlgUserPwdTitle">
   <form class="sheet xs" id="dlgUserPwdForm" novalidate>
@@ -275,7 +324,8 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
         <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
       </svg>
-      <input id="paletteInput" type="search" placeholder="搜索项目、工作项、文档、需求、用例…" autocomplete="off" aria-label="全局搜索" />
+      <input id="paletteInput" type="search" placeholder="搜索项目、工作项、分支、文档" autocomplete="off" aria-label="全局搜索" />
+      <span class="palette-scope" id="paletteScope">仅当前空间</span>
       <kbd>Esc</kbd>
     </div>
     <div class="palette-results" id="paletteResults" role="listbox" aria-label="搜索结果"></div>

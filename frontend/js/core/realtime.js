@@ -100,6 +100,8 @@ function onSseChanged(event){
     var rq = viewModule("requirements");
     if(rq && rq.notifyReqDocChanged) rq.notifyReqDocChanged(info.docId, info.actor);
   }
+  /* 弹窗打开时整体刷新会被延后；把实体变更原样抛出，让弹窗只刷新自己依赖的那一小块 */
+  try{ document.dispatchEvent(new CustomEvent("ds:sse-entity", { detail: info })); }catch(ex){ /* 忽略 */ }
   if(sse.debounce) clearTimeout(sse.debounce);
   sse.debounce = setTimeout(function(){
     if(drag || pending){ markSsePending(info.entity); return; }

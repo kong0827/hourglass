@@ -433,6 +433,11 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
   flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);
   font-size:15px;line-height:1.5;
 }
+.palette-scope{
+  flex:none;max-width:46%;padding:3px 8px;border:1px solid var(--primary-border);border-radius:999px;
+  background:var(--primary-soft);color:var(--primary);font-size:11px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .palette-input kbd,.palette-foot kbd{
   padding:1px 5px;border:1px solid var(--border);border-radius:var(--r-xs);
   background:var(--surface-sunken);color:var(--text-3);font-size:11px;font-family:inherit;
@@ -453,6 +458,29 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .palette-title{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .palette-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .palette-empty{padding:28px 12px;text-align:center;color:var(--text-3);font-size:13px;}
+.palette-recent-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px 4px;color:var(--text-3);font-size:11px;font-weight:650;letter-spacing:.04em;
+}
+.palette-clear{
+  padding:2px 5px;border:0;border-radius:var(--r-xs);background:transparent;
+  color:var(--text-3);font-size:11.5px;cursor:pointer;
+}
+.palette-clear:hover{background:var(--primary-soft);color:var(--primary);}
+.palette-recent{
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:var(--r-sm);
+  background:transparent;color:var(--text);text-align:left;cursor:pointer;
+}
+.palette-recent:hover,.palette-recent:focus-visible{background:var(--surface-sunken);outline:0;}
+.palette-recent-ic{
+  flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+  background:var(--surface-sunken);color:var(--text-3);
+}
+.palette-recent .palette-title{font-weight:600;}
+.palette-scope-note{
+  margin:6px 8px 2px;padding:10px 2px 2px;border-top:1px solid var(--border);
+  color:var(--text-3);font-size:11.5px;line-height:1.5;
+}
 .palette-foot{
   display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);
   color:var(--text-3);font-size:11.5px;background:var(--surface-sunken);

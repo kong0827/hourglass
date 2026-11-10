@@ -15,4 +15,8 @@ public class Invite {
     private LocalDateTime expiresAt;
     private Integer usedCount;
     private LocalDateTime createdAt;
+    /** 列表展示用：预分配为「可参与」的项目数（非表字段，仅 selectByWorkspace 填充） */
+    private Integer writeGrantCount;
+    /** 列表展示用：预分配为「只读」的项目数（非表字段，仅 selectByWorkspace 填充） */
+    private Integer readGrantCount;
 }

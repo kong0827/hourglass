@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 53 张表（含已部署交付闭环与跨版本计划关联）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。
+基线包含当前全部 54 张表（含已部署交付闭环、跨版本计划关联与新成员默认不参与）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。
 
 ## 2. 已有库升级
 
@@ -21,6 +21,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 `63_delivery_release.sql` 的契约已随 A–E 部署，仅增列与创建五张表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`；新增需求计划日期 / revision、任务发布徽标及日志结构字段。已有 `version_task` 存任务当前 M:N 计划版本集合，`version_release_plan_task` 存独立计划的任务范围，不替代实际事件范围。本轮授权重建原库使用 52 表基线，不以 63 对旧库迁移；脚本不回填、不清空，不根据首版统计、旧版本状态或完成任务构造历史发布证据，旧记录缺失必须明确显示无正式证据。JSON 任务备份不是正式发布凭证；以上五表应随 MySQL 全库备份保留，恢复包含计划任务范围。
 
 `65_release_plan_versions.sql` 只新增第六张发布相关表 `version_release_plan_version`（计划与版本的关联），并回填现有单版本计划；它不修改 `version_release` 实际事件，也不构造历史证据。一个计划由此可覆盖多个版本 / 项目，计划完成仍以全部包含版本的成功生产部署 / 重部署为准。
+
+`66_project_access_assigned.sql` 新增 `workspace_member.project_access_mode`（`all` / `assigned`）与 `invite_project_grant` 表，并为 `assigned` 成员补齐 `project_member.access='none'` 种子行。存量成员默认 `all`，升级后可见范围不变；新成员与邀请加入者写 `assigned`，未显式授权的项目一律不可见。脚本只补缺，不覆盖已有 `write` / `read` / `none`。
 
 `64_task_test_flow.sql` 增量补齐测试流程：`task` 增加 `test_started_at` / `test_finished_at`，并为每个空间补「待测试」「测试中」两个内置列。新列插在「进行中」之后，同位置的自定义列按原相对顺序顺延；不回填历史测试时间，旧数据没有可靠记录时不伪造时间。执行时须带 `--default-character-set=utf8mb4`，否则列名中文会写成乱码。
 

@@ -76,7 +76,8 @@ class PermissionRulesTest {
                 mock(com.hourglass.mapper.AppNotificationMapper.class),
                 mock(com.hourglass.mapper.UserListPreferenceMapper.class),
                 mock(WorkActivityService.class),
-                mock(InviteMapper.class), projectMemberMapper,
+                mock(InviteMapper.class),
+                mock(com.hourglass.mapper.InviteProjectGrantMapper.class), projectMemberMapper,
                 mock(com.hourglass.mapper.TaskWatchMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
         projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);
@@ -120,6 +121,29 @@ class PermissionRulesTest {
     void adminCanDemoteMemberToViewer() {
         workspaceService.updateMemberRole(ADMIN, WS, MEMBER, ProjectAccessService.ROLE_VIEWER);
         verify(memberMapper).updateRole(WS, MEMBER, ProjectAccessService.ROLE_VIEWER);
+    }
+
+    /** 回归：按项目分配的成员经「升管理员 → 退回成员」不能变成全部可见 */
+    @Test
+    void roleRoundTripKeepsAssignedModeAndGrants() {
+        roles.put(MEMBER, ProjectAccessService.ROLE_ADMIN);
+        workspaceService.updateMemberRole(OWNER, WS, MEMBER, ProjectAccessService.ROLE_MEMBER);
+
+        verify(memberMapper).updateRole(WS, MEMBER, ProjectAccessService.ROLE_MEMBER);
+        verify(projectMemberMapper, never()).deleteByUser(anyString(), anyString());
+        verify(memberMapper, never()).updateProjectAccessMode(anyString(), anyString(), anyString());
+        /* 担任管理员期间新建的项目没有 none 种子，退回成员时补齐 */
+        verify(projectMemberMapper).seedAssignedNone(WS);
+    }
+
+    @Test
+    void promotingMemberDoesNotTouchProjectGrants() {
+        workspaceService.updateMemberRole(OWNER, WS, MEMBER, ProjectAccessService.ROLE_ADMIN);
+
+        verify(memberMapper).updateRole(WS, MEMBER, ProjectAccessService.ROLE_ADMIN);
+        verify(projectMemberMapper, never()).deleteByUser(anyString(), anyString());
+        verify(projectMemberMapper, never()).seedAssignedNone(anyString());
+        verify(memberMapper, never()).updateProjectAccessMode(anyString(), anyString(), anyString());
     }
 
     @Test

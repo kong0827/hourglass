@@ -80,7 +80,7 @@ function harness() {
   for (const name of ["iItemType", "iSeverity", "iEnvironment", "iReproSteps", "iRegression", "taskFormHint", "reqDocPickerBtn", "btnAttach"]) globals[name] = $(name);
   globals.taskDrawer.querySelector = selector => selector === ".drawer" ? $("drawerRoot") : null;
   globals.taskForm.querySelectorAll = selector => selector === "input,select,textarea" ? Object.values(elements).filter(el => /^i[A-Z]/.test(el.id)) : [];
-  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason"]) globals[name] = () => {};
+  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "stashCommentDraft", "restoreCommentDraft", "discardCommentDraft", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason"]) globals[name] = () => {};
   globals.ensureVersion = keep => {
     const sel = $("iVersion");
     sel.options = (Array.isArray(keep) ? keep : []).map(value => ({ value, selected:true }));
@@ -100,7 +100,7 @@ function harness() {
     slice(drawerSource, "function syncDrawerHead(", "function isoDate("),
     slice(drawerSource, 'taskForm.addEventListener("submit",', '$("btnCloseTask").addEventListener(')
   ];
-  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {};", context);
+  vm.runInContext("var origProgress = 0, startedDone = false, commentsCache = []; var demandTargetCache = {}, demandTargetPending = {}; var lastCommentDraftId = null, pendingCommentFiles = [];", context);
   for (const section of sections) vm.runInContext(section, context, { filename:"task-drawer.js (real source)" });
   function open({ edit = false, demand = false, readOnly = false } = {}) {
     const task = edit ? { id:"T1", reqId:readOnly ? "READONLY" : "R1", title:"原任务", boardColumn:"backlog", versionIds:[], canEdit:!readOnly } : null;
@@ -137,6 +137,8 @@ function readonly(h, label) {
   assert.equal(h.$("drawerRoot").classList.contains("readonly"), true, label);
   for (const id of ["iTitle", "iReq", "iVersion", "iProg", "iComment", "iSubNew"]) assert.equal(h.$(id).disabled, true, `${label}: ${id}`);
   for (const id of ["btnSaveTask", "btnSaveTaskContinue", "btnDeleteTask"]) assert.equal(h.$(id).hidden, true, `${label}: ${id}`);
+  assert.equal(h.$("iBranchNew").hidden, true, `${label}: 只读时收起就地新建分支入口`);
+  assert.match(h.$("iBranchHint").textContent, /只读/, `${label}: 分支提示不得引导点击已隐藏的入口`);
 }
 function untouched(h, label) {
   h.loading(true, label);
@@ -247,7 +249,8 @@ async function run() {
     if (result === "success") old.resolve({ title:"旧任务" }); else old.reject({ code:500 });
     await flush(); readonly(h, "旧回调后仍只读"); h.submit(); await flush();
     assert.equal(h.requests.length, 1, "只读表单不得保存");
-    h.open(); h.loading(false, "由只读切回可写"); h.submit(); await flush(); assert.equal(h.requests.length, 2);
+    h.open(); h.loading(false, "由只读切回可写"); assert.doesNotMatch(h.$("iBranchHint").textContent, /只读/, "切回可写：分支提示恢复可创建");
+    h.submit(); await flush(); assert.equal(h.requests.length, 2);
   }]);
   tests.push(["当前成功继续编辑保留行为", async () => {
     const h = harness(); h.open({ edit:true }); h.context.rt.formDirty = true; h.submit({ continueEdit:true }); await flush();

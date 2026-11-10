@@ -24,6 +24,9 @@ public interface DemandMapper {
     /** 各状态计数（status 条件由调用方置空，即忽略状态） */
     List<Map<String, Object>> countGroupByStatus(@Param("q") DemandQuery query);
 
+    /** 看板筛选项计数：按 优先级 × 类型 × 模块 一次分组，由调用方聚合成三个维度 */
+    List<Map<String, Object>> countGroupByFacets(@Param("q") DemandQuery query);
+
     /** 项目列表需求计数：只返回聚合结果，不加载需求明细 */
     List<Map<String, Object>> countGroupByReq(@Param("workspaceId") String workspaceId);
 

@@ -102,6 +102,9 @@ class RequirementServiceTest {
         when(versions.selectByReq(WS, "R1")).thenReturn(Arrays.asList(version("V1"), version("V2")));
         when(demands.selectByReq(WS, "R1")).thenReturn(Collections.singletonList(new Demand()));
         when(tasks.countTasksByReq(WS, "R1")).thenReturn(1);
+        com.hourglass.mapper.InviteProjectGrantMapper inviteGrants =
+                mock(com.hourglass.mapper.InviteProjectGrantMapper.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "inviteGrantMapper", inviteGrants);
 
         RequirementDeleteResult result = service.delete(VIEWER, WS, "R1");
 
@@ -118,6 +121,8 @@ class RequirementServiceTest {
         verify(demands).deleteLogsByReq(WS, "R1");
         verify(demands).deleteByReq(WS, "R1");
         verify(access).clearProject(WS, "R1");
+        /* 邀请上对该项目的预分配同步清掉，避免残留授权 */
+        verify(inviteGrants).deleteByProject(WS, "R1");
         verify(reqs).deleteById("R1");
     }
 

@@ -213,7 +213,7 @@ pages['07-four-questions'] = page({
   accent: ACCENT.s3, kicker: '系列三 · 核心功能 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
   title: '进度要回答的四个问题', sub: '一句「进度 60%」，回答不了任何一个。',
   body: `<div class="grid4">
-    ${card('01', '承诺了什么？', '需求评审后拆成工作项，绑定影响版本；发布说明自动汇总。', '版本 · 发布说明')}
+    ${card('01', '承诺了什么？', '需求评审后拆成工作项，关联计划版本；计划范围与实际发布分开，发布后读快照。', '版本 · 发布计划')}
     ${card('02', '做到哪一步？', '看板列驱动状态，任务进度、阻塞与逾期在同一处可见。', '看板 · 列表')}
     ${card('03', '谁在做？', '跨项目查看成员在办工作项与投入工时，避免只看任务数量。', '成员负载')}
     ${card('04', '何时交付？', '依赖、里程碑、基线偏差、关键路径，在同一张甘特上。', '甘特图')}
@@ -228,7 +228,7 @@ pages['11-disorders'] = page({
   title: '三种失序，三种接法', sub: '多数「执行力问题」，本质是数据没有接上。',
   body: `<div class="card">
     <div class="rowhead"><span></span><span>症状</span><span>根因</span><span>机制</span></div>
-    <div class="row"><div class="idx">01</div><div class="t">需求是断的</div><div class="c"><b>月底说不清承诺</b>评审在纪要、方案在文档、任务在看板、交付靠口头。</div><div class="c"><b>让需求成为起点</b>评审后拆工作项，绑定版本，发布说明自动汇总。</div></div>
+    <div class="row"><div class="idx">01</div><div class="t">需求是断的</div><div class="c"><b>月底说不清承诺</b>评审在纪要、方案在文档、任务在看板、交付靠口头。</div><div class="c"><b>让需求成为起点</b>评审后拆工作项，关联计划版本；实际发布单独记录，发布说明读快照。</div></div>
     <div class="row"><div class="idx">02</div><div class="t">状态是假的</div><div class="c"><b>看板一片绿，实际卡了三天</b>更新状态是额外动作，忙起来第一个放弃。</div><div class="c"><b>把状态绑进动作</b>拖拽即改状态，自动计时，完成接力，未归档进「待确认」。</div></div>
     <div class="row"><div class="idx">03</div><div class="t">风险总是最后才知道</div><div class="c"><b>发版前一天才发现延期</b>信息分散，逾期口径各算各的，没人相信数字。</div><div class="c"><b>集中视图 + 统一口径</b>逾期、阻塞、停滞一处处理；负载同时看数量与工时。</div></div>
   </div>
@@ -294,7 +294,9 @@ pages['14-path'] = page({
   foot: '沙漏博客专栏 · 第 13 篇'
 });
 
+const only = (process.env.ONLY || '').split(',').filter(Boolean);
 for (const [name, html] of Object.entries(pages)) {
+  if (only.length && !only.includes(name)) continue;
   const htmlPath = path.join(tmp, `${name}.html`);
   fs.writeFileSync(htmlPath, html);
   const png = path.join(out, `${name}.png`);

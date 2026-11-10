@@ -163,16 +163,19 @@ function roleGuideTable(head, body){
 function openRoleGuide(){
   var roleRows = [
     roleGuideGroup("数据范围"),
-    roleGuideRow(["查看项目与工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "默认全部；设为「不可见」的项目不可见", ROLE_GUIDE_YES]),
+    roleGuideRow(["查看项目与工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "新成员仅已分配的项目；早期成员默认全部，设为「不可见」的除外", ROLE_GUIDE_YES]),
     roleGuideRow(["查看统计 / 报表 / 成员负载", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "按可见项目过滤", ROLE_GUIDE_YES]),
     roleGuideGroup("工作项"),
     roleGuideRow(["新建 / 编辑工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["新增 / 编辑 / 排序看板列与模块", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除看板列 / 模块", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["删除分支 / 甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["新增 / 编辑 / 排序看板列", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["删除看板列", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["维护项目模块（新增 / 改名 / 排序 / 删除）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["创建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["删除分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["调整成员角色", "除空间主外的角色", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -276,7 +279,7 @@ function enterSettingsView(){
   var canInvite = !isPersonal && isManager;
   $("inviteBox").hidden = !canInvite;
   if($("inviteHint")) $("inviteHint").textContent =
-    "把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。";
+    "把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。";
   updateInviteAccountHint(isAdmin);
   if($("setTabPlatform")) $("setTabPlatform").hidden = !isAdmin;
   if(isPersonal){
@@ -290,7 +293,7 @@ function enterSettingsView(){
   $("btnWsDelete").hidden = isPersonal || !isOwner;
   $("wsFootHint").textContent = isPersonal
     ? "清空任务数据仅空间主可操作"
-    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖、删除列/模块仅空间主可操作");
+    : (isOwner ? "危险操作仅空间主可执行；删除空间会连同其数据一起删除" : "完整备份导出、清空任务数据、导入覆盖与删除看板列仅空间主可操作");
   /* 完整备份导入/导出与清空在后端均要求空间主；CSV 导出对所有角色开放 */
   ["btnExport", "btnImport", "btnReset"].forEach(function(id){
     var el = $(id);
@@ -390,7 +393,8 @@ function refreshPlatformTab(){
 }
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
-  var wsId = encodeURIComponent(rt.currentWs.id);
+  var rawWsId = rt.currentWs.id;
+  var wsId = encodeURIComponent(rawWsId);
   var myRole = rt.currentWs.myRole;
   var isOwner = myRole === "owner";
   var isManager = isOwner || myRole === "admin";
@@ -410,25 +414,29 @@ function loadWsMemberList(){
       var sub = "@" + esc(m.username);
       var vis = memberVisibilityText(m);
       if(vis) sub += ' · ' + vis;
+      var assignBtn = (canManageRow && role === "member")
+        ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
+        : '';
+      var removeBtn = canRemove
+        ? '<button class="btn sm danger" type="button" data-mid-del="' + esc(m.userId) + '">' +
+            (isSelf ? "退出" : "移出") + '</button>'
+        : '';
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
         '<span class="mi"><span class="nm">' + esc(m.displayName) + '</span>' +
           '<span class="sub">' + sub + '</span></span>' +
         roleCell +
-        (canRemove ? '<span class="acts"><button class="btn sm danger" type="button" data-mid-del="' +
-          esc(m.userId) + '">' + (isSelf ? "退出" : "移出") + '</button></span>' : '') +
+        ((assignBtn || removeBtn) ? '<span class="acts">' + assignBtn + removeBtn + '</span>' : '') +
       '</div>';
     }).join("");
   };
   API.get("/api/workspaces/" + wsId + "/members").then(function(list){
+    /* 请求期间切换了空间：丢弃旧空间的结果，避免覆盖新空间的成员列表 */
+    if(!rt.currentWs || rt.currentWs.id !== rawWsId) return;
     rt.wsMembersCache = list || [];
     /* 可见项目数来自矩阵接口：只有管理者能读，读不到就不显示这一项 */
-    if(isManager && !rt.projectAccessCache){
-      API.get("/api/workspaces/" + wsId + "/project-access").then(function(data){
-        rt.projectAccessCache = data || {};
-        rt.projectAccessCache.wsId = rt.currentWs.id;
-        render();
-      }).catch(render);
+    if(isManager && !(rt.projectAccessCache && rt.projectAccessCache.wsId === rawWsId)){
+      fetchAccessData(rawWsId).then(render, render);
       return;
     }
     render();
@@ -438,18 +446,27 @@ function loadWsMemberList(){
 }
 function memberVisibilityText(m){
   var data = rt.projectAccessCache;
-  if(!data || !(data.projects || []).length) return "";
+  if(!data || !rt.currentWs || data.wsId !== rt.currentWs.id) return "";
   var projects = data.projects || [];
   var role = m.role || "member";
-  if(role !== "member") return "可见全部 " + projects.length + " 个项目";
-  var hidden = 0, readOnly = 0;
+  if(!projects.length) return role === "member" && m.projectAccessMode === "assigned" ? "按项目分配" : "";
+  if(role !== "member") return (role === "viewer" ? "只读全部 " : "可见全部 ") + projects.length + " 个项目";
+  /* 缺记录按成员模式回落：按项目分配的新成员缺记录即不可见，存量成员缺记录仍可参与 */
+  var raw = {};
   (data.grants || []).forEach(function(g){
-    if(g.userId !== m.userId || !g.projectId) return;
-    if(g.access === "none") hidden++;
-    else if(g.access === "read") readOnly++;
+    if(g && g.userId === m.userId && g.projectId) raw[g.projectId] = g.access;
   });
-  return "可见 " + (projects.length - hidden) + "/" + projects.length + " 个项目" +
-    (readOnly ? ("（其中 " + readOnly + " 个只读）") : "");
+  var visible = 0, readOnly = 0;
+  projects.forEach(function(p){
+    var v = effectiveGrant(raw[p.id], m);
+    if(v !== "none") visible++;
+    if(v === "read") readOnly++;
+  });
+  var assigned = m.projectAccessMode === "assigned";
+  if(!visible && assigned) return "尚未分配项目";
+  return "可见 " + visible + "/" + projects.length + " 个项目" +
+    (readOnly ? ("（其中 " + readOnly + " 个只读）") : "") +
+    (assigned ? " · 按项目分配" : "");
 }
 wsMemberList.addEventListener("change", function(e){
   var sel = e.target.closest("[data-member-role]");
@@ -462,8 +479,10 @@ wsMemberList.addEventListener("change", function(e){
   API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
     encodeURIComponent(userId) + "/role", { role: role }).then(function(){
     toast("角色已改为「" + roleLabel(role) + "」", "fs");
+    /* 角色影响矩阵的整行展示（全部项目 / 逐项目），旧缓存必须作废后再刷新 */
+    rt.projectAccessCache = null;
     loadWsMemberList();
-    if(settingsTab === "access") loadProjectAccess();
+    if(settingsTab === "members") loadProjectAccess();
   }).catch(function(ex){
     sel.disabled = false;
     sel.value = (rt.wsMembersCache || []).reduce(function(prev, m){
@@ -474,13 +493,26 @@ wsMemberList.addEventListener("change", function(e){
 });
 /* ---------- 项目可见范围矩阵 ---------- */
 var ACCESS_OPTIONS = [
-  { value:"default", label:"默认（参与）" },
+  { value:"write", label:"可参与" },
   { value:"read", label:"只读" },
   { value:"none", label:"不可见" }
 ];
-/* 历史数据可能残留 pm/dev/qa：小团队不区分项目内角色，统一按默认参与展示 */
+/* 矩阵只写显式值；历史 pm/dev/qa 与空值都按「可参与」理解（与后端默认参与口径一致） */
 function normalizeAccess(value){
-  return (value === "read" || value === "none") ? value : "default";
+  return (value === "read" || value === "none" || value === "write") ? value : "write";
+}
+function accessLabel(value){
+  if(value === "none") return "不可见";
+  if(value === "read") return "只读";
+  return "可参与";
+}
+/* 新成员按项目分配时缺记录即不可见；存量成员缺记录仍是默认参与 */
+function defaultGrantFor(member){
+  return member && member.projectAccessMode === "assigned" ? "none" : "write";
+}
+/* 显式 write/read/none 优先；缺记录与历史 pm/dev/qa 按成员模式回落（与后端 effectiveAccess 一致） */
+function effectiveGrant(raw, member){
+  return (raw === "write" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
 }
 function accessOptions(selected){
   return ACCESS_OPTIONS.map(function(o){
@@ -489,15 +521,25 @@ function accessOptions(selected){
 }
 function isPrivilegedRole(role){ return role === "owner" || role === "admin"; }
 function accessKey(userId, projectId){ return userId + "|" + projectId; }
+/* 矩阵数据统一入口：按发起时的空间落缓存，响应回来时空间已切换则不写缓存 */
+function fetchAccessData(wsId){
+  return API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/project-access").then(function(data){
+    var fresh = data || {};
+    fresh.wsId = wsId;
+    if(rt.currentWs && rt.currentWs.id === wsId) rt.projectAccessCache = fresh;
+    return fresh;
+  });
+}
 function loadProjectAccess(){
   var box = $("projectAccessWrap");
   if(!box || !rt.currentWs) return;
+  var wsId = rt.currentWs.id;
   box.innerHTML = '<div class="foot-note">加载中…</div>';
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access").then(function(data){
-    rt.projectAccessCache = data || {};
-    rt.projectAccessCache.wsId = rt.currentWs.id;
+  fetchAccessData(wsId).then(function(){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
     renderProjectAccess();
   }).catch(function(ex){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
     box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
@@ -532,7 +574,7 @@ function renderProjectAccess(){
       cells = '<td class="access-all" colspan="' + projects.length + '">全部项目（只读）</td>';
     }else{
       cells = projects.map(function(p){
-        var value = normalizeAccess(grantMap[accessKey(m.userId, p.id)] || "default");
+        var value = effectiveGrant(grantMap[accessKey(m.userId, p.id)], m);
         return '<td><select class="mini-select access-select" data-access-user="' + esc(m.userId) +
           '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
           accessOptions(value) + '</select></td>';
@@ -551,7 +593,7 @@ $("projectAccessWrap").addEventListener("change", function(e){
   if(!sel) return;
   var userId = sel.dataset.accessUser;
   var projectId = sel.dataset.accessProject;
-  var access = sel.value === "default" ? "" : sel.value;
+  var access = normalizeAccess(sel.value);
   sel.disabled = true;
   API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access", {
     userId: userId, projectId: projectId, access: access
@@ -561,9 +603,11 @@ $("projectAccessWrap").addEventListener("change", function(e){
       rt.projectAccessCache.grants = rt.projectAccessCache.grants.filter(function(g){
         return !(g.userId === userId && g.projectId === projectId);
       });
-      if(access) rt.projectAccessCache.grants.push({ userId:userId, projectId:projectId, access:access });
+      rt.projectAccessCache.grants.push({ userId:userId, projectId:projectId, access:access });
     }
-    toast(access ? "可见范围已更新" : "已恢复默认参与", "fs");
+    toast("已设为「" + accessLabel(access) + "」", "fs");
+    /* 成员行上的「可见 x/y」同步刷新（复用已更新的矩阵缓存） */
+    loadWsMemberList();
   }).catch(function(ex){
     toast(ex.message || "保存失败", "bad");
     loadProjectAccess();
@@ -571,6 +615,223 @@ $("projectAccessWrap").addEventListener("change", function(e){
     sel.disabled = false;
   });
 });
+/* ---------- 项目权限三态选择（邀请预分配 / 成员分配共用） ----------
+   每次打开弹窗开一个会话：记下发起时的空间与成员、递增序号。
+   加载完成前「保存」不可点；旧会话的异步结果（连点、切空间、换成员）一律丢弃，
+   避免把 A 成员的草稿提交到 B 成员，或在项目没加载完时提交空授权。 */
+var grantSeq = 0;
+var grantSession = null;
+function startGrantSession(kind, member, okBtn){
+  grantSeq++;
+  grantSession = {
+    seq: grantSeq, kind: kind, wsId: rt.currentWs.id,
+    member: member || null, ready: false, busy: false,
+    projects: [], draft: {}, okBtn: okBtn || null
+  };
+  if(okBtn) okBtn.disabled = true;
+  return grantSession;
+}
+function isLiveSession(session){
+  return !!session && grantSession === session && !!rt.currentWs && rt.currentWs.id === session.wsId;
+}
+function markSessionReady(session){
+  session.ready = true;
+  if(session.okBtn) session.okBtn.disabled = false;
+}
+function grantButtons(value){
+  return ACCESS_OPTIONS.map(function(o){
+    return '<button type="button" data-grant-access="' + o.value + '"' +
+      (o.value === value ? ' aria-pressed="true"' : '') + '>' + o.label + '</button>';
+  }).join("");
+}
+function countGrants(session){
+  var write = 0, read = 0;
+  session.projects.forEach(function(p){
+    if(session.draft[p.id] === "write") write++;
+    else if(session.draft[p.id] === "read") read++;
+  });
+  return { write: write, read: read };
+}
+function updateGrantSummary(summaryEl){
+  var session = grantSession;
+  if(!session || !summaryEl) return;
+  var c = countGrants(session);
+  summaryEl.textContent = "可见 " + (c.write + c.read) + "/" + session.projects.length + " 个项目" +
+    " · 可参与 " + c.write + " · 只读 " + c.read;
+}
+function renderGrantPicker(listEl, summaryEl){
+  var session = grantSession;
+  if(!session) return;
+  if(!session.projects.length){
+    listEl.innerHTML = '<div class="foot-note">当前空间还没有项目。成员加入后可在创建项目时再分配，或稍后回来设置。</div>';
+    summaryEl.textContent = "暂无项目可分配";
+    return;
+  }
+  listEl.innerHTML = session.projects.map(function(p){
+    return '<div class="grant-row" data-grant-pid="' + esc(p.id) + '">' +
+      '<span class="nm" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
+      '<span class="seg mini">' + grantButtons(session.draft[p.id] || "none") + '</span>' +
+    '</div>';
+  }).join("");
+  updateGrantSummary(summaryEl);
+}
+function onGrantClick(e, summaryEl){
+  var session = grantSession;
+  if(!session || !session.ready || session.busy) return;
+  var btn = e.target.closest("[data-grant-access]");
+  if(!btn) return;
+  var row = btn.closest("[data-grant-pid]");
+  if(!row) return;
+  session.draft[row.dataset.grantPid] = btn.dataset.grantAccess;
+  row.querySelectorAll("[data-grant-access]").forEach(function(b){
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+  });
+  updateGrantSummary(summaryEl);
+}
+function grantLoadFailed(session, listEl, ex){
+  if(!isLiveSession(session)) return;
+  listEl.innerHTML = '<div class="foot-note">项目加载失败：' + esc((ex && ex.message) || "网络异常") +
+    '。请关闭后重试。</div>';
+}
+function openInviteCreate(){
+  if(!rt.currentWs) return;
+  var dlg = $("dlgInviteCreate");
+  if(!dlg) return;
+  var session = startGrantSession("invite", null, $("dlgInviteCreateOk"));
+  var list = $("inviteGrantList");
+  var summary = $("inviteGrantSummary");
+  list.innerHTML = UI.skeletonRows(2);
+  summary.textContent = "加载项目中…";
+  UI.openModal(dlg);
+  /* 每次打开都取最新项目列表：期间可能有人新建或删除项目 */
+  fetchAccessData(session.wsId).then(function(data){
+    if(!isLiveSession(session)) return;
+    session.projects = data.projects || [];
+    session.projects.forEach(function(p){ session.draft[p.id] = "none"; });
+    renderGrantPicker(list, summary);
+    markSessionReady(session);
+  }).catch(function(ex){ grantLoadFailed(session, list, ex); });
+}
+function grantCountText(c){
+  var parts = [];
+  if(c.write) parts.push("可参与 " + c.write + " 个");
+  if(c.read) parts.push("只读 " + c.read + " 个");
+  return parts.join("、") + "项目";
+}
+function submitInvite(){
+  var session = grantSession;
+  var btn = $("dlgInviteCreateOk");
+  if(!btn || btn.disabled || !session || session.kind !== "invite" || !session.ready || session.busy) return;
+  if(!isLiveSession(session)) return;
+  session.busy = true;
+  btn.disabled = true;
+  var grants = session.projects.filter(function(p){
+    return session.draft[p.id] === "write" || session.draft[p.id] === "read";
+  }).map(function(p){
+    return { projectId: p.id, access: session.draft[p.id] };
+  });
+  var counts = countGrants(session);
+  API.post("/api/workspaces/" + encodeURIComponent(session.wsId) + "/invites", { grants: grants })
+    .then(function(res){
+      if(isLiveSession(session)) UI.closeModal($("dlgInviteCreate"));
+      copyToClipboard(inviteLink(res.id), grants.length
+        ? ("邀请链接已复制（加入后" + grantCountText(counts) + "；对方需先有账号）")
+        : "邀请链接已复制（加入后暂无项目权限，需在成员列表再分配）");
+      if(rt.currentWs && rt.currentWs.id === session.wsId) loadInvites();
+    }).catch(function(ex){
+      toast(ex.message || "生成失败", "bad");
+    }).then(function(){
+      session.busy = false;
+      if(isLiveSession(session)) btn.disabled = false;
+    });
+}
+function openMemberGrants(userId){
+  var m = (rt.wsMembersCache || []).filter(function(x){ return x.userId === userId; })[0];
+  if(!m) return;
+  var dlg = $("dlgMemberGrants");
+  if(!dlg) return;
+  var session = startGrantSession("member", m, $("dlgMemberGrantsOk"));
+  $("dlgMemberGrantsTitle").textContent = "分配项目 · " + (m.displayName || m.username || m.userId);
+  $("dlgMemberGrantsDesc").textContent = "未选择「可参与 / 只读」的项目，该成员看不到；保存后立即生效，之后可随时调整。";
+  var list = $("memberGrantList");
+  var summary = $("memberGrantSummary");
+  list.innerHTML = UI.skeletonRows(2);
+  summary.textContent = "加载项目中…";
+  UI.openModal(dlg);
+  /* 整批提交会覆盖该成员全部项目，必须基于最新授权打开，不能用可能过期的缓存 */
+  fetchAccessData(session.wsId).then(function(data){
+    if(!isLiveSession(session)) return;
+    /* 以最新数据里的成员为准（模式/角色可能刚被别人改过） */
+    var fresh = (data.members || []).filter(function(x){ return x.userId === userId; })[0];
+    if(fresh) session.member = fresh;
+    if(!fresh || (fresh.role || "member") !== "member"){
+      list.innerHTML = '<div class="foot-note">该成员当前不是「成员」角色，无需按项目分配。</div>';
+      summary.textContent = "";
+      return;
+    }
+    session.projects = data.projects || [];
+    var values = {};
+    (data.grants || []).forEach(function(g){
+      if(g && g.userId === userId && g.projectId) values[g.projectId] = g.access;
+    });
+    session.projects.forEach(function(p){
+      session.draft[p.id] = effectiveGrant(values[p.id], session.member);
+    });
+    renderGrantPicker(list, summary);
+    markSessionReady(session);
+  }).catch(function(ex){ grantLoadFailed(session, list, ex); });
+}
+function submitMemberGrants(){
+  var session = grantSession;
+  var btn = $("dlgMemberGrantsOk");
+  if(!btn || btn.disabled || !session || session.kind !== "member" || !session.ready || session.busy) return;
+  if(!isLiveSession(session) || !session.member) return;
+  session.busy = true;
+  btn.disabled = true;
+  var target = session.member;
+  var grants = session.projects.map(function(p){
+    return { projectId: p.id, access: session.draft[p.id] || "none" };
+  });
+  API.put("/api/workspaces/" + encodeURIComponent(session.wsId) + "/members/" +
+    encodeURIComponent(target.userId) + "/project-access", { grants: grants })
+    .then(function(){
+      var name = target.displayName || target.username || target.userId;
+      if(isLiveSession(session)) UI.closeModal($("dlgMemberGrants"));
+      toast("已更新「" + name + "」的项目权限", "fs");
+      if(rt.currentWs && rt.currentWs.id === session.wsId){
+        rt.projectAccessCache = null;
+        loadWsMemberList();
+        loadProjectAccess();
+      }
+    }).catch(function(ex){
+      toast(ex.message || "保存失败", "bad");
+    }).then(function(){
+      session.busy = false;
+      if(isLiveSession(session)) btn.disabled = false;
+    });
+}
+(function wireGrantDialogs(){
+  var inviteDlg = $("dlgInviteCreate");
+  if(inviteDlg){
+    ["dlgInviteCreateX", "dlgInviteCreateCancel"].forEach(function(id){
+      if($(id)) $(id).addEventListener("click", function(){ UI.closeModal(inviteDlg); });
+    });
+    if($("dlgInviteCreateOk")) $("dlgInviteCreateOk").addEventListener("click", submitInvite);
+    if($("inviteGrantList")) $("inviteGrantList").addEventListener("click", function(e){
+      onGrantClick(e, $("inviteGrantSummary"));
+    });
+  }
+  var memberDlg = $("dlgMemberGrants");
+  if(memberDlg){
+    ["dlgMemberGrantsX", "dlgMemberGrantsCancel"].forEach(function(id){
+      if($(id)) $(id).addEventListener("click", function(){ UI.closeModal(memberDlg); });
+    });
+    if($("dlgMemberGrantsOk")) $("dlgMemberGrantsOk").addEventListener("click", submitMemberGrants);
+    if($("memberGrantList")) $("memberGrantList").addEventListener("click", function(e){
+      onGrantClick(e, $("memberGrantSummary"));
+    });
+  }
+})();
 function inviteLink(code){
   return window.location.origin + API.appBase + "/join.html?code=" + encodeURIComponent(code);
 }
@@ -593,9 +854,12 @@ function renderInvites(){
     return;
   }
   listEl.innerHTML = rt.inviteCache.map(function(v){
+    var w = v.writeGrantCount || 0, r = v.readGrantCount || 0;
+    var grantText = (w || r) ? ("加入后" + grantCountText({ write: w, read: r })) : "加入后暂无项目";
     return '<div class="invite-row" data-invite-id="' + esc(v.id) + '">' +
       '<code title="' + esc(inviteLink(v.id)) + '">' + esc(inviteLink(v.id)) + '</code>' +
-      '<span class="foot-note">有效期至 ' + esc(fmtShortMD(new Date(v.expiresAt))) + ' · 已加入 ' + (v.usedCount || 0) + ' 人</span>' +
+      '<span class="foot-note">有效期至 ' + esc(fmtShortMD(new Date(v.expiresAt))) + ' · 已加入 ' + (v.usedCount || 0) + ' 人' +
+        ' · ' + esc(grantText) + '</span>' +
       '<span class="row row-gap" style="gap:6px">' +
         '<button class="icon-btn sm" type="button" data-invite-copy title="复制链接" aria-label="复制链接">' + icon("copy", 14) + '</button>' +
         '<button class="btn sm danger" type="button" data-invite-del>撤销</button>' +
@@ -1670,6 +1934,11 @@ $("btnWsMemberAdd").addEventListener("click", function(){
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });
 wsMemberList.addEventListener("click", function(e){
+  var assign = e.target.closest("[data-assign-projects]");
+  if(assign){
+    openMemberGrants(assign.dataset.assignProjects);
+    return;
+  }
   var del = e.target.closest("[data-mid-del]");
   if(!del) return;
   var uid = del.dataset.midDel;
@@ -1737,17 +2006,7 @@ if($("btnAccountGotoMembers")) $("btnAccountGotoMembers").addEventListener("clic
   setSettingsTab("members");
 });
 $("btnInviteGen").addEventListener("click", function(){
-  if(!rt.currentWs) return;
-  var btn = $("btnInviteGen");
-  btn.disabled = true;
-  API.post("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/invites", {}).then(function(res){
-    btn.disabled = false;
-    copyToClipboard(inviteLink(res.id), "邀请链接已复制（对方需先有账号，登录后打开即可加入）");
-    loadInvites();
-  }).catch(function(ex){
-    btn.disabled = false;
-    toast(ex.message || "生成失败", "bad");
-  });
+  openInviteCreate();
 });
 $("inviteList").addEventListener("click", function(e){
   var row = e.target.closest("[data-invite-id]");
@@ -1840,38 +2099,46 @@ if(btnNavTelemetry) btnNavTelemetry.addEventListener("click", function(){
   toast("已导出导航使用记录", "fs");
 });
 var btnReset = $("btnReset"), resetLabel = $("resetLabel");
-function disarmReset(){
-  if(rt.resetArmed){ clearTimeout(rt.resetArmed); rt.resetArmed = null; }
-  btnReset.classList.remove("armed");
-  resetLabel.textContent = "清空任务数据";
-  btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
-}
-disarmReset();
+if(resetLabel) resetLabel.textContent = "清空任务数据";
+if(btnReset) btnReset.title = "删除工作项、回收站、项目、子任务、标签、工时、评论、甘特依赖/基线、工作项通知与完成归档、文档（随项目）、文档评论、测试用例、版本与需求池、分享链接失效；分支、附件、时间线、视图、看板列与模块保留";
 btnReset.addEventListener("click", function(){
-  if(rt.resetArmed){
-    disarmReset();
-    var n = totalTaskCount(), m = rt.reqList.length;
-    API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]}).then(function(){
+  var n = totalTaskCount(), m = rt.reqList.length;
+  var desc = "将删除当前空间的 " + n + " 项工作项与 " + m + " 个项目，以及评论、依赖/基线、文档、文档评论、测试用例、版本与需求池、工作项通知和完成归档；分支、附件、时间线、视图、看板列与模块保留。"
+    + "执行前会自动导出当前空间的完整备份。此操作不可撤销。";
+  UI.showPrompt({
+    title:"清空任务数据",
+    desc:desc,
+    label:"输入「清空」确认",
+    placeholder:"清空",
+    maxLength:2,
+    required:true,
+    okText:"导出备份并清空"
+  }).then(function(word){
+    if(word === null) return;
+    if(word.trim() !== "清空"){ toast("确认文字不正确，未执行清空", "warn"); return; }
+    btnReset.disabled = true;
+    toast("正在导出备份…", "fs");
+    return API.get("/api/export").then(function(data){
+      triggerDownload(BACKUP_NAME, JSON.stringify(data, null, 2), "application/json");
+      return API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]});
+    }).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
       state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       saveViewState();
       toast((n + m > 0)
-        ? ("已清空 " + n + " 项工作项与 " + m + " 个项目（含回收站、评论、工作项通知、完成归档、文档、文档评论、测试用例、版本与需求池）")
-        : "任务数据已清空（分支、附件、时间线保留）", "warn");
+        ? ("已清空 " + n + " 项工作项与 " + m + " 个项目；清空前备份已下载")
+        : "任务数据已清空（分支、附件、时间线保留）；清空前备份已下载", "warn");
       ganttState.undo = [];
       syncGanttUndoUI();
       loadBoard({animate:true});
       loadReqs();
       loadReqDocs(true);
-    }).catch(function(ex){ toast("清空失败：" + (ex.message || "网络异常"), "bad"); });
-    return;
-  }
-  btnReset.classList.add("armed");
-  resetLabel.textContent = "再次点击清空任务数据";
-  toast("再次点击确认：删除工作项/回收站/项目/评论/甘特依赖与基线/工作项通知/完成归档/文档/版本与需求池，分享链接失效；分支、附件、时间线保留", "warn");
-  rt.resetArmed = setTimeout(disarmReset, 3500);
+    }).catch(function(ex){
+      toast("清空失败（备份可能已下载）：" + (ex.message || "网络异常"), "bad");
+    }).then(function(){ btnReset.disabled = false; });
+  });
 });
 var SHORTCUT_ROWS = [
   ["N","新建工作项：看板内是列内快速录入；其它视图直接打开新建抽屉（不再强制切回看板）"],

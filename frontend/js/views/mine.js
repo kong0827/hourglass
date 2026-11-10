@@ -465,8 +465,8 @@ function renderTeam(opts){
       '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">截止此刻</span></div>' +
         '<div class="team-pending">' +
           '<button type="button" data-team-go="demands"><b>' + (pending.review || 0) + '</b><span>待评审</span></button>' +
-          '<button type="button" data-team-go="branches"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
-          '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
+          '<button type="button" data-team-go="branches" data-team-status="testing"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
+          '<button type="button" data-team-go="branches" data-team-status="merging"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
         '</div></section>';
 
     html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项 · 截止此刻</span></div>' +
@@ -525,6 +525,12 @@ function renderTeam(opts){
     });
     mineBody.querySelectorAll("[data-team-go]").forEach(function(el){
       el.addEventListener("click", function(){
+        var status = el.dataset.teamStatus || "";
+        /* 待验收 / 待合并直接落到对应分支状态，并保留来源，便于返回与清除 */
+        if(status){
+          var from = status === "testing" ? "accept" : "merge";
+          try{ window.location.hash = "#/branches?status=" + status + "&from=" + from; }catch(e){ /* noop */ }
+        }
         /* 走侧栏既有的 data-view 入口，避免 mine → router 的循环依赖 */
         var nav = document.querySelector('#sideNav [data-view="' + el.dataset.teamGo + '"]');
         if(nav) nav.click();

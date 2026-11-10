@@ -92,3 +92,7 @@ backend/local.env
 
 # 本地目录
 /hourglass/
+
+# Python 缓存
+tools/__pycache__/
+*.pyc

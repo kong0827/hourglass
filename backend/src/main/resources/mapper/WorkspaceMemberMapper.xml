@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.WorkspaceMemberMapper">
 
   <select id="selectByWorkspace" resultType="WorkspaceMember">
-    SELECT m.workspace_id, m.user_id, m.role, m.created_at,
+    SELECT m.workspace_id, m.user_id, m.role, m.project_access_mode, m.created_at,
            u.display_name, u.username
     FROM workspace_member m
     JOIN app_user u ON u.id = m.user_id
@@ -22,14 +22,14 @@
   </select>
 
   <select id="selectMember" resultType="WorkspaceMember">
-    SELECT workspace_id, user_id, role, created_at
+    SELECT workspace_id, user_id, role, project_access_mode, created_at
     FROM workspace_member
     WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
   </select>
 
   <!-- Delivery authorization current read: acquire only after project/task locks. -->
   <select id="selectDeliveryAccessForUpdate" resultType="map" useCache="false" flushCache="true">
-    SELECT m.role, r.owner_user_id AS projectOwnerUserId, pm.access
+    SELECT m.role, m.project_access_mode, r.owner_user_id AS projectOwnerUserId, pm.access
     FROM workspace_member m
     LEFT JOIN requirement r ON r.workspace_id = m.workspace_id AND r.id = #{projectId}
     LEFT JOIN project_member pm ON pm.workspace_id = m.workspace_id
@@ -39,11 +39,18 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO workspace_member (workspace_id, user_id, role) VALUES (#{workspaceId}, #{userId}, #{role})
+    INSERT INTO workspace_member (workspace_id, user_id, role, project_access_mode)
+    VALUES (#{workspaceId}, #{userId}, #{role},
+            COALESCE(#{projectAccessMode}, 'all'))
   </insert>
 
   <update id="updateRole">
     UPDATE workspace_member SET role = #{role}
+    WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
+  </update>
+
+  <update id="updateProjectAccessMode">
+    UPDATE workspace_member SET project_access_mode = #{mode}
     WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
   </update>
 

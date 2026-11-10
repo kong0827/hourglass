@@ -4,8 +4,8 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
-import { rt, state } from "../core/state.js";
-import { openTaskById } from "../core/task-actions.js";
+import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
+import { hashParam, openTaskById } from "../core/task-actions.js";
 import { ownerOptions } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, fmtTs, priColor, priName } from "../lib/format.js";
@@ -23,6 +23,8 @@ var branchBoard = null;         /* { columns, counts, avgCycleDays } */
 var branchExtra = { dev:[], testing:[], merging:[], released:[] };
 var branchesLoaded = false;
 var branchFilter = "";
+/* 深链来源：从「我的工作 · 待验收 / 待合并」进来时，明确标出筛选依据；用户改筛选即视为已接管 */
+var branchSource = null;          /* { from:"accept"|"merge"|"link", status:"testing"|"merging" } */
 var branchProjectFilter = "";
 var branchGroupMode = "status";   /* "status" | "project" */
 var BRANCH_VIEW_KEY = "ds.branchView";
@@ -38,6 +40,7 @@ var branchSearchTimer = null;
 var branchOptionCache = {};      /* projectId → 下拉选项 */
 var brDrawerId = null;
 var brEditingId = null;
+var brDialogTask = null;      /* 从工作项抽屉就地新建时记录上下文，创建成功后自动挂接 */
 var dragBranch = null;        /* 拖动中的分支卡片 { id, status } */
 var branchSelectProject = ""; /* 工作项抽屉里「所属分支」当前的项目过滤（后台刷新时不能丢） */
 var reqsPending = null;       /* 项目列表加载中，避免多个下拉各自重复请求 */
@@ -69,6 +72,16 @@ function branchNameById(id){
   for(var i = 0; i < branchRefs.length; i++) if(branchRefs[i].id === id) return branchRefs[i].name;
   var b = branchById(id);
   return b ? b.name : "";
+}
+/* 分支的修改 / 改状态 / 删除与后端一致：按所属项目写权限；空间级公共分支对非查看者开放 */
+function canEditBranch(b){
+  return !!b && canEditReq(b.reqId);
+}
+/* 只读元数据：发布计划按工作项实时推导分支时使用，避免只拿到名称而丢失状态/目标分支 */
+function branchMetaById(id){
+  if(!id) return null;
+  for(var i = 0; i < branchRefs.length; i++) if(branchRefs[i].id === id) return branchRefs[i];
+  return branchById(id);
 }
 function branchDurText(ms){
   if(!ms || ms < 0) return "刚刚";
@@ -153,10 +166,74 @@ function loadMoreBranches(status){
       renderBranches();
     }).catch(function(ex){ toast(ex.message || "加载更多失败", "bad"); });
 }
+function applyBranchDeepLink(){
+  var status = hashParam("status"), from = hashParam("from");
+  if(!status || !branchStatusMeta(status) || !branchStatusMeta(status).hint){
+    /* 侧栏等普通入口：不沿用上一次深链强加的来源条与状态筛选 */
+    if(branchSource){ branchSource = null; branchFilter = ""; }
+    return false;
+  }
+  branchSource = { from: from === "accept" || from === "merge" ? from : "link", status: status };
+  branchFilter = branchStatusMeta(status).id;
+  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 关键词筛选 */
+  var search = $("branchSearch");
+  var reset = !!branchProjectFilter || !!(search && search.value.trim());
+  branchProjectFilter = "";
+  if($("branchProjectFilter")) $("branchProjectFilter").value = "";
+  if(search) search.value = "";
+  return reset;
+}
+function branchSourceName(){
+  if(!branchSource) return null;
+  if(branchSource.from === "accept") return "待验收";
+  if(branchSource.from === "merge") return "待合并";
+  return "按状态筛选";
+}
+function clearBranchDeepLink(){
+  if(String(window.location.hash || "").indexOf("#/branches?") !== 0) return;
+  try{ history.replaceState(null, "", "#/branches"); }catch(e){ /* noop */ }
+}
+function dropBranchSource(){
+  if(!branchSource) return;
+  branchSource = null;
+  clearBranchDeepLink();
+}
+/* 深链来源条：位于分支看板之上，说明为什么只看这一档，并提供一键清除 */
+function renderBranchSource(box){
+  var host = document.getElementById("branchSource");
+  if(!branchSource){
+    if(host) host.remove();
+    return;
+  }
+  var parent = box && box.parentNode;
+  if(!parent) return;
+  if(!host){
+    host = document.createElement("div");
+    host.id = "branchSource";
+    host.className = "br-source";
+    host.setAttribute("role", "status");
+    parent.insertBefore(host, box);
+  }
+  var st = branchStatusMeta(branchFilter || branchSource.status);
+  var n = branchStat()[st.id] || 0;
+  host.innerHTML = '<span class="br-source-ico" aria-hidden="true">↩</span>'
+    + '<span class="br-source-text">来自 <b>我的工作</b> · <b>' + esc(branchSourceName()) + '</b></span>'
+    + '<span class="br-source-rule">只看「' + esc(st.name) + '」分支</span>'
+    + '<span class="br-source-count">' + n + ' 条</span>'
+    + '<button type="button" class="br-source-clear" data-br-source-clear>清除来源 ×</button>';
+  host.onclick = function(e){
+    if(!e.target.closest("[data-br-source-clear]")) return;
+    dropBranchSource();
+    branchFilter = "";
+    renderBranches();
+    if(branchViewMode === "list") loadBranchRows();
+  };
+}
 function enterBranchesView(){
+  var resetScope = applyBranchDeepLink();
   updateBranchModeUI();
   renderBranches();                       // 先用缓存出一版，避免空白
-  loadBranches().then(function(){ renderBranches(); });
+  loadBranches(resetScope).then(function(){ renderBranches(); });
   if(branchViewMode === "list") loadBranchRows();
 }
 /* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组 */
@@ -204,11 +281,14 @@ function renderBranchList(rows){
   var body = rows.length ? rows.map(function(b){
     var sm = branchStatusMeta(b.status);
     var stay = branchStay(b);
+    var writable = canEditBranch(b);
     var taskTxt = b.taskCount ? ((b.doneCount || 0) + "/" + b.taskCount) : "—";
     return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
       '<td class="br-name-cell" title="' + esc(b.name) + '">' + esc(b.name) + '</td>' +
-      '<td><button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
-        '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button></td>' +
+      '<td>' + (writable
+        ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
+          '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
+        : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + '</td>' +
       '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指定</span>') + '</td>' +
       '<td>' + esc(branchProjectsText(b)) + '</td>' +
       '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
@@ -236,6 +316,7 @@ function branchCycleAvg(){
 function renderBranches(){
   var box = $("branchGroups");
   if(!box) return;
+  renderBranchSource(box);
   /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
   box.classList.toggle("br-list-mode", branchViewMode === "list");
   var st = branchStat();
@@ -269,9 +350,9 @@ function renderBranches(){
   var hasFilter = !!(branchFilter || branchProjectFilter || (($("branchSearch") || {}).value || "").trim());
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
   var branchNewBtn = $("branchNew");
-  var canCreate = !!branchNewBtn;
+  var canCreate = !!branchNewBtn && !roleReadOnly();
   var totalForBtn = isList ? branchRows.length : st.total;
-  if(branchNewBtn) branchNewBtn.hidden = !totalForBtn && !hasFilter;
+  if(branchNewBtn) branchNewBtn.hidden = !canCreate || (!totalForBtn && !hasFilter);
   if(isList){
     if(branchRowsLoading && !branchRows.length){
       box.innerHTML = '<div class="br-list-wrap" style="padding:16px">' + UI.skeletonRows(5) + '</div>';
@@ -427,15 +508,18 @@ function branchProjectChips(b){
 function branchCardHTML(b){
   var sm = branchStatusMeta(b.status);
   var stay = branchStay(b);
+  var writable = canEditBranch(b);
   var taskTxt = b.taskCount
     ? ((b.doneCount || 0) + "/" + b.taskCount + " 工作项")
     : "无关联工作项";
   return '<article class="br-card" data-branch="' + esc(b.id) + '" data-br-st="' + esc(b.status) + '"' +
-      ' draggable="true" title="拖到其他状态列" tabindex="0" role="button"' +
+      ' draggable="' + (writable ? "true" : "false") + '" title="' + (writable ? "拖到其他状态列" : "只读分支，不能改状态") + '" tabindex="0" role="button"' +
       ' aria-label="' + esc(b.name) + '，' + esc(sm.name) + '">' +
     '<div class="br-card-top">' +
-      '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) + '"' +
-        ' title="点击切换状态">' + sm.name + icon("down", 11) + '</button>' +
+      (writable
+        ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) + '"' +
+          ' title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
+        : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') +
       (b.owner ? '<span class="br-owner" title="负责人：' + esc(b.owner) + '">' + avatarHTML(b.owner) + '</span>' : '') +
     '</div>' +
     '<div class="br-name" title="' + esc(b.name) + '">' + esc(b.name) + '</div>' +
@@ -452,6 +536,7 @@ function branchCardHTML(b){
 function openBranchStatusMenu(anchor, id){
   var b = branchById(id);
   if(!b) return;
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能修改分支", "warn"); return; }
   var el = document.createElement("div");
   el.className = "menu br-status-menu";
   el.innerHTML = BRANCH_STATUS.map(function(s){
@@ -463,8 +548,7 @@ function openBranchStatusMenu(anchor, id){
   }).join("") +
     '<div class="menu-sep"></div>' +
     '<button class="menu-item" type="button" data-br-edit="1">编辑分支信息</button>' +
-    (rt.currentWs && rt.currentWs.myRole === "owner"
-      ? '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>' : '');
+    '<button class="menu-item danger" type="button" data-br-del="1">删除分支</button>';
   el.addEventListener("click", function(e){
     var set = e.target.closest("[data-br-set]");
     if(set){
@@ -477,12 +561,16 @@ function openBranchStatusMenu(anchor, id){
   });
   UI.openPop(el, anchor, { align: "left" });
 }
-function setBranchStatus(id, status){
-  var b = branchById(id);
+function setBranchStatus(id, status, after){
+  var b = branchMetaById(id);
   if(!b || b.status === status) return;
   API.post("/api/branches/" + encodeURIComponent(id) + "/status", { status: status })
     .then(function(nb){
+      /* 先就地更新引用，调用方（如发布计划）不必等列表重拉就能重画 */
+      var meta = branchMetaById(id);
+      if(meta) meta.status = nb.status;
       toast("「" + nb.name + "」→ " + branchStatusMeta(nb.status).name, "fs");
+      if(typeof after === "function"){ try{ after(nb); }catch(e){ /* 调用方刷新失败不影响分支保存 */ } }
       return loadBranches(true);
     })
     .then(function(){
@@ -507,11 +595,14 @@ function fillBranchReqOptions(sel, cur){
   }
   var html = '<option value="">空间级公共分支</option>';
   (rt.reqList || []).forEach(function(r){
+    /* 只读项目不提供新建入口；保留当前值以免编辑已有分支时下拉变空 */
+    if(r.id !== cur && !canEditReq(r.id)) return;
     html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + (r.archivedAt ? "（已归档）" : "") + '</option>';
   });
   sel.innerHTML = html;
 }
 function openBranchDialog(id){
+  brDialogTask = null;
   var known = id ? branchById(id) : null;
   if(id && !known){
     /* 本地缓存里找不到时先按 ID 拉取，绝不以空表单进入编辑（否则保存会把名称外的字段清空） */
@@ -523,30 +614,55 @@ function openBranchDialog(id){
   }
   openBranchDialogWith(id, known);
 }
-function openBranchDialogWith(id, b){
+/** 从任务表单读取当前负责人，供就地新建分支时预填；没有负责人时返回 null */
+function taskOwnerSelection(){
+  var sel = $("iOwner");
+  if(!sel || sel.tagName !== "SELECT" || sel.selectedIndex < 0) return null;
+  var opt = sel.options[sel.selectedIndex];
+  if(!opt) return null;
+  var name = ((opt.dataset && opt.dataset.name) || opt.textContent || "").replace(/\s+/g, " ").trim();
+  if(!name) return null;
+  return { name: name, userId: opt.value && opt.value !== "__text__" ? opt.value : "" };
+}
+/** 工作项抽屉里就地新建：按当前项目预填，创建后自动挂到当前工作项 */
+function openBranchDialogForTask(projectId){
+  brDialogTask = { projectId: projectId || "" };
+  openBranchDialogWith(null, null, { fromTask: true, projectId: projectId || "" });
+}
+function openBranchDialogWith(id, b, options){
+  var dialogOpts = options || {};
+  var fromTask = !!dialogOpts.fromTask;
+  var taskProjectId = dialogOpts.projectId || "";
   brEditingId = id || null;
   b = brEditingId ? b : null;
   $("dlgBranchTitle").textContent = b ? "编辑分支" : "新建分支";
   $("dlgBranchMsg").textContent = b
     ? "状态不在这里改 —— 点分支卡片上的状态标签切换，那样才会记进时间线。"
-    : "分支名照 git 里的写法填，建好之后就能跟状态和时间。";
-  $("dlgBranchOk").textContent = b ? "保存" : "创建分支";
+    : (fromTask
+      ? "建好后会自动选中并挂到当前工作项；保存工作项后关联生效。分支名照 git 里的写法填。"
+      : "分支名照 git 里的写法填，建好之后就能跟状态和时间。");
+  $("dlgBranchOk").textContent = b ? "保存" : (fromTask ? "创建并选中" : "创建分支");
   /* 编辑时隐藏「初始状态」（状态只能走状态切换接口） */
   if($("brStatusField")) $("brStatusField").hidden = !!b;
   $("brName").value = b ? (b.name || "") : "";
   $("brTarget").value = b ? (b.targetBranch || "") : "";
   $("brNote").value = b ? (b.note || "") : "";
   fillBranchStatusOptions($("brStatus"), b ? b.status : "dev");
-  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : "");
+  fillBranchReqOptions($("brReq"), b ? (b.reqId || "") : (fromTask ? taskProjectId : ""));
 
-  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定） */
+  /* 负责人：沿用任务抽屉的口径（成员列表 + 账号绑定）。
+     从任务里就地新建时默认跟任务负责人走，避免把分支指派给「当前操作人」；
+     任务没有负责人时再回落到当前用户。 */
   var sel = $("brOwner");
   if(sel){
-    var opts = ownerOptions();
-    var curName = b ? (b.owner || "") : (rt.currentUser ? (rt.currentUser.displayName || "") : "");
-    var curId = b ? (b.ownerUserId || "") : (rt.currentUser ? rt.currentUser.id : "");
+    var ownerOpts = ownerOptions();
+    var taskOwner = fromTask ? taskOwnerSelection() : null;
+    var curName = b ? (b.owner || "")
+      : (taskOwner ? taskOwner.name : (rt.currentUser ? (rt.currentUser.displayName || "") : ""));
+    var curId = b ? (b.ownerUserId || "")
+      : (taskOwner ? (taskOwner.userId || "") : (rt.currentUser ? rt.currentUser.id : ""));
     var html = "", matched = false;
-    opts.forEach(function(o){
+    ownerOpts.forEach(function(o){
       var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
       if(on) matched = true;
       html += '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (on ? " selected" : "") + '>' +
@@ -558,7 +674,7 @@ function openBranchDialogWith(id, b){
     sel.innerHTML = html;
   }
 
-  $("dlgBranch").__uiOnClose = function(){ brEditingId = null; };
+  $("dlgBranch").__uiOnClose = function(){ brEditingId = null; brDialogTask = null; };
   UI.openModal($("dlgBranch"));
   setTimeout(function(){ try{ $("brName").focus(); }catch(e){ /* noop */ } }, 40);
 }
@@ -566,6 +682,37 @@ function closeBranchDialog(){
   var d = $("dlgBranch");
   if(d) UI.closeModal(d);
   brEditingId = null;
+  brDialogTask = null;
+}
+/** 新建成功后就地挂到任务抽屉的下拉，不要求用户再回分支页刷新 */
+function attachCreatedBranchToTask(b){
+  var sel = $("iBranch");
+  if(!sel || !b) return;
+  var projectId = (($("iReq") || {}).value) || "";
+  var rows = branchOptionCache[projectId];
+  if(rows){
+    var found = false;
+    for(var i = 0; i < rows.length; i++) if(rows[i].id === b.id){ found = true; break; }
+    if(!found) rows.push(b);
+    branchOptionCache[projectId] = rows;
+    if(projectId) delete branchOptionCache[""];  /* 全量缓存已过期，下次按需重拉 */
+    fillBranchSelect(sel, b.id, rows);
+  }else{
+    /* 选项还在加载 / 加载失败：先把新分支塞进当前下拉，避免用户等一次刷新 */
+    var opt = null;
+    for(var j = 0; j < sel.options.length; j++) if(sel.options[j].value === b.id){ opt = sel.options[j]; break; }
+    if(!opt){
+      opt = document.createElement("option");
+      opt.value = b.id;
+      opt.textContent = b.name + (b.targetBranch ? " → " + b.targetBranch : "");
+      sel.appendChild(opt);
+    }
+    sel.value = b.id;
+    sel.setAttribute("data-ready", "1");
+  }
+  var hint = $("iBranchHint");
+  if(hint) hint.textContent = "已创建并选中「" + b.name + "」，保存工作项后关联生效。";
+  try{ sel.dispatchEvent(new Event("change", { bubbles: true })); }catch(e){ /* noop：事件派发失败不影响选中 */ }
 }
 function submitBranchDialog(){
   /* 回车提交不经过按钮的禁用状态：请求在途时忽略 */
@@ -597,9 +744,15 @@ function submitBranchDialog(){
   var btn = $("dlgBranchOk");
   btn.disabled = true;
   req.then(function(b){
+    var taskCtx = brDialogTask;
     btn.disabled = false;
     closeBranchDialog();
-    toast(wasEdit ? ("已更新「" + b.name + "」") : ("已创建分支「" + b.name + "」"), "fs");
+    if(taskCtx){
+      attachCreatedBranchToTask(b);
+      toast("已创建「" + b.name + "」，保存工作项后关联生效", "fs");
+    }else{
+      toast(wasEdit ? ("已更新「" + b.name + "」") : ("已创建分支「" + b.name + "」"), "fs");
+    }
     loadBranches(true).then(function(){
       if(brDrawerId === b.id) openBranchDrawer(b.id);
     });
@@ -611,7 +764,7 @@ function submitBranchDialog(){
 function deleteBranch(id){
   var b = branchById(id);
   if(!b) return;
-  if(!(rt.currentWs && rt.currentWs.myRole === "owner")){ toast("仅空间主可删除分支", "warn"); return; }
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能删除分支", "warn"); return; }
   var n = b.taskCount || 0;
   UI.showConfirm({
     title: "删除分支",
@@ -681,10 +834,11 @@ function renderBranchDrawer(b){
     '<div class="br-sect"><h4>关联工作项</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
-      (rt.currentWs && rt.currentWs.myRole === "owner"
-        ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>' : '') +
+      (canEditBranch(b)
+        ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>'
+        : '<span class="foot-note">你对该项目只有查看权限，不能修改或删除分支</span>') +
       '<span style="flex:1 1 auto"></span>' +
-      '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' +
+      (canEditBranch(b) ? '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' : '') +
     '</div>';
 
   var del = $("brDrawerDelete");
@@ -731,6 +885,17 @@ function loadBranchTasks(id){
     if(box && brDrawerId === id) box.innerHTML = '<div class="tl-empty">关联工作项加载失败</div>';
   });
 }
+/** 分支字段提示：只读项目里不能出现「点新建分支」这种做不到的引导 */
+function branchFieldHint(rows){
+  if(rt.drawerReadOnly){
+    return rows.length
+      ? "当前项目为只读项目，不能新建分支；可查看已有分支。"
+      : "当前项目为只读项目，且还没有分支。";
+  }
+  return rows.length
+    ? "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。"
+    : "还没有分支，点「新建分支」就地创建，建好自动选中，保存后生效。";
+}
 function fillBranchSelect(sel, cur, rows){
   var html = '<option value="">不关联分支</option>';
   BRANCH_STATUS.forEach(function(s){
@@ -754,12 +919,10 @@ function fillBranchSelect(sel, cur, rows){
   sel.value = ok ? cur : "";
   /* 标记选项已就绪：保存时区分「确实不关联」与「选项还没加载完」 */
   sel.setAttribute("data-ready", "1");
+  var newBtn = $("iBranchNew");
+  if(newBtn) newBtn.hidden = !!rt.drawerReadOnly;
   var hint = $("iBranchHint");
-  if(hint){
-    hint.textContent = rows.length
-      ? "分支在「分支」页里建，这里只负责挂上去"
-      : "还没有分支 —— 先去「分支」页建一条，再回来挂";
-  }
+  if(hint) hint.textContent = branchFieldHint(rows);
 }
 function populateBranchSelect(keep, projectId){
   var sel = $("iBranch");
@@ -837,10 +1000,12 @@ function clearGroupOver(){
       var card = e.target.closest("[data-branch]");
       if(card){ e.preventDefault(); openBranchDrawer(card.dataset.branch); }
     });
-    /* 卡片拖动：跨状态列流转（同列无效；状态切换全员可用，与状态菜单口径一致） */
+    /* 卡片拖动：跨状态列流转（同列无效；与后端一致，仅项目可写者可改状态） */
     box.addEventListener("dragstart", function(e){
       var card = e.target.closest(".br-card");
       if(!card) return;
+      var b = branchById(card.dataset.branch);
+      if(!canEditBranch(b)){ e.preventDefault(); return; }
       dragBranch = { id: card.dataset.branch, status: card.dataset.brSt };
       e.dataTransfer.setData("text/plain", dragBranch.id);
       e.dataTransfer.effectAllowed = "move";
@@ -877,6 +1042,7 @@ function clearGroupOver(){
       var c = e.target.closest("[data-br-filter]");
       if(c){
         branchFilter = (branchFilter === c.dataset.brFilter) ? "" : c.dataset.brFilter;
+        dropBranchSource();
         renderBranches();
         return;
       }
@@ -896,6 +1062,7 @@ function clearGroupOver(){
       if(!b) return;
       var v = b.dataset.brMeta;
       branchFilter = (!v || branchFilter === v) ? "" : v;
+      dropBranchSource();
       if(branchGroupMode === "project"){
         branchGroupMode = "status";
         updateBranchGroupToggle();
@@ -906,6 +1073,11 @@ function clearGroupOver(){
     });
   }
   if($("branchNew")) $("branchNew").addEventListener("click", function(){ openBranchDialog(null); });
+  /* 工作项抽屉里的「新建分支」：按当前项目预填，建好自动挂到当前工作项 */
+  if($("iBranchNew")) $("iBranchNew").addEventListener("click", function(){
+    var projectId = (($("iReq") || {}).value) || "";
+    openBranchDialogForTask(projectId);
+  });
   if($("branchSearch")) $("branchSearch").addEventListener("input", function(){
     if(branchViewMode === "list"){ renderBranches(); return; }  /* 列表数据已全量在手，本地过滤即可 */
     clearTimeout(branchSearchTimer);
@@ -917,6 +1089,7 @@ function clearGroupOver(){
       if(!b || b.dataset.brMode === branchViewMode) return;
       branchViewMode = b.dataset.brMode;
       branchFilter = "";
+      dropBranchSource();
       try{ localStorage.setItem(BRANCH_VIEW_KEY, branchViewMode); }catch(err){ /* 受限环境忽略 */ }
       updateBranchModeUI();
       renderBranches();
@@ -988,4 +1161,4 @@ function ensureBranchOptions(keep, projectId){
 function openBranchById(id){
   openBranchDrawer(id);
 }
-export { branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, loadBranches, openBranchById, populateBranchSelect, renderBranches };
+export { branchMetaById, branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, loadBranches, openBranchById, populateBranchSelect, renderBranches, setBranchStatus };

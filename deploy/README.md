@@ -39,7 +39,7 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_291.jdk/Contents/Home \
 bash deploy/local/stack.sh            # 起 MySQL(3307) + 后端(8080) + 静态服务(8081)
 E2E_BASE=http://127.0.0.1:8081/hourglass E2E_USER=admin E2E_PASS=admin123 \
   node tools/e2e/smoke.mjs            # 浏览器冒烟：登录、12 个入口、驾驶舱、通知中心、导航使用记录
-python3 tools/preview/gen-preview.js  # 重新生成 docs/preview/ui-preview.html
+node tools/preview/gen-preview.js     # 重新生成 docs/preview/ui-preview.html
 ```
 
 ## 1. 服务器准备
@@ -65,17 +65,19 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 > 应用账号不再内置固定口令：脚本首次执行时用 `RANDOM_BYTES` 随机生成一次性密码，并在结束时以「沙漏部署提示」输出一次。**请立即把该密码写进第 3 步 `/etc/hourglass.env` 的 `DB_PASSWORD`（用单引号包裹）**；这条提示不会再次出现，也不要把建库输出重定向或记录到日志文件里。
 > 账号已存在时脚本不改动其密码，只输出提示；重置密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。若你的 MySQL 禁用了 `RANDOM_BYTES`，按脚本内注释改用 `SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)`，或先手工建号再执行脚本。
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
-> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得作为普通升级在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表，不回放 61/62、不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
+> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得作为普通升级在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（当时口径；其后 `sql/65` 新增跨版本计划关联表、`sql/66` 新增成员项目授权模式与邀请项目预分配表，完整基线现为 54 表），不回放 61/62、不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
+>
+> **已有库升级到「新成员默认不参与项目」版本：先执行 `sql/66_project_access_assigned.sql`，再替换 jar。** 新 jar 会读写 `workspace_member.project_access_mode` 与 `invite_project_grant`，先换 jar 会导致成员列表、邀请与加入接口报错。66 只增列、建表并为 `assigned` 成员补 `none` 种子行，不改写已有授权；存量成员默认 `all`，升级后可见范围不变。执行前照常做全库备份。
 
 ## 2. 上传后端与前端
 
 自动部署（推荐）：本地执行 `bash deploy/deploy.sh`，脚本会按改动范围只发布 jar 或只发布前端，并完成校验与备份。部署脚本保留已有备份，不自动清理。
 
-**正常脚本仍只支持新空库；本轮原库重建是用户单独明确授权操作，不是脚本默认许可。**新库路径使用不存在的 `hourglass_` 前缀数据库，先备份当前数据库、配置和附件，再创建新库、执行 52 表基线并设置显式 DB_NAME；不回放 61/62、不迁移旧历史。本次最新授权替代新库-only 方案：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；最终认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点。原历史仅在备份中，不再原表在线保留。正式证据包括 plan / plan_task / record / item / log 五表，须随 MySQL 全库备份恢复。
+**正常脚本仍只支持新空库；本轮原库重建是用户单独明确授权操作，不是脚本默认许可。**新库路径使用不存在的 `hourglass_` 前缀数据库，先备份当前数据库、配置和附件，再创建新库、执行 54 表基线并设置显式 DB_NAME；不回放 61/62、不迁移旧历史。本次最新授权替代新库-only 方案：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；最终认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点。原历史仅在备份中，不再原表在线保留。正式证据包括 plan / plan_task / record / item / log 五表，须随 MySQL 全库备份恢复。
 
-A–E 最终本地正确性门禁通过：Java 821 tests（0 failures/errors/skipped，当时 `124ce05` 的 514 个发布候选源文件 parity，不是当前 HEAD）、真实 MySQL 14 mandatory 484 passed / 0 failed / 0 unverified、本地 full demo 990 回读分别通过；真实 headless Chrome backend 8120 / frontend 8121 在 1440/390px 的导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 重拍、SHA256 配对一致并视觉查看，非物理手机测试；JS syntax 107 files / 3 unit suites、3 SVG、文档 14 checks / baseline convergence 16、部署安全隔离 212（含脚本语法 73）分别通过。1 个自建浏览器 fixture 空间留作本地证据，最终复跑未建新空间，不称全部本地数据已清理；独立统计见 [`CHANGELOG.md`](../CHANGELOG.md)。
+A–E 首次交付时点的本地正确性门禁（历史记录，不代表当前 HEAD）：Java 821 tests（0 failures/errors/skipped，当时 `124ce05` 的 514 个发布候选源文件 parity，不是当前 HEAD）、真实 MySQL 14 mandatory 484 passed / 0 failed / 0 unverified、本地 full demo 990 回读分别通过；真实 headless Chrome backend 8120 / frontend 8121 在 1440/390px 的导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 重拍、SHA256 配对一致并视觉查看，非物理手机测试；JS syntax 107 files / 3 unit suites、3 SVG、文档 14 checks / baseline convergence 16、部署安全隔离 212（含脚本语法 73）分别通过。1 个自建浏览器 fixture 空间留作本地证据，最终复跑未建新空间，不称全部本地数据已清理；独立统计见 [`CHANGELOG.md`](../CHANGELOG.md)。
 
-**本轮实际部署完成，生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误。**`124ce05` 已正常 commit / push，生产 jar SHA256=`bd930b8caf43914d4af929ced29a9cb526170f35542f378c3b7ba638c2b46df5`；169 个生产前端文件 HTTP 200，字节 / SHA 与 `124ce05` archive 匹配，SW v120。首次 deploy.sh 因 umask 077 前端目录 700 / 文件 600 导致 403 / 500 中止；实际权限修为目录 755 / 文件 644，AppleDouble 元数据移入受限备份，独立完整回读通过，不能称首次 deploy.sh exit 0。后续 `2d7fe2e` 仅旧无引用 DTO 与部署 COPYFILE_DISABLE=1 / 递归权限修正，已在 origin/main；本段是 `124ce05` 时点的发布回读记录，其后每次部署登记在更新日志的发布记录里；`124ce05` 的 821 Java 全量测试与 514 source parity 只覆盖该时点，不代表后续 payload。
+**A–E 首次交付时点的实际部署（历史记录，当前线上 payload 见更新日志最新一条发布记录）：**生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误。`124ce05` 已正常 commit / push，生产 jar SHA256=`bd930b8caf43914d4af929ced29a9cb526170f35542f378c3b7ba638c2b46df5`；169 个生产前端文件 HTTP 200，字节 / SHA 与 `124ce05` archive 匹配，SW v120。首次 deploy.sh 因 umask 077 前端目录 700 / 文件 600 导致 403 / 500 中止；实际权限修为目录 755 / 文件 644，AppleDouble 元数据移入受限备份，独立完整回读通过，不能称首次 deploy.sh exit 0。后续 `2d7fe2e` 仅旧无引用 DTO 与部署 COPYFILE_DISABLE=1 / 递归权限修正，已在 origin/main；本段是 `124ce05` 时点的发布回读记录，其后每次部署登记在更新日志的发布记录里；`124ce05` 的 821 Java 全量测试与 514 source parity 只覆盖该时点，不代表后续 payload。
 
 完整生产模拟已完成；只读验收 1747 GET / 3 login、7463 有效断言零失败 / 零 API 错误，无生产变更测试。8255 原执行含 792 被替换的 harness 日期断言（初 264 失败因 UTC manifest 11-09 误作本地业务日 11-10），纠正后零失败，不可加总。完整规模、66 产物 SHA / 44 plan raw UTF-8 SHA、三次稳定事件 canonical SHA 及工时 38940 / 版本卡 39930（含 990 跨版本重叠）见更新日志。
 
@@ -119,7 +121,7 @@ EOF
 sudo chmod 600 /etc/hourglass.env
 ```
 
-> 说明：`AUTH_USER/AUTH_PASSWORD` 仅用于**首次启动引导创建管理员**（库中已有用户后不再读取）；后续账号由管理员在「用户」管理中创建下发，不开放注册。每个账号自动有个人空间；可另建共享空间邀请成员协作（空间主按登录名添加）。
+> 说明：`AUTH_USER/AUTH_PASSWORD` 仅用于**首次启动引导创建管理员**（库中已有用户后不再读取）；后续账号由平台管理员在「设置 → 平台 → 账号管理」创建下发，不开放注册。每个账号自动有个人空间；可另建共享空间，成员通过邀请链接加入（按登录名直接加人仅平台管理员可用，普通空间主请使用邀请链接）。
 > **值的写法（systemd 解析，和 shell 不同）**：每行的说明必须单独一行用 `#` 开头，**不要写在值后面**（行尾的 `#` 及其后内容会整个算进变量值里）；含 `$`、空格等特殊字符的值建议用单引号包裹（如 `AUTH_PASSWORD='$2y$10$...'`），引号会被剥掉、值保持不变。应用侧仅接受完整 60 位 bcrypt 格式，格式不符时按普通明文处理。
 
 自动部署要求 `/etc/hourglass.env` 显式设置经核实的 `DB_NAME`，不能依赖应用的默认库名。其余可选项（有默认值）：`DB_HOST`（默认 127.0.0.1）、`DB_USER`（默认 hourglass）、`SERVER_PORT`（默认 8080）、`BIND_ADDR`（默认 127.0.0.1）、`ATTACH_DIR`（附件目录，默认 `/opt/hourglass/data/attachments`，需确保 hourglass 用户可写）。
@@ -234,10 +236,10 @@ sudo systemctl restart hourglass
 - [ ] 浏览器访问域名/IP 跳登录页；登录后手机保持 30 天免登录
 - [ ] 新增任务 → 拖拽移动 → 编辑查看「操作时间线」→ 筛选/搜索/回顾/导出全部可用
 - [ ] 任务弹窗可增删勾选子任务，卡片上出现 2/5 角标，时间线记录子任务变更（含操作人）
-- [ ] 管理员：侧栏「用户管理」（独立页面，仅管理员可见）新增用户/重置密码/删除用户可用；普通成员看不到该入口、直接访问接口返回 403
-- [ ] 管理员「用户」建号 → 新账号登录看到全新个人空间；互相看不到数据
-- [ ] 侧栏空间切换器：新建共享空间 → 空间设置中添加成员（登录名）
-- [ ] 共享空间 → 空间设置 →「邀请链接」生成并复制；已有账号的同事登录后打开链接一键加入；未登录打开会引导先登录再回来加入；新同事须先在「用户管理」建号
+- [ ] 平台管理员：`设置 → 平台 → 账号管理` 新增用户 / 重置密码 / 删除用户可用；普通成员看不到「平台」页签、直接访问接口返回 403
+- [ ] 平台管理员建号 → 新账号登录看到全新个人空间；互相看不到数据
+- [ ] 侧栏空间切换器：新建共享空间 →「设置 → 成员与权限」生成邀请链接
+- [ ] 共享空间 →「设置 → 成员与权限」→「邀请链接」生成并复制；已有账号的同事登录后打开链接一键加入；未登录打开会引导先登录再回来加入；新同事须先由平台管理员在账号管理中建号
 - [ ] 侧栏底部点自己的名字：可修改显示名（负责人默认值随之更新）与密码
 - [ ] 邀请链接撤销/过期后打开提示失效；被移除成员重新打开邀请链接可再次加入
 - [ ] 被添加的账号刷新后能看到共享空间；两人同时打开：一方改动 1 秒内另一方自动刷新

@@ -6,10 +6,20 @@
     SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite WHERE id = #{id}
   </select>
 
+  <!-- 加入 / 撤销共用的行锁：保证撤销与加入串行，撤销后不会再按旧授权落库 -->
+  <select id="selectByIdForUpdate" resultType="Invite">
+    SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite WHERE id = #{id} FOR UPDATE
+  </select>
+
   <select id="selectByWorkspace" resultType="Invite">
-    SELECT id, workspace_id, created_by, expires_at, used_count, created_at FROM invite
-    WHERE workspace_id = #{workspaceId}
-    ORDER BY created_at DESC, id
+    SELECT i.id, i.workspace_id, i.created_by, i.expires_at, i.used_count, i.created_at,
+           (SELECT COUNT(*) FROM invite_project_grant g
+             WHERE g.invite_id = i.id AND g.access = 'write') AS write_grant_count,
+           (SELECT COUNT(*) FROM invite_project_grant g
+             WHERE g.invite_id = i.id AND g.access = 'read') AS read_grant_count
+    FROM invite i
+    WHERE i.workspace_id = #{workspaceId}
+    ORDER BY i.created_at DESC, i.id
     LIMIT #{limit} OFFSET #{offset}
   </select>
 

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.InviteProjectGrantMapper">
+
+  <insert id="insert">
+    INSERT INTO invite_project_grant (invite_id, workspace_id, project_id, access)
+    VALUES (#{inviteId}, #{workspaceId}, #{projectId}, #{access})
+    ON DUPLICATE KEY UPDATE access = VALUES(access)
+  </insert>
+
+  <select id="selectByInvite" resultType="InviteProjectGrant">
+    SELECT invite_id, workspace_id, project_id, access, created_at
+    FROM invite_project_grant
+    WHERE invite_id = #{inviteId}
+    ORDER BY project_id
+  </select>
+
+  <delete id="deleteByInvite">
+    DELETE FROM invite_project_grant WHERE invite_id = #{inviteId}
+  </delete>
+
+  <delete id="deleteByProject">
+    DELETE FROM invite_project_grant WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
+  </delete>
+
+  <delete id="deleteAllByWorkspace">
+    DELETE FROM invite_project_grant WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

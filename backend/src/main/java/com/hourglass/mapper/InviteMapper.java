@@ -13,6 +13,9 @@ public interface InviteMapper {
 
     Invite selectById(String id);
 
+    /** 加入 / 撤销前锁住邀请行，二者串行执行 */
+    Invite selectByIdForUpdate(@Param("id") String id);
+
     List<Invite> selectByWorkspace(@Param("workspaceId") String workspaceId,
                                    @Param("offset") int offset, @Param("limit") int limit);
 

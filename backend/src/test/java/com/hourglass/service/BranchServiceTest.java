@@ -187,6 +187,8 @@ class BranchServiceTest {
 
         service.delete("U1", WS, "B1");
 
+        verify(access).assertView(WS, "U1", "R1");
+        verify(access).assertWrite(WS, "U1", "R1");
         verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", "branch", "B1", "R1");
         verify(branchMapper).deleteById(WS, "B1");
@@ -202,6 +204,19 @@ class BranchServiceTest {
         service.delete("U2", WS, "B1");
 
         verifyNoInteractions(events);
+        verify(branchMapper).deleteById(WS, "B1");
+    }
+
+    @Test
+    void deleteSpaceLevelBranchChecksWriteWithoutProject() {
+        DevBranch b = branch("B1");
+        b.setReqId(null);
+        when(branchMapper.selectById("B1")).thenReturn(b);
+
+        service.delete("U1", WS, "B1");
+
+        verify(access).assertView(WS, "U1", null);
+        verify(access).assertWrite(WS, "U1", null);
         verify(branchMapper).deleteById(WS, "B1");
     }
 

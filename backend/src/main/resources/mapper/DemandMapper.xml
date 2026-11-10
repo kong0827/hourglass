@@ -128,6 +128,12 @@
     GROUP BY d.status
   </select>
 
+  <select id="countGroupByFacets" resultType="map">
+    SELECT d.priority AS pri, d.item_kind AS kind, d.category_id AS cat, COUNT(*) AS cnt FROM demand d
+    <include refid="pageWhere"/>
+    GROUP BY d.priority, d.item_kind, d.category_id
+  </select>
+
   <select id="countGroupByReq" resultType="map">
     SELECT req_id AS reqId, COUNT(*) AS cnt FROM demand
     WHERE workspace_id = #{workspaceId}

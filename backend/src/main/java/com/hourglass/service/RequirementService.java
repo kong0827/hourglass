@@ -46,6 +46,9 @@ public class RequirementService {
     private final CategoryService categoryService;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
+    /** 删项目时清掉邀请上对它的预分配 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.InviteProjectGrantMapper inviteGrantMapper;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -190,6 +193,13 @@ public class RequirementService {
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
         reqMapper.insert(r);
+        /* 新项目默认只对空间主/管理员可见：先给 assigned 成员补不可见种子，
+           再让创建者显式可参与，避免 assigned 成员建完项目后自己看不到 */
+        projectAccess.seedAssignedNone(workspaceId);
+        com.hourglass.entity.WorkspaceMember creator = memberMapper.selectMember(workspaceId, userId);
+        if (ProjectAccessService.isAssigned(creator)) {
+            projectAccess.saveGrant(workspaceId, userId, id, ProjectAccessService.ACCESS_WRITE);
+        }
         /* 项目自带模块清单：预置「其他」，保证一开始就能按模块归类工作项 */
         categoryService.createDefault(workspaceId, r.getId());
         /* 模板只做增量补齐：列按空间共享、文档/测试模块/版本归属本项目 */
@@ -384,6 +394,9 @@ public class RequirementService {
         demandMapper.deleteLogsByReq(workspaceId, id);
         demandMapper.deleteByReq(workspaceId, id);
         projectAccess.clearProject(workspaceId, id);
+        if (inviteGrantMapper != null) {
+            inviteGrantMapper.deleteByProject(workspaceId, id);
+        }
         workActivityService.deleteByEntity(workspaceId, WorkActivityService.PROJECT, id);
         reqMapper.deleteById(id);
         /* O-9：破坏性配置变更留审计（活动流可见） */

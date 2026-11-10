@@ -118,16 +118,29 @@ public class DemandService {
         return page;
     }
 
-    /** 看板：每个状态一列，只取首屏 limit 条；其余由 /api/demands/page 滚动加载 */
+    /** 兼容旧调用：只按项目取整块看板 */
     public DemandBoardResponse board(String workspaceId, String userId, String reqId, int limit) {
         DemandQuery base = new DemandQuery();
         base.setReqId(Texts.trimToNull(reqId));
+        base.setLimit(limit);
+        return board(workspaceId, userId, base);
+    }
+
+    /**
+     * 看板：每个状态一列，只取首屏 limit 条；其余由 /api/demands/page 滚动加载。
+     * 搜索/优先级/类型/模块条件与列表共用 DemandQuery，服务端过滤后列计数即匹配数；
+     * totalAll 始终是该项目的未筛选总数，用于展示「匹配 M / N」。
+     */
+    public DemandBoardResponse board(String workspaceId, String userId, DemandQuery base) {
         prepare(workspaceId, userId, base);
-        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, limit <= 0 ? 50 : limit));
+        int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, base.getLimit() <= 0 ? 50 : base.getLimit()));
+        base.setLimit(safeLimit);
         Map<String, Integer> counts = countByStatus(base);
 
         DemandBoardResponse resp = new DemandBoardResponse();
         resp.setCounts(counts);
+        resp.setTotalAll(boardTotalAll(base));
+        resp.setFacets(boardFacets(base));
         for (String status : DEMAND_STATUSES) {
             DemandQuery q = copyOf(base);
             q.setStatus(status);
@@ -520,6 +533,52 @@ public class DemandService {
             }
         }
         return null;
+    }
+
+    /** 看板范围（项目/可见性）不变，去掉搜索与筛选后的总数；用于「匹配 M / N」的 N */
+    private int boardTotalAll(DemandQuery query) {
+        DemandQuery all = copyOf(query);
+        all.setStatus(null);
+        all.setQ(null);
+        all.setPris(new java.util.ArrayList<String>());
+        all.setKinds(new java.util.ArrayList<String>());
+        all.setCats(new java.util.ArrayList<String>());
+        all.setReqs(new java.util.ArrayList<String>());
+        return sumCounts(countByStatus(all));
+    }
+
+    /** 看板筛选项计数：保留项目/可见性与搜索词，去掉三个筛选维度，一次分组后在内存聚合 */
+    private Map<String, Map<String, Integer>> boardFacets(DemandQuery query) {
+        DemandQuery scope = copyOf(query);
+        scope.setStatus(null);
+        scope.setPris(new java.util.ArrayList<String>());
+        scope.setKinds(new java.util.ArrayList<String>());
+        scope.setCats(new java.util.ArrayList<String>());
+        scope.setReqs(new java.util.ArrayList<String>());
+        Map<String, Integer> pris = new java.util.LinkedHashMap<String, Integer>();
+        Map<String, Integer> kinds = new java.util.LinkedHashMap<String, Integer>();
+        Map<String, Integer> cats = new java.util.LinkedHashMap<String, Integer>();
+        List<Map<String, Object>> rows = demandMapper.countGroupByFacets(scope);
+        if (rows != null) {
+            for (Map<String, Object> row : rows) {
+                Object cnt = row.get("cnt");
+                int n = cnt == null ? 0 : ((Number) cnt).intValue();
+                addFacet(pris, row.get("pri"), n);
+                addFacet(kinds, row.get("kind"), n);
+                addFacet(cats, row.get("cat"), n);
+            }
+        }
+        Map<String, Map<String, Integer>> facets = new java.util.LinkedHashMap<String, Map<String, Integer>>();
+        facets.put("pris", pris);
+        facets.put("kinds", kinds);
+        facets.put("cats", cats);
+        return facets;
+    }
+
+    private static void addFacet(Map<String, Integer> bucket, Object key, int n) {
+        String k = key == null ? "" : String.valueOf(key);
+        Integer old = bucket.get(k);
+        bucket.put(k, (old == null ? 0 : old) + n);
     }
 
     private Map<String, Integer> countByStatus(DemandQuery query) {

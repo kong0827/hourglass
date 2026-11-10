@@ -454,9 +454,12 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                   <span class="hint" id="iEpicHint">先选项目，再挂到该项目的史诗下。</span>
                 </div>
                 <div class="field">
-                  <label class="field-label" for="iBranch">所属分支</label>
+                  <div class="field-label">
+                    <label for="iBranch">所属分支</label>
+                    <button type="button" class="label-link" id="iBranchNew" hidden>新建分支</button>
+                  </div>
                   <select id="iBranch"></select>
-                  <span class="hint" id="iBranchHint">分支在「分支」页创建，这里负责挂接。</span>
+                  <span class="hint" id="iBranchHint">找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。</span>
                 </div>
                 <div class="field">
                   <div class="field-label">

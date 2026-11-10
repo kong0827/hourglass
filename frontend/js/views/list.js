@@ -249,11 +249,24 @@ function enterListView(){
   });
   loadList();
 }
-function refreshListIfOpen(){ if(activeView === "list") loadList(); }
-function listRequestParams(offset){
+/* 保存 / 删除 / 批量操作后的刷新：保留已加载分页与滚动位置，
+   不闪骨架屏、不把 offset 归零；筛选或排序变化仍走普通 loadList。 */
+/* 桌面端真正的滚动容器是 .list-scroll（#view-list 为 overflow:hidden），
+   静默刷新必须还原它而不是外层的 scrollTop。 */
+function listScroller(){
+  var view = document.getElementById("view-list");
+  return (view && view.querySelector(".list-scroll")) || view;
+}
+function refreshListIfOpen(){
+  if(activeView !== "list") return null;
+  var scroller = listScroller();
+  var top = scroller ? scroller.scrollTop : 0;
+  return loadList({silent:true, keepLoaded:true, restoreScroll:top});
+}
+function listRequestParams(offset, limit){
   var requestSort = smart.sort === "default" ? serverSort : smart.sort;
   if(requestSort === "estimate" || requestSort === "actual") requestSort = serverSort;
-  var extra = {sort:requestSort, offset:offset || 0, limit:LIST_PAGE_SIZE};
+  var extra = {sort:requestSort, offset:offset || 0, limit:limit || LIST_PAGE_SIZE};
   /* 能下推的预置条件下推，避免 500 条上限截断后本地预置结果偏少。 */
   if(smart.preset === "mine" && !state.owners.length && rt.currentUser){
     var myName = rt.currentUser.displayName || rt.currentUser.username;
@@ -274,11 +287,14 @@ function updateListMeta(rawCount){
 function loadList(opts){
   opts = opts || {};
   var append = !!(opts.more && lastItems.length);
+  /* 保留已加载分页：一次重新拉取与当前加载量等量的数据，避免回到第一页 */
+  var keep = !!(opts.keepLoaded && lastItems.length && !append);
   var offset = append ? lastItems.length : 0;
+  var limit = keep ? Math.min(500, Math.max(LIST_PAGE_SIZE, lastItems.length)) : LIST_PAGE_SIZE;
   var seq = ++rt.listSeq;
   listLoadingMore = append;
   if(!append) listHasMore = false;
-  if(!opts.silent && !append){
+  if(!opts.silent && !append && !keep){
     listBody.innerHTML = UI.skeletonRows(8);
     listMeta.textContent = "加载中…";
   }
@@ -286,7 +302,7 @@ function loadList(opts){
   /* 选中态不在重载时清空：批量操作后会重载，清空让人误以为操作没生效；
      真正失效的 id 在 renderListItems 里按可见行裁剪 */
   syncListSelectionUI();
-  API.get("/api/tasks/list", listRequestParams(offset)).then(function(d){
+  return API.get("/api/tasks/list", listRequestParams(offset, limit)).then(function(d){
     if(seq !== rt.listSeq) return;
     rt.listTotal = d.total || 0;
     listHasMore = !!d.hasMore;
@@ -295,12 +311,19 @@ function loadList(opts){
     var items = d.items || [];
     renderListItems(append ? lastItems.concat(items) : items);
     updateListMeta((append ? lastItems.length : items.length));
+    if(opts.restoreScroll != null){
+      var scroller = listScroller();
+      if(scroller){
+        scroller.scrollTop = opts.restoreScroll;
+        requestAnimationFrame(function(){ scroller.scrollTop = opts.restoreScroll; });
+      }
+    }
   }).catch(function(ex){
     if(seq !== rt.listSeq) return;
     listLoadingMore = false;
-    if(append){
-      toast(ex.message || "加载更多失败", "bad");
-      renderListItems(lastItems);
+    if(append || keep || opts.silent){
+      toast(ex.message || "列表刷新失败", "bad");
+      if(append) renderListItems(lastItems);
       return;
     }
     listMeta.textContent = "";

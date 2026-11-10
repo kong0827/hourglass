@@ -49,6 +49,7 @@
       <div class="ir"><span class="k">空间</span><span class="v" id="ivWs">—</span></div>
       <div class="ir"><span class="k">邀请人</span><span class="v" id="ivBy">—</span></div>
       <div class="ir"><span class="k">有效期</span><span class="v" id="ivExp">—</span></div>
+      <div class="ir"><span class="k">项目权限</span><span class="v" id="ivGrant">—</span></div>
     </div>
 
     <form id="fJoin" class="join-actions" hidden>
@@ -81,6 +82,7 @@ import { API } from "./js/core/api.js";
   var ivWs = document.getElementById("ivWs");
   var ivBy = document.getElementById("ivBy");
   var ivExp = document.getElementById("ivExp");
+  var ivGrant = document.getElementById("ivGrant");
   var fJoin = document.getElementById("fJoin");
   var needLogin = document.getElementById("needLogin");
   var joinAsNote = document.getElementById("joinAsNote");
@@ -114,11 +116,13 @@ import { API } from "./js/core/api.js";
       })
       .catch(function () { return null; });
   }
-  function myWorkspaces() {
-    return fetch(API.url("/api/workspaces"), { credentials: "same-origin" })
-      .then(function (res) { return res.json(); })
-      .then(function (json) { return (json && json.code === 0) ? (json.data || []) : []; })
-      .catch(function () { return []; });
+  /* 预分配说明：新成员默认不参与任何项目，邀请上勾选的项目加入后立即生效 */
+  function grantText(w, r) {
+    if (!w && !r) return "加入后暂无项目，待空间主分配";
+    var parts = [];
+    if (w) parts.push("可参与 " + w + " 个");
+    if (r) parts.push("只读 " + r + " 个");
+    return "加入后" + parts.join("、") + "项目";
   }
 
   if (!code) {
@@ -161,6 +165,7 @@ import { API } from "./js/core/api.js";
       ivWs.textContent = info.workspaceName || "—";
       ivBy.textContent = info.inviterName || "空间主";
       ivExp.textContent = shortDate(info.expiresAt);
+      ivGrant.textContent = grantText(info.writeGrantCount || 0, info.readGrantCount || 0);
       document.getElementById("joinTitle").textContent = "加入「" + (info.workspaceName || "共享空间") + "」";
 
       if (!me) {
@@ -170,20 +175,16 @@ import { API } from "./js/core/api.js";
         return;
       }
       joinAsNote.textContent = "将以账号「" + (me.displayName || me.username) + "」（@" + me.username + "）加入";
-      /* 已是成员时主按钮改为「进入空间」 */
-      return myWorkspaces().then(function (list) {
-        var hit = null;
-        (list || []).forEach(function (w) {
-          if (w.name === info.workspaceName) hit = w;
-        });
-        if (hit) {
-          alreadyWsId = hit.id;
-          btnJoin.textContent = "进入空间";
-        }
-        stLoading.hidden = true;
-        stOk.hidden = false;
-        fJoin.hidden = false;
-      });
+      /* 已是成员时主按钮改为「进入空间」：以后端按空间 ID 判定为准，不按同名空间猜 */
+      if (info.alreadyMember && info.workspaceId) {
+        alreadyWsId = info.workspaceId;
+        btnJoin.textContent = "进入空间";
+        ivGrant.textContent = "你已是该空间成员，项目权限以当前分配为准";
+        joinAsNote.textContent = "当前账号「" + (me.displayName || me.username) + "」（@" + me.username + "）已在该空间";
+      }
+      stLoading.hidden = true;
+      stOk.hidden = false;
+      fJoin.hidden = false;
     })
     .catch(function (ex) {
       fail("无法校验邀请链接", (ex && ex.message) || "网络异常，请稍后重试。");
@@ -203,7 +204,8 @@ import { API } from "./js/core/api.js";
       btnJoin.style.background = "var(--success)";
       btnJoin.style.borderColor = "var(--success)";
       btnJoin.style.color = "var(--text-inverse)";
-      btnJoin.textContent = res && res.already ? "已是成员，正在进入…" : "已加入，正在进入…";
+      btnJoin.textContent = res && res.already ? "已是成员，正在进入…"
+        : (res && res.grantCount ? ("已加入（" + res.grantCount + " 个项目已开通），正在进入…") : "已加入，正在进入…");
       setTimeout(function () { go(wsId); }, 800);
     }).catch(function (ex) {
       btnJoin.disabled = false;

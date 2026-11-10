@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -140,11 +141,13 @@ public class WorkspaceController {
                                         HttpServletRequest request) {
         String me = CurrentUser.id();
         Workspace before = workspaceService.requireMember(me, id);
-        workspaceService.removeMember(me, id, userId);
         boolean self = me.equals(userId);
-        audit.recordCurrent(id, "member_remove", "member", userId, userId, true,
+        /* 移除后就查不到成员了：先取展示名，审计里写人名而不是内部 ID */
+        String name = self ? userId : memberName(me, id, userId);
+        workspaceService.removeMember(me, id, userId);
+        audit.recordCurrent(id, "member_remove", "member", userId, name, true,
                 self ? "退出空间「" + before.getName() + "」"
-                        : ("移除成员 " + userId + "（空间「" + before.getName() + "」）"), request);
+                        : ("移除成员 " + name + "（空间「" + before.getName() + "」）"), request);
         /* 被移除的人已不是成员，普通通知的成员校验会拦掉，必须走系统通道；
            不带深链：该空间已无权进入，点击只展示正文 */
         if (!self) {
@@ -165,8 +168,9 @@ public class WorkspaceController {
         String role = req == null ? null : req.getRole();
         Workspace ws = workspaceService.requireMember(me, id);
         workspaceService.updateMemberRole(me, id, userId, role);
-        audit.recordCurrent(id, "role_change", "member", userId, userId, true,
-                "成员 " + userId + " 的空间角色调整为「" + roleLabel(role) + "」（空间「" + ws.getName() + "」）",
+        String name = memberName(me, id, userId);
+        audit.recordCurrent(id, "role_change", "member", userId, name, true,
+                "成员 " + name + " 的空间角色调整为「" + roleLabel(role) + "」（空间「" + ws.getName() + "」）",
                 request);
         if (!me.equals(userId)) {
             notificationEvents.notifySystem(userId, id, NotificationEventService.MEMBER_ROLE,
@@ -228,22 +232,115 @@ public class WorkspaceController {
         if (project == null || !id.equals(project.getWorkspaceId())) {
             throw AppException.notFound("项目不存在或不属于当前空间：" + req.getProjectId());
         }
-        String previous = ProjectAccessService.normalizeAccess(
-                projectAccessService.configuredAccess(id, req.getProjectId(), req.getUserId()));
-        projectAccessService.saveGrant(id, req.getUserId(), req.getProjectId(), req.getAccess());
-        String access = ProjectAccessService.normalizeAccess(req.getAccess());
+        String previous = projectAccessService.effectiveAccess(id, req.getProjectId(), target);
+        String access = projectAccessService.saveGrant(id, req.getUserId(), req.getProjectId(), req.getAccess());
+        String effective = ProjectAccessService.effectiveOf(access, target);
+        /* 记有效权限而不是落库值：存量成员选「可参与」会删掉冗余行（落库为空），
+           若照抄落库值会在日志里显示成 default，与界面看到的「可参与」不一致 */
+        String name = target.getDisplayName() == null ? req.getUserId() : target.getDisplayName();
         activityService.logConfig(id, me,
-                "调整项目可见范围「" + project.getName() + "」→ " + (access.isEmpty() ? "default" : access));
+                "调整成员「" + name + "」对项目「" + project.getName() + "」的可见范围 → " + accessLabel(effective));
         audit.recordCurrent(id, "role_change", "project", project.getId(), project.getName(), true,
-                "成员 " + req.getUserId() + " 对项目「" + project.getName() + "」的可见范围改为「"
-                        + (access.isEmpty() ? "default" : access) + "」", request);
-        if (!me.equals(req.getUserId()) && !previous.equals(access)) {
+                "成员 " + name + " 对项目「" + project.getName() + "」的可见范围改为「"
+                        + accessLabel(effective) + "」", request);
+        if (!me.equals(req.getUserId()) && !previous.equals(effective)) {
             notificationEvents.notifySystem(req.getUserId(), id, NotificationEventService.PROJECT_ACCESS,
                     "项目可见范围已调整：「" + project.getName() + "」",
-                    "你在空间「" + ws.getName() + "」中对该项目的可见范围已调整为「" + accessLabel(access) + "」",
+                    "你在空间「" + ws.getName() + "」中对该项目的可见范围已调整为「" + accessLabel(effective) + "」",
                     null, "project", project.getId());
         }
         return ApiResult.ok();
+    }
+
+    /**
+     * 批量保存某成员的项目权限（成员行的「分配项目」）：一次提交全部项目，
+     * 落库按提交值幂等写入，只把变化的单元格计入审计与通知，避免逐项保存产生 N 条记录。
+     */
+    @PutMapping("/api/workspaces/{id}/members/{userId}/project-access")
+    public ApiResult<Void> saveMemberProjectAccess(@PathVariable String id, @PathVariable String userId,
+                                                   @RequestBody MemberGrantsRequest req,
+                                                   HttpServletRequest request) {
+        String me = CurrentUser.id();
+        Workspace ws = workspaceService.requireMember(me, id);
+        projectAccessService.requireManage(id, me);
+        requireSharedWorkspace(ws, "项目可见范围");
+        WorkspaceMember target = null;
+        for (WorkspaceMember m : workspaceService.members(me, id)) {
+            if (userId.equals(m.getUserId())) {
+                target = m;
+                break;
+            }
+        }
+        if (target == null) {
+            throw AppException.notFound("成员不存在：" + userId);
+        }
+        if (!ProjectAccessService.ROLE_MEMBER.equals(target.getRole())) {
+            throw AppException.badRequest(ProjectAccessService.isPrivileged(target.getRole())
+                    ? "空间主/管理员天然拥有全部项目，无需单独配置"
+                    : "查看者对整个空间只读，无需配置项目可见范围");
+        }
+        if (req == null || req.getGrants() == null) {
+            throw AppException.badRequest("请提交项目权限");
+        }
+        Map<String, String> wanted = new LinkedHashMap<String, String>();
+        Map<String, Requirement> projects = new LinkedHashMap<String, Requirement>();
+        for (MemberGrant item : req.getGrants()) {
+            if (item == null) {
+                continue;
+            }
+            String projectId = item.getProjectId() == null ? null : item.getProjectId().trim();
+            if (projectId == null || projectId.isEmpty()) {
+                continue;
+            }
+            String value = ProjectAccessService.normalizeAccess(item.getAccess());
+            if (!value.isEmpty()
+                    && !ProjectAccessService.ACCESS_NONE.equals(value)
+                    && !ProjectAccessService.ACCESS_READ.equals(value)
+                    && !ProjectAccessService.ACCESS_WRITE.equals(value)) {
+                throw AppException.badRequest("项目权限只能是可参与 / 只读 / 不可见");
+            }
+            Requirement project = requirementMapper.selectById(projectId);
+            if (project == null || !id.equals(project.getWorkspaceId())) {
+                throw AppException.notFound("项目不存在或不属于当前空间：" + projectId);
+            }
+            wanted.put(projectId, value);
+            projects.put(projectId, project);
+        }
+
+        List<String> changes = new ArrayList<String>();
+        for (Map.Entry<String, String> entry
+                : projectAccessService.saveMemberGrants(id, target, wanted).entrySet()) {
+            changes.add(projects.get(entry.getKey()).getName() + "→" + accessLabel(entry.getValue()));
+        }
+        if (changes.isEmpty()) {
+            return ApiResult.ok();
+        }
+        String name = target.getDisplayName() == null ? userId : target.getDisplayName();
+        String summary = String.join("、", changes);
+        activityService.logConfig(id, me, "调整成员「" + name + "」的项目权限：" + summary);
+        audit.recordCurrent(id, "role_change", "member", userId, name, true,
+                "成员 " + name + " 的项目权限调整为：" + summary, request);
+        if (!me.equals(userId)) {
+            notificationEvents.notifySystem(userId, id, NotificationEventService.PROJECT_ACCESS,
+                    "项目可见范围已调整（" + changes.size() + " 个项目）",
+                    "你在空间「" + ws.getName() + "」中的项目权限已调整：" + summary,
+                    null, "member", userId);
+        }
+        return ApiResult.ok();
+    }
+
+    /** 审计展示名：取不到（已移出 / 查询失败）时回落到 userId，审计本身不能因此失败 */
+    private String memberName(String me, String workspaceId, String userId) {
+        try {
+            for (WorkspaceMember m : workspaceService.members(me, workspaceId)) {
+                if (userId.equals(m.getUserId())) {
+                    return m.getDisplayName() == null || m.getDisplayName().isEmpty() ? userId : m.getDisplayName();
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // fall through
+        }
+        return userId;
     }
 
     /** 角色展示名：通知里不出现 owner/admin 这类码值 */
@@ -267,6 +364,9 @@ public class WorkspaceController {
         }
         if (ProjectAccessService.ACCESS_READ.equals(access)) {
             return "只读";
+        }
+        if (ProjectAccessService.ACCESS_WRITE.equals(access)) {
+            return "可参与";
         }
         return "默认参与（可查看、可编辑）";
     }
@@ -302,6 +402,40 @@ public class WorkspaceController {
         public void setUserId(String userId) {
             this.userId = userId;
         }
+
+        public String getProjectId() {
+            return projectId;
+        }
+
+        public void setProjectId(String projectId) {
+            this.projectId = projectId;
+        }
+
+        public String getAccess() {
+            return access;
+        }
+
+        public void setAccess(String access) {
+            this.access = access;
+        }
+    }
+
+    /** 成员行「分配项目」：一次提交该成员在本空间全部项目的目标权限 */
+    public static class MemberGrantsRequest {
+        private List<MemberGrant> grants;
+
+        public List<MemberGrant> getGrants() {
+            return grants;
+        }
+
+        public void setGrants(List<MemberGrant> grants) {
+            this.grants = grants;
+        }
+    }
+
+    public static class MemberGrant {
+        private String projectId;
+        private String access;
 
         public String getProjectId() {
             return projectId;

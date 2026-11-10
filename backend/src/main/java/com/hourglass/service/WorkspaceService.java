@@ -18,6 +18,7 @@ import com.hourglass.mapper.ColumnTransitionMapper;
 import com.hourglass.mapper.WorkspacePriorityMapper;
 import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.InviteMapper;
+import com.hourglass.mapper.InviteProjectGrantMapper;
 import com.hourglass.mapper.ProjectMemberMapper;
 import com.hourglass.mapper.SavedViewMapper;
 import com.hourglass.mapper.TaskWatchMapper;
@@ -63,6 +64,7 @@ public class WorkspaceService {
     private final UserListPreferenceMapper userListPreferenceMapper;
     private final WorkActivityService workActivityService;
     private final InviteMapper inviteMapper;
+    private final InviteProjectGrantMapper inviteGrantMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final TaskWatchMapper taskWatchMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
@@ -84,6 +86,7 @@ public class WorkspaceService {
                             UserListPreferenceMapper userListPreferenceMapper,
                             WorkActivityService workActivityService,
                             InviteMapper inviteMapper,
+                            InviteProjectGrantMapper inviteGrantMapper,
                             ProjectMemberMapper projectMemberMapper,
                             TaskWatchMapper taskWatchMapper,
                             TaskCascade cascade,
@@ -102,6 +105,7 @@ public class WorkspaceService {
         this.userListPreferenceMapper = userListPreferenceMapper;
         this.workActivityService = workActivityService;
         this.inviteMapper = inviteMapper;
+        this.inviteGrantMapper = inviteGrantMapper;
         this.projectMemberMapper = projectMemberMapper;
         this.taskWatchMapper = taskWatchMapper;
         this.cascade = cascade;
@@ -243,7 +247,7 @@ public class WorkspaceService {
         ws.setType("shared");
         ws.setOwnerId(userId);
         workspaceMapper.insert(ws);
-        addMemberInternal(ws.getId(), userId, "owner");
+        addMemberInternal(ws.getId(), userId, "owner", ProjectAccessService.MODE_ALL);
         seedColumns(ws.getId());
         return workspaceMapper.selectById(ws.getId());
     }
@@ -261,7 +265,7 @@ public class WorkspaceService {
         ws.setType("personal");
         ws.setOwnerId(userId);
         workspaceMapper.insert(ws);
-        addMemberInternal(wsId, userId, "owner");
+        addMemberInternal(wsId, userId, "owner", ProjectAccessService.MODE_ALL);
         /* 历史异常删除可能只删了 workspace 行、留下列/模块（主键含 workspace_id），先清理再灌默认，避免启动补齐时主键冲突 */
         boardColumnMapper.deleteAllByWorkspace(wsId);
         transitionMapper.deleteAllByWorkspace(wsId);
@@ -337,6 +341,7 @@ public class WorkspaceService {
         memberMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
+        inviteGrantMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
         userMapper.resetLastWorkspaceForAll(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> {
@@ -393,7 +398,9 @@ public class WorkspaceService {
         if (memberMapper.selectMember(workspaceId, u.getId()) != null) {
             throw AppException.badRequest("该用户已在空间中");
         }
-        addMemberInternal(workspaceId, u.getId(), "member");
+        addMemberInternal(workspaceId, u.getId(), "member", ProjectAccessService.MODE_ASSIGNED);
+        /* 直接加人也遵循「默认不参与」：先落不可见种子，再由管理员分配 */
+        projectMemberMapper.seedAssignedNone(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, u.getId()));
     }
 
@@ -416,7 +423,9 @@ public class WorkspaceService {
         if (memberMapper.selectMember(workspaceId, userId) != null) {
             return;
         }
-        addMemberInternal(workspaceId, userId, "member");
+        addMemberInternal(workspaceId, userId, "member", ProjectAccessService.MODE_ASSIGNED);
+        /* 新成员默认不参与任何项目：先补齐全部项目的 none，邀请上预分配的 write/read 由调用方覆盖 */
+        projectMemberMapper.seedAssignedNone(workspaceId);
         /* 退出后再次通过邀请加入：清掉可能残留的旧视图，加入后立即可用 */
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, userId));
     }
@@ -447,16 +456,19 @@ public class WorkspaceService {
             }
         }
         memberMapper.updateRole(workspaceId, targetUserId, role);
-        /* 角色一变，旧的按项目配置就失去语义：管理员/查看者不看它，退回成员时也不该继承
-           （否则界面上看不到、行为上却仍在生效）。统一回到「默认全部可见可写」。 */
-        boolean grantsReset = !role.equals(target.getRole());
-        if (grantsReset) {
-            projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+        /* 角色变化不再清空按项目配置，也不改 project_access_mode：
+           管理员/查看者期间这些配置不参与判定（全量 / 全局只读），退回成员时原样恢复。
+           以前「退回成员即切到 all」会让按项目分配的新成员经一次升降级后看到全部项目。 */
+        boolean backToMember = ProjectAccessService.ROLE_MEMBER.equals(role) && !role.equals(target.getRole());
+        if (backToMember) {
+            /* 担任管理员/查看者期间新建的项目不会补种子（只对 member 补），这里补齐 none，
+               让按 access='none' 过滤的 SQL 与 Java 判定保持一致 */
+            projectMemberMapper.seedAssignedNone(workspaceId);
         }
         AppUser u = userMapper.selectById(targetUserId);
         activityService.logConfig(workspaceId, operatorId, "调整成员角色「"
                 + (u == null || u.getDisplayName() == null ? targetUserId : u.getDisplayName()) + "」→ " + role
-                + (grantsReset ? "（项目可见范围已重置）" : ""));
+                + (backToMember && ProjectAccessService.isAssigned(target) ? "（沿用此前分配的项目权限）" : ""));
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, targetUserId));
     }
 
@@ -534,14 +546,17 @@ public class WorkspaceService {
         if (boardColumnMapper.selectAll(workspaceId).isEmpty()) {
             seedColumns(workspaceId);
         }
+        /* 历史数据自检：assigned 成员缺失项目记录时补 none，避免列表与详情口径不一致 */
+        projectMemberMapper.seedAssignedNone(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
-    private void addMemberInternal(String workspaceId, String userId, String role) {
+    private void addMemberInternal(String workspaceId, String userId, String role, String projectAccessMode) {
         WorkspaceMember m = new WorkspaceMember();
         m.setWorkspaceId(workspaceId);
         m.setUserId(userId);
         m.setRole(role);
+        m.setProjectAccessMode(projectAccessMode);
         memberMapper.insert(m);
     }
 

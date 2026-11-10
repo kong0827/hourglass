@@ -1,6 +1,7 @@
 /* views/testcases · 测试用例：用例库、执行结果标记、失败一键转缺陷 */
 
 import { API } from "../core/api.js";
+import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
@@ -479,14 +480,31 @@ function fmtSize(n){
 }
 function evidenceHTML(a, writable){
   var isImg = a.contentType && a.contentType.indexOf("image/") === 0;
+  var canPrev = previewable(a.filename);
+  var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+  /* 与附件区一致：点击证据缩略图/文件名开弹框，表格开 Univer，其余仍走新标签 */
+  var openKey = canPrev ? ' data-run-att-prev="' + esc(a.id) + '"'
+    : (isSheet ? ' data-run-att-sheet="' + esc(a.id) + '"' : "");
+  var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+  var anchorTitle = esc(a.filename) + " · " + openTitle;
   var del = writable
     ? '<button class="icon-btn sm danger" type="button" data-run-att-del="' + esc(a.id) + '" title="删除证据" aria-label="删除证据">' + icon("trash", 13) + '</button>'
     : "";
   return '<span class="run-ev' + (isImg ? " is-img" : "") + '">'
     + (isImg
-      ? '<a href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '"><img src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" /></a>'
-      : '<a class="run-ev-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + '">' + icon("download", 13) + '<span>' + esc(cut(a.filename, 12)) + '</span></a>')
+      ? '<a href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + anchorTitle + '"' + openKey + '><img src="' + attThumbUrl(a.id) + '" alt="" loading="lazy" /></a>'
+      : '<a class="run-ev-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + anchorTitle + '"' + openKey + '>' + icon("clip", 13) + '<span>' + esc(cut(a.filename, 12)) + '</span></a>')
     + del + '</span>';
+}
+/* 证据附件按 id 找回对象：预览/表格弹层都需要文件名与大小 */
+function findRunAtt(attId){
+  for(var i = 0; i < runsList.length; i++){
+    var files = (runsList[i] && runsList[i].attachments) || [];
+    for(var j = 0; j < files.length; j++){
+      if(files[j].id === attId) return files[j];
+    }
+  }
+  return null;
 }
 function openRunsDialog(id, title){
   var c = caseById(id);
@@ -1480,6 +1498,23 @@ function renderPlanDetail(){
   }
   acts += '<button class="btn sm ghost" type="button" data-plan-csv>' + icon("download", 13) + ' 导出报告</button>';
   acts += '</div>';
+  var selBar = "";
+  if(editable && cs.length){
+    var noneN = 0, failedN = 0, blockedN = 0;
+    cs.forEach(function(c){
+      if(!c.result) noneN++;
+      else if(c.result === "failed") failedN++;
+      else if(c.result === "blocked") blockedN++;
+    });
+    selBar = '<div class="plan-selbar" data-plan-selbar>'
+      + '<label><input type="checkbox" class="cbx" data-plan-select-all aria-label="全选计划内用例" />全选</label>'
+      + '<button class="btn sm ghost" type="button" data-plan-pick-status="none" title="替换当前选择"' + (noneN ? "" : " disabled") + '>选未执行 (' + noneN + ')</button>'
+      + (failedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="failed" title="替换当前选择">选失败 (' + failedN + ')</button>' : "")
+      + (blockedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="blocked" title="替换当前选择">选阻塞 (' + blockedN + ')</button>' : "")
+      + '<button class="btn sm ghost" type="button" data-plan-clear' + (selCount ? "" : " disabled") + '>清除选择</button>'
+      + '<span class="plan-sel-count" data-plan-sel-count>已选 ' + selCount + ' / ' + cs.length + '</span>'
+      + '</div>';
+  }
   var rows = "";
   if(!cs.length){
     rows = UI.emptyState({
@@ -1511,7 +1546,31 @@ function renderPlanDetail(){
         + '</div>';
     }).join("");
   }
-  box.innerHTML = head + acts + '<div class="tc-list">' + rows + '</div>';
+  box.innerHTML = head + acts + selBar + '<div class="tc-list">' + rows + '</div>';
+  syncPlanSelUI();
+}
+/* 勾选状态与批量按钮、表头全选保持同步：所有变更都走这里收口 */
+function syncPlanSelUI(){
+  var box = $("tcPlans");
+  if(!box) return;
+  var rows = Array.prototype.slice.call(box.querySelectorAll("[data-pcase]"));
+  var n = 0;
+  rows.forEach(function(c){
+    c.checked = !!planSel[c.dataset.pcase];
+    if(c.checked) n++;
+  });
+  var all = box.querySelector("[data-plan-select-all]");
+  if(all){
+    all.checked = rows.length > 0 && n === rows.length;
+    all.indeterminate = n > 0 && n < rows.length;
+    all.disabled = !rows.length;
+  }
+  var cnt = box.querySelector("[data-plan-sel-count]");
+  if(cnt) cnt.textContent = "已选 " + n + " / " + rows.length;
+  var clr = box.querySelector("[data-plan-clear]");
+  if(clr) clr.disabled = n === 0;
+  var btn = box.querySelector("[data-plan-runs]");
+  if(btn) btn.textContent = "记录选中 " + n + " 条";
 }
 function planCaseIds(){
   return (planDetail && planDetail.cases || []).map(function(c){ return c.caseId; });
@@ -1870,6 +1929,19 @@ $("tcPlans").addEventListener("click", function(e){
   if((b = e.target.closest("[data-plan-del]"))){ deletePlan(b.dataset.planDel); return; }
   if((b = e.target.closest("[data-plan-status]"))){ planStatusTo(b.dataset.planStatus); return; }
   if((b = e.target.closest("[data-plan-pick]"))){ openPlanPick(); return; }
+  if((b = e.target.closest("[data-plan-pick-status]"))){
+    var st = b.dataset.planPickStatus;
+    planSel = {};
+    (planDetail && planDetail.cases || []).forEach(function(c){
+      var r = c.result || "";
+      if((st === "none" && !r) || (st === "failed" && r === "failed") || (st === "blocked" && r === "blocked")){
+        planSel[c.caseId] = true;
+      }
+    });
+    syncPlanSelUI();
+    return;
+  }
+  if(e.target.closest("[data-plan-clear]")){ planSel = {}; syncPlanSelUI(); return; }
   if((b = e.target.closest("[data-plan-runs]"))){ doPlanBatchRun(); return; }
   if((b = e.target.closest("[data-plan-csv]"))){ exportPlanCsv(); return; }
   if((b = e.target.closest("[data-pbatch]"))){
@@ -1891,15 +1963,18 @@ $("tcPlans").addEventListener("click", function(e){
   }
 });
 $("tcPlans").addEventListener("change", function(e){
+  if(e.target.closest("[data-plan-select-all]")){
+    var allOn = e.target.checked;
+    planSel = {};
+    if(allOn) (planDetail && planDetail.cases || []).forEach(function(c){ planSel[c.caseId] = true; });
+    syncPlanSelUI();
+    return;
+  }
   var c = e.target.closest("[data-pcase]");
   if(!c) return;
   planSel[c.dataset.pcase] = c.checked;
-  var btn = $("tcPlans").querySelector("[data-plan-runs]");
-  if(btn){
-    var n = 0;
-    for(var k in planSel) if(planSel[k]) n++;
-    btn.textContent = "记录选中 " + n + " 条";
-  }
+  if(!c.checked) delete planSel[c.dataset.pcase];
+  syncPlanSelUI();
 });
 $("btnSavePlan").addEventListener("click", savePlan);
 $("pName").addEventListener("input", function(){ $("fPlanName").classList.remove("invalid"); });
@@ -2006,6 +2081,24 @@ UI.setModalSubmit($("dlgCaseDefect"), function(){ if(!caseDefecting) doDefect();
 $("dlgCaseRunsX").addEventListener("click", function(){ closeRunsDialog(); });
 UI.setModalCloseGuard($("dlgCaseRuns"), function(){ closeRunsDialog(); });
 $("runsList").addEventListener("click", function(e){
+  var prev = e.target.closest("[data-run-att-prev]");
+  if(prev){
+    e.preventDefault();
+    var att = findRunAtt(prev.dataset.runAttPrev);
+    if(att) openAttPreview({ attachment: att });
+    return;
+  }
+  var sheet = e.target.closest("[data-run-att-sheet]");
+  if(sheet){
+    e.preventDefault();
+    var attSheet = findRunAtt(sheet.dataset.runAttSheet);
+    if(!attSheet) return;
+    /* 执行证据只读打开，避免从历史记录改写证据原文件 */
+    import("../core/sheet-viewer.js").then(function(m){
+      m.openSheet({ attachment: attSheet, canEdit: false });
+    }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+    return;
+  }
   var del = e.target.closest("[data-run-att-del]");
   if(del){
     var caseId = runsCaseId;

@@ -22,4 +22,13 @@ public final class CurrentUser {
     public static String id() {
         return get().getId();
     }
+
+    /** 公开接口用：已登录返回用户 ID，未登录返回 null（不抛 401） */
+    public static String idOrNull() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof LoginUser)) {
+            return null;
+        }
+        return ((LoginUser) auth.getPrincipal()).getId();
+    }
 }

@@ -281,6 +281,8 @@ function syncViewHash(name){
   if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
+  /* 分支状态深链：保留 ?status=&from=，否则 showView 会把来源与筛选条件一起抹掉 */
+  if(name === "branches" && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
   catch(e){ try{ window.location.hash = h; }catch(e2){ /* 完全不可用则忽略 */ } }
@@ -305,7 +307,7 @@ function refreshActiveView(opts){
   /* 看板在 SSE 流程里已由 refreshBoardPreserving 刷新，这里只在手动下拉刷新时兜底 */
   if(activeView === "board"){ if(opts && opts.manual) loadBoard({silent:true}); }
   else if(activeView === "calendar") loadCalendar({silent:true});
-  else if(activeView === "list") loadList({silent:true});
+  else if(activeView === "list") loadList({silent:true, keepLoaded:true});
   else if(activeView === "projects") loadReqs();
   else if(activeView === "mine") window.dispatchEvent(new CustomEvent("ds:refresh-mine"));
   else if(activeView === "branches") loadBranches(true).then(renderBranches);

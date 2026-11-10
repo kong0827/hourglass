@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
@@ -285,6 +286,175 @@ class ProjectAccessServiceTest {
                 org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void assignedMemberWithoutGrantSeesNothingAndCannotWrite() {
+        memberWithMode("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED);
+        when(grants.selectOne(WS, "R1", "U4")).thenReturn(null);
+
+        assertEquals(ProjectAccessService.ACCESS_NONE, service.effectiveAccess(WS, "R1",
+                rawMember("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED)));
+        assertFalse(service.canView(WS, "U4", "R1"));
+        assertFalse(service.canWrite(WS, "U4", "R1"));
+        assertEquals(404, assertThrows(AppException.class, () -> service.assertView(WS, "U4", "R1")).getCode());
+        assertEquals(404, assertThrows(AppException.class, () -> service.assertWrite(WS, "U4", "R1")).getCode());
+    }
+
+    @Test
+    void assignedMemberExplicitGrantWorksLikeOrdinaryMember() {
+        memberWithMode("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED);
+        when(grants.selectOne(WS, "R1", "U4"))
+                .thenReturn(grant("R1", "U4", ProjectAccessService.ACCESS_WRITE));
+        when(grants.selectOne(WS, "R2", "U4"))
+                .thenReturn(grant("R2", "U4", ProjectAccessService.ACCESS_READ));
+
+        assertTrue(service.canView(WS, "U4", "R1"));
+        assertTrue(service.canWrite(WS, "U4", "R1"));
+        assertTrue(service.canView(WS, "U4", "R2"));
+        assertFalse(service.canWrite(WS, "U4", "R2"));
+    }
+
+    @Test
+    void saveGrantOnAssignedMemberFallsBackToNoneInsteadOfRemoving() {
+        memberWithMode("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED);
+
+        assertEquals(ProjectAccessService.ACCESS_NONE, service.saveGrant(WS, "U4", "R1", "default"));
+
+        org.mockito.ArgumentCaptor<ProjectMember> saved =
+                org.mockito.ArgumentCaptor.forClass(ProjectMember.class);
+        verify(grants).upsert(saved.capture());
+        assertEquals(ProjectAccessService.ACCESS_NONE, saved.getValue().getAccess());
+        verify(grants, never()).deleteOne(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void saveGrantWritesExplicitWriteForAssignedMember() {
+        memberWithMode("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED);
+        assertEquals(ProjectAccessService.ACCESS_WRITE, service.saveGrant(WS, "U4", "R1", " WRITE "));
+
+        org.mockito.ArgumentCaptor<ProjectMember> saved =
+                org.mockito.ArgumentCaptor.forClass(ProjectMember.class);
+        verify(grants).upsert(saved.capture());
+        assertEquals(ProjectAccessService.ACCESS_WRITE, saved.getValue().getAccess());
+    }
+
+    @Test
+    void saveGrantDropsRedundantWriteRowForLegacyMember() {
+        memberWithMode("U3", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ALL);
+        assertEquals("", service.saveGrant(WS, "U3", "R1", "write"));
+        verify(grants).deleteOne(WS, "R1", "U3");
+        verify(grants, never()).upsert(any(ProjectMember.class));
+    }
+
+    @Test
+    void saveMemberGrantsReportsOnlyEffectiveChanges() {
+        WorkspaceMember legacy = rawMember("U3", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ALL);
+        when(members.selectMember(WS, "U3")).thenReturn(legacy);
+        when(grants.selectOne(WS, "R2", "U3"))
+                .thenReturn(grant("R2", "U3", ProjectAccessService.ACCESS_NONE));
+        Map<String, String> wanted = new java.util.LinkedHashMap<String, String>();
+        wanted.put("R1", "write");   /* 缺记录 = 可参与：不算变化 */
+        wanted.put("R2", "");        /* none → 默认参与：变化为 write */
+        wanted.put("R3", "read");    /* 可参与 → 只读：变化 */
+
+        Map<String, String> changed = service.saveMemberGrants(WS, legacy, wanted);
+
+        assertEquals(2, changed.size());
+        assertEquals(ProjectAccessService.ACCESS_WRITE, changed.get("R2"));
+        assertEquals(ProjectAccessService.ACCESS_READ, changed.get("R3"));
+        assertEquals(Arrays.asList("R2", "R3"), new java.util.ArrayList<String>(changed.keySet()));
+    }
+
+    @Test
+    void effectiveOfFollowsMemberMode() {
+        assertEquals(ProjectAccessService.ACCESS_WRITE, ProjectAccessService.effectiveOf("",
+                rawMember("U3", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ALL)));
+        assertEquals(ProjectAccessService.ACCESS_NONE, ProjectAccessService.effectiveOf("",
+                rawMember("U4", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED)));
+        assertEquals(ProjectAccessService.ACCESS_READ, ProjectAccessService.effectiveOf("read", null));
+    }
+
+    @Test
+    void seedAssignedNoneDelegatesToMapper() {
+        service.seedAssignedNone(WS);
+        verify(grants).seedAssignedNone(WS);
+    }
+
+    @Test
+    void assignedMemberMissingGrantIsMarkedReadOnlyInMyTasks() {
+        when(members.selectMember(WS, "U4"))
+                .thenReturn(rawMember("U4", ProjectAccessService.ROLE_MEMBER,
+                        ProjectAccessService.MODE_ASSIGNED));
+        com.hourglass.entity.Task hidden = new com.hourglass.entity.Task();
+        hidden.setWorkspaceId(WS);
+        hidden.setReqId("R1");
+        com.hourglass.entity.Task granted = new com.hourglass.entity.Task();
+        granted.setWorkspaceId(WS);
+        granted.setReqId("R2");
+        when(grants.selectByUser(WS, "U4"))
+                .thenReturn(Collections.singletonList(grant("R2", "U4", ProjectAccessService.ACCESS_WRITE)));
+
+        service.markWritable("U4", Arrays.asList(hidden, granted));
+
+        assertEquals("read", hidden.getAccess());
+        assertEquals("write", granted.getAccess());
+    }
+
+    @Test
+    void legacyMemberMissingGrantStaysWritableInMyTasks() {
+        when(members.selectMember(WS, "U3"))
+                .thenReturn(rawMember("U3", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ALL));
+        com.hourglass.entity.Task task = new com.hourglass.entity.Task();
+        task.setWorkspaceId(WS);
+        task.setReqId("R9");
+        when(grants.selectByUser(WS, "U3")).thenReturn(Collections.<ProjectMember>emptyList());
+
+        service.markWritable("U3", Collections.singletonList(task));
+
+        assertEquals("write", task.getAccess());
+    }
+
+    @Test
+    void filterVisibleMembersRequiresExplicitGrantForAssignedMembers() {
+        WorkspaceMember assigned = rawMember("U4", ProjectAccessService.ROLE_MEMBER,
+                ProjectAccessService.MODE_ASSIGNED);
+        WorkspaceMember legacy = rawMember("U3", ProjectAccessService.ROLE_MEMBER,
+                ProjectAccessService.MODE_ALL);
+        when(grants.selectByWorkspace(WS))
+                .thenReturn(Collections.singletonList(grant("R2", "U4", ProjectAccessService.ACCESS_WRITE)));
+
+        java.util.List<WorkspaceMember> visible = service.filterVisibleMembers(WS,
+                Arrays.asList(assigned, legacy), "R1");
+        assertEquals(Collections.singletonList("U3"),
+                Arrays.asList(visible.get(0).getUserId()));
+
+        java.util.List<WorkspaceMember> visibleR2 = service.filterVisibleMembers(WS,
+                Arrays.asList(assigned, legacy), "R2");
+        assertEquals(2, visibleR2.size());
+    }
+
+    @Test
+    void groupDigestHidesOnlyProjectsHiddenFromCurrentMembers() {
+        when(members.selectByWorkspace(WS)).thenReturn(Arrays.asList(
+                rawMember("U1", ProjectAccessService.ROLE_OWNER),
+                rawMember("U2", ProjectAccessService.ROLE_MEMBER, ProjectAccessService.MODE_ASSIGNED),
+                rawMember("U3", ProjectAccessService.ROLE_ADMIN, ProjectAccessService.MODE_ASSIGNED),
+                rawMember("U4", ProjectAccessService.ROLE_VIEWER, ProjectAccessService.MODE_ASSIGNED)));
+        when(grants.selectByWorkspace(WS)).thenReturn(Arrays.asList(
+                grant("R1", "U2", ProjectAccessService.ACCESS_NONE),
+                grant("R2", "U2", ProjectAccessService.ACCESS_WRITE),
+                /* 升为 admin / 降为 viewer 后保留的历史 none 行：当前全量可见，不能把项目挡出群摘要 */
+                grant("R2", "U3", ProjectAccessService.ACCESS_NONE),
+                grant("R3", "U4", ProjectAccessService.ACCESS_NONE),
+                /* 已离开空间的残留行同样不计入 */
+                grant("R4", "U9", ProjectAccessService.ACCESS_NONE)));
+
+        assertEquals(Collections.singleton("R1"), service.projectsHiddenFromAnyMember(WS));
+    }
+
+    private void memberWithMode(String userId, String role, String mode) {
+        when(members.selectMember(WS, userId)).thenReturn(rawMember(userId, role, mode));
+    }
+
     private void currentSnapshot(String projectId, String role, String access) {
         Map<String, Object> snapshot = null;
         if (role != null) {
@@ -297,10 +467,15 @@ class ProjectAccessServiceTest {
     }
 
     private WorkspaceMember rawMember(String userId, String role) {
+        return rawMember(userId, role, null);
+    }
+
+    private WorkspaceMember rawMember(String userId, String role, String mode) {
         WorkspaceMember m = new WorkspaceMember();
         m.setWorkspaceId(WS);
         m.setUserId(userId);
         m.setRole(role);
+        m.setProjectAccessMode(mode);
         return m;
     }
 

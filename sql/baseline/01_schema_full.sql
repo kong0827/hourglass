@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-10: full schema after migrations 01-65 (53 tables).
+-- Updated 2026-11-10: full schema after migrations 01-66 (54 tables).
 --
--- 完整结构与 sql/01-63 增量链等效；不包含历史业务数据回填。
+-- 完整结构与 sql/01-66 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -313,6 +313,20 @@ CREATE TABLE `invite` (
   KEY `idx_ws` (`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间邀请链接';
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `invite_project_grant`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `invite_project_grant` (
+  `invite_id` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邀请码',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
+  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '预分配权限：write/read',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`invite_id`,`project_id`),
+  KEY `idx_ipg_ws` (`workspace_id`),
+  KEY `idx_ipg_project` (`project_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邀请链接预分配的项目权限';
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `mail_delivery`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -357,7 +371,7 @@ CREATE TABLE `project_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员账号ID',
-  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/pm/dev/qa',
+  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/write（历史 pm/dev/qa 归一为默认参与）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`workspace_id`,`project_id`,`user_id`),
@@ -930,6 +944,7 @@ CREATE TABLE `workspace_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员用户ID',
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member' COMMENT '空间角色：owner/admin/member/viewer',
+  `project_access_mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'all' COMMENT '项目参与模式：all=默认参与；assigned=按项目分配',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
   PRIMARY KEY (`workspace_id`,`user_id`),
   KEY `idx_user` (`user_id`)

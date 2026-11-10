@@ -20,6 +20,12 @@ public interface ProjectMemberMapper {
 
     int upsert(ProjectMember member);
 
+    /**
+     * 为 assigned 成员补齐缺失项目的 none 种子行（不覆盖已有 write/read/none）。
+     * 幂等：只插入 project_member 中还没有记录的成员×项目组合。
+     */
+    int seedAssignedNone(@Param("workspaceId") String workspaceId);
+
     int deleteOne(@Param("workspaceId") String workspaceId,
                   @Param("projectId") String projectId,
                   @Param("userId") String userId);

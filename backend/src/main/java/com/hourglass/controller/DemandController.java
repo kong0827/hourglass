@@ -42,13 +42,17 @@ public class DemandController {
         this.docService = docService;
     }
 
-    /** 需求池看板首屏：每个状态一列，只下发前 limit 条 */
+    /** 需求池看板首屏：每个状态一列，只下发前 limit 条；搜索/优先级/类型/模块与列表同一口径 */
     @GetMapping("/api/demands/board")
     public ApiResult<DemandBoardResponse> board(@RequestParam(required = false) String reqId,
+                                                @RequestParam(required = false) String q,
+                                                @RequestParam(required = false) String pris,
+                                                @RequestParam(required = false) String kinds,
+                                                @RequestParam(required = false) String cats,
                                                 @RequestParam(required = false) Integer limit,
                                                 @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(demandService.board(ctx.getWsId(), ctx.getUserId(), reqId,
-                limit == null ? 0 : limit));
+        return ApiResult.ok(demandService.board(ctx.getWsId(), ctx.getUserId(),
+                query(reqId, null, q, pris, kinds, cats, null, null, 0, limit)));
     }
 
     /** 需求池分页：看板单列滚动加载 + 列表模式的筛选/排序/分页 */

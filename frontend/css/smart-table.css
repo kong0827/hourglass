@@ -78,6 +78,22 @@
 .pivot-tbl tbody tr:last-child{background:var(--surface-sunken);}
 /* 需求池列表：搜索框 + 表格内分组行 */
 #view-demands .dem-search{min-width:170px;max-width:230px;padding:5px 10px;font-size:12.5px;}
+/* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
+#view-demands .dem-board-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-bottom:10px;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+}
+#view-demands .demb-search{
+  flex:1 1 260px;min-width:180px;max-width:420px;
+  padding:5px 10px;font-size:12.5px;
+}
+#view-demands .demb-clear{min-height:28px;}
+#view-demands .demb-spacer{flex:1 1 auto;}
+#view-demands .demb-match{
+  font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#view-demands .demb-col-empty{padding:10px 2px;}
 #view-demands .dem-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 #view-demands .dem-group-row > td{padding:6px 10px;}
 #view-demands .dem-group-toggle{

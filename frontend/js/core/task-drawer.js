@@ -55,6 +55,9 @@ function formSnapshot(){
     regression: (iRegression && iRegression.value) || "",
     prog: formProgressValue(),
     note: (iNote.value || "").trim(),
+    /* 评论草稿与待上传附件也纳入基线：关闭/切页前不能静默丢掉 */
+    comment: (iComment && iComment.value || "").trim(),
+    commentFiles: pendingCommentFiles.map(function(f){ return f.name + "\u0001" + f.size; }).join("\u0001"),
     recur: rt.formRecur || "",
     remind: (iRemind && iRemind.value) || "",
     remindTarget: (iRemindTarget && iRemindTarget.value) || "owner",
@@ -76,6 +79,37 @@ function formSnapshot(){
   var bsel = $("iBranch");
   if(formReady(bsel)) snap.branch = bsel.value || "";
   return snap;
+}
+/* 只比较表单字段：重新加载会用服务器内容覆盖表单，但评论草稿会按任务保留 */
+function formFieldsDirty(){
+  if(!formBase) return false;
+  var cur = formSnapshot();
+  for(var k in formBase){
+    if(k === "comment" || k === "commentFiles") continue;
+    if(cur[k] === undefined) continue;
+    if(formBase[k] !== cur[k]) return true;
+  }
+  return false;
+}
+/* 409 冲突：列出服务器相对本次打开时已变化的字段，供用户选择重载或覆盖 */
+var CONFLICT_FIELDS = [
+  ["title", "标题"], ["description", "描述"], ["priority", "优先级"], ["categoryId", "模块"],
+  ["owner", "负责人"], ["boardColumn", "状态"], ["startDate", "开始日期"], ["dueDate", "截止日期"],
+  ["reqId", "所属项目"], ["itemType", "类型"], ["severity", "严重度"], ["environment", "环境"],
+  ["progress", "进度"], ["estimateMinutes", "预计耗时"], ["note", "备注"], ["branchId", "分支"],
+  ["epicId", "史诗"], ["demandId", "需求"], ["versionIds", "版本"], ["tags", "标签"]
+];
+function conflictValue(v){
+  if(v === null || v === undefined) return "";
+  if(Object.prototype.toString.call(v) === "[object Array]") return v.slice().sort().join("\u0001");
+  return String(v);
+}
+function conflictChangedLabels(before, after){
+  var labels = [];
+  CONFLICT_FIELDS.forEach(function(pair){
+    if(conflictValue(before && before[pair[0]]) !== conflictValue(after && after[pair[0]])) labels.push(pair[1]);
+  });
+  return labels;
 }
 function resetFormBaseline(){
   formBase = formSnapshot();
@@ -867,6 +901,13 @@ function applyDrawerReadOnly(readOnly){
   var factStatus = $("factStatus");
   if(factStatus) factStatus.disabled = !!readOnly;
   if(reqDocPickerBtn) reqDocPickerBtn.disabled = !!readOnly;
+  /* 就地新建分支属于写操作：只读项目里连同入口一起收起，提示也不能再引导去点它 */
+  var branchNewBtn = $("iBranchNew");
+  if(branchNewBtn) branchNewBtn.hidden = !!readOnly;
+  var branchHint = $("iBranchHint");
+  if(branchHint) branchHint.textContent = readOnly
+    ? "当前项目为只读项目，不能新建分支；可查看已有分支。"
+    : "找不到合适的分支？点「新建分支」就地创建，建好自动选中，保存后生效。";
   if(btnAttach) btnAttach.hidden = !!readOnly;
   if(btnSaveTask) btnSaveTask.hidden = !!readOnly;
   /* 新建任务保存后仍走“保存并关闭”：留在新建态再保存会重复创建 */
@@ -1151,6 +1192,8 @@ function loadWatchStatus(taskId){
 function openTaskDrawer(colId, task, defaults){
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
+  /* 切任务前先收好上一条未发送的评论草稿 */
+  stashCommentDraft(lastCommentDraftId || rt.editingId);
   rt.taskFormSeq++;
   setSaveLoading(false); // 新抽屉独立管理 loading，后续再应用当前表单的只读权限
   demandTargetCache = {}; demandTargetPending = {};
@@ -1242,7 +1285,7 @@ function openTaskDrawer(colId, task, defaults){
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
-    clearPendingCommentFiles();
+    restoreCommentDraft(task.id);
     loadComments(task.id);
     loadWatchStatus(task.id);
     loadTimeline(task.id);
@@ -1308,7 +1351,7 @@ function openTaskDrawer(colId, task, defaults){
     var drawerMoreNew = $("drawerMore");
     if(drawerMoreNew) drawerMoreNew.open = false;
     commentsCache = [];
-    clearPendingCommentFiles();
+    restoreCommentDraft(null);
     loadWatchStatus(null);
     if(commentList) commentList.innerHTML = "";
     if(commentCount) commentCount.textContent = "";
@@ -1370,12 +1413,12 @@ window.addEventListener("ds:before-route", function(e){
   var to = e.detail && e.detail.to;
   UI.showConfirm({
     title:"离开当前工作项？",
-    msg:"表单有未保存的修改，切换页面后会丢失。",
+    msg:"表单、评论草稿或待上传附件尚未保存，切换页面后会丢失。",
     okText:"放弃并离开",
     cancelText:"继续编辑"
   }).then(function(ok){
     if(!ok) return;
-    forceCloseTaskDrawer();
+    forceCloseTaskDrawer({discardCommentDraft:true});
     window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:to } }));
   });
 });
@@ -1384,15 +1427,20 @@ function tryCloseTaskDrawer(){
   if(rt.formDirty){
     UI.showConfirm({
       title:"放弃未保存的改动？",
-      msg:"当前表单有未保存的修改，关闭后将会丢失。",
+      msg:"当前表单、评论草稿或待上传附件有未保存的内容，关闭后将会丢失。",
       okText:"放弃改动",
       cancelText:"继续编辑"
-    }).then(function(ok){ if(ok) forceCloseTaskDrawer(); });
+    }).then(function(ok){ if(ok) forceCloseTaskDrawer({discardCommentDraft:true}); });
     return;
   }
   forceCloseTaskDrawer();
 }
-function forceCloseTaskDrawer(){
+function forceCloseTaskDrawer(opts){
+  opts = opts || {};
+  var closingId = lastCommentDraftId || rt.editingId;
+  if(opts.discardCommentDraft) discardCommentDraft(closingId);
+  else stashCommentDraft(closingId);
+  lastCommentDraftId = null;
   rt.taskFormSeq++;
   setSaveLoading(false);
   var opener = rt.drawerOpener;
@@ -1496,7 +1544,8 @@ function inTaskAuxSection(target){
 taskForm.addEventListener("input", function(e){
   if(e.target === iProg) return;
   if(formSettling(e.target)) return; // 异步下拉回填期间的伪 input 不算用户改动
-  if(!inTaskAuxSection(e.target)) rt.formDirty = true;
+  /* 评论草稿单独计入未保存内容；检查清单/附件区仍按各自的即时操作处理 */
+  if(e.target === iComment || !inTaskAuxSection(e.target)) rt.formDirty = true;
   if(e.target === iTitle){
     fTitle.classList.remove("invalid");
     syncTitleCount();
@@ -1702,7 +1751,13 @@ function renderComments(list){
         '</span>' +
         (c.content ? '<span class="ci-body">' + esc(c.content) + '</span>' : '') +
         (files.length ? '<span class="ci-files">' + files.map(function(a){
-          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="预览 / 下载">' +
+          /* 与附件区一致：可预览的开弹框，表格开 Univer，其余仍走新标签 */
+          var canPrev = previewable(a.filename);
+          var isSheet = /\.(xlsx|xls)$/i.test(a.filename || "");
+          var openKey = canPrev ? ' data-att-prev="' + esc(a.id) + '"'
+            : (isSheet ? ' data-att-sheet="' + esc(a.id) + '"' : "");
+          var openTitle = canPrev ? "在线预览" : (isSheet ? "打开表格" : "预览 / 下载");
+          return '<a class="ci-file" href="' + attUrl(a.id) + '" target="_blank" rel="noopener" title="' + openTitle + '"' + openKey + '>' +
             icon("clip", 12) +
             '<span class="cf-name">' + esc(a.filename) + '</span>' +
             '<span class="cf-size">' + esc(fmtSize(a.size)) + '</span>' +
@@ -1712,11 +1767,42 @@ function renderComments(list){
     '</div>';
   }).join("");
 }
+/* 评论附件按 id 找回对象：预览/表格弹层都需要文件名与大小 */
+function findCommentAtt(attId){
+  for(var i = 0; i < commentsCache.length; i++){
+    var files = (commentsCache[i] && commentsCache[i].attachments) || [];
+    for(var j = 0; j < files.length; j++){
+      if(files[j].id === attId) return files[j];
+    }
+  }
+  return null;
+}
 /* ==================== 评论附件 ==================== */
 var pendingCommentFiles = [];
+/* 按任务保留未发送的评论草稿：切任务、保存表单或临时关闭抽屉后还能找回 */
+var commentDrafts = Object.create(null);
+var lastCommentDraftId = null;
 var COMMENT_FILE_RE = /\.(jpe?g|png|gif|webp|pdf|txt|md|zip|docx?|xlsx?|pptx?)$/i;
 var COMMENT_FILE_MAX = 10 * 1024 * 1024;
 var COMMENT_FILE_MAX_COUNT = 5;
+
+function stashCommentDraft(taskId){
+  if(!taskId) return;
+  var text = iComment ? iComment.value : "";
+  if(!text.trim() && !pendingCommentFiles.length){ delete commentDrafts[taskId]; return; }
+  commentDrafts[taskId] = { text:text, files:pendingCommentFiles.slice() };
+}
+function restoreCommentDraft(taskId){
+  var draft = taskId ? commentDrafts[taskId] : null;
+  if(iComment) iComment.value = draft ? draft.text : "";
+  pendingCommentFiles = draft ? draft.files.slice() : [];
+  renderPendingCommentFiles();
+  lastCommentDraftId = taskId || null;
+}
+function discardCommentDraft(taskId){
+  if(taskId) delete commentDrafts[taskId];
+  if(lastCommentDraftId === taskId) lastCommentDraftId = null;
+}
 
 function renderPendingCommentFiles(){
   if(!commentAttachChips || !commentAttachTip) return;
@@ -1741,6 +1827,7 @@ function pickCommentFiles(){
   if(iCommentFiles) iCommentFiles.click();
 }
 function addCommentFiles(picked){
+  var before = pendingCommentFiles.length;
   picked.forEach(function(f){
     if(!f.size){ toast("「" + f.name + "」是空文件，已跳过", "warn"); return; }
     if(f.size > COMMENT_FILE_MAX){ toast("「" + f.name + "」超过 10MB，已跳过", "warn"); return; }
@@ -1758,6 +1845,7 @@ function addCommentFiles(picked){
     pendingCommentFiles.push(f);
   });
   renderPendingCommentFiles();
+  if(pendingCommentFiles.length !== before) rt.formDirty = true;
 }
 /* 评论先落库，再逐个上传附件；单个失败不影响其它文件，最后汇总提示 */
 function uploadCommentFiles(commentId, files){
@@ -1819,6 +1907,10 @@ function sendComment(){
     closeMention();
     mentionPicked = [];
     clearPendingCommentFiles();
+    discardCommentDraft(id);
+    /* 评论已发表：把这部分从脏基线里移走，不影响表单其他未保存字段 */
+    if(formBase){ formBase.comment = ""; formBase.commentFiles = ""; }
+    syncDrawerDirty();
     loadComments(id);
   }).catch(function(ex){
     rt.commentSending = false;
@@ -1841,6 +1933,7 @@ if(commentAttachChips) commentAttachChips.addEventListener("click", function(e){
   if(!btn) return;
   pendingCommentFiles.splice(Number(btn.dataset.commentFileRemove), 1);
   renderPendingCommentFiles();
+  rt.formDirty = true;
 });
 
 /* ==================== 评论 @提及 ==================== */
@@ -2034,6 +2127,24 @@ if(commentMention){
 if(commentList){
   commentList.addEventListener("click", function(e){
     if(e.target.closest("[data-retry-comments]") && rt.editingId){ loadComments(rt.editingId); return; }
+    var prev = e.target.closest("[data-att-prev]");
+    if(prev){
+      e.preventDefault();
+      var att = findCommentAtt(prev.dataset.attPrev);
+      if(att) openAttPreview({ attachment: att });
+      return;
+    }
+    var sheet = e.target.closest("[data-att-sheet]");
+    if(sheet){
+      e.preventDefault();
+      var attSheet = findCommentAtt(sheet.dataset.attSheet);
+      if(!attSheet) return;
+      /* 评论附件只读打开，避免从讨论区改写附件内容 */
+      import("./sheet-viewer.js").then(function(m){
+        m.openSheet({ attachment: attSheet, canEdit: false });
+      }).catch(function(ex){ toast(ex && ex.message ? ex.message : "打开表格失败", "bad"); });
+      return;
+    }
     var del = e.target.closest("[data-comment-del]");
     if(!del || !rt.editingId) return;
     if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
@@ -2050,15 +2161,25 @@ function showDrawerNotice(text){
   drawerNotice.hidden = false;
 }
 if(drawerNoticeReload){
-  drawerNoticeReload.addEventListener("click", function(){
+  function reloadDrawerFromServer(){
     if(!rt.editingId) return;
     var id = rt.editingId;
     drawerNotice.hidden = true;
     API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
       if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return; }
       taskCacheExtra[t.id] = t;
+      /* 评论草稿按任务保存，重新加载表单不会丢掉未发送的评论 */
       openTaskDrawer(null, t);
     }).catch(function(){ toast("刷新失败，请稍后重试", "bad"); });
+  }
+  drawerNoticeReload.addEventListener("click", function(){
+    if(!formFieldsDirty()){ reloadDrawerFromServer(); return; }
+    UI.showConfirm({
+      title:"重新加载最新版本？",
+      msg:"表单有未保存的修改，重新加载会用服务器最新内容覆盖表单；评论草稿会按任务保留。",
+      okText:"放弃表单修改并刷新",
+      cancelText:"继续编辑"
+    }).then(function(ok){ if(ok) reloadDrawerFromServer(); });
   });
 }
 iTags.addEventListener("keydown", function(e){
@@ -2287,6 +2408,50 @@ taskForm.addEventListener("submit", function(e){
     return false;
   })();
   var retried = false;
+  var conflictOverwriteTried = false;
+  /* 409：先读服务器最新版本，展示变化字段；重载或明确覆盖都由用户决定 */
+  function handleSaveConflict(){
+    API.get("/api/task/" + encodeURIComponent(editId)).then(function(fresh){
+      if(seq !== rt.taskFormSeq) return;
+      if(!fresh){ setSaveLoading(false); toast("保存冲突，且无法读取最新版本；请关闭抽屉后重新打开", "bad"); return; }
+      var labels = conflictChangedLabels(current, fresh);
+      var changedText = labels.length
+        ? ("服务器上已更新：" + labels.slice(0, 6).join("、") + (labels.length > 6 ? " 等" : "") + "。")
+        : "服务器上的内容已变化。";
+      UI.showConfirm({
+        title:"工作项已被他人修改",
+        msg:esc(changedText) + "重新加载会放弃你当前的修改；也可以选择用当前表单覆盖服务器最新版本。",
+        okText:"重新加载最新版本",
+        cancelText:"用我的修改覆盖",
+        danger:false
+      }).then(function(reload){
+        if(reload){
+          taskCacheExtra[fresh.id] = fresh;
+          openTaskDrawer(null, fresh);
+          return;
+        }
+        return UI.showConfirm({
+          title:"覆盖服务器最新版本？",
+          msg:"这会用当前表单覆盖他人刚刚保存的内容。请确认你已核对差异。",
+          okText:"覆盖保存",
+          cancelText:"继续编辑"
+        }).then(function(force){
+          if(!force || seq !== rt.taskFormSeq) return;
+          if(formRev !== revAtSubmit){ toast("表单已继续变化，请重新保存", "warn"); return; }
+          if(conflictOverwriteTried){ toast("仍与其他修改冲突，请重新加载最新版本", "bad"); return; }
+          conflictOverwriteTried = true;
+          payload.oldUpdatedAt = fresh.updatedAt || null;
+          taskCacheExtra[editId] = Object.assign({}, taskCacheExtra[editId] || fresh, { updatedAt:fresh.updatedAt });
+          setSaveLoading(true);
+          saveWith();
+        });
+      });
+    }).catch(function(ex){
+      if(seq !== rt.taskFormSeq) return;
+      setSaveLoading(false);
+      toast("保存冲突，且无法读取最新版本：" + (ex.message || "请稍后重试"), "bad");
+    });
+  }
   function onSaved(nt){
     if(seq === rt.taskFormSeq){ // 只有当前抽屉可修改 loading 和表单；旧成功响应仍刷新视图缓存
       setSaveLoading(false);
@@ -2360,6 +2525,7 @@ taskForm.addEventListener("submit", function(e){
         return;
       }
       setSaveLoading(false);
+      if(ex.code === 409 && wasEdit){ handleSaveConflict(); return; }
       toast(ex.message || "保存失败", "bad");
     });
   }
@@ -2432,7 +2598,7 @@ function deleteTask(id){
       t.deletedAt = t.deletedAt || new Date().toISOString();
       delete taskCacheExtra[id];
       delete rt.listCache[id];
-      if(rt.editingId === id) forceCloseTaskDrawer();
+      if(rt.editingId === id) forceCloseTaskDrawer({discardCommentDraft:true});
       loadBoard({animate:false});
       loadReqs();
       refreshCalendarIfOpen();

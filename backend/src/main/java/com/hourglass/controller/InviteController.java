@@ -2,12 +2,14 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.InviteCreateRequest;
 import com.hourglass.entity.Invite;
 import com.hourglass.service.InviteService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,13 +29,15 @@ public class InviteController {
         this.inviteService = inviteService;
     }
 
-    /** 生成邀请链接（仅空间主，7 天有效） */
+    /** 生成邀请链接（空间主 / 管理员，7 天有效）；可选附带项目预分配 */
     @PostMapping("/api/workspaces/{id}/invites")
-    public ApiResult<Map<String, Object>> create(@PathVariable String id) {
-        return ApiResult.ok(inviteService.create(CurrentUser.id(), id));
+    public ApiResult<Map<String, Object>> create(
+            @PathVariable String id,
+            @RequestBody(required = false) InviteCreateRequest req) {
+        return ApiResult.ok(inviteService.create(CurrentUser.id(), id, req));
     }
 
-    /** 当前空间的有效邀请列表（仅空间主） */
+    /** 当前空间的有效邀请列表（空间主 / 管理员） */
     @GetMapping("/api/workspaces/{id}/invites")
     public ApiResult<com.hourglass.dto.PageResult<Invite>> list(
             @PathVariable String id,
@@ -43,7 +47,7 @@ public class InviteController {
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 
-    /** 撤销邀请（仅空间主） */
+    /** 撤销邀请（空间主 / 管理员） */
     @DeleteMapping("/api/workspaces/{id}/invites/{inviteId}")
     public ApiResult<Void> revoke(@PathVariable String id, @PathVariable String inviteId) {
         inviteService.revoke(CurrentUser.id(), id, inviteId);
@@ -53,7 +57,7 @@ public class InviteController {
     /** 邀请信息（公开） */
     @GetMapping("/api/invite/{code}")
     public ApiResult<Map<String, Object>> info(@PathVariable String code) {
-        return ApiResult.ok(inviteService.info(code));
+        return ApiResult.ok(inviteService.info(code, CurrentUser.idOrNull()));
     }
 
     /** 已有账号加入空间（需登录） */

@@ -7,10 +7,12 @@ import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.ProjectMemberMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,9 +28,14 @@ public class ProjectAccessService {
 
     public static final String ACCESS_NONE = "none";
     public static final String ACCESS_READ = "read";
+    public static final String ACCESS_WRITE = "write";
     public static final String ACCESS_PM = "pm";
     public static final String ACCESS_DEV = "dev";
     public static final String ACCESS_QA = "qa";
+
+    /** all=默认参与（没有记录即可见，存量口径）；assigned=按项目分配（未显式授权即不可见） */
+    public static final String MODE_ALL = "all";
+    public static final String MODE_ASSIGNED = "assigned";
 
     public static final String ROLE_OWNER = "owner";
     public static final String ROLE_ADMIN = "admin";
@@ -41,6 +48,7 @@ public class ProjectAccessService {
     static {
         ACCESS_VALUES.add(ACCESS_NONE);
         ACCESS_VALUES.add(ACCESS_READ);
+        ACCESS_VALUES.add(ACCESS_WRITE);
     }
 
     private final ProjectMemberMapper projectMemberMapper;
@@ -89,32 +97,53 @@ public class ProjectAccessService {
         return pm == null ? null : pm.getAccess();
     }
 
+    public static boolean isAssigned(WorkspaceMember member) {
+        return member != null && MODE_ASSIGNED.equals(member.getProjectAccessMode());
+    }
+
+    /**
+     * 成员对某项目的有效权限：
+     * 显式 write/read/none 优先；没有记录时，assigned 成员默认 none，其余（存量 all）默认 write。
+     */
+    public String effectiveAccess(String workspaceId, String projectId, WorkspaceMember member) {
+        if (member == null || projectId == null) {
+            return ACCESS_WRITE;
+        }
+        String access = normalizeAccess(configuredAccess(workspaceId, projectId, member.getUserId()));
+        if (!access.isEmpty()) {
+            return access;
+        }
+        return isAssigned(member) ? ACCESS_NONE : ACCESS_WRITE;
+    }
+
     public boolean canView(String workspaceId, String userId, String projectId) {
         if (userId == null) {
             return true;
         }
-        String role = roleOf(workspaceId, userId);
-        if (role == null) {
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        if (member == null) {
             /* 非空间成员一律不可见，避免调用方漏掉成员校验时默认放行 */
             return false;
         }
         if (projectId == null) {
             return true;
         }
+        String role = member.getRole();
         if (isPrivileged(role) || isViewer(role)) {
             return true;
         }
-        return !ACCESS_NONE.equals(configuredAccess(workspaceId, projectId, userId));
+        return !ACCESS_NONE.equals(effectiveAccess(workspaceId, projectId, member));
     }
 
     public boolean canWrite(String workspaceId, String userId, String projectId) {
         if (userId == null) {
             return true;
         }
-        String role = roleOf(workspaceId, userId);
-        if (role == null) {
+        WorkspaceMember member = memberMapper.selectMember(workspaceId, userId);
+        if (member == null) {
             return false;
         }
+        String role = member.getRole();
         if (projectId == null) {
             // 未归类到项目的任务不受项目级范围限制；viewer 仍全局只读
             return !isViewer(role);
@@ -125,8 +154,7 @@ public class ProjectAccessService {
         if (isPrivileged(role)) {
             return true;
         }
-        String access = configuredAccess(workspaceId, projectId, userId);
-        return !ACCESS_NONE.equals(access) && !ACCESS_READ.equals(access);
+        return ACCESS_WRITE.equals(effectiveAccess(workspaceId, projectId, member));
     }
 
     /** 读校验：不可见按"不存在"处理，避免泄露项目是否存在 */
@@ -167,6 +195,11 @@ public class ProjectAccessService {
         }
         if (projectId != null) {
             if (ACCESS_NONE.equals(snapshot.get("access"))) {
+                throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
+            }
+            /* assigned 成员没有显式授权时同样按不可见处理，不能靠「没记录」默认放行 */
+            if (MODE_ASSIGNED.equals(snapshot.get("project_access_mode"))
+                    && snapshot.get("access") == null) {
                 throw AppException.notFound("项目不存在或你没有访问权限：" + projectId);
             }
             if (ACCESS_READ.equals(snapshot.get("access"))) {
@@ -234,18 +267,18 @@ public class ProjectAccessService {
      * 避免逐条任务查库。结果写入 Task.access = write/read，与 canWrite 同口径。
      */
     public void markWritable(String userId, List<Task> tasks) {
-        Map<String, String> roles = new HashMap<String, String>();
+        Map<String, WorkspaceMember> roles = new HashMap<String, WorkspaceMember>();
         Map<String, Map<String, String>> grants = new HashMap<String, Map<String, String>>();
         for (Task t : tasks) {
             String wsId = t.getWorkspaceId();
-            String role;
+            WorkspaceMember member;
             if (roles.containsKey(wsId)) {
-                role = roles.get(wsId);
+                member = roles.get(wsId);
             } else {
-                String r = roleOf(wsId, userId);
-                role = r == null ? "" : r;
-                roles.put(wsId, role);
+                member = roleOfMember(wsId, userId);
+                roles.put(wsId, member);
             }
+            String role = member == null || member.getRole() == null ? "" : member.getRole();
             boolean writable;
             if (role.isEmpty() || isViewer(role)) {
                 writable = false;
@@ -258,10 +291,19 @@ public class ProjectAccessService {
                     grants.put(wsId, g);
                 }
                 String access = g.get(t.getReqId());
-                writable = !ACCESS_READ.equals(access) && !ACCESS_NONE.equals(access);
+                if (access == null) {
+                    /* assigned 成员缺记录即不可见；存量 all 成员缺记录默认可参与 */
+                    writable = !isAssigned(member);
+                } else {
+                    writable = !ACCESS_READ.equals(access) && !ACCESS_NONE.equals(access);
+                }
             }
             t.setAccess(writable ? "write" : "read");
         }
+    }
+
+    private WorkspaceMember roleOfMember(String workspaceId, String userId) {
+        return memberMapper.selectMember(workspaceId, userId);
     }
 
     /** 该成员被显式设为"不可见"的项目集合（owner/admin/viewer 恒为空） */
@@ -290,15 +332,14 @@ public class ProjectAccessService {
             return visible;
         }
         Map<String, Set<String>> hidden = new HashMap<String, Set<String>>();
+        Map<String, Set<String>> explicitlyVisible = new HashMap<String, Set<String>>();
         if (projectId != null) {
             for (ProjectMember pm : projectMemberMapper.selectByWorkspace(workspaceId)) {
-                if (!ACCESS_NONE.equals(pm.getAccess())) {
-                    continue;
-                }
-                Set<String> projects = hidden.get(pm.getUserId());
+                Map<String, Set<String>> target = ACCESS_NONE.equals(pm.getAccess()) ? hidden : explicitlyVisible;
+                Set<String> projects = target.get(pm.getUserId());
                 if (projects == null) {
                     projects = new HashSet<String>();
-                    hidden.put(pm.getUserId(), projects);
+                    target.put(pm.getUserId(), projects);
                 }
                 projects.add(pm.getProjectId());
             }
@@ -313,9 +354,17 @@ public class ProjectAccessService {
                 continue;
             }
             Set<String> projects = hidden.get(userId);
-            if (projects == null || !projects.contains(projectId)) {
-                visible.add(m);
+            if (projects != null && projects.contains(projectId)) {
+                continue;
             }
+            /* assigned 成员只有在项目上有显式 write/read 才算可见；缺记录不能默认参与 */
+            if (isAssigned(m)) {
+                Set<String> granted = explicitlyVisible.get(userId);
+                if (granted == null || !granted.contains(projectId)) {
+                    continue;
+                }
+            }
+            visible.add(m);
         }
         return visible;
     }
@@ -324,11 +373,23 @@ public class ProjectAccessService {
         return projectMemberMapper.selectByWorkspace(workspaceId);
     }
 
-    /** 空间群机器人摘要用：只要某项目对任一成员显式 none，就不进入群消息，避免成员级隐藏内容外泄 */
+    /**
+     * 空间群机器人摘要用：只要某项目对任一 member 显式 none，就不进入群消息，避免成员级隐藏内容外泄。
+     * 角色调整会保留项目授权，所以 admin/viewer 名下可能残留 none 行；它们当前全量可见，不应参与隐藏。
+     */
     public Set<String> projectsHiddenFromAnyMember(String workspaceId) {
         Set<String> hidden = new HashSet<String>();
+        Set<String> members = new HashSet<String>();
+        for (WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
+            if (ROLE_MEMBER.equals(m.getRole())) {
+                members.add(m.getUserId());
+            }
+        }
+        if (members.isEmpty()) {
+            return hidden;
+        }
         for (ProjectMember pm : projectMemberMapper.selectByWorkspace(workspaceId)) {
-            if (ACCESS_NONE.equals(pm.getAccess())) {
+            if (ACCESS_NONE.equals(pm.getAccess()) && members.contains(pm.getUserId())) {
                 hidden.add(pm.getProjectId());
             }
         }
@@ -349,27 +410,79 @@ public class ProjectAccessService {
     }
 
     /**
-     * 保存单个单元格。归一化后为空表示删除记录，回到默认参与。
+     * 保存单个单元格。归一化后为空表示「未指定」：
+     * assigned 成员落 none（默认不可见），其余成员删除记录回到默认参与。
      * 历史弹窗可能仍提交 pm/dev/qa，一律收敛为默认参与。
+     *
+     * @return 实际生效的权限值；空串表示已删除记录（默认参与）
      */
-    public void saveGrant(String workspaceId, String userId, String projectId, String access) {
+    public String saveGrant(String workspaceId, String userId, String projectId, String access) {
         if (projectId == null) {
             throw AppException.badRequest("请选择项目");
         }
         String value = normalizeAccess(access);
-        if (value.isEmpty()) {
-            projectMemberMapper.deleteOne(workspaceId, projectId, userId);
-            return;
-        }
-        if (!ACCESS_VALUES.contains(value)) {
+        if (!value.isEmpty() && !ACCESS_VALUES.contains(value)) {
             throw AppException.badRequest("可见范围取值不合法：" + access);
         }
+        WorkspaceMember target = memberMapper.selectMember(workspaceId, userId);
+        boolean assigned = isAssigned(target);
+        if (value.isEmpty()) {
+            value = assigned ? ACCESS_NONE : "";
+        } else if (ACCESS_WRITE.equals(value) && !assigned) {
+            /* 存量成员缺记录即可参与，显式 write 是冗余行：删掉保持「只存例外」 */
+            value = "";
+        }
+        if (value.isEmpty()) {
+            projectMemberMapper.deleteOne(workspaceId, projectId, userId);
+            return "";
+        }
+        upsertGrant(workspaceId, userId, projectId, value);
+        return value;
+    }
+
+    /** saveGrant 的返回值换算成有效权限：空串按成员模式回落 */
+    public static String effectiveOf(String saved, WorkspaceMember member) {
+        String value = normalizeAccess(saved);
+        if (!value.isEmpty()) {
+            return value;
+        }
+        return isAssigned(member) ? ACCESS_NONE : ACCESS_WRITE;
+    }
+
+    /**
+     * 批量保存某成员在多个项目上的权限，整批在一个事务内：任一项失败全部回滚，
+     * 不会出现「前几个项目已改、后几个没改」的半保存状态。
+     *
+     * @param wanted projectId → 已归一化的提交值（write/read/none/空串）
+     * @return 实际发生变化的 projectId → 变化后的有效权限（write/read/none），保持提交顺序
+     */
+    @Transactional
+    public Map<String, String> saveMemberGrants(String workspaceId, WorkspaceMember target,
+                                                Map<String, String> wanted) {
+        Map<String, String> changed = new LinkedHashMap<String, String>();
+        for (Map.Entry<String, String> entry : wanted.entrySet()) {
+            String projectId = entry.getKey();
+            String before = effectiveAccess(workspaceId, projectId, target);
+            String after = effectiveOf(saveGrant(workspaceId, target.getUserId(), projectId, entry.getValue()), target);
+            if (!before.equals(after)) {
+                changed.put(projectId, after);
+            }
+        }
+        return changed;
+    }
+
+    private void upsertGrant(String workspaceId, String userId, String projectId, String access) {
         ProjectMember pm = new ProjectMember();
         pm.setWorkspaceId(workspaceId);
         pm.setProjectId(projectId);
         pm.setUserId(userId);
-        pm.setAccess(value);
+        pm.setAccess(access);
         projectMemberMapper.upsert(pm);
+    }
+
+    /** 为 assigned 成员补齐缺失项目的 none 种子行；幂等，加入 / 建项目 / 启动自检都会调用 */
+    public void seedAssignedNone(String workspaceId) {
+        projectMemberMapper.seedAssignedNone(workspaceId);
     }
 
     /** 项目删除时清理它的可见范围配置 */
