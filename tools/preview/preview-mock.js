@@ -319,9 +319,11 @@
     "/api/views": [{ id: "V1", name: "我的 P0", params: JSON.stringify({ pris: ["P0"] }) }],
     /* 设置页「看板列 / 分类」用：之前缺这两条路由，预览会显示"加载失败" */
     "/api/columns": [
-      { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, done: false },
-      { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, done: false },
-      { id: "done", name: "已完成", color: "#12B76A", sortOrder: 2, done: true }
+      { id: "backlog", name: "待处理", color: "#8a8578", sortOrder: 0, processingRule: "backlog", done: false },
+      { id: "doing", name: "进行中", color: "#2563EB", sortOrder: 1, processingRule: "normal", done: false },
+      { id: "test", name: "待测试", color: "#8b6fb5", sortOrder: 2, processingRule: "waiting", done: false },
+      { id: "testing", name: "测试中", color: "#b06f9a", sortOrder: 3, processingRule: "normal", done: false },
+      { id: "done", name: "已完成", color: "#5f7a4a", sortOrder: 4, processingRule: "done", done: true }
     ],
     /* 工作流页的优先级显示名；缺这条会让整块配置显示「加载失败」 */
     "/api/priorities": [
@@ -335,7 +337,9 @@
       columns: [
         { id: "backlog", name: "待处理", color: "#8a8578" },
         { id: "doing", name: "进行中", color: "#2563EB" },
-        { id: "done", name: "已完成", color: "#12B76A" }
+        { id: "test", name: "待测试", color: "#8b6fb5" },
+        { id: "testing", name: "测试中", color: "#b06f9a" },
+        { id: "done", name: "已完成", color: "#5f7a4a" }
       ],
       rules: [
         { from: "done", to: "doing", rule: "reason" },
@@ -458,7 +462,7 @@
         { id: "doing", name: "进行中", color: "#2563EB", segments: 12, totalSeconds: 302400,
           avgSeconds: 25200, medianSeconds: 18000, p90Seconds: 50400, share: 0.32,
           ongoingCount: 2, ongoingMaxSeconds: 259200, ongoingAvgSeconds: 172800, bottleneck: false },
-        { id: "done", name: "已完成", color: "#12B76A", segments: 0, totalSeconds: 0,
+        { id: "done", name: "已完成", color: "#5f7a4a", segments: 0, totalSeconds: 0,
           avgSeconds: 0, medianSeconds: 0, p90Seconds: 0, share: 0,
           ongoingCount: 0, ongoingMaxSeconds: 0, ongoingAvgSeconds: 0, bottleneck: false }
       ],

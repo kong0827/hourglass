@@ -163,10 +163,13 @@ class TaskSupport {
         return c == null ? column : c.getName();
     }
 
-    /** 列的有效处理规则：built-in 列固定，自定义列读库 */
+    /** 列的有效处理规则：待处理/进行中/已完成固定，待测试/测试中与自定义列读库 */
     String processingRule(String workspaceId, String column) {
         if (Consts.COL_BACKLOG.equals(column)) {
             return "backlog";
+        }
+        if (Consts.COL_DOING.equals(column)) {
+            return "normal";
         }
         if (Consts.COL_DONE.equals(column)) {
             return "done";

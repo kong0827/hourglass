@@ -694,6 +694,7 @@
               <div class="seg" id="phaseModeSeg">
                 <button type="button" data-pmode="phase" aria-pressed="true">按阶段</button>
                 <button type="button" data-pmode="version" aria-pressed="false">按版本</button>
+                <button type="button" data-pmode="schedule" aria-pressed="false">发布日程</button>
                 <button type="button" data-pmode="overview" aria-pressed="false">全部项目</button>
               </div>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
@@ -1972,14 +1973,28 @@
             <div class="panel" data-set-pane="workflow" id="set-columns">
               <div class="panel-head">
                 <h3>看板列</h3>
-                <span class="meta-right">拖拽/按钮调整顺序</span>
+                <span class="meta-right">用箭头调整顺序</span>
               </div>
-              <p class="set-hint">「待处理」「进行中」可改名不可删除；「已完成」为系统列。处理规则决定这一列的工作项还计不计时、算不算逾期：<br>
-                正常计时：可以计时，逾期照常计算；<br>
-                暂停计时：停止计时，逾期照常计算（例如等待外部反馈）；<br>
-                结束计时：停止计时，也不再计算逾期（例如待发布、待验收）。<br>
-                删除列时其工作项移入最靠前的列。</p>
+              <div class="rule-legend" role="list" aria-label="处理规则说明">
+                <div class="rule-legend-item" role="listitem">
+                  <span class="rule-dot normal" aria-hidden="true"></span>
+                  <div class="rule-legend-txt"><b>正常计时</b><span>可以计时，逾期照常计算</span></div>
+                </div>
+                <div class="rule-legend-item" role="listitem">
+                  <span class="rule-dot waiting" aria-hidden="true"></span>
+                  <div class="rule-legend-txt"><b>暂停计时</b><span>停止计时，逾期照常计算</span></div>
+                </div>
+                <div class="rule-legend-item" role="listitem">
+                  <span class="rule-dot ended" aria-hidden="true"></span>
+                  <div class="rule-legend-txt"><b>结束计时</b><span>停止计时，也不再计算逾期</span></div>
+                </div>
+              </div>
+              <p class="set-hint">看板固定 5 个系统列，均不可删除；前四个可改名，「已完成」不可改名。待处理、进行中、已完成的处理规则固定，待测试、测试中与自定义列可调整。规则变更只影响之后的计时与逾期判断，不会停止已运行的计时；删除自定义列时，其工作项移入最靠前的列。</p>
+              <div class="colcfg-head" aria-hidden="true">
+                <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
+              </div>
               <div class="cfg-list" id="colCfgList"></div>
+              <div class="cfg-add-head">新增自定义列</div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
                 <input type="text" id="colNewName" maxlength="12" placeholder="新列名，如：待验收" />
@@ -1988,7 +2003,7 @@
                   <option value="waiting">暂停计时（算逾期）</option>
                   <option value="ended">结束计时（不计逾期）</option>
                 </select>
-                <button class="btn sm" type="button" id="btnColAdd">添加列</button>
+                <button class="btn" type="button" id="btnColAdd">添加列</button>
               </div>
               <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
             </div>

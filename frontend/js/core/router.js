@@ -47,7 +47,7 @@ var VIEWS = {
   calendar: { title:"工作项", sub:"日历视图：按 [开始日期, 实际结束日] 逐日铺开", enter:enterCalendarView },
   gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
-  phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；可切换全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
+  phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；发布日程跨项目汇总计划；全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
   demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },

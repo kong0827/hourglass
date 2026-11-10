@@ -26,12 +26,125 @@ function syncDrawerDirty(){
 }
 /* 每次标记改动自增：保存期间又编辑时，不能把新改动误当成已保存 */
 var formRev = 0;
+/* 语义脏检查：事件只是「可能改过」的提示，是否真的脏由当前值和基线比较决定。
+   打开抽屉时 / 保存成功后记基线；选项异步回填、浏览器补发 change、
+   重复点已选中的分段按钮都不会误报，改回原值也会恢复为干净。 */
+var formBase = null;
+function formReady(sel){ return !!(sel && sel.getAttribute("data-ready") === "1"); }
+function formProgressValue(){
+  var done = iCol && iCol.value === "done";
+  return (done && startedDone) ? origProgress : (Number(iProg && iProg.value) || 0);
+}
+function formSnapshot(){
+  var snap = {
+    title: (iTitle.value || "").trim(),
+    desc: (iDesc.value || "").trim(),
+    start: iStart.value || "",
+    due: iDue.value || "",
+    milestone: !!($("iMilestone") || {}).checked,
+    estimate: (function(){ var h = iEstimate ? Number(iEstimate.value) : 0; return h > 0 ? Math.round(h * 60) : 0; })(),
+    pri: rt.formPri || "",
+    cat: rt.formCat || "",
+    col: (iCol && iCol.value) || "",
+    req: (iReq && iReq.value) || "",
+    owner: (function(){ var o = ownerPick(); return (o.userId || "") + "\u0001" + (o.name || ""); })(),
+    type: (iItemType && iItemType.value) || "task",
+    severity: (iSeverity && iSeverity.value) || "",
+    environment: (iEnvironment && iEnvironment.value || "").trim(),
+    repro: (iReproSteps && iReproSteps.value || "").trim(),
+    regression: (iRegression && iRegression.value) || "",
+    prog: formProgressValue(),
+    note: (iNote.value || "").trim(),
+    recur: rt.formRecur || "",
+    remind: (iRemind && iRemind.value) || "",
+    remindTarget: (iRemindTarget && iRemindTarget.value) || "owner",
+    blocked: !!(iBlocked && iBlocked.checked),
+    blockedReason: (iBlocked && iBlocked.checked && iBlockedReason) ? (iBlockedReason.value || "").trim() : "",
+    tags: rt.tagsCache.slice(0, 8).join("\u0001"),
+    reason: ($("iVersionChangeReason") || {}).value || ""
+  };
+  var vsel = $("iVersion");
+  if(formReady(vsel)) snap.version = selectedVersionIds(vsel).slice().sort().join("\u0001");
+  var fsel = $("iFoundVersion");
+  if(formReady(fsel)) snap.found = fsel.value || "";
+  var esel = $("iEpic");
+  if(formReady(esel)) snap.epic = esel.value || "";
+  var dsel = $("iDemand");
+  if(formReady(dsel)) snap.demand = dsel.value || "";
+  var rsel = $("iReqDoc");
+  if(formReady(rsel)) snap.reqdoc = rsel.value || "";
+  var bsel = $("iBranch");
+  if(formReady(bsel)) snap.branch = bsel.value || "";
+  return snap;
+}
+function resetFormBaseline(){
+  formBase = formSnapshot();
+  lastReqValue = (iReq && iReq.value) || "";
+  var dsel = $("iDemand");
+  lastDemandValue = (dsel && dsel.value) || "";
+  lastVersionKey = versionKeyOf($("iVersion"));
+  syncDrawerDirty();
+}
+var formAsyncFields = [
+  ["iVersion", "version"], ["iFoundVersion", "found"], ["iEpic", "epic"],
+  ["iDemand", "demand"], ["iReqDoc", "reqdoc"], ["iBranch", "branch"]
+];
+/* 记录关联下拉最后一次「已确认」的值：选项重建 / 异步回填也可能触发 change，
+   这类伪事件不能当成用户选择去清空版本、史诗、需求等关联。 */
+var lastReqValue = null, lastDemandValue = null, lastVersionKey = null;
+function versionKeyOf(sel){ return selectedVersionIds(sel).slice().sort().join("\u0001"); }
+function formSettling(target){
+  if(!target || !target.id) return false;
+  for(var i = 0; i < formAsyncFields.length; i++){
+    if(formAsyncFields[i][0] === target.id) return !formReady(target);
+  }
+  return false;
+}
+/* 需求目标版本继承属于程序化回填，不计入用户改动（版本选择器会被重新填充一次） */
+var versionBaseGen = 0, versionBaseAbsorbed = 0;
+/* 未就绪的异步下拉不参与基线：就绪后把回填值吸收为基线，避免「刚加载完就被判脏」。
+   只吸收「基线里本来没有」或「程序化预填」的值；已经就绪过的字段再次重载
+   （换项目等）要保留基线，否则关联被清空后切回原项目会被误判为没改过。 */
+function absorbSettledFields(){
+  if(!formBase) return;
+  var cur = formSnapshot(), changed = false;
+  formAsyncFields.forEach(function(pair){
+    var sel = $(pair[0]);
+    if(!sel || !formReady(sel) || cur[pair[1]] === undefined) return;
+    /* 重载完成后的当前值即「已确认值」，后续伪 change 不应再被当成用户选择 */
+    if(pair[1] === "version") lastVersionKey = cur.version;
+    else if(pair[1] === "demand") lastDemandValue = cur.demand;
+    var pending = formBase[pair[1]] === undefined;
+    if(pair[1] === "version" && versionBaseAbsorbed < versionBaseGen) pending = true;
+    if(!pending) return;
+    formBase[pair[1]] = cur[pair[1]];
+    changed = true;
+    if(pair[1] === "version") versionBaseAbsorbed = versionBaseGen;
+  });
+  if(changed) syncDrawerDirty();
+}
+if(typeof window !== "undefined" && window.MutationObserver){
+  formAsyncFields.forEach(function(pair){
+    var sel = $(pair[0]);
+    if(!sel) return;
+    new MutationObserver(absorbSettledFields).observe(sel, { attributes:true, attributeFilter:["data-ready"], childList:true, subtree:true });
+  });
+}
 (function watchFormDirty(){
   var desc = Object.getOwnPropertyDescriptor(rt, "formDirty");
   if(desc && desc.set && desc.get) return; // 已被监听
   var val = rt.formDirty;
   Object.defineProperty(rt, "formDirty", {
-    get: function(){ return val; },
+    get: function(){
+      if(!val) return false;
+      if(!formBase) return true;
+      var cur = formSnapshot();
+      for(var k in formBase){
+        if(cur[k] === undefined) continue; // 异步下拉重新加载中：先不据此判脏
+        if(formBase[k] !== cur[k]) return true;
+      }
+      return false;
+    },
     set: function(v){
       if(v) formRev++;
       val = !!v;
@@ -81,6 +194,8 @@ function assocStillCurrent(seq, taskId, reqId){
     && currentReqId() === (reqId || "");
 }
 function ensureReqDoc(v){
+  var sel = $("iReqDoc");
+  if(sel) sel.removeAttribute("data-ready");
   var seq = rt.taskFormSeq, taskId = rt.editingId, reqId = currentReqId();
   loadView("requirements").then(function(m){
     if(assocStillCurrent(seq, taskId, reqId)) m.ensureReqDocOptions(v);
@@ -607,6 +722,7 @@ function syncDemandTarget(){
     var target = targetVersionOf(d);
     if(!rt.editingId && !newVersionExplicit && newInheritedTarget !== target && d.status === "plan"){
       newInheritedTarget = target;
+      versionBaseGen++;
       ensureVersion(target ? [target] : []);
     }
     var name = d.targetVersionName || d.versionName || "";
@@ -664,7 +780,15 @@ function loadTaskReleaseRecords(task){
 }
 var versionSel = $("iVersion");
 if(versionSel){
-  versionSel.addEventListener("change", function(){ if(!rt.editingId) newVersionExplicit = true; syncVersionReason(); });
+  versionSel.addEventListener("change", function(){
+    /* 未就绪时的 change 来自选项回填；值没变也不是用户改选 */
+    if(!formReady(versionSel)) return;
+    var key = versionKeyOf(versionSel);
+    if(key === lastVersionKey) return;
+    lastVersionKey = key;
+    if(!rt.editingId) newVersionExplicit = true;
+    syncVersionReason();
+  });
   if(window.MutationObserver) new MutationObserver(function(){ syncVersionReason(); }).observe(versionSel, {childList:true, attributes:true, attributeFilter:["data-ready"]});
 }
 ["iEpic", "iBranch", "iReqDoc"].forEach(function(id){
@@ -857,6 +981,8 @@ function populateReqSelect(keepId){
   iReq.innerHTML = html;
   if(cur && rt.reqList.some(function(r){ return r.id === cur; })) iReq.value = cur;
   else iReq.value = "";
+  /* 项目下拉重建时值可能被收回（如项目已删）：记下来，避免把这次程序化变化当成用户换项目 */
+  lastReqValue = iReq.value;
 }
 function ownerOptions(){
   var opts = [], seen = {};
@@ -1208,6 +1334,7 @@ function openTaskDrawer(colId, task, defaults){
   syncAssocMore();
   /* 手机端新建走半屏抽屉，编辑走全屏；桌面端样式不区分 */
   taskForm.classList.toggle("is-create", !task);
+  resetFormBaseline();
   openDrawer();
   loadTaskReleaseRecords(task);
   UI.wireTooltips(taskDrawer);
@@ -1368,6 +1495,7 @@ function inTaskAuxSection(target){
 }
 taskForm.addEventListener("input", function(e){
   if(e.target === iProg) return;
+  if(formSettling(e.target)) return; // 异步下拉回填期间的伪 input 不算用户改动
   if(!inTaskAuxSection(e.target)) rt.formDirty = true;
   if(e.target === iTitle){
     fTitle.classList.remove("invalid");
@@ -1375,6 +1503,7 @@ taskForm.addEventListener("input", function(e){
   }
 });
 taskForm.addEventListener("change", function(e){
+  if(formSettling(e.target)) return; // 异步下拉回填期间的伪 change 不算用户改动
   if(!inTaskAuxSection(e.target)) rt.formDirty = true;
   if(e.target && e.target.closest && e.target.closest("#drawerMore")) syncMoreSummary();
 });
@@ -1426,6 +1555,9 @@ if(versionHelp){
 }
 /* 换项目时计划版本的可选项要跟着换；关联需求的刷新在 requirements 模块里各自监听 */
 if(iReq) iReq.addEventListener("change", function(){
+  var nowReq = iReq.value || "";
+  if(nowReq === lastReqValue) return; // 选项重建等程序化事件：不能按换项目处理
+  lastReqValue = nowReq;
   if(!rt.editingId){ newVersionExplicit = false; newInheritedTarget = null; }
   ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
   ensureBranch(($("iBranch") || {}).value, iReq.value);
@@ -1442,6 +1574,10 @@ if(iReq) iReq.addEventListener("change", function(){
 });
 var iDemand = $("iDemand");
 if(iDemand) iDemand.addEventListener("change", function(){
+  if(!formReady(iDemand)) return; // 异步回填期间的 change 不是用户选择
+  var demandNow = iDemand.value || "";
+  if(demandNow === lastDemandValue) return;
+  lastDemandValue = demandNow;
   if(!rt.editingId && !newVersionExplicit){
     if(newInheritedTarget !== null) ensureVersion([]);
     newInheritedTarget = null;
@@ -1456,6 +1592,8 @@ if(iDemand) iDemand.addEventListener("change", function(){
   var wantReq = opt ? (opt.getAttribute("data-req") || "") : "";
   if(wantReq && wantReq !== iReq.value){
     iReq.value = wantReq;
+    /* 这里是程序化换项目，iReq 的 change 不会触发；同步记录避免后续伪 change 重跑一遍清空 */
+    lastReqValue = iReq.value;
     ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
     ensureBranch(($("iBranch") || {}).value, wantReq);
     ensureCatForProject(wantReq);
@@ -2166,6 +2304,7 @@ taskForm.addEventListener("submit", function(e){
           syncVersionReason();
           syncTaskPublication(taskCacheExtra[editId]);
           rt.formDirty = false;
+          resetFormBaseline();
         }
         var stayHint = $("taskFormHint");
         if(stayHint && !rt.drawerReadOnly && !changedDuringSave) stayHint.textContent = "已保存 · 可继续编辑";
@@ -2809,4 +2948,4 @@ if(btnDrawerStatus) btnDrawerStatus.addEventListener("click", function(){ openDr
 var factStatusBtn = $("factStatus");
 if(factStatusBtn) factStatusBtn.addEventListener("click", function(){ openDrawerColMenu(factStatusBtn); });
 
-export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, showDrawerNotice, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };
+export { buildFormControls, deleteTask, openTaskDrawer, ownerOptions, populateReqSelect, refreshOwnerSelect, renderTagChips, resetFormBaseline, showDrawerNotice, syncAssocViewBtns, syncCatSeg, syncDateBounds, syncFormSegs, syncProgVal, tryCloseTaskDrawer };

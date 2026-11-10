@@ -1,6 +1,6 @@
 # 部署指南（腾讯云轻量服务器 · Ubuntu）
 
-前置说明：服务器已有 **JDK8、MySQL8、Nginx**，本项目**不使用 Redis**。本轮 A–E 已部署 `124ce05`，原库单独授权重建、完整生产模拟与只读验收完成；生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误，每日 cron 未确认安装。以下是具备权限后的操作说明（root 或 sudo），不是授权执行任何命令或绕过权限；实际发布及回退边界见第 2 节。
+前置说明：服务器已有 **JDK8、MySQL8、Nginx**，本项目**不使用 Redis**。本轮 A–E 已部署，线上 payload 逐条见 [`CHANGELOG.md`](../CHANGELOG.md) 的发布记录；原库单独授权重建、完整生产模拟与只读验收完成；生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误，每日 cron 未确认安装。以下是具备权限后的操作说明（root 或 sudo），不是授权执行任何命令或绕过权限；实际发布及回退边界见第 2 节。
 
 ## 0. 本地打包（开发机）
 
@@ -75,7 +75,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 A–E 最终本地正确性门禁通过：Java 821 tests（0 failures/errors/skipped，当时 `124ce05` 的 514 个发布候选源文件 parity，不是当前 HEAD）、真实 MySQL 14 mandatory 484 passed / 0 failed / 0 unverified、本地 full demo 990 回读分别通过；真实 headless Chrome backend 8120 / frontend 8121 在 1440/390px 的导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 重拍、SHA256 配对一致并视觉查看，非物理手机测试；JS syntax 107 files / 3 unit suites、3 SVG、文档 14 checks / baseline convergence 16、部署安全隔离 212（含脚本语法 73）分别通过。1 个自建浏览器 fixture 空间留作本地证据，最终复跑未建新空间，不称全部本地数据已清理；独立统计见 [`CHANGELOG.md`](../CHANGELOG.md)。
 
-**本轮实际部署完成，生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误。**`124ce05` 已正常 commit / push，生产 jar SHA256=`bd930b8caf43914d4af929ced29a9cb526170f35542f378c3b7ba638c2b46df5`；169 个生产前端文件 HTTP 200，字节 / SHA 与 `124ce05` archive 匹配，SW v120。首次 deploy.sh 因 umask 077 前端目录 700 / 文件 600 导致 403 / 500 中止；实际权限修为目录 755 / 文件 644，AppleDouble 元数据移入受限备份，独立完整回读通过，不能称首次 deploy.sh exit 0。后续 `2d7fe2e` 仅旧无引用 DTO 与部署 COPYFILE_DISABLE=1 / 递归权限修正，已在 origin/main；生产 payload 仍为经过 821 Java 全量测试的 `124ce05`，514 source parity 仅指当时发布候选，不是当前 HEAD。
+**本轮实际部署完成，生产 Chrome 1440/390px、24 次入口导航、93 项有效断言通过，0 runtime/console/HTTP 错误。**`124ce05` 已正常 commit / push，生产 jar SHA256=`bd930b8caf43914d4af929ced29a9cb526170f35542f378c3b7ba638c2b46df5`；169 个生产前端文件 HTTP 200，字节 / SHA 与 `124ce05` archive 匹配，SW v120。首次 deploy.sh 因 umask 077 前端目录 700 / 文件 600 导致 403 / 500 中止；实际权限修为目录 755 / 文件 644，AppleDouble 元数据移入受限备份，独立完整回读通过，不能称首次 deploy.sh exit 0。后续 `2d7fe2e` 仅旧无引用 DTO 与部署 COPYFILE_DISABLE=1 / 递归权限修正，已在 origin/main；本段是 `124ce05` 时点的发布回读记录，其后每次部署登记在更新日志的发布记录里；`124ce05` 的 821 Java 全量测试与 514 source parity 只覆盖该时点，不代表后续 payload。
 
 完整生产模拟已完成；只读验收 1747 GET / 3 login、7463 有效断言零失败 / 零 API 错误，无生产变更测试。8255 原执行含 792 被替换的 harness 日期断言（初 264 失败因 UTC manifest 11-09 误作本地业务日 11-10），纠正后零失败，不可加总。完整规模、66 产物 SHA / 44 plan raw UTF-8 SHA、三次稳定事件 canonical SHA 及工时 38940 / 版本卡 39930（含 990 跨版本重叠）见更新日志。
 

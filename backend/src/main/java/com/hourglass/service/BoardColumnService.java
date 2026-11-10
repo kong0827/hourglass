@@ -75,18 +75,27 @@ public class BoardColumnService {
         checkName(workspaceId, name, id);
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
-        /* 内置列只冻结处理规则，名称/颜色仍允许调整（与删除提示「可改名」一致） */
-        if (!isBuiltIn(id)) {
-            c.setProcessingRule(normalizeProcessingRule(req.getProcessingRule()));
+        /* 待处理/进行中是固定语义，只允许改名改色，库里始终保持 normal；
+           其余列仅在请求显式带 processingRule 时修改，看板改列名/改色不会把测试列规则冲掉 */
+        if (isRuleFixed(id)) {
+            c.setProcessingRule(RULE_NORMAL);
+        } else {
+            String rule = Texts.trimToNull(req.getProcessingRule());
+            if (rule != null) {
+                c.setProcessingRule(normalizeProcessingRule(rule));
+            }
         }
         boardColumnMapper.update(c);
         evictColumns(workspaceId);
         return boardColumnMapper.selectById(workspaceId, id);
     }
 
-    /** 删除列：任务移入最靠前的其他列（内置四列不可删） */
+    /** 删除列：任务移入最靠前的其他列（五个系统列均不可删） */
     @Transactional
     public void delete(String workspaceId, String id) {
+        if (Consts.COL_DONE.equals(id)) {
+            throw AppException.badRequest("「已完成」是系统列，不可删除");
+        }
         BoardColumn c = boardColumnMapper.selectById(workspaceId, id);
         if (c == null) {
             throw AppException.notFound("看板列不存在：" + id);
@@ -139,6 +148,11 @@ public class BoardColumnService {
     private static boolean isBuiltIn(String id) {
         return Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id)
                 || Consts.COL_TEST.equals(id) || Consts.COL_TESTING.equals(id);
+    }
+
+    /** 规则固定的系统列：待处理固定不计时，进行中固定正常计时 */
+    private static boolean isRuleFixed(String id) {
+        return Consts.COL_BACKLOG.equals(id) || Consts.COL_DOING.equals(id);
     }
 
     private void renumber(String workspaceId, String columnId) {

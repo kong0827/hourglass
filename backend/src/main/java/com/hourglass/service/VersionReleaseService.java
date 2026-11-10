@@ -8,6 +8,7 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.ReleaseConfirmRequest;
 import com.hourglass.dto.ReleasePlanRequest;
+import com.hourglass.dto.ReleasePlanRow;
 import com.hourglass.dto.ReleasePreviewResponse;
 import com.hourglass.dto.ReleasePreviewRequest;
 import com.hourglass.dto.TaskVersionBinding;
@@ -119,6 +120,46 @@ public class VersionReleaseService {
         List<VersionReleasePlan> plans = mapper.selectPlans(workspaceId, versionId);
         for (VersionReleasePlan plan : plans) plan.setPlannedTaskIds(mapper.selectPlannedTaskIds(workspaceId, plan.getId()));
         return plans;
+    }
+
+    /** 跨项目发布日程：只读汇总，可见范围与项目列表一致；不返回计划任务明细。 */
+    public List<ReleasePlanRow> planSchedule(String userId, String workspaceId, String from, String to,
+                                             String projectId, String environment, String status) {
+        String reqId = Texts.trimToNull(projectId);
+        if (reqId != null) access.assertView(workspaceId, userId, reqId);
+        LocalDate fromDate = scheduleDate(from, "起始日期");
+        LocalDate toDate = scheduleDate(to, "结束日期");
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw AppException.badRequest("起始日期不能晚于结束日期");
+        }
+        String env = Texts.trimToNull(environment);
+        if (env != null && !Arrays.asList("production", "staging", "test").contains(env)) {
+            throw AppException.badRequest("发布环境无效");
+        }
+        String viewerId = access.viewerScope(workspaceId, userId);
+        return mapper.selectPlanSchedule(workspaceId, fromDate, toDate, reqId, env,
+                scheduleStatuses(status), viewerId, 500);
+    }
+
+    private LocalDate scheduleDate(String value, String label) {
+        String text = Texts.trimToNull(value);
+        if (text == null) return null;
+        try {
+            return LocalDate.parse(text);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw AppException.badRequest(label + "格式应为 yyyy-MM-dd");
+        }
+    }
+
+    /** open = 未完成（草稿 + 就绪）；all 或缺省 = 全部状态。 */
+    private List<String> scheduleStatuses(String status) {
+        String text = Texts.trimToNull(status);
+        if (text == null || "all".equals(text)) return null;
+        if ("open".equals(text)) return Arrays.asList("draft", "ready");
+        if (!Arrays.asList("draft", "ready", "completed", "canceled").contains(text)) {
+            throw AppException.badRequest("发布计划状态无效");
+        }
+        return Collections.singletonList(text);
     }
 
     private ProjectVersion lockVersion(String userId, String workspaceId, String id, String otherMember) {

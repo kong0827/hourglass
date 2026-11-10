@@ -29,6 +29,7 @@ rt.wsMembersCache = [];
 rt.savedViews = [];
 rt.inviteCache = [];
 rt.colDefsCache = [];
+rt.doneColDef = null;
 rt.settingsReady = false;
 rt.subtasksCache = [];
 rt.listCache = {};
@@ -95,9 +96,10 @@ function tagChip(name){
   return '<span class="tag tag-ghost">' + esc(name) + '</span>';
 }
 function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
-/** 列的有效处理规则：优先任务自带值（跨空间「我的任务」），其次看板列定义、设置页缓存；未知按 normal（与后端默认一致） */
+/** 列的有效处理规则：查的是任务当前列时优先任务自带值（跨空间「我的任务」），
+    查目标列（如抽屉里改列预览）时必须回落到列定义，否则会拿旧列规则判断新列 */
 function colRuleOf(id, task){
-  if(task && task.processingRule) return task.processingRule;
+  if(task && task.processingRule && (!task.boardColumn || !id || task.boardColumn === id)) return task.processingRule;
   if(!id) return "normal";
   for(var i = 0; i < COLUMNS.length; i++){
     var c = COLUMNS[i];

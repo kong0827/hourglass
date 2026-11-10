@@ -1,5 +1,6 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import com.hourglass.dto.ColumnRequest;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.mapper.BoardColumnMapper;
@@ -11,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class BoardColumnServiceTest {
@@ -51,6 +54,40 @@ class BoardColumnServiceTest {
     }
 
     @Test
+    void doingColumnKeepsProcessingRule() {
+        BoardColumn c = column("doing", "进行中", "normal");
+        when(mapper.selectById(WS, "doing")).thenReturn(c);
+
+        ColumnRequest req = new ColumnRequest();
+        req.setName("开发中");
+        req.setColor("#112233");
+        req.setProcessingRule("ended");
+
+        BoardColumn updated = service.update(WS, "doing", req);
+
+        assertEquals("开发中", updated.getName());
+        assertEquals("normal", updated.getProcessingRule(), "「进行中」的处理规则固定为正常计时");
+        verify(mapper).update(c);
+    }
+
+    @Test
+    void testColumnProcessingRuleCanChange() {
+        BoardColumn c = column("test", "待测试", "waiting");
+        when(mapper.selectById(WS, "test")).thenReturn(c);
+
+        ColumnRequest req = new ColumnRequest();
+        req.setName("待验收");
+        req.setColor("#112233");
+        req.setProcessingRule("ended");
+
+        BoardColumn updated = service.update(WS, "test", req);
+
+        assertEquals("待验收", updated.getName());
+        assertEquals("ended", updated.getProcessingRule());
+        verify(mapper).update(c);
+    }
+
+    @Test
     void customColumnProcessingRuleCanChange() {
         BoardColumn c = column("C1", "等待中", "normal");
         when(mapper.selectById(WS, "C1")).thenReturn(c);
@@ -64,6 +101,41 @@ class BoardColumnServiceTest {
 
         assertEquals("waiting", updated.getProcessingRule());
         verify(mapper).update(c);
+    }
+
+    @Test
+    void updatingWithoutRuleKeepsTestColumnProcessingRule() {
+        BoardColumn c = column("test", "待测试", "waiting");
+        when(mapper.selectById(WS, "test")).thenReturn(c);
+
+        ColumnRequest req = new ColumnRequest();
+        req.setName("待验收");
+        req.setColor("#112233");
+
+        BoardColumn updated = service.update(WS, "test", req);
+
+        assertEquals("waiting", updated.getProcessingRule(), "不带规则更新时不能被重置为 normal");
+    }
+
+    @Test
+    void updatingFixedColumnNormalizesLegacyRule() {
+        BoardColumn c = column("doing", "进行中", "waiting");
+        when(mapper.selectById(WS, "doing")).thenReturn(c);
+
+        ColumnRequest req = new ColumnRequest();
+        req.setName("进行中");
+        req.setColor("#112233");
+
+        BoardColumn updated = service.update(WS, "doing", req);
+
+        assertEquals("normal", updated.getProcessingRule(), "固定列在库里统一落 normal");
+    }
+
+    @Test
+    void doneColumnCannotBeDeleted() {
+        AppException ex = assertThrows(AppException.class, () -> service.delete(WS, "done"));
+        assertEquals(400, ex.getCode());
+        verifyNoInteractions(mapper);
     }
 
     private BoardColumn column(String id, String name, String rule) {

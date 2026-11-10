@@ -9,6 +9,7 @@ import com.hourglass.dto.PhaseStatsResponse;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReleaseNoteResponse;
 import com.hourglass.dto.ReleasePlanRequest;
+import com.hourglass.dto.ReleasePlanRow;
 import com.hourglass.dto.ReleasePreviewRequest;
 import com.hourglass.dto.ReleasePreviewResponse;
 import com.hourglass.dto.ReleaseConfirmRequest;
@@ -51,6 +52,17 @@ public class ProjectVersionController {
     @GetMapping("/api/versions")
     public ApiResult<List<ProjectVersion>> list(@RequestParam String reqId, @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(versionService.list(ctx.getWsId(), reqId, ctx.getUserId()));
+    }
+
+    /** 跨项目发布日程：from/to 为计划时间区间（yyyy-MM-dd），project 为项目 ID，env/status 可选。 */
+    @GetMapping("/api/release-plans")
+    public ApiResult<List<ReleasePlanRow>> planSchedule(@RequestParam(required = false) String from,
+                                                        @RequestParam(required = false) String to,
+                                                        @RequestParam(required = false) String project,
+                                                        @RequestParam(required = false) String env,
+                                                        @RequestParam(required = false) String status,
+                                                        @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.planSchedule(ctx.getUserId(), ctx.getWsId(), from, to, project, env, status));
     }
 
     /** T1.3：版本聚合统计（版本卡三态口径 + 待规划任务桶） */

@@ -29,6 +29,14 @@ public interface ReleaseMapper {
     Requirement selectProjectForUpdate(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     List<Demand> selectDemandsByProjectForUpdate(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
     List<VersionReleasePlan> selectPlans(@Param("workspaceId") String workspaceId, @Param("versionId") String versionId);
+    List<com.hourglass.dto.ReleasePlanRow> selectPlanSchedule(@Param("workspaceId") String workspaceId,
+                                                             @Param("from") LocalDate from,
+                                                             @Param("to") LocalDate to,
+                                                             @Param("reqId") String reqId,
+                                                             @Param("environment") String environment,
+                                                             @Param("statuses") List<String> statuses,
+                                                             @Param("viewerId") String viewerId,
+                                                             @Param("limit") int limit);
     VersionReleasePlan selectPlanForUpdate(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<String> selectPlannedTaskIds(@Param("workspaceId") String workspaceId, @Param("planId") String planId);
     List<String> selectPlannedTaskIdsForUpdate(@Param("workspaceId") String workspaceId, @Param("planId") String planId);

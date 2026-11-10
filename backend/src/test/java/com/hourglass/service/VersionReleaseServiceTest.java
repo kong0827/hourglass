@@ -25,10 +25,11 @@ class VersionReleaseServiceTest {
     private final ReleasePermissionService permissions = mock(ReleasePermissionService.class);
     private final DeliveryScopeLock locks = mock(DeliveryScopeLock.class);
     private final NotificationEventService notifications = mock(NotificationEventService.class);
+    private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final PlatformTransactionManager tx = mock(PlatformTransactionManager.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, mock(RequirementMapper.class),
-            mock(DemandMapper.class), users, members, locks, permissions, mock(ProjectAccessService.class),
+            mock(DemandMapper.class), users, members, locks, permissions, access,
             mock(TaskPublicationService.class), notifications, json, tx);
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
@@ -349,6 +350,26 @@ class VersionReleaseServiceTest {
         assertFalse(scopeSql.contains("blocked, vt.version_id")); assertFalse(scopeSql.contains("AS version_name"));
         String recordsSql = configuration.getMappedStatement(namespace + "selectRecords").getBoundSql(params).getSql().replaceAll("\\s+", " ").trim();
         assertTrue(recordsSql.endsWith("ORDER BY occurred_at DESC, recorded_at DESC, id DESC"));
+    }
+
+    @Test void scheduleDefaultsToOpenPlansAndKeepsProjectVisibilityScope() {
+        when(access.viewerScope("W", "U")).thenReturn("U");
+        when(mapper.selectPlanSchedule("W", LocalDate.parse("2026-11-01"), LocalDate.parse("2026-12-31"), "P",
+                "production", Arrays.asList("draft", "ready"), "U", 500))
+                .thenReturn(Collections.<ReleasePlanRow>emptyList());
+        assertTrue(service.planSchedule("U", "W", "2026-11-01", "2026-12-31", "P", "production", "open").isEmpty());
+        verify(access).assertView("W", "U", "P");
+    }
+
+    @Test void scheduleAcceptsAllStatusesAndRejectsInvalidFilters() {
+        when(access.viewerScope("W", "U")).thenReturn(null);
+        when(mapper.selectPlanSchedule("W", null, null, null, null, null, null, 500))
+                .thenReturn(Collections.<ReleasePlanRow>emptyList());
+        assertTrue(service.planSchedule("U", "W", null, null, null, null, "all").isEmpty());
+        code(400, () -> service.planSchedule("U", "W", "2026-13-01", null, null, null, null));
+        code(400, () -> service.planSchedule("U", "W", "2026-12-31", "2026-11-01", null, null, null));
+        code(400, () -> service.planSchedule("U", "W", null, null, null, "prod", null));
+        code(400, () -> service.planSchedule("U", "W", null, null, null, null, "done"));
     }
 
     private VersionRelease confirm(ReleaseConfirmRequest r) { preview(r); return service.confirm("U", "W", "V", r); }

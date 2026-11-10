@@ -8,7 +8,7 @@ import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { calState, dueState, dueText, rt, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
-import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
+import { openTaskDrawer, resetFormBaseline, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { addDays, fmtMD, iso, pad2, parseDate, priColor, rgbaOf, weekdayCN } from "../lib/format.js";
@@ -242,7 +242,8 @@ function openNewTaskOnDate(dateIso){
   openTaskDrawer("backlog");
   iDue.value = dateIso;
   syncDateBounds();
-  rt.formDirty = false;   // 预填不算用户改动，避免关抽屉时无故挽留
+  /* 预填不算用户改动：连基线一起更新，避免关抽屉时无故挽留 */
+  resetFormBaseline();
 }var unplannedState = {items:[], total:0, hasMore:false, loading:false};
 function loadUnplanned(opts){
   if(!unplannedBox) return;

@@ -96,6 +96,7 @@
     background-repeat:no-repeat;background-position:right 7px center;
   }
   .cfg-row .mini-select{width:172px;flex:0 0 auto;}
+  .rule-fixed{width:172px;flex:0 0 auto;font-size:12px;color:var(--text-2);white-space:nowrap;}
   .sysmark{font-size:11px;color:var(--text-3);flex:0 0 auto;}
 
   /* 矩阵 */
@@ -256,25 +257,34 @@
       <span class="meta">拖拽 / 按钮调整顺序</span>
     </div>
     <div class="panel-body">
-      <p class="hint">「未开始」「进行中」可改名不可删除；「已完成」为系统列。处理规则决定这一列的工作项还计不计时、算不算逾期。</p>
+      <p class="hint">看板有 5 个系统列：待处理、进行中、待测试、测试中、已完成。它们都不可删除；前四个可改名，「已完成」不可改名。待处理、进行中、已完成的处理规则固定，待测试、测试中可调整。处理规则决定这一列的工作项还计不计时、算不算逾期。</p>
       <div class="cfg-list">
         <div class="cfg-row">
-          <span class="handle">⋮⋮</span><span class="dot" style="background:#c08a3e"></span>
-          <span class="cfg-name">未开始</span>
-          <select class="mini-select" aria-label="未开始处理规则"><option>正常计时（算逾期）</option></select>
-          <span class="sysmark">内置列</span>
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#98a2b3"></span>
+          <span class="cfg-name">待处理</span>
+          <span class="rule-fixed">不计时（算逾期）</span>
+          <span class="sysmark">系统列</span>
         </div>
         <div class="cfg-row">
-          <span class="handle">⋮⋮</span><span class="dot" style="background:#5b83ad"></span>
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#2e90fa"></span>
           <span class="cfg-name">进行中</span>
-          <select class="mini-select" aria-label="进行中处理规则"><option>正常计时（算逾期）</option></select>
-          <span class="sysmark">内置列</span>
+          <span class="rule-fixed">正常计时（算逾期）</span>
+          <span class="sysmark">系统列</span>
         </div>
         <div class="cfg-row">
-          <span class="handle">⋮⋮</span><span class="dot" style="background:#7a5c86"></span>
-          <span class="cfg-name">待验证</span>
-          <select class="mini-select" aria-label="待验证处理规则">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#8b6fb5"></span>
+          <span class="cfg-name">待测试</span>
+          <select class="mini-select" aria-label="待测试处理规则">
             <option>正常计时（算逾期）</option>
+            <option selected>暂停计时（算逾期）</option>
+            <option>结束计时（不计逾期）</option>
+          </select>
+        </div>
+        <div class="cfg-row">
+          <span class="handle">⋮⋮</span><span class="dot" style="background:#b06f9a"></span>
+          <span class="cfg-name">测试中</span>
+          <select class="mini-select" aria-label="测试中处理规则">
+            <option selected>正常计时（算逾期）</option>
             <option>暂停计时（算逾期）</option>
             <option>结束计时（不计逾期）</option>
           </select>
@@ -282,6 +292,7 @@
         <div class="cfg-row">
           <span class="handle">⋮⋮</span><span class="dot" style="background:#5f7a4a"></span>
           <span class="cfg-name">已完成</span>
+          <span class="rule-fixed">结束计时（不计逾期）</span>
           <span class="sysmark">系统列</span>
         </div>
       </div>
@@ -312,7 +323,7 @@
       <div class="matrix-foot">
         <span class="dirty-flag hidden" id="dirtyFlag">有未保存的修改</span>
         <span class="spacer"></span>
-        <span>对「进行中 / 待验证」的阻塞标记不受流转限制</span>
+        <span>阻塞标记不受流转限制</span>
       </div>
     </div>
   </section>
@@ -389,9 +400,10 @@
   "use strict";
 
   var COLUMNS = [
-    {id:"backlog", name:"未开始", color:"#c08a3e"},
-    {id:"doing",   name:"进行中", color:"#5b83ad"},
-    {id:"testing", name:"待验证", color:"#7a5c86"},
+    {id:"backlog", name:"待处理", color:"#98a2b3"},
+    {id:"doing",   name:"进行中", color:"#2e90fa"},
+    {id:"test",    name:"待测试", color:"#8b6fb5"},
+    {id:"testing", name:"测试中", color:"#b06f9a"},
     {id:"done",    name:"已完成", color:"#5f7a4a"}
   ];
   var RULE_TEXT = {allow:"允许", reason:"填原因", deny:"禁止"};

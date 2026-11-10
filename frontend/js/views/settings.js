@@ -121,6 +121,11 @@ var TRANS_NEXT = { allow:"reason", reason:"deny", deny:"allow" };
 var wsMemberSelected = null, wsMemberCandidates = {}, wsMemberTimer = null, wsMemberSeq = 0;
 var ROLE_LABELS = { owner:"空间主", admin:"管理员", member:"成员", viewer:"查看者" };
 var RULE_LABELS = { normal:"正常计时（算逾期）", waiting:"暂停计时（算逾期）", ended:"结束计时（不计逾期）" };
+var FIXED_RULE_LABELS = {
+  backlog:"不计时（算逾期）",
+  doing:"正常计时（算逾期）",
+  done:"结束计时（不计逾期）"
+};
 var RULE_TITLES = {
   normal:"可以计时，逾期照常计算",
   waiting:"停止计时，逾期照常计算（例如等待外部反馈）",
@@ -601,7 +606,11 @@ function renderInvites(){
 function loadColCfg(){
   colCfgList.innerHTML = UI.skeletonRows(2);
   API.get("/api/columns").then(function(defs){
-    rt.colDefsCache = (defs || []).filter(function(d){ return !d.done; });
+    rt.doneColDef = null;
+    rt.colDefsCache = (defs || []).filter(function(d){
+      if(d.done){ rt.doneColDef = d; return false; }
+      return true;
+    });
     renderColCfg();
     loadColTrans();
   }).catch(function(ex){
@@ -611,41 +620,70 @@ function loadColCfg(){
 function renderColCfg(){
   var readOnly = roleReadOnly();
   var canDel = !readOnly && rt.currentWs && rt.currentWs.myRole === "owner";
-  colCfgList.innerHTML = rt.colDefsCache.map(function(d, idx){
+  var rows = rt.colDefsCache.map(function(d, idx){
     var fixed = (d.id === "backlog" || d.id === "doing" || d.id === "test" || d.id === "testing");
+    var ruleFixed = (d.id === "backlog" || d.id === "doing");
     var delDisabled = fixed || !canDel;
-    var ruleSelect = fixed ? ''
-      : '<select class="mini-select col-rule" data-col-rule aria-label="处理规则" title="正常计时：计时且计逾期；暂停计时：停表仍计逾期；结束计时：停表且不计逾期"' + (readOnly ? " disabled" : "") + '>' +
+    var ruleControl = ruleFixed
+      ? '<span class="rule-fixed" data-rule="' + (d.id === "backlog" ? "waiting" : "normal") + '" title="' + (d.id === "backlog" ? "待处理是系统列：不计时，逾期照常计算" : "进行中是系统列：正常计时，逾期照常计算") + '">' + FIXED_RULE_LABELS[d.id] + '</span>'
+      : '<select class="mini-select col-rule" data-col-rule data-rule="' + esc(d.processingRule || "normal") + '" aria-label="处理规则" title="正常计时：计时且计逾期；暂停计时：停表仍计逾期；结束计时：停表且不计逾期；规则同时影响计时、逾期和统计口径"' + (readOnly ? " disabled" : "") + '>' +
           colRuleOptions(d.processingRule || "normal") + '</select>';
-    return '<div class="cfg-row" data-col-id="' + esc(d.id) + '">' +
-      '<span class="handle" title="使用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
+    return '<div class="cfg-row colcfg-row" data-col-id="' + esc(d.id) + '">' +
+      '<span class="handle" title="用右侧箭头调整顺序">' + icon("grip", 14) + '</span>' +
       '<input type="color" value="' + esc(d.color || CAT_DEFAULT_COLOR) + '" data-col-color aria-label="列颜色"' + (readOnly ? " disabled" : "") + ' />' +
       '<input type="text" value="' + esc(d.name) + '" maxlength="12" data-col-name aria-label="列名"' + (readOnly ? " disabled" : "") + ' />' +
-      ruleSelect +
-      (fixed ? '<span class="sysmark">系统列</span>' : '') +
-      '<button class="cc-act" type="button" data-col-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
-      '<button class="cc-act" type="button" data-col-down title="下移"' + (readOnly || idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
-      '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : (canDel ? "删除列" : "仅空间主可删除列")) + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
+      ruleControl +
+      '<span class="cfg-type">' + (fixed ? '<span class="sys-chip">系统</span>' : '') + '</span>' +
+      '<span class="cfg-acts">' +
+        '<button class="cc-act" type="button" data-col-up title="上移"' + (readOnly || idx === 0 ? " disabled" : "") + '>' + icon("up", 14) + '</button>' +
+        '<button class="cc-act" type="button" data-col-down title="下移"' + (readOnly || idx === rt.colDefsCache.length - 1 ? " disabled" : "") + '>' + icon("down", 14) + '</button>' +
+        '<button class="cc-act dan" type="button" data-col-del title="' + (fixed ? "内置列不可删除" : (canDel ? "删除列" : "仅空间主可删除列")) + '"' + (delDisabled ? " disabled" : "") + '>' + icon("trash", 14) + '</button>' +
+      '</span>' +
     '</div>';
   }).join("");
+  var done = rt.doneColDef || { id:"done", name:"已完成", color:"#5f7a4a" };
+  colCfgList.innerHTML = rows +
+    '<div class="cfg-row colcfg-row is-done" data-col-id="done">' +
+      '<span class="handle" title="系统列固定在看板末尾">' + icon("shield", 14) + '</span>' +
+      '<input type="color" value="' + esc(done.color || "#5f7a4a") + '" aria-label="列颜色" disabled />' +
+      '<input type="text" value="' + esc(done.name || "已完成") + '" aria-label="列名" disabled />' +
+      '<span class="rule-fixed" data-rule="ended" title="已完成是系统列：停止计时，也不再计算逾期">' + FIXED_RULE_LABELS.done + '</span>' +
+      '<span class="cfg-type"><span class="sys-chip">系统</span></span>' +
+      '<span class="cfg-acts"><span class="cc-act is-lock" title="「已完成」由系统维护">' + icon("shield", 14) + '</span></span>' +
+    '</div>';
   ["colNewColor", "colNewName", "colNewRule", "btnColAdd"].forEach(function(id){ if($(id)) $(id).disabled = readOnly; });
   if($("colCfgHint")) $("colCfgHint").hidden = !readOnly;
   UI.wireTooltips(colCfgList);
 }
 function saveColRow(id){
-  if(roleReadOnly()) return;
+  if(roleReadOnly() || id === "done") return;
   var row = colCfgList.querySelector('[data-col-id="' + id + '"]');
   if(!row) return;
-  var name = row.querySelector("[data-col-name]").value.trim();
-  var color = row.querySelector("[data-col-color]").value;
+  var nameEl = row.querySelector("[data-col-name]");
+  var colorEl = row.querySelector("[data-col-color]");
   var ruleEl = row.querySelector("[data-col-rule]");
-  var processingRule = ruleEl ? ruleEl.value : "normal";
+  var name = nameEl.value.trim();
+  var color = colorEl.value;
+  var processingRule = ruleEl ? ruleEl.value : null;
   if(!name){ toast("列名不能为空", "warn"); loadColCfg(); return; }
-  API.put("/api/columns/" + encodeURIComponent(id), { name: name, color: color, processingRule: processingRule }).then(function(){
-    toast("已更新列「" + name + "」", "fs");
-    loadColCfg();
+  row.setAttribute("aria-busy", "true");
+  API.put("/api/columns/" + encodeURIComponent(id), { name: name, color: color, processingRule: processingRule }).then(function(saved){
+    row.removeAttribute("aria-busy");
+    var d = null;
+    for(var i = 0; i < rt.colDefsCache.length; i++) if(rt.colDefsCache[i].id === id) d = rt.colDefsCache[i];
+    if(d && saved){
+      d.name = saved.name || name;
+      d.color = saved.color || color;
+      /* 后端固定列统一落 normal；待处理的前端伪规则 backlog 不能被覆盖，否则会误判为可计时 */
+      if(saved.processingRule && id !== "backlog") d.processingRule = saved.processingRule;
+      nameEl.value = d.name;
+      colorEl.value = d.color;
+      if(ruleEl) ruleEl.setAttribute("data-rule", saved.processingRule || processingRule || "normal");
+    }
+    toast("已更新列「" + (d ? d.name : name) + "」", "fs");
     loadBoard({silent:true});
   }).catch(function(ex){
+    row.removeAttribute("aria-busy");
     toast(ex.message || "保存失败", "bad");
     loadColCfg();
   });

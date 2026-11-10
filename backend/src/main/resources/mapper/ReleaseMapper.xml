@@ -113,6 +113,37 @@
   <select id="selectPlans" resultMap="plan">
     SELECT * FROM version_release_plan WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} ORDER BY created_at DESC, id DESC
   </select>
+  <!-- 跨项目发布日程：只读；项目可见范围与项目列表同口径，归档项目不进入日程。 -->
+  <select id="selectPlanSchedule" resultType="com.hourglass.dto.ReleasePlanRow">
+    SELECT rp.id AS id, rp.workspace_id AS workspaceId, rp.version_id AS versionId,
+      pv.name AS versionName, pv.status AS versionStatus, pv.target_date AS versionTargetDate,
+      pv.req_id AS reqId, r.name AS projectName,
+      rp.planned_at AS plannedAt, rp.owner_user_id AS ownerUserId, u.display_name AS ownerName,
+      rp.environment AS environment, rp.coverage AS coverage, rp.status AS status,
+      rp.revision AS revision, rp.notes AS notes, rp.risks AS risks,
+      (SELECT COUNT(*) FROM version_release_plan_task pt
+        WHERE pt.workspace_id = rp.workspace_id AND pt.plan_id = rp.id) AS plannedTaskCount
+    FROM version_release_plan rp
+    INNER JOIN project_version pv ON pv.workspace_id = rp.workspace_id AND pv.id = rp.version_id
+    INNER JOIN requirement r ON r.workspace_id = pv.workspace_id AND r.id = pv.req_id
+    LEFT JOIN app_user u ON u.id = rp.owner_user_id
+    WHERE rp.workspace_id = #{workspaceId}
+      AND r.archived_at IS NULL
+      <if test="from != null">AND rp.planned_at &gt;= #{from}</if>
+      <if test="to != null">AND rp.planned_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)</if>
+      <if test="reqId != null">AND pv.req_id = #{reqId}</if>
+      <if test="environment != null">AND rp.environment = #{environment}</if>
+      <if test="statuses != null">
+        AND rp.status IN <foreach collection="statuses" item="status" open="(" separator="," close=")">#{status}</foreach>
+      </if>
+      <if test="viewerId != null">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+          WHERE pm.workspace_id = rp.workspace_id AND pm.project_id = pv.req_id
+            AND pm.user_id = #{viewerId} AND pm.access = 'none')
+      </if>
+    ORDER BY (rp.planned_at IS NULL), rp.planned_at, rp.id
+    LIMIT #{limit}
+  </select>
   <insert id="insertPlan">
     INSERT INTO version_release_plan
       (id, workspace_id, version_id, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)

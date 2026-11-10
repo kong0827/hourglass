@@ -39,7 +39,7 @@ public class TaskSaveRequest {
     @Size(max = 32, message = "模块ID不合法")
     private String categoryId;
 
-    /** 看板列 id：内置 backlog/doing/done 或自定义列（C 开头）；存在性由服务层校验 */
+    /** 看板列 id：内置 backlog/doing/test/testing/done 或自定义列（C 开头）；存在性由服务层校验 */
     @Pattern(regexp = "^[A-Za-z0-9_-]{1,16}$", message = "所在列不合法")
     private String boardColumn = "backlog";
 
