@@ -5,7 +5,9 @@ import com.hourglass.entity.ProjectMember;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.ProjectMemberMapper;
+import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,10 @@ public class ProjectAccessService {
 
     private final ProjectMemberMapper projectMemberMapper;
     private final WorkspaceMemberMapper memberMapper;
+
+    /** 展示标签清理用；单测里不注入时为 null，避免把新表耦合进权限测试。 */
+    @Autowired(required = false)
+    private ProjectMemberRoleMapper projectMemberRoleMapper;
 
     public ProjectAccessService(ProjectMemberMapper projectMemberMapper,
                                 WorkspaceMemberMapper memberMapper) {
@@ -109,7 +115,12 @@ public class ProjectAccessService {
         if (member == null || projectId == null) {
             return ACCESS_WRITE;
         }
-        String access = normalizeAccess(configuredAccess(workspaceId, projectId, member.getUserId()));
+        return effectiveOfConfigured(member, configuredAccess(workspaceId, projectId, member.getUserId()));
+    }
+
+    /** 已取到显式配置时的有效权限计算，供批量场景复用，避免逐人回查。 */
+    public static String effectiveOfConfigured(WorkspaceMember member, String configured) {
+        String access = normalizeAccess(configured);
         if (!access.isEmpty()) {
             return access;
         }
@@ -485,8 +496,11 @@ public class ProjectAccessService {
         projectMemberMapper.seedAssignedNone(workspaceId);
     }
 
-    /** 项目删除时清理它的可见范围配置 */
+    /** 项目删除时清理它的可见范围配置与角色标签 */
     public void clearProject(String workspaceId, String projectId) {
         projectMemberMapper.deleteByProject(workspaceId, projectId);
+        if (projectMemberRoleMapper != null) {
+            projectMemberRoleMapper.deleteByProject(workspaceId, projectId);
+        }
     }
 }

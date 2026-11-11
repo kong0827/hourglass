@@ -2,6 +2,7 @@
 
 import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
+import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
@@ -1031,20 +1032,73 @@ function populateReqSelect(keepId){
   /* 项目下拉重建时值可能被收回（如项目已删）：记下来，避免把这次程序化变化当成用户换项目 */
   lastReqValue = iReq.value;
 }
+/* 项目角色标注缓存：按 空间:项目 缓存，角色变化时由项目页广播失效 */
+var projectRoleCache = Object.create(null);
+var projectRoleLoading = Object.create(null);
+function currentProjectId(){
+  return iReq ? (iReq.value || "") : "";
+}
+function projectRoleMap(projectId){
+  if(!projectId || !rt.currentWs) return null;
+  return projectRoleCache[rt.currentWs.id + ":" + projectId] || null;
+}
+/* 花名册接口只对当前项目可见者开放；读取失败就不展示角色，不影响负责人选择 */
+function ensureProjectRoles(projectId){
+  if(!projectId || !rt.currentWs || rt.currentWs.type !== "shared") return;
+  var key = rt.currentWs.id + ":" + projectId;
+  if(projectRoleCache[key] || projectRoleLoading[key]) return;
+  projectRoleLoading[key] = true;
+  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(projectId) + "/members")
+    .then(function(data){
+      var map = {};
+      (data && data.members || []).forEach(function(m){
+        if(m.roleTitle) map[m.userId] = m.roleTitle;
+      });
+      projectRoleCache[key] = map;
+      delete projectRoleLoading[key];
+      refreshOwnerSelect();
+    }).catch(function(){
+      delete projectRoleLoading[key];
+    });
+}
+window.addEventListener("ds:project-roles-changed", function(e){
+  var pid = e && e.detail && e.detail.projectId;
+  if(!pid || !rt.currentWs) return;
+  delete projectRoleCache[rt.currentWs.id + ":" + pid];
+  if(pid === currentProjectId()) ensureProjectRoles(pid);
+});
 function ownerOptions(){
-  var opts = [], seen = {};
+  var opts = [], seen = {}, roles = projectRoleMap(currentProjectId()) || {};
+  function push(userId, name, m){
+    if(!userId || seen[userId]) return;
+    seen[userId] = 1;
+    opts.push({
+      id: userId,
+      name: name,
+      company: m ? companyNameOf(m) : companyOfUser(userId),
+      role: roles[userId] || ""
+    });
+  }
   if(rt.currentUser){
-    opts.push({id: rt.currentUser.id, name: rt.currentUser.displayName || rt.currentUser.username});
-    seen[rt.currentUser.id] = 1;
+    push(rt.currentUser.id, rt.currentUser.displayName || rt.currentUser.username);
   }
   if(rt.currentWs && rt.currentWs.type === "shared"){
     rt.wsMembersCache.forEach(function(m){
-      if(!m.userId || seen[m.userId]) return;
-      seen[m.userId] = 1;
-      opts.push({id: m.userId, name: m.displayName || m.username});
+      /* 空间查看者不参与项目，也不进入负责人可选范围 */
+      if((m.role || "member") === "viewer") return;
+      push(m.userId, m.displayName || m.username, m);
     });
   }
   return opts;
+}
+function companyOfUser(userId){
+  if(!userId) return "";
+  var hit = (rt.wsMembersCache || []).filter(function(m){ return m.userId === userId; })[0];
+  return hit ? companyNameOf(hit) : "";
+}
+function ownerOptionHTML(o, selected){
+  return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' +
+    esc(o.name) + (o.role ? ' · ' + esc(o.role) : '') + '</option>';
 }
 function populateOwnerSelect(currentName, currentUserId){
   if(!iOwner || iOwner.tagName !== "SELECT") return;
@@ -1052,12 +1106,32 @@ function populateOwnerSelect(currentName, currentUserId){
   var curName = currentName == null ? "" : String(currentName);
   var curId = currentUserId == null ? "" : String(currentUserId);
   var html = "", matched = false;
+  var groups = [], groupIndex = {};
+  var hasCompany = opts.some(function(o){ return !!o.company; });
   opts.forEach(function(o){
     var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
     if(on) matched = true;
-    html += '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (on ? " selected" : "") + '>' +
-      esc(o.name) + '</option>';
+    if(!hasCompany){ html += ownerOptionHTML(o, on); return; }
+    var label = o.company || "未标注公司";
+    var g = groupIndex[label];
+    if(!g){
+      g = groupIndex[label] = { label:label, items:[] };
+      groups.push(g);
+    }
+    g.items.push({ o:o, on:on });
   });
+  if(hasCompany){
+    groups.sort(function(a, b){
+      if(a.label === "未标注公司") return 1;
+      if(b.label === "未标注公司") return -1;
+      return a.label.localeCompare(b.label, "zh");
+    });
+    groups.forEach(function(g){
+      html += '<optgroup label="' + esc(g.label) + '">'
+        + g.items.map(function(x){ return ownerOptionHTML(x.o, x.on); }).join("")
+        + '</optgroup>';
+    });
+  }
   if(curName && !matched){
     html += '<option value="__text__" data-name="' + esc(curName) + '" selected>○ ' + esc(curName) + '（非成员）</option>';
   }
@@ -1065,6 +1139,8 @@ function populateOwnerSelect(currentName, currentUserId){
     html += '<option value="__text__" data-name="' + esc(rt.OWNER_DEFAULT) + '">' + esc(rt.OWNER_DEFAULT) + '</option>';
   }
   iOwner.innerHTML = html;
+  /* 角色是异步的：先渲染基础选项，拿到花名册后只重绘下拉并保留当前选择 */
+  ensureProjectRoles(currentProjectId());
 }
 function refreshOwnerSelect(){
   if(!iOwner || iOwner.tagName !== "SELECT") return;
@@ -2145,6 +2221,8 @@ if(iReq) iReq.addEventListener("change", function(){
   syncAssocViewBtns();
   syncDrawerHead();
   syncDrawerSource();
+  /* 负责人选项里的「本项目角色」跟项目走：换项目后重新取花名册 */
+  refreshOwnerSelect();
 });
 var iDemand = $("iDemand");
 if(iDemand) iDemand.addEventListener("change", function(){
@@ -2271,6 +2349,11 @@ function renderComments(list){
       avatarHTML(c.authorName || "?", "sm") +
       '<span class="ci-main">' +
         '<span class="ci-head"><span class="ci-who">' + esc(c.authorName || "未知") + '</span>' +
+          (function(){
+            if(!rt.currentWs || rt.currentWs.type !== "shared") return "";
+            var company = companyOfUser(c.authorId);
+            return company ? companyChipHTML(company) : "";
+          })() +
           '<span class="ci-time">' + esc(fmtTs(c.createdAt)) + '</span>' +
           (mine && !rt.drawerReadOnly ? '<button class="ci-del" type="button" data-comment-del="' + esc(c.id) + '">删除</button>' : '') +
         '</span>' +

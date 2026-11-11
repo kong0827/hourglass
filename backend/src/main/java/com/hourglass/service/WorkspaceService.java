@@ -20,6 +20,7 @@ import com.hourglass.mapper.AppNotificationMapper;
 import com.hourglass.mapper.InviteMapper;
 import com.hourglass.mapper.InviteProjectGrantMapper;
 import com.hourglass.mapper.ProjectMemberMapper;
+import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.SavedViewMapper;
 import com.hourglass.mapper.TaskWatchMapper;
 import com.hourglass.mapper.UserListPreferenceMapper;
@@ -66,6 +67,7 @@ public class WorkspaceService {
     private final InviteMapper inviteMapper;
     private final InviteProjectGrantMapper inviteGrantMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ProjectMemberRoleMapper projectMemberRoleMapper;
     private final TaskWatchMapper taskWatchMapper;
     /** 任务/项目/文档/分支/依赖/附件等清空清单统一收口在 TaskCascade */
     private final TaskCascade cascade;
@@ -88,6 +90,7 @@ public class WorkspaceService {
                             InviteMapper inviteMapper,
                             InviteProjectGrantMapper inviteGrantMapper,
                             ProjectMemberMapper projectMemberMapper,
+                            ProjectMemberRoleMapper projectMemberRoleMapper,
                             TaskWatchMapper taskWatchMapper,
                             TaskCascade cascade,
                             com.hourglass.service.ActivityService activityService,
@@ -107,6 +110,7 @@ public class WorkspaceService {
         this.inviteMapper = inviteMapper;
         this.inviteGrantMapper = inviteGrantMapper;
         this.projectMemberMapper = projectMemberMapper;
+        this.projectMemberRoleMapper = projectMemberRoleMapper;
         this.taskWatchMapper = taskWatchMapper;
         this.cascade = cascade;
         this.activityService = activityService;
@@ -371,6 +375,7 @@ public class WorkspaceService {
         wipeData(workspaceId);
         memberMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
+        projectMemberRoleMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
         inviteGrantMapper.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
@@ -394,6 +399,7 @@ public class WorkspaceService {
         boardColumnMapper.deleteAllByWorkspace(workspaceId);
         transitionMapper.deleteAllByWorkspace(workspaceId);
         projectMemberMapper.deleteAllByWorkspace(workspaceId);
+        projectMemberRoleMapper.deleteAllByWorkspace(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> metaCache.evict(workspaceId));
     }
 
@@ -410,6 +416,29 @@ public class WorkspaceService {
     public List<WorkspaceMember> members(String userId, String workspaceId) {
         requireMember(userId, workspaceId);
         return memberMapper.selectByWorkspace(workspaceId);
+    }
+
+    /** 标注成员公司：空间级自由文本，只影响展示/筛选，不触碰任何权限字段。 */
+    @Transactional
+    public String updateMemberCompany(String operatorId, String workspaceId, String targetUserId,
+                                      String companyName) {
+        requireManager(operatorId, workspaceId);
+        WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
+        if (target == null) {
+            throw AppException.notFound("成员不存在：" + targetUserId);
+        }
+        String name = Texts.trimToNull(companyName);
+        if (name != null && name.length() > 64) {
+            throw AppException.badRequest("公司名称不能超过 64 个字符");
+        }
+        memberMapper.updateCompanyName(workspaceId, targetUserId, name);
+        AppUser u = userMapper.selectById(targetUserId);
+        String display = u == null || Texts.trimToNull(u.getDisplayName()) == null
+                ? targetUserId : u.getDisplayName();
+        activityService.logConfig(workspaceId, operatorId, name == null
+                ? "清除成员「" + display + "」的公司标注"
+                : "标注成员「" + display + "」的公司为「" + name + "」");
+        return name == null ? "" : name;
     }
 
     @Transactional
@@ -519,6 +548,7 @@ public class WorkspaceService {
             }
             memberMapper.delete(workspaceId, targetUserId);
             projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+            projectMemberRoleMapper.deleteByUser(workspaceId, targetUserId);
             /* 关注关系只在本空间有效，退出后清理，重新加入需重新关注 */
             taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
             activityService.logConfig(workspaceId, userId, "退出空间");
@@ -541,6 +571,7 @@ public class WorkspaceService {
         }
         memberMapper.delete(workspaceId, targetUserId);
         projectMemberMapper.deleteByUser(workspaceId, targetUserId);
+        projectMemberRoleMapper.deleteByUser(workspaceId, targetUserId);
         /* 关注关系只在本空间有效，移除后清理，重新加入需重新关注 */
         taskWatchMapper.deleteByWorkspaceUser(workspaceId, targetUserId);
         AppUser target = userMapper.selectById(targetUserId);

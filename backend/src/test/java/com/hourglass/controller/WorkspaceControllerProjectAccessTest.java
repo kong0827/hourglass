@@ -7,9 +7,13 @@ import com.hourglass.entity.Workspace;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.UserMapper;
+import com.hourglass.dto.ProjectMemberRoleOverview;
+import com.hourglass.dto.ProjectMemberRoleView;
 import com.hourglass.service.ActivityService;
+import com.hourglass.service.AuditService;
 import com.hourglass.service.NotificationEventService;
 import com.hourglass.service.ProjectAccessService;
+import com.hourglass.service.ProjectMemberRoleService;
 import com.hourglass.service.WorkspaceService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +45,9 @@ class WorkspaceControllerProjectAccessTest {
     private WorkspaceService workspaceService;
     private ProjectAccessService projectAccessService;
     private RequirementMapper requirementMapper;
+    private ProjectMemberRoleService projectMemberRoleService;
     private ActivityService activityService;
+    private AuditService auditService;
     private NotificationEventService notificationEvents;
     private MockMvc mvc;
 
@@ -49,12 +55,14 @@ class WorkspaceControllerProjectAccessTest {
     void setUp() {
         workspaceService = mock(WorkspaceService.class);
         projectAccessService = mock(ProjectAccessService.class);
+        projectMemberRoleService = mock(ProjectMemberRoleService.class);
         requirementMapper = mock(RequirementMapper.class);
         activityService = mock(ActivityService.class);
+        auditService = mock(AuditService.class);
         notificationEvents = mock(NotificationEventService.class);
         mvc = MockMvcBuilders.standaloneSetup(new WorkspaceController(workspaceService, mock(UserMapper.class),
-                        projectAccessService, requirementMapper, activityService, notificationEvents,
-                        mock(com.hourglass.service.AuditService.class)))
+                        projectAccessService, projectMemberRoleService,
+                        requirementMapper, activityService, notificationEvents, auditService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         LoginUser user = new LoginUser("U1", "u1", "x", "我", "user");
@@ -251,6 +259,96 @@ class WorkspaceControllerProjectAccessTest {
 
         verifyNoInteractions(activityService);
         verifyNoInteractions(notificationEvents);
+    }
+
+    @Test
+    void projectRosterRequiresViewAndReturnsCompanyAndRole() throws Exception {
+        workspace("shared");
+        Requirement p1 = new Requirement();
+        p1.setId("P1");
+        p1.setWorkspaceId(WS);
+        p1.setName("项目A");
+        when(requirementMapper.selectById("P1")).thenReturn(p1);
+        ProjectMemberRoleOverview overview = new ProjectMemberRoleOverview();
+        ProjectMemberRoleView row = new ProjectMemberRoleView();
+        row.setUserId("U2");
+        row.setCompanyName("外部公司");
+        row.setRoleTitle("前端");
+        row.setAccess("write");
+        overview.setMembers(Collections.singletonList(row));
+        overview.setCanEditRole(true);
+        when(projectMemberRoleService.roster(WS, p1, "U1")).thenReturn(overview);
+
+        mvc.perform(get("/api/workspaces/" + WS + "/projects/P1/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.members[0].companyName").value("外部公司"))
+                .andExpect(jsonPath("$.data.members[0].roleTitle").value("前端"))
+                .andExpect(jsonPath("$.data.canEditRole").value(true));
+
+        verify(projectAccessService).assertView(WS, "U1", "P1");
+    }
+
+    @Test
+    void projectRosterRejectsProjectFromAnotherWorkspace() throws Exception {
+        workspace("shared");
+        Requirement other = new Requirement();
+        other.setId("P1");
+        other.setWorkspaceId("W2");
+        when(requirementMapper.selectById("P1")).thenReturn(other);
+
+        mvc.perform(get("/api/workspaces/" + WS + "/projects/P1/members"))
+                .andExpect(status().isNotFound());
+
+        verify(projectAccessService, never()).assertView(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void saveProjectRoleLogsConfigAndAudit() throws Exception {
+        workspace("shared");
+        Requirement p1 = new Requirement();
+        p1.setId("P1");
+        p1.setWorkspaceId(WS);
+        p1.setName("项目A");
+        when(requirementMapper.selectById("P1")).thenReturn(p1);
+        when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
+        when(projectMemberRoleService.saveRole(WS, p1, "U2", "前端", "U1")).thenReturn("前端");
+
+        mvc.perform(put("/api/workspaces/" + WS + "/projects/P1/member-roles/U2")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"roleTitle\":\"前端\"}"))
+                .andExpect(status().isOk());
+
+        verify(activityService).logConfig(WS, "U1", "标注成员「U2」在项目「项目A」的角色为「前端」");
+        verify(auditService).recordCurrent(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.eq("project_role"),
+                org.mockito.ArgumentMatchers.eq("project"),
+                org.mockito.ArgumentMatchers.eq("P1"),
+                org.mockito.ArgumentMatchers.eq("项目A"),
+                org.mockito.ArgumentMatchers.eq(true),
+                org.mockito.ArgumentMatchers.contains("前端"),
+                org.mockito.ArgumentMatchers.any(javax.servlet.http.HttpServletRequest.class));
+    }
+
+    @Test
+    void updateMemberCompanyDelegatesAndAudits() throws Exception {
+        workspace("shared");
+        when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
+        when(workspaceService.updateMemberCompany("U1", WS, "U2", "外部公司")).thenReturn("外部公司");
+
+        mvc.perform(put("/api/workspaces/" + WS + "/members/U2/company")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"companyName\":\"外部公司\"}"))
+                .andExpect(status().isOk());
+
+        verify(workspaceService).updateMemberCompany("U1", WS, "U2", "外部公司");
+        verify(auditService).recordCurrent(org.mockito.ArgumentMatchers.eq(WS),
+                org.mockito.ArgumentMatchers.eq("member_company"),
+                org.mockito.ArgumentMatchers.eq("member"),
+                org.mockito.ArgumentMatchers.eq("U2"),
+                org.mockito.ArgumentMatchers.eq("U2"),
+                org.mockito.ArgumentMatchers.eq(true),
+                org.mockito.ArgumentMatchers.contains("外部公司"),
+                org.mockito.ArgumentMatchers.any(javax.servlet.http.HttpServletRequest.class));
     }
 
     private void workspace(String type) {

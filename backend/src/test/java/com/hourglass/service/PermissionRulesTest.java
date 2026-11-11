@@ -78,6 +78,7 @@ class PermissionRulesTest {
                 mock(WorkActivityService.class),
                 mock(InviteMapper.class),
                 mock(com.hourglass.mapper.InviteProjectGrantMapper.class), projectMemberMapper,
+                mock(com.hourglass.mapper.ProjectMemberRoleMapper.class),
                 mock(com.hourglass.mapper.TaskWatchMapper.class), mock(TaskCascade.class),
                 mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
         projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);

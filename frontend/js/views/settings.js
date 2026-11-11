@@ -12,6 +12,7 @@ import { canManageProject, catTag, roleReadOnly, rt, state, totalTaskCount } fro
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
+import { companyChipHTML, companyEditChipHTML } from "../lib/company.js";
 import { BACKUP_NAME, CAT_DEFAULT_COLOR, avatarHTML, dayDiff, fmtShortMD, fmtTs, priTagHTML, startOfDay } from "../lib/format.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { ganttState, syncGanttUndoUI } from "./gantt.js";
@@ -417,6 +418,12 @@ function loadWsMemberList(){
       var sub = "@" + esc(m.username);
       var vis = memberVisibilityText(m);
       if(vis) sub += ' · ' + vis;
+      var company = "";
+      if(rt.currentWs.type === "shared"){
+        company = isManager
+          ? companyEditChipHTML(m.companyName, m.userId)
+          : companyChipHTML(m.companyName);
+      }
       var assignBtn = (canManageRow && role === "member")
         ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
         : '';
@@ -426,7 +433,7 @@ function loadWsMemberList(){
         : '';
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
-        '<span class="mi"><span class="nm">' + esc(m.displayName) + '</span>' +
+        '<span class="mi"><span class="nm"><span class="nm-text">' + esc(m.displayName) + '</span>' + company + '</span>' +
           '<span class="sub">' + sub + '</span></span>' +
         roleCell +
         ((assignBtn || removeBtn) ? '<span class="acts">' + assignBtn + removeBtn + '</span>' : '') +
@@ -470,6 +477,35 @@ function memberVisibilityText(m){
   return "可见 " + visible + "/" + projects.length + " 个项目" +
     (readOnly ? ("（其中 " + readOnly + " 个只读）") : "") +
     (assigned ? " · 按项目分配" : "");
+}
+function editMemberCompany(userId){
+  var m = (rt.wsMembersCache || []).filter(function(x){ return x.userId === userId; })[0];
+  if(!m || !rt.currentWs || rt.currentWs.type !== "shared") return;
+  var myRole = rt.currentWs.myRole;
+  if(myRole !== "owner" && myRole !== "admin") return;
+  UI.showPrompt({
+    title: "标注公司 · " + (m.displayName || m.username || userId),
+    desc: "公司是空间级展示标签，用于区分外部协作方；不改变项目可见范围、任务与工时权限。留空表示未标注。",
+    label: "公司名称",
+    value: m.companyName || "",
+    placeholder: "例如：蓝海银行 / 云启实施",
+    maxLength: 64,
+    required: false,
+    okText: "保存"
+  }).then(function(name){
+    if(name === null) return;
+    API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
+      encodeURIComponent(userId) + "/company", { companyName: name }).then(function(){
+      m.companyName = name;
+      loadWsMemberList();
+      window.dispatchEvent(new CustomEvent("ds:member-company-changed", {
+        detail: { userId: userId, companyName: name }
+      }));
+      toast(name ? ("已标注公司「" + name + "」") : "已清除公司标注", "fs");
+    }).catch(function(ex){
+      toast(ex.message || "公司标注失败", "bad");
+    });
+  });
 }
 wsMemberList.addEventListener("change", function(e){
   var sel = e.target.closest("[data-member-role]");
@@ -1568,7 +1604,8 @@ if(actList) actList.addEventListener("click", function(e){
 var AUDIT_LABEL = {
   login:"登录成功", login_fail:"登录失败", logout:"退出登录",
   role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
-  member_add:"添加成员", member_remove:"移除成员", workspace_delete:"删除空间",
+  member_add:"添加成员", member_remove:"移除成员", member_company:"标注成员公司",
+  project_role:"标注项目角色", workspace_delete:"删除空间",
   project_delete:"删除项目", user_create:"创建账号", user_update:"修改账号",
   user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
   invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
@@ -1952,6 +1989,11 @@ $("btnWsMemberAdd").addEventListener("click", function(){
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });
 wsMemberList.addEventListener("click", function(e){
+  var company = e.target.closest("[data-member-company]");
+  if(company){
+    editMemberCompany(company.dataset.memberCompany);
+    return;
+  }
   var assign = e.target.closest("[data-assign-projects]");
   if(assign){
     openMemberGrants(assign.dataset.assignProjects);

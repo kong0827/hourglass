@@ -19,6 +19,7 @@ import com.hourglass.mapper.WorkspaceMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -56,6 +57,10 @@ public class UserService implements UserDetailsService {
     private final PasswordEncoder encoder;
     private final WorkspaceMemberCache memberCache;
     private final SessionEpochService sessionEpochs;
+
+    /** 展示标签表，账号删除时清理；单测不注入时为 null */
+    @Autowired(required = false)
+    private com.hourglass.mapper.ProjectMemberRoleMapper projectMemberRoleMapper;
 
     @Value("${app.auth.username:admin}")
     private String bootstrapUser;
@@ -323,6 +328,9 @@ public class UserService implements UserDetailsService {
         // 退出所有共享空间 + 清空个人空间配置数据
         memberMapper.deleteAllByUser(id);
         projectMemberMapper.deleteAllByUser(id);
+        if (projectMemberRoleMapper != null) {
+            projectMemberRoleMapper.deleteAllByUser(id);
+        }
         /* 账号删除后清掉业务表上的负责人引用，保留显示名文本作为历史快照 */
         taskMapper.clearOwnerUser(id);
         /* 关注关系跨空间保留在任务上，账号删除后必须一并清掉 */

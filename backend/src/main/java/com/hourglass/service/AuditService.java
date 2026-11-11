@@ -222,6 +222,8 @@ public class AuditService {
             case "role_change": return "权限变更";
             case "member_add": return "添加成员";
             case "member_remove": return "移除成员";
+            case "member_company": return "标注成员公司";
+            case "project_role": return "标注项目角色";
             case "invite_create": return "生成邀请链接";
             case "invite_revoke": return "撤销邀请链接";
             case "password_change": return "修改密码";

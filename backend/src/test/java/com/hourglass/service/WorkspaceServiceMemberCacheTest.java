@@ -63,6 +63,7 @@ class WorkspaceServiceMemberCacheTest {
                 mock(WorkActivityService.class),
                 mock(InviteMapper.class), mock(com.hourglass.mapper.InviteProjectGrantMapper.class),
                 mock(ProjectMemberMapper.class),
+                mock(com.hourglass.mapper.ProjectMemberRoleMapper.class),
                 taskWatchMapper, mock(TaskCascade.class),
                 activityService, memberCache, mock(WorkspaceMetaCache.class));
 
@@ -142,6 +143,41 @@ class WorkspaceServiceMemberCacheTest {
         service.joinByInvite(WS, "U4");
 
         verify(activityService).logConfig(WS, "U4", "通过邀请链接加入空间");
+    }
+
+    @Test
+    void managerCanLabelMemberCompany() {
+        service.updateMemberCompany(OWNER, WS, MEMBER, "  外部协作公司  ");
+
+        verify(memberMapper).updateCompanyName(WS, MEMBER, "外部协作公司");
+        verify(activityService).logConfig(eq(WS), eq(OWNER), contains("外部协作公司"));
+    }
+
+    @Test
+    void blankCompanyClearsLabel() {
+        service.updateMemberCompany(OWNER, WS, MEMBER, "   ");
+
+        verify(memberMapper).updateCompanyName(WS, MEMBER, null);
+        verify(activityService).logConfig(eq(WS), eq(OWNER), contains("清除"));
+    }
+
+    @Test
+    void ordinaryMemberCannotLabelCompany() {
+        assertThrows(AppException.class,
+                () -> service.updateMemberCompany(MEMBER, WS, OWNER, "外部公司"));
+        verify(memberMapper, times(0)).updateCompanyName(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void companyNameLongerThan64IsRejected() {
+        StringBuilder name = new StringBuilder();
+        for (int i = 0; i < 65; i++) {
+            name.append('司');
+        }
+
+        assertThrows(AppException.class,
+                () -> service.updateMemberCompany(OWNER, WS, MEMBER, name.toString()));
+        verify(memberMapper, times(0)).updateCompanyName(anyString(), anyString(), anyString());
     }
 
     private static Workspace workspace() {

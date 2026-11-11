@@ -57,6 +57,7 @@ var SHELL = [
   "js/core/view-params.js",
   "js/lib/download.js",
   "js/lib/format.js",
+  "js/lib/company.js",
   "js/lib/gantt-shared.js",
   "js/lib/text-diff.js",
   "js/main.js",

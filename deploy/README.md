@@ -65,15 +65,17 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 > 应用账号不再内置固定口令：脚本首次执行时用 `RANDOM_BYTES` 随机生成一次性密码，并在结束时以「沙漏部署提示」输出一次。**请立即把该密码写进第 3 步 `/etc/hourglass.env` 的 `DB_PASSWORD`（用单引号包裹）**；这条提示不会再次出现，也不要把建库输出重定向或记录到日志文件里。
 > 账号已存在时脚本不改动其密码，只输出提示；重置密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。若你的 MySQL 禁用了 `RANDOM_BYTES`，按脚本内注释改用 `SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)`，或先手工建号再执行脚本。
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
-> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得作为普通升级在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（当时口径；其后 `sql/65` 新增跨版本计划关联表、`sql/66` 新增成员项目授权模式与邀请项目预分配表，完整基线现为 54 表），不回放 61/62、不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
+> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得作为普通升级在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（当时口径；其后 `sql/65` 新增跨版本计划关联表、`sql/66` 新增成员项目授权模式与邀请项目预分配表、`sql/68` 新增成员公司与项目角色标注表，完整基线现为 55 表），不回放 61/62、不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
 >
 > **已有库升级到「新成员默认不参与项目」版本：先执行 `sql/66_project_access_assigned.sql`，再替换 jar。** 新 jar 会读写 `workspace_member.project_access_mode` 与 `invite_project_grant`，先换 jar 会导致成员列表、邀请与加入接口报错。66 只增列、建表并为 `assigned` 成员补 `none` 种子行，不改写已有授权；存量成员默认 `all`，升级后可见范围不变。执行前照常做全库备份。
+
+**已有库升级到「成员公司与项目角色标注」版本：先执行 `sql/68_member_company_project_role.sql`，再替换 jar。** 新 jar 会读取 `workspace_member.company_name` 与 `project_member_role`，缺结构会让成员列表和项目花名册报错。68 幂等、只增列建表、不回填、不改权限；执行后全库 55 表，全库备份与恢复需包含新表。
 
 ## 2. 上传后端与前端
 
 自动部署（推荐）：本地执行 `bash deploy/deploy.sh`，脚本会按改动范围只发布 jar 或只发布前端，并完成校验与备份。部署脚本保留已有备份，不自动清理。
 
-**正常脚本仍只支持新空库；本轮原库重建是用户单独明确授权操作，不是脚本默认许可。**新库路径使用不存在的 `hourglass_` 前缀数据库，先备份当前数据库、配置和附件，再创建新库、执行 54 表基线并设置显式 DB_NAME；不回放 61/62、不迁移旧历史。本次最新授权替代新库-only 方案：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；最终认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点。原历史仅在备份中，不再原表在线保留。正式证据包括 plan / plan_task / record / item / log 五表，须随 MySQL 全库备份恢复。
+**正常脚本仍只支持新空库；本轮原库重建是用户单独明确授权操作，不是脚本默认许可。**新库路径使用不存在的 `hourglass_` 前缀数据库，先备份当前数据库、配置和附件，再创建新库、执行 55 表基线并设置显式 DB_NAME；不回放 61/62、不迁移旧历史。本次最新授权替代新库-only 方案：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；最终认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点。原历史仅在备份中，不再原表在线保留。正式证据包括 plan / plan_task / record / item / log 五表，须随 MySQL 全库备份恢复。
 
 A–E 首次交付时点的本地正确性门禁（历史记录，不代表当前 HEAD）：Java 821 tests（0 failures/errors/skipped，当时 `124ce05` 的 514 个发布候选源文件 parity，不是当前 HEAD）、真实 MySQL 14 mandatory 484 passed / 0 failed / 0 unverified、本地 full demo 990 回读分别通过；真实 headless Chrome backend 8120 / frontend 8121 在 1440/390px 的导航 72、权限 29、恢复 27（3 场景）、planTime 6、截图 16 断言独立通过。七对 delivery PNG 重拍、SHA256 配对一致并视觉查看，非物理手机测试；JS syntax 107 files / 3 unit suites、3 SVG、文档 14 checks / baseline convergence 16、部署安全隔离 212（含脚本语法 73）分别通过。1 个自建浏览器 fixture 空间留作本地证据，最终复跑未建新空间，不称全部本地数据已清理；独立统计见 [`CHANGELOG.md`](../CHANGELOG.md)。
 

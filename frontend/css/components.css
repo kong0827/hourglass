@@ -346,6 +346,17 @@ input[type="week"]::-webkit-calendar-picker-indicator:hover{opacity:.85;}
 .tag.tag-info{background:var(--info-soft);color:var(--info-fg);}
 .tag.tag-plum{background:var(--plum-soft);color:var(--plum);}
 .tag.ghost{background:transparent;border-color:var(--border);color:var(--text-3);font-weight:500;}
+/* 公司标签：自由文本 + 确定性色点；只做识别，不承载语义权限 */
+.org-chip{
+  display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;
+  border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);
+  font-size:10.5px;font-weight:500;color:var(--text-2);
+  white-space:nowrap;vertical-align:middle;max-width:100%;appearance:none;font-family:inherit;
+}
+.org-chip i{width:6px;height:6px;border-radius:2px;background:var(--oc,#98A2B3);flex:0 0 auto;}
+.org-chip.unassigned{color:var(--text-3);border-style:dashed;}
+.org-chip.editable{line-height:18px;cursor:pointer;}
+.org-chip.editable:hover{border-color:var(--primary);color:var(--primary);}
 /* 模块/列标签：用模块原色与主题文字混合派生，色相不漂移、两套主题各自对比度达标 */
 .tag.tag-cat{
   background:color-mix(in srgb, var(--tag-c) 12%, var(--surface));

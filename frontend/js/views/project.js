@@ -10,6 +10,7 @@ import { dueState, rt, statusBucket } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
+import { companyChipHTML } from "../lib/company.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
@@ -26,18 +27,26 @@ window.addEventListener("ds:delivery-changed", function(e){
   else deliveryCache = Object.create(null);
   if(document.body.dataset.view === "project" && currentMode() === "board") loadProject({ silent:true });
 });
+/* 设置页改了公司后，花名册的公司列要重新取数，避免继续显示旧标签 */
+window.addEventListener("ds:member-company-changed", function(){
+  rosterCache.key = "";
+  rosterCache.data = null;
+  if(document.body.dataset.view === "project" && projectTab === "roles" && cache && cache.project){
+    loadRoster(cache.project.id, true);
+  }
+});
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
 var projectTab = (function(){
   try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
 })();
 function setProjectTab(tab){
-  if(["overview","epics","members"].indexOf(tab) === -1) return;
+  if(["overview","epics","members","roles"].indexOf(tab) === -1) return;
   projectTab = tab;
   try{ localStorage.setItem(TAB_KEY, tab); }catch(e){ /* 受限环境忽略 */ }
   if(cache && currentMode() === "board") renderProject();
 }
 function projectTabBar(){
-  var tabs = [["overview","概览"],["epics","史诗"],["members","成员负载"]];
+  var tabs = [["overview","概览"],["epics","史诗"],["members","成员负载"],["roles","成员与角色"]];
   return '<div class="seg mini project-tabs" role="tablist" aria-label="项目详情分区">' + tabs.map(function(t){
     var on = projectTab === t[0];
     return '<button type="button" role="tab" data-project-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' + t[1] + '</button>';
@@ -107,6 +116,105 @@ function memberRows(members){
       + '<td class="num">' + fmtHours(m.actualWeekMinutes) + '</td><td>' + loadBarHTML(m.loadPct) + '</td>'
       + '<td>' + (m.overloaded ? '<span class="mini-tag over">超载</span>' : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>')) + '</td></tr>';
   }).join("");
+}
+/* ---------- 成员与角色：公司/角色只是展示标签，不改变项目权限 ---------- */
+var ROSTER_ROLES = ["项目经理","项目负责人","产品负责人","产品","后端开发","前端开发","测试","测试负责人","技术负责人","视觉设计","交互设计","实施顾问","客户项目负责人","业务代表"];
+var rosterCache = { key:"", data:null, loading:false, error:null, seq:0 };
+function rosterPanel(){
+  return '<section class="manager-panel"><div class="manager-panel-head"><b>成员与角色</b><span id="rosterSummary">加载中…</span></div>'
+    + '<p class="roster-note">公司由空间主 / 管理员维护，是空间级展示标签；项目角色由项目负责人或空间管理员维护，一人一个主角色。两者都只影响展示与筛选，不改变项目可见范围和工作项权限。空间查看者不参与项目，不在此列表。</p>'
+    + '<div class="tbl-wrap"><table class="manager-tbl roster-tbl"><thead><tr><th>成员</th><th>公司</th><th>本项目角色</th><th>项目权限</th><th>可见来源</th></tr></thead>'
+    + '<tbody id="rosterBody"><tr><td colspan="5" class="manager-empty-cell">加载中…</td></tr></tbody></table></div></section>';
+}
+function rosterRoleSelect(m, canEdit){
+  var role = m.roleTitle || "";
+  if(!canEdit){
+    return role ? '<span class="tag tag-ghost">' + esc(role) + '</span>' : '<span class="roster-empty">未设角色</span>';
+  }
+  var options = ROSTER_ROLES.slice();
+  if(role && options.indexOf(role) === -1) options.unshift(role);
+  return '<select class="mini-select roster-role" data-roster-role="' + esc(m.userId) + '" aria-label="项目角色">'
+    + '<option value=""' + (role ? "" : " selected") + '>未设角色</option>'
+    + options.map(function(r){
+      return '<option value="' + esc(r) + '"' + (r === role ? " selected" : "") + '>' + esc(r) + '</option>';
+    }).join("") + '</select>';
+}
+function paintRoster(){
+  var body = $("rosterBody"), summary = $("rosterSummary");
+  if(!body) return;
+  if(rosterCache.error){
+    if(summary) summary.textContent = "加载失败";
+    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">花名册加载失败：' + esc(rosterCache.error.message || "网络异常")
+      + ' <button class="btn sm" type="button" data-roster-retry>重试</button></td></tr>';
+    return;
+  }
+  if(rosterCache.loading || !rosterCache.data){
+    if(summary) summary.textContent = "加载中…";
+    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">加载中…</td></tr>';
+    return;
+  }
+  var list = rosterCache.data.members || [];
+  var canEdit = !!rosterCache.data.canEditRole;
+  var companies = {}, unlabeled = 0;
+  list.forEach(function(m){
+    var name = String(m.companyName || "").trim();
+    if(name) companies[name] = 1; else unlabeled++;
+  });
+  if(summary){
+    summary.textContent = list.length + " 位成员 · " + Object.keys(companies).length + " 家公司" + (unlabeled ? " · " + unlabeled + " 人未标注" : "");
+  }
+  if(!list.length){
+    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">当前没有可见的项目成员</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function(m){
+    var name = m.displayName || m.username || m.userId;
+    return '<tr data-roster-user="' + esc(m.userId) + '">'
+      + '<td><span class="manager-person">' + avatarHTML(name, "sm") + '<span class="roster-who"><b>' + esc(name) + '</b><small>@' + esc(m.username || m.userId) + '</small></span></span></td>'
+      + '<td>' + companyChipHTML(m.companyName) + '</td>'
+      + '<td>' + rosterRoleSelect(m, canEdit) + '</td>'
+      + '<td><span class="roster-access ' + (m.access === "read" ? "read" : "write") + '">' + (m.access === "read" ? "只读" : "可参与") + '</span></td>'
+      + '<td><span class="roster-source">' + esc(m.source || "") + '</span></td>'
+      + '</tr>';
+  }).join("");
+}
+function loadRoster(reqId, force){
+  if(!reqId || !rt.currentWs){ paintRoster(); return Promise.resolve(null); }
+  var key = rt.currentWs.id + ":" + reqId;
+  if(!force && rosterCache.key === key){ paintRoster(); return Promise.resolve(rosterCache.data); }
+  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1 };
+  var my = rosterCache.seq;
+  return API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(reqId) + "/members")
+    .then(function(data){
+      if(my !== rosterCache.seq) return null;
+      rosterCache.data = data; rosterCache.loading = false;
+      paintRoster();
+      return data;
+    }).catch(function(ex){
+      if(my !== rosterCache.seq) return null;
+      rosterCache.loading = false; rosterCache.error = ex;
+      paintRoster();
+      return null;
+    });
+}
+function saveRosterRole(sel){
+  var m = (rosterCache.data && rosterCache.data.members || []).filter(function(x){ return x.userId === sel.dataset.rosterRole; })[0];
+  if(!m || !rt.currentWs) return;
+  var title = sel.value || "";
+  var prev = m.roleTitle || "";
+  sel.disabled = true;
+  API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(cache.project.id)
+      + "/member-roles/" + encodeURIComponent(m.userId), { roleTitle: title }).then(function(){
+    m.roleTitle = title || null;
+    var name = m.displayName || m.username || m.userId;
+    toast(title ? ("已标注「" + name + "」为「" + title + "」") : ("已清除「" + name + "」的项目角色"), "fs");
+    window.dispatchEvent(new CustomEvent("ds:project-roles-changed", { detail:{ projectId: cache.project.id } }));
+    paintRoster();
+  }).catch(function(ex){
+    sel.value = prev;
+    sel.disabled = false;
+    toast(ex.message || "角色标注失败", "bad");
+  });
 }
 function modeSeg(){
   var mode = currentMode();
@@ -393,12 +501,16 @@ function renderProject(){
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
   var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(cache.members || []) + '</tbody></table></div></section>';
-  var panel = projectTab === "epics" ? epicsPanel : (projectTab === "members" ? membersPanel : overview);
+  var panel = projectTab === "epics" ? epicsPanel
+    : (projectTab === "members" ? membersPanel
+    : (projectTab === "roles" ? rosterPanel() : overview));
   $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
   if(projectTab === "overview"){
     loadProjectDelivery(p);
     var moduleInput = document.querySelector("[data-module-new-name]");
     if(moduleUi.adding && moduleInput) moduleInput.focus();
+  } else if(projectTab === "roles"){
+    loadRoster(p.reqId || p.id);
   }
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
@@ -679,6 +791,10 @@ function onClick(e){
   }
   var tabBtn = e.target.closest("[data-project-tab]");
   if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
+  if(e.target.closest("[data-roster-retry]")){
+    loadRoster((cache && cache.project && cache.project.id) || rt.managerProjectId, true);
+    return;
+  }
   if(e.target.closest("[data-module-add]")){
     moduleUi.adding = true;
     moduleUi.deleting = "";
@@ -779,6 +895,8 @@ function renderAfterModeSwitch(){
 function onChange(e){
   if(e.target.id === "managerProjectSelect"){ rt.managerProjectId = e.target.value; loadProject(); }
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
+  var roleSel = e.target.closest("[data-roster-role]");
+  if(roleSel) saveRosterRole(roleSel);
 }
 /* 透视树行键盘可达：聚焦任务行后 Enter/空格打开详情 */
 function onKeydown(e){

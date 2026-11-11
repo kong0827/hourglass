@@ -5,6 +5,9 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.MemberAddRequest;
 import com.hourglass.dto.MemberCandidate;
+import com.hourglass.dto.MemberCompanyRequest;
+import com.hourglass.dto.ProjectMemberRoleOverview;
+import com.hourglass.dto.ProjectMemberRoleRequest;
 import com.hourglass.dto.WorkspaceCreateRequest;
 import com.hourglass.dto.WorkspaceUpdateRequest;
 import com.hourglass.entity.AppUser;
@@ -18,6 +21,7 @@ import com.hourglass.service.ActivityService;
 import com.hourglass.service.AuditService;
 import com.hourglass.service.NotificationEventService;
 import com.hourglass.service.ProjectAccessService;
+import com.hourglass.service.ProjectMemberRoleService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,6 +48,7 @@ public class WorkspaceController {
     private final WorkspaceService workspaceService;
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccessService;
+    private final ProjectMemberRoleService projectMemberRoleService;
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
     private final NotificationEventService notificationEvents;
@@ -51,6 +56,7 @@ public class WorkspaceController {
 
     public WorkspaceController(WorkspaceService workspaceService, UserMapper userMapper,
                                ProjectAccessService projectAccessService,
+                               ProjectMemberRoleService projectMemberRoleService,
                                RequirementMapper requirementMapper,
                                ActivityService activityService,
                                NotificationEventService notificationEvents,
@@ -58,6 +64,7 @@ public class WorkspaceController {
         this.workspaceService = workspaceService;
         this.userMapper = userMapper;
         this.projectAccessService = projectAccessService;
+        this.projectMemberRoleService = projectMemberRoleService;
         this.requirementMapper = requirementMapper;
         this.activityService = activityService;
         this.notificationEvents = notificationEvents;
@@ -178,6 +185,54 @@ public class WorkspaceController {
                     "你在空间「" + ws.getName() + "」中的角色已调整为「" + roleLabel(role) + "」",
                     null, "workspace", id);
         }
+        return ApiResult.ok();
+    }
+
+    /** 标注成员公司（空间主/管理员）：只写展示字段，不改变任何权限 */
+    @PutMapping("/api/workspaces/{id}/members/{userId}/company")
+    public ApiResult<Void> updateMemberCompany(@PathVariable String id, @PathVariable String userId,
+                                               @RequestBody(required = false) MemberCompanyRequest req,
+                                               HttpServletRequest request) {
+        String me = CurrentUser.id();
+        Workspace ws = workspaceService.requireMember(me, id);
+        String saved = workspaceService.updateMemberCompany(me, id, userId,
+                req == null ? null : req.getCompanyName());
+        String name = memberName(me, id, userId);
+        audit.recordCurrent(id, "member_company", "member", userId, name, true,
+                "成员 " + name + " 的公司标注为「" + (saved.isEmpty() ? "未标注" : saved)
+                        + "」（空间「" + ws.getName() + "」）", request);
+        return ApiResult.ok();
+    }
+
+    /** 项目花名册：可见且非查看者的成员 + 公司 + 本项目角色 + 有效权限 */
+    @GetMapping("/api/workspaces/{id}/projects/{projectId}/members")
+    public ApiResult<ProjectMemberRoleOverview> projectMembers(@PathVariable String id,
+                                                               @PathVariable String projectId) {
+        String me = CurrentUser.id();
+        workspaceService.requireMember(me, id);
+        Requirement project = requireProject(id, projectId);
+        projectAccessService.assertView(id, me, projectId);
+        return ApiResult.ok(projectMemberRoleService.roster(id, project, me));
+    }
+
+    /** 保存项目角色标注：空间主/管理员或项目负责人可写；空值清除 */
+    @PutMapping("/api/workspaces/{id}/projects/{projectId}/member-roles/{userId}")
+    public ApiResult<Void> saveProjectRole(@PathVariable String id, @PathVariable String projectId,
+                                           @PathVariable String userId,
+                                           @RequestBody(required = false) ProjectMemberRoleRequest req,
+                                           HttpServletRequest request) {
+        String me = CurrentUser.id();
+        workspaceService.requireMember(me, id);
+        Requirement project = requireProject(id, projectId);
+        String name = memberName(me, id, userId);
+        String saved = projectMemberRoleService.saveRole(id, project, userId,
+                req == null ? null : req.getRoleTitle(), me);
+        activityService.logConfig(id, me, saved.isEmpty()
+                ? "清除成员「" + name + "」在项目「" + project.getName() + "」的角色标注"
+                : "标注成员「" + name + "」在项目「" + project.getName() + "」的角色为「" + saved + "」");
+        audit.recordCurrent(id, "project_role", "project", project.getId(), project.getName(), true,
+                "成员 " + name + " 在项目「" + project.getName() + "」的项目角色标注为「"
+                        + (saved.isEmpty() ? "未设角色" : saved) + "」", request);
         return ApiResult.ok();
     }
 
@@ -376,6 +431,14 @@ public class WorkspaceController {
         if ("personal".equals(ws.getType())) {
             throw AppException.badRequest("个人空间不支持" + action);
         }
+    }
+
+    private Requirement requireProject(String workspaceId, String projectId) {
+        Requirement project = requirementMapper.selectById(projectId);
+        if (project == null || !workspaceId.equals(project.getWorkspaceId())) {
+            throw AppException.notFound("项目不存在或不属于当前空间：" + projectId);
+        }
+        return project;
     }
 
     public static class MemberRoleRequest {
