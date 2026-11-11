@@ -230,6 +230,17 @@
 [data-layout="mobile"] .ai-fab{
   right:16px;bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
   width:46px;height:46px;
+  transition:transform .2s var(--ease-out),opacity .2s var(--ease-out);
+}
+/* 与「新建」FAB 同步：滚动时收起、停稳后恢复 */
+[data-layout="mobile"] body.fab-away .ai-fab{
+  transform:translateY(14px) scale(.92);opacity:0;pointer-events:none;
+}
+/* 两个 FAB 叠放时底部多留一层，末条内容的右侧不被助手按钮盖住 */
+[data-layout="mobile"] body:has(#aiFab:not([hidden])):not([data-view="board"]):not([data-view="settings"]):not([data-view="profile"]):not([data-view="messages"]) .view,
+[data-layout="mobile"] body:has(#aiFab:not([hidden]))[data-view="board"] .mob-board,
+[data-layout="mobile"] body:has(#aiFab:not([hidden])) #view-calendar{
+  padding-bottom:calc(var(--tabbar-space) + 112px);
 }
 [data-layout="mobile"] .ai-panel{
   left:0;right:0;bottom:0;width:100%;

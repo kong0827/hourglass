@@ -147,6 +147,9 @@
 body[data-view="settings"] #btnNew,
 body[data-view="profile"] #btnNew,
 body[data-view="messages"] #btnNew{display:none !important;}
+/* 查看者全局只读：新建入口不展示（抽屉入口另有拦截提示） */
+body[data-ws-role="viewer"] #btnNew,
+body[data-ws-role="viewer"] #ganttNew{display:none !important;}
 
 /* ===================== 子导航：同一业务域内的视图切换 ===================== */
 .subnav{

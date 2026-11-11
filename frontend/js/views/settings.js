@@ -1400,6 +1400,12 @@ $("btnPriorityReset").addEventListener("click", function(){
 var CHANNEL_LABEL = { webhook:"企业微信 / 钉钉 webhook", serverchan:"Server 酱", pushplus:"PushPlus" };
 function loadNotifyStatus(){
   if(!notifyStatusText) return;
+  if(!rt.currentWs || rt.currentWs.myRole !== "owner"){
+    rt.notifyInfo = null;
+    if(notifyStatus) notifyStatus.className = "notify-status off";
+    notifyStatusText.textContent = "推送配置与生效状态仅空间主可查看";
+    return;
+  }
   API.get("/api/notify/status").then(function(d){
     rt.notifyInfo = d || {};
     if(!rt.pickedChannel) rt.pickedChannel = rt.notifyInfo.channel || "webhook";

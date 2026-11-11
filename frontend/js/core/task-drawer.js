@@ -5,7 +5,7 @@ import { openAttPreview, previewable } from "./att-preview.js";
 import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -1272,6 +1272,7 @@ function loadWatchStatus(taskId){
   });
 }
 function openTaskDrawer(colId, task, defaults){
+  if(!task && roleReadOnly()){ toast("查看者为只读角色，不能新建工作项", "warn"); return; }
   /* 从搜索、通知、看板其它卡片直接换任务时，也必须走未保存确认；
      否则 openTaskDrawer 会把 formDirty 置 false，静默丢掉当前表单/附件。 */
   if(rt.formDirty && rt.editingId && task && task.id === rt.editingId){

@@ -62,6 +62,7 @@ function loadWorkspaces(meUser){
   }).catch(function(){ return null; });
 }
 function applyWsRoleGating(){
+  document.body.dataset.wsRole = (rt.currentWs && rt.currentWs.myRole) || "";
   var owner = !rt.currentWs || rt.currentWs.myRole === "owner";
   [["btnExport","导出任务备份"],["btnImport","导入任务备份"],["btnReset","清空任务数据"],["btnNotifyTest","测试推送"]].forEach(function(pair){
     var b = $(pair[0]);
