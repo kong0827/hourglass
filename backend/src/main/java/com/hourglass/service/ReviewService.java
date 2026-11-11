@@ -239,7 +239,7 @@ public class ReviewService {
             List<ReqProgress> only = new ArrayList<ReqProgress>();
             only.add(scopedReq);
             resp.setReqDist(only);
-            /* 只看项目时，没有交付/工时的成员不必占位展示 */
+            /* 只看项目时，没有完成/工时的成员不必占位展示 */
             for (int i = memberStats.size() - 1; i >= 0; i--) {
                 ReviewResponse.MemberStat ms = memberStats.get(i);
                 if (ms.getCount() == 0 && ms.getMinutes() == 0) {

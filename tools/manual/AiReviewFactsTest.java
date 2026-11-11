@@ -132,7 +132,7 @@ public class AiReviewFactsTest {
         ok(facts.contains("进行中（共 1 项）") && facts.contains("进度 60%"), "进行中带进度");
         ok(facts.contains("进度 100% 但还没移入已完成列（共 1 项）"), "待确认完成单独一节");
         ok(facts.contains("- 流程引擎 62%（2/4 项）"), "项目进展带完成比");
-        ok(facts.contains("成员交付") && facts.contains("- 小王 1 项"), "多人时才列成员交付");
+        ok(facts.contains("成员完成") && facts.contains("- 小王 1 项"), "多人时才列成员完成");
         ok(facts.contains("当事人补充"), "补充说明要进事实清单");
         ok(countOf(facts, "线上排查") == 50,
                 "补充说明截断到 200 字（400 字 → 50 段）", "出现 " + countOf(facts, "线上排查") + " 次（每次 4 字）");
@@ -156,7 +156,7 @@ public class AiReviewFactsTest {
         ok(!facts.contains("进行中（共"), "没有进行中就不写这一节");
         ok(!facts.contains("工时："), "工时全是 0 时不写工时行");
         ok(facts.contains("完成项都没有设截止日期，不计按期率"), "无截止日期时换个说法");
-        ok(facts.contains("成员交付") == false, "单人/无成员不写成员交付");
+        ok(facts.contains("成员完成") == false, "单人/无成员不写成员完成");
     }
 
     private static void testCleanFence() throws Exception {

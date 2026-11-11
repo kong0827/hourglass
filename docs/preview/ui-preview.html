@@ -36775,11 +36775,11 @@ function buildSummary(d){
     var p0 = list.filter(function(t){ return t.priority === "P0"; }).length;
     var rateTxt = (withDue === 0)
       ? "，完成项均未设置截止日期"
-      : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期交付");
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共交付 <b>" + n + "</b> 项工作项" + rateTxt +
+      : "，按期完成率 <b>" + rate + "%</b>" + (rate < 100 ? "（延期 " + d.stats.late + " 项）" : "，全部按期完成");
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>共完成 <b>" + n + "</b> 项工作项" + rateTxt +
       (p0 ? "，其中" + esc(priName("P0")) + " <b>" + p0 + "</b> 项。" : "。"));
   }else{
-    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已交付的工作项记录。");
+    parts.push(scope + "<b>" + label + "（" + rangeTxt + "）</b>没有已完成的工作项记录。");
   }
   if(n){
     var items = list.slice(0, 12).map(function(t){
@@ -37016,7 +37016,7 @@ function renderReview(d){
   $("peopleBox").innerHTML = members.length ? members.map(function(m){
     return '<span class="person">' + avatarHTML(m.name) + '<span class="pn">' + esc(m.name) + '</span>' +
       '<span class="pc">' + m.count + ' 项' + (m.minutes ? (' · ' + fmtMinutesShort(m.minutes)) : '') + '</span></span>';
-  }).join("") : '<span class="foot-note">该周期暂无成员交付记录</span>';
+  }).join("") : '<span class="foot-note">该周期暂无成员完成记录</span>';
 
   var list = d.completed || [];
   $("doneList").innerHTML = list.length ? list.map(function(t){

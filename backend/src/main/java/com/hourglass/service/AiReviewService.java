@@ -210,7 +210,7 @@ public class AiReviewService {
 
         List<ReviewResponse.MemberStat> members = d.getMembers();
         if (members.size() > 1) {
-            sb.append("\n成员交付：\n");
+            sb.append("\n成员完成：\n");
             for (ReviewResponse.MemberStat m : members) {
                 sb.append("- ").append(nz(m.getName())).append(" ").append(m.getCount()).append(" 项\n");
             }
