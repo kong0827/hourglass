@@ -1194,42 +1194,70 @@
           </div>
         </div>
 
-        <!-- 历史版本：左侧版本列表，右侧预览，可恢复 -->
+        <!-- 历史版本：左侧快照列表，右侧阅读/对比；对比为类 Git 的行对齐分栏 -->
         <div class="modal-layer" id="dlgReqDocHistory" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocHistoryTitle">
           <div class="sheet wide reqdoc-history-dlg">
-            <div class="sheet-head">
-              <div style="flex:1;min-width:0">
+            <div class="sheet-head rh-head">
+              <div class="rh-head-main">
                 <h2 id="dlgReqDocHistoryTitle">历史版本</h2>
-                <div class="desc">正文每次保存留一版快照，最多保留最近 20 版；恢复前当前内容会先留档</div>
+                <div class="desc">正文每次保留一版快照，最多保留最近 20 版；恢复前当前内容会先留档</div>
               </div>
               <button class="icon-btn sm" type="button" id="dlgReqDocHistoryX" aria-label="关闭">
                 <span data-icon="close"></span>
               </button>
             </div>
-            <div class="sheet-body reqdoc-history-body">
-              <div class="reqdoc-history-list" id="reqDocHistoryList"></div>
-              <div class="reqdoc-history-preview">
-                <div class="reqdoc-history-preview-head">
-                  <span class="rh-ver-title" id="reqDocHistoryVerTitle"></span>
-                  <span class="rh-actions">
-                    <button class="btn sm ghost" type="button" id="reqDocHistoryCompare">与当前对比</button>
-                    <button class="btn sm ghost" type="button" id="reqDocHistoryTextDiff">文本差异</button>
-                    <button class="btn sm primary" type="button" id="reqDocHistoryRestore">恢复此版本</button>
-                  </span>
-                </div>
-                <div class="reqdoc-history-content markdown-body" id="reqDocHistoryContent"></div>
-                <div class="reqdoc-history-compare" id="reqDocHistoryCompareWrap" hidden>
-                  <div class="reqdoc-history-compare-col">
-                    <div class="reqdoc-history-compare-title">当前版本</div>
-                    <div class="reqdoc-history-content markdown-body" id="reqDocHistoryCompareCurrent"></div>
+            <div class="rh-body">
+              <aside class="rh-vlist" aria-label="历史快照">
+                <div class="rh-vlist-head"><span>历史快照</span><em id="reqDocHistoryCount"></em></div>
+                <div class="rh-vscroll" id="reqDocHistoryList"></div>
+                <div class="rh-vlist-foot">快照记录的是「保存前」的正文；最近一次保存后的内容即当前版本。</div>
+              </aside>
+              <div class="rh-pane">
+                <div class="rh-pane-head">
+                  <div class="rh-pane-meta">
+                    <span class="dot"></span>
+                    <b id="reqDocHistoryVerTitle">—</b>
+                    <span class="who" id="reqDocHistoryWho"></span>
                   </div>
-                  <div class="reqdoc-history-compare-col">
-                    <div class="reqdoc-history-compare-title">所选历史版本</div>
-                    <div class="reqdoc-history-content markdown-body" id="reqDocHistoryCompareHistory"></div>
+                  <div class="rh-pane-actions">
+                    <div class="seg mini" id="reqDocHistoryModeSeg" role="group" aria-label="查看方式">
+                      <button type="button" data-rh-mode="read" aria-pressed="false">阅读</button>
+                      <button type="button" data-rh-mode="compare" aria-pressed="true">对比</button>
+                    </div>
+                    <button class="btn primary sm" type="button" id="reqDocHistoryRestore">恢复此版本</button>
                   </div>
                 </div>
-                <div class="reqdoc-history-diff" id="reqDocHistoryDiffWrap" hidden>
-                  <div class="reqdoc-history-diff-content" id="reqDocHistoryDiffContent"></div>
+                <div class="rh-cmp-bar" id="reqDocHistoryCmpBar">
+                  <span class="rh-pick"><label for="reqDocHistoryBase">基准</label><select id="reqDocHistoryBase"></select></span>
+                  <span class="rh-arrow">→</span>
+                  <span class="rh-pick"><label for="reqDocHistoryTarget">对比</label><select id="reqDocHistoryTarget"></select></span>
+                  <span class="rh-stats" id="reqDocHistoryStats"></span>
+                  <span class="rh-spacer"></span>
+                  <div class="seg mini" id="reqDocHistoryViewSeg" role="group" aria-label="对比视图">
+                    <button type="button" data-rh-view="split" aria-pressed="true">分栏</button>
+                    <button type="button" data-rh-view="unified" aria-pressed="false">统一</button>
+                  </div>
+                  <button class="btn ghost sm" type="button" id="reqDocHistoryFoldAll">展开全部</button>
+                </div>
+                <div class="rh-meta-diff" id="reqDocHistoryMetaDiff" hidden></div>
+                <div class="rh-diff-shell" id="reqDocHistoryDiffShell">
+                  <div class="rh-diff-wrap" id="reqDocHistoryDiff"></div>
+                  <div class="rh-ovl" id="reqDocHistoryOvl"></div>
+                </div>
+                <div class="rh-identical" id="reqDocHistoryIdentical" hidden>
+                  <div class="ic">✓</div>
+                  <b>两个版本正文完全一致</b>
+                  <p>没有可对比的差异，可切换基准或对比版本再看。</p>
+                </div>
+                <div class="rh-read" id="reqDocHistoryRead" hidden></div>
+                <div class="rh-pane-empty" id="reqDocHistoryEmpty" hidden></div>
+                <div class="rh-diff-foot" id="reqDocHistoryDiffFoot">
+                  <span class="rh-hunk-pos">差异 <b id="reqDocHistoryHunkNow">1</b> / <span id="reqDocHistoryHunkAll">0</span></span>
+                  <button class="btn xs" type="button" id="reqDocHistoryPrev" aria-label="上一处差异">↑</button>
+                  <button class="btn xs" type="button" id="reqDocHistoryNext" aria-label="下一处差异">↓</button>
+                  <span class="rh-foot-hint">点击折叠条展开未改动内容</span>
+                  <span class="rh-spacer"></span>
+                  <span class="rh-foot-stat" id="reqDocHistoryFootStat"></span>
                 </div>
               </div>
             </div>
@@ -2540,6 +2568,7 @@
 <link rel="modulepreload" href="js/lib/format.js" />
 <link rel="modulepreload" href="js/lib/gantt-shared.js" />
 <link rel="modulepreload" href="js/lib/download.js" />
+<link rel="modulepreload" href="js/lib/text-diff.js" />
 <link rel="modulepreload" href="js/views/board.js" />
 <link rel="modulepreload" href="js/views/list.js" />
 <link rel="modulepreload" href="js/views/calendar.js" />

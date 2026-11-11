@@ -12,6 +12,7 @@ import { AIProgress, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-pro
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { DOC_TYPES, colName, docTypeName, fmtTs, pad2, priColor, priName, typeBadgeHTML } from "../lib/format.js";
+import * as textDiff from "../lib/text-diff.js";
 import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
 
@@ -2277,62 +2278,210 @@ function deleteReqDocComment(commentId){
   });
 }
 
-/* ---------- 历史版本：列表、预览、恢复 ---------- */
+/* ---------- 历史版本：列表、阅读、对比、恢复 ---------- */
 
 var reqDocHistories = [];
 var reqDocHistorySel = null;
-var reqDocHistoryCompareMode = false;
-var reqDocCompareCurrentDoc = null;
-var reqDocCompareHistoryDoc = null;
-var reqDocTextDiffVisible = false;
+var reqDocHistoryTarget = "current";
 /* 历史弹窗与编辑器解耦：阅读模式也能打开；docId 记录目标文档，fromReader 决定恢复后回到哪里 */
 var reqDocHistoryDocId = null;
 var reqDocHistoryFromReader = false;
 var reqDocHistoryCanRestore = true;
+var reqDocHistoryCurrent = null;
+var reqDocHistoryCurrentNo = 1;
+var reqDocHistoryMode = "compare";
+var reqDocHistoryView = "split";
+var reqDocHistoryShowAll = false;
+var reqDocHistoryExpanded = {};
+var reqDocHistoryHunk = 0;
+var reqDocHistoryRows = null;
+var reqDocHistoryRowsKey = "";
+var reqDocHistorySeq = 0;
+var reqDocHistoryLoadSeq = 0;
+var reqDocHistoryDocs = {};
+var reqDocHistoryPending = {};
+var reqDocHistoryScrollTick = false;
+
+function reqDocHistoryFind(id){
+  for(var i = 0; i < reqDocHistories.length; i++){
+    if(reqDocHistories[i].id === id) return reqDocHistories[i];
+  }
+  return null;
+}
+function reqDocHistoryCurrentDoc(){
+  if(!reqDocHistoryCurrent) return null;
+  return {
+    key: "current",
+    title: reqDocHistoryCurrent.title,
+    content: reqDocHistoryCurrent.content,
+    format: reqDocHistoryCurrent.format,
+    versionNo: reqDocHistoryCurrentNo,
+    savedBy: reqDocHistoryCurrent.owner || "",
+    createdAt: reqDocHistoryCurrent.updatedAt || ""
+  };
+}
+function reqDocHistoryDocSync(key){
+  if(key === "current") return reqDocHistoryCurrentDoc();
+  return reqDocHistoryDocs[key] || null;
+}
+function reqDocHistoryDoc(key){
+  if(key === "current") return Promise.resolve(reqDocHistoryCurrentDoc());
+  if(reqDocHistoryDocs[key]) return Promise.resolve(reqDocHistoryDocs[key]);
+  if(reqDocHistoryPending[key]) return reqDocHistoryPending[key];
+  var docId = reqDocHistoryDocId;
+  var pending = API.get("/api/req-docs/" + encodeURIComponent(docId) + "/history/" + encodeURIComponent(key)).then(function(h){
+    var doc = {
+      key: key,
+      id: h.id,
+      versionNo: h.versionNo,
+      title: h.title,
+      content: h.content,
+      format: h.format,
+      savedBy: h.savedBy,
+      createdAt: h.createdAt
+    };
+    reqDocHistoryDocs[key] = doc;
+    delete reqDocHistoryPending[key];
+    return doc;
+  }).catch(function(ex){
+    delete reqDocHistoryPending[key];
+    throw ex;
+  });
+  reqDocHistoryPending[key] = pending;
+  return pending;
+}
+
 function openReqDocHistory(docId, opts){
   docId = docId || editingDocId;
   if(!docId) return;
   opts = opts || {};
+  var layer = $("dlgReqDocHistory");
+  if(!layer) return;
   reqDocHistoryDocId = docId;
   reqDocHistoryFromReader = !!opts.fromReader;
   reqDocHistoryCanRestore = opts.canRestore != null ? !!opts.canRestore : !reqDocReadOnly;
-  var layer = $("dlgReqDocHistory");
+  var seq = ++reqDocHistorySeq;
+  reqDocHistoryHistoriesReset();
+  reqDocHistoryView = window.innerWidth < 900 ? "unified" : "split";
   var list = $("reqDocHistoryList");
-  var verTitle = $("reqDocHistoryVerTitle");
+  if(list) list.innerHTML = '<div class="rh-empty">加载中…</div>';
+  var count = $("reqDocHistoryCount");
+  if(count) count.textContent = "";
   var restore = $("reqDocHistoryRestore");
-  var preview = $("reqDocHistoryContent");
-  if(!layer || !list) return;
-  reqDocHistories = [];
-  reqDocHistorySel = null;
-  reqDocCompareCurrentDoc = null;
-  reqDocCompareHistoryDoc = null;
-  setReqDocHistoryCompareMode(false);
-  setReqDocTextDiffVisible(false);
-  list.innerHTML = '<div class="rh-empty">加载中…</div>';
-  preview.innerHTML = '<div class="rh-empty">点击左侧版本查看正文</div>';
-  verTitle.textContent = "";
-  restore.style.display = reqDocHistoryCanRestore ? "" : "none";
+  if(restore) restore.style.display = reqDocHistoryCanRestore ? "" : "none";
+  reqDocHistoryResetPane("加载中…");
   UI.openModal(layer);
-  API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/history").then(function(rows){
-    if(docId !== reqDocHistoryDocId) return;
-    rows = rows || [];
+  Promise.all([
+    API.getAllPages("/api/req-docs/" + encodeURIComponent(docId) + "/history"),
+    API.get("/api/req-docs/" + encodeURIComponent(docId))
+  ]).then(function(results){
+    if(seq !== reqDocHistorySeq) return;
+    var rows = results[0] || [];
+    rows.sort(function(a, b){ return (Number(b.versionNo) || 0) - (Number(a.versionNo) || 0); });
     reqDocHistories = rows;
-    list.innerHTML = rows.length ? rows.map(function(h, i){
-      return '<button class="rh-row" type="button" data-history-id="' + esc(h.id) + '">'
-        + '<span class="rh-ver">第 ' + h.versionNo + ' 版' + (i === 0 ? '<span class="rh-latest">最新</span>' : '') + '</span>'
-        + '<span class="rh-main">'
-        +   '<span class="rh-t">' + esc(h.title || "未命名") + '</span>'
-        +   '<span class="rh-m">' + esc(h.savedBy || "—") + ' · ' + esc(fmtTs(h.createdAt) || "—") + '</span>'
-        + '</span></button>';
-    }).join("") : '<div class="rh-empty">还没有历史快照：保存正文后自动生成</div>';
-    /* 与语雀/飞书一致：打开即预览最近一版，而不是空白等待点击 */
-    if(rows.length) loadReqDocHistoryPreview(rows[0].id);
+    reqDocHistoryCurrent = results[1] || null;
+    var maxNo = 0;
+    for(var i = 0; i < rows.length; i++) maxNo = Math.max(maxNo, Number(rows[i].versionNo) || 0);
+    reqDocHistoryCurrentNo = maxNo + 1;
+    if(rows.length){
+      reqDocHistorySel = rows[0].id;
+      reqDocHistoryTarget = "current";
+      reqDocHistoryMode = "compare";
+    }else{
+      reqDocHistorySel = null;
+      reqDocHistoryTarget = "current";
+      reqDocHistoryMode = "read";
+    }
+    renderReqDocHistoryList();
+    reqDocHistoryLoadAndRender(false);
   }).catch(function(ex){
-    list.innerHTML = '<div class="rh-empty">' + esc(ex.message || "历史版本加载失败") + '</div>';
+    if(seq !== reqDocHistorySeq) return;
+    var msg = ex.message || "历史版本加载失败";
+    if(list) list.innerHTML = '<div class="rh-empty">' + esc(msg) + '</div>';
+    reqDocHistoryResetPane(msg);
   });
 }
+function reqDocHistoryHistoriesReset(){
+  reqDocHistories = [];
+  reqDocHistorySel = null;
+  reqDocHistoryTarget = "current";
+  reqDocHistoryCurrent = null;
+  reqDocHistoryCurrentNo = 1;
+  reqDocHistoryMode = "compare";
+  reqDocHistoryShowAll = false;
+  reqDocHistoryExpanded = {};
+  reqDocHistoryHunk = 0;
+  reqDocHistoryRows = null;
+  reqDocHistoryRowsKey = "";
+  reqDocHistoryDocs = {};
+  reqDocHistoryPending = {};
+  reqDocHistoryLoadSeq++;
+}
+function reqDocHistoryShowPaneMessage(msg){
+  ["reqDocHistoryDiffShell", "reqDocHistoryDiffFoot", "reqDocHistoryIdentical",
+    "reqDocHistoryRead", "reqDocHistoryMetaDiff"].forEach(function(id){
+    var el = $(id);
+    if(el) el.hidden = true;
+  });
+  var empty = $("reqDocHistoryEmpty");
+  if(empty){
+    empty.hidden = false;
+    empty.innerHTML = msg ? esc(msg) : "";
+  }
+}
+function reqDocHistoryResetPane(msg){
+  var cmpBar = $("reqDocHistoryCmpBar");
+  if(cmpBar) cmpBar.hidden = true;
+  reqDocHistoryShowPaneMessage(msg);
+  var title = $("reqDocHistoryVerTitle");
+  if(title) title.textContent = "—";
+  var who = $("reqDocHistoryWho");
+  if(who) who.textContent = "";
+}
+function reqDocHistoryShowLoading(){
+  reqDocHistoryResetPane("加载中…");
+}
+function reqDocHistoryLoadAndRender(preserveScroll){
+  var loadId = ++reqDocHistoryLoadSeq;
+  var baseKey = reqDocHistorySel;
+  if(!baseKey){ renderReqDocHistory(preserveScroll); return; }
+  var targetKey = reqDocHistoryTarget;
+  var needs = [];
+  if(!reqDocHistoryDocs[baseKey]) needs.push(reqDocHistoryDoc(baseKey));
+  if(targetKey !== "current" && !reqDocHistoryDocs[targetKey]) needs.push(reqDocHistoryDoc(targetKey));
+  if(needs.length) reqDocHistoryShowLoading();
+  Promise.all(needs).then(function(){
+    if(loadId !== reqDocHistoryLoadSeq) return;
+    renderReqDocHistory(preserveScroll);
+  }).catch(function(ex){
+    if(loadId !== reqDocHistoryLoadSeq) return;
+    reqDocHistoryResetPane(ex.message || "版本正文加载失败");
+  });
+}
+function renderReqDocHistoryList(){
+  var list = $("reqDocHistoryList");
+  var count = $("reqDocHistoryCount");
+  if(!list) return;
+  if(!reqDocHistories.length){
+    list.innerHTML = '<div class="rh-empty">还没有历史快照<br>保存正文后自动生成</div>';
+    if(count) count.textContent = "";
+    return;
+  }
+  if(count) count.textContent = reqDocHistories.length + " 版";
+  list.innerHTML = reqDocHistories.map(function(h, i){
+    return '<button class="rh-vrow' + (h.id === reqDocHistorySel ? ' active' : '') + '" type="button" data-history-id="' + esc(h.id) + '">'
+      + '<span class="top"><span class="rh-vno">第 ' + esc(h.versionNo) + ' 版</span>'
+      + (i === 0 ? '<span class="rh-vchip">最近快照</span>' : '')
+      + '</span>'
+      + '<span class="rh-vtitle">' + esc(h.title || "未命名") + '</span>'
+      + '<span class="rh-vmeta">' + esc(h.savedBy || "—") + ' · ' + esc(fmtTs(h.createdAt) || "—") + '</span>'
+      + '</button>';
+  }).join("");
+}
 function renderReqDocHistoryPreview(h, box){
+  if(!box) return;
   loadMarkdownLib().then(function(){
+    if(!box.isConnected) return;
     var html;
     if(h.format === "markdown"){
       try{ html = window.marked.parse(h.content || "", { gfm: true, breaks: false }); }catch(e){ html = ""; }
@@ -2349,160 +2498,325 @@ function renderReqDocHistoryPreview(h, box){
     box.innerHTML = '<div class="rh-empty">' + esc(ex.message || "预览组件加载失败") + '</div>';
   });
 }
-function setReqDocHistoryCompareMode(on){
-  reqDocHistoryCompareMode = !!on;
-  var btn = $("reqDocHistoryCompare");
-  var preview = $("reqDocHistoryContent");
-  var wrap = $("reqDocHistoryCompareWrap");
-  if(btn) btn.textContent = reqDocHistoryCompareMode ? "取消对比" : "与当前对比";
-  if(btn) btn.classList.toggle("primary", reqDocHistoryCompareMode);
-  if(preview) preview.hidden = reqDocHistoryCompareMode;
-  if(wrap) wrap.hidden = !reqDocHistoryCompareMode;
-}
-function toggleReqDocHistoryCompare(){
-  if(!reqDocHistoryDocId){ toast("没有打开的文档", "warn"); return; }
-  if(!reqDocHistorySel){ toast("先选择一个历史版本", "warn"); return; }
-  setReqDocHistoryCompareMode(!reqDocHistoryCompareMode);
-  if(reqDocHistoryCompareMode){ loadReqDocHistoryCompare(reqDocHistorySel); }
-  else { loadReqDocHistoryPreview(reqDocHistorySel); }
-}
-function loadReqDocHistoryCompare(historyId){
-  if(!reqDocHistoryDocId || !historyId) return;
-  var currentBox = $("reqDocHistoryCompareCurrent");
-  var historyBox = $("reqDocHistoryCompareHistory");
-  if(currentBox) currentBox.innerHTML = '<div class="rh-empty">加载中…</div>';
-  if(historyBox) historyBox.innerHTML = '<div class="rh-empty">加载中…</div>';
-  var docId = reqDocHistoryDocId;
-  Promise.all([
-    API.get("/api/req-docs/" + encodeURIComponent(docId)),
-    API.get("/api/req-docs/" + encodeURIComponent(docId) + "/history/" + encodeURIComponent(historyId))
-  ]).then(function(results){
-    if(docId !== reqDocHistoryDocId || !reqDocHistoryCompareMode) return;
-    var current = results[0];
-    var h = results[1];
-    reqDocCompareCurrentDoc = current;
-    reqDocCompareHistoryDoc = h;
-    var verTitle = $("reqDocHistoryVerTitle");
-    if(verTitle) verTitle.textContent = "第 " + h.versionNo + " 版 · " + (h.savedBy || "—") + " · " + (fmtTs(h.createdAt) || "—") + " 与当前对比";
-    if(currentBox) renderReqDocHistoryPreview({ format: current.format, content: current.content }, currentBox);
-    if(historyBox) renderReqDocHistoryPreview(h, historyBox);
-    if(reqDocTextDiffVisible) renderReqDocTextDiff();
-  }).catch(function(ex){
-    var msg = esc(ex.message || "对比内容加载失败");
-    if(currentBox) currentBox.innerHTML = '<div class="rh-empty">' + msg + '</div>';
-    if(historyBox) historyBox.innerHTML = '<div class="rh-empty">' + msg + '</div>';
-  });
-}
-function setReqDocTextDiffVisible(on){
-  reqDocTextDiffVisible = !!on;
-  var wrap = $("reqDocHistoryDiffWrap");
-  var btn = $("reqDocHistoryTextDiff");
-  if(wrap) wrap.hidden = !reqDocTextDiffVisible;
-  if(btn){
-    btn.classList.toggle("primary", reqDocTextDiffVisible);
-    btn.textContent = reqDocTextDiffVisible ? "隐藏差异" : "文本差异";
+function renderReqDocHistoryPickers(base, target){
+  var baseSel = $("reqDocHistoryBase");
+  var targetSel = $("reqDocHistoryTarget");
+  var title = $("reqDocHistoryVerTitle");
+  var who = $("reqDocHistoryWho");
+  var restore = $("reqDocHistoryRestore");
+  var modeSeg = $("reqDocHistoryModeSeg");
+  if(modeSeg) modeSeg.hidden = !reqDocHistories.length;
+  if(baseSel){
+    baseSel.disabled = !reqDocHistories.length;
+    baseSel.innerHTML = reqDocHistories.map(function(h){
+      return '<option value="' + esc(h.id) + '"' + (h.id === reqDocHistorySel ? ' selected' : '') + '>第 '
+        + esc(h.versionNo) + ' 版 · ' + esc(fmtTs(h.createdAt) || "—") + '</option>';
+    }).join("");
   }
-  if(reqDocTextDiffVisible) renderReqDocTextDiff();
+  if(targetSel){
+    targetSel.disabled = !reqDocHistories.length;
+    var options = '<option value="current"' + (reqDocHistoryTarget === "current" ? ' selected' : '') + '>当前 · 第 '
+      + reqDocHistoryCurrentNo + ' 版</option>';
+    options += reqDocHistories.map(function(h){
+      return '<option value="' + esc(h.id) + '"' + (h.id === reqDocHistoryTarget ? ' selected' : '') + '>第 '
+        + esc(h.versionNo) + ' 版 · ' + esc(fmtTs(h.createdAt) || "—") + '</option>';
+    }).join("");
+    targetSel.innerHTML = options;
+  }
+  if(title) title.textContent = base ? ("第 " + base.versionNo + " 版") : "—";
+  if(who) who.textContent = base
+    ? ((base.savedBy || "—") + " · " + (fmtTs(base.createdAt) || "—") + (base.key === "current" ? "（当前）" : ""))
+    : "";
+  if(restore){
+    restore.style.display = (reqDocHistories.length && reqDocHistoryCanRestore) ? "" : "none";
+    restore.textContent = base ? ("恢复第 " + base.versionNo + " 版") : "恢复此版本";
+    restore.disabled = !base || base.key === "current";
+  }
+  var modeBtns = document.querySelectorAll("#reqDocHistoryModeSeg button");
+  for(var i = 0; i < modeBtns.length; i++){
+    modeBtns[i].setAttribute("aria-pressed", String(modeBtns[i].dataset.rhMode === reqDocHistoryMode));
+  }
+  var viewBtns = document.querySelectorAll("#reqDocHistoryViewSeg button");
+  for(var j = 0; j < viewBtns.length; j++){
+    viewBtns[j].setAttribute("aria-pressed", String(viewBtns[j].dataset.rhView === reqDocHistoryView));
+  }
+  var foldAll = $("reqDocHistoryFoldAll");
+  if(foldAll){
+    foldAll.textContent = reqDocHistoryShowAll ? "仅看差异" : "展开全部";
+    foldAll.setAttribute("aria-pressed", String(!!reqDocHistoryShowAll));
+  }
 }
-function toggleReqDocTextDiff(){
-  if(!reqDocHistoryDocId){ toast("没有打开的文档", "warn"); return; }
-  if(!reqDocHistorySel){ toast("先选择一个历史版本", "warn"); return; }
-  if(!reqDocHistoryCompareMode){
-    setReqDocHistoryCompareMode(true);
-    loadReqDocHistoryCompare(reqDocHistorySel);
-  }
-  setReqDocTextDiffVisible(!reqDocTextDiffVisible);
-}
-function renderReqDocTextDiff(){
-  var box = $("reqDocHistoryDiffContent");
-  if(!box) return;
-  if(!reqDocCompareCurrentDoc || !reqDocCompareHistoryDoc){
-    box.innerHTML = '<div class="rh-empty">加载对比内容后显示差异</div>';
-    return;
-  }
-  var oldText = docContentToPlainText(reqDocCompareHistoryDoc);
-  var newText = docContentToPlainText(reqDocCompareCurrentDoc);
-  if(oldText === newText){
-    box.innerHTML = '<div class="rh-empty">内容完全一致</div>';
-    return;
-  }
-  var lines = computeLineDiff(oldText, newText);
-  box.innerHTML = lines.map(function(l){
-    var sign = l.type === "add" ? "+" : (l.type === "del" ? "-" : " ");
-    return '<div class="diff-line diff-line-' + l.type + '"><span class="diff-sign">' + sign + '</span>' + esc(l.text) + '</div>';
+function reqDocHistorySegsHtml(segs, cls){
+  return segs.map(function(seg){
+    return seg.c ? '<mark class="' + cls + '">' + esc(seg.t) + '</mark>' : esc(seg.t);
   }).join("");
 }
-function docContentToPlainText(doc){
-  var raw = doc && doc.content ? doc.content : "";
-  if(doc && doc.format === "markdown") return raw;
-  try{
-    var parsed = new DOMParser().parseFromString(raw, "text/html");
-    return parsed.body.textContent || "";
-  }catch(e){ return raw; }
+function renderReqDocHistoryMeta(base, target){
+  var box = $("reqDocHistoryMetaDiff");
+  if(!box) return;
+  var a = String(base.title || "");
+  var b = String(target.title || "");
+  if(a === b){
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  var diff = textDiff.inlineDiff(a, b);
+  if(!diff){
+    box.innerHTML = '<span class="k">标题</span><span>' + esc(a || "（空）") + '</span><span>→</span><span>' + esc(b || "（空）") + '</span>';
+    return;
+  }
+  box.innerHTML = '<span class="k">标题</span>'
+    + '<span>' + reqDocHistorySegsHtml(diff.old, "old") + '</span>'
+    + '<span>→</span>'
+    + '<span>' + reqDocHistorySegsHtml(diff.new, "new") + '</span>';
 }
-function computeLineDiff(oldText, newText){
-  var a = (oldText || "").split("\n");
-  var b = (newText || "").split("\n");
-  var MAX = 1200;
-  if(a.length > MAX || b.length > MAX){
-    return [{ type: "same", text: "（文档超过 1200 行，暂不支持文本差异对比）" }];
+function reqDocHistorySplitRowHtml(r, hunkStart, hunkIndex){
+  var oldSign = (r.type === "del" || r.type === "mod" || r.type === "deladd") ? "-" : "";
+  var newSign = (r.type === "add" || r.type === "mod" || r.type === "deladd") ? "+" : "";
+  var oldTxt = r.oldNo == null ? "" : (r.inline ? reqDocHistorySegsHtml(r.inline.old, "rh-mk-del") : esc(r.old));
+  var newTxt = r.newNo == null ? "" : (r.inline ? reqDocHistorySegsHtml(r.inline.new, "rh-mk-add") : esc(r.new));
+  return '<div class="rh-drow' + (textDiff.isChanged(r) ? ' changed' : '') + '"' + (hunkStart ? ' data-hunk="' + hunkIndex + '"' : '') + '>'
+    + '<div class="rh-ln' + (r.oldNo == null ? ' blank' : '') + '">' + (r.oldNo == null ? '' : r.oldNo) + '</div>'
+    + '<div class="rh-txt' + (oldSign ? ' delbg' : '') + (r.oldNo == null ? ' empty' : '') + '"><span class="sign">' + oldSign + '</span>' + oldTxt + '</div>'
+    + '<div class="rh-ln' + (r.newNo == null ? ' blank' : '') + '">' + (r.newNo == null ? '' : r.newNo) + '</div>'
+    + '<div class="rh-txt' + (newSign ? ' addbg' : '') + (r.newNo == null ? ' empty' : '') + '"><span class="sign">' + newSign + '</span>' + newTxt + '</div>'
+    + '</div>';
+}
+function reqDocHistoryUnifiedRowHtml(r, hunkStart, hunkIndex){
+  var out = "";
+  if(r.type === "same"){
+    return '<div class="rh-drow uni">'
+      + '<div class="rh-ln">' + r.oldNo + '</div>'
+      + '<div class="rh-ln">' + r.newNo + '</div>'
+      + '<div class="rh-txt"><span class="sign"> </span>' + esc(r.old) + '</div>'
+      + '</div>';
   }
-  var n = a.length, m = b.length;
-  var dp = [];
-  var i, j;
-  for(i = 0; i <= n; i++){ dp[i] = []; dp[i][m] = 0; }
-  for(j = 0; j <= m; j++){ dp[n][j] = 0; }
-  for(i = n - 1; i >= 0; i--){
-    for(j = m - 1; j >= 0; j--){
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
+  if(r.type === "del" || r.type === "mod" || r.type === "deladd"){
+    out += '<div class="rh-drow uni changed"' + (hunkStart ? ' data-hunk="' + hunkIndex + '"' : '') + '>'
+      + '<div class="rh-ln">' + (r.oldNo == null ? '' : r.oldNo) + '</div>'
+      + '<div class="rh-ln blank"></div>'
+      + '<div class="rh-txt delbg"><span class="sign">-</span>' + (r.inline ? reqDocHistorySegsHtml(r.inline.old, "rh-mk-del") : esc(r.old)) + '</div>'
+      + '</div>';
+    hunkStart = false;
   }
-  var out = [];
-  i = 0; j = 0;
-  while(i < n && j < m){
-    if(a[i] === b[j]){ out.push({ type: "same", text: a[i] }); i++; j++; }
-    else if(dp[i + 1][j] >= dp[i][j + 1]){ out.push({ type: "del", text: a[i] }); i++; }
-    else { out.push({ type: "add", text: b[j] }); j++; }
+  if(r.type === "add" || r.type === "mod" || r.type === "deladd"){
+    out += '<div class="rh-drow uni changed"' + (hunkStart ? ' data-hunk="' + hunkIndex + '"' : '') + '>'
+      + '<div class="rh-ln blank"></div>'
+      + '<div class="rh-ln">' + (r.newNo == null ? '' : r.newNo) + '</div>'
+      + '<div class="rh-txt addbg"><span class="sign">+</span>' + (r.inline ? reqDocHistorySegsHtml(r.inline.new, "rh-mk-add") : esc(r.new)) + '</div>'
+      + '</div>';
   }
-  while(i < n){ out.push({ type: "del", text: a[i] }); i++; }
-  while(j < m){ out.push({ type: "add", text: b[j] }); j++; }
   return out;
 }
-function loadReqDocHistoryPreview(historyId){
-  if(!reqDocHistoryDocId) return;
-  reqDocHistorySel = historyId;
-  var list = $("reqDocHistoryList");
-  if(list) list.querySelectorAll(".rh-row").forEach(function(r){
-    r.classList.toggle("active", r.dataset.historyId === historyId);
+function reqDocHistoryFoldHtml(block){
+  var olds = [], news = [];
+  block.rows.forEach(function(row){
+    if(row.oldNo != null) olds.push(row.oldNo);
+    if(row.newNo != null) news.push(row.newNo);
   });
-  if(reqDocHistoryCompareMode){ loadReqDocHistoryCompare(historyId); return; }
-  var preview = $("reqDocHistoryContent");
-  preview.innerHTML = '<div class="rh-empty">加载中…</div>';
-  var docId = reqDocHistoryDocId;
-  API.get("/api/req-docs/" + encodeURIComponent(docId) + "/history/" + encodeURIComponent(historyId)).then(function(h){
-    if(docId !== reqDocHistoryDocId) return;
-    var verTitle = $("reqDocHistoryVerTitle");
-    if(verTitle) verTitle.textContent = "第 " + h.versionNo + " 版 · " + (h.savedBy || "—") + " · " + (fmtTs(h.createdAt) || "—");
-    renderReqDocHistoryPreview(h, preview);
-  }).catch(function(ex){
-    preview.innerHTML = '<div class="rh-empty">' + esc(ex.message || "版本正文加载失败") + '</div>';
+  var range = "";
+  if(olds.length) range += "旧 " + Math.min.apply(null, olds) + "–" + Math.max.apply(null, olds);
+  if(news.length) range += (range ? " / " : "") + "新 " + Math.min.apply(null, news) + "–" + Math.max.apply(null, news);
+  return '<button class="rh-dfold" type="button" data-rh-fold="' + block.key + '">'
+    + '<span class="chev">▸</span>展开 <b>' + block.rows.length + '</b> 行未改动'
+    + '<span class="range">' + range + '</span></button>';
+}
+function reqDocHistoryHeadHtml(base, target){
+  var targetLabel = target.key === "current"
+    ? ("当前（第 " + target.versionNo + " 版）")
+    : ("第 " + target.versionNo + " 版");
+  if(reqDocHistoryView === "split"){
+    return '<div class="rh-dhead">'
+      + '<div class="dh-ln"></div>'
+      + '<div class="dh-side">旧 · 第 ' + base.versionNo + ' 版 <span>' + esc(base.savedBy || "—") + ' · ' + esc(fmtTs(base.createdAt) || "—") + '</span></div>'
+      + '<div class="dh-ln"></div>'
+      + '<div class="dh-side">新 · ' + esc(targetLabel) + ' <span>' + esc(target.savedBy || "—") + ' · ' + esc(fmtTs(target.createdAt) || "—") + '</span></div>'
+      + '</div>';
+  }
+  return '<div class="rh-dhead uni">'
+    + '<div class="dh-ln"></div>'
+    + '<div class="dh-ln"></div>'
+    + '<div class="dh-side">旧 第 ' + base.versionNo + ' 版 → ' + esc(targetLabel) + '</div>'
+    + '</div>';
+}
+function reqDocHistoryUpdateHunkLabel(){
+  var wrap = $("reqDocHistoryDiff");
+  var marks = wrap ? wrap.querySelectorAll("[data-hunk]") : [];
+  var now = $("reqDocHistoryHunkNow");
+  var all = $("reqDocHistoryHunkAll");
+  if(now) now.textContent = marks.length ? (reqDocHistoryHunk + 1) : 0;
+  if(all) all.textContent = marks.length;
+  var prev = $("reqDocHistoryPrev");
+  var next = $("reqDocHistoryNext");
+  if(prev) prev.disabled = reqDocHistoryHunk <= 0;
+  if(next) next.disabled = reqDocHistoryHunk >= marks.length - 1;
+}
+function reqDocHistoryBuildOverview(){
+  var ovl = $("reqDocHistoryOvl");
+  var wrap = $("reqDocHistoryDiff");
+  if(!ovl || !wrap) return;
+  ovl.innerHTML = "";
+  var marks = wrap.querySelectorAll("[data-hunk]");
+  var total = wrap.scrollHeight || 1;
+  for(var i = 0; i < marks.length; i++){
+    var row = marks[i];
+    var dot = document.createElement("button");
+    dot.type = "button";
+    dot.className = "rh-ovmk";
+    var add = row.querySelector(".rh-txt.addbg");
+    var del = row.querySelector(".rh-txt.delbg");
+    if(add && !del) dot.className += " add";
+    else if(del && !add) dot.className += " del";
+    dot.style.top = Math.max(0, Math.min(99.4, (row.offsetTop / total) * 100)) + "%";
+    dot.setAttribute("aria-label", "跳到第 " + (i + 1) + " 处差异");
+    dot.dataset.rhOv = String(i);
+    ovl.appendChild(dot);
+  }
+}
+function reqDocHistoryJumpHunk(delta){
+  var wrap = $("reqDocHistoryDiff");
+  if(!wrap) return;
+  var marks = wrap.querySelectorAll("[data-hunk]");
+  if(!marks.length) return;
+  reqDocHistoryHunk = Math.max(0, Math.min(marks.length - 1, reqDocHistoryHunk + delta));
+  marks[reqDocHistoryHunk].scrollIntoView({ block: "center", behavior: "smooth" });
+  reqDocHistoryUpdateHunkLabel();
+}
+function reqDocHistoryEnsureHunkVisible(){
+  var wrap = $("reqDocHistoryDiff");
+  if(!wrap) return;
+  var marks = wrap.querySelectorAll("[data-hunk]");
+  if(!marks.length) return;
+  var top = wrap.scrollTop + 70;
+  var idx = 0;
+  for(var i = 0; i < marks.length; i++){
+    if(marks[i].offsetTop <= top) idx = i;
+  }
+  if(idx !== reqDocHistoryHunk){
+    reqDocHistoryHunk = idx;
+    reqDocHistoryUpdateHunkLabel();
+  }
+}
+function renderReqDocHistory(preserveScroll){
+  var readBox = $("reqDocHistoryRead");
+  var diffShell = $("reqDocHistoryDiffShell");
+  var diffFoot = $("reqDocHistoryDiffFoot");
+  var identical = $("reqDocHistoryIdentical");
+  var cmpBar = $("reqDocHistoryCmpBar");
+  var metaBox = $("reqDocHistoryMetaDiff");
+  var empty = $("reqDocHistoryEmpty");
+  var statsBox = $("reqDocHistoryStats");
+  var footStat = $("reqDocHistoryFootStat");
+  var base = reqDocHistoryDocSync(reqDocHistorySel);
+  var target = reqDocHistoryDocSync(reqDocHistoryTarget);
+  if(!base && !reqDocHistories.length && reqDocHistoryCurrent){
+    reqDocHistoryMode = "read";
+    base = reqDocHistoryCurrentDoc();
+    target = base;
+  }
+  if(!base){
+    reqDocHistoryResetPane(reqDocHistories.length ? "版本内容加载失败" : "还没有历史快照：保存正文后自动生成");
+    return;
+  }
+  if(!target) target = reqDocHistoryCurrentDoc();
+  if(!target){
+    reqDocHistoryResetPane("当前正文加载失败");
+    return;
+  }
+  renderReqDocHistoryList();
+  renderReqDocHistoryPickers(base, target);
+  if(empty) empty.hidden = true;
+  var readMode = reqDocHistoryMode === "read";
+  var noHistory = !reqDocHistories.length;
+  if(cmpBar) cmpBar.hidden = readMode || noHistory;
+  if(diffShell) diffShell.hidden = readMode || noHistory;
+  if(diffFoot) diffFoot.hidden = readMode || noHistory;
+  if(identical) identical.hidden = true;
+  if(metaBox) metaBox.hidden = true;
+  if(readBox) readBox.hidden = !readMode;
+  if(readMode){
+    var readNote = base.key === "current"
+      ? '正在阅读当前版本 · ' + esc(base.savedBy || "—") + ' · ' + esc(fmtTs(base.createdAt) || "—")
+      : '正在阅读第 ' + base.versionNo + ' 版 · ' + esc(base.savedBy || "—") + ' · ' + esc(fmtTs(base.createdAt) || "—")
+        + '（快照内容，不会影响当前正文）';
+    readBox.innerHTML = '<div class="rh-read-note">' + readNote + '</div>'
+      + '<div class="markdown-body" id="reqDocHistoryReadBody"></div>';
+    renderReqDocHistoryPreview(base, $("reqDocHistoryReadBody"));
+    return;
+  }
+  renderReqDocHistoryMeta(base, target);
+
+  var oldLines = textDiff.docLines(base);
+  var newLines = textDiff.docLines(target);
+  if(textDiff.tooLarge(oldLines, newLines)){
+    reqDocHistoryShowPaneMessage("文档超过 " + textDiff.MAX_LINES + " 行，暂不支持结构化差异对比；可切到「阅读」逐版查看。");
+    if(statsBox) statsBox.innerHTML = '<span class="hunks">文档过长</span>';
+    if(footStat) footStat.textContent = "";
+    return;
+  }
+  var key = (base.key || "current") + "|" + (target.key || "current");
+  if(key !== reqDocHistoryRowsKey){
+    reqDocHistoryRows = textDiff.buildRows(oldLines, newLines);
+    reqDocHistoryRowsKey = key;
+  }
+  var rows = reqDocHistoryRows.rows;
+  var stats = textDiff.rowStats(rows);
+  if(!rows.some(textDiff.isChanged)){
+    if(diffShell) diffShell.hidden = true;
+    if(diffFoot) diffFoot.hidden = true;
+    if(identical) identical.hidden = false;
+    if(statsBox) statsBox.innerHTML = '<span class="add">+0</span><span class="del">−0</span><span class="hunks">无差异</span>';
+    if(footStat) footStat.textContent = "+0 −0";
+    return;
+  }
+  var blocks = textDiff.buildBlocks(rows, { showAll: reqDocHistoryShowAll });
+  var prepared = textDiff.prepareBlocks(blocks, reqDocHistoryExpanded);
+  if(statsBox){
+    statsBox.innerHTML = '<span class="add">+' + stats.add + '</span><span class="del">−' + stats.del + '</span>'
+      + '<span class="hunks">' + prepared.hunks + ' 处差异</span>';
+  }
+  if(footStat) footStat.textContent = '+' + stats.add + ' −' + stats.del;
+
+  var wrap = $("reqDocHistoryDiff");
+  if(!wrap) return;
+  var scrollTop = preserveScroll ? wrap.scrollTop : 0;
+  var html = reqDocHistoryHeadHtml(base, target);
+  prepared.items.forEach(function(item){
+    if(item.kind === "gap"){
+      html += reqDocHistoryFoldHtml(item.block);
+      return;
+    }
+    html += reqDocHistoryView === "split"
+      ? reqDocHistorySplitRowHtml(item.row, item.hunkStart, item.hunkIndex)
+      : reqDocHistoryUnifiedRowHtml(item.row, item.hunkStart, item.hunkIndex);
   });
+  wrap.innerHTML = html;
+  if(diffShell) diffShell.hidden = false;
+  if(diffFoot) diffFoot.hidden = false;
+  wrap.scrollTop = scrollTop;
+  reqDocHistoryHunk = Math.max(0, Math.min(reqDocHistoryHunk, prepared.hunks - 1));
+  reqDocHistoryUpdateHunkLabel();
+  reqDocHistoryBuildOverview();
 }
 function restoreReqDocHistory(){
   if(!reqDocHistoryDocId || !reqDocHistorySel){ toast("先选择一个历史版本", "warn"); return; }
   if(!reqDocHistoryCanRestore){ toast("你对该项目只有查看权限", "warn"); return; }
+  var entry = reqDocHistoryFind(reqDocHistorySel);
+  if(!entry){ toast("先选择一个历史版本", "warn"); return; }
   var docId = reqDocHistoryDocId, historyId = reqDocHistorySel;
   var fromReader = reqDocHistoryFromReader;
   UI.showConfirm({
     title: "恢复历史版本",
-    msg: "当前正文会先留一版快照，再替换为所选版本的内容"
+    msg: "当前正文会先留一版快照，再替换为第 " + entry.versionNo + " 版的内容"
       + (fromReader ? "。" : "（未保存的修改会丢失）。") + "确定恢复？",
     okText: "恢复"
   }).then(function(ok){
     if(!ok) return;
     API.post("/api/req-docs/" + encodeURIComponent(docId) + "/restore", { historyId: historyId }).then(function(){
       UI.closeModal($("dlgReqDocHistory"));
-      toast("已恢复到所选版本", "fs");
+      toast("已恢复到第 " + entry.versionNo + " 版", "fs");
       loadReqDocs(true);
       if(fromReader){ loadReqDocSplitDoc(docId); }
       else { openReqDocEditor(docId); }
@@ -3331,14 +3645,96 @@ function populateReqDocSelect(keep){
   if($("reqDocHistory")) $("reqDocHistory").addEventListener("click", function(){ openReqDocHistory(); });
   if($("dlgReqDocHistoryX")) $("dlgReqDocHistoryX").addEventListener("click", function(){ UI.closeModal($("dlgReqDocHistory")); });
   if($("reqDocHistoryRestore")) $("reqDocHistoryRestore").addEventListener("click", restoreReqDocHistory);
-  if($("reqDocHistoryCompare")) $("reqDocHistoryCompare").addEventListener("click", toggleReqDocHistoryCompare);
-  if($("reqDocHistoryTextDiff")) $("reqDocHistoryTextDiff").addEventListener("click", toggleReqDocTextDiff);
   if($("reqDocHistoryList")){
     $("reqDocHistoryList").addEventListener("click", function(e){
       var r = e.target.closest("[data-history-id]");
-      if(r) loadReqDocHistoryPreview(r.dataset.historyId);
+      if(!r) return;
+      var id = r.dataset.historyId;
+      if(id === reqDocHistorySel && reqDocHistoryMode === "compare") return;
+      reqDocHistorySel = id;
+      if(reqDocHistoryTarget === id) reqDocHistoryTarget = "current";
+      reqDocHistoryMode = "compare";
+      reqDocHistoryExpanded = {};
+      reqDocHistoryHunk = 0;
+      renderReqDocHistoryList();
+      reqDocHistoryLoadAndRender(false);
     });
   }
+  if($("reqDocHistoryBase")){
+    $("reqDocHistoryBase").addEventListener("change", function(){
+      var id = this.value;
+      if(!id) return;
+      reqDocHistorySel = id;
+      if(reqDocHistoryTarget === id) reqDocHistoryTarget = "current";
+      reqDocHistoryExpanded = {};
+      reqDocHistoryHunk = 0;
+      renderReqDocHistoryList();
+      reqDocHistoryLoadAndRender(false);
+    });
+  }
+  if($("reqDocHistoryTarget")){
+    $("reqDocHistoryTarget").addEventListener("change", function(){
+      reqDocHistoryTarget = this.value || "current";
+      reqDocHistoryExpanded = {};
+      reqDocHistoryHunk = 0;
+      reqDocHistoryLoadAndRender(false);
+    });
+  }
+  if($("reqDocHistoryModeSeg")){
+    $("reqDocHistoryModeSeg").addEventListener("click", function(e){
+      var btn = e.target.closest("button[data-rh-mode]");
+      if(!btn) return;
+      var mode = btn.dataset.rhMode;
+      if(mode === "compare" && !reqDocHistories.length) return;
+      reqDocHistoryMode = mode;
+      renderReqDocHistory(false);
+    });
+  }
+  if($("reqDocHistoryViewSeg")){
+    $("reqDocHistoryViewSeg").addEventListener("click", function(e){
+      var btn = e.target.closest("button[data-rh-view]");
+      if(!btn) return;
+      reqDocHistoryView = btn.dataset.rhView;
+      reqDocHistoryHunk = 0;
+      renderReqDocHistory(true);
+    });
+  }
+  if($("reqDocHistoryFoldAll")){
+    $("reqDocHistoryFoldAll").addEventListener("click", function(){
+      reqDocHistoryShowAll = !reqDocHistoryShowAll;
+      reqDocHistoryExpanded = {};
+      reqDocHistoryHunk = 0;
+      renderReqDocHistory(true);
+    });
+  }
+  if($("reqDocHistoryDiff")){
+    $("reqDocHistoryDiff").addEventListener("click", function(e){
+      var fold = e.target.closest("[data-rh-fold]");
+      if(!fold) return;
+      reqDocHistoryExpanded[fold.dataset.rhFold] = true;
+      renderReqDocHistory(true);
+    });
+    $("reqDocHistoryDiff").addEventListener("scroll", function(){
+      if(reqDocHistoryScrollTick) return;
+      reqDocHistoryScrollTick = true;
+      requestAnimationFrame(function(){
+        reqDocHistoryScrollTick = false;
+        reqDocHistoryEnsureHunkVisible();
+      });
+    });
+  }
+  if($("reqDocHistoryOvl")){
+    $("reqDocHistoryOvl").addEventListener("click", function(e){
+      var mark = e.target.closest("[data-rh-ov]");
+      if(!mark) return;
+      reqDocHistoryHunk = Number(mark.dataset.rhOv) || 0;
+      var marks = $("reqDocHistoryDiff") ? $("reqDocHistoryDiff").querySelectorAll("[data-hunk]") : [];
+      if(marks[reqDocHistoryHunk]) marks[reqDocHistoryHunk].scrollIntoView({ block: "center", behavior: "smooth" });
+      reqDocHistoryUpdateHunkLabel();
+    });
+  }
+  if($("reqDocHistoryPrev")) $("reqDocHistoryPrev").addEventListener("click", function(){ reqDocHistoryJumpHunk(-1); });
+  if($("reqDocHistoryNext")) $("reqDocHistoryNext").addEventListener("click", function(){ reqDocHistoryJumpHunk(1); });
   if($("reqDocCommentSend")) $("reqDocCommentSend").addEventListener("click", submitReqDocComment);
   if($("reqDocCommentQuoteBtn")) $("reqDocCommentQuoteBtn").addEventListener("click", quoteReqDocSelection);
   if($("reqDocCommentQuoteClear")) $("reqDocCommentQuoteClear").addEventListener("click", function(){ setReqDocCommentQuote(null); });
@@ -3449,6 +3845,18 @@ function populateReqDocSelect(keep){
     if($("dlgReqDocHistory") && $("dlgReqDocHistory").classList.contains("open")){ UI.closeModal($("dlgReqDocHistory")); return; }
     if($("dlgReqDocShare") && $("dlgReqDocShare").classList.contains("open")){ UI.closeModal($("dlgReqDocShare")); return; }
     if(activeView === "requirements" && $("reqDocEditPage") && !$("reqDocEditPage").hidden){ tryCloseReqDocEditor(); }
+  });
+
+  /* 历史版本对比：n / p 在差异之间跳转（输入控件内不拦截） */
+  document.addEventListener("keydown", function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    var layer = $("dlgReqDocHistory");
+    if(!layer || !layer.classList.contains("open")) return;
+    if(reqDocHistoryMode !== "compare") return;
+    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+    if(tag === "select" || tag === "input" || tag === "textarea") return;
+    if(e.key === "n" || e.key === "N"){ e.preventDefault(); reqDocHistoryJumpHunk(1); }
+    else if(e.key === "p" || e.key === "P"){ e.preventDefault(); reqDocHistoryJumpHunk(-1); }
   });
 
   /* 编辑器改成打开需求时按需加载，这里不再预初始化（首屏省下 2.5 MB） */
