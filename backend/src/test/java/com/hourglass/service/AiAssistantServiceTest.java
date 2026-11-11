@@ -96,6 +96,19 @@ class AiAssistantServiceTest {
     }
 
     @Test
+    void ownWorkNounPhrasesRouteWithoutQuestionWords() {
+        assertEquals("overdue", AiAssistantService.queryTypeOf("我逾期的工作项"));
+        assertEquals("overdue", AiAssistantService.queryTypeOf("我的逾期任务"));
+        assertEquals("today", AiAssistantService.queryTypeOf("我今天到期的任务"));
+        assertEquals("blocked", AiAssistantService.queryTypeOf("我被阻塞的工作项"));
+        assertEquals("open", AiAssistantService.queryTypeOf("我的待办"));
+        assertNull(AiAssistantService.queryTypeOf("逾期的工作项"), "不带「我」仍需疑问词");
+        assertNull(AiAssistantService.queryTypeOf("我新建的逾期任务"), "写动作词不走查询");
+        assertNull(AiAssistantService.queryTypeOf("我团队的逾期任务"), "团队范围不走本人模板");
+        assertNull(AiAssistantService.queryTypeOf("我逾期的工作项，帮我移到进行中"), "带写动作不走查询");
+    }
+
+    @Test
     void overdueQueryIsOwnScopedAndKeepsTitlesOutOfAnswer() {
         member(USER);
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));

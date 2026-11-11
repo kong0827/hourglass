@@ -1404,7 +1404,8 @@ public class AiAssistantService {
         if (s.matches(".*(把|将|创建|新建|建一个|建个|提一个|提个|移到|挪到|移动到|拆|改成|改为|标记).*")) {
             return null;
         }
-        if (!s.matches(".*(哪些|什么|多少|几个|几条|几项|列出|列一下|查一下|查查|查询|看看|看下|看一下|有没有|有吗|清单|列表|吗|？|\\?).*")) {
+        boolean myNounPhrase = s.matches("^(我的?|我手上的?|我手头的?)[^，,。！!]{0,12}(任务|工作项|待办|缺陷|bug|Bug|BUG)[。.！!]?$");
+        if (!myNounPhrase && !s.matches(".*(哪些|什么|多少|几个|几条|几项|列出|列一下|查一下|查查|查询|看看|看下|看一下|有没有|有吗|清单|列表|吗|？|\\?).*")) {
             return null;
         }
         boolean aboutWork = s.matches(".*(任务|工作项|待办|事情|活|缺陷|bug|Bug|BUG|到期|截止|逾期|超期|阻塞).*");
