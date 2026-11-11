@@ -1610,7 +1610,7 @@ var AUDIT_LABEL = {
   user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
   invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
   password_change:"修改密码", profile_update:"修改个人资料", work_hours_update:"修改计时设置",
-  mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置",
+  mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置", ai_assistant_exec:"AI 助手执行",
   gantt_share_create:"生成甘特分享", gantt_share_revoke:"撤销甘特分享",
   test_case_delete:"删除测试用例", test_case_import:"导入测试用例",
   test_plan_delete:"删除测试计划", test_plan_status:"测试计划状态变更",

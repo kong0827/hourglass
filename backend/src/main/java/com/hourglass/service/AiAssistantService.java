@@ -236,6 +236,13 @@ public class AiAssistantService {
         res.setQuestion(cleanText(text(root, "question"), 200));
 
         String intent = res.getIntent();
+        if (("create_task".equals(intent) || "create_demand".equals(intent) || "clarify".equals(intent))
+                && !hasWritable(projects)) {
+            /* 没有可写项目时不下发创建草稿，确认时也必然被拒，直接说明 */
+            res.setIntent("answer");
+            res.setAnswer("你在当前空间没有可写的项目，不能创建工作项或提需求。需要时请联系空间管理员或项目负责人授予写权限。");
+            return res;
+        }
         AiAssistantDraft draft = buildDraft(intent, root, workspaceId, userId, projects, contextProject, req.getContext());
         if (draft == null) {
             if (isActionIntent(intent)) {
@@ -263,7 +270,17 @@ public class AiAssistantService {
             return res;
         }
 
-        List<AiAssistantMissing> missing = missingFor(draft, projects, intent);
+        /* 模型提议的动作因权限或状态被服务端丢弃时，模型原话（如「确认后执行」）会误导，改由服务端说明 */
+        if ("demand_action".equals(intent) && draft.getDemandId() != null && draft.getDemandAction() == null) {
+            String proposed = normalizeDemandAction(firstText(root.get("draft"), "demandAction", root));
+            if (proposed != null) {
+                res.setAnswer("需求「" + nz(draft.getDemandTitle()) + "」当前是「" + nz(draft.getDemandStatusName())
+                        + "」，你不能执行「" + demandActionName(proposed) + "」：评审类流转需要项目写权限，"
+                        + "排期、撤排、取消、恢复需要空间主、管理员或项目负责人。可以改选下面允许的动作。");
+            }
+        }
+
+        List<AiAssistantMissing> missing = missingFor(draft, projects, draft.getAction());
         res.setDraft(draft);
         res.setMissing(missing);
         if (!missing.isEmpty()) {
@@ -468,14 +485,21 @@ public class AiAssistantService {
         /* 以服务端刚读到的 revision 做 CAS，避免覆盖他人并发改动 */
         body.setRevision(d.getRevision());
         if ("plan".equals(action) || "replan".equals(action)) {
+            /* schedule 会用请求体整体覆盖版本与计划日期：没明确改的项沿用需求当前值，避免调期时把排期清空 */
             String versionId = pick(req.getVersionId(), draft.getVersionId());
-            ProjectVersion v = resolveVersion(workspaceId, d.getReqId(), versionId);
-            if (Texts.trimToNull(versionId) != null && v == null) {
-                throw AppException.badRequest("目标版本不存在、不属于该项目或已发布");
+            if (versionId != null) {
+                ProjectVersion v = resolveVersion(workspaceId, d.getReqId(), versionId);
+                if (v == null) {
+                    throw AppException.badRequest("目标版本不存在、不属于该项目或已发布");
+                }
+                body.setVersionId(v.getId());
+            } else {
+                body.setVersionId(d.getVersionId());
             }
-            body.setVersionId(v == null ? null : v.getId());
-            body.setPlannedStart(req.getPlannedStart() != null ? req.getPlannedStart() : draft.getPlannedStart());
-            body.setPlannedEnd(req.getPlannedEnd() != null ? req.getPlannedEnd() : draft.getPlannedEnd());
+            LocalDate start = req.getPlannedStart() != null ? req.getPlannedStart() : draft.getPlannedStart();
+            LocalDate end = req.getPlannedEnd() != null ? req.getPlannedEnd() : draft.getPlannedEnd();
+            body.setPlannedStart(start != null ? start : d.getPlannedStart());
+            body.setPlannedEnd(end != null ? end : d.getPlannedEnd());
         }
 
         Demand result;
@@ -691,6 +715,8 @@ public class AiAssistantService {
                 if (v != null) {
                     d.setVersionId(v.getId());
                     d.setVersionName(v.getName());
+                } else if (target.getVersionId() != null) {
+                    d.setVersionName(target.getVersionName());
                 }
             }
         } else {
@@ -783,7 +809,7 @@ public class AiAssistantService {
 
     private List<AiAssistantMissing> missingFor(AiAssistantDraft d, List<ProjectRef> projects, String intent) {
         List<AiAssistantMissing> list = new ArrayList<AiAssistantMissing>();
-        if ("create_task".equals(intent) || "create_demand".equals(intent) || "clarify".equals(intent)) {
+        if ("create_task".equals(intent) || "create_demand".equals(intent)) {
             if (Texts.trimToNull(d.getReqId()) == null) {
                 AiAssistantMissing m = missing("reqId", "所属项目");
                 for (AiAssistantProject p : writableOptions(projects)) {
@@ -1149,7 +1175,7 @@ public class AiAssistantService {
 
         sb.append("\n对话（按时间顺序，最后一条是用户本轮消息）：\n");
         for (AiAssistantMessage m : safeMessages(req)) {
-            sb.append("用户".equals(m.getRole()) ? "用户：" : "助手：").append(m.getContent()).append("\n");
+            sb.append("user".equals(m.getRole()) ? "用户：" : "助手：").append(m.getContent()).append("\n");
         }
         sb.append("\n请按输出契约只返回 JSON。");
         return sb.toString();
@@ -1211,7 +1237,12 @@ public class AiAssistantService {
         if (s.matches(".*(创建|新建|建|加|提).{0,6}(一个|个|一条|条)?.{0,12}(任务|工作项|需求).*")) {
             return true;
         }
-        return s.matches(".*(把|将).{0,30}(通过|拒绝|排期|调期|撤排|取消|恢复|重新打开|移到|移动到|流转|提测|完成).*");
+        String verbs = "(通过|拒绝|驳回|排期|调期|改期|撤回评审|撤排|撤销排期|取消|恢复|重新打开|重开|移到|挪到|移动到|流转|提测|完成)";
+        if (s.matches(".*(把|将).{0,30}" + verbs + ".*")) {
+            return true;
+        }
+        /* 「需求「X」调期，原因：…」这类陈述式指令：对象词 + 流转动词，不要求「把」字句 */
+        return s.matches(".*(需求|任务|工作项).{0,40}" + verbs + ".*");
     }
 
     private void rateLimit(String userId) {

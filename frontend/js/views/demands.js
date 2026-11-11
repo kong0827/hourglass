@@ -2080,6 +2080,7 @@ function renderDemandDetail(d){
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
+  layer.setAttribute("data-ai-demand", id);
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(d.title) + '</h2>'

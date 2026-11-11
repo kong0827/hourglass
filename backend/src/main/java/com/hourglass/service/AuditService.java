@@ -231,6 +231,7 @@ public class AuditService {
             case "work_hours_update": return "修改计时设置";
             case "mail_settings_update": return "修改邮件服务器";
             case "ai_config_update": return "修改 AI 配置";
+            case "ai_assistant_exec": return "AI 助手执行";
             case "gantt_share_create": return "生成甘特分享";
             case "gantt_share_revoke": return "撤销甘特分享";
             case "test_case_delete": return "删除测试用例";
