@@ -117,7 +117,7 @@ public class AiReqDocService {
 
         JsonNode arr = root.path("tasks");
         if (!arr.isArray()) {
-            throw new IllegalStateException("AI 返回的结构里没有 tasks 数组，请重试");
+            throw new AppException(502, "AI 返回的结构里没有 tasks 数组，请重试");
         }
         int idx = 0;
         Set<String> seen = new HashSet<String>();
@@ -140,7 +140,7 @@ public class AiReqDocService {
             idx++;
         }
         if (res.getTasks().isEmpty()) {
-            throw new IllegalStateException("AI 没有拆出任何任务，可能是正文信息太少，补充细节后再试");
+            throw new AppException(502, "AI 没有拆出任何任务，可能是正文信息太少，补充细节后再试");
         }
         return res;
     }
@@ -230,7 +230,7 @@ public class AiReqDocService {
 
         JsonNode pts = root.path("points");
         if (!pts.isArray()) {
-            throw new IllegalStateException("AI 返回的结构里没有 points 数组，请重试");
+            throw new AppException(502, "AI 返回的结构里没有 points 数组，请重试");
         }
         for (JsonNode n : pts) {
             String p = trim(n.path("point").asText(""), 120);
@@ -247,7 +247,7 @@ public class AiReqDocService {
             res.getPoints().add(pt);
         }
         if (res.getPoints().isEmpty()) {
-            throw new IllegalStateException("AI 没有拆出任何功能点，请补充文档细节后再试");
+            throw new AppException(502, "AI 没有拆出任何功能点，请补充文档细节后再试");
         }
 
         /* ---- 分数与结论由程序算，不用模型给的口径 ---- */

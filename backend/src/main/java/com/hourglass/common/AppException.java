@@ -15,6 +15,11 @@ public class AppException extends RuntimeException {
         this.code = code;
     }
 
+    public AppException(int code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+    }
+
     public static AppException badRequest(String message) {
         return new AppException(400, message);
     }

@@ -3,6 +3,8 @@ package com.hourglass.common;
 import com.hourglass.dto.AiConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -39,6 +41,8 @@ import java.util.Map;
 @Component
 public class AiClient {
 
+    private static final Logger log = LoggerFactory.getLogger(AiClient.class);
+
     private static final String DEFAULT_TIMEOUT_MSG = "AI 服务响应超时（已等待 90 秒）";
     /** 同时只允许 2 个上游请求：慢模型不能把 Tomcat 线程和连接堆满 */
     private static final java.util.concurrent.Semaphore AI_SLOTS = new java.util.concurrent.Semaphore(2);
@@ -70,20 +74,21 @@ public class AiClient {
 
     /**
      * @param wantJson 是否按 JSON 模式请求（不支持会自动降级重试，业务层无需关心）
+     * @throws AppException 配置问题返回 400，上游失败返回 502/504，并发占满返回 429
      */
     public Reply chat(AiConfig cfg, String systemPrompt, String userPrompt, boolean wantJson) {
         if (!cfg.usable()) {
-            throw new IllegalStateException("AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
+            throw AppException.badRequest("AI 配置不完整：请先在「个人设置 → AI 设置」里填好模型和 API Key");
         }
         String url = endpoint(cfg.getBaseUrl());
         try {
             OutboundUrlGuard.validate(cfg.getBaseUrl(), allowPrivateNetwork || "ollama".equals(cfg.getProvider()));
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(e.getMessage());
+            throw AppException.badRequest(e.getMessage());
         }
 
         if (!AI_SLOTS.tryAcquire()) {
-            throw new IllegalStateException("AI 正忙（同时最多 2 个生成任务），请稍后再试");
+            throw new AppException(429, "AI 正忙（同时最多 2 个生成任务），请稍后再试");
         }
         try {
             return call(cfg, url, systemPrompt, userPrompt, wantJson);
@@ -103,24 +108,28 @@ public class AiClient {
         try {
             return doCall(cfg, url, messages, wantJson);
         } catch (HttpStatusCodeException e) {
+            String detail = upstreamMessage(e.getResponseBodyAsString(StandardCharsets.UTF_8));
+            log.warn("AI 上游返回 {}：model={} detail={}", e.getRawStatusCode(), cfg.getModel(), brief(detail));
             /* JSON 模式不被支持：去掉 response_format 再试一次，其余错误照常抛 */
             if (wantJson && e.getRawStatusCode() == 400) {
                 long used = System.currentTimeMillis() - startedAt;
                 if (used > RETRY_DEADLINE_MS || TOTAL_BUDGET_MS - used < 30000L) {
-                    throw new IllegalStateException("AI 首轮响应过慢（已用 " + (used / 1000)
+                    throw new AppException(504, "AI 首轮响应过慢（已用 " + (used / 1000)
                             + " 秒），为避免代理超时未再重试；请稍后重试或换更快的模型", e);
                 }
                 Reply r = doCall(cfg, url, messages, false);
                 return r;
             }
-            throw new IllegalStateException(readableError(e), e);
+            throw new AppException(502, errorMessage(e.getRawStatusCode(),
+                    e.getResponseBodyAsString(StandardCharsets.UTF_8)), e);
         } catch (ResourceAccessException e) {
-            throw new IllegalStateException(DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
-        } catch (IllegalStateException e) {
+            log.warn("AI 上游连接失败：model={} error={}", cfg.getModel(), e.getClass().getSimpleName());
+            throw new AppException(504, DEFAULT_TIMEOUT_MSG + "，请检查网络或换更快的模型", e);
+        } catch (AppException e) {
             throw e;
         } catch (RuntimeException e) {
             /* baseUrl 写错等底层异常可能把完整地址（含内部主机名）带到界面：统一包装成可读提示 */
-            throw new IllegalStateException("AI 请求失败（" + e.getClass().getSimpleName()
+            throw new AppException(502, "AI 请求失败（" + e.getClass().getSimpleName()
                     + "）：请检查接口地址格式与网络连通性", e);
         }
     }
@@ -159,15 +168,15 @@ public class AiClient {
             r.jsonModeUsed = json;
             if (content == null || content.trim().isEmpty()) {
                 String why = choice.path("finish_reason").asText("");
-                throw new IllegalStateException("length".equals(why)
+                throw new AppException(502, "length".equals(why)
                         ? "模型输出被截断（超出最大 token），请减少需求篇幅或换长上下文模型"
                         : "AI 返回了空内容" + (why.isEmpty() ? "" : "（finish_reason=" + why + "）"));
             }
             return r;
-        } catch (IllegalStateException e) {
+        } catch (AppException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("AI 返回内容解析失败：" + brief(raw), e);
+            throw new AppException(502, "AI 返回内容解析失败：" + brief(raw), e);
         }
     }
 
@@ -191,10 +200,12 @@ public class AiClient {
     }
 
     /** 把上游错误翻译成用户能自己动手解决的话 */
-    private String readableError(HttpStatusCodeException e) {
-        int code = e.getRawStatusCode();
-        String body = e.getResponseBodyAsString(StandardCharsets.UTF_8);
+    static String errorMessage(int code, String body) {
         String detail = upstreamMessage(body);
+        if (quotaExhausted(body)) {
+            return "厂商账户额度不足（" + code + "）：请到厂商控制台充值或关闭「仅使用免费额度」模式，"
+                    + "也可以换一个有额度的模型/账号" + suffix(detail);
+        }
         switch (code) {
             case 401:
             case 403:
@@ -202,12 +213,27 @@ public class AiClient {
             case 404:
                 return "接口地址不存在（404）：baseUrl 或模型名不对" + suffix(detail);
             case 429:
-                return "额度不足或请求太频繁（429）：检查厂商账户余额，稍后再试" + suffix(detail);
+                return "请求过于频繁（429）：稍后再试，或检查厂商账户的并发与额度限制" + suffix(detail);
             case 400:
                 return "请求被拒绝（400）：多半是模型名不支持或该模型不支持 JSON 输出" + suffix(detail);
             default:
                 return "AI 服务返回错误（" + code + "）" + suffix(detail);
         }
+    }
+
+    /** 额度用尽各厂商写法不同，统一点明，避免被误判成 Key 或频率问题 */
+    static boolean quotaExhausted(String body) {
+        if (body == null || body.isEmpty()) {
+            return false;
+        }
+        String b = body.toLowerCase();
+        return b.contains("insufficient_quota")
+                || b.contains("free quota exhausted")
+                || b.contains("quota exhausted")
+                || b.contains("arrearage")
+                || b.contains("额度已用完")
+                || b.contains("余额不足")
+                || b.contains("欠费");
     }
 
     /** 从上游 JSON 里挖出 error.message 或 message，挖不到就截一段原文 */
@@ -255,7 +281,7 @@ public class AiClient {
      */
     public static JsonNode extractJson(ObjectMapper mapper, String content) {
         if (content == null || content.trim().isEmpty()) {
-            throw new IllegalStateException("AI 返回内容为空");
+            throw new AppException(502, "AI 返回内容为空");
         }
         String s = content.trim();
         /* 去掉 ```json ... ``` 围栏 */
@@ -278,7 +304,7 @@ public class AiClient {
         try {
             return mapper.readTree(s);
         } catch (Exception e) {
-            throw new IllegalStateException("AI 返回的不是合法 JSON，请重试一次（片段：" + brief(s) + "）", e);
+            throw new AppException(502, "AI 返回的不是合法 JSON，请重试一次（片段：" + brief(s) + "）", e);
         }
     }
 }

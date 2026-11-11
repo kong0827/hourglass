@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,6 +44,28 @@ class AiClientTest {
         JsonNode prose = AiClient.extractJson(OM, "好的，结果如下：\n{\"coverage\":88}\n以上。");
         assertEquals(88, prose.path("coverage").asInt(), "前后有解释文字也能抽出来");
 
-        assertThrows(IllegalStateException.class, () -> AiClient.extractJson(OM, "这不是 JSON"));
+        assertThrows(AppException.class, () -> AiClient.extractJson(OM, "这不是 JSON"));
+    }
+
+    /** 百炼免费额度用尽返回 403 + insufficient_quota，不能提示成 Key 无效 */
+    @Test
+    void quotaExhaustedOn403IsNamedAsQuota() {
+        String body = "{\"error\":{\"message\":\"Free quota exhausted. To continue accessing the model on a paid basis, "
+                + "please add funds or disable the \\\"use free tier only\\\" mode in the management console.\","
+                + "\"type\":\"insufficient_quota\",\"code\":\"insufficient_quota\"}}";
+
+        String message = AiClient.errorMessage(403, body);
+
+        assertTrue(message.contains("额度不足"), message);
+        assertTrue(message.contains("免费额度"), message);
+        assertTrue(AiClient.quotaExhausted(body));
+    }
+
+    @Test
+    void plain403StaysKeyOrPermissionHint() {
+        String message = AiClient.errorMessage(403, "{\"error\":{\"message\":\"Invalid API key\"}}");
+
+        assertTrue(message.contains("API Key 无效"), message);
+        assertFalse(AiClient.quotaExhausted("{\"error\":{\"message\":\"Invalid API key\"}}"));
     }
 }

@@ -107,7 +107,7 @@ public class AiReviewService {
         res.setSource(src);
         res.setUsage(AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed));
         if (res.getReport().isEmpty()) {
-            throw new IllegalStateException("AI 返回了空内容，请重试一次");
+            throw new AppException(502, "AI 返回了空内容，请重试一次");
         }
         return res;
     }
