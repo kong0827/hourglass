@@ -505,18 +505,15 @@ class AiAssistantServiceTest {
         member(USER);
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
         allow("P1", true, false);
-        Demand target = demand("D1", "P1", "review", 1L);
-        target.setTitle("对账");
-        searchReturns(target);
-        when(demandService.getVisible(WS, USER, "D1")).thenReturn(target);
-        modelSays("{\"intent\":\"demand_action\",\"draft\":{\"demandQuery\":\"对账\",\"demandAction\":\"pass\"}}");
 
         AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把对账需求通过"));
 
         assertEquals("answer", chat.getIntent(), "只读成员没有任何可执行流转时只给说明");
         assertNull(chat.getRequestId(), "不下发可确认的草稿凭据");
-        assertTrue(chat.getAnswer().contains("待评审"));
+        assertTrue(chat.getAnswer().contains("没有可写的项目"));
         assertFalse(chat.getAnswer().contains("对账"), "回答会回灌给模型，不能带服务端解析出的需求标题");
+        verifyNoInteractions(client);
+        verify(demandService, never()).getVisible(anyString(), anyString(), anyString());
     }
 
     // ==================== 从需求拆分工作项 ====================
@@ -628,13 +625,26 @@ class AiAssistantServiceTest {
         member(USER);
         when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
         allow("P1", true, false);
-        modelSays("{\"intent\":\"create_demand\",\"draft\":{\"title\":\"对账导出\",\"reqId\":\"P1\"}}");
 
         AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("在项目甲提一个需求：对账导出"));
 
         assertEquals("answer", chat.getIntent());
         assertNull(chat.getRequestId(), "没有可写项目时不下发可确认的草稿凭据");
         assertNull(chat.getDraft());
+        assertTrue(chat.getAnswer().contains("没有可写的项目"));
+        verifyNoInteractions(client);
+        verify(configService, never()).resolve(anyString());
+    }
+
+    @Test
+    void clearWriteRequestsAreRecognizedNarrowly() {
+        assertTrue(AiAssistantService.isClearWriteRequest("帮我在风控规则引擎建一个工作项：登录页修复"));
+        assertTrue(AiAssistantService.isClearWriteRequest("把对账导出这个需求驳回"));
+        assertTrue(AiAssistantService.isClearWriteRequest("把登录页任务移到进行中"));
+        assertFalse(AiAssistantService.isClearWriteRequest("帮我看看已完成的任务"), "只读请求");
+        assertFalse(AiAssistantService.isClearWriteRequest("帮我设置任务提醒"), "不是工作项写动作");
+        assertFalse(AiAssistantService.isClearWriteRequest("怎么新建工作项？"), "咨询交给 FAQ");
+        assertFalse(AiAssistantService.isClearWriteRequest("帮我解释一下 WSJF"));
     }
 
     @Test

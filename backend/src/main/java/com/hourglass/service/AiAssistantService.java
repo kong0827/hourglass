@@ -225,6 +225,15 @@ public class AiAssistantService {
             return answerQuery(userId, workspaceId, queryType, projects);
         }
 
+        /* 没有可写项目时写请求注定被拒：不调模型，也不先报「未配置 AI」把人引去配置 */
+        if (!hasWritable(projects) && isClearWriteRequest(question)) {
+            AiAssistantResponse res = new AiAssistantResponse();
+            res.setIntent("answer");
+            res.setAnswer(NO_WRITABLE_ANSWER);
+            res.setDegraded(true);
+            return res;
+        }
+
         /* 高频产品问题不烧额度：FAQ 命中就直接返回人工维护的答案 */
         AssistantFaqService.Entry faq = looksLikeAction(question) ? null : faqService.match(question);
         if (faq != null) {
@@ -253,7 +262,7 @@ public class AiAssistantService {
                 && !hasWritable(projects)) {
             /* 没有可写项目时不下发创建草稿，确认时也必然被拒，直接说明 */
             res.setIntent("answer");
-            res.setAnswer("你在当前空间没有可写的项目，不能创建工作项或提需求。需要时请联系空间管理员或项目负责人授予写权限。");
+            res.setAnswer(NO_WRITABLE_ANSWER);
             return res;
         }
         AiAssistantDraft draft = buildDraft(intent, root, workspaceId, userId, projects, contextProject, req.getContext());
@@ -1378,6 +1387,7 @@ public class AiAssistantService {
 
     // ==================== 固定模板只读查询 ====================
 
+    private static final String NO_WRITABLE_ANSWER = "你在当前空间没有可写的项目，不能创建或修改工作项与需求。需要时请联系空间管理员或项目负责人授予写权限。";
     private static final int QUERY_SHOW = 20;
     private static final Map<String, String> QUERY_LABELS = new LinkedHashMap<String, String>();
 
@@ -1530,6 +1540,16 @@ public class AiAssistantService {
         }
         /* 「需求「X」调期，原因：…」这类陈述式指令：对象词 + 流转动词，不要求「把」字句 */
         return s.matches(".*(需求|任务|工作项).{0,40}" + verbs + ".*");
+    }
+
+    /** 比 looksLikeAction 更窄：必须同时出现工作对象和写动词，「帮我看看已完成的任务」这类不算 */
+    static boolean isClearWriteRequest(String q) {
+        if (!looksLikeAction(q)) {
+            return false;
+        }
+        String s = q.replaceAll("\\s+", "");
+        return s.matches(".*(任务|工作项|需求|缺陷|bug|Bug|BUG).*")
+                && s.matches(".*(创建|新建|建一?个|建一?条|加一?个|加一?条|提一?个|提一?条|拆分|拆成|拆出|移到|挪到|移动到|流转|通过|驳回|拒绝|排期|调期|改期|撤回|撤排|取消|恢复|重开|重新打开|提测).*");
     }
 
     private void rateLimit(String userId) {
