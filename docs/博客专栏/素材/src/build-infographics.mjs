@@ -109,7 +109,7 @@ const card = (n, h, p, tag = '') => `<div class="card pad"><div class="num">${n}
 /* 01 · 选型对照表 */
 pages['01-matrix'] = page({
   accent: ACCENT.s1, kicker: '系列一 · 行业思考 ｜ 配图 01', brand: '项目管理专栏',
-  title: '选型会上的那张功能对照表', sub: '横轴是功能清单，纵轴是产品名——谁的勾多，谁就排在前面。',
+  title: '选型会上的那张功能对照表', sub: '虚构功能表示例：产品 A–D 不对应真实产品，勾选也不是使用效果证据。',
   body: `<table class="matrix">
     <tr><th>产品</th><th>需求</th><th>审批</th><th>OKR</th><th>工时</th><th>文档</th><th>知识库</th><th>自动化</th><th>仪表盘</th><th>AI</th></tr>
     <tr class="hot"><td>产品 A<span class="badge">勾最多</span></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
@@ -117,46 +117,46 @@ pages['01-matrix'] = page({
     <tr><td>产品 C</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td></tr>
     <tr><td>产品 D</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
   </table>
-  <div class="bottom"><b>勾选数量，不等于使用效率。</b>半年后，日活最高的页面仍然是「我的任务」，其他模块加起来不如一个群。</div>`,
+  <div class="bottom"><b>勾选数量，不等于使用效率。</b>主流工具已有同类能力；选型应核对实际流程、使用成本与证据边界，而不是假定某个功能空位被独占。</div>`,
   foot: '项目管理专栏 · 第 1 篇'
 });
 
 /* 02 · 审批卡点 */
 pages['02-approval'] = page({
   accent: ACCENT.s1, kicker: '系列一 · 行业思考 ｜ 配图 02', brand: '项目管理专栏',
-  title: '一个两小时的改动，走了三个人', sub: '流程不是越完整越好，重量级要和团队规模匹配。',
+  title: '示例：一个两小时的改动，走了三个人', sub: '虚构流程示例，不代表所有审批；风险与责任决定流程，低频控制也可能必要。',
   body: `<div class="grid4">
     <div class="card pad"><div class="num">01</div><div class="h">需求评审</div><p class="p">两小时能评审完，问题不大。</p><span class="tag">正常</span></div>
     <div class="card pad warn"><div class="num">02</div><div class="h">排期审批</div><p class="p">审批人出差，任务卡在这里三天。</p><span class="tag">卡点</span></div>
     <div class="card pad"><div class="num">03</div><div class="h">上线审批</div><p class="p">再等一天签字，才能发布。</p><span class="tag">等待</span></div>
     <div class="card pad"><div class="num">04</div><div class="h">上线</div><p class="p">两小时的改动，走了五天。</p><span class="tag">结果</span></div>
   </div>
-  <div class="bottom"><b>八个人的团队，需要的是快速对齐，不是层层签字。</b>最后大家学会了「先干活，后补审批」，流程变成了形式。</div>`,
+  <div class="bottom"><b>审批不是一概无用。</b>可为等待环节配置代理人与升级路径，但安全、生产变更和责任确认所需的控制，不能仅因低频就删除。</div>`,
   foot: '项目管理专栏 · 第 2 篇'
 });
 
 /* 01 */
 pages['01-complexity'] = page({
   accent: ACCENT.s1, kicker: '系列一 · 行业思考 ｜ 配图 02', brand: '项目管理专栏',
-  title: '复杂的三个来源', sub: '产品不是不知道复杂，而是很难选择不复杂。',
+  title: '复杂度可能从哪里来', sub: '三个可能的成因，不是对所有平台的判断；完整功能也可能服务必要的流程。',
   body: `<div class="grid3">
-    ${card('01', '买的人，不是用的人', '决策者看「覆盖所有场景」，使用者只关心「今天怎么把活干完」。面向采购卖，最有效的语言是功能清单。')}
-    ${card('02', '同质化竞争，靠加模块', '竞品有审批，你不能没有；竞品上了 AI，你也要有。加功能在对比表上是进步，减功能像退步。')}
-    ${card('03', '组织复杂度被搬进工具', '现实里的流程已经绕了三道弯，做进系统就变成三层配置。工具没有简化流程，只是把复杂搬上了屏幕。')}
+    ${card('01', '采购与使用目标可能不同', '采购关注覆盖范围，使用者关注日常动作。若两者没有一起验证，功能清单可能掩盖使用成本。')}
+    ${card('02', '模块扩展可能增加成本', '审批、AI 等能力各有用途；新增模块若缺少清晰入口与关联，可能增加学习和配置负担。')}
+    ${card('03', '组织流程可能影响配置', '复杂流程进入系统后，可能带来多层配置；先区分必要控制与冗余步骤，再决定怎样简化。')}
   </div>
-  <div class="bottom"><b>结果：</b>功能清单是采购那一刻的胜利，复杂度却是团队此后每一天的成本。</div>`,
+  <div class="bottom"><b>核对方向：</b>用真实流程检查功能是否服务工作，而不是把复杂度归因于所有平台或所有功能。</div>`,
   foot: '项目管理专栏 · 第 1 篇'
 });
 
 /* 02 */
 pages['02-tax'] = page({
   accent: ACCENT.s1, kicker: '系列一 · 行业思考 ｜ 配图 03', brand: '项目管理专栏',
-  title: '一套工具的四种隐性成本', sub: '选型时只算「能带来什么」，很少算「会消耗什么」。',
+  title: '一套工具的四种隐性成本', sub: '除了功能收益，也要核对可能产生的时间与维护成本。',
   body: `<div class="grid2">
-    ${card('01', '学习税', '新同事第一周，一半时间在学字段、状态、权限、报表入口。上手越难，团队越只会用最浅的功能。', '起步成本')}
-    ${card('02', '配置税', '改工作流 → 报表口径变 → 历史数据对不上。团队里悄悄长出一个没有岗位名的「系统管理员」。', '维护成本')}
-    ${card('03', '数据搬运税', '需求在文档、任务在看板、结论在群聊。一次录入、三处维护，每个人都在为同一份信息付三遍成本。', '重复成本')}
-    ${card('04', '注意力税', '打开系统想看一眼进度，先被红点、审批和推荐卡片拦住。工具本该减少打断，却成了打断源。', '切换成本')}
+    ${card('01', '学习税', '字段、状态、权限与报表入口都需要学习。让新人走一遍真实任务，记录上手时间，而不是预设耗时比例。', '起步成本')}
+    ${card('02', '配置税', '工作流变更可能改变统计口径。明确配置负责人，并分开核对当前统计与历史记录。', '维护成本')}
+    ${card('03', '数据搬运税', '需求、任务、结论若分散在多处，可能产生重复维护。检查哪些对象能关联，哪些仍需人工整理。', '重复成本')}
+    ${card('04', '注意力税', '红点、审批与推荐都可能造成切换。区分必须即时处理的消息与可以稍后查看的回顾。', '切换成本')}
   </div>
   <div class="bottom"><b>结论：</b>功能覆盖度衡量的是「买到了什么」，使用效率衡量的是「每天省下了什么」。</div>`,
   foot: '项目管理专栏 · 第 1 篇'
@@ -165,132 +165,132 @@ pages['02-tax'] = page({
 /* 03 */
 pages['03-subtraction'] = page({
   accent: ACCENT.s1, kicker: '系列一 · 行业思考 ｜ 配图 01', brand: '项目管理专栏',
-  title: '判断一个功能去留的三道问题', sub: '减法不是砍功能，是让主线浮出来。',
+  title: '判断一个功能去留的三道问题', sub: '减法不是只按使用频率删功能，而是保留交付链路所需的关联与控制。',
   body: `<div class="card">
     <div class="rowhead"><span></span><span>问题</span><span>判断</span><span>处理</span></div>
-    <div class="row"><div class="idx">01</div><div class="t">它服务主线吗？</div><div class="c">主线是「从想法到交付」。与它无关、只是偶尔用一次的能力，不该占据主界面。</div><div class="c"><b>移出主路径</b>放到更合适的位置，而不是删掉。</div></div>
-    <div class="row"><div class="idx">02</div><div class="t">它每天都用吗？</div><div class="c">每天用的功能值得做深、做顺；一个月用一次的，做对即可。</div><div class="c"><b>按频率分配重量</b>高频进主入口，低频收进二级。</div></div>
-    <div class="row"><div class="idx">03</div><div class="t">它能被解释吗？</div><div class="c">数字怎么算、状态为什么变，使用者能不能自己看明白。</div><div class="c"><b>解释不清就不上</b>否则迟早变成争议来源。</div></div>
+    <div class="row"><div class="idx">01</div><div class="t">它服务交付链路吗？</div><div class="c">需求、工作项、计划、发布与投入之间，是否有清楚的关联。</div><div class="c"><b>明确服务对象</b>让交付主路径清楚，辅助能力放到合适位置。</div></div>
+    <div class="row"><div class="idx">02</div><div class="t">缺了会断证据吗？</div><div class="c">责任确认、审计与恢复即使低频，也可能是记录可信的必要条件。</div><div class="c"><b>保留必要控制</b>不能仅因不常使用，就删掉证据与风险控制。</div></div>
+    <div class="row"><div class="idx">03</div><div class="t">它能解释吗？</div><div class="c">数字怎么算、状态为何变化、记录由谁确认，是否可以核对。</div><div class="c"><b>说明口径与边界</b>减少重复整理，同时保留校正路径。</div></div>
   </div>
-  <div class="bottom"><b>减法之后留下的是链路，不是散装功能。</b>前提是产品清楚自己服务谁——没有边界的产品，减不掉任何东西。</div>`,
+  <div class="bottom"><b>减法之后留下的是链路，不是散装功能。</b>简化操作，不等于省略必要的责任确认与记录。</div>`,
   foot: '项目管理专栏 · 第 2 篇'
 });
 
 /* 08 · 通知节奏 */
 pages['08-notify'] = page({
   accent: ACCENT.s3, kicker: '系列三 · 核心功能 ｜ 配图 02', brand: '沙漏 · HOURGLASS',
-  title: '消息该在什么时候出现', sub: '协作不是让消息更多，而是让消息在对的时候出现。',
+  title: '消息该在什么时候出现', sub: '协作不是让消息更多，而是区分提醒、回顾与外部投递。',
   body: `<div class="grid2">
-    <div class="card pad"><div class="mini">需要立刻知道的</div><div class="h">即时到达</div>
+    <div class="card pad"><div class="mini">需要及时处理的</div><div class="h">关注站内提醒</div>
       <ul class="list"><li>被指派、被提及</li><li>逾期与今日到期</li><li>关键状态变更</li></ul>
-      <span class="tag">站内角标 · 即时推送</span>
+      <span class="tag">按事件与通知配置</span>
     </div>
-    <div class="card pad"><div class="mini">只需要了解的</div><div class="h">汇总到达</div>
-      <ul class="list"><li>每日进展摘要</li><li>每周回顾</li><li>按个人偏好投递的邮件</li><li>外部机器人同步</li></ul>
-      <span class="tag">每日 · 每周 · 按需</span>
+    <div class="card pad"><div class="mini">需要集中核对的</div><div class="h">回顾可查看</div>
+      <ul class="list"><li>每周完成与投入记录</li><li>待确认与进行中事项</li><li>AI 草稿按配置生成，需人工核对</li><li>邮件与机器人按配置投递</li></ul>
+      <span class="tag">不承诺周报自动推送</span>
     </div>
   </div>
-  <div class="bottom"><b>不是所有变化都值得打断一个人。</b>需要立刻知道的，即时到；只需要了解的，汇总到。</div>`,
+  <div class="bottom"><b>回顾可查看，不等于周报必定自动送达。</b>外部 AI、邮件与机器人会按配置出站，需核对服务与数据边界。</div>`,
   foot: '沙漏博客专栏 · 第 8 篇'
 });
 
 /* 05 */
 pages['05-principles'] = page({
   accent: ACCENT.s2, kicker: '系列二 · 产品理念 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '让用户「不用想」的四条原则', sub: '简单不是功能少，而是动作和目标之间没有多余步骤。',
+  title: '少重复、可校正的四条原则', sub: '减少重复整理，不替代记录核对与发布确认。',
   body: `<div class="grid2">
-    ${card('01', '一个动作，只做一件事', '拖进「进行中」，状态改变、计时开始；拖进「已完成」，停表并接上下一个任务。用户只做一个动作，后续由系统承担。')}
-    ${card('02', '默认值应该真的能用', '新建空间，看板列、分类、角色都已配好。可以改，但不改也能开始工作——不能用就不该叫默认值。')}
-    ${card('03', '同一个问题只有一个答案', '逾期、完成数、工时由一套规则计算，看板、日历、度量、报表共用。两个页面两个数字，团队就会怀疑所有数字。')}
-    ${card('04', '每个数字都能点开', '看到「本周投入 42 小时」，可以点进任务、成员、日期和记录。看不到来源的汇总，只是无法验证的结论。')}
+    ${card('01', '动作关联记录', '拖进「进行中」开表，拖进「已完成」停表并接力。计时与状态相关联，但遗漏和异常仍需要人工核对。')}
+    ${card('02', '默认可用，也可配置', '自动计时按工作日，周末不计；个人工作时段默认 9–18，日额度默认 8h，两者可配置。')}
+    ${card('03', '共享来源，区分口径', '当前统计与完成、发布历史快照分开。比较数字前先核对对象、筛选、时间范围与统计口径。')}
+    ${card('04', '有明细，也有校正路径', '按任务、成员、日期核对工时记录，支持补记与作废重算。补记单条 1min–24h，不按自动计时规则裁剪；不承诺所有指标都可点击下钻。')}
   </div>
-  <div class="bottom"><b>复杂度应该留在系统里，简单留给使用者。</b>这不是少做，而是把难的部分前置消化。</div>`,
+  <div class="bottom"><b>少重复，不等于不用确认。</b>工时用于解释投入，不是财务结算；发布记录由人工确认，不是客户签认。</div>`,
   foot: '沙漏博客专栏 · 第 4 篇'
 });
 
 /* 07 */
 pages['07-four-questions'] = page({
   accent: ACCENT.s3, kicker: '系列三 · 核心功能 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '进度要回答的四个问题', sub: '一句「进度 60%」，回答不了任何一个。',
+  title: '投入与交付要回答的四个问题', sub: '任务完成不等于已发布；发布记录也不等于客户验收。',
   body: `<div class="grid4">
-    ${card('01', '承诺了什么？', '需求评审后拆成工作项，关联计划版本；计划范围与实际发布分开，发布后读快照。', '版本 · 发布计划')}
-    ${card('02', '做到哪一步？', '看板列驱动状态，任务进度、阻塞与逾期在同一处可见。', '看板 · 列表')}
-    ${card('03', '谁在做？', '跨项目查看成员在办工作项与投入工时，避免只看任务数量。', '成员负载')}
-    ${card('04', '何时交付？', '依赖、里程碑、基线偏差、关键路径，在同一张甘特上。', '甘特图')}
+    ${card('01', '计划什么？', '需求评审后拆成工作项，关联计划版本与发布计划；计划可修改，不代表已经发生。', '版本 · 发布计划')}
+    ${card('02', '完成什么？', '看板状态与完成记录说明团队登记的完成情况；历史快照与当前任务统计分开。', '工作项 · 完成快照')}
+    ${card('03', '实际发布什么？', '按人工确认的发布记录核对环境、范围与逐项处置；系统不执行部署、不独立验证 SHA。', '发布记录 · 人工确认')}
+    ${card('04', '投入怎么算？', '自动计时按工作日、个人时段和日额度；默认 9–18 / 8h 可配。补记单条 1min–24h，不裁剪。', '工时明细 · 可校正')}
   </div>
-  <div class="bottom"><b>四个问题都能被回答，进度才不是一句百分比。</b>而且每个指标都能从项目下钻到具体任务。</div>`,
+  <div class="bottom"><b>「交付账本」只是关联记录的比喻。</b>工时不是财务结算，发布不是客户签认；按对象核对明细，不承诺所有指标均可下钻。</div>`,
   foot: '沙漏博客专栏 · 第 6 篇'
 });
 
 /* 11 */
 pages['11-disorders'] = page({
   accent: ACCENT.s4, kicker: '系列四 · 场景应用 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '三种失序，三种接法', sub: '多数「执行力问题」，本质是数据没有接上。',
+  title: '三种信息断点，三种核对方向', sub: '可能的信息问题，不是多数失序的通用根因；能力、资源与决策也需要排查。',
   body: `<div class="card">
-    <div class="rowhead"><span></span><span>症状</span><span>根因</span><span>机制</span></div>
-    <div class="row"><div class="idx">01</div><div class="t">需求是断的</div><div class="c"><b>月底说不清承诺</b>评审在纪要、方案在文档、任务在看板、交付靠口头。</div><div class="c"><b>让需求成为起点</b>评审后拆工作项，关联计划版本；实际发布单独记录，发布说明读快照。</div></div>
-    <div class="row"><div class="idx">02</div><div class="t">状态是假的</div><div class="c"><b>看板一片绿，实际卡了三天</b>更新状态是额外动作，忙起来第一个放弃。</div><div class="c"><b>把状态绑进动作</b>拖拽即改状态，自动计时，完成接力，未归档进「待确认」。</div></div>
-    <div class="row"><div class="idx">03</div><div class="t">风险总是最后才知道</div><div class="c"><b>发版前一天才发现延期</b>信息分散，逾期口径各算各的，没人相信数字。</div><div class="c"><b>集中视图 + 统一口径</b>逾期、阻塞、停滞一处处理；负载同时看数量与工时。</div></div>
+    <div class="rowhead"><span></span><span>现象</span><span>可能原因</span><span>核对方式</span></div>
+    <div class="row"><div class="idx">01</div><div class="t">需求关联不清</div><div class="c"><b>月底说不清计划</b>评审、方案、任务和发布记录可能缺少关联。</div><div class="c"><b>核对需求到发布</b>评审后拆工作项，关联计划版本；发布内容由人工确认后留快照。</div></div>
+    <div class="row"><div class="idx">02</div><div class="t">状态更新滞后</div><div class="c"><b>记录与现场有差异</b>可能遗漏更新，也可能是完成定义不一致。</div><div class="c"><b>动作关联 + 人工校正</b>拖拽改状态并关联计时；补记、作废与回顾用于核对异常。</div></div>
+    <div class="row"><div class="idx">03</div><div class="t">风险发现较晚</div><div class="c"><b>临近发版才发现延期</b>可能信息分散，也可能依赖、资源或优先级变化。</div><div class="c"><b>集中视图 + 核对口径</b>查看逾期、阻塞与负载，结合实际情况确认风险和责任人。</div></div>
   </div>
-  <div class="bottom"><b>早三天知道，和晚三天知道，是两个完全不同的项目。</b>工具提供骨架，运转仍然靠团队。</div>`,
+  <div class="bottom"><b>工具帮助暴露信息断点，不替代项目判断。</b>记录需要维护，风险处理与发布确认仍由团队负责。</div>`,
   foot: '沙漏博客专栏 · 第 10 篇'
 });
 
 /* 12 */
 pages['12-selection'] = page({
   accent: ACCENT.s4, kicker: '系列四 · 场景应用 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '选型不是选最强的，是选约束匹配的', sub: '功能对比表能筛掉明显不合适的，但筛不出「团队会不会用」。',
+  title: '项目制团队怎样选择交付工具', sub: '按流程、身份、证据和恢复能力逐项核对，不按人数直接下结论。',
   body: `<table class="table">
-    <tr><th>约束</th><th>更适合大型平台</th><th>更适合轻量自托管</th></tr>
-    <tr><td>组织规模</td><td>数百人以上，多组织、多部门</td><td>50 人以下，一到两条产品线</td></tr>
-    <tr><td>流程复杂度</td><td>审批链、角色矩阵需要大量自定义</td><td>流程相对稳定，不需要每天改工作流</td></tr>
-    <tr><td>合规与审计</td><td>强合规，需要完整审计与导出</td><td>数据不出内网即可满足</td></tr>
-    <tr><td>运维能力</td><td>有专职管理员或实施顾问</td><td>希望一个下午上线，无人专职维护</td></tr>
-    <tr><td>核心痛点</td><td>流程不够灵活、需要生态集成</td><td>说不清全局、数字对不上</td></tr>
+    <tr><th>约束</th><th>选型核对项</th><th>沙漏当前边界</th></tr>
+    <tr><td>流程与容量</td><td>用真实项目验证关联、审批、权限与负载</td><td>面向小型项目制研发团队；单实例容量须在实际环境验证</td></tr>
+    <tr><td>身份与 SSO</td><td>逐项核对组织身份、SSO 协议与接入路径</td><td>不预设满足企业 SSO；按现有支持与缺口验证</td></tr>
+    <tr><td>合规与审计</td><td>核对事件覆盖、CSV、保留期与访问控制</td><td>系统审计最小集已实现；有 CSV，默认保留 90 天可配；内网不等于合规</td></tr>
+    <tr><td>运维与恢复</td><td>明确升级、监控、备份、恢复负责人并演练</td><td>自托管不免维护；证据须全库数据库 + 附件备份</td></tr>
+    <tr><td>迁移与集成</td><td>核对现有工具的迁移、自动化和外部服务需求</td><td>主流工具有同类功能；当前迁移与集成缺口需逐项验证</td></tr>
   </table>
-  <div class="bottom"><b>验证方式：</b>拿一个真实项目试一周——新人能否自学上手、周会前十分钟能否说清风险、月末工时能否对上。</div>`,
+  <div class="bottom"><b>验证方式：</b>用一个真实项目试运行，核对投入明细与人工确认的发布范围，并演练恢复；外部 AI、邮件、机器人按配置出站。</div>`,
   foot: '沙漏博客专栏 · 第 11 篇'
 });
 
 /* 12 · 轻量边界 */
 pages['12-boundary'] = page({
   accent: ACCENT.s5, kicker: '系列五 · 价值总结 ｜ 配图 02', brand: '沙漏 · HOURGLASS',
-  title: '轻量的四条边界', sub: '知道自己不适合谁，才谈得上适合谁。',
+  title: '自托管的四条当前边界', sub: '这是当前实现与交付条件，不是永久产品哲学。',
   body: `<div class="grid4">
-    ${card('01', '单实例部署', '不追求横向扩展，容量跟随一台服务器。', '代价')}
-    ${card('02', '不做插件市场', '边角需求不能靠第三方生态补齐。', '代价')}
-    ${card('03', '不做复杂工作流', '流程特别复杂的团队会觉得不够用。', '代价')}
-    ${card('04', '不提供一键迁移', '从其他平台迁过来，需要自己动手。', '代价')}
+    ${card('01', '单实例部署', '当前采用单实例；容量要在实际数据、并发与服务器环境验证，不承诺 50 人 2C4G 实测保证。', '容量验证')}
+    ${card('02', '运维责任', '升级、监控、权限与安全更新需要负责人。自托管不是无人维护，也不是自动合规。', '明确负责人')}
+    ${card('03', '数据库证据备份', '正式发布证据须全库数据库 + 附件备份并演练恢复；任务 JSON 不含正式发布证据。', '备份与恢复')}
+    ${card('04', '迁移与集成缺口', '当前没有完整的一键迁移与插件生态；SSO、复杂流程与外部接入需逐项核对支持范围。', '当前缺口')}
   </div>
-  <div class="bottom"><b>几百人、多组织、强合规审计时，轻量会成为约束，而不是优势。</b>我们不认为「轻」是万能答案，它只是对某一类团队更合适的答案。</div>`,
+  <div class="bottom"><b>边界要随版本与环境核对。</b>系统审计最小集已有 CSV、保留期默认 90 天可配；不能据此推定满足全部合规审计要求。</div>`,
   foot: '沙漏博客专栏 · 第 12 篇'
 });
 
 /* 13 */
 pages['13-burden'] = page({
   accent: ACCENT.s5, kicker: '系列五 · 价值总结 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '项目管理工具的三重负担', sub: '只把界面做干净，解决不了负担问题。',
+  title: '交付工具需要承担的三类责任', sub: '界面简洁不等于没有成本；时间、维护与记录责任都需要明确。',
   body: `<div class="grid3">
-    ${card('01', '时间负担', '学习、配置、补数据、维护字段。看得见，也最容易被低估。', '解法 · 默认可用')}
-    ${card('02', '维护负担', '权限、流程、报表口径、升级都要有人管。这个人一走，系统开始半瘫痪。', '解法 · 可自持')}
-    ${card('03', '心理负担', '大量「应该做但没做」的字段和模块，形成持续的欠账感。', '解法 · 可退出')}
+    ${card('01', '时间成本', '学习、配置、补记与校正都占用时间。通过默认值与关联减少重复整理，但不能承诺零录入。', '少重复 · 可校正')}
+    ${card('02', '维护责任', '权限、升级、安全、审计保留与恢复演练需要负责人和交接机制。自托管不等于免维护。', '有人负责 · 可恢复')}
+    ${card('03', '记录责任', '投入要核对，发布要人工确认。发布记录不执行部署、不独立验证 SHA，也不提供客户签认。', '记录边界 · 人工确认')}
   </div>
-  <div class="bottom"><b>留住用户的应该是价值，不是迁移成本。</b>支持全量导出、回收站保留、一个 jar + 一个 MySQL，数据始终在自己手里。</div>`,
+  <div class="bottom"><b>导出不等于证据备份。</b>任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份；「交付账本」只是比喻，工时非财务结算。</div>`,
   foot: '沙漏博客专栏 · 第 13 篇'
 });
 
 /* 14 */
 pages['14-path'] = page({
   accent: ACCENT.s5, kicker: '系列五 · 价值总结 ｜ 配图 01', brand: '沙漏 · HOURGLASS',
-  title: '从「发现问题」到「愿意尝试」', sub: '一个专栏的阅读路径，也是一次认知的递进。',
+  title: '从问题到验证：研发交付的阅读路径', sub: '面向小型项目制研发团队的自托管研发交付工作台。',
   body: `<div class="path">
-    <div class="step"><div class="n">STEP 01</div><div class="h">发现问题</div><p class="p">工具复杂，团队越用越累</p><div class="r">第 1 篇</div></div>
-    <div class="step"><div class="n">STEP 02</div><div class="h">产生共鸣</div><p class="p">该做减法了</p><div class="r">第 2 篇</div></div>
-    <div class="step"><div class="n">STEP 03</div><div class="h">认同理念</div><p class="p">简单、专注、数字可信</p><div class="r">第 3–5 篇</div></div>
-    <div class="step"><div class="n">STEP 04</div><div class="h">了解产品</div><p class="p">一条链路，动作即记录</p><div class="r">第 6–8 篇</div></div>
-    <div class="step"><div class="n">STEP 05</div><div class="h">愿意尝试</div><p class="p">场景验证，边界清楚</p><div class="r">第 9–13 篇</div></div>
+    <div class="step"><div class="n">STEP 01</div><div class="h">问题</div><p class="p">识别可能的重复整理与信息断点</p><div class="r">第 1 篇</div></div>
+    <div class="step"><div class="n">STEP 02</div><div class="h">关联</div><p class="p">围绕交付链路做减法，保留必要控制</p><div class="r">第 2 篇</div></div>
+    <div class="step"><div class="n">STEP 03</div><div class="h">事实</div><p class="p">区分计划、完成、人工发布记录与投入</p><div class="r">第 3–8 篇</div></div>
+    <div class="step"><div class="n">STEP 04</div><div class="h">场景</div><p class="p">在项目团队的一周里核对记录与责任</p><div class="r">第 9–10 篇</div></div>
+    <div class="step"><div class="n">STEP 05</div><div class="h">验证</div><p class="p">逐项验证选型、容量、审计与恢复边界</p><div class="r">第 11–13 篇</div></div>
   </div>
-  <div class="bottom"><b>不做大而全，只做真正有用的项目管理。</b>工具的目标不是被频繁打开，而是需要时都在，不需要时不打扰。</div>`,
+  <div class="bottom"><b>让投入可解释，让交付可追溯。</b>不是财务结算或客户签认承诺，而是通过关联记录、口径核对与责任确认来解释工作。</div>`,
   foot: '沙漏博客专栏 · 第 13 篇'
 });
 

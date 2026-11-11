@@ -144,7 +144,7 @@
       <div class="im-logo">⏳</div>
       <div class="im-title">沙漏 <span>Hourglass</span></div>
     </div>
-    <div class="im-sub">信息模型 · 一套数据贯穿需求、工作项、版本、发布与工时 · 每个统计数字都可回溯</div>
+    <div class="im-sub">信息模型 · 关联需求、工作项、版本、发布与工时 · 共享来源，按对象与口径核对</div>
   </div>
 
   <div class="im-band">
@@ -228,7 +228,7 @@
     <div class="im-facts">
       <div class="im-fact-card">
         <div class="im-fact-name">日常操作</div>
-        <div class="im-fact-desc">拖拽看板 · 手工补记 · 作废重算，不需要二次录入</div>
+        <div class="im-fact-desc">拖拽看板 · 手工补记 · 作废重算，减少重复整理，记录仍需核对</div>
         <div class="im-fact-chips">
           <span class="im-fact-chip">拖入「进行中」自动开表</span>
           <span class="im-fact-chip">拖入「已完成」停表接力</span>
@@ -237,19 +237,20 @@
       </div>
       <div class="im-fact-card fact">
         <div class="im-fact-name">time_log · task_log · version_release</div>
-        <div class="im-fact-desc">工时与流转事实 + 不可变的发布证据；每条记录带任务、时段、操作者，发布带环境、覆盖与计划快照</div>
+        <div class="im-fact-desc">工时、流转与人工确认的发布记录；工时带任务与时段，发布带环境、覆盖及计划快照，不独立验证实际部署</div>
         <div class="im-fact-chips">
           <span class="im-fact-chip">写入 · 拖拽、计时、补记、预览确认发布</span>
           <span class="im-fact-chip">字段 · 任务 / 时段 / 操作者 / 环境 / 计划修订</span>
-          <span class="im-fact-chip">读取 · 全部视图、发布历史与 AI 周回顾</span>
+          <span class="im-fact-chip">读取 · 相关视图、发布历史与周回顾</span>
         </div>
       </div>
       <div class="im-fact-card">
         <div class="im-fact-name">统一规则</div>
         <div class="im-rules">
-          <div class="im-rule"><b>有效工时</b>：跳过周末，每人每天封顶 8 小时</div>
+          <div class="im-rule"><b>自动计时</b>：工作日，周末不计；个人时段默认 9–18，日上限默认 8h，均可配置</div>
+          <div class="im-rule"><b>补记例外</b>：单条 1min–24h，不按自动计时规则裁剪；工时非财务结算</div>
           <div class="im-rule"><b>计时归属</b>：一人同一时刻只计一个任务</div>
-          <div class="im-rule"><b>完成 ≠ 发布</b>：徽标只由成功 production 记录派生</div>
+          <div class="im-rule"><b>发布非验收</b>：人工确认，不执行部署、不独立验 SHA、不提供客户签认</div>
           <div class="im-rule"><b>模块口径</b>：模块合计 + 未指定 = 项目合计</div>
         </div>
       </div>
@@ -265,7 +266,7 @@
       <span class="im-view">成员负载</span>
       <span class="im-view">周回顾</span>
     </div>
-    <div class="im-foot">所有视图读同一套事实数据 —— 任何页面看到的是同一个数字</div>
+    <div class="im-foot">共享数据来源，当前统计与历史快照各有口径；任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份</div>
   </div>
 </div>
 </body>

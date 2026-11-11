@@ -130,7 +130,7 @@
 
   <div class="df-head">
     <h1>沙漏 · 数据流转</h1>
-    <p>一次拖拽、一条发布记录 → 同一个数字 · 不维护第二套汇总数据</p>
+    <p>日常操作关联投入与发布记录 · 当前统计与历史快照分开核对</p>
   </div>
 
   <div class="df-stages">
@@ -141,7 +141,7 @@
       <div class="df-item"><b>拖入「已完成」</b>· 停表并接力</div>
       <div class="df-item"><b>手工补记 / 作废重算</b>· 事后修正</div>
       <div class="df-item"><b>需求评审 / 分支流转</b>· 状态变化即留痕</div>
-      <div class="df-item"><b>制定计划 → 确认发布</b>· 预览后写入事实</div>
+      <div class="df-item"><b>制定计划 → 确认发布</b>· 人工预览后写入记录</div>
     </div>
 
     <div class="df-arrow">
@@ -171,8 +171,9 @@
 
     <div class="df-stage">
       <div class="df-stage-head"><span class="df-num n3">3</span><b>统一规则</b></div>
-      <div class="df-stage-sub">口径只有一套 · 查询时现算</div>
-      <div class="df-item"><b>有效工时</b>· 跳过周末，每人每天封顶 8 小时</div>
+      <div class="df-stage-sub">共享规则 · 区分当前统计与快照</div>
+      <div class="df-item"><b>自动计时</b>· 工作日（周末不计）；个人时段默认 9–18、日额度默认 8h，均可配置</div>
+      <div class="df-item"><b>补记例外</b>· 单条 1min–24h，不按工作日、时段与日额度裁剪；工时非财务结算</div>
       <div class="df-item"><b>计时归属</b>· 一人同一时刻只计一个任务</div>
       <div class="df-item"><b>完成 ≠ 发布</b>· 徽标只由成功 production 记录派生</div>
       <div class="df-item"><b>计划 ≠ 事实</b>· 计划可改，确认后的发布记录不可变</div>
@@ -188,7 +189,7 @@
 
     <div class="df-stage">
       <div class="df-stage-head"><span class="df-num n4">4</span><b>输出</b></div>
-      <div class="df-stage-sub">同一数据长出所有视图</div>
+      <div class="df-stage-sub">共享来源 · 按对象与时段查询</div>
       <div class="df-item"><b>我的工作</b>· 跨空间汇总，按筛选与计时状态</div>
       <div class="df-item"><b>看板 / 甘特 / 日历 / 列表</b>· 共享筛选与逾期判定</div>
       <div class="df-item"><b>项目驾驶舱</b>· 整体健康度 + 按模块统计</div>
@@ -199,8 +200,8 @@
 
   <div class="df-out">
     <div class="df-out-head">
-      <h2>所有视图从同一条数据生长出来</h2>
-      <span>点任何一个数字都能下钻到具体工作项、耗时与发布记录</span>
+      <h2>视图共享数据来源，各有统计口径</h2>
+      <span>按对象核对工作项、工时明细与发布记录，不承诺任意指标均可点击下钻</span>
     </div>
     <div class="df-chips">
       <span class="df-chip">项目健康度</span>
@@ -222,11 +223,11 @@
   </div>
 
   <div class="df-notes">
-    <div class="df-note warn"><b>为什么不汇总：</b>汇总表一旦存在，就和明细对不上——「补了工时但报表没变」这类问题会消耗大量解释成本。统计直读事实表，补记或作废后自动重算。</div>
-    <div class="df-note info"><b>代价与边界：</b>统计现算依赖单实例内的数据量可控——50 人以下团队实测够用，这也是定位单实例的原因之一。发布证据以 MySQL 备份为准，任务 JSON / 表格导出只是副本。</div>
+    <div class="df-note warn"><b>降低汇总漂移：</b>统计直读事实表，补记或作废后重算，可减少多处维护带来的漂移；核对时仍须区分对象、筛选、时间范围、当前统计与历史快照。</div>
+    <div class="df-note info"><b>容量与责任：</b>单实例容量须按实际数据量、并发与环境验证，不提供人数或 2C4G 保证；升级、监控、备份与恢复由团队负责。任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份。</div>
   </div>
 
-  <div class="df-foot"><b>同一个动作，在所有页面得到同一个数字</b> · 计划说明打算怎么发，发布记录证明实际发生了什么</div>
+  <div class="df-foot"><b>共享来源，各有口径</b> · 计划说明打算怎么发，发布历史用于核对当时填写的内容；人工确认，不执行部署、不独立验 SHA、不提供客户签认</div>
 </div>
 </body>
 </html>

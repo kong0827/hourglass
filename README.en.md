@@ -2,13 +2,13 @@
 
 **English** | [简体中文](README.md)
 
-> A self-hosted R&D collaboration workbench for small teams: requirements, review, docs, tasks, releases, and retrospectives all run on a single set of data.
+> A self-hosted R&D delivery workbench for small, project-based teams: explainable effort, traceable delivery.
 
 **In one sentence**: Hourglass packs the entire R&D collaboration pipeline into a system you can deploy yourself:
 
 > Ideas in the demand pool → review & scheduling → docs for the plan → break down into work items → kanban / calendar / Gantt → plan a version → complete, preview & confirm publication → weekly retrospective & monthly delivery list
 
-Progress, work hours, member workload, overdue risks, and delivery reports are all generated automatically from everyday actions — nobody has to enter data twice.
+Requirements, work items, effective hours and actual release records are connected, reducing repeated reporting. Timers still require review and corrections, and authorized people confirm release records. Hourglass does not execute deployments, calculate billable amounts or obtain customer acceptance.
 
 - Project overview: [`docs/项目介绍.md`](docs/项目介绍.md) (Chinese)
 - User manual: [`docs/用户使用手册.md`](docs/用户使用手册.md) (Chinese)
@@ -16,7 +16,7 @@ Progress, work hours, member workload, overdue risks, and delivery reports are a
 
 ## Live Demo
 
-Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself (about 30 minutes, see [`deploy/README.md`](deploy/README.md)), initialize the database from the single baseline script, then sign in and create your first project. Contact the maintainers for access to a hosted demo.
+Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself using [`deploy/README.md`](deploy/README.md) (setup time depends on your environment), initialize the database from the single baseline script, then sign in and create your first project. Contact the maintainers for access to a hosted demo.
 
 ---
 
@@ -29,17 +29,19 @@ Hourglass came out of a direct observation of how small teams struggle. The comm
 3. **Time is unaccountable** — records only say "done". Afterward nobody can answer "how long did this actually take, where did this month go".
 4. **Retrospectives are stitched together** — weekly and monthly reports are assembled from chat logs, emails, and meeting notes. Painful to write, and readers don't quite trust them either.
 
-Existing tools are either pure task boards (execution without requirements or metrics) or heavyweight R&D management platforms (expensive, demanding, needing a dedicated PMO). Hourglass fills the gap in between: **the work item is the backbone of execution, so requirements, docs, tasks, releases, and time all share one set of data — and every statistic can be traced back to a specific task, time window, and action.**
+Other tools also provide requirements, time tracking and release management. Hourglass focuses on **connecting requirements, work items, effective hours and actual release records in a single-instance, self-hosted system**. Evaluate the complete workflow and maintenance cost rather than feature counts or claims of an unoccupied market.
 
 ## Positioning
 
 | Dimension | Description |
 | --- | --- |
-| Who it's for | Recommended for R&D teams of 50 or fewer people: they run requirement management and iterations, but have no dedicated PMO |
-| Form factor | Single instance, self-hosted: one jar + MySQL; no Redis / MQ / object storage required |
-| Core thesis | Task management is not the goal — **hours and retrospectives** are; moving a task drives the timer, and timers accumulate into weekly retrospectives and monthly delivery lists |
-| Product style | Small and sharp: restrained scope, consistent metrics, every number explainable — no feature stacking to match big products |
+| Who it's for | Small R&D teams that reconcile project effort, explain release scope and assign an operations owner; outsourcing, IT delivery and internal project teams can evaluate the same constraints. Fewer than 50 people is a reference profile, not a capacity guarantee |
+| Form factor | Single instance, self-hosted: backend jar + MySQL, with Nginx serving the frontend; no Redis / MQ / object storage dependency |
+| Core thesis | **Explainable effort, traceable delivery**: keep requirements, effort, plans, task completion and actual releases linked but distinct |
+| Product style | Usability supports adoption; consistent conventions and traceable records deliver value — not feature count alone |
 | Explicit non-goals | Multi-tenant SaaS, large-scale horizontal scaling, real-time collaborative spreadsheet editing, highly configurable workflows, plugin marketplace |
+
+“Delivery ledger” is a metaphor for connected R&D records, not an accounting ledger. Automatic timers count weekdays within each user's work window (default 09:00–18:00) and daily allowance (default 8 hours, configurable); manual entries bypass that clipping. Effective hours are not necessarily billable. Release snapshots do not independently verify deployments or provide customer signatures. External AI, email and bots may send content to configured services.
 
 ## Key Features
 
@@ -134,7 +136,7 @@ For the deeper information model, unified metric rules, the role-permission matr
 | File | Contents |
 | --- | --- |
 | [`docs/产品说明.md`](docs/产品说明.md) | Product overview: what it is, who it is for, core value and deployment shape (Chinese) |
-| [`docs/快速上手指南.md`](docs/快速上手指南.md) | Quick start: a new team runs the main flow in 30 minutes (Chinese) |
+| [`docs/快速上手指南.md`](docs/快速上手指南.md) | Quick start: an approximately 30-minute main-flow exercise in an already deployed environment (Chinese) |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | Background, positioning, information model, module map, core mechanisms (Chinese) |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | End-user manual and unified metric rules (Chinese) |
 | [`docs/管理员指南.md`](docs/管理员指南.md) | Admin guide: deployment, backup and upgrade, notifications and AI, troubleshooting (Chinese) |
@@ -151,7 +153,7 @@ For the deeper information model, unified metric rules, the role-permission matr
 | Multi-tenant SaaS, large-scale horizontal scaling | Recommended for self-hosted teams of 50 or fewer people; single instance is a deliberate choice |
 | Real-time collaborative spreadsheet editing | The online spreadsheet is for viewing attachments and quick edits; last-write-wins on save |
 | Predictive statistics and AI scoring | Metrics are retrospective and traceable only; no unexplainable model outputs |
-| Migration from other platforms | No Jira / ZenTao importers; internal backups restore per workspace |
+| Current integration gaps | No external task importers, SSO / WeCom login, public API tokens or Git / CI linkage yet; these are current gaps, not permanent non-goals |
 
 ## Collaboration
 

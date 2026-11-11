@@ -305,6 +305,9 @@
     }
     .hgvp-flow-foot {
       display: flex;
+      flex-wrap: wrap;
+      text-align: center;
+      line-height: 1.6;
       align-items: center;
       justify-content: center;
       gap: 8px;
@@ -338,26 +341,26 @@
       <div class="hgvp-logo">⏳</div>
       <div class="hgvp-title">沙漏 <span>Hourglass</span></div>
     </div>
-    <p class="hgvp-subtitle">适合 50 人以下研发团队的私有化协作工作台。把需求、评审、文档、任务、版本、回顾跑在同一套数据上，让进度、工时与交付报表从日常操作里自然产生。</p>
-    <div class="hgvp-tagline">一个 jar + MySQL，无需 Redis / MQ / 对象存储</div>
+    <p class="hgvp-subtitle">面向小型项目制研发团队的自托管研发交付工作台。关联需求、工作项、计划、完成与人工确认的发布记录，让投入有口径，交付有记录可核对。</p>
+    <div class="hgvp-tagline">投入可解释，交付可追溯</div>
   </div>
 
   <div class="hgvp-compare-wrap">
     <div class="hgvp-compare">
       <div class="hgvp-col hgvp-pain">
-        <div class="hgvp-col-head"><span class="dot"></span>小团队常见困境</div>
+        <div class="hgvp-col-head"><span class="dot"></span>项目制交付可能遇到的问题</div>
         <div class="hgvp-item">
           <div class="hgvp-item-num">1</div>
           <div>
-            <div class="hgvp-item-title">需求是断的</div>
-            <div class="hgvp-item-desc">想法在聊天、方案在文档、任务在看板，彼此不关联。</div>
+            <div class="hgvp-item-title">计划与发布关联不清</div>
+            <div class="hgvp-item-desc">需求、方案、任务与发布范围可能分散，月底难以核对计划和实际记录。</div>
           </div>
         </div>
         <div class="hgvp-item">
           <div class="hgvp-item-num">2</div>
           <div>
-            <div class="hgvp-item-title">管理者看不见全局</div>
-            <div class="hgvp-item-desc">延期、负载、风险散落在每个人脑子里，不问就不知道。</div>
+            <div class="hgvp-item-title">进展与风险需要对齐</div>
+            <div class="hgvp-item-desc">状态、依赖与人员负载可能更新滞后；集中视图也不能替代负责人核对。</div>
           </div>
         </div>
         <div class="hgvp-item">
@@ -370,8 +373,8 @@
         <div class="hgvp-item">
           <div class="hgvp-item-num">4</div>
           <div>
-            <div class="hgvp-item-title">回顾靠拼凑</div>
-            <div class="hgvp-item-desc">周报月报翻聊天记录，写的人痛苦，看的人也未必信。</div>
+            <div class="hgvp-item-title">完成不等于交付确认</div>
+            <div class="hgvp-item-desc">任务状态、计划与发布记录含义不同；回顾需要明确范围、口径和记录责任。</div>
           </div>
         </div>
       </div>
@@ -381,29 +384,29 @@
         <div class="hgvp-item">
           <div class="hgvp-item-num">1</div>
           <div>
-            <div class="hgvp-item-title">需求-任务-版本串联</div>
-            <div class="hgvp-item-desc">以工作项为执行主线，每个统计数字都能回溯到具体操作。</div>
+            <div class="hgvp-item-title">需求-工作项-计划-发布关联</div>
+            <div class="hgvp-item-desc">以工作项为执行主线，按对象核对明细；当前统计与完成、发布快照分开。</div>
           </div>
         </div>
         <div class="hgvp-item">
           <div class="hgvp-item-num">2</div>
           <div>
-            <div class="hgvp-item-title">项目健康度实时可见</div>
-            <div class="hgvp-item-desc">逾期、负载、阻塞、风险集中呈现，可下钻到具体工作项。</div>
+            <div class="hgvp-item-title">集中查看进展与风险线索</div>
+            <div class="hgvp-item-desc">查看健康度、逾期、负载与阻塞，按项目和工作项核对；不替代风险判断。</div>
           </div>
         </div>
         <div class="hgvp-item">
           <div class="hgvp-item-num">3</div>
           <div>
-            <div class="hgvp-item-title">移动任务即记录工时</div>
-            <div class="hgvp-item-desc">拖入「进行中」自动开表，拖入「已完成」自动停表并接力。</div>
+            <div class="hgvp-item-title">自动计时与补记可校正</div>
+            <div class="hgvp-item-desc">自动计时按工作日（周末不计）；个人时段默认 9–18、日额度默认 8h，均可配。补记单条 1min–24h，不按自动规则裁剪。</div>
           </div>
         </div>
         <div class="hgvp-item">
           <div class="hgvp-item-num">4</div>
           <div>
-            <div class="hgvp-item-title">周回顾与月度清单自动生成</div>
-            <div class="hgvp-item-desc">从 time_log / task_log 自动汇总，无需二次录入。</div>
+            <div class="hgvp-item-title">回顾可查看，发布需确认</div>
+            <div class="hgvp-item-desc">工时与流转记录减少重复整理，回顾仍需核对；发布记录由人工确认，不执行部署、不独立验 SHA、不提供客户签认。</div>
           </div>
         </div>
       </div>
@@ -414,23 +417,23 @@
   <div class="hgvp-pillars">
     <div class="hgvp-pillar">
       <div class="hgvp-pillar-icon">◎</div>
-      <div class="hgvp-pillar-title">统一数据</div>
-      <div class="hgvp-pillar-desc">需求池、文档、任务、版本、工时共用一套数据模型，看板、日历、度量、报表看到的是同一个数字。</div>
+      <div class="hgvp-pillar-title">投入可解释</div>
+      <div class="hgvp-pillar-desc">工作项与工时关联，视图共享来源、各有口径；按成员、任务与时段核对投入；工时不自动等于可结算工时。</div>
     </div>
     <div class="hgvp-pillar">
       <div class="hgvp-pillar-icon">◈</div>
-      <div class="hgvp-pillar-title">自动度量</div>
-      <div class="hgvp-pillar-desc">燃尽图、累积流图、成员负载、流程体检等全部从日常移动任务的操作中自动产生。</div>
+      <div class="hgvp-pillar-title">交付可追溯</div>
+      <div class="hgvp-pillar-desc">区分计划、完成与人工填写的发布快照，核对当时记录的范围；「交付账本」只是比喻，不是部署验真或客户签认。</div>
     </div>
     <div class="hgvp-pillar">
       <div class="hgvp-pillar-icon">⌂</div>
-      <div class="hgvp-pillar-title">私有化部署</div>
-      <div class="hgvp-pillar-desc">单实例自托管，数据留在本地；无需 Redis、MQ 或对象存储，一台服务器即可跑起来。</div>
+      <div class="hgvp-pillar-title">自托管有责任</div>
+      <div class="hgvp-pillar-desc">单实例容量须在实际环境验证，升级、监控与恢复有人负责；外部 AI、邮件、机器人按配置出站，内网不等于合规。</div>
     </div>
   </div>
 
   <div class="hgvp-flow">
-    <div class="hgvp-flow-title">协作主链路</div>
+    <div class="hgvp-flow-title">研发交付主链路 · 主流工具有同类能力，选型须逐项验证</div>
     <div class="hgvp-flow-track">
       <div class="hgvp-flow-node primary">需求池</div>
       <span class="hgvp-flow-arrow">→</span>
@@ -440,12 +443,15 @@
       <span class="hgvp-flow-arrow">→</span>
       <div class="hgvp-flow-node primary">工作项</div>
       <span class="hgvp-flow-arrow">→</span>
-      <div class="hgvp-flow-node neutral">版本发布</div>
+      <div class="hgvp-flow-node neutral">计划 → 人工确认发布</div>
       <span class="hgvp-flow-arrow">→</span>
       <div class="hgvp-flow-node primary">周回顾</div>
     </div>
     <div class="hgvp-flow-foot">
-      核心事实表 <code>time_log</code> + <code>task_log</code> 驱动工时、燃尽、负载与回顾，补记或作废后自动重算
+      记录与恢复：任务 JSON 不含正式发布证据，证据须全库数据库 + 附件备份；需演练恢复，核对当前迁移、SSO 与集成缺口。
+    </div>
+    <div class="hgvp-flow-foot">
+      系统审计最小集已实现，有 CSV；保留期默认 90 天可配置。事件覆盖与合规要求仍须逐项核对。
     </div>
   </div>
 </div>

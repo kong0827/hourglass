@@ -17,19 +17,19 @@ const ACCENT = {
 };
 
 const covers = [
-  ['01', 's1', '行业思考', '功能越多的项目管理工具，<br>为什么团队越用越累？', '复杂是行业的惯性，代价由团队承担', 0],
+  ['01', 's1', '行业思考', '功能越多的项目管理工具，<br>为什么团队越用越累？', '功能扩展可能增加成本，值得结合场景核对', 0],
   ['02', 's1', '行业思考', '项目管理，是不是该做减法了？', '不是功能更少，而是主线更清楚', 0],
-  ['03', 's2', '产品理念', '我们为什么不想再做一个大而全的项目管理平台', '克制不是缺失，是设计', 1],
-  ['04', 's2', '产品理念', '好的工具，应该让复杂的工作变简单', '简单不是少，是不用想', 1],
+  ['03', 's2', '产品理念', '我们为什么选择做研发交付工作台', '面向小型项目制研发团队的自托管研发交付工作台', 1],
+  ['04', 's2', '产品理念', '好的工具，应该让复杂的工作变简单', '简单不是少，是少重复、可校正', 1],
   ['05', 's2', '产品理念', '少一些功能，多一些值得信任的数字', '可信，比智能更重要', 1],
-  ['06', 's3', '核心功能', '项目进度，怎样才能一眼看清？', '进度不是百分比，是四个问题', 1],
+  ['06', 's3', '核心功能', '任务完成了，为什么还不算交付？', '计划、完成与人工确认的发布记录分开看', 1],
   ['07', 's3', '核心功能', '任务分配与跟踪，能不能少一点动作？', '让记录发生在动作里', 1],
-  ['08', 's3', '核心功能', '少开一次会，靠的不是沟通技巧', '信息落在同一个地方，会议就少一半', 1],
-  ['09', 's4', '场景应用', '一个 20 人团队的一周：项目管理到底在管什么', '工具退到背景，工作本身被看见', 1],
-  ['10', 's4', '场景应用', '进度混乱、任务没人跟进，问题通常不在执行力', '多数失序，是数据失序', 1],
-  ['11', 's4', '场景应用', '小团队，真的需要复杂的项目管理系统吗？', '按约束选型，不按功能表选型', 1],
-  ['12', 's5', '价值总结', '项目管理，不该成为团队的新负担', '时间、维护、心理，三种负担都要卸下', 1],
-  ['13', 's5', '价值总结', '让项目管理回归简单，<br>让团队专注真正重要的事', '不做大而全，只做真正有用的项目管理', 1]
+  ['08', 's3', '核心功能', '少开一次会，靠的不是沟通技巧', '集中记录，减少重复问询；回顾仍需核对', 1],
+  ['09', 's4', '场景应用', '一个20人项目团队的一周：投入和交付如何留下记录', '示例场景：记录投入、核对完成、确认发布', 1],
+  ['10', 's4', '场景应用', '进度混乱、任务没人跟进，问题通常不在执行力', '信息断点是排查方向之一，不是通用根因', 1],
+  ['11', 's4', '场景应用', '项目制团队怎样选择交付工具？', '按流程、证据与运维约束逐项验证', 1],
+  ['12', 's5', '价值总结', '自托管不等于免维护：交付数据谁来守护', '时间、维护与记录责任，都需要有人承担', 1],
+  ['13', 's5', '价值总结', '让投入可解释，让交付可追溯', '关联记录、明确边界，用真实项目验证', 1]
 ];
 
 const coverCSS = `
@@ -75,7 +75,7 @@ function coverHTML([num, key, series, title, sub, brand]) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>${coverCSS}</style></head>
 <body><div id="root" style="--accent:${accent}">
   <div class="grid"></div><div class="glow"></div><div class="frame"></div><div class="accentline"></div>
-  <div class="top"><div class="mark"><i></i><b></b><i></i></div><div class="brand">${markText}<span>${markSub}</span></div></div>
+  <div class="top">${brand ? '<div class="mark"><i></i><b></b><i></i></div>' : '<svg width="26" height="34" viewBox="0 0 26 34" aria-hidden="true"><rect x="3" y="7" width="20" height="20" rx="3" fill="none" stroke="#1F3A5F" stroke-width="2"/><circle cx="13" cy="17" r="4" fill="#C9A227"/></svg>'}<div class="brand">${markText}<span>${markSub}</span></div></div>
   <div class="pill"><span class="dot"></span>${series}</div>
   <div class="num">${num}</div>
   <h1 class="${titleClass}">${title}</h1>
@@ -85,12 +85,15 @@ function coverHTML([num, key, series, title, sub, brand]) {
   <svg class="art" viewBox="0 0 300 300" aria-hidden="true">
     <circle class="ring" cx="150" cy="150" r="128"/>
     <circle class="ring" cx="150" cy="150" r="104"/>
-    <path class="glass" d="M68 42 H232 M68 258 H232"/>
+    ${brand ? `<path class="glass" d="M68 42 H232 M68 258 H232"/>
     <path class="glass" d="M78 52 H222 L150 148 Z"/>
     <path class="glass" d="M78 248 H222 L150 152 Z"/>
     <path class="sand" d="M104 70 H196 L150 128 Z"/>
     <path class="sand" d="M112 232 H188 L150 186 Z"/>
-    <path class="sand2" d="M146 142 h8 v24 h-8 z"/>
+    <path class="sand2" d="M146 142 h8 v24 h-8 z"/>` : `<rect class="glass" x="74" y="74" width="152" height="152" rx="16"/>
+    <path class="glass" d="M74 150 H226 M150 74 V226"/>
+    <circle class="sand" cx="112" cy="112" r="16"/>
+    <circle class="sand2" cx="188" cy="188" r="16"/>`}
   </svg>
 </div></body></html>`;
 }
