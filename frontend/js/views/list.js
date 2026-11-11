@@ -1078,7 +1078,8 @@ function openRowMenu(anchor, id){
         function send(){
           API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body).then(function(res){
             toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
-              (res.autoTimerStarted ? " · 已开始计时" : ""));
+              (res.autoTimerStarted ? " · 已开始计时" : "") +
+              (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
             loadList(); loadBoard({silent:true}); loadReqs();
           }).catch(fail);
         }
@@ -1107,6 +1108,17 @@ listSort.addEventListener("change", function(){
 });
 window.addEventListener("ds:layout", function(){
   if(lastItems && lastItems.length) renderListItems(lastItems);
+});
+/* 移动 / 完成 / 抽屉改列都可能由服务端停表；列表也要跟着计时身份变化重绘 */
+var lastTimerTaskId = state.runningTimer ? state.runningTimer.taskId : null;
+window.addEventListener("ds:running-timer", function(){
+  var id = state.runningTimer ? state.runningTimer.taskId : null;
+  if(id === lastTimerTaskId) return;
+  lastTimerTaskId = id;
+  if(activeView !== "list") return;
+  /* 计时只影响行内按钮，本地重绘即可；没有已加载数据时才回源 */
+  if(lastItems && lastItems.length) renderListItems(lastItems);
+  else refreshListIfOpen();
 });
 
 export { applyListSavedView, currentListViewId, currentListViewName, currentListViewParams, enterListView, listViewDeleted, loadList, markListViewSaved, refreshListIfOpen, renderSmartTabs };

@@ -476,8 +476,20 @@
   </delete>
 
   <select id="selectPurgeable" resultType="Task">
-    SELECT <include refid="cols"/> FROM task WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+    SELECT <include refid="cols"/> FROM task
+    WHERE deleted_at IS NOT NULL AND deleted_at &lt; #{cutoff}
+      AND NOT EXISTS (
+        SELECT 1 FROM version_release_plan_task pt
+        WHERE pt.workspace_id = task.workspace_id AND pt.task_id = task.id
+      )
     LIMIT #{limit}
+  </select>
+
+  <select id="selectPlanReferencedTaskIds" resultType="string">
+    SELECT DISTINCT task_id FROM version_release_plan_task
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="taskId" open="(" separator="," close=")">#{taskId}</foreach>
   </select>
 
   <!-- 备份导入前预判任务 ID 冲突：本空间任务已清空，同 ID 只可能被其它空间占用 -->

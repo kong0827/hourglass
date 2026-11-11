@@ -127,6 +127,28 @@ class TimeLogStartStopTest {
         verify(timeLogMapper, times(1)).insert(any(TimeLog.class));
     }
 
+    @Test
+    void resumeSkipsTasksOwnedByOthers() {
+        when(taskSupport.canTime(WS, "doing")).thenReturn(true);
+        when(timeLogMapper.selectRunningAllByUser(ME)).thenReturn(Collections.<TimeLog>emptyList());
+        AppUser me = new AppUser();
+        me.setId(ME);
+        me.setDisplayName("我");
+        when(userMapper.selectById(ME)).thenReturn(me);
+        Task other = task("K1", "doing");
+        other.setOwnerUserId("U2");
+        Task mine = task("K2", "doing");
+        mine.setOwnerUserId(ME);
+        when(taskMapper.selectColumnTasks(WS, "doing")).thenReturn(Arrays.asList(other, mine));
+        when(taskMapper.selectById("K2")).thenReturn(mine);
+        when(projectAccess.canWrite(WS, ME, "R1")).thenReturn(true);
+
+        Task resumed = service.resumeInColumn(ME, WS, "doing", null);
+
+        assertSame(mine, resumed, "接力不能把计时开到别人的任务上");
+        verify(timeLogMapper, times(1)).insert(any(TimeLog.class));
+    }
+
     private static Task task(String id, String column) {
         Task task = new Task();
         task.setId(id);

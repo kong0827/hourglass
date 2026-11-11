@@ -1,6 +1,7 @@
 package com.hourglass.service;
 
 import com.hourglass.common.AppException;
+import com.hourglass.common.Consts;
 import com.hourglass.common.Texts;
 import com.hourglass.common.WorkTime;
 import com.hourglass.dto.PageResult;
@@ -165,16 +166,15 @@ public class TimeLogService {
      */
     @Transactional
     public Task resumeInColumn(String userId, String workspaceId, String columnId, String excludeTaskId) {
-        if (!support.canTime(workspaceId, columnId)) {
+        /* 只允许「进行中」列接力，且只接自己的任务：不能因停表把计时开到别人的任务上。 */
+        if (!Consts.COL_DOING.equals(columnId) || !support.canTime(workspaceId, columnId)) {
             return null;
         }
         if (!timeLogMapper.selectRunningAllByUser(userId).isEmpty()) {
             return null;
         }
-        /* 只接力“自己的任务”：共享空间里 A 完成自己的任务，不该自动把计时开到 B 的任务上 */
         AppUser me = userMapper.selectById(userId);
         String myName = me == null ? null : Texts.trimToNull(me.getDisplayName());
-        /* 只查目标列（已按 sort_order,id 排序），第一条属于自己的就是接力目标 */
         for (Task t : taskMapper.selectColumnTasks(workspaceId, columnId)) {
             if (excludeTaskId != null && excludeTaskId.equals(t.getId())) {
                 continue;
@@ -199,7 +199,7 @@ public class TimeLogService {
 
     @Transactional
     public Map<String, Object> stop(String userId, String workspaceId, String taskId) {
-        ensureTask(workspaceId, taskId);
+        Task task = ensureTask(workspaceId, taskId);
         userMapper.lockById(userId);
         TimeLog running = timeLogMapper.selectRunningByTaskAndUser(taskId, userId);
         if (running == null) {
@@ -209,8 +209,11 @@ public class TimeLogService {
         int minutes = effectiveMinutes(running.getStartedAt(), userId);
         timeLogMapper.closeRunning(taskId, userId, minutes);
         log(userId, workspaceId, taskId, "停止计时，本次计入 " + minutes + " 分钟" + capNote(wallMinutes, minutes));
-        /* 停自己的表不受项目可见范围影响：可见范围被收回后仍要能关掉计时 */
-        return statusOf(workspaceId, taskId, userId);
+        /* 手动停表也接力：停在可计时列时，继续接上同列下一个任务 */
+        Task resumed = resumeInColumn(userId, workspaceId, task.getBoardColumn(), taskId);
+        Map<String, Object> result = statusOf(workspaceId, taskId, userId);
+        result.put("autoTimerTask", resumed == null ? null : resumed.getTitle());
+        return result;
     }
 
     /**
@@ -374,6 +377,18 @@ public class TimeLogService {
      */
     @Transactional
     public int closeRunningForTask(String workspaceId, String taskId, String actorId, String reason) {
+        List<TimeLog> observed = timeLogMapper.selectRunningByTask(workspaceId, taskId);
+        /* 与 start() 共用账号锁；按用户 ID 排序加锁，避免多人同时完成不同任务时死锁。
+           锁后重读，覆盖“观察到之后、加锁之前”刚插入的运行记录。 */
+        java.util.TreeSet<String> users = new java.util.TreeSet<String>();
+        for (TimeLog running : observed) {
+            if (Texts.trimToNull(running.getUserId()) != null) {
+                users.add(running.getUserId());
+            }
+        }
+        for (String userId : users) {
+            userMapper.lockById(userId);
+        }
         int closed = 0;
         for (TimeLog running : timeLogMapper.selectRunningByTask(workspaceId, taskId)) {
             int wall = wallMinutes(running.getStartedAt());

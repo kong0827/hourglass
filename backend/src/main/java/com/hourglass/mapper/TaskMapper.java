@@ -189,6 +189,10 @@ public interface TaskMapper {
 
     List<Task> selectPurgeable(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
 
+    /** 彻底删除前检查：这些任务是否已被发布计划引用（FK RESTRICT，不能物理删除） */
+    List<String> selectPlanReferencedTaskIds(@Param("workspaceId") String workspaceId,
+                                             @Param("taskIds") List<String> taskIds);
+
     /** 全库到期未提醒的任务（跨空间一次取回，调用方按 workspace_id 分组） */
     List<Task> selectRemindDueAll(@Param("now") LocalDateTime now,
                                   @Param("windowStart") LocalDateTime windowStart);

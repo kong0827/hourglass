@@ -69,10 +69,8 @@ function loadBoard(opts){
        直接进列表/日历等页面时负责人/优先级/类型/更多筛选全部空白 */
     renderFilterChips();
     render({animate: !!opts.animate});
-    /* 卡片上的「计时中」状态来自另一个接口；只有确实有运行中的计时才补一次渲染 */
-    loadRunningTimer(function(rt){
-      if(rt && seq === state.loadSeq) render({animate:false});
-    });
+    /* 计时状态加载后由 ds:running-timer 监听统一重绘，避免这里与监听器各渲染一次 */
+    loadRunningTimer();
     /* 卡片上的需求名来自需求列表（首次加载后会重绘一次） */
     loadReqDocs();
   }).catch(function(ex){
@@ -816,7 +814,8 @@ function endDrag(){
           toast("已清除完成时间", "warn");
         }else if(fromCol !== res.to){
           toast("「" + task.title + "」移动到「" + colName(res.to) + "」" +
-            (res.autoTimerStarted ? " · 已开始计时（拖到「已完成」会自动停止）" : ""));
+            (res.autoTimerStarted ? " · 已开始计时（拖到「已完成」会自动停止）" : "") +
+            (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
         }
         loadBoard({silent:true});
         loadReqs();
@@ -1046,6 +1045,18 @@ window.addEventListener("ds:layout", function(){
   /* 看板没有 enter 回调：断点时不在看板也要置脏，否则切回来仍是旧档位的 DOM */
   if(activeView === "board") render({animate:false});
   else rt.boardDirty = true;
+});
+
+/* 拖列 / 抽屉改列可能在后端停止计时：计时身份变化时按最新状态重绘，
+   否则卡片会残留「计时中」胶囊（loadBoard 期间拿到的还是旧计时状态）。 */
+var lastTimerTaskId = state.runningTimer ? state.runningTimer.taskId : null;
+window.addEventListener("ds:running-timer", function(){
+  var id = state.runningTimer ? state.runningTimer.taskId : null;
+  if(id === lastTimerTaskId) return;
+  lastTimerTaskId = id;
+  /* 拖拽过程中重建 DOM 会让幽灵卡/插入线失效，等拖拽结束后的渲染接管 */
+  if(drag || pending) return;
+  if(activeView === "board" && state.board) render({animate:false});
 });
 
 export { cancelDrag, cardHTML, drag, loadBoard, loadReqs, openInlineAdd, pending, refreshBoardPreserving, render, showBoardSkeleton };

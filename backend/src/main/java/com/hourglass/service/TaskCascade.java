@@ -196,6 +196,7 @@ public class TaskCascade {
             tasks.add(task);
         }
         lockPurgeTasks(tasks);
+        assertNoPlanRefs(workspaceId, taskIds);
         taskMapper.clearRecurNextByTaskIds(taskIds);
         deleteTaskChildren(workspaceId, taskIds);
         taskMapper.deleteByIds(taskIds);
@@ -222,10 +223,23 @@ public class TaskCascade {
         // 任务行即将消失、ID 可被复用：清掉上游循环派生关联，避免之后误认到无关的新任务
         taskMapper.clearRecurNextByTaskIds(allIds);
         for (Map.Entry<String, List<String>> entry : idsByWorkspace.entrySet()) {
+            assertNoPlanRefs(entry.getKey(), entry.getValue());
             deleteTaskChildren(entry.getKey(), entry.getValue());
             taskMapper.deleteByIds(entry.getValue());
         }
         return allIds.size();
+    }
+
+    /**
+     * 发布计划任务行对 task 是 ON DELETE RESTRICT。计划属于不可变交付证据，
+     * 不能靠物理删除把任务从计划里抠掉；这里直接拒绝，并让回收站清理在查询阶段就跳过。
+     */
+    private void assertNoPlanRefs(String workspaceId, List<String> taskIds) {
+        List<String> referenced = taskMapper.selectPlanReferencedTaskIds(workspaceId, taskIds);
+        if (referenced != null && !referenced.isEmpty()) {
+            throw com.hourglass.common.AppException.badRequest(
+                    "任务已被发布计划引用，不能彻底删除；请先从发布计划中移除该任务");
+        }
     }
 
     private void lockPurgeTasks(List<Task> tasks) {
@@ -381,7 +395,8 @@ public class TaskCascade {
             if (clearDocComments) {
                 docCommentMapper.deleteByWorkspace(workspaceId);
             }
-            docHistoryMapper.deleteAllByWorkspace(workspaceId);
+            /* 文档历史不在备份格式里：导入时保留旧快照，避免“备份没带就直接删”。
+               同空间导入文档 ID 通常复用，历史仍可对应；跨空间可能成为孤立历史，但不再静默丢数据。 */
             reqDocShareMapper.deleteByWorkspace(workspaceId);
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
@@ -391,7 +406,7 @@ public class TaskCascade {
         }
         if (clearDemands) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
-            demandMapper.deleteLogsByWorkspace(workspaceId);
+            /* 需求流转日志同样不在备份里：保留审计记录，不随导入清空 */
             demandMapper.deleteByWorkspace(workspaceId);
         }
         /* 版本必须在需求池之后删：需求池通过 version_id 指向版本 */

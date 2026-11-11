@@ -2,7 +2,7 @@
 
 import { API } from "../core/api.js";
 import { $, iDue, iStart, searchInput, searchWrap } from "../core/dom.js";
-import { applyView, clearFilters, deleteView, promptSaveView, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
+import { applyView, clearFilters, deleteView, markHumanSearchInput, promptSaveView, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
@@ -1920,6 +1920,7 @@ function afterGanttFilterChange(){
 var ganttQueryTimer = null;
 function ganttSetQuery(kw){
   state.q = kw || "";
+  markHumanSearchInput();
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
   if(ganttQueryTimer) clearTimeout(ganttQueryTimer);

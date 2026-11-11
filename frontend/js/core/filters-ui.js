@@ -309,12 +309,15 @@ function reloadFilteredViews(){
     saveViewState();
   }, 150);
 }
-/* 把当前筛选/视图/列表视图状态按工作区持久化到 localStorage，刷新后可恢复 */
-var VIEW_STATE_KEY = "ds.viewState.v1";
+/* 把当前筛选/视图/列表视图状态按「账号 + 工作区」持久化到 localStorage，刷新后可恢复。
+   不能只按空间存：同一浏览器切换账号后，上一个人的搜索词（常见是账号名）会被当前账号恢复出来。 */
+var VIEW_STATE_KEY = "ds.viewState.v2";
 function currentWsId(){ return rt.currentWs && rt.currentWs.id || ""; }
+function currentUserId(){ return rt.currentUser && rt.currentUser.id || ""; }
+function viewStateKey(){ return VIEW_STATE_KEY + ":" + currentUserId() + ":" + currentWsId(); }
 function saveViewState(){
-  var ws = currentWsId();
-  if(!ws) return;
+  var ws = currentWsId(), user = currentUserId();
+  if(!ws || !user) return;
   try{
     var listSnap = null;
     try{
@@ -322,10 +325,11 @@ function saveViewState(){
       listSnap = { current: currentListViewId(), preset: lp.preset, group: lp.group,
         subgroup: lp.subgroup || "none", hideDone: !!lp.hideDone, sort: lp.sort, sortDir: lp.sortDir };
     }catch(err){ /* 列表模块尚未就绪 */ }
-    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+    localStorage.setItem(viewStateKey(), JSON.stringify({
+      userId: user,
       wsId: ws,
       filters: {
-        q: state.q,
+        /* 关键词不跨会话恢复：搜索是临时上下文，恢复旧词（常见是别人的账号名）会让人以为查询条件被自动写入 */
         owners: state.owners.slice(), pris: state.pris.slice(), cats: state.cats.slice(), reqs: state.reqs.slice(),
         tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
         due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope
@@ -335,15 +339,17 @@ function saveViewState(){
   }catch(e){ /* 隐私模式/受限环境忽略 */ }
 }
 function restoreViewState(){
-  if(!rt.currentWs) return false;
+  if(!rt.currentWs || !rt.currentUser) return false;
+  /* v1 仅按空间存，可能混入其他账号的搜索词；升级后直接清掉，不再恢复 */
+  try{ localStorage.removeItem("ds.viewState.v1"); }catch(e){ /* 受限环境忽略 */ }
   var snap;
-  try{ snap = JSON.parse(localStorage.getItem(VIEW_STATE_KEY) || "null"); }catch(e){ return false; }
-  if(!snap || snap.wsId !== rt.currentWs.id) return false;
+  try{ snap = JSON.parse(localStorage.getItem(viewStateKey()) || "null"); }catch(e){ return false; }
+  if(!snap || snap.userId !== rt.currentUser.id || snap.wsId !== rt.currentWs.id) return false;
   var changed = false;
+  /* 旧快照里的 q 不再恢复；当前页面已经输入的关键词属于会话内筛选，不能被 settings 等
+     再次调用 loadWorkspaces 时清掉。 */
   var f = snap.filters;
   if(f){
-    var newQ = typeof f.q === "string" ? f.q : "";
-    if(newQ !== state.q){ state.q = newQ; changed = true; }
     ["owners","pris","cats","reqs","tags","types","versions"].forEach(function(k){
       var arr = Array.isArray(f[k]) ? f[k].slice() : [];
       if(arr.length !== state[k].length || arr.some(function(v,i){ return v !== state[k][i]; })){ state[k] = arr; changed = true; }
@@ -379,6 +385,10 @@ function restoreViewState(){
     if(searchInput){ searchInput.value = state.q; searchWrap.classList.toggle("has", !!state.q); }
     renderFilterChips();
     updateBrand();
+  }else if(!state.q && searchInput && searchInput.value){
+    /* 没有活动搜索时清掉浏览器/密码管理器自动填进输入框的残留值 */
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
   }
   return changed;
 }
@@ -386,7 +396,67 @@ var searchTimer = null;
 /* 单字查询是最贵的一档（全列计数 + 字面 LIKE），拉丁单字符多半只是单词前缀：
    1 个字等 600ms，2 个字起维持 300ms；没有生效中的关键词时，拉丁单字符先不发请求。 */
 var SINGLE_ASCII = /^[\x00-\x7F]$/;
+/* 浏览器 / 密码管理器会把登录名自动填进文本输入框。输入框初始 readonly，
+   首次交互时再解除，避免扩展在页面加载阶段直接写入；清理只针对“用户没输入过”的值。 */
+var searchHumanTouched = false;
+function lookalikeTokens(){
+  var u = rt.currentUser;
+  if(!u) return [];
+  return [u.username, u.displayName, u.email, u.id].map(function(v){
+    return String(v == null ? "" : v).trim().toLowerCase();
+  }).filter(function(v){ return !!v; });
+}
+function looksLikeOwnAccount(value){
+  var s = String(value == null ? "" : value).trim().toLowerCase();
+  return !!s && lookalikeTokens().indexOf(s) !== -1;
+}
+function markHumanSearchInput(){ searchHumanTouched = true; }
+["keydown", "paste", "beforeinput", "compositionstart"].forEach(function(type){
+  searchInput.addEventListener(type, markHumanSearchInput);
+});
+function releaseSearchReadonly(){
+  if(searchInput.readOnly) searchInput.readOnly = false;
+}
+["pointerdown", "touchstart", "focus", "keydown"].forEach(function(type){
+  searchInput.addEventListener(type, releaseSearchReadonly, {passive:true});
+});
+function clearAutoFilledOwnAccount(){
+  /* 用户真正键鼠/输入法输入过就不再自动清理，避免把用户主动搜索的账号名删掉 */
+  if(searchHumanTouched || !searchInput) return;
+  var v = searchInput.value;
+  if(!v || !looksLikeOwnAccount(v)) return;
+  // 只清“没有搜索状态”或“搜索状态就是这次自动填充值”的情况，别抹掉用户刚应用的视图
+  if(state.q && state.q !== v.trim()) return;
+  searchInput.value = "";
+  searchWrap.classList.remove("has");
+  /* 自动填充可能已经触发过一次查询，这里一并复位，避免框空了但结果仍按账号过滤 */
+  if(state.q) applySearch("");
+}
+window.addEventListener("ds:user-ready", clearAutoFilledOwnAccount);
+window.addEventListener("pageshow", clearAutoFilledOwnAccount);
+window.addEventListener("focus", clearAutoFilledOwnAccount);
+document.addEventListener("visibilitychange", function(){
+  if(!document.hidden) clearAutoFilledOwnAccount();
+});
+searchInput.addEventListener("focus", clearAutoFilledOwnAccount);
+/* Chrome/Edge 自动填充会触发 :-webkit-autofill 上的动画；这是不读取密码也能
+   感知“浏览器自己填了值”的可靠信号。 */
+searchInput.addEventListener("animationstart", function(e){
+  if(e.animationName === "ds-autofill-start") clearAutoFilledOwnAccount();
+});
+/* 密码管理器可能在 load 之后一段时间才回填：前 10 秒定期兜底 */
+var autofillWatch = setInterval(clearAutoFilledOwnAccount, 1000);
+setTimeout(function(){ clearInterval(autofillWatch); }, 10000);
 searchInput.addEventListener("input", function(){
+  releaseSearchReadonly();
+  if(!searchInput.value.trim()) searchHumanTouched = false;
+  if(!searchHumanTouched && looksLikeOwnAccount(searchInput.value)){
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
+    /* 若之前已有搜索词，自动填充不应只是视觉清空而让旧查询继续生效 */
+    if(state.q) applySearch("");
+    return;
+  }
   var kw = searchInput.value.trim();
   searchWrap.classList.toggle("has", kw.length > 0);
   if(searchTimer){ clearTimeout(searchTimer); searchTimer = null; }
@@ -582,6 +652,7 @@ function applyView(v){
   state.due = f.due; state.focus = f.focus;
   state.blocked = f.blocked;
   state.doneScope = f.doneScope;
+  markHumanSearchInput();
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
   /* 视图 = 筛选 + 可选的布局：甘特布局由视图自己恢复，列表布局只作用于列表 */
@@ -858,4 +929,4 @@ window.addEventListener("ds:view-search", function(){
 });
 updateMobFilterSummary();
 
-export { applyView, clearFilters, deleteView, loadViews, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };
+export { applyView, clearFilters, deleteView, loadViews, markHumanSearchInput, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };

@@ -25,18 +25,29 @@
     <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
   </select>
 
-  <!-- 添加成员时的候选搜索：排除已在空间内的账号，只取选人所需字段 -->
+  <!-- 添加成员时的候选搜索：空关键词只列可加入账号；输入关键词时也保留已在空间内的账号，
+       这样搜索自己（如 admin）能查到账号信息，并由 inWorkspace 阻止重复添加 -->
   <select id="searchCandidates" resultType="com.hourglass.dto.MemberCandidate">
-    SELECT u.id, u.username, u.display_name
+    SELECT u.id, u.username, u.display_name,
+           EXISTS (
+             SELECT 1 FROM workspace_member m
+             WHERE m.workspace_id = #{workspaceId} AND m.user_id = u.id
+           ) AS in_workspace
     FROM app_user u
-    WHERE NOT EXISTS (
-      SELECT 1 FROM workspace_member m
-      WHERE m.workspace_id = #{workspaceId} AND m.user_id = u.id
-    )
-    <if test="q != null">
-      AND (LOCATE(LOWER(#{q}), LOWER(u.username)) > 0
-           OR LOCATE(LOWER(#{q}), LOWER(u.display_name)) > 0)
-    </if>
+    <where>
+      <choose>
+        <when test="q != null">
+          AND (LOCATE(LOWER(#{q}), LOWER(u.username)) > 0
+               OR LOCATE(LOWER(#{q}), LOWER(u.display_name)) > 0)
+        </when>
+        <otherwise>
+          AND NOT EXISTS (
+            SELECT 1 FROM workspace_member m
+            WHERE m.workspace_id = #{workspaceId} AND m.user_id = u.id
+          )
+        </otherwise>
+      </choose>
+    </where>
     ORDER BY u.username
     LIMIT #{limit}
   </select>

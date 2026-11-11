@@ -1085,8 +1085,15 @@ public class BackupService {
             if (!st.reqIds.contains(reqId)) {
                 continue;
             }
+            String original = Ids.sanitize(Texts.trimToNull(b.getId()));
+            /* 同空间导入尽量复用原用例 ID：测试计划/计划圈选不在备份里，ID 复用后
+               计划里的 case_id 仍然有效，不会出现“计划总数有、列表为空”。 */
+            String caseId = original;
+            if (caseId == null || testCaseMapper.selectById(caseId) != null) {
+                caseId = Ids.gen("C");
+            }
             TestCase c = new TestCase();
-            c.setId(Ids.gen("C"));
+            c.setId(caseId);
             c.setWorkspaceId(st.workspaceId);
             c.setReqId(reqId);
             c.setTitle(Texts.cut(title, 100));
@@ -1103,7 +1110,6 @@ public class BackupService {
             c.setCreatedAt(parseTs(b.getCreatedAt()));
             c.setUpdatedAt(parseTs(b.getUpdatedAt()));
             testCaseMapper.insert(c);
-            String original = Texts.trimToNull(b.getId());
             if (original != null) {
                 caseIdMap.put(original, c.getId());
             }

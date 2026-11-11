@@ -9,4 +9,6 @@ public class MemberCandidate {
     private String id;
     private String username;
     private String displayName;
+    /** 是否已经在当前空间内：搜索结果里保留自己/同事的账号信息，但不能重复添加 */
+    private Boolean inWorkspace;
 }

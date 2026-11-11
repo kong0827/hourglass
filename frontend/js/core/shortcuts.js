@@ -5,7 +5,7 @@ import { $, board, btnSaveTask, iReq, searchInput, taskDrawer, taskForm } from "
 import { activeView, showView } from "./router.js";
 import { toggleRail } from "./shell.js";
 import { calState, canEditTask, rt, state, taskById } from "./state.js";
-import { openDuePopover, toggleTaskDone } from "./task-actions.js";
+import { loadRunningTimer, openDuePopover, toggleTaskDone } from "./task-actions.js";
 import { deleteTask, openTaskDrawer, tryCloseTaskDrawer } from "./task-drawer.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, toast } from "./ui.js";
@@ -50,9 +50,12 @@ function moveTaskCol(t, delta){
   }
   function ok(res){
     toast("「" + res.task.title + "」移动到「" + colName(res.to) + "」" +
-      (res.autoTimerStarted ? " · 已开始计时" : ""));
+      (res.autoTimerStarted ? " · 已开始计时" : "") +
+      (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
     if(activeView === "list") loadList(); else loadBoard({animate:false, movedId: t.id});
     loadReqs();
+    /* 移到不可计时列会由服务端停表；列表路径不会走 loadBoard，这里主动同步顶部胶囊与卡片 */
+    loadRunningTimer();
   }
   guard(wsId, items, to).then(function(pass){
     if(!pass) return;

@@ -313,6 +313,7 @@ function enterSettingsView(){
 var settingsTab = "space";
 var platformTab = "account";
 function setSettingsTab(tab){
+  var prevTab = settingsTab;
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
   var myRole = rt.currentWs && rt.currentWs.myRole;
   var isManager = myRole === "owner" || myRole === "admin";
@@ -342,6 +343,8 @@ function setSettingsTab(tab){
   if($("set-mail")) $("set-mail").hidden = tab !== "integration" || !isAdmin;
   if(tab === "data") loadTrash({silent:true});
   if(tab === "workflow") loadWsCatProjects();
+  /* 切换页签时清掉成员搜索残留：避免上一次选中的账号在下一次打开时仍留在输入框里 */
+  if(prevTab !== tab && (prevTab === "members" || tab === "members")) resetMemberPicker();
   if(tab === "members" && isManager && !isPersonal) loadProjectAccess();
   if(tab === "integration" && isAdmin) loadMailSettings();
   if(tab === "platform" && isAdmin) setPlatformTab(platformTab);
@@ -1862,9 +1865,11 @@ function renderMemberOptions(list){
     return;
   }
   box.innerHTML = list.map(function(u){
-    return '<button class="member-option" type="button" role="option" data-cid="' + esc(u.id) + '">' +
+    var inWs = !!u.inWorkspace;
+    return '<button class="member-option' + (inWs ? " is-member" : "") + '" type="button" role="option" data-cid="' + esc(u.id) + '"' +
+      (inWs ? ' aria-disabled="true"' : "") + '>' +
       '<span class="nm">' + esc(u.displayName || u.username) + '</span>' +
-      '<span class="sub">@' + esc(u.username) + '</span></button>';
+      '<span class="sub">@' + esc(u.username) + (inWs ? ' · 已在空间内' : '') + '</span></button>';
   }).join("");
   setMemberOptionsOpen(true);
 }
@@ -1910,6 +1915,7 @@ $("wsMemberOptions").addEventListener("mousedown", function(e){
   e.preventDefault();
   var u = wsMemberCandidates[opt.dataset.cid];
   if(!u) return;
+  if(u.inWorkspace){ setMemberOptionsOpen(false); toast("该账号已在当前空间内", "warn"); return; }
   wsMemberSelected = u;
   wsMemberName.value = (u.displayName || u.username) + " (@" + u.username + ")";
   $("btnWsMemberAdd").disabled = false;
