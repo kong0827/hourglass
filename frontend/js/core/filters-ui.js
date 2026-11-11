@@ -393,35 +393,59 @@ function restoreViewState(){
   return changed;
 }
 var searchTimer = null;
-/* 浏览器 / 密码管理器会把登录名自动填进文本输入框。仅当值恰好等于当前账号、
-   且不是用户键鼠输入造成时忽略，避免登录或切视图后凭空多出一个查询条件。 */
+/* 浏览器 / 密码管理器会把登录名自动填进文本输入框。输入框初始 readonly，
+   首次交互时再解除，避免扩展在页面加载阶段直接写入；清理只针对“用户没输入过”的值。 */
 var searchHumanTouched = false;
-function looksLikeOwnAccount(value){
+function lookalikeTokens(){
   var u = rt.currentUser;
+  if(!u) return [];
+  return [u.username, u.displayName, u.email, u.id].map(function(v){
+    return String(v == null ? "" : v).trim().toLowerCase();
+  }).filter(function(v){ return !!v; });
+}
+function looksLikeOwnAccount(value){
   var s = String(value == null ? "" : value).trim().toLowerCase();
-  if(!u || !s) return false;
-  var username = String(u.username || "").trim().toLowerCase();
-  var displayName = String(u.displayName || "").trim().toLowerCase();
-  return (username && s === username) || (displayName && s === displayName);
+  return !!s && lookalikeTokens().indexOf(s) !== -1;
 }
 function markHumanSearchInput(){ searchHumanTouched = true; }
 ["keydown", "paste", "beforeinput", "compositionstart"].forEach(function(type){
   searchInput.addEventListener(type, markHumanSearchInput);
 });
+function releaseSearchReadonly(){
+  if(searchInput.readOnly) searchInput.readOnly = false;
+}
+["pointerdown", "touchstart", "focus", "keydown"].forEach(function(type){
+  searchInput.addEventListener(type, releaseSearchReadonly, {passive:true});
+});
 function clearAutoFilledOwnAccount(){
   /* 用户真正键鼠/输入法输入过就不再自动清理，避免把用户主动搜索的账号名删掉 */
-  if(searchHumanTouched) return;
-  if(!state.q && searchInput && looksLikeOwnAccount(searchInput.value)){
-    searchInput.value = "";
-    searchWrap.classList.remove("has");
-  }
+  if(searchHumanTouched || !searchInput) return;
+  var v = searchInput.value;
+  if(!v || !looksLikeOwnAccount(v)) return;
+  // 只清“没有搜索状态”或“搜索状态就是这次自动填充值”的情况，别抹掉用户刚应用的视图
+  if(state.q && state.q !== v.trim()) return;
+  searchInput.value = "";
+  searchWrap.classList.remove("has");
+  /* 自动填充可能已经触发过一次查询，这里一并复位，避免框空了但结果仍按账号过滤 */
+  if(state.q) applySearch("");
 }
 window.addEventListener("ds:user-ready", clearAutoFilledOwnAccount);
+window.addEventListener("pageshow", clearAutoFilledOwnAccount);
+window.addEventListener("focus", clearAutoFilledOwnAccount);
+document.addEventListener("visibilitychange", function(){
+  if(!document.hidden) clearAutoFilledOwnAccount();
+});
 searchInput.addEventListener("focus", clearAutoFilledOwnAccount);
-/* 密码管理器通常在页面 load 之后才回填，不能在点击聚焦时才清理：
-   登录/刷新后的几个关键时点再检查一次。 */
-[400, 1200, 3000, 6000].forEach(function(ms){ setTimeout(clearAutoFilledOwnAccount, ms); });
+/* Chrome/Edge 自动填充会触发 :-webkit-autofill 上的动画；这是不读取密码也能
+   感知“浏览器自己填了值”的可靠信号。 */
+searchInput.addEventListener("animationstart", function(e){
+  if(e.animationName === "ds-autofill-start") clearAutoFilledOwnAccount();
+});
+/* 密码管理器可能在 load 之后一段时间才回填：前 10 秒定期兜底 */
+var autofillWatch = setInterval(clearAutoFilledOwnAccount, 1000);
+setTimeout(function(){ clearInterval(autofillWatch); }, 10000);
 searchInput.addEventListener("input", function(){
+  releaseSearchReadonly();
   if(!searchInput.value.trim()) searchHumanTouched = false;
   if(!searchHumanTouched && looksLikeOwnAccount(searchInput.value)){
     searchInput.value = "";
@@ -615,6 +639,7 @@ function applyView(v){
   state.due = f.due; state.focus = f.focus;
   state.blocked = f.blocked;
   state.doneScope = f.doneScope;
+  markHumanSearchInput();
   searchInput.value = state.q;
   searchWrap.classList.toggle("has", state.q.length > 0);
   /* 视图 = 筛选 + 可选的布局：甘特布局由视图自己恢复，列表布局只作用于列表 */
@@ -891,4 +916,4 @@ window.addEventListener("ds:view-search", function(){
 });
 updateMobFilterSummary();
 
-export { applyView, clearFilters, deleteView, loadViews, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };
+export { applyView, clearFilters, deleteView, loadViews, markHumanSearchInput, openMobFilterSheet, pruneUnknownCats, promptSaveView, reloadFilteredViews, renderFilterChips, restoreViewState, saveViewState, savedViewsFor, toggleIn, updateMobFilterSummary };

@@ -200,6 +200,9 @@ body[data-view="messages"] #btnNew{display:none !important;}
 }
 .global-search input::placeholder{color:var(--text-3);}
 .global-search input:focus{width:380px;background:var(--surface);border-color:var(--primary);box-shadow:var(--ring-focus);}
+/* Chrome/Edge 自动填充时触发动画，供脚本识别并清理（见 filters-ui.js） */
+@keyframes ds-autofill-start{from{opacity:1;}to{opacity:1;}}
+.global-search input:-webkit-autofill{animation:ds-autofill-start 1ms 1;}
 .global-search .gs-kbd{
   position:absolute;right:8px;display:inline-flex;gap:2px;pointer-events:none;
 }
