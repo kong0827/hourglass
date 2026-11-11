@@ -383,10 +383,23 @@ function restoreViewState(){
   return changed;
 }
 var searchTimer = null;
+/* 单字查询是最贵的一档（全列计数 + 字面 LIKE），拉丁单字符多半只是单词前缀：
+   1 个字等 600ms，2 个字起维持 300ms；没有生效中的关键词时，拉丁单字符先不发请求。 */
+var SINGLE_ASCII = /^[\x00-\x7F]$/;
 searchInput.addEventListener("input", function(){
-  searchWrap.classList.toggle("has", searchInput.value.trim().length > 0);
-  if(searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(function(){ applySearch(searchInput.value.trim()); }, 300);
+  var kw = searchInput.value.trim();
+  searchWrap.classList.toggle("has", kw.length > 0);
+  if(searchTimer){ clearTimeout(searchTimer); searchTimer = null; }
+  if(!kw){
+    /* 清空且原本就没有生效条件：不必再拉一次全量数据 */
+    if(state.q) applySearch("");
+    return;
+  }
+  if(kw.length === 1 && SINGLE_ASCII.test(kw) && !state.q) return;
+  searchTimer = setTimeout(function(){
+    searchTimer = null;
+    applySearch(kw);
+  }, kw.length === 1 ? 600 : 300);
 });
 function applySearch(kw){
   var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};

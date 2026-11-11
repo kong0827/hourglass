@@ -206,7 +206,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .manager-drill-caret:hover{background:var(--surface-hover);color:var(--text);}
 .manager-drill-caret svg{transition:transform var(--dur-fast) var(--ease-out);}
 .manager-drill-caret.open svg{transform:rotate(90deg);}
-.manager-drill-indent{display:inline-block;flex:0 0 auto;}
+.manager-drill-name{display:flex;align-items:center;min-width:0;}
 .manager-drill-title{font-weight:600;color:var(--text);}
 .manager-drill-link{padding:0;border:0;background:transparent;font:inherit;font-weight:600;color:var(--text);cursor:pointer;text-align:left;}
 .manager-drill-link:hover{color:var(--primary);}

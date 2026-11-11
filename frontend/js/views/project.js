@@ -482,7 +482,7 @@ function caretPlaceholder(){
   return '<span class="manager-drill-caret" style="visibility:hidden" aria-hidden="true">' + icon("chevronRight", 12) + '</span>';
 }
 function drillName(level, inner){
-  return '<td class="drill-name"><span class="manager-drill-indent" style="width:' + (level * 20) + 'px"></span>' + inner + '</td>';
+  return '<td class="drill-name"><div class="manager-drill-name" style="padding-left:' + (level * 20) + 'px">' + inner + '</div></td>';
 }
 function emptyCols(n){
   var s = "";
@@ -491,7 +491,7 @@ function emptyCols(n){
 }
 function drillTaskRow(t){
   return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
-    + drillName(2, '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
+    + drillName(2, caretPlaceholder() + '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
     + '<td>' + esc(taskStatusName(t)) + '</td>'
     + '<td class="num">' + taskPct(t) + '%</td>'
     + emptyCols(4)
