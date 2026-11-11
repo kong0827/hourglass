@@ -163,7 +163,9 @@ public class AiConfigService {
             changed.add("总开关");
         }
         if (Boolean.TRUE.equals(req.getClearKey())) {
-            changed.add("API Key（已清空）");
+            if (u.getAiApiKey() != null && !u.getAiApiKey().isEmpty()) {
+                changed.add("API Key（已清空）");
+            }
         } else if (req.getApiKey() != null && !req.getApiKey().trim().isEmpty()) {
             changed.add("API Key（已更新）");
         }

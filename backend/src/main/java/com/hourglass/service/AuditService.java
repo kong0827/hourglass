@@ -246,6 +246,8 @@ public class AuditService {
             case "user_create": return "创建账号";
             case "user_update": return "修改账号";
             case "user_delete": return "删除账号";
+            case "user_disable": return "禁用账号";
+            case "user_enable": return "启用账号";
             case "password_reset": return "重置密码";
             default: return action;
         }

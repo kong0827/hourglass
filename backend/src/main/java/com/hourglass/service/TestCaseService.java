@@ -470,9 +470,12 @@ public class TestCaseService {
         out.put("created", created);
         out.put("failed", errors.size());
         out.put("errors", errors);
-        out.put("skipped", Math.max(0, dataRows - created - errors.size()));
-        auditService.recordCurrent(workspaceId, "test_case_import", "project", rid, null, true,
-                "导入测试用例：成功 " + created + " 条，失败 " + errors.size() + " 条", null);
+        int skipped = Math.max(0, dataRows - created - errors.size());
+        out.put("skipped", skipped);
+        /* 一条都没导入且存在错误时，审计结果记为失败，便于按结果筛选问题导入 */
+        auditService.recordCurrent(workspaceId, "test_case_import", "project", rid, null,
+                created > 0 || errors.isEmpty(), "导入测试用例：成功 " + created + " 条，失败 "
+                        + errors.size() + " 条，跳过 " + skipped + " 条", null);
         return out;
     }
 

@@ -313,7 +313,7 @@ public class InviteService {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(("hourglass-invite:" + code).getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder("invite:");
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 16; i++) {
                 sb.append(Character.forDigit((digest[i] >> 4) & 0xF, 16))
                         .append(Character.forDigit(digest[i] & 0xF, 16));
             }

@@ -92,7 +92,19 @@ class TestCaseCsvTest {
         assertTrue(String.valueOf(errors.get(0).get("message")).contains("P0/P1/P2/P3"));
         verify(cases, times(2)).insert(any(TestCase.class));
         verify(auditService).recordCurrent(eq(WS), eq("test_case_import"), eq("project"), eq(REQ),
-                isNull(), eq(true), contains("成功 2 条，失败 1 条"), isNull());
+                isNull(), eq(true), contains("成功 2 条，失败 1 条，跳过 1 条"), isNull());
+    }
+
+    @Test
+    void importWithNoSuccessfulRowAuditsFailure() {
+        String text = "标题,模块,优先级,前置条件,步骤\r\n"
+                + "坏优先级,,P9,,\r\n";
+        Map<String, Object> out = service.importCsv(USER, WS, REQ, text);
+        assertEquals(0, out.get("created"));
+        assertEquals(1, out.get("failed"));
+        verify(cases, never()).insert(any(TestCase.class));
+        verify(auditService).recordCurrent(eq(WS), eq("test_case_import"), eq("project"), eq(REQ),
+                isNull(), eq(false), contains("成功 0 条，失败 1 条，跳过 0 条"), isNull());
     }
 
     @Test
