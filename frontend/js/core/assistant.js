@@ -321,7 +321,9 @@ function handleResponse(res){
     history.push({ role: "assistant", content: answer });
     trimHistory();
   }
-  appendBot(answer, links);
+  var bot = appendBot(answer, links);
+  /* 查询结果只渲染、不写进 history：标题不能随下一轮对话发给模型 */
+  if(res.intent === "query" && res.tasks && res.tasks.length) appendTaskList(bot, res.tasks);
   if(question && answer.indexOf(question) === -1){
     var q = document.createElement("div");
     q.className = "ai-msg note";
@@ -366,6 +368,26 @@ function appendBot(text, links){
   if(links && links.length) appendLinkChips(el, links);
   scrollBottom();
   return el;
+}
+
+function appendTaskList(container, tasks){
+  var wrap = document.createElement("div");
+  wrap.className = "ai-results";
+  tasks.forEach(function(t){
+    if(!t || !isSafeHref(t.href)) return;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "ai-result";
+    b.setAttribute("data-ai-href", t.href);
+    var meta = [t.projectName, t.columnName, t.dueDate ? ("截止 " + t.dueDate) : ""].filter(Boolean).join(" · ");
+    b.innerHTML = '<span class="ai-result-title">' + (t.blocked ? '<em class="ai-result-flag">阻塞</em>' : "") + esc(t.title || "") + '</span>'
+      + (meta ? '<span class="ai-result-meta">' + esc(meta) + '</span>' : "");
+    wrap.appendChild(b);
+  });
+  if(!wrap.childNodes.length) return;
+  var links = container.querySelector(".ai-links");
+  container.insertBefore(wrap, links || null);
+  scrollBottom();
 }
 
 function appendNote(text){
@@ -499,6 +521,7 @@ function normalizeDraft(d){
     dueDate: d.dueDate || "",
     severity: d.severity || "",
     boardColumn: d.boardColumn || "backlog",
+    fromDemand: !!d.fromDemand,
     itemKind: ITEM_KINDS.indexOf(d.itemKind) >= 0 ? d.itemKind : "新功能",
     source: d.source || "",
     expectDate: d.expectDate || "",
@@ -524,11 +547,13 @@ function normalizeDraft(d){
   };
 }
 
-/* 回传给下一轮对话的上一版草稿：只带服务端 DTO 认识的字段；需求/工作项标题不回传，避免进提示词 */
+/* 回传给下一轮对话的上一版草稿：只带服务端 DTO 认识的字段；需求/工作项标题不回传，避免进提示词。
+   拆分草稿的标题默认取自需求标题，同样不回传，只带需求 ID 让服务端重新解析 */
 function copyDraft(){
+  var ownTitle = (draft.action === "create_task" && !draft.fromDemand) || draft.action === "create_demand";
   return {
     action: draft.action,
-    title: draft.action === "create_task" || draft.action === "create_demand" ? (draft.title || "") : "",
+    title: ownTitle ? (draft.title || "") : "",
     description: draft.description || "",
     itemType: draft.itemType || "task",
     reqId: draft.reqId || "",
@@ -536,7 +561,9 @@ function copyDraft(){
     startDate: draft.startDate || null,
     dueDate: draft.dueDate || null,
     severity: draft.severity || "",
-    boardColumn: draft.boardColumn || "backlog"
+    boardColumn: draft.boardColumn || "backlog",
+    fromDemand: !!draft.fromDemand,
+    demandId: draft.fromDemand ? (draft.demandId || "") : ""
   };
 }
 
@@ -592,11 +619,24 @@ function descHTML(){
 }
 
 function createTaskBody(){
-  return '<label class="ai-field"><span>标题</span>' +
+  var head = "";
+  if(draft.fromDemand){
+    if(!draft.demandId){
+      var cands = optionsHTML(draft.demandCandidates, "", "请选择需求");
+      return '<label class="ai-field"><span>匹配到多条需求，选一条来拆分</span><select data-ai-demand>' + cands.html + '</select></label>';
+    }
+    head = '<div class="ai-target">' +
+        '<div class="ai-target-meta">拆分自需求' + (draft.demandStatusName ? " · " + esc(draft.demandStatusName) : "") + '</div>' +
+        '<div class="ai-target-title">' + esc(draft.demandTitle || "需求") + '</div>' +
+      '</div>';
+  }
+  return head +
+    '<label class="ai-field"><span>标题</span>' +
       '<input type="text" maxlength="60" data-ai-title value="' + esc(draft.title) + '" placeholder="给工作项起个名字" />' +
     '</label>' +
     '<div class="ai-field-row">' +
-      '<label class="ai-field"><span>所属项目</span><select data-ai-req>' + projectOptions() + '</select></label>' +
+      /* 拆分出的工作项只能落在需求所在项目，项目不可改选 */
+      '<label class="ai-field"><span>所属项目</span><select data-ai-req' + (draft.fromDemand ? " disabled" : "") + '>' + projectOptions() + '</select></label>' +
       (draft.itemType === "bug"
         ? '<label class="ai-field"><span>严重度</span><select data-ai-sev>' + severityOptions() + '</select></label>'
         : "") +
@@ -605,6 +645,7 @@ function createTaskBody(){
       chip(TYPE_LABEL[draft.itemType] || "任务") +
       chip(draft.priority ? (PRIO_LABEL[draft.priority] || draft.priority) : "") +
       chip(dateRangeText()) +
+      chip(draft.fromDemand && draft.versionName ? "继承版本 " + draft.versionName : "") +
     '</div>' + descHTML();
 }
 
@@ -648,7 +689,8 @@ function demandActionBody(){
   if(!acts.found) draft.demandAction = "";
   html += '<label class="ai-field"><span>流转动作</span><select data-ai-action>' + acts.html + '</select></label>';
   if(draft.demandAction === "plan" || draft.demandAction === "replan"){
-    var keep = draft.versionName ? "保持当前：" + draft.versionName : "不指定版本";
+    /* 当前版本已预选时不再额外放「保持当前」，否则同一版本会出现两次；当前版本已发布时才保留占位 */
+    var keep = draft.versionId ? null : (draft.versionName ? "保持当前：" + draft.versionName : "不指定版本");
     var vers = optionsHTML(draft.versions, draft.versionId, keep);
     if(!vers.found) draft.versionId = "";
     html += '<label class="ai-field"><span>目标版本</span><select data-ai-version>' + vers.html + '</select></label>';
@@ -760,6 +802,7 @@ function onDraftChange(e){
    可执行动作用与服务端相同的口径预览；确认时仍由服务端按最新状态与权限复核 */
 function pickDemand(id){
   if(!id) return;
+  if(draft.action === "create_task"){ pickSplitDemand(id); return; }
   var cand = draft.demandCandidates.filter(function(c){ return c.value === id; })[0];
   API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
     if(!draft || draft.action !== "demand_action") return;
@@ -773,10 +816,44 @@ function pickDemand(id){
     draft.projectName = "";
     draft.allowedActions = acts.map(function(a){ return { value: a, label: ACTION_NAME[a] }; });
     if(acts.indexOf(draft.demandAction) < 0) draft.demandAction = "";
-    /* 候选路径下没有服务端预取的版本列表：排期时沿用当前版本，确认时由服务端校验 */
+    /* 版本列表随后补取；取到之前排期沿用当前版本，确认时由服务端校验 */
     draft.versions = [];
     draft.versionId = "";
     draft.versionName = d.versionName || "";
+    missing = (missing || []).filter(function(m){ return m.field !== "demandId"; });
+    renderDraft();
+    if(acts.indexOf("plan") >= 0 || acts.indexOf("replan") >= 0) loadDemandVersions(d);
+  }).catch(function(ex){
+    appendError((ex && ex.message) || "需求不存在或无权查看");
+  });
+}
+
+/* 候选路径补取版本，口径与需求池排期弹窗一致：只列未发布版本；确认时服务端仍会复核 */
+function loadDemandVersions(d){
+  API.get("/api/versions", { reqId: d.reqId }).then(function(list){
+    if(!draft || draft.demandId !== d.id) return;
+    readDraftInputs();
+    draft.versions = (list || []).filter(function(v){ return v.status !== "released" && !v.releasedAt; })
+      .map(function(v){ return { value: v.id, label: v.name }; });
+    var cur = draft.versions.some(function(v){ return v.value === d.versionId; });
+    if(cur && !draft.versionId) draft.versionId = d.versionId;
+    renderDraft();
+  }).catch(function(){ /* 版本取不到时仍可「保持当前」确认 */ });
+}
+
+/* 拆分候选：候选已由服务端按「可写且未取消」过滤；这里只补展示与默认值，确认时服务端再按最新状态复核 */
+function pickSplitDemand(id){
+  readDraftInputs();
+  API.get("/api/demands/" + encodeURIComponent(id)).then(function(d){
+    if(!draft || draft.action !== "create_task" || !draft.fromDemand) return;
+    draft.demandId = d.id;
+    draft.demandTitle = d.title || "";
+    draft.demandStatusName = STATUS_NAME[d.status] || d.status || "";
+    draft.reqId = d.reqId || "";
+    if(!String(draft.title || "").trim()) draft.title = String(d.title || "").slice(0, 60);
+    if(!draft.startDate && d.plannedStart) draft.startDate = d.plannedStart;
+    if(!draft.dueDate && (d.plannedEnd || d.expectDate)) draft.dueDate = d.plannedEnd || d.expectDate;
+    draft.versionName = d.status === "plan" && d.versionId ? (d.versionName || "") : "";
     missing = (missing || []).filter(function(m){ return m.field !== "demandId"; });
     renderDraft();
   }).catch(function(ex){
@@ -810,6 +887,7 @@ function pickTask(id){
 function draftNeeds(){
   var need = [];
   if(draft.action === "create_task" || draft.action === "create_demand"){
+    if(draft.fromDemand && !draft.demandId){ need.push("要拆分的需求"); return need; }
     if(!(draft.title || "").trim()) need.push(draft.action === "create_demand" ? "需求标题" : "标题");
     if(!draft.reqId) need.push("所属项目");
     if(draft.action === "create_task" && draft.itemType === "bug" && !draft.severity) need.push("严重度");
@@ -828,6 +906,7 @@ function readyHint(){
   if(draft.action === "create_demand") return "确认后提交到需求池「待评审」；评审、排期仍按项目权限进行。";
   if(draft.action === "demand_action") return "确认后按你的权限与需求最新状态执行，并写入需求操作记录。";
   if(draft.action === "move_task") return "确认后按看板流转规则移动（不会强制越过规则），并写入工作项操作记录。";
+  if(draft.fromDemand) return "确认后在需求所在项目创建到「待处理」并关联该需求；已排期需求的版本会自动继承。";
   return "确认后创建到「待处理」列；负责人、版本等可在工作项里继续补充。";
 }
 
@@ -856,6 +935,7 @@ function confirmPayload(){
     p.reqId = draft.reqId;
     p.title = String(draft.title || "").trim();
     if(draft.action === "create_task" && draft.itemType === "bug") p.severity = draft.severity;
+    if(draft.action === "create_task" && draft.fromDemand) p.demandId = draft.demandId;
     if(draft.action === "create_demand") p.itemKind = draft.itemKind;
   } else if(draft.action === "demand_action"){
     p.demandId = draft.demandId;
@@ -880,12 +960,14 @@ function confirmDraft(){
 
   var label = confirmLabel();
   var action = draft.action;
+  var splitFrom = action === "create_task" && draft.fromDemand ? draft.demandId : "";
   if(btn){ btn.disabled = true; btn.textContent = "执行中…"; }
 
   API.post("/api/ai/assistant/tasks/confirm", confirmPayload()).then(function(res){
     res = res || {};
     clearDraft();
     afterConfirm(action, res);
+    if(splitFrom) refreshDemands(splitFrom);
   }).catch(function(ex){
     if(btn){ btn.disabled = false; btn.textContent = label; }
     appendError((ex && ex.message) || "执行失败，请稍后重试");

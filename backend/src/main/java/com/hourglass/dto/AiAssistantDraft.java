@@ -31,6 +31,8 @@ public class AiAssistantDraft {
     private LocalDate dueDate;
     private String severity;
     private String boardColumn;
+    /** 从需求拆分：demandId 即关联需求，项目固定为需求所在项目，确认时复核可写与未取消 */
+    private boolean fromDemand;
 
     /* ---- create_demand ---- */
     private String itemKind;

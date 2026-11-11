@@ -9,10 +9,15 @@ import java.util.List;
 @Data
 public class AiAssistantResponse {
 
-    /** answer / create_task / create_demand / demand_action / move_task / clarify / navigate */
+    /** answer / query / create_task / create_demand / demand_action / move_task / clarify / navigate */
     private String intent;
     private String answer;
     private List<AiAssistantLink> links = new ArrayList<AiAssistantLink>();
+    /** intent=query 的结果：服务端按固定模板在当前空间、本人负责范围内查询 */
+    private String queryType;
+    private List<AiAssistantTaskItem> tasks = new ArrayList<AiAssistantTaskItem>();
+    private int total;
+    private boolean hasMore;
     private AiAssistantDraft draft;
     /** 服务端盘点的缺失字段，绝不采用模型自报的选项 */
     private List<AiAssistantMissing> missing = new ArrayList<AiAssistantMissing>();

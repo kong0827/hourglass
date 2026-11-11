@@ -23,10 +23,12 @@ import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskSaveRequest;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.ProjectVersionMapper;
+import com.hourglass.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -72,9 +74,63 @@ class AiAssistantServiceTest {
     private final WorkspaceMetaCache metaCache = mock(WorkspaceMetaCache.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final ProjectVersionMapper versionMapper = mock(ProjectVersionMapper.class);
+    private final UserMapper userMapper = mock(UserMapper.class);
     private final AiAssistantService service = new AiAssistantService(
             configService, client, requirementService, projectAccess, taskService, new AssistantFaqService(),
-            demandService, taskWorkflow, taskQuery, metaCache, releasePermission, versionMapper);
+            demandService, taskWorkflow, taskQuery, metaCache, releasePermission, versionMapper, userMapper);
+
+    // ==================== 固定模板只读查询 ====================
+
+    @Test
+    void queryRoutingIsStrictAboutOwnWorkOnly() {
+        assertEquals("overdue", AiAssistantService.queryTypeOf("我有哪些逾期的任务？"));
+        assertEquals("today", AiAssistantService.queryTypeOf("今天有什么到期的工作项"));
+        assertEquals("soon", AiAssistantService.queryTypeOf("三天内要到期的有哪些"));
+        assertEquals("blocked", AiAssistantService.queryTypeOf("我有被阻塞的任务吗"));
+        assertEquals("open", AiAssistantService.queryTypeOf("我手上还有哪些没完成的活"));
+        assertNull(AiAssistantService.queryTypeOf("逾期任务怎么设置提醒？"), "咨询类交给 FAQ");
+        assertNull(AiAssistantService.queryTypeOf("团队里有哪些逾期的任务"), "只查本人负责的");
+        assertNull(AiAssistantService.queryTypeOf("有哪些逾期的需求"), "需求不在模板范围");
+        assertNull(AiAssistantService.queryTypeOf("把逾期的任务移到进行中"), "写动作不走查询");
+        assertNull(AiAssistantService.queryTypeOf("帮我建一个本周五截止的任务"));
+    }
+
+    @Test
+    void overdueQueryIsOwnScopedAndKeepsTitlesOutOfAnswer() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        allow("P9", false, false);
+        AppUser me = new AppUser();
+        me.setDisplayName("张伟");
+        when(userMapper.selectById(USER)).thenReturn(me);
+        Task mine = task("K1", WS, "doing");
+        mine.setOwnerUserId(USER);
+        mine.setDueDate(LocalDate.of(2026, 11, 1));
+        Task legacy = task("K2", WS, "backlog");
+        Task sameName = task("K3", WS, "doing");
+        sameName.setOwnerUserId("U2");
+        Task hidden = task("K4", WS, "doing");
+        hidden.setReqId("P9");
+        TaskListResponse list = new TaskListResponse();
+        list.getItems().addAll(Arrays.asList(mine, legacy, sameName, hidden));
+        ArgumentCaptor<BoardQuery> bq = ArgumentCaptor.forClass(BoardQuery.class);
+        when(taskQuery.list(eq(WS), eq(USER), bq.capture(), eq("due"), anyInt(), anyInt(), eq(false))).thenReturn(list);
+
+        AiAssistantResponse res = service.chat(USER, WS, WS_NAME, request("我有哪些逾期的任务？"));
+
+        verifyNoInteractions(client);
+        assertEquals("query", res.getIntent());
+        assertEquals("over", bq.getValue().getDue());
+        assertEquals(Arrays.asList("张伟"), bq.getValue().getOwners());
+        assertEquals(2, res.getTotal(), "同名他人与隐藏项目里的工作项都不算");
+        assertEquals("K1", res.getTasks().get(0).getId());
+        assertEquals("项目甲", res.getTasks().get(0).getProjectName());
+        assertEquals("2026-11-01", res.getTasks().get(0).getDueDate());
+        assertEquals("#/board?task=K1", res.getTasks().get(0).getHref());
+        assertTrue(res.getAnswer().contains("2 条"));
+        assertFalse(res.getAnswer().contains("登录页"), "回答会回灌给模型，不能带工作项标题");
+    }
 
     @Test
     void bootstrapOnlyReturnsWritableVisibleProjects() {
@@ -92,7 +148,10 @@ class AiAssistantServiceTest {
         assertTrue(view.isCanCreate());
         assertEquals(1, view.getProjects().size());
         assertEquals("P1", view.getProjects().get(0).getId());
-        assertEquals(3, view.getSuggestions().size());
+        assertEquals(4, view.getSuggestions().size());
+        for (String s : view.getSuggestions().subList(0, 2)) {
+            assertNotNull(AiAssistantService.queryTypeOf(s), "示例查询必须命中固定模板：" + s);
+        }
     }
 
     @Test
@@ -444,6 +503,111 @@ class AiAssistantServiceTest {
         assertEquals("answer", chat.getIntent(), "只读成员没有任何可执行流转时只给说明");
         assertNull(chat.getRequestId(), "不下发可确认的草稿凭据");
         assertTrue(chat.getAnswer().contains("待评审"));
+        assertFalse(chat.getAnswer().contains("对账"), "回答会回灌给模型，不能带服务端解析出的需求标题");
+    }
+
+    // ==================== 从需求拆分工作项 ====================
+
+    @Test
+    void splitFromDemandForcesDemandProjectAndInheritsFields() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲"), project("P2", "项目乙")));
+        allow("P1", true, true);
+        allow("P2", true, true);
+        Demand target = demand("D1", "P1", "pass", 1L);
+        target.setTitle("对账明细导出");
+        target.setCategoryId("C1");
+        target.setPlannedStart(LocalDate.of(2026, 11, 12));
+        target.setPlannedEnd(LocalDate.of(2026, 11, 20));
+        searchReturns(target);
+        when(demandService.getVisible(WS, USER, "D1")).thenReturn(target);
+        modelSays("{\"intent\":\"create_task\",\"draft\":{\"demandQuery\":\"对账\",\"reqId\":\"P2\"}}");
+
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把对账需求拆一个开发任务"));
+        assertEquals("create_task", chat.getIntent());
+        assertTrue(chat.getDraft().isFromDemand());
+        assertEquals("D1", chat.getDraft().getDemandId());
+        assertEquals("P1", chat.getDraft().getReqId(), "项目固定为需求所在项目，模型给的 P2 不生效");
+        assertEquals("对账明细导出", chat.getDraft().getTitle(), "没给标题时用需求标题");
+        assertEquals(LocalDate.of(2026, 11, 20), chat.getDraft().getDueDate());
+
+        AiAssistantConfirmRequest forced = confirmOf(chat.getRequestId());
+        forced.setReqId("P2");
+        assertEquals(400, assertThrows(AppException.class, () -> service.confirm(USER, WS, forced)).getCode());
+
+        Task created = task("K1", WS, "backlog");
+        when(taskService.create(eq(USER), eq(WS), any(TaskSaveRequest.class))).thenReturn(created);
+        AiAssistantConfirmResponse out = service.confirm(USER, WS, confirmOf(chat.getRequestId()));
+        assertEquals("K1", out.getTaskId());
+        ArgumentCaptor<TaskSaveRequest> save = ArgumentCaptor.forClass(TaskSaveRequest.class);
+        verify(taskService).create(eq(USER), eq(WS), save.capture());
+        assertEquals("D1", save.getValue().getDemandId());
+        assertEquals("P1", save.getValue().getReqId());
+        assertEquals("C1", save.getValue().getCategoryId());
+        assertEquals(LocalDate.of(2026, 11, 12), save.getValue().getStartDate());
+        assertEquals("backlog", save.getValue().getBoardColumn());
+    }
+
+    @Test
+    void demandCanceledAfterDraftCannotBeSplit() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        Demand target = demand("D1", "P1", "review", 1L);
+        searchReturns(target);
+        when(demandService.getVisible(WS, USER, "D1")).thenReturn(target);
+        modelSays("{\"intent\":\"create_task\",\"draft\":{\"demandQuery\":\"对账\",\"title\":\"导出接口\"}}");
+
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把对账需求拆一个任务"));
+        assertEquals("D1", chat.getDraft().getDemandId());
+
+        target.setStatus("canceled");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.confirm(USER, WS, confirmOf(chat.getRequestId()))).getCode());
+        verify(taskService, never()).create(anyString(), anyString(), any(TaskSaveRequest.class));
+    }
+
+    @Test
+    void readonlyOrCanceledDemandIsNotOfferedForSplit() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "可写项目"), project("P2", "只读项目")));
+        allow("P1", true, true);
+        allow("P2", true, false);
+        Demand readonly = demand("D1", "P2", "pass", 1L);
+        readonly.setTitle("只读项目里的对账");
+        Demand canceled = demand("D2", "P1", "canceled", 1L);
+        searchReturns(readonly, canceled);
+        modelSays("{\"intent\":\"create_task\",\"draft\":{\"demandQuery\":\"对账\"}}");
+
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把对账需求拆一个任务"));
+
+        assertEquals("answer", chat.getIntent());
+        assertNull(chat.getRequestId(), "没有可拆分的需求时不下发草稿凭据");
+        assertFalse(chat.getAnswer().contains("对账"));
+    }
+
+    @Test
+    void multipleSplittableDemandsAskUserToPick() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        searchReturns(demand("D1", "P1", "review", 1L), demand("D2", "P1", "plan", 1L));
+        modelSays("{\"intent\":\"create_task\",\"draft\":{\"demandQuery\":\"需求\"}}");
+
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把这个需求拆一个任务"));
+
+        assertEquals("clarify", chat.getIntent());
+        assertNull(chat.getDraft().getDemandId());
+        assertNull(chat.getDraft().getReqId(), "需求未定时项目也不预选");
+        assertEquals("demandId", chat.getMissing().get(0).getField());
+        assertEquals(Arrays.asList("D1", "D2"), values(chat.getDraft().getDemandCandidates()));
+
+        AiAssistantConfirmRequest pick = confirmOf(chat.getRequestId());
+        pick.setDemandId("D9");
+        pick.setTitle("导出接口");
+        when(demandService.getVisible(WS, USER, "D9")).thenThrow(AppException.notFound("需求不存在"));
+        assertEquals(404, assertThrows(AppException.class, () -> service.confirm(USER, WS, pick)).getCode());
+        verify(taskService, never()).create(anyString(), anyString(), any(TaskSaveRequest.class));
     }
 
     @Test
@@ -538,6 +702,29 @@ class AiAssistantServiceTest {
         verify(taskWorkflow).move(eq(USER), eq(WS), eq("K1"), move.capture());
         assertEquals("doing", move.getValue().getColumn());
         assertEquals(Boolean.FALSE, move.getValue().getForce(), "助手永不强制越过流转规则");
+    }
+
+    @Test
+    void moveMessageReportsAutoTimerSideEffects() {
+        member(USER);
+        when(requirementService.list(WS, USER)).thenReturn(Arrays.asList(project("P1", "项目甲")));
+        allow("P1", true, true);
+        Task t = task("K1", WS, "backlog");
+        TaskListResponse list = new TaskListResponse();
+        list.getItems().add(t);
+        when(taskQuery.list(eq(WS), eq(USER), any(BoardQuery.class), anyString(), anyInt(), anyInt(), anyBoolean()))
+                .thenReturn(list);
+        modelSays("{\"intent\":\"move_task\",\"draft\":{\"taskQuery\":\"登录页\",\"targetColumn\":\"doing\"}}");
+        AiAssistantResponse chat = service.chat(USER, WS, WS_NAME, request("把登录页任务移到进行中"));
+
+        Map<String, Object> moved = new HashMap<String, Object>();
+        moved.put("task", t);
+        moved.put("to", "doing");
+        moved.put("autoTimerStarted", Boolean.TRUE);
+        when(taskWorkflow.move(eq(USER), eq(WS), eq("K1"), any(TaskMoveRequest.class))).thenReturn(moved);
+
+        AiAssistantConfirmResponse out = service.confirm(USER, WS, confirmOf(chat.getRequestId()));
+        assertTrue(out.getMessage().contains("已开始计时"), "页面拖动会提示自动计时，助手也要告知");
     }
 
     @Test

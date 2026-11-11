@@ -18,6 +18,7 @@ import com.hourglass.dto.AiAssistantOption;
 import com.hourglass.dto.AiAssistantProject;
 import com.hourglass.dto.AiAssistantRequest;
 import com.hourglass.dto.AiAssistantResponse;
+import com.hourglass.dto.AiAssistantTaskItem;
 import com.hourglass.dto.AiConfig;
 import com.hourglass.dto.AiConfigView;
 import com.hourglass.dto.AiUsage;
@@ -30,11 +31,13 @@ import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.dto.TaskMoveRequest;
 import com.hourglass.dto.TaskSaveRequest;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Demand;
 import com.hourglass.entity.ProjectVersion;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.ProjectVersionMapper;
+import com.hourglass.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -143,6 +146,7 @@ public class AiAssistantService {
     private final WorkspaceMetaCache metaCache;
     private final ReleasePermissionService releasePermission;
     private final ProjectVersionMapper versionMapper;
+    private final UserMapper userMapper;
     private final ObjectMapper om = new ObjectMapper();
 
     private final Map<String, DraftRecord> drafts = new ConcurrentHashMap<String, DraftRecord>();
@@ -154,7 +158,8 @@ public class AiAssistantService {
                               TaskCommandService taskService, AssistantFaqService faqService,
                               DemandService demandService, TaskWorkflowService taskWorkflow,
                               TaskQueryService taskQuery, WorkspaceMetaCache metaCache,
-                              ReleasePermissionService releasePermission, ProjectVersionMapper versionMapper) {
+                              ReleasePermissionService releasePermission, ProjectVersionMapper versionMapper,
+                              UserMapper userMapper) {
         this.configService = configService;
         this.client = client;
         this.requirementService = requirementService;
@@ -167,6 +172,7 @@ public class AiAssistantService {
         this.metaCache = metaCache;
         this.releasePermission = releasePermission;
         this.versionMapper = versionMapper;
+        this.userMapper = userMapper;
     }
 
     // ==================== 启动信息 ====================
@@ -197,9 +203,10 @@ public class AiAssistantService {
 
     private static List<String> suggestions(boolean canCreate) {
         List<String> list = new ArrayList<String>();
+        list.add("我有哪些逾期的任务？");
+        list.add("今天有什么到期的工作项？");
+        list.add(canCreate ? "帮我建一个本周五截止的任务" : "项目权限怎么设置？");
         list.add("如何创建一个任务？");
-        list.add("项目权限怎么设置？");
-        list.add(canCreate ? "帮我建一个本周五截止的任务" : "怎么邀请成员？");
         return list;
     }
 
@@ -211,6 +218,12 @@ public class AiAssistantService {
         String question = lastUserQuestion(req);
         List<ProjectRef> projects = loadProjects(workspaceId, userId);
         String contextProject = contextProject(req.getContext(), projects);
+
+        /* 「我有哪些逾期的任务」这类固定模板查询：服务端确定性路由，不调模型、标题不进对话历史 */
+        String queryType = queryTypeOf(question);
+        if (queryType != null) {
+            return answerQuery(userId, workspaceId, queryType, projects);
+        }
 
         /* 高频产品问题不烧额度：FAQ 命中就直接返回人工维护的答案 */
         AssistantFaqService.Entry faq = looksLikeAction(question) ? null : faqService.match(question);
@@ -261,10 +274,21 @@ public class AiAssistantService {
             return res;
         }
 
+        /* 拆分请求没有命中任何可拆的需求：不下发空卡片；不区分「不存在 / 只读 / 已取消」，避免反推 */
+        if ("create_task".equals(intent) && draft.isFromDemand() && draft.getDemandId() == null
+                && draft.getDemandCandidates().isEmpty()) {
+            res.setIntent("answer");
+            res.setAnswer("没有找到你可以拆分的需求：需求要在你可写的项目里，且未被取消。换个需求标题关键词再试一次，或到需求池打开需求后点「拆分为工作项」。");
+            res.getLinks().clear();
+            res.getLinks().add(new AiAssistantLink(LINKS.get("#/demands"), "#/demands"));
+            return res;
+        }
+
         /* 需求已解析但当前用户在该状态下没有任何可执行流转：直接说明，不下发空动作卡片 */
         if ("demand_action".equals(intent) && draft.getDemandId() != null && draft.getAllowedActions().isEmpty()) {
             res.setIntent("answer");
-            res.setAnswer("需求「" + nz(draft.getDemandTitle()) + "」当前是「" + nz(draft.getDemandStatusName())
+            /* 回答会进入对话历史再发给模型，只能用状态名，不能带服务端解析出的需求标题 */
+            res.setAnswer("找到的这条需求当前是「" + nz(draft.getDemandStatusName())
                     + "」，你在该状态下没有可执行的流转（可能只有查看权限，或状态已到终态）。可以到需求池查看详情。");
             res.getLinks().add(new AiAssistantLink(LINKS.get("#/demands"), "#/demands"));
             return res;
@@ -274,7 +298,7 @@ public class AiAssistantService {
         if ("demand_action".equals(intent) && draft.getDemandId() != null && draft.getDemandAction() == null) {
             String proposed = normalizeDemandAction(firstText(root.get("draft"), "demandAction", root));
             if (proposed != null) {
-                res.setAnswer("需求「" + nz(draft.getDemandTitle()) + "」当前是「" + nz(draft.getDemandStatusName())
+                res.setAnswer("这条需求当前是「" + nz(draft.getDemandStatusName())
                         + "」，你不能执行「" + demandActionName(proposed) + "」：评审类流转需要项目写权限，"
                         + "排期、撤排、取消、恢复需要空间主、管理员或项目负责人。可以改选下面允许的动作。");
             }
@@ -309,7 +333,7 @@ public class AiAssistantService {
     private AiAssistantDraft buildDraft(String intent, JsonNode root, String workspaceId, String userId,
                                         List<ProjectRef> projects, String contextProject, AiAssistantContext ctx) {
         if ("create_task".equals(intent) || "clarify".equals(intent)) {
-            return taskDraft(root.get("draft"), projects, contextProject);
+            return taskDraft(root.get("draft"), workspaceId, userId, projects, contextProject);
         }
         if ("create_demand".equals(intent)) {
             return createDemandDraft(root.get("draft"), projects, contextProject);
@@ -376,7 +400,28 @@ public class AiAssistantService {
     private AiAssistantConfirmResponse confirmCreateTask(String userId, String workspaceId,
                                                          AiAssistantConfirmRequest req, AiAssistantDraft draft) {
         List<ProjectRef> projects = loadProjects(workspaceId, userId);
-        ProjectRef project = resolveWritableProject(projects, workspaceId, userId, req.getReqId(), draft.getReqId());
+        /* 从需求拆分：需求按可见范围重新加载，项目强制为需求所在项目，口径与需求详情「拆分为工作项」一致 */
+        Demand demand = null;
+        if (draft.isFromDemand()) {
+            String demandId = pick(req.getDemandId(), draft.getDemandId());
+            if (demandId == null) {
+                throw AppException.badRequest("请先选择要拆分的需求");
+            }
+            demand = loadVisibleDemand(workspaceId, userId, demandId);
+            if (demand == null) {
+                throw AppException.notFound("需求不存在或你没有访问权限");
+            }
+            if ("canceled".equals(demand.getStatus())) {
+                throw AppException.badRequest("已取消的需求不能新拆工作项");
+            }
+            String requested = Texts.trimToNull(req.getReqId());
+            if (requested != null && !requested.equals(demand.getReqId())) {
+                throw AppException.badRequest("拆分出的工作项必须属于需求所在项目");
+            }
+        }
+        ProjectRef project = demand != null
+                ? resolveWritableProject(projects, workspaceId, userId, demand.getReqId(), null)
+                : resolveWritableProject(projects, workspaceId, userId, req.getReqId(), draft.getReqId());
 
         String title = pick(req.getTitle(), draft.getTitle());
         if (title == null) {
@@ -401,6 +446,20 @@ public class AiAssistantService {
         save.setStartDate(draft.getStartDate());
         save.setDueDate(draft.getDueDate());
         save.setSeverity("bug".equals(draft.getItemType()) ? severity : null);
+        if (demand != null) {
+            /* 已排期需求的版本由 TaskCommandService 按需求自动继承；模块与日期在这里补齐 */
+            save.setDemandId(demand.getId());
+            save.setCategoryId(demand.getCategoryId());
+            if (save.getStartDate() == null) {
+                save.setStartDate(demand.getPlannedStart());
+            }
+            if (save.getDueDate() == null) {
+                save.setDueDate(demand.getPlannedEnd() != null ? demand.getPlannedEnd() : demand.getExpectDate());
+            }
+            if (save.getStartDate() != null && save.getDueDate() != null && save.getDueDate().isBefore(save.getStartDate())) {
+                save.setStartDate(null);
+            }
+        }
         /* 助手只创建到待处理列；之后由用户自己流转，避免越权推进别人负责的流程 */
         save.setBoardColumn("backlog");
         save.setProgress(0);
@@ -412,7 +471,7 @@ public class AiAssistantService {
         out.setTitle(task.getTitle());
         out.setHref("#/board?task=" + task.getId());
         out.setStatusName(columnName(workspaceId, "backlog"));
-        out.setMessage("工作项已创建到「" + out.getStatusName() + "」。");
+        out.setMessage((demand != null ? "已从需求拆出工作项，创建到「" : "工作项已创建到「") + out.getStatusName() + "」。");
         return out;
     }
 
@@ -561,7 +620,16 @@ public class AiAssistantService {
         out.setTitle(task == null ? null : task.getTitle());
         out.setHref("#/board?task=" + taskId);
         out.setStatusName(columnName(workspaceId, to));
-        out.setMessage("工作项已移动到「" + out.getStatusName() + "」。");
+        StringBuilder msg = new StringBuilder("工作项已移动到「").append(out.getStatusName()).append("」");
+        /* 移列会自动起停计时，与看板拖拽一样说出来，别让人以为计时没动 */
+        if (Boolean.TRUE.equals(result.get("autoTimerStarted"))) {
+            msg.append(" · 已开始计时");
+        }
+        Object resumed = result.get("autoTimerTask");
+        if (resumed != null) {
+            msg.append(" · 已接着开始「").append(resumed).append("」的计时");
+        }
+        out.setMessage(msg.append("。").toString());
         return out;
     }
 
@@ -597,7 +665,8 @@ public class AiAssistantService {
 
     // ==================== 草稿构建 ====================
 
-    private AiAssistantDraft taskDraft(JsonNode node, List<ProjectRef> projects, String contextProject) {
+    private AiAssistantDraft taskDraft(JsonNode node, String workspaceId, String userId,
+                                       List<ProjectRef> projects, String contextProject) {
         if (node == null || !node.isObject()) {
             return null;
         }
@@ -614,12 +683,78 @@ public class AiAssistantService {
         d.setReqId(resolveCreateProject(node, projects, contextProject));
         fillProjectName(d, projects);
 
+        String demandRef = Texts.trimToNull(text(node, "demandId"));
+        String demandQuery = Texts.trimToNull(text(node, "demandQuery"));
+        if (demandRef != null || demandQuery != null) {
+            linkDemand(d, workspaceId, userId, projects, demandRef, demandQuery);
+            return d;
+        }
+
         if (Texts.trimToNull(d.getTitle()) == null && Texts.trimToNull(d.getDescription()) == null
                 && Texts.trimToNull(text(node, "reqId")) == null && d.getDueDate() == null
                 && Texts.trimToNull(text(node, "itemType")) == null) {
             return null;
         }
         return d;
+    }
+
+    /**
+     * 拆分为工作项：只认当前用户可见、所在项目可写且未取消的需求（与需求详情按钮同口径）。
+     * 命中后项目固定为需求所在项目，日期按需求计划/期望补齐；多条候选交给用户选。
+     */
+    private void linkDemand(AiAssistantDraft d, String workspaceId, String userId, List<ProjectRef> projects,
+                            String demandRef, String demandQuery) {
+        d.setFromDemand(true);
+        Demand target = null;
+        if (demandRef != null) {
+            target = loadVisibleDemand(workspaceId, userId, demandRef);
+            if (target != null && !splittable(workspaceId, userId, target)) {
+                target = null;
+            }
+        }
+        if (target == null && demandQuery != null) {
+            List<Demand> hits = new ArrayList<Demand>();
+            for (Demand cand : searchDemands(workspaceId, userId, demandQuery)) {
+                if (splittable(workspaceId, userId, cand)) {
+                    hits.add(cand);
+                }
+            }
+            if (hits.size() == 1) {
+                target = hits.get(0);
+            } else {
+                for (Demand cand : hits) {
+                    d.getDemandCandidates().add(new AiAssistantOption(cand.getId(), Texts.cut(nz(cand.getTitle()), 60)));
+                }
+            }
+        }
+        if (target == null) {
+            d.setReqId(null);
+            d.setProjectName(null);
+            return;
+        }
+        d.setDemandId(target.getId());
+        d.setDemandTitle(target.getTitle());
+        d.setDemandStatus(target.getStatus());
+        d.setDemandStatusName(demandStatusName(target.getStatus()));
+        d.setReqId(target.getReqId());
+        d.setProjectName(null);
+        fillProjectName(d, projects);
+        if (Texts.trimToNull(d.getTitle()) == null) {
+            d.setTitle(Texts.cut(nz(target.getTitle()), 60));
+        }
+        if (d.getStartDate() == null) {
+            d.setStartDate(target.getPlannedStart());
+        }
+        if (d.getDueDate() == null) {
+            d.setDueDate(target.getPlannedEnd() != null ? target.getPlannedEnd() : target.getExpectDate());
+        }
+        if ("plan".equals(target.getStatus()) && target.getVersionId() != null) {
+            d.setVersionName(target.getVersionName());
+        }
+    }
+
+    private boolean splittable(String workspaceId, String userId, Demand demand) {
+        return !"canceled".equals(demand.getStatus()) && projectAccess.canWrite(workspaceId, userId, demand.getReqId());
     }
 
     private AiAssistantDraft createDemandDraft(JsonNode node, List<ProjectRef> projects, String contextProject) {
@@ -707,11 +842,16 @@ public class AiAssistantService {
             d.setActionName(demandActionName(d.getDemandAction()));
             d.setTargetStatusName(demandStatusName(targetStatusFor(d.getDemandAction())));
             fillProjectName(d, projects, target.getReqId());
-            if ("plan".equals(d.getDemandAction()) || "replan".equals(d.getDemandAction())) {
-                for (ProjectVersion v : schedulableVersions(workspaceId, target.getReqId())) {
+            /* 用户可能在卡片里把动作改成排期/调期，只要允许就预取版本；当前版本仍可排期时直接选中，避免下拉里出现两次 */
+            if (allowed.contains("plan") || allowed.contains("replan")) {
+                List<ProjectVersion> schedulable = schedulableVersions(workspaceId, target.getReqId());
+                for (ProjectVersion v : schedulable) {
                     d.getVersions().add(new AiAssistantOption(v.getId(), v.getName()));
                 }
                 ProjectVersion v = resolveVersion(workspaceId, target.getReqId(), versionId);
+                if (v == null && target.getVersionId() != null) {
+                    v = resolveVersion(workspaceId, target.getReqId(), target.getVersionId());
+                }
                 if (v != null) {
                     d.setVersionId(v.getId());
                     d.setVersionName(v.getName());
@@ -810,6 +950,12 @@ public class AiAssistantService {
     private List<AiAssistantMissing> missingFor(AiAssistantDraft d, List<ProjectRef> projects, String intent) {
         List<AiAssistantMissing> list = new ArrayList<AiAssistantMissing>();
         if ("create_task".equals(intent) || "create_demand".equals(intent)) {
+            if (d.isFromDemand() && Texts.trimToNull(d.getDemandId()) == null) {
+                AiAssistantMissing m = missing("demandId", "要拆分的需求");
+                m.getOptions().addAll(d.getDemandCandidates());
+                list.add(m);
+                return list;
+            }
             if (Texts.trimToNull(d.getReqId()) == null) {
                 AiAssistantMissing m = missing("reqId", "所属项目");
                 for (AiAssistantProject p : writableOptions(projects)) {
@@ -878,7 +1024,8 @@ public class AiAssistantService {
             return "缺陷需要填写严重度，选一个最接近的。";
         }
         if ("demandId".equals(f)) {
-            return "要操作哪条需求？可以说出需求标题。";
+            return "要拆分的需求".equals(m.getLabel())
+                    ? "匹配到多条需求，要从哪一条拆分？" : "要操作哪条需求？可以说出需求标题。";
         }
         if ("demandAction".equals(f)) {
             return "要对这条需求做什么流转？";
@@ -1104,7 +1251,9 @@ public class AiAssistantService {
                 + "2. 回答先给结论，再给 2–4 步操作；不超过 600 字，除非用户要求展开。\n"
                 + "3. 需要入口时只能从「允许的链接」里原样选择 href，不要自己拼链接。\n"
                 + "4. 你能发起四类操作，但都只整理草稿、绝不声称已执行：\n"
-                + "   - create_task 建工作项：提取 title/description/itemType/reqId/priority/startDate/dueDate/severity。\n"
+                + "   - create_task 建工作项：提取 title/description/itemType/reqId/priority/startDate/dueDate/severity。"
+                + "从某条需求拆分工作项时（如「把需求X拆一个开发任务」）在 create_task 里用 demandQuery 写需求标题关键词；"
+                + "说「这条需求」且给了当前需求ID时把它放进 demandId。项目由系统按需求所在项目确定。\n"
                 + "   - create_demand 提需求：提取 title/description/reqId/itemKind(新功能|体验优化|缺陷|其他)/source/priority/expectDate/acceptText。\n"
                 + "   - demand_action 需求状态流转：给出 demandAction(pass通过|rej拒绝|plan排期|replan调期|unpass撤回评审|unplan撤排|cancel取消|restore恢复|reopen重新打开)，"
                 + "用 demandQuery 写需求标题关键词由系统检索，不要编造 demandId；rej/replan/unplan/cancel/restore 需要 note 原因；plan/replan 可带 versionId/plannedStart/plannedEnd。\n"
@@ -1118,7 +1267,7 @@ public class AiAssistantService {
                 + "\"draft\":{\"title\":\"\",\"description\":\"\",\"reqId\":\"\",\"priority\":\"P0|P1|P2|P3\","
                 + "\"itemType\":\"task|story|bug|epic\",\"startDate\":\"yyyy-MM-dd\",\"dueDate\":\"yyyy-MM-dd\",\"severity\":\"blocker|critical|major|minor\","
                 + "\"itemKind\":\"\",\"source\":\"\",\"expectDate\":\"yyyy-MM-dd\",\"acceptText\":\"\","
-                + "\"demandQuery\":\"\",\"demandAction\":\"\",\"note\":\"\",\"versionId\":\"\",\"plannedStart\":\"\",\"plannedEnd\":\"\","
+                + "\"demandQuery\":\"\",\"demandId\":\"\",\"demandAction\":\"\",\"note\":\"\",\"versionId\":\"\",\"plannedStart\":\"\",\"plannedEnd\":\"\","
                 + "\"taskQuery\":\"\",\"targetColumn\":\"\",\"reason\":\"\"},\"question\":\"缺字段时只问一句\"}\n"
                 + "今天是 " + LocalDate.now() + "。日期的相对说法必须先换算成绝对日期再放进 draft。";
     }
@@ -1171,6 +1320,9 @@ public class AiAssistantService {
             sb.append("优先级：").append(nz(previous.getPriority())).append("\n");
             sb.append("开始：").append(previous.getStartDate() == null ? "" : previous.getStartDate()).append("\n");
             sb.append("截止：").append(previous.getDueDate() == null ? "" : previous.getDueDate()).append("\n");
+            if (previous.isFromDemand() && Texts.trimToNull(previous.getDemandId()) != null) {
+                sb.append("拆分自需求ID（继续补字段时原样放进 draft.demandId）：").append(previous.getDemandId()).append("\n");
+            }
         }
 
         sb.append("\n对话（按时间顺序，最后一条是用户本轮消息）：\n");
@@ -1224,6 +1376,140 @@ public class AiAssistantService {
         return out;
     }
 
+    // ==================== 固定模板只读查询 ====================
+
+    private static final int QUERY_SHOW = 20;
+    private static final Map<String, String> QUERY_LABELS = new LinkedHashMap<String, String>();
+
+    static {
+        QUERY_LABELS.put("overdue", "已逾期");
+        QUERY_LABELS.put("today", "今天到期");
+        QUERY_LABELS.put("soon", "今天起 3 天内到期");
+        QUERY_LABELS.put("blocked", "被阻塞");
+        QUERY_LABELS.put("open", "未完成");
+    }
+
+    /**
+     * 只认「问我自己的工作项」：问团队/别人/需求、问怎么操作、带写动作的都交回 FAQ 或模型。
+     * 规则宁紧勿松，漏判只是多走一次模型，误判会把咨询答成清单。
+     */
+    static String queryTypeOf(String q) {
+        String s = q == null ? "" : q.replaceAll("\\s+", "");
+        if (s.isEmpty() || s.length() > 40) {
+            return null;
+        }
+        if (s.matches(".*(怎么|如何|怎样|在哪|为什么|设置|提醒|通知|需求|团队|大家|所有人|别人|成员|谁|他们|项目里|完成了|已完成).*")) {
+            return null;
+        }
+        if (s.matches(".*(把|将|创建|新建|建一个|建个|提一个|提个|移到|挪到|移动到|拆|改成|改为|标记).*")) {
+            return null;
+        }
+        if (!s.matches(".*(哪些|什么|多少|几个|几条|几项|列出|列一下|查一下|查查|查询|看看|看下|看一下|有没有|有吗|清单|列表|吗|？|\\?).*")) {
+            return null;
+        }
+        boolean aboutWork = s.matches(".*(任务|工作项|待办|事情|活|缺陷|bug|Bug|BUG|到期|截止|逾期|超期|阻塞).*");
+        if (!aboutWork) {
+            return null;
+        }
+        if (s.matches(".*(逾期|超期|过期|拖期|延误).*")) {
+            return "overdue";
+        }
+        if (s.matches(".*(今天|今日).{0,6}(到期|截止|要交|要完成).*")) {
+            return "today";
+        }
+        if (s.matches(".*(三天|3天|这几天|近几天|最近|快要?|即将|马上).{0,6}(到期|截止).*")) {
+            return "soon";
+        }
+        if (s.matches(".*(阻塞|被卡|卡住|卡点).*")) {
+            return "blocked";
+        }
+        if (s.matches(".*(我|手上|手里|手头).{0,10}(未完成|没完成|没做完|待办|在办|任务|工作项|活).*")) {
+            return "open";
+        }
+        return null;
+    }
+
+    private AiAssistantResponse answerQuery(String userId, String workspaceId, String type, List<ProjectRef> projects) {
+        AppUser me = userMapper.selectById(userId);
+        String name = me == null ? null : Texts.trimToNull(me.getDisplayName());
+        List<Task> mine = new ArrayList<Task>();
+        boolean truncated = false;
+        if (name != null) {
+            BoardQuery bq = new BoardQuery();
+            bq.getOwners().add(name);
+            if ("overdue".equals(type)) bq.setDue("over");
+            if ("today".equals(type)) bq.setDue("today");
+            if ("soon".equals(type)) bq.setDue("soon");
+            if ("blocked".equals(type)) bq.setBlocked(true);
+            TaskListResponse page = taskQuery.list(workspaceId, userId, bq, "due", 0, 100, false);
+            truncated = page.isHasMore();
+            Set<String> ended = new HashSet<String>();
+            for (BoardColumn c : metaCache.columns(workspaceId)) {
+                if ("ended".equals(c.getProcessingRule())) ended.add(c.getId());
+            }
+            Map<String, Boolean> visible = new HashMap<String, Boolean>();
+            for (Task t : page.getItems()) {
+                /* 显示名可能重名：有账号绑定的只认本人；历史数据未绑定时按显示名兜底，与「我的工作」同口径 */
+                if (t.getOwnerUserId() != null && !userId.equals(t.getOwnerUserId())) continue;
+                if (!workspaceId.equals(t.getWorkspaceId()) || ended.contains(t.getBoardColumn())) continue;
+                String reqId = t.getReqId();
+                if (reqId != null) {
+                    Boolean ok = visible.get(reqId);
+                    if (ok == null) {
+                        ok = projectAccess.canView(workspaceId, userId, reqId);
+                        visible.put(reqId, ok);
+                    }
+                    if (!ok) continue;
+                }
+                mine.add(t);
+            }
+        }
+
+        AiAssistantResponse res = new AiAssistantResponse();
+        res.setIntent("query");
+        res.setQueryType(type);
+        res.setDegraded(true);
+        res.setTotal(mine.size());
+        res.setHasMore(truncated || mine.size() > QUERY_SHOW);
+        for (Task t : mine.subList(0, Math.min(QUERY_SHOW, mine.size()))) {
+            AiAssistantTaskItem item = new AiAssistantTaskItem();
+            item.setId(t.getId());
+            item.setTitle(Texts.cut(nz(t.getTitle()), 60));
+            item.setProjectName(projectNameOf(t, projects));
+            item.setColumnName(columnName(workspaceId, t.getBoardColumn()));
+            item.setDueDate(t.getDueDate() == null ? null : t.getDueDate().toString());
+            item.setBlocked(Boolean.TRUE.equals(t.getBlocked()));
+            item.setHref("#/board?task=" + t.getId());
+            res.getTasks().add(item);
+        }
+        /* 回答会进入对话历史再发给模型：只放数量，不放标题 */
+        String label = QUERY_LABELS.get(type);
+        String answer;
+        if (mine.isEmpty()) {
+            answer = "当前空间里你负责的工作项中，没有" + label + "的。";
+        } else {
+            answer = "当前空间里你负责的工作项中，" + label + "的" + (truncated ? "至少" : "") + "有 " + mine.size() + " 条"
+                    + (res.isHasMore() ? "，下面列出截止日期最早的 " + res.getTasks().size() + " 条" : "，按截止日期列在下面")
+                    + "，点开可直接进入详情。";
+        }
+        res.setAnswer(answer);
+        res.getLinks().add(new AiAssistantLink(LINKS.get("#/mine"), "#/mine"));
+        if ("overdue".equals(type) || "blocked".equals(type)) {
+            res.getLinks().add(new AiAssistantLink(LINKS.get("#/risks"), "#/risks"));
+        }
+        return res;
+    }
+
+    private static String projectNameOf(Task t, List<ProjectRef> projects) {
+        if (t.getReqId() == null) {
+            return null;
+        }
+        for (ProjectRef p : projects) {
+            if (p.id.equals(t.getReqId())) return p.name;
+        }
+        return Texts.trimToNull(t.getReqName()) == null ? null : Texts.cut(t.getReqName(), 40);
+    }
+
     private static boolean looksLikeAction(String q) {
         String s = q == null ? "" : q.replaceAll("\\s+", "");
         /* 问句优先：how/能不能/是否 等是咨询，不是要执行操作 */
@@ -1237,7 +1523,7 @@ public class AiAssistantService {
         if (s.matches(".*(创建|新建|建|加|提).{0,6}(一个|个|一条|条)?.{0,12}(任务|工作项|需求).*")) {
             return true;
         }
-        String verbs = "(通过|拒绝|驳回|排期|调期|改期|撤回评审|撤排|撤销排期|取消|恢复|重新打开|重开|移到|挪到|移动到|流转|提测|完成)";
+        String verbs = "(通过|拒绝|驳回|排期|调期|改期|撤回评审|撤排|撤销排期|取消|恢复|重新打开|重开|移到|挪到|移动到|流转|提测|完成|拆分|拆成|拆出|拆一个)";
         if (s.matches(".*(把|将).{0,30}" + verbs + ".*")) {
             return true;
         }
