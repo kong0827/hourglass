@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 import java.io.InputStream;
@@ -45,6 +46,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -204,6 +207,24 @@ class ProjectVersionServiceTest {
         verify(tasks, never()).touchDeliveryRevision(anyString(), anyString());
         assertEquals(Collections.singletonList("V2"), other.getVersionIds());
         assertEquals("V2", demand.getVersionId());
+    }
+
+    @Test
+    void createWritesVersionCreateLogForTheNewVersion() {
+        when(reqs.selectById("R1")).thenReturn(requirement("R1"));
+        when(versions.selectByNameForUpdate(WS, "R1", "V1.0", null)).thenReturn(Collections.emptyList());
+        when(versions.selectByIdForUpdate(eq(WS), anyString())).thenReturn(version("V1", "R1"));
+
+        ProjectVersionSaveRequest request = new ProjectVersionSaveRequest();
+        request.setReqId("R1");
+        request.setName("V1.0");
+
+        service.create(USER, WS, request);
+
+        ArgumentCaptor<ProjectVersion> created = ArgumentCaptor.forClass(ProjectVersion.class);
+        verify(versions).insert(created.capture());
+        verify(releaseService).log(eq(USER), eq(WS), anyString(), eq("version_create"),
+                isNull(), isNull(), same(created.getValue()));
     }
 
     @Test
