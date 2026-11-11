@@ -267,3 +267,10 @@ sudo systemctl restart hourglass
 - [ ] 用旧版页面「导出任务备份」的 JSON 走「导入任务备份」成功，条数一致（v4 含评论与回收站；需求文档/分支不在任务备份内）
 - [ ] `ls /opt/hourglass/backup` 有当天备份文件
 - [ ] `ss -tlnp` 确认 8080/3306 未对公网开放
+
+## 12. 支持与反馈
+
+- 邮箱：[1351882069@qq.com](mailto:1351882069@qq.com)
+- GitHub：[@kong0827](https://github.com/kong0827)
+- 项目仓库：[kong0827/hourglass](https://github.com/kong0827/hourglass)
+- 问题反馈与建议：[GitHub Issues](https://github.com/kong0827/hourglass/issues)

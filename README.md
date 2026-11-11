@@ -20,7 +20,7 @@
 
 ## 在线体验
 
-公开文档不再给出演示环境地址与游客口令。想上手可以：按 [`deploy/README.md`](deploy/README.md) 自行部署（所需时间取决于环境），用全新基线初始化数据库后登录创建第一个项目。需要试用托管演示环境的，联系维护者开通。
+公开文档不再给出演示环境地址与游客口令。想上手可以：按 [`deploy/README.md`](deploy/README.md) 自行部署（所需时间取决于环境），用全新基线初始化数据库后登录创建第一个项目。需要试用托管演示环境的，通过[联系与支持](#联系与支持)中的方式联系维护者开通。
 
 ---
 
@@ -177,7 +177,14 @@ java -jar backend/target/hourglass-server.jar
 主要贡献者：
 
 - [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责早期个人看板项目的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
-- kongxiangjin
+- [kongxiangjin](https://github.com/kong0827)（阿劲）— 联合维护者；邮箱 [1351882069@qq.com](mailto:1351882069@qq.com)
+
+## 联系与支持
+
+- 邮箱：[1351882069@qq.com](mailto:1351882069@qq.com)
+- GitHub：[@kong0827](https://github.com/kong0827)
+- 项目仓库：[kong0827/hourglass](https://github.com/kong0827/hourglass)
+- 问题反馈与建议：[GitHub Issues](https://github.com/kong0827/hourglass/issues)
 
 ## 许可
 
@@ -185,7 +192,7 @@ java -jar backend/target/hourglass-server.jar
 
 - **允许**：个人学习、研究、试验、兴趣项目等非商业目的的使用、修改与分发；慈善组织、教育机构、公共研究机构、公共安全/卫生/环境保护组织与政府机构的使用（无论资金来源）。
 - **禁止**：任何商业目的的使用——在生产经营中使用本软件、以收费方式提供本软件或基于它的服务、将其用于对外交付的项目。
-- **商业授权**：企业内网部署、对外交付、试点评估等商业场景，须先向版权持有人取得商业授权（联系方式待补充）。
+- **商业授权**：企业内网部署、对外交付、试点评估等商业场景，须先向版权持有人取得商业授权（邮箱 [1351882069@qq.com](mailto:1351882069@qq.com)，GitHub [@kong0827](https://github.com/kong0827)）。
 - 版权、历史沿革与贡献者许可说明见 [NOTICE](NOTICE)；「沙漏」「Hourglass」名称与 logo 等商标不在许可授予范围内。
 - `frontend/vendor/` 内嵌的第三方库（Univer、SheetJS、SunEditor、marked、DOMPurify、React、RxJS）与后端依赖各自沿用其原始开源许可证，清单见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 - 其中 **MySQL Connector/J 为 GPL-2.0 + Oracle FOSS Exception**，该例外很可能不适用于非开源许可的应用，**对外分发前须按清单说明处理**。

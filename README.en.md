@@ -16,7 +16,7 @@ Requirements, work items, effective hours and actual release records are connect
 
 ## Live Demo
 
-Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself using [`deploy/README.md`](deploy/README.md) (setup time depends on your environment), initialize the database from the single baseline script, then sign in and create your first project. Contact the maintainers for access to a hosted demo.
+Public docs no longer publish a demo URL or guest credentials. To try Hourglass: deploy it yourself using [`deploy/README.md`](deploy/README.md) (setup time depends on your environment), initialize the database from the single baseline script, then sign in and create your first project. Contact the maintainers via [Contact](#contact) for access to a hosted demo.
 
 ---
 
@@ -162,7 +162,14 @@ This project evolved from a personal kanban project started by [chc2](https://gi
 Key contributors:
 
 - [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; designed and implemented the original personal kanban project; continues to develop and expand Hourglass
-- kongxiangjin
+- [kongxiangjin](https://github.com/kong0827) (aka 阿劲) — co-maintainer; email [1351882069@qq.com](mailto:1351882069@qq.com)
+
+## Contact
+
+- Email: [1351882069@qq.com](mailto:1351882069@qq.com)
+- GitHub: [@kong0827](https://github.com/kong0827)
+- Repository: [kong0827/hourglass](https://github.com/kong0827/hourglass)
+- Questions and feedback: [GitHub Issues](https://github.com/kong0827/hourglass/issues)
 
 ## License
 
@@ -170,7 +177,7 @@ Key contributors:
 
 - **Permitted**: use, modification and distribution for noncommercial purposes — personal study, research, experimentation, hobby projects; and use by charitable organizations, educational institutions, public research organizations, public safety or health organizations, environmental protection organizations and government institutions, regardless of funding.
 - **Not permitted**: any commercial use — running the software in business operations, offering the software or services based on it for a fee, or using it in client delivery projects.
-- **Commercial licensing**: enterprise intranet deployments, client delivery and paid pilots require a separate commercial license from the copyright holders (contact details to be added).
+- **Commercial licensing**: enterprise intranet deployments, client delivery and paid pilots require a separate commercial license from the copyright holders (email [1351882069@qq.com](mailto:1351882069@qq.com), GitHub [@kong0827](https://github.com/kong0827)).
 - Copyright, project history and contributor terms: see [NOTICE](NOTICE). Trademarks (the "Hourglass" name and logo) are not licensed.
 - Licenses and copyrights of the bundled third-party frontend libraries (Univer, SheetJS, SunEditor, marked, DOMPurify, React, RxJS) and backend dependencies are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 - Note: **MySQL Connector/J is GPL-2.0 with the Oracle FOSS Exception**, which most likely does not cover an application under a non-open-source license. Resolve it as described in that file before redistributing any build artifact.

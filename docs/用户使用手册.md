@@ -949,3 +949,15 @@
 | [管理员指南](管理员指南.md) | 部署、账号管理、备份与升级 | 空间主 / 运维 |
 | [项目介绍](项目介绍.md) | 产品背景、信息模型与机制取舍 | 想了解设计边界的人 |
 
+---
+
+## 附录：联系与支持
+
+使用中遇到文档未覆盖的问题，可通过以下方式联系维护者：
+
+| 渠道 | 地址 |
+| --- | --- |
+| 邮箱 | [1351882069@qq.com](mailto:1351882069@qq.com) |
+| GitHub | [@kong0827](https://github.com/kong0827) |
+| 项目仓库 | [kong0827/hourglass](https://github.com/kong0827/hourglass) |
+| 问题反馈与建议 | [GitHub Issues](https://github.com/kong0827/hourglass/issues) |
