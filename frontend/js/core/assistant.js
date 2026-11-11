@@ -180,6 +180,8 @@ function openPanel(){
   els.fab.setAttribute("aria-expanded", "true");
   document.body.classList.add("ai-open");
   loadBootstrap();
+  /* 渲染库按需加载：开面板就预取，首条回答不必等两个脚本串行下载 */
+  ensureMarkdown();
   setTimeout(function(){
     try{ els.input.focus(); }catch(e){ /* noop */ }
   }, 30);
@@ -450,6 +452,8 @@ function appendLinkChips(container, links){
 }
 
 function renderMarkdown(body, text){
+  /* 先放纯文本：渲染库还没到时气泡不留空，到了再换成排版后的内容 */
+  if(!(window.marked && window.DOMPurify)) body.textContent = text;
   ensureMarkdown().then(function(ok){
     if(!ok){
       body.textContent = text;
