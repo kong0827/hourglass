@@ -8,6 +8,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,12 +24,14 @@ class TaskTrashServiceEpicCleanupTest {
     private final TaskCascade cascade = mock(TaskCascade.class);
     private final TimeLogService timeLog = mock(TimeLogService.class);
     private final TaskAuditLogger audit = mock(TaskAuditLogger.class);
+    private final AuditService systemAudit = mock(AuditService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final TaskTrashService service = new TaskTrashService(tasks, support, cascade, timeLog, audit,
             access, mock(com.hourglass.mapper.MailDeliveryMapper.class),
             mock(NotificationEventService.class), mock(TaskWatchService.class),
             mock(PlatformTransactionManager.class), scopeLock,
-            mock(com.hourglass.mapper.VersionTaskMapper.class));
+            mock(com.hourglass.mapper.VersionTaskMapper.class), systemAudit,
+            mock(com.hourglass.mapper.UserMapper.class));
 
     @Test
     void softDeletingEpicClearsChildrenEpicRefs() {
@@ -51,12 +56,15 @@ class TaskTrashServiceEpicCleanupTest {
         Task epic = new Task();
         epic.setId("K1");
         epic.setWorkspaceId("W1");
+        epic.setTitle("Epic");
         epic.setDeletedAt(java.time.LocalDateTime.now());
         when(support.requireDeleted("W1", "K1")).thenReturn(epic);
         when(scopeLock.lockTask("W1", "K1")).thenReturn(epic);
 
-        service.purge("W1", "K1");
+        service.purge("U1", "W1", "K1");
 
+        verify(systemAudit).record(eq("W1"), eq("U1"), eq("U1"), eq("task_purge"), eq("task"),
+                eq("K1"), eq("Epic"), eq(true), contains("未归属项目"), isNull());
         verify(cascade).purgeTasks("W1", Collections.singletonList("K1"));
     }
 }

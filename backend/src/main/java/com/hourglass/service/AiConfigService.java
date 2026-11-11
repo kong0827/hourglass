@@ -13,8 +13,11 @@ import com.hourglass.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 每个账号自己的 AI 配置（厂商 / 地址 / 模型 / Key）。
@@ -28,13 +31,16 @@ public class AiConfigService {
     private final UserMapper userMapper;
     private final AiCrypto crypto;
     private final AiClient aiClient;
+    /** 账号凭证变更：审计只记改了哪些项，不写 Key 明文或密文 */
+    private final AuditService auditService;
     @Value("${app.ai.allow-private-network:false}")
     private boolean allowPrivateNetwork;
 
-    public AiConfigService(UserMapper userMapper, AiCrypto crypto, AiClient aiClient) {
+    public AiConfigService(UserMapper userMapper, AiCrypto crypto, AiClient aiClient, AuditService auditService) {
         this.userMapper = userMapper;
         this.crypto = crypto;
         this.aiClient = aiClient;
+        this.auditService = auditService;
     }
 
     /**
@@ -140,6 +146,31 @@ public class AiConfigService {
 
         userMapper.updateAiConfig(userId, emptyToNull(provider), emptyToNull(baseUrl),
                 emptyToNull(model), cipher, enabled);
+
+        List<String> changed = new ArrayList<String>();
+        if (!Objects.equals(emptyToNull(u.getAiProvider()), emptyToNull(provider))) {
+            changed.add("服务商");
+        }
+        if (!Objects.equals(emptyToNull(AiProviders.baseUrlOr(u.getAiProvider(), u.getAiBaseUrl())),
+                emptyToNull(baseUrl))) {
+            changed.add("接口地址");
+        }
+        if (!Objects.equals(emptyToNull(AiProviders.modelOr(u.getAiProvider(), u.getAiModel())),
+                emptyToNull(model))) {
+            changed.add("模型");
+        }
+        if (Boolean.TRUE.equals(u.getAiEnabled()) != enabled) {
+            changed.add("总开关");
+        }
+        if (Boolean.TRUE.equals(req.getClearKey())) {
+            changed.add("API Key（已清空）");
+        } else if (req.getApiKey() != null && !req.getApiKey().trim().isEmpty()) {
+            changed.add("API Key（已更新）");
+        }
+        if (!changed.isEmpty()) {
+            auditService.recordCurrent(null, "ai_config_update", "user", userId, u.getUsername(), true,
+                    "修改 AI 配置：" + String.join("、", changed), null);
+        }
         return view(userId);
     }
 

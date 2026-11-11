@@ -90,6 +90,15 @@ public class TestCaseController {
         return ApiResult.ok(caseService.coverage(ws.getId(), userId, reqId));
     }
 
+    /** 缺陷 tab：反查执行流水记录过的缺陷任务 → 用例 */
+    @GetMapping("/api/test-cases/linked-bugs")
+    public ApiResult<List<com.hourglass.dto.CaseBugLink>> linkedBugs(@RequestParam(required = false) String reqId,
+                                                                    @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.linkedBugs(ws.getId(), userId, reqId));
+    }
+
     @PostMapping("/api/test-cases")
     public ApiResult<TestCase> create(@Valid @RequestBody TestCaseSaveRequest req,
                                       @RequestParam(required = false) String workspace) {

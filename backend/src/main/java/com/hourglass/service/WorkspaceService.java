@@ -249,6 +249,7 @@ public class WorkspaceService {
         workspaceMapper.insert(ws);
         addMemberInternal(ws.getId(), userId, "owner", ProjectAccessService.MODE_ALL);
         seedColumns(ws.getId());
+        activityService.logConfig(ws.getId(), userId, "创建共享空间「" + ws.getName() + "」");
         return workspaceMapper.selectById(ws.getId());
     }
 
@@ -284,6 +285,13 @@ public class WorkspaceService {
         /* 鉴权走缓存，但要把完整字段写回库，必须以库里的最新配置为底稿：
            缓存里的空间快照可能落后于最近一次推送结果/改名，直接写回会覆盖别人的修改 */
         Workspace ws = requireOwnerRaw(userId, workspaceId);
+        /* 变更摘要用：update 会原地改 ws，先留住旧值才能说清这次改了什么 */
+        String oldName = ws.getName();
+        String oldChannel = ws.getNotifyChannel();
+        String oldHook = ws.getNotifyWebhook();
+        Boolean oldEnabled = ws.getNotifyEnabled();
+        Boolean oldInApp = ws.getNotifyInAppEnabled();
+        boolean oldHadToken = Texts.trimToNull(ws.getNotifyToken()) != null;
         String name = Texts.trimToNull(req.getName());
         if (!"personal".equals(ws.getType()) && name != null) {
             ws.setName(Texts.cut(name, 20));
@@ -326,6 +334,29 @@ public class WorkspaceService {
             }
         }
         workspaceMapper.update(ws);
+        /* 活动流只记改了哪些项，不写推送地址/令牌本身（成员可见，避免泄露） */
+        List<String> changed = new java.util.ArrayList<String>();
+        if (!java.util.Objects.equals(oldName, ws.getName())) {
+            changed.add("名称");
+        }
+        if (!java.util.Objects.equals(oldChannel, ws.getNotifyChannel())) {
+            changed.add("通知渠道");
+        }
+        if (!java.util.Objects.equals(oldHook, ws.getNotifyWebhook())) {
+            changed.add("推送地址");
+        }
+        if (!java.util.Objects.equals(oldEnabled, ws.getNotifyEnabled())) {
+            changed.add("通知开关");
+        }
+        if (!java.util.Objects.equals(oldInApp, ws.getNotifyInAppEnabled())) {
+            changed.add("站内通知");
+        }
+        if (oldHadToken != (Texts.trimToNull(ws.getNotifyToken()) != null)) {
+            changed.add("推送令牌");
+        }
+        if (!changed.isEmpty()) {
+            activityService.logConfig(workspaceId, userId, "更新空间设置：" + String.join("、", changed));
+        }
         /* 名称/推送配置对成员可见，缓存里每个成员都存了一份空间快照 */
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evictWorkspace(workspaceId));
         return workspaceMapper.selectById(workspaceId);
@@ -401,6 +432,8 @@ public class WorkspaceService {
         addMemberInternal(workspaceId, u.getId(), "member", ProjectAccessService.MODE_ASSIGNED);
         /* 直接加人也遵循「默认不参与」：先落不可见种子，再由管理员分配 */
         projectMemberMapper.seedAssignedNone(workspaceId);
+        activityService.logConfig(workspaceId, operatorId, "添加成员「"
+                + (Texts.trimToNull(u.getDisplayName()) == null ? u.getUsername() : u.getDisplayName()) + "」");
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, u.getId()));
     }
 
@@ -426,6 +459,7 @@ public class WorkspaceService {
         addMemberInternal(workspaceId, userId, "member", ProjectAccessService.MODE_ASSIGNED);
         /* 新成员默认不参与任何项目：先补齐全部项目的 none，邀请上预分配的 write/read 由调用方覆盖 */
         projectMemberMapper.seedAssignedNone(workspaceId);
+        activityService.logConfig(workspaceId, userId, "通过邀请链接加入空间");
         /* 退出后再次通过邀请加入：清掉可能残留的旧视图，加入后立即可用 */
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, userId));
     }

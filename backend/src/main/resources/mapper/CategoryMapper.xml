@@ -41,6 +41,12 @@
     WHERE workspace_id = #{workspaceId} AND id = #{id}
   </update>
 
+  <select id="selectTaskIdsForCascade" resultType="string">
+    SELECT id FROM task
+    WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{categoryId}
+    ORDER BY id
+  </select>
+
   <update id="moveTasksToCategory">
     UPDATE task SET category_id = #{toId}, updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
     WHERE workspace_id = #{workspaceId} AND req_id = #{projectId} AND category_id = #{fromId}

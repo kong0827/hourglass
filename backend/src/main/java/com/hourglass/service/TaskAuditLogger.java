@@ -1,5 +1,6 @@
 package com.hourglass.service;
 
+import com.hourglass.common.DefectMeta;
 import com.hourglass.common.Texts;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
@@ -110,6 +111,34 @@ public class TaskAuditLogger {
         if (!Objects.equals(old.getReqId(), t.getReqId())) {
             parts.add("所属项目 " + reqName(workspaceId, old.getReqId()) + "→" + reqName(workspaceId, t.getReqId()));
         }
+        /* 类型/史诗/里程碑：单独修改时也必须产生差异，否则保存后时间线只显示「无字段变化」 */
+        if (!Objects.equals(old.getItemType(), t.getItemType())) {
+            parts.add("类型 " + itemTypeName(old.getItemType()) + "→" + itemTypeName(t.getItemType()));
+        }
+        if (!Objects.equals(old.getEpicId(), t.getEpicId())) {
+            parts.add(t.getEpicId() == null ? "解除史诗归属" : "挂到史诗");
+        }
+        if (!Objects.equals(Boolean.TRUE.equals(old.getIsMilestone()), Boolean.TRUE.equals(t.getIsMilestone()))) {
+            parts.add(Boolean.TRUE.equals(t.getIsMilestone()) ? "设为里程碑" : "取消里程碑");
+        }
+        /* 缺陷专属字段：类型不变时也可能单独调整 */
+        if (!Objects.equals(old.getSeverity(), t.getSeverity())) {
+            parts.add("严重程度 " + DefectMeta.severityLabel(old.getSeverity())
+                    + "→" + DefectMeta.severityLabel(t.getSeverity()));
+        }
+        if (!Objects.equals(old.getEnvironment(), t.getEnvironment())) {
+            parts.add("缺陷环境变更");
+        }
+        if (!Objects.equals(old.getReproduceSteps(), t.getReproduceSteps())) {
+            parts.add("复现步骤变更");
+        }
+        if (!Objects.equals(old.getFoundVersionId(), t.getFoundVersionId())) {
+            parts.add("发现版本变更");
+        }
+        if (!Objects.equals(old.getRegressionStatus(), t.getRegressionStatus())) {
+            parts.add("回归状态 " + regressionName(old.getRegressionStatus())
+                    + "→" + regressionName(t.getRegressionStatus()));
+        }
         if (!Objects.equals(old.getReqDocId(), t.getReqDocId())) {
             parts.add("关联文档变更");
         }
@@ -126,12 +155,19 @@ public class TaskAuditLogger {
         if (!Objects.equals(old.getRemindAt(), t.getRemindAt())) {
             parts.add("提醒时间 " + fmtTime(old.getRemindAt()) + "→" + fmtTime(t.getRemindAt()));
         }
+        if (!Objects.equals(old.getRemindTarget(), t.getRemindTarget())) {
+            parts.add("提醒对象变更");
+        }
         if (!Objects.equals(Boolean.TRUE.equals(old.getBlocked()), Boolean.TRUE.equals(t.getBlocked()))) {
             parts.add(Boolean.TRUE.equals(t.getBlocked())
                     ? ("标记为被阻塞" + (t.getBlockedReason() == null ? "" : "（" + Texts.cut(t.getBlockedReason(), 40) + "）"))
                     : "解除阻塞");
         } else if (Boolean.TRUE.equals(t.getBlocked()) && !Objects.equals(old.getBlockedReason(), t.getBlockedReason())) {
             parts.add("卡点原因变更");
+        }
+        /* 已阻塞状态下更换前置任务：原因没变时也必须留下差异 */
+        if (!Objects.equals(old.getBlockedByTaskId(), t.getBlockedByTaskId())) {
+            parts.add(t.getBlockedByTaskId() == null ? "解除前置任务" : "前置任务变更");
         }
         if (!Objects.equals(old.getOwnerUserId(), t.getOwnerUserId()) && t.getOwnerUserId() != null) {
             parts.add("绑定负责人账号");
@@ -187,6 +223,29 @@ public class TaskAuditLogger {
             return "每月";
         }
         return "不循环";
+    }
+
+    private String itemTypeName(String type) {
+        if ("epic".equals(type)) {
+            return "史诗";
+        }
+        if ("bug".equals(type)) {
+            return "缺陷";
+        }
+        return "任务";
+    }
+
+    private String regressionName(String status) {
+        if (DefectMeta.REGRESSION_PASSED.equals(status)) {
+            return "回归通过";
+        }
+        if (DefectMeta.REGRESSION_FAILED.equals(status)) {
+            return "回归失败";
+        }
+        if (DefectMeta.REGRESSION_PENDING.equals(status)) {
+            return "待回归";
+        }
+        return "未标记";
     }
 
     private String reqName(String workspaceId, String reqId) {

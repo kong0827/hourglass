@@ -118,6 +118,6 @@ class TaskControllerResolveTest {
     @Test
     void requireRoleAllowsOwner() throws Exception {
         mvc.perform(delete("/api/tasks/K1/purge")).andExpect(status().isOk());
-        verify(trashService).purge("W1", "K1");
+        verify(trashService).purge("U1", "W1", "K1");
     }
 }

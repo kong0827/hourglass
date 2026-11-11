@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.CaseMeta;
 import com.hourglass.common.Consts;
+import com.hourglass.common.DefectMeta;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.BackupData;
@@ -802,8 +803,13 @@ public class BackupService {
                     foundVersionId = null;
                 }
                 t.setFoundVersionId(foundVersionId);
-                t.setRegressionStatus(oneOf(b.getRegressionStatus(),
-                        new String[]{"pending", "passed", "failed"}, null));
+                String regression = oneOf(b.getRegressionStatus(),
+                        new String[]{"pending", "passed", "failed"}, null);
+                /* 旧备份没有回归状态：按列推导，避免恢复后待回归缺陷又变回“未开始” */
+                if (regression == null) {
+                    regression = DefectMeta.regressionForTransition(null, null, t.getBoardColumn());
+                }
+                t.setRegressionStatus(regression);
             }
             /* 关联需求：必须存在、同空间，且属于任务当前项目；跨空间导入找不到就置空 */
             String reqDocId = Texts.trimToNull(b.getReqDocId());

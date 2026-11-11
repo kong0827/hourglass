@@ -58,6 +58,8 @@ public class TestCaseService {
     /* 测试计划关联清理：只依赖 mapper，避免与 TestPlanService 形成循环 */
     private final com.hourglass.mapper.TestPlanMapper planMapper;
     private final com.hourglass.mapper.TestPlanCaseMapper planCaseMapper;
+    /** 用例删除会连带执行流水，批量导入会一次性写入大量数据：都属于需可追责的动作 */
+    private final AuditService auditService;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
@@ -65,7 +67,8 @@ public class TestCaseService {
                            com.hourglass.mapper.TestModuleMapper moduleMapper,
                            AttachmentMapper attachmentMapper, AttachmentService attachmentService,
                            com.hourglass.mapper.TestPlanMapper planMapper,
-                           com.hourglass.mapper.TestPlanCaseMapper planCaseMapper) {
+                           com.hourglass.mapper.TestPlanCaseMapper planCaseMapper,
+                           AuditService auditService) {
         this.caseMapper = caseMapper;
         this.runMapper = runMapper;
         this.taskCommandService = taskCommandService;
@@ -77,6 +80,7 @@ public class TestCaseService {
         this.attachmentService = attachmentService;
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
+        this.auditService = auditService;
     }
 
     /* ---------- 查询 ---------- */
@@ -165,6 +169,13 @@ public class TestCaseService {
         }
         s.setUntested(s.getTotal() - s.getPassed() - s.getFailed() - s.getBlocked());
         return s;
+    }
+
+    /** 缺陷反查用例：执行流水记录过的 bug → 用例，缺陷 tab 展示来源用例 */
+    public List<com.hourglass.dto.CaseBugLink> linkedBugs(String workspaceId, String userId, String reqId) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        return runMapper.selectBugCaseLinks(workspaceId, rid);
     }
 
     public TestCase get(String workspaceId, String id) {
@@ -276,6 +287,8 @@ public class TestCaseService {
         planCaseMapper.deleteByCase(id);
         caseMapper.delete(workspaceId, id);
         attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
+        auditService.recordCurrent(workspaceId, "test_case_delete", "test_case", id, c.getTitle(), true,
+                "删除测试用例「" + c.getTitle() + "」，执行流水与计划圈选一并清理", null);
     }
 
     /** 记录一次执行：流水追加一行，最近一轮结果冗余回用例；返回流水 id 供上传失败证据 */
@@ -458,6 +471,8 @@ public class TestCaseService {
         out.put("failed", errors.size());
         out.put("errors", errors);
         out.put("skipped", Math.max(0, dataRows - created - errors.size()));
+        auditService.recordCurrent(workspaceId, "test_case_import", "project", rid, null, true,
+                "导入测试用例：成功 " + created + " 条，失败 " + errors.size() + " 条", null);
         return out;
     }
 

@@ -26,10 +26,15 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -50,8 +55,11 @@ class InviteServiceTest {
     private final WorkspaceMemberMapper memberMapper = mock(WorkspaceMemberMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
     private final WorkspaceService workspaceService = mock(WorkspaceService.class);
+    private final ActivityService activityService = mock(ActivityService.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final InviteService service = new InviteService(inviteMapper, grantMapper, projectMemberMapper,
-            requirementMapper, workspaceMapper, memberMapper, userMapper, workspaceService);
+            requirementMapper, workspaceMapper, memberMapper, userMapper, workspaceService,
+            activityService, auditService);
 
     @BeforeEach
     void setUp() {
@@ -110,6 +118,22 @@ class InviteServiceTest {
     }
 
     @Test
+    void createLeavesSpaceActivityAndAuditTrail() {
+        ArgumentCaptor<Invite> inserted = ArgumentCaptor.forClass(Invite.class);
+        ArgumentCaptor<String> targetId = ArgumentCaptor.forClass(String.class);
+
+        service.create("U1", WS);
+
+        verify(inviteMapper).insert(inserted.capture());
+        verify(activityService).logConfig(eq(WS), eq("U1"), contains("生成邀请链接（预分配 0 个项目"));
+        verify(auditService).recordCurrent(eq(WS), eq("invite_create"), eq("invite"), targetId.capture(),
+                isNull(), eq(true), contains("生成邀请链接，预分配 0 个项目"), isNull());
+        assertTrue(targetId.getValue().startsWith("invite:"), "审计用指纹标识邀请");
+        assertNotEquals(inserted.getValue().getId(), targetId.getValue(), "邀请码本身不得进入审计");
+        assertFalse(targetId.getValue().contains(inserted.getValue().getId()));
+    }
+
+    @Test
     void joinSeedsMemberThenAppliesInviteGrants() {
         Invite inv = invite(CODE);
         when(inviteMapper.selectByIdForUpdate(CODE)).thenReturn(inv);
@@ -158,6 +182,19 @@ class InviteServiceTest {
         order.verify(inviteMapper).selectByIdForUpdate(CODE);
         order.verify(grantMapper).deleteByInvite(CODE);
         order.verify(inviteMapper).delete(CODE);
+    }
+
+    @Test
+    void revokeLeavesSpaceActivityAndAuditTrail() {
+        when(inviteMapper.selectByIdForUpdate(CODE)).thenReturn(invite(CODE));
+
+        service.revoke("U1", WS, CODE);
+
+        verify(activityService).logConfig(WS, "U1", "撤销邀请链接");
+        verify(auditService).recordCurrent(eq(WS), eq("invite_revoke"), eq("invite"),
+                argThat(v -> v != null && v.startsWith("invite:") && !CODE.equals(v)), isNull(),
+                eq(true), eq("撤销邀请链接"), isNull());
+        verify(inviteMapper).delete(CODE);
     }
 
     /** 加入先锁邀请行再锁用户行：与撤销串行，同一用户并发加入排队后走「已是成员」 */

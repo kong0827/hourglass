@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -55,6 +56,7 @@ class WorkActivityRecordingTest {
     private TaskMapper taskMapper;
     private DemandMapper demandMapper;
     private WorkActivityService workActivityService;
+    private DeletionTraceService deletionTrace;
     private RequirementService requirementService;
     private RequirementDocService docService;
 
@@ -66,6 +68,7 @@ class WorkActivityRecordingTest {
         demandMapper = mock(DemandMapper.class);
         UserMapper userMapper = mock(UserMapper.class);
         workActivityService = mock(WorkActivityService.class);
+        deletionTrace = mock(DeletionTraceService.class);
         /* 乐观锁：这些用例只关心活动记录，默认按更新成功返回 */
         when(docMapper.update(any(RequirementDoc.class), any())).thenReturn(1);
         when(reqMapper.update(any(Requirement.class))).thenReturn(1);
@@ -75,7 +78,8 @@ class WorkActivityRecordingTest {
                 workActivityService, demandMapper, mock(ProjectAccessService.class),
                 mock(NotificationEventService.class),
                 mock(com.hourglass.mapper.ReqDocShareMapper.class),
-                mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class));
+                mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class),
+                deletionTrace);
         org.springframework.test.util.ReflectionTestUtils.setField(docService, "taskQueries", mock(TaskQueryService.class));
         requirementService = new RequirementService(reqMapper, mock(TaskMapper.class), mock(TaskLogMapper.class),
                 mock(ActivityService.class), workActivityService, docService,
@@ -168,6 +172,8 @@ class WorkActivityRecordingTest {
         when(docMapper.selectById("D1")).thenReturn(old);
         when(reqMapper.selectById("R1")).thenReturn(project("R1", WS, "旧项目", null, "active"));
         when(reqMapper.selectById("R2")).thenReturn(project("R2", WS, "新项目", null, "active"));
+        when(taskMapper.selectIdsByReqDocExceptReqForCascade(WS, "D1", "R2"))
+                .thenReturn(Arrays.asList("K9"));
 
         ReqDocSaveRequest request = new ReqDocSaveRequest();
         request.setReqId("R2");
@@ -189,6 +195,8 @@ class WorkActivityRecordingTest {
             assertFalse(detail.contains("<strong>"));
         }
         verify(docMapper).clearTaskRefExceptReq(WS, "D1", "R2");
+        verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K9"),
+                "需求文档「新标题」已更换项目，自动解除关联");
     }
 
     @Test
@@ -206,6 +214,23 @@ class WorkActivityRecordingTest {
         verify(workActivityService).record(eq(WS), eq(WorkActivityService.REQUIREMENT_DOC),
                 org.mockito.ArgumentMatchers.startsWith("D"), eq(USER), eq("create"),
                 eq("创建了文档「需求标题」"));
+    }
+
+    @Test
+    void deletingDocumentWritesTombstoneBeforeItsActivityIsCleared() {
+        RequirementDoc d = doc("D1", null);
+        d.setTitle("待删文档");
+        when(taskMapper.selectIdsByReqDocForCascade(WS, "D1")).thenReturn(Arrays.asList("K1"));
+
+        docService.delete(USER, WS, "D1");
+
+        verify(deletionTrace).recordDelete(eq(WS), eq(USER), eq("requirement_doc_delete"),
+                eq("requirement_doc"), eq("D1"), eq("待删文档"),
+                contains("删除需求文档「待删文档」（项目 R1"));
+        verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K1"),
+                "关联需求文档「待删文档」已删除，自动解除关联");
+        verify(workActivityService).deleteByEntity(WS, WorkActivityService.REQUIREMENT_DOC, "D1");
+        verify(docMapper).delete("D1");
     }
 
     @ParameterizedTest

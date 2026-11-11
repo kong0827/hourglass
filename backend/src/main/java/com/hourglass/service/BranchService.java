@@ -67,18 +67,21 @@ public class BranchService {
     private final ProjectAccessService projectAccess;
     private final RequirementMapper requirementMapper;
     private final NotificationEventService notificationEvents;
+    /** 删除不可逆：分支时间线会一起清掉，必须在删除前写独立墓碑 */
+    private final DeletionTraceService deletionTrace;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
 
     public BranchService(DevBranchMapper branchMapper, TaskMapper taskMapper, UserMapper userMapper,
                          ProjectAccessService projectAccess, RequirementMapper requirementMapper,
-                         NotificationEventService notificationEvents) {
+                         NotificationEventService notificationEvents, DeletionTraceService deletionTrace) {
         this.branchMapper = branchMapper;
         this.taskMapper = taskMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
         this.requirementMapper = requirementMapper;
         this.notificationEvents = notificationEvents;
+        this.deletionTrace = deletionTrace;
     }
 
     public static String label(String status) {
@@ -514,7 +517,14 @@ public class BranchService {
         projectAccess.assertWrite(workspaceId, userId, b.getReqId());
         notifyOwner(b, userId, "分支「" + b.getName() + "」已被删除",
                 "分支及其时间线已被删除，关联任务已解绑");
+        deletionTrace.recordDelete(workspaceId, userId, "branch_delete", "branch", id, b.getName(),
+                "删除分支「" + b.getName() + "」（"
+                        + (b.getReqId() == null ? "空间级公共分支" : "项目 " + b.getReqId())
+                        + "；关联任务已解绑，分支时间线一并清理）");
+        java.util.List<String> affectedTaskIds = taskMapper.selectIdsByBranchForCascade(workspaceId, id);
         taskMapper.clearBranchRef(workspaceId, id);
+        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                "关联分支「" + b.getName() + "」已删除，自动解除关联");
         branchMapper.deleteLogsByBranch(id);
         branchMapper.deleteById(workspaceId, id);
     }

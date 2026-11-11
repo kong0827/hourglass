@@ -19,6 +19,8 @@ import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -48,12 +50,17 @@ public class InviteService {
     private final WorkspaceMemberMapper memberMapper;
     private final UserMapper userMapper;
     private final WorkspaceService workspaceService;
+    /** 空间活动流：邀请生成/撤销属于空间配置变更，成员在活动页可见 */
+    private final ActivityService activityService;
+    /** 安全审计：邀请码是进入空间的凭证，创建/撤销需可追责 */
+    private final AuditService auditService;
 
     public InviteService(InviteMapper inviteMapper, InviteProjectGrantMapper inviteGrantMapper,
                          ProjectMemberMapper projectMemberMapper, RequirementMapper requirementMapper,
                          WorkspaceMapper workspaceMapper,
                          WorkspaceMemberMapper memberMapper, UserMapper userMapper,
-                         WorkspaceService workspaceService) {
+                         WorkspaceService workspaceService, ActivityService activityService,
+                         AuditService auditService) {
         this.inviteMapper = inviteMapper;
         this.inviteGrantMapper = inviteGrantMapper;
         this.projectMemberMapper = projectMemberMapper;
@@ -62,6 +69,8 @@ public class InviteService {
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
         this.workspaceService = workspaceService;
+        this.activityService = activityService;
+        this.auditService = auditService;
     }
 
     /* ==================== 空间主管理 ==================== */
@@ -117,6 +126,12 @@ public class InviteService {
             }
         }
 
+        activityService.logConfig(workspaceId, userId,
+                "生成邀请链接（预分配 " + grantCount + " 个项目，" + EXPIRE_DAYS + " 天内有效）");
+        /* 邀请码本身是 bearer 凭证，审计只记不可逆指纹，避免管理端二次扩散 */
+        auditService.recordCurrent(workspaceId, "invite_create", "invite", inviteFingerprint(inv.getId()), null,
+                true, "生成邀请链接，预分配 " + grantCount + " 个项目，" + EXPIRE_DAYS + " 天内有效", null);
+
         Map<String, Object> res = new LinkedHashMap<String, Object>();
         res.put("id", inv.getId());
         res.put("expiresAt", inv.getExpiresAt());
@@ -145,6 +160,10 @@ public class InviteService {
         }
         inviteGrantMapper.deleteByInvite(inviteId);
         inviteMapper.delete(inviteId);
+        /* 不把邀请码写进摘要或 targetId：审计按空间可查，码本身不需要二次扩散 */
+        activityService.logConfig(workspaceId, userId, "撤销邀请链接");
+        auditService.recordCurrent(workspaceId, "invite_revoke", "invite", inviteFingerprint(inviteId), null,
+                true, "撤销邀请链接", null);
     }
 
     /* ==================== 凭链接加入（公开 / 登录用户） ==================== */
@@ -280,6 +299,28 @@ public class InviteService {
             throw AppException.badRequest("邀请对应的空间不存在或已删除");
         }
         return ws;
+    }
+
+    /**
+     * 审计用的邀请码指纹：同一邀请码在创建/撤销两条记录中可关联，但无法从审计表还原出可用的码。
+     * 算法不可用时退化为不带标识，也绝不回退成明文邀请码。
+     */
+    private static String inviteFingerprint(String code) {
+        if (code == null) {
+            return null;
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(("hourglass-invite:" + code).getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder("invite:");
+            for (int i = 0; i < 8; i++) {
+                sb.append(Character.forDigit((digest[i] >> 4) & 0xF, 16))
+                        .append(Character.forDigit(digest[i] & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "invite";
+        }
     }
 
     private String generateCode() {

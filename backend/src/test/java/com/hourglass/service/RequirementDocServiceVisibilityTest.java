@@ -42,7 +42,8 @@ class RequirementDocServiceVisibilityTest {
             mock(RequirementDocHistoryMapper.class), mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
             reqs, users, tasks,
             activities, demands, access, mock(NotificationEventService.class),
-            mock(ReqDocShareMapper.class), mock(WorkspaceMapper.class), mock(DocPreviewService.class));
+            mock(ReqDocShareMapper.class), mock(WorkspaceMapper.class), mock(DocPreviewService.class),
+            mock(DeletionTraceService.class));
 
     @Test
     void docsOfDemandPushesViewerAndDraftVisibilityIntoPageQuery() {

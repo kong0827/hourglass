@@ -36,7 +36,8 @@ class RequirementDocServiceNotificationTest {
             mock(TaskMapper.class), activities, mock(DemandMapper.class),
             mock(ProjectAccessService.class), events,
             mock(com.hourglass.mapper.ReqDocShareMapper.class),
-            mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class));
+            mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class),
+            mock(DeletionTraceService.class));
 
     @Test
     void updateByOtherUserKeepsOwnerAndNotifies() {

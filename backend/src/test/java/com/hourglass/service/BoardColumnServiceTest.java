@@ -24,15 +24,35 @@ class BoardColumnServiceTest {
 
     private BoardColumnMapper mapper;
     private WorkspaceMetaCache metaCache;
+    private TaskMapper taskMapper;
+    private DeletionTraceService deletionTrace;
     private BoardColumnService service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(BoardColumnMapper.class);
         metaCache = mock(WorkspaceMetaCache.class);
+        taskMapper = mock(TaskMapper.class);
+        deletionTrace = mock(DeletionTraceService.class);
         when(metaCache.columns(WS)).thenReturn(Collections.<BoardColumn>emptyList());
-        service = new BoardColumnService(mapper, mock(ColumnTransitionMapper.class), mock(TaskMapper.class),
-                mock(ActivityService.class), metaCache);
+        service = new BoardColumnService(mapper, mock(ColumnTransitionMapper.class), taskMapper,
+                mock(ActivityService.class), deletionTrace, metaCache);
+    }
+
+    @Test
+    void deletingCustomColumnLogsMovedTasksIntoTheirTimeline() {
+        BoardColumn custom = column("C1", "验收", "normal");
+        BoardColumn backlog = column("backlog", "待处理", "normal");
+        when(mapper.selectById(WS, "C1")).thenReturn(custom);
+        when(metaCache.columns(WS)).thenReturn(java.util.Arrays.asList(backlog, custom));
+        when(taskMapper.selectIdsByColumnForCascade(WS, "C1"))
+                .thenReturn(java.util.Arrays.asList("K1", "K2"));
+        when(taskMapper.selectAll(WS)).thenReturn(Collections.emptyList());
+
+        service.delete("U1", WS, "C1");
+
+        verify(deletionTrace).logTaskCascade(WS, "U1", java.util.Arrays.asList("K1", "K2"),
+                "因删除看板列「验收」，自动移入「待处理」");
     }
 
     @Test
@@ -133,7 +153,7 @@ class BoardColumnServiceTest {
 
     @Test
     void doneColumnCannotBeDeleted() {
-        AppException ex = assertThrows(AppException.class, () -> service.delete(WS, "done"));
+        AppException ex = assertThrows(AppException.class, () -> service.delete("U1", WS, "done"));
         assertEquals(400, ex.getCode());
         verifyNoInteractions(mapper);
     }

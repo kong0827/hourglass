@@ -25,15 +25,22 @@ public class RequirementDocCommentService {
     private final RequirementDocMapper docMapper;
     private final UserMapper userMapper;
     private final ProjectAccessService projectAccess;
+    /** 评论是硬删除：文档轨迹留一句，独立审计保留「谁删了」 */
+    private final WorkActivityService workActivityService;
+    private final AuditService auditService;
 
     public RequirementDocCommentService(RequirementDocCommentMapper commentMapper,
                                         RequirementDocMapper docMapper,
                                         UserMapper userMapper,
-                                        ProjectAccessService projectAccess) {
+                                        ProjectAccessService projectAccess,
+                                        WorkActivityService workActivityService,
+                                        AuditService auditService) {
         this.commentMapper = commentMapper;
         this.docMapper = docMapper;
         this.userMapper = userMapper;
         this.projectAccess = projectAccess;
+        this.workActivityService = workActivityService;
+        this.auditService = auditService;
     }
 
     public com.hourglass.dto.PageResult<ReqDocCommentView> list(String workspaceId, String userId, String docId,
@@ -92,6 +99,10 @@ public class RequirementDocCommentService {
         }
         projectAccess.assertWrite(workspaceId, userId, doc.getReqId());
         commentMapper.delete(workspaceId, commentId);
+        workActivityService.record(workspaceId, WorkActivityService.REQUIREMENT_DOC, docId, userId,
+                "update", "删除了一条评论");
+        auditService.recordCurrent(workspaceId, "comment_delete", "comment", commentId, doc.getTitle(), true,
+                "删除文档「" + doc.getTitle() + "」下的一条评论", null);
     }
 
     private RequirementDoc requireVisibleDoc(String workspaceId, String userId, String docId) {

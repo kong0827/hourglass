@@ -719,8 +719,7 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-actionbar [data-view-fullscreen]{display:none !important;}
 [data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 auto;min-width:0;max-width:150px;}
 [data-layout="mobile"] .tc-filterbar{display:none;}
-[data-layout="mobile"] .tc-filterbar.is-open{
-  display:flex;flex:1 0 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
+[data-layout="mobile"] .tc-filterbar.is-open{  display:flex;flex:1 0 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
   padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);
 }
 [data-layout="mobile"] .tc-filterbar.is-open .views-menu-wrap,
@@ -730,6 +729,17 @@ body.mob-sheet-open{overflow:hidden;}
 [data-layout="mobile"] .tc-filterbar.is-open .mini-select{width:100%;max-width:none;height:38px;font-size:16px;}
 [data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg{width:100%;}
 [data-layout="mobile"] .tc-filterbar.is-open #tcStatusSeg button{flex:1 1 0;min-width:0;padding:0 2px;font-size:11.5px;}
+/* 缺陷 tab 的筛选项直接平铺：没有「筛选」开关，默认全部可见；搜索与重置同行，四个下拉两行 */
+[data-layout="mobile"] .tc-defbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 8px;padding:0;}
+[data-layout="mobile"] .tc-defbar .tc-search{flex:1 1 100%;width:100%;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-defbar .mini-select{flex:1 1 calc(50% - 32px);width:auto;max-width:none;min-width:0;height:34px;font-size:16px;}
+[data-layout="mobile"] .tc-defbar #tcDefReq{max-width:none;}
+[data-layout="mobile"] .tc-defbar #tcDefReset{flex:0 0 auto;align-self:center;height:34px;padding:0 8px;}
+/* 缺陷统计 2×2 铺满，避免 3+1 换行留空 */
+[data-layout="mobile"] .tc-def-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;}
+[data-layout="mobile"] .tc-def-stats .tc-stat{justify-content:center;padding:6px 8px;}
+/* 底部留给悬浮按钮，滚到底时最后一行不被遮住 */
+[data-layout="mobile"] .tc-defects{padding-bottom:56px;}
 
 /* ===================== 版本阶段：时间轴竖排、表格本地滚动 ===================== */
 [data-layout="mobile"] .phase-tl{flex-wrap:wrap;gap:6px;padding:6px 0 2px;}

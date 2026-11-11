@@ -23,6 +23,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -44,8 +45,9 @@ class TestPlanServiceTest {
     private final TestCaseService caseService = mock(TestCaseService.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final com.hourglass.mapper.ProjectVersionMapper versions = mock(com.hourglass.mapper.ProjectVersionMapper.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final TestPlanService service =
-            new TestPlanService(plans, planCases, cases, caseService, access, versions);
+            new TestPlanService(plans, planCases, cases, caseService, access, versions, auditService);
 
     @BeforeEach
     void setUp() {
@@ -164,6 +166,8 @@ class TestPlanServiceTest {
         when(plans.selectViewById(PLAN)).thenReturn(full);
         service.setStatus(USER, WS, PLAN, "done");
         verify(plans).updateStatus(PLAN, "done");
+        verify(auditService).recordCurrent(eq(WS), eq("test_plan_status"), eq("test_plan"), eq(PLAN),
+                any(), eq(true), contains("running → done"), isNull());
 
         assertThrows(AppException.class, () -> service.setStatus(USER, WS, PLAN, "archived"));
 

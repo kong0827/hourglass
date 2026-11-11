@@ -10,6 +10,7 @@ import com.hourglass.dto.GanttDepRequest;
 import com.hourglass.dto.GanttLoadResponse;
 import com.hourglass.dto.GanttResponse;
 import com.hourglass.dto.GanttShareResponse;
+import com.hourglass.dto.TaskDependencyView;
 import com.hourglass.entity.GanttShare;
 import com.hourglass.entity.TaskDependency;
 import com.hourglass.service.GanttService;
@@ -47,14 +48,18 @@ public class GanttController {
     private final WorkspaceVersionService versionService;
     private final WorkspaceService workspaceService;
     private final com.hourglass.service.PriorityService priorityService;
+    /** 公开分享链接等于对外只读授权，创建/撤销要可追责 */
+    private final com.hourglass.service.AuditService auditService;
 
     public GanttController(GanttService ganttService, WorkspaceVersionService versionService,
                            WorkspaceService workspaceService,
-                           com.hourglass.service.PriorityService priorityService) {
+                           com.hourglass.service.PriorityService priorityService,
+                           com.hourglass.service.AuditService auditService) {
         this.ganttService = ganttService;
         this.versionService = versionService;
         this.workspaceService = workspaceService;
         this.priorityService = priorityService;
+        this.auditService = auditService;
     }
 
     /** 任务分页 + 依赖 + 基线（依赖/基线只随第一页返回）；筛选参数与 /api/tasks/list 一致 */
@@ -105,6 +110,13 @@ public class GanttController {
     @GetMapping("/api/gantt/deps")
     public ApiResult<List<TaskDependency>> deps(@CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(ganttService.deps(ctx.getWsId(), ctx.getUserId()));
+    }
+
+    /** 任务详情：当前任务的前置 / 后置依赖，带两端任务摘要 */
+    @GetMapping("/api/tasks/{id}/dependencies")
+    public ApiResult<List<TaskDependencyView>> taskDependencies(@PathVariable String id,
+                                                                @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(ganttService.taskDependencies(ctx.getWsId(), ctx.getUserId(), id));
     }
 
     @PostMapping("/api/gantt/deps")
@@ -170,13 +182,18 @@ public class GanttController {
     @RequireRole
     @PostMapping("/api/gantt/share")
     public ApiResult<GanttShare> createShare(@CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(ganttService.createShare(ctx.getWsId()));
+        GanttShare share = ganttService.createShare(ctx.getWsId());
+        auditService.recordCurrent(ctx.getWsId(), "gantt_share_create", "gantt_share", ctx.getWsId(),
+                null, true, "生成甘特分享链接", null);
+        return ApiResult.ok(share);
     }
 
     @RequireRole
     @DeleteMapping("/api/gantt/share")
     public ApiResult<Void> revokeShare(@CurrentWorkspace WorkspaceCtx ctx) {
         ganttService.revokeShare(ctx.getWsId());
+        auditService.recordCurrent(ctx.getWsId(), "gantt_share_revoke", "gantt_share", ctx.getWsId(),
+                null, true, "撤销甘特分享链接", null);
         return ApiResult.ok();
     }
 

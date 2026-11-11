@@ -49,12 +49,14 @@ public class TaskCommentService {
     private final ProjectAccessService projectAccess;
     private final TaskWatchService watchService;
     private final AttachmentService attachmentService;
+    /** 评论是硬删除：独立审计保留「谁删了」，任务时间线保留「发生过删除」 */
+    private final AuditService auditService;
 
     public TaskCommentService(TaskCommentMapper commentMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               UserMapper userMapper, WorkspaceMemberMapper memberMapper,
                               NotificationEventService notificationEvents,
                               ProjectAccessService projectAccess, TaskWatchService watchService,
-                              AttachmentService attachmentService) {
+                              AttachmentService attachmentService, AuditService auditService) {
         this.commentMapper = commentMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
@@ -64,6 +66,7 @@ public class TaskCommentService {
         this.projectAccess = projectAccess;
         this.watchService = watchService;
         this.attachmentService = attachmentService;
+        this.auditService = auditService;
     }
 
     /** 读评论：允许回收站中的任务（保留可读） */
@@ -238,5 +241,17 @@ public class TaskCommentService {
         /* 评论附件跟着评论走：记录随事务，文件提交后再删 */
         attachmentService.deleteByTarget(workspaceId, String.valueOf(id), AttachmentService.KIND_COMMENT);
         commentMapper.deleteById(id);
+        if (t != null) {
+            TaskLog taskLog = new TaskLog();
+            taskLog.setTaskId(c.getTaskId());
+            taskLog.setWorkspaceId(workspaceId);
+            taskLog.setActorId(userId);
+            taskLog.setAction("update");
+            taskLog.setDetail("删除了一条评论");
+            logMapper.insert(taskLog);
+        }
+        auditService.recordCurrent(workspaceId, "comment_delete", "comment", String.valueOf(id),
+                t == null ? null : t.getTitle(), true,
+                "删除任务" + (t == null ? "" : "「" + t.getTitle() + "」") + "下的一条评论", null);
     }
 }

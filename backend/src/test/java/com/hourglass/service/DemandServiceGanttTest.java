@@ -40,7 +40,7 @@ class DemandServiceGanttTest {
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
             mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
-            mock(ReleasePermissionService.class));
+            mock(ReleasePermissionService.class), mock(DeletionTraceService.class));
 
     @Test
     void devStageStartsFromRealWorkNotPlannedDate() {

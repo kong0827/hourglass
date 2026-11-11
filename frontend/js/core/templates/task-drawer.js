@@ -257,6 +257,65 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
             </div>
           </section>
 
+          <!-- 依赖关系：与甘特图共用同一张依赖表；详情里即时保存 -->
+          <section class="drawer-card dep-card" id="fDeps" aria-label="依赖关系">
+            <div class="drawer-card-head">
+              <h3>依赖关系</h3>
+              <span class="dep-count" id="depCount" hidden></span>
+              <span class="foot-note" id="depScopeNote">影响甘特连线，不自动改日期</span>
+            </div>
+            <div class="dep-body">
+              <div class="dep-alert" id="depAlert" hidden>
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4 17 16H3z"/><path d="M10 8v3.4M10 13.9h.01"/></svg>
+                <span id="depAlertText"></span>
+              </div>
+
+              <div class="dep-group">
+                <div class="dep-group-head">
+                  <span class="dep-group-title">
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10H4M8.4 5.6 4 10l4.4 4.4"/></svg>
+                    前置任务
+                  </span>
+                  <span class="dep-group-hint">完成这些后才开始当前工作项</span>
+                  <button class="btn sm ghost dep-add" type="button" id="btnDepAddPred">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+                    添加
+                  </button>
+                </div>
+                <div class="dep-list" id="depPredList"></div>
+              </div>
+
+              <div class="dep-group">
+                <div class="dep-group-head">
+                  <span class="dep-group-title">
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M11.6 5.6 16 10l-4.4 4.4"/></svg>
+                    后置任务
+                  </span>
+                  <span class="dep-group-hint">当前工作项完成后再推进</span>
+                  <button class="btn sm ghost dep-add" type="button" id="btnDepAddSucc">
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
+                    添加
+                  </button>
+                </div>
+                <div class="dep-list" id="depSuccList"></div>
+              </div>
+
+              <div class="dep-picker" id="depPicker" hidden>
+                <div class="dep-picker-head">
+                  <span id="depPickerTitle">添加前置任务</span>
+                  <button class="icon-btn sm" type="button" id="depPickerClose" aria-label="关闭选择">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+                  </button>
+                </div>
+                <input class="input dep-search" id="iDepSearch" type="text" maxlength="60" autocomplete="off" placeholder="搜索工作项标题或所属项目…" aria-label="搜索要添加为依赖的工作项" />
+                <div class="dep-picker-list" id="depPickerList" aria-live="polite"></div>
+                <div class="dep-picker-foot">只列出你有权限查看的工作项；只读项目不可选。</div>
+              </div>
+
+              <div class="dep-foot" id="depFoot"></div>
+            </div>
+          </section>
+
           <!-- 缺陷信息：仅工作项类型为缺陷时显示 -->
           <section class="drawer-card drawer-card-defect" id="fDefect" hidden>
             <div class="drawer-card-head"><h3>缺陷信息</h3><span class="foot-note">严重度必填，其余可后补</span></div>
@@ -299,7 +358,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <option value="passed">回归通过</option>
                 <option value="failed">回归失败</option>
               </select>
-              <span class="hint">修复完成后由测试同学回填，管理报表按此口径统计缺陷关闭</span>
+              <span class="hint">进入待测试 / 测试中自动记为待回归；标记已完成自动记为回归通过，退回待处理 / 进行中自动记为回归失败</span>
             </div>
           </section>
 

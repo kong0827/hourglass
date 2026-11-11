@@ -64,7 +64,11 @@ function harness() {
     defaultReqId:() => "R1", projCats:() => [], projFirstCat:() => "",
     ownerPick:() => ({ name:"", userId:null }), esc:value => String(value),
     API:{
-      get() { throw new Error("未设置需求目标/版本请求"); },
+      get(url) {
+        // 打开抽屉会拉取依赖关系；依赖区块不属于本用例关注点，返回空列表即可。
+        if (/\/dependencies$/.test(url || "")) return Promise.resolve([]);
+        throw new Error("未设置需求目标/版本请求");
+      },
       put(url, body) { const d = deferred(); requests.push({ url, body, ...d }); return d.promise; },
       post(url, body) { return this.put(url, body); }
     },

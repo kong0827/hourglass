@@ -1570,10 +1570,22 @@ var AUDIT_LABEL = {
   role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
   member_add:"添加成员", member_remove:"移除成员", workspace_delete:"删除空间",
   project_delete:"删除项目", user_create:"创建账号", user_update:"修改账号",
-  user_delete:"删除账号", password_reset:"重置密码"
+  user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
+  invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
+  password_change:"修改密码", profile_update:"修改个人资料", work_hours_update:"修改计时设置",
+  mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置",
+  gantt_share_create:"生成甘特分享", gantt_share_revoke:"撤销甘特分享",
+  test_case_delete:"删除测试用例", test_case_import:"导入测试用例",
+  test_plan_delete:"删除测试计划", test_plan_status:"测试计划状态变更",
+  comment_delete:"删除评论", task_purge:"彻底删除任务",
+  demand_delete:"删除需求", requirement_doc_delete:"删除需求文档",
+  branch_delete:"删除分支", version_delete:"删除版本"
 };
 var AUDIT_TARGET = {
-  auth:"登录", user:"账号", workspace:"空间", member:"成员", project:"项目", data:"数据"
+  auth:"登录", user:"账号", workspace:"空间", member:"成员", project:"项目", data:"数据",
+  invite:"邀请", mail_settings:"邮件配置", gantt_share:"甘特分享",
+  test_case:"测试用例", test_plan:"测试计划", comment:"评论",
+  task:"工作项", demand:"需求", requirement_doc:"需求文档", branch:"分支", project_version:"版本"
 };
 var auditState = { page:1, size:50, total:0, pages:1, loading:false };
 
@@ -1629,7 +1641,7 @@ function renderAudit(data){
   auditState.size = data.size || 50;
   auditState.pages = Math.max(1, Math.ceil(auditState.total / auditState.size));
   if($("auditCount")) $("auditCount").textContent = "共 " + auditState.total + " 条 · 全空间";
-  if($("auditHint")) $("auditHint").textContent = "登录成功/失败、权限变更、数据导出、删除/清空、备份恢复等安全事件；保留 " +
+  if($("auditHint")) $("auditHint").textContent = "登录成功/失败、权限变更、删除、账号安全、配置变更、数据导出、备份恢复等安全事件；保留 " +
     (data.retentionDays || 90) + " 天，可按条件筛选并导出 CSV。";
   if(!list.length){
     $("auditBody").innerHTML = '<tr><td colspan="7" class="audit-empty">当前条件下没有审计记录</td></tr>';

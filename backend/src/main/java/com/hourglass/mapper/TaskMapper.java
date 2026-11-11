@@ -226,6 +226,24 @@ public interface TaskMapper {
     /** 批量彻底删除前，解除被删任务作为 Epic 的子任务归属 */
     int clearEpicChildrenByTaskIds(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds);
 
+    /** 级联解绑前取受影响任务 ID（含回收站）：删除需求/分支/文档/列/模块后逐条补时间线 */
+    List<String> selectIdsByDemandForCascade(@Param("workspaceId") String workspaceId,
+                                              @Param("demandId") String demandId);
+
+    List<String> selectIdsByBranchForCascade(@Param("workspaceId") String workspaceId,
+                                              @Param("branchId") String branchId);
+
+    List<String> selectIdsByReqDocForCascade(@Param("workspaceId") String workspaceId,
+                                              @Param("reqDocId") String reqDocId);
+
+    /** 文档换项目时只解绑仍留在旧项目的任务；与 clearTaskRefExceptReq 同口径 */
+    List<String> selectIdsByReqDocExceptReqForCascade(@Param("workspaceId") String workspaceId,
+                                                       @Param("reqDocId") String reqDocId,
+                                                       @Param("reqId") String reqId);
+
+    List<String> selectIdsByColumnForCascade(@Param("workspaceId") String workspaceId,
+                                              @Param("column") String column);
+
     /** 分支被删除时，把挂在它上面的任务解绑（任务本身保留） */
     int clearBranchRef(@Param("workspaceId") String workspaceId, @Param("branchId") String branchId);
 

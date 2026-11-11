@@ -15,6 +15,11 @@ public interface TaskDependencyMapper {
     List<TaskDependency> selectVisibleByWorkspace(@Param("workspaceId") String workspaceId,
                                                   @Param("viewerId") String viewerId);
 
+    /** 任务详情：只取任一端命中该任务的边，仍按项目可见范围过滤 */
+    List<TaskDependency> selectVisibleByTask(@Param("workspaceId") String workspaceId,
+                                             @Param("taskId") String taskId,
+                                             @Param("viewerId") String viewerId);
+
     TaskDependency selectById(@Param("id") String id);
 
     int countEdge(@Param("fromTaskId") String fromTaskId, @Param("toTaskId") String toTaskId);

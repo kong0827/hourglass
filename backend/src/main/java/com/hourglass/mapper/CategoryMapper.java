@@ -32,6 +32,11 @@ public interface CategoryMapper {
     int moveTasksToCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
                             @Param("fromId") String fromId, @Param("toId") String toId);
 
+    /** 删除模块前取受影响任务 ID（含回收站），用于批量补时间线；与 moveTasksToCategory 同口径 */
+    List<String> selectTaskIdsForCascade(@Param("workspaceId") String workspaceId,
+                                         @Param("projectId") String projectId,
+                                         @Param("categoryId") String categoryId);
+
     /** 删除项目模块时：该项目下需求迁到目标模块 */
     int moveDemandsToCategory(@Param("workspaceId") String workspaceId, @Param("projectId") String projectId,
                               @Param("fromId") String fromId, @Param("toId") String toId);

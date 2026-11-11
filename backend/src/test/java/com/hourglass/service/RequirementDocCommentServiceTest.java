@@ -19,8 +19,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -39,8 +42,10 @@ class RequirementDocCommentServiceTest {
     private final RequirementDocMapper docMapper = mock(RequirementDocMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
+    private final WorkActivityService workActivityService = mock(WorkActivityService.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final RequirementDocCommentService service = new RequirementDocCommentService(
-            commentMapper, docMapper, userMapper, access);
+            commentMapper, docMapper, userMapper, access, workActivityService, auditService);
 
     @Test
     void listReturnsCommentsForVisibleDoc() {
@@ -102,6 +107,10 @@ class RequirementDocCommentServiceTest {
         service.delete(USER, WS, DOC, "C1");
 
         verify(commentMapper).delete(WS, "C1");
+        verify(workActivityService).record(eq(WS), eq(WorkActivityService.REQUIREMENT_DOC), eq(DOC),
+                eq(USER), eq("update"), contains("删除了一条评论"));
+        verify(auditService).recordCurrent(eq(WS), eq("comment_delete"), eq("comment"), eq("C1"),
+                any(), eq(true), anyString(), isNull());
     }
 
     @Test

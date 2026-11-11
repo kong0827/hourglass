@@ -54,5 +54,10 @@ public interface TaskLogMapper {
     int insertUnlinkReqLogs(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
                             @Param("actorId") String actorId, @Param("detail") String detail);
 
+    /** 级联修改任务字段（删列/模块/需求/文档/分支）后批量补时间线；调用方负责分片 */
+    int insertBatch(@Param("workspaceId") String workspaceId, @Param("taskIds") List<String> taskIds,
+                    @Param("actorId") String actorId, @Param("action") String action,
+                    @Param("detail") String detail);
+
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);
 }

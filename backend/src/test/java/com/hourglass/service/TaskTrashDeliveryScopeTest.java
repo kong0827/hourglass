@@ -32,13 +32,16 @@ class TaskTrashDeliveryScopeTest {
     private final DeliveryScopeLock locks = mock(DeliveryScopeLock.class);
     private final VersionTaskMapper bindings = mock(VersionTaskMapper.class);
     private final TaskAuditLogger audit = mock(TaskAuditLogger.class);
+    private final AuditService systemAudit = mock(AuditService.class);
+    private final com.hourglass.mapper.UserMapper users = mock(com.hourglass.mapper.UserMapper.class);
     private final TimeLogService timeLogs = mock(TimeLogService.class);
     private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
     private final ProjectAccessService access = spy(new ProjectAccessService(mock(ProjectMemberMapper.class), members));
     private final TaskTrashService service = new TaskTrashService(tasks, support, cascade,
             timeLogs, audit, access,
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(NotificationEventService.class),
-            mock(TaskWatchService.class), mock(PlatformTransactionManager.class), locks, bindings);
+            mock(TaskWatchService.class), mock(PlatformTransactionManager.class), locks, bindings,
+            systemAudit, users);
     private Task task;
 
     @BeforeEach
@@ -74,8 +77,10 @@ class TaskTrashDeliveryScopeTest {
     void publishedTaskPurgeDelegatesToCascadeWithoutRewritingHistory() {
         task.setPublishedAt(LocalDate.now());
         task.setDeletedAt(LocalDateTime.now());
-        service.purge("W1", "K1");
+        service.purge("U1", "W1", "K1");
         verify(cascade).purgeTasks("W1", java.util.Collections.singletonList("K1"));
+        verify(systemAudit).record(eq("W1"), eq("U1"), eq("U1"), eq("task_purge"), eq("task"),
+                eq("K1"), eq("任务"), eq(true), contains("彻底删除任务「任务」"), isNull());
         verifyNoInteractions(bindings);
     }
 
@@ -246,7 +251,7 @@ class TaskTrashDeliveryScopeTest {
         observed.setReqId("R1");
         observed.setDeletedAt(LocalDateTime.now());
         when(support.requireDeleted("W1", "K1")).thenReturn(observed);
-        assertThrows(AppException.class, () -> service.purge("W1", "K1"));
+        assertThrows(AppException.class, () -> service.purge("U1", "W1", "K1"));
         verifyNoInteractions(cascade);
     }
 }

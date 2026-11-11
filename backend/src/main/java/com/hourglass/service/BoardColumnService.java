@@ -32,16 +32,19 @@ public class BoardColumnService {
     private final ColumnTransitionMapper transitionMapper;
     private final TaskMapper taskMapper;
     private final ActivityService activityService;
+    /** 删列会批量改任务所在列：为受影响任务补时间线，避免看板列突然变化无可解释 */
+    private final DeletionTraceService deletionTrace;
     /** 列定义缓存：读列表/查名/排序校验共用，写入口负责失效 */
     private final WorkspaceMetaCache metaCache;
 
     public BoardColumnService(BoardColumnMapper boardColumnMapper, ColumnTransitionMapper transitionMapper,
                               TaskMapper taskMapper, ActivityService activityService,
-                              WorkspaceMetaCache metaCache) {
+                              DeletionTraceService deletionTrace, WorkspaceMetaCache metaCache) {
         this.boardColumnMapper = boardColumnMapper;
         this.transitionMapper = transitionMapper;
         this.taskMapper = taskMapper;
         this.activityService = activityService;
+        this.deletionTrace = deletionTrace;
         this.metaCache = metaCache;
     }
 
@@ -92,7 +95,7 @@ public class BoardColumnService {
 
     /** 删除列：任务移入最靠前的其他列（五个系统列均不可删） */
     @Transactional
-    public void delete(String workspaceId, String id) {
+    public void delete(String userId, String workspaceId, String id) {
         if (Consts.COL_DONE.equals(id)) {
             throw AppException.badRequest("「已完成」是系统列，不可删除");
         }
@@ -115,8 +118,12 @@ public class BoardColumnService {
         if (target == null) {
             throw AppException.badRequest("至少需要保留一个看板列");
         }
+        java.util.List<String> affectedTaskIds = taskMapper.selectIdsByColumnForCascade(workspaceId, id);
         boardColumnMapper.moveTasks(workspaceId, id, target);
         boardColumnMapper.deleteById(workspaceId, id);
+        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                "因删除看板列「" + c.getName() + "」，自动移入「"
+                        + (targetName == null ? target : targetName) + "」");
         transitionMapper.deleteByColumn(workspaceId, id);
         renumber(workspaceId, target);
         evictColumns(workspaceId);

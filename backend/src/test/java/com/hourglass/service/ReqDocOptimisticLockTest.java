@@ -35,7 +35,8 @@ class ReqDocOptimisticLockTest {
             mock(UserMapper.class), mock(TaskMapper.class), activities,
             mock(DemandMapper.class), access, mock(NotificationEventService.class),
             mock(com.hourglass.mapper.ReqDocShareMapper.class),
-            mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class));
+            mock(com.hourglass.mapper.WorkspaceMapper.class), mock(DocPreviewService.class),
+            mock(DeletionTraceService.class));
 
     @Test
     void staleVersionIsRejectedWithConflict() {

@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
+import com.hourglass.common.DefectMeta;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.TaskBulkMoveRequest;
@@ -186,6 +187,11 @@ public class TaskWorkflowService {
         boolean autoTimerStarted = false;
         Task resumed = null;
         if (!from.equals(to)) {
+            /* 缺陷回归状态随列流转自动维护：提交待验证 / 验证通过 / 退回返工 */
+            if ("bug".equals(task.getItemType())) {
+                task.setRegressionStatus(DefectMeta.regressionForTransition(
+                        task.getRegressionStatus(), from, to));
+            }
             applyTestTimestamps(task, from, to);
             if (Consts.COL_DONE.equals(to)) {
                 task.setCompletedAt(LocalDate.now());

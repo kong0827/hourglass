@@ -9,6 +9,7 @@ import com.hourglass.dto.GanttQuery;
 import com.hourglass.dto.GanttResponse;
 import com.hourglass.dto.GanttShareResponse;
 import com.hourglass.dto.PublicGanttTask;
+import com.hourglass.dto.TaskDependencyView;
 import com.hourglass.dto.UserWeekRow;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.GanttShare;
@@ -159,6 +160,53 @@ public class GanttService {
     public List<TaskDependency> deps(String workspaceId, String userId) {
         return dependencyMapper.selectVisibleByWorkspace(workspaceId,
                 projectAccess.viewerScope(workspaceId, userId));
+    }
+
+    /**
+     * 任务详情用：只返回与当前任务直接相连的依赖，并带出两端任务摘要。
+     * 仍按项目可见范围过滤，避免通过依赖关系泄露隐藏项目里的任务标题。
+     */
+    public List<TaskDependencyView> taskDependencies(String workspaceId, String userId, String taskId) {
+        Task current = taskMapper.selectById(taskId);
+        if (current == null || current.getDeletedAt() != null
+                || !workspaceId.equals(current.getWorkspaceId())) {
+            throw AppException.notFound("工作项不存在或已被删除：" + taskId);
+        }
+        projectAccess.assertViewTask(workspaceId, userId, current);
+        List<TaskDependency> edges = dependencyMapper.selectVisibleByTask(workspaceId, taskId,
+                projectAccess.viewerScope(workspaceId, userId));
+        Map<String, Task> tasks = new HashMap<String, Task>();
+        tasks.put(current.getId(), current);
+        List<TaskDependencyView> out = new ArrayList<TaskDependencyView>(edges.size());
+        for (TaskDependency edge : edges) {
+            Task from = taskOf(workspaceId, tasks, edge.getFromTaskId());
+            Task to = taskOf(workspaceId, tasks, edge.getToTaskId());
+            if (from == null || to == null) {
+                continue;
+            }
+            TaskDependencyView view = new TaskDependencyView();
+            view.setId(edge.getId());
+            view.setDepType(edge.getDepType());
+            view.setLagDays(edge.getLagDays());
+            view.setFrom(TaskDependencyView.ref(from));
+            view.setTo(TaskDependencyView.ref(to));
+            view.setEditable(projectAccess.canWrite(workspaceId, userId, from.getReqId())
+                    && projectAccess.canWrite(workspaceId, userId, to.getReqId()));
+            out.add(view);
+        }
+        return out;
+    }
+
+    private Task taskOf(String workspaceId, Map<String, Task> cache, String taskId) {
+        if (cache.containsKey(taskId)) {
+            return cache.get(taskId);
+        }
+        Task task = taskMapper.selectById(taskId);
+        if (task == null || task.getDeletedAt() != null || !workspaceId.equals(task.getWorkspaceId())) {
+            task = null;
+        }
+        cache.put(taskId, task);
+        return task;
     }
 
     @Transactional

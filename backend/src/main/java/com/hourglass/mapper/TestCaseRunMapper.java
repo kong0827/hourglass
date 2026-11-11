@@ -29,6 +29,10 @@ public interface TestCaseRunMapper {
     /** 最近失败转出缺陷时回填该轮流水（仅当该轮为 failed 时由服务层判断） */
     int updateBugTask(@Param("id") String id, @Param("bugTaskId") String bugTaskId);
 
+    /** 缺陷反查用例：项目内执行流水记录过的 bug_task_id → 用例（同一缺陷同一用例去重） */
+    List<com.hourglass.dto.CaseBugLink> selectBugCaseLinks(@Param("workspaceId") String workspaceId,
+                                                           @Param("reqId") String reqId);
+
     /** 缺陷任务被彻底删除时解除引用 */
     int clearBugTaskRefs(@Param("workspaceId") String workspaceId,
                          @Param("taskIds") List<String> taskIds);

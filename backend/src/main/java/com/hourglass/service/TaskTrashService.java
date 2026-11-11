@@ -1,8 +1,10 @@
 package com.hourglass.service;
 
 import com.hourglass.common.Texts;
+import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Task;
 import com.hourglass.mapper.TaskMapper;
+import com.hourglass.mapper.UserMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -45,6 +47,9 @@ public class TaskTrashService {
     private final TaskWatchService watchService;
     private final DeliveryScopeLock scopeLock;
     private final com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
+    /** 安全审计：彻底删除不可恢复，必须在级联清理前留下独立墓碑（task_log 会被级联删除） */
+    private final AuditService systemAudit;
+    private final UserMapper userMapper;
     /** 回收站清理：批量事务模板（REQUIRES_NEW 保证每批独立提交） */
     private final TransactionTemplate purgeTx;
     @org.springframework.beans.factory.annotation.Autowired
@@ -56,9 +61,12 @@ public class TaskTrashService {
                             com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                             NotificationEventService notificationEvents, TaskWatchService watchService,
                             PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
-                            com.hourglass.mapper.VersionTaskMapper versionTaskMapper) {
+                            com.hourglass.mapper.VersionTaskMapper versionTaskMapper,
+                            AuditService systemAudit, UserMapper userMapper) {
         this.scopeLock = scopeLock;
         this.versionTaskMapper = versionTaskMapper;
+        this.systemAudit = systemAudit;
+        this.userMapper = userMapper;
         this.taskMapper = taskMapper;
         this.support = support;
         this.cascade = cascade;
@@ -119,8 +127,16 @@ public class TaskTrashService {
     }
 
     @Transactional
-    public void purge(String workspaceId, String id) {
+    public void purge(String userId, String workspaceId, String id) {
         Task task = lockTask(workspaceId, id, true);
+        /* 墓碑写在级联前：task_log 会被一并物理删除，只有独立审计能回答「谁彻底删了哪条任务」 */
+        AppUser actor = userMapper.selectById(userId);
+        String actorName = actor == null || Texts.trimToNull(actor.getDisplayName()) == null
+                ? userId : actor.getDisplayName();
+        systemAudit.record(workspaceId, userId, actorName, "task_purge", "task", id,
+                task.getTitle(), true, "彻底删除任务「" + task.getTitle() + "」（"
+                        + (task.getReqId() == null ? "未归属项目" : "项目 " + task.getReqId())
+                        + "；不可恢复，时间线与评论等一并清理）", null);
         cascade.purgeTasks(workspaceId, Collections.singletonList(id));
     }
 

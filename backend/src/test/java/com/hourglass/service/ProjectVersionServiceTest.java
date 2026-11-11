@@ -70,8 +70,9 @@ class ProjectVersionServiceTest {
     private final VersionReleaseService releaseService = mock(VersionReleaseService.class);
     private final TaskAuditLogger taskAudit = mock(TaskAuditLogger.class);
     private final Map<String, List<String>> taskBindings = new HashMap<>();
+    private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
     private final ProjectVersionService service = new ProjectVersionService(versions, versionTasks, tasks, reqs,
-            access, lock, permissions, releases, releaseService);
+            access, lock, permissions, releases, releaseService, deletionTrace);
 
     @BeforeEach
     void setUp() {
@@ -107,6 +108,8 @@ class ProjectVersionServiceTest {
         order.verify(releases).selectAllTasksByProjectForUpdate(WS, "R1");
         order.verify(releases).selectDemandsByProjectForUpdate(WS, "R1");
         verify(releases, never()).deletePlansByVersion(anyString(), anyString());
+        verify(deletionTrace).recordDelete(eq(WS), eq(USER), eq("version_delete"), eq("project_version"),
+                eq("V1"), eq("V1"), eq("删除版本「V1」（项目 R1；测试计划中的版本引用一并解除）"));
         verify(tasks).selectVersionPlanIdsForScope(WS, "V1");
         verify(tasks).selectVersionAuditIdsForScope(WS, "V1");
         order.verify(versions).deleteById(WS, "V1");

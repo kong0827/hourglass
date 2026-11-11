@@ -39,12 +39,13 @@ class TaskCommandServiceDefectValidationTest {
     private final ProjectVersionMapper versions = mock(ProjectVersionMapper.class);
     private final TaskSupport support = mock(TaskSupport.class);
     private final TaskAuditLogger audit = mock(TaskAuditLogger.class);
+    private final DeliveryScopeLock scopeLock = mock(DeliveryScopeLock.class);
     private final TaskCommandService service = new TaskCommandService(tasks, reqs,
             mock(SubtaskMapper.class), categories, mock(UserMapper.class), mock(RequirementDocMapper.class),
             mock(DevBranchMapper.class), mock(WorkspaceMemberMapper.class), versions,
             mock(VersionTaskMapper.class), mock(DemandMapper.class), mock(WorkspaceMetaCache.class),
             support, mock(TaskCompletionService.class), mock(TaskWorkflowService.class), audit,
-            mock(NotificationEventService.class), mock(ProjectAccessService.class), mock(TimeLogService.class), mock(DeliveryScopeLock.class),
+            mock(NotificationEventService.class), mock(ProjectAccessService.class), mock(TimeLogService.class), scopeLock,
             mock(ReleasePermissionService.class));
 
     @Test
@@ -96,6 +97,107 @@ class TaskCommandServiceDefectValidationTest {
         assertNull(saved.getValue().getEnvironment());
         assertNull(saved.getValue().getFoundVersionId());
         assertNull(saved.getValue().getRegressionStatus());
+    }
+
+    @Test
+    void bugSubmittedForTestBecomesPending() {
+        stubProject("R1");
+        TaskSaveRequest req = request("bug", "major");
+        req.setBoardColumn("test");
+
+        service.create("U1", WS, req);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).insert(saved.capture());
+        assertEquals("pending", saved.getValue().getRegressionStatus());
+    }
+
+    @Test
+    void bugCreatedDoneBecomesPassed() {
+        stubProject("R1");
+        TaskSaveRequest req = request("bug", "major");
+        req.setBoardColumn("done");
+
+        service.create("U1", WS, req);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).insert(saved.capture());
+        assertEquals("passed", saved.getValue().getRegressionStatus());
+    }
+
+    @Test
+    void bugNotSubmittedYetHasNoRegressionStatus() {
+        stubProject("R1");
+        TaskSaveRequest req = request("bug", "major");
+        req.setBoardColumn("backlog");
+
+        service.create("U1", WS, req);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).insert(saved.capture());
+        assertNull(saved.getValue().getRegressionStatus());
+    }
+
+    @Test
+    void doneRejectsExplicitFailedRegression() {
+        stubProject("R1");
+        TaskSaveRequest req = request("bug", "major");
+        req.setBoardColumn("done");
+        req.setRegressionStatus("failed");
+
+        AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
+
+        assertTrue(ex.getMessage().contains("需回归通过"), ex.getMessage());
+    }
+
+    @Test
+    void passedRegressionOutsideDoneIsRejected() {
+        stubProject("R1");
+        TaskSaveRequest req = request("bug", "major");
+        req.setBoardColumn("doing");
+        req.setRegressionStatus("passed");
+
+        AppException ex = assertThrows(AppException.class, () -> service.create("U1", WS, req));
+
+        assertTrue(ex.getMessage().contains("请同时将任务状态改为「已完成」"), ex.getMessage());
+    }
+
+    @Test
+    void movingBugToDoneKeepsPassedWhenDrawerEchoesOldPending() {
+        stubProject("R1");
+        Task old = new Task();
+        old.setId("K1");
+        old.setWorkspaceId(WS);
+        old.setReqId("R1");
+        old.setTitle("缺陷标题");
+        old.setItemType("bug");
+        old.setSeverity("major");
+        old.setBoardColumn("test");
+        old.setRegressionStatus("pending");
+        old.setOwner("owner");
+        old.setPriority("P2");
+        old.setProgress(0);
+        old.setCategoryId("general");
+        old.setSortOrder(1024);
+        when(support.require(WS, "K1")).thenReturn(old);
+        when(scopeLock.lockTask(WS, "K1")).thenReturn(old);
+        when(support.tagNames(WS, "K1")).thenReturn(java.util.Collections.<String>emptyList());
+        when(audit.diffParts(org.mockito.ArgumentMatchers.eq(WS), org.mockito.ArgumentMatchers.eq(old),
+                org.mockito.ArgumentMatchers.any(Task.class), org.mockito.ArgumentMatchers.anyList(),
+                org.mockito.ArgumentMatchers.anyList())).thenReturn(new java.util.ArrayList<String>());
+        when(tasks.update(org.mockito.ArgumentMatchers.any(Task.class))).thenReturn(1);
+
+        TaskSaveRequest req = request("bug", "major");
+        req.setId("K1");
+        req.setBoardColumn("done");
+        /* 抽屉会把打开时的旧值原样回传，应视为“未修改”，由列流转自动记为回归通过 */
+        req.setRegressionStatus("pending");
+
+        service.update("U1", WS, "K1", req);
+
+        ArgumentCaptor<Task> saved = ArgumentCaptor.forClass(Task.class);
+        verify(tasks).update(saved.capture());
+        assertEquals("passed", saved.getValue().getRegressionStatus());
     }
 
     @Test

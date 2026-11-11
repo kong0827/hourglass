@@ -4,11 +4,12 @@ import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, catNameById, colRuleOf, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
 import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
+import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
 import { refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
@@ -64,7 +65,11 @@ function formSnapshot(){
     blocked: !!(iBlocked && iBlocked.checked),
     blockedReason: (iBlocked && iBlocked.checked && iBlockedReason) ? (iBlockedReason.value || "").trim() : "",
     tags: rt.tagsCache.slice(0, 8).join("\u0001"),
-    reason: ($("iVersionChangeReason") || {}).value || ""
+    reason: ($("iVersionChangeReason") || {}).value || "",
+    /* 新建时暂存的依赖：增删后回到原始组合，不应再提示「有未保存的改动」 */
+    deps: (depState && depState.pending ? depState.pending : []).map(function(p){
+      return p.direction + ":" + p.task.id + ":" + p.depType + ":" + (Number(p.lagDays) || 0);
+    }).join("\u0001")
   };
   var vsel = $("iVersion");
   if(formReady(vsel)) snap.version = selectedVersionIds(vsel).slice().sort().join("\u0001");
@@ -932,6 +937,7 @@ function applyDrawerReadOnly(readOnly){
   if(hint && !rt.formDirty){
     hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "保存后可拖动卡片调整状态与顺序";
   }
+  syncDepControls();
 }
 /** 只读抽屉里仍在视图上的写控件（分段按钮、快捷日期等）：拦下并给出反馈 */
 function denyReadOnly(){
@@ -1342,7 +1348,7 @@ function openTaskDrawer(colId, task, defaults){
     }
     /* 新建时不能沿用上一个工作项的需求选择 */
     if($("iDemand")) $("iDemand").value = rt.formDemandId || "";
-    if(iItemType) iItemType.value = "task";
+    if(iItemType) iItemType.value = (defaults && defaults.itemType === "bug") ? "bug" : "task";
     clearDefectFields();
     ensureVersion(normalizedIds(defaults && defaults.versionIds));
     ensureFoundVersion("");
@@ -1377,6 +1383,7 @@ function openTaskDrawer(colId, task, defaults){
     if(commentCount) commentCount.textContent = "";
     closeMention();
   }
+  initDependencies(task);
   syncDefectFields();
   syncTypeButtons();
   syncSeverityButtons();
@@ -1403,6 +1410,503 @@ function openTaskDrawer(colId, task, defaults){
   UI.wireTooltips(taskDrawer);
   setTimeout(function(){ try{ iTitle.focus(); iTitle.select(); }catch(e){ /* noop */ } }, 60);
 }
+/* ==================== 依赖关系（与甘特图共用 task_dependency） ==================== */
+var DEP_TYPES = [
+  { v:"FS", n:"完成-开始", d:"前置完成后，后置才能开始" },
+  { v:"SS", n:"开始-开始", d:"前置开始后，后置才能开始" },
+  { v:"FF", n:"完成-完成", d:"前置完成后，后置才能完成" },
+  { v:"SF", n:"开始-完成", d:"前置开始后，后置才能完成" }
+];
+var depState = {
+  taskId: null, seq: 0, loading: false, error: "",
+  edges: [], pending: [], pendingSeq: 0,
+  mode: "", pickerSeq: 0, pickerItems: [], pickerLoading: false, searchTimer: null
+};
+function depTypeMeta(type){
+  for(var i=0;i<DEP_TYPES.length;i++) if(DEP_TYPES[i].v === type) return DEP_TYPES[i];
+  return DEP_TYPES[0];
+}
+function depCurrentRef(){
+  return {
+    id: rt.editingId || "__new__",
+    title: (iTitle.value || "").trim() || "当前工作项",
+    reqId: (iReq && iReq.value) || "",
+    boardColumn: (iCol && iCol.value) || "",
+    startDate: (iStart && iStart.value) || "",
+    dueDate: (iDue && iDue.value) || "",
+    milestone: !!($("iMilestone") && $("iMilestone").checked)
+  };
+}
+function depDateRange(ref){
+  var s = parseDate(ref && ref.startDate) || parseDate(ref && ref.dueDate);
+  var e = parseDate(ref && ref.dueDate) || s;
+  if(!s || !e) return null;
+  if(e < s){ var tmp = s; s = e; e = tmp; }
+  return { s:s, e:e };
+}
+function depRangeText(ref){
+  var r = depDateRange(ref);
+  if(!r) return "未排期";
+  var a = GS.fmtDashMD(r.s), b = GS.fmtDashMD(r.e);
+  return a === b ? a : (a + " → " + b);
+}
+function depProjectName(ref){
+  if(!ref || !ref.reqId) return "未归属项目";
+  var name = reqNameById(ref.reqId);
+  return name && name !== "无" ? name : "未归属项目";
+}
+function depConflictOf(pred, succ, type, lag){
+  var pr = depDateRange(pred), sr = depDateRange(succ);
+  if(!pr || !sr) return false;
+  return GS.depConflict(
+    { s:pr.s, e:pr.e, as:pr.s, ae:pr.e, done:pred.boardColumn === "done" },
+    { s:sr.s, e:sr.e, as:sr.s, ae:sr.e },
+    type, lag
+  );
+}
+function depTypeOptionsHTML(selected){
+  return DEP_TYPES.map(function(t){
+    return '<option value="' + t.v + '"' + (t.v === (selected || "FS") ? " selected" : "") +
+      ' title="' + esc(t.n + "：" + t.d) + '">' + t.v + '</option>';
+  }).join("");
+}
+function depTaskLinked(taskId){
+  for(var i=0;i<depState.edges.length;i++){
+    var e = depState.edges[i];
+    if((e.from && e.from.id === taskId) || (e.to && e.to.id === taskId)) return true;
+  }
+  for(var j=0;j<depState.pending.length;j++){
+    if(depState.pending[j].task.id === taskId) return true;
+  }
+  return false;
+}
+function depRowsFor(direction){
+  var cur = depCurrentRef();
+  var rows = [];
+  depState.edges.forEach(function(e){
+    var other = direction === "pred" ? e.from : e.to;
+    if(!other) return;
+    var matches = direction === "pred" ? (e.to && e.to.id === cur.id) : (e.from && e.from.id === cur.id);
+    if(matches) rows.push({ edge:e, other:other, direction:direction, depType:e.depType || "FS", lagDays:Number(e.lagDays) || 0 });
+  });
+  depState.pending.forEach(function(p){
+    if(p.direction === direction){
+      rows.push({ pending:p, other:p.task, direction:direction, depType:p.depType || "FS", lagDays:Number(p.lagDays) || 0 });
+    }
+  });
+  return rows;
+}
+function depRowHTML(row){
+  var other = row.other, cur = depCurrentRef();
+  var pred = row.direction === "pred" ? other : cur;
+  var succ = row.direction === "pred" ? cur : other;
+  var conflict = depConflictOf(pred, succ, row.depType, row.lagDays);
+  var editable = row.pending ? !rt.drawerReadOnly : (!!row.edge.editable && !rt.drawerReadOnly);
+  var idAttr = row.pending
+    ? ' data-dep-pending="' + esc(row.pending.key) + '"'
+    : ' data-dep-id="' + esc(row.edge.id) + '"';
+  var typeAttr = row.pending
+    ? ' data-dep-pending-type="' + esc(row.pending.key) + '"'
+    : ' data-dep-type="' + esc(row.edge.id) + '"';
+  var lagAttr = row.pending
+    ? ' data-dep-pending-lag="' + esc(row.pending.key) + '"'
+    : ' data-dep-lag="' + esc(row.edge.id) + '"';
+  var delAttr = row.pending
+    ? ' data-dep-pending-del="' + esc(row.pending.key) + '"'
+    : ' data-dep-del="' + esc(row.edge.id) + '"';
+  var meta = [
+    depProjectName(other),
+    depRangeText(other),
+    "滞后 " + row.lagDays + " 天"
+  ].join(" · ");
+  var typeMeta = depTypeMeta(row.depType);
+  return '<div class="dep-row"' + idAttr + '>' +
+    '<select class="dep-type" ' + typeAttr + ' aria-label="依赖类型"' +
+      (editable ? "" : ' disabled data-dep-locked="1"') + ' title="' + esc(typeMeta.n + "：" + typeMeta.d) + '">' +
+      depTypeOptionsHTML(row.depType) + '</select>' +
+    '<div class="dep-main">' +
+      '<span class="dep-title" title="' + esc(other.title || "") + '">' + esc(other.title || "未命名工作项") + '</span>' +
+      '<span class="dep-meta" title="' + esc(meta) + '">' + esc(meta) + '</span>' +
+    '</div>' +
+    (conflict ? '<span class="dep-bad" title="后置排期早于依赖要求，可在甘特图调整日期">排期冲突</span>' : '') +
+    (row.pending ? '<span class="dep-pending">未保存</span>' : '') +
+    (!row.edge || row.edge.editable ? '' : '<span class="dep-opt-state">只读</span>') +
+    '<label class="dep-lag">滞后 <input type="number" min="-365" max="365" step="1" value="' + row.lagDays + '" ' +
+      lagAttr + ' aria-label="滞后天数"' +
+      (editable ? "" : ' disabled data-dep-locked="1"') + ' /> 天</label>' +
+    (editable ? '<button class="dep-del" type="button" ' + delAttr + ' title="删除依赖" aria-label="删除依赖">' +
+      icon("close", 12) + '</button>' : '') +
+  '</div>';
+}
+function depGroupHTML(rows, direction){
+  if(depState.loading && !rows.length) return '<div class="dep-empty">加载中…</div>';
+  if(depState.error && !rows.length){
+    return '<div class="dep-empty">加载失败，<button class="link-btn" type="button" data-dep-retry>重新加载</button></div>';
+  }
+  if(!rows.length) return '<div class="dep-empty">' + (direction === "pred" ? "暂无前置任务" : "暂无后置任务") + '</div>';
+  return rows.map(depRowHTML).join("");
+}
+function syncDepControls(){
+  var root = $("fDeps");
+  if(!root) return;
+  var ro = !!rt.drawerReadOnly;
+  Array.prototype.forEach.call(root.querySelectorAll(".dep-add, .dep-del"), function(el){ el.hidden = ro; });
+  /* data-dep-locked 标记「依赖两端含只读项目」，恢复可编辑时要还原它，不能一律放开 */
+  Array.prototype.forEach.call(root.querySelectorAll(".dep-type, .dep-lag input"), function(el){
+    el.disabled = ro || el.getAttribute("data-dep-locked") === "1";
+  });
+  if(ro) closeDepPicker();
+}
+function renderDeps(){
+  var root = $("fDeps");
+  if(!root) return;
+  var preds = depRowsFor("pred"), succs = depRowsFor("succ");
+  var total = depState.edges.length + depState.pending.length;
+  var cnt = $("depCount");
+  if(cnt){ cnt.hidden = total === 0; cnt.textContent = total + " 条"; }
+  var predList = $("depPredList"), succList = $("depSuccList");
+  if(predList) predList.innerHTML = depGroupHTML(preds, "pred");
+  if(succList) succList.innerHTML = depGroupHTML(succs, "succ");
+  var conflicts = preds.concat(succs).filter(function(row){
+    var cur = depCurrentRef();
+    var pred = row.direction === "pred" ? row.other : cur;
+    var succ = row.direction === "pred" ? cur : row.other;
+    return depConflictOf(pred, succ, row.depType, row.lagDays);
+  }).length;
+  var alert = $("depAlert"), alertText = $("depAlertText");
+  if(alert && alertText){
+    alert.hidden = conflicts === 0;
+    if(conflicts){
+      alertText.textContent = conflicts + " 条依赖存在排期冲突：后置任务的开始或结束早于前置要求。可在甘特图调整日期。";
+    }
+  }
+  var foot = $("depFoot");
+  if(foot){
+    if(rt.drawerReadOnly){
+      foot.textContent = "你对该项目只有查看权限，依赖关系只读。";
+    }else if(!rt.editingId){
+      foot.textContent = "新建工作项时添加的依赖会在保存后一并建立，甘特图随之更新。";
+    }else{
+      foot.textContent = "修改立即生效并同步甘特图；只调整连线与冲突提示，不会自动改日期。";
+    }
+    foot.classList.remove("bad");
+  }
+  var note = $("depScopeNote");
+  if(note) note.textContent = rt.editingId ? "影响甘特连线，不自动改日期" : "保存后建立";
+  syncDepControls();
+}
+function loadTaskDeps(taskId){
+  var seq = ++depState.seq;
+  depState.loading = true;
+  depState.error = "";
+  renderDeps();
+  API.get("/api/tasks/" + encodeURIComponent(taskId) + "/dependencies").then(function(list){
+    if(seq !== depState.seq || rt.editingId !== taskId) return;
+    depState.edges = Array.isArray(list) ? list : [];
+    depState.loading = false;
+    renderDeps();
+  }).catch(function(ex){
+    if(seq !== depState.seq) return;
+    depState.loading = false;
+    depState.error = (ex && ex.message) || "网络异常";
+    renderDeps();
+  });
+}
+function initDependencies(task){
+  depState.taskId = task ? task.id : null;
+  depState.seq++;
+  depState.edges = [];
+  depState.pending = [];
+  depState.loading = !!task;
+  depState.error = "";
+  depState.pickerItems = [];
+  depState.pickerLoading = false;
+  closeDepPicker();
+  if(task) loadTaskDeps(task.id);
+  else renderDeps();
+}
+function closeDepPicker(){
+  depState.mode = "";
+  depState.pickerItems = [];
+  depState.pickerLoading = false;
+  var p = $("depPicker");
+  if(p) p.hidden = true;
+  var s = $("iDepSearch");
+  if(s) s.value = "";
+  var list = $("depPickerList");
+  if(list) list.innerHTML = "";
+}
+function openDepPicker(mode){
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  depState.mode = mode;
+  depState.pickerItems = [];
+  depState.pickerLoading = true;
+  var p = $("depPicker");
+  if(p) p.hidden = false;
+  var title = $("depPickerTitle");
+  if(title) title.textContent = mode === "pred" ? "添加前置任务" : "添加后置任务";
+  var s = $("iDepSearch");
+  if(s){ s.value = ""; s.focus(); }
+  var list = $("depPickerList");
+  if(list) list.innerHTML = '<div class="dep-picker-empty">加载中…</div>';
+  searchDepTasks("");
+}
+function searchDepTasks(q){
+  if(!depState.mode) return;
+  var seq = ++depState.pickerSeq;
+  depState.pickerLoading = true;
+  API.get("/api/tasks/list", { q:q, limit:12, sort:"updated" }).then(function(res){
+    if(seq !== depState.pickerSeq || !depState.mode) return;
+    depState.pickerItems = (res && res.items) || [];
+    depState.pickerLoading = false;
+    renderDepPicker();
+  }).catch(function(){
+    if(seq !== depState.pickerSeq) return;
+    depState.pickerItems = [];
+    depState.pickerLoading = false;
+    renderDepPicker("加载失败，请稍后重试");
+  });
+}
+function renderDepPicker(errorText){
+  var list = $("depPickerList");
+  if(!list) return;
+  if(depState.pickerLoading){ list.innerHTML = '<div class="dep-picker-empty">加载中…</div>'; return; }
+  if(errorText){ list.innerHTML = '<div class="dep-picker-empty">' + esc(errorText) + '</div>'; return; }
+  var currentId = rt.editingId;
+  var rows = (depState.pickerItems || []).filter(function(t){ return t.id !== currentId; });
+  if(!rows.length){
+    list.innerHTML = '<div class="dep-picker-empty">没有匹配的工作项</div>';
+    return;
+  }
+  list.innerHTML = rows.map(function(t){
+    var linked = depTaskLinked(t.id);
+    var writable = canEditTask(t);
+    var disabled = linked || !writable;
+    var state = linked ? "已关联" : (!writable ? "只读项目" : "添加");
+    var meta = [
+      t.reqName || (t.reqId ? reqNameById(t.reqId) : "未归属项目"),
+      depRangeText(t)
+    ].join(" · ");
+    return '<button class="dep-opt" type="button" data-dep-opt="' + esc(t.id) + '"' +
+      (disabled ? " disabled" : "") + ' title="' + esc(t.title || "") + '">' +
+      '<span class="dep-opt-main">' +
+        '<span class="dep-opt-title">' + esc(t.title || "未命名工作项") + '</span>' +
+        '<span class="dep-opt-meta">' + esc(meta) + '</span>' +
+      '</span>' +
+      '<span class="dep-opt-state' + (!writable && !linked ? " bad" : "") + '">' + state + '</span>' +
+    '</button>';
+  }).join("");
+}
+function addDependency(other, mode){
+  if(!other || !mode) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  var currentId = rt.editingId;
+  if(!currentId){
+    depState.pending.push({
+      key: "p" + (++depState.pendingSeq),
+      direction: mode,
+      task: other,
+      depType: "FS",
+      lagDays: 0
+    });
+    renderDeps();
+    rt.formDirty = true;
+    syncDrawerDirty();
+    toast("已添加「" + other.title + "」，保存工作项后建立依赖");
+    return;
+  }
+  var body = mode === "pred"
+    ? { fromTaskId:other.id, toTaskId:currentId, depType:"FS", lagDays:0 }
+    : { fromTaskId:currentId, toTaskId:other.id, depType:"FS", lagDays:0 };
+  API.post("/api/gantt/deps", body).then(function(){
+    toast("已添加依赖「" + other.title + "」");
+    loadTaskDeps(currentId);
+    refreshGanttIfOpen();
+  }).catch(function(ex){
+    toast((ex && ex.message) || "添加依赖失败", "bad");
+  });
+}
+function updateDependency(row, patch){
+  if(!row || !row.edge || rt.drawerReadOnly) return;
+  if(!row.edge.editable){
+    toast("依赖两端项目中存在只读项目，不能修改", "warn");
+    renderDeps();
+    return;
+  }
+  var edge = row.edge;
+  var oldType = edge.depType, oldLag = Number(edge.lagDays) || 0;
+  edge.depType = patch.depType || oldType;
+  edge.lagDays = patch.lagDays == null ? oldLag : patch.lagDays;
+  renderDeps();
+  API.put("/api/gantt/deps/" + encodeURIComponent(edge.id), {
+    depType: edge.depType, lagDays: edge.lagDays
+  }).then(function(){
+    refreshGanttIfOpen();
+  }).catch(function(ex){
+    edge.depType = oldType;
+    edge.lagDays = oldLag;
+    renderDeps();
+    toast((ex && ex.message) || "更新依赖失败", "bad");
+  });
+}
+function deleteDependency(row){
+  if(!row || rt.drawerReadOnly) return;
+  if(row.pending){
+    depState.pending = depState.pending.filter(function(p){ return p.key !== row.pending.key; });
+    renderDeps();
+    rt.formDirty = true;
+    syncDrawerDirty();
+    return;
+  }
+  var edge = row.edge;
+  if(!edge || !edge.editable){ toast("依赖两端项目中存在只读项目，不能删除", "warn"); return; }
+  var body = { fromTaskId:edge.from.id, toTaskId:edge.to.id, depType:edge.depType, lagDays:edge.lagDays };
+  API.del("/api/gantt/deps/" + encodeURIComponent(edge.id)).then(function(){
+    depState.edges = depState.edges.filter(function(e){ return e.id !== edge.id; });
+    renderDeps();
+    refreshGanttIfOpen();
+    toastAction("已删除与「" + (row.other.title || "工作项") + "」的依赖", "撤销", function(){
+      API.post("/api/gantt/deps", body).then(function(){
+        if(rt.editingId === depState.taskId) loadTaskDeps(depState.taskId);
+        refreshGanttIfOpen();
+      }).catch(function(ex){ toast((ex && ex.message) || "撤销失败", "bad"); });
+    }, "", 8000);
+  }).catch(function(ex){
+    toast((ex && ex.message) || "删除依赖失败", "bad");
+  });
+}
+function flushPendingDependencies(taskId){
+  var list = depState.pending.slice();
+  depState.pending = [];
+  if(!list.length) return Promise.resolve({ total:0, failed:0 });
+  var failed = [], i = 0;
+  function next(){
+    if(i >= list.length) return Promise.resolve({ total:list.length, failed:failed.length });
+    var p = list[i++];
+    var body = p.direction === "pred"
+      ? { fromTaskId:p.task.id, toTaskId:taskId, depType:p.depType, lagDays:p.lagDays }
+      : { fromTaskId:taskId, toTaskId:p.task.id, depType:p.depType, lagDays:p.lagDays };
+    return API.post("/api/gantt/deps", body).then(next, function(ex){
+      failed.push({ title:p.task.title, message:(ex && ex.message) || "网络异常" });
+      return next();
+    });
+  }
+  return next();
+}
+(function wireDepSection(){
+  var root = $("fDeps");
+  if(!root) return;
+  var addPred = $("btnDepAddPred"), addSucc = $("btnDepAddSucc");
+  if(addPred) addPred.addEventListener("click", function(){ openDepPicker("pred"); });
+  if(addSucc) addSucc.addEventListener("click", function(){ openDepPicker("succ"); });
+  var closeBtn = $("depPickerClose");
+  if(closeBtn) closeBtn.addEventListener("click", closeDepPicker);
+  var search = $("iDepSearch");
+  if(search){
+    search.addEventListener("input", function(){
+      var q = this.value.trim();
+      if(depState.searchTimer) clearTimeout(depState.searchTimer);
+      depState.searchTimer = setTimeout(function(){ searchDepTasks(q); }, 180);
+    });
+    search.addEventListener("keydown", function(e){
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      var first = root.querySelector(".dep-opt:not(:disabled)");
+      if(first) first.click();
+    });
+  }
+  root.addEventListener("click", function(e){
+    var opt = e.target.closest("[data-dep-opt]");
+    if(opt && !opt.disabled){
+      var id = opt.getAttribute("data-dep-opt");
+      var task = null;
+      for(var i=0;i<depState.pickerItems.length;i++){
+        if(depState.pickerItems[i].id === id){ task = depState.pickerItems[i]; break; }
+      }
+      var mode = depState.mode;
+      closeDepPicker();
+      if(task) addDependency(task, mode);
+      return;
+    }
+    var retry = e.target.closest("[data-dep-retry]");
+    if(retry && depState.taskId){ loadTaskDeps(depState.taskId); return; }
+    var del = e.target.closest("[data-dep-del]");
+    var pdel = e.target.closest("[data-dep-pending-del]");
+    if(del){
+      var rows = depRowsFor("pred").concat(depRowsFor("succ"));
+      for(var j=0;j<rows.length;j++){
+        if(rows[j].edge && rows[j].edge.id === del.getAttribute("data-dep-del")){
+          deleteDependency(rows[j]); return;
+        }
+      }
+    }
+    if(pdel){
+      var prows = depRowsFor("pred").concat(depRowsFor("succ"));
+      for(var k=0;k<prows.length;k++){
+        if(prows[k].pending && prows[k].pending.key === pdel.getAttribute("data-dep-pending-del")){
+          deleteDependency(prows[k]); return;
+        }
+      }
+    }
+  });
+  root.addEventListener("change", function(e){
+    if(rt.drawerReadOnly) return;
+    var typeSel = e.target.closest("[data-dep-type]");
+    var lagInput = e.target.closest("[data-dep-lag]");
+    var pType = e.target.closest("[data-dep-pending-type]");
+    var pLag = e.target.closest("[data-dep-pending-lag]");
+    var rows = depRowsFor("pred").concat(depRowsFor("succ"));
+    if(typeSel){
+      var id = typeSel.getAttribute("data-dep-type");
+      for(var i=0;i<rows.length;i++){
+        if(rows[i].edge && rows[i].edge.id === id){
+          updateDependency(rows[i], { depType:typeSel.value, lagDays:rows[i].lagDays });
+          return;
+        }
+      }
+    }
+    if(lagInput){
+      var lid = lagInput.getAttribute("data-dep-lag");
+      var v = parseInt(lagInput.value, 10);
+      if(isNaN(v)) v = 0;
+      v = Math.max(-365, Math.min(365, v));
+      lagInput.value = v;
+      for(var j=0;j<rows.length;j++){
+        if(rows[j].edge && rows[j].edge.id === lid){
+          updateDependency(rows[j], { depType:rows[j].depType, lagDays:v });
+          return;
+        }
+      }
+    }
+    if(pType){
+      var key = pType.getAttribute("data-dep-pending-type");
+      for(var k=0;k<depState.pending.length;k++){
+        if(depState.pending[k].key === key){
+          depState.pending[k].depType = pType.value;
+          renderDeps(); rt.formDirty = true; syncDrawerDirty(); return;
+        }
+      }
+    }
+    if(pLag){
+      var pkey = pLag.getAttribute("data-dep-pending-lag");
+      var pv = parseInt(pLag.value, 10);
+      if(isNaN(pv)) pv = 0;
+      pv = Math.max(-365, Math.min(365, pv));
+      pLag.value = pv;
+      for(var n=0;n<depState.pending.length;n++){
+        if(depState.pending[n].key === pkey){
+          depState.pending[n].lagDays = pv;
+          renderDeps(); rt.formDirty = true; syncDrawerDirty(); return;
+        }
+      }
+    }
+  });
+  root.addEventListener("keydown", function(e){
+    var lag = e.target.closest(".dep-lag input");
+    if(lag && e.key === "Enter"){ e.preventDefault(); lag.blur(); }
+  });
+})();
+
 function syncProgByCol(){
   var done = iCol && iCol.value === "done";
   var wrap = $("progWrap");
@@ -1559,7 +2063,8 @@ segProg.addEventListener("click", function(e){
 [segPri, segCat, segRecur, segDue, segStart, segProg].forEach(wireSegKeyboard);
 iProg.addEventListener("input", function(){ syncProgVal(); rt.formDirty = true; });
 function inTaskAuxSection(target){
-  return !!(target && target.closest && target.closest("#fComments, #fSubtasks, #fAttach"));
+  /* 依赖区是即时保存：类型/滞后改动走各自的接口，不计入主表单脏状态 */
+  return !!(target && target.closest && target.closest("#fComments, #fSubtasks, #fAttach, #fDeps"));
 }
 taskForm.addEventListener("input", function(e){
   if(e.target === iProg) return;
@@ -2496,9 +3001,22 @@ taskForm.addEventListener("submit", function(e){
         if(changedDuringSave) toast("已保存提交时的内容 · 保存期间的新改动还未保存", "warn");
         else toast("已保存「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""));
       }else{
+        var createdId = !wasEdit && nt ? nt.id : null;
+        /* 新建时暂存的依赖要等工作项拿到 id 后才能落库；先记数量再关抽屉 */
+        var pendingDepCount = createdId ? depState.pending.length : 0;
         forceCloseTaskDrawer();
         if(wasEdit){
           toast("已更新「" + title + "」" + (autoTimerHint ? " · 已开始计时" : ""), "fs");
+        }else if(createdId && pendingDepCount){
+          toast("已创建工作项「" + nt.title + "」，正在建立依赖…", "fs");
+          flushPendingDependencies(createdId).then(function(res){
+            if(res && res.failed){
+              toast("工作项已创建，但有 " + res.failed + " 条依赖未建立，可在详情里重新添加", "warn");
+            }else{
+              toast("已创建工作项「" + nt.title + "」，并建立 " + ((res && res.total) || pendingDepCount) + " 条依赖", "fs");
+            }
+            refreshGanttIfOpen();
+          });
         }else{
           var tip = "已创建工作项「" + nt.title + "」";
           var kind = "fs";
@@ -2518,6 +3036,10 @@ taskForm.addEventListener("submit", function(e){
     refreshListIfOpen();
     refreshGanttIfOpen();
     refreshAssociationViews();
+    /* 测试页缺陷 tab 依赖工作项保存后的列与回归状态，通知其重新拉取 */
+    window.dispatchEvent(new CustomEvent("ds:task-saved", {
+      detail: { id: (wasEdit ? editId : (nt && nt.id)) || "", created: !wasEdit }
+    }));
   }
   function saveWith(extra){
     var body = payload;

@@ -47,9 +47,11 @@ class DemandServiceScheduleTest {
     private final AttachmentService attachments = mock(AttachmentService.class);
     private final com.hourglass.mapper.MailDeliveryMapper mail = mock(com.hourglass.mapper.MailDeliveryMapper.class);
     private final com.hourglass.mapper.TestCaseMapper cases = mock(com.hourglass.mapper.TestCaseMapper.class);
+    private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
     private final DemandService service = new DemandService(demands, projects, versions, tasks, events,
             docs, access, attachments, mail, cases,
-            mock(com.hourglass.mapper.CategoryMapper.class), lock, permissions);
+            mock(com.hourglass.mapper.CategoryMapper.class), lock, permissions,
+            deletionTrace);
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
@@ -560,6 +562,10 @@ class DemandServiceScheduleTest {
         verify(mail).deleteByReferenceIds(Collections.singletonList("D1"));
         verify(docs).deleteDemandLinksByDemand("W1", "D1");
         verify(cases).clearDemandRefs("W1", "D1");
+        verify(deletionTrace).recordDelete(eq("W1"), eq("U1"), eq("demand_delete"), eq("demand"),
+                eq("D1"), eq("需求"), contains("删除需求「需求」（项目 R1；解除"));
+        verify(deletionTrace).logTaskCascade(eq("W1"), eq("U1"), anyList(),
+                eq("关联需求「需求」已删除，自动解除关联"));
         verifyNoInteractions(permissions);
     }
 

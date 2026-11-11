@@ -24,6 +24,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 
 `66_project_access_assigned.sql` 新增 `workspace_member.project_access_mode`（`all` / `assigned`）与 `invite_project_grant` 表，并为 `assigned` 成员补齐 `project_member.access='none'` 种子行。存量成员默认 `all`，升级后可见范围不变；新成员与邀请加入者写 `assigned`，未显式授权的项目一律不可见。脚本只补缺，不覆盖已有 `write` / `read` / `none`。
 
+`67_bug_regression_backfill.sql` 只为存量缺陷补齐缺失的回归状态：`test` / `testing` 补 `pending`，`done` 补 `passed`；已有值不动，`backlog` / `doing` 保持为空。此后回归状态由后端随列流转维护，完成与回归通过同时成立才算关闭。
+
 `64_task_test_flow.sql` 增量补齐测试流程：`task` 增加 `test_started_at` / `test_finished_at`，并为每个空间补「待测试」「测试中」两个内置列。新列插在「进行中」之后，同位置的自定义列按原相对顺序顺延；不回填历史测试时间，旧数据没有可靠记录时不伪造时间。执行时须带 `--default-character-set=utf8mb4`，否则列名中文会写成乱码。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。

@@ -32,11 +32,12 @@ class CategoryServiceTest {
     private final CategoryMapper categoryMapper = mock(CategoryMapper.class);
     private final RequirementMapper requirementMapper = mock(RequirementMapper.class);
     private final ActivityService activityService = mock(ActivityService.class);
+    private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
     private final ProjectAccessService projectAccess = mock(ProjectAccessService.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final WorkspaceMetaCache metaCache = mock(WorkspaceMetaCache.class);
     private final CategoryService service = new CategoryService(categoryMapper, requirementMapper,
-            activityService, projectAccess, releasePermission, metaCache);
+            activityService, deletionTrace, projectAccess, releasePermission, metaCache);
 
     @BeforeEach
     void setUp() {
@@ -58,12 +59,16 @@ class CategoryServiceTest {
         when(metaCache.categories(WS)).thenReturn(Arrays.asList(front, back, foreign));
         when(categoryMapper.moveTasksToCategory(WS, PROJECT, "G1", "G2")).thenReturn(3);
         when(categoryMapper.moveDemandsToCategory(WS, PROJECT, "G1", "G2")).thenReturn(1);
+        when(categoryMapper.selectTaskIdsForCascade(WS, PROJECT, "G1"))
+                .thenReturn(Arrays.asList("K1", "K2", "K3"));
 
         service.delete(WS, USER, "G1", null);
 
         verify(categoryMapper).moveTasksToCategory(WS, PROJECT, "G1", "G2");
         verify(categoryMapper).moveDemandsToCategory(WS, PROJECT, "G1", "G2");
         verify(categoryMapper).deleteById(WS, "G1");
+        verify(deletionTrace).logTaskCascade(WS, USER, Arrays.asList("K1", "K2", "K3"),
+                "因删除模块「前端」，自动改到「后端」");
         verify(activityService).logConfig(WS,
                 "项目「项目一」删除模块「前端」，其下 3 个工作项与 1 个需求已改到「后端」");
     }

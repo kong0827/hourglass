@@ -158,7 +158,7 @@ public class TaskController {
     @RequireRole
     @DeleteMapping("/api/tasks/{id}/purge")
     public ApiResult<Void> purge(@PathVariable String id, @CurrentWorkspace WorkspaceCtx ctx) {
-        trashService.purge(ctx.getWsId(), id);
+        trashService.purge(ctx.getUserId(), ctx.getWsId(), id);
         return ApiResult.ok();
     }
 

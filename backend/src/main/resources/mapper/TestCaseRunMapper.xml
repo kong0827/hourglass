@@ -17,6 +17,17 @@
     ORDER BY created_at ASC, id ASC
   </select>
 
+  <select id="selectBugCaseLinks" resultType="com.hourglass.dto.CaseBugLink">
+    SELECT r.bug_task_id AS bugTaskId, c.id AS caseId, c.title AS caseTitle
+    FROM test_case_run r
+    JOIN test_case c ON c.id = r.case_id AND c.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+      AND c.req_id = #{reqId}
+      AND r.bug_task_id IS NOT NULL
+    GROUP BY r.bug_task_id, c.id, c.title
+    ORDER BY MAX(r.created_at) DESC, MAX(r.id) DESC
+  </select>
+
   <update id="clearBugTaskRefs">
     UPDATE test_case_run
     SET bug_task_id = NULL

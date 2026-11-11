@@ -597,6 +597,30 @@
     <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
   </update>
 
+  <!-- 级联解绑前取受影响任务：与级联 UPDATE 同口径（不过滤 deleted_at），删除后逐条补时间线 -->
+  <select id="selectIdsByDemandForCascade" resultType="string">
+    SELECT id FROM task WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} ORDER BY id
+  </select>
+
+  <select id="selectIdsByBranchForCascade" resultType="string">
+    SELECT id FROM task WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId} ORDER BY id
+  </select>
+
+  <select id="selectIdsByReqDocForCascade" resultType="string">
+    SELECT id FROM task WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId} ORDER BY id
+  </select>
+
+  <select id="selectIdsByReqDocExceptReqForCascade" resultType="string">
+    SELECT id FROM task
+    WHERE workspace_id = #{workspaceId} AND req_doc_id = #{reqDocId}
+      AND (req_id IS NULL OR req_id &lt;&gt; #{reqId})
+    ORDER BY id
+  </select>
+
+  <select id="selectIdsByColumnForCascade" resultType="string">
+    SELECT id FROM task WHERE workspace_id = #{workspaceId} AND board_column = #{column} ORDER BY id
+  </select>
+
   <update id="clearBranchRef">
     UPDATE task SET branch_id = NULL, updated_at = GREATEST(NOW(), DATE_ADD(updated_at, INTERVAL 1 SECOND))
     WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId}

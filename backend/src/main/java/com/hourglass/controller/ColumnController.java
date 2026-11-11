@@ -117,7 +117,7 @@ public class ColumnController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         workspaceService.requireOwner(userId, ws.getId());
-        boardColumnService.delete(ws.getId(), id);
+        boardColumnService.delete(userId, ws.getId(), id);
         return ApiResult.ok();
     }
 

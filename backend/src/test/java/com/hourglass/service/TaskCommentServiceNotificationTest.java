@@ -4,6 +4,7 @@ import com.hourglass.common.AppException;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskComment;
+import com.hourglass.entity.TaskLog;
 import com.hourglass.entity.WorkspaceMember;
 import com.hourglass.mapper.TaskCommentMapper;
 import com.hourglass.mapper.TaskLogMapper;
@@ -18,6 +19,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -37,9 +39,11 @@ class TaskCommentServiceNotificationTest {
     private final TaskCommentMapper comments = mock(TaskCommentMapper.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final WorkspaceMemberMapper members = mock(WorkspaceMemberMapper.class);
+    private final TaskLogMapper logs = mock(TaskLogMapper.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final TaskCommentService service = new TaskCommentService(comments, tasks,
-            mock(TaskLogMapper.class), users, members, events, access, mock(TaskWatchService.class),
-            mock(AttachmentService.class));
+            logs, users, members, events, access, mock(TaskWatchService.class),
+            mock(AttachmentService.class), auditService);
 
     @Test
     void commentNotifiesOwnerThroughEventPreferences() {
@@ -97,6 +101,9 @@ class TaskCommentServiceNotificationTest {
         service.delete("U-author", "W1", 9L);
 
         verify(comments).deleteById(9L);
+        verify(logs).insert(any(TaskLog.class));
+        verify(auditService).recordCurrent(eq("W1"), eq("comment_delete"), eq("comment"), eq("9"),
+                isNull(), eq(true), anyString(), isNull());
     }
 
     @Test

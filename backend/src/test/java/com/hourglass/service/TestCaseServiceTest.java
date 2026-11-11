@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,12 +55,13 @@ class TestCaseServiceTest {
     private final RequirementMapper reqs = mock(RequirementMapper.class);
     private final AttachmentService attachments = mock(AttachmentService.class);
     private final com.hourglass.mapper.TestPlanCaseMapper planCases = mock(com.hourglass.mapper.TestPlanCaseMapper.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final TestCaseService service =
             new TestCaseService(cases, runs, taskCommand, access, reqs,
                     mock(com.hourglass.mapper.DemandMapper.class), mock(com.hourglass.mapper.TestModuleMapper.class),
                     mock(com.hourglass.mapper.AttachmentMapper.class), attachments,
                     mock(com.hourglass.mapper.TestPlanMapper.class),
-                    planCases);
+                    planCases, auditService);
 
     @BeforeEach
     void setUp() {
@@ -388,6 +390,8 @@ class TestCaseServiceTest {
         service.delete(USER, WS, "C1");
         verify(runs).deleteByCase(WS, "C1");
         verify(cases).delete(WS, "C1");
+        verify(auditService).recordCurrent(eq(WS), eq("test_case_delete"), eq("test_case"), eq("C1"),
+                any(), eq(true), anyString(), isNull());
     }
 
     @Test

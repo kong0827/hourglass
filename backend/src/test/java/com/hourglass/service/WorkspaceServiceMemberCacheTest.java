@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,6 +42,7 @@ class WorkspaceServiceMemberCacheTest {
     private WorkspaceService service;
     private WorkspaceMemberCache memberCache;
     private com.hourglass.mapper.TaskWatchMapper taskWatchMapper;
+    private ActivityService activityService;
 
     @BeforeEach
     void setUp() {
@@ -48,6 +52,7 @@ class WorkspaceServiceMemberCacheTest {
         taskWatchMapper = mock(com.hourglass.mapper.TaskWatchMapper.class);
         memberCache = new WorkspaceMemberCache(workspaceMapper, memberMapper, 60_000L,
                 new AtomicLong(1_000_000L)::get);
+        activityService = mock(ActivityService.class);
         service = new WorkspaceService(workspaceMapper, memberMapper, userMapper,
                 mock(BoardColumnMapper.class), mock(com.hourglass.mapper.ColumnTransitionMapper.class),
                 mock(CategoryMapper.class),
@@ -59,7 +64,7 @@ class WorkspaceServiceMemberCacheTest {
                 mock(InviteMapper.class), mock(com.hourglass.mapper.InviteProjectGrantMapper.class),
                 mock(ProjectMemberMapper.class),
                 taskWatchMapper, mock(TaskCascade.class),
-                mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
+                activityService, memberCache, mock(WorkspaceMetaCache.class));
 
         when(workspaceMapper.selectById(WS)).thenReturn(workspace());
         when(memberMapper.selectMember(WS, OWNER)).thenReturn(member(OWNER, "owner"));
@@ -106,6 +111,37 @@ class WorkspaceServiceMemberCacheTest {
         service.requireMember(MEMBER, WS);
         verify(memberMapper, times(2)).selectMember(WS, MEMBER);
         verify(workspaceMapper, times(1)).update(any(Workspace.class));
+        verify(activityService).logConfig(WS, OWNER, "更新空间设置：名称、通知渠道");
+    }
+
+    @Test
+    void createSharedSpaceLeavesConfigActivity() {
+        service.createShared(OWNER, "团队");
+
+        verify(activityService).logConfig(anyString(), eq(OWNER), contains("创建共享空间「团队」"));
+    }
+
+    @Test
+    void directMemberAddLeavesConfigActivity() {
+        com.hourglass.entity.AppUser u = new com.hourglass.entity.AppUser();
+        u.setId("U3");
+        u.setUsername("wang");
+        u.setDisplayName("小王");
+        when(userMapper.selectByUsername("wang")).thenReturn(u);
+        when(memberMapper.selectMember(WS, "U3")).thenReturn(null);
+
+        service.addMember(OWNER, WS, "wang");
+
+        verify(activityService).logConfig(WS, OWNER, "添加成员「小王」");
+    }
+
+    @Test
+    void joinByInviteLeavesConfigActivity() {
+        when(memberMapper.selectMember(WS, "U4")).thenReturn(null);
+
+        service.joinByInvite(WS, "U4");
+
+        verify(activityService).logConfig(WS, "U4", "通过邀请链接加入空间");
     }
 
     private static Workspace workspace() {

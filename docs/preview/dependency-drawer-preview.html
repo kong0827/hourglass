@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 任务详情依赖关系原型</title>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#D92D20; --danger-soft:#FEF3F2; --danger-border:#FECDCA; --danger-fg:#B42318;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-lg:0 12px 24px -6px rgba(16,24,40,.10),0 4px 8px -4px rgba(16,24,40,.05);
+    --shadow-xl:0 24px 48px -12px rgba(16,24,40,.22),0 8px 16px -8px rgba(16,24,40,.14);
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--bg-app);color:var(--text);font:13px/1.55 var(--font-sans);-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,h4,p{margin:0;}
+  button{font:inherit;color:inherit;}
+  .page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px 22px;}
+  .layout{display:flex;gap:22px;width:100%;max-width:1440px;align-items:center;}
+
+  /* ===== 左侧说明栏 ===== */
+  .rail{width:300px;flex:0 0 300px;padding-top:2px;}
+  .brand{display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:11.5px;font-weight:600;letter-spacing:.02em;}
+  .brand .logo{width:22px;height:22px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;}
+  .rail h1{margin-top:14px;font-size:23px;line-height:1.28;font-weight:680;letter-spacing:-.02em;}
+  .rail .lede{margin-top:8px;font-size:12.5px;line-height:1.7;color:var(--text-2);}
+  .rail .lede b{font-weight:600;color:var(--text);}
+
+  .state-box{margin-top:20px;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);}
+  .state-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:7px;}
+  .seg{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--surface-sunken);border:1px solid var(--border);}
+  .seg button{flex:1;height:26px;border:0;border-radius:6px;background:transparent;font-size:11.5px;color:var(--text-3);cursor:pointer;}
+  .seg button[aria-pressed="true"]{background:#fff;color:var(--text);font-weight:600;box-shadow:var(--shadow-xs);}
+
+  .steps{margin-top:18px;display:flex;flex-direction:column;gap:10px;}
+  .step{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;}
+  .step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--surface-sunken);color:var(--text-3);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .step .t{font-size:12.5px;font-weight:600;line-height:1.45;color:var(--text);}
+  .step .d{margin-top:1px;font-size:11.5px;line-height:1.6;color:var(--text-3);}
+
+  .try{margin-top:18px;border:1px solid var(--primary-border);border-radius:10px;background:var(--primary-soft);padding:11px 12px;}
+  .try-title{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--primary-fg);margin-bottom:6px;}
+  .try ul{margin:0;padding-left:15px;color:#1D4ED8;font-size:11.5px;line-height:1.75;}
+  .try li::marker{color:#93B4FD;}
+  .try li + li{margin-top:1px;}
+  .rail .note{margin-top:14px;font-size:11px;line-height:1.7;color:var(--text-3);}
+  .rail .note b{color:var(--text-2);font-weight:600;}
+  .reset{margin-top:12px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-2);font-size:11.5px;cursor:pointer;}
+  .reset:hover{background:var(--surface-hover);}
+
+  /* ===== 右侧应用舞台 ===== */
+  .stage-wrap{flex:1 1 auto;min-width:0;display:flex;align-items:center;}
+  .stage{position:relative;width:100%;max-width:1080px;height:860px;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;}
+  .appbar{flex:0 0 44px;display:flex;align-items:center;gap:9px;padding:0 14px;border-bottom:1px solid var(--border);background:#fff;color:var(--text-3);font-size:11.5px;}
+  .appbar .mark{width:20px;height:20px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700;}
+  .appbar b{color:var(--text);font-weight:600;font-size:12px;}
+  .appbar .sep{width:1px;height:14px;background:var(--border);}
+  .appbar .grow{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .appbar .pill{border:1px solid var(--border);border-radius:var(--r-pill);padding:0 8px;height:22px;display:flex;align-items:center;background:#fff;color:var(--text-2);font-variant-numeric:tabular-nums;}
+  .appbar .x{color:var(--text-3);font-size:15px;line-height:1;}
+
+  .drawer{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--surface);}
+  .drawer-head{flex:0 0 56px;display:flex;align-items:center;gap:10px;padding:0 18px 0 24px;border-bottom:1px solid var(--border);}
+  .drawer-head h2{font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0;}
+  .head-pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11px;font-weight:600;}
+  .head-pill i{width:6px;height:6px;border-radius:50%;background:var(--primary);}
+  .head-btn{width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:var(--text-3);display:grid;place-items:center;cursor:pointer;flex:0 0 auto;}
+  .head-btn:hover{background:var(--surface-hover);color:var(--text);}
+
+  .drawer-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 24px 28px;}
+  .task-detail-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}
+  .task-detail-main,.task-detail-side{min-width:0;}
+
+  .task-intro .meta-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
+  .proj-chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px;border-radius:5px;background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);font-weight:600;}
+  .proj-chip i{width:6px;height:6px;border-radius:2px;background:var(--primary);}
+  .p1{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:4px;background:var(--danger-soft);color:var(--danger-fg);font-size:10.5px;font-weight:700;border:1px solid var(--danger-border);}
+  .task-intro h1{margin-top:8px;font-size:19px;line-height:1.35;font-weight:680;letter-spacing:-.015em;}
+  .task-intro .desc{margin-top:5px;font-size:12.5px;line-height:1.65;color:var(--text-2);max-width:640px;}
+  .facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:13px;}
+  .fact{min-width:0;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:#fff;}
+  .fact-k{font-size:10px;font-weight:600;letter-spacing:.03em;color:var(--text-3);}
+  .fact-v{display:flex;align-items:center;gap:5px;margin-top:2px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fact-v b{font-weight:650;}
+  .fact-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);flex:0 0 auto;}
+  .fact-dot.warn{background:var(--warning);}
+  .progress-mini{width:100%;height:4px;border-radius:999px;background:var(--surface-sunken);overflow:hidden;margin-top:6px;}
+  .progress-mini i{display:block;height:100%;width:45%;border-radius:inherit;background:var(--primary);}
+
+  .drawer-sect{padding-top:15px;margin-top:17px;border-top:1px solid var(--border);}
+  .sect-head{display:flex;align-items:center;gap:8px;min-height:24px;}
+  .sect-head h3{font-size:14px;font-weight:650;color:var(--text);}
+  .sect-head .cnt{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .sect-head .caret{color:var(--text-3);display:inline-flex;transition:transform .15s ease;}
+  .sect-head .sect-actions{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .link-btn{border:0;background:transparent;padding:0 2px;color:var(--primary-fg);font-size:11.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:3px;}
+  .link-btn:hover{text-decoration:underline;}
+
+  .dep-banner{display:flex;align-items:center;gap:7px;margin-top:11px;padding:7px 9px;border-radius:8px;background:var(--surface-sunken);border:1px solid var(--border);font-size:11px;line-height:1.5;color:var(--text-2);}
+  .dep-banner svg{flex:0 0 auto;color:var(--text-3);}
+  .dep-banner b{font-weight:600;color:var(--text);}
+
+  .dep-sect.collapsed .dep-body{display:none;}
+  .dep-sect.collapsed .sect-head .caret{transform:rotate(-90deg);}
+  .dep-group{margin-top:12px;}
+  .dep-group-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11.5px;font-weight:650;color:var(--text-2);}
+  .dep-group-head .gcnt{font-size:10.5px;font-weight:600;color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);border-radius:999px;padding:0 5px;line-height:16px;}
+  .dep-group-head .group-hint{margin-left:2px;font-size:10.5px;font-weight:400;color:var(--text-3);}
+  .dep-group-head .direction{margin-left:auto;color:var(--text-3);display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;}
+  .dep-row{display:flex;align-items:center;gap:9px;padding:8px 9px;border:1px solid var(--border);border-radius:9px;background:#fff;transition:border-color .15s,background .15s,box-shadow .15s;}
+  .dep-row + .dep-row{margin-top:6px;}
+  .dep-row:hover{border-color:var(--border-strong);background:#FCFCFD;box-shadow:var(--shadow-xs);}
+  .dep-conn{width:20px;height:20px;border-radius:6px;background:var(--surface-sunken);display:grid;place-items:center;color:var(--text-3);flex:0 0 auto;}
+  .dep-conn.pre{background:#F2F4F7;color:#475467;}
+  .dep-conn.post{background:var(--success-soft);color:var(--success-fg);}
+  .dep-main{flex:1 1 auto;min-width:0;}
+  .dep-title{display:block;max-width:100%;border:0;background:transparent;padding:0;text-align:left;font-size:12.5px;font-weight:600;line-height:1.4;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+  .dep-title:hover{color:var(--primary-fg);text-decoration:underline;text-underline-offset:2px;}
+  .dep-meta{display:flex;align-items:center;gap:5px;margin-top:1px;font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dep-meta .dot-sep{color:var(--border-strong);}
+  .dep-side{display:flex;align-items:center;gap:5px;flex:0 0 auto;}
+  .type-chip{height:22px;padding:0 6px;border-radius:5px;border:1px solid var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);font-size:10.5px;font-weight:700;letter-spacing:.02em;display:inline-flex;align-items:center;gap:3px;cursor:pointer;flex:0 0 auto;}
+  .type-chip:hover{border-color:#93B4FD;background:#E6EFFF;}
+  .type-chip .caret{font-size:8px;color:#6D9AF6;line-height:1;}
+  .type-chip.static{cursor:default;}
+  .type-chip.static:hover{border-color:var(--primary-border);background:var(--primary-soft);}
+  .lag-wrap{display:inline-flex;align-items:center;gap:3px;height:23px;padding:0 5px;border:1px solid var(--border);border-radius:5px;background:#fff;font-size:10.5px;color:var(--text-3);flex:0 0 auto;}
+  .lag-input{width:30px;border:0;background:transparent;text-align:right;font:inherit;font-weight:600;color:var(--text);padding:0;font-variant-numeric:tabular-nums;}
+  .lag-input:focus{outline:none;}
+  .lag-text{font-size:10.5px;color:var(--text-2);white-space:nowrap;}
+  .status-pill{height:19px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;white-space:nowrap;flex:0 0 auto;}
+  .status-pill.conflict{background:var(--danger-soft);border:1px solid var(--danger-border);color:var(--danger-fg);}
+  .status-pill.unsched{background:var(--warning-soft);border:1px solid var(--warning-border);color:var(--warning-fg);}
+  .del-btn{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--text-3);display:grid;place-items:center;cursor:pointer;opacity:.55;flex:0 0 auto;}
+  .del-btn:hover{background:var(--danger-soft);color:var(--danger-fg);opacity:1;}
+  .dep-empty{padding:9px 10px;border:1px dashed var(--border);border-radius:8px;color:var(--text-3);font-size:11px;background:#FCFCFD;}
+
+  .dep-add-row{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;}
+  .btn{height:29px;padding:0 10px;border-radius:7px;border:1px solid var(--border);background:#fff;color:var(--text-2);font-size:11.5px;font-weight:550;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap;}
+  .btn:hover{background:var(--surface-hover);color:var(--text);}
+  .btn.ghost{border-style:dashed;background:transparent;color:var(--text-2);}
+  .btn.ghost:hover{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-fg);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .btn.primary:hover{background:#1D4ED8;color:#fff;}
+
+  .readonly-note{display:flex;align-items:center;gap:6px;margin-top:10px;padding:7px 9px;border-radius:7px;background:var(--surface-sunken);color:var(--text-3);font-size:11px;}
+
+  /* 添加依赖选择器 */
+  .picker{margin-top:10px;border:1px solid var(--primary-border);border-radius:10px;background:#fff;box-shadow:var(--shadow-xs);padding:10px;}
+  .picker-head{display:flex;align-items:flex-start;gap:8px;}
+  .picker-head b{display:block;font-size:12px;font-weight:650;color:var(--text);}
+  .picker-head p{margin-top:1px;font-size:10.5px;color:var(--text-3);line-height:1.5;}
+  .picker-close{margin-left:auto;width:22px;height:22px;border:0;border-radius:5px;background:transparent;color:var(--text-3);cursor:pointer;display:grid;place-items:center;flex:0 0 auto;}
+  .picker-close:hover{background:var(--surface-hover);color:var(--text);}
+  .search{position:relative;margin-top:8px;}
+  .search svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;}
+  .search input{width:100%;height:30px;padding:0 9px 0 27px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--text);font:inherit;font-size:11.5px;}
+  .search input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.10);}
+  .cand-list{max-height:154px;overflow-y:auto;margin-top:5px;}
+  .cand{width:100%;display:flex;align-items:center;gap:8px;padding:7px 7px;border:0;border-radius:6px;background:transparent;text-align:left;cursor:pointer;}
+  .cand:hover{background:var(--surface-hover);}
+  .cand-main{flex:1 1 auto;min-width:0;}
+  .cand-main b{display:block;font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cand-main span{display:block;margin-top:1px;font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cand-add{font-size:10px;font-weight:600;color:var(--primary-fg);flex:0 0 auto;}
+  .cand[disabled]{cursor:not-allowed;opacity:.62;}
+  .cand[disabled]:hover{background:transparent;}
+  .ro-chip{height:18px;padding:0 5px;border-radius:4px;background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-3);font-size:9.5px;font-weight:600;display:inline-flex;align-items:center;flex:0 0 auto;}
+  .picker-foot{margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:10px;color:var(--text-3);}
+
+  /* 类型选择浮层 */
+  .type-pop{position:fixed;z-index:80;width:252px;padding:7px;border:1px solid var(--border);border-radius:10px;background:#fff;box-shadow:var(--shadow-lg);}
+  .type-pop-title{padding:2px 6px 6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3);}
+  .type-opt{display:grid;grid-template-columns:30px minmax(0,1fr) 14px;gap:7px;align-items:start;width:100%;padding:6px 6px;border:0;border-radius:6px;background:transparent;text-align:left;cursor:pointer;}
+  .type-opt:hover{background:var(--surface-hover);}
+  .type-opt[aria-pressed="true"]{background:var(--primary-soft);}
+  .type-opt .code{font-size:10.5px;font-weight:700;color:var(--primary-fg);padding-top:1px;}
+  .type-opt .opt-t{display:block;font-size:11.5px;font-weight:600;color:var(--text);line-height:1.4;}
+  .type-opt .opt-d{display:block;margin-top:1px;font-size:10px;color:var(--text-3);line-height:1.5;}
+  .type-opt .check{color:var(--primary);font-size:11px;padding-top:2px;visibility:hidden;}
+  .type-opt[aria-pressed="true"] .check{visibility:visible;}
+  .type-pop-foot{margin-top:5px;padding:7px 6px 2px;border-top:1px solid var(--border);font-size:10px;line-height:1.5;color:var(--text-3);}
+
+  /* 右侧栏 */
+  .task-detail-side{padding-left:16px;border-left:1px solid var(--border);}
+  .side-card{border:1px solid var(--border);border-radius:11px;background:#fff;padding:11px 12px;}
+  .side-card + .side-card{margin-top:11px;}
+  .side-title{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:var(--text);}
+  .side-sub{margin-top:2px;font-size:10px;color:var(--text-3);line-height:1.5;}
+  .live{margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:999px;background:var(--success-soft);border:1px solid var(--success-border);color:var(--success-fg);font-size:9.5px;font-weight:600;}
+  .live i{width:5px;height:5px;border-radius:50%;background:var(--success);}
+
+  .mini-legend{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:9.5px;color:var(--text-3);}
+  .mini-legend span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+  .mini-legend i{width:8px;height:8px;border-radius:2px;background:#98A2B3;}
+  .mini-legend i.cur{background:var(--primary);}
+  .mini-legend i.succ{background:var(--success);}
+  .mini-legend i.conf{background:var(--danger);border-radius:50%;}
+  .mini-scale{display:grid;grid-template-columns:74px minmax(0,1fr);margin-top:8px;font-size:9px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .mini-scale-track{display:flex;justify-content:space-between;}
+  .mini-body{position:relative;margin-top:3px;}
+  .mini-row{display:grid;grid-template-columns:74px minmax(0,1fr);align-items:center;height:25px;border-radius:5px;}
+  .mini-row.current{background:var(--primary-soft);}
+  .mini-label{min-width:0;padding-right:6px;font-size:9.5px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mini-row.current .mini-label{color:var(--primary-fg);font-weight:650;}
+  .mini-track{position:relative;display:block;height:100%;min-width:0;}
+  .mini-bar{position:absolute;top:7px;height:11px;border-radius:3px;background:#98A2B3;box-shadow:inset 0 0 0 1px rgba(16,24,40,.04);}
+  .mini-bar.current{background:var(--primary);}
+  .mini-bar.succ{background:var(--success);}
+  .mini-bar.pred{background:#98A2B3;}
+  .mini-unsched{position:absolute;left:0;top:8px;font-size:9px;color:var(--warning-fg);background:var(--warning-soft);border:1px dashed var(--warning-border);border-radius:3px;padding:0 4px;line-height:15px;white-space:nowrap;}
+  .mini-svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
+  .mini-note{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);font-size:9.5px;line-height:1.55;color:var(--text-3);}
+
+  .kv{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-top:1px dashed var(--border);font-size:11px;}
+  .kv:first-of-type{margin-top:8px;border-top-style:solid;}
+  .kv span{flex:0 0 auto;color:var(--text-3);}
+  .kv b{font-weight:600;color:var(--text);margin-left:auto;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .side-hint{margin-top:8px;padding:7px 8px;border-radius:6px;background:var(--surface-sunken);font-size:9.5px;line-height:1.55;color:var(--text-3);}
+
+  .drawer-foot{flex:0 0 62px;display:flex;align-items:center;gap:9px;padding:0 24px;border-top:1px solid var(--border);background:var(--surface);}
+  .foot-hint{display:flex;align-items:center;gap:6px;margin-right:auto;font-size:11.5px;color:var(--text-3);}
+  .foot-hint i{width:6px;height:6px;border-radius:50%;background:var(--success);flex:0 0 auto;}
+  .foot-hint b{font-weight:600;color:var(--text-2);}
+  .fh-short{display:none;font-size:11px;color:var(--text-2);font-weight:600;}
+
+  .toast{position:absolute;left:50%;bottom:74px;transform:translate(-50%,8px);z-index:70;max-width:560px;padding:8px 12px;border-radius:8px;background:#101828;color:#fff;font-size:11.5px;line-height:1.5;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;box-shadow:var(--shadow-lg);}
+  .toast.on{opacity:1;transform:translate(-50%,0);}
+
+  /* ===== 移动端 ===== */
+  @media (max-width: 1000px){
+    .page{padding:0;display:block;}
+    .layout{display:block;}
+    .rail{display:none;}
+    .stage-wrap{display:block;}
+    .stage{width:100%;max-width:none;height:100vh;border:0;border-radius:0;box-shadow:none;}
+    .drawer-head{padding:0 14px;gap:8px;}
+    .drawer-head h2{font-size:15px;}
+    .drawer-body{padding:14px 14px 24px;}
+    .task-detail-layout{grid-template-columns:1fr;gap:14px;}
+    .task-detail-side{padding:14px 0 0;border-left:0;border-top:1px solid var(--border);}
+    .facts{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .dep-row{align-items:flex-start;flex-wrap:wrap;}
+    .dep-side{width:100%;padding-left:29px;flex-wrap:wrap;}
+    .dep-title{white-space:normal;}
+    .drawer-foot{padding:0 14px;}
+    .foot-hint{font-size:10.5px;min-width:0;white-space:nowrap;}
+    .fh-long{display:none;}
+    .fh-short{display:inline;}
+    .appbar{display:none;}
+    .toast{bottom:76px;max-width:calc(100vw - 28px);}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="layout">
+    <aside class="rail">
+      <div class="brand"><span class="logo">沙</span>沙漏 · 交互原型</div>
+      <h1>任务详情里的依赖关系</h1>
+      <p class="lede">甘特图条尾的小圆点之外，再给一条<b>看得懂、改得动</b>的路径。依赖修改即时生效，甘特图同步刷新。</p>
+
+      <div class="state-box">
+        <div class="state-label">演示状态</div>
+        <div class="seg" role="group" aria-label="演示状态">
+          <button type="button" data-mode="edit" aria-pressed="true">可编辑</button>
+          <button type="button" data-mode="readonly" aria-pressed="false">只读项目</button>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step"><span class="n">01</span><div><div class="t">前置 / 后置分组</div><div class="d">每条依赖都直接显示对方项目与排期，默认 FS、滞后 0 天。</div></div></div>
+        <div class="step"><span class="n">02</span><div><div class="t">类型与滞后就地改</div><div class="d">点 FS 切换 SS / FF / SF；滞后可填负数，冲突立即标红。</div></div></div>
+        <div class="step"><span class="n">03</span><div><div class="t">按标题搜索添加</div><div class="d">只读项目的任务置灰不可选，和甘特图拖线的权限口径一致。</div></div></div>
+        <div class="step"><span class="n">04</span><div><div class="t">未排期也能建</div><div class="d">依赖会保存，但甘特图只在两端都有日期时才画箭头。</div></div></div>
+      </div>
+
+      <div class="try">
+        <div class="try-title">试试这些</div>
+        <ul>
+          <li>点「添加前置任务」，选一条搜出来。</li>
+          <li>点 <b>FS</b> 类型，切换成 SS 或 FF。</li>
+          <li>把滞后改成 <b>+10</b>，看排期冲突。</li>
+          <li>删掉后置任务，右侧箭头同步消失。</li>
+        </ul>
+      </div>
+
+      <p class="note"><b>边界：</b>两端项目都要写权限；不能自环、重复、成环；单空间上限 5000 条。这些仍由后端兜底，前端只提示错误。</p>
+      <button type="button" class="reset" id="resetDemo">重置演示</button>
+    </aside>
+
+    <div class="stage-wrap">
+      <div class="stage" id="stage">
+        <div class="appbar">
+          <span class="mark">沙</span><b>沙漏</b><span class="sep"></span><span>项目 · 中台重构</span>
+          <span class="grow"><span class="pill">工作项 HG-238</span><span class="x">×</span></span>
+        </div>
+
+        <div class="drawer">
+          <div class="drawer-head">
+            <h2>接入统一鉴权并切换灰度</h2>
+            <span class="head-pill"><i></i>进行中</span>
+            <button type="button" class="head-btn" title="关注" aria-label="关注">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7L3.2 8.2l4.7-.7L10 3.2z"/></svg>
+            </button>
+            <button type="button" class="head-btn" title="关闭" aria-label="关闭">×</button>
+          </div>
+
+          <div class="drawer-body">
+            <div class="task-detail-layout">
+              <div class="task-detail-main">
+                <div class="task-intro">
+                  <div class="meta-row">
+                    <span class="proj-chip"><i></i>中台重构</span>
+                    <span class="p1">P1</span>
+                    <span>负责人 林然</span>
+                    <span class="dot-sep">·</span>
+                    <span>更新于 10 分钟前</span>
+                  </div>
+                  <h1>接入统一鉴权并切换灰度</h1>
+                  <p class="desc">把现有会话校验收敛到统一鉴权服务，按 10% → 50% → 100% 切换灰度；依赖关系会影响灰度窗口的起始时间。</p>
+                  <div class="facts">
+                    <div class="fact"><div class="fact-k">状态</div><div class="fact-v"><span class="fact-dot"></span><b>进行中</b></div></div>
+                    <div class="fact"><div class="fact-k">进度</div><div class="fact-v"><b>45%</b></div><div class="progress-mini"><i></i></div></div>
+                    <div class="fact"><div class="fact-k">计划</div><div class="fact-v"><b>11-15 → 11-21</b></div></div>
+                    <div class="fact"><div class="fact-k">工时</div><div class="fact-v"><b>估 24h / 实 11h</b></div></div>
+                  </div>
+                </div>
+
+                <section class="drawer-sect dep-sect">
+                  <div class="sect-head">
+                    <h3>依赖关系</h3>
+                    <span class="cnt" id="depCount">0</span>
+                    <span class="caret" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+                    </span>
+                    <span class="sect-actions">
+                      <button type="button" class="link-btn" id="jumpGantt" title="在甘特图中查看">
+                        在甘特图中查看
+                        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13L13 7M8 7h5v5"/></svg>
+                      </button>
+                    </span>
+                  </div>
+                  <div class="dep-body" id="depBody"></div>
+                </section>
+
+                <div class="drawer-sect" style="padding-top:12px;margin-top:14px">
+                  <div class="sect-head" style="cursor:pointer">
+                    <h3 style="font-size:13px">检查清单</h3><span class="cnt">2 / 5</span>
+                    <span class="caret" style="margin-left:auto;transform:rotate(-90deg)" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+                  </div>
+                </div>
+                <div class="drawer-sect" style="padding-top:12px;margin-top:12px">
+                  <div class="sect-head" style="cursor:pointer">
+                    <h3 style="font-size:13px">附件</h3><span class="cnt">2</span>
+                    <span class="caret" style="margin-left:auto;transform:rotate(-90deg)" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
+                  </div>
+                </div>
+              </div>
+
+              <aside class="task-detail-side">
+                <section class="side-card">
+                  <div class="side-title">甘特图联动<span class="live"><i></i>实时</span></div>
+                  <p class="side-sub">保存依赖后自动刷新，无需回甘特图重连。</p>
+                  <div class="mini-legend">
+                    <span><i class="cur"></i>当前</span>
+                    <span><i></i>前置</span>
+                    <span><i class="succ"></i>后置</span>
+                    <span><i class="conf"></i>冲突</span>
+                  </div>
+                  <div class="mini-scale"><span></span><span class="mini-scale-track" id="miniScaleTrack"></span></div>
+                  <div class="mini-body" id="miniBody"><svg class="mini-svg" id="miniSvg"></svg></div>
+                  <p class="mini-note">仅两端都有日期时绘制连线；未排期任务保留依赖但不画线。</p>
+                </section>
+
+                <section class="side-card">
+                  <div class="side-title">关联</div>
+                  <div class="kv"><span>计划版本</span><b>v1.8 灰度</b></div>
+                  <div class="kv"><span>关联需求</span><b>权限中心 2.0</b></div>
+                  <div class="kv"><span>分支</span><b>feature/auth-unify</b></div>
+                  <div class="side-hint">这里的「关联」是版本、需求与文档；任务先后顺序在「依赖关系」里维护，两者不混用。</div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <div class="drawer-foot">
+            <span class="foot-hint"><i></i><span class="fh-long"><b>依赖修改即时生效</b>，甘特图箭头与关键路径同步更新</span><span class="fh-short">依赖即时同步</span></span>
+            <button type="button" class="btn">取消</button>
+            <button type="button" class="btn primary">保存</button>
+          </div>
+        </div>
+
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var TYPES = {
+    FS: { name:'完成 → 开始', desc:'前置完成后，后置才能开始（默认）' },
+    SS: { name:'开始 → 开始', desc:'前置开始后，后置才能开始' },
+    FF: { name:'完成 → 完成', desc:'前置完成后，后置才能完成' },
+    SF: { name:'开始 → 完成', desc:'前置开始后，后置才能完成' }
+  };
+
+  var INITIAL = {
+    currentId: 'T3',
+    tasks: {
+      T1: { id:'T1', title:'接口联调完成', project:'中台重构', start:'2026-11-12', due:'2026-11-14', status:'进行中' },
+      T2: { id:'T2', title:'权限模型评审', project:'中台重构', start:'2026-11-10', due:'2026-11-12', status:'已完成' },
+      T3: { id:'T3', title:'接入统一鉴权并切换灰度', project:'中台重构', start:'2026-11-15', due:'2026-11-21', status:'进行中' },
+      T5: { id:'T5', title:'灰度发布', project:'中台重构', start:'2026-11-24', due:'2026-11-26', status:'未开始' },
+      T6: { id:'T6', title:'监控告警接入', project:'稳定性专项', start:null, due:null, status:'未排期' },
+      T7: { id:'T7', title:'历史数据迁移', project:'数据平台', start:'2026-11-18', due:'2026-11-20', status:'进行中', readonly:true },
+      T8: { id:'T8', title:'前端灰度开关', project:'中台重构', start:'2026-11-17', due:'2026-11-19', status:'未开始' },
+      T9: { id:'T9', title:'网关限流规则', project:'中台重构', start:'2026-11-16', due:'2026-11-18', status:'未开始' },
+      T10:{ id:'T10', title:'回滚预案评审', project:'稳定性专项', start:null, due:null, status:'未排期' },
+      T12:{ id:'T12', title:'旧会话清理', project:'中台重构', start:'2026-11-12', due:'2026-11-14', status:'未开始' }
+    },
+    deps: [
+      { id:'D1', from:'T1', to:'T3', type:'FS', lag:0 },
+      { id:'D2', from:'T2', to:'T3', type:'SS', lag:1 },
+      { id:'D3', from:'T3', to:'T5', type:'FS', lag:2 }
+    ]
+  };
+
+  var state = {
+    readOnly: false,
+    picker: null,
+    focusSearch: false,
+    deps: deepCopy(INITIAL.deps),
+    seq: 10,
+    tasks: deepCopy(INITIAL.tasks)
+  };
+
+  var depBody = document.getElementById('depBody');
+  var depCount = document.getElementById('depCount');
+  var miniBody = document.getElementById('miniBody');
+  var miniSvg = document.getElementById('miniSvg');
+  var miniScaleTrack = document.getElementById('miniScaleTrack');
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  var typePop = null;
+
+  function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function parseDate(s){ if(!s) return null; var p = String(s).split('-'); return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); }
+  function fmtShort(s){ if(!s) return '未排期'; var p = String(s).split('-'); return p[1] + '-' + p[2]; }
+  function dayDiff(a, b){ return Math.round((parseDate(a) - parseDate(b)) / 86400000); }
+  function addDays(s, n){ var d = parseDate(s); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function lagText(n){ n = Number(n) || 0; return n === 0 ? '0 天' : (n > 0 ? '+' : '') + n + ' 天'; }
+  function isReadOnly(){ return state.readOnly || window.matchMedia('(max-width: 900px)').matches; }
+  function current(){ return state.tasks[INITIAL.currentId]; }
+
+  function isConflict(dep){
+    var f = state.tasks[dep.from], t = state.tasks[dep.to];
+    if(!f || !t || !f.start || !f.due || !t.start || !t.due) return false;
+    var lag = Number(dep.lag) || 0;
+    if(dep.type === 'SS') return dayDiff(addDays(f.start, lag), t.start) > 0;
+    if(dep.type === 'FF') return dayDiff(addDays(f.due, lag), t.due) > 0;
+    if(dep.type === 'SF') return dayDiff(addDays(f.start, lag), t.due) > 0;
+    return dayDiff(addDays(f.due, lag + 1), t.start) > 0;
+  }
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('on'); }, 2600);
+  }
+
+  function typeChip(depId, ro){
+    var d = findDep(depId);
+    if(!d) return '';
+    if(ro){
+      return '<span class="type-chip static" title="' + esc(TYPES[d.type].name) + '">' + d.type + '</span>';
+    }
+    return '<button type="button" class="type-chip" data-type="' + esc(d.id) + '" title="修改依赖类型：' + esc(TYPES[d.type].name) + '">' +
+      d.type + '<span class="caret" aria-hidden="true">▾</span></button>';
+  }
+
+  function findDep(id){
+    for(var i = 0; i < state.deps.length; i++){ if(state.deps[i].id === id) return state.deps[i]; }
+    return null;
+  }
+
+  function depRow(dep, dir, ro){
+    var otherId = dir === 'pre' ? dep.from : dep.to;
+    var t = state.tasks[otherId];
+    if(!t) return '';
+    var unsched = !t.start || !t.due;
+    var conflict = isConflict(dep);
+    var connIcon = dir === 'pre'
+      ? '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h10M10 6l4 4-4 4"/></svg>'
+      : '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h10M10 6l4 4-4 4"/></svg>';
+    var status = '';
+    if(conflict) status = '<span class="status-pill conflict" title="按当前依赖类型与滞后，两端排期冲突">排期冲突</span>';
+    else if(unsched) status = '<span class="status-pill unsched" title="对方未排期，甘特图暂不绘制连线">未排期</span>';
+
+    var lagHtml = ro
+      ? '<span class="lag-text">滞后 ' + lagText(dep.lag) + '</span>'
+      : '<label class="lag-wrap" title="滞后天数，可为负">滞后 <input class="lag-input" type="number" min="-365" max="365" step="1" value="' + (Number(dep.lag) || 0) + '" data-lag="' + esc(dep.id) + '" aria-label="滞后天数" /> 天</label>';
+
+    var delHtml = ro ? '' :
+      '<button type="button" class="del-btn" data-del="' + esc(dep.id) + '" title="删除依赖" aria-label="删除依赖">' +
+        '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.2h6.6L14 6M8.4 8.8v4.4M11.6 8.8v4.4"/></svg>' +
+      '</button>';
+
+    return '<div class="dep-row" data-row="' + esc(dep.id) + '">' +
+      '<span class="dep-conn ' + (dir === 'pre' ? 'pre' : 'post') + '" aria-hidden="true">' + connIcon + '</span>' +
+      '<div class="dep-main">' +
+        '<button type="button" class="dep-title" data-open="' + esc(otherId) + '" title="打开工作项：' + esc(t.title) + '">' + esc(t.title) + '</button>' +
+        '<div class="dep-meta"><span>' + esc(t.project) + '</span><span class="dot-sep">·</span>' +
+          (unsched ? '<span>未排期</span>' : '<span>' + fmtShort(t.start) + ' → ' + fmtShort(t.due) + '</span>') +
+        '</div>' +
+      '</div>' +
+      '<div class="dep-side">' + status + typeChip(dep.id, ro) + lagHtml + delHtml + '</div>' +
+    '</div>';
+  }
+
+  function renderDeps(){
+    var ro = isReadOnly();
+    var pre = state.deps.filter(function(d){ return d.to === INITIAL.currentId; });
+    var post = state.deps.filter(function(d){ return d.from === INITIAL.currentId; });
+    depCount.textContent = String(state.deps.length);
+
+    var html = '';
+    html += '<div class="dep-banner">' +
+      '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 9v4.2M10 6.4v.2"/></svg>' +
+      '<span>依赖只约束<b>先后顺序</b>，不会自动顺延日期。排期冲突会标红，仍需手动调整。</span></div>';
+
+    html += '<div class="dep-group">' +
+      '<div class="dep-group-head"><span>前置任务</span><span class="gcnt">' + pre.length + '</span>' +
+        '<span class="group-hint">做完这些，当前工作项才能开始</span>' +
+        '<span class="direction">前置 → 当前</span></div>' +
+      (pre.length ? pre.map(function(d){ return depRow(d, 'pre', ro); }).join('')
+        : '<div class="dep-empty">暂无前置任务。添加后，甘特图会从对方条尾画箭头到当前工作项。</div>') +
+    '</div>';
+
+    html += '<div class="dep-group">' +
+      '<div class="dep-group-head"><span>后置任务</span><span class="gcnt">' + post.length + '</span>' +
+        '<span class="group-hint">当前完成后，才能开始这些</span>' +
+        '<span class="direction">当前 → 后置</span></div>' +
+      (post.length ? post.map(function(d){ return depRow(d, 'post', ro); }).join('')
+        : '<div class="dep-empty">暂无后置任务。</div>') +
+    '</div>';
+
+    if(ro){
+      html += '<div class="readonly-note">' +
+        '<svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="8.5" width="11" height="8" rx="1.5"/><path d="M7 8.5V6.8a3 3 0 0 1 6 0v1.7"/></svg>' +
+        '当前项目只读或处于移动端，只能查看依赖；编辑请到有写权限的桌面端。</div>';
+    } else {
+      html += '<div class="dep-add-row">' +
+        '<button type="button" class="btn ghost" data-add="pre"><span aria-hidden="true">＋</span> 添加前置任务</button>' +
+        '<button type="button" class="btn ghost" data-add="post"><span aria-hidden="true">＋</span> 添加后置任务</button>' +
+      '</div>';
+    }
+
+    if(state.picker && !ro) html += pickerHTML(state.picker);
+
+    depBody.innerHTML = html;
+
+    if(state.picker && state.focusSearch){
+      state.focusSearch = false;
+      var input = document.getElementById('depSearch');
+      if(input){ input.focus(); input.select(); }
+    }
+  }
+
+  function candidates(dir){
+    var connected = {};
+    state.deps.forEach(function(d){ connected[d.from] = true; connected[d.to] = true; });
+    var out = [];
+    Object.keys(state.tasks).forEach(function(id){
+      var t = state.tasks[id];
+      if(id === INITIAL.currentId || connected[id]) return;
+      out.push(t);
+    });
+    out.sort(function(a, b){
+      if(a.readonly !== b.readonly) return a.readonly ? 1 : -1;
+      var as = a.start || '9999-99-99', bs = b.start || '9999-99-99';
+      if(as !== bs) return as < bs ? -1 : 1;
+      return a.title.localeCompare(b.title, 'zh-CN');
+    });
+    return out;
+  }
+
+  function pickerHTML(dir){
+    var list = candidates(dir);
+    var rows = list.map(function(t){
+      var unsched = !t.start || !t.due;
+      var roTarget = !!t.readonly;
+      var search = (t.title + ' ' + t.project).toLowerCase();
+      return '<button type="button" class="cand" data-pick="' + esc(t.id) + '" data-search="' + esc(search) + '"' + (roTarget ? ' disabled' : '') + '>' +
+        '<span class="cand-main"><b>' + esc(t.title) + '</b>' +
+          '<span>' + esc(t.project) + ' · ' + (unsched ? '未排期' : fmtShort(t.start) + ' → ' + fmtShort(t.due)) + '</span>' +
+        '</span>' +
+        (unsched ? '<span class="status-pill unsched">未排期</span>' : '') +
+        (roTarget ? '<span class="ro-chip">只读项目</span>' : '<span class="cand-add">＋ 添加</span>') +
+      '</button>';
+    }).join('');
+
+    return '<div class="picker" id="depPicker">' +
+      '<div class="picker-head">' +
+        '<div><b>添加' + (dir === 'pre' ? '前置' : '后置') + '任务</b>' +
+          '<p>' + (dir === 'pre' ? '所选任务将排在当前工作项之前' : '当前工作项完成后，才能开始所选任务') + '</p></div>' +
+        '<button type="button" class="picker-close" data-picker-close aria-label="关闭">×</button>' +
+      '</div>' +
+      '<div class="search">' +
+        '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.6" cy="8.6" r="4.8"/><path d="M12.2 12.2l3.4 3.4"/></svg>' +
+        '<input id="depSearch" type="search" placeholder="搜索任务标题或项目" autocomplete="off" aria-label="搜索任务" />' +
+      '</div>' +
+      '<div class="cand-list" id="candList">' + (rows || '<div class="dep-empty">没有可添加的任务</div>') + '</div>' +
+      '<div class="picker-foot">默认建立 FS、滞后 0 天；添加后可继续调整类型与滞后。</div>' +
+    '</div>';
+  }
+
+  function renderMini(){
+    var ids = [INITIAL.currentId];
+    state.deps.forEach(function(d){
+      if(ids.indexOf(d.from) < 0) ids.push(d.from);
+      if(ids.indexOf(d.to) < 0) ids.push(d.to);
+    });
+    var rows = ids.map(function(id){ return state.tasks[id]; }).filter(Boolean);
+    rows.sort(function(a, b){
+      if(!a.start && b.start) return 1;
+      if(a.start && !b.start) return -1;
+      if(a.start !== b.start) return a.start < b.start ? -1 : 1;
+      return a.id === INITIAL.currentId ? -1 : (b.id === INITIAL.currentId ? 1 : 0);
+    });
+
+    var scheduled = rows.filter(function(t){ return t.start && t.due; });
+    var min = scheduled.length ? scheduled[0].start : current().start;
+    var max = scheduled.length ? scheduled[0].due : current().due;
+    scheduled.forEach(function(t){
+      if(t.start < min) min = t.start;
+      if(t.due > max) max = t.due;
+    });
+    if(!min) min = '2026-11-10';
+    if(!max) max = '2026-11-26';
+    min = addDays(min, -1);
+    max = addDays(max, 1);
+    var total = Math.max(1, dayDiff(max, min) + 1);
+
+    var ticks = [0, 1 / 3, 2 / 3, 1].map(function(f){
+      return fmtShort(addDays(min, Math.round(f * (total - 1))));
+    });
+    miniScaleTrack.innerHTML = ticks.map(function(t){ return '<span>' + t + '</span>'; }).join('');
+
+    var rowHtml = rows.map(function(t){
+      var cls = 'mini-bar';
+      if(t.id === INITIAL.currentId) cls += ' current';
+      else if(state.deps.some(function(d){ return d.from === INITIAL.currentId && d.to === t.id; })) cls += ' succ';
+      else cls += ' pred';
+      var bar = (t.start && t.due)
+        ? '<span class="' + cls + '" data-bar="' + esc(t.id) + '" style="left:' + ((dayDiff(t.start, min) / total) * 100) + '%;width:' + (((dayDiff(t.due, t.start) + 1) / total) * 100) + '%"></span>'
+        : '<span class="mini-unsched">未排期</span>';
+      return '<div class="mini-row' + (t.id === INITIAL.currentId ? ' current' : '') + '" data-mini-row="' + esc(t.id) + '">' +
+        '<span class="mini-label" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
+        '<span class="mini-track">' + bar + '</span>' +
+      '</div>';
+    }).join('');
+
+    miniBody.innerHTML = '<svg class="mini-svg" id="miniSvg"></svg>' + rowHtml;
+    miniSvg = document.getElementById('miniSvg');
+    requestAnimationFrame(function(){ requestAnimationFrame(drawMiniArrows); });
+  }
+
+  function drawMiniArrows(){
+    if(!miniSvg || !miniBody) return;
+    var bodyRect = miniBody.getBoundingClientRect();
+    if(!bodyRect.width || !bodyRect.height) return;
+    miniSvg.setAttribute('viewBox', '0 0 ' + bodyRect.width + ' ' + bodyRect.height);
+    miniSvg.setAttribute('width', bodyRect.width);
+    miniSvg.setAttribute('height', bodyRect.height);
+
+    var paths = '';
+    state.deps.forEach(function(d){
+      var fromBar = miniBody.querySelector('[data-bar="' + d.from + '"]');
+      var toBar = miniBody.querySelector('[data-bar="' + d.to + '"]');
+      if(!fromBar || !toBar) return;
+      var fr = fromBar.getBoundingClientRect();
+      var tr = toBar.getBoundingClientRect();
+      var x1 = fr.right - bodyRect.left + 1;
+      var y1 = fr.top - bodyRect.top + fr.height / 2;
+      var x2 = tr.left - bodyRect.left - 3;
+      var y2 = tr.top - bodyRect.top + tr.height / 2;
+      if(x2 <= x1 + 5){
+        x2 = x1 + 5;
+      }
+      var mid = x1 + 8;
+      var path = 'M' + x1 + ',' + y1 + ' H' + mid + ' V' + y2 + ' H' + x2;
+      var bad = isConflict(d);
+      paths += '<path d="' + path + '" fill="none" stroke="' + (bad ? 'var(--danger)' : 'var(--text-3)') + '" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#' + (bad ? 'miniArrowBad' : 'miniArrow') + ')"></path>';
+    });
+
+    miniSvg.innerHTML = '<defs>' +
+      '<marker id="miniArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--text-3)"></path></marker>' +
+      '<marker id="miniArrowBad" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--danger)"></path></marker>' +
+    '</defs>' + paths;
+  }
+
+  function renderAll(){
+    renderDeps();
+    renderMini();
+  }
+
+  function closeTypePop(){
+    if(typePop && typePop.parentNode) typePop.parentNode.removeChild(typePop);
+    typePop = null;
+  }
+
+  function openTypePop(chip, depId){
+    closeTypePop();
+    var dep = findDep(depId);
+    if(!dep) return;
+    var pop = document.createElement('div');
+    pop.className = 'type-pop';
+    pop.setAttribute('role', 'menu');
+    pop.innerHTML = '<div class="type-pop-title">依赖类型</div>' +
+      Object.keys(TYPES).map(function(code){
+        var t = TYPES[code];
+        return '<button type="button" class="type-opt" role="menuitemradio" data-pick-type="' + code + '" aria-pressed="' + (dep.type === code) + '">' +
+          '<span class="code">' + code + '</span>' +
+          '<span><span class="opt-t">' + esc(t.name) + '</span><span class="opt-d">' + esc(t.desc) + '</span></span>' +
+          '<span class="check">✓</span>' +
+        '</button>';
+      }).join('') +
+      '<div class="type-pop-foot">类型决定约束方式，滞后决定提前或延后天数。负数表示允许重叠。</div>';
+    document.body.appendChild(pop);
+    var r = chip.getBoundingClientRect();
+    var pw = 252;
+    var left = Math.min(window.innerWidth - pw - 10, Math.max(10, r.right - pw));
+    var top = r.bottom + 6;
+    if(top + pop.offsetHeight > window.innerHeight - 10){
+      top = r.top - pop.offsetHeight - 6;
+    }
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    typePop = pop;
+
+    pop.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-pick-type]');
+      if(!btn) return;
+      dep.type = btn.getAttribute('data-pick-type');
+      closeTypePop();
+      renderAll();
+      toast('依赖类型已改为 ' + dep.type + '（' + TYPES[dep.type].name + '）');
+    });
+  }
+
+  function addDep(dir, taskId){
+    var dep = {
+      id: 'D' + (++state.seq),
+      from: dir === 'pre' ? taskId : INITIAL.currentId,
+      to: dir === 'pre' ? INITIAL.currentId : taskId,
+      type: 'FS',
+      lag: 0
+    };
+    state.deps.push(dep);
+    state.picker = null;
+    renderAll();
+    var t = state.tasks[taskId];
+    toast('已添加' + (dir === 'pre' ? '前置' : '后置') + '：' + t.title + '（FS · 0 天），甘特图已同步');
+  }
+
+  function deleteDep(depId){
+    var dep = findDep(depId);
+    if(!dep) return;
+    var otherId = dep.from === INITIAL.currentId ? dep.to : dep.from;
+    var t = state.tasks[otherId];
+    state.deps = state.deps.filter(function(d){ return d.id !== depId; });
+    closeTypePop();
+    renderAll();
+    toast('已删除依赖：' + (t ? t.title : depId) + '；甘特图箭头已同步移除');
+  }
+
+  depBody.addEventListener('click', function(e){
+    var add = e.target.closest('[data-add]');
+    if(add){
+      if(isReadOnly()) return;
+      state.picker = add.getAttribute('data-add');
+      state.focusSearch = true;
+      closeTypePop();
+      renderAll();
+      var picker = document.getElementById('depPicker');
+      if(picker) picker.scrollIntoView({ block:'nearest', behavior:'smooth' });
+      return;
+    }
+    var close = e.target.closest('[data-picker-close]');
+    if(close){
+      state.picker = null;
+      renderAll();
+      return;
+    }
+    var pick = e.target.closest('[data-pick]');
+    if(pick){
+      if(isReadOnly() || pick.disabled) return;
+      addDep(state.picker || 'pre', pick.getAttribute('data-pick'));
+      return;
+    }
+    var typeBtn = e.target.closest('[data-type]');
+    if(typeBtn){
+      if(isReadOnly()) return;
+      openTypePop(typeBtn, typeBtn.getAttribute('data-type'));
+      return;
+    }
+    var del = e.target.closest('[data-del]');
+    if(del){
+      if(isReadOnly()) return;
+      deleteDep(del.getAttribute('data-del'));
+      return;
+    }
+    var open = e.target.closest('[data-open]');
+    if(open){
+      var id = open.getAttribute('data-open');
+      var row = miniBody.querySelector('[data-mini-row="' + id + '"]');
+      if(row){
+        row.style.transition = 'background .2s';
+        row.style.background = 'var(--warning-soft)';
+        setTimeout(function(){ row.style.background = ''; }, 900);
+      }
+      toast('原型示意：打开工作项「' + (state.tasks[id] ? state.tasks[id].title : id) + '」');
+    }
+  });
+
+  depBody.addEventListener('change', function(e){
+    var input = e.target.closest('[data-lag]');
+    if(!input) return;
+    var dep = findDep(input.getAttribute('data-lag'));
+    if(!dep) return;
+    var v = parseInt(input.value, 10);
+    if(isNaN(v)) v = 0;
+    v = Math.max(-365, Math.min(365, v));
+    dep.lag = v;
+    renderAll();
+  });
+
+  depBody.addEventListener('input', function(e){
+    if(e.target.id !== 'depSearch') return;
+    var q = e.target.value.trim().toLowerCase();
+    var list = document.getElementById('candList');
+    if(!list) return;
+    Array.prototype.forEach.call(list.querySelectorAll('.cand'), function(row){
+      var txt = row.getAttribute('data-search') || '';
+      row.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
+    });
+  });
+
+  document.addEventListener('click', function(e){
+    if(typePop && !typePop.contains(e.target) && !e.target.closest('[data-type]')) closeTypePop();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      if(typePop){ closeTypePop(); return; }
+      if(state.picker){ state.picker = null; renderAll(); }
+    }
+  });
+
+  var depSect = document.querySelector('.dep-sect');
+  var depHead = depSect ? depSect.querySelector('.sect-head') : null;
+  if(depHead) depHead.addEventListener('click', function(e){
+    if(e.target.closest('#jumpGantt')) return;
+    depSect.classList.toggle('collapsed');
+  });
+
+  var jump = document.getElementById('jumpGantt');
+  if(jump) jump.addEventListener('click', function(e){
+    e.stopPropagation();
+    toast('原型示意：跳到甘特图并定位当前工作项；连线仍由同一张依赖表渲染');
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(btn){
+    btn.addEventListener('click', function(){
+      var mode = btn.getAttribute('data-mode');
+      state.readOnly = mode === 'readonly';
+      state.picker = null;
+      closeTypePop();
+      Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(b){
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+      renderAll();
+      toast(state.readOnly ? '已切换到只读项目：依赖仅可查看' : '已切换到可编辑状态');
+    });
+  });
+
+  var reset = document.getElementById('resetDemo');
+  if(reset) reset.addEventListener('click', function(){
+    state.deps = deepCopy(INITIAL.deps);
+    state.readOnly = false;
+    state.picker = null;
+    closeTypePop();
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === 'edit'));
+    });
+    renderAll();
+    toast('演示已重置');
+  });
+
+  var resizeTimer = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      closeTypePop();
+      renderAll();
+    }, 120);
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>

@@ -32,7 +32,7 @@ class RequirementDocImportWordTest {
             mock(NotificationEventService.class),
             mock(com.hourglass.mapper.ReqDocShareMapper.class),
             mock(com.hourglass.mapper.WorkspaceMapper.class),
-            previewService);
+            previewService, mock(DeletionTraceService.class));
 
     private Map<String, String> previewResult(String content) {
         Map<String, String> m = new LinkedHashMap<String, String>();

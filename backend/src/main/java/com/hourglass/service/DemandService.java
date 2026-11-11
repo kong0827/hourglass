@@ -59,6 +59,8 @@ public class DemandService {
     private final CategoryMapper categoryMapper;
     private final DeliveryScopeLock deliveryLock;
     private final ReleasePermissionService releasePermission;
+    /** 删除不可逆：需求自身的流转日志会一起清掉，必须在删除前写独立墓碑 */
+    private final DeletionTraceService deletionTrace;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
@@ -73,7 +75,8 @@ public class DemandService {
                          ProjectAccessService projectAccess, AttachmentService attachmentService,
                          com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                          com.hourglass.mapper.TestCaseMapper caseMapper, CategoryMapper categoryMapper,
-                         DeliveryScopeLock deliveryLock, ReleasePermissionService releasePermission) {
+                         DeliveryScopeLock deliveryLock, ReleasePermissionService releasePermission,
+                         DeletionTraceService deletionTrace) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -87,6 +90,7 @@ public class DemandService {
         this.categoryMapper = categoryMapper;
         this.deliveryLock = deliveryLock;
         this.releasePermission = releasePermission;
+        this.deletionTrace = deletionTrace;
     }
 
     /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 条件 */
@@ -901,11 +905,21 @@ public class DemandService {
         if (!releases.selectDemandRecords(workspaceId, id).isEmpty()) {
             throw AppException.badRequest("需求已有正式发布历史，不能删除，请保留或取消以维护历史证据");
         }
+        deletionTrace.recordDelete(workspaceId, userId, "demand_delete", "demand", id, d.getTitle(),
+                "删除需求「" + d.getTitle() + "」（"
+                        + (d.getReqId() == null ? "未归属项目" : "项目 " + d.getReqId())
+                        + "；解除 " + linkedTasks.size() + " 项任务关联，需求流转日志一并清理）");
         attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DEMAND);
         mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         docMapper.deleteDemandLinksByDemand(workspaceId, id);
         /* 需求没了，任务上的 demand_id 必须一起解绑，否则编辑任务会被"关联需求不存在"拦住 */
         taskMapper.clearDemandRef(workspaceId, id);
+        java.util.List<String> affectedTaskIds = new java.util.ArrayList<String>(linkedTasks.size());
+        for (Task t : linkedTasks) {
+            affectedTaskIds.add(t.getId());
+        }
+        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                "关联需求「" + d.getTitle() + "」已删除，自动解除关联");
         /* 测试用例上的选填关联同样解绑 */
         caseMapper.clearDemandRefs(workspaceId, id);
         /* 条目本身要删，留着它自己的流转日志只会变成查不到主人的孤儿行 */

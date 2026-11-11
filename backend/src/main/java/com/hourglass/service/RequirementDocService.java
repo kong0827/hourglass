@@ -100,6 +100,8 @@ public class RequirementDocService {
     private final ReqDocShareMapper shareMapper;
     private final WorkspaceMapper workspaceMapper;
     private final DocPreviewService docPreviewService;
+    /** 删除不可逆：文档活动、评论与历史会一起清掉，必须在删除前写独立墓碑 */
+    private final DeletionTraceService deletionTrace;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
 
@@ -110,7 +112,7 @@ public class RequirementDocService {
                                  DemandMapper demandMapper, ProjectAccessService projectAccess,
                                  NotificationEventService notificationEvents,
                                  ReqDocShareMapper shareMapper, WorkspaceMapper workspaceMapper,
-                                 DocPreviewService docPreviewService) {
+                                 DocPreviewService docPreviewService, DeletionTraceService deletionTrace) {
         this.docMapper = docMapper;
         this.historyMapper = historyMapper;
         this.commentMapper = commentMapper;
@@ -124,6 +126,7 @@ public class RequirementDocService {
         this.shareMapper = shareMapper;
         this.workspaceMapper = workspaceMapper;
         this.docPreviewService = docPreviewService;
+        this.deletionTrace = deletionTrace;
     }
 
     public List<ReqDocView> list(String workspaceId, String userId) {
@@ -277,7 +280,11 @@ public class RequirementDocService {
         }
         /* 需求换项目后，仍挂在旧项目下的任务会指向别的项目的文档：解掉这些关联 */
         if (oldReqId != null && !oldReqId.equals(reqId)) {
+            java.util.List<String> affectedTaskIds =
+                    taskMapper.selectIdsByReqDocExceptReqForCascade(workspaceId, d.getId(), reqId);
             docMapper.clearTaskRefExceptReq(workspaceId, d.getId(), reqId);
+            deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                    "需求文档「" + d.getTitle() + "」已更换项目，自动解除关联");
             /* 旧项目的需求关联同样失效（关联要求同项目），避免需求详情里看到别的项目的文档 */
             docMapper.deleteDemandLinksByDoc(workspaceId, d.getId());
             /* 子文档留在旧项目，提升到本文档原来的父级，避免跨项目形成断掉的子树 */
@@ -448,10 +455,17 @@ public class RequirementDocService {
     public void delete(String userId, String workspaceId, String id) {
         RequirementDoc d = getVisible(workspaceId, userId, id);
         projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        deletionTrace.recordDelete(workspaceId, userId, "requirement_doc_delete", "requirement_doc", id,
+                d.getTitle(), "删除需求文档「" + d.getTitle() + "」（"
+                        + (d.getReqId() == null ? "未归属项目" : "项目 " + d.getReqId())
+                        + "；子文档上移，关联任务已解绑，评论与历史一并清理）");
         /* 子文档提升到被删文档的父级，避免整棵子树变成孤儿 */
         docMapper.reparentChildren(workspaceId, id, d.getParentId());
         docMapper.deleteDemandLinksByDoc(workspaceId, id);
+        java.util.List<String> affectedTaskIds = taskMapper.selectIdsByReqDocForCascade(workspaceId, id);
         docMapper.clearTaskRef(workspaceId, d.getId());
+        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                "关联需求文档「" + d.getTitle() + "」已删除，自动解除关联");
         commentMapper.deleteByDoc(workspaceId, id);
         historyMapper.deleteByDoc(workspaceId, id);
         shareMapper.deleteByDoc(workspaceId, id);

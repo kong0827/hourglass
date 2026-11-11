@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
@@ -38,8 +39,9 @@ class BranchServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final RequirementMapper requirementMapper = mock(RequirementMapper.class);
     private final NotificationEventService events = mock(NotificationEventService.class);
+    private final DeletionTraceService deletionTrace = mock(DeletionTraceService.class);
     private final BranchService service = new BranchService(branchMapper, taskMapper, userMapper, access,
-            requirementMapper, events);
+            requirementMapper, events, deletionTrace);
 
     @Test
     void listFillsDerivedVersionTagsSortedByVersionLifecycle() {
@@ -184,6 +186,7 @@ class BranchServiceTest {
         b.setReqId("R1");
         b.setOwnerUserId("U2");
         when(branchMapper.selectById("B1")).thenReturn(b);
+        when(taskMapper.selectIdsByBranchForCascade(WS, "B1")).thenReturn(Arrays.asList("K1", "K2"));
 
         service.delete("U1", WS, "B1");
 
@@ -191,6 +194,10 @@ class BranchServiceTest {
         verify(access).assertWrite(WS, "U1", "R1");
         verify(events).notifyLinked("U2", WS, UserNotificationPreferenceService.DEMAND_STATUS,
                 "分支「B1」已被删除", "分支及其时间线已被删除，关联任务已解绑", "branch", "B1", "R1");
+        verify(deletionTrace).logTaskCascade(WS, "U1", Arrays.asList("K1", "K2"),
+                "关联分支「B1」已删除，自动解除关联");
+        verify(deletionTrace).recordDelete(eq(WS), eq("U1"), eq("branch_delete"), eq("branch"), eq("B1"),
+                eq("B1"), contains("删除分支「B1」（项目 R1"));
         verify(branchMapper).deleteById(WS, "B1");
     }
 

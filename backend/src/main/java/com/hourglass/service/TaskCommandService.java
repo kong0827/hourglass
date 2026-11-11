@@ -319,10 +319,8 @@ public class TaskCommandService {
         support.saveTags(workspaceId, id, req.getTags());
         /* 完成归档 / 取消完成撤档 / 循环派生 / 移动日志都在流程服务里 */
         workflow.afterEditColumnChange(userId, workspaceId, t, old.getBoardColumn(), moveSuffix);
-        if (!columnChanged || !changes.isEmpty()) {
-            String detail = changes.isEmpty()
-                    ? "更新任务「" + t.getTitle() + "」（无字段变化）"
-                    : Texts.cut("更新任务「" + t.getTitle() + "」：" + String.join("；", changes), 250);
+        if (!changes.isEmpty()) {
+            String detail = Texts.cut("更新任务「" + t.getTitle() + "」：" + String.join("；", changes), 250);
             audit.log(userId, workspaceId, id, "update", detail);
         }
         boolean ownerChanged = !java.util.Objects.equals(old.getOwnerUserId(), t.getOwnerUserId());
@@ -536,13 +534,25 @@ public class TaskCommandService {
             }
         }
         t.setFoundVersionId(foundVersion);
-        String regression = req.getRegressionStatus();
-        if (regression == null && old != null) {
-            regression = old.getRegressionStatus();
+        String incoming = Texts.trimToNull(req.getRegressionStatus());
+        if (incoming != null && !DefectMeta.isRegressionStatus(incoming)) {
+            throw AppException.badRequest("回归状态不合法：" + incoming);
         }
-        regression = Texts.trimToNull(regression);
-        if (regression != null && !DefectMeta.isRegressionStatus(regression)) {
-            throw AppException.badRequest("回归状态不合法：" + regression);
+        String current = old == null ? null : Texts.trimToNull(old.getRegressionStatus());
+        /* 与旧值相同的回传视为「未修改」，仍按列流转自动推导；只有真正改过才当作显式覆盖 */
+        boolean explicit = incoming != null && !incoming.equals(current);
+        String regression = explicit ? incoming
+                : DefectMeta.regressionForTransition(current,
+                        old == null ? null : old.getBoardColumn(), t.getBoardColumn());
+        if (Consts.COL_DONE.equals(t.getBoardColumn()) && !DefectMeta.REGRESSION_PASSED.equals(regression)) {
+            if (explicit) {
+                throw AppException.badRequest("缺陷进入已完成前需回归通过，请先将回归状态改为「回归通过」");
+            }
+            regression = DefectMeta.REGRESSION_PASSED;
+        }
+        if (!Consts.COL_DONE.equals(t.getBoardColumn())
+                && DefectMeta.REGRESSION_PASSED.equals(regression) && explicit) {
+            throw AppException.badRequest("回归已通过，请同时将任务状态改为「已完成」");
         }
         t.setRegressionStatus(regression);
     }

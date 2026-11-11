@@ -41,17 +41,21 @@ public class TestPlanService {
     private final TestCaseService caseService;
     private final ProjectAccessService projectAccess;
     private final com.hourglass.mapper.ProjectVersionMapper versionMapper;
+    /** 计划删除与状态流转影响交付判断，需独立审计 */
+    private final AuditService auditService;
 
     public TestPlanService(TestPlanMapper planMapper, TestPlanCaseMapper planCaseMapper,
                            TestCaseMapper caseMapper, TestCaseService caseService,
                            ProjectAccessService projectAccess,
-                           com.hourglass.mapper.ProjectVersionMapper versionMapper) {
+                           com.hourglass.mapper.ProjectVersionMapper versionMapper,
+                           AuditService auditService) {
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.caseMapper = caseMapper;
         this.caseService = caseService;
         this.projectAccess = projectAccess;
         this.versionMapper = versionMapper;
+        this.auditService = auditService;
     }
 
     /* ---------- 查询 ---------- */
@@ -165,7 +169,12 @@ public class TestPlanService {
                 throw AppException.badRequest("计划还没有圈选用例，无法标记完成");
             }
         }
+        String oldStatus = p.getStatus();
         planMapper.updateStatus(id, status);
+        if (!status.equals(oldStatus)) {
+            auditService.recordCurrent(workspaceId, "test_plan_status", "test_plan", id, p.getName(), true,
+                    "测试计划「" + p.getName() + "」状态：" + oldStatus + " → " + status, null);
+        }
         return planMapper.selectViewById(id);
     }
 
@@ -175,6 +184,8 @@ public class TestPlanService {
         projectAccess.assertWrite(workspaceId, userId, p.getReqId());
         planCaseMapper.deleteByPlan(id);
         planMapper.deleteById(workspaceId, id);
+        auditService.recordCurrent(workspaceId, "test_plan_delete", "test_plan", id, p.getName(), true,
+                "删除测试计划「" + p.getName() + "」", null);
     }
 
     /* ---------- 圈选与批量执行 ---------- */

@@ -28,17 +28,21 @@ public class CategoryService {
     private final CategoryMapper categoryMapper;
     private final RequirementMapper requirementMapper;
     private final ActivityService activityService;
+    /** 删模块会批量改任务所属模块：为受影响任务补时间线 */
+    private final DeletionTraceService deletionTrace;
     private final ProjectAccessService projectAccess;
     private final ReleasePermissionService releasePermission;
     /** 模块列表缓存（空间全量，按项目内存过滤）：读列表/删除时选目标模块共用，写入口负责失效 */
     private final WorkspaceMetaCache metaCache;
 
     public CategoryService(CategoryMapper categoryMapper, RequirementMapper requirementMapper,
-                           ActivityService activityService, ProjectAccessService projectAccess,
+                           ActivityService activityService, DeletionTraceService deletionTrace,
+                           ProjectAccessService projectAccess,
                            ReleasePermissionService releasePermission, WorkspaceMetaCache metaCache) {
         this.categoryMapper = categoryMapper;
         this.requirementMapper = requirementMapper;
         this.activityService = activityService;
+        this.deletionTrace = deletionTrace;
         this.projectAccess = projectAccess;
         this.releasePermission = releasePermission;
         this.metaCache = metaCache;
@@ -151,9 +155,13 @@ public class CategoryService {
         if (targetCat == null) {
             throw AppException.badRequest("至少需要保留一个模块");
         }
+        java.util.List<String> affectedTaskIds =
+                categoryMapper.selectTaskIdsForCascade(workspaceId, c.getProjectId(), id);
         int movedTasks = categoryMapper.moveTasksToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
         int movedDemands = categoryMapper.moveDemandsToCategory(workspaceId, c.getProjectId(), id, targetCat.getId());
         categoryMapper.deleteById(workspaceId, id);
+        deletionTrace.logTaskCascade(workspaceId, userId, affectedTaskIds,
+                "因删除模块「" + c.getName() + "」，自动改到「" + targetCat.getName() + "」");
         evictCategories(workspaceId);
         /* O-9：破坏性配置变更留审计（活动流可见）；空模块没有迁移动作，不能写「已改到」 */
         String migration = movedTasks + movedDemands == 0

@@ -24,6 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -40,6 +43,7 @@ class TestCaseCsvTest {
     private final TestCaseMapper cases = mock(TestCaseMapper.class);
     private final com.hourglass.mapper.RequirementMapper reqs =
             mock(com.hourglass.mapper.RequirementMapper.class);
+    private final AuditService auditService = mock(AuditService.class);
     private final TestCaseService service = new TestCaseService(cases,
             mock(TestCaseRunMapper.class), mock(TaskCommandService.class),
             mock(ProjectAccessService.class), reqs,
@@ -48,7 +52,8 @@ class TestCaseCsvTest {
             mock(com.hourglass.mapper.AttachmentMapper.class),
             mock(AttachmentService.class),
             mock(com.hourglass.mapper.TestPlanMapper.class),
-            mock(com.hourglass.mapper.TestPlanCaseMapper.class));
+            mock(com.hourglass.mapper.TestPlanCaseMapper.class),
+            auditService);
 
     @BeforeEach
     void setUp() {
@@ -86,6 +91,8 @@ class TestCaseCsvTest {
         assertEquals(3, errors.get(0).get("row"), "错误行号按原文行计（含表头）");
         assertTrue(String.valueOf(errors.get(0).get("message")).contains("P0/P1/P2/P3"));
         verify(cases, times(2)).insert(any(TestCase.class));
+        verify(auditService).recordCurrent(eq(WS), eq("test_case_import"), eq("project"), eq(REQ),
+                isNull(), eq(true), contains("成功 2 条，失败 1 条"), isNull());
     }
 
     @Test

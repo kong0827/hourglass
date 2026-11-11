@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.dto.GanttDepRequest;
+import com.hourglass.dto.TaskDependencyView;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TaskDependency;
 import com.hourglass.mapper.GanttShareMapper;
@@ -13,7 +14,13 @@ import com.hourglass.mapper.UserMapper;
 import com.hourglass.mapper.WorkspaceMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -80,6 +87,48 @@ class GanttDependencyAccessTest {
 
         assertThrows(AppException.class, () -> service.deleteDep(WS, USER, "D1"));
         verify(deps, never()).deleteById(anyString(), anyString());
+    }
+
+    @Test
+    void taskDependenciesRejectsMissingTask() {
+        assertThrows(AppException.class, () -> service.taskDependencies(WS, USER, "T404"));
+        verify(access, never()).assertViewTask(anyString(), anyString(), any(Task.class));
+    }
+
+    @Test
+    void taskDependenciesReturnsEndpointsAndEditability() {
+        givenTask("T1", "P1");
+        givenTask("T2", "P2");
+        when(access.viewerScope(WS, USER)).thenReturn(USER);
+        when(deps.selectVisibleByTask(WS, "T1", USER))
+                .thenReturn(Collections.singletonList(dependency("D1", "T2", "T1")));
+        when(access.canWrite(WS, USER, "P1")).thenReturn(true);
+        when(access.canWrite(WS, USER, "P2")).thenReturn(false);
+
+        List<TaskDependencyView> views = service.taskDependencies(WS, USER, "T1");
+
+        assertEquals(1, views.size());
+        TaskDependencyView view = views.get(0);
+        assertEquals("T2", view.getFrom().getId());
+        assertEquals("T1", view.getTo().getId());
+        assertEquals("FS", view.getDepType());
+        /* 任一端只读时整条边只读，抽屉里不出现删除入口 */
+        assertFalse(view.isEditable());
+        verify(access).assertViewTask(WS, USER, tasks.selectById("T1"));    }
+
+    @Test
+    void taskDependenciesEditableWhenBothProjectsWritable() {
+        givenTask("T1", "P1");
+        givenTask("T2", "P2");
+        when(deps.selectVisibleByTask(WS, "T1", null))
+                .thenReturn(Collections.singletonList(dependency("D1", "T1", "T2")));
+        when(access.canWrite(WS, USER, "P1")).thenReturn(true);
+        when(access.canWrite(WS, USER, "P2")).thenReturn(true);
+
+        List<TaskDependencyView> views = service.taskDependencies(WS, USER, "T1");
+
+        assertEquals(1, views.size());
+        assertTrue(views.get(0).isEditable());
     }
 
     private void givenTask(String id, String reqId) {

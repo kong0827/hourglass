@@ -35,6 +35,8 @@ public class ProjectVersionService {
     private final ReleasePermissionService permissions;
     private final com.hourglass.mapper.ReleaseMapper releases;
     private final VersionReleaseService releaseService;
+    /** 删除不可逆：版本自身没有独立时间线，删除后只剩任务侧变更，必须留墓碑 */
+    private final DeletionTraceService deletionTrace;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
@@ -44,7 +46,8 @@ public class ProjectVersionService {
                                  TaskMapper taskMapper, RequirementMapper reqMapper,
                                  ProjectAccessService projectAccess,
                                  DeliveryScopeLock scopeLock, ReleasePermissionService permissions,
-                                 com.hourglass.mapper.ReleaseMapper releases, VersionReleaseService releaseService) {
+                                 com.hourglass.mapper.ReleaseMapper releases, VersionReleaseService releaseService,
+                                 DeletionTraceService deletionTrace) {
         this.versionMapper = versionMapper;
         this.versionTaskMapper = versionTaskMapper;
         this.taskMapper = taskMapper;
@@ -54,6 +57,7 @@ public class ProjectVersionService {
         this.permissions = permissions;
         this.releases = releases;
         this.releaseService = releaseService;
+        this.deletionTrace = deletionTrace;
     }
 
     public List<ProjectVersion> list(String workspaceId, String reqId) {
@@ -138,6 +142,8 @@ public class ProjectVersionService {
         if (req.getTaskIds() != null) {
             applyTasks(userId, version, req.getTaskIds(), req.getTaskChangeReason());
         }
+        /* 版本域唯一缺日志的动作：创建后与 update/start 一样进 version_log */
+        releaseService.log(userId, workspaceId, version.getId(), "version_create", null, null, version);
         return getForUpdate(workspaceId, version.getId());
     }
 
@@ -238,6 +244,10 @@ public class ProjectVersionService {
             }
         }
         assertNoPlanOrLog(workspaceId, id);
+        deletionTrace.recordDelete(workspaceId, userId, "version_delete", "project_version", id,
+                version.getName(), "删除版本「" + version.getName() + "」（"
+                        + (version.getReqId() == null ? "未归属项目" : "项目 " + version.getReqId())
+                        + "；测试计划中的版本引用一并解除）");
         if (versionMapper.deleteById(workspaceId, id) != 1) {
             throw new AppException(409, "版本已变化，请刷新后重试");
         }
