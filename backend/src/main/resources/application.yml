@@ -45,6 +45,18 @@ mybatis:
     map-underscore-to-camel-case: true
     jdbc-type-for-null: 'NULL'
 
+logging:
+  level:
+    com.hourglass: info
+  file:
+    # 相对工作目录解析：生产 WorkingDirectory=/opt/hourglass，即 /opt/hourglass/logs/hourglass.log
+    name: ${LOG_FILE:logs/hourglass.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 30
+      total-size-cap: 2GB
+
 # 登录账号：AUTH_PASSWORD 可用明文（启动时转 bcrypt）或直接配置 bcrypt 哈希
 app:
   version: ${APP_VERSION:1.0.0}
@@ -93,7 +105,3 @@ app:
     initial-delay-ms: ${MAIL_INITIAL_DELAY_MS:10000}
     # 站点根地址，含 context-path（如 https://host/hourglass/）；用于通知邮件里的任务/登录链接，留空则不附链接
     base-url: ${MAIL_BASE_URL:}
-
-logging:
-  level:
-    com.hourglass: info

@@ -141,6 +141,8 @@ curl -s http://127.0.0.1:8080/hourglass/api/health     # 期望 "db":"up"
 
 > **单实例约束**：成员关系（默认 60 秒 TTL）与空间 meta（列/模块/标签，版本号 + 300 秒兜底）都是**进程内缓存**，不跨实例共享。本部署方式是单实例 systemd 服务，可直接使用；如需多实例/多副本部署，必须去掉这两层缓存或改用共享缓存（如 Redis），否则成员权限变更与 meta 变更在其它实例上最多延迟一个 TTL 才生效。
 
+> **应用日志**：文件日志默认写到系统服务工作目录下的 `logs/hourglass.log`，生产即 `/opt/hourglass/logs/hourglass.log`；按 50MB 轮转、保留 30 份、总量上限 2GB。`deploy.sh` 会创建 `/opt/hourglass/logs`（hourglass 可写）并在重启后校验日志已生成。需要换位置时在 `/etc/hourglass.env` 设置 `LOG_FILE`（相对路径按工作目录解析）。journald 仍保留标准输出，两处内容一致。
+
 ## 5. Nginx（前端静态 + API 反代）
 
 ```bash

@@ -267,6 +267,7 @@ fi
 printf '%s\n' "$RUN_ID" > "$LOCK_DIR/owner"
 [ ! -L "$APP_DIR/.deploy-staging" ] || { echo "staging 父目录不能是符号链接" >&2; exit 1; }
 mkdir -p -- "$APP_DIR/.deploy-staging" "$BACKUP_DIR"
+install -d -m 750 -o hourglass -g hourglass "$APP_DIR/logs"
 chmod 711 "$APP_DIR/.deploy-staging"
 mkdir -m 700 -- "$REMOTE_STAGE"
 chown "$SSH_USER:$SSH_USER" "$REMOTE_STAGE"
@@ -706,6 +707,11 @@ echo "    · 新包大小：$(wc -c < "$APP_DIR/$JAR_NAME") bytes"
 systemctl restart "$SERVICE"
 sleep 9
 [ "$(systemctl is-active "$SERVICE")" = active ] || exit 1
+LOG_PATH="$(read_env LOG_FILE)"
+LOG_PATH="${LOG_PATH:-$APP_DIR/logs/hourglass.log}"
+case "$LOG_PATH" in /*) ;; *) LOG_PATH="$APP_DIR/${LOG_PATH#./}" ;; esac
+[ -s "$LOG_PATH" ] || { echo "应用日志未生成：$LOG_PATH" >&2; exit 1; }
+echo "    · 应用日志：$LOG_PATH ($(wc -c < "$LOG_PATH") bytes)"
 echo "    · 服务状态：$(systemctl is-active "$SERVICE")  开机自启：$(systemctl is-enabled "$SERVICE")"
 REMOTE
   ok "后端重启完成"
@@ -769,6 +775,10 @@ print(data['database'])
 PY
 )"
 echo "DATABASE $ACTUAL_DB"
+LOG_PATH="$(read_env LOG_FILE)"
+LOG_PATH="${LOG_PATH:-$APP_DIR/logs/hourglass.log}"
+case "$LOG_PATH" in /*) ;; *) LOG_PATH="$APP_DIR/${LOG_PATH#./}" ;; esac
+echo "LOGFILE $LOG_PATH $([ -f "$LOG_PATH" ] && wc -c < "$LOG_PATH" || echo 0)"
 echo "MEM $(systemctl show "$SERVICE" -p MemoryCurrent --value | awk '{printf "%.0f", $1/1048576}')"
 REMOTE
   then
@@ -832,6 +842,16 @@ REMOTE
 
   MEM="$(vget MEM | awk '{print $2}')"
   info "应用内存占用：${MEM} MB"
+
+  REMOTE_LOG="$(vget LOGFILE | awk '{print $2}')"
+  LOG_BYTES="$(vget LOGFILE | awk '{print $3}')"
+  case "$LOG_BYTES" in ''|*[!0-9]*) LOG_BYTES=0 ;; esac
+  if [ "$LOG_BYTES" -gt 0 ]; then
+    ok "应用日志已生成：${REMOTE_LOG}（${LOG_BYTES} bytes）"
+  else
+    err "应用日志缺失或为空：${REMOTE_LOG:-未返回路径}"
+    VERIFY_FAIL=1
+  fi
 
   [ "$VERIFY_FAIL" -eq 0 ] || die "校验未通过，部署结果不可信。可执行 bash deploy/deploy.sh --rollback 回滚"
 else
