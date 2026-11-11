@@ -309,12 +309,15 @@ function reloadFilteredViews(){
     saveViewState();
   }, 150);
 }
-/* 把当前筛选/视图/列表视图状态按工作区持久化到 localStorage，刷新后可恢复 */
-var VIEW_STATE_KEY = "ds.viewState.v1";
+/* 把当前筛选/视图/列表视图状态按「账号 + 工作区」持久化到 localStorage，刷新后可恢复。
+   不能只按空间存：同一浏览器切换账号后，上一个人的搜索词（常见是账号名）会被当前账号恢复出来。 */
+var VIEW_STATE_KEY = "ds.viewState.v2";
 function currentWsId(){ return rt.currentWs && rt.currentWs.id || ""; }
+function currentUserId(){ return rt.currentUser && rt.currentUser.id || ""; }
+function viewStateKey(){ return VIEW_STATE_KEY + ":" + currentUserId() + ":" + currentWsId(); }
 function saveViewState(){
-  var ws = currentWsId();
-  if(!ws) return;
+  var ws = currentWsId(), user = currentUserId();
+  if(!ws || !user) return;
   try{
     var listSnap = null;
     try{
@@ -322,10 +325,11 @@ function saveViewState(){
       listSnap = { current: currentListViewId(), preset: lp.preset, group: lp.group,
         subgroup: lp.subgroup || "none", hideDone: !!lp.hideDone, sort: lp.sort, sortDir: lp.sortDir };
     }catch(err){ /* 列表模块尚未就绪 */ }
-    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({
+    localStorage.setItem(viewStateKey(), JSON.stringify({
+      userId: user,
       wsId: ws,
       filters: {
-        q: state.q,
+        /* 关键词不跨会话恢复：搜索是临时上下文，恢复旧词（常见是别人的账号名）会让人以为查询条件被自动写入 */
         owners: state.owners.slice(), pris: state.pris.slice(), cats: state.cats.slice(), reqs: state.reqs.slice(),
         tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
         due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope
@@ -335,15 +339,17 @@ function saveViewState(){
   }catch(e){ /* 隐私模式/受限环境忽略 */ }
 }
 function restoreViewState(){
-  if(!rt.currentWs) return false;
+  if(!rt.currentWs || !rt.currentUser) return false;
+  /* v1 仅按空间存，可能混入其他账号的搜索词；升级后直接清掉，不再恢复 */
+  try{ localStorage.removeItem("ds.viewState.v1"); }catch(e){ /* 受限环境忽略 */ }
   var snap;
-  try{ snap = JSON.parse(localStorage.getItem(VIEW_STATE_KEY) || "null"); }catch(e){ return false; }
-  if(!snap || snap.wsId !== rt.currentWs.id) return false;
+  try{ snap = JSON.parse(localStorage.getItem(viewStateKey()) || "null"); }catch(e){ return false; }
+  if(!snap || snap.userId !== rt.currentUser.id || snap.wsId !== rt.currentWs.id) return false;
   var changed = false;
+  /* 旧快照里的 q 不再恢复；当前页面已经输入的关键词属于会话内筛选，不能被 settings 等
+     再次调用 loadWorkspaces 时清掉。 */
   var f = snap.filters;
   if(f){
-    var newQ = typeof f.q === "string" ? f.q : "";
-    if(newQ !== state.q){ state.q = newQ; changed = true; }
     ["owners","pris","cats","reqs","tags","types","versions"].forEach(function(k){
       var arr = Array.isArray(f[k]) ? f[k].slice() : [];
       if(arr.length !== state[k].length || arr.some(function(v,i){ return v !== state[k][i]; })){ state[k] = arr; changed = true; }
@@ -379,11 +385,51 @@ function restoreViewState(){
     if(searchInput){ searchInput.value = state.q; searchWrap.classList.toggle("has", !!state.q); }
     renderFilterChips();
     updateBrand();
+  }else if(!state.q && searchInput && searchInput.value){
+    /* 没有活动搜索时清掉浏览器/密码管理器自动填进输入框的残留值 */
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
   }
   return changed;
 }
 var searchTimer = null;
+/* 浏览器 / 密码管理器会把登录名自动填进文本输入框。仅当值恰好等于当前账号、
+   且不是用户键鼠输入造成时忽略，避免登录或切视图后凭空多出一个查询条件。 */
+var searchHumanTouched = false;
+function looksLikeOwnAccount(value){
+  var u = rt.currentUser;
+  var s = String(value == null ? "" : value).trim().toLowerCase();
+  if(!u || !s) return false;
+  var username = String(u.username || "").trim().toLowerCase();
+  var displayName = String(u.displayName || "").trim().toLowerCase();
+  return (username && s === username) || (displayName && s === displayName);
+}
+function markHumanSearchInput(){ searchHumanTouched = true; }
+["keydown", "paste", "beforeinput", "compositionstart"].forEach(function(type){
+  searchInput.addEventListener(type, markHumanSearchInput);
+});
+function clearAutoFilledOwnAccount(){
+  /* 用户真正键鼠/输入法输入过就不再自动清理，避免把用户主动搜索的账号名删掉 */
+  if(searchHumanTouched) return;
+  if(!state.q && searchInput && looksLikeOwnAccount(searchInput.value)){
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
+  }
+}
+window.addEventListener("ds:user-ready", clearAutoFilledOwnAccount);
+searchInput.addEventListener("focus", clearAutoFilledOwnAccount);
+/* 密码管理器通常在页面 load 之后才回填，不能在点击聚焦时才清理：
+   登录/刷新后的几个关键时点再检查一次。 */
+[400, 1200, 3000, 6000].forEach(function(ms){ setTimeout(clearAutoFilledOwnAccount, ms); });
 searchInput.addEventListener("input", function(){
+  if(!searchInput.value.trim()) searchHumanTouched = false;
+  if(!searchHumanTouched && looksLikeOwnAccount(searchInput.value)){
+    searchInput.value = "";
+    searchWrap.classList.remove("has");
+    /* 若之前已有搜索词，自动填充不应只是视觉清空而让旧查询继续生效 */
+    if(state.q) applySearch("");
+    return;
+  }
   searchWrap.classList.toggle("has", searchInput.value.trim().length > 0);
   if(searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(function(){ applySearch(searchInput.value.trim()); }, 300);

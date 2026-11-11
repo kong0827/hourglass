@@ -185,7 +185,7 @@
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
-          <input id="searchInput" type="search" placeholder="搜索…" autocomplete="off" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
+          <input id="searchInput" type="search" name="task-search" placeholder="搜索…" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
           <button class="gs-clear" id="searchClear" type="button" aria-label="清空搜索">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
@@ -1898,7 +1898,8 @@
               <p class="set-hint" id="wsMemberHint" hidden>共享空间不能直接把别人拉进来：请用下面的「邀请链接」发给对方，对方打开链接、确认后才会成为成员。</p>
               <div class="cfg-add" id="wsMemberAdd" hidden>
                 <div class="member-search-box">
-                  <input type="text" id="wsMemberName" maxlength="32" autocomplete="off"
+                  <input type="text" id="wsMemberName" name="member-search" maxlength="32" autocomplete="off"
+                         autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"
                          placeholder="搜索登录名或显示名" role="combobox" aria-expanded="false"
                          aria-controls="wsMemberOptions" aria-autocomplete="list" />
                   <div class="member-options" id="wsMemberOptions" role="listbox" hidden></div>

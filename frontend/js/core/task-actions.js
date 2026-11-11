@@ -174,7 +174,8 @@ function toggleTaskTimer(taskId){
     timerToggleBusy = false;
     if(on){
       var total = (d && typeof d.totalMinutes === "number") ? d.totalMinutes : 0;
-      toast("已停止「" + name + "」的计时" + (total ? "，累计 " + fmtMinutesShort(total) : ""), "fs");
+      var auto = (d && d.autoTimerTask) ? " · 已接着开始「" + d.autoTimerTask + "」的计时" : "";
+      toast("已停止「" + name + "」的计时" + (total ? "，累计 " + fmtMinutesShort(total) : "") + auto, "fs");
     }else if(prev && prev.taskId && prev.taskId !== taskId){
       var other = taskById(prev.taskId);
       var otherName = other ? other.title : (prev.taskTitle || "另一个工作项");
@@ -353,7 +354,8 @@ function openCardMenu(anchor, taskId){
         return API.post("/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
       }, function(res){
         toast("「" + t.title + "」移动到「" + colName(res.to) + "」" +
-          (res.autoTimerStarted ? " · 已开始计时" : ""));
+          (res.autoTimerStarted ? " · 已开始计时" : "") +
+          (res.autoTimerTask ? " · 已接着开始「" + res.autoTimerTask + "」的计时" : ""));
         loadBoard({silent:true}); loadReqs(); refreshListIfOpen();
       });
     }

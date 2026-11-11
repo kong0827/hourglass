@@ -161,6 +161,22 @@ class TaskCascadeTest {
     }
 
     @Test
+    void purgeRejectsTaskReferencedByReleasePlan() {
+        List<String> ids = Arrays.asList("K1");
+        Task task = new Task();
+        task.setId("K1");
+        task.setWorkspaceId(WS);
+        when(taskMapper.selectById("K1")).thenReturn(task);
+        when(scopeLock.lockTask(WS, "K1")).thenReturn(task);
+        when(taskMapper.selectPlanReferencedTaskIds(WS, ids)).thenReturn(Collections.singletonList("K1"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.hourglass.common.AppException.class,
+                () -> cascade.purgeTasks(WS, ids));
+
+        verify(taskMapper, never()).deleteByIds(ids);
+    }
+
+    @Test
     void purgeTasksGroupsByWorkspace() {
         cascade.purgeTasks(tasks("W1", "K1", "W2", "K2", "W1", "K3"));
 
@@ -377,7 +393,8 @@ class TaskCascadeTest {
         verify(devBranchMapper).deleteLogsByWorkspace(WS);
         verify(devBranchMapper).deleteByWorkspace(WS);
         verify(versionMapper).deleteByWorkspace(WS);
-        verify(demandMapper).deleteLogsByWorkspace(WS);
+        /* 需求流转日志不在备份里，导入时必须保留 */
+        verify(demandMapper, never()).deleteLogsByWorkspace(WS);
         verify(demandMapper).deleteByWorkspace(WS);
     }
 

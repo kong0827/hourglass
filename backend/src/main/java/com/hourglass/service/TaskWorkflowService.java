@@ -201,8 +201,13 @@ public class TaskWorkflowService {
             } else {
                 task.setCompletedAt(null);
                 if (!support.canTime(workspaceId, to)) {
-                    /* 移入不可计时列（待处理 / 等待接续 / 执行结束）：保留已记录工时，停掉运行中计时 */
+                    /* 移入不可计时列（待处理 / 等待接续 / 执行结束）：保留已记录工时，停掉运行中计时；
+                       与完成一样接力到原可计时列的下一个任务，避免“进行中整列没人计时”。 */
                     timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
+                    boolean wantResume = req.getAutoResume() == null || req.getAutoResume();
+                    if (wantResume) {
+                        resumed = timeLogService.resumeInColumn(userId, workspaceId, from, id);
+                    }
                 } else {
                     /* 拖进「正常处理」列 = 开工，自动开始计时。
                        若本人已有别的任务在计时，start() 会先把它停掉 —— 个人同一时刻只计一个任务。
@@ -394,8 +399,9 @@ public class TaskWorkflowService {
             /* 抽屉里改成已完成也接力：进行中不该出现"谁都没在计时"的空档 */
             timeLogService.resumeInColumn(userId, workspaceId, from, id);
         } else if (!support.canTime(workspaceId, to)) {
-            /* 抽屉里改成不可计时列：工时保留，计时停掉 */
+            /* 抽屉里改成不可计时列：工时保留，计时停掉，并接力到原列下一个任务 */
             timeLogService.closeRunningForTask(workspaceId, id, userId, stopReasonForRule(support.processingRule(workspaceId, to)));
+            timeLogService.resumeInColumn(userId, workspaceId, from, id);
         } else if (!blocked) {
             /* 改成「正常处理」列 = 开工，与看板拖拽 / 列表行内移动同一口径 */
             timeLogService.start(userId, workspaceId, id);

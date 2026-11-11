@@ -560,6 +560,9 @@ public class GanttService {
         if (ws == null) {
             throw AppException.notFound("分享链接无效或已过期");
         }
+        /* 公开链接没有查看人身份，无法按个人项目范围裁剪；采用最保守口径：
+           只要某项目对任一成员显式设为不可见，就不进入公开甘特分享。 */
+        Set<String> hiddenAny = projectAccess.projectsHiddenFromAnyMember(share.getWorkspaceId());
         List<Task> all = taskService.allWithExtras(share.getWorkspaceId());
         if (all.size() > LOAD_MAX_TASKS) {
             all = new ArrayList<Task>(all.subList(0, LOAD_MAX_TASKS));
@@ -567,6 +570,9 @@ public class GanttService {
         List<PublicGanttTask> tasks = new ArrayList<PublicGanttTask>(all.size());
         Set<String> visibleIds = new HashSet<String>();
         for (Task t : all) {
+            if (t.getReqId() != null && hiddenAny.contains(t.getReqId())) {
+                continue;
+            }
             PublicGanttTask p = new PublicGanttTask();
             p.setId(t.getId());
             p.setTitle(t.getTitle());

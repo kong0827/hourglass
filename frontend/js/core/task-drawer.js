@@ -1190,6 +1190,26 @@ function loadWatchStatus(taskId){
   });
 }
 function openTaskDrawer(colId, task, defaults){
+  /* 从搜索、通知、看板其它卡片直接换任务时，也必须走未保存确认；
+     否则 openTaskDrawer 会把 formDirty 置 false，静默丢掉当前表单/附件。 */
+  if(rt.formDirty && rt.editingId && task && task.id === rt.editingId){
+    /* 同一任务重复打开不重填表单，避免把未保存内容冲掉 */
+    return;
+  }
+  if(rt.formDirty && rt.editingId && (!task || task.id !== rt.editingId)){
+    var nextCol = colId, nextTask = task, nextDefaults = defaults;
+    UI.showConfirm({
+      title: "放弃未保存的改动？",
+      msg: "当前工作项的表单、评论草稿或待上传附件尚未保存，打开其他工作项后会丢失。",
+      okText: "放弃并打开",
+      cancelText: "继续编辑"
+    }).then(function(ok){
+      if(!ok) return;
+      forceCloseTaskDrawer({ discardCommentDraft: true });
+      openTaskDrawer(nextCol, nextTask, nextDefaults);
+    });
+    return;
+  }
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
   /* 切任务前先收好上一条未发送的评论草稿 */

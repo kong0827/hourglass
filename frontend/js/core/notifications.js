@@ -37,7 +37,11 @@ var TASK_REF_TYPES = {
 function isTaskRef(type){ return !!TASK_REF_TYPES[type]; }
 var notifyState = {unread:0, total:0, mentions:0, items:[], loading:false, hasMore:false};
 var noticeMutationSeq = 0, unreadReqSeq = 0, noticeListReqSeq = 0;
-function invalidateNotifications(){ noticeMutationSeq++; }
+function invalidateNotifications(){
+  noticeMutationSeq++;
+  /* 作废在途列表请求时同步复位 loading，否则「加载更多」会被永久拦住 */
+  notifyState.loading = false;
+}
 var bubbleTimer = null;
 var lastBubbleId = 0;
 try{ lastBubbleId = parseInt(sessionStorage.getItem("ds.lastUnreadId") || "0", 10) || 0; }catch(e){ /* 受限环境忽略 */ }
@@ -131,6 +135,7 @@ function loadUnread(force){
     notifyState.unread = n;
     renderBellBadge();
     updateBellTitle();
+    syncMessagesReadAllButton();
     if(changed){
       if(!$("alertPanel").hidden && rt.alertTab === "notice") loadNoticeList();
       if(n > prev) maybeUnreadBubble();
@@ -155,7 +160,8 @@ function alertCenterHTML(isPage){
   /* 面板是浮层，需要一条去完整消息页的出口；消息页自身不再重复显示 */
   if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm ghost" type="button" data-ap-all>查看全部消息</button>';
   if(rt.alertTab === "notice"){
-    if(unread > 0) foot += '<button class="btn sm" type="button" data-ap-readall>全部标为已读</button>';
+    /* 消息页把「一键已读」放到页头常驻；浮层面板仍放在底部，按未读数显隐 */
+    if(!isPage && unread > 0) foot += '<button class="btn sm" type="button" data-ap-readall>全部标为已读</button>';
   }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
     foot += '<button class="btn sm" type="button" data-ap-test>在空间中测试推送</button>';
   }
@@ -174,12 +180,27 @@ function renderMessagesPage(){
   if(!box) return;
   var view = box.closest(".view");
   if(view && !view.classList.contains("on")) return;
-  box.innerHTML = '<div class="alert-panel msg-center">' + alertCenterHTML(true) + '</div>';
+  var unread = notifyState.unread || 0;
+  var top = view ? (view.scrollTop || 0) : 0;
+  box.innerHTML =
+    '<div class="msg-page-head">' +
+      '<div><h2>消息中心</h2><p>站内通知与截止提醒</p></div>' +
+      '<span class="spacer"></span>' +
+      '<button class="btn sm" type="button" data-ap-readall' + (unread > 0 ? '' : ' disabled') + '>一键全部已读</button>' +
+    '</div>' +
+    '<div class="alert-panel msg-center">' + alertCenterHTML(true) + '</div>';
+  /* 标记已读/加载更多会重建列表，恢复消息页滚动位置 */
+  if(view) view.scrollTop = top;
 }
 function enterMessagesView(){
   renderMessagesPage();
   loadUnread(true);
   loadAlertPanel();
+}
+/* 未读数变化时只同步页头按钮状态，避免整页重绘导致消息页滚动位置丢失 */
+function syncMessagesReadAllButton(){
+  var btn = document.querySelector("#messagesBody [data-ap-readall]");
+  if(btn) btn.disabled = (notifyState.unread || 0) <= 0;
 }
 function handleNoticeClick(e){
   if(e.target.closest("[data-ap-more]")){
@@ -216,6 +237,7 @@ function handleNoticeClick(e){
     API.postGlobal("/api/notifications/read-all").then(function(){
       notifyState.items.forEach(function(x){ if(!x.readAt) x.readAt = new Date().toISOString(); });
       notifyState.unread = 0;
+      notifyState.mentions = 0;
       renderBellBadge(); updateBellTitle(); renderAlertPanel();
       loadAlertPanel();
       loadUnread(true);

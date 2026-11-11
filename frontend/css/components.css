@@ -1098,6 +1098,10 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .msg-center{width:auto;max-width:none;margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;}
 .msg-center .ap-body{max-height:none;min-height:240px;}
 #messagesBody{padding-top:20px;}
+.msg-page-head{display:flex;align-items:center;gap:12px;margin:0 0 12px;}
+.msg-page-head h2{margin:0;font-size:18px;color:var(--text);}
+.msg-page-head p{margin:2px 0 0;font-size:12px;color:var(--text-3);}
+.msg-page-head .spacer{flex:1 1 auto;}
 
 /* 通知项 */
 .apn{

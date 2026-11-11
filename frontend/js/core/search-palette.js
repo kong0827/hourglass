@@ -31,12 +31,16 @@ var recent = [];
 var RECENT_MAX = 5;
 
 function wsId(){ return (rt.currentWs && rt.currentWs.id) || "none"; }
+function userId(){ return (rt.currentUser && rt.currentUser.id) || "anon"; }
 function wsName(){ return (rt.currentWs && rt.currentWs.name) || ""; }
-function recentKey(){ return "ds.search.recent:" + wsId(); }
+/* 最近搜索必须按账号隔离：同一浏览器切换账号后不能看到上一个人的搜索历史 */
+function recentKey(){ return "ds.search.recent:" + userId() + ":" + wsId(); }
 
 function loadRecent(){
   recent = [];
   try{
+    /* 旧 key 只按空间存，可能泄露其他账号的搜索历史，升级后清掉 */
+    localStorage.removeItem("ds.search.recent:" + wsId());
     var raw = localStorage.getItem(recentKey());
     var rows = raw ? JSON.parse(raw) : [];
     if(Array.isArray(rows)) recent = rows.filter(function(x){ return x && x.q; }).slice(0, RECENT_MAX);

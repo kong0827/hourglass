@@ -141,6 +141,7 @@ function loadMe(prefetched){
   var p = prefetched ? Promise.resolve(prefetched) : API.get("/api/auth/me");
   return p.then(function(u){
     rt.currentUser = u;
+    window.dispatchEvent(new CustomEvent("ds:user-ready"));
     if(u.displayName) rt.OWNER_DEFAULT = u.displayName;
     var tabPlat = $("setTabPlatform");
     if(tabPlat) tabPlat.hidden = u.role !== "admin";
