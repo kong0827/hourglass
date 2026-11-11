@@ -55,12 +55,13 @@ public class RequirementDocController {
     /** 需求列表（含所属项目名、关联任务数、正文摘要），不含完整正文；keyword 按标题/正文模糊搜索 */
     @GetMapping("/api/req-docs")
     public ApiResult<PageResult<ReqDocView>> list(@RequestParam(required = false) String workspace,
+                                                  @RequestParam(required = false) String reqId,
                                                   @RequestParam(required = false) String keyword,
                                                   @RequestParam(required = false) Integer offset,
                                                   @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
-        return ApiResult.ok(docService.page(ws.getId(), userId, keyword,
+        return ApiResult.ok(docService.page(ws.getId(), userId, reqId, keyword,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
     }
 

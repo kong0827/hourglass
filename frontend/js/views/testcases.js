@@ -1,6 +1,7 @@
 /* views/testcases · 测试用例：用例库、执行结果标记、失败一键转缺陷 */
 
 import { API } from "../core/api.js";
+import { AIProgress, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
@@ -51,6 +52,15 @@ var caseMoreLoading = false;
 var caseFormBaseline = null;
 var runFormBaseline = null;
 var defectFormBaseline = null;
+/* AI 生成用例：来源选择 → 进度层 → 草稿勾选 */
+var aiCaseSource = "doc";
+var aiCaseSourceReqId = null;
+var aiCaseDrafts = [];
+var aiCaseDemandId = "";
+var aiCaseApplyReqId = null;
+var aiCaseGenerating = false;
+var aiCaseApplying = false;
+var aiCaseDocs = { reqId: null, list: [], error: null };
 
 var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞" };
 function statusBadgeHTML(s){
@@ -820,8 +830,10 @@ function syncModeUI(){
     if(filterBtn) filterBtn.setAttribute("aria-expanded", "false");
   }
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
+  var aiBtn = $("btnCaseAi");
   if(csvOut) csvOut.style.display = tcMode === "cases" && caseReqId ? "" : "none";
   if(csvIn) csvIn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
+  if(aiBtn) aiBtn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
   /* 该按钮初始带 hidden 属性，而全局 [hidden]{display:none!important} 优先级高于行内 display，
      必须切 hidden 本身，改 style.display 永远显示不出来。
      计划 tab 下始终可见：没选项目时点按给提示，而不是让入口整个消失。 */
@@ -1200,6 +1212,203 @@ function removeCase(id){
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
 }
 
+/* ---------- AI 生成用例 ---------- */
+
+function openAiCaseSource(keepState){
+  if(!caseReqId){ toast("先在上方选择一个项目，再生成用例", "warn"); if($("tcReq")) $("tcReq").focus(); return; }
+  if(!isWritable()){ toast("当前项目只读，无法生成用例", "warn"); return; }
+  aiCaseSourceReqId = caseReqId;
+  if(!keepState) aiCaseSource = "doc";
+  aiCaseDocs = { reqId: null, list: [], error: null };
+  syncAiCaseSource();
+  var req = null;
+  for(var i = 0; i < rt.reqList.length; i++){
+    if(rt.reqList[i].id === caseReqId){ req = rt.reqList[i]; break; }
+  }
+  $("aiCaseSourceHint").textContent = "当前项目：" + (req ? req.name : caseReqId)
+    + "。AI 只生成草稿，勾选确认后才会创建。";
+  loadAiCaseDocs(caseReqId);
+  loadAiCaseDemands(caseReqId);
+  UI.openModal($("dlgAiCaseSource"), "#aiCaseDocSel");
+}
+function syncAiCaseSource(){
+  document.querySelectorAll("#aiCaseSourceSeg [data-ai-src]").forEach(function(b){
+    var on = b.dataset.aiSrc === aiCaseSource;
+    b.classList.toggle("primary", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  $("aiCaseDocField").hidden = aiCaseSource !== "doc";
+  $("aiCaseDemandField").hidden = aiCaseSource !== "demand";
+}
+function loadAiCaseDocs(reqId){
+  aiCaseDocs = { reqId: reqId, list: [], error: null };
+  var sel = $("aiCaseDocSel");
+  sel.innerHTML = '<option value="">文档加载中…</option>';
+  return API.get("/api/req-docs", { reqId: reqId, offset: 0, limit: 100 }).then(function(page){
+    if(aiCaseDocs.reqId !== reqId) return;
+    aiCaseDocs.list = page.items || [];
+    var opts = ['<option value="">请选择文档</option>'];
+    aiCaseDocs.list.forEach(function(d){
+      opts.push('<option value="' + esc(d.id) + '">' + esc(d.title) + (d.publishedAt ? "" : "（草稿）") + '</option>');
+    });
+    sel.innerHTML = opts.join("");
+    if(aiCaseDocs.list.length === 1) sel.value = aiCaseDocs.list[0].id;
+  }).catch(function(ex){
+    if(aiCaseDocs.reqId !== reqId) return;
+    aiCaseDocs.error = ex || new Error("文档加载失败");
+    sel.innerHTML = '<option value="">文档加载失败，请关闭后重试</option>';
+  });
+}
+function loadAiCaseDemands(reqId){
+  var sel = $("aiCaseDemandSel");
+  sel.innerHTML = '<option value="">需求加载中…</option>';
+  return loadDemandOptions(reqId).then(function(list){
+    if(aiCaseSourceReqId !== reqId) return;
+    if(list === null){
+      sel.innerHTML = '<option value="">需求加载失败，请关闭后重试</option>';
+      return;
+    }
+    var opts = ['<option value="">请选择需求</option>'];
+    list.forEach(function(d){
+      opts.push('<option value="' + esc(d.id) + '">' + esc(demandPickLabel(d)) + '</option>');
+    });
+    if(demandOptions.total > list.length){
+      opts.push('<option value="" disabled>仅显示前 ' + list.length + ' 条，共 ' + demandOptions.total + ' 条</option>');
+    }
+    sel.innerHTML = opts.join("");
+    if(list.length === 1) sel.value = list[0].id;
+  });
+}
+function generateAiCases(){
+  if(aiCaseGenerating) return;
+  if(!caseReqId || caseReqId !== aiCaseSourceReqId){
+    toast("项目已切换，请重新打开生成入口", "warn");
+    return;
+  }
+  var sel = aiCaseSource === "doc" ? $("aiCaseDocSel") : $("aiCaseDemandSel");
+  if(!sel.value){
+    toast(aiCaseSource === "doc" ? "先选择要拆的文档" : "先选择要生成用例的需求", "warn");
+    sel.focus();
+    return;
+  }
+  var sourceId = sel.value;
+  var sourceLabel = sel.options[sel.selectedIndex].textContent;
+  var reqId = aiCaseSourceReqId;
+  var demandId = aiCaseSource === "demand" ? sourceId : "";
+  var maxCases = Number($("aiCaseMax").value) || 8;
+  aiCaseGenerating = true;
+  UI.closeModal($("dlgAiCaseSource"));
+  AIProgress.run({
+    title: "AI 生成测试用例",
+    desc: "正在读「" + sourceLabel + "」，拆出可执行的用例和步骤…",
+    hint: "通常需要 20–60 秒，可以随时取消",
+    errorText: aiErrorText,
+    request: function(signal){
+      return API.postWithSignal("/api/ai/testcases/generate", {
+        source: aiCaseSource, sourceId: sourceId, maxCases: maxCases
+      }, signal);
+    },
+    onSuccess: function(d){
+      aiCaseDrafts = d.cases || [];
+      aiCaseApplyReqId = reqId;
+      aiCaseDemandId = demandId;
+      renderAiCaseResult(d);
+      UI.openModal($("dlgAiCaseResult"));
+    },
+    onCancel: function(){ openAiCaseSource(true); }
+  }).then(function(){ aiCaseGenerating = false; });
+}
+function aiCasePriOptions(selected){
+  var p = String(selected || "P2").toUpperCase();
+  return PRIORITIES.map(function(x){
+    return '<option value="' + x + '"' + (x === p ? " selected" : "") + '>' + x + ' · ' + esc(priName(x)) + '</option>';
+  }).join("");
+}
+function renderAiCaseResult(d){
+  $("aiCaseResultTitle").textContent = "AI 生成用例 · " + (d.sourceTitle || "");
+  var msg = "从「" + (d.sourceTitle || "所选来源") + "」生成 " + aiCaseDrafts.length + " 条草稿"
+    + (aiCaseDemandId ? "，创建后关联该需求" : "") + "。标题可直接改，优先级和模块也能调；没勾的不会创建。";
+  if(d.truncated) msg += " 来源共 " + (d.sourceChars || 0) + " 字，AI 只读取了前 12000 字。";
+  $("aiCaseResultMsg").textContent = msg;
+  $("aiCaseList").innerHTML = aiCaseDrafts.map(function(c, i){
+    var steps = c.steps || [];
+    return '<div class="ai-item on" data-i="' + i + '">' +
+      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择用例">' +
+      '<div class="ai-main">' +
+        '<input class="ai-title" type="text" maxlength="100" value="' + esc(c.title) + '" data-title="' + i + '" aria-label="用例标题">' +
+        '<div class="ai-meta">' +
+          '<select class="ai-case-pri" data-pri="' + i + '" aria-label="优先级">' + aiCasePriOptions(c.priority) + '</select>' +
+          '<input class="ai-case-module" type="text" maxlength="50" value="' + esc(c.module || "") + '" data-module="' + i + '" placeholder="功能模块" aria-label="功能模块">' +
+          (c.precondition ? '<span>前置：' + esc(cut(c.precondition, 36)) + '</span>' : "") +
+          (c.reason ? '<span class="ai-reason">' + esc(c.reason) + '</span>' : "") +
+        '</div>' +
+        (steps.length
+          ? '<details class="ai-case-steps"><summary>' + steps.length + ' 个步骤（点击核对）</summary><ol>'
+            + steps.map(function(s){
+              return '<li><div class="act">' + esc(s.action) + '</div>'
+                + (s.expected ? '<div class="exp">预期：' + esc(s.expected) + '</div>' : "") + '</li>';
+            }).join("") + '</ol></details>'
+          : '<div class="ai-reason">这条没有步骤，建议取消勾选后手动补充</div>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+  $("aiCaseUsage").textContent = aiUsageText(d.usage);
+}
+function collectAiCaseDrafts(){
+  var nodes = document.querySelectorAll("#aiCaseList .ai-item");
+  var picked = [];
+  for(var i = 0; i < nodes.length; i++){
+    var cb = nodes[i].querySelector("input[type=checkbox]");
+    if(!cb || !cb.checked) continue;
+    var idx = Number(nodes[i].dataset.i);
+    var src = aiCaseDrafts[idx] || {};
+    var titleEl = nodes[i].querySelector(".ai-title");
+    var title = (titleEl ? titleEl.value : src.title || "").trim();
+    if(!title) continue;
+    var priEl = nodes[i].querySelector("[data-pri]");
+    var modEl = nodes[i].querySelector("[data-module]");
+    picked.push({
+      title: title,
+      precondition: src.precondition || "",
+      module: modEl ? modEl.value.trim() : (src.module || ""),
+      priority: priEl ? priEl.value : (src.priority || "P2"),
+      steps: src.steps || [],
+      reason: src.reason || ""
+    });
+  }
+  return picked;
+}
+function applyAiCases(){
+  if(aiCaseApplying) return;
+  var picked = collectAiCaseDrafts();
+  if(!picked.length){ toast("至少选一条要创建的用例", "warn"); return; }
+  var reqId = aiCaseApplyReqId || caseReqId;
+  var btn = $("dlgAiCaseResultOk");
+  aiCaseApplying = true;
+  btn.disabled = true;
+  btn.textContent = "创建中…";
+  API.post("/api/ai/testcases/apply", {
+    reqId: reqId,
+    demandId: aiCaseDemandId || null,
+    cases: picked
+  }).then(function(r){
+    aiCaseApplying = false;
+    btn.disabled = false;
+    btn.textContent = "创建选中用例";
+    UI.closeModal($("dlgAiCaseResult"));
+    var msg = "已创建 " + r.created + " 条用例";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 条同名";
+    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 条失败";
+    toast(msg, r.failed && r.failed.length ? "warn" : "fs");
+    if(r.failed && r.failed.length) console.warn("AI 用例落库失败项", r.failed);
+    if(reqId === caseReqId) loadCases();
+  }).catch(function(ex){
+    aiCaseApplying = false;
+    btn.disabled = false;
+    btn.textContent = "创建选中用例";
+    toast(ex.message || "创建失败", "bad");
+  });
+}
 /* ---------- 执行结果 ---------- */
 
 function openRunDialog(id){
@@ -1904,6 +2113,31 @@ if(tcViewsBtn && tcViewsMenuEl){
   });
 }
 $("btnCaseNew").addEventListener("click", openNewDialog);
+
+/* AI 生成用例：来源选择 → 进度层 → 草稿勾选 */
+if($("btnCaseAi")) $("btnCaseAi").addEventListener("click", function(){ openAiCaseSource(false); });
+$("aiCaseSourceSeg").addEventListener("click", function(e){
+  var b = e.target.closest("[data-ai-src]");
+  if(!b) return;
+  aiCaseSource = b.dataset.aiSrc;
+  syncAiCaseSource();
+  var sel = aiCaseSource === "doc" ? $("aiCaseDocSel") : $("aiCaseDemandSel");
+  if(sel) sel.focus();
+});
+$("dlgAiCaseSourceX").addEventListener("click", function(){ UI.closeModal($("dlgAiCaseSource")); });
+$("btnAiCaseGenerate").addEventListener("click", generateAiCases);
+$("dlgAiCaseResultCancel").addEventListener("click", function(){ UI.closeModal($("dlgAiCaseResult")); });
+$("dlgAiCaseResultOk").addEventListener("click", applyAiCases);
+$("aiCaseList").addEventListener("change", function(e){
+  var cb = e.target;
+  if(!cb || cb.type !== "checkbox") return;
+  var item = cb.closest(".ai-item");
+  if(item) item.classList.toggle("on", cb.checked);
+});
+UI.setModalCloseGuard($("dlgAiCaseResult"), function(){
+  if(aiCaseApplying) return;
+  UI.closeModal($("dlgAiCaseResult"));
+});
 
 /* 用例 CSV：导出走服务端（含步骤展开），导入读文件后以 JSON 文本提交 */
 $("btnCaseCsvOut").addEventListener("click", exportCasesCsv);

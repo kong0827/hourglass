@@ -1675,6 +1675,17 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .ai-item .ai-desc{font-size:12px;color:var(--text-2);line-height:18px;}
 .ai-item .ai-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
 .ai-item .ai-reason{font-size:11.5px;color:var(--text-3);line-height:17px;}
+/* AI 用例草稿：优先级/模块就地改，步骤折叠起来核对，避免长列表把弹窗撑爆 */
+.ai-item .ai-case-pri{height:24px;padding:0 4px;font-size:11.5px;border-radius:var(--r-xs);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-family:inherit;}
+.ai-item .ai-case-module{height:24px;width:112px;padding:0 6px;font-size:11.5px;border-radius:var(--r-xs);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-family:inherit;}
+.ai-case-steps{margin-top:2px;font-size:11.5px;color:var(--text-2);}
+.ai-case-steps summary{cursor:pointer;color:var(--text-3);line-height:17px;}
+.ai-case-steps ol{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px;}
+.ai-case-steps li{line-height:17px;}
+.ai-case-steps .act{color:var(--text-2);}
+.ai-case-steps .exp{color:var(--text-3);}
 
 .ai-tag{
   font-size:10.5px;font-weight:600;line-height:16px;padding:0 6px;

@@ -481,6 +481,7 @@ function copyReviewAi(){
 })();
 var aiReportCache = {};
 var aiReportBusy = false;
+var aiReportTimer = null;
 function aiKey(off, reqId){
   return String(window.CURRENT_WORKSPACE || "") + "#" + (reqId || "") + "#" + off;
 }
@@ -532,7 +533,16 @@ function runAiReport(){
   var req = d.reqId || "";
   aiReportBusy = true;
   aiBtnBusy(btn, true, "生成中…");
-  $("reviewAiMeta").textContent = "正在写…（10–30 秒）";
+  var startedAt = Date.now();
+  var setMeta = function(){
+    var sec = Math.floor((Date.now() - startedAt) / 1000);
+    $("reviewAiMeta").textContent = sec < 1
+      ? "正在写…（通常需要 10–30 秒）"
+      : "正在写…已等待 " + sec + " 秒，通常需要 10–30 秒";
+  };
+  setMeta();
+  if(aiReportTimer) clearInterval(aiReportTimer);
+  aiReportTimer = setInterval(setMeta, 1000);
   $("reviewAiHint").hidden = true;
   $("btnAiReportCopy").hidden = true;
   body.hidden = false;
@@ -554,6 +564,7 @@ function runAiReport(){
     }
     toast(aiErrMsg(ex && ex.message), "bad");
   }).then(function(){
+    if(aiReportTimer){ clearInterval(aiReportTimer); aiReportTimer = null; }
     aiReportBusy = false;
     aiBtnBusy(btn, false);
   });

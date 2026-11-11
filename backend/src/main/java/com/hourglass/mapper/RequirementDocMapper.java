@@ -13,13 +13,15 @@ public interface RequirementDocMapper {
 
     /** 空间下的需求列表（带项目名、关联任务数、正文片段）；keyword 非空时按标题/正文模糊匹配 */
     List<ReqDocView> selectViewByWorkspace(@Param("workspaceId") String workspaceId,
+                                           @Param("reqId") String reqId,
                                            @Param("keyword") String keyword,
                                            @Param("viewerId") String viewerId,
                                            @Param("userId") String userId,
                                            @Param("seeAllDrafts") boolean seeAllDrafts,
                                            @Param("offset") int offset, @Param("limit") int limit);
 
-    int countVisible(@Param("workspaceId") String workspaceId, @Param("keyword") String keyword,
+    int countVisible(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId,
+                     @Param("keyword") String keyword,
                      @Param("viewerId") String viewerId, @Param("userId") String userId,
                      @Param("seeAllDrafts") boolean seeAllDrafts);
 

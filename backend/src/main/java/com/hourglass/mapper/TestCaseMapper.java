@@ -27,6 +27,9 @@ public interface TestCaseMapper {
     /** 筛选下拉候选值（不受当前筛选影响） */
     List<String> selectModules(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
+    /** 项目内已有用例标题（AI 生成时去重，避免同一功能重复建用例） */
+    List<String> selectTitlesByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
     List<String> selectOwners(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     /** 项目用例概览：latest_status 计数（未执行不在此列，由调用方按总数反推） */

@@ -975,11 +975,11 @@
             <span class="reqdoc-saved" id="reqDocSaved"></span>
             <span class="reqdoc-count" id="reqDocCount"></span>
             <span class="reqdoc-actions">
-              <button class="btn sm ghost" type="button" id="reqDocAiSplit" title="用 AI 把正文拆成工作项草稿（需要先配好 AI）">
-                AI 拆分
+              <button class="btn sm ghost ai-action" type="button" id="reqDocAiSplit" title="用 AI 把当前文档拆成工作项草稿，勾选确认后才会创建">
+                <span data-icon="ai"></span>&nbsp;AI 拆成工作项
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查文档里的功能点是否都有工作项覆盖">
-                完成度检查
+              <button class="btn sm ghost ai-action" type="button" id="reqDocAiAudit" title="用 AI 检查文档里的功能点是否都有工作项覆盖">
+                <span data-icon="ai"></span>&nbsp;AI 检查完成度
               </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
@@ -1176,6 +1176,24 @@
           </div>
         </div>
 
+        <!-- AI 长请求：统一等待、计时、取消与重试 -->
+        <div class="modal-layer" id="dlgAiProgress" role="dialog" aria-modal="true" aria-labelledby="aiProgressTitle">
+          <div class="sheet xs ai-progress-dlg">
+            <h3 id="aiProgressTitle">AI 处理中</h3>
+            <p class="ai-progress-desc" id="aiProgressDesc">正在连接模型…</p>
+            <div class="ai-progress-track" aria-hidden="true"><i></i></div>
+            <div class="ai-progress-meta">
+              <span id="aiProgressElapsed">0 秒</span>
+              <span id="aiProgressHint"></span>
+            </div>
+            <div class="ai-progress-error" id="aiProgressError" role="alert" hidden></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="aiProgressCancel">取消</button>
+              <button class="btn primary" type="button" id="aiProgressRetry" hidden>重试</button>
+            </div>
+          </div>
+        </div>
+
         <!-- 历史版本：左侧版本列表，右侧预览，可恢复 -->
         <div class="modal-layer" id="dlgReqDocHistory" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocHistoryTitle">
           <div class="sheet wide reqdoc-history-dlg">
@@ -1253,6 +1271,7 @@
               <span class="tc-actionbar">
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
                 <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+                <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
                 <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
                 <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
@@ -1381,6 +1400,57 @@
             </div>
           </div>
         </div></div></div>
+
+        <!-- AI 生成测试用例：先选来源，再在进度层等待，最后勾选草稿落库 -->
+        <div class="modal-layer" id="dlgAiCaseSource" role="dialog" aria-modal="true" aria-labelledby="aiCaseSourceTitle"><div class="sheet sm"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="aiCaseSourceTitle">AI 生成测试用例</h3><button class="icon-btn sm" type="button" id="dlgAiCaseSourceX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note">从需求文档或需求池条目生成用例草稿；勾选确认后才会创建，AI 不会直接写入。</p>
+              <div class="field">
+                <label>生成来源</label>
+                <div class="seg" id="aiCaseSourceSeg">
+                  <button type="button" data-ai-src="doc" aria-pressed="true">需求文档</button>
+                  <button type="button" data-ai-src="demand" aria-pressed="false">需求池条目</button>
+                </div>
+              </div>
+              <div class="field" id="aiCaseDocField">
+                <label for="aiCaseDocSel">选择文档 <span class="req">*</span></label>
+                <select id="aiCaseDocSel"></select>
+              </div>
+              <div class="field" id="aiCaseDemandField" hidden>
+                <label for="aiCaseDemandSel">选择需求 <span class="req">*</span></label>
+                <select id="aiCaseDemandSel"></select>
+              </div>
+              <div class="field">
+                <label for="aiCaseMax">生成条数</label>
+                <select id="aiCaseMax">
+                  <option value="5">5 条</option>
+                  <option value="8" selected>8 条</option>
+                  <option value="12">12 条</option>
+                </select>
+              </div>
+              <p class="foot-note" id="aiCaseSourceHint">当前项目：—</p>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnAiCaseGenerate">生成用例草稿</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- AI 用例草稿：可改标题/优先级/模块，步骤只读核对 -->
+        <div class="modal-layer" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="aiCaseResultTitle">AI 生成的测试用例</h3>
+            <p class="reqdoc-dlg-msg" id="aiCaseResultMsg">勾选要创建的用例，标题可以直接改；没勾的不会落库。</p>
+            <div class="ai-list" id="aiCaseList"></div>
+            <div class="ai-usage" id="aiCaseUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="dlgAiCaseResultCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgAiCaseResultOk">创建选中用例</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 新建 / 编辑测试计划 -->
         <div class="modal-layer" id="dlgPlan" role="dialog" aria-modal="true" aria-labelledby="planFormTitle"><div class="sheet sm"><div class="sheet-body">

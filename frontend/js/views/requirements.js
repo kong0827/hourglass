@@ -8,6 +8,7 @@ import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { AIProgress, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
 import { DOC_TYPES, colName, docTypeName, fmtTs, pad2, priColor, priName, typeBadgeHTML } from "../lib/format.js";
@@ -1839,26 +1840,13 @@ function aiBtnBusy(btn, busy, label){
   if(!btn) return;
   btn.disabled = busy;
   if(busy){
-    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
-    btn.textContent = label || "处理中…";
-  }else if(btn.dataset.label){
-    btn.textContent = btn.dataset.label;
+    if(!btn.dataset.html) btn.dataset.html = btn.innerHTML;
+    var ico = btn.querySelector("[data-icon]");
+    btn.innerHTML = (ico ? ico.outerHTML : "") + "&nbsp;" + esc(label || "处理中…");
+  }else if(btn.dataset.html){
+    btn.innerHTML = btn.dataset.html;
+    delete btn.dataset.html;
   }
-}
-function aiErrMsg(msg){
-  var m = msg || "AI 调用失败";
-  if(m.indexOf("个人设置") < 0 &&
-     (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
-      || m.indexOf("AI 配置") >= 0)){
-    m += "（到「个人设置 → AI 设置」里配一下）";
-  }
-  return m;
-}
-function aiUsageText(u){
-  if(!u) return "";
-  return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
-    + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
-    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
 }
 function runAiSplit(){
   if(!editingDocId || aiBusy) return;
@@ -1866,13 +1854,20 @@ function runAiSplit(){
   var btn = $("reqDocAiSplit");
   ensureReqDocSaved(function(){
     aiBusy = true;
-    aiBtnBusy(btn, true, "拆分中…");
-    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}).then(function(d){
-      aiSplitDrafts = d.tasks || [];
-      renderAiSplit(d);
-      UI.openModal($("dlgAiSplit"));
-    }).catch(function(ex){
-      toast(aiErrMsg(ex && ex.message), "bad");
+    aiBtnBusy(btn, true, "生成中…");
+    AIProgress.run({
+      title: "AI 拆成工作项",
+      desc: "正在读「" + (editingMeta.title || "当前文档") + "」，拆成可执行的工作单元…",
+      hint: "通常需要 20–60 秒，可以随时取消",
+      errorText: aiErrMsg,
+      request: function(signal){
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}, signal);
+      },
+      onSuccess: function(d){
+        aiSplitDrafts = d.tasks || [];
+        renderAiSplit(d);
+        UI.openModal($("dlgAiSplit"));
+      }
     }).then(function(){
       aiBusy = false;
       aiBtnBusy(btn, false);
@@ -1946,11 +1941,18 @@ function runAiAudit(){
   ensureReqDocSaved(function(){
     aiBusy = true;
     aiBtnBusy(btn, true, "检查中…");
-    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}).then(function(d){
-      renderAiAudit(d);
-      UI.openModal($("dlgAiAudit"));
-    }).catch(function(ex){
-      toast(aiErrMsg(ex && ex.message), "bad");
+    AIProgress.run({
+      title: "AI 检查完成度",
+      desc: "正在对照「" + (editingMeta.title || "当前文档") + "」和关联工作项，找出还没覆盖的功能点…",
+      hint: "文档越长耗时越久，可以随时取消",
+      errorText: aiErrMsg,
+      request: function(signal){
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}, signal);
+      },
+      onSuccess: function(d){
+        renderAiAudit(d);
+        UI.openModal($("dlgAiAudit"));
+      }
     }).then(function(){
       aiBusy = false;
       aiBtnBusy(btn, false);

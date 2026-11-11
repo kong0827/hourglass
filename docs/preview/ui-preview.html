@@ -745,6 +745,11 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
   flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);
   font-size:15px;line-height:1.5;
 }
+.palette-scope{
+  flex:none;max-width:46%;padding:3px 8px;border:1px solid var(--primary-border);border-radius:999px;
+  background:var(--primary-soft);color:var(--primary);font-size:11px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .palette-input kbd,.palette-foot kbd{
   padding:1px 5px;border:1px solid var(--border);border-radius:var(--r-xs);
   background:var(--surface-sunken);color:var(--text-3);font-size:11px;font-family:inherit;
@@ -765,6 +770,29 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .palette-title{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .palette-meta{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .palette-empty{padding:28px 12px;text-align:center;color:var(--text-3);font-size:13px;}
+.palette-recent-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 10px 4px;color:var(--text-3);font-size:11px;font-weight:650;letter-spacing:.04em;
+}
+.palette-clear{
+  padding:2px 5px;border:0;border-radius:var(--r-xs);background:transparent;
+  color:var(--text-3);font-size:11.5px;cursor:pointer;
+}
+.palette-clear:hover{background:var(--primary-soft);color:var(--primary);}
+.palette-recent{
+  display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:var(--r-sm);
+  background:transparent;color:var(--text);text-align:left;cursor:pointer;
+}
+.palette-recent:hover,.palette-recent:focus-visible{background:var(--surface-sunken);outline:0;}
+.palette-recent-ic{
+  flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+  background:var(--surface-sunken);color:var(--text-3);
+}
+.palette-recent .palette-title{font-weight:600;}
+.palette-scope-note{
+  margin:6px 8px 2px;padding:10px 2px 2px;border-top:1px solid var(--border);
+  color:var(--text-3);font-size:11.5px;line-height:1.5;
+}
 .palette-foot{
   display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);
   color:var(--text-3);font-size:11.5px;background:var(--surface-sunken);
@@ -794,6 +822,10 @@ body.side-rail .rail-btn{transform:rotate(180deg);}
 .btn.primary:active{background:var(--primary-active);border-color:var(--primary-active);}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
 .btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+/* AI 动作：在工具条里保持 ghost 的轻量，但用主题色和图标明确区分 */
+.btn.ghost.ai-action{color:var(--primary-fg);}
+.btn.ghost.ai-action:hover{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.btn.ghost.ai-action [data-icon]{display:inline-flex;align-items:center;vertical-align:-2px;}
 .btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
 .btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);}
 .btn.danger{background:var(--surface);border-color:var(--danger-border);color:var(--danger-fg);}
@@ -1663,6 +1695,21 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .sheet.xs{max-width:400px;}
 .sheet.sm{max-width:480px;}
+/* AI 长请求：进度条只表示“还在跑”，不假装知道百分比 */
+.ai-progress-dlg{padding:20px;}
+.ai-progress-dlg h3{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+.ai-progress-desc{margin-top:6px;font-size:13px;line-height:19px;color:var(--text-2);}
+.ai-progress-track{position:relative;height:6px;margin-top:16px;border-radius:99px;overflow:hidden;background:var(--surface-sunken);}
+.ai-progress-track i{position:absolute;top:0;bottom:0;width:38%;border-radius:inherit;
+  background:linear-gradient(90deg,transparent,var(--primary),transparent);
+  animation:ai-progress-slide 1.3s var(--ease-out) infinite;}
+.ai-progress-dlg:not(.busy) .ai-progress-track i{animation-play-state:paused;opacity:.4;}
+@keyframes ai-progress-slide{from{transform:translateX(-110%);}to{transform:translateX(290%);}}
+.ai-progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:12px;color:var(--text-3);min-height:18px;}
+.ai-progress-meta #aiProgressHint{text-align:right;}
+.ai-progress-error{margin-top:12px;padding:10px 12px;border:1px solid var(--danger-border);border-radius:var(--r-sm);
+  background:var(--danger-soft);color:var(--danger-fg);font-size:12.5px;line-height:18px;}
+.ai-progress-dlg .reqdoc-dlg-foot{margin-top:16px;}
 /* 宽表格类弹框（任务明细下钻等）：列多时 480px 会截断表格 */
 .sheet.md{max-width:none;width:min(720px,94vw);}
 .sheet.wide{max-width:none;width:min(1080px,94vw);}
@@ -2710,6 +2757,22 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 .access-matrix .access-sub{display:block;font-size:11.5px;color:var(--text-3);}
 .access-matrix .access-all{color:var(--text-3);font-size:12px;}
 .access-matrix .access-select{min-width:116px;}
+/* 邀请 / 成员分配项目的弹窗：项目行 + 三态分段 */
+.grant-sheet .sheet-body{max-height:min(56vh,440px);overflow:auto;gap:12px;}
+.grant-tip{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--surface-sunken);font-size:12px;line-height:18px;color:var(--text-2);}
+.grant-list{display:flex;flex-direction:column;gap:6px;}
+.grant-row{display:flex;align-items:center;gap:10px;min-height:40px;padding:5px 8px 5px 10px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);}
+.grant-row .nm{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.grant-row .seg{flex:0 0 auto;}
+.grant-row .seg button{min-width:52px;}
+.grant-row .seg button[aria-pressed="true"][data-grant-access="write"]{color:var(--success-fg);}
+.grant-row .seg button[aria-pressed="true"][data-grant-access="read"]{color:var(--warning-fg);}
+.grant-row .seg button[aria-pressed="true"][data-grant-access="none"]{color:var(--text-2);}
+.grant-summary{font-size:12px;color:var(--text-3);line-height:18px;}
+.grant-list .foot-note{padding:4px 2px;}
 /* 创建表单：等宽输入 + 固定宽按钮，不让按钮吃掉整行剩余空间 */
 .user-add{
   display:grid;gap:8px;align-items:center;max-width:900px;
@@ -3721,6 +3784,17 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .ai-item .ai-desc{font-size:12px;color:var(--text-2);line-height:18px;}
 .ai-item .ai-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
 .ai-item .ai-reason{font-size:11.5px;color:var(--text-3);line-height:17px;}
+/* AI 用例草稿：优先级/模块就地改，步骤折叠起来核对，避免长列表把弹窗撑爆 */
+.ai-item .ai-case-pri{height:24px;padding:0 4px;font-size:11.5px;border-radius:var(--r-xs);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-family:inherit;}
+.ai-item .ai-case-module{height:24px;width:112px;padding:0 6px;font-size:11.5px;border-radius:var(--r-xs);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-family:inherit;}
+.ai-case-steps{margin-top:2px;font-size:11.5px;color:var(--text-2);}
+.ai-case-steps summary{cursor:pointer;color:var(--text-3);line-height:17px;}
+.ai-case-steps ol{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px;}
+.ai-case-steps li{line-height:17px;}
+.ai-case-steps .act{color:var(--text-2);}
+.ai-case-steps .exp{color:var(--text-3);}
 
 .ai-tag{
   font-size:10.5px;font-weight:600;line-height:16px;padding:0 6px;
@@ -3839,6 +3913,16 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .br-list tbody tr:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--ring-focus);}
 .br-list .br-name-cell{font-weight:500;color:var(--text);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
+/* 从「我的工作」深链进来：说明只看哪一档，可一键清除来源 */
+.br-source{display:flex;align-items:center;gap:9px;min-width:0;margin:0 0 10px;padding:8px 12px;border:1px solid var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);color:var(--primary-fg);font-size:12.5px;}
+.br-source-ico{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--surface);color:var(--primary);font-size:12px;flex:none;box-shadow:var(--shadow-xs);}
+.br-source-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.br-source-text b{font-weight:650;}
+.br-source-rule{padding:1px 7px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--primary-border);font-size:11.5px;white-space:nowrap;}
+.br-source-count{margin-left:auto;color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.br-source-clear{border:0;background:transparent;color:var(--primary-fg);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:2px 4px;white-space:nowrap;}
+.br-source-clear:hover{color:var(--text);}
+
 /* 四列分组 */
 .br-groups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;}
 .br-group{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-sunken);padding:8px;}
@@ -3915,9 +3999,13 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .br-projs .tag{height:18px;padding:0 7px;font-size:12px;font-weight:500;background:var(--primary-soft);color:var(--primary);border-color:var(--primary-border);}
 /* 版本卡「分支进度」行：状态点复用分支四状态色，分支名等宽字体 */
 .ver-branches{display:flex;flex-wrap:wrap;gap:4px 6px;margin:6px 0 2px;}
-.ver-br{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:var(--r-pill);
-  font-family:var(--font-mono);font-size:11.5px;color:var(--text-2);background:var(--surface-sunken);
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ver-br{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px 0 8px;border:1px solid transparent;border-radius:var(--r-pill);
+  font-family:var(--font-mono);font-size:11.5px;line-height:1;color:var(--text-2);background:var(--surface-sunken);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:border-color .12s,background .12s,color .12s;}
+.ver-br:hover{border-color:var(--primary-border);background:var(--surface);color:var(--text);}
+.ver-br:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.ver-br-go{flex:0 0 auto;margin-left:-1px;color:var(--text-3);font-family:inherit;font-size:12px;line-height:1;}
+.ver-br:hover .ver-br-go{color:var(--primary);}
 .ver-br-n{color:var(--text-3);font-size:10.5px;font-weight:600;}
 .br-card-foot{display:flex;align-items:center;gap:8px;margin-top:2px;font-size:11.5px;color:var(--text-3);}
 .br-tasks{display:inline-flex;align-items:center;gap:3px;min-width:0;}
@@ -3984,6 +4072,10 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 }
 @media (max-width:780px){
   .br-groups,.br-flow{grid-template-columns:1fr;}
+  .br-source{flex-wrap:wrap;gap:6px 8px;padding:8px 10px;}
+  .br-source-text{flex:1 1 100%;white-space:normal;}
+  .br-source-count{margin-left:0;}
+  .br-source-clear{margin-left:auto;}
 }
 
 /* IA-5：设置页 tabs（原长页锚点导航改为分区切换） */
@@ -4167,6 +4259,28 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .phase-filter-input:hover{border-color:var(--border-strong);}
 .phase-filter-input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .phase-tbl-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 全部版本：跨项目勾选 → 创建发布计划 */
+.allv-tools{padding:0 0 12px;}
+.allv-selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin:0 0 12px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-md);}
+.allv-selinfo{flex:1;min-width:0;}
+.allv-selinfo>b{display:block;font-size:12.5px;font-weight:650;color:var(--primary-fg);}
+.allv-selinfo .release-chips{margin-top:4px;flex-wrap:wrap;}
+.allv-selinfo .release-chip{background:var(--surface);border-color:var(--primary-border);color:var(--primary-fg);}
+.allv-hint{margin:0 0 12px;font-size:12px;color:var(--text-3);}
+.allv-tbl{min-width:760px;}
+.allv-tbl th:first-child,.allv-tbl td:first-child{width:36px;padding-right:0;}
+.allv-pick{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;cursor:pointer;}
+.allv-pick input:disabled{cursor:not-allowed;opacity:.45;}
+.allv-group td{padding:8px 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.allv-gname{font-size:12.5px;font-weight:650;color:var(--text);}
+.allv-gmeta{margin-left:8px;font-size:11px;color:var(--text-3);}
+.allv-vname{font-size:13px;font-weight:600;color:var(--text);}
+.allv-vsub{margin-top:1px;font-size:11px;color:var(--text-3);}
+.allv-tbl tbody tr.is-selected td{background:var(--primary-soft);}
+.allv-perm{display:inline-flex;align-items:center;font-size:11.5px;color:var(--text-2);}
+.allv-perm.is-off{color:var(--text-3);}
+.allv-empty{padding:28px 8px;text-align:center;font-size:12.5px;color:var(--text-3);}
+.allv-foot{margin:10px 0 0;font-size:11.5px;line-height:1.6;color:var(--text-3);}
 .phase-tbl-tools .btn.sm[disabled]{opacity:.5;cursor:not-allowed;}
 .phase-tbl{width:100%;border-collapse:collapse;font-size:13px;}
 .phase-tbl th,.phase-tbl td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -4338,6 +4452,14 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .plan-br-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto 50px minmax(0,86px) minmax(0,.85fr);align-items:center;gap:8px 10px;min-width:0;padding:8px 11px;border-bottom:1px solid var(--border);font-size:12.5px;}
 .plan-br-row:last-child{border-bottom:0;}
 .plan-br-row.is-released{opacity:.62;}
+.plan-br-row.is-just-synced{background:color-mix(in srgb,var(--primary) 5%,var(--surface));box-shadow:inset 2px 0 0 var(--primary);}
+/* 打开中的发布工作区收到分支实时变更：只刷新分支区块，并给一条可收起的同步提示 */
+.plan-br-sync{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 9px 7px 11px;border:1px solid var(--success-border);border-radius:var(--r-sm);background:var(--success-soft);color:var(--text-2);font-size:12px;line-height:18px;}
+.plan-br-sync-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.plan-br-sync-text b{font-weight:650;color:var(--text);}
+.plan-br-sync-more,.plan-br-sync-time{color:var(--text-3);}
+.plan-br-sync .btn{flex:0 0 auto;}
+.plan-br-sync .icon-btn{flex:0 0 auto;}
 .plan-br-name{display:flex;align-items:center;gap:7px;min-width:0;font-weight:600;color:var(--text);}
 .plan-br-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .plan-br-target{display:flex;align-items:center;gap:5px;min-width:0;color:var(--text-2);}
@@ -4397,6 +4519,9 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
   .release-version-row{min-height:44px;}
   .release-chip{max-width:150px;}
   .plan-br-summary{flex:1 1 100%;margin-left:0;line-height:17px;}
+  .plan-br-sync{flex-wrap:wrap;padding:8px 10px;}
+  .plan-br-sync-text{flex:1 1 100%;white-space:normal;}
+  .plan-br-sync .btn{margin-left:auto;}
   .plan-br-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 11px;}
   .plan-br-name{grid-column:1 / 2;}
   .plan-br-target{grid-column:1 / 2;font-size:12px;}
@@ -5206,6 +5331,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .manager-toolbar>div:first-child{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap;}
 .manager-toolbar b{font-size:15px;font-weight:650;}
 .manager-toolbar span{font-size:12.5px;color:var(--text-3);}
+.manager-actions{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.manager-toolbar .manager-nudge-all .manager-nudge-count{min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:var(--surface);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11px;font-weight:650;line-height:1;font-variant-numeric:tabular-nums;}
 .manager-project-picker select{height:32px;min-width:180px;max-width:300px;padding:0 32px 0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background-color:var(--surface);color:var(--text);font-size:13px;background-position:right 9px center;}
 .project-tabs{align-self:flex-start;margin-top:-2px;}
 .project-tab-panel{display:flex;flex-direction:column;gap:14px;min-width:0;}
@@ -5405,7 +5532,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .manager-drill-caret:hover{background:var(--surface-hover);color:var(--text);}
 .manager-drill-caret svg{transition:transform var(--dur-fast) var(--ease-out);}
 .manager-drill-caret.open svg{transform:rotate(90deg);}
-.manager-drill-indent{display:inline-block;flex:0 0 auto;}
+.manager-drill-name{display:flex;align-items:center;min-width:0;}
 .manager-drill-title{font-weight:600;color:var(--text);}
 .manager-drill-link{padding:0;border:0;background:transparent;font:inherit;font-weight:600;color:var(--text);cursor:pointer;text-align:left;}
 .manager-drill-link:hover{color:var(--primary);}
@@ -5593,6 +5720,22 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .pivot-tbl tbody tr:last-child{background:var(--surface-sunken);}
 /* 需求池列表：搜索框 + 表格内分组行 */
 #view-demands .dem-search{min-width:170px;max-width:230px;padding:5px 10px;font-size:12.5px;}
+/* 需求池看板：紧凑搜索/筛选条，范围固定为当前项目 */
+#view-demands .dem-board-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-bottom:10px;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+}
+#view-demands .demb-search{
+  flex:1 1 260px;min-width:180px;max-width:420px;
+  padding:5px 10px;font-size:12.5px;
+}
+#view-demands .demb-clear{min-height:28px;}
+#view-demands .demb-spacer{flex:1 1 auto;}
+#view-demands .demb-match{
+  font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#view-demands .demb-col-empty{padding:10px 2px;}
 #view-demands .dem-group-row{background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 #view-demands .dem-group-row > td{padding:6px 10px;}
 #view-demands .dem-group-toggle{
@@ -7269,6 +7412,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               <div class="seg" id="phaseModeSeg">
                 <button type="button" data-pmode="phase" aria-pressed="true">按阶段</button>
                 <button type="button" data-pmode="version" aria-pressed="false">按版本</button>
+                <button type="button" data-pmode="allversions" aria-pressed="false">全部版本</button>
                 <button type="button" data-pmode="schedule" aria-pressed="false">发布日程</button>
                 <button type="button" data-pmode="overview" aria-pressed="false">全部项目</button>
               </div>
@@ -7549,11 +7693,11 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
             <span class="reqdoc-saved" id="reqDocSaved"></span>
             <span class="reqdoc-count" id="reqDocCount"></span>
             <span class="reqdoc-actions">
-              <button class="btn sm ghost" type="button" id="reqDocAiSplit" title="用 AI 把正文拆成工作项草稿（需要先配好 AI）">
-                AI 拆分
+              <button class="btn sm ghost ai-action" type="button" id="reqDocAiSplit" title="用 AI 把当前文档拆成工作项草稿，勾选确认后才会创建">
+                <span data-icon="ai"></span>&nbsp;AI 拆成工作项
               </button>
-              <button class="btn sm ghost" type="button" id="reqDocAiAudit" title="检查文档里的功能点是否都有工作项覆盖">
-                完成度检查
+              <button class="btn sm ghost ai-action" type="button" id="reqDocAiAudit" title="用 AI 检查文档里的功能点是否都有工作项覆盖">
+                <span data-icon="ai"></span>&nbsp;AI 检查完成度
               </button>
               <button class="btn sm ghost" type="button" id="reqDocTocToggle" title="显示/隐藏大纲">
                 <span data-icon="listUl"></span>&nbsp;大纲
@@ -7750,6 +7894,24 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
           </div>
         </div>
 
+        <!-- AI 长请求：统一等待、计时、取消与重试 -->
+        <div class="modal-layer" id="dlgAiProgress" role="dialog" aria-modal="true" aria-labelledby="aiProgressTitle">
+          <div class="sheet xs ai-progress-dlg">
+            <h3 id="aiProgressTitle">AI 处理中</h3>
+            <p class="ai-progress-desc" id="aiProgressDesc">正在连接模型…</p>
+            <div class="ai-progress-track" aria-hidden="true"><i></i></div>
+            <div class="ai-progress-meta">
+              <span id="aiProgressElapsed">0 秒</span>
+              <span id="aiProgressHint"></span>
+            </div>
+            <div class="ai-progress-error" id="aiProgressError" role="alert" hidden></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="aiProgressCancel">取消</button>
+              <button class="btn primary" type="button" id="aiProgressRetry" hidden>重试</button>
+            </div>
+          </div>
+        </div>
+
         <!-- 历史版本：左侧版本列表，右侧预览，可恢复 -->
         <div class="modal-layer" id="dlgReqDocHistory" role="dialog" aria-modal="true" aria-labelledby="dlgReqDocHistoryTitle">
           <div class="sheet wide reqdoc-history-dlg">
@@ -7827,6 +7989,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               <span class="tc-actionbar">
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
                 <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
+                <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
                 <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
                 <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
@@ -7955,6 +8118,57 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
             </div>
           </div>
         </div></div></div>
+
+        <!-- AI 生成测试用例：先选来源，再在进度层等待，最后勾选草稿落库 -->
+        <div class="modal-layer" id="dlgAiCaseSource" role="dialog" aria-modal="true" aria-labelledby="aiCaseSourceTitle"><div class="sheet sm"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="aiCaseSourceTitle">AI 生成测试用例</h3><button class="icon-btn sm" type="button" id="dlgAiCaseSourceX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note">从需求文档或需求池条目生成用例草稿；勾选确认后才会创建，AI 不会直接写入。</p>
+              <div class="field">
+                <label>生成来源</label>
+                <div class="seg" id="aiCaseSourceSeg">
+                  <button type="button" data-ai-src="doc" aria-pressed="true">需求文档</button>
+                  <button type="button" data-ai-src="demand" aria-pressed="false">需求池条目</button>
+                </div>
+              </div>
+              <div class="field" id="aiCaseDocField">
+                <label for="aiCaseDocSel">选择文档 <span class="req">*</span></label>
+                <select id="aiCaseDocSel"></select>
+              </div>
+              <div class="field" id="aiCaseDemandField" hidden>
+                <label for="aiCaseDemandSel">选择需求 <span class="req">*</span></label>
+                <select id="aiCaseDemandSel"></select>
+              </div>
+              <div class="field">
+                <label for="aiCaseMax">生成条数</label>
+                <select id="aiCaseMax">
+                  <option value="5">5 条</option>
+                  <option value="8" selected>8 条</option>
+                  <option value="12">12 条</option>
+                </select>
+              </div>
+              <p class="foot-note" id="aiCaseSourceHint">当前项目：—</p>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnAiCaseGenerate">生成用例草稿</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- AI 用例草稿：可改标题/优先级/模块，步骤只读核对 -->
+        <div class="modal-layer" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
+          <div class="sheet ai-dlg">
+            <h3 class="reqdoc-dlg-title" id="aiCaseResultTitle">AI 生成的测试用例</h3>
+            <p class="reqdoc-dlg-msg" id="aiCaseResultMsg">勾选要创建的用例，标题可以直接改；没勾的不会落库。</p>
+            <div class="ai-list" id="aiCaseList"></div>
+            <div class="ai-usage" id="aiCaseUsage"></div>
+            <div class="reqdoc-dlg-foot">
+              <button class="btn ghost" type="button" id="dlgAiCaseResultCancel">取消</button>
+              <button class="btn primary" type="button" id="dlgAiCaseResultOk">创建选中用例</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 新建 / 编辑测试计划 -->
         <div class="modal-layer" id="dlgPlan" role="dialog" aria-modal="true" aria-labelledby="planFormTitle"><div class="sheet sm"><div class="sheet-body">
@@ -8466,7 +8680,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
               <div class="perm-guide" id="permGuide">
                 <div class="perm-guide-row"><span class="perm-chip owner">空间主</span><span>全部项目；调整所有成员（含管理员）、删除空间、配置推送</span></div>
                 <div class="perm-guide-row"><span class="perm-chip admin">管理员</span><span>全部项目；邀请 / 移出成员与查看者、配置项目可见范围</span></div>
-                <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>默认参与全部项目，可按项目设为只读或不可见</span></div>
+                <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>新成员只看到已分配的项目（可参与 / 只读）；早期成员默认全部，可按项目设为不可见</span></div>
                 <div class="perm-guide-row"><span class="perm-chip viewer">查看者</span><span>全部项目只读，不能修改任何数据</span></div>
               </div>
               <div class="member-list" id="wsMemberList"></div>
@@ -8485,7 +8699,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                   <h3 style="font-size:14px">邀请链接</h3>
                   <span class="meta-right">7 天有效</span>
                 </div>
-                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。</p>
+                <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。</p>
                 <p class="set-hint" id="inviteNoAccountHint">
                   <span id="inviteNoAccountText">对方还没有账号？请联系平台管理员先创建账号。</span>
                   <button class="link-btn" type="button" id="btnInviteCreateAccount" hidden>去创建账号</button>
@@ -8500,7 +8714,7 @@ html[data-theme="dark"] [data-layout="mobile"] .team-hero{
                 <h3>项目可见范围</h3>
                 <span class="meta-right" id="accessSummary"></span>
               </div>
-              <p class="set-hint">按「成员 × 项目」配置参与范围：默认参与可读写；设为「只读」后只能查看该项目；设为「不可见」后，该项目在项目、工作项、看板、报表中都不出现。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
+              <p class="set-hint">按「成员 × 项目」配置：可参与可读写；只读只能查看；不可见时该项目在项目、工作项、看板、报表中都不出现。新成员默认不参与任何项目，可用成员行的「分配项目」或邀请时先分配；早期加入的成员沿用「默认全部可参与」，只需把不该看到的项目设为不可见。空间主与管理员天然拥有全部项目，查看者为全局只读，均无需配置。</p>
               <div class="tbl-wrap access-matrix-wrap" id="projectAccessWrap">
                 <div class="foot-note">加载中…</div>
               </div>
@@ -10599,6 +10813,55 @@ var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ==================== --
   </form>
 </div>
 
+<!-- 生成邀请链接：先选项目权限（未选即加入后不可见，后续可调） -->
+<div class="modal-layer" id="dlgInviteCreate" role="dialog" aria-modal="true" aria-labelledby="dlgInviteCreateTitle">
+  <div class="sheet sm grant-sheet">
+    <div class="sheet-head">
+      <div style="flex:1 1 auto;min-width:0">
+        <h2 id="dlgInviteCreateTitle">生成邀请链接</h2>
+        <div class="desc">对方通过链接加入后，默认可看到你在这里分配的项目；未分配的项目不可见。</div>
+      </div>
+      <button class="icon-btn sm" type="button" id="dlgInviteCreateX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="grant-tip">邀请链接可被多人使用，同样的项目权限会应用到每位通过该链接加入的人。加入后仍可在「成员与权限」中调整。</div>
+      <div class="grant-list" id="inviteGrantList"><div class="foot-note">加载中…</div></div>
+      <div class="grant-summary" id="inviteGrantSummary"></div>
+    </div>
+    <div class="sheet-foot">
+      <span class="hint">链接 7 天有效，可随时撤销</span>
+      <button class="btn" type="button" id="dlgInviteCreateCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgInviteCreateOk">生成链接</button>
+    </div>
+  </div>
+</div>
+
+<!-- 成员行「分配项目」：一次保存该成员在本空间全部项目的权限 -->
+<div class="modal-layer" id="dlgMemberGrants" role="dialog" aria-modal="true" aria-labelledby="dlgMemberGrantsTitle">
+  <div class="sheet sm grant-sheet">
+    <div class="sheet-head">
+      <div style="flex:1 1 auto;min-width:0">
+        <h2 id="dlgMemberGrantsTitle">分配项目</h2>
+        <div class="desc" id="dlgMemberGrantsDesc">未选择「可参与 / 只读」的项目，该成员看不到。</div>
+      </div>
+      <button class="icon-btn sm" type="button" id="dlgMemberGrantsX" aria-label="关闭">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="grant-list" id="memberGrantList"><div class="foot-note">加载中…</div></div>
+      <div class="grant-summary" id="memberGrantSummary"></div>
+    </div>
+    <div class="sheet-foot">
+      <span class="hint">保存后立即生效</span>
+      <button class="btn" type="button" id="dlgMemberGrantsCancel">取消</button>
+      <button class="btn primary" type="button" id="dlgMemberGrantsOk">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 管理员重置密码 -->
 <div class="modal-layer" id="dlgUserPwd" role="dialog" aria-modal="true" aria-labelledby="dlgUserPwdTitle">
   <form class="sheet xs" id="dlgUserPwdForm" novalidate>
@@ -10789,7 +11052,8 @@ var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ==================== --
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
         <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
       </svg>
-      <input id="paletteInput" type="search" placeholder="搜索项目、工作项、文档、需求、用例…" autocomplete="off" aria-label="全局搜索" />
+      <input id="paletteInput" type="search" placeholder="搜索项目、工作项、分支、文档" autocomplete="off" aria-label="全局搜索" />
+      <span class="palette-scope" id="paletteScope">仅当前空间</span>
       <kbd>Esc</kbd>
     </div>
     <div class="palette-results" id="paletteResults" role="listbox" aria-label="搜索结果"></div>
@@ -10956,7 +11220,7 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
   var etagOrder = [];
   var ETAG_MAX = 80;
 
-  function request(method, url, body, isForm, skipWorkspace) {
+  function request(method, url, body, isForm, skipWorkspace, externalSignal) {
     url = resolveRoot(url);
     if (!skipWorkspace) url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
@@ -10981,15 +11245,31 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
     var timeout = /\/api\/(ai|import|export)(\/|$)/.test(path) ? 180000 : 20000;
     var ctrl = window.AbortController ? new AbortController() : null;
     var timer = null;
+    var timedOut = false;
     if (ctrl) {
+      /* 外部可取消的请求（AI 生成）与内部超时共用同一个 controller：
+         用户取消时 timedOut 仍为 false，调用方据此区分“取消”和“超时” */
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          try { ctrl.abort(); } catch (e) { /* noop */ }
+        } else {
+          externalSignal.addEventListener("abort", function () {
+            try { ctrl.abort(); } catch (e) { /* noop */ }
+          }, { once: true });
+        }
+      }
       opts.signal = ctrl.signal;
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) { /* noop */ } }, timeout);
+      timer = setTimeout(function () {
+        timedOut = true;
+        try { ctrl.abort(); } catch (e) { /* noop */ }
+      }, timeout);
     }
     return fetch(url, opts).catch(function (err) {
       if (timer) { clearTimeout(timer); timer = null; }
       if (err && err.name === "AbortError") {
-        var e = new Error("请求超时，请稍后重试");
+        var e = new Error(timedOut ? "请求超时，请稍后重试" : "已取消");
         e.silent = true;
+        e.aborted = !timedOut;
         throw e;
       }
       /* fetch 只在断网 / DNS / 连接被拒时抛 TypeError，统一转成可读中文，别把英文原文丢到界面 */
@@ -11098,6 +11378,10 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
     },
     post: function (path, body) {
       return request("POST", path, body);
+    },
+    /* AI 长请求可取消：signal 由调用方传入，超时仍由 request() 统一兜底 */
+    postWithSignal: function (path, body, signal) {
+      return request("POST", path, body, false, false, signal);
     },
     put: function (path, body) {
       return request("PUT", path, body);
@@ -11230,6 +11514,8 @@ var channelCards = $("channelCards"), notifyStatus = $("notifyStatus"),
 
     /* ---- 品牌 / 其他 ---- */
     star: function (s) { return svg(s, '<path d="M10 2.4 12.3 7.4l5.3.5-4 3.5 1.2 5.2L10 13.8 5.2 16.6l1.2-5.2-4-3.5 5.3-.5Z"/>'); },
+    /* AI：四角星 + 小星，用于所有 AI 动作入口，避免只靠文字区分 */
+    ai: function (s) { return svg(s, '<path d="M8.6 2.8 10 7l4.2 1.4L10 9.8 8.6 14 7.2 9.8 3 8.4 7.2 7Z"/><path d="M15.2 13.2 15.9 15l1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z"/>'); },
     link: function (s) { return svg(s, '<path d="M8.4 11.6a3.4 3.4 0 0 0 4.8 0l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8L9.8 5.4"/><path d="M11.6 8.4a3.4 3.4 0 0 0-4.8 0L4.2 11a3.4 3.4 0 0 0 4.8 4.8l1.1-1.1"/>'); },
     logout: function (s) { return svg(s, '<path d="M8.2 3.4H5.6a2 2 0 0 0-2 2v9.2a2 2 0 0 0 2 2h2.6"/><path d="M12.6 6.4 16.2 10l-3.6 3.6M16 10H8.4"/>'); },
     grip: function (s) { return fillSvg(s, '<circle cx="7.6" cy="5.4" r="1.2"/><circle cx="12.4" cy="5.4" r="1.2"/><circle cx="7.6" cy="10" r="1.2"/><circle cx="12.4" cy="10" r="1.2"/><circle cx="7.6" cy="14.6" r="1.2"/><circle cx="12.4" cy="14.6" r="1.2"/>'); },
@@ -13470,6 +13756,191 @@ function parseQuickAdd(text){
   return out;
 }
 
+/* ---- core/ai-progress.js ---- */
+/* 核心 · AI 长请求：统一等待、计时、取消与重试
+ *
+ * 模型响应通常是 10–60 秒，按钮上的“处理中…”不足以说明还在等什么。
+ * 这里只负责过程反馈，不关心业务结果：调用方传入 request(signal)，
+ * 成功后在 onSuccess 里渲染自己的结果弹窗。
+ */
+
+
+var dlg = null;
+var active = null;
+var running = false;
+var ctrl = null;
+var timer = null;
+var startedAt = 0;
+var seq = 0;
+
+function ensure() {
+  if (dlg) return;
+  dlg = $("dlgAiProgress");
+  if (!dlg) return;
+  $("aiProgressCancel").addEventListener("click", function () {
+    if (running) cancel();
+    else close();
+  });
+  $("aiProgressRetry").addEventListener("click", retry);
+}
+
+function elapsedText(sec) {
+  return sec < 1 ? "刚刚开始" : ("已等待 " + sec + " 秒");
+}
+
+function hintFor(sec, note) {
+  if (sec >= 75) return "已等待较久，模型可能正在排队；超时后可以重试";
+  if (sec >= 25) return "模型仍在生成，这项通常需要 20–60 秒";
+  return note || "";
+}
+
+function tick(my) {
+  if (timer) clearInterval(timer);
+  timer = setInterval(function () {
+    if (my !== seq || !dlg) return;
+    var sec = Math.floor((Date.now() - startedAt) / 1000);
+    $("aiProgressElapsed").textContent = elapsedText(sec);
+    var hint = hintFor(sec, active && active.opts.hint);
+    if ($("aiProgressHint").textContent !== hint) $("aiProgressHint").textContent = hint;
+  }, 500);
+}
+
+function stopTimer() {
+  if (timer) { clearInterval(timer); timer = null; }
+}
+
+function open() {
+  var opts = active.opts;
+  $("aiProgressTitle").textContent = opts.title || "AI 处理中";
+  $("aiProgressDesc").textContent = opts.desc || "正在连接模型…";
+  $("aiProgressHint").textContent = opts.hint || "";
+  $("aiProgressElapsed").textContent = "刚刚开始";
+  $("aiProgressError").hidden = true;
+  $("aiProgressError").textContent = "";
+  $("aiProgressRetry").hidden = true;
+  var cancelBtn = $("aiProgressCancel");
+  cancelBtn.hidden = false;
+  cancelBtn.textContent = "取消";
+  dlg.classList.add("busy");
+  UI.setModalCloseGuard(dlg, function () {
+    if (running) cancel();
+    else close();
+  });
+  UI.openModal(dlg, "#aiProgressCancel");
+}
+
+function close() {
+  if (!dlg) return;
+  UI.setModalCloseGuard(dlg, null);
+  UI.closeModal(dlg);
+  dlg.classList.remove("busy");
+  active = null;
+  running = false;
+  if (ctrl) {
+    try { ctrl.abort(); } catch (e) { /* noop */ }
+    ctrl = null;
+  }
+}
+
+function showError(err) {
+  running = false;
+  stopTimer();
+  dlg.classList.remove("busy");
+  var opts = active.opts;
+  var raw = (err && err.message) || "AI 调用失败";
+  var msg = opts.errorText ? opts.errorText(raw) : raw;
+  $("aiProgressDesc").textContent = "这次没有完成";
+  $("aiProgressElapsed").textContent = "已停止";
+  $("aiProgressHint").textContent = "可以直接重试，或先检查 AI 设置";
+  var box = $("aiProgressError");
+  box.textContent = msg;
+  box.hidden = false;
+  $("aiProgressRetry").hidden = false;
+  $("aiProgressCancel").textContent = "关闭";
+}
+
+function start() {
+  var my = ++seq;
+  var opts = active.opts;
+  running = true;
+  startedAt = Date.now();
+  $("aiProgressDesc").textContent = opts.desc || "正在连接模型…";
+  $("aiProgressHint").textContent = opts.hint || "";
+  $("aiProgressElapsed").textContent = "刚刚开始";
+  $("aiProgressError").hidden = true;
+  $("aiProgressRetry").hidden = true;
+  $("aiProgressCancel").hidden = false;
+  $("aiProgressCancel").textContent = "取消";
+  dlg.classList.add("busy");
+  ctrl = window.AbortController ? new AbortController() : null;
+  tick(my);
+
+  return Promise.resolve()
+    .then(function () {
+      return opts.request(ctrl ? ctrl.signal : null);
+    })
+    .then(function (res) {
+      if (my !== seq) return null;
+      stopTimer();
+      close();
+      if (opts.onSuccess) opts.onSuccess(res);
+      return res;
+    })
+    .catch(function (err) {
+      if (my !== seq) return null;
+      if (err && err.aborted) return null;
+      showError(err || new Error("AI 调用失败"));
+      if (opts.onError) opts.onError(err);
+      return null;
+    });
+}
+
+function cancel() {
+  if (!active) return;
+  var opts = active.opts;
+  seq++;
+  stopTimer();
+  running = false;
+  close();
+  if (opts.onCancel) opts.onCancel();
+  else toast("已取消本次 AI 生成", "fs");
+}
+
+function retry() {
+  if (!active) return;
+  start();
+}
+
+/* 同一时刻只允许一个 AI 长请求：避免两个弹窗抢同一个进度层 */
+function run(opts) {
+  ensure();
+  if (!dlg) return Promise.reject(new Error("缺少 AI 进度弹窗"));
+  if (active) return Promise.resolve(null);
+  active = { opts: opts || {} };
+  open();
+  return start();
+}
+
+var AIProgress = { run: run, cancel: cancel };
+
+/* 配置类错误统一补一句去哪配：模型/Key 缺失是最常见的失败原因 */
+function aiErrorText(msg) {
+  var m = String(msg || "AI 调用失败");
+  if (m.indexOf("个人设置") < 0 &&
+      (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
+       || m.indexOf("AI 配置") >= 0)) {
+    m += "（到「个人设置 → AI 设置」里配一下）";
+  }
+  return m;
+}
+
+function aiUsageText(u) {
+  if (!u) return "";
+  return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
+    + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
+    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
+}
+
 /* ---- core/activity-ui.js ---- */
 __NS["core/activity-ui.js"] = (function(){
 /* core/activity-ui · 通用活动时间线 */
@@ -13756,8 +14227,9 @@ var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
 function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
-var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}} */
+var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, totalAll} */
 var demandColExtra = {};       /* 看板列已滚动加载的追加条目 */
+var demBoardBar = null, demBoardInput = null, demBoardTimer = null;
 var demandTotal = 0;           /* 列表模式：当前筛选下的总数 */
 var demandHasMore = false;
 var demandServerFiltered = false;
@@ -13842,13 +14314,23 @@ function loadDemands(){
   if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
   demandBody.innerHTML = UI.skeletonRows(2);
   Promise.all([
-    API.get("/api/demands/board", { reqId: reqId, limit: DEMAND_BOARD_PAGE }),
+    API.get("/api/demands/board", {
+      reqId: reqId, limit: DEMAND_BOARD_PAGE,
+      q: demSmart.q || null,
+      pris: demSmart.pris.join(","),
+      kinds: demSmart.kinds.join(","),
+      cats: demSmart.cats.join(",")
+    }),
     API.get("/api/versions", { reqId: reqId })
   ]).then(function(rs){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
     if(listPrefs.viewMode("demand-pool") !== "board") return;
     demandBoard = rs[0].columns || {};
+    /* 计数附在列映射上，供元信息与紧凑搜索条共用；列遍历只按 COLS 取键 */
+    demandBoard.counts = rs[0].counts || {};
+    demandBoard.totalAll = rs[0].totalAll || 0;
+    demandBoard.facets = rs[0].facets || null;
     demandServerFiltered = false;
     demandColExtra = {};
     demands = [];
@@ -13973,7 +14455,11 @@ function loadMoreDemandColumn(status){
   var reqId = rt.demandReqId;
   return API.get("/api/demands/page", {
     reqId: reqId, status: status, offset: col.items.length + extra.length,
-    limit: DEMAND_BOARD_PAGE
+    limit: DEMAND_BOARD_PAGE,
+    q: demSmart.q || null,
+    pris: demSmart.pris.join(","),
+    kinds: demSmart.kinds.join(","),
+    cats: demSmart.cats.join(",")
   }).then(function(page){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return false;
     var known = {};
@@ -14069,8 +14555,9 @@ function syncModeUI(mode){
   if(demandReq) demandReq.hidden = mode !== "board";
   var bc = $("btnDemandColumns");
   if(bc) bc.hidden = mode !== "table";
-  /* 智能视图条承载搜索/筛选/分组/排序：列表与甘特共用，看板保持评审状态机原貌 */
+  /* 智能视图条承载搜索/筛选/分组/排序：列表与甘特共用；看板另用一条紧凑搜索/筛选条 */
   if(demSmartBar) demSmartBar.hidden = mode === "board";
+  if(demBoardBar) demBoardBar.hidden = mode !== "board" || !rt.demandReqId;
   if(demandGanttBar) demandGanttBar.hidden = mode !== "gantt";
   if(demandGanttHelp) demandGanttHelp.hidden = mode !== "gantt";
   if(demandsPage){
@@ -14083,6 +14570,7 @@ function syncModeUI(mode){
   var bn = $("btnDemandNew");
   if(bn) bn.style.display = (writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
   syncDemGanttControls();
+  syncDemBoard();
 }
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
@@ -14090,12 +14578,8 @@ function render(){
   if(mode === "gantt"){ renderDemandGantt(); return; }
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
-    var total = 0;
-    COLS.forEach(function(c){
-      var col = demandBoard && demandBoard[c[0]];
-      if(col) total += col.matched || 0;
-    });
-    demandsMeta.textContent = reqNameById(rt.demandReqId) + (total ? (" · 共 " + total + " 条") : "");
+    var mt = demBoardMatchText();
+    demandsMeta.textContent = reqNameById(rt.demandReqId) + (mt ? (" · " + mt) : "");
   }
   if(!demands.length && !versions.length && !demandBoard){
     demandBody.innerHTML = UI.emptyState({
@@ -14116,7 +14600,8 @@ function render(){
       esc(STATUS_HINTS[c[0]] || "") + '">'
       + '<span class="pdot" style="background:' + c[2] + '"></span>' + c[1] + '</span>'
       + '<span class="bkl-count">' + (col.matched || 0) + '</span></div>'
-      + (items.map(cardHTML).join("") || '<p class="foot-note" style="padding:10px 2px">暂无需求</p>')
+      + (items.map(cardHTML).join("") || '<p class="foot-note demb-col-empty">'
+        + (demBoardHasCond() ? "没有匹配需求" : "暂无需求") + '</p>')
       + more
       + '</div>';
   }).join("") + '</div>';
@@ -14356,6 +14841,34 @@ function demViewRows(){
 function demFilterCount(){
   return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length + demSmart.reqs.length + (demSmart.q ? 1 : 0);
 }
+/* ---------- 看板紧凑搜索/筛选（范围固定为当前项目，条件与列表共用） ---------- */
+function demBoardFilterCount(){
+  return demSmart.pris.length + demSmart.kinds.length + demSmart.cats.length;
+}
+function demBoardHasCond(){
+  return demBoardFilterCount() > 0 || !!demSmart.q;
+}
+function demBoardMatchText(){
+  var matched = demandBoard && demandBoard.counts ? (demandBoard.counts.all || 0) : 0;
+  var total = demandBoard && typeof demandBoard.totalAll === "number" ? demandBoard.totalAll : matched;
+  if(demBoardHasCond()) return "匹配 " + matched + " / " + total;
+  return matched ? "共 " + matched + " 条" : "";
+}
+function syncDemBoard(){
+  if(!demBoardBar) return;
+  var mode = listPrefs.viewMode("demand-pool");
+  demBoardBar.hidden = mode !== "board" || !rt.demandReqId;
+  if(demBoardInput && demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
+  var fc = demBoardBar.querySelector("[data-demb-fcount]");
+  if(fc){ var n = demBoardFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
+  var clr = demBoardBar.querySelector("[data-demb-clear]");
+  if(clr) clr.hidden = !demBoardHasCond();
+  var mt = demBoardBar.querySelector("[data-demb-match]");
+  if(mt){
+    var text = demBoardMatchText();
+    mt.textContent = (text ? text + " · " : "") + "仅当前项目";
+  }
+}
 function renderDemTabs(){
   if(!demTabsBox) return;
   var html = DEM_PRESETS.map(function(p){
@@ -14440,10 +14953,8 @@ function restoreDemState(){
 }
 function demStateChanged(){
   syncDemControls();
-  /* 列表与甘特的筛选/排序下推服务端，条件变化必须重新取第一页 */
-  var mode = listPrefs.viewMode("demand-pool");
-  if(mode === "table" || mode === "gantt") loadDemands();
-  else render();
+  /* 三种模式的搜索/筛选/排序都下推服务端：看板也要重新取每一列的首屏与匹配数 */
+  loadDemands();
   saveDemState();
 }
 function activateDemPreset(id){
@@ -14528,16 +15039,24 @@ function deleteDemView(id){
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
 }
-function demFilterMenuHTML(){
-  var base = demands.filter(function(d){ return demSmart.preset === "all" || d.status === demSmart.preset; });
+function demFilterMenuHTML(boardOnly){
   var counts = { pris:{}, kinds:{}, reqs:{}, cats:{} };
-  base.forEach(function(d){
-    var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none", c = d.categoryId || "";
-    counts.pris[p] = (counts.pris[p] || 0) + 1;
-    counts.kinds[k] = (counts.kinds[k] || 0) + 1;
-    counts.reqs[r] = (counts.reqs[r] || 0) + 1;
-    counts.cats[c] = (counts.cats[c] || 0) + 1;
-  });
+  var facets = boardOnly && demandBoard && demandBoard.facets;
+  if(facets){
+    /* 看板只下发每列首屏，且不受列表状态页签影响：计数取服务端按「当前项目 + 搜索词」聚合的全量结果 */
+    counts.pris = facets.pris || {};
+    counts.kinds = facets.kinds || {};
+    counts.cats = facets.cats || {};
+  }else{
+    var base = demands.filter(function(d){ return boardOnly || demSmart.preset === "all" || d.status === demSmart.preset; });
+    base.forEach(function(d){
+      var p = d.priority || "P2", k = d.itemKind || "其他", r = d.reqId || "__none", c = d.categoryId || "";
+      counts.pris[p] = (counts.pris[p] || 0) + 1;
+      counts.kinds[k] = (counts.kinds[k] || 0) + 1;
+      counts.reqs[r] = (counts.reqs[r] || 0) + 1;
+      counts.cats[c] = (counts.cats[c] || 0) + 1;
+    });
+  }
   function section(title, inner){
     if(!inner) return "";
     return '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">' + title + '</div>' +
@@ -14573,21 +15092,22 @@ function demFilterMenuHTML(){
       esc(r.name) + ' <span class="n">' + (counts.reqs[r.id] || 0) + '</span></button>';
   }).join("");
   var html = '<div class="menu-title">筛选需求</div>' +
-    section("优先级", priInner) + section("类型", kindInner) + section("模块", catInner) + section("项目", reqInner);
-  if(!priInner && !kindInner && !catInner && !reqInner){
+    section("优先级", priInner) + section("类型", kindInner) + section("模块", catInner)
+    + (boardOnly ? "" : section("项目", reqInner));
+  if(!priInner && !kindInner && !catInner && (boardOnly || !reqInner)){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前条件下没有可筛选的选项。</p></div>';
   }
   html += '<div class="menu-foot"><button class="btn sm" type="button" data-dem-f-reset>重置筛选</button></div>';
   return html;
 }
-function openDemFilterPop(anchor){
+function openDemFilterPop(anchor, boardOnly){
   var el = document.createElement("div");
   el.className = "menu popover filter-dd";
-  el.innerHTML = demFilterMenuHTML();
+  el.innerHTML = demFilterMenuHTML(boardOnly);
   el.addEventListener("click", function(e){
     if(e.target.closest("[data-dem-f-reset]")){
       demSmart.pris = []; demSmart.kinds = []; demSmart.cats = []; demSmart.reqs = [];
-      el.innerHTML = demFilterMenuHTML();
+      el.innerHTML = demFilterMenuHTML(boardOnly);
       demStateChanged();
       return;
     }
@@ -14595,7 +15115,7 @@ function openDemFilterPop(anchor){
     if(!b) return;
     var arr = demSmart[b.dataset.demF], i = arr.indexOf(b.dataset.demFv);
     if(i === -1) arr.push(b.dataset.demFv); else arr.splice(i, 1);
-    el.innerHTML = demFilterMenuHTML();
+    el.innerHTML = demFilterMenuHTML(boardOnly);
     demStateChanged();
   });
   UI.openPop(el, anchor, {align:"left", width:320, onClose:function(){ el.remove(); }});
@@ -14658,6 +15178,36 @@ function initDemSmartBar(){
     '</div>';
   page.insertBefore(demSmartBar, demandBody);
   if(demandGanttBar) page.insertBefore(demandGanttBar, demandBody);
+  demBoardBar = document.createElement("div");
+  demBoardBar.className = "dem-board-bar";
+  demBoardBar.hidden = true;
+  demBoardBar.innerHTML =
+    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索标题 / 描述 / 来源 / 模块" aria-label="搜索当前项目需求" />' +
+    '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 模块）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
+    '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
+    '<span class="demb-spacer"></span>' +
+    '<span class="demb-match" data-demb-match></span>';
+  page.insertBefore(demBoardBar, demandBody);
+  demBoardInput = demBoardBar.querySelector("[data-demb-q]");
+  demBoardBar.addEventListener("click", function(e){
+    if(e.target.closest("[data-demb-clear]")){
+      demSmart.q = "";
+      demSmart.pris = []; demSmart.kinds = []; demSmart.cats = [];
+      if(demBoardInput) demBoardInput.value = "";
+      demStateChanged();
+      return;
+    }
+    var fb = e.target.closest("[data-demb-filter]");
+    if(fb){ openDemFilterPop(fb, true); return; }
+  });
+  if(demBoardInput) demBoardInput.addEventListener("input", function(){
+    if(demBoardTimer) clearTimeout(demBoardTimer);
+    demBoardTimer = setTimeout(function(){
+      demBoardTimer = null;
+      demSmart.q = demBoardInput.value.trim();
+      demStateChanged();
+    }, 300);
+  });
   demTabsBox = demSmartBar.querySelector(".smart-view-tabs");
   demSearchInput = demSmartBar.querySelector("[data-dem-q]");
   demSmartBar.addEventListener("click", function(e){
@@ -16281,6 +16831,7 @@ __NS["views/requirements.js"] = (function(){
 
 
 var esc = esc2;
+var aiErrMsg = aiErrorText;
 var activityUI = __NS["core/activity-ui.js"];
 
 
@@ -18111,26 +18662,13 @@ function aiBtnBusy(btn, busy, label){
   if(!btn) return;
   btn.disabled = busy;
   if(busy){
-    if(!btn.dataset.label) btn.dataset.label = btn.textContent;
-    btn.textContent = label || "处理中…";
-  }else if(btn.dataset.label){
-    btn.textContent = btn.dataset.label;
+    if(!btn.dataset.html) btn.dataset.html = btn.innerHTML;
+    var ico = btn.querySelector("[data-icon]");
+    btn.innerHTML = (ico ? ico.outerHTML : "") + "&nbsp;" + esc(label || "处理中…");
+  }else if(btn.dataset.html){
+    btn.innerHTML = btn.dataset.html;
+    delete btn.dataset.html;
   }
-}
-function aiErrMsg(msg){
-  var m = msg || "AI 调用失败";
-  if(m.indexOf("个人设置") < 0 &&
-     (m.indexOf("AI 设置") >= 0 || m.indexOf("API Key") >= 0 || m.indexOf("AI 开关") >= 0
-      || m.indexOf("AI 配置") >= 0)){
-    m += "（到「个人设置 → AI 设置」里配一下）";
-  }
-  return m;
-}
-function aiUsageText(u){
-  if(!u) return "";
-  return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
-    + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
-    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
 }
 function runAiSplit(){
   if(!editingDocId || aiBusy) return;
@@ -18138,13 +18676,20 @@ function runAiSplit(){
   var btn = $("reqDocAiSplit");
   ensureReqDocSaved(function(){
     aiBusy = true;
-    aiBtnBusy(btn, true, "拆分中…");
-    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}).then(function(d){
-      aiSplitDrafts = d.tasks || [];
-      renderAiSplit(d);
-      UI.openModal($("dlgAiSplit"));
-    }).catch(function(ex){
-      toast(aiErrMsg(ex && ex.message), "bad");
+    aiBtnBusy(btn, true, "生成中…");
+    AIProgress.run({
+      title: "AI 拆成工作项",
+      desc: "正在读「" + (editingMeta.title || "当前文档") + "」，拆成可执行的工作单元…",
+      hint: "通常需要 20–60 秒，可以随时取消",
+      errorText: aiErrMsg,
+      request: function(signal){
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/split", {}, signal);
+      },
+      onSuccess: function(d){
+        aiSplitDrafts = d.tasks || [];
+        renderAiSplit(d);
+        UI.openModal($("dlgAiSplit"));
+      }
     }).then(function(){
       aiBusy = false;
       aiBtnBusy(btn, false);
@@ -18218,11 +18763,18 @@ function runAiAudit(){
   ensureReqDocSaved(function(){
     aiBusy = true;
     aiBtnBusy(btn, true, "检查中…");
-    API.post("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}).then(function(d){
-      renderAiAudit(d);
-      UI.openModal($("dlgAiAudit"));
-    }).catch(function(ex){
-      toast(aiErrMsg(ex && ex.message), "bad");
+    AIProgress.run({
+      title: "AI 检查完成度",
+      desc: "正在对照「" + (editingMeta.title || "当前文档") + "」和关联工作项，找出还没覆盖的功能点…",
+      hint: "文档越长耗时越久，可以随时取消",
+      errorText: aiErrMsg,
+      request: function(signal){
+        return API.postWithSignal("/api/ai/reqdoc/" + encodeURIComponent(editingDocId) + "/audit", {}, signal);
+      },
+      onSuccess: function(d){
+        renderAiAudit(d);
+        UI.openModal($("dlgAiAudit"));
+      }
     }).then(function(){
       aiBusy = false;
       aiBtnBusy(btn, false);
@@ -20435,10 +20987,16 @@ function enterListView(){
 }
 /* 保存 / 删除 / 批量操作后的刷新：保留已加载分页与滚动位置，
    不闪骨架屏、不把 offset 归零；筛选或排序变化仍走普通 loadList。 */
+/* 桌面端真正的滚动容器是 .list-scroll（#view-list 为 overflow:hidden），
+   静默刷新必须还原它而不是外层的 scrollTop。 */
+function listScroller(){
+  var view = document.getElementById("view-list");
+  return (view && view.querySelector(".list-scroll")) || view;
+}
 function refreshListIfOpen(){
   if(activeView !== "list") return null;
-  var view = document.getElementById("view-list");
-  var top = view ? view.scrollTop : 0;
+  var scroller = listScroller();
+  var top = scroller ? scroller.scrollTop : 0;
   return loadList({silent:true, keepLoaded:true, restoreScroll:top});
 }
 function listRequestParams(offset, limit){
@@ -20490,10 +21048,10 @@ function loadList(opts){
     renderListItems(append ? lastItems.concat(items) : items);
     updateListMeta((append ? lastItems.length : items.length));
     if(opts.restoreScroll != null){
-      var view = document.getElementById("view-list");
-      if(view){
-        view.scrollTop = opts.restoreScroll;
-        requestAnimationFrame(function(){ view.scrollTop = opts.restoreScroll; });
+      var scroller = listScroller();
+      if(scroller){
+        scroller.scrollTop = opts.restoreScroll;
+        requestAnimationFrame(function(){ scroller.scrollTop = opts.restoreScroll; });
       }
     }
   }).catch(function(ex){
@@ -24403,7 +24961,7 @@ var factStatusBtn = $("factStatus");
 if(factStatusBtn) factStatusBtn.addEventListener("click", function(){ openDrawerColMenu(factStatusBtn); });
 
 /* ---- core/search-palette.js ---- */
-/* core/search-palette · 全局搜索（Cmd/Ctrl+K）：项目 / 工作项 / 文档 / 需求 / 用例一次聚合 */
+/* core/search-palette · 全局搜索（Cmd/Ctrl+K）：项目 / 分支 / 工作项 / 文档 / 需求 / 用例一次聚合 */
 
 
 
@@ -24412,23 +24970,63 @@ if(factStatusBtn) factStatusBtn.addEventListener("click", function(){ openDrawer
 var esc = esc2;
 var TYPE_META = {
   project: { label: "项目", icon: "项" },
+  branch:  { label: "分支", icon: "分" },
   task:    { label: "工作项", icon: "任" },
   doc:     { label: "文档", icon: "文" },
   demand:  { label: "需求", icon: "需" },
   case:    { label: "用例", icon: "测" }
 };
+var TYPE_ORDER = { project:0, branch:1, task:2, doc:3, demand:4, case:5 };
+var BRANCH_STATUS = { dev:"开发中", testing:"待测试", merging:"待合并", released:"已发布" };
 var DOC_TYPE = { requirement: "需求文档", technical: "技术方案", acceptance: "测试验收" };
 var DEMAND_STATUS = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝" };
 var CASE_STATUS = { passed: "通过", failed: "失败", blocked: "阻塞" };
 var PROJECT_STATUS = { active: "进行中", done: "已完成", hold: "已搁置" };
 
-var inputEl, resultsEl;
+var inputEl, resultsEl, scopeEl;
 var timer = null;
 var seq = 0;
 var hits = [];
 var active = -1;
+var recent = [];
+var RECENT_MAX = 5;
+
+function wsId(){ return (rt.currentWs && rt.currentWs.id) || "none"; }
+function wsName(){ return (rt.currentWs && rt.currentWs.name) || ""; }
+function recentKey(){ return "ds.search.recent:" + wsId(); }
+
+function loadRecent(){
+  recent = [];
+  try{
+    var raw = localStorage.getItem(recentKey());
+    var rows = raw ? JSON.parse(raw) : [];
+    if(Array.isArray(rows)) recent = rows.filter(function(x){ return x && x.q; }).slice(0, RECENT_MAX);
+  }catch(e){ recent = []; }
+}
+function saveRecent(){
+  try{ localStorage.setItem(recentKey(), JSON.stringify(recent)); }catch(e){ /* 存不下就不记 */ }
+}
+function remember(q, h){
+  q = String(q || "").trim();
+  if(!q) return;
+  var meta = TYPE_META[h.type] ? TYPE_META[h.type].label : "结果";
+  if(h.title) meta += " · " + h.title;
+  recent = recent.filter(function(x){ return x.q !== q; });
+  recent.unshift({ q: q, meta: meta });
+  if(recent.length > RECENT_MAX) recent = recent.slice(0, RECENT_MAX);
+  saveRecent();
+}
+
+function branchMeta(h){
+  var parts = [BRANCH_STATUS[h.status] || "分支"];
+  var v = h.versionName || (h.versions && h.versions[0] && h.versions[0].name) || "";
+  if(v) parts.push(v);
+  if(h.owner) parts.push(h.owner);
+  return parts.join(" · ");
+}
 
 function metaText(h){
+  if(h.type === "branch") return branchMeta(h);
   var parts = [];
   if(h.reqName) parts.push(h.reqName);
   if(h.type === "doc" && h.extra) parts.push(DOC_TYPE[h.extra] || h.extra);
@@ -24442,8 +25040,37 @@ function metaText(h){
   return parts.filter(Boolean).join(" · ");
 }
 
-function emptyHint(){
-  return '<div class="palette-empty">输入关键词，搜索项目、工作项、文档、需求与测试用例</div>';
+function scopeMessage(){
+  var name = wsName();
+  return name
+    ? "只在「" + name + "」内搜索；切换空间后在对应空间内查找"
+    : "只在当前空间内搜索；切换空间后在对应空间内查找";
+}
+
+function idleHTML(){
+  var html = "";
+  if(recent.length){
+    html += '<div class="palette-recent-head"><span>最近搜索</span>'
+      + '<button type="button" class="palette-clear" data-recent-clear>清除</button></div>';
+    recent.forEach(function(r, i){
+      html += '<button class="palette-recent" type="button" data-recent="' + i + '">'
+        + '<span class="palette-recent-ic" aria-hidden="true">'
+        + '<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><path d="M10 6.4V10l2.6 1.8"/></svg>'
+        + '</span>'
+        + '<span class="palette-body"><span class="palette-title">' + esc(r.q) + '</span>'
+        + '<span class="palette-meta">' + esc(r.meta || "搜索") + '</span></span>'
+        + '</button>';
+    });
+  }else{
+    html += '<div class="palette-empty">输入关键词，搜索项目、分支、工作项、文档、需求与测试用例</div>';
+  }
+  html += '<div class="palette-scope-note">' + esc(scopeMessage()) + '</div>';
+  return html;
+}
+
+function renderIdle(){
+  active = -1;
+  resultsEl.innerHTML = idleHTML();
 }
 
 function render(){
@@ -24457,8 +25084,8 @@ function render(){
   hits.forEach(function(h, i){
     if(h.type !== lastType){
       lastType = h.type;
-      var meta = TYPE_META[h.type] || { label: "结果", icon: "•" };
-      html += '<div class="palette-group">' + meta.label + '</div>';
+      var gm = TYPE_META[h.type] || { label: "结果", icon: "•" };
+      html += '<div class="palette-group">' + gm.label + '</div>';
     }
     var m = TYPE_META[h.type] || { label: "结果", icon: "•" };
     html += '<button class="palette-item' + (i === active ? " on" : "") + '" type="button" role="option"'
@@ -24479,34 +25106,78 @@ function move(delta){
   if(on) on.scrollIntoView({ block: "nearest" });
 }
 
+function branchHits(kw){
+  return API.get("/api/branches", { q: kw, limit: 4 }).then(function(page){
+    var rows = (page && page.items) || [];
+    return rows.map(function(b){
+      return {
+        type: "branch",
+        id: b.id,
+        title: b.name,
+        status: b.status,
+        owner: b.owner || "",
+        versions: b.versions || [],
+        projects: b.projects || [],
+        versionName: (b.versions && b.versions[0] && b.versions[0].name) || ""
+      };
+    });
+  });
+}
+
 function query(value){
   var kw = String(value || "").trim();
   if(!kw){
+    seq++;
     hits = [];
     active = -1;
-    resultsEl.innerHTML = emptyHint();
+    renderIdle();
     return;
   }
   var my = ++seq;
   resultsEl.innerHTML = '<div class="palette-empty">搜索中…</div>';
-  API.get("/api/search", { q: kw, limit: 6 }).then(function(rows){
+  var err = null;
+  var main = API.get("/api/search", { q: kw, limit: 6 }).catch(function(ex){ err = err || ex; return []; });
+  var br = branchHits(kw).catch(function(ex){ err = err || ex; return []; });
+  Promise.all([main, br]).then(function(res){
     if(my !== seq) return;
-    hits = rows || [];
+    var rows = (res[0] || []).concat(res[1] || []);
+    if(err && !rows.length) throw err;
+    rows = rows.filter(function(h){ return h && TYPE_META[h.type]; });
+    rows.sort(function(a, b){
+      var da = TYPE_ORDER[a.type] == null ? 9 : TYPE_ORDER[a.type];
+      var db = TYPE_ORDER[b.type] == null ? 9 : TYPE_ORDER[b.type];
+      return da - db;
+    });
+    hits = rows;
     active = hits.length ? 0 : -1;
     render();
   }).catch(function(ex){
     if(my !== seq) return;
+    hits = [];
+    active = -1;
     resultsEl.innerHTML = '<div class="palette-empty">' + esc(ex.message || "搜索失败，请稍后重试") + '</div>';
   });
+}
+
+function setScope(){
+  if(!scopeEl) return;
+  var name = wsName();
+  scopeEl.textContent = name ? "仅当前空间 · " + name : "仅当前空间";
+  scopeEl.title = scopeMessage();
 }
 
 function open(){
   var m = $("dlgSearch");
   if(!m) return;
+  // 丢弃上次未触发的防抖与在途查询，避免旧结果覆盖重新打开后的「最近搜索」
+  if(timer){ clearTimeout(timer); timer = null; }
+  seq++;
   inputEl.value = "";
   hits = [];
   active = -1;
-  resultsEl.innerHTML = emptyHint();
+  loadRecent();
+  setScope();
+  renderIdle();
   UI.openModal(m, "#paletteInput");
   setTimeout(function(){ try{ inputEl.focus(); }catch(e){ /* noop */ } }, 30);
 }
@@ -24518,6 +25189,7 @@ function close(){
 
 function openHit(h){
   if(!h) return;
+  remember(inputEl ? inputEl.value : "", h);
   close();
   if(h.type === "task"){
     openTaskById(h.id);
@@ -24526,6 +25198,10 @@ function openHit(h){
   if(h.type === "project"){
     rt.managerProjectId = h.id;
     showView("project");
+    return;
+  }
+  if(h.type === "branch"){
+    import("../views/branches.js").then(function(mod){ mod.openBranchById(h.id); });
     return;
   }
   if(h.type === "doc"){
@@ -24546,9 +25222,19 @@ function openHit(h){
   }
 }
 
+function useRecent(i){
+  var r = recent[i];
+  if(!r) return;
+  if(timer){ clearTimeout(timer); timer = null; }
+  inputEl.value = r.q;
+  try{ inputEl.focus(); }catch(e){ /* noop */ }
+  query(r.q);
+}
+
 function init(){
   inputEl = $("paletteInput");
   resultsEl = $("paletteResults");
+  scopeEl = $("paletteScope");
   if(!inputEl || !resultsEl) return;
 
   inputEl.addEventListener("input", function(){
@@ -24568,6 +25254,16 @@ function init(){
     if(e.key === "Escape"){ e.preventDefault(); close(); }
   });
   resultsEl.addEventListener("click", function(e){
+    var rc = e.target.closest("[data-recent-clear]");
+    if(rc){
+      recent = [];
+      saveRecent();
+      renderIdle();
+      try{ inputEl.focus(); }catch(err){ /* noop */ }
+      return;
+    }
+    var re = e.target.closest("[data-recent]");
+    if(re){ useRecent(Number(re.getAttribute("data-recent"))); return; }
     var btn = e.target.closest("[data-hit]");
     if(!btn) return;
     var hit = hits[Number(btn.dataset.hit)];
@@ -25884,8 +26580,8 @@ function renderTeam(opts){
       '<section class="team-card"><div class="tc-head"><h3>待处理</h3><span class="foot-note">截止此刻</span></div>' +
         '<div class="team-pending">' +
           '<button type="button" data-team-go="demands"><b>' + (pending.review || 0) + '</b><span>待评审</span></button>' +
-          '<button type="button" data-team-go="branches"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
-          '<button type="button" data-team-go="branches"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
+          '<button type="button" data-team-go="branches" data-team-status="testing"><b>' + (pending.accept || 0) + '</b><span>待验收</span></button>' +
+          '<button type="button" data-team-go="branches" data-team-status="merging"><b>' + (pending.merge || 0) + '</b><span>待合并</span></button>' +
         '</div></section>';
 
     html += '<section class="team-card"><div class="tc-head"><h3>风险工作项</h3><span class="foot-note">' + riskList.length + ' 项 · 截止此刻</span></div>' +
@@ -25944,6 +26640,12 @@ function renderTeam(opts){
     });
     mineBody.querySelectorAll("[data-team-go]").forEach(function(el){
       el.addEventListener("click", function(){
+        var status = el.dataset.teamStatus || "";
+        /* 待验收 / 待合并直接落到对应分支状态，并保留来源，便于返回与清除 */
+        if(status){
+          var from = status === "testing" ? "accept" : "merge";
+          try{ window.location.hash = "#/branches?status=" + status + "&from=" + from; }catch(e){ /* noop */ }
+        }
         /* 走侧栏既有的 data-view 入口，避免 mine → router 的循环依赖 */
         var nav = document.querySelector('#sideNav [data-view="' + el.dataset.teamGo + '"]');
         if(nav) nav.click();
@@ -27184,6 +27886,8 @@ var branchBoard = null;         /* { columns, counts, avgCycleDays } */
 var branchExtra = { dev:[], testing:[], merging:[], released:[] };
 var branchesLoaded = false;
 var branchFilter = "";
+/* 深链来源：从「我的工作 · 待验收 / 待合并」进来时，明确标出筛选依据；用户改筛选即视为已接管 */
+var branchSource = null;          /* { from:"accept"|"merge"|"link", status:"testing"|"merging" } */
 var branchProjectFilter = "";
 var branchGroupMode = "status";   /* "status" | "project" */
 var BRANCH_VIEW_KEY = "ds.branchView";
@@ -27325,10 +28029,74 @@ function loadMoreBranches(status){
       renderBranches();
     }).catch(function(ex){ toast(ex.message || "加载更多失败", "bad"); });
 }
+function applyBranchDeepLink(){
+  var status = hashParam("status"), from = hashParam("from");
+  if(!status || !branchStatusMeta(status) || !branchStatusMeta(status).hint){
+    /* 侧栏等普通入口：不沿用上一次深链强加的来源条与状态筛选 */
+    if(branchSource){ branchSource = null; branchFilter = ""; }
+    return false;
+  }
+  branchSource = { from: from === "accept" || from === "merge" ? from : "link", status: status };
+  branchFilter = branchStatusMeta(status).id;
+  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 关键词筛选 */
+  var search = $("branchSearch");
+  var reset = !!branchProjectFilter || !!(search && search.value.trim());
+  branchProjectFilter = "";
+  if($("branchProjectFilter")) $("branchProjectFilter").value = "";
+  if(search) search.value = "";
+  return reset;
+}
+function branchSourceName(){
+  if(!branchSource) return null;
+  if(branchSource.from === "accept") return "待验收";
+  if(branchSource.from === "merge") return "待合并";
+  return "按状态筛选";
+}
+function clearBranchDeepLink(){
+  if(String(window.location.hash || "").indexOf("#/branches?") !== 0) return;
+  try{ history.replaceState(null, "", "#/branches"); }catch(e){ /* noop */ }
+}
+function dropBranchSource(){
+  if(!branchSource) return;
+  branchSource = null;
+  clearBranchDeepLink();
+}
+/* 深链来源条：位于分支看板之上，说明为什么只看这一档，并提供一键清除 */
+function renderBranchSource(box){
+  var host = document.getElementById("branchSource");
+  if(!branchSource){
+    if(host) host.remove();
+    return;
+  }
+  var parent = box && box.parentNode;
+  if(!parent) return;
+  if(!host){
+    host = document.createElement("div");
+    host.id = "branchSource";
+    host.className = "br-source";
+    host.setAttribute("role", "status");
+    parent.insertBefore(host, box);
+  }
+  var st = branchStatusMeta(branchFilter || branchSource.status);
+  var n = branchStat()[st.id] || 0;
+  host.innerHTML = '<span class="br-source-ico" aria-hidden="true">↩</span>'
+    + '<span class="br-source-text">来自 <b>我的工作</b> · <b>' + esc(branchSourceName()) + '</b></span>'
+    + '<span class="br-source-rule">只看「' + esc(st.name) + '」分支</span>'
+    + '<span class="br-source-count">' + n + ' 条</span>'
+    + '<button type="button" class="br-source-clear" data-br-source-clear>清除来源 ×</button>';
+  host.onclick = function(e){
+    if(!e.target.closest("[data-br-source-clear]")) return;
+    dropBranchSource();
+    branchFilter = "";
+    renderBranches();
+    if(branchViewMode === "list") loadBranchRows();
+  };
+}
 function enterBranchesView(){
+  var resetScope = applyBranchDeepLink();
   updateBranchModeUI();
   renderBranches();                       // 先用缓存出一版，避免空白
-  loadBranches().then(function(){ renderBranches(); });
+  loadBranches(resetScope).then(function(){ renderBranches(); });
   if(branchViewMode === "list") loadBranchRows();
 }
 /* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组 */
@@ -27411,6 +28179,7 @@ function branchCycleAvg(){
 function renderBranches(){
   var box = $("branchGroups");
   if(!box) return;
+  renderBranchSource(box);
   /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
   box.classList.toggle("br-list-mode", branchViewMode === "list");
   var st = branchStat();
@@ -28136,6 +28905,7 @@ function clearGroupOver(){
       var c = e.target.closest("[data-br-filter]");
       if(c){
         branchFilter = (branchFilter === c.dataset.brFilter) ? "" : c.dataset.brFilter;
+        dropBranchSource();
         renderBranches();
         return;
       }
@@ -28155,6 +28925,7 @@ function clearGroupOver(){
       if(!b) return;
       var v = b.dataset.brMeta;
       branchFilter = (!v || branchFilter === v) ? "" : v;
+      dropBranchSource();
       if(branchGroupMode === "project"){
         branchGroupMode = "status";
         updateBranchGroupToggle();
@@ -28181,6 +28952,7 @@ function clearGroupOver(){
       if(!b || b.dataset.brMode === branchViewMode) return;
       branchViewMode = b.dataset.brMode;
       branchFilter = "";
+      dropBranchSource();
       try{ localStorage.setItem(BRANCH_VIEW_KEY, branchViewMode); }catch(err){ /* 受限环境忽略 */ }
       updateBranchModeUI();
       renderBranches();
@@ -29694,10 +30466,23 @@ function restoreViewState(){
   return changed;
 }
 var searchTimer = null;
+/* 单字查询是最贵的一档（全列计数 + 字面 LIKE），拉丁单字符多半只是单词前缀：
+   1 个字等 600ms，2 个字起维持 300ms；没有生效中的关键词时，拉丁单字符先不发请求。 */
+var SINGLE_ASCII = /^[\x00-\x7F]$/;
 searchInput.addEventListener("input", function(){
-  searchWrap.classList.toggle("has", searchInput.value.trim().length > 0);
-  if(searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(function(){ applySearch(searchInput.value.trim()); }, 300);
+  var kw = searchInput.value.trim();
+  searchWrap.classList.toggle("has", kw.length > 0);
+  if(searchTimer){ clearTimeout(searchTimer); searchTimer = null; }
+  if(!kw){
+    /* 清空且原本就没有生效条件：不必再拉一次全量数据 */
+    if(state.q) applySearch("");
+    return;
+  }
+  if(kw.length === 1 && SINGLE_ASCII.test(kw) && !state.q) return;
+  searchTimer = setTimeout(function(){
+    searchTimer = null;
+    applySearch(kw);
+  }, kw.length === 1 ? 600 : 300);
 });
 function applySearch(kw){
   var supported = {board:1, list:1, mine:1, gantt:1, calendar:1};
@@ -30526,6 +31311,8 @@ function syncViewHash(name){
   if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
+  /* 分支状态深链：保留 ?status=&from=，否则 showView 会把来源与筛选条件一起抹掉 */
+  if(name === "branches" && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
   catch(e){ try{ window.location.hash = h; }catch(e2){ /* 完全不可用则忽略 */ } }
@@ -31187,6 +31974,8 @@ function onSseChanged(event){
     var rq = viewModule("requirements");
     if(rq && rq.notifyReqDocChanged) rq.notifyReqDocChanged(info.docId, info.actor);
   }
+  /* 弹窗打开时整体刷新会被延后；把实体变更原样抛出，让弹窗只刷新自己依赖的那一小块 */
+  try{ document.dispatchEvent(new CustomEvent("ds:sse-entity", { detail: info })); }catch(ex){ /* 忽略 */ }
   if(sse.debounce) clearTimeout(sse.debounce);
   sse.debounce = setTimeout(function(){
     if(drag || pending){ markSsePending(info.entity); return; }
@@ -35272,6 +36061,7 @@ function copyReviewAi(){
 })();
 var aiReportCache = {};
 var aiReportBusy = false;
+var aiReportTimer = null;
 function aiKey(off, reqId){
   return String(window.CURRENT_WORKSPACE || "") + "#" + (reqId || "") + "#" + off;
 }
@@ -35323,7 +36113,16 @@ function runAiReport(){
   var req = d.reqId || "";
   aiReportBusy = true;
   aiBtnBusy(btn, true, "生成中…");
-  $("reviewAiMeta").textContent = "正在写…（10–30 秒）";
+  var startedAt = Date.now();
+  var setMeta = function(){
+    var sec = Math.floor((Date.now() - startedAt) / 1000);
+    $("reviewAiMeta").textContent = sec < 1
+      ? "正在写…（通常需要 10–30 秒）"
+      : "正在写…已等待 " + sec + " 秒，通常需要 10–30 秒";
+  };
+  setMeta();
+  if(aiReportTimer) clearInterval(aiReportTimer);
+  aiReportTimer = setInterval(setMeta, 1000);
   $("reviewAiHint").hidden = true;
   $("btnAiReportCopy").hidden = true;
   body.hidden = false;
@@ -35345,6 +36144,7 @@ function runAiReport(){
     }
     toast(aiErrMsg(ex && ex.message), "bad");
   }).then(function(){
+    if(aiReportTimer){ clearInterval(aiReportTimer); aiReportTimer = null; }
     aiReportBusy = false;
     aiBtnBusy(btn, false);
   });
@@ -36074,9 +36874,11 @@ var phaseReq = $("phaseReq"), phaseMeta = $("phaseMeta"), phaseBody = $("phaseBo
 var editingVerId = null;
 /* 打开编辑时的版本令牌：保存时不能从缓存重读（缓存可能已被迟到的列表响应换掉，静默覆盖并发修改） */
 var editingVerRevision = null, editingVerStatus = null;
-var viewMode = "phase";            /* phase | version | schedule | overview */
+var viewMode = "phase";            /* phase | version | allversions | schedule | overview */
 var cache = null;                  /* { phase, vstats, versions, tasks } */
 var overviewCache = null;
+var allVersionsCache = null, allVersionsSeq = 0, allVersionsSel = [];
+var allVersionsFilters = { project:"", status:"", q:"" };
 var scheduleCache = null;          /* { rows }：跨项目发布计划 */
 var scheduleSeq = 0;
 var cacheReqId = null;             /* cache 对应的项目，日程跳转后避免串项目 */
@@ -36133,11 +36935,14 @@ function branchChipsHTML(brs){
   if(!brs || !brs.length) return "";
   return '<div class="ver-branches">' + brs.map(function(b){
     var st = BRANCH_ST[b.status] || { name: b.status || "未知", cls: "" };
-    var tip = "分支状态：" + st.name + " · 该版本 " + (b.taskCount || 0) + " 个工作项挂在此分支";
-    return '<span class="ver-br" title="' + esc(tip) + '">' +
+    var meta = branchMetaById(b.branchId);
+    var owner = meta && meta.owner ? meta.owner : "";
+    var tip = "打开分支详情 · " + st.name + (owner ? " · " + owner : "") + " · 该版本 " + (b.taskCount || 0) + " 个工作项挂在此分支";
+    return '<button type="button" class="ver-br" data-ver-branch="' + esc(b.branchId) + '" title="' + esc(tip) + '">' +
       '<i class="br-dot ' + st.cls + '"></i>' + esc(b.name) +
       ((b.taskCount || 0) > 1 ? '<span class="ver-br-n">×' + b.taskCount + '</span>' : '') +
-    '</span>';
+      '<span class="ver-br-go" aria-hidden="true">›</span>' +
+    '</button>';
   }).join("") + '</div>';
 }
 function dateShort(s){
@@ -36168,6 +36973,7 @@ function syncReqSel(){
    以最终落地的项目列表补一次同步，避免刷新后误判「还没有项目」 */
 window.addEventListener("ds:reqs-loaded", function(){
   if(document.body.dataset.view !== "phase" || !rt.reqsLoaded) return;
+  if(viewMode === "allversions"){ loadAllVersions(); return; }
   if(!rt.reqList.length || (phaseReq && phaseReq.options.length)) return;
   syncReqSel();
   if(viewMode === "overview") loadOverview();
@@ -36201,14 +37007,14 @@ function loadPhaseData(){
     API.get("/api/versions", { reqId: reqId }),
     API.get("/api/versions/task-options", { reqId: reqId })
   ]).then(function(rs){
-    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "schedule") return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions") return;
     cache = { phase: rs[0], vstats: rs[1], versions: rs[2], tasks: rs[3] };
     cacheReqId = reqId;
     versionOptionsCache[reqId] = rs[2];
     taskOptionsCache[reqId] = rs[3];
     renderPhaseView();
   }).catch(function(ex){
-    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview") return;
+    if(current !== loadSeq || rt.phaseReqId !== reqId || viewMode === "overview" || viewMode === "allversions") return;
     phaseBody.innerHTML = UI.emptyState({
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
     });
@@ -36221,6 +37027,7 @@ function enterPhaseView(){
     syncReqSel();
     if(viewMode === "overview") loadOverview();
     else if(viewMode === "schedule") loadSchedule();
+    else if(viewMode === "allversions") loadAllVersions();
     else loadPhaseData();
   };
   if(rt.reqsLoaded){
@@ -36238,6 +37045,7 @@ function enterPhaseView(){
 function reloadView(){
   if(viewMode === "overview"){ loadOverview(); return; }
   if(viewMode === "schedule"){ loadSchedule(); return; }
+  if(viewMode === "allversions"){ loadAllVersions(); return; }
   invalidateVersionCache(rt.phaseReqId);
   loadPhaseData();
 }
@@ -36319,6 +37127,127 @@ function renderOverviewMode(){
     + '<th class="num">首版工时</th><th class="num">迭代工时</th><th class="num">合计工时</th>'
     + '<th class="num">首版准时率</th><th class="num">迭代准时率</th><th>最近版本</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+}
+
+/* ---------- 全部版本（跨项目勾选 → 现有发布计划） ---------- */
+
+function allVersionRowMap(){
+  var map = {};
+  (allVersionsCache || []).forEach(function(r){ map[r.versionId] = r; });
+  return map;
+}
+function loadAllVersions(){
+  var current = ++allVersionsSeq;
+  if(phaseMeta) phaseMeta.textContent = "全部版本";
+  phaseBody.innerHTML = UI.skeletonRows(4);
+  return API.get("/api/versions/cross-project").then(function(rows){
+    if(current !== allVersionsSeq || viewMode !== "allversions") return;
+    allVersionsCache = rows || [];
+    var alive = {};
+    allVersionsCache.forEach(function(r){ alive[r.versionId] = true; });
+    allVersionsSel = allVersionsSel.filter(function(id){ return alive[id]; });
+    renderAllVersions();
+  }).catch(function(ex){
+    if(current !== allVersionsSeq || viewMode !== "allversions") return;
+    phaseBody.innerHTML = UI.emptyState({
+      icon:"alert", title:"全部版本加载失败", text: ex.message || "网络异常，请稍后重试", actionLabel:"重试"
+    });
+    bindRetry(phaseBody, loadAllVersions);
+  });
+}
+function allVersionsFiltered(){
+  var f = allVersionsFilters, q = String(f.q || "").trim().toLowerCase();
+  return (allVersionsCache || []).filter(function(r){
+    if(f.project && r.reqId !== f.project) return false;
+    if(f.status && r.versionStatus !== f.status) return false;
+    if(q && String(r.versionName || "").toLowerCase().indexOf(q) === -1
+      && String(r.projectName || "").toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+}
+function allVersionsSelect(name, pairs, chosen, label){
+  return '<select class="mini-select" data-allv-filter="' + name + '" aria-label="' + esc(label) + '">'
+    + pairs.map(function(p){ return '<option value="' + esc(p[0]) + '"' + (p[0] === chosen ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join("")
+    + '</select>';
+}
+function renderAllVersions(){
+  var rows = allVersionsCache || [];
+  if(!rows.length){
+    phaseBody.innerHTML = UI.emptyState({
+      icon:"folder", title:"还没有版本", text:"先在项目中创建版本，这里会汇总全部可见项目的版本。"
+    });
+    return;
+  }
+  var map = allVersionRowMap();
+  var selected = allVersionsSel.map(function(id){ return map[id]; }).filter(Boolean);
+  var selectedProjects = {};
+  selected.forEach(function(r){ selectedProjects[r.reqId] = true; });
+  var projectIds = [], projectNames = {}, manageable = {};
+  rows.forEach(function(r){
+    if(projectIds.indexOf(r.reqId) === -1){ projectIds.push(r.reqId); projectNames[r.reqId] = r.projectName; }
+    if(r.canManage) manageable[r.reqId] = true;
+  });
+  var filtered = allVersionsFiltered();
+  var manageCount = projectIds.filter(function(id){ return manageable[id]; }).length;
+  var selbar = "";
+  if(selected.length){
+    selbar = '<div class="allv-selbar"><div class="allv-selinfo"><b>已选 ' + selected.length + ' 个版本 · 跨 ' + Object.keys(selectedProjects).length + ' 个项目</b>'
+      + '<div class="release-chips">' + selected.map(function(r){ return '<span class="release-chip" title="' + esc(r.projectName) + '">' + esc(r.versionName) + '</span>'; }).join("") + '</div></div>'
+      + '<button class="btn sm" type="button" data-allv-clear>清空</button>'
+      + '<button class="btn sm primary" type="button" data-allv-plan>创建发布计划</button></div>';
+  }else{
+    selbar = '<p class="allv-hint">' + (manageCount
+      ? "勾选可管理的版本后，可跨项目创建一个发布计划；只读项目不可勾选。"
+      : "当前项目均无发布计划权限，仅可查看版本；需要创建计划请联系空间主、管理员或项目负责人。") + '</p>';
+  }
+  var body = "";
+  if(!filtered.length){
+    body = '<tr><td colspan="7"><div class="allv-empty">没有匹配的版本，试试清空筛选。</div></td></tr>';
+  }else{
+    var lastReq = null;
+    filtered.forEach(function(r){
+      if(r.reqId !== lastReq){
+        lastReq = r.reqId;
+        var count = filtered.filter(function(x){ return x.reqId === r.reqId; }).length;
+        body += '<tr class="allv-group"><td colspan="7"><span class="allv-gname">' + esc(r.projectName) + '</span>'
+          + '<span class="allv-gmeta">' + count + ' 个版本 · ' + (r.canManage ? '可创建计划' : '只读 · 无发布权限') + '</span></td></tr>';
+      }
+      var on = allVersionsSel.indexOf(r.versionId) !== -1;
+      body += '<tr' + (on ? ' class="is-selected"' : '') + '>'
+        + '<td class="allv-checkcol"><label class="allv-pick"><input type="checkbox" data-allv-pick="' + esc(r.versionId) + '"'
+          + (on ? ' checked' : '') + (r.canManage ? '' : ' disabled') + ' aria-label="选择 ' + esc(r.versionName) + '"></label></td>'
+        + '<td><div class="allv-vname">' + esc(r.versionName) + '</div><div class="allv-vsub">'
+          + (r.versionStatus === "released" ? '已发布 · 内容只读' : '工作项 ' + (r.taskCount == null ? "—" : r.taskCount) + ' 项') + '</div></td>'
+        + '<td>' + versionStatusTag(r.versionStatus) + '</td>'
+        + '<td>' + (r.targetDate ? esc(String(r.targetDate).substring(0, 10)) : '<span class="mute">未设置</span>') + '</td>'
+        + '<td class="num">' + (r.taskCount == null ? "—" : r.taskCount) + '</td>'
+        + '<td>' + (r.latestReleaseDate ? esc(String(r.latestReleaseDate).substring(0, 10)) : "—") + '</td>'
+        + '<td><span class="allv-perm' + (r.canManage ? '' : ' is-off') + '">' + (r.canManage ? '可创建计划' : '无发布权限') + '</span></td>'
+        + '</tr>';
+    });
+  }
+  phaseBody.innerHTML = '<div class="panel allv-panel">'
+    + '<div class="phase-tbl-tools allv-tools">'
+    + '<label class="phase-filter">项目' + allVersionsSelect("project", [["", "全部项目"]].concat(projectIds.map(function(id){ return [id, projectNames[id]]; })), allVersionsFilters.project, "按项目筛选") + '</label>'
+    + '<label class="phase-filter">状态' + allVersionsSelect("status", [["", "全部状态"], ["active", "进行中"], ["planned", "计划中"], ["released", "已发布"]], allVersionsFilters.status, "按状态筛选") + '</label>'
+    + '<input class="phase-filter-input" type="search" data-allv-kw value="' + esc(allVersionsFilters.q) + '" placeholder="搜索版本或项目" aria-label="搜索版本或项目">'
+    + '<span class="phase-tbl-count">' + filtered.length + ' 个版本 · ' + manageCount + ' 个可管理项目</span>'
+    + '</div>'
+    + selbar
+    + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl allv-tbl"><thead><tr>'
+    + '<th class="allv-checkcol"><span class="sr-only">选择</span></th><th>版本</th><th>状态</th><th>目标就绪日</th><th class="num">工作项</th><th>最近发布</th><th>可管理</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<p class="allv-foot">发布计划可跨项目、跨版本；主版本取第一个勾选版本。已发布版本的内容只读，但仍可用于汇总计划。列表按项目分组、版本倒序。</p>'
+    + '</div>';
+}
+function createPlanFromAllVersions(){
+  var map = allVersionRowMap();
+  var picked = allVersionsSel.map(function(id){ return map[id]; }).filter(function(r){ return r && r.canManage; });
+  if(!picked.length){ toast("先勾选至少一个可管理的版本", "warn"); return; }
+  var anchor = picked[0];
+  var known = { id: anchor.versionId, reqId: anchor.reqId, name: anchor.versionName, status: anchor.versionStatus,
+    targetDate: anchor.targetDate, canManageReleasePlan: true, canPublish: false };
+  openReleaseDetail(anchor.versionId, "plan", null, known, picked.map(function(r){ return r.versionId; }), true);
 }
 
 /* ---------- 发布日程（跨项目只读汇总） ---------- */
@@ -36429,11 +37358,11 @@ function syncModeSeg(){
   if(seg) seg.querySelectorAll("[data-pmode]").forEach(function(b){
     b.setAttribute("aria-pressed", b.dataset.pmode === viewMode);
   });
-  /* 总览与发布日程都是跨项目口径：隐藏单项目选择、新建版本与单项目发布入口 */
-  var allProjects = viewMode === "overview" || viewMode === "schedule";
+  /* 总览、发布日程与全部版本都是跨项目口径：隐藏单项目选择、新建版本与单项目发布入口 */
+  var allProjects = viewMode === "overview" || viewMode === "schedule" || viewMode === "allversions";
   if(phaseReq) phaseReq.style.display = allProjects ? "none" : "";
   if($("btnVerNew")) $("btnVerNew").style.display = (allProjects || !canWritePhase()) ? "none" : "";
-  if($("btnReleasePlan")) $("btnReleasePlan").style.display = viewMode === "schedule" ? "none" : "";
+  if($("btnReleasePlan")) $("btnReleasePlan").style.display = (viewMode === "schedule" || viewMode === "allversions") ? "none" : "";
 }
 function metricCells(cells, drill){
   return '<div class="pgrid">' + cells.map(function(c){
@@ -37240,15 +38169,29 @@ function exportReleaseRecordCSV(record){
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 function publishVersion(id){ openReleaseDetail(id, "actual"); }
-function openReleaseDetail(id, entry, onClose, knownVersion){
+function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, forceNewPlan){
   var v = knownVersion || findVersion(id);
   if(!v) return;
   var dlg = releaseDialog(v, "发布工作区", onClose), layer = dlg.layer;
   var base = "/api/versions/" + encodeURIComponent(id), reqId = v.reqId, wsId = (rt.currentWs || {}).id, userId = (rt.currentUser || {}).id;
+  var syncBannerTimer = null, syncRowTimer = null, syncDebounceTimer = null, pendingBranchId = null;
+  var justSynced = {};      /* 最近一次同步变化的分支 id，8 秒内重画也保留高亮 */
+  document.addEventListener("ds:sse-entity", onBranchSync);
+  var prevClose = layer.__uiOnClose;
+  layer.__uiOnClose = function(){
+    document.removeEventListener("ds:sse-entity", onBranchSync);
+    if(syncBannerTimer){ clearTimeout(syncBannerTimer); syncBannerTimer = null; }
+    if(syncRowTimer){ clearTimeout(syncRowTimer); syncRowTimer = null; }
+    if(syncDebounceTimer){ clearTimeout(syncDebounceTimer); syncDebounceTimer = null; }
+    if(prevClose) prevClose();
+    /* 弹窗关掉后再开抽屉：抽屉层级低于弹窗，且关闭时可能还有未保存确认 */
+    if(pendingBranchId){ var bid = pendingBranchId; pendingBranchId = null; setTimeout(function(){ openBranchById(bid); }, 0); }
+  };
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
   var plans = [], planId = null, records = [], tasks = [], members = [], preview = null, previewContext = null;
   var busy = false, loadSeq = 0, previewSeq = 0, mayManage = false, mayPublish = false;
   var planOptions = null, planScopeVersionIds = null, planTaskPoolCache = {}, planTaskFetchKey = "", planTaskErrorKey = "", planTaskSeq = 0;
+  var presetPlanVersionIds = presetVersionIds && presetVersionIds.length ? normalizedIds(presetVersionIds) : null;
   var pending = null, storageError = "", recoveryMessage = "", recoveredRecord = null, retryAllowed = false, resetAllowed = false;
   var page = 0, filters = {result:"", environment:"", operation:""}, advancedOpen = false;
   /* 计划 / 实际 / 历史 / 内容 四个工作面，入口决定初始页；入口只决定看哪页，不再用顶部报错兜底 */
@@ -37522,7 +38465,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
         ? '<button type="button" class="plan-br-badge is-' + esc(g.status || "unknown") + ' is-editable" data-plan-br-status="' + esc(g.id) + '" title="修改分支状态（当前：' + esc(st.name) + '）" aria-label="' + esc(g.name + "，当前" + st.name + "，点击修改状态") + '">' + esc(st.name) + icon("down", 10) + '</button>'
         : '<span class="plan-br-badge is-' + esc(g.status || "unknown") + '">' + esc(st.name) + '</span>';
       var owner = '<span class="plan-br-owner' + (g.owner ? '' : ' is-empty') + '" title="分支负责人：' + esc(g.owner || "未设置") + '">' + (g.owner ? icon("user", 12) : '') + '<span>' + esc(g.owner || "—") + '</span></span>';
-      return '<div class="plan-br-row' + (g.status === "released" ? ' is-released' : '') + '">'
+      return '<div class="plan-br-row' + (g.status === "released" ? ' is-released' : '') + '" data-plan-br-row="' + esc(g.id) + '">'
         + '<span class="plan-br-name" title="' + esc(g.name) + '"><i class="br-dot ' + st.cls + '"></i><span>' + esc(g.name) + '</span></span>'
         + target
         + badge
@@ -37550,6 +38493,70 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
     var picker = pickerBox("plan");
     var ids = picker ? checks("plan") : normalizedIds((selectedPlan() || {}).plannedTaskIds);
     host.innerHTML = planBranchesHTML(ids);
+    /* 重画（勾选变化、后续同步）不能把刚同步行的高亮抹掉 */
+    Object.keys(justSynced).forEach(function(bid){
+      var row = host.querySelector('[data-plan-br-row="' + bid.replace(/["\\]/g, "") + '"]');
+      if(row) row.classList.add("is-just-synced");
+    });
+  }
+  /* 打开的发布工作区：只跟分支实体，重拉分支元数据并就地重算分支区块；不碰表单草稿与滚动位置 */
+  function planBranchSnapshot(){
+    var picker = pickerBox("plan");
+    var ids = picker ? checks("plan") : normalizedIds((selectedPlan() || {}).plannedTaskIds);
+    var map = {};
+    planBranchData(ids).groups.forEach(function(g){ map[g.id] = { name:g.name, status:g.status }; });
+    return map;
+  }
+  function showPlanSyncBanner(changes){
+    var host = layer.querySelector("[data-plan-sync-host]"); if(!host) return;
+    if(!changes || !changes.length){ host.innerHTML = ""; return; }
+    var first = changes[0], toMeta = BRANCH_ST[first.to], fromMeta = BRANCH_ST[first.from];
+    host.innerHTML = '<div class="plan-br-sync" role="status">'
+      + '<i class="br-dot ' + (toMeta ? toMeta.cls : "") + '"></i>'
+      + '<span class="plan-br-sync-text"><b>' + esc(first.name) + '</b> 状态已更新：'
+      + esc(fromMeta ? fromMeta.name : (first.from || "未知")) + ' → ' + esc(toMeta ? toMeta.name : (first.to || "未知"))
+      + (changes.length > 1 ? ' <span class="plan-br-sync-more">等 ' + changes.length + ' 条</span>' : '')
+      + '<span class="plan-br-sync-time"> · 刚刚</span></span>'
+      + '<button class="btn sm" type="button" data-plan-sync-open="' + esc(first.id) + '">查看分支</button>'
+      + '<button class="icon-btn sm" type="button" data-plan-sync-close aria-label="收起同步提示">' + icon("close", 12) + '</button>'
+      + '</div>';
+    if(syncBannerTimer) clearTimeout(syncBannerTimer);
+    syncBannerTimer = setTimeout(function(){ var h = layer.querySelector("[data-plan-sync-host]"); if(h) h.innerHTML = ""; }, 20000);
+  }
+  var syncInFlight = false, syncAgain = false;
+  function refreshPlanBranchesFromSse(){
+    if(!layer.classList.contains("open") || !current()) return;
+    if(syncInFlight){ syncAgain = true; return; }
+    syncInFlight = true;
+    var before = planBranchSnapshot();
+    loadBranches(true).then(function(){
+      if(!layer.classList.contains("open") || !current()) return;
+      var after = planBranchSnapshot(), changes = [];
+      Object.keys(after).forEach(function(bid){
+        var prev = before[bid];
+        if(prev && prev.status !== after[bid].status) changes.push({ id:bid, name:after[bid].name, from:prev.status, to:after[bid].status });
+      });
+      changes.forEach(function(c){ justSynced[c.id] = 1; });
+      refreshPlanBranches();
+      if(changes.length){
+        if(syncRowTimer) clearTimeout(syncRowTimer);
+        syncRowTimer = setTimeout(function(){
+          justSynced = {};
+          layer.querySelectorAll(".plan-br-row.is-just-synced").forEach(function(row){ row.classList.remove("is-just-synced"); });
+        }, 8000);
+      }
+      /* 无变化的后续事件不清掉已显示的提示：提示按 20 秒自动收起或手动关闭 */
+      if(changes.length) showPlanSyncBanner(changes);
+    }).catch(function(){ /* 分支元数据暂不可用时保持现状 */ }).then(function(){
+      syncInFlight = false;
+      if(syncAgain){ syncAgain = false; refreshPlanBranchesFromSse(); }
+    });
+  }
+  function onBranchSync(e){
+    if(!(e && e.detail && e.detail.entity === "branch")) return;
+    /* 批量改状态会连发多条事件：合并成一次重拉，避免并发请求互相覆盖前后对比 */
+    if(syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(function(){ syncDebounceTimer = null; refreshPlanBranchesFromSse(); }, 250);
   }
   /* 状态改在分支本身上：这里只提供快捷入口，不写计划；成功后重算实时区块 */
   function openPlanBranchStatusMenu(anchor, branchId){
@@ -37817,6 +38824,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       + heading('计划包含的版本（<span data-plan-version-count>' + planVersionSelection().length + '</span> 个 · <span data-plan-version-project-count>' + planSelectionProjects(planVersionSelection()) + '</span> 个项目）', "可跨版本、跨项目选择；当前版本固定包含。计划包含的所有版本都完成生产部署 / 重部署后，计划才自动完成。") + planVersionPicker(locked)
       + field("计划目标键（每行一个）", '<textarea data-plan-targets placeholder="如 prod-shanghai-a，每行一个"' + disabled + '>' + esc(normalizedIds(p.targetKeys).join('\n')) + '</textarea>', "计划影响的部署目标或服务键，每行一个；与实际目标键一致才不构成偏差。")
       + heading('这次计划发布哪些工作项（<span data-plan-task-count>' + normalizedIds(p.plannedTaskIds).length + '</span> 项）', "勾选这次计划发布的工作项；设为「就绪」时至少 1 项。实际记录会独立选择，不自动继承计划范围。") + taskRows("plan", normalizedIds(p.plannedTaskIds), locked)
+      + '<div data-plan-sync-host></div>'
       + '<div data-plan-branches-host></div>'
       + (!locked ? '<p class="release-readiness" data-plan-readiness></p>' : '')
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
@@ -37880,9 +38888,11 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
       if(!current() || seq !== loadSeq) return;
       plans = rs[0] || []; records = (rs[1] || []).slice(0, 200); tasks = rs[2] || []; members = rs[3] || [];
       if(rs[4]) planOptions = rs[4];
-      planScopeVersionIds = null; planTaskPoolCache = {}; planTaskFetchKey = ""; planTaskErrorKey = ""; planTaskSeq++;
+      planScopeVersionIds = presetPlanVersionIds ? normalizedIds(presetPlanVersionIds.concat(id)) : null;
+      presetPlanVersionIds = null;
+      planTaskPoolCache = {}; planTaskFetchKey = ""; planTaskErrorKey = ""; planTaskSeq++;
       taskOptionsCache[reqId] = tasks; if(cache && rt.phaseReqId === reqId) cache.tasks = tasks;
-      if(planId === null) planId = plans.length ? plans[0].id : "";
+      if(planId === null) planId = forceNewPlan ? "" : (plans.length ? plans[0].id : "");
       if(planId && !plans.some(function(p){ return p.id === planId; })) planId = "";
       /* 首次进入实际记录面：自动带出匹配版本与环境的就绪计划，避免误记成紧急发布 */
       if(!pending && !storageError && !actualPlanTouched && !actualDraft.planId) actualDraft.planId = preferredActualPlanId();
@@ -38040,6 +39050,14 @@ function openReleaseDetail(id, entry, onClose, knownVersion){
   layer.addEventListener("click", function(e){
     var exp = e.target.closest('[data-release-export]');
     if(exp){ var r = records.concat(recoveredRecord ? [recoveredRecord] : []).find(function(r){ return String(r.id) === exp.dataset.releaseExport; }); if(r) exportReleaseRecordCSV(r); return; }
+    var syncOpen = e.target.closest('[data-plan-sync-open]');
+    if(syncOpen){
+      /* 跳去分支抽屉要先关掉工作区：有未保存的计划修改时先确认，避免草稿被静默丢弃 */
+      var syncBranchId = syncOpen.getAttribute("data-plan-sync-open");
+      confirmDiscardPlan(function(){ pendingBranchId = syncBranchId; UI.closeModal(layer); });
+      return;
+    }
+    if(e.target.closest('[data-plan-sync-close]')){ var syncHost = layer.querySelector("[data-plan-sync-host]"); if(syncHost) syncHost.innerHTML = ""; return; }
     if(busy || !current()) return;
     var tab = e.target.closest('[data-release-tab]');
     if(tab){ switchTab(tab.getAttribute("data-release-tab"), false); return; }
@@ -38633,6 +39651,7 @@ if($("phaseModeSeg")) $("phaseModeSeg").addEventListener("click", function(e){
   syncModeSeg();
   if(viewMode === "overview"){ loadOverview(); return; }
   if(viewMode === "schedule"){ loadSchedule(); return; }
+  if(viewMode === "allversions"){ loadAllVersions(); return; }
   if(cache) renderPhaseView();
   else loadPhaseData();
 });
@@ -38647,6 +39666,8 @@ if(btnSaveVer) btnSaveVer.addEventListener("click", saveVersion);
 if(vName) vName.addEventListener("input", function(){ fVerName.classList.remove("invalid"); });
 if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(e.target.closest("[data-schedule-refresh]")){ loadSchedule(); return; }
+  if(e.target.closest("[data-allv-clear]")){ allVersionsSel = []; renderAllVersions(); return; }
+  if(e.target.closest("[data-allv-plan]")){ createPlanFromAllVersions(); return; }
   var sch = e.target.closest("[data-schedule-open]");
   if(sch){ openSchedulePlan(sch.dataset.scheduleProject, sch.dataset.scheduleVersion); return; }
   var ovr = e.target.closest("[data-ov-project]");
@@ -38698,6 +39719,8 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(launch){ markFirstRelease(); return; }
   var detail = e.target.closest("[data-ver-detail]");
   if(detail){ openReleaseDetail(detail.dataset.verDetail, "plan"); return; }
+  var chipBranch = e.target.closest("[data-ver-branch]");
+  if(chipBranch){ openBranchById(chipBranch.getAttribute("data-ver-branch")); return; }
   var rel = e.target.closest("[data-ver-release]");
   if(rel){ publishVersion(rel.dataset.verRelease); return; }
   var st = e.target.closest("[data-ver-start]");
@@ -38720,16 +39743,39 @@ if(phaseBody) phaseBody.addEventListener("change", function(e){
     loadSchedule();
     return;
   }
+  var avf = e.target.closest("[data-allv-filter]");
+  if(avf){
+    allVersionsFilters[avf.dataset.allvFilter] = avf.value;
+    renderAllVersions();
+    return;
+  }
+  var avp = e.target.closest("[data-allv-pick]");
+  if(avp){
+    var vid = avp.getAttribute("data-allv-pick"), at = allVersionsSel.indexOf(vid);
+    if(at === -1 && avp.checked) allVersionsSel.push(vid);
+    else if(at !== -1 && !avp.checked) allVersionsSel.splice(at, 1);
+    renderAllVersions();
+    var again = phaseBody.querySelector('[data-allv-pick="' + vid.replace(/["\\]/g, "") + '"]');
+    if(again) again.focus();
+    return;
+  }
   if(e.target.closest("[data-tbl-status],[data-tbl-owner],[data-tbl-type]")) applyPhaseTblFilters();
 });
 if(phaseBody) phaseBody.addEventListener("input", function(e){
+  if(e.target.closest("[data-allv-kw]")){
+    allVersionsFilters.q = e.target.value;
+    renderAllVersions();
+    var kw = phaseBody.querySelector("[data-allv-kw]");
+    if(kw){ kw.focus(); kw.setSelectionRange(kw.value.length, kw.value.length); }
+    return;
+  }
   if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
 });
 
 function setPhaseProject(reqId, mode){
   if(!reqId) return;
   rt.phaseReqId = reqId;
-  if(mode === "phase" || mode === "version" || mode === "overview") viewMode = mode;
+  if(mode === "phase" || mode === "version" || mode === "overview" || mode === "allversions") viewMode = mode;
   else if(viewMode === "overview") viewMode = "phase";
   if(document.body.dataset.view === "phase"){
     syncModeSeg();
@@ -39907,7 +40953,7 @@ function caretPlaceholder(){
   return '<span class="manager-drill-caret" style="visibility:hidden" aria-hidden="true">' + icon("chevronRight", 12) + '</span>';
 }
 function drillName(level, inner){
-  return '<td class="drill-name"><span class="manager-drill-indent" style="width:' + (level * 20) + 'px"></span>' + inner + '</td>';
+  return '<td class="drill-name"><div class="manager-drill-name" style="padding-left:' + (level * 20) + 'px">' + inner + '</div></td>';
 }
 function emptyCols(n){
   var s = "";
@@ -39916,7 +40962,7 @@ function emptyCols(n){
 }
 function drillTaskRow(t){
   return '<tr data-open-task="' + esc(t.id) + '" tabindex="0" title="打开工作项详情">'
-    + drillName(2, '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
+    + drillName(2, caretPlaceholder() + '<div class="manager-task-title">' + typeBadgeHTML(t.itemType) + esc(t.title) + '</div>')
     + '<td>' + esc(taskStatusName(t)) + '</td>'
     + '<td class="num">' + taskPct(t) + '%</td>'
     + emptyCols(4)
@@ -40454,6 +41500,28 @@ function resetReqForm(){
   if($("dlgProject")) UI.closeModal($("dlgProject"));
   renderReqList();
 }
+/* 共享空间里成员 / 只读成员看到空列表，多半是还没被分配项目，而不是空间里真的没有项目 */
+function emptyProjectsState(){
+  var ws = rt.currentWs;
+  var role = ws && ws.type !== "personal" ? ws.myRole : "";
+  /* 查看者全局只读、不受项目级范围限制：列表为空只可能是空间里还没有项目 */
+  if(role === "viewer"){
+    return UI.emptyState({
+      icon:"folder", title:"还没有项目",
+      text:"你在此空间是查看者，空间主或管理员创建项目后会显示在这里。"
+    });
+  }
+  if(role === "member"){
+    return UI.emptyState({
+      icon:"folder", title:"暂无可见项目",
+      text:"你还没有被分配到任何项目，可联系空间主或管理员分配；也可以点右上角「新建项目」自己创建。"
+    });
+  }
+  return UI.emptyState({
+    icon:"folder", title:"还没有项目",
+    text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
+  });
+}
 function renderReqList(){
   var list = sortedProjects(visibleReqs());
   var countEl = $("reqCount");
@@ -40467,12 +41535,9 @@ function renderReqList(){
   if($("btnProjectColumns")) $("btnProjectColumns").hidden = listPrefs.viewMode("project-list") !== "table";
   if(!list.length){
     reqListEl.className = "req-list";
-    reqListEl.innerHTML = showArchived ? UI.emptyState({
-      icon:"folder", title:"还没有项目",
-      text:"点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
-    }) : UI.emptyState({
-      icon:"folder", title: archivedCount() ? "全部项目已归档" : "还没有项目",
-      text: archivedCount() ? "点上方「显示已归档」查看或恢复已归档项目。" : "点右上角「新建项目」创建第一个；展开项目可以查看文档与工作项进度。"
+    reqListEl.innerHTML = (showArchived || !archivedCount()) ? emptyProjectsState() : UI.emptyState({
+      icon:"folder", title:"全部项目已归档",
+      text:"点上方「显示已归档」查看或恢复已归档项目。"
     });
     return;
   }
@@ -41363,6 +42428,7 @@ __NS["views/risks.js"] = (function(){
 var esc = esc2;
 
 var { fullscreenButtonHTML } = __NS["core/fullscreen.js"];
+
 var { daysBetween, fmtDate } = __NS["views/manager-shared.js"];
 var cache=null,seq=0,sending=false;
 function enterRisksView(){loadRisks();}
@@ -41392,7 +42458,8 @@ function uniqueRiskTasks(){
 }
 function renderRisks(){
   var today=cache.today,all=uniqueRiskTasks(),over=cache.overloaded||[];
-  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+fullscreenButtonHTML()+'</div>'
+  var nudgeAll=canManage()?'<button class="btn sm soft manager-nudge-all" type="button" data-nudge-all '+(all.length?'':'disabled')+'>'+icon("bell", 13)+'全部催办<span class="manager-nudge-count">'+all.length+'</span></button>':'';
+  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div><div class="manager-actions">'+nudgeAll+fullscreenButtonHTML()+'</div></div>'
     +(over.length?'<button type="button" class="manager-overload-note" data-risk-overload title="查看成员负载"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></button>':'')
     +'<div class="manager-risk-grid">'+riskColumn("overdue","逾期",cache.overdue||[],today)+riskColumn("blocked","被阻塞",cache.blocked||[],today)+riskColumn("stagnant","7 天未动",cache.stagnant||[],today)+'</div>';
 }
@@ -41586,7 +42653,7 @@ function roleGuideTable(head, body){
 function openRoleGuide(){
   var roleRows = [
     roleGuideGroup("数据范围"),
-    roleGuideRow(["查看项目与工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "默认全部；设为「不可见」的项目不可见", ROLE_GUIDE_YES]),
+    roleGuideRow(["查看项目与工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "新成员仅已分配的项目；早期成员默认全部，设为「不可见」的除外", ROLE_GUIDE_YES]),
     roleGuideRow(["查看统计 / 报表 / 成员负载", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "按可见项目过滤", ROLE_GUIDE_YES]),
     roleGuideGroup("工作项"),
     roleGuideRow(["新建 / 编辑工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
@@ -41702,7 +42769,7 @@ function enterSettingsView(){
   var canInvite = !isPersonal && isManager;
   $("inviteBox").hidden = !canInvite;
   if($("inviteHint")) $("inviteHint").textContent =
-    "把链接发给已有账号的同事：对方登录后打开链接即可一键加入。链接 7 天有效，可随时撤销。";
+    "把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。";
   updateInviteAccountHint(isAdmin);
   if($("setTabPlatform")) $("setTabPlatform").hidden = !isAdmin;
   if(isPersonal){
@@ -41816,7 +42883,8 @@ function refreshPlatformTab(){
 }
 function loadWsMemberList(){
   wsMemberList.innerHTML = UI.skeletonRows(2);
-  var wsId = encodeURIComponent(rt.currentWs.id);
+  var rawWsId = rt.currentWs.id;
+  var wsId = encodeURIComponent(rawWsId);
   var myRole = rt.currentWs.myRole;
   var isOwner = myRole === "owner";
   var isManager = isOwner || myRole === "admin";
@@ -41836,25 +42904,29 @@ function loadWsMemberList(){
       var sub = "@" + esc(m.username);
       var vis = memberVisibilityText(m);
       if(vis) sub += ' · ' + vis;
+      var assignBtn = (canManageRow && role === "member")
+        ? '<button class="btn sm" type="button" data-assign-projects="' + esc(m.userId) + '">分配项目</button>'
+        : '';
+      var removeBtn = canRemove
+        ? '<button class="btn sm danger" type="button" data-mid-del="' + esc(m.userId) + '">' +
+            (isSelf ? "退出" : "移出") + '</button>'
+        : '';
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
         '<span class="mi"><span class="nm">' + esc(m.displayName) + '</span>' +
           '<span class="sub">' + sub + '</span></span>' +
         roleCell +
-        (canRemove ? '<span class="acts"><button class="btn sm danger" type="button" data-mid-del="' +
-          esc(m.userId) + '">' + (isSelf ? "退出" : "移出") + '</button></span>' : '') +
+        ((assignBtn || removeBtn) ? '<span class="acts">' + assignBtn + removeBtn + '</span>' : '') +
       '</div>';
     }).join("");
   };
   API.get("/api/workspaces/" + wsId + "/members").then(function(list){
+    /* 请求期间切换了空间：丢弃旧空间的结果，避免覆盖新空间的成员列表 */
+    if(!rt.currentWs || rt.currentWs.id !== rawWsId) return;
     rt.wsMembersCache = list || [];
     /* 可见项目数来自矩阵接口：只有管理者能读，读不到就不显示这一项 */
-    if(isManager && !rt.projectAccessCache){
-      API.get("/api/workspaces/" + wsId + "/project-access").then(function(data){
-        rt.projectAccessCache = data || {};
-        rt.projectAccessCache.wsId = rt.currentWs.id;
-        render();
-      }).catch(render);
+    if(isManager && !(rt.projectAccessCache && rt.projectAccessCache.wsId === rawWsId)){
+      fetchAccessData(rawWsId).then(render, render);
       return;
     }
     render();
@@ -41864,18 +42936,27 @@ function loadWsMemberList(){
 }
 function memberVisibilityText(m){
   var data = rt.projectAccessCache;
-  if(!data || !(data.projects || []).length) return "";
+  if(!data || !rt.currentWs || data.wsId !== rt.currentWs.id) return "";
   var projects = data.projects || [];
   var role = m.role || "member";
-  if(role !== "member") return "可见全部 " + projects.length + " 个项目";
-  var hidden = 0, readOnly = 0;
+  if(!projects.length) return role === "member" && m.projectAccessMode === "assigned" ? "按项目分配" : "";
+  if(role !== "member") return (role === "viewer" ? "只读全部 " : "可见全部 ") + projects.length + " 个项目";
+  /* 缺记录按成员模式回落：按项目分配的新成员缺记录即不可见，存量成员缺记录仍可参与 */
+  var raw = {};
   (data.grants || []).forEach(function(g){
-    if(g.userId !== m.userId || !g.projectId) return;
-    if(g.access === "none") hidden++;
-    else if(g.access === "read") readOnly++;
+    if(g && g.userId === m.userId && g.projectId) raw[g.projectId] = g.access;
   });
-  return "可见 " + (projects.length - hidden) + "/" + projects.length + " 个项目" +
-    (readOnly ? ("（其中 " + readOnly + " 个只读）") : "");
+  var visible = 0, readOnly = 0;
+  projects.forEach(function(p){
+    var v = effectiveGrant(raw[p.id], m);
+    if(v !== "none") visible++;
+    if(v === "read") readOnly++;
+  });
+  var assigned = m.projectAccessMode === "assigned";
+  if(!visible && assigned) return "尚未分配项目";
+  return "可见 " + visible + "/" + projects.length + " 个项目" +
+    (readOnly ? ("（其中 " + readOnly + " 个只读）") : "") +
+    (assigned ? " · 按项目分配" : "");
 }
 wsMemberList.addEventListener("change", function(e){
   var sel = e.target.closest("[data-member-role]");
@@ -41888,8 +42969,10 @@ wsMemberList.addEventListener("change", function(e){
   API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
     encodeURIComponent(userId) + "/role", { role: role }).then(function(){
     toast("角色已改为「" + roleLabel(role) + "」", "fs");
+    /* 角色影响矩阵的整行展示（全部项目 / 逐项目），旧缓存必须作废后再刷新 */
+    rt.projectAccessCache = null;
     loadWsMemberList();
-    if(settingsTab === "access") loadProjectAccess();
+    if(settingsTab === "members") loadProjectAccess();
   }).catch(function(ex){
     sel.disabled = false;
     sel.value = (rt.wsMembersCache || []).reduce(function(prev, m){
@@ -41900,13 +42983,26 @@ wsMemberList.addEventListener("change", function(e){
 });
 /* ---------- 项目可见范围矩阵 ---------- */
 var ACCESS_OPTIONS = [
-  { value:"default", label:"默认（参与）" },
+  { value:"write", label:"可参与" },
   { value:"read", label:"只读" },
   { value:"none", label:"不可见" }
 ];
-/* 历史数据可能残留 pm/dev/qa：小团队不区分项目内角色，统一按默认参与展示 */
+/* 矩阵只写显式值；历史 pm/dev/qa 与空值都按「可参与」理解（与后端默认参与口径一致） */
 function normalizeAccess(value){
-  return (value === "read" || value === "none") ? value : "default";
+  return (value === "read" || value === "none" || value === "write") ? value : "write";
+}
+function accessLabel(value){
+  if(value === "none") return "不可见";
+  if(value === "read") return "只读";
+  return "可参与";
+}
+/* 新成员按项目分配时缺记录即不可见；存量成员缺记录仍是默认参与 */
+function defaultGrantFor(member){
+  return member && member.projectAccessMode === "assigned" ? "none" : "write";
+}
+/* 显式 write/read/none 优先；缺记录与历史 pm/dev/qa 按成员模式回落（与后端 effectiveAccess 一致） */
+function effectiveGrant(raw, member){
+  return (raw === "write" || raw === "read" || raw === "none") ? raw : defaultGrantFor(member);
 }
 function accessOptions(selected){
   return ACCESS_OPTIONS.map(function(o){
@@ -41915,15 +43011,25 @@ function accessOptions(selected){
 }
 function isPrivilegedRole(role){ return role === "owner" || role === "admin"; }
 function accessKey(userId, projectId){ return userId + "|" + projectId; }
+/* 矩阵数据统一入口：按发起时的空间落缓存，响应回来时空间已切换则不写缓存 */
+function fetchAccessData(wsId){
+  return API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/project-access").then(function(data){
+    var fresh = data || {};
+    fresh.wsId = wsId;
+    if(rt.currentWs && rt.currentWs.id === wsId) rt.projectAccessCache = fresh;
+    return fresh;
+  });
+}
 function loadProjectAccess(){
   var box = $("projectAccessWrap");
   if(!box || !rt.currentWs) return;
+  var wsId = rt.currentWs.id;
   box.innerHTML = '<div class="foot-note">加载中…</div>';
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access").then(function(data){
-    rt.projectAccessCache = data || {};
-    rt.projectAccessCache.wsId = rt.currentWs.id;
+  fetchAccessData(wsId).then(function(){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
     renderProjectAccess();
   }).catch(function(ex){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
     box.innerHTML = '<div class="foot-note">加载失败：' + esc(ex.message || "网络异常") + '</div>';
   });
 }
@@ -41958,7 +43064,7 @@ function renderProjectAccess(){
       cells = '<td class="access-all" colspan="' + projects.length + '">全部项目（只读）</td>';
     }else{
       cells = projects.map(function(p){
-        var value = normalizeAccess(grantMap[accessKey(m.userId, p.id)] || "default");
+        var value = effectiveGrant(grantMap[accessKey(m.userId, p.id)], m);
         return '<td><select class="mini-select access-select" data-access-user="' + esc(m.userId) +
           '" data-access-project="' + esc(p.id) + '" aria-label="' + esc(m.displayName + " · " + p.name) + '">' +
           accessOptions(value) + '</select></td>';
@@ -41977,7 +43083,7 @@ $("projectAccessWrap").addEventListener("change", function(e){
   if(!sel) return;
   var userId = sel.dataset.accessUser;
   var projectId = sel.dataset.accessProject;
-  var access = sel.value === "default" ? "" : sel.value;
+  var access = normalizeAccess(sel.value);
   sel.disabled = true;
   API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/project-access", {
     userId: userId, projectId: projectId, access: access
@@ -41987,9 +43093,11 @@ $("projectAccessWrap").addEventListener("change", function(e){
       rt.projectAccessCache.grants = rt.projectAccessCache.grants.filter(function(g){
         return !(g.userId === userId && g.projectId === projectId);
       });
-      if(access) rt.projectAccessCache.grants.push({ userId:userId, projectId:projectId, access:access });
+      rt.projectAccessCache.grants.push({ userId:userId, projectId:projectId, access:access });
     }
-    toast(access ? "可见范围已更新" : "已恢复默认参与", "fs");
+    toast("已设为「" + accessLabel(access) + "」", "fs");
+    /* 成员行上的「可见 x/y」同步刷新（复用已更新的矩阵缓存） */
+    loadWsMemberList();
   }).catch(function(ex){
     toast(ex.message || "保存失败", "bad");
     loadProjectAccess();
@@ -41997,6 +43105,223 @@ $("projectAccessWrap").addEventListener("change", function(e){
     sel.disabled = false;
   });
 });
+/* ---------- 项目权限三态选择（邀请预分配 / 成员分配共用） ----------
+   每次打开弹窗开一个会话：记下发起时的空间与成员、递增序号。
+   加载完成前「保存」不可点；旧会话的异步结果（连点、切空间、换成员）一律丢弃，
+   避免把 A 成员的草稿提交到 B 成员，或在项目没加载完时提交空授权。 */
+var grantSeq = 0;
+var grantSession = null;
+function startGrantSession(kind, member, okBtn){
+  grantSeq++;
+  grantSession = {
+    seq: grantSeq, kind: kind, wsId: rt.currentWs.id,
+    member: member || null, ready: false, busy: false,
+    projects: [], draft: {}, okBtn: okBtn || null
+  };
+  if(okBtn) okBtn.disabled = true;
+  return grantSession;
+}
+function isLiveSession(session){
+  return !!session && grantSession === session && !!rt.currentWs && rt.currentWs.id === session.wsId;
+}
+function markSessionReady(session){
+  session.ready = true;
+  if(session.okBtn) session.okBtn.disabled = false;
+}
+function grantButtons(value){
+  return ACCESS_OPTIONS.map(function(o){
+    return '<button type="button" data-grant-access="' + o.value + '"' +
+      (o.value === value ? ' aria-pressed="true"' : '') + '>' + o.label + '</button>';
+  }).join("");
+}
+function countGrants(session){
+  var write = 0, read = 0;
+  session.projects.forEach(function(p){
+    if(session.draft[p.id] === "write") write++;
+    else if(session.draft[p.id] === "read") read++;
+  });
+  return { write: write, read: read };
+}
+function updateGrantSummary(summaryEl){
+  var session = grantSession;
+  if(!session || !summaryEl) return;
+  var c = countGrants(session);
+  summaryEl.textContent = "可见 " + (c.write + c.read) + "/" + session.projects.length + " 个项目" +
+    " · 可参与 " + c.write + " · 只读 " + c.read;
+}
+function renderGrantPicker(listEl, summaryEl){
+  var session = grantSession;
+  if(!session) return;
+  if(!session.projects.length){
+    listEl.innerHTML = '<div class="foot-note">当前空间还没有项目。成员加入后可在创建项目时再分配，或稍后回来设置。</div>';
+    summaryEl.textContent = "暂无项目可分配";
+    return;
+  }
+  listEl.innerHTML = session.projects.map(function(p){
+    return '<div class="grant-row" data-grant-pid="' + esc(p.id) + '">' +
+      '<span class="nm" title="' + esc(p.name) + '">' + esc(p.name) + '</span>' +
+      '<span class="seg mini">' + grantButtons(session.draft[p.id] || "none") + '</span>' +
+    '</div>';
+  }).join("");
+  updateGrantSummary(summaryEl);
+}
+function onGrantClick(e, summaryEl){
+  var session = grantSession;
+  if(!session || !session.ready || session.busy) return;
+  var btn = e.target.closest("[data-grant-access]");
+  if(!btn) return;
+  var row = btn.closest("[data-grant-pid]");
+  if(!row) return;
+  session.draft[row.dataset.grantPid] = btn.dataset.grantAccess;
+  row.querySelectorAll("[data-grant-access]").forEach(function(b){
+    b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+  });
+  updateGrantSummary(summaryEl);
+}
+function grantLoadFailed(session, listEl, ex){
+  if(!isLiveSession(session)) return;
+  listEl.innerHTML = '<div class="foot-note">项目加载失败：' + esc((ex && ex.message) || "网络异常") +
+    '。请关闭后重试。</div>';
+}
+function openInviteCreate(){
+  if(!rt.currentWs) return;
+  var dlg = $("dlgInviteCreate");
+  if(!dlg) return;
+  var session = startGrantSession("invite", null, $("dlgInviteCreateOk"));
+  var list = $("inviteGrantList");
+  var summary = $("inviteGrantSummary");
+  list.innerHTML = UI.skeletonRows(2);
+  summary.textContent = "加载项目中…";
+  UI.openModal(dlg);
+  /* 每次打开都取最新项目列表：期间可能有人新建或删除项目 */
+  fetchAccessData(session.wsId).then(function(data){
+    if(!isLiveSession(session)) return;
+    session.projects = data.projects || [];
+    session.projects.forEach(function(p){ session.draft[p.id] = "none"; });
+    renderGrantPicker(list, summary);
+    markSessionReady(session);
+  }).catch(function(ex){ grantLoadFailed(session, list, ex); });
+}
+function grantCountText(c){
+  var parts = [];
+  if(c.write) parts.push("可参与 " + c.write + " 个");
+  if(c.read) parts.push("只读 " + c.read + " 个");
+  return parts.join("、") + "项目";
+}
+function submitInvite(){
+  var session = grantSession;
+  var btn = $("dlgInviteCreateOk");
+  if(!btn || btn.disabled || !session || session.kind !== "invite" || !session.ready || session.busy) return;
+  if(!isLiveSession(session)) return;
+  session.busy = true;
+  btn.disabled = true;
+  var grants = session.projects.filter(function(p){
+    return session.draft[p.id] === "write" || session.draft[p.id] === "read";
+  }).map(function(p){
+    return { projectId: p.id, access: session.draft[p.id] };
+  });
+  var counts = countGrants(session);
+  API.post("/api/workspaces/" + encodeURIComponent(session.wsId) + "/invites", { grants: grants })
+    .then(function(res){
+      if(isLiveSession(session)) UI.closeModal($("dlgInviteCreate"));
+      copyToClipboard(inviteLink(res.id), grants.length
+        ? ("邀请链接已复制（加入后" + grantCountText(counts) + "；对方需先有账号）")
+        : "邀请链接已复制（加入后暂无项目权限，需在成员列表再分配）");
+      if(rt.currentWs && rt.currentWs.id === session.wsId) loadInvites();
+    }).catch(function(ex){
+      toast(ex.message || "生成失败", "bad");
+    }).then(function(){
+      session.busy = false;
+      if(isLiveSession(session)) btn.disabled = false;
+    });
+}
+function openMemberGrants(userId){
+  var m = (rt.wsMembersCache || []).filter(function(x){ return x.userId === userId; })[0];
+  if(!m) return;
+  var dlg = $("dlgMemberGrants");
+  if(!dlg) return;
+  var session = startGrantSession("member", m, $("dlgMemberGrantsOk"));
+  $("dlgMemberGrantsTitle").textContent = "分配项目 · " + (m.displayName || m.username || m.userId);
+  $("dlgMemberGrantsDesc").textContent = "未选择「可参与 / 只读」的项目，该成员看不到；保存后立即生效，之后可随时调整。";
+  var list = $("memberGrantList");
+  var summary = $("memberGrantSummary");
+  list.innerHTML = UI.skeletonRows(2);
+  summary.textContent = "加载项目中…";
+  UI.openModal(dlg);
+  /* 整批提交会覆盖该成员全部项目，必须基于最新授权打开，不能用可能过期的缓存 */
+  fetchAccessData(session.wsId).then(function(data){
+    if(!isLiveSession(session)) return;
+    /* 以最新数据里的成员为准（模式/角色可能刚被别人改过） */
+    var fresh = (data.members || []).filter(function(x){ return x.userId === userId; })[0];
+    if(fresh) session.member = fresh;
+    if(!fresh || (fresh.role || "member") !== "member"){
+      list.innerHTML = '<div class="foot-note">该成员当前不是「成员」角色，无需按项目分配。</div>';
+      summary.textContent = "";
+      return;
+    }
+    session.projects = data.projects || [];
+    var values = {};
+    (data.grants || []).forEach(function(g){
+      if(g && g.userId === userId && g.projectId) values[g.projectId] = g.access;
+    });
+    session.projects.forEach(function(p){
+      session.draft[p.id] = effectiveGrant(values[p.id], session.member);
+    });
+    renderGrantPicker(list, summary);
+    markSessionReady(session);
+  }).catch(function(ex){ grantLoadFailed(session, list, ex); });
+}
+function submitMemberGrants(){
+  var session = grantSession;
+  var btn = $("dlgMemberGrantsOk");
+  if(!btn || btn.disabled || !session || session.kind !== "member" || !session.ready || session.busy) return;
+  if(!isLiveSession(session) || !session.member) return;
+  session.busy = true;
+  btn.disabled = true;
+  var target = session.member;
+  var grants = session.projects.map(function(p){
+    return { projectId: p.id, access: session.draft[p.id] || "none" };
+  });
+  API.put("/api/workspaces/" + encodeURIComponent(session.wsId) + "/members/" +
+    encodeURIComponent(target.userId) + "/project-access", { grants: grants })
+    .then(function(){
+      var name = target.displayName || target.username || target.userId;
+      if(isLiveSession(session)) UI.closeModal($("dlgMemberGrants"));
+      toast("已更新「" + name + "」的项目权限", "fs");
+      if(rt.currentWs && rt.currentWs.id === session.wsId){
+        rt.projectAccessCache = null;
+        loadWsMemberList();
+        loadProjectAccess();
+      }
+    }).catch(function(ex){
+      toast(ex.message || "保存失败", "bad");
+    }).then(function(){
+      session.busy = false;
+      if(isLiveSession(session)) btn.disabled = false;
+    });
+}
+(function wireGrantDialogs(){
+  var inviteDlg = $("dlgInviteCreate");
+  if(inviteDlg){
+    ["dlgInviteCreateX", "dlgInviteCreateCancel"].forEach(function(id){
+      if($(id)) $(id).addEventListener("click", function(){ UI.closeModal(inviteDlg); });
+    });
+    if($("dlgInviteCreateOk")) $("dlgInviteCreateOk").addEventListener("click", submitInvite);
+    if($("inviteGrantList")) $("inviteGrantList").addEventListener("click", function(e){
+      onGrantClick(e, $("inviteGrantSummary"));
+    });
+  }
+  var memberDlg = $("dlgMemberGrants");
+  if(memberDlg){
+    ["dlgMemberGrantsX", "dlgMemberGrantsCancel"].forEach(function(id){
+      if($(id)) $(id).addEventListener("click", function(){ UI.closeModal(memberDlg); });
+    });
+    if($("dlgMemberGrantsOk")) $("dlgMemberGrantsOk").addEventListener("click", submitMemberGrants);
+    if($("memberGrantList")) $("memberGrantList").addEventListener("click", function(e){
+      onGrantClick(e, $("memberGrantSummary"));
+    });
+  }
+})();
 function inviteLink(code){
   return window.location.origin + API.appBase + "/join.html?code=" + encodeURIComponent(code);
 }
@@ -42019,9 +43344,12 @@ function renderInvites(){
     return;
   }
   listEl.innerHTML = rt.inviteCache.map(function(v){
+    var w = v.writeGrantCount || 0, r = v.readGrantCount || 0;
+    var grantText = (w || r) ? ("加入后" + grantCountText({ write: w, read: r })) : "加入后暂无项目";
     return '<div class="invite-row" data-invite-id="' + esc(v.id) + '">' +
       '<code title="' + esc(inviteLink(v.id)) + '">' + esc(inviteLink(v.id)) + '</code>' +
-      '<span class="foot-note">有效期至 ' + esc(fmtShortMD(new Date(v.expiresAt))) + ' · 已加入 ' + (v.usedCount || 0) + ' 人</span>' +
+      '<span class="foot-note">有效期至 ' + esc(fmtShortMD(new Date(v.expiresAt))) + ' · 已加入 ' + (v.usedCount || 0) + ' 人' +
+        ' · ' + esc(grantText) + '</span>' +
       '<span class="row row-gap" style="gap:6px">' +
         '<button class="icon-btn sm" type="button" data-invite-copy title="复制链接" aria-label="复制链接">' + icon("copy", 14) + '</button>' +
         '<button class="btn sm danger" type="button" data-invite-del>撤销</button>' +
@@ -43096,6 +44424,11 @@ $("btnWsMemberAdd").addEventListener("click", function(){
   }).catch(function(ex){ toast(ex.message || "添加失败", "bad"); });
 });
 wsMemberList.addEventListener("click", function(e){
+  var assign = e.target.closest("[data-assign-projects]");
+  if(assign){
+    openMemberGrants(assign.dataset.assignProjects);
+    return;
+  }
   var del = e.target.closest("[data-mid-del]");
   if(!del) return;
   var uid = del.dataset.midDel;
@@ -43163,17 +44496,7 @@ if($("btnAccountGotoMembers")) $("btnAccountGotoMembers").addEventListener("clic
   setSettingsTab("members");
 });
 $("btnInviteGen").addEventListener("click", function(){
-  if(!rt.currentWs) return;
-  var btn = $("btnInviteGen");
-  btn.disabled = true;
-  API.post("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/invites", {}).then(function(res){
-    btn.disabled = false;
-    copyToClipboard(inviteLink(res.id), "邀请链接已复制（对方需先有账号，登录后打开即可加入）");
-    loadInvites();
-  }).catch(function(ex){
-    btn.disabled = false;
-    toast(ex.message || "生成失败", "bad");
-  });
+  openInviteCreate();
 });
 $("inviteList").addEventListener("click", function(e){
   var row = e.target.closest("[data-invite-id]");
@@ -43759,6 +45082,7 @@ __NS["views/testcases.js"] = (function(){
 
 
 
+
 var esc = esc2;
 
 
@@ -43802,6 +45126,15 @@ var caseMoreLoading = false;
 var caseFormBaseline = null;
 var runFormBaseline = null;
 var defectFormBaseline = null;
+/* AI 生成用例：来源选择 → 进度层 → 草稿勾选 */
+var aiCaseSource = "doc";
+var aiCaseSourceReqId = null;
+var aiCaseDrafts = [];
+var aiCaseDemandId = "";
+var aiCaseApplyReqId = null;
+var aiCaseGenerating = false;
+var aiCaseApplying = false;
+var aiCaseDocs = { reqId: null, list: [], error: null };
 
 var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞" };
 function statusBadgeHTML(s){
@@ -44571,8 +45904,10 @@ function syncModeUI(){
     if(filterBtn) filterBtn.setAttribute("aria-expanded", "false");
   }
   var csvOut = $("btnCaseCsvOut"), csvIn = $("btnCaseCsvIn"), planNew = $("btnPlanNew");
+  var aiBtn = $("btnCaseAi");
   if(csvOut) csvOut.style.display = tcMode === "cases" && caseReqId ? "" : "none";
   if(csvIn) csvIn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
+  if(aiBtn) aiBtn.style.display = tcMode === "cases" && isWritable() ? "" : "none";
   /* 该按钮初始带 hidden 属性，而全局 [hidden]{display:none!important} 优先级高于行内 display，
      必须切 hidden 本身，改 style.display 永远显示不出来。
      计划 tab 下始终可见：没选项目时点按给提示，而不是让入口整个消失。 */
@@ -44951,6 +46286,203 @@ function removeCase(id){
   }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
 }
 
+/* ---------- AI 生成用例 ---------- */
+
+function openAiCaseSource(keepState){
+  if(!caseReqId){ toast("先在上方选择一个项目，再生成用例", "warn"); if($("tcReq")) $("tcReq").focus(); return; }
+  if(!isWritable()){ toast("当前项目只读，无法生成用例", "warn"); return; }
+  aiCaseSourceReqId = caseReqId;
+  if(!keepState) aiCaseSource = "doc";
+  aiCaseDocs = { reqId: null, list: [], error: null };
+  syncAiCaseSource();
+  var req = null;
+  for(var i = 0; i < rt.reqList.length; i++){
+    if(rt.reqList[i].id === caseReqId){ req = rt.reqList[i]; break; }
+  }
+  $("aiCaseSourceHint").textContent = "当前项目：" + (req ? req.name : caseReqId)
+    + "。AI 只生成草稿，勾选确认后才会创建。";
+  loadAiCaseDocs(caseReqId);
+  loadAiCaseDemands(caseReqId);
+  UI.openModal($("dlgAiCaseSource"), "#aiCaseDocSel");
+}
+function syncAiCaseSource(){
+  document.querySelectorAll("#aiCaseSourceSeg [data-ai-src]").forEach(function(b){
+    var on = b.dataset.aiSrc === aiCaseSource;
+    b.classList.toggle("primary", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  $("aiCaseDocField").hidden = aiCaseSource !== "doc";
+  $("aiCaseDemandField").hidden = aiCaseSource !== "demand";
+}
+function loadAiCaseDocs(reqId){
+  aiCaseDocs = { reqId: reqId, list: [], error: null };
+  var sel = $("aiCaseDocSel");
+  sel.innerHTML = '<option value="">文档加载中…</option>';
+  return API.get("/api/req-docs", { reqId: reqId, offset: 0, limit: 100 }).then(function(page){
+    if(aiCaseDocs.reqId !== reqId) return;
+    aiCaseDocs.list = page.items || [];
+    var opts = ['<option value="">请选择文档</option>'];
+    aiCaseDocs.list.forEach(function(d){
+      opts.push('<option value="' + esc(d.id) + '">' + esc(d.title) + (d.publishedAt ? "" : "（草稿）") + '</option>');
+    });
+    sel.innerHTML = opts.join("");
+    if(aiCaseDocs.list.length === 1) sel.value = aiCaseDocs.list[0].id;
+  }).catch(function(ex){
+    if(aiCaseDocs.reqId !== reqId) return;
+    aiCaseDocs.error = ex || new Error("文档加载失败");
+    sel.innerHTML = '<option value="">文档加载失败，请关闭后重试</option>';
+  });
+}
+function loadAiCaseDemands(reqId){
+  var sel = $("aiCaseDemandSel");
+  sel.innerHTML = '<option value="">需求加载中…</option>';
+  return loadDemandOptions(reqId).then(function(list){
+    if(aiCaseSourceReqId !== reqId) return;
+    if(list === null){
+      sel.innerHTML = '<option value="">需求加载失败，请关闭后重试</option>';
+      return;
+    }
+    var opts = ['<option value="">请选择需求</option>'];
+    list.forEach(function(d){
+      opts.push('<option value="' + esc(d.id) + '">' + esc(demandPickLabel(d)) + '</option>');
+    });
+    if(demandOptions.total > list.length){
+      opts.push('<option value="" disabled>仅显示前 ' + list.length + ' 条，共 ' + demandOptions.total + ' 条</option>');
+    }
+    sel.innerHTML = opts.join("");
+    if(list.length === 1) sel.value = list[0].id;
+  });
+}
+function generateAiCases(){
+  if(aiCaseGenerating) return;
+  if(!caseReqId || caseReqId !== aiCaseSourceReqId){
+    toast("项目已切换，请重新打开生成入口", "warn");
+    return;
+  }
+  var sel = aiCaseSource === "doc" ? $("aiCaseDocSel") : $("aiCaseDemandSel");
+  if(!sel.value){
+    toast(aiCaseSource === "doc" ? "先选择要拆的文档" : "先选择要生成用例的需求", "warn");
+    sel.focus();
+    return;
+  }
+  var sourceId = sel.value;
+  var sourceLabel = sel.options[sel.selectedIndex].textContent;
+  var reqId = aiCaseSourceReqId;
+  var demandId = aiCaseSource === "demand" ? sourceId : "";
+  var maxCases = Number($("aiCaseMax").value) || 8;
+  aiCaseGenerating = true;
+  UI.closeModal($("dlgAiCaseSource"));
+  AIProgress.run({
+    title: "AI 生成测试用例",
+    desc: "正在读「" + sourceLabel + "」，拆出可执行的用例和步骤…",
+    hint: "通常需要 20–60 秒，可以随时取消",
+    errorText: aiErrorText,
+    request: function(signal){
+      return API.postWithSignal("/api/ai/testcases/generate", {
+        source: aiCaseSource, sourceId: sourceId, maxCases: maxCases
+      }, signal);
+    },
+    onSuccess: function(d){
+      aiCaseDrafts = d.cases || [];
+      aiCaseApplyReqId = reqId;
+      aiCaseDemandId = demandId;
+      renderAiCaseResult(d);
+      UI.openModal($("dlgAiCaseResult"));
+    },
+    onCancel: function(){ openAiCaseSource(true); }
+  }).then(function(){ aiCaseGenerating = false; });
+}
+function aiCasePriOptions(selected){
+  var p = String(selected || "P2").toUpperCase();
+  return PRIORITIES.map(function(x){
+    return '<option value="' + x + '"' + (x === p ? " selected" : "") + '>' + x + ' · ' + esc(priName(x)) + '</option>';
+  }).join("");
+}
+function renderAiCaseResult(d){
+  $("aiCaseResultTitle").textContent = "AI 生成用例 · " + (d.sourceTitle || "");
+  var msg = "从「" + (d.sourceTitle || "所选来源") + "」生成 " + aiCaseDrafts.length + " 条草稿"
+    + (aiCaseDemandId ? "，创建后关联该需求" : "") + "。标题可直接改，优先级和模块也能调；没勾的不会创建。";
+  if(d.truncated) msg += " 来源共 " + (d.sourceChars || 0) + " 字，AI 只读取了前 12000 字。";
+  $("aiCaseResultMsg").textContent = msg;
+  $("aiCaseList").innerHTML = aiCaseDrafts.map(function(c, i){
+    var steps = c.steps || [];
+    return '<div class="ai-item on" data-i="' + i + '">' +
+      '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择用例">' +
+      '<div class="ai-main">' +
+        '<input class="ai-title" type="text" maxlength="100" value="' + esc(c.title) + '" data-title="' + i + '" aria-label="用例标题">' +
+        '<div class="ai-meta">' +
+          '<select class="ai-case-pri" data-pri="' + i + '" aria-label="优先级">' + aiCasePriOptions(c.priority) + '</select>' +
+          '<input class="ai-case-module" type="text" maxlength="50" value="' + esc(c.module || "") + '" data-module="' + i + '" placeholder="功能模块" aria-label="功能模块">' +
+          (c.precondition ? '<span>前置：' + esc(cut(c.precondition, 36)) + '</span>' : "") +
+          (c.reason ? '<span class="ai-reason">' + esc(c.reason) + '</span>' : "") +
+        '</div>' +
+        (steps.length
+          ? '<details class="ai-case-steps"><summary>' + steps.length + ' 个步骤（点击核对）</summary><ol>'
+            + steps.map(function(s){
+              return '<li><div class="act">' + esc(s.action) + '</div>'
+                + (s.expected ? '<div class="exp">预期：' + esc(s.expected) + '</div>' : "") + '</li>';
+            }).join("") + '</ol></details>'
+          : '<div class="ai-reason">这条没有步骤，建议取消勾选后手动补充</div>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+  $("aiCaseUsage").textContent = aiUsageText(d.usage);
+}
+function collectAiCaseDrafts(){
+  var nodes = document.querySelectorAll("#aiCaseList .ai-item");
+  var picked = [];
+  for(var i = 0; i < nodes.length; i++){
+    var cb = nodes[i].querySelector("input[type=checkbox]");
+    if(!cb || !cb.checked) continue;
+    var idx = Number(nodes[i].dataset.i);
+    var src = aiCaseDrafts[idx] || {};
+    var titleEl = nodes[i].querySelector(".ai-title");
+    var title = (titleEl ? titleEl.value : src.title || "").trim();
+    if(!title) continue;
+    var priEl = nodes[i].querySelector("[data-pri]");
+    var modEl = nodes[i].querySelector("[data-module]");
+    picked.push({
+      title: title,
+      precondition: src.precondition || "",
+      module: modEl ? modEl.value.trim() : (src.module || ""),
+      priority: priEl ? priEl.value : (src.priority || "P2"),
+      steps: src.steps || [],
+      reason: src.reason || ""
+    });
+  }
+  return picked;
+}
+function applyAiCases(){
+  if(aiCaseApplying) return;
+  var picked = collectAiCaseDrafts();
+  if(!picked.length){ toast("至少选一条要创建的用例", "warn"); return; }
+  var reqId = aiCaseApplyReqId || caseReqId;
+  var btn = $("dlgAiCaseResultOk");
+  aiCaseApplying = true;
+  btn.disabled = true;
+  btn.textContent = "创建中…";
+  API.post("/api/ai/testcases/apply", {
+    reqId: reqId,
+    demandId: aiCaseDemandId || null,
+    cases: picked
+  }).then(function(r){
+    aiCaseApplying = false;
+    btn.disabled = false;
+    btn.textContent = "创建选中用例";
+    UI.closeModal($("dlgAiCaseResult"));
+    var msg = "已创建 " + r.created + " 条用例";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 条同名";
+    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 条失败";
+    toast(msg, r.failed && r.failed.length ? "warn" : "fs");
+    if(r.failed && r.failed.length) console.warn("AI 用例落库失败项", r.failed);
+    if(reqId === caseReqId) loadCases();
+  }).catch(function(ex){
+    aiCaseApplying = false;
+    btn.disabled = false;
+    btn.textContent = "创建选中用例";
+    toast(ex.message || "创建失败", "bad");
+  });
+}
 /* ---------- 执行结果 ---------- */
 
 function openRunDialog(id){
@@ -45259,7 +46791,7 @@ function renderPlanDetail(){
     });
     selBar = '<div class="plan-selbar" data-plan-selbar>'
       + '<label><input type="checkbox" class="cbx" data-plan-select-all aria-label="全选计划内用例" />全选</label>'
-      + '<button class="btn sm ghost" type="button" data-plan-pick-status="none" title="替换当前选择">选未执行 (' + noneN + ')</button>'
+      + '<button class="btn sm ghost" type="button" data-plan-pick-status="none" title="替换当前选择"' + (noneN ? "" : " disabled") + '>选未执行 (' + noneN + ')</button>'
       + (failedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="failed" title="替换当前选择">选失败 (' + failedN + ')</button>' : "")
       + (blockedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="blocked" title="替换当前选择">选阻塞 (' + blockedN + ')</button>' : "")
       + '<button class="btn sm ghost" type="button" data-plan-clear' + (selCount ? "" : " disabled") + '>清除选择</button>'
@@ -45655,6 +47187,31 @@ if(tcViewsBtn && tcViewsMenuEl){
   });
 }
 $("btnCaseNew").addEventListener("click", openNewDialog);
+
+/* AI 生成用例：来源选择 → 进度层 → 草稿勾选 */
+if($("btnCaseAi")) $("btnCaseAi").addEventListener("click", function(){ openAiCaseSource(false); });
+$("aiCaseSourceSeg").addEventListener("click", function(e){
+  var b = e.target.closest("[data-ai-src]");
+  if(!b) return;
+  aiCaseSource = b.dataset.aiSrc;
+  syncAiCaseSource();
+  var sel = aiCaseSource === "doc" ? $("aiCaseDocSel") : $("aiCaseDemandSel");
+  if(sel) sel.focus();
+});
+$("dlgAiCaseSourceX").addEventListener("click", function(){ UI.closeModal($("dlgAiCaseSource")); });
+$("btnAiCaseGenerate").addEventListener("click", generateAiCases);
+$("dlgAiCaseResultCancel").addEventListener("click", function(){ UI.closeModal($("dlgAiCaseResult")); });
+$("dlgAiCaseResultOk").addEventListener("click", applyAiCases);
+$("aiCaseList").addEventListener("change", function(e){
+  var cb = e.target;
+  if(!cb || cb.type !== "checkbox") return;
+  var item = cb.closest(".ai-item");
+  if(item) item.classList.toggle("on", cb.checked);
+});
+UI.setModalCloseGuard($("dlgAiCaseResult"), function(){
+  if(aiCaseApplying) return;
+  UI.closeModal($("dlgAiCaseResult"));
+});
 
 /* 用例 CSV：导出走服务端（含步骤展开），导入读文件后以 JSON 文本提交 */
 $("btnCaseCsvOut").addEventListener("click", exportCasesCsv);
@@ -46278,6 +47835,6 @@ window.__HG_MODULES__["testcases"] = __NS["views/testcases.js"];
 window.__HG_MODULES__["messages"] = __NS["views/messages.js"];
 })();
 </script>
-<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-10 13:45</span></div>
+<div style="position:fixed;left:0;right:0;bottom:var(--app-foot-h,26px);z-index:99999;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1B2430;color:#E8EEF6;font:12.5px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.18)"><strong style="font-weight:700">静态预览稿</strong><span style="opacity:.82">真实 CSS/JS 快照 + 演示数据，不连后端。可看：①看板「待处理」列 8 张卡片（列内滚动、卡片不被压扁）；②「需求」编辑页的 SunEditor（表格/无边框整页书写）；③「周回顾」的「进行中」与「本周完成」。</span><span style="margin-left:auto;opacity:.62">2026-11-11 06:18</span></div>
 </body>
 </html>

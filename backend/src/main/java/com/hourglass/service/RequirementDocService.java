@@ -145,15 +145,20 @@ public class RequirementDocService {
 
     public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String keyword,
                                                           int offset, int limit) {
+        return page(workspaceId, userId, null, keyword, offset, limit);
+    }
+
+    public com.hourglass.dto.PageResult<ReqDocView> page(String workspaceId, String userId, String reqId,
+                                                          String keyword, int offset, int limit) {
         int safeOffset = Math.max(0, offset);
         int safeLimit = Math.max(1, Math.min(100, limit));
         String pattern = likePattern(Texts.trimToNull(keyword));
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         String role = projectAccess.roleOf(workspaceId, userId);
         boolean seeAllDrafts = ProjectAccessService.isPrivileged(role);
-        int total = docMapper.countVisible(workspaceId, pattern, viewerId, userId, seeAllDrafts);
+        int total = docMapper.countVisible(workspaceId, reqId, pattern, viewerId, userId, seeAllDrafts);
         List<ReqDocView> rows = total <= safeOffset ? new java.util.ArrayList<ReqDocView>()
-                : docMapper.selectViewByWorkspace(workspaceId, pattern, viewerId, userId, seeAllDrafts,
+                : docMapper.selectViewByWorkspace(workspaceId, reqId, pattern, viewerId, userId, seeAllDrafts,
                         safeOffset, safeLimit);
         for (ReqDocView v : rows) {
             v.setExcerpt(excerptOf(v.getContentBrief()));

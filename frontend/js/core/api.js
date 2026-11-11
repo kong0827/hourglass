@@ -62,7 +62,7 @@
   var etagOrder = [];
   var ETAG_MAX = 80;
 
-  function request(method, url, body, isForm, skipWorkspace) {
+  function request(method, url, body, isForm, skipWorkspace, externalSignal) {
     url = resolveRoot(url);
     if (!skipWorkspace) url = withWorkspace(url);
     var opts = { method: method, credentials: "same-origin", headers: {} };
@@ -87,15 +87,31 @@
     var timeout = /\/api\/(ai|import|export)(\/|$)/.test(path) ? 180000 : 20000;
     var ctrl = window.AbortController ? new AbortController() : null;
     var timer = null;
+    var timedOut = false;
     if (ctrl) {
+      /* 外部可取消的请求（AI 生成）与内部超时共用同一个 controller：
+         用户取消时 timedOut 仍为 false，调用方据此区分“取消”和“超时” */
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          try { ctrl.abort(); } catch (e) { /* noop */ }
+        } else {
+          externalSignal.addEventListener("abort", function () {
+            try { ctrl.abort(); } catch (e) { /* noop */ }
+          }, { once: true });
+        }
+      }
       opts.signal = ctrl.signal;
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) { /* noop */ } }, timeout);
+      timer = setTimeout(function () {
+        timedOut = true;
+        try { ctrl.abort(); } catch (e) { /* noop */ }
+      }, timeout);
     }
     return fetch(url, opts).catch(function (err) {
       if (timer) { clearTimeout(timer); timer = null; }
       if (err && err.name === "AbortError") {
-        var e = new Error("请求超时，请稍后重试");
+        var e = new Error(timedOut ? "请求超时，请稍后重试" : "已取消");
         e.silent = true;
+        e.aborted = !timedOut;
         throw e;
       }
       /* fetch 只在断网 / DNS / 连接被拒时抛 TypeError，统一转成可读中文，别把英文原文丢到界面 */
@@ -204,6 +220,10 @@
     },
     post: function (path, body) {
       return request("POST", path, body);
+    },
+    /* AI 长请求可取消：signal 由调用方传入，超时仍由 request() 统一兜底 */
+    postWithSignal: function (path, body, signal) {
+      return request("POST", path, body, false, false, signal);
     },
     put: function (path, body) {
       return request("PUT", path, body);

@@ -19,6 +19,10 @@
 .btn.primary:active{background:var(--primary-active);border-color:var(--primary-active);}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--text-2);}
 .btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+/* AI 动作：在工具条里保持 ghost 的轻量，但用主题色和图标明确区分 */
+.btn.ghost.ai-action{color:var(--primary-fg);}
+.btn.ghost.ai-action:hover{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.btn.ghost.ai-action [data-icon]{display:inline-flex;align-items:center;vertical-align:-2px;}
 .btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
 .btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);}
 .btn.danger{background:var(--surface);border-color:var(--danger-border);color:var(--danger-fg);}
@@ -888,6 +892,21 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .sheet.xs{max-width:400px;}
 .sheet.sm{max-width:480px;}
+/* AI 长请求：进度条只表示“还在跑”，不假装知道百分比 */
+.ai-progress-dlg{padding:20px;}
+.ai-progress-dlg h3{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+.ai-progress-desc{margin-top:6px;font-size:13px;line-height:19px;color:var(--text-2);}
+.ai-progress-track{position:relative;height:6px;margin-top:16px;border-radius:99px;overflow:hidden;background:var(--surface-sunken);}
+.ai-progress-track i{position:absolute;top:0;bottom:0;width:38%;border-radius:inherit;
+  background:linear-gradient(90deg,transparent,var(--primary),transparent);
+  animation:ai-progress-slide 1.3s var(--ease-out) infinite;}
+.ai-progress-dlg:not(.busy) .ai-progress-track i{animation-play-state:paused;opacity:.4;}
+@keyframes ai-progress-slide{from{transform:translateX(-110%);}to{transform:translateX(290%);}}
+.ai-progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:12px;color:var(--text-3);min-height:18px;}
+.ai-progress-meta #aiProgressHint{text-align:right;}
+.ai-progress-error{margin-top:12px;padding:10px 12px;border:1px solid var(--danger-border);border-radius:var(--r-sm);
+  background:var(--danger-soft);color:var(--danger-fg);font-size:12.5px;line-height:18px;}
+.ai-progress-dlg .reqdoc-dlg-foot{margin-top:16px;}
 /* 宽表格类弹框（任务明细下钻等）：列多时 480px 会截断表格 */
 .sheet.md{max-width:none;width:min(720px,94vw);}
 .sheet.wide{max-width:none;width:min(1080px,94vw);}

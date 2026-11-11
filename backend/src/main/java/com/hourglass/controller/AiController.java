@@ -5,15 +5,19 @@ import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.AiApplyRequest;
 import com.hourglass.dto.AiApplyResult;
 import com.hourglass.dto.AiAuditResponse;
+import com.hourglass.dto.AiCaseApplyRequest;
 import com.hourglass.dto.AiConfigRequest;
 import com.hourglass.dto.AiConfigView;
 import com.hourglass.dto.AiReviewRequest;
 import com.hourglass.dto.AiReviewResponse;
 import com.hourglass.dto.AiSplitResponse;
+import com.hourglass.dto.AiTestCaseRequest;
+import com.hourglass.dto.AiTestCaseResponse;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.AiConfigService;
 import com.hourglass.service.AiReqDocService;
 import com.hourglass.service.AiReviewService;
+import com.hourglass.service.AiTestCaseService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,8 +26,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import javax.validation.Valid;
 
 import javax.validation.Valid;
 import java.util.Map;
@@ -43,13 +45,16 @@ public class AiController {
     private final AiConfigService configService;
     private final AiReqDocService reqDocService;
     private final AiReviewService reviewService;
+    private final AiTestCaseService testCaseService;
     private final WorkspaceService workspaceService;
 
     public AiController(AiConfigService configService, AiReqDocService reqDocService,
-                        AiReviewService reviewService, WorkspaceService workspaceService) {
+                        AiReviewService reviewService, AiTestCaseService testCaseService,
+                        WorkspaceService workspaceService) {
         this.configService = configService;
         this.reqDocService = reqDocService;
         this.reviewService = reviewService;
+        this.testCaseService = testCaseService;
         this.workspaceService = workspaceService;
     }
 
@@ -97,6 +102,24 @@ public class AiController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(reqDocService.applyTasks(userId, ws.getId(), id, req.getTasks()));
+    }
+
+    /** 从需求文档或需求池条目生成测试用例草稿（不落库） */
+    @PostMapping("/api/ai/testcases/generate")
+    public ApiResult<AiTestCaseResponse> generateCases(@Valid @RequestBody AiTestCaseRequest req,
+                                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(testCaseService.generate(userId, ws.getId(), req));
+    }
+
+    /** 把勾选的用例草稿创建成正式用例（逐条处理，同名跳过） */
+    @PostMapping("/api/ai/testcases/apply")
+    public ApiResult<AiApplyResult> applyCases(@Valid @RequestBody AiCaseApplyRequest req,
+                                               @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(testCaseService.applyCases(userId, ws.getId(), req));
     }
 
     /**
