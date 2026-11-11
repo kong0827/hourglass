@@ -91,6 +91,40 @@ public class GlobalExceptionHandler {
         log.debug("异步请求超时（SSE 正常断开）：{} {}", request.getMethod(), request.getRequestURI());
     }
 
+    /**
+     * SSE 心跳写到已断开的连接时，容器在异步写回线程抛出 IOException（Broken pipe）。
+     * 这不是服务端故障，降为 debug；其余 IOException 仍按未处理异常返回 500。
+     */
+    @ExceptionHandler(java.io.IOException.class)
+    public Object handleIo(java.io.IOException e, HttpServletRequest request) {
+        markFailed(request);
+        if (isClientAbort(e)) {
+            log.debug("客户端已断开：{} {} - {}", request.getMethod(), request.getRequestURI(), e.getMessage());
+            return null;
+        }
+        log.error("未处理异常：{} {}", request.getMethod(), request.getRequestURI(), e);
+        return ResponseEntity.status(500).body(ApiResult.error(500, "服务内部错误"));
+    }
+
+    private static boolean isClientAbort(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current.getClass().getName().endsWith("ClientAbortException")) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && (message.contains("Broken pipe") || message.contains("Connection reset"))) {
+                return true;
+            }
+            Throwable cause = current.getCause();
+            if (cause == current) {
+                return false;
+            }
+            current = cause;
+        }
+        return false;
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResult<Void>> handleOther(Exception e, HttpServletRequest request) {
         markFailed(request);

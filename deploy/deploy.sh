@@ -409,7 +409,7 @@ for f in $(find sql -maxdepth 1 -name '*.sql' 2>/dev/null | sort); do
 done
 
 HAS_BACKEND=0
-if printf '%s\n' "$CHANGED_ALL" | grep -qE '(^|/)src/.*\.(java|xml)$|pom\.xml$'; then HAS_BACKEND=1; fi
+if printf '%s\n' "$CHANGED_ALL" | grep -qE '(^|/)src/.*\.(java|xml|yml|yaml|properties)$|pom\.xml$'; then HAS_BACKEND=1; fi
 HAS_FRONTEND=0
 if printf '%s\n' "$CHANGED_ALL" | grep -qE '(^|/)frontend/'; then HAS_FRONTEND=1; fi
 
