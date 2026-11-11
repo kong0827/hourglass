@@ -122,6 +122,9 @@
   color:var(--text-3);font-size:12.5px;font-weight:550;flex:0 0 auto;
 }
 .side-logout:hover{background:var(--danger-soft);color:var(--danger-fg);}
+/* 底栏只留图标（文案见 title/aria-label）：240px 侧栏里两段文案会把用户名挤成省略号 */
+.side-foot .side-logout .nl{display:none;}
+.side-foot .side-logout{padding:0 6px;}
 #sideSettings:hover{background:var(--surface-hover);color:var(--text);}
 #sideSettings.on{background:var(--primary-soft);color:var(--primary-fg);}
 
@@ -401,7 +404,8 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
 
 /* 侧边栏收起/展开按钮：压在中缝上（VS Code 那种位置），收起态箭头翻转 */
 .rail-btn{
-  position:absolute;top:16px;right:-13px;z-index:6;
+  /* 压在侧栏中缝上，必须高于顶栏（40）才不会被切掉右半边 */
+  position:absolute;top:16px;right:-13px;z-index:45;
   width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
   background:var(--surface);border:1px solid var(--border);
   color:var(--text-3);cursor:pointer;box-shadow:var(--shadow-sm);

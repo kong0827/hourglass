@@ -183,8 +183,8 @@ function renderMessagesPage(){
   var unread = notifyState.unread || 0;
   var top = view ? (view.scrollTop || 0) : 0;
   box.innerHTML =
+    /* 页面标题（顶栏）已经写明「消息 / 站内通知与截止提醒」，卡头不再重复一遍 */
     '<div class="msg-page-head">' +
-      '<div><h2>消息中心</h2><p>站内通知与截止提醒</p></div>' +
       '<span class="spacer"></span>' +
       '<button class="btn sm" type="button" data-ap-readall' + (unread > 0 ? '' : ' disabled') + '>一键全部已读</button>' +
     '</div>' +

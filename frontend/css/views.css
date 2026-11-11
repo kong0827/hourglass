@@ -2129,9 +2129,10 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .set-tab:hover{color:var(--text);background:var(--surface-hover);}
 .set-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
 @media (max-width:780px){
-  .set-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;}
-  .set-tabs::-webkit-scrollbar{display:none;}
-  .set-tab{flex:0 0 auto;}
+  /* 窄屏改为可换行的胶囊页签：5–6 个分区平铺会超出屏幕，横滑又看不出还有内容 */
+  .set-tabs{flex-wrap:wrap;overflow:visible;gap:6px;border-bottom:none;padding:8px 0 6px;}
+  .set-tab{flex:0 0 auto;height:32px;padding:0 12px;border-radius:999px;background:var(--surface-sunken);border-bottom:none;}
+  .set-tab.on{background:var(--primary-soft);color:var(--primary-fg);}
 }
 #view-settings [data-set-pane][hidden]{display:none;}
 #view-settings [data-platform-sub][hidden]{display:none;}
@@ -2881,6 +2882,10 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 @media (max-width:620px){
   /* 窄屏保留「状态」：缺陷 tab 最需要先看修到哪一步，版本/关联用例/更新时间让位 */
   .tc-def-head,.tc-def-row{grid-template-columns:58px minmax(0,1fr) 74px;}
+  /* 三行 1fr 网格在窄屏会把行撑到 170px：改为普通纵排，行高回到内容高度 */
+  .tc-def-main{display:flex;flex-direction:column;justify-content:center;gap:2px;}
+  .tc-def-title,.tc-def-sub{grid-row:auto;}
+  .tc-def-sub{margin-top:0;}
   .tc-def-head > :nth-child(4),.tc-def-row > :nth-child(4),
   .tc-def-head > :nth-child(5),.tc-def-row > :nth-child(5),
   .tc-def-head > :nth-child(6),.tc-def-row > :nth-child(6),

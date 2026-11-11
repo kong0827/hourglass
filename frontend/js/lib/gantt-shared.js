@@ -61,6 +61,23 @@
   }
 
   /* ==================== 表头 HTML ==================== */
+  /* 轴末尾常常只落几天，月格只有 20–30px：按可用宽度退成「1月」/「1」，
+     避免 "2027年1月" 被 overflow:hidden 从中间裁断。 */
+  function estTextW(s){
+    var w = 0;
+    for(var i = 0; i < s.length; i++){
+      w += s.charCodeAt(i) > 255 ? 11 : 6.2;
+    }
+    return w;
+  }
+  function fitMonthLabel(width, full, shortLabel){
+    if(estTextW(full) <= width - 16) return { text: full, cls: "" };
+    if(estTextW(shortLabel) <= width - 16) return { text: shortLabel, cls: "" };
+    if(estTextW(shortLabel) <= width - 4) return { text: shortLabel, cls: " is-compact" };
+    var num = String(parseInt(shortLabel, 10));
+    if(estTextW(num) <= width - 4) return { text: num, cls: " is-compact" };
+    return { text: "", cls: " is-compact" };
+  }
   function monthsHTML(range, dayW) {
     var out = "";
     var cur = new Date(range.start.getFullYear(), range.start.getMonth(), 1);
@@ -75,7 +92,8 @@
       var label = (first || cur.getMonth() === 0)
         ? (cur.getFullYear() + "年" + (cur.getMonth() + 1) + "月")
         : ((cur.getMonth() + 1) + "月");
-      out += '<span class="gantt-month" style="width:' + w + 'px">' + label + '</span>';
+      var fit = fitMonthLabel(w, label, (cur.getMonth() + 1) + "月");
+      out += '<span class="gantt-month' + fit.cls + '" style="width:' + w + 'px" title="' + label + '">' + fit.text + '</span>';
       first = false;
       cur = next;
     }
@@ -125,7 +143,9 @@
       var to = addDays(next, -1);
       if (to > range.end) to = range.end;
       var w = (dayDiff(to, from) + 1) * dayW;
-      out += '<span class="gantt-month" style="width:' + w + 'px">' + (cur.getMonth() + 1) + ' 月</span>';
+      var shortLabel = (cur.getMonth() + 1) + "月";
+      var fit = fitMonthLabel(w, (cur.getMonth() + 1) + " 月", shortLabel);
+      out += '<span class="gantt-month' + fit.cls + '" style="width:' + w + 'px" title="' + shortLabel + '">' + fit.text + '</span>';
       cur = next;
     }
     return out;

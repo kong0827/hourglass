@@ -713,11 +713,11 @@ body.mob-sheet-open{overflow:hidden;}
 
 /* ===================== 测试用例：筛选收进面板 ===================== */
 [data-layout="mobile"] .tc-filter-toggle{display:inline-flex;}
-[data-layout="mobile"] .tc-actionbar{order:1;gap:6px;}
+[data-layout="mobile"] .tc-actionbar{order:1;gap:6px;flex-wrap:wrap;justify-content:flex-end;width:100%;}
 [data-layout="mobile"] .tc-actionbar #btnCaseCsvOut,
 [data-layout="mobile"] .tc-actionbar #btnCaseCsvIn,
 [data-layout="mobile"] .tc-actionbar [data-view-fullscreen]{display:none !important;}
-[data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 auto;min-width:0;max-width:150px;}
+[data-layout="mobile"] .tc-actionbar #tcReq{flex:1 1 130px;min-width:110px;max-width:none;}
 [data-layout="mobile"] .tc-filterbar{display:none;}
 [data-layout="mobile"] .tc-filterbar.is-open{  display:flex;flex:1 0 100%;order:2;flex-direction:column;align-items:stretch;gap:8px;
   padding:12px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-sunken);

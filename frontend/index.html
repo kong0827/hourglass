@@ -1943,7 +1943,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="integration" id="set-notify">
+            <div class="panel" data-set-pane="integration" id="set-notify" hidden>
               <div class="panel-head">
                 <h3>通知推送</h3>
                 <span class="meta-right">服务端推送渠道</span>
@@ -2015,7 +2015,7 @@
               <p class="me-preview" id="mailResult" hidden></p>
             </div>
 
-            <div class="panel" data-set-pane="members" id="set-members">
+            <div class="panel" data-set-pane="members" id="set-members" hidden>
               <div class="panel-head">
                 <h3>成员与角色</h3>
                 <button class="btn sm perm-guide-btn" type="button" id="btnRoleGuide" title="查看各角色可执行的操作与可见菜单" aria-haspopup="dialog">角色权限说明</button>
@@ -2055,7 +2055,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="members" id="set-access">
+            <div class="panel" data-set-pane="members" id="set-access" hidden>
               <div class="panel-head">
                 <h3>项目可见范围</h3>
                 <span class="meta-right" id="accessSummary"></span>
@@ -2066,7 +2066,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-columns">
+            <div class="panel" data-set-pane="workflow" id="set-columns" hidden>
               <div class="panel-head">
                 <h3>看板列</h3>
                 <span class="meta-right">用箭头调整顺序</span>
@@ -2104,7 +2104,7 @@
               <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-transitions">
+            <div class="panel" data-set-pane="workflow" id="set-transitions" hidden>
               <div class="panel-head">
                 <h3>状态流转</h3>
                 <span class="meta-right" id="colTransSummary"></span>
@@ -2123,7 +2123,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-priorities">
+            <div class="panel" data-set-pane="workflow" id="set-priorities" hidden>
               <div class="panel-head">
                 <h3>优先级</h3>
                 <span class="meta-right">固定四档 · 仅改显示</span>
@@ -2137,7 +2137,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="workflow" id="set-categories">
+            <div class="panel" data-set-pane="workflow" id="set-categories" hidden>
               <div class="panel-head">
                 <h3>模块</h3>
                 <span class="meta-right" id="wsCatCount"></span>
@@ -2156,7 +2156,7 @@
               <p class="foot-note" id="wsCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
             </div>
 
-            <div class="panel" data-set-pane="data" id="set-data">
+            <div class="panel" data-set-pane="data" id="set-data" hidden>
               <div class="panel-head"><h3>数据</h3></div>
               <div class="data-actions" style="margin-top:0">
                 <button class="btn" type="button" id="btnExport" title="导出任务数据：工作项、回收站、项目、子任务、标签、工时、评论、依赖/基线、文档与分支（不含附件文件与时间线）">
@@ -2186,7 +2186,7 @@
               <p class="foot-note" id="wsFootHint" style="margin-top:6px">删除列/模块、清空任务数据、导入覆盖仅空间主可操作</p>
             </div>
 
-            <div class="panel" data-set-pane="data" id="set-activity">
+            <div class="panel" data-set-pane="data" id="set-activity" hidden>
               <div class="panel-head">
                 <h3>活动</h3>
                 <span class="meta-right" id="actCount"></span>
@@ -2296,7 +2296,7 @@
               </div>
             </div>
 
-            <div class="panel" data-set-pane="data" id="set-trash">
+            <div class="panel" data-set-pane="data" id="set-trash" hidden>
                           <div class="panel-head"><h3>回收站</h3><span class="meta-right">30 天自动清理</span></div>
                           <p class="set-hint">删除的工作项保留 30 天，之后自动清理；恢复后回到原看板列，彻底删除不可找回。</p>
                           <div class="trash-list" id="trashList"></div>

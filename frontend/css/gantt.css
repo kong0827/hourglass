@@ -106,8 +106,10 @@
 .gantt-month{
   flex:0 0 auto;display:flex;align-items:center;padding:0 8px;
   border-right:1px solid var(--border);border-bottom:1px solid var(--border);
-  font-size:11px;font-weight:650;color:var(--text-2);white-space:nowrap;overflow:hidden;
+  font-size:11px;font-weight:650;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* 轴末尾的月格只有几天宽：缩字号和内边距，保住「1月」而不是裁成半个字 */
+.gantt-month.is-compact{padding:0 2px;font-size:10px;letter-spacing:-.02em;}
 .gantt-days{display:flex;height:26px;background:var(--surface);}
 .gantt-day{
   flex:0 0 auto;display:grid;place-items:center;

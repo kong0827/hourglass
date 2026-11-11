@@ -5,8 +5,8 @@
 
 /* ---------- 悬浮入口 ---------- */
 .ai-fab{
-  /* 低于弹窗遮罩（200），弹窗打开时跟着页面一起被盖住 */
-  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:190;
+  /* 低于抽屉（120）与弹窗遮罩（200）：抽屉/弹窗打开时入口跟着页面一起被盖住 */
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:100;
   display:grid;place-items:center;width:48px;height:48px;padding:0;border-radius:50%;
   background:var(--primary);color:#fff;box-shadow:var(--shadow-lg);
   transition:transform var(--dur-base) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);
@@ -19,7 +19,8 @@
 
 /* ---------- 面板 ---------- */
 .ai-panel{
-  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h) + 60px);z-index:280;
+  /* 面板必须低于抽屉（120）和弹窗（200）：否则会盖住选版本、新建用例等弹框 */
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h) + 60px);z-index:115;
   display:flex;flex-direction:column;
   width:min(420px,calc(100vw - 32px));
   height:min(620px,calc(100vh - 150px));
