@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, "docs")
 FRONTEND = os.path.join(ROOT, "frontend")
-BASELINE = os.path.join(ROOT, "sql", "baseline", "01_schema_full.sql")
+SCHEMA = os.path.join(ROOT, "sql", "01_schema.sql")
 
 # 前端帮助中心使用 user-guide.md 作为手册文件名，其余内容应与 docs 副本一致。
 COPY_PAIRS = [
@@ -89,11 +89,11 @@ def check_links(issues):
 
 
 def check_table_count(issues):
-    schema = read(BASELINE)
+    schema = read(SCHEMA)
     actual = len(re.findall(r"^CREATE TABLE", schema, re.M))
     header = re.search(r"\((\d+) tables?\)", schema[:1200])
     if header and int(header.group(1)) != actual:
-        issues.append("基线表数量口径不一致：头部写 %s，实际 CREATE TABLE %d" % (header.group(1), actual))
+        issues.append("01_schema.sql 表数量口径不一致：头部写 %s，实际 CREATE TABLE %d" % (header.group(1), actual))
 
     checks = [
         ("README.md", r"(\d+) 张表"),
@@ -110,7 +110,7 @@ def check_table_count(issues):
         if not m:
             issues.append("%s 未找到表数量口径" % rel)
         elif int(m.group(1)) != actual:
-            issues.append("%s 表数量写 %s，基线实际 %d" % (rel, m.group(1), actual))
+            issues.append("%s 表数量写 %s，sql/01_schema.sql 实际 %d" % (rel, m.group(1), actual))
 
 
 def main():

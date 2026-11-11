@@ -1,14 +1,14 @@
 -- ============================================================================
--- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-10: full schema after migrations 01-66 (54 tables).
+-- sql/01_schema.sql · 沙漏 Hourglass 全量 DDL（MySQL 8，utf8mb4）
+-- Updated 2026-11-10: 三文件体系（01 全量结构 / 02 基础数据 / 03 种子数据）。
 --
--- 完整结构与 sql/01-66 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与）；不包含历史业务数据回填。
--- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
+-- 包含全部 52 张表的结构、索引与全文索引，不含任何业务数据。
+-- 执行顺序：01_schema.sql → 02_init_data.sql（可选）→ 03_seed_data.sql（可选）。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
 --   在已有同名库的机器上做验证，必须先把下方 USE 行改成临时库名，否则会清空现有库表。
 -- 执行（需 root 或具 CREATE USER / GRANT 权限的账号）：
---   mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
+--   mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema.sql
 -- ============================================================================
 
 -- 0. 建库 + 应用账号
@@ -44,8 +44,6 @@ USE hourglass;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 DROP TABLE IF EXISTS `app_notification`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `app_notification` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '通知ID',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '收件人用户ID',
@@ -65,10 +63,7 @@ CREATE TABLE `app_notification` (
   KEY `idx_user_ref_type` (`user_id`,`ref_task_id`,`type`,`created_at`),
   KEY `idx_user_ref` (`user_id`,`ref_kind`,`ref_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用内通知';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `app_user`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `app_user` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户ID',
   `username` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '登录名',
@@ -92,10 +87,7 @@ CREATE TABLE `app_user` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `attachment`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `attachment` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '附件ID',
   `target_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属目标ID（任务/需求池需求）',
@@ -110,10 +102,7 @@ CREATE TABLE `attachment` (
   KEY `idx_target` (`target_id`),
   KEY `idx_ws_target` (`workspace_id`,`target_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务附件';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `audit_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `audit_log` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '日志ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '归属空间ID；登录等系统事件为空',
@@ -132,11 +121,8 @@ CREATE TABLE `audit_log` (
   KEY `idx_ws_created` (`workspace_id`,`created_at`),
   KEY `idx_actor` (`actor_id`,`id`),
   KEY `idx_action_time` (`action`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=370 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统审计日志（安全事件最小集）';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统审计日志（安全事件最小集）';
 DROP TABLE IF EXISTS `board_column`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `board_column` (
   `id` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -147,10 +133,7 @@ CREATE TABLE `board_column` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`workspace_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='看板列配置（每个空间一套）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `column_transition`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `column_transition` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `from_column` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '来源列ID',
@@ -160,10 +143,7 @@ CREATE TABLE `column_transition` (
   PRIMARY KEY (`workspace_id`,`from_column`,`to_column`),
   KEY `idx_ws_to` (`workspace_id`,`to_column`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='看板列状态流转规则（每空间一份）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `category`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `category` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -175,10 +155,7 @@ CREATE TABLE `category` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ws_proj_name` (`workspace_id`,`project_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目模块（按项目）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `demand`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `demand` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -210,10 +187,7 @@ CREATE TABLE `demand` (
   KEY `idx_ws_category_id` (`workspace_id`,`category_id`),
   KEY `idx_version` (`version_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求池（评审状态机）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `demand_doc_link`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `demand_doc_link` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求池需求ID（demand.id）',
@@ -223,10 +197,7 @@ CREATE TABLE `demand_doc_link` (
   PRIMARY KEY (`workspace_id`,`demand_id`,`doc_id`),
   KEY `idx_ddl_doc` (`workspace_id`,`doc_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求池需求 ↔ 文档关联';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `demand_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `demand_log` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -238,11 +209,8 @@ CREATE TABLE `demand_log` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
   PRIMARY KEY (`id`),
   KEY `idx_ws_demand` (`workspace_id`,`demand_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=496 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求流转日志';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求流转日志';
 DROP TABLE IF EXISTS `dev_branch`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `dev_branch` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -267,10 +235,7 @@ CREATE TABLE `dev_branch` (
   KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
   KEY `idx_branch_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支（空间级分支池，可归属项目）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `dev_branch_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `dev_branch_log` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '日志ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -286,10 +251,7 @@ CREATE TABLE `dev_branch_log` (
   KEY `idx_branch` (`branch_id`,`created_at`),
   KEY `idx_ws` (`workspace_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支状态变更记录（时间线）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `gantt_share`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `gantt_share` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间',
   `token` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分享令牌（URL 参数）',
@@ -298,10 +260,7 @@ CREATE TABLE `gantt_share` (
   PRIMARY KEY (`workspace_id`),
   UNIQUE KEY `uk_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='甘特图只读分享';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `invite`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invite` (
   `id` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邀请码（10 位大写字母数字）',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -312,24 +271,7 @@ CREATE TABLE `invite` (
   PRIMARY KEY (`id`),
   KEY `idx_ws` (`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间邀请链接';
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `invite_project_grant`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `invite_project_grant` (
-  `invite_id` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邀请码',
-  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
-  `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
-  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '预分配权限：write/read',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`invite_id`,`project_id`),
-  KEY `idx_ipg_ws` (`workspace_id`),
-  KEY `idx_ipg_project` (`project_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邀请链接预分配的项目权限';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `mail_delivery`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `mail_delivery` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `recipient` varchar(254) NOT NULL,
@@ -347,10 +289,7 @@ CREATE TABLE `mail_delivery` (
   KEY `idx_mail_delivery_due` (`status`,`next_attempt_at`,`id`),
   KEY `idx_mail_delivery_reference` (`event_type`,`reference_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='事件邮件持久化 outbox';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `mail_setting`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `mail_setting` (
   `id` tinyint NOT NULL DEFAULT '1' COMMENT '固定为 1，全局单行',
   `enabled` tinyint(1) NOT NULL DEFAULT '0',
@@ -363,25 +302,19 @@ CREATE TABLE `mail_setting` (
   PRIMARY KEY (`id`),
   CONSTRAINT `chk_mail_setting_singleton` CHECK ((`id` = 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全局 SMTP 配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `project_member`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `project_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员账号ID',
-  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/write（历史 pm/dev/qa 归一为默认参与）',
+  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/pm/dev/qa',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`workspace_id`,`project_id`,`user_id`),
   KEY `idx_pm_user` (`workspace_id`,`user_id`),
   KEY `idx_pm_project` (`workspace_id`,`project_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目级成员可见范围';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `project_version`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `project_version` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '版本ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -399,10 +332,7 @@ CREATE TABLE `project_version` (
   UNIQUE KEY `uk_req_version_name` (`req_id`,`name`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目版本';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `req_doc_comment`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `req_doc_comment` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -415,10 +345,7 @@ CREATE TABLE `req_doc_comment` (
   PRIMARY KEY (`id`),
   KEY `idx_doc_created` (`doc_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档评论';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `req_doc_share`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `req_doc_share` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间',
   `doc_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
@@ -428,10 +355,7 @@ CREATE TABLE `req_doc_share` (
   PRIMARY KEY (`workspace_id`,`doc_id`),
   UNIQUE KEY `uk_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求文档只读分享';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `requirement`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `requirement` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -450,10 +374,7 @@ CREATE TABLE `requirement` (
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_ws_owner` (`workspace_id`,`owner_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目（原需求）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `requirement_doc`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `requirement_doc` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -478,10 +399,7 @@ CREATE TABLE `requirement_doc` (
   KEY `idx_doc_parent` (`workspace_id`,`req_id`,`parent_id`),
   FULLTEXT KEY `ft_doc_fulltext` (`title`,`content_brief`,`content`) /*!50100 WITH PARSER `ngram` */ 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求（项目下的需求文档）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `requirement_doc_history`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `requirement_doc_history` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '快照ID',
   `doc_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '文档ID（requirement_doc.id）',
@@ -497,10 +415,7 @@ CREATE TABLE `requirement_doc_history` (
   KEY `idx_history_doc` (`doc_id`,`version_no`),
   KEY `idx_history_ws` (`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档历史快照（查看与恢复旧版本）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `saved_view`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `saved_view` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '视图ID',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属用户ID',
@@ -511,10 +426,7 @@ CREATE TABLE `saved_view` (
   PRIMARY KEY (`id`),
   KEY `idx_user_ws` (`user_id`,`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='保存的筛选视图';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `subtask`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subtask` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '子任务ID',
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属任务ID',
@@ -526,11 +438,8 @@ CREATE TABLE `subtask` (
   PRIMARY KEY (`id`),
   KEY `idx_task` (`task_id`,`id`),
   KEY `idx_ws_task` (`workspace_id`,`task_id`,`done`)
-) ENGINE=InnoDB AUTO_INCREMENT=1957 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='子任务（检查清单）';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='子任务（检查清单）';
 DROP TABLE IF EXISTS `tag`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tag` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标签ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -539,10 +448,7 @@ CREATE TABLE `tag` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ws_name` (`workspace_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='标签（按空间唯一）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID（沿用前端生成的字符串ID）',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -575,8 +481,6 @@ CREATE TABLE `task` (
   `blocked_by_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '等待的任务ID（可选的依赖关系）',
   `note` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度备注',
   `completed_at` date DEFAULT NULL COMMENT '完成日期',
-  `test_started_at` date DEFAULT NULL COMMENT '进入测试中的日期（新一轮测试重新记录）',
-  `test_finished_at` date DEFAULT NULL COMMENT '离开测试中的日期：测试通过或退回',
   `published_at` date DEFAULT NULL,
   `publish_source` varchar(16) DEFAULT NULL,
   `published_release_id` varchar(32) DEFAULT NULL,
@@ -615,10 +519,7 @@ CREATE TABLE `task` (
   KEY `idx_epic` (`epic_id`),
   KEY `idx_demand` (`demand_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_baseline`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_baseline` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间',
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
@@ -627,10 +528,7 @@ CREATE TABLE `task_baseline` (
   `captured_at` datetime NOT NULL COMMENT '快照时间',
   PRIMARY KEY (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='甘特图基线快照';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_comment`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_comment` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '评论ID',
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属任务ID',
@@ -643,11 +541,8 @@ CREATE TABLE `task_comment` (
   KEY `idx_task` (`task_id`,`id`),
   KEY `idx_ws` (`workspace_id`,`id`),
   KEY `idx_ws_task` (`workspace_id`,`task_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=142 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务评论';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务评论';
 DROP TABLE IF EXISTS `task_completion_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_completion_record` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -671,11 +566,8 @@ CREATE TABLE `task_completion_record` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ws_task` (`workspace_id`,`task_id`),
   KEY `idx_ws_completed` (`workspace_id`,`completed_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=1429 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务完成快照（月度统计用）';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务完成快照（月度统计用）';
 DROP TABLE IF EXISTS `task_dependency`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_dependency` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '依赖ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间',
@@ -689,10 +581,7 @@ CREATE TABLE `task_dependency` (
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_to` (`to_task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务依赖（甘特图）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_log` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '日志ID',
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
@@ -710,11 +599,8 @@ CREATE TABLE `task_log` (
   KEY `idx_ws_action_time` (`workspace_id`,`action`,`created_at`),
   KEY `idx_ws_created` (`workspace_id`,`created_at`),
   KEY `idx_ws_task_created` (`workspace_id`,`task_id`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=1696 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务操作日志（时间线）';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务操作日志（时间线）';
 DROP TABLE IF EXISTS `task_tag`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_tag` (
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
   `tag_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标签ID',
@@ -723,10 +609,7 @@ CREATE TABLE `task_tag` (
   KEY `idx_tag` (`tag_id`),
   KEY `idx_ws_task` (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务-标签关联';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_watch`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_watch` (
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -736,10 +619,7 @@ CREATE TABLE `task_watch` (
   KEY `idx_watch_user` (`user_id`,`workspace_id`),
   KEY `idx_watch_ws_task` (`workspace_id`,`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务关注人';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_case`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `test_case` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -763,10 +643,7 @@ CREATE TABLE `test_case` (
   KEY `idx_demand` (`demand_id`),
   KEY `idx_bug` (`latest_bug_task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例（项目下，展示最近一轮执行结果）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_case_run`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `test_case_run` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行记录ID',
   `case_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用例ID（test_case.id）',
@@ -783,10 +660,7 @@ CREATE TABLE `test_case_run` (
   KEY `idx_ws` (`workspace_id`),
   KEY `idx_plan` (`plan_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用例执行流水（每次执行一行）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_module`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `test_module` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -798,10 +672,7 @@ CREATE TABLE `test_module` (
   UNIQUE KEY `uk_ws_req_name` (`workspace_id`,`req_id`,`name`),
   KEY `idx_ws_req` (`workspace_id`,`req_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目测试模块（模板预置 + 手动维护）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_plan`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `test_plan` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '计划ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -820,10 +691,7 @@ CREATE TABLE `test_plan` (
   KEY `idx_ws_req` (`workspace_id`,`req_id`),
   KEY `idx_ws_status` (`workspace_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划（项目下的回归/迭代容器）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `test_plan_case`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `test_plan_case` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '关联ID',
   `plan_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属计划ID（test_plan.id）',
@@ -838,10 +706,7 @@ CREATE TABLE `test_plan_case` (
   UNIQUE KEY `uk_plan_case` (`plan_id`,`case_id`),
   KEY `idx_case` (`case_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试计划圈选用例（含计划内最近结果）';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `time_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `time_log` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '记录ID',
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
@@ -859,11 +724,8 @@ CREATE TABLE `time_log` (
   KEY `idx_ws_started` (`workspace_id`,`started_at`),
   KEY `idx_user_started` (`user_id`,`started_at`),
   KEY `idx_ws_task_started` (`workspace_id`,`task_id`,`started_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=3676 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工时记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工时记录';
 DROP TABLE IF EXISTS `user_list_preference`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_list_preference` (
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
@@ -873,10 +735,7 @@ CREATE TABLE `user_list_preference` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`user_id`,`workspace_id`,`view_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户列表视图与显示列偏好';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `user_notification_preference`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_notification_preference` (
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `event_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'task_assigned/task_updated/task_comment/demand_status',
@@ -885,10 +744,7 @@ CREATE TABLE `user_notification_preference` (
   PRIMARY KEY (`user_id`,`event_type`),
   CONSTRAINT `fk_unp_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人事件通知偏好';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `version_task`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `version_task` (
   `task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID，显式多版本规划关联',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -898,10 +754,7 @@ CREATE TABLE `version_task` (
   KEY `idx_version` (`workspace_id`,`version_id`,`task_id`),
   KEY `idx_task` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='版本任务关联';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `work_activity`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `work_activity` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -914,11 +767,8 @@ CREATE TABLE `work_activity` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_ws_entity_id` (`workspace_id`,`entity_type`,`entity_id`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=370 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务实体活动轨迹';
-/*!40101 SET character_set_client = @saved_cs_client */;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务实体活动轨迹';
 DROP TABLE IF EXISTS `workspace`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `workspace` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID（个人空间为 W+用户ID）',
   `name` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间名称',
@@ -936,23 +786,16 @@ CREATE TABLE `workspace` (
   PRIMARY KEY (`id`),
   KEY `idx_owner` (`owner_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `workspace_member`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `workspace_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员用户ID',
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member' COMMENT '空间角色：owner/admin/member/viewer',
-  `project_access_mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'all' COMMENT '项目参与模式：all=默认参与；assigned=按项目分配',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
   PRIMARY KEY (`workspace_id`,`user_id`),
   KEY `idx_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间成员';
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `workspace_priority`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `workspace_priority` (
   `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '配置ID',
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
@@ -963,8 +806,6 @@ CREATE TABLE `workspace_priority` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `version_release_plan_version`;
 DROP TABLE IF EXISTS `version_release_plan`;
 CREATE TABLE `version_release_plan` (
   `id` varchar(32) NOT NULL,
@@ -988,18 +829,6 @@ CREATE TABLE `version_release_plan` (
   KEY `idx_plan_workspace` (`workspace_id`,`status`),
   CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-DROP TABLE IF EXISTS `version_release_plan_version`;
-CREATE TABLE `version_release_plan_version` (
-  `workspace_id` varchar(32) NOT NULL,
-  `plan_id` varchar(32) NOT NULL,
-  `version_id` varchar(32) NOT NULL,
-  `req_id` varchar(32) NOT NULL,
-  PRIMARY KEY (`plan_id`,`version_id`),
-  KEY `idx_plan_version_scope` (`workspace_id`,`version_id`),
-  KEY `idx_plan_version_project` (`workspace_id`,`req_id`),
-  CONSTRAINT `fk_plan_version_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_plan_version_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布计划包含的版本（多版本/多项目）';
 DROP TABLE IF EXISTS `version_release_plan_task`;
 CREATE TABLE `version_release_plan_task` (
   `workspace_id` varchar(32) NOT NULL,

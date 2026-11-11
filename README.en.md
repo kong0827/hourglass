@@ -87,10 +87,10 @@ Other tools also provide requirements, time tracking and release management. Hou
 Prerequisites: **JDK 8**, **Maven**, **MySQL 8**.
 
 ```bash
-# 1. Fresh install: create the database, user, and schema in one step
-mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
+# 1. Fresh install: create the database, user, and schema in one step (optionally then 02 init data / 03 demo seed)
+mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema.sql
 
-#    The account password in the baseline is a placeholder — change it before going live:
+#    The DB account password is generated randomly and printed once at the end — save it immediately. To reset:
 #    ALTER USER 'hourglass'@'%' IDENTIFIED BY 'your-strong-password';
 
 # 2. Required configuration (all overridable via environment variables)
@@ -109,9 +109,9 @@ java -jar backend/target/hourglass-server.jar
 #    listen on 8081, then open http://127.0.0.1:8081/hourglass/)
 ```
 
-For production, run `bash deploy/deploy.sh`: it detects changes → packages frontend / backend as needed → backs up the database → applies incremental SQL → swaps artifacts → health-checks, with `--dry-run` / `--rollback` support. See [`deploy/README.md`](deploy/README.md) (Chinese).
+For production, run `bash deploy/deploy.sh`: it detects changes → packages frontend / backend as needed → backs up the database → swaps artifacts → health-checks, with `--dry-run` / `--rollback` support. See [`deploy/README.md`](deploy/README.md) (Chinese).
 
-This A–E rollout used **explicit one-time user authorization to rebuild the original database**, replacing the new-database-only plan. The original 46-table `hourglass` catalog was backed up and restore-validated before DROP / CREATE rebuilt it to 52; historical data remains in backups, not in the live original tables. Use `sql/baseline/01_schema_full.sql` for all 54 tables (the rebuild had 52; 65 adds the cross-version plan link table, 66 adds invite project grants); do not replay 61/62 or migrate old history. The full baseline rebuilds tables and is not idempotent or nondestructive. Normal deployment scripts still support empty databases only; this specific authorization is not a general license to delete existing databases. Software-only rollback is insufficient after rebuilding: restoring matching SQL requires separate authorization. `63_delivery_release.sql` only adds columns and creates five tables: `version_release_plan`, `version_release_plan_task`, `version_release`, `version_release_item`, and `version_log`. It does not backfill, clear data or invent historical evidence, and is not an old-database migration entry point for this rollout. `65_release_plan_versions.sql` only adds the `version_release_plan_version` link table and backfills existing plans so one plan can span versions and projects; it never rewrites actual release evidence. Upgrades of previously released schemas require review of the relevant numbered scripts; the destructive warnings for 61/62 still apply. See [`sql/README.md`](sql/README.md).
+This A–E rollout used **explicit one-time user authorization to rebuild the original database**: the original 46-table `hourglass` catalog was backed up and restore-validated before DROP / CREATE rebuilt it to 52; historical data remains in backups, not in the live original tables. The full schema is now maintained as [`sql/01_schema.sql`](sql/01_schema.sql) (54 tables: the 52-table rebuild plus the later cross-version plan link and invite project grant tables), with optional init data and demo seed in [`sql/02_init_data.sql`](sql/02_init_data.sql) and [`sql/03_seed_data.sql`](sql/03_seed_data.sql); the historical numbered incremental scripts have been removed from the repository and remain traceable in git history. All three SQL files target fresh empty databases only: 01 rebuilds tables and is not idempotent or nondestructive — never replay it on an existing database, and this specific authorization is not a general license to delete existing databases. Software-only rollback is insufficient after rebuilding: restoring matching SQL requires separate authorization. See [`sql/README.md`](sql/README.md) (Chinese).
 
 ## Tech Stack
 

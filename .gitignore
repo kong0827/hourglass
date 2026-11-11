@@ -29,15 +29,12 @@ deploy/dist/
 #   · 商业化落地计划 —— 定价假设、试点折扣、支持人力上限、法务待决与未拍板决策项
 #   · 部署记录 / 上线清单 —— 服务器明文凭据、真实成员信息与初始密码
 #   · 审查截图证据 —— 约 13MB 二进制，公开报告已改为文字引用
-#   · seed_yunying.sql —— 含 15 个真实成员姓名；因 build.bat 按 sql/seeds/ 相对路径
-#     打包，正本暂留仓库内并忽略（未移出）
 docs/商业化落地计划.md
 docs/audit-shots/
 docs/audit/uiux-evidence/
 deploy/部署记录-*.md
 deploy/上线清单.md
 deploy/local/
-sql/seeds/seed_yunying.sql
 # Excel 看板生成的种子与全量初始化数据：含真实成员姓名、账号与统一初始密码，仅本地部署使用
 sql/seeds/seed_from_excel.sql
 sql/seeds/seed_from_excel.sql.bak.*

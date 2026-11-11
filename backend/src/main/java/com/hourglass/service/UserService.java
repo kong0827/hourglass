@@ -202,7 +202,8 @@ public class UserService implements UserDetailsService {
      * · owner_user_id = 该用户 → 无条件同步；
      * · owner_user_id 为空且 owner = 旧名 → 仅当该空间内没有另一个同名的在册成员时才同步，
      *   避免"同名的另一个人的任务被连带改错"。
-     * 想彻底不再依赖文本层，可先跑 sql/04_backfill_owner_user.sql 回填 owner_user_id。
+     * 存量 owner_user_id 为空的数据无法批量回填（历史回填脚本已随增量 SQL 体系移除），
+     * 只能随任务编辑逐步收敛到身份绑定。
      */
     private void syncTaskOwnerName(String userId, String oldName, String newName) {
         if (oldName == null || newName == null || oldName.equals(newName)) {

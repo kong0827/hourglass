@@ -118,9 +118,11 @@ if errorlevel 1 goto :pack_fail
 copy /y "deploy\README.md" "%DEPLOY_DIR%\README.md" >nul
 if errorlevel 1 goto :pack_fail
 
-copy /y "sql\baseline\01_schema_full.sql" "%SQL_DIR%\01_schema_full.sql" >nul
+copy /y "sql\01_schema.sql" "%SQL_DIR%\01_schema.sql" >nul
 if errorlevel 1 goto :pack_fail
-copy /y "sql\seeds\seed_yunying.sql" "%SQL_DIR%\seed_yunying.sql" >nul
+copy /y "sql\02_init_data.sql" "%SQL_DIR%\02_init_data.sql" >nul
+if errorlevel 1 goto :pack_fail
+copy /y "sql\03_seed_data.sql" "%SQL_DIR%\03_seed_data.sql" >nul
 if errorlevel 1 goto :pack_fail
 rem 上线清单属内部资料，已移出仓库：优先取仓库外 ../内部资料 路径，仓库内旧路径作兼容回退
 rem 两处都没有时只告警、不中断打包（交付包内将不含上线清单）

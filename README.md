@@ -99,10 +99,10 @@
 前置：**JDK 8**、**Maven**、**MySQL 8**。
 
 ```bash
-# 1. 全新部署：一步建库、建账号、建表
-mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
+# 1. 全新部署：一步建库、建账号、建表（可选：02 基础数据 / 03 演示数据）
+mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema.sql
 
-#    基线里的账号密码是占位值，上线前务必修改：
+#    库账号密码由脚本随机生成、只在结尾打印一次，请立即保存；重置用：
 #    ALTER USER 'hourglass'@'%' IDENTIFIED BY '你的强密码';
 
 # 2. 必要配置（全部可用环境变量覆盖）
@@ -120,9 +120,9 @@ java -jar backend/target/hourglass-server.jar
 #    listen 改成 8081，再访问 http://127.0.0.1:8081/hourglass/）
 ```
 
-生产部署执行 `bash deploy/deploy.sh`：自动检测改动 → 按需打包前端 / 后端 → 备份数据库 → 执行增量 SQL → 换包 → 健康校验，支持 `--dry-run` / `--rollback`。详见 [`deploy/README.md`](deploy/README.md)。
+生产部署执行 `bash deploy/deploy.sh`：自动检测改动 → 按需打包前端 / 后端 → 备份数据库 → 换包 → 健康校验，支持 `--dry-run` / `--rollback`。详见 [`deploy/README.md`](deploy/README.md)。
 
-本轮 A–E **经用户单独明确授权重建原库**：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留。完整基线 `sql/baseline/01_schema_full.sql` 包含 54 张表（重建时 52 表，其后 65 新增跨版本计划关联表、66 新增邀请项目预分配表），不回放 61/62、不迁移旧历史。完整基线会重建表，不是幂等无损脚本；正常部署脚本仍只支持新空库，不能把本次授权泛化为任意部署删库许可。重建后的完整回退须匹配 SQL 恢复并单独授权，软件-only 回退不足。`63_delivery_release.sql` 仅增列与建五张发布相关表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`，不回填、不清空、不构造历史证据；它不是本轮旧库迁移入口。`65_release_plan_versions.sql` 只新增 `version_release_plan_version` 关联表并回填现有计划，使一个计划可跨版本 / 跨项目，不改写任何实际发布证据。既有已发布结构的升级按发布说明评估所需编号脚本，61/62 的破坏性说明仍有效。详见 [`sql/README.md`](sql/README.md)。
+本轮 A–E **经用户单独明确授权重建原库**：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留。全量结构现以 [`sql/01_schema.sql`](sql/01_schema.sql) 维护（54 张表：52 表重建，其后跨版本计划关联、邀请项目预分配再增两表），基础数据与演示种子见 [`sql/02_init_data.sql`](sql/02_init_data.sql)、[`sql/03_seed_data.sql`](sql/03_seed_data.sql)；历史编号增量脚本已从仓库移除，可在 git 历史追溯。三份 SQL 只用于新空库：01 会重建表，不是幂等无损脚本，不得在已有库重跑，也不能把本轮授权泛化为任意部署删库许可。重建后的完整回退须匹配 SQL 恢复并单独授权，软件-only 回退不足。详见 [`sql/README.md`](sql/README.md)。
 
 ## 技术栈
 

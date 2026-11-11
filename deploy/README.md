@@ -59,13 +59,13 @@ sudo timedatectl set-timezone Asia/Shanghai
 
 # 建库 + 建应用账号 + 建表（仅用于全新空库，需 root 执行；重跑会删表）
 # 内含：CREATE DATABASE hourglass、随机口令创建账号 'hourglass'@'%'（库内全部权限）、全部表结构
-mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
+mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema.sql
 ```
 
 > 应用账号不再内置固定口令：脚本首次执行时用 `RANDOM_BYTES` 随机生成一次性密码，并在结束时以「沙漏部署提示」输出一次。**请立即把该密码写进第 3 步 `/etc/hourglass.env` 的 `DB_PASSWORD`（用单引号包裹）**；这条提示不会再次出现，也不要把建库输出重定向或记录到日志文件里。
 > 账号已存在时脚本不改动其密码，只输出提示；重置密码用 `ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';`。若你的 MySQL 禁用了 `RANDOM_BYTES`，按脚本内注释改用 `SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)`，或先手工建号再执行脚本。
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
-> 既有已发布结构的升级按发布说明评估对应增量脚本；完整基线会重建表，不是幂等无损脚本，不得作为普通升级在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（当时口径；其后 `sql/65` 新增跨版本计划关联表、`sql/66` 新增成员项目授权模式与邀请项目预分配表，完整基线现为 54 表），不回放 61/62、不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
+> 既有库的结构升级不再走增量脚本（历史编号脚本已移除，可在 git 历史追溯）；升级以新空库重建 + 恢复备份为准，须单独评估与授权。`sql/01_schema.sql` 会重建表，不是幂等无损脚本，不得在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（其后跨版本计划关联、邀请项目预分配再增两表，全量 DDL 现为 54 表），不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
 >
 > **已有库升级到「新成员默认不参与项目」版本：先执行 `sql/66_project_access_assigned.sql`，再替换 jar。** 新 jar 会读写 `workspace_member.project_access_mode` 与 `invite_project_grant`，先换 jar 会导致成员列表、邀请与加入接口报错。66 只增列、建表并为 `assigned` 成员补 `none` 种子行，不改写已有授权；存量成员默认 `all`，升级后可见范围不变。执行前照常做全库备份。
 
@@ -227,8 +227,7 @@ sudo systemctl restart hourglass
    - 前后端都改：两步都做。
 3. 日常升级直接执行 `bash deploy/deploy.sh`，脚本会自动判断范围、备份旧产物并校验哈希。
 
-> 例：升级到分支支持项目归属的版本，在已存在的库上执行一次：
-> `mysql -uroot -p --default-character-set=utf8mb4 hourglass < 31_branch_project.sql`（全新安装无需执行，`01_schema_full.sql` 已含该结构）。
+> 例：升级到分支支持项目归属的版本，在已存在的库上执行对应结构变更（`sql/01_schema.sql` 已含全部结构，日常升级不再有独立编号脚本可执行）。
 
 ## 11. 验收清单
 

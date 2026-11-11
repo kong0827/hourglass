@@ -391,8 +391,8 @@ changed() {
   fi
 }
 
-# 完整基线会删表、旧结构与种子会重灌过时数据，只允许手工执行，不纳入自动部署改动检测
-CHANGED_ALL="$(changed backend sql frontend | grep -vE '^sql/(baseline|legacy|seeds)/' || true)"
+# 三文件 SQL（01 全量 DDL 会删表、02/03 重灌数据）只允许手工在新空库执行，不纳入自动部署改动检测
+CHANGED_ALL="$(changed backend sql frontend | grep -vE '^sql/(01_schema|02_init_data|03_seed_data)\.sql$|^sql/(baseline|legacy|seeds)/' || true)"
 if [ -n "$CHANGED_ALL" ]; then
   printf '%s\n' "$CHANGED_ALL" | sed 's/^/      /'
 else
@@ -443,7 +443,6 @@ fi
 # Reject destructive historical scripts before any upload, backup or local write.
 for f in $CHANGED_SQL; do
   [[ "$f" =~ ^sql/[a-zA-Z0-9_.-]+\.sql$ ]] || die "不安全的 SQL 文件名：$f"
-  case "$f" in sql/61_*|sql/62_*) die "${f} 会清理旧模块数据，不能自动重放；请使用独立新库部署" ;; esac
 done
 
 start_session
@@ -540,19 +539,19 @@ if [ "$NEED_DB" -eq 1 ]; then
   info "待执行：${NEW_DB:-$CHANGED_SQL}"
   if [ -n "$NEW_DB" ]; then
     BASELINE_STAGE="${DIST_DIR}/new-database.sql"
-    python3 - "$NEW_DB" "sql/baseline/01_schema_full.sql" "$BASELINE_STAGE" <<'PY'
+    python3 - "$NEW_DB" "sql/01_schema.sql" "$BASELINE_STAGE" <<'PY'
 import pathlib, re, sys
 name, source, target = sys.argv[1:]
-sql = pathlib.Path(source).read_text()
+sql = pathlib.Path(source).read_text(encoding='utf-8')
 start = re.search(r'^USE hourglass;\s*$', sql, re.M)
 if start is None:
-    raise SystemExit('基线缺少唯一 USE 入口')
+    raise SystemExit('01_schema.sql 缺少唯一 USE 入口')
 body = sql[start.end():]
 if re.search(r'\bUSE\b|\bCREATE\s+DATABASE\b|\bDROP\s+DATABASE\b|(?:\bhourglass\b|`hourglass`)\s*\.', body, re.I):
-    raise SystemExit('拒绝包含额外数据库切换或原库限定引用的基线')
-pathlib.Path(target).write_text('USE `' + name + '`;\n' + body)
+    raise SystemExit('拒绝包含额外数据库切换或原库限定引用的 01_schema.sql')
+pathlib.Path(target).write_text('USE `' + name + '`;\n' + body, encoding='utf-8')
 PY
-    scp "${SCP_OPTS[@]}" -P "$SSH_PORT" "$BASELINE_STAGE" "${SSH_USER}@${HOST}:${REMOTE_STAGE}/new-database.sql" >/dev/null || die "上传新库基线失败"
+    scp "${SCP_OPTS[@]}" -P "$SSH_PORT" "$BASELINE_STAGE" "${SSH_USER}@${HOST}:${REMOTE_STAGE}/new-database.sql" >/dev/null || die "上传新库 DDL 失败"
   fi
 
   for f in $CHANGED_SQL; do
