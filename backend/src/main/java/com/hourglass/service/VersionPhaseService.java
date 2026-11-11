@@ -2,6 +2,7 @@ package com.hourglass.service;
 
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
+import com.hourglass.dto.CrossProjectVersionRow;
 import com.hourglass.dto.PhaseMemberTask;
 import com.hourglass.dto.PhaseMemberTaskPage;
 import com.hourglass.dto.PhaseMemberTaskSummary;
@@ -34,6 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * M1 版本阶段视图统计（T1.3 / T1.4 / T1.6）。
@@ -237,6 +239,26 @@ public class VersionPhaseService {
         applyMemberHours(resp.getMvp(), mvpHours, userNameCache);
         applyMemberHours(resp.getPost(), postHours, userNameCache);
         return resp;
+    }
+
+    /** 跨项目版本清单：只列当前用户可见的项目，并标出能否创建发布计划。 */
+    public List<CrossProjectVersionRow> crossProjectVersions(String workspaceId, String userId) {
+        Set<String> hidden = projectAccess.hiddenProjectIds(workspaceId, userId);
+        Map<String, Boolean> canManage = new HashMap<String, Boolean>();
+        List<CrossProjectVersionRow> rows = new ArrayList<CrossProjectVersionRow>();
+        for (CrossProjectVersionRow row : versionMapper.selectCrossProjectRows(workspaceId)) {
+            if (hidden.contains(row.getReqId())) {
+                continue;
+            }
+            Boolean manage = canManage.get(row.getReqId());
+            if (manage == null) {
+                manage = permissions.canManageProject(userId, workspaceId, row.getReqId());
+                canManage.put(row.getReqId(), manage);
+            }
+            row.setCanManage(manage);
+            rows.add(row);
+        }
+        return rows;
     }
 
     /**

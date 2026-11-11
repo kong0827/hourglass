@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 催办按钮与跨项目版本原型 · 2026-11-11</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  /* ---------- 页面骨架：只用于原型观感，不引入业务代码 ---------- */
+  body{background:var(--bg-app)}
+  .shell{display:flex;min-height:100vh}
+  .side{width:232px;flex:none;background:#fff;border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:18px}
+  .side .brand{padding:0 10px 10px}
+  .nav-group{display:flex;flex-direction:column;gap:2px}
+  .nav-lab{font-size:11px;color:var(--text-3);padding:8px 10px 4px;letter-spacing:.04em}
+  .nav-item{display:flex;align-items:center;gap:9px;height:34px;padding:0 10px;border-radius:8px;color:var(--text-2);font-size:13px}
+  .nav-item.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+  .nav-ico{width:16px;height:16px;display:grid;place-items:center;color:currentColor;opacity:.85}
+  .canvas{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{height:58px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 26px;position:sticky;top:0;z-index:3}
+  .topbar h1{font-size:17px;margin:0;font-weight:650}
+  .topbar .sub{font-size:12px;color:var(--text-3);margin-top:2px}
+  .topbar .grow{flex:1}
+  .searchbox{width:260px;height:32px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--text-3);font-size:12.5px;background:#fff}
+  .content{padding:20px 26px 60px;max-width:1280px;width:100%;margin:0 auto}
+  .section-tag{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:999px;padding:4px 10px;margin:4px 0 12px}
+  .section-title{font-size:20px;margin:0 0 6px;letter-spacing:.2px}
+  .section-desc{font-size:12.5px;line-height:1.7;color:var(--text-3);margin:0 0 16px;max-width:900px}
+  .section-gap{height:46px}
+  .variant{position:relative;background:#fff;border:1px solid var(--border);border-radius:12px;padding:0;margin-bottom:14px;box-shadow:var(--shadow-xs);overflow:hidden}
+  .variant-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:#FCFCFD}
+  .variant-head .name{font-size:12.5px;font-weight:650}
+  .variant-head .note{font-size:11.5px;color:var(--text-3)}
+  .variant-body{padding:14px 16px 18px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;border-radius:999px;padding:2px 8px;border:1px solid}
+  .badge.now{color:var(--danger-fg);background:var(--danger-soft);border-color:var(--danger-border)}
+  .badge.rec{color:var(--success-fg);background:var(--success-soft);border-color:var(--success-border)}
+  .badge.alt{color:var(--text-2);background:var(--surface-sunken);border-color:var(--border)}
+  .badge.small{font-size:10.5px;font-weight:600}
+
+  /* ---------- ① 催办工具条 ---------- */
+  .mtoolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;flex-wrap:wrap}
+  .mtoolbar .title{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap}
+  .mtoolbar b{font-size:15px;font-weight:650}
+  .mtoolbar .title span{font-size:12.5px;color:var(--text-3)}
+  .mactions{display:flex;align-items:center;gap:8px}
+  .iconbtn{width:28px;height:28px;border:0;background:transparent;border-radius:7px;display:grid;place-items:center;color:var(--text-2);cursor:pointer}
+  .iconbtn:hover{background:var(--surface-hover);color:var(--text)}
+  .nudge-soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+  .nudge-soft:hover{background:#E7EFFF;border-color:var(--primary)}
+  .nudge-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#fff;color:var(--primary-fg);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;border:1px solid var(--primary-border)}
+  .pulse{position:relative}
+  .pulse:after{content:"";position:absolute;inset:-4px;border:1.5px dashed rgba(240,68,56,.55);border-radius:10px;pointer-events:none}
+  .measure{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--danger-fg);background:var(--danger-soft);border:1px solid var(--danger-border);border-radius:6px;padding:4px 7px;display:inline-block;margin-top:10px}
+  .risk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+  .risk-col{background:var(--surface-sunken);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .risk-head{display:flex;align-items:center;justify-content:space-between;padding:0 4px;font-size:12.5px}
+  .risk-head b{font-weight:650}.risk-head span{color:var(--text-3);font-size:11.5px}
+  .risk-card{background:#fff;border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:8px;padding:10px 11px}
+  .risk-card.blocked{border-left-color:var(--warning)}
+  .risk-card.stagnant{border-left-color:var(--text-3)}
+  .risk-title{font-size:12.5px;font-weight:550;line-height:1.5}
+  .risk-meta{font-size:11px;color:var(--text-3);margin-top:4px}
+  .risk-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:11px;color:var(--text-3)}
+  .avatar-s{width:20px;height:20px;border-radius:50%;background:#FDF0D5;color:#B54708;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-right:5px;vertical-align:-5px}
+
+  /* ---------- ② 全部版本 ---------- */
+  .vhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .vhead .grow{flex:1}
+  .vseg{display:inline-flex;align-items:center;border:1px solid var(--border);background:#fff;border-radius:8px;overflow:hidden}
+  .vseg button{border:0;background:transparent;height:30px;padding:0 12px;font-size:12.5px;color:var(--text-2);border-right:1px solid var(--border);cursor:pointer;font-family:var(--font)}
+  .vseg button:last-child{border-right:0}
+  .vseg button.on{background:var(--surface-sunken);color:var(--text);font-weight:650}
+  .vseg .new{color:var(--primary-fg)}
+  .vfilters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .search-mini{height:30px;border:1px solid var(--border-strong);border-radius:7px;display:flex;align-items:center;gap:7px;padding:0 9px;background:#fff;min-width:190px;color:var(--text-3);font-size:12px}
+  .selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:10px;padding:9px 12px;margin-bottom:10px}
+  .selbar .grow{flex:1;min-width:0}
+  .selbar b{font-size:12.5px;color:var(--primary-fg)}
+  .selbar .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+  .vchip{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--primary-border);color:var(--primary-fg);border-radius:999px;font-size:11px;padding:1px 8px;line-height:17px}
+  .vtbl{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff}
+  .vtbl th{background:var(--surface-sunken);color:var(--text-3);text-align:left;font-size:11.5px;font-weight:600;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .vtbl td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .vtbl tr.group td{background:#FBFCFD;padding:8px 10px;border-bottom:1px solid var(--border)}
+  .gname{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650}
+  .gmeta{font-size:11px;color:var(--text-3);font-weight:400}
+  .vname{font-weight:600;white-space:nowrap}
+  .vsub{font-size:11px;color:var(--text-3);margin-top:1px}
+  .checkcell{width:36px}
+  .cbox{width:14px;height:14px;accent-color:var(--primary);vertical-align:-2px}
+  .row-on td{background:#FAFBFF}
+  .row-off td{background:#FCFCFD;color:var(--text-3)}
+  .lock{font-size:11px;color:var(--text-3);display:inline-flex;align-items:center;gap:4px}
+  .tagv{display:inline-flex;align-items:center;font-size:11px;line-height:18px;border-radius:5px;padding:1px 7px;border:1px solid;white-space:nowrap}
+  .tagv.doing{color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border)}
+  .tagv.done{color:var(--success-fg);background:var(--success-soft);border-color:var(--success-border)}
+  .tagv.plan{color:var(--text-2);background:var(--surface-sunken);border-color:var(--border)}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .vfoot{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:10px;flex-wrap:wrap}
+  .vfoot .hint{margin:0}
+
+  /* ---------- ③ 发布计划弹窗片段 ---------- */
+  .modal-mock{width:920px;max-width:calc(100% - 32px);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-xl);overflow:hidden;margin-top:14px}
+  .mm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px 12px;border-bottom:1px solid var(--border)}
+  .mm-head h2{font-size:17px;margin:0 0 4px}
+  .mm-head .sub{font-size:12px;color:var(--text-3)}
+  .mm-body{padding:16px 22px 18px}
+  .mm-label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;margin:4px 0 8px}
+  .mm-label .hint{font-weight:400;margin:0}
+  .mm-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .mm-group{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:#fff}
+  .mm-g-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--surface-sunken);font-size:12px;font-weight:650}
+  .mm-g-count{font-size:10.5px;color:var(--text-3);font-weight:400}
+  .mm-row{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-top:1px solid var(--border);font-size:12px;cursor:pointer}
+  .mm-row:first-child{border-top:0}
+  .mm-row.on{background:#F8FAFF}
+  .mm-row.fixed{background:#F8FAFF}
+  .mm-row.disabled{background:#FCFCFD;color:var(--text-3);cursor:not-allowed}
+  .mm-row b{display:block;font-size:12px;font-weight:600}
+  .mm-row small{display:block;color:var(--text-3);font-size:10.5px;margin-top:1px}
+  .mm-row .fixedtag{margin-left:auto;font-size:10px;color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:999px;padding:1px 6px;white-space:nowrap}
+  .mm-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 22px;border-top:1px solid var(--border);background:#FCFCFD}
+  .mm-foot .hint{margin:0}
+
+  /* ---------- ④ 倒序对比 ---------- */
+  .order-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .order-card{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-xs)}
+  .order-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);background:#FCFCFD}
+  .order-head b{font-size:12.5px}
+  .order-body{padding:10px 14px 14px}
+  .order-group{margin-bottom:8px}
+  .order-proj{font-size:11px;color:var(--text-3);margin:4px 0 5px}
+  .order-row{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12px;margin-bottom:5px;background:#fff}
+  .order-row .idx{width:16px;height:16px;border-radius:50%;background:var(--surface-sunken);color:var(--text-3);display:grid;place-items:center;font-size:9.5px;font-weight:700}
+  .order-row b{font-weight:600}
+  .order-row .date{margin-left:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .order-note{border-left:3px solid var(--warning);background:var(--warning-soft);color:var(--warning-fg);font-size:11.5px;line-height:1.6;border-radius:0 7px 7px 0;padding:8px 10px}
+  .order-note.ok{border-left-color:var(--success);background:var(--success-soft);color:var(--success-fg)}
+  .rule{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--text-3)}
+  .rule .step-chip{background:#fff;border:1px solid var(--border);border-radius:999px;padding:2px 9px;color:var(--text-2)}
+  .rule .arrow{color:var(--border-strong)}
+
+  /* 评估摘要 */
+  .verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0 8px}
+  .verdict{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-xs)}
+  .verdict .n{width:22px;height:22px;border-radius:7px;background:var(--primary-soft);color:var(--primary-fg);display:grid;place-items:center;font-size:11.5px;font-weight:700;margin-bottom:8px}
+  .verdict b{font-size:13px;display:block;margin-bottom:4px}
+  .verdict p{font-size:11.5px;line-height:1.65;color:var(--text-3);margin:0}
+  .flag{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;border-radius:999px;padding:2px 8px;margin-top:8px}
+  .flag.fix{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+  .flag.add{background:var(--primary-soft);color:var(--primary-fg);border:1px solid var(--primary-border)}
+  .flag.small{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+  .proto-note{font-size:11px;color:var(--text-3);text-align:center;margin-top:26px}
+  @media(max-width:1100px){.verdicts,.mm-groups,.order-wrap{grid-template-columns:1fr}.side{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand" style="display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px">
+      <span style="width:26px;height:26px;border-radius:8px;background:linear-gradient(160deg,#2563EB,#7A5AF8);display:grid;place-items:center;color:#fff;font-size:12px">沙</span>沙漏
+    </div>
+    <div class="nav-group">
+      <div class="nav-lab">我的</div>
+      <div class="nav-item"><span class="nav-ico">☆</span>我的工作</div>
+      <div class="nav-item"><span class="nav-ico">◷</span>周回顾</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-lab">规划</div>
+      <div class="nav-item"><span class="nav-ico">▤</span>需求池</div>
+      <div class="nav-item"><span class="nav-ico">▢</span>项目</div>
+      <div class="nav-item on"><span class="nav-ico">◫</span>版本</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-lab">交付</div>
+      <div class="nav-item"><span class="nav-ico">▥</span>工作项</div>
+      <div class="nav-item"><span class="nav-ico">▧</span>文档</div>
+      <div class="nav-item"><span class="nav-ico">◈</span>测试</div>
+      <div class="nav-item"><span class="nav-ico">⑂</span>分支</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-lab">洞察</div>
+      <div class="nav-item"><span class="nav-ico">◔</span>报表</div>
+      <div class="nav-item"><span class="nav-ico">◍</span>成员负载</div>
+      <div class="nav-item"><span class="nav-ico">△</span>逾期与阻塞</div>
+    </div>
+  </aside>
+
+  <main class="canvas">
+    <header class="topbar">
+      <div>
+        <h1>版本</h1>
+        <div class="sub">支付业务部 / 版本 · 按阶段或版本看投入、偏差与准时率</div>
+      </div>
+      <div class="grow"></div>
+      <div class="searchbox">搜索… <span style="margin-left:auto;font-size:10.5px;border:1px solid var(--border);border-radius:4px;padding:0 4px">⌘ K</span></div>
+      <button class="btn sm primary">+ 新建</button>
+    </header>
+
+    <div class="content">
+      <div class="section-tag">评估原型 · 2026-11-11 · 未改业务代码</div>
+      <h2 class="section-title">三项交互调整</h2>
+      <p class="section-desc">1）全部催办按钮的位置与样式；2）版本增加跨项目「全部版本」清单并勾选后创建发布计划；3）版本选择列表改为最新在前。以下均为静态原型，用于确认方向。</p>
+
+      <div class="verdicts">
+        <div class="verdict">
+          <div class="n">1</div>
+          <b>催办按钮</b>
+          <p>现有工具条是三列 <span style="font-family:monospace">space-between</span>，按钮被挤在标题与全屏图标中间；实心蓝也比同类工具条动作更重。</p>
+          <span class="flag fix">成立 · 优先修</span>
+        </div>
+        <div class="verdict">
+          <div class="n">2</div>
+          <b>跨项目版本 + 批量计划</b>
+          <p>发布计划已支持多版本、跨项目；缺的是“先看全部版本、再勾选”的入口。建议新增「全部版本」模式，复用现有发布工作区。</p>
+          <span class="flag add">成立 · 中等改造</span>
+        </div>
+        <div class="verdict">
+          <div class="n">3</div>
+          <b>版本倒序</b>
+          <p>发布计划里的版本组当前按项目名、版本名升序（v2.0 → v2.2），确实与“最新在前”的直觉相反。</p>
+          <span class="flag small">成立 · 小改</span>
+        </div>
+      </div>
+
+      <!-- ================= ① 催办 ================= -->
+      <div class="section-gap"></div>
+      <div class="section-tag">01 · 逾期与阻塞</div>
+      <h2 class="section-title">「全部催办」的位置与层级</h2>
+      <p class="section-desc">问题不在按钮本身，而在工具条只有一个右侧动作时仍把三个元素平铺到两端：标题靠左、按钮居中、全屏靠右。建议把动作收进一个右对齐的动作组，并把实心蓝降为轻量 tonal（沿用现有 <span style="font-family:monospace">.btn.soft</span>）。</p>
+
+      <div class="variant">
+        <div class="variant-head">
+          <span class="badge now">当前</span>
+          <span class="name">三列平铺 + 实心蓝</span>
+          <span class="note">按钮距右侧全屏图标约 400px，视觉上悬在中间</span>
+        </div>
+        <div class="variant-body">
+          <div class="mtoolbar">
+            <div class="title"><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>
+            <button class="btn sm primary pulse">全部催办（8）</button>
+            <button class="iconbtn" title="全屏查看">⤢</button>
+          </div>
+          <div class="measure">测量：工具条宽 1140px · 按钮右侧到全屏约 394px · 三个子元素各自靠边/居中</div>
+        </div>
+      </div>
+
+      <div class="variant">
+        <div class="variant-head">
+          <span class="badge rec">建议 A · 推荐</span>
+          <span class="name">动作右对齐 + soft 轻量底色 + 铃铛与计数</span>
+          <span class="note">全屏图标仍在最右；批量动作与页面动作形成一组</span>
+        </div>
+        <div class="variant-body">
+          <div class="mtoolbar">
+            <div class="title"><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>
+            <div class="mactions">
+              <button class="btn sm nudge-soft">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6a5.2 5.2 0 0 0-5.2 5.2c0 3.6-1.4 4.8-1.4 4.8h13.2s-1.4-1.2-1.4-4.8A5.2 5.2 0 0 0 10 2.6Z"/><path d="M8.2 15.4a1.9 1.9 0 0 0 3.6 0"/></svg>
+                全部催办 <span class="nudge-count">8</span>
+              </button>
+              <button class="iconbtn" title="全屏查看">⤢</button>
+            </div>
+          </div>
+          <div class="risk-grid">
+            <div class="risk-col">
+              <div class="risk-head"><b>逾期</b><span>7</span></div>
+              <div class="risk-card">
+                <div class="risk-title">告警阈值配置</div>
+                <div class="risk-meta">风控规则引擎 · <span style="color:var(--danger-fg);font-weight:600">紧急</span> · 截止 11-08</div>
+                <div class="risk-foot"><span><span class="avatar-s">李</span>李娜 · 逾期 3 天</span><button class="btn sm">催办</button></div>
+              </div>
+              <div class="risk-card">
+                <div class="risk-title">规则缓存预热</div>
+                <div class="risk-meta">风控规则引擎 · <span style="color:var(--danger-fg);font-weight:600">紧急</span> · 截止 11-10</div>
+                <div class="risk-foot"><span><span class="avatar-s" style="background:#E0EAFF;color:#1D4ED8">陈</span>陈昊 · 逾期 1 天</span><button class="btn sm">催办</button></div>
+              </div>
+            </div>
+            <div class="risk-col">
+              <div class="risk-head"><b>被阻塞</b><span>1</span></div>
+              <div class="risk-card blocked">
+                <div class="risk-title">差错工单状态机</div>
+                <div class="risk-meta">清结算与对账平台 · <span style="color:var(--warning-fg);font-weight:600">高</span> · 截止 11-26</div>
+                <div class="risk-foot"><span><span class="avatar-s" style="background:#E0EAFF;color:#1D4ED8">陈</span>陈昊 · 测试环境资源不足</span><button class="btn sm">催办</button></div>
+              </div>
+            </div>
+            <div class="risk-col">
+              <div class="risk-head"><b>7 天未动</b><span>0</span></div>
+              <div style="padding:26px 8px;text-align:center;color:var(--text-3);font-size:12px">暂无 7 天未动工作项</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="variant">
+        <div class="variant-head">
+          <span class="badge alt">建议 B · 备选</span>
+          <span class="name">保留实心蓝，但收进右侧动作组</span>
+          <span class="note">强调最强，适合“催办是页面唯一主任务”的判断；仍比当前中间悬停自然</span>
+        </div>
+        <div class="variant-body">
+          <div class="mtoolbar">
+            <div class="title"><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>
+            <div class="mactions">
+              <button class="btn sm primary">全部催办（8）</button>
+              <button class="iconbtn" title="全屏查看">⤢</button>
+            </div>
+          </div>
+          <div class="measure" style="background:var(--surface-sunken);border-color:var(--border);color:var(--text-3)">与「报表」「成员负载」「发布计划」等工具条一致：动作成组靠右，全屏最后。</div>
+        </div>
+      </div>
+
+      <!-- ================= ② 全部版本 ================= -->
+      <div class="section-gap"></div>
+      <div class="section-tag">02 · 版本</div>
+      <h2 class="section-title">新增「全部版本」：跨项目勾选 → 创建发布计划</h2>
+      <p class="section-desc">不新增“执行计划”这个新概念：系统里的跨版本载体已经是「发布计划」，它支持一个计划包含多个版本、多个项目。新页面只做“选择入口”，创建时把勾选结果预填进现有发布工作区。</p>
+
+      <div id="shot-versions">
+        <div class="vhead">
+          <div class="vseg">
+            <button>按阶段</button>
+            <button>按版本</button>
+            <button class="on">全部版本</button>
+            <button>发布日程</button>
+            <button>全部项目</button>
+          </div>
+          <div class="grow"></div>
+          <button class="iconbtn" title="全屏查看">⤢</button>
+        </div>
+
+        <div class="vfilters">
+          <span class="sel">全部项目</span>
+          <span class="sel">全部状态</span>
+          <span class="search-mini">搜索版本或项目</span>
+          <span style="font-size:11.5px;color:var(--text-3);margin-left:auto">9 个版本 · 3 个可管理项目</span>
+        </div>
+
+        <div class="selbar">
+          <div class="grow">
+            <b>已选 3 个版本 · 跨 3 个项目</b>
+            <div class="chips">
+              <span class="vchip">支付网关 v2.2</span>
+              <span class="vchip">清结算 v3.2</span>
+              <span class="vchip">风控引擎 v1.2</span>
+            </div>
+          </div>
+          <button class="btn sm">清空</button>
+          <button class="btn sm primary">创建发布计划</button>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="vtbl">
+            <thead>
+              <tr>
+                <th class="checkcell"></th>
+                <th>版本</th>
+                <th>状态</th>
+                <th>目标就绪日</th>
+                <th class="num">工作项</th>
+                <th>最近发布</th>
+                <th>可管理</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="group"><td colspan="7"><span class="gname">统一支付网关 <span class="gmeta">3 个版本 · 首版 2026-09-12</span></span></td></tr>
+              <tr class="row-on">
+                <td class="checkcell"><input class="cbox" type="checkbox" checked aria-label="选择 支付网关 v2.2"></td>
+                <td><div class="vname">支付网关 v2.2</div><div class="vsub">当前迭代 · 2 个分支</div></td>
+                <td><span class="tagv doing">进行中</span></td>
+                <td class="num" style="text-align:left">2026-11-27</td>
+                <td class="num">17</td>
+                <td>—</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 支付网关 v2.1"></td>
+                <td><div class="vname">支付网关 v2.1</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-10-23</td>
+                <td class="num">3</td>
+                <td>2026-10-23</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 支付网关 v2.0"></td>
+                <td><div class="vname">支付网关 v2.0</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-09-11</td>
+                <td class="num">5</td>
+                <td>2026-09-12</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+
+              <tr class="group"><td colspan="7"><span class="gname">清结算与对账平台 <span class="gmeta">3 个版本 · 首版 2026-09-18</span></span></td></tr>
+              <tr class="row-on">
+                <td class="checkcell"><input class="cbox" type="checkbox" checked aria-label="选择 清结算 v3.2"></td>
+                <td><div class="vname">清结算 v3.2</div><div class="vsub">当前迭代</div></td>
+                <td><span class="tagv doing">进行中</span></td>
+                <td class="num" style="text-align:left">2026-12-04</td>
+                <td class="num">11</td>
+                <td>—</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 清结算 v3.1"></td>
+                <td><div class="vname">清结算 v3.1</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-10-30</td>
+                <td class="num">9</td>
+                <td>2026-10-30</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 清结算 v3.0"></td>
+                <td><div class="vname">清结算 v3.0</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-09-18</td>
+                <td class="num">14</td>
+                <td>2026-09-18</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+
+              <tr class="group"><td colspan="7"><span class="gname">风控规则引擎 <span class="gmeta">3 个版本 · 首版 2026-09-25</span></span></td></tr>
+              <tr class="row-on">
+                <td class="checkcell"><input class="cbox" type="checkbox" checked aria-label="选择 风控引擎 v1.2"></td>
+                <td><div class="vname">风控引擎 v1.2</div><div class="vsub">当前迭代</div></td>
+                <td><span class="tagv doing">进行中</span></td>
+                <td class="num" style="text-align:left">2026-12-11</td>
+                <td class="num">8</td>
+                <td>—</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 风控引擎 v1.1"></td>
+                <td><div class="vname">风控引擎 v1.1</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-11-06</td>
+                <td class="num">6</td>
+                <td>2026-11-07</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+              <tr>
+                <td class="checkcell"><input class="cbox" type="checkbox" aria-label="选择 风控引擎 v1.0"></td>
+                <td><div class="vname">风控引擎 v1.0</div><div class="vsub">已发布 · 内容只读</div></td>
+                <td><span class="tagv done">已发布</span></td>
+                <td class="num" style="text-align:left">2026-09-25</td>
+                <td class="num">10</td>
+                <td>2026-09-25</td>
+                <td><span class="lock">可创建计划</span></td>
+              </tr>
+
+              <tr class="group"><td colspan="7"><span class="gname">数据看板 <span class="gmeta">1 个版本 · 只读 · 你在该项目无发布权限</span></span></td></tr>
+              <tr class="row-off">
+                <td class="checkcell"><input class="cbox" type="checkbox" disabled aria-label="不可选择：无发布权限"></td>
+                <td><div class="vname">看板 v4.0</div><div class="vsub">可查看，但不能创建计划</div></td>
+                <td><span class="tagv plan">待规划</span></td>
+                <td class="num" style="text-align:left">2026-12-20</td>
+                <td class="num">2</td>
+                <td>—</td>
+                <td><span class="lock">无发布权限</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="vfoot">
+          <p class="hint">勾选后可跨项目、跨版本创建一个发布计划；主版本取第一个勾选版本，保存时仍走现有权限校验。只读行不可勾选。</p>
+          <span class="hint">每页按项目分组 · 版本倒序</span>
+        </div>
+      </div>
+
+      <div class="modal-mock">
+        <div class="mm-head">
+          <div>
+            <h2>新建发布计划</h2>
+            <div class="sub">已按所选版本预填；可继续增减，实际发布仍按单个版本登记</div>
+          </div>
+          <button class="iconbtn" title="关闭">✕</button>
+        </div>
+        <div class="mm-body">
+          <div class="mm-label">计划包含的版本 <span style="color:var(--primary-fg)">3 个</span> · 跨 <span style="color:var(--primary-fg)">3 个项目</span> <span class="hint">主版本：支付网关 v2.2（保存时取第一个勾选版本）</span></div>
+          <div class="mm-groups">
+            <div class="mm-group">
+              <div class="mm-g-head"><span>统一支付网关</span><span class="mm-g-count">1 / 3</span></div>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>支付网关 v2.0</b><small>已发布 · 目标 09-11</small></span></label>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>支付网关 v2.1</b><small>已发布 · 目标 10-23</small></span></label>
+              <label class="mm-row on"><input class="cbox" type="checkbox" checked><span><b>支付网关 v2.2</b><small>进行中 · 目标 11-27</small></span><span class="fixedtag">主版本</span></label>
+            </div>
+            <div class="mm-group">
+              <div class="mm-g-head"><span>清结算与对账平台</span><span class="mm-g-count">1 / 3</span></div>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>清结算 v3.0</b><small>已发布 · 目标 09-18</small></span></label>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>清结算 v3.1</b><small>已发布 · 目标 10-30</small></span></label>
+              <label class="mm-row on"><input class="cbox" type="checkbox" checked><span><b>清结算 v3.2</b><small>进行中 · 目标 12-04</small></span></label>
+            </div>
+            <div class="mm-group">
+              <div class="mm-g-head"><span>风控规则引擎</span><span class="mm-g-count">1 / 3</span></div>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>风控引擎 v1.0</b><small>已发布 · 目标 09-25</small></span></label>
+              <label class="mm-row"><input class="cbox" type="checkbox"><span><b>风控引擎 v1.1</b><small>已发布 · 目标 11-06</small></span></label>
+              <label class="mm-row on"><input class="cbox" type="checkbox" checked><span><b>风控引擎 v1.2</b><small>进行中 · 目标 12-11</small></span></label>
+            </div>
+          </div>
+          <p style="font-size:11.5px;color:var(--text-3);line-height:1.65;margin:10px 0 0">沿用现有发布工作区：计划时间、负责人、目标键、工作项范围与就绪校验都不变。全部包含版本完成成功生产部署 / 重部署后，计划才自动完成。</p>
+        </div>
+        <div class="mm-foot">
+          <p class="hint">已发布版本仍可纳入计划，用于补记或回顾；内容只读。</p>
+          <div style="display:flex;gap:8px"><button class="btn sm">取消</button><button class="btn sm primary">创建发布计划</button></div>
+        </div>
+      </div>
+
+      <!-- ================= ③ 倒序 ================= -->
+      <div class="section-gap"></div>
+      <div class="section-tag">03 · 版本选择顺序</div>
+      <h2 class="section-title">版本选择列表统一为“最新在前”</h2>
+      <p class="section-desc">当前发布计划里的版本组来自跨项目选项接口，按项目名、版本名升序排列；同样是 v2.x，列表从旧到新，选最近版本要往下找。改为按目标就绪日倒序，日期相同再按创建时间倒序，无日期排最后。</p>
+
+      <div class="order-wrap">
+        <div class="order-card">
+          <div class="order-head"><b>当前 · 名称升序</b><span class="badge now">需要往下找最新</span></div>
+          <div class="order-body">
+            <div class="order-note">支付网关：v2.0 → v2.1 → v2.2；清结算：v3.0 → v3.1 → v3.2。最新迭代排在组末。</div>
+            <div class="order-group" style="margin-top:10px">
+              <div class="order-proj">统一支付网关</div>
+              <div class="order-row"><span class="idx">1</span><b>支付网关 v2.0</b><span class="date">2026-09-11</span></div>
+              <div class="order-row"><span class="idx">2</span><b>支付网关 v2.1</b><span class="date">2026-10-23</span></div>
+              <div class="order-row" style="border-color:var(--primary-border)"><span class="idx">3</span><b>支付网关 v2.2</b><span class="date">2026-11-27</span></div>
+            </div>
+            <div class="order-group">
+              <div class="order-proj">清结算与对账平台</div>
+              <div class="order-row"><span class="idx">1</span><b>清结算 v3.0</b><span class="date">2026-09-18</span></div>
+              <div class="order-row"><span class="idx">2</span><b>清结算 v3.1</b><span class="date">2026-10-30</span></div>
+              <div class="order-row"><span class="idx">3</span><b>清结算 v3.2</b><span class="date">2026-12-04</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="order-card">
+          <div class="order-head"><b>建议 · 目标就绪日倒序</b><span class="badge rec">最新在前</span></div>
+          <div class="order-body">
+            <div class="order-note ok">项目内按最新迭代优先：v2.2 → v2.1 → v2.0；跨项目仍是项目分组，不混排。</div>
+            <div class="order-group" style="margin-top:10px">
+              <div class="order-proj">统一支付网关</div>
+              <div class="order-row" style="border-color:var(--primary-border)"><span class="idx">1</span><b>支付网关 v2.2</b><span class="date">2026-11-27</span></div>
+              <div class="order-row"><span class="idx">2</span><b>支付网关 v2.1</b><span class="date">2026-10-23</span></div>
+              <div class="order-row"><span class="idx">3</span><b>支付网关 v2.0</b><span class="date">2026-09-11</span></div>
+            </div>
+            <div class="order-group">
+              <div class="order-proj">清结算与对账平台</div>
+              <div class="order-row"><span class="idx">1</span><b>清结算 v3.2</b><span class="date">2026-12-04</span></div>
+              <div class="order-row"><span class="idx">2</span><b>清结算 v3.1</b><span class="date">2026-10-30</span></div>
+              <div class="order-row"><span class="idx">3</span><b>清结算 v3.0</b><span class="date">2026-09-18</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <span>排序规则：</span>
+        <span class="step-chip">目标就绪日 DESC</span><span class="arrow">→</span>
+        <span class="step-chip">创建时间 DESC</span><span class="arrow">→</span>
+        <span class="step-chip">名称 DESC</span>
+        <span style="margin-left:8px">无目标日期的版本排在后面；进行中 / 待规划不单独置顶，避免“旧的进行中”压住“新的待规划”。</span>
+      </div>
+
+      <p class="proto-note">静态原型 · 仅用于方向确认 · 未修改任何业务代码 / 未跑迁移</p>
+    </div>
+  </main>
+</div>
+</body>
+</html>

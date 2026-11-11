@@ -2139,6 +2139,28 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .phase-filter-input:hover{border-color:var(--border-strong);}
 .phase-filter-input:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .phase-tbl-count{margin-left:auto;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 全部版本：跨项目勾选 → 创建发布计划 */
+.allv-tools{padding:0 0 12px;}
+.allv-selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;margin:0 0 12px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:var(--r-md);}
+.allv-selinfo{flex:1;min-width:0;}
+.allv-selinfo>b{display:block;font-size:12.5px;font-weight:650;color:var(--primary-fg);}
+.allv-selinfo .release-chips{margin-top:4px;flex-wrap:wrap;}
+.allv-selinfo .release-chip{background:var(--surface);border-color:var(--primary-border);color:var(--primary-fg);}
+.allv-hint{margin:0 0 12px;font-size:12px;color:var(--text-3);}
+.allv-tbl{min-width:760px;}
+.allv-tbl th:first-child,.allv-tbl td:first-child{width:36px;padding-right:0;}
+.allv-pick{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;cursor:pointer;}
+.allv-pick input:disabled{cursor:not-allowed;opacity:.45;}
+.allv-group td{padding:8px 10px;background:var(--surface-sunken);border-bottom:1px solid var(--border);}
+.allv-gname{font-size:12.5px;font-weight:650;color:var(--text);}
+.allv-gmeta{margin-left:8px;font-size:11px;color:var(--text-3);}
+.allv-vname{font-size:13px;font-weight:600;color:var(--text);}
+.allv-vsub{margin-top:1px;font-size:11px;color:var(--text-3);}
+.allv-tbl tbody tr.is-selected td{background:var(--primary-soft);}
+.allv-perm{display:inline-flex;align-items:center;font-size:11.5px;color:var(--text-2);}
+.allv-perm.is-off{color:var(--text-3);}
+.allv-empty{padding:28px 8px;text-align:center;font-size:12.5px;color:var(--text-3);}
+.allv-foot{margin:10px 0 0;font-size:11.5px;line-height:1.6;color:var(--text-3);}
 .phase-tbl-tools .btn.sm[disabled]{opacity:.5;cursor:not-allowed;}
 .phase-tbl{width:100%;border-collapse:collapse;font-size:13px;}
 .phase-tbl th,.phase-tbl td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}

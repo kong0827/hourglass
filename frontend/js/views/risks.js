@@ -8,6 +8,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { avatarHTML, priTagHTML } from "../lib/format.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
+import { icon } from "../core/icons.js";
 import { daysBetween, fmtDate } from "./manager-shared.js";
 
 var cache=null,seq=0,sending=false;
@@ -38,7 +39,8 @@ function uniqueRiskTasks(){
 }
 function renderRisks(){
   var today=cache.today,all=uniqueRiskTasks(),over=cache.overloaded||[];
-  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div>'+(canManage()?'<button class="btn sm primary" type="button" data-nudge-all '+(all.length?'':'disabled')+'>全部催办（'+all.length+'）</button>':'')+fullscreenButtonHTML()+'</div>'
+  var nudgeAll=canManage()?'<button class="btn sm soft manager-nudge-all" type="button" data-nudge-all '+(all.length?'':'disabled')+'>'+icon("bell", 13)+'全部催办<span class="manager-nudge-count">'+all.length+'</span></button>':'';
+  $("risksBody").innerHTML='<div class="manager-toolbar"><div><b>逾期与阻塞</b><span>逾期 / 阻塞 / 7 天未动 · 站内催办</span></div><div class="manager-actions">'+nudgeAll+fullscreenButtonHTML()+'</div></div>'
     +(over.length?'<button type="button" class="manager-overload-note" data-risk-overload title="查看成员负载"><b>'+over.length+' 位成员超载</b><span>'+over.map(function(m){return esc(m.name)+' '+m.loadPct+'%（剩余 '+Math.round(m.remainingMinutes/60*10)/10+'h）';}).join(' · ')+'</span></button>':'')
     +'<div class="manager-risk-grid">'+riskColumn("overdue","逾期",cache.overdue||[],today)+riskColumn("blocked","被阻塞",cache.blocked||[],today)+riskColumn("stagnant","7 天未动",cache.stagnant||[],today)+'</div>';
 }

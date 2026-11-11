@@ -6,6 +6,7 @@ import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.PhaseMemberTaskPage;
 import com.hourglass.dto.PhaseStatsResponse;
+import com.hourglass.dto.CrossProjectVersionRow;
 import com.hourglass.dto.ProjectVersionSaveRequest;
 import com.hourglass.dto.ReleaseNoteResponse;
 import com.hourglass.dto.ReleasePlanOptions;
@@ -86,6 +87,12 @@ public class ProjectVersionController {
                                                       @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(phaseService.memberTasks(ctx.getWsId(), reqId, userId, ctx.getUserId(),
                 offset == null ? 0 : offset, limit == null ? 0 : limit));
+    }
+
+    /** 跨项目版本清单：全部可见项目的版本，勾选后进入现有发布计划。 */
+    @GetMapping("/api/versions/cross-project")
+    public ApiResult<List<CrossProjectVersionRow>> crossProjectVersions(@CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(phaseService.crossProjectVersions(ctx.getWsId(), ctx.getUserId()));
     }
 
     /** 管理端总览：全部项目的首版/迭代工时对比、版本节奏与准时率 */

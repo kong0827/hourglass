@@ -41,6 +41,24 @@
     ORDER BY created_at, id
   </select>
 
+  <select id="selectCrossProjectRows" resultType="com.hourglass.dto.CrossProjectVersionRow">
+    SELECT r.id AS reqId, r.name AS projectName,
+      v.id AS versionId, v.name AS versionName, v.status AS versionStatus,
+      v.target_date AS targetDate, v.released_at AS releasedAt,
+      (SELECT COUNT(DISTINCT vt.task_id) FROM version_task vt
+        INNER JOIN task t ON t.workspace_id = vt.workspace_id AND t.id = vt.task_id
+       WHERE vt.workspace_id = v.workspace_id AND vt.version_id = v.id
+         AND t.req_id = v.req_id AND t.deleted_at IS NULL) AS taskCount,
+      (SELECT MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) FROM version_release vr
+       WHERE vr.workspace_id = v.workspace_id AND vr.version_id = v.id
+         AND vr.result = 'success' AND vr.environment = 'production'
+         AND vr.operation IN ('deploy', 'redeploy')) AS latestReleaseDate
+    FROM project_version v
+    INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
+    WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
+    ORDER BY r.name, COALESCE(v.target_date, DATE(v.released_at), DATE(v.created_at)) DESC, v.created_at DESC, v.id DESC
+  </select>
+
   <select id="countGroupByReq" resultType="java.util.HashMap">
     SELECT req_id AS reqId, COUNT(*) AS cnt
     FROM project_version WHERE workspace_id = #{workspaceId}

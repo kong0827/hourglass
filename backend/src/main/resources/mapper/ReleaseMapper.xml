@@ -68,7 +68,7 @@
     INNER JOIN project_version pv ON pv.workspace_id = prv.workspace_id AND pv.id = prv.version_id
     INNER JOIN requirement r ON r.workspace_id = pv.workspace_id AND r.id = pv.req_id
     WHERE prv.workspace_id = #{workspaceId} AND prv.plan_id = #{planId}
-    ORDER BY r.name, pv.name, pv.id
+    ORDER BY r.name, COALESCE(pv.target_date, DATE(pv.released_at), DATE(pv.created_at)) DESC, pv.created_at DESC, pv.id DESC
   </select>
   <select id="selectPlanVersionOptions" resultType="com.hourglass.dto.ReleasePlanOptionRow">
     SELECT r.id AS reqId, r.name AS projectName, v.id AS versionId, v.name AS versionName,
@@ -76,7 +76,7 @@
     FROM project_version v
     INNER JOIN requirement r ON r.workspace_id = v.workspace_id AND r.id = v.req_id
     WHERE v.workspace_id = #{workspaceId} AND r.archived_at IS NULL
-    ORDER BY r.name, v.name, v.id
+    ORDER BY r.name, COALESCE(v.target_date, DATE(v.released_at), DATE(v.created_at)) DESC, v.created_at DESC, v.id DESC
   </select>
   <insert id="insertPlanVersion">
     INSERT INTO version_release_plan_version (workspace_id, plan_id, version_id, req_id)

@@ -1,5 +1,6 @@
 package com.hourglass.mapper;
 
+import com.hourglass.dto.CrossProjectVersionRow;
 import com.hourglass.entity.ProjectVersion;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,6 +14,9 @@ public interface ProjectVersionMapper {
 
     /** 备份导出：整空间版本（含已发布） */
     List<ProjectVersion> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
+    /** 跨项目版本清单：工作项数与最近生产发布时间在 SQL 侧聚合，版本按目标/发布日期倒序 */
+    List<CrossProjectVersionRow> selectCrossProjectRows(@Param("workspaceId") String workspaceId);
 
     ProjectVersion selectById(String id);
 
