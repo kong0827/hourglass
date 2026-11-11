@@ -5,7 +5,8 @@
 
 /* ---------- 悬浮入口 ---------- */
 .ai-fab{
-  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:280;
+  /* 低于弹窗遮罩（200），弹窗打开时跟着页面一起被盖住 */
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:190;
   display:grid;place-items:center;width:48px;height:48px;padding:0;border-radius:50%;
   background:var(--primary);color:#fff;box-shadow:var(--shadow-lg);
   transition:transform var(--dur-base) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);
@@ -236,6 +237,7 @@
   border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
 }
 /* 助手面板打开时收起「新建」FAB，避免两个悬浮按钮叠在一起 */
+[data-layout="mobile"] body.ai-open .ai-fab{display:none;}
 [data-layout="mobile"] body.ai-open #btnNew{
   transform:translateY(14px) scale(.92);opacity:0;pointer-events:none;
 }

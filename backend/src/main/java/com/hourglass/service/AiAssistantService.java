@@ -203,10 +203,10 @@ public class AiAssistantService {
 
     private static List<String> suggestions(boolean canCreate) {
         List<String> list = new ArrayList<String>();
-        list.add("我有哪些逾期的任务？");
+        list.add("我有哪些逾期的工作项？");
         list.add("今天有什么到期的工作项？");
-        list.add(canCreate ? "帮我建一个本周五截止的任务" : "项目权限怎么设置？");
-        list.add("如何创建一个任务？");
+        list.add(canCreate ? "帮我建一个本周五截止的工作项" : "项目权限怎么设置？");
+        list.add("如何创建工作项？");
         return list;
     }
 
@@ -239,7 +239,7 @@ public class AiAssistantService {
         AiConfig cfg = configService.resolve(userId);
         AiClient.Reply reply = client.chat(cfg, systemPrompt(), userPrompt(workspaceName, req, projects, contextProject), true);
         JsonNode root = parse(reply.content);
-        AiUsage usage = AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed);
+        AiUsage usage = AiUsage.of(reply);
 
         AiAssistantResponse res = new AiAssistantResponse();
         res.setUsage(usage);

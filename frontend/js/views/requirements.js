@@ -4,14 +4,14 @@ import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
-import { canEditReq, roleReadOnly, rt, state } from "../core/state.js";
+import { canEditReq, reqNameById, roleReadOnly, rt, state } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
-import { AIProgress, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
+import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
-import { DOC_TYPES, colName, docTypeName, fmtTs, pad2, priColor, priName, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, PRIORITIES, colName, docTypeName, fmtTs, pad2, priName, typeBadgeHTML } from "../lib/format.js";
 import * as textDiff from "../lib/text-diff.js";
 import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
@@ -1876,18 +1876,24 @@ function runAiSplit(){
   });
 }
 function renderAiSplit(d){
+  var proj = editingMeta.reqId ? reqNameById(editingMeta.reqId) : "";
+  var hasDep = aiSplitDrafts.some(function(t){ return t.dependsOnIndex >= 0; });
   $("dlgAiSplitMsg").textContent = "「" + (d.reqDocTitle || "") + "」正文 " + (d.docChars || 0)
-    + " 字，AI 拆出 " + aiSplitDrafts.length + " 条。勾选要创建的，标题可以直接改；没勾的不会落库。";
+    + " 字，AI 拆出 " + aiSplitDrafts.length + " 条。勾选的会创建到"
+    + (proj ? "「" + proj + "」" : "本项目") + "的待处理列并关联本文档，标题和优先级可直接改"
+    + (hasDep ? "；有依赖的两条都勾选时会自动连上依赖" : "") + "。";
   $("aiSplitList").innerHTML = aiSplitDrafts.map(function(t, i){
     var p = String(t.priority || "P2").toUpperCase();
-    var pcls = p === "P0" ? "p0" : (p === "P1" ? "p1" : "");
+    var opts = PRIORITIES.map(function(x){
+      return '<option value="' + x + '"' + (x === p ? " selected" : "") + '>' + x + ' · ' + esc(priName(x)) + '</option>';
+    }).join("");
     return '<div class="ai-item on" data-i="' + i + '">' +
       '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择工作项">' +
       '<div class="ai-main">' +
         '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="工作项标题">' +
         (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
         '<div class="ai-meta">' +
-          '<span class="ai-tag ' + pcls + '" style="color:' + esc(priColor(p)) + '">' + esc(priName(p)) + '</span>' +
+          '<select class="ai-pri" data-pri="' + i + '" aria-label="优先级">' + opts + '</select>' +
           (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '') +
           (t.reason ? '<span class="ai-reason">' + esc(t.reason) + '</span>' : '') +
         '</div>' +
@@ -1907,11 +1913,13 @@ function applyAiSplit(){
     var titleEl = nodes[i].querySelector(".ai-title");
     var title = (titleEl ? titleEl.value : src.title || "").trim();
     if(!title) continue;
+    var priEl = nodes[i].querySelector("[data-pri]");
     picked.push({
       title: title,
       description: src.description || "",
-      priority: src.priority || "P2",
-      dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex
+      priority: priEl ? priEl.value : (src.priority || "P2"),
+      dependsOnIndex: src.dependsOnIndex == null ? -1 : src.dependsOnIndex,
+      draftIndex: idx
     });
   }
   if(!picked.length){ toast("至少选一条要创建的工作项", "warn"); return; }
@@ -1922,12 +1930,10 @@ function applyAiSplit(){
     btn.disabled = false;
     UI.closeModal($("dlgAiSplit"));
     var msg = "已创建 " + r.created + " 个工作项";
-    if(r.skipped) msg += "，跳过 " + r.skipped + " 个同名工作项";
-    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 个失败";
+    if(r.linked) msg += "，连上 " + r.linked + " 条依赖";
+    if(r.skipped) msg += "，跳过 " + r.skipped + " 个本项目已有的同名项";
+    msg += aiApplyFailText(r.failed, "个");
     toast(msg, r.failed && r.failed.length ? "warn" : "fs");
-    if(r.failed && r.failed.length){
-      console.warn("AI 拆分落库失败项", r.failed);
-    }
     /* 任务数变了：列表页的「任务/完成」计数要跟着动 */
     loadReqDocs(true);
   }).catch(function(ex){
@@ -1988,7 +1994,7 @@ function renderAiAudit(d){
   $("aiAuditList").innerHTML = pts.map(function(p){
     /* 状态同时进 class 与文案：只接受四个已知值，避免异常值破坏属性 */
     var st = S[p.status] ? p.status : "missing";
-    return '<div class="ai-item' + (st === "missing" ? " on" : "") + '">' +
+    return '<div class="ai-item' + (st === "missing" ? " miss" : "") + '">' +
       '<div class="ai-main">' +
         '<div class="ai-meta">' +
           '<span class="ai-tag ' + st + '">' + (S[st] || st) + '</span>' +

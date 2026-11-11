@@ -11,6 +11,8 @@ public class AiApplyResult {
 
     private int created;
     private int skipped;
+    /** 按草稿依赖关系连上的依赖条数 */
+    private int linked;
     private List<Item> failed = new ArrayList<Item>();
 
     @Data

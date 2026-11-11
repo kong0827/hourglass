@@ -177,9 +177,17 @@ export function aiErrorText(msg) {
   return m;
 }
 
+/* 批量创建的失败项：把首条原因直接给用户看，别只留在控制台 */
+export function aiApplyFailText(failed, unit) {
+  if(!failed || !failed.length) return "";
+  var f = failed[0] || {};
+  return "，" + failed.length + " " + (unit || "个") + "失败（「" + (f.title || "") + "」："
+    + (f.reason || "未知原因") + (failed.length > 1 ? " 等" : "") + "）";
+}
+
 export function aiUsageText(u) {
   if (!u) return "";
   return "本次 " + (u.totalTokens || 0) + " tokens（输入 " + (u.promptTokens || 0)
     + " / 输出 " + (u.completionTokens || 0) + "）· 模型 " + (u.model || "—")
-    + (u.jsonMode ? "" : " · 该模型不支持 JSON 模式，已降级解析");
+    + (u.jsonFallback ? " · 该模型不支持 JSON 模式，已降级解析" : "");
 }

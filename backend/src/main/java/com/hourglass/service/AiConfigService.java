@@ -186,7 +186,10 @@ public class AiConfigService {
             throw AppException.notFound("账号不存在");
         }
         if (!Boolean.TRUE.equals(u.getAiEnabled())) {
-            throw AppException.badRequest("你的 AI 开关是关的，请先在「个人设置 → AI 设置」里打开");
+            boolean neverConfigured = u.getAiProvider() == null && u.getAiApiKey() == null;
+            throw AppException.badRequest(neverConfigured
+                    ? "你还没配置 AI：请先在「个人设置 → AI 设置」里选模型、填 API Key 并打开开关"
+                    : "你的 AI 开关是关的，请先在「个人设置 → AI 设置」里打开");
         }
         return resolveRaw(u);
     }

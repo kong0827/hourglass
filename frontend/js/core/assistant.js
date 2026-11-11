@@ -90,12 +90,12 @@ function buildDom(){
   panel.hidden = true;
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "false");
-  panel.setAttribute("aria-label", "沙漏 AI 助手");
+  panel.setAttribute("aria-label", "AI 助手");
   panel.innerHTML =
     '<header class="ai-head">' +
       '<span class="ai-head-ic">' + icon("ai", 17) + '</span>' +
       '<div class="ai-head-txt">' +
-        '<div class="ai-head-title">沙漏助手</div>' +
+        '<div class="ai-head-title">AI 助手</div>' +
         '<div class="ai-head-sub" id="aiHeadSub">正在读取当前空间…</div>' +
       '</div>' +
       '<button class="ai-icon-btn" type="button" data-ai-close aria-label="关闭助手">' + icon("close", 16) + '</button>' +
@@ -110,7 +110,7 @@ function buildDom(){
     '</div>' +
     '<div class="ai-draft-slot" id="aiDraftSlot" hidden></div>' +
     '<form class="ai-compose" id="aiForm">' +
-      '<textarea id="aiInput" rows="1" maxlength="2000" placeholder="问点什么，或直接说：在 XX 项目提个需求 / 把某需求评审通过…"></textarea>' +
+      '<textarea id="aiInput" rows="1" maxlength="2000" placeholder="问问题，或直接让我建工作项、提需求…"></textarea>' +
       '<button class="ai-send" id="aiSend" type="submit" aria-label="发送">' + icon("up", 16) + '</button>' +
     '</form>' +
     '<div class="ai-foot" id="aiFoot">只读取你有权访问的项目 · 修改前需确认</div>';

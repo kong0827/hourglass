@@ -1149,11 +1149,11 @@
           </div>
         </div>
 
-        <!-- AI 拆分：草稿先给人看，确认后才落库 -->
+        <!-- AI 拆分：草稿先给人看，确认后才创建 -->
         <div class="modal-layer" id="dlgAiSplit" role="dialog" aria-modal="true" aria-labelledby="dlgAiSplitTitle">
           <div class="sheet ai-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆分结果</h3>
-            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的工作项，标题可以直接改。不勾的不会落库。</p>
+            <h3 class="reqdoc-dlg-title" id="dlgAiSplitTitle">AI 拆出的工作项</h3>
+            <p class="reqdoc-dlg-msg" id="dlgAiSplitMsg">勾选要创建的工作项，标题和优先级可以直接改；没勾的不会创建。</p>
             <div class="ai-list" id="aiSplitList"></div>
             <div class="ai-usage" id="aiSplitUsage"></div>
             <div class="reqdoc-dlg-foot">
@@ -1464,12 +1464,12 @@
           </div>
         </div></div></div>
 
-        <!-- AI 生成测试用例：先选来源，再在进度层等待，最后勾选草稿落库 -->
+        <!-- AI 生成测试用例：先选来源，再在进度层等待，最后勾选草稿创建 -->
         <div class="modal-layer" id="dlgAiCaseSource" role="dialog" aria-modal="true" aria-labelledby="aiCaseSourceTitle"><div class="sheet sm"><div class="sheet-body">
           <div class="panel">
             <div class="panel-head"><h3 id="aiCaseSourceTitle">AI 生成测试用例</h3><button class="icon-btn sm" type="button" id="dlgAiCaseSourceX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
-              <p class="foot-note">从需求文档或需求池条目生成用例草稿；勾选确认后才会创建，AI 不会直接写入。</p>
+              <p class="foot-note">从需求文档或需求池条目生成用例草稿，你勾选确认后才会创建。</p>
               <div class="field">
                 <label>生成来源</label>
                 <div class="seg" id="aiCaseSourceSeg">
@@ -1505,7 +1505,7 @@
         <div class="modal-layer" id="dlgAiCaseResult" role="dialog" aria-modal="true" aria-labelledby="aiCaseResultTitle">
           <div class="sheet ai-dlg">
             <h3 class="reqdoc-dlg-title" id="aiCaseResultTitle">AI 生成的测试用例</h3>
-            <p class="reqdoc-dlg-msg" id="aiCaseResultMsg">勾选要创建的用例，标题可以直接改；没勾的不会落库。</p>
+            <p class="reqdoc-dlg-msg" id="aiCaseResultMsg">勾选要创建的用例，标题可以直接改；没勾的不会创建。</p>
             <div class="ai-list" id="aiCaseList"></div>
             <div class="ai-usage" id="aiCaseUsage"></div>
             <div class="reqdoc-dlg-foot">
@@ -2427,12 +2427,12 @@
                 <h3>AI 设置</h3>
                 <span class="meta-right" id="meAiState">—</span>
               </div>
-              <p class="set-hint">用来「按文档拆工作项」和「检查文档做完了没」。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
+              <p class="set-hint">用于 AI 助手、文档拆成工作项、完成度检查、生成测试用例和 AI 周报。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
               <div class="ai-assist-row">
                 <span class="ai-assist-ic" id="meAiAssistantIc" aria-hidden="true"></span>
                 <div class="ai-assist-txt">
                   <div class="ai-assist-title">显示 AI 助手</div>
-                  <div class="ai-assist-sub">在右下角显示悬浮助手，可问答、找入口，并按自然语言创建工作项；关闭后立即隐藏。</div>
+                  <div class="ai-assist-sub">在右下角显示悬浮助手：问答找入口、查我的待办，或用一句话建工作项、提需求、推进状态（每次改动都要你确认）；关闭后立即隐藏。</div>
                 </div>
                 <label class="sw" title="开启后在右下角显示 AI 助手悬浮入口">
                   <input type="checkbox" id="meAiAssistant" role="switch" aria-label="显示 AI 助手" />

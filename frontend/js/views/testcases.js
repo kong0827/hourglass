@@ -1,7 +1,7 @@
 /* views/testcases · 测试用例：用例库、执行结果标记、失败一键转缺陷 */
 
 import { API } from "../core/api.js";
-import { AIProgress, aiErrorText, aiUsageText } from "../core/ai-progress.js";
+import { AIProgress, aiApplyFailText, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
 import { icon } from "../core/icons.js";
@@ -1895,8 +1895,7 @@ function openAiCaseSource(keepState){
   for(var i = 0; i < rt.reqList.length; i++){
     if(rt.reqList[i].id === caseReqId){ req = rt.reqList[i]; break; }
   }
-  $("aiCaseSourceHint").textContent = "当前项目：" + (req ? req.name : caseReqId)
-    + "。AI 只生成草稿，勾选确认后才会创建。";
+  $("aiCaseSourceHint").textContent = "当前项目：" + (req ? req.name : caseReqId);
   loadAiCaseDocs(caseReqId);
   loadAiCaseDemands(caseReqId);
   UI.openModal($("dlgAiCaseSource"), "#aiCaseDocSel");
@@ -1957,7 +1956,7 @@ function generateAiCases(){
   }
   var sel = aiCaseSource === "doc" ? $("aiCaseDocSel") : $("aiCaseDemandSel");
   if(!sel.value){
-    toast(aiCaseSource === "doc" ? "先选择要拆的文档" : "先选择要生成用例的需求", "warn");
+    toast(aiCaseSource === "doc" ? "先选择来源文档" : "先选择来源需求", "warn");
     sel.focus();
     return;
   }
@@ -2068,9 +2067,8 @@ function applyAiCases(){
     UI.closeModal($("dlgAiCaseResult"));
     var msg = "已创建 " + r.created + " 条用例";
     if(r.skipped) msg += "，跳过 " + r.skipped + " 条同名";
-    if(r.failed && r.failed.length) msg += "，" + r.failed.length + " 条失败";
+    msg += aiApplyFailText(r.failed, "条");
     toast(msg, r.failed && r.failed.length ? "warn" : "fs");
-    if(r.failed && r.failed.length) console.warn("AI 用例落库失败项", r.failed);
     if(reqId === caseReqId) loadCases();
   }).catch(function(ex){
     aiCaseApplying = false;

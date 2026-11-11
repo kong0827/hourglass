@@ -70,6 +70,8 @@ public class AiClient {
         public int promptTokens;
         public int completionTokens;
         public boolean jsonModeUsed;
+        /** 请求了 JSON 模式但上游不支持、已去掉 response_format 重试 */
+        public boolean jsonFallback;
     }
 
     /**
@@ -118,6 +120,7 @@ public class AiClient {
                             + " 秒），为避免代理超时未再重试；请稍后重试或换更快的模型", e);
                 }
                 Reply r = doCall(cfg, url, messages, false);
+                r.jsonFallback = true;
                 return r;
             }
             throw new AppException(502, errorMessage(e.getRawStatusCode(),

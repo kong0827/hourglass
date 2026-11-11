@@ -105,7 +105,7 @@ public class AiReviewService {
         res.setWeekEnd(d.getWeekEnd());
         res.setReport(clean(reply.content));
         res.setSource(src);
-        res.setUsage(AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed));
+        res.setUsage(AiUsage.of(reply));
         if (res.getReport().isEmpty()) {
             throw new AppException(502, "AI 返回了空内容，请重试一次");
         }

@@ -7,6 +7,7 @@ import com.hourglass.dto.AiAuditResponse;
 import com.hourglass.dto.AiConfig;
 import com.hourglass.dto.AiSplitResponse;
 import com.hourglass.dto.AiUsage;
+import com.hourglass.dto.GanttDepRequest;
 import com.hourglass.dto.TaskSaveRequest;
 import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.Task;
@@ -52,17 +53,19 @@ public class AiReqDocService {
     private final AiClient client;
     private final TaskCommandService taskService;
     private final ProjectAccessService projectAccess;
+    private final GanttService ganttService;
     private final ObjectMapper om = new ObjectMapper();
 
     public AiReqDocService(RequirementDocService docService, TaskMapper taskMapper,
                            AiConfigService configService, AiClient client, TaskCommandService taskService,
-                           ProjectAccessService projectAccess) {
+                           ProjectAccessService projectAccess, GanttService ganttService) {
         this.docService = docService;
         this.taskMapper = taskMapper;
         this.configService = configService;
         this.client = client;
         this.taskService = taskService;
         this.projectAccess = projectAccess;
+        this.ganttService = ganttService;
     }
 
     // ==================== 拆分成任务草稿 ====================
@@ -113,7 +116,7 @@ public class AiReqDocService {
         res.setReqDocId(docId);
         res.setReqDocTitle(doc.getTitle());
         res.setDocChars(text.length());
-        res.setUsage(AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed));
+        res.setUsage(AiUsage.of(reply));
 
         JsonNode arr = root.path("tasks");
         if (!arr.isArray()) {
@@ -216,7 +219,7 @@ public class AiReqDocService {
         res.setReqDocTitle(doc.getTitle());
         res.setSummary(trim(root.path("summary").asText(""), 200));
         res.setNextStep(trim(root.path("nextStep").asText(""), 200));
-        res.setUsage(AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed));
+        res.setUsage(AiUsage.of(reply));
 
         for (Task t : mine) {
             AiAuditResponse.TaskBrief b = new AiAuditResponse.TaskBrief();
@@ -300,16 +303,22 @@ public class AiReqDocService {
             throw AppException.badRequest("每次最多创建 15 个任务");
         }
         RequirementDoc doc = docService.getVisible(workspaceId, userId, docId);
+        /* 同名去重只在本项目内：别的项目里也叫「联调」不该被跳过 */
         Set<String> titles = new HashSet<String>();
-        for (String title : taskMapper.selectTitles(workspaceId,
-                projectAccess.viewerScope(workspaceId, userId))) {
+        List<String> existing = doc.getReqId() == null
+                ? taskMapper.selectTitles(workspaceId, projectAccess.viewerScope(workspaceId, userId))
+                : taskMapper.selectTitlesByReq(workspaceId, doc.getReqId(), Integer.MAX_VALUE);
+        for (String title : existing) {
             if (title != null) {
                 titles.add(title.trim());
             }
         }
 
         AiApplyResult out = new AiApplyResult();
-        for (AiSplitResponse.DraftTask d : drafts) {
+        Map<Integer, String> createdByIndex = new LinkedHashMap<Integer, String>();
+        Map<String, Integer> dependsOn = new LinkedHashMap<String, Integer>();
+        for (int pos = 0; pos < drafts.size(); pos++) {
+            AiSplitResponse.DraftTask d = drafts.get(pos);
             String title = trim(d.getTitle(), 60);
             if (title.isEmpty()) {
                 continue;
@@ -327,10 +336,31 @@ public class AiReqDocService {
                 req.setReqId(doc.getReqId());
                 req.setReqDocId(docId);
                 req.setProgress(0);
-                taskService.create(userId, workspaceId, req);
+                Task t = taskService.create(userId, workspaceId, req);
                 out.setCreated(out.getCreated() + 1);
+                createdByIndex.put(d.getDraftIndex() == null ? pos : d.getDraftIndex(), t.getId());
+                if (d.getDependsOnIndex() >= 0) {
+                    dependsOn.put(t.getId(), d.getDependsOnIndex());
+                }
             } catch (Exception e) {
                 out.getFailed().add(new AiApplyResult.Item(title, e.getMessage()));
+            }
+        }
+        /* 前置项也被选中并创建成功时才连线；连线失败（成环、达上限）不影响已建的工作项 */
+        for (Map.Entry<String, Integer> e : dependsOn.entrySet()) {
+            String from = createdByIndex.get(e.getValue());
+            if (from == null || from.equals(e.getKey())) {
+                continue;
+            }
+            try {
+                GanttDepRequest dep = new GanttDepRequest();
+                dep.setFromTaskId(from);
+                dep.setToTaskId(e.getKey());
+                dep.setDepType("FS");
+                ganttService.createDep(workspaceId, userId, dep);
+                out.setLinked(out.getLinked() + 1);
+            } catch (AppException ignored) {
+                // 依赖是附加信息，工作项本身已创建成功
             }
         }
         return out;

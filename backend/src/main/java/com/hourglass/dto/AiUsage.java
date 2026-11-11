@@ -1,5 +1,6 @@
 package com.hourglass.dto;
 
+import com.hourglass.common.AiClient;
 import lombok.Data;
 
 /** 一次 AI 调用的用量（让用户知道这次花了多少 token，自己的额度自己有数） */
@@ -10,16 +11,19 @@ public class AiUsage {
     private int promptTokens;
     private int completionTokens;
     private int totalTokens;
-    /** 是否走了 JSON 模式（降级过则为 false，排查问题用） */
+    /** 是否走了 JSON 模式（纯文本调用本就不走，排查问题用） */
     private boolean jsonMode;
+    /** 请求了 JSON 模式但模型不支持、已降级为纯文本解析 */
+    private boolean jsonFallback;
 
-    public static AiUsage of(String model, int prompt, int completion, boolean jsonMode) {
+    public static AiUsage of(AiClient.Reply r) {
         AiUsage u = new AiUsage();
-        u.model = model;
-        u.promptTokens = prompt;
-        u.completionTokens = completion;
-        u.totalTokens = prompt + completion;
-        u.jsonMode = jsonMode;
+        u.model = r.model;
+        u.promptTokens = r.promptTokens;
+        u.completionTokens = r.completionTokens;
+        u.totalTokens = r.promptTokens + r.completionTokens;
+        u.jsonMode = r.jsonModeUsed;
+        u.jsonFallback = r.jsonFallback;
         return u;
     }
 }

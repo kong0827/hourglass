@@ -126,7 +126,7 @@ public class AiTestCaseService {
         res.setSourceTitle(source.title);
         res.setSourceChars(source.text.length());
         res.setTruncated(truncated);
-        res.setUsage(AiUsage.of(reply.model, reply.promptTokens, reply.completionTokens, reply.jsonModeUsed));
+        res.setUsage(AiUsage.of(reply));
 
         JsonNode arr = root.path("cases");
         if (!arr.isArray()) {

@@ -25,8 +25,10 @@ public class AiSplitResponse {
         private String description;
         /** P0-P3，后端已做合法值兜底 */
         private String priority;
-        /** 依赖的草稿下标（-1 表示无依赖），前端用于排序/提示 */
+        /** 依赖的草稿下标（-1 表示无依赖）；创建时两端都选中才会连成依赖 */
         private int dependsOnIndex = -1;
+        /** 该草稿在原拆分结果里的下标（提交时回传，用于解析 dependsOnIndex；缺省按提交顺序） */
+        private Integer draftIndex;
         /** 模型给出的拆分理由，界面上折叠展示，方便判断拆得对不对 */
         private String reason;
         /** 默认勾选（前端可改） */
