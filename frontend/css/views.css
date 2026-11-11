@@ -1771,6 +1771,24 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
   font-size:13px;color:var(--text-2);cursor:pointer;
 }
 
+/* AI 助手显示开关（个人设置 · AI 区）：左图标 + 说明，右侧 .sw 开关 */
+.ai-assist-row{
+  display:flex;align-items:center;gap:12px;
+  margin-top:14px;padding:12px 14px;
+  border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface-sunken);
+  transition:border-color var(--dur-fast) var(--ease-out);
+}
+.ai-assist-row:hover{border-color:var(--border-strong);}
+.ai-assist-ic{
+  display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;
+  border-radius:var(--r-sm);background:var(--primary-soft);color:var(--primary-fg);
+}
+.ai-assist-txt{flex:1 1 auto;min-width:0;}
+.ai-assist-title{font-size:13.5px;font-weight:650;color:var(--text);line-height:19px;}
+.ai-assist-sub{margin-top:2px;font-size:12px;line-height:17px;color:var(--text-3);}
+.ai-assist-row .sw{flex:0 0 auto;margin:0;}
+
 /* ===== AI 弹窗（拆分 / 完成度） ===== */
 /* 内容量不固定（拆 3 条和 12 条差很多），所以弹窗自身定高上限、列表内部滚动 */
 .ai-dlg{

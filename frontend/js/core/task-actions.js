@@ -3,7 +3,7 @@
 import { API } from "./api.js";
 import { $ } from "./dom.js";
 import { icon } from "./icons.js";
-import { activeView } from "./router.js";
+import { activeView, showView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
 import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
@@ -58,9 +58,17 @@ function stripHashParam(name){
 }
 function handleDeepLink(){
   var id = hashParam("task");
-  if(!id) return;
-  stripHashParam("task");   // 先清参数：避免刷新后反复弹窗
-  openTaskById(id);
+  if(id){
+    stripHashParam("task");   // 先清参数：避免刷新后反复弹窗
+    openTaskById(id);
+    return;
+  }
+  /* 助手「新建工作项」入口：#/board?new=1 直接打开新建抽屉 */
+  if(hashParam("new") === "1"){
+    stripHashParam("new");
+    if(activeView === "board"){ openTaskDrawer("backlog"); return; }
+    showView("board").then(function(){ openTaskDrawer("backlog"); });
+  }
 }
 function openDuePopover(anchor, taskId){
   var t = taskById(taskId);

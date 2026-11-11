@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="css/smart-table.css" />
 <link rel="stylesheet" href="css/auth.css" />
 <link rel="stylesheet" href="css/mobile.css" />
+<link rel="stylesheet" href="css/assistant.css" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#2563EB" />
 <link rel="apple-touch-icon" href="icons/icon-1024.png" />
@@ -2426,6 +2427,16 @@
                 <span class="meta-right" id="meAiState">—</span>
               </div>
               <p class="set-hint">用来「按文档拆工作项」和「检查文档做完了没」。额度走你自己填的 Key，加密后只存在你的账号下 —— 共享空间里的其他人看不到，也不会用到你的额度。</p>
+              <div class="ai-assist-row">
+                <span class="ai-assist-ic" id="meAiAssistantIc" aria-hidden="true"></span>
+                <div class="ai-assist-txt">
+                  <div class="ai-assist-title">显示 AI 助手</div>
+                  <div class="ai-assist-sub">在右下角显示悬浮助手，可问答、找入口，并按自然语言创建工作项；关闭后立即隐藏。</div>
+                </div>
+                <label class="sw" title="开启后在右下角显示 AI 助手悬浮入口">
+                  <input type="checkbox" id="meAiAssistant" role="switch" aria-label="显示 AI 助手" />
+                </label>
+              </div>
               <div class="set-grid">
                 <div class="field">
                   <label for="meAiProvider">厂商</label>

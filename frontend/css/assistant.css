@@ -1,0 +1,218 @@
+/* ==========================================================================
+   assistant.css · 右下角 AI 助手
+   只消费 tokens.css 的令牌；浅色为默认，深色自动跟随。
+   ========================================================================== */
+
+/* ---------- 悬浮入口 ---------- */
+.ai-fab{
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h));z-index:280;
+  display:grid;place-items:center;width:48px;height:48px;padding:0;border-radius:50%;
+  background:var(--primary);color:#fff;box-shadow:var(--shadow-lg);
+  transition:transform var(--dur-base) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);
+}
+.ai-fab:hover{background:var(--primary-hover);transform:translateY(-1px);box-shadow:var(--shadow-xl);}
+.ai-fab:active{transform:none;}
+.ai-fab[aria-expanded="true"]{background:var(--primary-active);}
+.ai-fab:focus-visible{outline:none;box-shadow:var(--shadow-lg),var(--ring-focus);}
+.ai-fab[hidden]{display:none;}
+
+/* ---------- 面板 ---------- */
+.ai-panel{
+  position:fixed;right:24px;bottom:calc(24px + var(--app-foot-h) + 60px);z-index:280;
+  display:flex;flex-direction:column;
+  width:min(420px,calc(100vw - 32px));
+  height:min(620px,calc(100vh - 150px));
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-xl);
+  overflow:hidden;
+}
+.ai-panel[hidden]{display:none;}
+
+.ai-head{
+  display:flex;align-items:center;gap:10px;flex:0 0 auto;
+  padding:12px 12px 12px 14px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.ai-head-ic{
+  display:grid;place-items:center;width:30px;height:30px;flex:0 0 auto;
+  border-radius:var(--r-sm);background:var(--primary-soft);color:var(--primary-fg);
+}
+.ai-head-txt{flex:1 1 auto;min-width:0;}
+.ai-head-title{font-size:14px;font-weight:650;color:var(--text);line-height:18px;}
+.ai-head-sub{
+  margin-top:2px;font-size:11.5px;line-height:15px;color:var(--text-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ai-icon-btn{
+  display:grid;place-items:center;width:28px;height:28px;flex:0 0 auto;
+  border-radius:var(--r-xs);color:var(--text-3);
+}
+.ai-icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+
+/* ---------- 对话区 ---------- */
+.ai-body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:14px;display:flex;flex-direction:column;gap:10px;
+  background:var(--surface);
+}
+.ai-welcome{padding:2px 2px 4px;}
+.ai-welcome-title{font-size:13px;line-height:19px;font-weight:600;color:var(--text);}
+.ai-welcome-sub{margin-top:4px;font-size:12px;line-height:18px;color:var(--text-3);}
+.ai-suggest{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.ai-suggest button{
+  padding:5px 10px;border:1px solid var(--border);border-radius:var(--r-pill);
+  background:var(--surface);font-size:12px;line-height:18px;color:var(--text-2);
+  text-align:left;transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+}
+.ai-suggest button:hover{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+
+.ai-msgs{display:flex;flex-direction:column;gap:10px;}
+.ai-msg{
+  max-width:min(88%,340px);padding:9px 12px;border-radius:var(--r-md);
+  font-size:13px;line-height:20px;word-break:break-word;
+}
+.ai-msg.user{
+  align-self:flex-end;background:var(--primary);color:#fff;
+  border-bottom-right-radius:var(--r-xs);white-space:pre-wrap;
+}
+.ai-msg.bot{
+  align-self:flex-start;background:var(--surface-sunken);color:var(--text);
+  border-bottom-left-radius:var(--r-xs);
+}
+.ai-msg.note{
+  align-self:flex-start;max-width:100%;padding:0 2px;
+  background:transparent;color:var(--text-3);font-size:12px;line-height:18px;
+}
+.ai-msg.error{
+  align-self:flex-start;background:var(--danger-soft);color:var(--danger-fg);
+  border:1px solid var(--danger-border);font-size:12.5px;
+}
+.ai-msg.typing{display:flex;align-items:center;gap:6px;color:var(--text-3);}
+.ai-typing-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--text-3);
+  animation:ai-blink 1.1s infinite ease-in-out;
+}
+.ai-typing-dot:nth-child(2){animation-delay:.15s;}
+.ai-typing-dot:nth-child(3){animation-delay:.3s;}
+@keyframes ai-blink{0%,80%,100%{opacity:.25;transform:translateY(0);}40%{opacity:1;transform:translateY(-2px);}}
+
+/* 回答里的 Markdown：收紧间距，别把气泡撑成文档 */
+.ai-md p{margin:0;}
+.ai-md p + p{margin-top:7px;}
+.ai-md ul,.ai-md ol{margin:6px 0 0;padding-left:18px;}
+.ai-md li + li{margin-top:3px;}
+.ai-md code{
+  padding:1px 4px;border-radius:var(--r-xs);background:var(--surface-active);
+  font-family:var(--font-mono);font-size:12px;
+}
+.ai-md pre{
+  margin:7px 0 0;padding:8px 10px;border-radius:var(--r-sm);
+  background:var(--surface-active);overflow-x:auto;
+}
+.ai-md pre code{padding:0;background:transparent;}
+.ai-md a{color:var(--primary-fg);text-decoration:underline;text-underline-offset:2px;}
+.ai-md strong{font-weight:650;}
+
+/* ---------- 入口 chips ---------- */
+.ai-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
+.ai-link{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 9px;border:1px solid var(--primary-border);border-radius:var(--r-pill);
+  background:var(--primary-soft);color:var(--primary-fg);
+  font-size:12px;line-height:17px;font-weight:600;
+  transition:background var(--dur-fast);
+}
+.ai-link:hover{background:var(--primary-border);}
+.ai-link svg{flex:0 0 auto;opacity:.8;}
+
+/* ---------- 草稿卡片 ---------- */
+.ai-draft-slot{
+  flex:0 0 auto;max-height:52%;overflow-y:auto;overscroll-behavior:contain;
+  padding:0 12px 12px;background:var(--surface);
+}
+.ai-draft-slot[hidden]{display:none;}
+.ai-draft-card{
+  border:1px solid var(--primary-border);border-radius:var(--r-md);
+  background:var(--surface);padding:10px 11px 11px;
+  box-shadow:var(--shadow-sm);
+}
+.ai-draft-head{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:650;color:var(--primary-fg);
+}
+.ai-draft-head .ai-icon-btn{margin-left:auto;}
+.ai-field{display:flex;flex-direction:column;gap:4px;margin-top:8px;min-width:0;}
+.ai-field > span{font-size:11.5px;font-weight:600;color:var(--text-3);}
+.ai-field input,.ai-field select{
+  width:100%;height:34px;padding:0 9px;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--surface);color:var(--text);
+  font-size:13px;
+}
+.ai-field input:focus,.ai-field select:focus{
+  outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);
+}
+.ai-field-row{display:flex;gap:8px;}
+.ai-field-row .ai-field{flex:1 1 0;}
+.ai-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+.ai-chip{
+  padding:2px 7px;border-radius:var(--r-pill);
+  background:var(--surface-sunken);color:var(--text-2);
+  font-size:11.5px;line-height:18px;
+}
+.ai-draft-desc{
+  margin-top:8px;padding:6px 8px;border-radius:var(--r-sm);
+  background:var(--surface-sunken);color:var(--text-2);
+  font-size:12px;line-height:18px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.ai-draft-note{margin-top:8px;font-size:11.5px;line-height:17px;color:var(--text-3);}
+.ai-draft-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
+.ai-draft-foot .btn[disabled]{opacity:.55;cursor:not-allowed;}
+
+/* ---------- 输入区 ---------- */
+.ai-compose{
+  flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;
+  padding:10px 12px 8px;border-top:1px solid var(--border);background:var(--surface);
+}
+.ai-compose textarea{
+  flex:1 1 auto;min-width:0;min-height:38px;max-height:120px;
+  padding:9px 10px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface-sunken);color:var(--text);
+  font-family:inherit;font-size:13px;line-height:18px;resize:none;
+}
+.ai-compose textarea:focus{
+  outline:none;border-color:var(--primary);background:var(--surface);
+  box-shadow:var(--ring-focus);
+}
+.ai-send{
+  display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;
+  border-radius:var(--r-md);background:var(--primary);color:#fff;
+  transition:background var(--dur-fast),opacity var(--dur-fast);
+}
+.ai-send:hover{background:var(--primary-hover);}
+.ai-send[disabled]{opacity:.5;cursor:not-allowed;}
+.ai-send.stop{background:var(--text-2);}
+.ai-send.stop:hover{background:var(--text);}
+.ai-foot{
+  flex:0 0 auto;padding:0 12px 8px;font-size:11px;line-height:15px;color:var(--text-3);
+}
+
+/* ---------- 手机：底部面板 ---------- */
+[data-layout="mobile"] .ai-fab{
+  right:16px;bottom:calc(var(--tabbar-h) + var(--safe-b) + 92px);
+  width:46px;height:46px;
+}
+[data-layout="mobile"] .ai-panel{
+  left:0;right:0;bottom:0;width:100%;
+  height:min(78vh,calc(100vh - 56px));
+  border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0;
+}
+/* 助手面板打开时收起「新建」FAB，避免两个悬浮按钮叠在一起 */
+[data-layout="mobile"] body.ai-open #btnNew{
+  transform:translateY(14px) scale(.92);opacity:0;pointer-events:none;
+}
+[data-layout="mobile"] .ai-compose textarea{font-size:16px;line-height:22px;}
+
+@media (max-width:420px){
+  .ai-panel{height:min(82vh,calc(100vh - 40px));}
+}

@@ -4,6 +4,7 @@
 import "./core/templates/index.js";
 import { initNavTelemetry } from "./core/nav-telemetry.js";
 import { initMobileGestures } from "./core/gestures.js";
+import { initAssistant } from "./core/assistant.js";
 import { initLayout, isMobile } from "./core/layout.js";
 import { loadMe } from "./core/app.js";
 import { API } from "./core/api.js";
@@ -51,6 +52,7 @@ function boot(){
   UI.wireTooltips(document);
 
   var deepTaskId = hashParam("task");   // 必须在任何 hash 改写之前抓取（O-3）
+  var deepNewTask = hashParam("new") === "1";   // 助手「新建工作项」入口
   /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
   try{ history.replaceState(null, "", "#/" + startView); }
@@ -77,7 +79,7 @@ function boot(){
   /* 未登录时只允许先打这一次鉴权请求；401 由 API 层统一跳登录页，
      其余看板/通知/SSE 请求全部等鉴权通过后再发，避免首屏一串 401。 */
   API.get("/api/auth/me").then(function(meUser){
-    startAuthenticatedApp(meUser, startView, deepTaskId);
+    startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask);
   }).catch(function(ex){
     if(ex && ex.status === 401) return;
     UI.showConfirm({
@@ -90,10 +92,11 @@ function boot(){
   });
 }
 
-function startAuthenticatedApp(meUser, startView, deepTaskId){
+function startAuthenticatedApp(meUser, startView, deepTaskId, deepNewTask){
   initNavTelemetry(startView);
   showView(startView);
   showBoardSkeleton();
+  initAssistant();
   loadBoard({animate:true}).then(function(){
     /* O-3：深链任务；跨空间时（从「我的任务」切过来）用 sessionStorage 接力 */
     var pendingTask = deepTaskId;
@@ -104,6 +107,7 @@ function startAuthenticatedApp(meUser, startView, deepTaskId){
       }catch(e){ pendingTask = ""; }
     }
     if(pendingTask) openTaskById(pendingTask);
+    else if(deepNewTask) openTaskDrawer("backlog");
     /* 跨空间通知深链：切换空间 reload 后用 sessionStorage 接力 */
     var pendingLink = null;
     try{

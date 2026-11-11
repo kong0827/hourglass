@@ -2,7 +2,9 @@
 
 import { API } from "../core/api.js";
 import { renderSideUser } from "../core/app.js";
+import { isAssistantEnabled, setAssistantEnabled } from "../core/assistant.js";
 import { $ } from "../core/dom.js";
+import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
 import { rt } from "../core/state.js";
 import { loadRunningTimer } from "../core/task-actions.js";
@@ -50,6 +52,7 @@ function enterProfileView(){
   /* AI 配置每次进页面都重新拉：可能在别的设备上改过 */
   loadAiConfig();
   loadNotificationPreferences();
+  syncAssistantPref();
 }
 var NOTIFY_EVENTS = {
   task_assigned: ["工作项指派", "工作项创建或负责人变更后指派给我"],
@@ -329,6 +332,21 @@ if($("meAiProvider")){
       if(p.model) $("meAiModel").value = p.model;
     }
     if($("meAiKeyHint")) $("meAiKeyHint").textContent = p.keyHint || "";
+  });
+}
+/* AI 助手显示开关：本地偏好，切换即时显隐右下角悬浮入口，无需点保存 */
+function syncAssistantPref(){
+  var box = $("meAiAssistant");
+  if(box) box.checked = isAssistantEnabled();
+  var ic = $("meAiAssistantIc");
+  if(ic && !ic.innerHTML) ic.innerHTML = icon("ai", 18);
+}
+if($("meAiAssistant")){
+  syncAssistantPref();
+  $("meAiAssistant").addEventListener("change", function(){
+    var on = this.checked;
+    setAssistantEnabled(on);
+    toast(on ? "已显示 AI 助手" : "已隐藏 AI 助手", "fs");
   });
 }
 if($("meAiSave")){
