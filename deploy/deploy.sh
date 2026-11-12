@@ -6,7 +6,7 @@
 #   bash deploy/deploy.sh              自动判断改动范围后部署（推荐日常使用）
 #   bash deploy/deploy.sh --dry-run    只检测改了什么、要走哪些步骤，不实际执行
 #   bash deploy/deploy.sh --force      即使没检测到改动也强制重新部署
-#   bash deploy/deploy.sh --sql-all    已有 hourglass 库的增量重放（拒绝 61/62；需逐项评估）
+#   bash deploy/deploy.sh --sql-all    （已停用：编号增量脚本已移除，参数保留兼容、无实际效果）
 #   bash deploy/deploy.sh --new-database=hourglass_YYYYMMDD 独立新库启用（保留原库，只接受不存在的新库）
 #   bash deploy/deploy.sh --no-verify  已禁用：不允许跳过登录/哈希校验
 #   bash deploy/deploy.sh --rollback   回滚最近完整 checkpoint 的同批 jar/env/前端
@@ -14,7 +14,7 @@
 # 自动判断逻辑：
 #   - 只改 frontend/         → 只打前端包、只换静态资源（不重新编译 Java）
 #   - 只改 backend/（Java 等）→ 只打 jar、只换后端包（前端不动）
-#   - 改了 sql/*.sql         → 先备份整库，再按文件名顺序执行改动的脚本
+#   - 改了 sql/01_schema.sql → 仅 NEW_DB 新库路径会执行全量 DDL，已有库不会自动重放
 #   - 前后端都改             → 两个产物都发布
 #   - 什么都没改             → 提示并退出（除非 --force）
 #

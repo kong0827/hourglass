@@ -1,12 +1,13 @@
 -- ============================================================================
 -- sql/02_init_data.sql · 沙漏 Hourglass 初始化基础数据（MySQL 8，utf8mb4）
--- Updated 2026-11-10: 三文件体系之二。必须紧接 sql/01_schema.sql 在空库上执行。
+-- Updated 2026-11-11: 对齐测试流转看板列与项目授权模式。必须紧接 sql/01_schema.sql 在空库上执行。
 --
 -- 内容：
 --   1. 管理员账号 admin / admin123（bcrypt；首次登录后请立即在用户管理中改密）
 --   2. 共享空间「演示空间」SXh01（admin 为 owner；admin 的个人空间由后端启动时自动创建）
---   3. 该空间的工作项状态（看板列）：待处理 backlog / 进行中 doing / 待验证 verify / 已完成 done
---      · 已完成列处理规则=ended：任务到达该列后停止计时与逾期判定
+--   3. 该空间的工作项状态（看板列）：待处理 backlog / 进行中 doing / 待测试 test / 测试中 testing
+--      · 与后端新建空间的默认列完全一致；待测试列处理规则=waiting（排队不计时、仍计逾期）
+--      · 已完成为后端虚拟系统列（固定排在看板最后），不在 board_column 落行
 --      · 列流转矩阵（column_transition）不预置行 = 默认全部放开；可在界面按需收紧
 --   4. 优先级档位 P0 紧急 / P1 高 / P2 中 / P3 低（与后端内置默认一致，显式落库便于界面调整）
 --   5. 全局 SMTP 配置单例行（enabled=0，占位；在界面配置后生效）
@@ -33,15 +34,15 @@ INSERT INTO app_user (id, username, password_hash, display_name, email, role, di
 INSERT INTO workspace (id, name, type, owner_id, created_at, updated_at) VALUES
   ('SXh01', '演示空间', 'shared', 'Uadmin01', '2026-11-01 09:00:00', '2026-11-01 09:00:00');
 
-INSERT INTO workspace_member (workspace_id, user_id, role, created_at) VALUES
-  ('SXh01', 'Uadmin01', 'owner', '2026-11-01 09:00:00');
+INSERT INTO workspace_member (workspace_id, user_id, role, project_access_mode, created_at) VALUES
+  ('SXh01', 'Uadmin01', 'owner', 'all', '2026-11-01 09:00:00');
 
--- 工作项状态（看板列，每空间一套）
+-- 工作项状态（看板列，每空间一套；与后端 seedColumns 一致）
 INSERT INTO board_column (id, workspace_id, name, color, processing_rule, sort_order, created_at) VALUES
-  ('backlog', 'SXh01', '待处理', '#c08a3e', 'normal', 0, '2026-11-01 09:00:00'),
-  ('doing',   'SXh01', '进行中', '#5b83ad', 'normal', 1, '2026-11-01 09:00:00'),
-  ('verify',  'SXh01', '待验证', '#8f7ee0', 'normal', 2, '2026-11-01 09:00:00'),
-  ('done',    'SXh01', '已完成', '#6b8f71', 'ended',  3, '2026-11-01 09:00:00');
+  ('backlog', 'SXh01', '待处理', '#c08a3e', 'normal',  0, '2026-11-01 09:00:00'),
+  ('doing',   'SXh01', '进行中', '#5b83ad', 'normal',  1, '2026-11-01 09:00:00'),
+  ('test',    'SXh01', '待测试', '#8b6fb5', 'waiting', 2, '2026-11-01 09:00:00'),
+  ('testing', 'SXh01', '测试中', '#b06f9a', 'normal',  3, '2026-11-01 09:00:00');
 
 -- 优先级档位（与后端内置默认一致）
 INSERT INTO workspace_priority (id, workspace_id, code, name, color, created_at) VALUES

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- sql/03_seed_data.sql · 沙漏 Hourglass 种子数据（全量覆盖模拟数据，MySQL 8，utf8mb4）
--- Updated 2026-11-10: 三文件体系之三。用于本地/演示环境功能验证。
+-- Updated 2026-11-11: 对齐测试流转列、项目授权模式与发布计划跨版本结构。用于本地/演示环境功能验证。
 --
 -- 前置：先执行 sql/01_schema.sql 与 sql/02_init_data.sql（本文件挂在其创建的 SXh01 空间下）。
 -- 内容（全部为虚构模拟数据，不指向任何真实人员）：
@@ -11,7 +11,9 @@
 --   · 工作项 34 条覆盖史诗/故事/任务/缺陷、阻塞、里程碑、循环、软删除、发布标记
 --   · 依赖/基线/子任务/评论/标签/关注/工时（计时器+手工补记）/完成快照
 --   · 分支池与状态时间线、测试模块/用例/执行流水/计划
---   · 发布闭环：计划、计划任务范围、发布记录（成功/回滚）、条目快照、版本日志
+--   · 发布闭环：计划（含跨版本关联）、计划任务范围、发布记录（成功/回滚）、条目快照、版本日志
+--   · 邀请预分配（invite_project_grant）示例；测试窗口字段（test_started_at / test_finished_at）
+--     与按项目分配成员（S9u07 孙敏 project_access_mode=assigned：可见 客户门户重构(写) / 数据看板(读)）
 --   · 通知、邀请、分享、保存视图、列表与通知偏好、审计与活动日志、附件行
 -- ⚠ 幂等策略：文件开头按 ID 前缀 S9* 与 SXh01 空间清空旧种子后重灌；
 --   勿在存有真实业务数据的库上执行（会清掉 SXh01 空间下的动态数据）。
@@ -62,6 +64,7 @@ DELETE FROM test_plan_case WHERE plan_id LIKE 'S9pn%';
 DELETE FROM version_task WHERE task_id LIKE 'S9t%' OR version_id LIKE 'S9v%';
 DELETE FROM version_release_plan WHERE id LIKE 'S9rp%';
 DELETE FROM version_release_plan_task WHERE plan_id LIKE 'S9rp%';
+DELETE FROM version_release_plan_version WHERE plan_id LIKE 'S9rp%';
 DELETE FROM version_release WHERE id LIKE 'S9rel%';
 DELETE FROM version_release_item WHERE release_id LIKE 'S9rel%';
 DELETE FROM version_log WHERE version_id LIKE 'S9v%';
@@ -69,6 +72,7 @@ DELETE FROM app_notification WHERE workspace_id = 'SXh01';
 DELETE FROM work_activity WHERE workspace_id = 'SXh01';
 DELETE FROM audit_log WHERE workspace_id = 'SXh01';
 DELETE FROM invite WHERE workspace_id = 'SXh01';
+DELETE FROM invite_project_grant WHERE workspace_id = 'SXh01';
 DELETE FROM gantt_share WHERE workspace_id = 'SXh01';
 DELETE FROM saved_view WHERE user_id LIKE 'S9u%' OR (user_id = 'Uadmin01' AND workspace_id = 'SXh01');
 DELETE FROM user_list_preference WHERE user_id LIKE 'S9u%' OR (user_id = 'Uadmin01' AND workspace_id = 'SXh01');
@@ -92,15 +96,15 @@ INSERT INTO app_user (id, username, password_hash, display_name, email, role, di
   ('S9u07', 'sunmin',   @pw, '孙敏', 'sunmin@example.com',   'user', 0, 1, 9, 18, 8, 'SXh01', '2026-09-01 09:30:00', '2026-09-01 09:30:00'),
   ('S9u08', 'zhoutao',  @pw, '周涛', 'zhoutao@example.com',  'user', 0, 1, 9, 18, 8, 'SXh01', '2026-09-01 09:35:00', '2026-09-01 09:35:00');
 
-INSERT INTO workspace_member (workspace_id, user_id, role, created_at) VALUES
-  ('SXh01', 'S9u01', 'admin',  '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u02', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u03', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u04', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u05', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u06', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u07', 'member', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9u08', 'viewer', '2026-09-01 10:00:00');
+INSERT INTO workspace_member (workspace_id, user_id, role, project_access_mode, created_at) VALUES
+  ('SXh01', 'S9u01', 'admin',  'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u02', 'member', 'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u03', 'member', 'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u04', 'member', 'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u05', 'member', 'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u06', 'member', 'all',      '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u07', 'member', 'assigned', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9u08', 'viewer', 'all',      '2026-09-01 10:00:00');
 
 -- ---------------------------------------------------------------------------
 -- 项目 / 成员可见范围 / 模块 / 版本
@@ -112,19 +116,20 @@ INSERT INTO requirement (id, workspace_id, name, description, objective, status,
   ('S9p03', 'SXh01', '数据看板', '经营数据的可视化看板与导出', '周报制作时间缩短一半', 'done', 'S9u05', '2026-09-01', '2026-10-31', '2026-10-15', '2026-09-01 10:30:00', '2026-10-31 10:00:00');
 
 INSERT INTO project_member (workspace_id, project_id, user_id, access, created_at, updated_at) VALUES
-  ('SXh01', 'S9p01', 'Uadmin01', 'pm',   '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p01', 'S9u01',    'pm',   '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p01', 'S9u02',    'qa',   '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p01', 'S9u03',    'dev',  '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p01', 'S9u04',    'read', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p01', 'S9u08',    'none', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
-  ('SXh01', 'S9p02', 'Uadmin01', 'pm',   '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
-  ('SXh01', 'S9p02', 'S9u03',    'pm',   '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
-  ('SXh01', 'S9p02', 'S9u06',    'dev',  '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
-  ('SXh01', 'S9p03', 'Uadmin01', 'pm',   '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
-  ('SXh01', 'S9p03', 'S9u05',    'pm',   '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
-  ('SXh01', 'S9p03', 'S9u04',    'qa',   '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
-  ('SXh01', 'S9p03', 'S9u07',    'read', '2026-09-01 10:30:00', '2026-09-01 10:30:00');
+  ('SXh01', 'S9p01', 'Uadmin01', 'write', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u01',    'write', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u02',    'write', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u03',    'write', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u04',    'read',  '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u07',    'write', '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p01', 'S9u08',    'none',  '2026-09-01 10:00:00', '2026-09-01 10:00:00'),
+  ('SXh01', 'S9p02', 'Uadmin01', 'write', '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
+  ('SXh01', 'S9p02', 'S9u03',    'write', '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
+  ('SXh01', 'S9p02', 'S9u06',    'write', '2026-09-15 10:00:00', '2026-09-15 10:00:00'),
+  ('SXh01', 'S9p03', 'Uadmin01', 'write', '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
+  ('SXh01', 'S9p03', 'S9u05',    'write', '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
+  ('SXh01', 'S9p03', 'S9u04',    'write', '2026-09-01 10:30:00', '2026-09-01 10:30:00'),
+  ('SXh01', 'S9p03', 'S9u07',    'read',  '2026-09-01 10:30:00', '2026-09-01 10:30:00');
 
 INSERT INTO category (id, workspace_id, project_id, name, color, sort_order, created_at) VALUES
   ('S9c01', 'SXh01', 'S9p01', '前端', '#5b83ad', 0, '2026-09-01 10:00:00'),
@@ -277,7 +282,7 @@ INSERT INTO task (id, workspace_id, title, description, item_type, epic_id, dema
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 5, '2026-10-01 09:00:00', '2026-10-01 09:00:00'),
   ('S9t07', 'SXh01', '登录后头像不显示', '登录成功后首页头像区域空白', 'bug', NULL, NULL, 'major', 'Chrome 126 / Win11',
    '1. 登录成功\n2. 进入首页\n3. 头像区域空白',
-   'S9v01', 'pending', 'P2', '李娜', 'S9u02', 'S9c01', 'verify',
+   'S9v01', 'pending', 'P2', '李娜', 'S9u02', 'S9c01', 'test',
    '2026-10-25', '2026-11-12', 'S9p01', NULL, NULL, 90, 0, 240,
    0, NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 6, '2026-10-25 10:00:00', '2026-11-08 10:00:00'),
@@ -334,7 +339,7 @@ INSERT INTO task (id, workspace_id, title, description, item_type, epic_id, dema
    0, NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 16, '2026-11-03 09:00:00', '2026-11-03 09:00:00'),
   ('S9t18', 'SXh01', '账号注销流程开发', '注销确认与冷静期实现', 'task', NULL, 'S9d04', NULL, NULL, NULL,
-   NULL, NULL, 'P1', '李娜', 'S9u02', 'S9c03', 'verify',
+   NULL, NULL, 'P1', '李娜', 'S9u02', 'S9c03', 'test',
    '2026-11-10', '2026-11-25', 'S9p01', 'S9o03', NULL, 50, 0, 600,
    0, NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 17, '2026-11-10 09:00:00', '2026-11-10 09:00:00'),
@@ -400,7 +405,7 @@ INSERT INTO task (id, workspace_id, title, description, item_type, epic_id, dema
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 4, '2026-11-01 10:00:00', '2026-11-01 10:00:00'),
   ('S9t31', 'SXh01', '启动页白屏', '部分安卓机启动页白屏', 'bug', NULL, NULL, 'blocker', 'Android 14 / Pixel 8',
    '1. 安装 v2.0-beta\n2. 冷启动\n3. 启动页停留后白屏',
-   NULL, 'pending', 'P0', '王浩', 'S9u03', 'S9c04', 'verify',
+   NULL, 'pending', 'P0', '王浩', 'S9u03', 'S9c04', 'testing',
    '2026-11-05', '2026-11-11', 'S9p02', NULL, NULL, 80, 0, 240,
    0, NULL, NULL, NULL, NULL, NULL, NULL,
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 5, '2026-11-05 11:00:00', '2026-11-09 16:00:00'),
@@ -420,6 +425,11 @@ INSERT INTO task (id, workspace_id, title, description, item_type, epic_id, dema
    '2026-10-20', '2026-10-28', 'S9p03', NULL, NULL, 100, 0, 240,
    0, NULL, NULL, NULL, '2026-10-28', NULL, NULL,
    NULL, NULL, NULL, NULL, 'owner', 0, NULL, 1, '2026-10-20 10:00:00', '2026-10-28 16:00:00');
+
+-- 测试窗口示例：S9t31 测试中（计时起点）；S9t02 / S9t13 已通过测试，窗口留痕
+UPDATE task SET test_started_at = '2026-11-10' WHERE id = 'S9t31';
+UPDATE task SET test_started_at = '2026-09-20', test_finished_at = '2026-09-24' WHERE id = 'S9t02';
+UPDATE task SET test_started_at = '2026-10-05', test_finished_at = '2026-10-08' WHERE id = 'S9t13';
 
 INSERT INTO task_dependency (id, workspace_id, from_task_id, to_task_id, dep_type, lag_days, created_at) VALUES
   ('S9td01', 'SXh01', 'S9t04', 'S9t06', 'FS', 0, '2026-10-01 09:00:00'),
@@ -533,7 +543,7 @@ INSERT INTO task_log (task_id, workspace_id, actor_id, action, detail, change_da
   ('S9t03', 'SXh01', 'S9u01', 'create', '创建任务', NULL, NULL, NULL, '2026-09-14 09:00:00'),
   ('S9t03', 'SXh01', 'S9u01', 'move', '开始处理', NULL, 'backlog', 'doing', '2026-09-14 09:30:00'),
   ('S9t16', 'SXh01', 'S9u04', 'create', '提测转缺陷', NULL, NULL, NULL, '2026-11-02 10:00:00'),
-  ('S9t16', 'SXh01', 'S9u04', 'move', '开始修复', NULL, 'verify', 'doing', '2026-11-02 14:00:00'),
+  ('S9t16', 'SXh01', 'S9u04', 'move', '开始修复', NULL, 'test', 'doing', '2026-11-02 14:00:00'),
   ('S9t25', 'SXh01', 'S9u01', 'delete', '移入回收站：等待新备案号', NULL, NULL, NULL, '2026-11-05 15:00:00'),
   ('S9t23', 'SXh01', 'S9u06', 'move', '本周周报完成', NULL, 'doing', 'done', '2026-11-06 16:00:00'),
   ('S9t02', 'SXh01', 'S9u01', 'move', '信息架构定稿', NULL, 'doing', 'done', '2026-09-25 17:00:00');
@@ -640,6 +650,11 @@ INSERT INTO version_release_plan_task (workspace_id, plan_id, task_id) VALUES
   ('SXh01', 'S9rp01', 'S9t04'),
   ('SXh01', 'S9rp01', 'S9t18');
 
+-- 计划包含的版本（多版本/跨项目）：v1.1 为主版本，移动端 v2.0-beta 同批关联
+INSERT INTO version_release_plan_version (workspace_id, plan_id, version_id, req_id) VALUES
+  ('SXh01', 'S9rp01', 'S9v02', 'S9p01'),
+  ('SXh01', 'S9rp01', 'S9v03', 'S9p02');
+
 INSERT INTO version_release (id, workspace_id, req_id, version_id, plan_id, plan_revision, occurred_at, environment,
                              target_keys, coverage, artifact_ref, artifact_digest, operation, related_release_id,
                              executor_user_id, executor_name, deviation_reason, result, published_on, recorded_at,
@@ -701,6 +716,11 @@ INSERT INTO app_notification (user_id, workspace_id, type, title, body, ref_task
 INSERT INTO invite (id, workspace_id, created_by, expires_at, used_count, created_at) VALUES
   ('AB3KZ9QM7X', 'SXh01', 'Uadmin01', '2026-12-31 23:59:59', 3, '2026-09-01 11:00:00');
 
+-- 邀请链接预分配的项目权限（加入时一次性落库为成员的可见范围）
+INSERT INTO invite_project_grant (invite_id, workspace_id, project_id, access, created_at) VALUES
+  ('AB3KZ9QM7X', 'SXh01', 'S9p01', 'write', '2026-09-01 11:00:00'),
+  ('AB3KZ9QM7X', 'SXh01', 'S9p02', 'read',  '2026-09-01 11:00:00');
+
 INSERT INTO gantt_share (workspace_id, token, created_at, expires_at) VALUES
   ('SXh01', 'gshare0000000000000000000abcdef1', '2026-10-15 10:00:00', NULL);
 
@@ -736,7 +756,7 @@ INSERT INTO attachment (id, target_id, target_kind, workspace_id, filename, cont
   ('S9at02', 'S9t16', 'task', 'SXh01', '导出超时日志.txt', 'text/plain', 15360, 'att0000000000000000000000000002', '2026-11-03 10:30:00');
 
 -- ---------------------------------------------------------------------------
--- 看板列流转矩阵示例（已完成列重开需原因，其余保持默认放开）
+-- 看板列流转矩阵示例（已完成列重开需原因，显式落库；测试中退回默认也需原因，未落库）
 -- ---------------------------------------------------------------------------
 INSERT INTO column_transition (workspace_id, from_column, to_column, rule, updated_at) VALUES
   ('SXh01', 'done', 'backlog', 'reason', '2026-11-01 09:00:00'),

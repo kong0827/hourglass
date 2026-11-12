@@ -67,7 +67,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/01_schema.sql
 > 账号 host 为 `%`，外部可直连；但还需 MySQL 的 `bind-address` 不是 `127.0.0.1`，并在防火墙放行 3306。
 > 既有库的结构升级不再走增量脚本（历史编号脚本已移除，可在 git 历史追溯）；升级以新空库重建 + 恢复备份为准，须单独评估与授权。`sql/01_schema.sql` 会重建表，不是幂等无损脚本，不得在已有库重跑。正常部署脚本仍只支持新空库；本轮 A–E 经用户单独明确授权，原 `hourglass` 46 表受限备份并恢复验证后重建为 52 表（其后跨版本计划关联、邀请项目预分配再增两表，全量 DDL 现为 54 表），不迁移旧历史。原历史仅在备份中保留，不能泛化为默认部署删库许可。
 >
-> **已有库升级到「新成员默认不参与项目」版本：先执行 `sql/66_project_access_assigned.sql`，再替换 jar。** 新 jar 会读写 `workspace_member.project_access_mode` 与 `invite_project_grant`，先换 jar 会导致成员列表、邀请与加入接口报错。66 只增列、建表并为 `assigned` 成员补 `none` 种子行，不改写已有授权；存量成员默认 `all`，升级后可见范围不变。执行前照常做全库备份。
+> 「新成员默认不参与项目」所需结构（`workspace_member.project_access_mode` 列与 `invite_project_grant` 表）已并入 `sql/01_schema.sql`；编号增量脚本已移除，不再有「先执行 66 再换 jar」的升级入口。已有库升级以新空库重建 + 恢复备份为准（见上）；新装环境执行 01 后即包含该结构，存量成员默认 `all`，可见范围不变。
 
 ## 2. 上传后端与前端
 

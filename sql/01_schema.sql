@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/01_schema.sql · 沙漏 Hourglass 全量 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-10: 三文件体系（01 全量结构 / 02 基础数据 / 03 种子数据）。
+-- Updated 2026-11-11: full schema (54 tables)；三文件体系：01 全量结构 / 02 基础数据 / 03 种子数据。
 --
--- 包含全部 52 张表的结构、索引与全文索引，不含任何业务数据。
+-- 包含全部 54 张表的结构、索引与全文索引，不含任何业务数据。
 -- 执行顺序：01_schema.sql → 02_init_data.sql（可选）→ 03_seed_data.sql（可选）。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -271,6 +271,17 @@ CREATE TABLE `invite` (
   PRIMARY KEY (`id`),
   KEY `idx_ws` (`workspace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间邀请链接';
+DROP TABLE IF EXISTS `invite_project_grant`;
+CREATE TABLE `invite_project_grant` (
+  `invite_id` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邀请码',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
+  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '预分配权限：write/read',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`invite_id`,`project_id`),
+  KEY `idx_ipg_ws` (`workspace_id`),
+  KEY `idx_ipg_project` (`project_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邀请链接预分配的项目权限';
 DROP TABLE IF EXISTS `mail_delivery`;
 CREATE TABLE `mail_delivery` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -307,7 +318,7 @@ CREATE TABLE `project_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员账号ID',
-  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/pm/dev/qa',
+  `access` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可见范围：none/read/write（历史 pm/dev/qa 归一为默认参与）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`workspace_id`,`project_id`,`user_id`),
@@ -481,6 +492,8 @@ CREATE TABLE `task` (
   `blocked_by_task_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '等待的任务ID（可选的依赖关系）',
   `note` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '进度备注',
   `completed_at` date DEFAULT NULL COMMENT '完成日期',
+  `test_started_at` date DEFAULT NULL COMMENT '进入测试中的日期（新一轮测试重新记录）',
+  `test_finished_at` date DEFAULT NULL COMMENT '离开测试中的日期：测试通过或退回',
   `published_at` date DEFAULT NULL,
   `publish_source` varchar(16) DEFAULT NULL,
   `published_release_id` varchar(32) DEFAULT NULL,
@@ -791,6 +804,7 @@ CREATE TABLE `workspace_member` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '空间ID',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员用户ID',
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member' COMMENT '空间角色：owner/admin/member/viewer',
+  `project_access_mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'all' COMMENT '项目参与模式：all=默认参与；assigned=按项目分配',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
   PRIMARY KEY (`workspace_id`,`user_id`),
   KEY `idx_user` (`user_id`)
@@ -806,6 +820,7 @@ CREATE TABLE `workspace_priority` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ws_code` (`workspace_id`,`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优先级显示配置（按空间，未配置档位用内置默认）';
+DROP TABLE IF EXISTS `version_release_plan_version`;
 DROP TABLE IF EXISTS `version_release_plan`;
 CREATE TABLE `version_release_plan` (
   `id` varchar(32) NOT NULL,
@@ -829,6 +844,18 @@ CREATE TABLE `version_release_plan` (
   KEY `idx_plan_workspace` (`workspace_id`,`status`),
   CONSTRAINT `fk_plan_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `version_release_plan_version`;
+CREATE TABLE `version_release_plan_version` (
+  `workspace_id` varchar(32) NOT NULL,
+  `plan_id` varchar(32) NOT NULL,
+  `version_id` varchar(32) NOT NULL,
+  `req_id` varchar(32) NOT NULL,
+  PRIMARY KEY (`plan_id`,`version_id`),
+  KEY `idx_plan_version_scope` (`workspace_id`,`version_id`),
+  KEY `idx_plan_version_project` (`workspace_id`,`req_id`),
+  CONSTRAINT `fk_plan_version_plan` FOREIGN KEY (`plan_id`,`workspace_id`) REFERENCES `version_release_plan` (`id`,`workspace_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_plan_version_version` FOREIGN KEY (`version_id`) REFERENCES `project_version` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发布计划包含的版本（多版本/多项目）';
 DROP TABLE IF EXISTS `version_release_plan_task`;
 CREATE TABLE `version_release_plan_task` (
   `workspace_id` varchar(32) NOT NULL,
