@@ -104,27 +104,28 @@
 /* 选中态加左侧指示条：折叠成图标栏时也能定位当前页 */
 .nav-item.on::before{content:"";position:absolute;left:-4px;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--primary);}
 
-/* 底部 48px */
+/* 底部 52px：用户信息靠左，设置/退出收成右侧图标组 */
 .side-foot{
-  flex:0 0 auto;height:48px;display:flex;align-items:center;gap:8px;
-  border-top:1px solid var(--border);padding:0 12px;
+  flex:0 0 auto;height:52px;display:flex;align-items:center;gap:2px;
+  border-top:1px solid var(--border);padding:0 10px;
 }
 .side-user{
-  display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;height:34px;
-  padding:0 6px;margin:0 -6px;border-radius:var(--r-sm);
+  display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 auto;height:36px;
+  padding:0 12px 0 4px;border-radius:var(--r-sm);text-align:left;
   transition:background var(--dur-fast) var(--ease-out);
 }
-.side-user:hover{background:var(--surface-hover);}
-.side-user .avatar{width:24px;height:24px;font-size:10.5px;border-radius:var(--r-xs);}
-.side-user-n{font-size:13px;font-weight:550;color:var(--text-2);min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.side-user:hover,.side-user:focus-visible{background:var(--surface-hover);}
+.side-user:focus-visible{outline:none;box-shadow:var(--ring-focus);}
+.side-user .avatar{width:26px;height:26px;font-size:11px;border-radius:var(--r-sm);}
+.side-user-n{font-size:12.5px;font-weight:550;color:var(--text-2);min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .side-logout{
-  display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;gap:6px;width:30px;height:30px;padding:0;border-radius:var(--r-sm);
   color:var(--text-3);font-size:12.5px;font-weight:550;flex:0 0 auto;
 }
 .side-logout:hover{background:var(--danger-soft);color:var(--danger-fg);}
+.side-logout:focus-visible{outline:none;box-shadow:var(--ring-focus);}
 /* 底栏只留图标（文案见 title/aria-label）：240px 侧栏里两段文案会把用户名挤成省略号 */
 .side-foot .side-logout .nl{display:none;}
-.side-foot .side-logout{padding:0 6px;}
 #sideSettings:hover{background:var(--surface-hover);color:var(--text);}
 #sideSettings.on{background:var(--primary-soft);color:var(--primary-fg);}
 
@@ -374,7 +375,7 @@ body.side-rail .ws-switch{justify-content:center;padding:0;width:40px;height:40p
 body.side-rail .ws-menu{left:12px;right:auto;width:232px;}
 body.side-rail .side-user{justify-content:center;padding:0;margin:0;}
 body.side-rail .side-user .avatar{width:32px;height:32px;font-size:13px;}
-body.side-rail .side-logout{justify-content:center;padding:0;width:32px;}
+body.side-rail .side-logout{justify-content:center;padding:0;width:32px;height:32px;}
 body.side-rail .nav-item{justify-content:center;padding:0;position:relative;}
 body.side-rail .nav-item .nl{display:none;}
 /* rail 下分组标题变分隔线：保留分组节奏，同时不占文字宽度 */

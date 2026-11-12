@@ -221,6 +221,7 @@ public class BranchService {
         q.setWorkspaceId(workspaceId);
         q.setViewerId(projectAccess.viewerScope(workspaceId, userId));
         q.setProjectId(Texts.trimToNull(q.getProjectId()));
+        q.setOwnerUserId(Texts.trimToNull(q.getOwnerUserId()));
         q.setQ(Texts.trimToNull(q.getQ()));
         if (q.getStatus() != null && !LABELS.containsKey(q.getStatus())) {
             q.setStatus(null);
@@ -272,6 +273,7 @@ public class BranchService {
         q.setWorkspaceId(src.getWorkspaceId());
         q.setViewerId(src.getViewerId());
         q.setProjectId(src.getProjectId());
+        q.setOwnerUserId(src.getOwnerUserId());
         q.setStatus(src.getStatus());
         q.setQ(src.getQ());
         q.setOffset(src.getOffset());

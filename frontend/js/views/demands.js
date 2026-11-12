@@ -76,6 +76,8 @@ var dragOverCol = null;       /* 最近悬停的列：drop 未触发时用 drage
 var pendingFocusReq = null;
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
+/* 评审流转（拖拽换列=通过/拒绝/撤回等）空间主与管理员都可做；删除仍仅空间主 */
+function canReviewDemand(){ var r = rt.currentWs && rt.currentWs.myRole; return r === "owner" || r === "admin"; }
 /* 需求写权限跟随所属项目：成员在只读项目下不显示/不放行任何写入口 */
 function canWriteDemand(d){ return !!d && canEditReq(d.reqId); }
 function canScheduleDemand(d){ return !!d && d.canSchedule === true; }
@@ -432,11 +434,13 @@ function demandMenuItems(d){
   if(!d) return [];
   var out = [];
   if(canWriteDemand(d) && d.status === "review"){
-    if(isOwner()) out.push({ act: "rej", label: "拒绝" });
+    if(canReviewDemand()) out.push({ act: "rej", label: "拒绝" });
     out.push({ act: "edit", label: "编辑" });
   }
-  if(isOwner() && canWriteDemand(d)){
+  if(canReviewDemand() && canWriteDemand(d)){
     if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
+  }
+  if(isOwner() && canWriteDemand(d)){
     out.push({ act: "del", label: "删除", danger: true });
   }
   if(canScheduleDemand(d)){
@@ -452,7 +456,7 @@ function demandActs(d, opts){
   /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为主色浅底，避免整屏都是主色 */
   var cls = (opts && opts.subtle) ? "btn sm soft" : "btn sm primary";
   var acts = "";
-  if(isOwner() && canWriteDemand(d)){
+  if(canReviewDemand() && canWriteDemand(d)){
     if(d.status === "review"){
       acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
     }
@@ -514,7 +518,7 @@ function demandStateNote(d){
 function cardHTML(d, opts){
   var acts = demandActs(d);
   /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
-  var drag = (isOwner() && canWriteDemand(d) && d.status !== "canceled" && !(opts && opts.noDrag))
+  var drag = (canReviewDemand() && canWriteDemand(d) && d.status !== "canceled" && !(opts && opts.noDrag))
     ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
     : "";
   return '<div class="bkl-card" data-dem-card="' + esc(d.id) + '"' + drag + '>'
@@ -2486,7 +2490,7 @@ function applyDrop(src, to){
 if(demandBody){
   demandBody.addEventListener("dragstart", function(e){
     var card = e.target.closest(".bkl-card");
-    if(!card || !isOwner()) return;
+    if(!card || !canReviewDemand()) return;
     dragSrc = { id: card.dataset.cardId, status: card.dataset.cardStatus };
     dragOverCol = null;
     e.dataTransfer.setData("text/plain", dragSrc.id);
@@ -2558,6 +2562,12 @@ function openDemandDetailById(id){
  * 未选项目时可从全空间挑选，选中后由抽屉自动带出需求所属项目。
  * --------------------------------------------------------------------------- */
 var drawerDemandOpts = { reqId: null, list: [], total: 0, error: null };
+/* 关联需求候选排序：越接近可执行越靠前；已拒绝/已取消只保留原关联 */
+var DEMAND_OPTION_RANK = { plan: 0, pass: 1, review: 2, rej: 3, canceled: 4 };
+function demandOptionRank(st){
+  var r = DEMAND_OPTION_RANK[st];
+  return r === undefined ? 9 : r;
+}
 function drawerDemandStatusLabel(st){
   for(var i = 0; i < COLS.length; i++){
     if(COLS[i][0] === st) return COLS[i][1];
@@ -2582,12 +2592,16 @@ function fillDrawerDemandSelect(reqId, keep){
   }
   var html = '<option value="">不关联</option>';
   var matched = false;
-  (drawerDemandOpts.list || []).forEach(function(d){
+  var list = (drawerDemandOpts.list || []).slice().sort(function(a, b){
+    return demandOptionRank(a.status) - demandOptionRank(b.status);
+  });
+  list.forEach(function(d){
     var on = d.id === keep;
-    // 已有关联可保留；已取消需求不作为新拆任务的候选。
-    if(d.status === "canceled" && !on) return;
+    // 已有关联可保留；已拒绝/已取消需求不作为新任务的候选。
+    if((d.status === "rej" || d.status === "canceled") && !on) return;
     if(on) matched = true;
     var tag = drawerDemandStatusLabel(d.status);
+    if(d.status === "plan" && d.versionStatus === "released") tag = tag ? tag + " · 已发布" : "已发布";
     html += '<option value="' + esc(d.id) + '" data-req="' + esc(d.reqId || "") + '">'
       + esc(d.title) + (tag ? "（" + esc(tag) + "）" : "") + '</option>';
   });

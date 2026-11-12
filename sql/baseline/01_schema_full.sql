@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-11: full schema after migrations 01-69 (56 tables).
+-- Updated 2026-11-12: full schema after migrations 01-70 (56 tables).
 --
--- 完整结构与 sql/01-69 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -15,22 +15,15 @@
 CREATE DATABASE IF NOT EXISTS hourglass DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 应用账号：host '%' 允许外部连接，库内全部权限（增删改查、建表/改表/删表、视图、触发器、导入导出等）。
--- 密码不再内置固定值：账号不存在时随机生成一次性密码并在末尾打印一次，请立即保存到 /etc/hourglass.env 的 DB_PASSWORD。
--- 账号已存在时本脚本不改动其密码，只输出提示；重置密码用 ALTER USER 'hourglass'@'%' IDENTIFIED BY '新密码';
+-- 账号固定为 hourglass / Dzqh@123456；脚本重跑会把该账号密码重置为此值。
 -- 外部直连还需 MySQL 服务的 bind-address 非 127.0.0.1，且防火墙放行 3306。
-SET @hg_user_exists = (SELECT COUNT(*) FROM mysql.user WHERE user = 'hourglass' AND host = '%');
--- 若你的 MySQL 禁用了 RANDOM_BYTES，把 RANDOM_BYTES(24) 换成 SHA2(CONCAT(UUID(), NOW(6), RAND()), 256)
-SET @hg_db_password = IF(@hg_user_exists = 0,
-                        CONCAT(SUBSTRING(REPLACE(REPLACE(REPLACE(TO_BASE64(RANDOM_BYTES(24)), '+', ''), '/', ''), '=', ''), 1, 18), 'aA1!'),
-                        NULL);
-SET @hg_create_sql = IF(@hg_user_exists = 0,
-                        CONCAT('CREATE USER ''hourglass''@''%'' IDENTIFIED BY ', QUOTE(@hg_db_password)),
-                        'SELECT 1');
-PREPARE hg_stmt FROM @hg_create_sql;
-EXECUTE hg_stmt;
-DEALLOCATE PREPARE hg_stmt;
-GRANT ALL PRIVILEGES ON hourglass.* TO 'hourglass'@'%';
+CREATE USER IF NOT EXISTS 'hourglass'@'%' IDENTIFIED BY 'Dzqh@123456';
+ALTER USER 'hourglass'@'%' IDENTIFIED BY 'Dzqh@123456';
+-- 库级授权：ALL PRIVILEGES 覆盖增删改查、建表/改表/删表、索引、视图、触发器、存储过程与事件等
+GRANT ALL PRIVILEGES ON `hourglass`.* TO 'hourglass'@'%';
 FLUSH PRIVILEGES;
+-- 执行后回显该账号的实际授权，确认可访问 hourglass 库
+SHOW GRANTS FOR 'hourglass'@'%';
 
 USE hourglass;
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -461,9 +454,11 @@ CREATE TABLE `requirement` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `archived_at` datetime DEFAULT NULL COMMENT '归档时间（NULL=未归档）',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '项目手动排序（空间内升序，0 起）',
   PRIMARY KEY (`id`),
   KEY `idx_ws` (`workspace_id`),
-  KEY `idx_ws_owner` (`workspace_id`,`owner_user_id`)
+  KEY `idx_ws_owner` (`workspace_id`,`owner_user_id`),
+  KEY `idx_ws_sort` (`workspace_id`,`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目（原需求）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `requirement_doc`;

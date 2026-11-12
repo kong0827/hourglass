@@ -63,9 +63,33 @@ function openTaskTable(title, tasks, description, pager){
   var total = pager && typeof pager.total === "number" ? pager.total : all.length;
   var hasMore = !!(pager && pager.hasMore && pager.fetch);
   var loading = false;
+  var filterText = "";
+  var filtered = all.slice();
+  var searchTimer = null;
+  var searchable = !pager; /* 服务端分页时数据不完整，不提供前端搜索，避免误导 */
+  function matchesFilter(t){
+    if(!filterText.trim()) return true;
+    var terms = filterText.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    var hay = [
+      String(t.title || ""),
+      String(t.owner || ""),
+      String(t.reqName || t.reqId || ""),
+      String(taskStatusName(t))
+    ].join(" ").toLowerCase();
+    return terms.every(function(term){ return hay.indexOf(term) !== -1; });
+  }
+  function applyFilter(){
+    filtered = all.filter(matchesFilter);
+  }
+  function descText(){
+    var base = description || ("共 " + total + " 项 · 点击工作项行打开详情");
+    if(searchable && filterText.trim()) base += " · 搜索匹配 " + filtered.length + " 项";
+    return base;
+  }
   function rowsHTML(){
-    if(!all.length) return '<tr><td colspan="7" class="manager-empty-cell">该口径下暂无工作项</td></tr>';
-    return all.map(managerTaskRowHTML).join("")
+    if(!filtered.length) return '<tr><td colspan="7" class="manager-empty-cell">' +
+      (filterText.trim() ? "没有匹配的工作项" : "该口径下暂无工作项") + '</td></tr>';
+    return filtered.map(managerTaskRowHTML).join("")
       + (hasMore
         ? '<tr><td colspan="7" class="manager-more-cell"><button class="btn sm block" type="button" data-manager-more'
           + (loading ? ' disabled' : '') + '>'
@@ -73,25 +97,46 @@ function openTaskTable(title, tasks, description, pager){
           + '</button></td></tr>'
         : "");
   }
+  function renderBody(){
+    if(tbody) tbody.innerHTML = rowsHTML();
+    var desc = layer && layer.querySelector(".desc");
+    if(desc) desc.textContent = descText();
+  }
+  var searchBarHTML = searchable
+    ? '<div class="manager-search-bar"><input type="search" class="manager-search" placeholder="搜索工作项、负责人、项目或状态…" aria-label="搜索工作项" /></div>'
+    : "";
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
   layer.innerHTML = '<div class="sheet manager-drill-sheet"><div class="sheet-head"><div style="flex:1;min-width:0">'
-    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(description || ("共 " + total + " 项 · 点击工作项行打开详情")) + '</div></div>'
+    + '<h2>' + esc(title) + '</h2><div class="desc">' + esc(descText()) + '</div></div>'
     + '<button class="icon-btn sm" type="button" data-manager-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
+    + searchBarHTML
     + '<div class="sheet-body"><div class="tbl-wrap"><table class="manager-tbl"><thead><tr>'
     + '<th>工作项</th><th>项目</th><th>负责人</th><th>状态</th><th class="num">截止</th><th class="num">预估</th><th class="num">实际</th>'
     + '</tr></thead><tbody>' + rowsHTML() + '</tbody></table></div></div></div>';
   document.body.appendChild(layer);
   var tbody = layer.querySelector("tbody");
+  var searchInput = layer.querySelector(".manager-search");
+  if(searchInput){
+    searchInput.addEventListener("input", function(){
+      filterText = searchInput.value;
+      if(searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function(){
+        searchTimer = null;
+        applyFilter();
+        renderBody();
+      }, 200);
+    });
+  }
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-manager-close]")){ UI.closeModal(layer); return; }
     if(e.target.closest("[data-manager-more]")){
       if(loading || !hasMore) return;
       loading = true;
-      tbody.innerHTML = rowsHTML();
+      renderBody();
       pager.fetch(all.length).then(function(page){
         loading = false;
         if(!layer.isConnected) return;
@@ -101,11 +146,12 @@ function openTaskTable(title, tasks, description, pager){
         all = all.concat(rows);
         if(page && typeof page.total === "number") total = page.total;
         hasMore = !!(page && page.hasMore) && rows.length > 0;
-        tbody.innerHTML = rowsHTML();
+        applyFilter();
+        renderBody();
       }).catch(function(ex){
         loading = false;
         if(!layer.isConnected) return;
-        tbody.innerHTML = rowsHTML();
+        renderBody();
         UI.toast(ex && ex.message ? ex.message : "加载更多失败", "bad");
       });
       return;

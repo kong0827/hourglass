@@ -331,7 +331,7 @@ function renderWorkload(){
   if(!cache || loading || filterWorkspace !== workloadWorkspace()) return;
   var focusKey = document.activeElement && document.activeElement.dataset.workloadFilter;
   $("workloadBody").innerHTML = workloadToolbar() + '<p class="roster-note">' + esc(workloadScopeText(cache)) + '</p>'
-    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × '+capacityHoursLabel(cache)+'）；无截止日默认 5 个剩余工作日，容量上限按 20 天计算。')
+    + caliberHTML('负载 = 剩余预估工时 ÷（剩余工作日 × '+capacityHoursLabel(cache)+'）；无截止日默认 5 个剩余工作日，容量上限按 30 天计算。')
     + (mode==='person'?matrix():weekTable());
   if(focusKey){ var field = document.querySelector('[data-workload-filter="' + focusKey + '"]'); if(field) field.focus(); }
 }

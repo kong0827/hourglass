@@ -4,10 +4,15 @@ import com.hourglass.common.AiCrypto;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Texts;
 import com.hourglass.entity.MailSetting;
-import org.springframework.mail.SimpleMailMessage;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import javax.mail.MessagingException;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
@@ -17,10 +22,14 @@ public class SmtpMailService {
 
     private final MailSettingService settingService;
     private final AiCrypto crypto;
+    /** 只影响收件人看到的名称，MAIL FROM 仍是配置里的发件邮箱，不改变企业邮的账号一致性要求。 */
+    private final String fromName;
 
-    public SmtpMailService(MailSettingService settingService, AiCrypto crypto) {
+    public SmtpMailService(MailSettingService settingService, AiCrypto crypto,
+                           @Value("${app.mail.from-name:沙漏}") String fromName) {
         this.settingService = settingService;
         this.crypto = crypto;
+        this.fromName = Texts.trimToNull(fromName);
     }
 
     public boolean isEnabled() {
@@ -45,12 +54,23 @@ public class SmtpMailService {
             }
         }
         JavaMailSenderImpl sender = createSender(s, password);
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(s.getFromEmail());
-        message.setTo(recipient);
-        message.setSubject(subject);
-        message.setText(body == null ? "" : body);
-        sender.send(message);
+        sender.send(buildMessage(sender, s.getFromEmail(), recipient, subject, body));
+    }
+
+    /** 独立成方法便于针对性测试报文头，不连接真实 SMTP。 */
+    protected MimeMessage buildMessage(JavaMailSenderImpl sender, String fromEmail, String recipient,
+                                       String subject, String body) {
+        MimeMessage message = sender.createMimeMessage();
+        try {
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
+            helper.setFrom(new InternetAddress(fromEmail, fromName, StandardCharsets.UTF_8.name()));
+            helper.setTo(recipient);
+            helper.setSubject(subject == null ? "" : subject);
+            helper.setText(body == null ? "" : body, false);
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            throw AppException.badRequest("邮件地址格式不正确：" + errorMessage(e));
+        }
+        return message;
     }
 
     /** 独立成方法便于针对性测试邮件属性，不连接真实 SMTP。 */
@@ -78,6 +98,13 @@ public class SmtpMailService {
             current = current.getCause();
         }
         String message = Texts.trimToNull(current.getMessage());
-        return message == null ? current.getClass().getSimpleName() : message;
+        if (message == null) {
+            return current.getClass().getSimpleName();
+        }
+        // 腾讯企业邮等要求 From 与认证账号完全相同，原始英文提示无法指导改哪一栏
+        if (message.contains("must be same as authorization user")) {
+            return "发件人邮箱必须与 SMTP 用户名一致（" + message + "）";
+        }
+        return message;
     }
 }

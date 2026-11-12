@@ -287,6 +287,8 @@ public class BackupService {
                 req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 1000));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
                 req.setFirstReleasedAt(parseDate(r.getFirstReleasedAt()));
+                /* 按备份里的项目顺序编号，恢复后列表与下拉框保持一致 */
+                req.setSortOrder(st.reqCount);
                 reqMapper.insert(req);
                 st.reqCount++;
             }

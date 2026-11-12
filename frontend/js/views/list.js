@@ -36,7 +36,9 @@ var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", subgroup:"none", hideDone:false,
   sort:"default", sortDir:"asc", collapsed:{} };
-var LIST_GROUPS = ["none", "status", "owner", "priority", "project", "category"];
+var LIST_GROUPS = ["none", "status", "owner", "priority", "project", "category", "version"];
+/* 版本分组需组内完整：自动按 100/页续拉到该上限；单项可入多组，导出仍按唯一工作项去重 */
+var VERSION_GROUP_MAX = 500;
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
 var SORT_DEFAULT_DIR = {
   due:"asc", priority:"asc", estimate:"desc", actual:"desc", updated:"desc",
@@ -149,11 +151,11 @@ function initSmartTable(){
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
         '<option value="priority">按优先级</option><option value="project">按项目</option>' +
-        '<option value="category">按模块</option></select></label>' +
+        '<option value="category">按模块</option><option value="version">按版本</option></select></label>' +
       '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-list-subgroup aria-label="二级分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
         '<option value="priority">按优先级</option><option value="project">按项目</option>' +
-        '<option value="category">按模块</option></select></label>' +
+        '<option value="category">按模块</option><option value="version">按版本</option></select></label>' +
       '<button class="btn sm ghost list-hide-done" type="button" data-list-hide-done aria-pressed="false">隐藏已完成</button>' +
       '<span class="smart-list-sort"></span>' +
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
@@ -216,6 +218,7 @@ function initSmartTable(){
     renderListItems(lastItems);
     updateListMeta(lastItems.length);
     saveViewState();
+    autoLoadVersionGroups();
   });
   smartSubgroup.addEventListener("change", function(){
     if(LIST_GROUPS.indexOf(smartSubgroup.value) === -1) return;
@@ -225,6 +228,7 @@ function initSmartTable(){
     renderListItems(lastItems);
     updateListMeta(lastItems.length);
     saveViewState();
+    autoLoadVersionGroups();
   });
   /* 监听挂在工具条自身：手机档位整条会搬进筛选面板，挂在 smartBar 上会收不到点击 */
   var smartTools = smartBar.querySelector(".smart-view-tools");
@@ -288,6 +292,17 @@ function updateListMeta(rawCount){
   if(smart.hideDone) text += " · 已隐藏已完成";
   listMeta.textContent = text;
 }
+function versionGroupingActive(){
+  return smart.group === "version" || effectiveSubgroup() === "version";
+}
+/* 版本分组要看到组内全貌：按服务端 100 条/页自动续拉，直到 500 上限或没有更多 */
+function autoLoadVersionGroups(added){
+  /* added=0 防死循环：服务端说还有下一页但本页为空（期间被删）时不再自动续拉 */
+  if(added === 0) return;
+  if(activeView !== "list" || !versionGroupingActive() || !listHasMore || listLoadingMore) return;
+  if(lastItems.length >= VERSION_GROUP_MAX) return;
+  loadList({more:true, silent:true});
+}
 function loadList(opts){
   opts = opts || {};
   var append = !!(opts.more && lastItems.length);
@@ -322,6 +337,7 @@ function loadList(opts){
         requestAnimationFrame(function(){ scroller.scrollTop = opts.restoreScroll; });
       }
     }
+    autoLoadVersionGroups(items.length);
   }).catch(function(ex){
     if(seq !== rt.listSeq) return;
     listLoadingMore = false;
@@ -495,15 +511,47 @@ function groupInfoBy(t, dim){
   if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块"};
   return null;
 }
-function groupInfo(t){ return smart.group === "none" ? null : groupInfoBy(t, smart.group); }
+/* 版本标签来自看板 meta：同名版本跨项目时用项目名消歧，进行中版本排前 */
+var versionLabelCache = null, versionLabelSource = null;
+function versionGroupMeta(){
+  var meta = state.board && state.board.meta;
+  if(versionLabelCache && versionLabelSource === meta) return versionLabelCache;
+  var map = {}, nameCount = {};
+  var list = (meta && meta.versions) || [];
+  list.forEach(function(v){ nameCount[v.name] = (nameCount[v.name] || 0) + 1; });
+  list.forEach(function(v){
+    map[v.id] = {
+      label: nameCount[v.name] > 1 && v.projectName ? v.name + "（" + v.projectName + "）" : v.name,
+      status: v.status
+    };
+  });
+  versionLabelCache = map;
+  versionLabelSource = meta;
+  return map;
+}
+/* 一项可绑定多个版本：分组时进入每个所属版本组，未绑定的归「待规划」 */
+function versionGroupInfos(t){
+  var ids = Array.isArray(t.versionIds) ? t.versionIds : [];
+  var names = Array.isArray(t.versionNames) ? t.versionNames : [];
+  if(!ids.length) return [{key:"__none", label:"待规划"}];
+  var map = versionGroupMeta(), seen = {}, out = [];
+  ids.forEach(function(id, i){
+    if(seen[id]) return;
+    seen[id] = 1;
+    var m = map[id];
+    out.push({key:id, label:(m && m.label) || names[i] || id});
+  });
+  return out;
+}
+function groupInfosBy(t, dim){
+  if(dim === "version") return versionGroupInfos(t);
+  var info = groupInfoBy(t, dim);
+  return info ? [info] : [];
+}
 /* 二级维度不能与一级重复；一级不分组时二级无意义 */
 function effectiveSubgroup(){
   return (smart.group === "none" || smart.subgroup === "none" || smart.subgroup === smart.group)
     ? "none" : smart.subgroup;
-}
-function subgroupInfo(t){
-  var dim = effectiveSubgroup();
-  return dim === "none" ? null : groupInfoBy(t, dim);
 }
 function groupCompare(dim){
   if(dim === "category"){
@@ -525,26 +573,35 @@ function groupCompare(dim){
       return (PRIORITIES.indexOf(a.key) < 0 ? 9 : PRIORITIES.indexOf(a.key)) -
         (PRIORITIES.indexOf(b.key) < 0 ? 9 : PRIORITIES.indexOf(b.key));
     }
+    if(dim === "version"){
+      var map = versionGroupMeta();
+      var rank = function(key){
+        if(key === "__none") return 2;
+        var m = map[key];
+        return m && m.status === "active" ? 0 : 1;
+      };
+      return rank(a.key) - rank(b.key) || a.label.localeCompare(b.label, "zh-CN");
+    }
     return a.label.localeCompare(b.label, "zh-CN");
   };
 }
 function currentViewGroups(){
   if(smart.group === "none") return [];
-  var groups = [];
+  var groups = [], groupIndex = {}, subIndex = {};
+  var subDim = effectiveSubgroup();
   presetFilteredItems().forEach(function(t){
-    var info = groupInfo(t), group = null;
-    for(var i = 0; i < groups.length; i++) if(groups[i].key === info.key){ group = groups[i]; break; }
-    if(!group){ group = {key:info.key, label:info.label, rows:[], subgroups:[]}; groups.push(group); }
-    group.rows.push(t);
-    var subInfo = subgroupInfo(t);
-    if(subInfo){
-      var sub = null;
-      for(var j = 0; j < group.subgroups.length; j++){
-        if(group.subgroups[j].key === subInfo.key){ sub = group.subgroups[j]; break; }
-      }
-      if(!sub){ sub = {key:subInfo.key, label:subInfo.label, rows:[]}; group.subgroups.push(sub); }
-      sub.rows.push(t);
-    }
+    groupInfosBy(t, smart.group).forEach(function(info){
+      var group = groupIndex[info.key];
+      if(!group){ group = {key:info.key, label:info.label, rows:[], subgroups:[]}; groupIndex[info.key] = group; groups.push(group); }
+      group.rows.push(t);
+      if(subDim === "none") return;
+      groupInfosBy(t, subDim).forEach(function(subInfo){
+        var subKey = info.key + "/" + subInfo.key;
+        var sub = subIndex[subKey];
+        if(!sub){ sub = {key:subInfo.key, label:subInfo.label, rows:[]}; subIndex[subKey] = sub; group.subgroups.push(sub); }
+        sub.rows.push(t);
+      });
+    });
   });
   groups.forEach(function(g){
     g.rows = sortedTasks(g.rows);
@@ -556,7 +613,16 @@ function currentViewGroups(){
 }
 function currentViewRows(){
   if(smart.group === "none") return sortedTasks(presetFilteredItems());
-  return currentViewGroups().reduce(function(all, g){ return all.concat(g.rows); }, []);
+  /* 一项可入多个版本组：导出/计数按工作项去重，避免同一条重复出现 */
+  var seen = {}, rows = [];
+  currentViewGroups().forEach(function(g){
+    g.rows.forEach(function(t){
+      if(seen[t.id]) return;
+      seen[t.id] = 1;
+      rows.push(t);
+    });
+  });
+  return rows;
 }
 function csvCell(value){
   var s = value === null || value === undefined ? "" : String(value);

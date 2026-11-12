@@ -7,6 +7,7 @@ import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.FirstReleaseRequest;
 import com.hourglass.dto.PageResult;
+import com.hourglass.dto.ReqOrderRequest;
 import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReqSaveRequest;
 import com.hourglass.dto.RequirementDeleteResult;
@@ -68,6 +69,16 @@ public class RequirementController {
                                          @RequestParam(required = false) String workspace) {
         Workspace ws = workspaceService.resolve(CurrentUser.id(), workspace);
         return ApiResult.ok(requirementService.update(ws.getId(), CurrentUser.id(), id, req));
+    }
+
+    /** 项目手动排序：ids 为空间内全部项目的新顺序，项目列表与下拉框据此排序 */
+    @PutMapping({"/api/reqs/order", "/api/projects/order"})
+    public ApiResult<Void> reorder(@RequestBody ReqOrderRequest body,
+                                   @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        requirementService.reorder(ws.getId(), userId, body == null ? null : body.getIds());
+        return ApiResult.ok();
     }
 
     /** 项目活动轨迹：沿用空间成员权限，并校验项目属于该空间。 */

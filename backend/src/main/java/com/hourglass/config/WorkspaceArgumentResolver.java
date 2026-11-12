@@ -39,15 +39,22 @@ public class WorkspaceArgumentResolver implements HandlerMethodArgumentResolver 
         String wsParam = request.getParameter("workspace");
         RequireRole role = parameter.getMethodAnnotation(RequireRole.class);
         Workspace ws = workspaceService.resolve(userId, wsParam);
-        if (role != null && RequireRole.OWNER.equals(role.value())
-                && !"owner".equals(ws.getMyRole())) {
-            throw new com.hourglass.common.AppException(403, "仅空间主可执行该操作");
+        if (role != null && !roleAllowed(ws.getMyRole(), role.value())) {
+            throw new com.hourglass.common.AppException(403,
+                    RequireRole.ADMIN.equals(role.value()) ? "仅空间主或管理员可执行该操作" : "仅空间主可执行该操作");
         }
         /* 查看者全局只读：所有带空间上下文的写请求统一拦截，避免各接口各写一遍 */
         if ("viewer".equals(ws.getMyRole()) && isWriteRequest(request)) {
             throw new com.hourglass.common.AppException(403, "你在此空间是查看者，只能查看不能修改");
         }
         return new WorkspaceCtx(userId, ws);
+    }
+
+    private static boolean roleAllowed(String myRole, String required) {
+        if (RequireRole.ADMIN.equals(required)) {
+            return "owner".equals(myRole) || "admin".equals(myRole);
+        }
+        return "owner".equals(myRole);
     }
 
     private static boolean isWriteRequest(NativeWebRequest request) {

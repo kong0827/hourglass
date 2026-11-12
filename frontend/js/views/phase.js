@@ -613,7 +613,7 @@ function openDrillModal(scope, val, metric){
       UI.closeModal(layer);
       /* 复用项目页「在看板中查看」的跳转口径：清掉旧筛选，按当前项目 + 该版本过滤。
          下钻弹窗列的是版本全部工作项（含任意时间完成的），doneScope 一并切到 all，避免跳过去只剩空列。 */
-      state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.versions = [val]; state.due = null; state.focus = false; state.blocked = false;
+      state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.versions = [val]; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
       state.doneScope = "all";
       if(searchInput) searchInput.value = "";
       if(searchWrap) searchWrap.classList.remove("has");
@@ -1044,11 +1044,13 @@ function cycleWindow(v){
 }
 
 function versionDeliverySummary(v){
+  /* 摘要与「查看实际记录」拆开：摘要可截断，入口不会被截断吃掉 */
   if(v.releaseEvidenceKind === "release_snapshot"){
-    return '<p class="foot-note">成功事件快照：发布处理 ' + v.publishedTaskCount + ' 项次（含测试 / 重部署）· 其他处理 ' + v.excludedTaskCount
-      + ' 项次。生产曾交付 ' + (v.uniqueProductionTaskCount || 0) + ' 项 · 当前生效 ' + (v.effectiveProductionTaskCount || 0) + ' 项，不等于待交付数量。<button class="link-cell" type="button" data-ver-note="' + esc(v.id) + '">查看实际记录</button></p>';
+    return '<div class="ver-delivery"><p class="foot-note">成功事件快照：发布处理 ' + v.publishedTaskCount + ' 项次（含测试 / 重部署）· 其他处理 ' + v.excludedTaskCount
+      + ' 项次。生产曾交付 ' + (v.uniqueProductionTaskCount || 0) + ' 项 · 当前生效 ' + (v.effectiveProductionTaskCount || 0) + ' 项，不等于待交付数量。</p>'
+      + '<button class="link-cell" type="button" data-ver-note="' + esc(v.id) + '">查看实际记录</button></div>';
   }
-  return '<p class="foot-note">' + (v.status === "released" ? '无正式发布记录，不能从完成数量或首版统计推断实际交付。' : '当前规划统计，完成不等于实际发布。') + '</p>';
+  return '<p class="foot-note ver-delivery-note">' + (v.status === "released" ? '无正式发布记录，不能从完成数量或首版统计推断实际交付。' : '当前规划统计，完成不等于实际发布。') + '</p>';
 }
 /* 内容只读由后端 contentLocked 判定（成功的生产部署 / 重部署）；测试环境部署与回滚不锁定，前端不再自行拼条件 */
 function versionContentLocked(v){
@@ -1114,12 +1116,28 @@ function versionCardHTML(v){
     acts += '<button class="btn sm ghost danger" type="button" data-ver-del="' + esc(v.id) + '">删除</button>';
   }
   acts += '</div>';
+  /* 说明只留两行：长文案会把整行版本卡撑到一屏高；是否被截断在渲染后量出来再决定要不要给展开入口 */
+  var descHTML = v.description
+    ? '<div class="ver-desc-wrap"><p class="ver-desc" data-ver-desc title="' + esc(v.description) + '">' + esc(v.description) + '</p>'
+      + '<button class="link-cell ver-desc-toggle" type="button" data-ver-desc-toggle hidden>展开说明</button></div>'
+    : "";
   return '<div class="phase-card ' + cls + '"><div class="phase-card-head">'
     + '<span class="tag tag-primary">' + esc(v.name) + '</span>' + stTag
     + '<span class="phase-card-sub">' + esc(sub) + '</span></div>'
     + branchChipsHTML(v.branches)
-    + (v.description ? '<p class="foot-note" style="margin:0">' + esc(v.description) + '</p>' : '')
+    + descHTML
     + metricCells(cells, { scope: "version", val: v.id }) + versionDeliverySummary(v) + acts + '</div>';
+}
+/* 说明默认截断两行；只有真的溢出时才露出「展开说明」，已展开时固定显示「收起说明」 */
+function syncVersionDescToggles(){
+  if(!phaseBody) return;
+  phaseBody.querySelectorAll("[data-ver-desc]").forEach(function(p){
+    var btn = p.parentNode.querySelector("[data-ver-desc-toggle]");
+    if(!btn) return;
+    var open = p.classList.contains("open");
+    btn.hidden = !open && p.scrollHeight <= p.clientHeight + 1;
+    btn.textContent = open ? "收起说明" : "展开说明";
+  });
 }
 function renderVersionMode(){
   var p = cache.phase;
@@ -1154,6 +1172,7 @@ function renderVersionMode(){
     return;
   }
   phaseBody.innerHTML = '<div class="ver-grid">' + cards + unboundCard + '</div>' + caliber + taskTable("version");
+  syncVersionDescToggles();
   applyPhaseTblFilters();
 }
 
@@ -2885,6 +2904,13 @@ if(phaseBody) phaseBody.addEventListener("click", function(e){
   if(dl){ deleteVersion(dl.dataset.verDel); return; }
   var nt = e.target.closest("[data-ver-note]");
   if(nt){ showReleaseNote(nt.dataset.verNote); return; }
+  var dt = e.target.closest("[data-ver-desc-toggle]");
+  if(dt){
+    var descP = dt.parentNode.querySelector("[data-ver-desc]");
+    if(descP) descP.classList.toggle("open");
+    syncVersionDescToggles();
+    return;
+  }
   var ua = e.target.closest("[data-unbound-assign]");
   if(ua){ openUnboundTasks(); return; }
 });
@@ -2922,6 +2948,10 @@ if(phaseBody) phaseBody.addEventListener("input", function(e){
     return;
   }
   if(e.target.closest("[data-tbl-kw]")) applyPhaseTblFilters();
+});
+/* 列数随窗口变化，说明的截断与否要重新量 */
+window.addEventListener("resize", function(){
+  if(document.body.dataset.view === "phase") syncVersionDescToggles();
 });
 
 function setPhaseProject(reqId, mode){

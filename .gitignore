@@ -45,6 +45,9 @@ sql/seeds/seed_from_excel_report.json
 sql/hourglass_full_init.sql
 # 一次性迁移脚本：输入为私有 Excel，脚本内硬编码真实成员名单
 tools/generate_seed_from_excel.py
+# 东证项目看板初始化种子与生成脚本：含真实成员姓名、邮箱与统一初始密码，仅本地部署使用
+sql/seeds/seed_dzqh_*.sql
+tools/gen_dzqh_init_seed.py
 # 数据库转储（含真实业务数据）
 backup/
 # 后端源码里的 backup 包不是转储目录，必须纳入版本管理
@@ -75,12 +78,16 @@ docs/images/_shot_*.png
 !docs/images/_shot_share-page.png
 !docs/images/_shot_stats-wide.png
 
+# 根目录临时截图
+/after-list.png
+
 # 系统文件
 .DS_Store
 Thumbs.db
 
 # 本地联调凭据（含密码，仅限本地）
 backend/local.env
+backend/src/main/resources/application-local.yml
 .env
 .env.*
 !.env.example

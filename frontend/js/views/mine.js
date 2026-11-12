@@ -127,7 +127,9 @@ function loadMine(opts){
     mineBody.innerHTML = UI.skeletonRows(6);
     if(mineMeta) mineMeta.textContent = "加载中…";
   }
-  var params = filterParams({scope: "open", offset: offset, limit: MINE_PAGE_SIZE});
+  /* 完成情况=已完成时 scope 必须是 all，否则 openOnly 与 completion=done 叠加后恒为空 */
+  var scope = state.completion === "done" ? "all" : "open";
+  var params = filterParams({scope: scope, offset: offset, limit: MINE_PAGE_SIZE});
   delete params.owners;      // 负责人维度天然是我
   /* 显示列偏好先就位再渲染，避免首屏按默认列闪一帧 */
   listPrefs.load("my-tasks").then(function(){

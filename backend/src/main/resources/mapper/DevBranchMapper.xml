@@ -87,6 +87,9 @@
     <if test="q.status != null and q.status != ''">
       AND b.status = #{q.status}
     </if>
+    <if test="q.ownerUserId != null and q.ownerUserId != ''">
+      AND b.owner_user_id = #{q.ownerUserId}
+    </if>
     <if test="q.q != null and q.q != ''">
       AND (b.name LIKE CONCAT('%', #{q.q}, '%')
         OR b.target_branch LIKE CONCAT('%', #{q.q}, '%')

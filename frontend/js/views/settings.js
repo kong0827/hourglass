@@ -2335,7 +2335,7 @@ btnReset.addEventListener("click", function(){
       return API.post("/api/import", {v:10, tasks:[], reqs:[], comments:[], deps:[], baseline:[], reqDocs:[], versions:[], demands:[], testCases:[], testCaseRuns:[], docComments:[]});
     }).then(function(){
       state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
-      state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
+      state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
       searchInput.value = "";
       searchWrap.classList.remove("has");
       saveViewState();

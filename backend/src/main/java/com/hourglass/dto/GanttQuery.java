@@ -24,6 +24,10 @@ public class GanttQuery {
     private List<String> tags = new ArrayList<String>();
     /** 工作项类型列表（story/task/bug/epic） */
     private List<String> types = new ArrayList<String>();
+    /** 看板列（状态）ID 列表 */
+    private List<String> columns = new ArrayList<String>();
+    /** 完成情况：null=全部，open=未完成，done=已完成 */
+    private String completion;
     /** 非 __none 的影响版本ID */
     private List<String> versionIds = new ArrayList<String>();
     /** 是否包含「待规划」（未绑定版本） */
@@ -53,6 +57,8 @@ public class GanttQuery {
         q.cats = new ArrayList<String>(b.getCats());
         q.tags = new ArrayList<String>(b.getTags());
         q.types = new ArrayList<String>(b.getTypes());
+        q.columns = new ArrayList<String>(b.getColumns());
+        q.completion = b.getCompletion();
         for (String version : b.getVersions()) {
             if (Consts.REQ_NONE.equals(version)) {
                 q.versionNone = true;

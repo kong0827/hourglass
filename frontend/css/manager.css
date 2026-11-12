@@ -99,6 +99,10 @@
 .manager-more-cell{padding:8px!important;border-bottom:none!important;}
 /* .sheet 默认 max-width:480px 会把下钻表格截断，这里必须显式放开 */
 .manager-drill-sheet{max-width:none;width:min(1080px,94vw);}
+.manager-search-bar{padding:0 20px 12px;border-bottom:1px solid var(--border);}
+.manager-search{width:100%;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;outline:none;}
+.manager-search:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);}
+.manager-search::placeholder{color:var(--text-3);}
 /* 成员负载抽屉：成员 → 项目 → 工作项 / 计时明细 逐层穿透 */
 .member-sheet{width:min(880px,94vw);}
 .member-sheet-id{display:flex;align-items:center;gap:12px;min-width:0;}

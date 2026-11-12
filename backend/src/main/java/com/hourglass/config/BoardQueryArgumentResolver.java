@@ -42,7 +42,9 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 request.getParameter("doneScope"),
                 integer(request.getParameter("doneLimit")),
                 integer(request.getParameter("doneOffset")),
-                integer(request.getParameter("openLimit")));
+                integer(request.getParameter("openLimit")),
+                request.getParameter("columns"),
+                request.getParameter("completion"));
     }
 
     private Boolean bool(String v) {

@@ -41,6 +41,8 @@ public class Demand {
     private String versionId;
     /** 目标版本名称（非表字段，分页列表联查返回） */
     private String versionName;
+    /** 目标版本状态 planned/active/released（非表字段，分页列表联查返回；released 表示需求已随版本交付） */
+    private String versionStatus;
     /** 评审备注（通过理由/拒绝原因/排期说明） */
     private String reviewNote;
     /** WSJF 分量 0-10（effort 为分母） */

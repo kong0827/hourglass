@@ -26,4 +26,6 @@ public class Requirement {
     private LocalDateTime updatedAt;
     /** 归档时间（sql/50）：仅从默认视图隐藏，不删除数据 */
     private LocalDateTime archivedAt;
+    /** 手动排序（sql/70）：空间内升序，项目列表与下拉框统一按它排序 */
+    private Integer sortOrder;
 }

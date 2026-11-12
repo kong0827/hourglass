@@ -80,6 +80,7 @@
     check: function (s) { return svg(s, '<path d="M4.4 10.4 8 14l7.6-8"/>', 1.8); },
     refresh: function (s) { return svg(s, '<path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/>'); },
     move: function (s) { return svg(s, '<path d="M10 3.4v13.2M3.4 10h13.2"/><path d="M10 3.4 7.8 5.6M10 3.4l2.2 2.2M10 16.6l-2.2-2.2M10 16.6l2.2-2.2M3.4 10l2.2-2.2M3.4 10l2.2 2.2M16.6 10l-2.2-2.2M16.6 10l-2.2 2.2"/>'); },
+    grip: function (s) { return fillSvg(s, '<circle cx="7.2" cy="4.6" r="1.15"/><circle cx="12.8" cy="4.6" r="1.15"/><circle cx="7.2" cy="10" r="1.15"/><circle cx="12.8" cy="10" r="1.15"/><circle cx="7.2" cy="15.4" r="1.15"/><circle cx="12.8" cy="15.4" r="1.15"/>'); },
     folder: function (s) { return svg(s, '<path d="M3.2 6A2 2 0 0 1 5.2 4h3.2l1.8 2.2h5.6a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.2a2 2 0 0 1-2-2Z"/>'); },
 
     /* ---- 状态 ---- */

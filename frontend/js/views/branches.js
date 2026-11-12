@@ -26,7 +26,9 @@ var branchFilter = "";
 /* 深链来源：从「我的工作 · 待验收 / 待合并」进来时，明确标出筛选依据；用户改筛选即视为已接管 */
 var branchSource = null;          /* { from:"accept"|"merge"|"link", status:"testing"|"merging" } */
 var branchProjectFilter = "";
-var branchGroupMode = "status";   /* "status" | "project" */
+var branchOwnerFilter = "";        /* 负责人筛选：按成员账号（owner_user_id），手填姓名的分支走关键词搜索 */
+var branchGroupMode = "status";    /* "status" | "project"（看板） */
+var branchListGroup = "none";      /* "none" | "status" | "owner" | "project"（列表） */
 var BRANCH_VIEW_KEY = "ds.branchView";
 var branchViewMode = (function(){
   try{ return localStorage.getItem(BRANCH_VIEW_KEY) === "list" ? "list" : "board"; }catch(e){ return "board"; }
@@ -113,6 +115,7 @@ function branchStay(b){
 function branchQueryParams(extra){
   var p = {};
   if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchOwnerFilter) p.ownerUserId = branchOwnerFilter;
   var kw = (($("branchSearch") || {}).value || "").trim();
   if(kw) p.q = kw;
   if(extra) for(var k in extra) if(Object.prototype.hasOwnProperty.call(extra, k)) p[k] = extra[k];
@@ -148,6 +151,7 @@ function loadBranches(force){
     branchesLoaded = true;
     if(activeView === "branches") renderBranches();
     populateProjectFilter();
+    populateOwnerFilter();
     /* 列表模式要有全量数据：看板刷新后顺带刷新一次列表，避免新增/改状态后列表还是旧的 */
     if(activeView === "branches" && branchViewMode === "list" && !branchRowsLoading) loadBranchRows();
     /* 看板卡片上带着分支标签，数据回来后要重画一次（render 会重建 DOM，所以只在看板停留时做） */
@@ -179,11 +183,13 @@ function applyBranchDeepLink(){
   }
   branchSource = { from: from === "accept" || from === "merge" ? from : "link", status: status };
   branchFilter = branchStatusMeta(status).id;
-  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 关键词筛选 */
+  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 负责人 / 关键词筛选 */
   var search = $("branchSearch");
-  var reset = !!branchProjectFilter || !!(search && search.value.trim());
+  var reset = !!branchProjectFilter || !!branchOwnerFilter || !!(search && search.value.trim());
   branchProjectFilter = "";
+  branchOwnerFilter = "";
   if($("branchProjectFilter")) $("branchProjectFilter").value = "";
+  if($("branchOwnerFilter")) $("branchOwnerFilter").value = "";
   if(search) search.value = "";
   return reset;
 }
@@ -236,16 +242,22 @@ function renderBranchSource(box){
 function enterBranchesView(){
   var resetScope = applyBranchDeepLink();
   updateBranchModeUI();
+  populateOwnerFilter();
   renderBranches();                       // 先用缓存出一版，避免空白
   loadBranches(resetScope).then(function(){ renderBranches(); });
   if(branchViewMode === "list") loadBranchRows();
 }
-/* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组 */
+/* 列表模式按 100 条续页取完整结果，保留现有本地排序与分组。
+   快照只下推项目/负责人这两个「改动必重拉」的条件；状态与关键词在本地过滤——
+   若把状态/关键词也下推，快照会停留在旧筛选子集上，本地换筛选就会错显空表。 */
 function loadBranchRows(){
   var seq = ++branchRowsSeq;
   branchRowsLoading = true;
   renderBranches();
-  return API.getAllPages("/api/branches", branchQueryParams({ status: branchFilter || null }))
+  var p = {};
+  if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchOwnerFilter) p.ownerUserId = branchOwnerFilter;
+  return API.getAllPages("/api/branches", p)
     .then(function(rows){
       if(seq !== branchRowsSeq) return;
       branchRows = rows || [];
@@ -266,6 +278,7 @@ function filteredBranchRows(){
   var q = branchSearchText();
   return branchRows.filter(function(b){
     if(branchFilter && b.status !== branchFilter) return false;
+    if(branchOwnerFilter && b.ownerUserId !== branchOwnerFilter) return false;
     if(!q) return true;
     var hay = [b.name, b.targetBranch, b.note, b.owner];
     (b.projects || []).forEach(function(p){ hay.push(p.projectName || p.projectId); });
@@ -281,26 +294,80 @@ function branchProjectsText(b){
   var names = (b.projects || []).map(function(p){ return p.projectName || p.projectId; }).filter(Boolean);
   return names.length ? names.join("、") : "空间级";
 }
-function renderBranchList(rows){
-  var body = rows.length ? rows.map(function(b){
+function branchRowHTML(b){
+  var sm = branchStatusMeta(b.status);
+  var stay = branchStay(b);
+  var writable = canEditBranch(b);
+  var taskTxt = b.taskCount ? ((b.doneCount || 0) + "/" + b.taskCount) : "—";
+  return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
+    '<td class="br-name-cell" title="' + esc(b.name) + '">' + esc(b.name) + '</td>' +
+    '<td>' + (writable
+      ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
+        '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
+      : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + '</td>' +
+    '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指定</span>') + '</td>' +
+    '<td>' + esc(branchProjectsText(b)) + '</td>' +
+    '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
+    '<td class="num">' + taskTxt + '</td>' +
+    '<td title="' + esc(stay.tip) + '">' + esc(stay.text) + '</td>' +
+    '<td>' + (b.updatedAt ? esc(fmtTs(b.updatedAt)) : "—") + '</td>' +
+  '</tr>';
+}
+/* 列表分组的组键与组名：项目维度取主项目（reqId 优先，公共分支归「空间级」），不把跨项目分支复制成多行 */
+function branchGroupInfo(b){
+  if(branchListGroup === "status"){
     var sm = branchStatusMeta(b.status);
-    var stay = branchStay(b);
-    var writable = canEditBranch(b);
-    var taskTxt = b.taskCount ? ((b.doneCount || 0) + "/" + b.taskCount) : "—";
-    return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
-      '<td class="br-name-cell" title="' + esc(b.name) + '">' + esc(b.name) + '</td>' +
-      '<td>' + (writable
-        ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
-          '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
-        : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + '</td>' +
-      '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指定</span>') + '</td>' +
-      '<td>' + esc(branchProjectsText(b)) + '</td>' +
-      '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
-      '<td class="num">' + taskTxt + '</td>' +
-      '<td title="' + esc(stay.tip) + '">' + esc(stay.text) + '</td>' +
-      '<td>' + (b.updatedAt ? esc(fmtTs(b.updatedAt)) : "—") + '</td>' +
-    '</tr>';
-  }).join("") : '<tr><td colspan="8" class="manager-empty-cell">没有匹配的分支</td></tr>';
+    return { key: b.status || "__other__", label: sm.name, dot: sm.cls };
+  }
+  if(branchListGroup === "owner"){
+    return b.owner
+      ? { key: b.ownerUserId || ("n:" + b.owner), label: b.owner }
+      : { key: "__none__", label: "未指定负责人" };
+  }
+  if(branchListGroup === "project"){
+    if(b.reqId) return { key: b.reqId, label: projectNameById(b.reqId) || b.reqId };
+    var p = (b.projects || [])[0];
+    if(p && (p.projectId || p.projectName)) return { key: p.projectId || "__none__", label: p.projectName || p.projectId || "未知项目" };
+    return { key: "__none__", label: "空间级公共分支" };
+  }
+  return null;
+}
+function buildBranchGroups(rows){
+  var groups = [];
+  var byKey = {};
+  rows.forEach(function(b){
+    var info = branchGroupInfo(b);
+    if(!info) return;
+    var g = byKey[info.key];
+    if(!g){ g = { key: info.key, label: info.label, dot: info.dot || "", rows: [] }; byKey[info.key] = g; groups.push(g); }
+    g.rows.push(b);
+  });
+  if(branchListGroup === "status"){
+    groups.sort(function(a, b){ return branchStatusOrder(a.key) - branchStatusOrder(b.key); });
+  }else{
+    groups.sort(function(a, b){
+      if(a.key === "__none__") return 1;
+      if(b.key === "__none__") return -1;
+      return String(a.label).localeCompare(String(b.label), "zh-CN");
+    });
+  }
+  return groups;
+}
+function renderBranchList(rows){
+  var body;
+  if(!rows.length){
+    body = '<tr><td colspan="8" class="manager-empty-cell">没有匹配的分支</td></tr>';
+  }else if(branchListGroup !== "none"){
+    body = buildBranchGroups(rows).map(function(g){
+      var head = (g.dot ? '<i class="br-dot ' + esc(g.dot) + '"></i>' : '') +
+        '<span class="bgr-name">' + esc(g.label) + '</span>' +
+        '<span class="bgr-n">' + g.rows.length + ' 条</span>';
+      return '<tr class="br-group-row"><td colspan="8">' + head + '</td></tr>' +
+        g.rows.map(branchRowHTML).join("");
+    }).join("");
+  }else{
+    body = rows.map(branchRowHTML).join("");
+  }
   return '<div class="br-list-wrap"><table class="manager-tbl br-list">' +
     '<thead><tr><th>分支</th><th>状态</th><th>负责人</th><th>项目</th><th>目标分支</th>' +
       '<th class="num">工作项</th><th>停留</th><th>更新时间</th></tr></thead>' +
@@ -321,6 +388,7 @@ function renderBranches(){
   var box = $("branchGroups");
   if(!box) return;
   renderBranchSource(box);
+  syncBranchFilterControls();
   /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
   box.classList.toggle("br-list-mode", branchViewMode === "list");
   var st = branchStat();
@@ -330,6 +398,7 @@ function renderBranches(){
     var cycle = branchCycleAvg();
     var extra = "";
     if(branchProjectFilter) extra += " · 项目「" + esc(projectFilterName) + "」";
+    if(branchOwnerFilter) extra += " · 负责人「" + esc(branchOwnerFilterName()) + "」";
     if(branchGroupMode === "project") extra += " · 按项目分组（仅统计已加载 " + branchList.length + " 条）";
     if(branchViewMode === "list") extra += " · 列表视图";
     /* 汇总里的每一档都可点击：直接按状态筛选，和分组头的点击等价 */
@@ -351,7 +420,7 @@ function renderBranches(){
 
   var isList = branchViewMode === "list";
   var listRows = isList ? filteredBranchRows() : null;
-  var hasFilter = !!(branchFilter || branchProjectFilter || (($("branchSearch") || {}).value || "").trim());
+  var hasFilter = !!(branchFilter || branchProjectFilter || branchOwnerFilter || (($("branchSearch") || {}).value || "").trim());
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
   var branchNewBtn = $("branchNew");
   var canCreate = !!branchNewBtn && !roleReadOnly();
@@ -377,7 +446,7 @@ function renderBranches(){
         box.innerHTML = UI.emptyState({
           icon: "filterOff",
           title: "没有匹配的分支",
-          text: "换个关键词，或清掉项目/状态筛选再试。"
+          text: "换个关键词，或清掉状态/负责人/项目筛选再试。"
         });
       }
       return;
@@ -390,7 +459,7 @@ function renderBranches(){
       box.innerHTML = UI.emptyState({
         icon: "filterOff",
         title: "没有匹配的分支",
-        text: "换个关键词，或清掉项目筛选再试。"
+        text: "换个关键词，或清掉状态/负责人/项目筛选再试。"
       });
       return;
     }
@@ -1020,6 +1089,42 @@ function populateProjectFilter(){
   var hasCur = opts.some(function(o){ return o.id === cur; });
   sel.value = hasCur ? cur : "";
 }
+/* 负责人筛选下拉：与分支新建/编辑同一份花名册口径（ownerOptions 传空串取空间级成员）。
+   成员已移出等失效值回落到「全部负责人」，避免下拉与结果对不上。 */
+function populateOwnerFilter(){
+  var sel = $("branchOwnerFilter");
+  if(!sel) return;
+  var opts = ownerOptions("").slice().sort(function(a, b){ return String(a.name).localeCompare(String(b.name), "zh-CN"); });
+  var cur = branchOwnerFilter;
+  var html = '<option value="">全部负责人</option>';
+  opts.forEach(function(o){
+    html += '<option value="' + esc(o.id) + '">' + esc(o.name) + '</option>';
+  });
+  sel.innerHTML = html;
+  var hasCur = opts.some(function(o){ return o.id === cur; });
+  sel.value = hasCur ? cur : "";
+  if(!hasCur && cur) branchOwnerFilter = "";
+}
+function branchOwnerFilterName(){
+  if(!branchOwnerFilter) return "";
+  var sel = $("branchOwnerFilter");
+  if(sel && sel.value === branchOwnerFilter && sel.selectedIndex >= 0){
+    return sel.options[sel.selectedIndex].textContent || branchOwnerFilter;
+  }
+  return branchOwnerFilter;
+}
+/* 筛选下拉与内部状态同源：深链 / 汇总点选改了 branchFilter 后，下拉值与生效态跟着走 */
+function syncBranchFilterControls(){
+  var stSel = $("branchStatusFilter");
+  if(stSel) stSel.value = branchStatusMeta(branchFilter).hint ? branchFilter : "";
+  var owSel = $("branchOwnerFilter");
+  if(owSel) owSel.value = branchOwnerFilter || "";
+  var prSel = $("branchProjectFilter");
+  if(prSel) prSel.value = branchProjectFilter || "";
+  UI.markFiltered(stSel, !branchFilter);
+  UI.markFiltered(owSel, !branchOwnerFilter);
+  UI.markFiltered(prSel, !branchProjectFilter);
+}
 function updateBranchGroupToggle(){
   var btn = $("branchGroupToggle");
   if(!btn) return;
@@ -1031,12 +1136,16 @@ function updateBranchGroupToggle(){
 }
 function updateBranchModeUI(){
   var seg = $("branchModeSeg");
-  if(!seg) return;
-  seg.querySelectorAll("[data-br-mode]").forEach(function(b){
-    var on = b.dataset.brMode === branchViewMode;
-    b.setAttribute("aria-pressed", on ? "true" : "false");
-    b.classList.toggle("primary", on);
-  });
+  if(seg){
+    seg.querySelectorAll("[data-br-mode]").forEach(function(b){
+      var on = b.dataset.brMode === branchViewMode;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.classList.toggle("primary", on);
+    });
+  }
+  /* 分组：看板用切换按钮（状态↔项目），列表用下拉（不分组/状态/负责人/项目） */
+  var groupSel = $("branchListGroup");
+  if(groupSel) groupSel.hidden = branchViewMode !== "list";
   updateBranchGroupToggle();
 }
 
@@ -1153,13 +1262,42 @@ function clearGroupOver(){
       try{ localStorage.setItem(BRANCH_VIEW_KEY, branchViewMode); }catch(err){ /* 受限环境忽略 */ }
       updateBranchModeUI();
       renderBranches();
-      if(branchViewMode === "list" && !branchRows.length) loadBranchRows();
+      /* 切回列表要重拉快照：在看板期间改过的项目/负责人筛选不会自动同步到列表行 */
+      if(branchViewMode === "list") loadBranchRows();
     });
   }
   if($("branchProjectFilter")){
     $("branchProjectFilter").addEventListener("change", function(e){
       branchProjectFilter = e.target.value;
       loadBranches(true);
+    });
+  }
+  /* 状态下拉与汇总行点选、看板列头点击是同一状态：改了就算接管，清掉深链来源 */
+  if($("branchStatusFilter")){
+    $("branchStatusFilter").addEventListener("change", function(e){
+      branchFilter = e.target.value;
+      dropBranchSource();
+      if(branchFilter && branchGroupMode === "project"){
+        /* 项目分组下没有状态列可承载过滤，选了具体状态就切回状态分组 */
+        branchGroupMode = "status";
+        updateBranchGroupToggle();
+        loadBranches(true);
+        return;
+      }
+      renderBranches();
+    });
+  }
+  /* 负责人是服务端过滤（计数/看板列/列表都跟着变），要走一次重拉 */
+  if($("branchOwnerFilter")){
+    $("branchOwnerFilter").addEventListener("change", function(e){
+      branchOwnerFilter = e.target.value;
+      loadBranches(true);
+    });
+  }
+  if($("branchListGroup")){
+    $("branchListGroup").addEventListener("change", function(e){
+      branchListGroup = e.target.value;
+      renderBranches();
     });
   }
   if($("branchGroupToggle")){

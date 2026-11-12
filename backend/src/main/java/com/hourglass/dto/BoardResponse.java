@@ -69,6 +69,8 @@ public class BoardResponse {
         private List<CatCount> cats = new ArrayList<CatCount>();
         /** 工作项类型计数（story/task/bug/epic 固定顺序） */
         private List<NameCount> types = new ArrayList<NameCount>();
+        /** 看板列（状态）计数，name 为列 ID */
+        private List<NameCount> columns = new ArrayList<NameCount>();
         /** 有任务绑定的影响版本及计数（含项目名，同名版本跨项目时用于区分） */
         private List<VersionCount> versions = new ArrayList<VersionCount>();
         private List<ReqCount> reqs = new ArrayList<ReqCount>();

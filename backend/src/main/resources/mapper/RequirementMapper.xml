@@ -4,11 +4,12 @@
 
   <sql id="cols">
     id, workspace_id, name, description, objective, status, owner_user_id, planned_start, planned_end,
-    first_released_at, created_at, updated_at, archived_at
+    first_released_at, created_at, updated_at, archived_at, sort_order
   </sql>
 
   <select id="selectAll" resultType="Requirement">
-    SELECT <include refid="cols"/> FROM requirement WHERE workspace_id = #{workspaceId} ORDER BY created_at, id
+    SELECT <include refid="cols"/> FROM requirement WHERE workspace_id = #{workspaceId}
+    ORDER BY sort_order, created_at, id
   </select>
 
   <sql id="visibleScope">
@@ -23,7 +24,7 @@
     SELECT <include refid="cols"/> FROM requirement r
     WHERE r.workspace_id = #{workspaceId}
     <include refid="visibleScope"/>
-    ORDER BY r.created_at, r.id
+    ORDER BY r.sort_order, r.created_at, r.id
     LIMIT #{limit} OFFSET #{offset}
   </select>
 
@@ -47,10 +48,21 @@
 
   <insert id="insert">
     INSERT INTO requirement (id, workspace_id, name, description, objective, status, owner_user_id,
-      planned_start, planned_end, first_released_at)
+      planned_start, planned_end, first_released_at, sort_order)
     VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{objective}, #{status}, #{ownerUserId},
-      #{plannedStart}, #{plannedEnd}, #{firstReleasedAt})
+      #{plannedStart}, #{plannedEnd}, #{firstReleasedAt}, #{sortOrder})
   </insert>
+
+  <!-- 新项目排到末尾：空间内最大序号 + 1 -->
+  <select id="selectMaxSortOrder" resultType="int">
+    SELECT COALESCE(MAX(sort_order), -1) FROM requirement WHERE workspace_id = #{workspaceId}
+  </select>
+
+  <!-- 只改排序，不动 updated_at：排序不是内容修改，不应影响「更新时间」列 -->
+  <update id="updateSortOrder">
+    UPDATE requirement SET sort_order = #{sortOrder}
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
 
   <update id="update">
     UPDATE requirement SET

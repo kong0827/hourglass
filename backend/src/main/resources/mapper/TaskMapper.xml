@@ -237,6 +237,12 @@
                             AND pm.user_id = #{userId}
                             AND pm.access = 'none'))
       <if test="openOnly"> AND t.board_column != 'done' </if>
+      <if test="columns != null and columns.size() > 0">
+        AND t.board_column IN
+        <foreach collection="columns" item="bc" open="(" separator="," close=")">#{bc}</foreach>
+      </if>
+      <if test="completion == 'open'"> AND t.board_column != 'done' </if>
+      <if test="completion == 'done'"> AND t.board_column = 'done' </if>
       <if test="q != null">
         <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 -->
         AND (t.title LIKE CONCAT('%', #{q}, '%')
@@ -729,6 +735,16 @@
     </if>
     <if test="query.includeDone == false">
       AND t.board_column &lt;&gt; 'done'
+    </if>
+    <if test="query.columns != null and query.columns.size() > 0">
+      AND t.board_column IN
+      <foreach collection="query.columns" item="bc" open="(" separator="," close=")">#{bc}</foreach>
+    </if>
+    <if test="query.completion == 'open'">
+      AND t.board_column &lt;&gt; 'done'
+    </if>
+    <if test="query.completion == 'done'">
+      AND t.board_column = 'done'
     </if>
     <if test="query.q != null">
       AND (

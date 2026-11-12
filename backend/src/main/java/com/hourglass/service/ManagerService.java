@@ -45,7 +45,9 @@ public class ManagerService {
 
     private static final int DEFAULT_WORKDAYS = 5;
     private static final int MIN_WORKDAYS = 1;
-    private static final int MAX_WORKDAYS = 20;
+    /* 负载容量按“今天到最晚截止日”的工作日折算，最多算 30 个工作日（约 6 周）：
+       再远的截止日不再摊薄负载，避免长排期被永久判成低负载。 */
+    private static final int MAX_WORKDAYS = 30;
     private static final int BURNDOWN_DAYS = 14;
     private static final int VELOCITY_WEEKS = 4;
     private static final int FLOW_WEEKS = 8;

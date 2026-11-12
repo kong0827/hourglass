@@ -103,5 +103,7 @@ app:
     # 数据库 outbox 扫描间隔；SMTP 主机、账号与密码统一由管理员接口保存，不走环境变量
     scan-ms: ${MAIL_SCAN_MS:30000}
     initial-delay-ms: ${MAIL_INITIAL_DELAY_MS:10000}
+    # 发件人显示名（收件人看到的名称）；留空则只显示邮箱地址，MAIL FROM 地址始终取邮件配置里的发件人邮箱
+    from-name: ${MAIL_FROM_NAME:沙漏}
     # 站点根地址，含 context-path（如 https://host/hourglass/）；用于通知邮件里的任务/登录链接，留空则不附链接
     base-url: ${MAIL_BASE_URL:}

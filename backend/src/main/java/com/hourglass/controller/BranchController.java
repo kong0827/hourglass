@@ -43,12 +43,14 @@ public class BranchController {
     @GetMapping("/api/branches/board")
     public ApiResult<com.hourglass.dto.BranchBoard> board(@RequestParam(required = false) String workspace,
                                                           @RequestParam(required = false) String project,
+                                                          @RequestParam(required = false) String ownerUserId,
                                                           @RequestParam(required = false) String q,
                                                           @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
         query.setProjectId(project);
+        query.setOwnerUserId(ownerUserId);
         query.setQ(q);
         if (limit != null) {
             query.setLimit(limit);
@@ -61,6 +63,7 @@ public class BranchController {
     public ApiResult<com.hourglass.dto.BranchPage> page(@RequestParam(required = false) String workspace,
                                                         @RequestParam(required = false) String status,
                                                         @RequestParam(required = false) String project,
+                                                        @RequestParam(required = false) String ownerUserId,
                                                         @RequestParam(required = false) String q,
                                                         @RequestParam(required = false) Integer offset,
                                                         @RequestParam(required = false) Integer limit) {
@@ -69,6 +72,7 @@ public class BranchController {
         com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
         query.setStatus(status);
         query.setProjectId(project);
+        query.setOwnerUserId(ownerUserId);
         query.setQ(q);
         if (offset != null) {
             query.setOffset(offset);

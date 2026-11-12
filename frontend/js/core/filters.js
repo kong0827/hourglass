@@ -19,6 +19,8 @@ var FILTER_KEYS = [
   { k: "tags", kind: "list", s: "tags" },
   { k: "types", kind: "list", s: "types" },
   { k: "versions", kind: "list", s: "versions" },
+  { k: "columns", kind: "list", s: "columns" },
+  { k: "completion", kind: "text" },
   { k: "due", kind: "text" },
   { k: "focus", kind: "bool" },
   { k: "blocked", kind: "bool" },

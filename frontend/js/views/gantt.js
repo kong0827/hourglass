@@ -13,7 +13,7 @@ import { openTaskDrawer, syncDateBounds } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { registerViewParams } from "../core/view-params.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
+import { COLUMNS, PRIORITIES, addDays, colName, dayDiff, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, typeName } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
@@ -1894,9 +1894,19 @@ function renderGanttFilterMenu(){
   var dueHTML = [{v:"over",n:"已逾期"},{v:"today",n:"今天到期"},{v:"soon",n:"3 天内"}].map(function(d){
     return ganttFilterChip("data-gantt-due", d.v, d.n, state.due === d.v);
   }).join("");
+  var meta = state.board && state.board.meta;
+  var colSource = (meta && meta.columns && meta.columns.length) ? meta.columns
+    : COLUMNS.map(function(c){ return {name:c.id}; });
+  var colHTML = colSource.map(function(c){
+    return ganttFilterChip("data-gantt-column", c.name, esc(colName(c.name)), state.columns.indexOf(c.name) !== -1);
+  }).join("");
+  var completionHTML = [["", "全部"], ["open", "未完成"], ["done", "已完成"]].map(function(o){
+    return ganttFilterChip("data-gantt-completion", o[0], o[1], (state.completion || "") === o[0]);
+  }).join("");
   var blockedHTML = ganttFilterChip("data-gantt-blocked", "1", "仅看被阻塞", state.blocked);
   var html = '<div class="menu-title">筛选工作项</div>' +
     '<div class="menu-field"><input class="input" type="search" id="ganttFilterQ" placeholder="关键词：标题 / 项目 / 标签" aria-label="关键词筛选" value="' + esc(state.q) + '" /></div>' +
+    ganttFilterSection("状态", colHTML) +
     ganttFilterSection("负责人", ownerHTML || '<span class="foot-note">当前空间没有负责人可选</span>') +
     ganttFilterSection("优先级", priHTML) +
     ganttFilterSection("类型", typeHTML) +
@@ -1905,7 +1915,8 @@ function renderGanttFilterMenu(){
     (catHTML ? ganttFilterSection("模块", catHTML) : "") +
     (tagHTML ? ganttFilterSection("标签", tagHTML) : "") +
     ganttFilterSection("到期", dueHTML) +
-    ganttFilterSection("状态", blockedHTML) +
+    ganttFilterSection("完成情况", completionHTML) +
+    ganttFilterSection("其他", blockedHTML) +
     '<div class="menu-foot">' +
       '<button class="btn sm" type="button" data-gantt-filter-reset>重置</button>' +
       '<button class="btn sm ghost" type="button" data-gantt-filter-save>保存视图</button>' +
@@ -2655,6 +2666,10 @@ if(ganttFilterMenu){
     if(p){ toggleFilterValue("pris", p.getAttribute("data-gantt-pri")); afterGanttFilterChange(); return; }
     var tp = e.target.closest("[data-gantt-type]");
     if(tp){ toggleFilterValue("types", tp.getAttribute("data-gantt-type")); afterGanttFilterChange(); return; }
+    var gc = e.target.closest("[data-gantt-column]");
+    if(gc){ toggleFilterValue("columns", gc.getAttribute("data-gantt-column")); afterGanttFilterChange(); return; }
+    var gcp = e.target.closest("[data-gantt-completion]");
+    if(gcp){ state.completion = gcp.getAttribute("data-gantt-completion") || ""; afterGanttFilterChange(); return; }
     var vr = e.target.closest("[data-gantt-version]");
     if(vr){ toggleFilterValue("versions", vr.getAttribute("data-gantt-version")); afterGanttFilterChange(); return; }
     var r = e.target.closest("[data-gantt-req]");

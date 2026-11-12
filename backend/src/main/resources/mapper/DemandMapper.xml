@@ -12,7 +12,7 @@
   <sql id="pageCols">
     d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
     d.expect_date, d.planned_start, d.planned_end, d.revision,
-    d.accept_text, d.version_id, v.name AS versionName, d.review_note,
+    d.accept_text, d.version_id, v.name AS versionName, v.status AS versionStatus, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
 

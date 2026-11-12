@@ -128,6 +128,8 @@ public class TaskQueryService {
         pageQuery.setTags(query.getTags());
         pageQuery.setTypes(query.getTypes());
         pageQuery.setVersions(query.getVersions());
+        pageQuery.setColumns(query.getColumns());
+        pageQuery.setCompletion(query.getCompletion());
         pageQuery.setBlocked(query.isBlocked());
         pageQuery.setDue(query.getDue());
         pageQuery.setFocus(query.isFocus());
@@ -607,6 +609,8 @@ public class TaskQueryService {
                 || !query.getTags().isEmpty()
                 || !query.getTypes().isEmpty()
                 || !query.getVersions().isEmpty()
+                || !query.getColumns().isEmpty()
+                || query.getCompletion() != null
                 || query.getDue() != null
                 || query.isFocus()
                 || query.isBlocked()
@@ -681,6 +685,16 @@ public class TaskQueryService {
             if (!hit) {
                 return false;
             }
+        }
+        if (!query.getColumns().isEmpty() && !query.getColumns().contains(t.getBoardColumn())) {
+            return false;
+        }
+        boolean isDone = Consts.COL_DONE.equals(t.getBoardColumn());
+        if ("open".equals(query.getCompletion()) && isDone) {
+            return false;
+        }
+        if ("done".equals(query.getCompletion()) && !isDone) {
+            return false;
         }
         if (query.getDue() != null) {
             String rule = support.processingRule(t.getWorkspaceId(), t.getBoardColumn());
@@ -765,6 +779,11 @@ public class TaskQueryService {
         Map<String, Integer> priCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> catCount = new LinkedHashMap<String, Integer>();
         Map<String, Integer> typeCount = new LinkedHashMap<String, Integer>();
+        Map<String, Integer> columnCount = new LinkedHashMap<String, Integer>();
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
+            columnCount.put(c.getId(), 0);
+        }
+        columnCount.put(Consts.COL_DONE, 0);
         for (String p : PRIORITIES) {
             priCount.put(p, 0);
         }
@@ -790,6 +809,9 @@ public class TaskQueryService {
             if (typeCount.containsKey(t.getItemType())) {
                 typeCount.merge(t.getItemType(), 1, Integer::sum);
             }
+            if (t.getBoardColumn() != null && columnCount.containsKey(t.getBoardColumn())) {
+                columnCount.merge(t.getBoardColumn(), 1, Integer::sum);
+            }
             if (t.getReqId() == null) {
                 unassigned++;
             }
@@ -808,6 +830,9 @@ public class TaskQueryService {
         }
         for (Map.Entry<String, Integer> e : typeCount.entrySet()) {
             meta.getTypes().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
+        }
+        for (Map.Entry<String, Integer> e : columnCount.entrySet()) {
+            meta.getColumns().add(new BoardResponse.NameCount(e.getKey(), e.getValue()));
         }
         meta.setTags(metaCache.tags(workspaceId, viewerId));
 

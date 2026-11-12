@@ -20,7 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class RequirementService {
@@ -192,6 +194,7 @@ public class RequirementService {
         r.setDescription(Texts.trimToNull(req.getDescription()));
         r.setStatus(req.getStatus() == null ? "active" : req.getStatus());
         applyProfile(workspaceId, r, req);
+        r.setSortOrder(reqMapper.selectMaxSortOrder(workspaceId) + 1);
         reqMapper.insert(r);
         /* 新项目默认只对空间主/管理员可见：先给 assigned 成员补不可见种子，
            再让创建者显式可参与，避免 assigned 成员建完项目后自己看不到 */
@@ -276,6 +279,37 @@ public class RequirementService {
         workActivityService.recordCurrent(workspaceId, WorkActivityService.PROJECT, id, "archive",
                 archived ? "归档了项目" : "取消归档");
         return reqMapper.selectById(id);
+    }
+
+    /**
+     * 项目手动排序：ids 必须是空间内全部项目（含已归档）的新顺序。
+     * 顺序是空间级展示口径，只允许空间主/管理员调整；数量或成员对不上时说明
+     * 期间有项目被增删，回 409 让前端刷新后重试，避免把别人的新项目挤出列表。
+     */
+    @Transactional
+    public void reorder(String workspaceId, String userId, List<String> ids) {
+        if (!projectAccess.canManage(workspaceId, userId)) {
+            throw new AppException(403, "仅空间主或管理员可调整项目顺序");
+        }
+        if (ids == null || ids.isEmpty()) {
+            throw new AppException(400, "项目顺序不能为空");
+        }
+        Set<String> existing = new HashSet<String>();
+        for (Requirement r : reqMapper.selectAll(workspaceId)) {
+            existing.add(r.getId());
+        }
+        Set<String> seen = new HashSet<String>();
+        for (String id : ids) {
+            if (id == null || !existing.contains(id) || !seen.add(id)) {
+                throw new AppException(409, "项目顺序已变化，请刷新后重试");
+            }
+        }
+        if (seen.size() != existing.size()) {
+            throw new AppException(409, "项目顺序已变化，请刷新后重试");
+        }
+        for (int i = 0; i < ids.size(); i++) {
+            reqMapper.updateSortOrder(workspaceId, ids.get(i), i);
+        }
     }
 
     /** 项目活动查询前必须验证项目归属，避免凭实体 ID 跨空间读取。 */

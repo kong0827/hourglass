@@ -8,7 +8,7 @@ import { icon } from "../core/icons.js";
 import { showView } from "../core/router.js";
 import { canEditReq, canManageProject, reqNameById, roleReadOnly, rt, state, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
-import { openTaskDrawer } from "../core/task-drawer.js";
+import { openTaskDrawer, populateReqSelect } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { CAT_DEFAULT_COLOR, colName, docTypeName, fmtTs, reqStatusName, typeBadgeHTML } from "../lib/format.js";
 import * as activityUI from "../core/activity-ui.js";
@@ -62,12 +62,81 @@ function compareProjects(a, b){
 function sortedProjects(rows){
   return projectSort.key ? rows.slice().sort(compareProjects) : rows;
 }
+/* 手动排序：空间主/管理员可拖；列排序是临时视图，此时不提供拖拽 */
+function canReorderProjects(){
+  var role = rt.currentWs && rt.currentWs.myRole;
+  return role === "owner" || role === "admin";
+}
+function reorderEnabled(){
+  return canReorderProjects() && !projectSort.key;
+}
+function reqDragHTML(id){
+  return '<button class="req-drag" type="button" draggable="true" data-req-drag="' + esc(id) +
+    '" title="拖动调整项目顺序" aria-label="拖动调整项目顺序">' + icon("grip", 14) + '</button>';
+}
+var dragReqState = null, orderSaving = false;
+function listedReqs(){
+  return rt.reqList.filter(function(r){ return showArchived || !r.archivedAt; });
+}
+function clearDropMarks(){
+  reqListEl.querySelectorAll(".drop-before,.drop-after").forEach(function(el){
+    el.classList.remove("drop-before", "drop-after");
+  });
+}
+function endProjectDrag(){
+  dragReqState = null;
+  clearDropMarks();
+  reqListEl.querySelectorAll(".dragging").forEach(function(el){ el.classList.remove("dragging"); });
+  document.body.classList.remove("proj-reordering");
+}
+/* 只把可见项目按新顺序回填，已归档（当前未显示）的项目保持原位置 */
+function mergeVisibleOrder(all, visibleIds){
+  var byId = {};
+  all.forEach(function(r){ byId[r.id] = r; });
+  var out = [], k = 0;
+  all.forEach(function(r){
+    if(showArchived || !r.archivedAt) out.push(byId[visibleIds[k++]] || r);
+    else out.push(r);
+  });
+  return out;
+}
+function applyProjectDrop(drag, targetId, after){
+  if(!drag || drag.id === targetId || orderSaving) return;
+  var ids = drag.order.slice();
+  var from = ids.indexOf(drag.id);
+  if(from < 0) return;
+  ids.splice(from, 1);
+  var to = ids.indexOf(targetId);
+  if(to < 0) return;
+  ids.splice(after ? to + 1 : to, 0, drag.id);
+  var before = rt.reqList.slice();
+  var next = mergeVisibleOrder(before, ids);
+  rt.reqList = next;
+  renderReqList();
+  orderSaving = true;
+  API.put("/api/reqs/order", { ids: next.map(function(r){ return r.id; }) }).then(function(){
+    orderSaving = false;
+    /* 工作项抽屉、看板筛选等下拉都按 rt.reqList 渲染，保存成功后同步一次 */
+    populateReqSelect();
+    toast("项目顺序已保存", "fs");
+  }).catch(function(ex){
+    orderSaving = false;
+    rt.reqList = before;
+    renderReqList();
+    toast("顺序保存失败：" + ((ex && ex.message) || "网络异常"), "bad");
+  });
+}
 function setProjectSort(key){
   if(!Object.prototype.hasOwnProperty.call(PROJECT_SORT_DEFAULT_DIR, key)) return;
-  if(projectSort.key === key) projectSort.dir = projectSort.dir === "desc" ? "asc" : "desc";
-  else{
+  if(projectSort.key !== key){
     projectSort.key = key;
     projectSort.dir = PROJECT_SORT_DEFAULT_DIR[key];
+  }else if(projectSort.dir === PROJECT_SORT_DEFAULT_DIR[key]){
+    /* 同列再点一次切方向，第三次回到手动顺序（拖拽排序只在手动顺序下可用） */
+    projectSort.dir = projectSort.dir === "desc" ? "asc" : "desc";
+  }else{
+    projectSort.key = "";
+    projectSort.dir = "asc";
   }
   renderReqList();
 }
@@ -285,6 +354,7 @@ function renderReqList(){
     }).join("") : '<p class="foot-note" style="margin:4px 0">还没有文档。</p>';
     return '<div class="req-item' + (rt.editingReqId === r.id ? " editing" : "") + '" data-req-id="' + esc(r.id) + '">' +
       '<div class="req-top">' +
+        (reorderEnabled() ? reqDragHTML(r.id) : "") +
         '<button class="icon-btn sm req-expand-btn' + (open ? " on" : "") + '" type="button" data-req-expand="' + esc(r.id) + '" aria-expanded="' + open + '" title="展开项目详情">' +
           icon("chevronRight", 14) + '</button>' +
         '<button class="req-name req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱">' + esc(r.name) + '</button>' +
@@ -348,7 +418,10 @@ function projectGrid(el){
   el.style.gridTemplateColumns = widths.concat(["224px"]).join(" ");
 }
 function projectCell(r, key){
-  if(key === "name") return '<button class="project-cell project-name-cell req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱：' + esc(r.name) + '">' + esc(r.name) + '</button>';
+  if(key === "name"){
+    var nameHTML = '<button class="project-cell project-name-cell req-name-btn" type="button" data-req-cockpit="' + esc(r.id) + '" title="打开项目驾驶舱：' + esc(r.name) + '">' + esc(r.name) + '</button>';
+    return reorderEnabled() ? '<span class="project-name-wrap">' + reqDragHTML(r.id) + nameHTML + '</span>' : nameHTML;
+  }
   if(key === "status") return '<span><span class="tag tag-' + (r.status === "done" ? "success" : (r.status === "hold" ? "ghost" : "info")) + '">' + esc(reqStatusName(r.status)) + '</span></span>';
   if(key === "description") return '<span class="project-cell" title="' + esc(r.description || "") + '">' + esc(r.description || "—") + '</span>';
   if(key === "ownerName") return '<span class="project-cell" title="' + esc(ownerLabelOf(r) || "") + '">' + esc(ownerLabelOf(r) || "—") + '</span>';
@@ -386,9 +459,12 @@ function renderProjectTable(list){
     '<div class="project-table-head">' + cols.map(function(key){
       var active = projectSort.key === key;
       var ind = active ? (projectSort.dir === "desc" ? "↓" : "↑") : "";
+      var hint = active
+        ? (projectSort.dir === PROJECT_SORT_DEFAULT_DIR[key] ? "切换排序方向（再点一次恢复手动顺序）" : "恢复手动顺序")
+        : "按「" + labels[key] + "」排序";
       return '<span aria-sort="' + (active ? (projectSort.dir === "desc" ? "descending" : "ascending") : "none") + '">' +
         '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-project-sort="' + esc(key) + '"' +
-          ' title="按「' + esc(labels[key]) + '」排序">' + esc(labels[key]) +
+          ' title="' + esc(hint) + '">' + esc(labels[key]) +
           '<i class="lh-ind" aria-hidden="true">' + ind + '</i></button></span>';
     }).join("") + '<span>操作</span></div>' +
     '<div class="project-table-body">' + list.map(function(r){
@@ -815,7 +891,7 @@ reqListEl.addEventListener("click", function(e){
   var toBoard = e.target.closest("[data-req-board]");
   if(toBoard){
     var rid1 = toBoard.dataset.reqBoard;
-    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.due = null; state.focus = false; state.blocked = false;
+    state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.tags = []; state.types = []; state.columns = []; state.completion = ""; state.due = null; state.focus = false; state.blocked = false;
     searchInput.value = "";
     searchWrap.classList.remove("has");
     state.reqs = [rid1];
@@ -840,6 +916,49 @@ reqListEl.addEventListener("click", function(e){
   var dl = e.target.closest("[data-del-req]");
   if(dl) deleteReq(dl.dataset.delReq);
 });
+/* 项目拖拽排序：只有把手可拖，避免误触按钮/文本选择 */
+reqListEl.addEventListener("dragstart", function(e){
+  var handle = e.target.closest("[data-req-drag]");
+  var row = handle && handle.closest("[data-req-id]");
+  if(!handle || !row || !reorderEnabled() || orderSaving){
+    e.preventDefault();
+    return;
+  }
+  dragReqState = { id: row.dataset.reqId, order: listedReqs().map(function(r){ return r.id; }) };
+  row.classList.add("dragging");
+  document.body.classList.add("proj-reordering");
+  if(e.dataTransfer){
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", dragReqState.id); }catch(err){ /* 老浏览器 */ }
+    try{ e.dataTransfer.setDragImage(row, 20, 20); }catch(err){ /* 老浏览器 */ }
+  }
+});
+reqListEl.addEventListener("dragover", function(e){
+  if(!dragReqState) return;
+  var row = e.target.closest("[data-req-id]");
+  if(!row || row.classList.contains("dragging")) return;
+  e.preventDefault();
+  if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  clearDropMarks();
+  var box = row.getBoundingClientRect();
+  row.classList.add((e.clientY - box.top) > box.height / 2 ? "drop-after" : "drop-before");
+});
+reqListEl.addEventListener("dragleave", function(e){
+  var row = e.target.closest("[data-req-id]");
+  if(row && !row.contains(e.relatedTarget)) row.classList.remove("drop-before", "drop-after");
+});
+reqListEl.addEventListener("drop", function(e){
+  if(!dragReqState) return;
+  e.preventDefault();
+  var row = e.target.closest("[data-req-id]");
+  var drag = dragReqState;
+  var ontoSelf = !row || row.classList.contains("dragging");
+  endProjectDrag();
+  if(ontoSelf) return;
+  var box = row.getBoundingClientRect();
+  applyProjectDrop(drag, row.dataset.reqId, (e.clientY - box.top) > box.height / 2);
+});
+reqListEl.addEventListener("dragend", endProjectDrag);
 reqListEl.addEventListener("keydown", function(e){
   var inp = e.target.closest("[data-req-new-input]");
   if(!inp) return;

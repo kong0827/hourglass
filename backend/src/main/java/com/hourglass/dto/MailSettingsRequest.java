@@ -18,6 +18,7 @@ public class MailSettingsRequest {
     @Min(value = 1, message = "SMTP 端口必须在 1-65535 之间")
     @Max(value = 65535, message = "SMTP 端口必须在 1-65535 之间")
     private Integer port;
+    @Email(message = "SMTP 用户名必须填写完整邮箱地址")
     @Size(max = 254, message = "SMTP 用户名过长")
     private String username;
     /** 空字符串或 null 表示保留已保存密码 */

@@ -193,6 +193,14 @@ class TaskCommandDeliveryScopeTest {
     }
 
     @Test
+    void rejectedDemandRejectsNewTask() {
+        demand.setStatus("rej");
+        assertTrue(assertThrows(AppException.class, () -> service.create("U1", "W1", request()))
+                .getMessage().contains("已拒绝需求"));
+        verify(tasks, never()).insert(any());
+    }
+
+    @Test
     void oldCanceledAssociationIsPreservedDuringOrdinaryEdit() {
         old.setDemandId("D1");
         demand.setStatus("canceled");

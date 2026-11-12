@@ -46,8 +46,8 @@ rt.commentSending = false;
 rt.alertTab = "notice";
 
 var state = {
-  q:"", owners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[],
-  due:null, focus:false, doneScope:"week", blocked:false,
+  q:"", owners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
+  completion:"", due:null, focus:false, doneScope:"week", blocked:false,
   board:null, doneExtra:[], loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
   mineSpace:"", mineGroup:"due", mineSubgroup:"none", mineSort:"default",
@@ -181,12 +181,14 @@ function dueMetaClass(kind){
 function filterOn(){
   return !!(state.q || state.owners.length || state.pris.length || state.cats.length
     || state.reqs.length || state.tags.length || state.types.length || state.versions.length
+    || state.columns.length || state.completion
     || state.due || state.focus || state.blocked);
 }
 function selectedFilterCount(){
   var n = 0;
   if(state.q) n++;
-  n += state.owners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length;
+  n += state.owners.length + state.pris.length + state.cats.length + state.reqs.length + state.tags.length + state.types.length + state.versions.length + state.columns.length;
+  if(state.completion) n++;
   if(state.due) n++;
   if(state.focus) n++;
   if(state.blocked) n++;

@@ -140,13 +140,13 @@
       </nav>
 
     <div class="side-foot">
-      <button class="side-logout" id="sideSettings" type="button" title="设置" aria-label="设置">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
-        <span class="nl">设置</span>
-      </button>
       <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
         <span class="avatar" id="sideUserAv" style="--a:#475467">·</span>
         <span class="side-user-n" id="sideUserName">…</span>
+      </button>
+      <button class="side-logout" id="sideSettings" type="button" title="设置" aria-label="设置">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5.2 3.4v3.4M5.2 10.2v6.4M10 3.4v6M10 12.8v3.8M14.8 3.4v8.2M14.8 15v1.6"/><circle cx="5.2" cy="8.4" r="1.9"/><circle cx="10" cy="11" r="1.9"/><circle cx="14.8" cy="13.2" r="1.9"/></svg>
+        <span class="nl">设置</span>
       </button>
       <button class="side-logout" id="btnLogout" type="button" title="退出登录" aria-label="退出登录">
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 3.4H5.6a2 2 0 0 0-2 2v9.2a2 2 0 0 0 2 2h2.6"/><path d="M12.6 6.4 16.2 10l-3.6 3.6M16 10H8.4"/></svg>
@@ -280,7 +280,7 @@
     <div class="filterbar" id="filterbar" aria-label="筛选条件">
       <div class="fb-main">
         <div class="fgroup" id="fgStatus">
-          <span class="group-label">状态</span>
+          <span class="group-label">截止期</span>
           <span class="chips" id="chipsDue">
             <button class="chip alert-over" id="chipOver" type="button" aria-pressed="false" aria-label="只看已逾期工作项"><i class="cdot"></i>已逾期 <span class="n" id="nOver">0</span></button>
             <button class="chip alert-today" id="chipToday" type="button" aria-pressed="false" aria-label="只看今天到期的工作项"><i class="cdot"></i>今天到期 <span class="n" id="nToday">0</span></button>
@@ -291,7 +291,7 @@
         </div>
 
         <div class="fgroup" id="fgMore" style="position:relative">
-          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="负责人、优先级、类型、版本、模块、标签与项目">
+          <button class="chip" id="btnMoreFilter" type="button" aria-haspopup="true" aria-expanded="false" title="状态、负责人、优先级、类型、版本、模块、标签、项目与完成情况">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.6 6.2h12.8M5.8 10h8.4M8 13.8h4"/></svg>
             更多筛选 <span class="n" id="moreFilterCount" hidden>0</span>
           </button>
@@ -299,6 +299,8 @@
         </div>
 
         <div class="fb-active" id="fbActive">
+          <div class="fgroup" id="fgColumns" hidden><span class="chips" id="chipsColumns"></span></div>
+          <div class="fgroup" id="fgCompletion" hidden><span class="chips" id="chipsCompletion"></span></div>
           <div class="fgroup" id="fgOwner" hidden><span class="chips" id="chipsOwner"></span></div>
           <div class="fgroup" id="fgPri" hidden><span class="chips" id="chipsPri"></span></div>
           <div class="fgroup" id="fgType" hidden><span class="chips" id="chipsType"></span></div>
@@ -626,11 +628,11 @@
             </div>
             <div class="req-list" id="reqList"></div>
           </div>
-          <div class="modal-layer" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+          <div class="modal-layer" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
             <div class="panel">
               <div class="panel-head"><h3 id="reqFormTitle">新建项目</h3><button class="icon-btn sm" type="button" id="dlgProjectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
-              <div class="stack">
-                <div class="field" id="fReqName">
+              <div class="stack proj-form-grid">
+                <div class="field span2" id="fReqName">
                   <label for="rName">项目名称 <span class="req">*</span></label>
                   <input id="rName" type="text" maxlength="40" placeholder="例如：资金上场小程序" autocomplete="off" />
                   <span class="err">请填写项目名称</span>
@@ -657,12 +659,12 @@
                     <input id="rPlanEnd" type="date" aria-label="计划结束日" />
                   </div>
                 </div>
-                <div class="field" id="fReqTemplate">
+                <div class="field span2" id="fReqTemplate">
                   <label for="rTemplate">项目模板 <small class="tc-optional">仅新建时生效</small></label>
                   <select id="rTemplate" aria-label="选择项目模板"></select>
                   <p class="foot-note" id="rTemplateHint">只补充缺失的列、文档骨架、测试模块与默认版本，不覆盖已有内容</p>
                 </div>
-                <div class="field">
+                <div class="field span2">
                   <label>项目状态</label>
                   <div class="seg" id="segReqStatus">
                     <button type="button" data-rst="active">进行中</button>
@@ -670,7 +672,7 @@
                     <button type="button" data-rst="hold">已搁置</button>
                   </div>
                 </div>
-                <div class="field" id="projCatCfg" hidden>
+                <div class="field span2" id="projCatCfg" hidden>
                   <label>模块 <small class="tc-optional">按项目配置</small></label>
                   <div class="cfg-list" id="projCatList"></div>
                   <div class="cfg-add">
@@ -680,11 +682,11 @@
                   </div>
                   <p class="foot-note" id="projCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
                 </div>
-                <div class="row row-gap">
+                <div class="row row-gap span2">
                   <button class="btn primary" type="button" id="btnSaveReq">新建项目</button>
                   <button class="btn" type="button" id="btnCancelReqEdit" hidden>取消编辑</button>
                 </div>
-                <p class="foot-note">删除项目时其下工作项会保留，仅解除关联；把工作项归入项目后，可在筛选栏按项目查看全部工作</p>
+                <p class="foot-note span2">删除项目时其下工作项会保留，仅解除关联；把工作项归入项目后，可在筛选栏按项目查看全部工作</p>
               </div>
             </div>
           </div></div></div>
@@ -810,10 +812,10 @@
         </div>
 
         <!-- 提需求 / 编辑需求 -->
-        <div class="modal-layer" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+        <div class="modal-layer" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
-            <div class="stack">
+            <div class="stack proj-form-grid">
               <div class="field">
                 <label for="dReq">所属项目 <span class="req">*</span></label>
                 <select id="dReq"></select>
@@ -831,7 +833,7 @@
                 <label for="dAccept">验收标准</label>
                 <textarea id="dAccept" maxlength="2000" placeholder="做到什么程度算完成…"></textarea>
               </div>
-              <div class="form-grid">
+              <div class="form-grid span2">
                 <div class="field">
                   <label for="dSource">需求来源</label>
                   <input id="dSource" type="text" maxlength="40" placeholder="例如：财务 · 刘" autocomplete="off" />
@@ -846,24 +848,26 @@
                   </select>
                 </div>
               </div>
-              <div class="field">
-                <label for="dCategory">模块</label>
-                <select id="dCategory"></select>
-              </div>
-              <div class="field">
-                <label>优先级</label>
-                <div class="seg" id="segDemandPri">
-                  <button type="button" data-dpri="P0">P0</button>
-                  <button type="button" data-dpri="P1">P1</button>
-                  <button type="button" data-dpri="P2">P2</button>
-                  <button type="button" data-dpri="P3">P3</button>
+              <div class="form-grid three span2">
+                <div class="field">
+                  <label for="dCategory">模块</label>
+                  <select id="dCategory"></select>
+                </div>
+                <div class="field">
+                  <label>优先级</label>
+                  <div class="seg" id="segDemandPri">
+                    <button type="button" data-dpri="P0">P0</button>
+                    <button type="button" data-dpri="P1">P1</button>
+                    <button type="button" data-dpri="P2">P2</button>
+                    <button type="button" data-dpri="P3">P3</button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="dExpect">期望交付日期</label>
+                  <input id="dExpect" type="date" />
                 </div>
               </div>
-              <div class="field">
-                <label for="dExpect">期望交付日期</label>
-                <input id="dExpect" type="date" />
-              </div>
-              <div class="field">
+              <div class="field span2">
                 <label>WSJF 评分（可选）</label>
                 <div class="wsjf-grid">
                   <span class="wsjf-item"><label for="dWsjfB">业务价值</label><input id="dWsjfB" type="number" min="0" max="10" placeholder="0-10" /></span>
@@ -873,10 +877,10 @@
                 </div>
                 <span class="hint">可不填：四项都填才自动计分 WSJF =（业务 + 紧迫 + 风险）÷ 工作量；留空不评分，列表默认按优先级排序</span>
               </div>
-              <div class="row row-gap">
+              <div class="row row-gap span2">
                 <button class="btn primary" type="button" id="btnSaveDemand">提交评审</button>
               </div>
-              <p class="foot-note">新需求进入「待评审」；仅空间主可通过 / 拒绝 / 排期</p>
+              <p class="foot-note span2">新需求进入「待评审」；仅空间主可通过 / 拒绝 / 排期</p>
             </div>
           </div>
         </div></div></div>
@@ -1604,8 +1608,30 @@
                 <button type="button" data-br-mode="list" aria-pressed="false">列表</button>
               </span>
               <span class="br-search">
+                <select id="branchStatusFilter" aria-label="按状态筛选">
+                  <option value="">全部状态</option>
+                  <option value="dev">开发中</option>
+                  <option value="testing">待测试</option>
+                  <option value="merging">待合并</option>
+                  <option value="released">已发布</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchOwnerFilter" aria-label="按负责人筛选">
+                  <option value="">全部负责人</option>
+                </select>
+              </span>
+              <span class="br-search">
                 <select id="branchProjectFilter" aria-label="按项目筛选">
                   <option value="">全部项目</option>
+                </select>
+              </span>
+              <span class="br-search">
+                <select id="branchListGroup" aria-label="列表分组方式" hidden>
+                  <option value="none">不分组</option>
+                  <option value="status">按状态分组</option>
+                  <option value="owner">按负责人分组</option>
+                  <option value="project">按项目分组</option>
                 </select>
               </span>
               <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>

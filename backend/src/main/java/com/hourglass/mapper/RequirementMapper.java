@@ -25,6 +25,12 @@ public interface RequirementMapper {
 
     int insert(Requirement requirement);
 
+    /** 空间内最大排序号；空空间返回 -1，新项目取 +1 排到末尾 */
+    int selectMaxSortOrder(@Param("workspaceId") String workspaceId);
+
+    int updateSortOrder(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                        @Param("sortOrder") int sortOrder);
+
     int update(Requirement requirement);
 
     int setArchived(@Param("workspaceId") String workspaceId, @Param("id") String id,

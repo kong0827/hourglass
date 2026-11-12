@@ -23,6 +23,10 @@ public class BoardQuery {
     private List<String> types = new ArrayList<String>();
     /** 影响版本ID列表，__none 表示待规划 */
     private List<String> versions = new ArrayList<String>();
+    /** 看板列（状态）ID 列表 */
+    private List<String> columns = new ArrayList<String>();
+    /** 完成情况：null=全部，open=未完成，done=已完成 */
+    private String completion;
     /** over/today/soon */
     private String due;
     /** 今日聚焦：逾期 + 今天到期 + 进行中的 P0 */
@@ -40,19 +44,20 @@ public class BoardQuery {
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String due, Boolean focus, String doneScope, Integer doneLimit, Integer doneOffset) {
-        return from(q, owners, pris, cats, reqs, tags, null, null, due, focus, null, null, doneScope, doneLimit, doneOffset, null);
+        return from(q, owners, pris, cats, reqs, tags, null, null, due, focus, null, null, doneScope, doneLimit, doneOffset, null, null, null);
     }
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String types, String versions, String due, Boolean focus, Boolean blocked, Boolean noDue,
                                   String doneScope, Integer doneLimit, Integer doneOffset) {
         return from(q, owners, pris, cats, reqs, tags, types, versions, due, focus, blocked, noDue,
-                doneScope, doneLimit, doneOffset, null);
+                doneScope, doneLimit, doneOffset, null, null, null);
     }
 
     public static BoardQuery from(String q, String owners, String pris, String cats, String reqs, String tags,
                                   String types, String versions, String due, Boolean focus, Boolean blocked, Boolean noDue,
-                                  String doneScope, Integer doneLimit, Integer doneOffset, Integer openLimit) {
+                                  String doneScope, Integer doneLimit, Integer doneOffset, Integer openLimit,
+                                  String columns, String completion) {
         BoardQuery query = new BoardQuery();
         query.q = trimToNull(q);
         query.owners = splitCsv(owners);
@@ -62,6 +67,9 @@ public class BoardQuery {
         query.tags = splitCsv(tags);
         query.types = splitCsv(types);
         query.versions = splitCsv(versions);
+        query.columns = splitCsv(columns);
+        String done = trimToNull(completion);
+        query.completion = "open".equals(done) || "done".equals(done) ? done : null;
         query.due = trimToNull(due);
         query.focus = Boolean.TRUE.equals(focus);
         query.blocked = Boolean.TRUE.equals(blocked);

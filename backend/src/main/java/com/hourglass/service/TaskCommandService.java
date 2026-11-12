@@ -774,6 +774,9 @@ public class TaskCommandService {
         if (demand != null && "canceled".equals(demand.getStatus())) {
             throw AppException.badRequest("已取消需求不能新建关联任务");
         }
+        if (demand != null && "rej".equals(demand.getStatus())) {
+            throw AppException.badRequest("已拒绝需求不能新建关联任务");
+        }
     }
 
     private void logDemandChange(String userId, String workspaceId, Task old, Task task) {

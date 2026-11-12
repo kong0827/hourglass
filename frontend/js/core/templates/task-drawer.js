@@ -495,7 +495,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <button type="button" class="label-link" id="iDemandView" hidden>查看</button>
               </div>
               <select id="iDemand"></select>
-              <span class="hint" id="iDemandHint">先选项目；未选项目时会自动带出需求所属项目。</span>
+              <span class="hint" id="iDemandHint">先选项目；未选项目时会自动带出需求所属项目。已拒绝、已取消需求不作为新关联候选。</span>
             </div>
             <details class="assoc-more" id="assocMore">
               <summary>

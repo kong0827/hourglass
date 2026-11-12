@@ -21,6 +21,10 @@ public class MyTasksQuery {
     private List<String> types = Collections.emptyList();
     /** 影响版本ID列表，__none 表示待规划 */
     private List<String> versions = Collections.emptyList();
+    /** 看板列（状态）ID 列表 */
+    private List<String> columns = Collections.emptyList();
+    /** 完成情况：null=全部，open=未完成，done=已完成 */
+    private String completion;
     private boolean blocked;
     private String due;
     private boolean focus;
@@ -107,6 +111,22 @@ public class MyTasksQuery {
 
     public void setVersions(List<String> versions) {
         this.versions = versions == null ? Collections.<String>emptyList() : versions;
+    }
+
+    public List<String> getColumns() {
+        return columns;
+    }
+
+    public void setColumns(List<String> columns) {
+        this.columns = columns == null ? Collections.<String>emptyList() : columns;
+    }
+
+    public String getCompletion() {
+        return completion;
+    }
+
+    public void setCompletion(String completion) {
+        this.completion = completion;
     }
 
     public boolean isBlocked() {
