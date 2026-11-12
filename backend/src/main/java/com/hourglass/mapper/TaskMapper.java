@@ -336,6 +336,15 @@ public interface TaskMapper {
                                                         @Param("viewerId") String viewerId,
                                                         @Param("today") LocalDate today);
 
+    /** 报表下钻：与 count* 聚合同口径的明细分页 */
+    int countDrillTasks(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+                        @Param("q") com.hourglass.dto.TaskDrillQuery q);
+
+    List<com.hourglass.dto.TaskDrillRow> selectDrillTasks(
+            @Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+            @Param("q") com.hourglass.dto.TaskDrillQuery q,
+            @Param("offset") int offset, @Param("limit") int limit);
+
     /** 最近一个完成日（周回顾 autoOffset 用；没有完成记录时为 null） */
     LocalDate selectLatestCompletedAt(@Param("workspaceId") String workspaceId,
                                       @Param("viewerId") String viewerId,

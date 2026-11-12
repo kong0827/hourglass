@@ -664,7 +664,7 @@ function applyView(v){
   toast("已应用视图「" + v.name + "」", "fs");
 }
 function deleteView(id){
-  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响任务数据。", okText:"删除" }).then(function(ok){
+  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响任务数据。", okText:"删除视图" }).then(function(ok){
     if(!ok) return;
     API.del("/api/views/" + encodeURIComponent(id)).then(function(){
       toast("视图已删除", "fs");

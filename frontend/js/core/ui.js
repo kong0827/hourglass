@@ -446,6 +446,13 @@ import { icon } from "./icons.js";
     if (bar) bar.classList.toggle("on", syncCount > 0);
   }
 
+  /* ==================== 筛选生效态 ====================
+     值偏离默认才高亮（与顶栏筛选 chip 同一组令牌）；默认值与禁用态都不发光。 */
+  function markFiltered(el, isDefault) {
+    if (!el) return;
+    el.classList.toggle("is-filtered", !el.disabled && !isDefault);
+  }
+
   /* ==================== 剪贴板 ==================== */
   function copyText(text, okMsg, failMsg) {
     function fallback() {
@@ -524,6 +531,7 @@ import { icon } from "./icons.js";
     skeletonCards: skeletonCards,
     skeletonRows: skeletonRows,
     syncBusy: syncBusy,
+    markFiltered: markFiltered,
     copyText: copyText
 };
 

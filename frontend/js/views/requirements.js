@@ -223,7 +223,7 @@ function enterRequirementsView(){
   fillReqDocProjectSelect();
   loadReqs().then(function(){
     fillReqDocProjectSelect();
-    /* 项目列表到位后重算「新增文档」按钮可见性（树可能先于 reqs 渲染过） */
+    /* 项目列表到位后重算「新建文档」按钮可见性（树可能先于 reqs 渲染过） */
     if(reqDocsLoaded) renderReqDocMode();
   });
   showReqDocList();
@@ -383,7 +383,7 @@ function reqDocGroupByProject(rows){
 function renderReqDocTree(){
   var box = $("reqDocTree");
   if(!box) return;
-  /* 没有可写项目就不显示「新增文档」；项目列表未加载时不判定（加载完成后会重渲染修正） */
+  /* 没有可写项目就不显示「新建文档」；项目列表未加载时不判定（加载完成后会重渲染修正） */
   var nb = $("reqDocNew");
   if(nb) nb.style.display = (!rt.reqsLoaded || rt.reqList.some(function(r){ return canEditReq(r.id); })) ? "" : "none";
   if(!reqDocsLoaded){
@@ -399,7 +399,7 @@ function renderReqDocTree(){
   if(!rows.length){
     box.innerHTML = kw
       ? '<div class="reqdoc-empty2">没有找到匹配的文档</div>'
-      : '<div class="reqdoc-empty2">还没有文档。点右上角「新增文档」，先选项目再填文档名称。</div>';
+      : '<div class="reqdoc-empty2">还没有文档。点右上角「新建文档」，先选项目再填文档名称。</div>';
     return;
   }
 
@@ -494,8 +494,8 @@ function reqDocEmptyHTML(){
   var kw = (($("reqDocSearch") || {}).value || "").trim();
   if(kw) return '<div class="reqdoc-empty2">没有找到匹配的文档</div>';
   if(reqDocsError) return '<div class="reqdoc-empty2">暂时无法加载文档，请点上方的「重试」</div>';
-  if(reqDocReqFilter) return '<div class="reqdoc-empty2">这个项目还没有文档。点右上角「新增文档」并选择该项目即可创建。</div>';
-  return '<div class="reqdoc-empty2">还没有文档。点右上角「新增文档」，先选项目再填文档名称。</div>';
+  if(reqDocReqFilter) return '<div class="reqdoc-empty2">这个项目还没有文档。点右上角「新建文档」并选择该项目即可创建。</div>';
+  return '<div class="reqdoc-empty2">还没有文档。点右上角「新建文档」，先选项目再填文档名称。</div>';
 }
 function reqDocFilterName(id){
   for(var i = 0; i < rt.reqList.length; i++){
@@ -571,7 +571,7 @@ function saveRdView(){
   });
 }
 function deleteRdView(id){
-  UI.showConfirm({ title: "删除视图", msg: "确定删除该文档视图？不影响文档数据。", okText: "删除" }).then(function(ok){
+  UI.showConfirm({ title: "删除视图", msg: "确定删除该文档视图？不影响文档数据。", okText: "删除视图" }).then(function(ok){
     if(!ok) return;
     API.del("/api/views/" + encodeURIComponent(id)).then(function(){
       toast("视图已删除", "fs");
@@ -1016,7 +1016,7 @@ function submitRrdComment(){
 }
 function deleteRrdComment(commentId){
   if(!rrdCommentsDocId || !commentId) return;
-  UI.showConfirm({ title: "删除评论", msg: "确定删除这条评论？", okText: "删除", danger: true }).then(function(ok){
+  UI.showConfirm({ title: "删除评论", msg: "确定删除这条评论？", okText: "删除评论", danger: true }).then(function(ok){
     if(!ok) return;
     API.del("/api/req-docs/" + encodeURIComponent(rrdCommentsDocId) + "/comments/" + encodeURIComponent(commentId)).then(function(){
       loadRrdComments();
@@ -1613,6 +1613,7 @@ function demandStatusName(st){
   if(st === "pass") return "已通过";
   if(st === "plan") return "已排期";
   if(st === "rej") return "已拒绝";
+  if(st === "canceled" || st === "cancelled") return "已取消";
   return "待评审";
 }
 function loadReqDocDemands(id){
@@ -1657,7 +1658,7 @@ function setNewReqDocBusy(label){
   var ok = $("dlgNewReqDocOk");
   if(!ok) return;
   ok.disabled = !!label;
-  ok.textContent = label || "创建并编辑";
+  ok.textContent = label || "新建并编辑";
 }
 /* 创建已成功、导入却失败：不静默留下空稿，直接进入草稿让用户继续编辑或重新导入 */
 function recoverFailedNewDocImport(doc, file, ex){
@@ -1688,7 +1689,7 @@ function submitNewReqDoc(){
   if(kind === "markdown") format = "markdown";
   var parentId = $("newReqDocParent") ? $("newReqDocParent").value : "";
   var createdDoc = null;
-  setNewReqDocBusy("创建文档…");
+  setNewReqDocBusy("新建文档…");
   API.post("/api/req-docs", {
     reqId: reqId, title: title, content: "", status: "draft",
     format: format, docType: $("newReqDocType").value, parentId: parentId || null
@@ -1708,7 +1709,7 @@ function submitNewReqDoc(){
     })
     .catch(function(ex){
       if(createdDoc) recoverFailedNewDocImport(createdDoc, file, ex);
-      else toast("创建文档失败：" + (ex.message || "网络异常"), "bad");
+      else toast("新建文档失败：" + (ex.message || "网络异常"), "bad");
     })
     .then(function(){ setNewReqDocBusy(null); });
 }
@@ -2276,7 +2277,7 @@ function submitReqDocComment(){
 }
 function deleteReqDocComment(commentId){
   if(!editingDocId || !commentId) return;
-  UI.showConfirm({ title: "删除评论", msg: "确定删除这条评论？", okText: "删除", danger: true }).then(function(ok){
+  UI.showConfirm({ title: "删除评论", msg: "确定删除这条评论？", okText: "删除评论", danger: true }).then(function(ok){
     if(!ok) return;
     API.del("/api/req-docs/" + encodeURIComponent(editingDocId) + "/comments/" + encodeURIComponent(commentId)).then(function(){
       loadReqDocComments(editingDocId);
@@ -3077,7 +3078,7 @@ function deleteReqDoc(){
   UI.showConfirm({
     title: "删除文档",
     msg: "子文档会上移一级，关联到它的工作项与需求池条目会自动解除关联（工作项与需求本身不会被删除）。确定删除？",
-    okText: "删除"
+    okText: "删除文档"
   }).then(function(ok){
     if(!ok) return;
     API.del("/api/req-docs/" + encodeURIComponent(id)).then(function(){

@@ -54,7 +54,7 @@
 
     <div class="side-ws">
       <button class="ws-switch" id="wsSwitch" type="button" aria-haspopup="true" aria-expanded="false" title="切换空间 / 空间管理">
-        <span class="avatar ws-avatar" id="wsAvatar" style="--a:#98A2B3">私</span>
+        <span class="avatar ws-avatar" id="wsAvatar" style="--a:#475467">私</span>
         <span class="ws-meta">
           <span class="ws-n" id="wsName">加载中…</span>
           <span class="ws-kind" id="wsKind">个人空间</span>
@@ -145,7 +145,7 @@
         <span class="nl">设置</span>
       </button>
       <button class="side-user" id="sideUserBtn" type="button" title="个人设置（账号 / 计时 / 密码）">
-        <span class="avatar" id="sideUserAv" style="--a:#98A2B3">·</span>
+        <span class="avatar" id="sideUserAv" style="--a:#475467">·</span>
         <span class="side-user-n" id="sideUserName">…</span>
       </button>
       <button class="side-logout" id="btnLogout" type="button" title="退出登录" aria-label="退出登录">
@@ -182,11 +182,11 @@
           <span class="tp-stop" id="timerPillStop" title="停止计时">停止</span>
         </button>
 
-        <label class="global-search" id="searchWrap" title="按标题 / 描述 / 备注筛选当前视图（Ctrl/⌘ + K 打开全局搜索）">
+        <label class="global-search" id="searchWrap" title="按标题 / 描述 / 备注等工作项字段筛选；Ctrl/⌘ + K 打开全站搜索">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
-          <input id="searchInput" type="search" name="task-search" placeholder="搜索…" autocomplete="new-password" autocapitalize="off" spellcheck="false" readonly data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
+          <input id="searchInput" type="search" name="task-search" placeholder="搜索工作项…" autocomplete="new-password" autocapitalize="off" spellcheck="false" readonly data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
           <button class="gs-clear" id="searchClear" type="button" aria-label="清空搜索">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
@@ -316,7 +316,7 @@
         <div class="fb-actions" id="filterActions" hidden>
           <button class="chip" id="selectedSummary" type="button" title="清空全部筛选"></button>
           <button class="btn sm" id="btnSaveView" type="button" title="把当前筛选条件存为视图（跨设备同步）">存为视图</button>
-          <button class="btn sm ghost" id="btnClearFilter" type="button">清空筛选</button>
+          <button class="btn sm soft" id="btnClearFilter" type="button"><span data-icon="close"></span>&nbsp;清空筛选</button>
         </div>
       </div>
     </div>
@@ -339,7 +339,7 @@
             <span class="toolbar-meta" id="mineMeta">—</span>
             <span class="toolbar-right">
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">分组</span>
+                <span class="toolbar-meta is-strong">分组</span>
                 <select id="mineGroup" class="mini-select" aria-label="分组方式">
                   <option value="due">按截止日期</option>
                   <option value="workspace">按空间</option>
@@ -351,7 +351,7 @@
                 </select>
               </label>
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">二级</span>
+                <span class="toolbar-meta is-strong">二级</span>
                 <select id="mineSubgroup" class="mini-select" aria-label="二级分组方式">
                   <option value="none">不分组</option>
                   <option value="due">按截止日期</option>
@@ -363,7 +363,7 @@
                 </select>
               </label>
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">排序</span>
+                <span class="toolbar-meta is-strong">排序</span>
                 <select id="mineSort" class="mini-select" aria-label="排序方式">
                   <option value="default">默认顺序</option>
                   <option value="due">按截止日期</option>
@@ -373,17 +373,24 @@
                 </select>
               </label>
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">空间</span>
+                <span class="toolbar-meta is-strong">空间</span>
                 <select id="mineSpaceFilter" class="mini-select" aria-label="按空间筛选">
                   <option value="">全部空间</option>
                 </select>
               </label>
+              <div class="seg mini" id="mineDensity" role="group" aria-label="列表密度">
+                <button type="button" data-mine-density="standard" aria-pressed="true">标准</button>
+                <button type="button" data-mine-density="relaxed" aria-pressed="false">宽松</button>
+              </div>
+              <button class="btn sm" type="button" id="btnMineFields">显示字段</button>
+              <button class="btn sm" type="button" id="btnMineFold">折叠全部</button>
               <button class="btn sm" type="button" id="btnMineRefresh">
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.4 10a6.4 6.4 0 1 1-1.9-4.6"/><path d="M16.6 3.6v4.2h-4.2"/></svg>
                 刷新
               </button>
             </span>
           </div>
+          <div class="mine-stats" id="mineStats"></div>
           <div id="mineBody"></div>
         </div>
       </section>
@@ -397,7 +404,7 @@
               <button class="btn sm" id="btnListBulk" type="button" hidden></button>
               <button class="btn sm" id="btnListColumns" type="button">显示字段</button>
               <label class="row row-gap" style="gap:6px">
-                <span class="toolbar-meta">排序</span>
+                <span>排序</span>
                 <select id="listSort" class="mini-select" aria-label="排序方式">
                   <option value="column">按看板列</option>
                   <option value="due">按截止日期</option>
@@ -508,7 +515,7 @@
                 </button>
                 <div class="menu popover" id="ganttFilterMenu" hidden style="left:0;top:calc(100% + 6px)"></div>
               </div>
-              <button class="btn sm ghost" type="button" id="ganttClearFilter" hidden>清除筛选</button>
+              <button class="btn sm soft" type="button" id="ganttClearFilter" hidden><span data-icon="close"></span>&nbsp;清除筛选</button>
               <label class="row row-gap" style="gap:6px">
                 <span class="toolbar-meta is-strong">分组</span>
                 <select id="ganttGroup" class="mini-select" aria-label="工作项分组方式">
@@ -621,7 +628,7 @@
           </div>
           <div class="modal-layer" id="dlgProject" role="dialog" aria-modal="true" aria-labelledby="reqFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
             <div class="panel">
-              <div class="panel-head"><h3 id="reqFormTitle">新增项目</h3><button class="icon-btn sm" type="button" id="dlgProjectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+              <div class="panel-head"><h3 id="reqFormTitle">新建项目</h3><button class="icon-btn sm" type="button" id="dlgProjectX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
               <div class="stack">
                 <div class="field" id="fReqName">
                   <label for="rName">项目名称 <span class="req">*</span></label>
@@ -674,7 +681,7 @@
                   <p class="foot-note" id="projCatHint" hidden>仅空间主、管理员或项目负责人可维护模块；其他成员只能查看。</p>
                 </div>
                 <div class="row row-gap">
-                  <button class="btn primary" type="button" id="btnSaveReq">添加项目</button>
+                  <button class="btn primary" type="button" id="btnSaveReq">新建项目</button>
                   <button class="btn" type="button" id="btnCancelReqEdit" hidden>取消编辑</button>
                 </div>
                 <p class="foot-note">删除项目时其下工作项会保留，仅解除关联；把工作项归入项目后，可在筛选栏按项目查看全部工作</p>
@@ -738,7 +745,7 @@
                 <textarea id="vDesc" maxlength="500" placeholder="选填：这一版要交付什么…"></textarea>
               </div>
               <div class="row row-gap">
-                <button class="btn primary" type="button" id="btnSaveVer">创建版本</button>
+                <button class="btn primary" type="button" id="btnSaveVer">新建版本</button>
               </div>
               <p class="foot-note">版本属于所选项目；工作项在详情抽屉选「计划版本」，需求池排期时选「目标版本」</p>
             </div>
@@ -929,13 +936,13 @@
                 <div class="menu popover" id="rdViewsMenu" hidden></div>
               </span>
               <span class="reqdoc-search">
-                <input type="search" id="reqDocSearch" placeholder="搜索标题或正文…" aria-label="搜索文档">
+                <input type="search" id="reqDocSearch" placeholder="搜索全部文档…" title="在全部项目（或当前筛选的项目）文档中搜索标题与正文" aria-label="搜索全部文档的标题与正文">
               </span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
               <button class="btn primary sm" type="button" id="reqDocNew">
-                <span data-icon="plus"></span>&nbsp;新增文档
+                <span data-icon="plus"></span>&nbsp;新建文档
               </button>
             </span>
           </div>
@@ -1085,10 +1092,10 @@
           </section>
         </div>
 
-        <!-- 新增文档：先选项目、填标题，确认后进编辑页 -->
+        <!-- 新建文档：先选项目、填标题，确认后进编辑页 -->
         <div class="modal-layer" id="dlgNewReqDoc" role="dialog" aria-modal="true" aria-labelledby="dlgNewReqDocTitle">
           <div class="sheet reqdoc-dlg">
-            <h3 class="reqdoc-dlg-title" id="dlgNewReqDocTitle">新增文档</h3>
+            <h3 class="reqdoc-dlg-title" id="dlgNewReqDocTitle">新建文档</h3>
             <p class="reqdoc-dlg-msg">选择项目和分类；可以从空白开始写，也可以直接上传已有文件，确认后进入编辑页。</p>
             <div class="reqdoc-dlg-form">
               <label class="reqdoc-dlg-field">
@@ -1104,8 +1111,8 @@
                 <select id="newReqDocType"></select>
               </label>
               <div class="reqdoc-dlg-field">
-                <span>创建方式</span>
-                <div class="seg mini" id="newReqDocSource" role="group" aria-label="创建方式">
+                <span>新建方式</span>
+                <div class="seg mini" id="newReqDocSource" role="group" aria-label="新建方式">
                   <button type="button" data-docsrc="blank" aria-pressed="true">空白新建</button>
                   <button type="button" data-docsrc="file" aria-pressed="false">上传文件</button>
                 </div>
@@ -1131,7 +1138,7 @@
             </div>
             <div class="reqdoc-dlg-foot">
               <button class="btn" type="button" id="dlgNewReqDocCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgNewReqDocOk">创建并编辑</button>
+              <button class="btn primary" type="button" id="dlgNewReqDocOk">新建并编辑</button>
             </div>
           </div>
         </div>
@@ -1158,7 +1165,7 @@
             <div class="ai-usage" id="aiSplitUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgAiSplitCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgAiSplitOk">创建选中工作项</button>
+              <button class="btn primary" type="button" id="dlgAiSplitOk">新建选中工作项</button>
             </div>
           </div>
         </div>
@@ -1269,6 +1276,20 @@
       <!-- ===== 交付：测试 ===== -->
       <section class="view" id="view-testcases" aria-label="测试">
         <div class="view-page tc-page">
+          <!-- 手机端：测试属于项目域，补面包屑与域内子页，避免底部只高亮「项目」却看不到隶属关系 -->
+          <nav class="tc-domain" id="tcDomain" aria-label="项目内导航">
+            <div class="tc-crumb">
+              <button class="tc-crumb-link" type="button" data-tc-domain="projects" title="返回项目列表">项目</button>
+              <span class="tc-crumb-sep" aria-hidden="true">/</span>
+              <span class="tc-crumb-cur" id="tcCrumbProj">全部项目</span>
+            </div>
+            <div class="tc-domain-tabs" role="group" aria-label="项目内页面">
+              <button type="button" data-tc-domain="project">概览</button>
+              <button type="button" data-tc-domain="board">工作项</button>
+              <button type="button" class="on" aria-current="page" data-tc-domain="testcases">测试用例</button>
+              <button type="button" data-tc-domain="branches">分支</button>
+            </div>
+          </nav>
           <div class="page-toolbar">
             <button type="button" class="label-help" id="tcHelp" aria-label="查看用例、计划、矩阵与报告的关系说明" title="测试模块使用说明"></button>
             <span class="seg mini" id="tcModeSeg" role="group" aria-label="测试视图">
@@ -1285,18 +1306,19 @@
                   <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
                   <div class="menu popover" id="tcViewsMenu" hidden></div>
                 </span>
-                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索用例 / 前置 / 步骤…" aria-label="搜索测试用例" />
+                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 步骤" aria-label="在所选项目内搜索测试用例" />
                 <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
                 <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
                 <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
                 <button class="btn sm ghost" type="button" id="tcBug" aria-pressed="false" title="只看关联缺陷仍未完成（未删除、未进入完成列）的用例">未关闭缺陷</button>
-                <div class="seg mini" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
-                  <button type="button" data-tc-status="all" aria-pressed="true">全部</button>
-                  <button type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
-                  <button type="button" data-tc-status="passed" aria-pressed="false">通过</button>
-                  <button type="button" data-tc-status="failed" aria-pressed="false">失败</button>
-                  <button type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
+                <div class="chips" id="tcStatusSeg" role="group" aria-label="执行结果筛选">
+                  <button class="chip" type="button" data-tc-status="all" aria-pressed="true">全部</button>
+                  <button class="chip" type="button" data-tc-status="untested" aria-pressed="false">未执行</button>
+                  <button class="chip" type="button" data-tc-status="passed" aria-pressed="false">通过</button>
+                  <button class="chip" type="button" data-tc-status="failed" aria-pressed="false">失败</button>
+                  <button class="chip" type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
                 </div>
+                <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清除筛选</button>
               </span>
               <span class="tc-actionbar">
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
@@ -1310,13 +1332,13 @@
                 <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
                 </button>
-                <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新增用例</button>
+                <button class="btn sm primary" type="button" id="btnCaseNew"><span data-icon="plus"></span>&nbsp;新建用例</button>
               </span>
             </span>
           </div>
           <div class="tc-filterbar tc-defbar" id="tcDefectBar" hidden>
             <select id="tcDefReq" class="mini-select" aria-label="按项目筛选缺陷"></select>
-            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索缺陷 / 编号 / 用例…" aria-label="搜索缺陷" />
+            <input id="tcDefSearch" type="search" class="tc-search" placeholder="搜索本项目缺陷…" title="在所选项目内搜索缺陷 / 编号 / 用例" aria-label="在所选项目内搜索缺陷" />
             <select id="tcDefSeverity" class="mini-select" aria-label="按严重度筛选缺陷">
               <option value="all">严重度：全部</option>
               <option value="blocker">阻断</option>
@@ -1334,14 +1356,14 @@
             </select>
             <select id="tcDefOwner" class="mini-select" aria-label="按负责人筛选缺陷"></select>
             <select id="tcDefVersion" class="mini-select" aria-label="按发现版本筛选缺陷"></select>
-            <button class="btn sm ghost" type="button" id="tcDefReset" title="恢复默认：未关闭、全部严重度">重置</button>
+            <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：未关闭、全部严重度"><span data-icon="refresh"></span>&nbsp;重置</button>
           </div>
           <div class="tc-stats" id="tcStats"></div>
           <div class="tc-defects" id="tcDefects" hidden>
             <div class="tc-def-stats" id="tcDefStats"></div>
             <div class="tc-def-card">
               <div class="tc-def-head" aria-hidden="true">
-                <span>严重度</span><span>缺陷</span><span>状态</span><span>负责人</span><span>发现版本</span><span>关联用例</span><span class="ta-r">更新</span>
+                <span class="ta-r">序号</span><span>严重度</span><span>缺陷</span><span>状态</span><span>负责人</span><span>发现版本</span><span>关联用例</span><span class="ta-r">更新</span>
               </div>
               <div id="tcDefRows"></div>
             </div>
@@ -1353,10 +1375,10 @@
           <div class="tc-list" id="tcList"></div>
         </div>
 
-        <!-- 新增 / 编辑用例 -->
+        <!-- 新建 / 编辑用例 -->
         <div class="modal-layer" id="dlgCase" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
           <div class="panel">
-            <div class="panel-head"><h3 id="caseFormTitle">新增用例</h3><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="panel-head"><h3 id="caseFormTitle">新建用例</h3><button class="icon-btn sm" type="button" id="dlgCaseX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
               <div class="field" id="fCaseTitle">
                 <label for="cTitle">用例标题 <span class="req">*</span></label>
@@ -1458,7 +1480,7 @@
                 <input id="defectEnvironment" type="text" maxlength="120" placeholder="选填：浏览器 / 版本 / 设备…" autocomplete="off" />
               </div>
               <div class="row row-gap">
-                <button class="btn primary" type="button" id="btnDoDefect">创建缺陷</button>
+                <button class="btn primary" type="button" id="btnDoDefect">新建缺陷</button>
               </div>
             </div>
           </div>
@@ -1510,7 +1532,7 @@
             <div class="ai-usage" id="aiCaseUsage"></div>
             <div class="reqdoc-dlg-foot">
               <button class="btn ghost" type="button" id="dlgAiCaseResultCancel">取消</button>
-              <button class="btn primary" type="button" id="dlgAiCaseResultOk">创建选中用例</button>
+              <button class="btn primary" type="button" id="dlgAiCaseResultOk">新建选中用例</button>
             </div>
           </div>
         </div>
@@ -1588,7 +1610,7 @@
               </span>
               <button class="btn sm" type="button" id="branchGroupToggle" data-mode="status">按项目分组</button>
               <span class="br-search">
-                <input type="search" id="branchSearch" placeholder="搜索分支名 / 目标分支 / 项目…" aria-label="搜索分支" autocomplete="off" />
+                <input type="search" id="branchSearch" placeholder="搜索全部分支…" title="在全部项目（或左侧所选项目）中搜索分支名 / 目标分支" aria-label="搜索全部分支" autocomplete="off" />
               </span>
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
@@ -1611,9 +1633,12 @@
           <div class="page-toolbar">
             <span class="toolbar-title" id="reviewTitle">上周回顾</span>
             <span class="toolbar-right">
-              <select class="mini-select" id="reviewReq" aria-label="回顾范围：全部项目或单个项目" title="按项目查看周回顾">
-                <option value="">全部项目</option>
-              </select>
+              <label class="row row-gap" style="gap:6px">
+                <span class="toolbar-meta is-strong">项目</span>
+                <select class="mini-select" id="reviewReq" aria-label="回顾范围：全部项目或单个项目" title="按项目查看周回顾">
+                  <option value="">全部项目</option>
+                </select>
+              </label>
               <span class="row row-gap" style="gap:4px">
                 <button class="icon-btn sm" type="button" id="weekPrev" aria-label="上一周">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3 4.6 7l4 4"/></svg>
@@ -1738,7 +1763,7 @@
             <button class="set-tab" type="button" role="tab" aria-selected="false" data-analysis-tab="flow">流程体检</button>
           </div>
           <label class="row row-gap" style="gap:6px">
-            <span class="toolbar-meta">周期</span>
+            <span class="toolbar-meta is-strong">周期</span>
             <select id="analysisPeriod" class="mini-select" aria-label="统计周期">
               <option value="week">本周</option>
               <option value="month">本月</option>
@@ -2018,13 +2043,13 @@
             <div class="panel" data-set-pane="members" id="set-members" hidden>
               <div class="panel-head">
                 <h3>成员与角色</h3>
-                <button class="btn sm perm-guide-btn" type="button" id="btnRoleGuide" title="查看各角色可执行的操作与可见菜单" aria-haspopup="dialog">角色权限说明</button>
+                <button class="perm-guide-btn" type="button" id="btnRoleGuide" title="查看各角色可执行的操作与可见菜单" aria-haspopup="dialog">角色权限说明</button>
                 <span class="meta-right" id="wsMemberCount"></span>
               </div>
               <p class="set-hint">空间主可把成员设为管理员、成员或查看者。空间主的角色不可在这里修改；管理员只能调整成员与查看者。</p>
               <div class="perm-guide" id="permGuide">
                 <div class="perm-guide-row"><span class="perm-chip owner">空间主</span><span>全部项目；调整所有成员（含管理员）、删除空间、配置推送</span></div>
-                <div class="perm-guide-row"><span class="perm-chip admin">管理员</span><span>全部项目；邀请 / 移出成员与查看者、配置项目可见范围</span></div>
+                <div class="perm-guide-row"><span class="perm-chip admin">管理员</span><span>全部项目；添加 / 移除成员与查看者、配置项目可见范围</span></div>
                 <div class="perm-guide-row"><span class="perm-chip member">成员</span><span>新成员只看到已分配的项目（可参与 / 只读）；早期成员默认全部，可按项目设为不可见</span></div>
                 <div class="perm-guide-row"><span class="perm-chip viewer">查看者</span><span>全部项目只读，不能修改任何数据</span></div>
               </div>
@@ -2047,8 +2072,8 @@
                 </div>
                 <p class="set-hint" id="inviteHint">把链接发给已有账号的同事：对方登录后打开链接即可加入。生成时可先分配项目权限；未分配的项目加入后不可见，之后可随时调整。</p>
                 <p class="set-hint" id="inviteNoAccountHint">
-                  <span id="inviteNoAccountText">对方还没有账号？请联系平台管理员先创建账号。</span>
-                  <button class="link-btn" type="button" id="btnInviteCreateAccount" hidden>去创建账号</button>
+                  <span id="inviteNoAccountText">对方还没有账号？请联系平台管理员先新建账号。</span>
+                  <button class="link-btn" type="button" id="btnInviteCreateAccount" hidden>去新建账号</button>
                 </p>
                 <button class="btn sm" type="button" id="btnInviteGen">生成邀请链接</button>
                 <div class="member-list" id="inviteList" style="margin-top:10px"></div>
@@ -2090,7 +2115,7 @@
                 <span></span><span></span><span>列名</span><span>处理规则</span><span>类型</span><span class="right">顺序 / 删除</span>
               </div>
               <div class="cfg-list" id="colCfgList"></div>
-              <div class="cfg-add-head">新增自定义列</div>
+              <div class="cfg-add-head">添加自定义列</div>
               <div class="cfg-add">
                 <input type="color" id="colNewColor" value="#98A2B3" title="新列颜色" aria-label="新列颜色" />
                 <input type="text" id="colNewName" maxlength="12" placeholder="新列名，如：待验收" />
@@ -2101,7 +2126,7 @@
                 </select>
                 <button class="btn" type="button" id="btnColAdd">添加列</button>
               </div>
-              <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能新增、改名、改色或排序。</p>
+              <p class="foot-note" id="colCfgHint" hidden>查看者只能查看看板列配置，不能添加、改名、改色或排序。</p>
             </div>
 
             <div class="panel" data-set-pane="workflow" id="set-transitions" hidden>
@@ -2237,7 +2262,7 @@
                   <option value="project_role">标注项目角色</option>
                   <option value="workspace_delete">删除空间</option>
                   <option value="project_delete">删除项目</option>
-                  <option value="user_create">创建账号</option>
+                  <option value="user_create">新建账号</option>
                   <option value="user_update">修改账号</option>
                   <option value="user_delete">删除账号</option>
                   <option value="password_reset">重置密码</option>
@@ -2309,7 +2334,7 @@
                             <span>账号由平台管理员创建下发（不开放注册）；共享空间的成员只能通过邀请链接加入——链接发给对方，对方打开并确认后才会成为成员，不会有人被悄悄拉进来。各账号数据完全隔离；删除账号前需先清空其个人空间数据，且至少保留一名平台管理员。</span>
                           </div>
                           <p class="set-hint" style="margin:10px 0 0">账号属于平台，空间角色属于某个空间：账号创建后不会自动加入共享空间，需要在「成员与权限」中分配角色。<button class="link-btn" type="button" id="btnAccountGotoMembers">去分配空间角色</button></p>
-                          <div class="panel-head" style="margin-top:16px"><h3 style="font-size:14px">新增账号</h3></div>
+                          <div class="panel-head" style="margin-top:16px"><h3 style="font-size:14px">新建账号</h3></div>
                           <div class="user-add">
                             <input class="input" type="text" id="uNewName" maxlength="32" placeholder="登录名（字母数字._-）" aria-label="登录名" autocomplete="off" />
                             <input class="input" type="text" id="uNewDisplay" maxlength="32" placeholder="显示名（负责人默认）" aria-label="显示名" autocomplete="off" />
@@ -2318,7 +2343,7 @@
                               <option value="user">普通账号</option>
                               <option value="admin">平台管理员</option>
                             </select>
-                            <button class="btn primary" type="button" id="btnUserAdd">创建</button>
+                            <button class="btn primary" type="button" id="btnUserAdd">新建</button>
                           </div>
                           <div class="user-list" id="userList" style="margin-top:16px"></div>
                           <p class="set-hint" style="margin:12px 0 0">普通账号只能管理自己的数据与参与的空间；平台管理员另可管理全部账号（本页）与系统设置。邮箱在行尾「编辑」里填写，支持账号或邮箱登录。</p>
@@ -2538,7 +2563,7 @@
     </div>
     <div class="reqdoc-dlg-foot">
       <button class="btn" type="button" id="dlgBranchCancel">取消</button>
-      <button class="btn primary" type="button" id="dlgBranchOk">创建分支</button>
+      <button class="btn primary" type="button" id="dlgBranchOk">新建分支</button>
     </div>
   </div>
 </div>

@@ -503,7 +503,7 @@ var ITEM_KINDS = ["新功能", "体验优化", "缺陷", "其他"];
 var NOTE_REQUIRED = { rej: 1, replan: 1, unplan: 1, cancel: 1, restore: 1 };
 var ACTION_NAME = { pass: "通过", rej: "拒绝", plan: "排期", replan: "调期", unpass: "撤回评审",
   unplan: "撤销排期", cancel: "取消", restore: "恢复", reopen: "重新打开" };
-var STATUS_NAME = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝", canceled: "已取消" };
+var STATUS_NAME = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝", canceled: "已取消", cancelled: "已取消" };
 var TARGET_STATUS = { pass: "pass", rej: "rej", plan: "plan", replan: "plan", unpass: "review",
   reopen: "review", unplan: "pass", restore: "pass", cancel: "canceled" };
 var CARD_TITLE = { create_task: "待确认的工作项", create_demand: "待确认的需求",

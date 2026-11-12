@@ -12,6 +12,13 @@ var DEFS = {
     labels: { title:"工作项", type:"类型", column:"看板列", priority:"优先级", owner:"负责人", dueDate:"截止日期", progress:"进度", project:"项目", version:"影响版本", category:"模块", startDate:"开始日期", tags:"标签", subtasks:"子任务", work:"工时", comments:"评论", updatedAt:"更新时间" },
     defaults: ["title","type","column","priority","owner","dueDate","progress","project","version"]
   },
+  "my-tasks": {
+    mode: "table",
+    modes: ["table"],
+    required: "title",
+    labels: { title:"工作项", type:"类型", priority:"优先级", status:"状态", dueDate:"截止", startDate:"开始日期", progress:"进度", work:"工时", project:"项目", updatedAt:"更新时间" },
+    defaults: ["title","priority","status","dueDate","progress","updatedAt"]
+  },
   "project-list": {
     mode: "card",
     modes: ["card", "table"],

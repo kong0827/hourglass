@@ -1,0 +1,1694 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-view="compare">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 全站审计修复原型（P0/P1/P2 修复前后） · 2026-11-12</title>
+<style>
+/* ============ 令牌：与 frontend/css/tokens.css 对齐 ============ */
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+  --surface-hover:#F2F4F7; --surface-active:#EAECF0;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085; --text-inverse:#FFFFFF;
+  --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF;
+  --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --danger-solid:#B42318;
+  --plum:#7A5AF8; --plum-soft:#F4F3FF; --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+  --ring-focus:0 0 0 3px rgba(37,99,235,.16);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D;
+  --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798; --text-inverse:#0D1219;
+  --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C;
+  --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --danger-solid:#D92D20;
+  --plum:#9B8AFB; --plum-soft:#1D1933; --plum-border:#3B3266; --plum-fg:#C4B8FF;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  --ring-focus:0 0 0 3px rgba(76,141,255,.28);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg-app);color:var(--text);
+  font-family:var(--font);font-size:14px;line-height:1.571;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:var(--ring-focus)}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition-duration:.001ms !important;animation-duration:.001ms !important}
+}
+
+/* ============ 顶栏 ============ */
+.appbar{
+  position:sticky;top:0;z-index:60;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-xs);
+}
+.appbar-inner{
+  max-width:1560px;margin:0 auto;padding:13px 28px;
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .mark{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  background:linear-gradient(160deg,var(--primary),var(--plum));
+  display:grid;place-items:center;color:#fff;
+}
+.brand .mark svg{width:16px;height:16px}
+.brand h1{font-size:16px;line-height:22px;font-weight:700;margin:0;letter-spacing:-.01em;white-space:nowrap}
+.brand .sub{font-size:11.5px;color:var(--text-3);margin-top:1px;white-space:nowrap}
+.controls{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctrl-label{font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-3);margin-right:-4px}
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface)}
+.seg button{
+  appearance:none;border:0;background:transparent;height:28px;padding:0 10px;
+  border-radius:7px;font-size:12px;color:var(--text-2);cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.seg button:hover{background:var(--surface-hover);color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-fg);font-weight:650}
+.seg button b{font-size:10.5px;font-weight:700;color:var(--text-3);font-variant-numeric:tabular-nums}
+.seg button[aria-pressed="true"] b{color:var(--primary-fg)}
+.ctrl{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);
+  height:32px;padding:0 11px;border-radius:8px;color:var(--text-2);
+  font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+}
+.ctrl:hover{background:var(--surface-hover);color:var(--text)}
+.ctrl svg{width:14px;height:14px}
+
+/* ============ 布局 ============ */
+.layout{
+  max-width:1560px;margin:0 auto;padding:20px 28px 72px;
+  display:grid;grid-template-columns:248px minmax(0,1fr);gap:24px;align-items:start;
+}
+.toc{position:sticky;top:88px;max-height:calc(100vh - 108px);overflow:auto;padding-right:2px}
+.toc-head{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--text-3);padding:0 8px 8px}
+.toc-group{margin-bottom:10px}
+.toc-group h4{
+  display:flex;align-items:center;gap:6px;margin:0 0 3px;padding:5px 8px;
+  font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3);
+}
+.toc-group h4 .p{font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:4px}
+.toc-group h4 .p.p0{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+.toc-group h4 .p.p1{background:var(--warning-soft);color:var(--warning-fg);border:1px solid var(--warning-border)}
+.toc-group h4 .p.p2{background:var(--surface-sunken);color:var(--text-2);border:1px solid var(--border)}
+.toc a{
+  display:flex;align-items:baseline;gap:7px;padding:6px 8px;border-radius:7px;
+  text-decoration:none;font-size:12px;line-height:1.45;color:var(--text-2);
+}
+.toc a:hover{background:var(--surface-hover);color:var(--text)}
+.toc a.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600}
+.toc a .pid{flex:none;font-family:var(--mono);font-size:9.5px;color:var(--text-3)}
+.toc a.on .pid{color:var(--primary-fg)}
+.toc-foot{margin-top:14px;padding:10px;border:1px dashed var(--border);border-radius:8px;font-size:10.5px;line-height:1.6;color:var(--text-3)}
+.toc-foot b{display:block;font-size:11px;color:var(--text-2);margin-bottom:3px}
+
+/* ============ 说明与确认 ============ */
+.intro{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow-xs);
+}
+.intro-top{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.intro h2{font-size:15px;font-weight:650;margin:0 0 4px}
+.intro p{margin:0;font-size:12.5px;line-height:1.7;color:var(--text-3);max-width:840px}
+.intro p b{color:var(--text-2);font-weight:600}
+.legend{margin-left:auto;display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--text-3);white-space:nowrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:7px;height:7px;border-radius:50%;flex:none}
+.legend i.before{background:var(--danger)}
+.legend i.after{background:var(--success)}
+.legend i.ratio{background:var(--primary)}
+.confirmbar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--border);
+}
+.confirmbar .txt{font-size:11.5px;color:var(--text-2);white-space:nowrap}
+.confirmbar .txt b{font-variant-numeric:tabular-nums;color:var(--text)}
+.confirmbar .progress{flex:1 1 200px;height:6px;border-radius:var(--r-pill);background:var(--surface-sunken);overflow:hidden;min-width:120px}
+.confirmbar .progress i{display:block;height:100%;width:0;background:var(--primary);border-radius:var(--r-pill);transition:width .18s ease}
+.confirmbar .spacer{flex:1}
+.scope-note{
+  margin-top:12px;padding:10px 12px;border-radius:8px;
+  background:var(--primary-soft);border:1px solid var(--primary-border);
+  font-size:11.5px;line-height:1.65;color:var(--text-2);
+}
+.scope-note b{color:var(--primary-fg)}
+
+/* ============ 问题卡 ============ */
+.issue{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  box-shadow:var(--shadow-xs);margin-bottom:18px;overflow:hidden;
+  scroll-margin-top:96px;
+}
+.issue-head{display:flex;align-items:flex-start;gap:12px;padding:15px 20px;border-bottom:1px solid var(--border)}
+.issue-head .pid{
+  flex:none;margin-top:1px;padding:3px 7px;border-radius:6px;
+  font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.02em;
+  background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);
+}
+.issue-head .pid.p0{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+.issue-head .pid.p1{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.issue-head h2{font-size:15.5px;line-height:22px;font-weight:650;margin:0;letter-spacing:-.01em}
+.issue-head .desc{margin:4px 0 0;font-size:12px;line-height:1.65;color:var(--text-3)}
+.accept{
+  flex:none;margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  padding:6px 9px;border:1px solid var(--border);border-radius:8px;
+  font-size:11.5px;color:var(--text-2);cursor:pointer;user-select:none;white-space:nowrap;
+}
+.accept:hover{background:var(--surface-hover)}
+.accept input{accent-color:var(--primary);margin:0}
+.accept:has(input:checked){background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);font-weight:600}
+.facts{display:grid;grid-template-columns:1fr 1fr 1.05fr;gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.facts>div{background:var(--surface);padding:11px 20px}
+.facts b{display:block;margin-bottom:3px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3)}
+.facts>div>span{display:block;font-size:12px;line-height:1.65;color:var(--text-2)}
+.facts .mono{font-size:11px;color:var(--text)}
+.compare{display:grid;grid-template-columns:1fr 1fr}
+.demo{min-width:0;padding:15px 20px 18px}
+.demo.before{border-right:1px solid var(--border)}
+.demo-label{display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:11.5px;font-weight:650;color:var(--text-2)}
+.demo-label .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.demo.before .dot{background:var(--danger)}
+.demo.after .dot{background:var(--success)}
+.demo-label .spec{
+  margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:500;
+  color:var(--text-3);background:var(--surface-sunken);border:1px solid var(--border);
+  border-radius:4px;padding:1px 5px;white-space:nowrap;
+}
+.test-flag{
+  display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px;
+  border-radius:4px;font-size:9.5px;font-weight:700;letter-spacing:.02em;
+  background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);
+}
+.test-flag.ok{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border)}
+.stage{
+  position:relative;background:var(--bg-app);border:1px solid var(--border);
+  border-radius:10px;padding:14px;min-height:172px;
+}
+.stage.tight{padding:10px}
+.decision{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:11px 20px;border-top:1px solid var(--border);background:var(--surface);
+  font-size:11.5px;line-height:1.6;color:var(--text-2);
+}
+.decision .lbl{font-size:10.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3);flex:none}
+.decision .impact{margin-left:auto;font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.decision .impact b{color:var(--text-2);font-weight:600}
+
+/* 视图模式 */
+html[data-view="before"] .demo.after{display:none}
+html[data-view="after"] .demo.before{display:none}
+html[data-view="before"] .demo.before{border-right:0}
+html[data-view="before"] .compare,
+html[data-view="after"] .compare{grid-template-columns:1fr}
+
+/* ============ 通用小组件 ============ */
+.stack{display:flex;flex-direction:column;gap:10px}
+.rowline{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);min-height:40px}
+.rowline:last-child{border-bottom:0}
+.rowline .lab{width:78px;flex:none;font-size:11px;color:var(--text-3);white-space:nowrap}
+.muted{font-size:11.5px;color:var(--text-3)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.ratio{
+  display:inline-flex;align-items:center;gap:3px;height:19px;padding:0 6px;
+  border-radius:var(--r-pill);font-family:var(--mono);font-size:10px;font-weight:700;
+  white-space:nowrap;
+}
+.ratio.bad{background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border)}
+.ratio.good{background:var(--success-soft);color:var(--success-fg);border:1px solid var(--success-border)}
+.b{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:8px;
+  background:var(--surface);color:var(--text-2);font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.b:hover{background:var(--surface-hover);color:var(--text)}
+.b.primary{background:var(--primary);border-color:var(--primary);color:var(--text-inverse);font-weight:600}
+.b.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.b.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:600}
+.b.soft:hover{background:var(--primary-soft);border-color:var(--primary)}
+.b.ghost{background:transparent;border-color:transparent;color:var(--text-2)}
+.b.ghost:hover{background:var(--surface-hover)}
+.b.danger-solid{background:var(--danger);border-color:var(--danger);color:var(--text-inverse);font-weight:600}
+.b.danger-solid.fixed{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff}
+.b.sm{height:26px;padding:0 9px;font-size:11.5px;border-radius:7px}
+.b.icon{width:30px;padding:0}
+.b svg{width:13px;height:13px;flex:none}
+.mini-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px dashed var(--border);margin-bottom:8px}
+.countline{margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap}
+.countline b{color:var(--danger-fg);font-variant-numeric:tabular-nums}
+.countline b.ok{color:var(--success-fg)}
+.mini-card{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 9px;margin-top:6px}
+.mini-card-t{flex:1;min-width:0;font-size:11px;line-height:1.4;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-acts{display:flex;gap:4px;flex:none}
+.icon-wrap{position:relative;width:32px;height:32px;border:1px solid var(--border);border-radius:8px;display:grid;place-items:center;background:var(--surface);color:var(--text-2)}
+.icon-wrap svg{width:15px;height:15px}
+.nbadge{
+  position:absolute;top:-6px;right:-6px;display:inline-grid;place-items:center;
+  min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);
+  font-size:11px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;
+}
+.nbadge.solid{background:var(--danger);color:var(--text-inverse)}
+.nbadge.soft{background:var(--danger-soft);border:1px solid var(--danger-border);color:var(--danger-fg)}
+.avset{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.av{
+  width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
+  font-size:10.5px;font-weight:700;line-height:1;color:#fff;flex:none;
+}
+html[data-theme="dark"] .av{box-shadow:0 0 0 1px rgba(255,255,255,.16)}
+html[data-theme="dark"] .av:not([class*="d"]){color:var(--text-inverse)}
+html[data-theme="dark"] #p0-1 .demo .spec{display:none}
+html[data-theme="dark"] #p0-1 .demo .demo-label::after{
+  content:"深色达标 · 数字为浅色实测";margin-left:auto;font-size:9.5px;color:var(--text-3);
+}
+.av.o1{background:#2563EB}.av.o2{background:#12B76A}.av.o3{background:#F79009}.av.o4{background:#F04438}
+.av.o5{background:#7A5AF8}.av.o6{background:#0E9384}.av.o7{background:#DD2590}.av.o8{background:#98A2B3}
+.av.d1{background:#1D4ED8}.av.d2{background:#067647}.av.d3{background:#B54708}.av.d4{background:#B42318}
+.av.d5{background:#5B3FD1}.av.d6{background:#0E6E63}.av.d7{background:#A31A6B}.av.d8{background:#475467}
+.av-note{margin-top:7px;font-size:10.5px;line-height:1.55;color:var(--text-3)}
+.av-note b{font-family:var(--mono);font-weight:700}
+.av-note b.bad{color:var(--danger-fg)}
+.av-note b.good{color:var(--success-fg)}
+
+/* 表格 */
+.cov{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:11.5px}
+.cov th{background:var(--surface-sunken);border-bottom:1px solid var(--border);padding:7px 9px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--text-3);white-space:nowrap}
+.cov td{padding:7px 9px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:middle}
+.cov tr:last-child td{border-bottom:0}
+.cov .num{text-align:right;font-variant-numeric:tabular-nums}
+.raw{
+  display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:5px;
+  font-family:var(--mono);font-size:10.5px;font-weight:600;
+  background:var(--danger-soft);border:1px dashed var(--danger-border);color:var(--danger-fg);
+}
+.tag{
+  display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;
+  border-radius:var(--r-pill);border:1px solid transparent;
+  font-size:10.5px;font-weight:600;white-space:nowrap;
+}
+.tag.neutral{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2)}
+.tag.pass{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg)}
+.tag.fail{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg)}
+.tag.warn{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg)}
+.tag.info{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg)}
+.z{
+  display:inline-grid;place-items:center;min-width:26px;height:20px;padding:0 5px;
+  border-radius:5px;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+.z.ok{background:var(--success-soft);color:var(--success-fg)}
+.z.bad{background:var(--danger-soft);color:var(--danger-fg)}
+.z.zero{background:var(--surface-sunken);color:var(--text-3)}
+.z.pos{background:var(--primary-soft);color:var(--primary-fg)}
+
+/* 看板卡 */
+.boardcol{width:300px;max-width:100%;background:var(--surface-sunken);border:1px solid var(--border);border-radius:10px;padding:9px}
+.bcolhead{display:flex;align-items:center;gap:6px;padding:1px 2px 8px;font-size:11.5px;font-weight:650;color:var(--text-2)}
+.bcolhead .n{padding:0 6px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--border);font-size:10px;font-weight:600;color:var(--text-3)}
+.bcard{
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--warning);
+  border-radius:9px;padding:10px 11px;box-shadow:var(--shadow-xs);
+}
+.btitle{font-size:13px;line-height:19px;font-weight:500;color:var(--text);letter-spacing:-.01em}
+.btitle.fixed{font-size:14px;line-height:22px;font-weight:600}
+.bmeta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:10.5px;color:var(--text-3);flex-wrap:wrap}
+.bmeta .who{width:18px;height:18px;border-radius:6px;background:#475467;color:#fff;display:grid;place-items:center;font-size:8.5px;font-weight:700}
+
+/* 筛选 */
+.fbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 9px}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;
+  border:1px solid var(--border);border-radius:var(--r-pill);
+  background:var(--surface);color:var(--text-2);font-size:11px;white-space:nowrap;
+}
+.chip b{font-size:10px;font-weight:700;color:var(--text-3);font-variant-numeric:tabular-nums}
+.chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);font-weight:650}
+.chip.on b{color:var(--primary-fg)}
+.sel{
+  height:28px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);
+  padding:0 26px 0 9px;font-size:11px;color:var(--text-2);appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+}
+.variant{border:1px dashed var(--border);border-radius:8px;padding:7px;margin-bottom:7px}
+.variant:last-child{margin-bottom:0}
+.variant .mini-label{display:block;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--text-3);margin:0 1px 5px}
+.mrow{display:flex;align-items:center;gap:8px;padding:8px 9px;background:var(--surface);border-bottom:1px solid var(--border);font-size:11.5px}
+.mrow:last-child{border-bottom:0}
+.mrow .mname{flex:1;min-width:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .msub{font-size:10px;color:var(--text-3)}
+.danger-link{border:0;background:none;color:var(--danger-fg);font-size:10.5px;padding:4px 6px;border-radius:5px;cursor:pointer}
+.danger-link:hover{background:var(--danger-soft)}
+.mrow .acts{display:flex;gap:3px;opacity:0;transition:opacity .15s}
+.mrow.hovered .acts,.mrow:focus-within .acts{opacity:1}
+.bulk{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:7px 9px;margin-bottom:7px;border-radius:8px;
+  background:var(--primary-soft);border:1px solid var(--primary-border);
+  color:var(--primary-fg);font-size:11px;font-weight:600;
+}
+.bulk .grow{flex:1;min-width:0}
+.bulk .b{height:25px;font-size:11px;padding:0 8px}
+
+/* 列表行高 / 日期 */
+.dlist{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.drow{display:grid;grid-template-columns:minmax(0,1fr) 76px 78px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border)}
+.drow:last-child{border-bottom:0}
+.drow .dtitle{font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drow .dcol{font-size:10.5px;color:var(--text-3);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dt{position:relative;display:inline-block;color:var(--text-2);font-variant-numeric:tabular-nums;border-bottom:1px dotted var(--border-strong);cursor:help}
+.dt[data-tip]:hover::after,.dt[data-tip]:focus::after{
+  content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);
+  background:var(--text);color:var(--text-inverse);font-size:10px;font-weight:500;line-height:1.4;
+  padding:4px 7px;border-radius:5px;white-space:nowrap;z-index:9;box-shadow:var(--shadow-sm);
+}
+.ruler{display:flex;align-items:stretch;gap:8px;margin-bottom:7px}
+.ruler .scale{width:52px;flex:none;display:flex;align-items:center;justify-content:flex-end;font-family:var(--mono);font-size:9.5px;color:var(--text-3);border-right:1px dashed var(--border-strong);padding-right:7px}
+.ruler .rows{flex:1;min-width:0}
+.hrow{background:var(--surface);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;gap:8px;padding:0 10px}
+.hrow + .hrow{margin-top:5px}
+.hrow .t{flex:1;min-width:0;font-size:11.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .m{font-size:10px;color:var(--text-3);white-space:nowrap}
+.hrow.h49{height:49px}
+.hrow.h56{height:56px;padding:6px 10px;align-items:flex-start;flex-direction:column;justify-content:center;gap:1px}
+.hrow.h56 .line1{display:flex;align-items:center;gap:8px;width:100%}
+.hrow.h56 .m{font-size:10px}
+
+/* 手机 */
+.phones{display:flex;justify-content:center;gap:22px;flex-wrap:wrap}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.phone{
+  width:286px;height:500px;border:7px solid #1F2937;border-radius:28px;
+  background:var(--bg-app);overflow:hidden;display:flex;flex-direction:column;flex:none;
+}
+html[data-theme="dark"] .phone{border-color:#000}
+.phead{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 11px 8px;flex:none}
+.phead .pc{font-size:9px;color:var(--text-3);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phead .pt{font-size:15px;line-height:20px;font-weight:650;color:var(--text)}
+.pdomain{display:flex;gap:2px;margin-top:7px;border-bottom:1px solid var(--border);overflow:hidden}
+.pdomain span{font-size:9.5px;color:var(--text-3);padding:4px 5px;border-bottom:2px solid transparent;white-space:nowrap}
+.pdomain span.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:700}
+.pbody{flex:1;min-height:0;padding:8px 9px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 8px}
+.pcard .pt{font-size:10.5px;line-height:1.4;font-weight:600;color:var(--text)}
+.pcard .pm{display:flex;gap:5px;align-items:center;margin-top:3px;font-size:9px;color:var(--text-3)}
+.ptabs{height:56px;flex:none;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding:0 3px}
+.ptab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:50px;height:42px;border-radius:999px;font-size:8.5px;color:var(--text-3)}
+.ptab svg{width:15px;height:15px}
+.ptab.on{background:var(--primary);color:var(--text-inverse);font-weight:600}
+.phone-cap{font-size:10.5px;color:var(--text-3);text-align:center;max-width:286px;line-height:1.5}
+
+/* 图表 */
+.chartbox{display:flex;gap:7px;align-items:stretch}
+.yaxis{width:24px;flex:none;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;padding-bottom:19px;font-family:var(--mono);font-size:9px;color:var(--text-3)}
+.plot{position:relative;flex:1;min-width:0;height:176px;border-bottom:1px solid var(--border-strong)}
+.gline{position:absolute;left:0;right:0;border-top:1px dashed var(--border);pointer-events:none}
+.bars{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:space-around;gap:5px;padding:0 5px}
+.barcol{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;min-width:0}
+.barcol i{display:block;width:100%;max-width:30px;height:var(--h);background:var(--primary);border-radius:4px 4px 0 0}
+.barcol i.warn{background:var(--warning)}
+.barcol span{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--text-2);line-height:1}
+.xlabels{display:flex;justify-content:space-around;gap:5px;margin-left:31px;padding-top:4px;font-size:9px;color:var(--text-3);text-align:center}
+.xlabels span{flex:1;min-width:0}
+
+/* 驾驶舱线框 */
+.wire{display:flex;min-height:186px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.wside{width:82px;flex:none;background:var(--surface-sunken);border-right:1px solid var(--border);padding:8px 7px;display:flex;flex-direction:column;gap:5px}
+.wside span{display:block;height:6px;border-radius:3px;background:var(--border)}
+.wside span.on{background:var(--primary-border)}
+.wmain{flex:1;min-width:0;padding:9px 10px}
+.wsub{display:flex;align-items:center;gap:6px;margin-bottom:7px;font-size:9px;color:var(--text-3);white-space:nowrap;overflow:hidden}
+.wsub b{color:var(--primary-fg)}
+.wtitle{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:12.5px;font-weight:650}
+.wtitle .dup{font-family:var(--mono);font-size:8.5px;font-weight:600;color:var(--danger-fg);border:1px dashed var(--danger-border);border-radius:4px;padding:1px 4px}
+.wtabs{display:flex;gap:8px;border-bottom:1px solid var(--border);padding-bottom:5px;margin-bottom:8px;font-size:9.5px;color:var(--text-3);white-space:nowrap}
+.wtabs b{color:var(--primary-fg);border-bottom:2px solid var(--primary);padding-bottom:5px;margin-bottom:-6px}
+.wsec{display:flex;align-items:center;gap:5px;margin:7px 0 4px;font-size:9.5px;font-weight:700;color:var(--text-2)}
+.wsec:before{content:"";width:6px;height:6px;border-radius:2px;background:var(--primary)}
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.wbox{height:38px;border-radius:5px;background:var(--surface-sunken);border:1px solid var(--border)}
+
+/* 搜索 */
+.searchbox{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-3);font-size:10.5px;min-width:0}
+.searchbox svg{width:13px;height:13px;flex:none}
+.searchbox .scope{display:inline-flex;align-items:center;height:19px;padding:0 5px;border-radius:4px;background:var(--primary-soft);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:9px;font-weight:650;white-space:nowrap}
+.searchbox .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3)}
+.kbd{font-family:var(--mono);font-size:9px;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 3px;background:var(--surface-sunken);color:var(--text-3);white-space:nowrap}
+.searchrow{display:flex;flex-direction:column;gap:6px}
+
+/* 纯文字操作 */
+.plainacts{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:6px 2px}
+.plainact{border:0;background:none;padding:2px;font-size:11.5px;color:var(--text-3);cursor:default}
+.linkbtn{
+  display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;
+  border:0;border-radius:7px;background:transparent;color:var(--primary-fg);
+  font-size:11.5px;font-weight:550;cursor:pointer;
+}
+.linkbtn:hover{background:var(--primary-soft);text-decoration:underline;text-underline-offset:2px}
+.linkbtn svg{width:12px;height:12px;flex:none}
+.linkbtn.demo-focus{outline:2px solid var(--primary);outline-offset:2px;box-shadow:var(--ring-focus)}
+
+/* 文案表 */
+.vocab{width:100%;border-collapse:collapse;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.vocab th{background:var(--surface-sunken);border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;font-size:9.5px;font-weight:700;color:var(--text-3);letter-spacing:.03em}
+.vocab td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2)}
+.vocab tr:last-child td{border-bottom:0}
+.vocab b{color:var(--text);font-weight:650}
+.vocab .no{color:var(--text-3);text-decoration:line-through}
+
+/* Toast */
+.toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);
+  background:var(--text);color:var(--text-inverse);font-size:12px;
+  padding:9px 14px;border-radius:8px;box-shadow:var(--shadow-md);
+  opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;z-index:200;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ 响应式 ============ */
+@media (max-width:1180px){
+  .layout{grid-template-columns:1fr;gap:14px;padding:16px 20px 60px}
+  .toc{position:static;max-height:none;display:flex;gap:6px;overflow-x:auto;padding:0 0 4px}
+  .toc-head,.toc-group h4,.toc-foot{display:none}
+  .toc-group{display:flex;gap:6px;margin:0}
+  .toc a{white-space:nowrap;border:1px solid var(--border);background:var(--surface);padding:5px 9px}
+  .compare{grid-template-columns:1fr}
+  .demo.before{border-right:0;border-bottom:1px solid var(--border)}
+  .facts{grid-template-columns:1fr}
+  .facts>div+div{border-top:1px solid var(--border)}
+  .appbar-inner{padding:12px 20px}
+  .controls{width:100%;margin-left:0}
+}
+@media (max-width:640px){
+  .appbar-inner{gap:10px}
+  .brand .sub{display:none}
+  .controls{gap:6px}
+  .seg button{padding:0 8px}
+  .issue-head{flex-wrap:wrap}
+  .accept{margin-left:0}
+  .demo{padding:12px 12px 14px}
+  .stage{padding:10px}
+  .phone{width:270px}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h10M5 17h10M6 3c0 3 2.5 4.5 4 7 1.5-2.5 4-4 4-7M6 17c0-3 2.5-4.5 4-7 1.5 2.5 4 4 4 7"/></svg>
+      </div>
+      <div>
+        <h1>全站审计修复原型 · 2026-11-12</h1>
+        <div class="sub">P0/P1/P2 共 14 项 · 修复前 / 修复后对照 · 沙漏设计令牌</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <span class="ctrl-label">优先级</span>
+      <div class="seg" role="group" aria-label="按优先级筛选">
+        <button type="button" data-p="all" aria-pressed="true">全部 <b>14</b></button>
+        <button type="button" data-p="P0" aria-pressed="false">P0 <b>2</b></button>
+        <button type="button" data-p="P1" aria-pressed="false">P1 <b>5</b></button>
+        <button type="button" data-p="P2" aria-pressed="false">P2 <b>7</b></button>
+      </div>
+      <span class="ctrl-label">视图</span>
+      <div class="seg" role="group" aria-label="对照视图">
+        <button type="button" data-view="compare" aria-pressed="true">对照</button>
+        <button type="button" data-view="before" aria-pressed="false">只看前</button>
+        <button type="button" data-view="after" aria-pressed="false">只看后</button>
+      </div>
+      <button type="button" class="ctrl" id="themeBtn" aria-label="切换深浅主题">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.2 12.4A6.6 6.6 0 0 1 7.6 3.8a6.6 6.6 0 1 0 8.6 8.6Z"/></svg>
+        <span id="themeTxt">深色</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="问题索引">
+    <div class="toc-head">问题索引</div>
+
+    <div class="toc-group">
+      <h4><span class="p p0">P0</span> 必须修</h4>
+      <a href="#p0-1" data-id="p0-1" data-p="P0"><span class="pid">P0-1</span><span>语义色实底白字</span></a>
+      <a href="#p0-2" data-id="p0-2" data-p="P0"><span class="pid">P0-2</span><span>cancelled 未翻译</span></a>
+    </div>
+
+    <div class="toc-group">
+      <h4><span class="p p1">P1</span> 体验优先</h4>
+      <a href="#p1-1" data-id="p1-1" data-p="P1"><span class="pid">P1-1</span><span>看板卡标题 13px</span></a>
+      <a href="#p1-2" data-id="p1-2" data-p="P1"><span class="pid">P1-2</span><span>主按钮泛滥</span></a>
+      <a href="#p1-3" data-id="p1-3" data-p="P1"><span class="pid">P1-3</span><span>筛选与行内操作</span></a>
+      <a href="#p1-4" data-id="p1-4" data-p="P1"><span class="pid">P1-4</span><span>日期格式统一</span></a>
+      <a href="#p1-5" data-id="p1-5" data-p="P1"><span class="pid">P1-5</span><span>移动端 Tab 归属</span></a>
+    </div>
+
+    <div class="toc-group">
+      <h4><span class="p p2">P2</span> 一致性与打磨</h4>
+      <a href="#p2-1" data-id="p2-1" data-p="P2"><span class="pid">P2-1</span><span>图表坐标系</span></a>
+      <a href="#p2-2" data-id="p2-2" data-p="P2"><span class="pid">P2-2</span><span>覆盖率零值</span></a>
+      <a href="#p2-3" data-id="p2-3" data-p="P2"><span class="pid">P2-3</span><span>列表行高</span></a>
+      <a href="#p2-4" data-id="p2-4" data-p="P2"><span class="pid">P2-4</span><span>动词统一</span></a>
+      <a href="#p2-5" data-id="p2-5" data-p="P2"><span class="pid">P2-5</span><span>驾驶舱层级</span></a>
+      <a href="#p2-6" data-id="p2-6" data-p="P2"><span class="pid">P2-6</span><span>搜索作用域</span></a>
+      <a href="#p2-7" data-id="p2-7" data-p="P2"><span class="pid">P2-7</span><span>操作可点击感</span></a>
+    </div>
+
+    <div class="toc-foot">
+      <b>确认方式</b>
+      逐项勾选「认可」，或直接回复编号与修改意见。勾选结果会保存在本机。
+    </div>
+  </nav>
+
+  <main>
+    <section class="intro">
+      <div class="intro-top">
+        <div>
+          <h2>这不是整页重做，只是 14 处局部修复的确认稿</h2>
+          <p>
+            每张卡片左侧是<b>按当前线上样式复刻的局部</b>（不是整页截图），右侧是<b>建议方案</b>。
+            尺寸、颜色、圆角均取自 <b>tokens.css</b>；标注的对比度为实测或按令牌计算。
+            原型支持深浅主题、优先级筛选与前后视图切换，URL 可带 <b>?p=P1&amp;view=after&amp;theme=dark</b> 直达。
+          </p>
+        </div>
+        <div class="legend" aria-hidden="true">
+          <span><i class="before"></i>修复前</span>
+          <span><i class="after"></i>修复后</span>
+          <span><i class="ratio"></i>徽标数字为对比度</span>
+        </div>
+      </div>
+
+      <div class="confirmbar">
+        <span class="txt">确认进度 <b id="accText">0 / 14</b></span>
+        <div class="progress" aria-hidden="true"><i id="accBar"></i></div>
+        <span class="spacer"></span>
+        <button type="button" class="b sm" id="copyBtn">复制确认清单</button>
+        <button type="button" class="b sm ghost" id="clearBtn">清空</button>
+      </div>
+
+      <div class="scope-note">
+        <b>本次边界：</b>只改视觉与文案层，不动信息架构、不加第 6 个移动 Tab、不改接口与数据结构。
+        语义色只调取值不改组件形状；P0 两项建议先单独发一版，P1/P2 可按视图分批落地。
+      </div>
+    </section>
+
+    <!-- ==================== P0-1 ==================== -->
+    <article class="issue" id="p0-1" data-p="P0" data-title="语义色实底白字不达标">
+      <div class="issue-head">
+        <span class="pid p0">P0-1</span>
+        <div>
+          <h2>语义色实底白字不达标：计数、危险按钮、头像首字母</h2>
+          <p class="desc">浅色主题下白字对 danger / success / warning 原色只有 2.35–3.76:1；深色主题因文字自动反转已达标，问题集中在浅色。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P0-1"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>计数徽标 3.76:1；危险实底按钮 3.76:1；头像 8 色板 2.35–4.43:1，仅 2 色达标。</span></div>
+        <div><b>预期</b><span>全部 ≥4.5:1；保留现有形状、尺寸与圆角，只调整前景与底色取值。</span></div>
+        <div><b>验证口径</b><span>浅色逐项实测；11px 徽标不再出现白字实底；深色主题回归不退化。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">浅色 WCAG AA 未过</span><span class="spec">实底原色 + 白字</span></div>
+          <div class="stage">
+            <div class="stack">
+              <div class="rowline">
+                <span class="lab">通知计数</span>
+                <span class="icon-wrap" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.5 4.5 0 0 1 4.5 4.5v3l1.2 2.3H4.3l1.2-2.3v-3A4.5 4.5 0 0 1 10 3.2Z"/><path d="M8.2 15.8a1.9 1.9 0 0 0 3.6 0"/></svg>
+                  <span class="nbadge solid">8</span>
+                </span>
+                <span class="ratio bad">3.76:1</span>
+              </div>
+              <div class="rowline">
+                <span class="lab">危险操作</span>
+                <button type="button" class="b danger-solid">删除工作项</button>
+                <span class="ratio bad">3.76:1</span>
+              </div>
+              <div class="rowline">
+                <span class="lab">成员头像</span>
+                <span class="avset" aria-label="八个头像色板">
+                  <span class="av o1">陈</span><span class="av o2">林</span><span class="av o3">赵</span><span class="av o4">周</span>
+                  <span class="av o5">吴</span><span class="av o6">郑</span><span class="av o7">王</span><span class="av o8">李</span>
+                </span>
+              </div>
+              <div class="av-note">浅色白字对 8 色板：<b class="bad">2.35 / 2.58 / 2.62 / 3.76 / 3.80 / 4.43</b>，仅蓝、紫两色达标。</div>
+            </div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">≥ 4.5:1</span><span class="spec">soft 徽标 + 深色头像板</span></div>
+          <div class="stage">
+            <div class="stack">
+              <div class="rowline">
+                <span class="lab">通知计数</span>
+                <span class="icon-wrap" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2a4.5 4.5 0 0 1 4.5 4.5v3l1.2 2.3H4.3l1.2-2.3v-3A4.5 4.5 0 0 1 10 3.2Z"/><path d="M8.2 15.8a1.9 1.9 0 0 0 3.6 0"/></svg>
+                  <span class="nbadge soft">8</span>
+                </span>
+                <span class="ratio good">6.05:1</span>
+              </div>
+              <div class="rowline">
+                <span class="lab">危险操作</span>
+                <button type="button" class="b danger-solid fixed">删除工作项</button>
+                <span class="ratio good">6.57:1</span>
+              </div>
+              <div class="rowline">
+                <span class="lab">成员头像</span>
+                <span class="avset" aria-label="八个深色头像色板">
+                  <span class="av d1">陈</span><span class="av d2">林</span><span class="av d3">赵</span><span class="av d4">周</span>
+                  <span class="av d5">吴</span><span class="av d6">郑</span><span class="av d7">王</span><span class="av d8">李</span>
+                </span>
+              </div>
+              <div class="av-note">深色板 8 色：<b class="good">5.43 – 7.69</b>，最低为橙 #B54708；形状与识别度不变。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>徽标改 <span class="mono">soft + fg</span>；危险实底新增 <span class="mono">--danger-solid</span>（浅 #B42318 / 深 #D92D20）；头像换 8 色深色板；深色主题无需改动。</span>
+        <span class="impact">影响面：<b>tokens.css + components.css</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P0-2 ==================== -->
+    <article class="issue" id="p0-2" data-p="P0" data-title="cancelled 未翻译">
+      <div class="issue-head">
+        <span class="pid p0">P0-2</span>
+        <div>
+          <h2>覆盖率状态泄漏原始码值 cancelled / canceled</h2>
+          <p class="desc">同一状态出现两种英文拼写，覆盖率表与需求选择器都直接回退后端码值，中文界面里非常突兀。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P0-2"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>覆盖率表状态列出现 <span class="mono">cancelled</span>、<span class="mono">canceled</span>；需求选择器同样泄漏。</span></div>
+        <div><b>预期</b><span>全站统一「已取消」，与待评审 / 已通过 / 已排期 / 已拒绝同一套标签。</span></div>
+        <div><b>验证口径</b><span>覆盖率表、需求选择器、筛选下拉三处均无英文码值；未知状态显示「未知状态」。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">EN 泄漏</span><span class="spec">映射表缺键</span></div>
+          <div class="stage">
+            <table class="cov">
+              <thead><tr><th>需求</th><th class="num">用例</th><th class="num">通过</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>登录态续期</td><td class="num">12</td><td class="num">8</td><td><span class="raw">cancelled</span></td></tr>
+                <tr><td>审批流回退</td><td class="num">6</td><td class="num">4</td><td><span class="raw">canceled</span></td></tr>
+                <tr><td>通知聚合</td><td class="num">9</td><td class="num">9</td><td><span class="tag pass">已通过</span></td></tr>
+              </tbody>
+            </table>
+            <div class="av-note">同一状态两种拼写；映射缺键时把后端原码直接吐到界面。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">中文标签</span><span class="spec">补全映射 + 未知兜底</span></div>
+          <div class="stage">
+            <table class="cov">
+              <thead><tr><th>需求</th><th class="num">用例</th><th class="num">通过</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>登录态续期</td><td class="num">12</td><td class="num">8</td><td><span class="tag neutral">已取消</span></td></tr>
+                <tr><td>审批流回退</td><td class="num">6</td><td class="num">4</td><td><span class="tag neutral">已取消</span></td></tr>
+                <tr><td>通知聚合</td><td class="num">9</td><td class="num">9</td><td><span class="tag pass">已通过</span></td></tr>
+              </tbody>
+            </table>
+            <div class="av-note">两种拼写都映射到「已取消」；未知码值降级为「未知状态」，不再显示英文。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>补齐 <span class="mono">cancelled / canceled</span> 映射，并把回退从「原始码值」改为「未知状态」；一处映射覆盖表格与选择器。</span>
+        <span class="impact">影响面：<b>testcases.js 第 1623 行</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P1-1 ==================== -->
+    <article class="issue" id="p1-1" data-p="P1" data-title="看板卡片标题 13px">
+      <div class="issue-head">
+        <span class="pid p1">P1-1</span>
+        <div>
+          <h2>看板卡片标题 13px / 500，弱于正文</h2>
+          <p class="desc">卡片标题是列内最需要被扫读的信息，却比 14px 正文小一号、字重也更轻；同屏元信息 12px，层级差不足。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P1-1"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>卡片标题 13 / 19 / 500；正文 14 / 22 / 400；元信息 12px。</span></div>
+        <div><b>预期</b><span>标题 14 / 22 / 600，与正文同号、略重于正文，保持两行截断。</span></div>
+        <div><b>验证口径</b><span>computed font-size=14、weight=600；两行截断不溢出；300px 列宽不变。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="spec">13 / 19 · 500</span></div>
+          <div class="stage">
+            <div class="boardcol">
+              <div class="bcolhead">进行中 <span class="n">4</span></div>
+              <article class="bcard">
+                <div class="btitle">支付回调重试次数用尽后未告警，失败单长期滞留</div>
+                <div class="bmeta"><span class="who">陈</span><span>PAY-218</span><span class="tag fail">P0</span><span>11-12</span></div>
+              </article>
+            </div>
+            <div class="av-note">标题字号小于正文，列内扫读时第一眼落在元信息上。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="spec">14 / 22 · 600</span></div>
+          <div class="stage">
+            <div class="boardcol">
+              <div class="bcolhead">进行中 <span class="n">4</span></div>
+              <article class="bcard">
+                <div class="btitle fixed">支付回调重试次数用尽后未告警，失败单长期滞留</div>
+                <div class="bmeta"><span class="who">陈</span><span>PAY-218</span><span class="tag fail">P0</span><span>11-12</span></div>
+              </article>
+            </div>
+            <div class="av-note">标题回到正文号 + 600 字重；卡片高度仅增加 3px，列内密度不受影响。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>移除 views.css 对 <span class="mono">.card-title</span> 的 13px 覆盖，回到组件默认 14/22，并把字重从 500 提到 600。</span>
+        <span class="impact">影响面：<b>views.css 1 条规则</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P1-2 ==================== -->
+    <article class="issue" id="p1-2" data-p="P1" data-title="主按钮泛滥">
+      <div class="issue-head">
+        <span class="pid p1">P1-2</span>
+        <div>
+          <h2>主按钮泛滥：一屏出现 5 个主操作</h2>
+          <p class="desc">看板顶栏与列头各一个「新建」；列表「保存视图」「按项目分组」都是主按钮；评审每张卡片「通过」都是主按钮。用户无法判断这一屏最该点什么。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P1-2"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>单屏主按钮计数 5；创建入口重复 2 处；通过 / 保存视图 / 分组与新建同级。</span></div>
+        <div><b>预期</b><span>每个视图只保留 1 个主按钮，通常为「新建」；其余降为次级、ghost 或 soft。</span></div>
+        <div><b>验证口径</b><span>单屏主按钮计数=1；通过类操作不再使用主色实底；重复新建只保留一处。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">5 个主按钮</span><span class="spec">列表 + 评审</span></div>
+          <div class="stage">
+            <div class="mini-toolbar">
+              <button type="button" class="b primary">新建工作项</button>
+              <button type="button" class="b primary">保存视图</button>
+              <button type="button" class="b primary">按项目分组</button>
+              <span class="countline">工具栏主按钮 <b>3</b></span>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-t">支付回调重试次数用尽后未告警</div>
+              <div class="mini-acts">
+                <button type="button" class="b primary sm">通过</button>
+                <button type="button" class="b sm">驳回</button>
+              </div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-t">审批流回退缺少二次确认</div>
+              <div class="mini-acts">
+                <button type="button" class="b primary sm">通过</button>
+                <button type="button" class="b sm">驳回</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">1 个主按钮</span><span class="spec">主次分明</span></div>
+          <div class="stage">
+            <div class="mini-toolbar">
+              <button type="button" class="b primary">新建工作项</button>
+              <button type="button" class="b ghost">保存视图</button>
+              <button type="button" class="b ghost">按项目分组</button>
+              <span class="countline">工具栏主按钮 <b class="ok">1</b></span>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-t">支付回调重试次数用尽后未告警</div>
+              <div class="mini-acts">
+                <button type="button" class="b soft sm">通过</button>
+                <button type="button" class="b sm">驳回</button>
+              </div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-card-t">审批流回退缺少二次确认</div>
+              <div class="mini-acts">
+                <button type="button" class="b soft sm">通过</button>
+                <button type="button" class="b sm">驳回</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>通过 → soft 主色浅底；保存视图、分组 → ghost；看板列头的重复「新建」移除，只留顶栏一处。</span>
+        <span class="impact">影响面：<b>看板 / 列表 / 评审 3 个视图</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P1-3 ==================== -->
+    <article class="issue" id="p1-3" data-p="P1" data-title="筛选与行内操作">
+      <div class="issue-head">
+        <span class="pid p1">P1-3</span>
+        <div>
+          <h2>筛选四种形态 + 行内危险操作常驻</h2>
+          <p class="desc">我的工作用 chips、列表用下拉、测试用分段、报表用多选；成员 / 风险 / 模块又在每一行常驻「移出 / 催办 / 删除」，危险动作没有收敛。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P1-3"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>四页四种筛选控件；行内危险操作常驻，批量入口与逐行入口同时出现。</span></div>
+        <div><b>预期</b><span>统一 FilterBar（状态 chips + 更多筛选 + 清除）；行内操作悬停或聚焦出现；批量入口唯一。</span></div>
+        <div><b>验证口径</b><span>四页筛选控件同构；未悬停时行内无危险按钮；键盘可到达；批量操作有已选计数。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">4 种形态</span><span class="spec">逐页重造</span></div>
+          <div class="stage">
+            <div class="variant">
+              <span class="mini-label">我的工作 · 状态 chips</span>
+              <div class="fbar" style="padding:0;border:0">
+                <span class="chip on">全部</span><span class="chip">进行中</span><span class="chip">已逾期</span>
+              </div>
+            </div>
+            <div class="variant">
+              <span class="mini-label">列表 · 两个下拉</span>
+              <div class="fbar" style="padding:0;border:0">
+                <select class="sel" aria-label="状态"><option>全部状态</option></select>
+                <select class="sel" aria-label="负责人"><option>全部负责人</option></select>
+              </div>
+            </div>
+            <div class="variant">
+              <span class="mini-label">风险 · 逐行催办</span>
+              <div class="mrow">
+                <span class="mname">支付回调失败单滞留</span>
+                <button type="button" class="b primary sm">催办</button>
+              </div>
+              <div class="mrow">
+                <span class="mname">审批流回退无二次确认</span>
+                <button type="button" class="b primary sm">催办</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">同一套规则</span><span class="spec">FilterBar + 悬停操作</span></div>
+          <div class="stage">
+            <div class="fbar">
+              <span class="chip on">全部 <b>12</b></span>
+              <span class="chip">未关闭</span>
+              <span class="chip">已逾期</span>
+              <button type="button" class="b sm ghost">更多筛选</button>
+              <button type="button" class="linkbtn" style="margin-left:auto">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg>清除筛选
+              </button>
+            </div>
+            <div class="bulk" style="margin-top:7px">
+              <span>已选 2 项</span>
+              <span class="grow"></span>
+              <button type="button" class="b sm">移出</button>
+              <button type="button" class="b sm ghost">取消</button>
+            </div>
+            <div class="mrow">
+              <span class="mname">支付回调失败单滞留</span>
+              <span class="muted">2 项风险</span>
+              <span class="acts">
+                <button type="button" class="b sm">处理</button>
+                <button type="button" class="danger-link">催办</button>
+              </span>
+            </div>
+            <div class="mrow hovered">
+              <span class="mname">审批流回退无二次确认</span>
+              <span class="muted">1 项风险</span>
+              <span class="acts">
+                <button type="button" class="b sm">处理</button>
+                <button type="button" class="danger-link">催办</button>
+              </span>
+            </div>
+            <div class="av-note">第二行是悬停/聚焦态：行内危险操作默认隐藏，批量操作有已选计数与唯一入口。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>抽公共 FilterBar；行内操作收进 hover / focus 与更多菜单；「全部催办」升为唯一主入口；筛选生效态仍按「偏离默认才高亮」。</span>
+        <span class="impact">影响面：<b>4 个视图 + 成员 / 风险 / 模块列表</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P1-4 ==================== -->
+    <article class="issue" id="p1-4" data-p="P1" data-title="日期格式统一">
+      <div class="issue-head">
+        <span class="pid p1">P1-4</span>
+        <div>
+          <h2>日期同一列四种写法</h2>
+          <p class="desc">绝对日期、短日期、相对日期、逾期天数混在同一列，时间判断成本高，也无法横向比较。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P1-4"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>同列出现 2026-11-12、11-12、今天、逾期 3 天四种写法。</span></div>
+        <div><b>预期</b><span>列内统一 MM-DD，悬停显示 YYYY-MM-DD 周几；相对日期只用于 7 天内，且移到状态位。</span></div>
+        <div><b>验证口径</b><span>同一列只出现一种日期格式；悬停可读全年；逾期不占用日期列。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">4 种写法</span><span class="spec">同一列混排</span></div>
+          <div class="stage">
+            <div class="dlist">
+              <div class="drow"><span class="dtitle">支付回调重试次数用尽</span><span class="dcol">2026-11-12</span><span class="dcol"><span class="tag fail">逾期 3 天</span></span></div>
+              <div class="drow"><span class="dtitle">审批流回退缺少二次确认</span><span class="dcol">11-12</span><span class="dcol"><span class="tag warn">今天</span></span></div>
+              <div class="drow"><span class="dtitle">需求时间轴缺少评审记录</span><span class="dcol">今天</span><span class="dcol"></span></div>
+              <div class="drow"><span class="dtitle">分支合并前未跑冒烟</span><span class="dcol">11-13</span><span class="dcol"><span class="tag info">明天</span></span></div>
+            </div>
+            <div class="av-note">「今天」同时出现在日期列和状态列，可比较性被破坏。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">MM-DD</span><span class="spec">悬停看全年</span></div>
+          <div class="stage">
+            <div class="dlist">
+              <div class="drow"><span class="dtitle">支付回调重试次数用尽</span><span class="dcol"><span class="dt" tabindex="0" data-tip="2026-11-12 周三">11-12</span></span><span class="dcol"><span class="tag fail">逾期 3 天</span></span></div>
+              <div class="drow"><span class="dtitle">审批流回退缺少二次确认</span><span class="dcol"><span class="dt" tabindex="0" data-tip="2026-11-12 周三">11-12</span></span><span class="dcol"><span class="tag warn">今天到期</span></span></div>
+              <div class="drow"><span class="dtitle">需求时间轴缺少评审记录</span><span class="dcol"><span class="dt" tabindex="0" data-tip="2026-11-12 周三">11-12</span></span><span class="dcol"></span></div>
+              <div class="drow"><span class="dtitle">分支合并前未跑冒烟</span><span class="dcol"><span class="dt" tabindex="0" data-tip="2026-11-13 周四">11-13</span></span><span class="dcol"><span class="tag info">明天</span></span></div>
+            </div>
+            <div class="av-note">日期列只有 MM-DD；悬停或键盘聚焦显示全年与星期；相对日期只留在状态位。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>统一格式化函数：列表 MM-DD + 悬停全年；详情与报表用绝对日期；逾期从日期列移到状态徽标。</span>
+        <span class="impact">影响面：<b>列表 / 我的工作 / 看板卡片</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P1-5 ==================== -->
+    <article class="issue" id="p1-5" data-p="P1" data-title="移动端 Tab 归属">
+      <div class="issue-head">
+        <span class="pid p1">P1-5</span>
+        <div>
+          <h2>移动端测试页高亮「项目」Tab，页内没有归属提示</h2>
+          <p class="desc">进入测试用例后底部高亮「项目」，但页面里看不到任何项目层级；用户会怀疑自己点错了。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P1-5"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>底部 5 Tab 中「项目」高亮；页面标题「测试用例」，无面包屑、无域内子 Tab。</span></div>
+        <div><b>预期</b><span>保持 5 Tab 不变，把测试用例明确为项目域内子页：面包屑 + 域内子 Tab。</span></div>
+        <div><b>验证口径</b><span>390 宽进入测试页：项目 Tab 高亮 + 测试用例子 Tab 激活；可返回项目概览。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">归属不明</span><span class="spec">390 等比缩放</span></div>
+          <div class="stage">
+            <div class="phones">
+              <div class="phone-wrap">
+                <div class="phone">
+                  <div class="phead">
+                    <div class="pc">沙漏研发协作平台</div>
+                    <div class="pt">测试用例</div>
+                  </div>
+                  <div class="pbody">
+                    <div class="pcard"><div class="pt">登录态续期 · 12 条用例</div><div class="pm"><span class="tag pass">8 通过</span><span>11-12</span></div></div>
+                    <div class="pcard"><div class="pt">审批流回退 · 6 条用例</div><div class="pm"><span class="tag warn">2 未执行</span><span>11-12</span></div></div>
+                    <div class="pcard"><div class="pt">通知聚合 · 9 条用例</div><div class="pm"><span class="tag pass">9 通过</span><span>11-11</span></div></div>
+                  </div>
+                  <div class="ptabs">
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="14" rx="4"/></svg>我的工作</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="3.8" height="12" rx="1.4"/><rect x="8.2" y="4" width="3.8" height="8" rx="1.4"/><rect x="13.4" y="4" width="3.6" height="11" rx="1.4"/></svg>工作项</span>
+                    <span class="ptab on"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6.4a1.8 1.8 0 0 1 1.8-1.8h3.2l1.6 1.9h6a1.8 1.8 0 0 1 1.8 1.8v6.9a1.8 1.8 0 0 1-1.8 1.8H4.8a1.8 1.8 0 0 1-1.8-1.8Z"/></svg>项目</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3.2a4.7 4.7 0 0 1 4.7 4.7v3l1.1 2.2H4.2l1.1-2.2v-3A4.7 4.7 0 0 1 10 3.2Z"/></svg>消息</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="7" r="3.1"/><path d="M4 16.5c.6-3.2 2.6-4.9 6-4.9s5.4 1.7 6 4.9"/></svg>我的</span>
+                  </div>
+                </div>
+                <div class="phone-cap">高亮「项目」，但页面没有任何项目层级</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">归属明确</span><span class="spec">面包屑 + 域内子 Tab</span></div>
+          <div class="stage">
+            <div class="phones">
+              <div class="phone-wrap">
+                <div class="phone">
+                  <div class="phead">
+                    <div class="pc">项目 / 沙漏研发协作平台</div>
+                    <div class="pt">测试用例</div>
+                    <div class="pdomain">
+                      <span>概览</span><span>工作项</span><span class="on">测试用例</span><span>分支</span>
+                    </div>
+                  </div>
+                  <div class="pbody">
+                    <div class="pcard"><div class="pt">登录态续期 · 12 条用例</div><div class="pm"><span class="tag pass">8 通过</span><span>11-12</span></div></div>
+                    <div class="pcard"><div class="pt">审批流回退 · 6 条用例</div><div class="pm"><span class="tag warn">2 未执行</span><span>11-12</span></div></div>
+                    <div class="pcard"><div class="pt">通知聚合 · 9 条用例</div><div class="pm"><span class="tag pass">9 通过</span><span>11-11</span></div></div>
+                  </div>
+                  <div class="ptabs">
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="14" rx="4"/></svg>我的工作</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="3.8" height="12" rx="1.4"/><rect x="8.2" y="4" width="3.8" height="8" rx="1.4"/><rect x="13.4" y="4" width="3.6" height="11" rx="1.4"/></svg>工作项</span>
+                    <span class="ptab on"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 6.4a1.8 1.8 0 0 1 1.8-1.8h3.2l1.6 1.9h6a1.8 1.8 0 0 1 1.8 1.8v6.9a1.8 1.8 0 0 1-1.8 1.8H4.8a1.8 1.8 0 0 1-1.8-1.8Z"/></svg>项目</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3.2a4.7 4.7 0 0 1 4.7 4.7v3l1.1 2.2H4.2l1.1-2.2v-3A4.7 4.7 0 0 1 10 3.2Z"/></svg>消息</span>
+                    <span class="ptab"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="7" r="3.1"/><path d="M4 16.5c.6-3.2 2.6-4.9 6-4.9s5.4 1.7 6 4.9"/></svg>我的</span>
+                  </div>
+                </div>
+                <div class="phone-cap">项目 Tab 高亮 + 页内测试用例子 Tab 激活，层级自洽</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>不新增第 6 个 Tab；测试用例作为项目域内子页，补面包屑与「概览 / 工作项 / 测试用例 / 分支」子导航。</span>
+        <span class="impact">影响面：<b>项目详情 + 测试页头部</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-1 ==================== -->
+    <article class="issue" id="p2-1" data-p="P2" data-title="图表坐标系">
+      <div class="issue-head">
+        <span class="pid p2">P2-1</span>
+        <div>
+          <h2>图表缺坐标轴与数值标签</h2>
+          <p class="desc">柱形与折线只有形状，数值依赖悬停；截图、移动端和汇报场景里都读不到具体数。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-1"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>无 Y 轴刻度、无网格线、无柱顶数值、无 X 轴标签。</span></div>
+        <div><b>预期</b><span>补 Y 轴 0–100、虚线网格、柱顶数值与 X 轴标签；颜色仍用语义令牌。</span></div>
+        <div><b>验证口径</b><span>不悬停可读出 4 个关键值；窄屏数值标签不重叠；深色网格不抢数据。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">仅悬停可读</span><span class="spec">无轴 / 无标签</span></div>
+          <div class="stage">
+            <div class="plot" style="height:176px">
+              <div class="bars">
+                <div class="barcol"><i style="--h:72%"></i></div>
+                <div class="barcol"><i style="--h:54%"></i></div>
+                <div class="barcol"><i style="--h:88%"></i></div>
+                <div class="barcol"><i style="--h:36%"></i></div>
+                <div class="barcol"><i style="--h:64%"></i></div>
+                <div class="barcol"><i class="warn" style="--h:24%"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">可读数值</span><span class="spec">轴 + 网格 + 标签</span></div>
+          <div class="stage">
+            <div class="chartbox">
+              <div class="yaxis"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+              <div class="plot">
+                <div class="gline" style="bottom:0"></div>
+                <div class="gline" style="bottom:25%"></div>
+                <div class="gline" style="bottom:50%"></div>
+                <div class="gline" style="bottom:75%"></div>
+                <div class="gline" style="bottom:100%"></div>
+                <div class="bars">
+                  <div class="barcol"><span>72</span><i style="--h:72%"></i></div>
+                  <div class="barcol"><span>54</span><i style="--h:54%"></i></div>
+                  <div class="barcol"><span>88</span><i style="--h:88%"></i></div>
+                  <div class="barcol"><span>36</span><i style="--h:36%"></i></div>
+                  <div class="barcol"><span>64</span><i style="--h:64%"></i></div>
+                  <div class="barcol"><span>24</span><i class="warn" style="--h:24%"></i></div>
+                </div>
+              </div>
+            </div>
+            <div class="xlabels"><span>需求池</span><span>设计</span><span>开发</span><span>测试</span><span>发布</span><span>复盘</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>统一图表壳（轴 + 网格 + 柱顶标签），先覆盖分析与报表；窄屏可只保留首尾刻度与柱顶数值。</span>
+        <span class="impact">影响面：<b>分析 / 报表图表容器</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-2 ==================== -->
+    <article class="issue" id="p2-2" data-p="P2" data-title="覆盖率零值">
+      <div class="issue-head">
+        <span class="pid p2">P2-2</span>
+        <div>
+          <h2>覆盖率矩阵 0 值着色误导</h2>
+          <p class="desc">0 通过显示绿色、0 失败显示红色，读者会先看到颜色再看到数字；同一数据的报告 Tab 却把 0 显示为中性。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-2"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>覆盖率矩阵 0 通过为绿、0 失败为红；报告 Tab 同数据 0 为中性灰。</span></div>
+        <div><b>预期</b><span>0 值统一中性；只有 &gt;0 才按语义着色；两个 Tab 共用同一套单元格规则。</span></div>
+        <div><b>验证口径</b><span>0 单元格无绿/红；&gt;0 仍可区分；图例说明「0 为未发生」。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">0 也被着色</span><span class="spec">绿 / 红误导</span></div>
+          <div class="stage">
+            <table class="cov">
+              <thead><tr><th>需求</th><th class="num">通过</th><th class="num">失败</th><th class="num">未执行</th></tr></thead>
+              <tbody>
+                <tr><td>登录态续期</td><td class="num"><span class="z ok">8</span></td><td class="num"><span class="z bad">1</span></td><td class="num"><span class="z zero">3</span></td></tr>
+                <tr><td>审批流回退</td><td class="num"><span class="z ok">0</span></td><td class="num"><span class="z bad">0</span></td><td class="num"><span class="z zero">6</span></td></tr>
+                <tr><td>通知聚合</td><td class="num"><span class="z ok">9</span></td><td class="num"><span class="z bad">0</span></td><td class="num"><span class="z zero">0</span></td></tr>
+              </tbody>
+            </table>
+            <div class="av-note">第二行「0 通过 / 0 失败」同时出现绿色与红色，像既有成功又有失败。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">0 为中性</span><span class="spec">&gt;0 才着色</span></div>
+          <div class="stage">
+            <table class="cov">
+              <thead><tr><th>需求</th><th class="num">通过</th><th class="num">失败</th><th class="num">未执行</th></tr></thead>
+              <tbody>
+                <tr><td>登录态续期</td><td class="num"><span class="z ok">8</span></td><td class="num"><span class="z bad">1</span></td><td class="num"><span class="z zero">3</span></td></tr>
+                <tr><td>审批流回退</td><td class="num"><span class="z zero">0</span></td><td class="num"><span class="z zero">0</span></td><td class="num"><span class="z zero">6</span></td></tr>
+                <tr><td>通知聚合</td><td class="num"><span class="z ok">9</span></td><td class="num"><span class="z zero">0</span></td><td class="num"><span class="z zero">0</span></td></tr>
+              </tbody>
+            </table>
+            <div class="av-note">0 值统一中性灰；8 通过仍为绿、1 失败仍为红；报告 Tab 使用同一规则。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>零值走 neutral 令牌，抽出共享单元格渲染；图例补一句「0 表示未发生，不代表通过或失败」。</span>
+        <span class="impact">影响面：<b>测试覆盖率 + 报告 Tab</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-3 ==================== -->
+    <article class="issue" id="p2-3" data-p="P2" data-title="列表行高">
+      <div class="issue-head">
+        <span class="pid p2">P2-3</span>
+        <div>
+          <h2>列表行高 49px 与我的工作 56px 不一致</h2>
+          <p class="desc">同样的两行内容（标题 + 元信息），在缺陷列表被压到 49px，在我的工作是 56px；跨页切换时密度感明显跳变。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-3"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>缺陷列表行高 49px；我的工作 56px（已验证的两行基准）。</span></div>
+        <div><b>预期</b><span>两行列表统一 56px，单行 44px；标题与元信息不压缩。</span></div>
+        <div><b>验证口径</b><span>行高 56±1；两行内容完整；密度只保留「标准 / 宽松」两档。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">49px</span><span class="spec">两行被压缩</span></div>
+          <div class="stage">
+            <div class="ruler">
+              <div class="scale">49px</div>
+              <div class="rows">
+                <div class="hrow h49"><span class="t">支付回调重试次数用尽</span><span class="m">逾期 3 天 · 陈</span></div>
+                <div class="hrow h49"><span class="t">审批流回退缺少二次确认</span><span class="m">今天 · 林</span></div>
+              </div>
+            </div>
+            <div class="av-note">标题与元信息挤在同一行的垂直中线上，长标题更容易被截断。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">56px</span><span class="spec">与我的工作一致</span></div>
+          <div class="stage">
+            <div class="ruler">
+              <div class="scale">56px</div>
+              <div class="rows">
+                <div class="hrow h56">
+                  <div class="line1"><span class="t">支付回调重试次数用尽</span><span class="m">逾期 3 天</span></div>
+                  <div class="m">PAY-218 · 陈 · 11-12</div>
+                </div>
+                <div class="hrow h56">
+                  <div class="line1"><span class="t">审批流回退缺少二次确认</span><span class="m">今天</span></div>
+                  <div class="m">APR-104 · 林 · 11-12</div>
+                </div>
+              </div>
+            </div>
+            <div class="av-note">标题与元信息各占一行，56px 与我的工作完全对齐；不做全站一刀切。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>列表行高对齐 56px 基准；单行列表用 44px；密度开关只保留标准 / 宽松。</span>
+        <span class="impact">影响面：<b>列表页行样式</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-4 ==================== -->
+    <article class="issue" id="p2-4" data-p="P2" data-title="动词统一">
+      <div class="issue-head">
+        <span class="pid p2">P2-4</span>
+        <div>
+          <h2>动词与保存文案不统一</h2>
+          <p class="desc">同一个动作有 2–4 种叫法；抽屉标题写「新建」，按钮写「创建」；保存类同时存在「保存工作项 / 保存视图 / 应用 / 确定」。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-4"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>新建 / 新增 / 创建 / 添加 / 提；删除 / 移除 / 退出；保存工作项 / 保存视图 / 应用 / 确定。</span></div>
+        <div><b>预期</b><span>一张动词表，全站唯一说法；标题与按钮同词；确认弹窗按钮含对象名。</span></div>
+        <div><b>验证口径</b><span>同义动词不再混用；抽屉标题与主按钮一致；危险确认按钮为「删除工作项」而非「确定」。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">同义混用</span><span class="spec">按页面各写各的</span></div>
+          <div class="stage">
+            <div class="plainacts" style="gap:8px">
+              <button type="button" class="b sm">新建工作项</button>
+              <button type="button" class="b sm">新增成员</button>
+              <button type="button" class="b sm">创建缺陷</button>
+              <button type="button" class="b sm">添加用例</button>
+              <button type="button" class="b sm">提评审</button>
+            </div>
+            <div class="plainacts" style="gap:8px;margin-top:8px">
+              <button type="button" class="b sm danger-solid">删除</button>
+              <button type="button" class="b sm">移出</button>
+              <button type="button" class="b sm">退出</button>
+            </div>
+            <div class="av-note" style="margin-top:10px">抽屉标题「新建工作项」，底部按钮「创建缺陷」——同一流程两个动词。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">一张词表</span><span class="spec">标题与按钮同词</span></div>
+          <div class="stage">
+            <table class="vocab">
+              <thead><tr><th>场景</th><th>统一文案</th><th>不再使用</th></tr></thead>
+              <tbody>
+                <tr><td>创建工作项</td><td><b>新建工作项</b></td><td class="no">新增 / 创建 / 添加</td></tr>
+                <tr><td>成员入组</td><td><b>添加成员</b></td><td class="no">邀请 / 新增</td></tr>
+                <tr><td>评审流转</td><td><b>提交评审</b></td><td class="no">提评审 / 发起</td></tr>
+                <tr><td>保存编辑</td><td><b>保存</b></td><td class="no">保存工作项 / 应用 / 确定</td></tr>
+                <tr><td>销毁数据</td><td><b>删除工作项</b></td><td class="no">移除 / 清除</td></tr>
+                <tr><td>解除关系</td><td><b>移除成员</b></td><td class="no">删除 / 踢出</td></tr>
+                <tr><td>自身离开</td><td><b>退出空间</b></td><td class="no">移出 / 离开</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>固化词表并从组件默认文案收口；抽屉标题与主按钮同词；危险确认按钮带对象名。</span>
+        <span class="impact">影响面：<b>多视图文案 + 抽屉标题 / 按钮</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-5 ==================== -->
+    <article class="issue" id="p2-5" data-p="P2" data-title="驾驶舱层级">
+      <div class="issue-head">
+        <span class="pid p2">P2-5</span>
+        <div>
+          <h2>驾驶舱三层导航 + 项目名重复</h2>
+          <p class="desc">侧栏、二级导航、页内 Tab 三层叠加，项目名又在面包屑和标题各出现一次；正文横向空间被挤占。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-5"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>导航层级 3；项目名出现 2 次；页内 Tab 与二级导航语义重叠。</span></div>
+        <div><b>预期</b><span>导航层级 ≤2；项目名只出现一次；页内 Tab 收敛为分组标题。</span></div>
+        <div><b>验证口径</b><span>首屏项目名计数=1；面包屑可返回；正文可用宽度增加。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="spec">3 层导航 · 2 次项目名</span></div>
+          <div class="stage">
+            <div class="wire">
+              <div class="wside"><span class="on"></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="wmain">
+                <div class="wsub"><span>项目集</span><span>/</span><b>沙漏研发协作平台</b><span>/</span><span>驾驶舱</span></div>
+                <div class="wtitle">沙漏研发协作平台 <span class="dup">重复的项目名</span></div>
+                <div class="wtabs"><b>概览</b><span>里程碑</span><span>风险</span><span>报表</span></div>
+                <div class="wgrid"><div class="wbox"></div><div class="wbox"></div><div class="wbox"></div><div class="wbox"></div></div>
+              </div>
+            </div>
+            <div class="av-note">侧栏 + 二级导航 + 页内 Tab 三层；标题与面包屑重复项目名。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">2 层 · 1 次项目名</span><span class="spec">Tab 收敛为分组标题</span></div>
+          <div class="stage">
+            <div class="wire">
+              <div class="wside"><span class="on"></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="wmain">
+                <div class="wsub"><span>项目</span><span>/</span><span>驾驶舱</span></div>
+                <div class="wtitle">沙漏研发协作平台</div>
+                <div class="wsec">健康度</div>
+                <div class="wgrid"><div class="wbox"></div><div class="wbox"></div></div>
+                <div class="wsec">里程碑与风险</div>
+                <div class="wgrid"><div class="wbox"></div><div class="wbox"></div></div>
+              </div>
+            </div>
+            <div class="av-note">去掉页内 Tab，改为分组标题；项目名只在标题出现一次，正文宽度增加。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>页内 Tab 改为分组标题；面包屑只保留「项目 / 驾驶舱」；项目名只在页面标题出现。</span>
+        <span class="impact">影响面：<b>项目详情 / 驾驶舱布局</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-6 ==================== -->
+    <article class="issue" id="p2-6" data-p="P2" data-title="搜索作用域">
+      <div class="issue-head">
+        <span class="pid p2">P2-6</span>
+        <div>
+          <h2>页面内搜索与全局搜索长得一样</h2>
+          <p class="desc">顶栏与页内各有一个同款搜索框、同一句占位文案；用户不知道该在哪个框里搜，也不知道搜的是全站还是本页。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-6"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>两个搜索框同款式、同占位文案「搜索」。</span></div>
+        <div><b>预期</b><span>顶栏明确「全站」，页内带「本项目」作用域标签；保留两个入口，不改搜索逻辑。</span></div>
+        <div><b>验证口径</b><span>两个输入框占位文案不同；页内搜索有 scope chip；键盘唤起仍是全局搜索。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">无作用域</span><span class="spec">同款同文案</span></div>
+          <div class="stage">
+            <div class="searchrow">
+              <div class="searchbox">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.2"/><path d="M13 13l3.5 3.5"/></svg>
+                <span class="txt">搜索</span>
+              </div>
+              <div class="searchbox">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.2"/><path d="M13 13l3.5 3.5"/></svg>
+                <span class="txt">搜索</span>
+              </div>
+            </div>
+            <div class="av-note">上为顶栏、下为页面内；视觉与语义都相同。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">作用域清晰</span><span class="spec">全站 / 本项目</span></div>
+          <div class="stage">
+            <div class="searchrow">
+              <div class="searchbox">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.2"/><path d="M13 13l3.5 3.5"/></svg>
+                <span class="txt">搜索全站</span>
+                <span class="kbd">Ctrl K</span>
+              </div>
+              <div class="searchbox">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="9" r="5.2"/><path d="M13 13l3.5 3.5"/></svg>
+                <span class="scope">本项目</span>
+                <span class="txt">搜索需求、工作项、用例</span>
+              </div>
+            </div>
+            <div class="av-note">顶栏负责全站，页内默认限定当前项目；不改变现有检索接口。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>顶栏占位改「搜索全站」并显示快捷键；页内搜索加 scope chip 与具体对象提示。</span>
+        <span class="impact">影响面：<b>顶栏 + 列表 / 需求 / 测试页搜索框</b></span>
+      </div>
+    </article>
+
+    <!-- ==================== P2-7 ==================== -->
+    <article class="issue" id="p2-7" data-p="P2" data-title="操作可点击感">
+      <div class="issue-head">
+        <span class="pid p2">P2-7</span>
+        <div>
+          <h2>纯文字操作缺少可点击感</h2>
+          <p class="desc">「清除筛选」「重置」「一键全部已读」是 11.5px 灰字，没有图标、没有悬停态、点击区也偏小，看起来像说明文字。</p>
+        </div>
+        <label class="accept"><input type="checkbox" data-id="P2-7"> 认可</label>
+      </div>
+      <div class="facts">
+        <div><b>当前表现</b><span>11.5px 灰字，无图标、无悬停态，点击区约 16–18px 高。</span></div>
+        <div><b>预期</b><span>次要操作使用 link-btn（主色 + 图标 + 悬停下划线）或 soft 按钮；点击区 ≥28px。</span></div>
+        <div><b>验证口径</b><span>hover / focus 可见；键盘可到达；点击区高度 ≥28px；不再像说明文字。</span></div>
+      </div>
+      <div class="compare">
+        <div class="demo before">
+          <div class="demo-label"><span class="dot"></span>修复前<span class="test-flag">无 affordance</span><span class="spec">11.5px 灰字</span></div>
+          <div class="stage">
+            <div class="plainacts">
+              <button type="button" class="plainact">清除筛选</button>
+              <button type="button" class="plainact">重置</button>
+              <button type="button" class="plainact">一键全部已读</button>
+            </div>
+            <div class="av-note">三个都是可点击操作，但外观与旁边的说明文字无法区分。</div>
+          </div>
+        </div>
+        <div class="demo after">
+          <div class="demo-label"><span class="dot"></span>修复后<span class="test-flag ok">可点击感</span><span class="spec">link-btn + soft</span></div>
+          <div class="stage">
+            <div class="plainacts">
+              <button type="button" class="linkbtn">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg>清除筛选
+              </button>
+              <button type="button" class="linkbtn demo-focus">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 8A6 6 0 1 0 16 12"/><path d="M15.5 4v4h-4"/></svg>重置
+              </button>
+              <button type="button" class="b soft sm">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5l3 3 6-7"/><path d="M10 13.5l1.5 1.5 5.5-7"/></svg>一键全部已读
+              </button>
+            </div>
+            <div class="av-note">第二个是键盘聚焦态；link-btn 高度 28px、有主色与图标，批量动作用 soft 按钮。</div>
+          </div>
+        </div>
+      </div>
+      <div class="decision">
+        <span class="lbl">建议</span>
+        <span>统一 link-btn 与 soft 次级按钮；保留「清除筛选」「重置」的轻量语义，但补图标、悬停与 focus。</span>
+        <span class="impact">影响面：<b>消息 / 列表 / 风险页</b></span>
+      </div>
+    </article>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var root = document.documentElement;
+  var cards = Array.prototype.slice.call(document.querySelectorAll(".issue"));
+  var tocLinks = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  var pButtons = Array.prototype.slice.call(document.querySelectorAll("[data-p]"));
+  var viewButtons = Array.prototype.slice.call(document.querySelectorAll("[data-view]"));
+  var themeBtn = document.getElementById("themeBtn");
+  var themeTxt = document.getElementById("themeTxt");
+  var toastEl = document.getElementById("toast");
+  var accText = document.getElementById("accText");
+  var accBar = document.getElementById("accBar");
+  var copyBtn = document.getElementById("copyBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var STORE_KEY = "hg-audit-fix-accept-v1";
+  var THEME_KEY = "hg-audit-fix-theme";
+
+  var params = new URLSearchParams(location.search);
+  var state = {
+    p: params.get("p") || "all",
+    view: params.get("view") || "compare",
+    solo: params.get("solo") || "",
+    accepted: {}
+  };
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ toastEl.classList.remove("show"); }, 2200);
+  }
+
+  function loadAccepted(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(raw){ state.accepted = JSON.parse(raw) || {}; }
+    }catch(e){ state.accepted = {}; }
+    Array.prototype.forEach.call(document.querySelectorAll(".accept input"), function(box){
+      box.checked = !!state.accepted[box.dataset.id];
+    });
+  }
+  function saveAccepted(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state.accepted)); }catch(e){}
+  }
+  function updateProgress(){
+    var boxes = Array.prototype.slice.call(document.querySelectorAll(".accept input"));
+    var done = boxes.filter(function(b){ return b.checked; }).length;
+    accText.textContent = done + " / " + boxes.length;
+    accBar.style.width = (boxes.length ? (done / boxes.length * 100) : 0) + "%";
+  }
+
+  function applyPriority(){
+    var intro = document.querySelector(".intro");
+    if(intro){ intro.hidden = !!state.solo; }
+    cards.forEach(function(card){
+      card.hidden = state.solo
+        ? card.id !== state.solo
+        : (state.p !== "all" && card.dataset.p !== state.p);
+    });
+    tocLinks.forEach(function(a){
+      a.hidden = state.p !== "all" && a.dataset.p !== state.p;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".toc-group"), function(group){
+      var any = Array.prototype.some.call(group.querySelectorAll("a"), function(a){ return !a.hidden; });
+      group.hidden = !any;
+    });
+    pButtons.forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.p === state.p ? "true" : "false");
+    });
+    refreshObserver();
+  }
+
+  function applyView(){
+    root.dataset.view = state.view;
+    viewButtons.forEach(function(b){
+      b.setAttribute("aria-pressed", b.dataset.view === state.view ? "true" : "false");
+    });
+  }
+
+  function applyTheme(theme){
+    root.dataset.theme = theme;
+    themeTxt.textContent = theme === "dark" ? "浅色" : "深色";
+    try{ localStorage.setItem(THEME_KEY, theme); }catch(e){}
+  }
+
+  function initTheme(){
+    var saved = null;
+    try{ saved = localStorage.getItem(THEME_KEY); }catch(e){}
+    var initial = params.get("theme") || saved ||
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    applyTheme(initial === "dark" ? "dark" : "light");
+  }
+
+  pButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      state.p = b.dataset.p;
+      applyPriority();
+      if(state.p !== "all"){
+        var first = cards.filter(function(c){ return !c.hidden; })[0];
+        if(first){ first.scrollIntoView({block:"start", behavior:"smooth"}); }
+      }
+    });
+  });
+
+  viewButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      state.view = b.dataset.view;
+      applyView();
+    });
+  });
+
+  themeBtn.addEventListener("click", function(){
+    applyTheme(root.dataset.theme === "dark" ? "light" : "dark");
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".accept input"), function(box){
+    box.addEventListener("change", function(){
+      if(box.checked){ state.accepted[box.dataset.id] = true; }
+      else{ delete state.accepted[box.dataset.id]; }
+      saveAccepted();
+      updateProgress();
+    });
+  });
+
+  clearBtn.addEventListener("click", function(){
+    state.accepted = {};
+    saveAccepted();
+    Array.prototype.forEach.call(document.querySelectorAll(".accept input"), function(b){ b.checked = false; });
+    updateProgress();
+    toast("已清空确认标记");
+  });
+
+  copyBtn.addEventListener("click", function(){
+    var picked = cards.filter(function(c){
+      var box = c.querySelector(".accept input");
+      return box && box.checked;
+    }).map(function(c){
+      var pid = c.querySelector(".pid").textContent.trim();
+      return pid + " " + c.dataset.title;
+    });
+    var text;
+    if(!picked.length){
+      text = "尚未勾选认可项。当前 14 项全部待确认。";
+    }else{
+      text = "沙漏全站审计修复确认清单（2026-11-12）\n已认可 " + picked.length + " / 14 项：\n" + picked.map(function(s,i){ return (i+1) + ". " + s; }).join("\n");
+    }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly","");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand("copy"); toast("已复制确认清单"); }
+      catch(e){ toast("复制失败，请手动选择"); }
+      document.body.removeChild(ta);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ toast("已复制确认清单"); }, fallback);
+    }else{
+      fallback();
+    }
+  });
+
+  var io = null;
+  if("IntersectionObserver" in window){
+    io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(!en.isIntersecting){ return; }
+        tocLinks.forEach(function(a){
+          a.classList.toggle("on", a.dataset.id === en.target.id);
+          if(a.dataset.id === en.target.id){ a.setAttribute("aria-current","true"); }
+          else{ a.removeAttribute("aria-current"); }
+        });
+      });
+    }, { rootMargin: "-96px 0px -68% 0px", threshold: 0 });
+  }
+
+  function refreshObserver(){
+    if(!io){ return; }
+    io.disconnect();
+    cards.forEach(function(c){ if(!c.hidden){ io.observe(c); } });
+  }
+
+  loadAccepted();
+  initTheme();
+  applyPriority();
+  applyView();
+  updateProgress();
+
+})();
+</script>
+</body>
+</html>

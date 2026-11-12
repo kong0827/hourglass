@@ -137,7 +137,7 @@ $("dlgWsCreateForm").addEventListener("submit", function(e){
     });
   }).catch(function(ex){
     btn.disabled = false;
-    toast(ex.message || "创建失败", "bad");
+    toast(ex.message || "新建失败", "bad");
   });
 });
 function loadMe(prefetched){

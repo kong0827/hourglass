@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的工作 · 两行舒适分组原型 v3</title>
+<script>
+  (function(){
+    var q = new URLSearchParams(location.search).get("theme");
+    var t = q || localStorage.getItem("ds.theme");
+    if(t === "dark") document.documentElement.setAttribute("data-theme","dark");
+  })();
+</script>
+<style>
+  /* ---------- 令牌：与 frontend/css/tokens.css 同源 ---------- */
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+    --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+
+    --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+    --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+
+    --p0:#F04438; --p1:#F79009; --p2:#2E90FA; --p3:#667085;
+
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+    --shadow-md:0 4px 10px -2px rgba(16,24,40,.08),0 2px 4px -2px rgba(16,24,40,.05);
+    --ease-out:cubic-bezier(.2,.8,.2,1);
+    --dur-fast:120ms;
+
+    --head-h:34px; --grp-h:32px; --sub-h:28px;
+  }
+  html[data-theme="dark"]{
+    color-scheme:dark;
+    --bg-app:#0D1219; --surface:#151D27; --surface-sunken:#111922;
+    --surface-hover:#1B2530; --surface-active:#26313F;
+    --border:#25303D; --border-strong:#334153;
+    --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+
+    --primary:#4C8DFF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+    --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+    --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+    --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+    --info:#53B1FD; --info-soft:#10202F; --info-border:#1F4468; --info-fg:#84CAFF;
+
+    --p0:#F97066; --p1:#FDB022; --p2:#53B1FD; --p3:#7B8798;
+    --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+    --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+    --shadow-md:0 4px 10px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;background:var(--bg-app);color:var(--text);
+    font-family:var(--font-sans);font-size:13px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;}
+  svg{display:block;}
+
+  .page{max-width:1440px;margin:0 auto;padding:24px 24px 40px;}
+  .page-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+  .ph-left{display:flex;align-items:baseline;gap:12px;min-width:0;}
+  h1{margin:0;font-size:19px;font-weight:650;letter-spacing:-.01em;}
+  .ph-meta{font-size:12.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .ph-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+  .seg{display:inline-flex;padding:2px;background:var(--surface-sunken);border-radius:var(--r-sm);border:1px solid var(--border);}
+  .seg button{
+    height:26px;padding:0 10px;border:none;background:none;border-radius:var(--r-xs);
+    font-size:12px;font-weight:600;color:var(--text-3);cursor:pointer;
+    transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+  }
+  .seg button:hover{color:var(--text-2);}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+
+  .icon-btn{
+    width:30px;height:30px;border-radius:var(--r-sm);display:grid;place-items:center;
+    color:var(--text-2);border:1px solid var(--border);background:var(--surface);cursor:pointer;
+    transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+  }
+  .icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+
+  /* ---------- 统计胶囊：沿用缺陷列表 ---------- */
+  .stats{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;font-size:11.5px;color:var(--text-3);}
+  .stat{display:inline-flex;align-items:baseline;gap:5px;padding:3px 9px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);}
+  .stat b{font-size:12px;font-weight:700;color:var(--text-2);font-variant-numeric:tabular-nums;}
+  .stat.over{border-color:var(--danger-border);background:var(--danger-soft);color:var(--danger-fg);}
+  .stat.over b{color:var(--danger-fg);}
+  .stat.today{border-color:var(--warning-border);background:var(--warning-soft);color:var(--warning-fg);}
+  .stat.today b{color:var(--warning-fg);}
+  .stat.blocked{border-color:var(--danger-border);background:var(--surface);color:var(--danger-fg);}
+  .stat.blocked b{color:var(--danger-fg);}
+  .stats .sep{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:var(--text-3);}
+
+  /* ---------- 工具栏 ---------- */
+  .toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .tb-field{display:flex;align-items:center;gap:6px;}
+  .tb-label{font-size:12px;color:var(--text-3);white-space:nowrap;}
+  .mini-select{
+    appearance:none;-webkit-appearance:none;height:30px;padding:0 28px 0 10px;border-radius:var(--r-sm);
+    border:1px solid var(--border);background-color:var(--surface);color:var(--text-2);
+    font-size:12.5px;font-weight:550;cursor:pointer;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 7px center;
+  }
+  .mini-select:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.16);border-color:var(--primary);}
+  .mini-select:disabled{opacity:.45;cursor:not-allowed;}
+  .link-btn{
+    height:30px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--border);
+    background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:550;cursor:pointer;
+    transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+  }
+  .link-btn:hover{background:var(--surface-hover);color:var(--text);}
+  .link-btn[aria-expanded="true"]{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+
+  /* ---------- 字段菜单 ---------- */
+  .field-wrap{position:relative;}
+  .field-menu{
+    position:absolute;right:0;top:36px;z-index:30;width:248px;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+    box-shadow:var(--shadow-md);padding:6px;
+  }
+  .field-menu[hidden]{display:none;}
+  .fm-head{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 6px;font-size:12px;font-weight:650;color:var(--text-2);}
+  .fm-reset{border:none;background:none;color:var(--primary-fg);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:var(--r-xs);}
+  .fm-reset:hover{background:var(--primary-soft);}
+  .fm-item{display:flex;align-items:center;gap:8px;padding:6px;border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2);cursor:pointer;}
+  .fm-item:hover{background:var(--surface-hover);}
+  .fm-item input{accent-color:var(--primary);margin:0;}
+  .fm-item.disabled{opacity:.5;cursor:not-allowed;}
+  .fm-note{margin-left:auto;font-size:11px;color:var(--text-3);}
+  .fm-hint{margin:6px 6px 2px;padding-top:6px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-3);line-height:1.5;}
+
+  /* ---------- 提示条 ---------- */
+  .hint{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:7px 12px;margin-bottom:10px;border-radius:var(--r-md);
+    background:var(--surface);border:1px solid var(--border);
+    color:var(--text-2);font-size:12px;
+  }
+  .hint svg{flex:0 0 auto;color:var(--primary);}
+  .hint .hint-sub{color:var(--text-3);}
+
+  /* ---------- 列表 ---------- */
+  .list-scroll{
+    --cols:minmax(260px,1fr);
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+    box-shadow:var(--shadow-xs);
+    overflow:auto;overscroll-behavior:contain;
+    max-height:min(640px,calc(100vh - 340px));min-height:260px;
+  }
+  /* 行高与缺陷列表优化后一致：8 + 标题 18.6 + 3 + 副行 18 + 8 ≈ 56px */
+  .list-scroll[data-density="standard"]{--row-pad:8px;--title-fs:12.8px;--title-lh:1.45;--sub-lh:18px;}
+  .list-scroll[data-density="relaxed"]{--row-pad:10px;--title-fs:13.5px;--title-lh:1.5;--sub-lh:19px;}
+
+  .list-head,.list-row{
+    display:grid;grid-template-columns:var(--cols);
+    align-items:center;gap:10px;
+  }
+  .list-head{
+    height:var(--head-h);padding:0 14px;background:var(--surface-sunken);
+    border-bottom:1px solid var(--border);
+    font-size:11px;font-weight:600;color:var(--text-3);
+    position:sticky;top:0;z-index:5;letter-spacing:.03em;
+  }
+  .list-head > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .list-head > .ta-r{text-align:right;}
+
+  /* 一级分组行：吸顶 + 语义色条 */
+  .grp-h{
+    position:sticky;top:var(--head-h);z-index:4;
+    display:flex;align-items:center;gap:7px;
+    height:var(--grp-h);padding:0 12px 0 8px;
+    background:var(--surface-sunken);
+    border-bottom:1px solid var(--border);
+    box-shadow:inset 3px 0 0 var(--grp-c,var(--border-strong));
+    cursor:pointer;user-select:none;
+  }
+  .grp-h:hover{background:var(--surface-hover);}
+  .grp-h:focus-visible{outline:none;box-shadow:inset 3px 0 0 var(--grp-c,var(--border-strong)),inset 0 0 0 2px var(--primary);}
+  .grp[data-tone="danger"] .grp-h{background:color-mix(in srgb,var(--danger-soft) 52%,var(--surface-sunken));}
+  .grp[data-tone="warning"] .grp-h{background:color-mix(in srgb,var(--warning-soft) 52%,var(--surface-sunken));}
+  .grp[data-tone="danger"] .grp-h:hover{background:color-mix(in srgb,var(--danger-soft) 78%,var(--surface-sunken));}
+  .grp[data-tone="warning"] .grp-h:hover{background:color-mix(in srgb,var(--warning-soft) 78%,var(--surface-sunken));}
+
+  .grp-chev{width:18px;height:18px;flex:0 0 auto;display:grid;place-items:center;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+  .grp-chev svg{transform:rotate(90deg);}
+  .grp.collapsed .grp-chev svg{transform:rotate(0);}
+
+  .grp-name{font-size:12.5px;font-weight:650;color:var(--text);white-space:nowrap;}
+  .grp-n{
+    min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-pill);
+    display:inline-grid;place-items:center;flex:0 0 auto;
+    background:var(--grp-soft,var(--surface));color:var(--grp-fg,var(--text-2));
+    border:1px solid transparent;
+    font-size:11px;font-weight:650;font-variant-numeric:tabular-nums;
+  }
+  .grp-hint{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .grp-actions{margin-left:auto;font-size:11.5px;color:var(--text-3);opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+  .grp-h:hover .grp-actions,.grp-h:focus-visible .grp-actions{opacity:1;}
+
+  .grp[data-tone="danger"]{--grp-c:var(--danger);--grp-soft:var(--danger-soft);--grp-fg:var(--danger-fg);}
+  .grp[data-tone="warning"]{--grp-c:var(--warning);--grp-soft:var(--warning-soft);--grp-fg:var(--warning-fg);}
+  .grp[data-tone="info"]{--grp-c:var(--info);--grp-soft:var(--info-soft);--grp-fg:var(--info-fg);}
+  .grp[data-tone="success"]{--grp-c:var(--success);--grp-soft:var(--success-soft);--grp-fg:var(--success-fg);}
+  .grp[data-tone="neutral"]{--grp-c:var(--border-strong);--grp-soft:var(--surface);--grp-fg:var(--text-2);}
+  .grp[data-tone="neutral"] .grp-n{border-color:var(--border);}
+  .grp.collapsed .grp-body{display:none;}
+
+  /* 二级分组 */
+  .sub{position:relative;}
+  .sub::before{
+    content:"";position:absolute;left:20px;top:0;bottom:0;width:2px;border-radius:2px;
+    background:var(--border-strong);opacity:.5;z-index:2;pointer-events:none;
+  }
+  .sub-h{
+    display:flex;align-items:center;gap:6px;
+    height:var(--sub-h);padding:0 12px 0 28px;
+    background:color-mix(in srgb,var(--surface-sunken) 55%,var(--surface));
+    border-bottom:1px solid var(--border);
+    cursor:pointer;user-select:none;position:sticky;
+    top:calc(var(--head-h) + var(--grp-h));z-index:3;
+  }
+  .sub-h:hover{background:var(--surface-hover);}
+  .sub-h:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary);}
+  .sub-chev{width:14px;height:14px;flex:0 0 auto;display:grid;place-items:center;color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);}
+  .sub-chev svg{transform:rotate(90deg);}
+  .sub.closed .sub-chev svg{transform:rotate(0);}
+  .sub-name{font-size:11.5px;font-weight:600;color:var(--text-2);white-space:nowrap;}
+  .sub-n{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .sub.closed .sub-body{display:none;}
+  .sub-body .tc-main{padding-left:22px;}
+
+  /* ---------- 工作项行：两行（标题 + 副行），整体垂直居中 ---------- */
+  .list-row{
+    padding:var(--row-pad) 14px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+    transition:background var(--dur-fast) var(--ease-out);
+  }
+  .list-row:hover{background:var(--surface-hover);}
+  .list-row:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary);}
+  .list-row[aria-current="true"]{background:var(--primary-soft);box-shadow:inset 2px 0 0 var(--primary);}
+
+  .tc-main{
+    min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px;
+  }
+  .tc-title{
+    font-size:var(--title-fs);font-weight:550;line-height:var(--title-lh);
+    letter-spacing:-.01em;color:var(--text);min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .tc-sub{
+    display:flex;align-items:center;gap:6px;
+    font-size:10.5px;line-height:var(--sub-lh);color:var(--text-3);
+    white-space:nowrap;overflow:hidden;min-width:0;
+  }
+  .proj-chip{
+    display:inline-flex;align-items:center;flex:0 1 auto;min-width:0;max-width:170px;height:18px;padding:0 6px;
+    border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface-sunken);
+    color:var(--text-2);font-size:10px;font-weight:600;line-height:1;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .sub-ws{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-3);}
+  .r-cat{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;font-size:10.5px;font-weight:600;
+    color:color-mix(in srgb,var(--c) 58%,var(--text-3));}
+  .r-cat i{width:5px;height:5px;border-radius:50%;background:var(--c);flex:0 0 auto;}
+  .r-tag{
+    flex:0 0 auto;font-size:10px;color:var(--text-3);background:var(--surface-sunken);
+    border-radius:4px;padding:0 5px;height:16px;line-height:16px;white-space:nowrap;
+  }
+  .r-blocked{flex:0 0 auto;font-size:10px;font-weight:600;color:var(--danger-fg);background:var(--danger-soft);
+    border-radius:4px;padding:0 5px;height:16px;line-height:16px;white-space:nowrap;}
+
+  /* 优先级胶囊：与缺陷严重度同一形状 */
+  .pri-pill{
+    display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-pill);
+    border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2);
+    font-size:11px;font-weight:600;white-space:nowrap;justify-self:start;
+  }
+  .pri-pill.p0{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg);}
+  .pri-pill.p1{background:var(--warning-soft);border-color:var(--warning-border);color:var(--warning-fg);}
+  .pri-pill.p2{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .pri-pill.p3{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2);}
+
+  .st-pill{
+    display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-pill);
+    border:1px solid var(--border);background:var(--surface-sunken);color:var(--text-2);
+    font-size:11px;font-weight:600;white-space:nowrap;justify-self:start;
+  }
+  .st-pill.todo{background:var(--surface-sunken);border-color:var(--border);color:var(--text-2);}
+  .st-pill.doing{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .st-pill.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+
+  .cell{font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;}
+  .cell.muted{color:var(--text-3);}
+  .cell.over{color:var(--danger-fg);font-weight:600;}
+  .cell.today{color:var(--warning-fg);font-weight:600;}
+  .cell.ta-r{text-align:right;}
+
+  .owner-cell{display:flex;align-items:center;gap:6px;min-width:0;}
+  .avatar{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700;flex:none;}
+  .owner-cell span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--text-2);}
+
+  .progress.mini{display:flex;align-items:center;gap:6px;}
+  .progress.mini .bar{width:40px;height:4px;border-radius:var(--r-pill);background:var(--surface-active);overflow:hidden;flex:0 0 auto;}
+  .progress.mini .bar i{display:block;height:100%;border-radius:var(--r-pill);background:var(--primary);}
+  .progress.mini .pv{font-size:11px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;}
+
+  .acts{display:flex;align-items:center;gap:0;justify-content:flex-end;opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+  .list-row:hover .acts,.list-row:focus-within .acts{opacity:1;}
+  .act-btn{
+    width:24px;height:24px;border-radius:var(--r-xs);display:grid;place-items:center;
+    border:none;background:none;color:var(--text-3);cursor:pointer;
+    transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out);
+  }
+  .act-btn:hover{background:var(--surface-active);color:var(--text);}
+  .act-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary);}
+
+  .foot{display:flex;justify-content:center;padding:12px 0 0;font-size:12px;color:var(--text-3);}
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:48px 24px;color:var(--text-3);}
+  .empty-state b{font-size:14px;font-weight:600;color:var(--text);}
+
+  @media (max-width:900px){
+    .page{padding:16px 12px 32px;}
+    .grp-hint{display:none;}
+    .tb-field .tb-label{display:none;}
+    .stats .sep{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="page-head">
+    <div class="ph-left">
+      <h1>我的工作</h1>
+      <span class="ph-meta" id="meta">—</span>
+    </div>
+    <div class="ph-right">
+      <div class="seg" id="modeSeg" role="group" aria-label="我的 / 团队">
+        <button type="button" data-mode="mine" aria-pressed="true">我的</button>
+        <button type="button" data-mode="team" aria-pressed="false">团队</button>
+      </div>
+      <button class="icon-btn" type="button" id="themeBtn" title="切换主题" aria-label="切换主题"></button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <div class="tb-field">
+      <span class="tb-label">分组</span>
+      <select id="groupSel" class="mini-select" aria-label="分组方式">
+        <option value="due">按截止日期</option>
+        <option value="workspace">按空间</option>
+        <option value="priority">按优先级</option>
+        <option value="status">按状态</option>
+        <option value="project">按项目</option>
+        <option value="category">按模块</option>
+        <option value="none">不分组</option>
+      </select>
+    </div>
+    <div class="tb-field">
+      <span class="tb-label">二级</span>
+      <select id="subSel" class="mini-select" aria-label="二级分组方式">
+        <option value="none">不分组</option>
+        <option value="due">按截止日期</option>
+        <option value="workspace">按空间</option>
+        <option value="priority">按优先级</option>
+        <option value="status">按状态</option>
+        <option value="project">按项目</option>
+        <option value="category">按模块</option>
+      </select>
+    </div>
+    <div class="tb-field">
+      <span class="tb-label">排序</span>
+      <select id="sortSel" class="mini-select" aria-label="排序方式">
+        <option value="default">默认顺序</option>
+        <option value="due">按截止日期</option>
+        <option value="priority">按优先级</option>
+        <option value="title">按标题</option>
+      </select>
+    </div>
+    <div class="tb-field">
+      <span class="tb-label">空间</span>
+      <select id="spaceSel" class="mini-select" aria-label="按空间筛选">
+        <option value="">全部空间</option>
+        <option value="支付业务部">支付业务部</option>
+        <option value="电商事业部">电商事业部</option>
+      </select>
+    </div>
+    <div class="tb-right">
+      <div class="seg" id="densitySeg" role="group" aria-label="列表密度">
+        <button type="button" data-density="standard" aria-pressed="true">标准</button>
+        <button type="button" data-density="relaxed" aria-pressed="false">宽松</button>
+      </div>
+      <div class="field-wrap">
+        <button class="link-btn" type="button" id="fieldBtn" aria-expanded="false" aria-haspopup="dialog">字段</button>
+        <div class="field-menu" id="fieldMenu" role="dialog" aria-label="显示字段" hidden>
+          <div class="fm-head"><span>显示字段</span><button class="fm-reset" type="button" data-fm-reset>恢复默认</button></div>
+          <div id="fmList"></div>
+          <div class="fm-hint">工作项与操作列固定；与「分组」相同的列会自动隐藏，避免重复。</div>
+        </div>
+      </div>
+      <button class="link-btn" type="button" id="expandAll">展开</button>
+      <button class="link-btn" type="button" id="collapseAll">折叠</button>
+    </div>
+  </div>
+
+  <div class="hint">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><path d="M10 9.2v4.2M10 6.6h.01"/></svg>
+    <span>两行：标题 + 归属/模块/标签副行，行高约 56px，与缺陷列表优化后同一套对齐规则。</span>
+    <span class="hint-sub">项目、空间、模块已在副行，按对应维度分组时自动省略。</span>
+  </div>
+
+  <div class="list-scroll" id="listScroll" data-density="standard">
+    <div class="list-head" id="listHead"></div>
+    <div class="list-body" id="listBody"></div>
+  </div>
+
+  <div class="foot">原型 v3 演示数据 · 分组、排序、密度与字段偏好保存在本机</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- 图标 ---------------- */
+  function svg(size, inner, sw){
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 20 20" fill="none" stroke="currentColor" ' +
+      'stroke-width="' + (sw || 1.6) + '" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  }
+  var ICON = {
+    chevron: function(s){ return svg(s || 14, '<path d="M7.6 4.6 13 10l-5.4 5.4"/>'); },
+    check: function(s){ return svg(s || 13, '<path d="M4.4 10.4 8 14l7.6-8"/>', 1.8); },
+    clock: function(s){ return svg(s || 13, '<circle cx="10" cy="10" r="7.2"/><path d="M10 5.8V10l3 1.8"/>'); },
+    calendar: function(s){ return svg(s || 13, '<rect x="3" y="4.4" width="14" height="12.6" rx="2.2"/><path d="M3 8.2h14M6.8 4.4V2.8M13.2 4.4V2.8"/>'); },
+    sun: function(s){ return svg(s || 16, '<circle cx="10" cy="10" r="3.4"/><path d="M10 2.4v2M10 15.6v2M2.4 10h2M15.6 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6 14 6M6 14l-1.4 1.4"/>'); },
+    moon: function(s){ return svg(s || 16, '<path d="M16.2 11.6A6.6 6.6 0 1 1 8.4 3.8a5.4 5.4 0 0 0 7.8 7.8Z"/>'); }
+  };
+
+  function esc(v){
+    return String(v == null ? "" : v)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  /* ---------------- 模拟数据 ---------------- */
+  var CATS = {
+    order:{name:"订单中心", color:"#2563EB"},
+    settle:{name:"结算中心", color:"#12B76A"},
+    risk:{name:"风控中心", color:"#F79009"},
+    pay:{name:"支付网关", color:"#7A5AF8"}
+  };
+
+  /* due：距今天数（null 为未设截止）；upd：距现在分钟数 */
+  var RAW = [
+    {id:"t01", title:"test1122", ws:"电商事业部", status:"待处理", pri:"P0", due:-1, prog:25, cat:"order", tags:["测试"], proj:"双十一大促", upd:12, owner:"李娜"},
+    {id:"t02", title:"执行批次1灰度观察30分钟后全量发布", ws:"支付业务部", status:"待处理", pri:"P0", due:null, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:35, owner:"陈昊"},
+    {id:"t03", title:"准备回滚包与发布前检查项", ws:"支付业务部", status:"待处理", pri:"P0", due:null, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:70, owner:"王敏"},
+    {id:"t04", title:"执行生产灰度并观察后全量发布", ws:"支付业务部", status:"待处理", pri:"P0", due:null, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:130, owner:"赵磊"},
+    {id:"t05", title:"实现微信支付 v3 退款接口", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"pay", tags:["微信支付"], proj:"支付链路重构", upd:300, owner:"李娜"},
+    {id:"t06", title:"制定 P0/P1 故障 5 分钟回滚与同步流程", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"risk", tags:[], proj:"稳定性专项", upd:420, owner:"陈昊"},
+    {id:"t07", title:"测试环境验证 v2.2 变更并确定灰度批次", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:1500, owner:"王敏"},
+    {id:"t08", title:"发布后核对核心指标与错误日志", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"settle", tags:[], proj:"支付链路重构", upd:1600, owner:"赵磊"},
+    {id:"t09", title:"实现支付结果页优惠明细展示", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"order", tags:[], proj:"双十一大促", upd:2900, owner:"李娜"},
+    {id:"t10", title:"实现银联二维码扫码支付", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"pay", tags:["银联"], proj:"支付链路重构", upd:4400, owner:"陈昊"},
+    {id:"t11", title:"核对发布后核心指标与错误日志", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"settle", tags:[], proj:"支付链路重构", upd:5800, owner:"王敏"},
+    {id:"t12", title:"支付链路压测与容量评估", ws:"支付业务部", status:"进行中", pri:"P0", due:0, prog:60, cat:"settle", tags:["压测"], proj:"支付链路重构", upd:25, owner:"赵磊"},
+    {id:"t13", title:"结算日批处理对账脚本联调", ws:"支付业务部", status:"进行中", pri:"P1", due:3, prog:40, cat:"settle", tags:[], proj:"对账平台", upd:180, owner:"李娜"},
+    {id:"t14", title:"风控规则命中率复盘", ws:"支付业务部", status:"执行结束", pri:"P2", due:6, prog:80, cat:"risk", tags:[], proj:"稳定性专项", upd:2900, owner:"陈昊"},
+    {id:"t15", title:"补充退款失败重试告警", ws:"电商事业部", status:"待处理", pri:"P2", due:9, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:7200, owner:"王敏"},
+    {id:"t16", title:"订单中心埋点字段梳理", ws:"电商事业部", status:"进行中", pri:"P3", due:null, prog:15, cat:"order", tags:["埋点"], proj:"双十一大促", upd:400, blocked:true, owner:"赵磊"},
+    {id:"t17", title:"灰度回滚演练记录归档", ws:"支付业务部", status:"执行结束", pri:"P3", due:null, prog:100, cat:"pay", tags:[], proj:"稳定性专项", upd:8900, owner:"李娜"},
+    {id:"t18", title:"支付回调签名校验加固", ws:"支付业务部", status:"待处理", pri:"P1", due:null, prog:0, cat:"pay", tags:[], proj:"支付链路重构", upd:60, teamOnly:true, owner:"陈昊"}
+  ];
+
+  var PRI_ORDER = ["P0","P1","P2","P3",""];
+  var PRI_NAME = {P0:"紧急", P1:"高", P2:"中", P3:"低", "":"未设置"};
+  var PRI_TONE = {P0:"danger", P1:"warning", P2:"info", P3:"neutral", "":"neutral"};
+  var STATUS_ORDER = ["待处理","进行中","执行结束","已完成"];
+  var STATUS_TONE = {"待处理":"neutral", "进行中":"info", "执行结束":"success", "已完成":"success"};
+  var STATUS_CLS = {"待处理":"todo", "进行中":"doing", "执行结束":"done", "已完成":"done"};
+  var DUE_GROUPS = [
+    {k:"over",   label:"逾期",     hint:"先处理已经拖过期的",         tone:"danger"},
+    {k:"today",  label:"今天",     hint:"今天到期",                   tone:"warning"},
+    {k:"week",   label:"本周",     hint:"本周内到期",                 tone:"info"},
+    {k:"ended",  label:"执行结束", hint:"所在列已结束计时，不计逾期", tone:"success"},
+    {k:"later",  label:"以后",     hint:"本周之后或未设截止",         tone:"neutral"}
+  ];
+
+  /* ---------------- 视图状态 ---------------- */
+  var STORE_KEY = "ds.preview.mineGroups.v3";
+  var DEF_COLS = {pri:true, status:true, owner:true, due:true, prog:true, updated:true};
+  var def = {group:"due", sub:"none", sort:"default", space:"", mode:"mine", density:"standard", closed:{}, cols:null};
+  var store = (function(){
+    try{
+      var raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+      return Object.assign({}, def, raw, {
+        closed: raw.closed || {},
+        cols: Object.assign({}, DEF_COLS, raw.cols || {})
+      });
+    }catch(e){ return Object.assign({}, def, {closed:{}, cols:Object.assign({}, DEF_COLS)}); }
+  })();
+  var qs = new URLSearchParams(location.search);
+  ["group","sub","sort","space","mode","density"].forEach(function(k){
+    if(qs.get(k)) store[k] = qs.get(k);
+  });
+
+  var DIMS = ["due","workspace","priority","status","project","category"];
+  var SORTS = ["default","due","priority","title"];
+  if(["mine","team"].indexOf(store.mode) < 0) store.mode = "mine";
+  if(DIMS.concat("none").indexOf(store.group) < 0) store.group = "due";
+  if(DIMS.concat("none").indexOf(store.sub) < 0) store.sub = "none";
+  if(SORTS.indexOf(store.sort) < 0) store.sort = "default";
+  if(["standard","relaxed"].indexOf(store.density) < 0) store.density = "standard";
+  if(["","支付业务部","电商事业部"].indexOf(store.space) < 0) store.space = "";
+
+  function save(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }catch(e){}
+  }
+
+  /* ---------------- 日期与分组 ---------------- */
+  var TODAY = new Date(); TODAY.setHours(0,0,0,0);
+  function addDays(d, n){ var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  var WEEK_END = addDays(TODAY, 6 - ((TODAY.getDay() + 6) % 7));
+
+  function dueBucket(it){
+    if(it.status === "已完成" || it.status === "执行结束") return "ended";
+    if(it.due === null || it.due === undefined) return "later";
+    if(it.due < 0) return "over";
+    if(it.due === 0) return "today";
+    return addDays(TODAY, it.due) <= WEEK_END ? "week" : "later";
+  }
+  function dueText(it){
+    if(it.status === "已完成") return {text:"已完成", cls:"muted"};
+    if(it.due === null || it.due === undefined) return {text:"未设截止", cls:"muted"};
+    if(it.due < 0) return {text:"逾期 " + (-it.due) + " 天", cls:"over"};
+    if(it.due === 0) return {text:"今天", cls:"today"};
+    return {text:it.due + " 天后", cls:""};
+  }
+  function updText(m){
+    var n = Number(m) || 0;
+    if(n < 5) return "刚刚";
+    if(n < 60) return n + " 分钟前";
+    if(n < 1440) return Math.floor(n / 60) + " 小时前";
+    if(n < 2880) return "昨天";
+    if(n < 10080) return Math.floor(n / 1440) + " 天前";
+    return Math.floor(n / 10080) + " 周前";
+  }
+
+  function subDim(){
+    if(store.group === "none" || store.sub === "none" || store.sub === store.group) return "none";
+    return store.sub;
+  }
+  function sectionInfo(it, dim){
+    if(dim === "due"){
+      var b = dueBucket(it), i = 0;
+      for(; i < DUE_GROUPS.length; i++) if(DUE_GROUPS[i].k === b) break;
+      var g = DUE_GROUPS[i] || DUE_GROUPS[DUE_GROUPS.length - 1];
+      return {key:g.k, label:g.label, hint:g.hint, tone:g.tone, order:DUE_GROUPS.indexOf(g)};
+    }
+    if(dim === "workspace") return {key:it.ws, label:it.ws, tone:"neutral"};
+    if(dim === "priority"){
+      var p = it.pri || "";
+      return {key:p || "__none", label:PRI_NAME[p] || "未设置", tone:PRI_TONE[p] || "neutral",
+        order:PRI_ORDER.indexOf(p), pri:p};
+    }
+    if(dim === "status") return {key:it.status, label:it.status, tone:STATUS_TONE[it.status] || "neutral",
+      order:STATUS_ORDER.indexOf(it.status)};
+    if(dim === "project") return {key:it.proj, label:it.proj, tone:"neutral"};
+    if(dim === "category"){
+      var c = CATS[it.cat];
+      return {key:it.cat || "__none", label:c ? c.name : "未指定模块", tone:"neutral"};
+    }
+    return null;
+  }
+  function sectionCompare(a, b, dim){
+    if(dim === "due") return a.order - b.order;
+    if(dim === "priority" || dim === "status"){
+      var ai = a.order === undefined ? 99 : a.order, bi = b.order === undefined ? 99 : b.order;
+      return ai - bi || a.label.localeCompare(b.label, "zh-Hans-CN");
+    }
+    return a.label.localeCompare(b.label, "zh-Hans-CN");
+  }
+  function sortRows(rows){
+    if(store.sort === "default") return rows;
+    var out = rows.slice();
+    out.sort(function(a, b){
+      if(store.sort === "title") return String(a.title).localeCompare(String(b.title), "zh-Hans-CN");
+      if(store.sort === "priority") return PRI_ORDER.indexOf(a.pri) - PRI_ORDER.indexOf(b.pri);
+      var x = a.due, y = b.due;
+      if(x === null && y === null) return 0;
+      if(x === null) return 1;
+      if(y === null) return -1;
+      return x - y;
+    });
+    return out;
+  }
+  function buildSections(items){
+    if(store.group === "none"){
+      return [{key:"all", label:"", hint:"", tone:"neutral", rows:sortRows(items), subs:[]}];
+    }
+    var map = {}, order = [];
+    items.forEach(function(it){
+      var info = sectionInfo(it, store.group);
+      if(!info) return;
+      var sec = map[info.key];
+      if(!sec){
+        sec = map[info.key] = {key:info.key, label:info.label, hint:info.hint || "", tone:info.tone,
+          order:info.order, rows:[], subs:[]};
+        order.push(info.key);
+      }
+      sec.rows.push(it);
+    });
+    var sections = order.map(function(k){ return map[k]; });
+    sections.sort(function(a, b){ return sectionCompare(a, b, store.group); });
+    sections.forEach(function(s){ s.rows = sortRows(s.rows); });
+
+    var sub = subDim();
+    if(sub !== "none"){
+      sections.forEach(function(s){
+        var m = {}, o = [];
+        s.rows.forEach(function(it){
+          var info = sectionInfo(it, sub);
+          if(!info) return;
+          var g = m[info.key];
+          if(!g){
+            g = m[info.key] = {key:info.key, label:info.label, hint:info.hint || "", tone:info.tone,
+              order:info.order, rows:[]};
+            o.push(info.key);
+          }
+          g.rows.push(it);
+        });
+        s.subs = o.map(function(k){ return m[k]; });
+        s.subs.sort(function(a, b){ return sectionCompare(a, b, sub); });
+        s.subs.forEach(function(g){ g.rows = sortRows(g.rows); });
+      });
+    }
+    return sections;
+  }
+
+  /* ---------------- 折叠 ---------------- */
+  function grpKey(dim, key){ return "g|" + dim + "|" + key; }
+  function subKey(dim, gkey, sdim, skey){ return "s|" + dim + "|" + gkey + "|" + sdim + "|" + skey; }
+  function isClosed(k){ return !!store.closed[k]; }
+  function toggle(k){
+    if(store.closed[k]) delete store.closed[k];
+    else store.closed[k] = 1;
+    save(); render();
+  }
+
+  /* ---------------- 列 ---------------- */
+  var COLS = [
+    {k:"pri",     label:"优先级", w:"64px"},
+    {k:"task",    label:"工作项", w:"minmax(260px,1fr)", fixed:true},
+    {k:"status",  label:"状态",   w:"88px"},
+    {k:"owner",   label:"负责人", w:"112px"},
+    {k:"due",     label:"截止",   w:"96px"},
+    {k:"prog",    label:"进度",   w:"96px"},
+    {k:"updated", label:"更新",   w:"76px", align:"right"}
+  ];
+  var OPS_W = "76px";
+
+  function dimUsed(dim){
+    return store.group === dim || subDim() === dim;
+  }
+  function hiddenByGroup(k){
+    return (k === "pri" && dimUsed("priority")) ||
+      (k === "status" && dimUsed("status")) ||
+      (k === "due" && dimUsed("due"));
+  }
+  function widthHidden(k){
+    var w = window.innerWidth;
+    if(k === "updated" && w < 1200) return true;
+    if(k === "prog" && w < 940) return true;
+    if(k === "owner" && w < 1024) return true;
+    return false;
+  }
+  function visibleCols(){
+    return COLS.filter(function(c){
+      if(c.k === "task") return true;
+      if(!store.cols[c.k]) return false;
+      if(c.k === "owner" && store.mode !== "team") return false;
+      if(hiddenByGroup(c.k)) return false;
+      if(widthHidden(c.k)) return false;
+      return true;
+    });
+  }
+  function gridTemplate(){
+    return visibleCols().map(function(c){ return c.w; }).concat(OPS_W).join(" ");
+  }
+
+  /* ---------------- 单元格 ---------------- */
+  var OWNER_COLOR = {"李娜":"#F79009", "陈昊":"#2563EB", "王敏":"#7A5AF8", "赵磊":"#12B76A"};
+  function ownerCell(t){
+    var name = t.owner || "我";
+    var c = OWNER_COLOR[name] || "#667085";
+    return '<span class="owner-cell"><span class="avatar" style="background:' + c + '" aria-hidden="true">' +
+      esc(name.charAt(0)) + '</span><span>' + esc(name) + '</span></span>';
+  }
+  function taskCell(t){
+    var cat = CATS[t.cat];
+    var tags = (t.tags || []).filter(function(x){ return !cat || x !== cat.name; }).slice(0, 2);
+    var sub = [];
+    if(store.group !== "project" && t.proj){
+      sub.push('<span class="proj-chip" title="项目：' + esc(t.proj) + '">' + esc(t.proj) + '</span>');
+    }
+    if(store.group !== "workspace" && t.ws){
+      sub.push('<span class="sub-ws" title="空间：' + esc(t.ws) + '">' + esc(t.ws) + '</span>');
+    }
+    if(store.group !== "category" && cat){
+      sub.push('<span class="r-cat" style="--c:' + cat.color + '"><i></i>' + esc(cat.name) + '</span>');
+    }
+    sub = sub.concat(tags.map(function(x){ return '<span class="r-tag">' + esc(x) + '</span>'; }));
+    if(t.blocked) sub.push('<span class="r-blocked">被阻塞</span>');
+    return '<span class="tc-main">' +
+      '<span class="tc-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
+      (sub.length ? '<span class="tc-sub">' + sub.join("") + '</span>' : '') +
+    '</span>';
+  }
+  function priCell(t){
+    var p = t.pri || "";
+    return '<span class="pri-pill ' + (p ? p.toLowerCase() : "p3") + '" title="优先级：' +
+      esc(p || "未设置") + '">' + esc(PRI_NAME[p]) + '</span>';
+  }
+  function statusCell(t){
+    return '<span class="st-pill ' + (STATUS_CLS[t.status] || "todo") + '">' + esc(t.status) + '</span>';
+  }
+  function progCell(t){
+    var p = t.status === "已完成" ? 100 : (Number(t.prog) || 0);
+    if(!p && t.status !== "进行中") return '<span class="cell muted">—</span>';
+    return '<span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span>';
+  }
+  function rowHTML(t){
+    var due = dueText(t);
+    var cells = visibleCols().map(function(c){
+      if(c.k === "task") return taskCell(t);
+      if(c.k === "pri") return priCell(t);
+      if(c.k === "owner") return ownerCell(t);
+      if(c.k === "status") return statusCell(t);
+      if(c.k === "due") return '<span class="cell ' + due.cls + '">' + esc(due.text) + '</span>';
+      if(c.k === "prog") return progCell(t);
+      if(c.k === "updated") return '<span class="cell muted ta-r" title="最近更新：' + esc(updText(t.upd)) + '">' + esc(updText(t.upd)) + '</span>';
+      return "";
+    }).join("");
+    var canDone = t.status !== "已完成" && t.status !== "执行结束";
+    var canTimer = t.status === "进行中" && !t.blocked;
+    return '<div class="list-row" tabindex="0" role="row" data-id="' + esc(t.id) + '" aria-label="打开工作项：' + esc(t.title) + '">' + cells +
+      '<span class="acts">' +
+        (canDone ? '<button class="act-btn" type="button" title="标记完成" aria-label="标记完成">' + ICON.check() + '</button>' : '') +
+        (canTimer ? '<button class="act-btn" type="button" title="开始计时" aria-label="开始计时">' + ICON.clock() + '</button>' : '') +
+        (canDone ? '<button class="act-btn" type="button" title="改期" aria-label="改期">' + ICON.calendar() + '</button>' : '') +
+      '</span></div>';
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  var listScroll = document.getElementById("listScroll");
+  var listHead = document.getElementById("listHead");
+  var listBody = document.getElementById("listBody");
+  var metaEl = document.getElementById("meta");
+  var statsEl = document.getElementById("stats");
+
+  function renderHead(){
+    var tpl = gridTemplate();
+    listScroll.style.setProperty("--cols", tpl);
+    listHead.innerHTML = visibleCols().map(function(c){
+      return '<span' + (c.align === "right" ? ' class="ta-r"' : '') + '>' + esc(c.label) + '</span>';
+    }).join("") + '<span class="ta-r">操作</span>';
+  }
+
+  function renderStats(items){
+    var over = 0, today = 0, blocked = 0, noDue = 0;
+    items.forEach(function(it){
+      var b = dueBucket(it);
+      if(b === "over") over++;
+      if(b === "today") today++;
+      if(it.blocked) blocked++;
+      if((it.due === null || it.due === undefined) && b !== "ended") noDue++;
+    });
+    statsEl.innerHTML =
+      '<span class="stat">共 <b>' + items.length + '</b> 项</span>' +
+      '<span class="stat over">逾期 <b>' + over + '</b></span>' +
+      '<span class="stat today">今天到期 <b>' + today + '</b></span>' +
+      '<span class="stat blocked">被阻塞 <b>' + blocked + '</b></span>' +
+      '<span class="stat">未设截止 <b>' + noDue + '</b></span>' +
+      '<span class="sep">点击行打开工作项 · 悬停显示快捷操作</span>';
+  }
+
+  function render(){
+    renderHead();
+    var items = RAW.filter(function(it){
+      if(it.teamOnly && store.mode !== "team") return false;
+      if(store.space && it.ws !== store.space) return false;
+      return true;
+    });
+    var spaces = {};
+    items.forEach(function(it){ spaces[it.ws] = 1; });
+    metaEl.textContent = "已加载 " + items.length + " 项 · 覆盖 " + Object.keys(spaces).length + " 个空间" +
+      (store.space ? " · 空间：" + store.space : "") +
+      (store.mode === "team" ? " · 团队视图" : "");
+    renderStats(items);
+
+    if(!items.length){
+      listBody.innerHTML = '<div class="empty-state"><b>当前筛选下没有工作项</b><span>试着放宽空间筛选。</span></div>';
+      return;
+    }
+
+    var sections = buildSections(items);
+    var html = "";
+    sections.forEach(function(s){
+      if(!s.rows.length) return;
+      var gk = grpKey(store.group, s.key);
+      var closed = isClosed(gk);
+      html += '<section class="grp' + (closed ? " collapsed" : "") + '" data-tone="' + s.tone + '">' +
+        (s.label
+          ? '<div class="grp-h" role="button" tabindex="0" aria-expanded="' + (!closed) + '" data-toggle="' + esc(gk) + '">' +
+              '<span class="grp-chev">' + ICON.chevron(15) + '</span>' +
+              '<span class="grp-name">' + esc(s.label) + '</span>' +
+              '<span class="grp-n">' + s.rows.length + '</span>' +
+              (s.hint ? '<span class="grp-hint">' + esc(s.hint) + '</span>' : '') +
+              '<span class="grp-actions">' + (closed ? "展开" : "收起") + '</span>' +
+            '</div>'
+          : '') +
+        '<div class="grp-body">';
+
+      if(s.subs && s.subs.length){
+        s.subs.forEach(function(sub){
+          if(!sub.rows.length) return;
+          var sk = subKey(store.group, s.key, subDim(), sub.key);
+          var sClosed = isClosed(sk);
+          html += '<div class="sub' + (sClosed ? " closed" : "") + '">' +
+            '<div class="sub-h" role="button" tabindex="0" aria-expanded="' + (!sClosed) + '" data-toggle="' + esc(sk) + '">' +
+              '<span class="sub-chev">' + ICON.chevron(12) + '</span>' +
+              '<span class="sub-name">' + esc(sub.label) + '</span>' +
+              '<span class="sub-n">' + sub.rows.length + '</span>' +
+            '</div>' +
+            '<div class="sub-body">' + sub.rows.map(rowHTML).join("") + '</div>' +
+          '</div>';
+        });
+      }else{
+        html += s.rows.map(rowHTML).join("");
+      }
+      html += '</div></section>';
+    });
+    listBody.innerHTML = html;
+  }
+
+  /* ---------------- 交互 ---------------- */
+  listBody.addEventListener("click", function(e){
+    if(e.target.closest(".act-btn")) return;
+    var head = e.target.closest("[data-toggle]");
+    if(head){ toggle(head.dataset.toggle); return; }
+    var row = e.target.closest(".list-row");
+    if(!row) return;
+    var selected = listBody.querySelector('.list-row[aria-current="true"]');
+    if(selected) selected.removeAttribute("aria-current");
+    if(selected !== row) row.setAttribute("aria-current", "true");
+  });
+  listBody.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var head = e.target.closest("[data-toggle]");
+    if(head){ e.preventDefault(); toggle(head.dataset.toggle); return; }
+    var row = e.target.closest(".list-row");
+    if(row){ e.preventDefault(); row.click(); }
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "Escape") return;
+    var selected = listBody.querySelector('.list-row[aria-current="true"]');
+    if(selected) selected.removeAttribute("aria-current");
+  });
+
+  var groupSel = document.getElementById("groupSel");
+  var subSel = document.getElementById("subSel");
+  var sortSel = document.getElementById("sortSel");
+  var spaceSel = document.getElementById("spaceSel");
+  var densitySeg = document.getElementById("densitySeg");
+  var fieldBtn = document.getElementById("fieldBtn");
+  var fieldMenu = document.getElementById("fieldMenu");
+  var fmList = document.getElementById("fmList");
+
+  var COL_LABELS = {pri:"优先级", status:"状态", owner:"负责人（团队视图）", due:"截止", prog:"进度", updated:"更新时间"};
+
+  function renderFieldMenu(){
+    fmList.innerHTML = Object.keys(COL_LABELS).map(function(k){
+      var grouped = (k === "pri" && dimUsed("priority")) ||
+        (k === "status" && dimUsed("status")) ||
+        (k === "due" && dimUsed("due"));
+      var narrow = widthHidden(k);
+      var modeHidden = k === "owner" && store.mode !== "team";
+      var disabled = grouped || narrow;
+      var note = grouped ? "按此分组" : (narrow ? "窗口过窄" : (modeHidden ? "仅团队视图" : ""));
+      return '<label class="fm-item' + (disabled ? " disabled" : "") + '">' +
+        '<input type="checkbox" data-col="' + k + '"' + (store.cols[k] ? " checked" : "") + (disabled ? " disabled" : "") + ' />' +
+        esc(COL_LABELS[k]) + (note ? '<span class="fm-note">' + note + '</span>' : '') +
+      '</label>';
+    }).join("");
+  }
+
+  function syncDensity(){
+    Array.prototype.forEach.call(densitySeg.querySelectorAll("[data-density]"), function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.density === store.density));
+    });
+    listScroll.dataset.density = store.density;
+  }
+
+  function syncControls(){
+    groupSel.value = DIMS.concat("none").indexOf(store.group) >= 0 ? store.group : "due";
+    subSel.value = DIMS.concat("none").indexOf(store.sub) >= 0 ? store.sub : "none";
+    subSel.disabled = store.group === "none";
+    sortSel.value = SORTS.indexOf(store.sort) >= 0 ? store.sort : "default";
+    spaceSel.value = store.space || "";
+    Array.prototype.forEach.call(document.querySelectorAll("#modeSeg [data-mode]"), function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.mode === store.mode));
+    });
+    syncDensity();
+  }
+
+  groupSel.addEventListener("change", function(){
+    store.group = groupSel.value;
+    if(store.group === "none" || store.group === store.sub) store.sub = "none";
+    store.closed = {};
+    save(); syncControls(); render();
+    if(!fieldMenu.hidden) renderFieldMenu();
+  });
+  subSel.addEventListener("change", function(){
+    store.sub = subSel.value;
+    store.closed = {};
+    save(); syncControls(); render();
+  });
+  sortSel.addEventListener("change", function(){
+    store.sort = sortSel.value;
+    save(); render();
+  });
+  spaceSel.addEventListener("change", function(){
+    store.space = spaceSel.value;
+    save(); syncControls(); render();
+  });
+
+  document.getElementById("modeSeg").addEventListener("click", function(e){
+    var b = e.target.closest("[data-mode]");
+    if(!b) return;
+    store.mode = b.dataset.mode;
+    save(); syncControls(); render();
+    if(!fieldMenu.hidden) renderFieldMenu();
+  });
+
+  densitySeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-density]");
+    if(!b) return;
+    store.density = b.dataset.density;
+    save(); syncDensity();
+  });
+
+  fieldBtn.addEventListener("click", function(){
+    if(fieldMenu.hidden){
+      renderFieldMenu();
+      fieldMenu.hidden = false;
+      fieldBtn.setAttribute("aria-expanded","true");
+    }else{
+      fieldMenu.hidden = true;
+      fieldBtn.setAttribute("aria-expanded","false");
+    }
+  });
+  document.addEventListener("click", function(e){
+    if(fieldMenu.hidden) return;
+    if(e.target.closest(".field-wrap")) return;
+    fieldMenu.hidden = true;
+    fieldBtn.setAttribute("aria-expanded","false");
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && !fieldMenu.hidden){
+      fieldMenu.hidden = true;
+      fieldBtn.setAttribute("aria-expanded","false");
+    }
+  });
+  fmList.addEventListener("change", function(e){
+    var cb = e.target.closest("[data-col]");
+    if(!cb) return;
+    store.cols[cb.dataset.col] = cb.checked;
+    save(); render();
+  });
+  fieldMenu.querySelector("[data-fm-reset]").addEventListener("click", function(){
+    store.cols = Object.assign({}, DEF_COLS);
+    save(); renderFieldMenu(); render();
+  });
+
+  document.getElementById("expandAll").addEventListener("click", function(){
+    store.closed = {};
+    save(); render();
+  });
+  function collapseAll(){
+    var closed = {};
+    function allowed(it){
+      return (!it.teamOnly || store.mode === "team") && (!store.space || it.ws === store.space);
+    }
+    if(store.group !== "none"){
+      RAW.filter(allowed).forEach(function(it){
+        var g = sectionInfo(it, store.group);
+        if(g) closed[grpKey(store.group, g.key)] = 1;
+      });
+    }
+    var sub = subDim();
+    if(sub !== "none"){
+      RAW.filter(allowed).forEach(function(it){
+        var g = sectionInfo(it, store.group), s = sectionInfo(it, sub);
+        if(g && s) closed[subKey(store.group, g.key, sub, s.key)] = 1;
+      });
+    }
+    store.closed = closed;
+    save(); render();
+  }
+  document.getElementById("collapseAll").addEventListener("click", collapseAll);
+
+  /* 主题 */
+  var themeBtn = document.getElementById("themeBtn");
+  function isDark(){ return document.documentElement.getAttribute("data-theme") === "dark"; }
+  function syncThemeBtn(){ themeBtn.innerHTML = isDark() ? ICON.sun(16) : ICON.moon(16); }
+  themeBtn.addEventListener("click", function(){
+    var dark = !isDark();
+    if(dark) document.documentElement.setAttribute("data-theme","dark");
+    else document.documentElement.removeAttribute("data-theme");
+    try{ localStorage.setItem("ds.theme", dark ? "dark" : "light"); }catch(e){}
+    syncThemeBtn();
+  });
+
+  /* 窗口变化影响列裁剪，重渲染保持表头与行对齐 */
+  var resizeTimer = 0;
+  window.addEventListener("resize", function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){ render(); }, 120);
+  });
+
+  syncThemeBtn();
+  syncControls();
+  render();
+
+  /* 原型调试参数 */
+  if(qs.get("fold") === "all") collapseAll();
+  if(qs.get("fields") === "open"){
+    renderFieldMenu();
+    fieldMenu.hidden = false;
+    fieldBtn.setAttribute("aria-expanded","true");
+  }
+  if(qs.get("scroll")) listScroll.scrollTop = Number(qs.get("scroll")) || 0;
+})();
+</script>
+</body>
+</html>

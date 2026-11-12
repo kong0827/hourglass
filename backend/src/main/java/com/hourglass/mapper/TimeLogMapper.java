@@ -1,5 +1,7 @@
 package com.hourglass.mapper;
 
+import com.hourglass.dto.ReviewHourLog;
+import com.hourglass.dto.ReviewHourLogSummary;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.TimeLog;
 import org.apache.ibatis.annotations.Mapper;
@@ -98,6 +100,26 @@ public interface TimeLogMapper {
     /** 本空间 [from, to) 区间的计时原始记录（甘特负载用，按 started_at 走索引） */
     List<com.hourglass.entity.TimeLog> selectByWorkspaceBetween(
             @Param("workspaceId") String workspaceId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
+
+    /** 回顾页工时下钻：与 sumWork 同口径的计时明细，按开始时间倒序分页 */
+    List<ReviewHourLog> selectReviewHourLogs(
+            @Param("workspaceId") String workspaceId,
+            @Param("viewerId") String viewerId,
+            @Param("reqId") String reqId,
+            @Param("userId") String userId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    /** 回顾页工时下钻汇总：行数与合计分钟，与明细同源 */
+    ReviewHourLogSummary summaryReviewHourLogs(
+            @Param("workspaceId") String workspaceId,
+            @Param("viewerId") String viewerId,
+            @Param("reqId") String reqId,
+            @Param("userId") String userId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
 

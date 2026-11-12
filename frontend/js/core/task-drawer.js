@@ -2,6 +2,7 @@
 
 import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
+import { attachCombo } from "./combo.js";
 import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
@@ -204,7 +205,7 @@ function setSaveLoading(loading){
       btnSaveTaskContinue.classList.add("loading");
     }
   }else{
-    btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存工作项";
+    btnSaveTask.textContent = btnSaveTask.dataset.saveText || "保存";
     btnSaveTask.disabled = false;
     btnSaveTask.classList.remove("loading");
     if(btnSaveTaskContinue){
@@ -578,17 +579,17 @@ function syncDrawerHead(){
   if(sub){
     var parts = [];
     if(reqName) parts.push(reqName);
-    if(colName) parts.push((rt.editingId ? "所在" : "创建到") + "「" + colName + "」");
+    if(colName) parts.push((rt.editingId ? "所在" : "新建到") + "「" + colName + "」");
     sub.textContent = parts.join(" · ");
   }
   var colLabel = $("ctxColLabel");
-  if(colLabel) colLabel.textContent = rt.editingId ? "所在列" : "创建到";
+  if(colLabel) colLabel.textContent = rt.editingId ? "所在列" : "新建到";
   var colItem = $("ctxColItem");
   if(colItem) colItem.hidden = !!rt.editingId;
   var ctxBox = taskDrawer.querySelector(".ctx");
   if(ctxBox) ctxBox.classList.toggle("ctx-edit", !!rt.editingId);
   if(btnSaveTask){
-    var saveText = rt.editingId ? "保存工作项" : ("创建" + meta.name);
+    var saveText = rt.editingId ? "保存" : ("新建" + meta.name);
     btnSaveTask.dataset.saveText = saveText;
     if(!btnSaveTask.classList.contains("loading")) btnSaveTask.textContent = saveText;
   }
@@ -925,7 +926,7 @@ function applyDrawerReadOnly(readOnly){
   if(btnDeleteTask) btnDeleteTask.hidden = !!readOnly || !rt.editingId;
   if(iSubNew){
     iSubNew.disabled = !!readOnly;
-    iSubNew.placeholder = readOnly ? "只读项目不可新增检查项" : "添加一项，回车确认";
+    iSubNew.placeholder = readOnly ? "只读项目不可添加检查项" : "添加一项，回车确认";
   }
   if(iComment){
     iComment.disabled = !!readOnly;
@@ -2784,6 +2785,7 @@ if(drawerNoticeReload){
     }).then(function(ok){ if(ok) reloadDrawerFromServer(); });
   });
 }
+attachCombo(iTags);
 iTags.addEventListener("keydown", function(e){
   if(e.isComposing || e.keyCode === 229) return;
   if(e.key === "Enter" || e.key === "," || e.key === "，"){
@@ -3458,7 +3460,7 @@ attachList.addEventListener("click", function(e){
   UI.showConfirm({
     title: "删除附件",
     msg: "附件删除后不可恢复，确定删除？",
-    okText: "删除"
+    okText: "删除附件"
   }).then(function(yes){
     if(!yes) return;
     API.del("/api/attachments/" + encodeURIComponent(del.dataset.attDel)).then(function(){
@@ -3677,7 +3679,7 @@ if(workLogList){
         + "作废后这条记录不再计入工作项、报表与每人每天额度；操作会保留在工作项时间线。"
         + "请用「补记」按天重新录入实际工时。";
     }
-    UI.showConfirm({ title:title, msg:msg, okText: manual ? "删除" : "作废并移除", danger:true }).then(function(ok){
+    UI.showConfirm({ title:title, msg:msg, okText: manual ? "删除补记" : "作废并移除", danger:true }).then(function(ok){
       if(!ok) return;
       API.del("/api/tasks/" + encodeURIComponent(taskId) + "/timer/records/" + encodeURIComponent(logId)).then(function(){
         toast(manual ? "已删除" : "已作废", "fs");

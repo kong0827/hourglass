@@ -711,6 +711,34 @@ body.mob-sheet-open{overflow:hidden;}
 }
 [data-layout="mobile"] .dem-mob-list .bkl-card{padding:14px;}
 
+/* ===================== 测试用例：项目域归属 ===================== */
+/* 桌面端顶栏面包屑 + 侧栏已表达归属，这里只在手机端补一层紧凑导航 */
+[data-layout="mobile"] .tc-domain{display:flex;flex-direction:column;gap:6px;margin:0 0 2px;}
+[data-layout="mobile"] .tc-crumb{
+  display:flex;align-items:center;gap:6px;min-width:0;
+  font-size:12px;line-height:16px;color:var(--text-3);
+}
+[data-layout="mobile"] .tc-crumb-link{
+  flex:0 0 auto;height:20px;padding:0;border:0;background:transparent;
+  font-size:12px;font-weight:600;color:var(--primary);
+}
+[data-layout="mobile"] .tc-crumb-sep{flex:0 0 auto;color:var(--border-strong);}
+[data-layout="mobile"] .tc-crumb-cur{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-weight:600;color:var(--text-2);
+}
+[data-layout="mobile"] .tc-domain-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;}
+[data-layout="mobile"] .tc-domain-tabs::-webkit-scrollbar{display:none;}
+[data-layout="mobile"] .tc-domain-tabs button{
+  flex:0 0 auto;height:28px;padding:0 11px;
+  border:1px solid var(--border);border-radius:999px;
+  background:var(--surface);color:var(--text-2);
+  font-size:12px;font-weight:600;
+}
+[data-layout="mobile"] .tc-domain-tabs button.on{
+  background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);
+}
+
 /* ===================== 测试用例：筛选收进面板 ===================== */
 [data-layout="mobile"] .tc-filter-toggle{display:inline-flex;}
 [data-layout="mobile"] .tc-actionbar{order:1;gap:6px;flex-wrap:wrap;justify-content:flex-end;width:100%;}

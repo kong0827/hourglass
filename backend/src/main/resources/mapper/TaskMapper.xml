@@ -327,7 +327,7 @@
        分页：ORDER BY 末尾带 t.id 兜底，保证同一 updated_at 下分页边界稳定。 -->
   <select id="selectMyTasks" resultType="Task">
     SELECT t.id, t.workspace_id, t.title, t.description, t.priority, t.owner, t.owner_user_id, t.category_id,
-           t.board_column, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
+           t.board_column, t.item_type, t.start_date, t.due_date, t.req_id, t.req_doc_id, t.branch_id, t.progress, t.is_milestone, t.is_blocked AS blocked,
            t.blocked_reason, t.blocked_by_task_id, t.note, t.completed_at, t.test_started_at, t.test_finished_at,
            t.recur_type, t.recur_next_id,
            t.remind_at, t.remind_target, t.remind_sent, t.deleted_at, t.sort_order, t.created_at, t.updated_at,
@@ -1089,6 +1089,54 @@
     LEFT JOIN board_column bc ON bc.workspace_id = t.workspace_id AND bc.id = t.board_column
     WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
     <include refid="visibleProject"/>
+  </select>
+
+  <!-- 报表下钻：kind 决定筛选口径，与 countCreatedCompletedByWeek / countCompletedBy* 及当前列快照逐条对齐 -->
+  <sql id="drillWhere">
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL
+    <include refid="visibleProject"/>
+    <if test="q.kind == 'created'">
+      AND t.created_at &gt;= #{q.from} AND t.created_at &lt; #{q.before}
+    </if>
+    <if test="q.kind == 'completed' or q.kind == 'category' or q.kind == 'owner'">
+      AND t.board_column = 'done'
+      AND t.completed_at &gt;= #{q.from} AND t.completed_at &lt; #{q.before}
+    </if>
+    <if test="q.kind == 'category'">
+      AND COALESCE((SELECT cg.name FROM category cg
+                    WHERE cg.workspace_id = t.workspace_id AND cg.id = t.category_id), '') = #{q.value}
+    </if>
+    <if test="q.kind == 'owner'">
+      AND COALESCE(t.owner, '') = #{q.value}
+    </if>
+    <if test="q.kind == 'column'">AND t.board_column = #{q.value}</if>
+    <if test="q.kind == 'priority'">AND t.priority = #{q.value}</if>
+  </sql>
+
+  <select id="countDrillTasks" resultType="int">
+    SELECT COUNT(*)
+    FROM task t
+    <include refid="drillWhere"/>
+  </select>
+
+  <select id="selectDrillTasks" resultType="com.hourglass.dto.TaskDrillRow">
+    SELECT t.id, t.title, t.item_type, t.owner, t.board_column, t.due_date,
+           t.estimate_minutes, t.completed_at,
+           COALESCE((SELECT SUM(tl.minutes) FROM time_log tl
+                     WHERE tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+                       AND tl.ended_at IS NOT NULL), 0) AS total_minutes,
+           r.name AS req_name
+    FROM task t
+    LEFT JOIN requirement r ON r.workspace_id = t.workspace_id AND r.id = t.req_id
+    <include refid="drillWhere"/>
+    <choose>
+      <when test="q.kind == 'created'">ORDER BY t.created_at DESC, BINARY t.id</when>
+      <when test="q.kind == 'completed' or q.kind == 'category' or q.kind == 'owner'">
+        ORDER BY t.completed_at DESC, BINARY t.id
+      </when>
+      <otherwise>ORDER BY (t.due_date IS NULL), t.due_date, t.board_column, t.sort_order, BINARY t.id</otherwise>
+    </choose>
+    LIMIT #{limit} OFFSET #{offset}
   </select>
 
   <select id="selectLatestCompletedAt" resultType="java.time.LocalDate">

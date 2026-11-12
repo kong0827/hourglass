@@ -12,7 +12,7 @@ import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
 import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, COLUMNS, colName, fmtMinutesShort, versionPhaseInfoHTML, addDays, iso } from "../lib/format.js";
 import { loadReqs } from "./board.js";
-import { branchMetaById, branchNameById, loadBranches, openBranchById, setBranchStatus } from "./branches.js";
+import { branchMetaById, branchNameById, loadBranches, openBranchById, requestBranchStatus } from "./branches.js";
 import { openDemandDetailById } from "./demands.js";
 
 /* datetime-local 按分钟记录：秒级差异既不可读，也会让未改动的计划被误判为有草稿 */
@@ -325,7 +325,7 @@ function renderAllVersions(){
   var rows = allVersionsCache || [];
   if(!rows.length){
     phaseBody.innerHTML = UI.emptyState({
-      icon:"folder", title:"还没有版本", text:"先在项目中创建版本，这里会汇总全部可见项目的版本。"
+      icon:"folder", title:"还没有版本", text:"先在项目中新建版本，这里会汇总全部可见项目的版本。"
     });
     return;
   }
@@ -345,10 +345,10 @@ function renderAllVersions(){
     selbar = '<div class="allv-selbar"><div class="allv-selinfo"><b>已选 ' + selected.length + ' 个版本 · 跨 ' + Object.keys(selectedProjects).length + ' 个项目</b>'
       + '<div class="release-chips">' + selected.map(function(r){ return '<span class="release-chip" title="' + esc(r.projectName) + '">' + esc(r.versionName) + '</span>'; }).join("") + '</div></div>'
       + '<button class="btn sm" type="button" data-allv-clear>清空</button>'
-      + '<button class="btn sm primary" type="button" data-allv-plan>创建发布计划</button></div>';
+      + '<button class="btn sm primary" type="button" data-allv-plan>新建发布计划</button></div>';
   }else{
     selbar = '<p class="allv-hint">' + (manageCount
-      ? "勾选可管理的版本后，可跨项目创建一个发布计划；只读项目不可勾选。"
+      ? "勾选可管理的版本后，可跨项目新建一个发布计划；只读项目不可勾选。"
       : "当前项目均无发布计划权限，仅可查看版本；需要创建计划请联系空间主、管理员或项目负责人。") + '</p>';
   }
   var body = "";
@@ -452,9 +452,10 @@ function renderSchedule(){
     return (r.status === "draft" || r.status === "ready") && r.plannedAt && new Date(r.plannedAt).getTime() < now;
   }).length;
   function select(name, pairs, chosen, label){
-    return '<select class="mini-select" data-schedule-filter="' + name + '" aria-label="' + label + '">'
+    return '<label class="phase-filter"><span>' + esc(label) + '</span>'
+      + '<select class="mini-select" data-schedule-filter="' + name + '" aria-label="按' + esc(label) + '筛选">'
       + pairs.map(function(p){ return '<option value="' + esc(p[0]) + '"' + (p[0] === chosen ? ' selected' : '') + '>' + esc(p[1]) + '</option>'; }).join("")
-      + '</select>';
+      + '</select></label>';
   }
   var body = rows.map(function(r){
     var late = (r.status === "draft" || r.status === "ready") && r.plannedAt && new Date(r.plannedAt).getTime() < now;
@@ -630,7 +631,7 @@ function openDrillModal(scope, val, metric){
 
 /* 版本需求下钻：已排需求/已排期需求格点击，列出排到该版本的需求（与计数同口径：不含已拒绝），行点击开需求详情 */
 function demandStatusLabel(st){
-  return st === "plan" ? "已排期" : st === "pass" ? "已通过" : st === "rej" ? "已拒绝" : st === "canceled" ? "已取消" : "待评审";
+  return st === "plan" ? "已排期" : st === "pass" ? "已通过" : st === "rej" ? "已拒绝" : (st === "canceled" || st === "cancelled") ? "已取消" : "待评审";
 }
 function openVersionDemandsModal(versionId){
   var v = findVersion(versionId);
@@ -1200,7 +1201,7 @@ function openVersionDialog(id, fresh){
   vDesc.value = v ? (v.description || "") : "";
   fVerName.classList.remove("invalid");
   verFormTitle.textContent = id ? "编辑版本" : "新建版本";
-  btnSaveVer.textContent = id ? "保存修改" : "创建版本";
+  btnSaveVer.textContent = id ? "保存" : "新建版本";
   if($("vProjectName")) $("vProjectName").textContent = reqNameById(rt.phaseReqId) || "—";
   UI.openModal($("dlgVersion"), "input");
 }
@@ -1725,7 +1726,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       var btn = e.target.closest("[data-plan-br-set]");
       if(!btn) return;
       UI.closeAllPops();
-      setBranchStatus(branchId, btn.getAttribute("data-plan-br-set"), function(){ refreshPlanBranches(); });
+      requestBranchStatus(branchId, btn.getAttribute("data-plan-br-set"), function(){ refreshPlanBranches(); });
     });
     UI.openPop(el, anchor, { align:"left" });
   }
@@ -1981,15 +1982,15 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
       + field("计划说明", '<textarea data-plan-notes maxlength="2000"' + disabled + '>' + esc(p.notes || "") + '</textarea>')
       + field("风险与回滚方案", '<textarea data-plan-risks maxlength="1000"' + disabled + '>' + esc(p.risks || "") + '</textarea>', "建议写清回滚命令、数据兼容处理和回滚后的验证步骤。")
       + field("计划状态", '<select data-plan-status' + disabled + '>' + options([["draft", "草稿"], ["ready", "就绪"], ["canceled", "取消"]].concat(p.status === "completed" ? [["completed", "已完成（只读）"]] : []), p.status || "draft") + '</select>', "只有「就绪」计划可被实际记录直接引用；就绪需要计划时间、负责人、至少 1 个工作项和目标键。草稿、取消或已完成会触发偏差校验，需要填写理由。")
-      + (!locked ? field("创建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '创建独立计划') + '</button>' : '<p class="hint">此计划只读</p>') + '</section>';
+      + (!locked ? field("新建 / 修改理由", '<input data-plan-reason maxlength="500" placeholder="说明为什么新建或修改此计划">', "", true) + '<p class="release-error" data-plan-error role="alert"></p><button class="btn sm primary" data-release-save type="button">' + (p.id ? '保存此计划' : '新建独立计划') + '</button>' : '<p class="hint">此计划只读</p>') + '</section>';
     var actualSection = mayPublish ? '<section class="release-section"><h3>实际发布事实</h3><p class="release-guide">记录顺序：发生时间 → 执行人 → 制品与 SHA256 → 目标键 → 勾选实际交付项，然后预览并确认。</p><p class="release-readiness" data-actual-readiness></p><p class="hint">只填本次真实发生的交付。覆盖、操作、关联事件与失败原因收在高级区，异常时自动展开；失败、测试和回滚记录不等于生产生效。</p><div class="form-grid">'
         + field("本次关联计划", '<select data-release-planId' + actualDisabled + '>' + actualPlanOptions(a) + '</select>', "关联计划用于预检对比；无计划即紧急记录。环境或状态不一致的计划仍可选择，但必须填写事实理由。", false, planSummaryHTML(a))
         + field("实际发生时间（本地）", '<input type="datetime-local" step="60" data-release-occurredAt value="' + esc(a.occurredAt) + '"' + actualDisabled + '>', "真实发生时间，不能晚于当前时间；与计划时间不同需填写偏差理由。", true)
         + field("实际环境", '<select data-release-environment' + actualDisabled + '>' + options(envs, a.environment) + '</select>', "真实发布环境；与计划环境不同需填写偏差理由。")
         + field("实际结果", '<select data-release-result' + actualDisabled + '>' + options([["success", "成功"], ["failed", "失败"]], a.result) + '</select>', "记录本次真实结果；失败必须填写失败原因。") + '</div>'
         + '<div class="form-grid">' + field("实际执行人（独立于记录人）", '<select data-release-executorUserId' + actualDisabled + '>' + memberOptions(a.executorUserId, false) + '</select>', "实际执行发布的人，独立于记录人。", true)
-        + field("制品标识", '<input data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名 + 提交号；不要用普通版本名代替制品证据。", true)
-        + field("SHA256", '<input data-release-artifactDigest maxlength="64" placeholder="64 位十六进制" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "制品文件的 SHA256，只能填 64 位十六进制；用于证明部署的是同一制品。", true) + '</div>'
+        + field("制品标识", '<input type="text" data-release-artifactRef maxlength="500" placeholder="如 hourglass-server.jar#8b44737" value="' + esc(a.artifactRef) + '"' + actualDisabled + '>', "可识别的制品名或构建号，例如 jar 名 + 提交号；不要用普通版本名代替制品证据。", true)
+        + field("SHA256", '<input type="text" data-release-artifactDigest maxlength="64" placeholder="64 位十六进制" value="' + esc(a.artifactDigest) + '"' + actualDisabled + '>', "制品文件的 SHA256，只能填 64 位十六进制；用于证明部署的是同一制品。", true) + '</div>'
         + field("实际目标键（每行一个）", '<textarea data-release-targetKeys placeholder="如 prod-shanghai-a，每行一个"' + actualDisabled + '>' + esc(a.targetKeys) + '</textarea>', "本次实际涉及的部署目标或服务键，每行一个；回滚时必须是引用事件目标的子集。", true)
         + heading("本次实际交付哪些工作项（与计划分别保存）", "只勾选本次真实交付的工作项，至少 1 项；未完成项会触发预检，需要填写事实理由。") + taskRows("actual", a.actualTaskIds, !!actualDisabled)
         + '<details class="release-advanced" data-release-advanced' + (advancedOpen ? ' open' : '') + '><summary>高级与异常字段 <span class="mute" data-release-advanced-summary></span></summary><div class="form-grid">'
@@ -2246,7 +2247,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     if(e.target.closest('[data-release-save]')){
       var p = selectedPlan(); if(!mayManage || (p && p.status === "completed")) return;
       var b = planBody();
-      if(!b.reason){ error("请填写创建 / 修改计划理由", "plan"); return; }
+      if(!b.reason){ error("请填写新建 / 修改计划理由", "plan"); return; }
       if(b.status === "ready" && (!b.plannedAt || !b.ownerUserId || !b.plannedTaskIds.length || !b.targetKeys.length)){ error("就绪计划需要时间、负责人、明确任务范围与目标键", "plan"); return; }
       readActual(); setBusy(true); invalidatePreview();
       (p ? API.put(base + "/release-plan", b) : API.post(base + "/release-plans", b)).then(function(saved){ if(current()){ planId = saved.id; planJustSaved = true; planSavedRevision = saved.revision == null ? null : saved.revision; restoreScroll = dlg.body.scrollTop; setBusy(false); toast("独立发布计划已保存", "fs"); load(); } }).catch(function(ex){ if(current()){ setBusy(false); error(ex.message || "计划保存失败", "plan"); } }); return;

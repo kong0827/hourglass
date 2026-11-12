@@ -26,7 +26,7 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
     <div class="sheet-foot">
       <span class="hint"></span>
       <button class="btn" type="button" id="dlgWsCreateCancel">取消</button>
-      <button class="btn primary" type="submit" id="dlgWsCreateOk">创建空间</button>
+      <button class="btn primary" type="submit" id="dlgWsCreateOk">新建空间</button>
     </div>
   </form>
 </div>

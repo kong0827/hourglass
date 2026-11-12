@@ -70,6 +70,14 @@ function updateBrand(){
   if(!brandSub) return;
   var wsName = rt.currentWs ? rt.currentWs.name : "";
   var viewMeta = VIEWS[activeView] || {};
+  /* 驾驶舱：面包屑只表示位置，项目名由页面标题承载 */
+  if(activeView === "project"){
+    brandSub.classList.add("breadcrumb");
+    brandSub.title = "项目 / 驾驶舱";
+    brandSub.innerHTML = '<button type="button" class="crumb-link" data-crumb-view="projects" title="返回项目列表">项目</button>'
+      + '<span class="sep">/</span><span>驾驶舱</span>';
+    return;
+  }
   var parts = [];
   if(wsName) parts.push(wsName);
   parts.push(viewMeta.title || activeView);
@@ -86,5 +94,11 @@ function updateBrand(){
     return '<span title="' + esc(p) + '">' + esc(p) + '</span>' + (i < arr.length - 1 ? '<span class="sep">/</span>' : '');
   }).join("");
 }
+/* 面包屑可点击段：当前只用于驾驶舱返回项目列表 */
+if(brandSub) brandSub.addEventListener("click", function(e){
+  var b = e.target.closest("[data-crumb-view]");
+  if(!b) return;
+  window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:b.dataset.crumbView } }));
+});
 
 export { boardParams, currentFilterParams, filterParams, setFilterValue, toggleFilterValue, updateBrand };

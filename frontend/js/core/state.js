@@ -1,7 +1,7 @@
 /* core/state · 全局可变状态（跨视图共享的写入统一走 rt） */
 
 import { esc } from "./ui.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, dayDiff, fmtShortMD, iso, parseDate, startOfDay } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, dayDiff, fmtFull, fmtShortMD, iso, parseDate, startOfDay, weekdayCN } from "../lib/format.js";
 
 /* 跨视图共享的可变状态：import 绑定只读，写入一律走 rt */
 export const rt = {};
@@ -148,6 +148,30 @@ function dueText(t){
   if(s.kind === "soon")  return "剩余 " + s.n + " 天";
   return fmtShortMD(parseDate(t.dueDate));
 }
+/* 日期列统一 MM-DD；相对日期另做徽标，避免同一列混排「今天 / 11-12 / 逾期 3 天」 */
+function dueDateMD(t){
+  if(!t || !t.dueDate) return "";
+  var d = parseDate(t.boardColumn === "done" ? (t.completedAt || t.dueDate) : t.dueDate);
+  return fmtShortMD(d);
+}
+function dueDateTip(t){
+  if(!t || !t.dueDate) return "";
+  var done = t.boardColumn === "done";
+  var d = parseDate(done ? (t.completedAt || t.dueDate) : t.dueDate);
+  if(!d) return "";
+  return (done ? "完成于 " : "截止 ") + fmtFull(d) + " " + weekdayCN(d);
+}
+/* 相对日期只用于 7 天内；逾期与临期改由状态位徽标表达 */
+function dueFlag(t){
+  if(!t || !t.dueDate) return null;
+  var s = dueState(t);
+  if(s.kind === "done" || s.kind === "ended" || s.kind === "none") return null;
+  var d = dayDiff(parseDate(t.dueDate), rt.TODAY);
+  if(d < 0) return { kind:"over", text:"逾期 " + Math.abs(d) + " 天" };
+  if(d === 0) return { kind:"today", text:"今天到期" };
+  if(d <= 7) return { kind:"soon", text:"剩余 " + d + " 天" };
+  return null;
+}
 function dueMetaClass(kind){
   if(kind === "over") return "meta over";
   if(kind === "today") return "meta today";
@@ -247,4 +271,4 @@ function canEditTask(t){
   return projectAccess(t.reqId) === "write";
 }
 
-export { calState, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };
+export { calState, canEditReq, canEditTask, canManageProject, catColor, catNameById, catTag, catTagByName, colRuleOf, currentRole, dueDateMD, dueDateTip, dueFlag, dueMetaClass, dueState, dueText, filterOn, progressOf, projectAccess, reqNameById, roleReadOnly, safeColor, selectedFilterCount, state, statusBucket, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount };

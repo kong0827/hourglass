@@ -7,8 +7,9 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
+import { axisTicks, fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
+import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
 import { distHTML } from "./review.js";
 
@@ -294,6 +295,69 @@ function loadStats(opts){
     setPageError(ex, ["chartWeeks","statsHours","statsCat","statsOwner"], function(){ loadStats(); });
   });
 }
+/* ---------- 穿透：图表点 / 分布行 / 工时卡 → 明细分页（与上方聚合同口径） ---------- */
+var statsDrillWindow = null;
+function isoDay(d){
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+}
+function dayAfter(dateStr){
+  var p = String(dateStr).split("-");
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  d.setDate(d.getDate() + 1);
+  return isoDay(d);
+}
+function openStatsTasks(title, params){
+  var base = Object.assign({limit: 100}, params);
+  API.get("/api/stats/tasks", Object.assign({}, base, {offset: 0})).then(function(page){
+    var rows = (page && page.items) || [];
+    if(!rows.length){ toast("该口径下暂无工作项", "warn"); return; }
+    openTaskTable(title, rows, "共 " + page.total + " 项 · 点击工作项行打开详情", {
+      total: page.total,
+      hasMore: page.hasMore,
+      fetch: function(offset){
+        return API.get("/api/stats/tasks", Object.assign({}, base, {offset: offset}));
+      }
+    });
+  }).catch(function(ex){ toast(ex && ex.message ? ex.message : "明细加载失败", "bad"); });
+}
+function openStatsHours(period){
+  if(!statsHoursEl) return;
+  var scope = state.workScope === "all" ? "all" : "mine";
+  var params = {scope: scope, period: period, limit: 100};
+  API.get("/api/stats/hour-logs", Object.assign({}, params, {offset: 0})).then(function(page){
+    var rows = (page && page.items) || [];
+    if(!rows.length){ toast(scope === "all" ? "该时段暂无计时记录" : "该时段你没有任何计时记录", "warn"); return; }
+    openLogTable((period === "week" ? "本周工时" : "累计工时") + (scope === "all" ? " · 全空间" : " · 仅我"),
+      rows,
+      (scope === "all" ? "空间全部成员的计时" : "我的计时")
+        + (period === "week" ? " · 本周（周一起）" : " · 累计")
+        + " · 共 " + page.total + " 条 · 合计 " + fmtMinutesShort(page.totalMinutes)
+        + " · 点击记录行打开工作项",
+      {showMember: scope === "all", pager: {
+        total: page.total,
+        hasMore: page.hasMore,
+        fetch: function(offset){
+          return API.get("/api/stats/hour-logs", Object.assign({}, params, {offset: offset}));
+        }
+      }});
+  }).catch(function(ex){ toast(ex && ex.message ? ex.message : "计时明细加载失败", "bad"); });
+}
+function onStatsTrend(el){
+  var kind = el.dataset.statDrill;
+  var from = el.dataset.drillFrom, before = el.dataset.drillBefore;
+  openStatsTasks((kind === "completed" ? "完成" : "新增") + " · " + el.dataset.drillRange,
+    {kind: kind, from: from, before: before});
+}
+function onStatsCategory(el){
+  var name = el.dataset.statCat;
+  openStatsTasks(name && name !== "__unset__" ? "完成 · 模块 " + name : "完成 · 未指定模块",
+    Object.assign({kind: "category", value: name}, statsDrillWindow || {}));
+}
+function onStatsOwner(el){
+  var name = el.dataset.statOwner;
+  openStatsTasks(name && name !== "__unset__" ? "完成 · 负责人 " + name : "完成 · 未指派负责人",
+    Object.assign({kind: "owner", value: name}, statsDrillWindow || {}));
+}
 function renderStatsHours(c){
   if(!statsHoursEl) return;
   var scope = state.workScope;
@@ -307,12 +371,14 @@ function renderStatsHours(c){
   /* 0 分钟不是缺失值：直接显示 0m，避免三张卡同时出现「—」像加载失败 */
   var hoursValue = function(m){ return m ? fmtMinutesShort(m) : "0m"; };
   var cards = [
-    {k:"累计工时", v:hoursValue(base)},
-    {k:"本周工时", v:hoursValue(week)},
+    {k:"累计工时", v:hoursValue(base), drill:"total"},
+    {k:"本周工时", v:hoursValue(week), drill:"week"},
     {k:"平均每项", v:(doneCount && base) ? fmtMinutesShort(Math.round(base / doneCount)) : "—"}
   ];
   statsHoursEl.innerHTML = cards.map(function(x){
-    return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
+    var tag = x.drill ? "button" : "div";
+    return "<" + tag + (x.drill ? ' type="button" class="stat clickable" data-stat-hours="' + x.drill + '"' : ' class="stat"') +
+      '><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></' + tag + '>';
   }).join("");
   if(workScopeTag) workScopeTag.textContent = (scope === "all") ? "全空间" : "仅我";
   if(hoursNote){
@@ -350,25 +416,49 @@ if(segWorkScope){
 }
 function renderStats(d){
   state.lastStats = d;
+  var weeks = d.weeks || [];
+  var todayBefore = dayAfter(isoDay(new Date()));
+  /* 分布下钻要和聚合用同一个完成窗口：周区间起点取自返回数据，终点与后端一致为「今天 + 1 天」 */
+  statsDrillWindow = weeks.length ? {from: weeks[0].start, before: todayBefore} : null;
   var maxV = 1;
-  (d.weeks || []).forEach(function(w){
+  weeks.forEach(function(w){
     if(w.created > maxV) maxV = w.created;
     if(w.completed > maxV) maxV = w.completed;
   });
   var chart;
-  if(!d.weeks || !d.weeks.length){
+  if(!weeks.length){
     chart = UI.colEmpty("暂无统计数据");
   }else{
-    chart = '<div class="chart">' + d.weeks.map(function(w){
+    /* 纵轴取整齐上界：柱顶数值、网格线与刻度共用同一标尺 */
+    var ticks = axisTicks(maxV);
+    var yLabels = "", grid = "";
+    for(var g = 0; g <= 4; g++){
+      grid += '<i' + (g === 0 ? ' class="base"' : '') + ' style="bottom:' + (g * 25) + '%"></i>';
+      yLabels += '<span style="top:' + ((4 - g) * 25) + '%">' + (g * ticks.step) + '</span>';
+    }
+    chart = '<div class="sc-plot">' +
+      '<div class="sc-yaxis" aria-hidden="true">' + yLabels + '</div>' +
+      '<div class="sc-lines" aria-hidden="true">' + grid + '</div>' +
+      '<div class="chart">' + weeks.map(function(w){
       var parts = w.start.split("-");
+      var range = w.start + " ~ " + w.end;
+      var before = dayAfter(w.end);
+      /* 当前周还没结束：聚合只统计到今天 + 1 天，下钻上界同步收口 */
+      if(before > todayBefore) before = todayBefore;
+      var hNew = Math.round(w.created / ticks.max * 100);
+      var hDone = Math.round(w.completed / ticks.max * 100);
       return '<div class="c" title="' + w.start + ' ~ ' + w.end + '：新增 ' + w.created + ' / 完成 ' + w.completed + '">' +
         '<div class="bars">' +
-          '<i class="b-new" style="height:' + Math.round(w.created/maxV*100) + '%"></i>' +
-          '<i class="b-done" style="height:' + Math.round(w.completed/maxV*100) + '%"></i>' +
+          '<span class="bar"><b style="bottom:calc(' + hNew + '% + 3px)">' + w.created + '</b>' +
+            '<i class="b-new" data-stat-drill="created" data-drill-from="' + w.start + '" data-drill-before="' + before +
+            '" data-drill-range="' + range + '" style="height:' + hNew + '%"></i></span>' +
+          '<span class="bar"><b style="bottom:calc(' + hDone + '% + 3px)">' + w.completed + '</b>' +
+            '<i class="b-done" data-stat-drill="completed" data-drill-from="' + w.start + '" data-drill-before="' + before +
+            '" data-drill-range="' + range + '" style="height:' + hDone + '%"></i></span>' +
         '</div>' +
         '<span class="cl">' + parts[1] + "-" + parts[2] + '</span>' +
       '</div>';
-    }).join("") + '</div>' +
+    }).join("") + '</div></div>' +
     '<div class="chart-legend"><span><i class="b-new"></i>新增</span><span><i class="b-done"></i>完成</span></div>';
   }
   $("chartWeeks").innerHTML = chart;
@@ -396,10 +486,12 @@ function renderStats(d){
 
   $("statsCat").innerHTML = distHTML(d.byCategory,
     function(){ return "var(--primary)"; },
-    function(x){ return x.count; });
+    function(x){ return x.count; },
+    function(x){ return 'data-stat-cat="' + esc(x.name || "__unset__") + '" title="查看该模块已完成工作项"'; });
   $("statsOwner").innerHTML = distHTML(d.byOwner,
     function(){ return "var(--primary)"; },
-    function(x){ return x.count; });
+    function(x){ return x.count; },
+    function(x){ return 'data-stat-owner="' + esc(x.name || "__unset__") + '" title="查看该负责人已完成工作项"'; });
 }
 function enterFlowView(){ loadFlowHealth(); }
 function spanParts(sec){
@@ -419,9 +511,9 @@ function fmtPct(v){
 function flowCard(k, html, cls){
   return '<div class="stat ' + (cls || "") + '"><div class="k">' + k + '</div><div class="v">' + html + '</div></div>';
 }
-function flowRow(label, value, widthPct, color){
+function flowRow(label, value, widthPct, color, attrs){
   var w = Math.max(0, Math.min(100, Math.round(Number(widthPct) || 0)));
-  return '<div class="dist-row">' +
+  return '<div class="dist-row' + (attrs ? " clickable" : "") + '"' + (attrs ? " " + attrs : "") + '>' +
     '<span class="lb">' + esc(label) + '</span>' +
     '<span class="bar"><i style="width:' + w + '%;--c:' + color + '"></i></span>' +
     '<span class="vl">' + value + '</span></div>';
@@ -488,6 +580,11 @@ function renderFlowHealth(d){
   if($("flowKpi").children[0] && d.bottleneckName){
     $("flowKpi").children[0].querySelector(".v").insertAdjacentHTML("beforeend",
       '<small> · 占 ' + fmtPct(d.bottleneckShare) + '</small>');
+    if(d.bottleneckId){
+      $("flowKpi").children[0].className += " clickable";
+      $("flowKpi").children[0].setAttribute("data-flow-column", d.bottleneckId);
+      $("flowKpi").children[0].setAttribute("data-flow-column-name", d.bottleneckName);
+    }
   }
 
   /* ---- 各列停留 ---- */
@@ -501,7 +598,8 @@ function renderFlowHealth(d){
       var ongoing = c.ongoingCount
         ? '现 ' + c.ongoingCount + ' 个在制 · 最久 ' + fmtSpan(c.ongoingMaxSeconds)
         : '当前无在制';
-      return '<div class="flow-bar' + (c.bottleneck ? " is-bn" : "") + '">' +
+      return '<div class="flow-bar' + (c.bottleneck ? " is-bn" : "") + '" data-flow-column="' + esc(c.id) +
+        '" data-flow-column-name="' + esc(c.name) + '" title="查看当前在「' + esc(c.name) + '」的工作项">' +
         '<div class="fb-row">' +
           '<span class="fb-name">' + esc(c.name) +
             (c.bottleneck ? '<i class="fb-tag">瓶颈</i>' : '') + '</span>' +
@@ -538,7 +636,8 @@ function renderFlowHealth(d){
     prio.forEach(function(p){ if(p.avgMoves > maxMv) maxMv = p.avgMoves; });
     $("flowPriority").innerHTML = '<div class="dist">' + prio.map(function(p){
       return flowRow(priName(p.priority) + " · " + p.tasks + " 项", p.avgMoves + " 次",
-        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0, priColor(p.priority));
+        maxMv > 0 ? p.avgMoves / maxMv * 100 : 0, priColor(p.priority),
+        'data-flow-priority="' + esc(p.priority) + '"');
     }).join("") + '</div>' +
       '<p class="flow-note">数字是每个工作项平均被移动多少次列。优先级立得住的话，' + esc(priName("P0")) + ' 应该<b>更少</b>被来回拖。</p>';
   }
@@ -617,7 +716,7 @@ function renderFlowEstimate(d){
     for(var i = 0; i < d.atRisk.length && i < 8; i++){
       var t = d.atRisk[i];
       var hi = t.level === "danger";
-      html += '<div class="done-item"><div class="di-main">' +
+      html += '<div class="done-item clickable" data-open-task="' + esc(t.id) + '" title="打开工作项详情"><div class="di-main">' +
         '<div class="di-t">' + esc(t.title) + '</div>' +
         '<div class="di-m">' +
           '<span class="ai-tag ' + (hi ? "risk-hi" : "risk-lo") + '">' + (hi ? "已超预估" : "接近预估") + '</span>' +
@@ -632,7 +731,7 @@ function renderFlowEstimate(d){
     html += '<div class="flow-est-cat"><div class="foot-note" style="margin:0">已完成但超出预估（复盘）</div>';
     for(var j = 0; j < d.overrun.length; j++){
       var o = d.overrun[j];
-      html += '<div class="done-item"><div class="di-main">' +
+      html += '<div class="done-item clickable" data-open-task="' + esc(o.id) + '" title="打开工作项详情"><div class="di-main">' +
         '<div class="di-t">' + esc(o.title) + '</div>' +
         '<div class="di-m"><span>实际 ' + fmtMinutesShort(o.actualMinutes) + ' / 预估 '
           + fmtMinutesShort(o.estimateMinutes) + '（' + Math.round(o.ratio * 100) + '%）</span></div>' +
@@ -660,10 +759,35 @@ if($("flowDays")){
     loadFlowHealth();
   });
 }
+if($("flowEstRisk")){
+  $("flowEstRisk").addEventListener("click", function(e){
+    var t = e.target.closest("[data-open-task]");
+    if(t) openTaskById(t.dataset.openTask);
+  });
+}
 if($("view-analysis")){
   $("view-analysis").addEventListener("click", function(e){
-    var b = e.target.closest("[data-open-reqdoc]");
-    if(b) openReqDocAndJump(b.dataset.openReqdoc);
+    var doc = e.target.closest("[data-open-reqdoc]");
+    if(doc){ openReqDocAndJump(doc.dataset.openReqdoc); return; }
+    var trend = e.target.closest("[data-stat-drill]");
+    if(trend){ onStatsTrend(trend); return; }
+    var cat = e.target.closest("[data-stat-cat]");
+    if(cat){ onStatsCategory(cat); return; }
+    var owner = e.target.closest("[data-stat-owner]");
+    if(owner){ onStatsOwner(owner); return; }
+    var hours = e.target.closest("[data-stat-hours]");
+    if(hours){ openStatsHours(hours.dataset.statHours); return; }
+    var col = e.target.closest("[data-flow-column]");
+    if(col && col.dataset.flowColumn){
+      openStatsTasks("流程体检 · 当前在「" + (col.dataset.flowColumnName || col.dataset.flowColumn) + "」",
+        {kind: "column", value: col.dataset.flowColumn});
+      return;
+    }
+    var pri = e.target.closest("[data-flow-priority]");
+    if(pri){
+      openStatsTasks("流程体检 · 优先级 " + priName(pri.dataset.flowPriority),
+        {kind: "priority", value: pri.dataset.flowPriority});
+    }
   });
 }
 

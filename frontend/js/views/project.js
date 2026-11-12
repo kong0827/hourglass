@@ -1,7 +1,7 @@
 /* views/project · 项目管理总览：单项目看板 + 全部项目透视表 */
 
 import { API } from "../core/api.js";
-import { $ } from "../core/dom.js";
+import { $, viewTitle } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
 import * as listPrefs from "../core/list-preferences.js";
@@ -16,7 +16,6 @@ import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
 var VIEW_KEY = "project-view";
-var TAB_KEY = "ds.projectTab";
 var cache = null, seq = 0;
 var pfCache = null, expanded = {};
 var moduleUi = { adding:false, deleting:"" };
@@ -39,7 +38,7 @@ window.addEventListener("ds:delivery-changed", function(e){
     if(eventWs !== workspaceId() || (d.projectId && d.projectId !== rt.managerProjectId)) return;
     seq++;
     if(document.body.dataset.view === "project"){
-      if(projectTab === "roles") paintRoster();
+      paintRoster();
       loadProject({ silent:true });
     }
   });
@@ -47,21 +46,10 @@ window.addEventListener("ds:delivery-changed", function(e){
 var projectWorkspaceId = "", memberFilter = { companyName:"", roleTitle:"" };
 function workspaceId(){ return rt.currentWs && rt.currentWs.id || ""; }
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
-var projectTab = (function(){
-  try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
-})();
-function setProjectTab(tab){
-  if(["overview","epics","members","roles"].indexOf(tab) === -1) return;
-  projectTab = tab;
-  try{ localStorage.setItem(TAB_KEY, tab); }catch(e){ /* 受限环境忽略 */ }
-  if(cache && currentMode() === "board") renderProject();
-}
-function projectTabBar(){
-  var tabs = [["overview","概览"],["epics","史诗"],["members","成员负载"],["roles","成员与角色"]];
-  return '<div class="seg mini project-tabs" role="tablist" aria-label="项目详情分区">' + tabs.map(function(t){
-    var on = projectTab === t[0];
-    return '<button type="button" role="tab" data-project-tab="' + t[0] + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' + t[1] + '</button>';
-  }).join("") + '</div>';
+/* 页面标题承载项目名：面包屑只表示所在位置（项目 / 驾驶舱） */
+function setPageTitle(text){
+  if(viewTitle) viewTitle.textContent = text;
+  document.title = text + " · 沙漏";
 }
 function enterProjectView(){
   effectiveMode = null;
@@ -92,9 +80,11 @@ function loadProject(opts){
   var selected = selectedProject();
   if(!selected){
     seq++; cache = null; rosterCache.seq++; rosterCache.key = ""; rosterCache.data = null;
+    setPageTitle("项目驾驶舱");
     body.innerHTML = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
     return;
   }
+  setPageTitle(selected.name || "项目驾驶舱");
   var wsId = workspaceId();
   if(projectWorkspaceId !== wsId || !cache || !cache.project || cache.project.id !== selected.id){
     moduleUi = { adding:false, deleting:"" };
@@ -160,7 +150,7 @@ function memberLabelFilters(list, f, prefix){
     + filterLabelOptions(list.map(function(m){ return m.companyName; }), f.companyName, "全部公司", "未设公司") + '</select></label>'
     + '<label>角色 <select class="mini-select" data-' + prefix + '-filter="roleTitle">'
     + filterLabelOptions(list.reduce(function(a,m){ return a.concat(memberRoleTitles(m)); }, []), f.roleTitle, "全部角色", "未设角色") + '</select></label>'
-    + '<button class="btn sm ghost" type="button" data-' + prefix + '-clear>清除筛选</button></div>';
+    + '<button class="btn sm soft" type="button" data-' + prefix + '-clear>' + icon("close", 13) + '清除筛选</button></div>';
 }
 function rosterPanel(){
   return '<section class="manager-panel roster-panel"><div class="manager-panel-head"><b>成员与角色</b><span id="rosterSummary" aria-live="polite">加载中…</span></div>'
@@ -374,6 +364,33 @@ function modeSeg(){
     + '<button type="button" data-pv-mode="drill" aria-pressed="' + (mode === "drill") + '">全部项目透视</button>'
     + '</div>';
 }
+/* 项目名只出现在页面标题里，切换入口用菜单而不是同名下拉 */
+function projectSwitchButton(){
+  if(selectableReqs().length < 2) return "";
+  return '<button class="btn sm" type="button" id="btnProjectSwitch" aria-haspopup="true" aria-expanded="false">切换项目</button>';
+}
+function openProjectSwitch(anchor){
+  var list = selectableReqs();
+  if(!anchor || list.length < 2) return;
+  var menu = document.createElement("div");
+  menu.className = "menu";
+  menu.style.minWidth = "220px";
+  menu.innerHTML = list.map(function(r){
+    var cur = r.id === rt.managerProjectId;
+    return '<button class="menu-item" type="button" data-switch-project="' + esc(r.id) + '"'
+      + (cur ? ' disabled aria-current="true"' : "") + '>'
+      + '<span>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</span>'
+      + '<span class="k">' + (cur ? "当前" : "") + '</span></button>';
+  }).join("");
+  UI.openPop(menu, anchor, { align:"left", onClose:function(){ menu.remove(); } });
+  menu.addEventListener("click", function(e){
+    var b = e.target.closest("[data-switch-project]");
+    if(!b) return;
+    UI.closeAllPops();
+    rt.managerProjectId = b.dataset.switchProject;
+    loadProject();
+  });
+}
 function dayDiff(from, to){
   function utc(s){ var a = String(s).slice(0, 10).split("-"); return Date.UTC(Number(a[0]), Number(a[1]) - 1, Number(a[2])); }
   return Math.round((utc(to) - utc(from)) / 86400000);
@@ -491,7 +508,7 @@ function moduleRowHTML(row, canManage, moduleCount){
 }
 function moduleEmptyRow(colspan, canManage){
   return '<tr><td colspan="' + colspan + '" class="manager-empty-cell">该项目还没有模块'
-    + (canManage ? '，点右上角「新增模块」添加第一个' : '') + '</td></tr>';
+    + (canManage ? '，点右上角「添加模块」添加第一个' : '') + '</td></tr>';
 }
 function moduleUnassignedRow(row){
   return '<tr class="project-module-row is-unassigned" data-module-open="__none" tabindex="0" title="查看未归属模块的工作项">'
@@ -524,7 +541,7 @@ function modulePanel(p, m, c){
   body += moduleTotalRow(m, c, total, canManage);
   if(canManage && moduleUi.adding){
     body += '<tr class="project-module-editor"><td colspan="' + colspan + '"><div class="project-module-inline">'
-      + '<b>新增模块</b>'
+      + '<b>添加模块</b>'
       + '<input type="color" data-module-new-color value="#8a8578" aria-label="模块颜色" />'
       + '<input type="text" data-module-new-name maxlength="12" placeholder="模块名称，最多 12 个字" aria-label="模块名称" />'
       + '<button class="btn sm primary" type="button" data-module-save>添加</button>'
@@ -538,7 +555,7 @@ function modulePanel(p, m, c){
     + '<details class="manager-caliber project-modules-caliber"><summary>口径</summary><div>'
     + '模块指标与项目驾驶舱同一套公式：进度 = Σ工作项完成度 ÷ 工作项数；预估、实际、剩余按工作项汇总；偏差只取已完成且填了预估的工作项。'
     + 'Σ模块 + 未指定 = 项目合计；项目整体进度仍按全部工作项计算，不是模块百分比的平均。</div></details>'
-    + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 新增模块</button>' : '')
+    + (canManage ? '<button class="btn sm primary" type="button" data-module-add>+ 添加模块</button>' : '')
     + '</div></div>'
     + '<p class="project-modules-note">像项目一样看每个模块的进度、预估与实际；删除模块时，其下工作项与需求迁到目标模块。</p>'
     + '<div class="tbl-wrap"><table class="manager-tbl project-modules-tbl"><thead><tr>'
@@ -624,12 +641,10 @@ function loadProjectDelivery(p){  if(!p || !p.id || deliveryCache[p.id]) return;
 function renderProject(){
   var p = cache.project || {}, m = cache.metrics || {}, c = cache.counts || {}, tasks = cache.tasks || [];
   var total = tasks.length, done = c.done || 0, progress = m.progressPct || 0;
-  var options = selectableReqs().map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === p.reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
+  setPageTitle(p.name || "项目驾驶舱");
   var deviation = m.deviationPct === null || m.deviationPct === undefined ? "—" : ((m.deviationPct > 0 ? "+" : "") + m.deviationPct + "%");
   var epics = cache.epics || [];
-  var toolbar = '<div class="manager-toolbar"><div class="manager-project-picker">'
-    + '<button class="btn sm ghost" type="button" id="btnProjectBack" title="返回项目列表">← 项目列表</button>'
-    + '<b>' + esc(p.name || "项目驾驶舱") + '</b><select id="managerProjectSelect" aria-label="切换项目">' + options + '</select></div>'
+  var toolbar = '<div class="manager-toolbar"><div>' + projectSwitchButton() + '</div>'
     + '<div class="toolbar-right">' + modeSeg() + '<span class="tag tag-primary">整体完成 ' + progress + '%</span>' + fullscreenButtonHTML() + '</div></div>';
   var overview = caliberHTML('整体进度 = Σ工作项完成度 ÷ 工作项数；指标由工作项流转、预估与自动计时汇总，不提供手填项目进度。分布按看板列的处理规则归类：待处理含「等待接续」列，进行中含「正常处理」的自定义列，「执行结束」列单独计数、不计未完成。')
     + projectBrief(p, m, c, cache.members)
@@ -655,17 +670,12 @@ function renderProject(){
     + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
     + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
     + memberRows(filteredProjectMembers()) + '</tbody></table></div></section>';
-  var panel = projectTab === "epics" ? epicsPanel
-    : (projectTab === "members" ? membersPanel
-    : (projectTab === "roles" ? rosterPanel() : overview));
-  $("projectBody").innerHTML = toolbar + projectTabBar() + '<div class="project-tab-panel" role="tabpanel">' + panel + '</div>';
-  if(projectTab === "overview"){
-    loadProjectDelivery(p);
-    var moduleInput = document.querySelector("[data-module-new-name]");
-    if(moduleUi.adding && moduleInput) moduleInput.focus();
-  } else if(projectTab === "roles"){
-    loadRoster(p.reqId || p.id);
-  }
+  /* 四个分区改为顺序分组：分组标题即原先的页内 Tab，导航只保留侧栏 + 二级导航两层 */
+  $("projectBody").innerHTML = toolbar + overview + epicsPanel + membersPanel + rosterPanel();
+  loadProjectDelivery(p);
+  var moduleInput = document.querySelector("[data-module-new-name]");
+  if(moduleUi.adding && moduleInput) moduleInput.focus();
+  loadRoster(p.reqId || p.id);
 }
 /* —— 全部项目透视：项目 → Epic → 任务 逐层展开 —— */
 function loadDrill(opts){
@@ -839,6 +849,7 @@ function drillControls(){
 }
 function renderDrill(){
   var projects = sortedProjects();
+  setPageTitle("全部项目透视");
   if(!drillInitialized && projects.length){
     drillInitialized = true;
     var first = projects[0];
@@ -856,7 +867,7 @@ function renderDrill(){
   }else{
     body = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
   }
-  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><b>项目全局透视</b><span>逐层展开史诗与工作项</span></div>'
+  $("projectBody").innerHTML = '<div class="manager-toolbar"><div><span>逐层展开史诗与工作项</span></div>'
     + '<div class="toolbar-right">' + drillControls() + modeSeg() + fullscreenButtonHTML() + '</div></div>'
     + caliberHTML('进度 = Σ工作项完成度 ÷ 工作项数（与单项目驾驶舱同口径）；项目行统计该项目全部工作项（含史诗本身），史诗行只统计其子工作项，因此子行数字相加不等于项目行。项目名进入项目驾驶舱，史诗名称查看子工作项明细，工作项行打开详情。')
     + body;
@@ -914,10 +925,8 @@ function metricTasks(kind){
   return rows;
 }
 function onClick(e){
-  if(e.target.closest("#btnProjectBack")){
-    window.dispatchEvent(new CustomEvent("ds:route-go", { detail:{ view:"projects" } }));
-    return;
-  }
+  var switchBtn = e.target.closest("#btnProjectSwitch");
+  if(switchBtn){ openProjectSwitch(switchBtn); return; }
   if(e.target.closest("[data-empty-action]")){ loadProject(); return; }
   var openRes = e.target.closest("[data-project-open]");
   if(openRes){
@@ -945,8 +954,6 @@ function onClick(e){
     }).catch(function(ex){ toast(ex.message || "打开失败", "bad"); });
     return;
   }
-  var tabBtn = e.target.closest("[data-project-tab]");
-  if(tabBtn){ setProjectTab(tabBtn.dataset.projectTab); return; }
   if(e.target.closest("[data-roster-retry]")){
     loadRoster((cache && cache.project && cache.project.id) || rt.managerProjectId, true);
     return;
@@ -1064,7 +1071,6 @@ function renderAfterModeSwitch(){
   else loadProject();
 }
 function onChange(e){
-  if(e.target.id === "managerProjectSelect"){ rt.managerProjectId = e.target.value; loadProject(); }
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
   var roleSel = e.target.closest("[data-roster-role]");
   if(roleSel){ saveRosterRole(roleSel); return; }
@@ -1086,14 +1092,6 @@ function onChange(e){
 }
 /* 透视树行键盘可达：聚焦任务行后 Enter/空格打开详情 */
 function onKeydown(e){
-  var tab = e.target.closest && e.target.closest("[data-project-tab]");
-  if(tab && ["ArrowLeft","ArrowRight","Home","End"].indexOf(e.key) !== -1){
-    var tabs = ["overview","epics","members","roles"], index = tabs.indexOf(tab.dataset.projectTab);
-    var next = e.key === "Home" ? 0 : (e.key === "End" ? tabs.length - 1 : (index + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length);
-    e.preventDefault(); setProjectTab(tabs[next]);
-    var target = document.querySelector('[data-project-tab="' + tabs[next] + '"]'); if(target) target.focus();
-    return;
-  }
   if(e.key === "Enter" && e.target.matches && e.target.matches("[data-module-new-name]")){
     e.preventDefault();
     saveModule();

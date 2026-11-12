@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>我的工作 · 列表行间距与列宽优化原型</title>
+<style>
+:root{
+  --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7; --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+  --border:#E4E7EC; --border-strong:#D0D5DD;
+  --text:#101828; --text-2:#475467; --text-3:#667085;
+  --primary:#2563EB; --primary-soft:#EFF4FF; --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+  --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+  --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+  --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+  --info:#2E90FA; --info-soft:#EFF8FF; --info-border:#B2DDFF; --info-fg:#175CD3;
+  --plum:#7A5AF8;
+  --p1-soft:#FFFAEB; --p1-border:#FEDF89; --p1-fg:#B54708;
+  --p2-soft:#EFF8FF; --p2-border:#B2DDFF; --p2-fg:#175CD3;
+  --p3-soft:#F2F4F7; --p3-border:#E4E7EC; --p3-fg:#475467;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --dur:150ms; --ease-out:cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D; --surface-hover:#1F2937; --surface-active:#26313F;
+  --border:#25303D; --border-strong:#334153;
+  --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+  --primary:#4C8DFF; --primary-soft:#16243C; --primary-border:#2B4772; --primary-fg:#8FB4FF;
+  --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+  --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+  --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+  --info:#53B1FD; --info-soft:#10202F; --info-border:#1F4468; --info-fg:#84CAFF;
+  --plum:#9B8AFB;
+  --p1-soft:#2A2110; --p1-border:#5C4A1E; --p1-fg:#FEC84B;
+  --p2-soft:#10202F; --p2-border:#1F4468; --p2-fg:#84CAFF;
+  --p3-soft:#1A222D; --p3-border:#25303D; --p3-fg:#A9B4C2;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;background:var(--bg-app);color:var(--text);
+  font-family:var(--font-sans);font-size:14px;line-height:1.571;
+  -webkit-font-smoothing:antialiased;
+}
+.pg{max-width:1240px;margin:0 auto;padding:24px 24px 48px;}
+.pg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:14px;}
+h1{font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.01em;margin:0 0 4px;}
+.lede{margin:0;font-size:12.5px;line-height:20px;color:var(--text-3);max-width:720px;}
+.ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ctrl-label{font-size:11.5px;font-weight:600;color:var(--text-3);letter-spacing:.02em;}
+.seg{display:inline-flex;padding:2px;gap:2px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:8px;}
+.seg button{
+  appearance:none;border:0;background:transparent;color:var(--text-2);
+  font:inherit;font-size:12px;font-weight:600;line-height:24px;height:24px;padding:0 10px;border-radius:6px;
+  cursor:pointer;transition:background var(--dur) var(--ease-out),color var(--dur) var(--ease-out);
+}
+.seg button:hover{color:var(--text);}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-xs);}
+.seg button:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.switch{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none;}
+.switch input{appearance:none;width:30px;height:18px;border-radius:999px;background:var(--surface-active);border:1px solid var(--border);position:relative;cursor:pointer;transition:background var(--dur) var(--ease-out);}
+.switch input::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow-xs);transition:transform var(--dur) var(--ease-out);}
+.switch input:checked{background:var(--primary);border-color:var(--primary);}
+.switch input:checked::after{transform:translateX(12px);background:#fff;}
+
+.spec{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 14px;}
+.spec b{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:11.5px;color:var(--text-2);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px 10px;}
+.spec b i{font-style:normal;font-size:11px;color:var(--text-3);font-weight:600;}
+.spec b em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--primary-fg);font-weight:700;}
+
+.demo{--pad-y:8px;--title-gap:3px;--chip-h:18px;--chip-px:6px;--sub-lh:18px;--sep:0px;--grp-h:32px;--chip-border:var(--border);
+  --cols:minmax(300px,2fr) 64px 88px 96px 76px 64px 88px 76px minmax(140px,1fr) 76px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.grid{display:grid;grid-template-columns:var(--cols);gap:10px;align-items:center;}
+.list-head{height:33px;padding:0 14px;background:var(--surface-sunken);border-bottom:1px solid var(--border);
+  font-size:10.5px;font-weight:600;color:var(--text-3);letter-spacing:.04em;}
+.list-head > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ta-r{text-align:right;}
+
+.col-ruler{display:grid;gap:10px;padding:5px 14px 7px;background:var(--surface-sunken);border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);font-size:10px;line-height:13px;color:var(--text-3);}
+.col-ruler span{overflow:hidden;white-space:nowrap;border-top:1px dashed var(--border-strong);padding-top:3px;}
+.col-ruler span b{color:var(--text-2);font-weight:700;}
+
+.grp-h{height:var(--grp-h);display:flex;align-items:center;gap:7px;padding:0 12px 0 8px;
+  background:var(--surface-sunken);border-bottom:1px solid var(--border);
+  box-shadow:inset 3px 0 0 var(--grp-c,var(--border-strong));cursor:pointer;user-select:none;}
+.grp-h:hover{background:var(--surface-hover);}
+.grp[data-tone="warning"]{--grp-c:var(--warning);--grp-bg:var(--warning-soft);}
+.grp[data-tone="neutral"]{--grp-c:var(--border-strong);}
+.grp[data-tone="warning"] .grp-h{background:color-mix(in srgb,var(--warning-soft) 52%,var(--surface-sunken));}
+.grp-chev{width:18px;height:18px;display:grid;place-items:center;color:var(--text-3);}
+.grp-chev svg{transform:rotate(90deg);transition:transform var(--dur) var(--ease-out);}
+.grp.collapsed .grp-chev svg{transform:rotate(0deg);}
+.grp.collapsed .grp-body{display:none;}
+.grp-name{font-size:12.5px;font-weight:650;white-space:nowrap;}
+.grp-n{min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:inline-grid;place-items:center;
+  background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-size:11px;font-weight:650;font-variant-numeric:tabular-nums;}
+.grp[data-tone="warning"] .grp-n{background:var(--warning-soft);border-color:transparent;color:var(--warning-fg);}
+.grp-hint{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.grp-act{margin-left:auto;font-size:11.5px;color:var(--text-3);opacity:0;transition:opacity var(--dur) var(--ease-out);}
+.grp-h:hover .grp-act{opacity:1;}
+
+.row{padding:var(--pad-y) 14px;border-bottom:var(--sep) solid var(--border);background:var(--surface);transition:background var(--dur) var(--ease-out);}
+.row:hover{background:var(--surface-hover);}
+.row:last-child{border-bottom:none;}
+.row:focus-visible{outline:2px solid var(--primary-border);outline-offset:-2px;}
+.tc-main{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:var(--title-gap);}
+.tc-title{font-size:12.8px;font-weight:550;line-height:1.45;letter-spacing:-.01em;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tc-sub{display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:var(--sub-lh);color:var(--text-3);
+  white-space:nowrap;overflow:hidden;min-width:0;}
+.proj{display:inline-flex;align-items:center;flex:0 1 auto;min-width:0;max-width:170px;height:var(--chip-h);padding:0 var(--chip-px);
+  border:1px solid var(--chip-border);border-radius:var(--r-xs);background:var(--surface-sunken);
+  color:var(--text-2);font-size:10px;font-weight:600;line-height:1;overflow:hidden;text-overflow:ellipsis;}
+.ws{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.cat{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;font-size:10.5px;font-weight:600;
+  color:color-mix(in srgb,var(--c) 58%,var(--text-3));}
+.cat i{width:5px;height:5px;border-radius:50%;background:var(--c);}
+.tag{display:inline-flex;align-items:center;flex:0 0 auto;height:var(--chip-h);padding:0 var(--chip-px);
+  border-radius:4px;background:var(--surface-sunken);color:var(--text-3);font-size:10px;}
+
+/* 项目列可见时副行不再重复项目胶囊；窄屏收起该列后胶囊自然回到副行 */
+.demo:not(.narrow) .tc-sub .proj{display:none;}
+
+.mini-tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;
+  background:var(--surface-sunken);border:1px solid var(--border);color:var(--text-2);font-size:10px;font-weight:600;}
+.mini-tag.is-bug{background:var(--danger-soft);border-color:var(--danger-border);color:var(--danger-fg);}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;border:1px solid var(--border);
+  background:var(--surface-sunken);color:var(--text-2);font-size:10.5px;font-weight:600;white-space:nowrap;justify-self:start;}
+.pill.p1{background:var(--p1-soft);border-color:var(--p1-border);color:var(--p1-fg);}
+.pill.p2{background:var(--p2-soft);border-color:var(--p2-border);color:var(--p2-fg);}
+.pill.p3{background:var(--p3-soft);border-color:var(--p3-border);color:var(--p3-fg);}
+.pill.doing{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+.pill.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
+.cell{font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cell.muted{color:var(--text-3);}
+.cell.upd{font-size:11px;}
+.cell.proj-col{font-size:11.5px;color:var(--text-2);}
+.prog{display:inline-flex;align-items:center;gap:6px;}
+.prog .bar{width:40px;height:4px;border-radius:999px;background:var(--surface-active);overflow:hidden;}
+.prog .bar i{display:block;height:100%;background:var(--primary);border-radius:inherit;}
+.prog em{font-style:normal;font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;}
+.acts{display:inline-flex;align-items:center;gap:2px;justify-content:flex-end;opacity:.45;transition:opacity var(--dur) var(--ease-out);}
+.row:hover .acts,.row:focus-within .acts{opacity:1;}
+.icon-btn{width:24px;height:24px;display:inline-grid;place-items:center;border-radius:6px;border:0;background:transparent;
+  color:var(--text-3);cursor:pointer;padding:0;}
+.icon-btn:hover{background:var(--surface-active);color:var(--text);}
+.icon-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+
+.narrow .grid{grid-template-columns:minmax(0,1fr) 88px 76px 64px 76px;}
+.narrow .grid > .col-extra{display:none;}
+
+.ruled .row:first-child{outline:1px dashed var(--border-strong);outline-offset:-1px;}
+.ruled .row:first-child .tc-title{outline:1px dashed var(--primary);}
+.ruled .row:first-child .tc-sub{outline:1px dashed var(--warning);}
+
+.panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:18px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px 16px;min-width:0;}
+.panel h2{font-size:13px;font-weight:650;margin:0 0 2px;}
+.panel p{margin:0 0 10px;font-size:11.5px;line-height:18px;color:var(--text-3);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+thead th{font-size:10.5px;letter-spacing:.04em;color:var(--text-3);font-weight:600;background:var(--surface-sunken);}
+tbody tr:last-child td{border-bottom:none;}
+td.num{font-variant-numeric:tabular-nums;text-align:right;}
+td.on{color:var(--primary-fg);font-weight:650;}
+td.off{color:var(--text-3);}
+.note{margin-top:10px;font-size:11.5px;line-height:18px;color:var(--text-3);}
+.note strong{color:var(--text-2);}
+pre{margin:10px 0 0;padding:10px 12px;background:var(--surface-sunken);border:1px solid var(--border);border-radius:8px;
+  font-family:var(--font-mono);font-size:11.5px;line-height:18px;overflow:auto;color:var(--text-2);}
+.copy{float:right;appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-2);
+  font:inherit;font-size:11px;font-weight:600;height:24px;padding:0 8px;border-radius:6px;cursor:pointer;}
+.copy:hover{background:var(--surface-hover);color:var(--text);}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+@media (max-width:1100px){
+  .panels{grid-template-columns:minmax(0,1fr);}
+}
+</style>
+</head>
+<body>
+<div class="pg">
+  <header class="pg-head">
+    <div>
+      <h1>我的工作 · 列表行间距与列宽</h1>
+      <p class="lede">参考「测试 › 缺陷」列表的两行结构。缺陷列表行内同样是上下 8px、标题与副行 3px，但副行是纯文字且有 1px 行分隔线；我的工作副行是描边胶囊且行间无分隔线，两行贴在一起显得挤。列宽方面当前只有「工作项」是弹性列，它把全部余量吃完，宽度占近四成。下面两组方案都可直接切换、实时测量。</p>
+    </div>
+    <div class="ctrl">
+      <span class="ctrl-label">间距</span>
+      <div class="seg" role="group" aria-label="间距方案">
+        <button type="button" data-scheme="cur" aria-pressed="false">当前</button>
+        <button type="button" data-scheme="opt" aria-pressed="true">优化（推荐）</button>
+        <button type="button" data-scheme="wide" aria-pressed="false">宽松</button>
+      </div>
+      <span class="ctrl-label">列宽</span>
+      <div class="seg" role="group" aria-label="列宽方案">
+        <button type="button" data-colscheme="cur" aria-pressed="false">当前</button>
+        <button type="button" data-colscheme="opt" aria-pressed="true">均衡（推荐）</button>
+      </div>
+      <span class="ctrl-label">宽度</span>
+      <div class="seg" role="group" aria-label="视图宽度">
+        <button type="button" data-width="wide" aria-pressed="true">宽屏</button>
+        <button type="button" data-width="narrow" aria-pressed="false">窄屏</button>
+      </div>
+      <span class="ctrl-label">主题</span>
+      <div class="seg" role="group" aria-label="主题">
+        <button type="button" data-theme-btn="light" aria-pressed="true">浅色</button>
+        <button type="button" data-theme-btn="dark" aria-pressed="false">深色</button>
+      </div>
+      <label class="switch"><input type="checkbox" id="ruler" /> 标尺</label>
+    </div>
+  </header>
+
+  <div class="spec" aria-live="polite">
+    <b><i>行高</i><em id="s-row">62</em>px</b>
+    <b><i>行内上下留白</i><em id="s-pad">8 / 8</em>px</b>
+    <b><i>标题 → 副行</i><em id="s-gap">6</em>px</b>
+    <b><i>副行胶囊高</i><em id="s-chip">20</em>px</b>
+    <b><i>行分隔线</i><em id="s-sep">有</em></b>
+    <b><i>列表宽</i><em id="s-w">—</em>px</b>
+    <b><i>工作项占比</i><em id="s-share">—</em></b>
+  </div>
+
+  <main class="demo" id="demo">
+    <div class="card">
+      <div class="list-head grid" id="head">
+        <span>工作项</span>
+        <span class="col-extra">优先级</span>
+        <span>状态</span>
+        <span class="col-extra">进度</span>
+        <span class="ta-r">更新</span>
+        <span>类型</span>
+        <span class="col-extra">开始</span>
+        <span class="col-extra">工时</span>
+        <span class="col-extra">项目</span>
+        <span class="ta-r">操作</span>
+      </div>
+      <div class="col-ruler" id="col-ruler" hidden></div>
+
+      <section class="grp" data-tone="warning">
+        <div class="grp-h" role="button" tabindex="0" aria-expanded="true">
+          <span class="grp-chev" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l6 5-6 5"/></svg></span>
+          <span class="grp-name">今天</span>
+          <span class="grp-n">1</span>
+          <span class="grp-hint">今天到期</span>
+          <span class="grp-act">收起</span>
+        </div>
+        <div class="grp-body">
+          <div class="row grid" tabindex="0" role="row">
+            <div class="tc-main">
+              <span class="tc-title">v1.1 发布评审</span>
+              <span class="tc-sub">
+                <span class="proj" title="项目：客户门户重构">客户门户重构</span>
+                <span class="ws" title="空间：演示空间">演示空间</span>
+                <span class="cat" style="--c:#7A5AF8"><i></i>需求评审</span>
+              </span>
+            </div>
+            <span class="pill p1 col-extra">高</span>
+            <span class="pill doing">进行中</span>
+            <span class="prog col-extra"><span class="bar"><i style="width:60%"></i></span><em>60%</em></span>
+            <span class="cell muted upd ta-r">7 天前</span>
+            <span class="cell"><span class="mini-tag">任务</span></span>
+            <span class="cell muted col-extra">11-10</span>
+            <span class="cell col-extra">3.5 小时</span>
+            <span class="cell muted proj-col col-extra" title="客户门户重构">客户门户重构</span>
+            <span class="acts">
+              <button class="icon-btn" type="button" title="标记完成" aria-label="标记完成"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg></button>
+              <button class="icon-btn" type="button" title="开始计时" aria-label="开始计时"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg></button>
+              <button class="icon-btn" type="button" title="改期" aria-label="改期"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="13" height="12" rx="2"/><path d="M3.5 8h13M7 3v3M13 3v3"/></svg></button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="grp" data-tone="neutral">
+        <div class="grp-h" role="button" tabindex="0" aria-expanded="true">
+          <span class="grp-chev" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l6 5-6 5"/></svg></span>
+          <span class="grp-name">以后</span>
+          <span class="grp-n">2</span>
+          <span class="grp-hint">本周之后或未设截止</span>
+          <span class="grp-act">收起</span>
+        </div>
+        <div class="grp-body">
+          <div class="row grid" tabindex="0" role="row">
+            <div class="tc-main">
+              <span class="tc-title">补齐发布审批记录</span>
+              <span class="tc-sub">
+                <span class="proj" title="项目：客户门户重构">客户门户重构</span>
+                <span class="ws" title="空间：演示空间">演示空间</span>
+                <span class="cat" style="--c:#12B76A"><i></i>发布流程</span>
+                <span class="tag">流程规范</span>
+              </span>
+            </div>
+            <span class="pill p2 col-extra">中</span>
+            <span class="pill">待处理</span>
+            <span class="cell muted col-extra">—</span>
+            <span class="cell muted upd ta-r">昨天</span>
+            <span class="cell"><span class="mini-tag">任务</span></span>
+            <span class="cell muted col-extra">—</span>
+            <span class="cell muted col-extra">—</span>
+            <span class="cell muted proj-col col-extra" title="客户门户重构">客户门户重构</span>
+            <span class="acts">
+              <button class="icon-btn" type="button" title="标记完成" aria-label="标记完成"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg></button>
+              <button class="icon-btn" type="button" title="开始计时" aria-label="开始计时"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg></button>
+              <button class="icon-btn" type="button" title="改期" aria-label="改期"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="13" height="12" rx="2"/><path d="M3.5 8h13M7 3v3M13 3v3"/></svg></button>
+            </span>
+          </div>
+          <div class="row grid" tabindex="0" role="row">
+            <div class="tc-main">
+              <span class="tc-title">会员中心接口联调</span>
+              <span class="tc-sub">
+                <span class="proj" title="项目：支付网关改造">支付网关改造</span>
+                <span class="ws" title="空间：演示空间">演示空间</span>
+                <span class="cat" style="--c:#2E90FA"><i></i>后端</span>
+              </span>
+            </div>
+            <span class="pill p1 col-extra">高</span>
+            <span class="pill doing">进行中</span>
+            <span class="prog col-extra"><span class="bar"><i style="width:40%"></i></span><em>40%</em></span>
+            <span class="cell muted upd ta-r">3 天前</span>
+            <span class="cell"><span class="mini-tag is-bug">缺陷</span></span>
+            <span class="cell muted col-extra">11-08</span>
+            <span class="cell col-extra">2 小时</span>
+            <span class="cell muted proj-col col-extra" title="支付网关改造">支付网关改造</span>
+            <span class="acts">
+              <button class="icon-btn" type="button" title="标记完成" aria-label="标记完成"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg></button>
+              <button class="icon-btn" type="button" title="停止计时" aria-label="停止计时"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="3.2" height="10" rx="1"/><rect x="10.8" y="5" width="3.2" height="10" rx="1"/></svg></button>
+              <button class="icon-btn" type="button" title="改期" aria-label="改期"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="13" height="12" rx="2"/><path d="M3.5 8h13M7 3v3M13 3v3"/></svg></button>
+            </span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="panels">
+    <section class="panel" id="anatomy-panel" hidden>
+      <h2>行内尺寸标注</h2>
+      <p>虚线为标题（主色）与副行（警示色）范围；左侧竖线是行内留白与标题到副行的间距。</p>
+      <div id="anatomy"></div>
+    </section>
+    <section class="panel">
+      <h2>间距方案对照</h2>
+      <p>缺陷列表作参考基线：行高 57px，行内 8/8，标题到副行 3px，有 1px 分隔线。</p>
+      <table>
+        <thead>
+          <tr><th>项</th><th>当前</th><th>优化</th><th>宽松</th><th>缺陷列表</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>行内上下留白</td><td class="num">8 / 8</td><td class="num on">8 / 8</td><td class="num">10 / 10</td><td class="num off">8 / 8</td></tr>
+          <tr><td>标题 → 副行</td><td class="num">3px</td><td class="num on">6px</td><td class="num">8px</td><td class="num off">3px</td></tr>
+          <tr><td>副行胶囊高</td><td class="num">18px</td><td class="num on">20px</td><td class="num">20px</td><td class="num off">20.5px（状态）</td></tr>
+          <tr><td>副行胶囊描边</td><td class="off">有</td><td class="on">无（浅底）</td><td class="on">无（浅底）</td><td class="off">无</td></tr>
+          <tr><td>行间分隔线</td><td class="off">无</td><td class="on">1px</td><td class="on">1px</td><td class="off">1px</td></tr>
+          <tr><td>行高</td><td class="num">56px</td><td class="num on">62px</td><td class="num">68px</td><td class="num off">57px</td></tr>
+        </tbody>
+      </table>
+      <p class="note"><strong>推荐「优化」</strong>：只加 6px 行高，换取标题与副行的呼吸和行间分隔；<strong>宽松</strong>留给习惯更低信息密度的同学。两种方案都可继续叠加「标准 / 宽松」密度开关，互不冲突。</p>
+    </section>
+    <section class="panel">
+      <h2>列宽实测</h2>
+      <p id="col-sum">—</p>
+      <table>
+        <thead>
+          <tr><th>列</th><th>实测宽</th><th>占列表宽</th></tr>
+        </thead>
+        <tbody id="col-body"></tbody>
+      </table>
+      <p class="note" id="col-note"><strong>当前</strong>：只有工作项是弹性列（<code>minmax(260px,1fr)</code>），余量全被它吃掉，列表越宽越明显。<strong>均衡</strong>：工作项与项目两列都改弹性、按 2:1 分配（<code>minmax(300px,2fr)</code> / <code>minmax(140px,1fr)</code>），余量不再集中到第一列，两列都保留最小可读宽度。</p>
+    </section>
+    <section class="panel">
+      <h2>落地改动</h2>
+      <p>间距走 <code>.mine-list</code> 的 CSS 变量；列宽由 <code>mine.js</code> 的 <code>MINE_COLS[].w</code> 拼成 <code>--mine-cols</code>，两处需同步。</p>
+      <button class="copy" type="button" id="copy-css">复制</button>
+      <pre id="css-out"></pre>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  var SPACING = {
+    cur:  { padY:8,  gap:3, chipH:18, chipPx:6, subLh:18, sep:0, grpH:32 },
+    opt:  { padY:8,  gap:6, chipH:20, chipPx:8, subLh:20, sep:1, grpH:34 },
+    wide: { padY:10, gap:8, chipH:20, chipPx:8, subLh:20, sep:1, grpH:36 }
+  };
+  var WIDTHS = {
+    cur: {
+      label:"当前",
+      title:"minmax(260px,1fr)", project:"120px",
+      tracks:"minmax(260px,1fr) 64px 88px 96px 76px 64px 88px 76px 120px 76px"
+    },
+    opt: {
+      label:"均衡",
+      title:"minmax(300px,2fr)", project:"minmax(140px,1fr)",
+      tracks:"minmax(300px,2fr) 64px 88px 96px 76px 64px 88px 76px minmax(140px,1fr) 76px"
+    }
+  };
+  var demo = document.getElementById("demo");
+  var currentSpacing = "opt";
+  var currentWidth = "opt";
+
+  function rowHeight(s){ return s.padY * 2 + 19 + s.gap + s.chipH + s.sep; }
+
+  function applySpacing(name){
+    currentSpacing = name;
+    var s = SPACING[name];
+    demo.style.setProperty("--pad-y", s.padY + "px");
+    demo.style.setProperty("--title-gap", s.gap + "px");
+    demo.style.setProperty("--chip-h", s.chipH + "px");
+    demo.style.setProperty("--chip-px", s.chipPx + "px");
+    demo.style.setProperty("--sub-lh", s.subLh + "px");
+    demo.style.setProperty("--sep", s.sep + "px");
+    demo.style.setProperty("--grp-h", s.grpH + "px");
+    demo.style.setProperty("--chip-border", s.sep ? "transparent" : "var(--border)");
+    document.getElementById("s-row").textContent = rowHeight(s);
+    document.getElementById("s-pad").textContent = s.padY + " / " + s.padY;
+    document.getElementById("s-gap").textContent = s.gap;
+    document.getElementById("s-chip").textContent = s.chipH;
+    document.getElementById("s-sep").textContent = s.sep ? "有" : "无";
+    document.querySelectorAll("[data-scheme]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.scheme === name));
+    });
+    renderCode();
+    if (!document.getElementById("anatomy-panel").hidden) drawAnatomy(s);
+  }
+
+  function applyWidth(name){
+    currentWidth = name;
+    demo.style.setProperty("--cols", WIDTHS[name].tracks);
+    document.querySelectorAll("[data-colscheme]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.colscheme === name));
+    });
+    renderCode();
+    requestAnimationFrame(measureCols);
+  }
+
+  function isShown(el){ return el.offsetParent !== null; }
+
+  function measureCols(){
+    var head = document.getElementById("head");
+    var spans = Array.prototype.slice.call(head.children).filter(isShown);
+    var cs = getComputedStyle(head);
+    var contentW = head.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var items = spans.map(function(sp){
+      var w = sp.getBoundingClientRect().width;
+      return { label: sp.textContent.trim() || "—", w: w, pct: contentW ? w / contentW * 100 : 0 };
+    });
+    document.getElementById("col-body").innerHTML = items.map(function(it, i){
+      var cls = i === 0 ? " on" : "";
+      return "<tr><td>" + it.label + "</td><td class='num" + cls + "'>" + it.w.toFixed(1) + "px</td><td class='num" + cls + "'>" + it.pct.toFixed(1) + "%</td></tr>";
+    }).join("");
+    document.getElementById("col-sum").textContent = "列表宽 " + Math.round(contentW) + "px · 可见 " + items.length + " 列 · 间距方案 " + SPACING[currentSpacing].gap + "px 不参与列宽";
+    document.getElementById("s-w").textContent = Math.round(contentW);
+    document.getElementById("s-share").textContent = items.length ? items[0].pct.toFixed(1) + "%" : "—";
+    var ruler = document.getElementById("col-ruler");
+    ruler.style.gridTemplateColumns = items.map(function(it){ return it.w.toFixed(1) + "px"; }).join(" ");
+    ruler.innerHTML = items.map(function(it, i){
+      return "<span title='" + it.label + " " + it.w.toFixed(1) + "px'>" + (i === 0 ? "<b>" : "") + Math.round(it.w) + (i === 0 ? "</b>" : "") + " " + it.pct.toFixed(0) + "%</span>";
+    }).join("");
+  }
+
+  function renderCode(){
+    var s = SPACING[currentSpacing], w = WIDTHS[currentWidth];
+    document.getElementById("css-out").textContent =
+      "/* 列宽：mine.js MINE_COLS 的 w 同步到 --mine-cols */\n" +
+      ".mine-list{ --mine-cols: " + w.tracks + "; }\n\n" +
+      "/* 间距 */\n" +
+      ".mine-list[data-density=\"standard\"]{\n" +
+      "  --row-pad: " + s.padY + "px;\n" +
+      "  --title-gap: " + s.gap + "px;\n" +
+      "  --sub-chip-h: " + s.chipH + "px;\n" +
+      "  --sub-chip-pad-x: " + s.chipPx + "px;\n" +
+      "  --sub-lh: " + s.subLh + "px;\n" +
+      "  --row-sep: " + s.sep + "px;\n" +
+      "  --mine-grp-h: " + s.grpH + "px;\n" +
+      "}\n" +
+      ".mine-list .list-row{\n" +
+      "  padding: var(--row-pad) 14px;\n" +
+      "  border-bottom: var(--row-sep) solid var(--border);\n" +
+      "}\n" +
+      ".mine-list .list-row:last-child{ border-bottom: none; }\n" +
+      ".mine-tc-main{ gap: var(--title-gap); }\n" +
+      ".mine-proj-chip, .mine-r-tag{\n" +
+      "  height: var(--sub-chip-h);\n" +
+      "  padding: 0 var(--sub-chip-pad-x);\n" +
+      "  border-color: " + (s.sep ? "transparent" : "var(--border)") + ";\n" +
+      "}\n\n" +
+      "/* mine.js */\n" +
+      "// title   " + w.title + "\n" +
+      "// project " + w.project;
+  }
+
+  document.querySelectorAll("[data-scheme]").forEach(function(b){
+    b.addEventListener("click", function(){ applySpacing(b.dataset.scheme); });
+  });
+  document.querySelectorAll("[data-colscheme]").forEach(function(b){
+    b.addEventListener("click", function(){ applyWidth(b.dataset.colscheme); });
+  });
+  document.querySelectorAll("[data-width]").forEach(function(b){
+    b.addEventListener("click", function(){
+      demo.classList.toggle("narrow", b.dataset.width === "narrow");
+      document.querySelectorAll("[data-width]").forEach(function(x){
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      requestAnimationFrame(measureCols);
+    });
+  });
+  document.querySelectorAll("[data-theme-btn]").forEach(function(b){
+    b.addEventListener("click", function(){
+      document.documentElement.setAttribute("data-theme", b.dataset.themeBtn);
+      document.querySelectorAll("[data-theme-btn]").forEach(function(x){
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+    });
+  });
+  document.querySelectorAll(".grp-h").forEach(function(h){
+    function toggle(){
+      var grp = h.parentNode;
+      grp.classList.toggle("collapsed");
+      h.setAttribute("aria-expanded", String(!grp.classList.contains("collapsed")));
+      h.querySelector(".grp-act").textContent = grp.classList.contains("collapsed") ? "展开" : "收起";
+    }
+    h.addEventListener("click", toggle);
+    h.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  });
+
+  var ruler = document.getElementById("ruler");
+  ruler.addEventListener("change", function(){
+    demo.classList.toggle("ruled", ruler.checked);
+    document.getElementById("anatomy-panel").hidden = !ruler.checked;
+    document.getElementById("col-ruler").hidden = !ruler.checked;
+    if (ruler.checked) {
+      drawAnatomy(SPACING[currentSpacing]);
+      requestAnimationFrame(measureCols);
+    }
+  });
+
+  document.getElementById("copy-css").addEventListener("click", function(){
+    var text = document.getElementById("css-out").textContent;
+    var btn = this;
+    function done(){ btn.textContent = "已复制"; setTimeout(function(){ btn.textContent = "复制"; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else { fallback(); }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch(e) { btn.textContent = "请手动复制"; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  var resizeTimer;
+  window.addEventListener("resize", function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(measureCols, 150);
+  });
+
+  function drawAnatomy(s){
+    var rowH = rowHeight(s);
+    var top = 28, x = 132, w = 470;
+    var titleY = top + s.padY, titleH = 19;
+    var subY = titleY + titleH + s.gap, subH = s.chipH;
+    var bottom = top + rowH;
+    var H = bottom + 34;
+
+    function guide(y){
+      return '<line x1="86" y1="' + y + '" x2="' + (x + w + 14) + '" y2="' + y + '" stroke="var(--border)" stroke-dasharray="3 3"/>';
+    }
+    function dim(y1, y2, label, dx){
+      var mx = dx;
+      return '<line x1="' + mx + '" y1="' + y1 + '" x2="' + mx + '" y2="' + y2 + '" stroke="var(--primary)" stroke-width="1"/>' +
+             '<line x1="' + (mx - 4) + '" y1="' + y1 + '" x2="' + (mx + 4) + '" y2="' + y1 + '" stroke="var(--primary)" stroke-width="1"/>' +
+             '<line x1="' + (mx - 4) + '" y1="' + y2 + '" x2="' + (mx + 4) + '" y2="' + y2 + '" stroke="var(--primary)" stroke-width="1"/>' +
+             '<text x="' + (mx - 9) + '" y="' + ((y1 + y2) / 2 + 4) + '" text-anchor="end" font-size="11" font-weight="700" fill="var(--primary-fg)">' + label + '</text>';
+    }
+    var svg = '<svg width="100%" viewBox="0 0 ' + (x + w + 86) + ' ' + H + '" role="img" aria-label="行内间距标注">' +
+      '<rect x="' + x + '" y="' + top + '" width="' + w + '" height="' + rowH + '" rx="8" fill="var(--surface-sunken)" stroke="var(--border)"/>' +
+      guide(titleY) + guide(titleY + titleH) + guide(subY) + guide(subY + subH) +
+      '<rect x="' + (x + 14) + '" y="' + titleY + '" width="250" height="' + titleH + '" rx="3" fill="var(--text)" opacity=".14"/>' +
+      '<text x="' + (x + 274) + '" y="' + (titleY + 13) + '" font-size="11" fill="var(--text-2)">标题 12.8px / 行高 18.6px</text>' +
+      '<rect x="' + (x + 14) + '" y="' + subY + '" width="150" height="' + subH + '" rx="6" fill="var(--surface)" stroke="var(--border)"/>' +
+      '<text x="' + (x + 174) + '" y="' + (subY + subH / 2 + 4) + '" font-size="11" fill="var(--text-2)">副行 / 项目胶囊 ' + s.chipH + 'px</text>' +
+      dim(top, titleY, s.padY, 96) +
+      dim(titleY + titleH, subY, s.gap, 96) +
+      dim(subY + subH, bottom, s.padY, 96) +
+      (s.sep ? '<line x1="' + x + '" y1="' + (bottom - 0.5) + '" x2="' + (x + w) + '" y2="' + (bottom - 0.5) + '" stroke="var(--border)" stroke-width="1"/>' +
+               '<text x="' + (x + w + 6) + '" y="' + (bottom + 12) + '" font-size="10.5" fill="var(--text-3)">行间分隔线 1px</text>' : '') +
+      '<line x1="' + (x + w + 40) + '" y1="' + top + '" x2="' + (x + w + 40) + '" y2="' + bottom + '" stroke="var(--text-3)" stroke-width="1"/>' +
+      '<line x1="' + (x + w + 35) + '" y1="' + top + '" x2="' + (x + w + 45) + '" y2="' + top + '" stroke="var(--text-3)" stroke-width="1"/>' +
+      '<line x1="' + (x + w + 35) + '" y1="' + bottom + '" x2="' + (x + w + 45) + '" y2="' + bottom + '" stroke="var(--text-3)" stroke-width="1"/>' +
+      '<text x="' + (x + w + 50) + '" y="' + ((top + bottom) / 2 + 4) + '" font-size="11" font-weight="700" fill="var(--text-2)">' + rowH + 'px</text>' +
+      '</svg>';
+    document.getElementById("anatomy").innerHTML = svg;
+  }
+
+  applySpacing("opt");
+  applyWidth("opt");
+})();
+</script>
+</body>
+</html>

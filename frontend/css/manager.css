@@ -7,10 +7,6 @@
 .manager-toolbar span{font-size:12.5px;color:var(--text-3);}
 .manager-actions{display:flex;align-items:center;gap:8px;margin-left:auto;}
 .manager-toolbar .manager-nudge-all .manager-nudge-count{min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:var(--surface);border:1px solid var(--primary-border);color:var(--primary-fg);font-size:11px;font-weight:650;line-height:1;font-variant-numeric:tabular-nums;}
-.manager-project-picker select{height:32px;min-width:180px;max-width:300px;padding:0 32px 0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background-color:var(--surface);color:var(--text);font-size:13px;background-position:right 9px center;}
-.project-tabs{align-self:flex-start;margin-top:-2px;}
-.project-tab-panel{display:flex;flex-direction:column;gap:14px;min-width:0;}
-@media(max-width:760px){.project-tabs{width:100%;}.project-tabs button{flex:1 1 0;}}
 .manager-caliber{display:inline-block;color:var(--text-3);font-size:12px;line-height:18px;}
 .manager-caliber>summary{list-style:none;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:var(--r-sm);transition:color var(--dur-fast),background var(--dur-fast);}
 .manager-caliber>summary::-webkit-details-marker{display:none;}
@@ -145,9 +141,13 @@
 .manager-chart{display:block;width:100%;height:220px;}
 .manager-chart text{fill:var(--text-3);font-size:10px;}
 .manager-chart .axis{stroke:var(--border);stroke-width:1;}
+/* 纵轴网格与柱顶数值：虚线不抢数据，基线加实 */
+.manager-chart .grid{stroke:var(--border);stroke-width:1;stroke-dasharray:3 4;}
+.manager-chart .grid.base{stroke:var(--border-strong);stroke-dasharray:none;}
+.manager-chart .bar-value{fill:var(--text-2);font-weight:600;}
 .manager-chart .actual{stroke:var(--primary);stroke-width:2.5;stroke-linejoin:round;}
 .manager-chart .ideal{stroke:var(--text-3);stroke-width:1.5;}
-.manager-chart .velocity-bar{fill:var(--primary);opacity:.72;}
+.manager-chart .velocity-bar{fill:var(--primary);opacity:.72;cursor:pointer;}
 .manager-chart .average{stroke:var(--warning);stroke-width:1.5;}
 .manager-chart .flow-done{fill:var(--success);opacity:.58}.manager-chart .flow-doing{fill:var(--info);opacity:.5}.manager-chart .flow-backlog{fill:var(--text-3);opacity:.3}.manager-chart .flow-ended{fill:var(--warning);opacity:.42}
 .manager-chart-legend i.actual-line,.manager-chart-legend i.ideal-line,.manager-chart-legend i.average-line{height:2px;width:14px;}
@@ -155,13 +155,16 @@
 .manager-chart-legend i.velocity-block{background:var(--primary)}
 .manager-chart .velocity-bar:hover{opacity:1;}
 .manager-chart .burn-point{fill:var(--primary);stroke:var(--surface);stroke-width:1.5;cursor:pointer;transition:r var(--dur-fast) var(--ease-out);}
-.manager-chart .burn-point.ideal{fill:var(--text-3);}
+.manager-chart .burn-point.ideal{fill:var(--text-3);cursor:default;}
 .manager-chart .burn-point:hover{filter:brightness(1.1);}
 .manager-chart .flow-hover{fill:transparent;cursor:pointer;}
 .manager-chart .flow-hover:hover{fill:var(--surface-hover);opacity:.25;}
-.manager-chart .defect-opened{fill:var(--warning);opacity:.82;}
-.manager-chart .defect-closed{fill:var(--success);opacity:.7;}
-.manager-chart .defect-open-line{stroke:var(--text-3);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+.manager-chart .defect-opened{fill:var(--warning);opacity:.82;cursor:pointer;}
+.manager-chart .defect-closed{fill:var(--success);opacity:.7;cursor:pointer;}
+.manager-chart .defect-opened:hover,.manager-chart .defect-closed:hover{opacity:1;}
+.manager-chart .defect-open-line{stroke:var(--text-3);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;pointer-events:none;}
+.manager-chart .defect-open-hit{fill:transparent;cursor:pointer;}
+.manager-chart .defect-open-hit:hover{fill:var(--text-3);opacity:.35;}
 .manager-chart-legend i.defect-opened-block{background:var(--warning)}
 .manager-chart-legend i.defect-closed-block{background:var(--success)}
 .manager-chart-legend i.defect-open-line{height:2px;width:14px;background:var(--text-3)}
@@ -192,6 +195,10 @@
 .manager-risk-meta span+span::before{content:"·";margin-right:7px;}
 .manager-risk-foot{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-3);}
 .manager-risk-foot>span:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (hover:hover){
+  .manager-risk-card [data-nudge]{opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+  .manager-risk-card:hover [data-nudge],.manager-risk-card:focus-within [data-nudge]{opacity:1;}
+}
 .manager-risk-empty{padding:28px 8px;text-align:center;color:var(--text-3);font-size:12.5px;}
 .manager-overload-note{padding:11px 13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--warning-border);border-radius:var(--r-md);background:var(--warning-soft);font-size:12.5px;}
 button.manager-overload-note{width:100%;text-align:left;font:inherit;cursor:pointer;color:var(--text-2);}
@@ -218,7 +225,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 @media(max-width:1279px){.manager-drill-tbl .drill-cost{display:none;}}
 .manager-overload-note b{color:var(--warning-fg)}.manager-overload-note span{color:var(--text-2);}
 @media(max-width:1279px){.manager-kpis{grid-template-columns:1fr 1fr}.manager-two-col,.manager-chart-grid{grid-template-columns:1fr}.manager-risk-grid{grid-template-columns:1fr}.manager-project-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.manager-kpis,.manager-project-grid{grid-template-columns:1fr}.manager-epic{grid-template-columns:1fr}.manager-epic>b{text-align:left}.manager-toolbar{align-items:flex-start}.manager-project-picker select{min-width:140px}.manager-chart{height:180px}}
+@media(max-width:760px){.manager-kpis,.manager-project-grid{grid-template-columns:1fr}.manager-epic{grid-template-columns:1fr}.manager-epic>b{text-align:left}.manager-toolbar{align-items:flex-start}.manager-chart{height:180px}}
 
 /* 项目驾驶舱首屏：目标 + 负责人/计划 + 风险信号 */
 .project-brief{display:flex;gap:24px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}
@@ -268,6 +275,11 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .project-modules-total .project-module-name b{font-weight:650;}
 .project-modules-total .progress>i{background:var(--text-2);}
 .project-module-ops{text-align:right;white-space:nowrap;}
+@media (hover:hover){
+  .project-modules-tbl .project-module-row .project-module-ops .icon-btn{opacity:0;transition:opacity var(--dur-fast) var(--ease-out);}
+  .project-modules-tbl .project-module-row:hover .project-module-ops .icon-btn,
+  .project-modules-tbl .project-module-row:focus-within .project-module-ops .icon-btn{opacity:1;}
+}
 .project-modules-tbl tr.is-deleting td{background:var(--danger-soft);}
 .project-module-editor td{padding:8px 0;background:transparent;border-bottom:0;}
 .project-module-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--surface-2);border-radius:var(--r-sm);}

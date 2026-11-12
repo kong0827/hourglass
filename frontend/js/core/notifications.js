@@ -158,10 +158,10 @@ function alertCenterHTML(isPage){
 
   var foot = "";
   /* 面板是浮层，需要一条去完整消息页的出口；消息页自身不再重复显示 */
-  if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm ghost" type="button" data-ap-all>查看全部消息</button>';
+  if(!isPage && document.body.dataset.view !== "messages") foot += '<button class="btn sm" type="button" data-ap-all>查看全部消息</button>';
   if(rt.alertTab === "notice"){
     /* 消息页把「一键已读」放到页头常驻；浮层面板仍放在底部，按未读数显隐 */
-    if(!isPage && unread > 0) foot += '<button class="btn sm" type="button" data-ap-readall>全部标为已读</button>';
+    if(!isPage && unread > 0) foot += '<button class="btn sm soft" type="button" data-ap-readall>' + icon("check", 13) + '全部标为已读</button>';
   }else if(rt.currentWs && rt.currentWs.myRole === "owner"){
     foot += '<button class="btn sm" type="button" data-ap-test>在空间中测试推送</button>';
   }
@@ -186,7 +186,7 @@ function renderMessagesPage(){
     /* 页面标题（顶栏）已经写明「消息 / 站内通知与截止提醒」，卡头不再重复一遍 */
     '<div class="msg-page-head">' +
       '<span class="spacer"></span>' +
-      '<button class="btn sm" type="button" data-ap-readall' + (unread > 0 ? '' : ' disabled') + '>一键全部已读</button>' +
+      '<button class="btn sm soft" type="button" data-ap-readall' + (unread > 0 ? '' : ' disabled') + '>' + icon("check", 13) + '一键全部已读</button>' +
     '</div>' +
     '<div class="alert-panel msg-center">' + alertCenterHTML(true) + '</div>';
   /* 标记已读/加载更多会重建列表，恢复消息页滚动位置 */

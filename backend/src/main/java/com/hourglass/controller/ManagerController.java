@@ -3,6 +3,7 @@ package com.hourglass.controller;
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentWorkspace;
 import com.hourglass.config.WorkspaceCtx;
+import com.hourglass.dto.PageResult;
 import com.hourglass.service.ManagerService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +48,23 @@ public class ManagerController {
                                                   @RequestParam(required = false) String companyName,
                                                   @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.reports(ctx.getWsId(), reqId, ctx.getUserId(), roleTitle, companyName));
+    }
+
+    @GetMapping("/reports/tasks")
+    public ApiResult<PageResult<Map<String, Object>>> reportTasks(
+            @RequestParam(required = false) String reqId,
+            @RequestParam(required = false) String roleTitle,
+            @RequestParam(required = false) String companyName,
+            @RequestParam(required = false) String chart,
+            @RequestParam(required = false) String weekStart,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String bucket,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(managerService.reportTasks(ctx.getWsId(), ctx.getUserId(),
+                reqId, roleTitle, companyName, chart, weekStart, state, bucket, date, offset, limit));
     }
 
     public ApiResult<Map<String, Object>> workload(WorkspaceCtx ctx) {

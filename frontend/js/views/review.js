@@ -4,12 +4,13 @@ import { API } from "../core/api.js";
 import { $, doneCountEl, pendingCount, pendingList, progCountEl, reviewHoursEl, reviewPendingBox } from "../core/dom.js";
 import { icon } from "../core/icons.js";
 import { catColor, catNameById, catTag, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
-import { activeView } from "../core/router.js";
+import { activeView, showView } from "../core/router.js";
+import { openTaskById } from "../core/task-actions.js";
 import { UI, copyToClipboard, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { avatarHTML, COLUMNS, PRIORITIES, colName, dayDiff, fmtMD, fmtMinutesShort, fmtShortMD, parseDate, priName, priTagHTML, weekdayCN } from "../lib/format.js";
 import { loadReqs, pending } from "./board.js";
-import { openTaskTable } from "./manager-shared.js";
+import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { aiBtnBusy, aiErrMsg, aiUsageText } from "./requirements.js";
 
 function reviewTitle(off){
@@ -242,7 +243,8 @@ function renderReviewPivot(d){
   reviewPivotState = { cells: cells, rows: rowMap, cols: colMap, all: list,
     rowDim: pivotDimLabel(reviewPivot.row), colDim: pivotDimLabel(reviewPivot.col) };
   function link(html, enabled, attrs){
-    return enabled ? '<button class="manager-cell-link" type="button" ' + attrs + '>' + html + '</button>' : "—";
+    return enabled ? '<button class="manager-cell-link" type="button" ' + attrs + '>' + html + '</button>'
+      : '<span title="该口径下暂无工作项">—</span>';
   }
   var head = '<tr><th>' + esc(pivotDimLabel(reviewPivot.row)) + ' \\ ' + esc(pivotDimLabel(reviewPivot.col)) + '</th>' +
     cols.map(function(c){
@@ -292,18 +294,122 @@ if($("reviewPivot")) $("reviewPivot").addEventListener("click", function(e){
   else if(r && c){ tasks = reviewPivotState.cells[r + "\u0000" + c] || []; title = r + " × " + c; }
   else if(r){ tasks = reviewPivotState.rows[r] || []; title = r; }
   else { tasks = reviewPivotState.cols[c] || []; title = c; }
+  if(!tasks.length){ toast("该口径下暂无工作项", "warn"); return; }
   openTaskTable("周回顾透视 · " + title, tasks,
     reviewPivotState.rowDim + " × " + reviewPivotState.colDim + " · 共 " + tasks.length + " 项 · 点击工作项行打开详情");
 });
 
-function distHTML(list, colorOf, valueOf){  if(!list || !list.length) return UI.colEmpty("暂无数据");
+/* 下钻：统计卡 / 成员 / 模块 / 项目都打开同一份明细表，行再进详情 */
+function reviewWeekText(d){
+  return fmtMD(parseDate(d.weekStart)) + " — " + fmtMD(parseDate(d.weekEnd));
+}
+function reviewCompleted(d){
+  return (d && d.completed) || [];
+}
+/* 模块聚合行的口径：未指定模块显示固定文案，已删除模块回退原始 ID，与后端下发一致 */
+function reviewCatLabel(t){
+  return catNameById(t.categoryId) || t.categoryId || "未指定模块";
+}
+function reviewLate(t){
+  return !!(t.completedAt && t.dueDate && t.completedAt > t.dueDate);
+}
+function openReviewTasks(title, tasks, note){
+  var d = state.reviewData || {};
+  if(!tasks || !tasks.length){ toast("该口径下暂无工作项", "warn"); return; }
+  openTaskTable(title, tasks,
+    (d.label || "该周期") + "（" + reviewWeekText(d) + "）" + (note ? " · " + note : "") + " · 共 " + tasks.length + " 项");
+}
+function onReviewTaskRow(e){
+  var row = e.target.closest("[data-review-task]");
+  if(row) openTaskById(row.dataset.reviewTask);
+}
+/* 工时卡下钻：走 /api/review/hour-logs，与卡片同口径，支持任意历史周 */
+function openReviewHours(kind){
+  var d = state.reviewData;
+  if(!d) return;
+  var mine = kind === "mine";
+  var params = { weekOffset:d.weekOffset, reqId:d.reqId || null, mine:mine ? 1 : null, limit:100 };
+  API.get("/api/review/hour-logs", params).then(function(page){
+    var rows = (page && page.items) || [];
+    if(!rows.length){ toast(mine ? "该周期你没有任何计时记录" : "该周期暂无计时记录", "warn"); return; }
+    var scopeText = (d.reqName ? "项目「" + d.reqName + "」" : "全空间") + (mine ? " · 我的" : "");
+    var pager = {
+      total: page.total,
+      hasMore: page.hasMore,
+      fetch: function(offset){
+        return API.get("/api/review/hour-logs",
+          Object.assign({}, params, { offset: offset }));
+      }
+    };
+    openLogTable(mine ? "周回顾 · 计时明细 · 我的" : "周回顾 · 计时明细", rows,
+      (d.label || "该周期") + "（" + reviewWeekText(d) + "）· " + scopeText
+        + " · 共 " + page.total + " 条 · 合计 " + fmtMinutesShort(page.totalMinutes) + " · 点击记录行打开工作项",
+      { showMember: !mine, pager: pager });
+  }).catch(function(ex){ toast(ex.message || "计时明细加载失败", "bad"); });
+}
+if(reviewHoursEl) reviewHoursEl.addEventListener("click", function(e){
+  var b = e.target.closest("[data-review-hours]");
+  if(b) openReviewHours(b.dataset.reviewHours);
+});
+if($("doneList")) $("doneList").addEventListener("click", onReviewTaskRow);
+if($("progList")) $("progList").addEventListener("click", onReviewTaskRow);
+if($("pendingList")) $("pendingList").addEventListener("click", onReviewTaskRow);
+if($("peopleBox")) $("peopleBox").addEventListener("click", function(e){
+  var b = e.target.closest("[data-review-member]");
+  if(!b) return;
+  var name = b.dataset.reviewMember;
+  openReviewTasks("周回顾 · 成员 · " + name,
+    reviewCompleted(state.reviewData).filter(function(t){ return (t.owner || "未分配") === name; }),
+    "完成项");
+});
+if($("catDist")) $("catDist").addEventListener("click", function(e){
+  var row = e.target.closest("[data-review-cat]");
+  if(!row) return;
+  var name = row.dataset.reviewCat;
+  openReviewTasks("周回顾 · 模块 · " + name,
+    reviewCompleted(state.reviewData).filter(function(t){ return reviewCatLabel(t) === name; }),
+    "完成项");
+});
+if($("reqDist")) $("reqDist").addEventListener("click", function(e){
+  var row = e.target.closest("[data-review-req]");
+  if(!row) return;
+  rt.managerProjectId = row.dataset.reviewReq;
+  showView("project");
+});
+if($("statGrid")) $("statGrid").addEventListener("click", function(e){
+  var b = e.target.closest("[data-review-stat]");
+  if(!b) return;
+  var d = state.reviewData;
+  if(!d) return;
+  var list = reviewCompleted(d);
+  var kind = b.dataset.reviewStat;
+  if(kind === "over"){ showView("risks"); return; }
+  if(kind === "doing"){ openReviewTasks("周回顾 · 进行中", d.progressTasks || [], "本周期内已开工未完成"); return; }
+  if(kind === "late"){ openReviewTasks("周回顾 · 延期完成", list.filter(reviewLate), "完成时间晚于截止日期"); return; }
+  if(kind === "rate"){
+    openReviewTasks("周回顾 · 按期率", list.filter(function(t){ return !!t.dueDate; }),
+      "分母为设置截止日期的完成项");
+    return;
+  }
+  if(kind === "members"){
+    openReviewTasks("周回顾 · 参与成员完成项", list,
+      "本周有完成记录的成员 " + ((d.members || []).filter(function(m){ return m.count > 0; }).length) + " 人");
+    return;
+  }
+  openReviewTasks("周回顾 · 完成", list);
+});
+function distHTML(list, colorOf, valueOf, attrsOf){
+  if(!list || !list.length) return UI.colEmpty("暂无数据");
   var max = 1;
   list.forEach(function(x){ if(x.count > max) max = x.count; });
   return list.map(function(x){
-    return '<div class="dist-row">' +
+    var attrs = attrsOf ? attrsOf(x) : "";
+    var tag = attrs ? "button" : "div";
+    return "<" + tag + (tag === "button" ? ' type="button"' : "") + ' class="dist-row' + (attrs ? " clickable" : "") + '"' +
+      (attrs ? " " + attrs : "") + ">" +
       '<span class="lb">' + esc(x.name) + '</span>' +
       '<span class="bar"><i style="width:' + Math.round(x.count/max*100) + '%;background:' + colorOf(x) + '"></i></span>' +
-      '<span class="vl">' + valueOf(x) + '</span></div>';
+      '<span class="vl">' + valueOf(x) + '</span></' + tag + '>';
   }).join("");
 }
 function renderReview(d){
@@ -315,16 +421,18 @@ function renderReview(d){
   var s = d.stats;
   var overN = (d.counts && d.counts.over) || 0;
   var stats = [
-    {k:"完成", v:s.done, u:"项", cls:""},
-    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good")},
-    {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : "")},
-    {k:"参与成员", v:s.members, u:"人", cls:""},
-    {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : "")},
-    {k:"进行中", v:d.doing || 0, u:"项", cls:"info"}
+    {k:"完成", v:s.done, u:"项", cls:"", drill:"done"},
+    {k:"按期率", v:s.onTimeRate, u:"%", cls:(s.onTimeRate < 60 ? "warn" : "good"), drill:"rate"},
+    {k:"延期", v:s.late, u:"项", cls:(s.late > 0 ? "warn" : ""), drill:"late"},
+    {k:"参与成员", v:s.members, u:"人", cls:"", drill:"members"},
+    {k:"逾期", v:overN, u:"项", cls:(overN > 0 ? "bad" : ""), drill:"over"},
+    {k:"进行中", v:(d.progressTasks || []).length, u:"项", cls:"info", drill:"doing"}
   ];
   $("statGrid").innerHTML = stats.map(function(x){
-    return '<div class="stat ' + x.cls + '"><div class="k">' + x.k + '</div><div class="v">' + x.v +
-      '<small>' + x.u + '</small></div></div>';
+    var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '<small>' + x.u + '</small></div>';
+    return x.drill
+      ? '<button class="stat clickable ' + x.cls + '" type="button" data-review-stat="' + x.drill + '" title="查看明细" aria-label="' + x.k + '：查看明细">' + inner + '</button>'
+      : '<div class="stat ' + x.cls + '">' + inner + '</div>';
   }).join("");
 
   renderReviewPivot(d);
@@ -332,14 +440,18 @@ function renderReview(d){
   /* N-5：工时区（全空间 / 我的） */
   if(reviewHoursEl){
     var w = d.workMinutes || {};
-    /* IA-7：只保留本周两个口径；累计工时挪到分析页 */
+    var weekWord = d.weekOffset === 0 ? "本周" : (d.weekOffset === -1 ? "上周" : "该周期");
+    /* IA-7：只保留本周期两个口径；累计工时挪到分析页 */
     var hcards = [
-      {k:"本周·我的", v:fmtMinutesShort(w.mineWeek || 0)},
-      {k:d.reqName ? "本周·项目" : "本周·全空间", v:fmtMinutesShort(w.spaceWeek || 0)}
+      {k:weekWord + "·我的", v:fmtMinutesShort(w.mineWeek || 0), min:(w.mineWeek || 0), scope:"mine"},
+      {k:weekWord + (d.reqName ? "·项目" : "·全空间"), v:fmtMinutesShort(w.spaceWeek || 0), min:(w.spaceWeek || 0), scope:"space"}
     ];
-    if($("reviewHoursScope")) $("reviewHoursScope").textContent = d.reqName ? ("本周 · 项目「" + d.reqName + "」/ 我的") : "本周 · 我的 / 全空间";
+    if($("reviewHoursScope")) $("reviewHoursScope").textContent = weekWord + " · " + (d.reqName ? ("项目「" + d.reqName + "」/ 我的") : "我的 / 全空间");
     reviewHoursEl.innerHTML = hcards.map(function(x){
-      return '<div class="stat"><div class="k">' + x.k + '</div><div class="v">' + x.v + '</div></div>';
+      var inner = '<div class="k">' + x.k + '</div><div class="v">' + x.v + '</div>';
+      /* 该周期没有计时时点开必然是空表，不做入口 */
+      if(!x.min) return '<div class="stat" title="' + weekWord + '暂无计时记录">' + inner + '</div>';
+      return '<button class="stat clickable" type="button" data-review-hours="' + x.scope + '" title="查看' + weekWord + '计时明细">' + inner + '</button>';
     }).join("");
   }
   /* O-10：进度 100% 但未入已完成列的任务单独成组，不静默漏统计 */
@@ -349,7 +461,7 @@ function renderReview(d){
     if(pendingCount) pendingCount.textContent = pending.length ? ("共 " + pending.length + " 项") : "";
     if(pendingList){
       pendingList.innerHTML = pending.map(function(t){
-        return '<div class="done-item">' + avatarHTML(t.owner) +
+        return '<div class="done-item clickable" data-review-task="' + esc(t.id) + '" title="打开工作项详情">' + avatarHTML(t.owner) +
           '<span class="di-main">' +
             '<span class="di-t">' + esc(t.title) + '</span>' +
             '<span class="di-m">' + priTagHTML(t.priority) + '' +
@@ -361,14 +473,23 @@ function renderReview(d){
     }
   }
 
-  $("catDist").innerHTML = distHTML(d.catDist,
+  /* 未指定模块在聚合里是空名：补成列表页同一文案，否则标签空白且点击命中不到工作项 */
+  var catDist = (d.catDist || []).map(function(c){
+    return { name: c.name || "未指定模块", count: c.count };
+  });
+  $("catDist").innerHTML = distHTML(catDist,
     function(c){ return catColor(c.name); },
-    function(c){ return c.count; });
+    function(c){ return c.count; },
+    function(c){ return c.count > 0 ? 'data-review-cat="' + esc(c.name) + '"' : ""; });
 
   var members = d.members || [];
   $("peopleBox").innerHTML = members.length ? members.map(function(m){
-    return '<span class="person">' + avatarHTML(m.name) + '<span class="pn">' + esc(m.name) + '</span>' +
-      '<span class="pc">' + m.count + ' 项' + (m.minutes ? (' · ' + fmtMinutesShort(m.minutes)) : '') + '</span></span>';
+    var inner = avatarHTML(m.name) + '<span class="pn">' + esc(m.name) + '</span>' +
+      '<span class="pc">' + m.count + ' 项' + (m.minutes ? (' · ' + fmtMinutesShort(m.minutes)) : '') + '</span>';
+    /* 只有完成过工作项的成员才有明细可看；已离开成员只有工时，不做入口 */
+    return m.count > 0
+      ? '<button class="person clickable" type="button" data-review-member="' + esc(m.name) + '" title="查看该成员本周期完成的工作项">' + inner + '</button>'
+      : '<span class="person" title="该成员本周期没有完成记录，无明细可看">' + inner + '</span>';
   }).join("") : '<span class="foot-note">该周期暂无成员完成记录</span>';
 
   var list = d.completed || [];
@@ -380,7 +501,7 @@ function renderReview(d){
     var n = late ? dayDiff(doneAt, due) : 0;
     var badge = late ? ("延期 " + n + " 天") : ((doneAt && due) ? "按期" : "—");
     var badgeKind = late ? "warning" : ((doneAt && due) ? "success" : "ghost");
-    return '<div class="done-item">' +
+    return '<div class="done-item clickable" data-review-task="' + esc(t.id) + '" title="打开工作项详情">' +
       '<span class="meta full">' + icon("check", 15) + '</span>' +
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
@@ -395,7 +516,7 @@ function renderReview(d){
 
   var progTasks = d.progressTasks || [];
   $("progList").innerHTML = progTasks.length ? progTasks.map(function(t){
-    return '<div class="done-item">' + avatarHTML(t.owner) +
+    return '<div class="done-item clickable" data-review-task="' + esc(t.id) + '" title="打开工作项详情">' + avatarHTML(t.owner) +
       '<span class="di-main">' +
         '<span class="di-t">' + esc(t.title) + '</span>' +
         '<span class="di-m">' + priTagHTML(t.priority) + '' +
@@ -412,7 +533,8 @@ function renderReview(d){
   $("reqDist").innerHTML = reqDist.length
     ? distHTML(reqDist.map(function(r){ return {name:r.name, count:r.progressPct, extra:r}; }),
         function(r){ return r.extra.status === "done" ? "var(--success)" : "var(--primary)"; },
-        function(r){ return r.count + "% · " + r.extra.doneCount + "/" + r.extra.taskCount; })
+        function(r){ return r.count + "% · " + r.extra.doneCount + "/" + r.extra.taskCount; },
+        function(r){ return r.extra.id ? 'data-review-req="' + esc(r.extra.id) + '"' : ""; })
     : UI.colEmpty("暂无项目");
 
   /* AI 周报跟着「当前这一周」走：有缓存还原，没有则空态（函数定义在下方，靠声明提升） */

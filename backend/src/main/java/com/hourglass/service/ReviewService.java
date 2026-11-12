@@ -4,6 +4,9 @@ import com.hourglass.common.AppException;
 import com.hourglass.dto.BoardResponse;
 import com.hourglass.dto.ReqProgress;
 import com.hourglass.dto.ReviewCountRow;
+import com.hourglass.dto.ReviewHourLog;
+import com.hourglass.dto.ReviewHourLogPage;
+import com.hourglass.dto.ReviewHourLogSummary;
 import com.hourglass.dto.ReviewResponse;
 import com.hourglass.dto.WorkSumRow;
 import com.hourglass.entity.Category;
@@ -27,6 +30,9 @@ import java.util.Set;
 
 @Service
 public class ReviewService {
+
+    /** 回顾页工时下钻单页上限：页面列表统一最多 100 条 */
+    private static final int HOUR_LOG_MAX_LIMIT = 100;
 
     private final TaskMapper taskMapper;
     private final RequirementService requirementService;
@@ -75,18 +81,7 @@ public class ReviewService {
         String scopeReq = normalizeReqId(reqId);
         String viewerId = projectAccess.viewerScope(workspaceId, userId);
         List<ReqProgress> reqs = requirementService.list(workspaceId, userId);
-        ReqProgress scopedReq = null;
-        if (scopeReq != null) {
-            for (ReqProgress r : reqs) {
-                if (scopeReq.equals(r.getId())) {
-                    scopedReq = r;
-                    break;
-                }
-            }
-            if (scopedReq == null) {
-                throw AppException.notFound("项目不存在或你没有访问权限：" + scopeReq);
-            }
-        }
+        ReqProgress scopedReq = scopedRequirement(reqs, scopeReq);
 
         LocalDate today = LocalDate.now();
         LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
@@ -268,6 +263,60 @@ public class ReviewService {
         returned.addAll(resp.getProgressTasks());
         taskQueries.mergeTaskExtras(workspaceId, returned);
         return resp;
+    }
+
+    /**
+     * 工时下钻：口径与 {@link #review} 的 workMinutes 一致（可见项目 + 项目范围 + 已结束记录）。
+     * mine=true 时只取当前用户自己的计时；历史周与本周走同一接口。
+     */
+    public ReviewHourLogPage hourLogs(String workspaceId, String userId, String reqId, Integer weekOffset,
+                                      boolean mine, int offset, int limit) {
+        String scopeReq = normalizeReqId(reqId);
+        if (scopeReq != null) {
+            scopedRequirement(requirementService.list(workspaceId, userId), scopeReq);
+        }
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        /* 未指定周时与 /api/review 取同一个默认周，避免两个接口对不上 */
+        int off = weekOffset == null ? autoOffset(workspaceId, viewerId, scopeReq, monday)
+                : Math.max(-52, Math.min(0, weekOffset));
+        LocalDate start = monday.plusWeeks(off);
+        LocalDate before = start.plusDays(7);
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? HOUR_LOG_MAX_LIMIT : Math.min(limit, HOUR_LOG_MAX_LIMIT);
+        String scopedUser = mine ? userId : null;
+
+        ReviewHourLogSummary summary = timeLogMapper.summaryReviewHourLogs(workspaceId, viewerId, scopeReq,
+                scopedUser, start.atStartOfDay(), before.atStartOfDay());
+        List<ReviewHourLog> items = summary.getTotal() <= safeOffset ? new ArrayList<ReviewHourLog>()
+                : timeLogMapper.selectReviewHourLogs(workspaceId, viewerId, scopeReq, scopedUser,
+                        start.atStartOfDay(), before.atStartOfDay(), safeOffset, safeLimit);
+
+        ReviewHourLogPage page = new ReviewHourLogPage();
+        page.setWeekOffset(off);
+        page.setWeekStart(start.toString());
+        page.setWeekEnd(start.plusDays(6).toString());
+        page.setTotal(summary.getTotal());
+        page.setOffset(safeOffset);
+        page.setLimit(safeLimit);
+        page.setHasMore(safeOffset + items.size() < summary.getTotal());
+        page.setTotalMinutes(summary.getTotalMinutes());
+        page.setItems(items);
+        return page;
+    }
+
+    /** 项目范围校验：不存在或不可见的项目一律按“不存在”处理，与 /api/review 同口径 */
+    private ReqProgress scopedRequirement(List<ReqProgress> reqs, String scopeReq) {
+        if (scopeReq == null) {
+            return null;
+        }
+        for (ReqProgress r : reqs) {
+            if (scopeReq.equals(r.getId())) {
+                return r;
+            }
+        }
+        throw AppException.notFound("项目不存在或你没有访问权限：" + scopeReq);
     }
 
     /** 未指定周时：从本周往前找最近一个有完成记录的周，都没有则返回上周 */

@@ -31,6 +31,7 @@
   --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5;
   --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89;
   --danger:#F04438;  --danger-soft:#FEF3F2;  --danger-border:#FDA29B; --danger-hover:#D92D20;
+  --danger-solid:#B42318; --danger-solid-hover:#912018;
   --info:#2E90FA;    --info-soft:#EFF8FF;    --info-border:#B2DDFF;
   /* 语义前景色：文字/图标用，浅底对比度 ≥4.5:1；原色只用于背景、圆点、进度条 */
   --success-fg:#067647; --warning-fg:#B54708; --danger-fg:#B42318; --info-fg:#175CD3;
@@ -77,6 +78,10 @@
   /* ---- 面板调色板（模块 / 看板列取色器预设） ---- */
   --palette-1:#2563EB; --palette-2:#12B76A; --palette-3:#F79009; --palette-4:#F04438;
   --palette-5:#7A5AF8; --palette-6:#0E9384; --palette-7:#DD2590; --palette-8:#98A2B3;
+
+  /* ---- 头像色板：8 色，白字对比度均 ≥4.5:1 ---- */
+  --avatar-1:#1D4ED8; --avatar-2:#067647; --avatar-3:#B54708; --avatar-4:#B42318;
+  --avatar-5:#5B3FD1; --avatar-6:#0E6E63; --avatar-7:#A31A6B; --avatar-8:#475467;
 
   /* ---- 下拉选择：各系统原生箭头粗细不一，统一用同一枚 chevron ---- */
   --select-chevron:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
@@ -136,6 +141,7 @@ html[data-theme="dark"]{
   --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E;
   --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E;
   --danger:#F97066;  --danger-soft:#2B1615;  --danger-border:#5C2A26; --danger-hover:#F04438;
+  --danger-solid:#D92D20; --danger-solid-hover:#B42318;
   --info:#53B1FD;    --info-soft:#10202F;    --info-border:#1F4468;
   --plum:#9B8AFB;    --plum-soft:#1D1933;    --plum-border:#3B3266;
 

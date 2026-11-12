@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>测试计划详情 · 布局改版原型</title>
+<script>
+  (function(){
+    var q = new URLSearchParams(location.search);
+    var t = q.get("theme") || localStorage.getItem("ds.theme");
+    if(t === "dark") document.documentElement.setAttribute("data-theme","dark");
+  })();
+</script>
+<style>
+  :root{
+    --bg-app:#F7F8FA; --surface:#FFFFFF; --surface-sunken:#F2F4F7;
+    --surface-hover:#F2F4F7; --surface-active:#E9ECF1;
+    --border:#E4E7EC; --border-strong:#D0D5DD;
+    --text:#101828; --text-2:#475467; --text-3:#667085;
+
+    --primary:#2563EB; --primary-hover:#1D4ED8; --primary-soft:#EFF4FF;
+    --primary-border:#BFD3FE; --primary-fg:#1D4ED8;
+    --success:#12B76A; --success-soft:#ECFDF3; --success-border:#A6F4C5; --success-fg:#067647;
+    --warning:#F79009; --warning-soft:#FFFAEB; --warning-border:#FEDF89; --warning-fg:#B54708;
+    --danger:#F04438; --danger-soft:#FEF3F2; --danger-border:#FDA29B; --danger-fg:#B42318;
+
+    --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+    --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-pill:999px;
+    --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+    --shadow-sm:0 2px 4px -2px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  }
+  html[data-theme="dark"]{
+    color-scheme:dark;
+    --bg-app:#0D1219; --surface:#151B24; --surface-sunken:#1A222D;
+    --surface-hover:#1F2937; --surface-active:#26313F;
+    --border:#25303D; --border-strong:#334153;
+    --text:#E7ECF3; --text-2:#A9B4C2; --text-3:#7B8798;
+
+    --primary:#4C8DFF; --primary-hover:#6BA1FF; --primary-soft:#16243C;
+    --primary-border:#2B4772; --primary-fg:#8FB4FF;
+    --success:#32D583; --success-soft:#0E2A1D; --success-border:#1F5C3E; --success-fg:#75E0A7;
+    --warning:#FDB022; --warning-soft:#2A2110; --warning-border:#5C4A1E; --warning-fg:#FEC84B;
+    --danger:#F97066; --danger-soft:#2B1615; --danger-border:#5C2A26; --danger-fg:#FDA29B;
+
+    --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+    --shadow-sm:0 2px 4px -2px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg-app);color:var(--text);
+    font-family:var(--font-sans);font-size:13px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+  :focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+  input{font-family:inherit;}
+
+  .page{max-width:1680px;margin:0 auto;padding:18px 24px 40px;display:flex;flex-direction:column;gap:14px;}
+
+  /* ---------- 原型控制条 ---------- */
+  .proto-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px dashed var(--border);}
+  .proto-head h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em;}
+  .proto-head .hint{font-size:11.5px;color:var(--text-3);}
+  .proto-head .right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+  .seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--r-sm);background:var(--surface-sunken);}
+  .seg button{padding:3px 10px;border-radius:var(--r-xs);font-size:12px;color:var(--text-2);}
+  .seg button:hover{background:var(--surface-active);color:var(--text);}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:650;box-shadow:var(--shadow-xs);}
+  .seg-label{font-size:12px;color:var(--text-3);}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;
+    border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+    font-size:12.5px;color:var(--text);white-space:nowrap;
+  }
+  .btn:hover{background:var(--surface-hover);border-color:var(--border-strong);}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--text-2);}
+  .btn.ghost:hover{background:var(--surface-hover);color:var(--text);}
+  .btn.soft{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
+  .btn.soft:hover{background:var(--primary-soft);border-color:var(--primary);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600;}
+  .btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);}
+  .btn[disabled]{opacity:.45;cursor:not-allowed;background:var(--surface);border-color:var(--border);color:var(--text-2);}
+  .btn.primary[disabled]{background:var(--surface-sunken);border-color:var(--border);color:var(--text-3);opacity:1;}
+  .icon-btn{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-xs);color:var(--text-3);}
+  .icon-btn:hover{background:var(--surface-hover);color:var(--text);}
+  .icon-btn.round{border:1px solid var(--border);border-radius:50%;width:24px;height:24px;background:var(--surface);}
+
+  .mini-select{
+    height:28px;padding:0 24px 0 8px;border:1px solid var(--border);border-radius:var(--r-sm);
+    background:var(--surface);color:var(--text-2);font-size:12.5px;
+    appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 4px center;
+  }
+
+  /* 徽标 */
+  .badge{
+    display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+    height:19px;padding:0 7px;border-radius:var(--r-xs);font-size:11px;font-weight:600;
+    border:1px solid transparent;
+  }
+  .badge.ok{background:var(--success-soft);color:var(--success-fg);border-color:var(--success-border);}
+  .badge.bad{background:var(--danger-soft);color:var(--danger-fg);border-color:var(--danger-border);}
+  .badge.warn{background:var(--warning-soft);color:var(--warning-fg);border-color:var(--warning-border);}
+  .badge.mute{background:var(--surface-sunken);color:var(--text-3);border-color:var(--border);}
+
+  /* ---------- 现状复刻 ---------- */
+  [data-mode="before"] .after-only{display:none;}
+  [data-mode="after"] .before-only{display:none;}
+
+  .before{display:flex;flex-direction:column;gap:16px;padding-top:16px;}
+  .b-toolbar{display:flex;align-items:center;gap:14px;min-height:32px;}
+  .b-toolbar .right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+  .gap-demo{
+    position:relative;height:42px;margin:-16px 0; /* 复刻：空容器外边距 + 两段 flex gap */
+    border:1px dashed var(--danger);border-radius:var(--r-xs);
+  }
+  .gap-demo .measure{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:var(--danger-soft);color:var(--danger-fg);border:1px solid var(--danger-border);
+    border-radius:var(--r-pill);padding:1px 8px;font-size:11px;white-space:nowrap;
+  }
+
+  .b-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .b-head .t{font-size:15px;font-weight:650;}
+  .b-head .meta{font-size:12px;color:var(--text-3);}
+  .b-head .act{margin-left:0;}
+  .b-note{margin:0;font-size:12px;color:var(--text-3);}
+
+  .b-stats{display:flex;gap:10px;flex-wrap:wrap;}
+  .b-chip{
+    display:inline-flex;align-items:baseline;gap:6px;padding:6px 12px;
+    border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border);
+    font-size:12px;color:var(--text-2);
+  }
+  .b-chip b{font-size:16px;font-weight:650;color:var(--text);}
+  .b-chip.ok b{color:var(--success);}
+  .b-chip.bad b{color:var(--danger);}
+  .b-chip.warn b{color:var(--warning);}
+  .b-chip.mute b{color:var(--text-3);}
+
+  .b-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .b-acts .note-inp{margin-left:0;}
+
+  .b-selbar{
+    display:flex;align-items:center;gap:6px;padding:6px 10px;
+    border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);
+    font-size:12px;color:var(--text-2);
+  }
+  .b-selbar .grow{flex:1;}
+
+  .b-list{display:flex;flex-direction:column;gap:6px;}
+  .b-row{
+    display:flex;align-items:flex-start;gap:10px;padding:8px 12px;
+    border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+  }
+  .b-row .main{flex:1;min-width:0;}
+  .b-row .title{font-size:14px;font-weight:500;letter-spacing:-.01em;}
+  .b-row .meta{font-size:12px;color:var(--text-3);margin-top:2px;}
+  .b-row .c-note{
+    display:inline-block;margin-top:4px;padding:3px 8px;border-radius:var(--r-xs);
+    background:var(--surface-sunken);color:var(--text-2);font-size:12px;
+  }
+  .b-row .side{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
+
+  /* 现状标注：编号标记 + 底部图例，避免标注自身撑高版面 */
+  .mk{
+    display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+    width:17px;height:17px;border-radius:50%;background:var(--danger);color:#fff;
+    font-size:11px;font-weight:700;line-height:1;
+  }
+  body:not(.show-annot) .mk{display:none;}
+  .b-legend{
+    display:flex;flex-direction:column;gap:6px;
+    padding:10px 12px;border:1px dashed var(--danger-border);border-radius:var(--r-sm);
+    background:var(--danger-soft);font-size:12px;color:var(--danger-fg);
+  }
+  .b-legend .item{display:flex;align-items:flex-start;gap:8px;}
+  .b-legend .mk{margin-top:1px;}
+  body:not(.show-annot) .b-legend{display:none;}
+
+  /* ---------- 改版 ---------- */
+  .after{display:flex;flex-direction:column;gap:12px;}
+  .a-crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-3);min-height:24px;}
+  .a-crumb .sep{color:var(--border-strong);}
+  .a-crumb .cur{color:var(--text-2);font-weight:550;}
+  .a-crumb .right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+  .plan-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+    overflow:hidden;
+  }
+
+  .plan-hd{padding:16px 18px 12px;}
+  .plan-hd .row1{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .plan-hd h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;}
+  .plan-hd .hd-acts{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .plan-hd .meta{margin:6px 0 0;font-size:12px;color:var(--text-3);}
+  .plan-hd .desc{margin:4px 0 0;font-size:12.5px;color:var(--text-2);}
+  .back{display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 8px;margin-left:-8px;border-radius:var(--r-xs);font-size:12.5px;color:var(--text-2);}
+  .back:hover{background:var(--surface-hover);color:var(--text);}
+
+  /* 指标带：唯一有底色的横条，取代 8 个独立白 chip */
+  .plan-sum{padding:10px 18px 12px;background:var(--surface-sunken);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+  .sum-vals{display:flex;align-items:baseline;gap:0;flex-wrap:wrap;font-size:12px;color:var(--text-3);}
+  .sum-vals .sv{display:inline-flex;align-items:baseline;gap:5px;padding:0 12px;border-left:1px solid var(--border-strong);}
+  .sum-vals .sv:first-child{padding-left:0;border-left:0;}
+  .sum-vals .sv b{font-size:15px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+  .sum-vals .sv.ok b{color:var(--success-fg);}
+  .sum-vals .sv.bad b{color:var(--danger-fg);}
+  .sum-vals .sv.warn b{color:var(--warning-fg);}
+  .sum-vals .sv.mute b{color:var(--text-3);}
+  .sum-vals .sv.strong b{color:var(--text);}
+  .sum-bar{display:flex;height:5px;margin-top:9px;border-radius:var(--r-pill);overflow:hidden;background:var(--surface-active);}
+  .sum-bar i{display:block;height:100%;transition:width .24s cubic-bezier(.2,.8,.2,1);}
+  .sum-bar .s-pass{background:var(--success);}
+  .sum-bar .s-fail{background:var(--danger);}
+  .sum-bar .s-block{background:var(--warning);}
+
+  /* 操作带：选择 + 记录合并成一条，左右分区 */
+  .plan-tools{
+    display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;
+    padding:9px 18px;border-bottom:1px solid var(--border);
+  }
+  .tools-l,.tools-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .tools-r{margin-left:auto;}
+  .tools-l .rule{width:1px;height:18px;background:var(--border);margin:0 2px;}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer;}
+  .chk input{width:14px;height:14px;margin:0;accent-color:var(--primary);}
+  .sel-count{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+  .link-btn{padding:3px 6px;border-radius:var(--r-xs);font-size:12px;color:var(--text-2);}
+  .link-btn:hover:not([disabled]){background:var(--surface-hover);color:var(--text);}
+  .link-btn[disabled]{color:var(--text-3);opacity:.55;cursor:not-allowed;}
+  .note-inp{
+    height:28px;width:230px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+    background:var(--surface);color:var(--text);font-size:12.5px;
+  }
+  .note-inp::placeholder{color:var(--text-3);}
+  .note-inp:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.14);}
+
+  /* 行：同一张卡片内的分隔行，不再一张张浮卡 */
+  .plan-rows{display:flex;flex-direction:column;}
+  .prow{
+    display:grid;grid-template-columns:18px 46px minmax(0,1fr) auto;
+    align-items:start;gap:10px;padding:10px 18px;
+    border-bottom:1px solid var(--border);cursor:default;
+  }
+  .prow:hover{background:var(--surface-hover);}
+  .prow:last-child{border-bottom:0;}
+  .prow input[type=checkbox]{width:14px;height:14px;margin:4px 0 0;accent-color:var(--primary);}
+  .prow .badge{margin-top:1px;}
+  .prow-title{font-size:13.5px;font-weight:550;color:var(--text);letter-spacing:-.005em;word-break:break-all;}
+  .prow-meta{font-size:12px;color:var(--text-3);margin-top:2px;}
+  .prow-note{font-size:12px;color:var(--text-2);margin-top:2px;word-break:break-all;}
+  .prow-side{display:flex;align-items:center;gap:8px;padding-top:1px;white-space:nowrap;}
+  .lib-ref{font-size:11.5px;color:var(--text-3);}
+  .lib-ref b{font-weight:600;}
+  .lib-ref .bad{color:var(--danger-fg);}
+  .lib-ref .ok{color:var(--success-fg);}
+  .lib-ref .warn{color:var(--warning-fg);}
+  .lib-ref .mute{color:var(--text-3);}
+  .rm{opacity:0;}
+  .prow:hover .rm,.prow:focus-within .rm{opacity:1;}
+
+  .plan-foot{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:9px 18px;border-top:1px solid var(--border);
+    background:var(--surface);font-size:11.5px;color:var(--text-3);
+  }
+  .plan-foot .right{margin-left:auto;}
+
+  /* 已完成快照 */
+  .lock-line{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:9px 18px;border-bottom:1px solid var(--border);
+    background:var(--surface-sunken);font-size:12px;color:var(--text-2);
+  }
+  .plan-card.is-done .plan-tools,
+  .plan-card.is-done .prow input[type=checkbox],
+  .plan-card.is-done .prow .rm{display:none;}
+  .plan-card.is-done .prow{grid-template-columns:46px minmax(0,1fr) auto;}
+  .plan-card.is-done .prow-title{color:var(--text-2);}
+  .plan-card:not(.is-done) .lock-line{display:none;}
+
+  .hidden{display:none !important;}
+
+  @media (max-width:1100px){
+    .note-inp{width:170px;}
+    .tools-r{margin-left:0;}
+  }
+  @media (max-width:820px){
+    .page{padding:14px 12px 30px;}
+    .plan-hd .hd-acts{margin-left:0;}
+    .prow{grid-template-columns:18px 44px minmax(0,1fr);}
+    .prow-side{grid-column:3;justify-content:flex-start;padding-top:0;}
+    .note-inp{width:100%;}
+  }
+</style>
+</head>
+<body data-mode="after">
+<div class="page">
+
+  <header class="proto-head">
+    <h1>测试计划详情 · 布局改版</h1>
+    <span class="hint">同一份数据，对照「现状」与「改版」</span>
+    <div class="right">
+      <span class="seg-label">视图</span>
+      <div class="seg" id="modeSeg" role="group" aria-label="对照模式">
+        <button type="button" data-mode="before" aria-pressed="false">现状</button>
+        <button type="button" data-mode="after" aria-pressed="true">改版</button>
+      </div>
+      <span class="seg-label">状态</span>
+      <div class="seg" id="stateSeg" role="group" aria-label="计划状态">
+        <button type="button" data-state="running" aria-pressed="true">执行中</button>
+        <button type="button" data-state="done" aria-pressed="false">已完成</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="annotChk" checked>标注</label>
+      <button class="icon-btn round" type="button" id="themeBtn" title="切换主题" aria-label="切换主题">◐</button>
+    </div>
+  </header>
+
+  <!-- ============ 现状 ============ -->
+  <section class="before before-only" aria-label="现状">
+    <div class="b-toolbar">
+      <span class="icon-btn round" aria-hidden="true">?</span>
+      <div class="right">
+        <button class="btn ghost" type="button">视图</button>
+        <select class="mini-select" aria-label="选择项目"><option>订单履约中台</option></select>
+        <button class="btn soft" type="button">+ 新建计划</button>
+      </div>
+    </div>
+
+    <div class="gap-demo" aria-hidden="true">
+      <span class="measure"><span class="mk">1</span>空区 42–52px：容器清空未隐藏 + 上下两段 flex gap</span>
+    </div>
+
+    <div class="b-head">
+      <button class="btn ghost" type="button">‹ 返回</button>
+      <span class="t">履约中台 v2.2 回归测试</span>
+      <span class="badge warn">执行中</span>
+      <span class="meta">版本：履约中台 v2.2 · 计划 2026-11-06 → 2026-12-05 · 王芳 创建</span>
+      <button class="btn ghost act" type="button">标记完成</button>
+    </div>
+    <p class="b-note">覆盖本版本核心链路与历史高频缺陷，执行完成后出具验收结论。</p>
+
+    <div class="b-stats">
+      <span class="b-chip"><b>4</b>圈选</span>
+      <span class="b-chip mute"><b>0</b>未执行</span>
+      <span class="b-chip ok"><b>2</b>通过</span>
+      <span class="b-chip bad"><b>1</b>失败</span>
+      <span class="b-chip warn"><b>1</b>阻塞</span>
+      <span class="b-chip"><b>100%</b>进度</span>
+      <span class="b-chip"><b>50%</b>通过率</span>
+      <span class="b-chip bad"><b>1</b>转缺陷</span>
+      <span class="mk">2</span>
+    </div>
+
+    <div class="b-acts">
+      <button class="btn soft" type="button">+ 圈选用例</button>
+      <div class="seg" role="group" aria-label="批量执行结果">
+        <button type="button" aria-pressed="true">通过</button>
+        <button type="button" aria-pressed="false">失败</button>
+        <button type="button" aria-pressed="false">阻塞</button>
+      </div>
+      <input class="note-inp" type="text" placeholder="批量备注（选填，写入本轮执行记录）">
+      <button class="btn primary" type="button">记录选中 0 条</button>
+      <button class="btn ghost" type="button">↓ 导出报告</button>
+      <span class="mk">3</span>
+    </div>
+
+    <div class="b-selbar">
+      <label class="chk"><input type="checkbox">全选</label>
+      <button class="link-btn" type="button">选未执行 (0)</button>
+      <button class="link-btn" type="button">选失败 (1)</button>
+      <button class="link-btn" type="button">选阻塞 (1)</button>
+      <button class="link-btn" type="button">清除选择</button>
+      <span class="grow"></span>
+      <span>已选 0 / 4</span>
+    </div>
+
+    <div class="b-list">
+      <div class="b-row">
+        <span class="badge ok">通过</span>
+        <div class="main">
+          <div class="title">下单履约全流程</div>
+          <div class="meta">库存 · P0 · 王芳 11-10 15:37</div>
+          <span class="c-note">计划内执行结果</span>
+        </div>
+        <div class="side"><span>用例库最近：失败</span><span aria-hidden="true">−</span></div>
+      </div>
+      <div class="b-row">
+        <span class="badge ok">通过</span>
+        <div class="main">
+          <div class="title">拆单与库存</div>
+          <div class="meta">库存 · P0 · 王芳 11-07 15:33</div>
+          <span class="c-note">计划内执行结果</span>
+        </div>
+        <div class="side"><span>用例库最近：通过</span><span aria-hidden="true">−</span></div>
+      </div>
+      <div class="b-row">
+        <span class="badge bad">失败</span>
+        <div class="main">
+          <div class="title">超时升级</div>
+          <div class="meta">订单中心 · P2 · 王芳 11-09 15:02</div>
+          <span class="c-note">计划内执行结果</span>
+        </div>
+        <div class="side"><span>用例库最近：失败</span><span aria-hidden="true">−</span></div>
+      </div>
+      <div class="b-row">
+        <span class="badge warn">阻塞</span>
+        <div class="main">
+          <div class="title">逆向退款</div>
+          <div class="meta">订单中心 · P1 · 王芳 11-07 15:20</div>
+          <span class="c-note">计划内执行结果</span>
+        </div>
+        <div class="side"><span>用例库最近：阻塞</span><span aria-hidden="true">−</span></div>
+      </div>
+    </div>
+
+    <div class="b-legend">
+      <div class="item"><span class="mk">1</span><span>计划模式下 #tcStats 只清空 innerHTML、没有 hidden：空元素仍带 4px 上 / 14px 下外边距，再叠加 .view-page 上下各一段 flex gap（12–16px），标题行被整体推低 42–52px。</span></div>
+      <div class="item"><span class="mk">2</span><span>标题、8 个统计 chip、批量操作条都是透明块，直接落在页面底色上；只有下方用例是白色卡片，同一页出现「浮在灰底」与「白卡」两种视觉层。</span></div>
+      <div class="item"><span class="mk">3</span><span>批量记录与选择分成两条带子，「记录选中 0 条」在 0 选中时仍是可点主按钮；详情里工具栏还保留「视图 / 项目 / 新建计划」这类列表级控件。</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 改版 ============ -->
+  <section class="after after-only" aria-label="改版">
+    <div class="a-crumb">
+      <span>测试计划</span><span class="sep">/</span><span class="cur">履约中台 v2.2 回归测试</span>
+      <div class="right"><span class="icon-btn round" aria-hidden="true">?</span></div>
+    </div>
+
+    <article class="plan-card" id="planCard">
+      <header class="plan-hd">
+        <div class="row1">
+          <button class="back" type="button">‹ 返回</button>
+          <h2>履约中台 v2.2 回归测试</h2>
+          <span class="badge warn" id="statusBadge">执行中</span>
+          <div class="hd-acts">
+            <button class="btn ghost" type="button" id="doneBtn">标记完成</button>
+            <button class="btn ghost" type="button">↓ 导出报告</button>
+          </div>
+        </div>
+        <p class="meta">版本 履约中台 v2.2 · 计划 2026-11-06 → 2026-12-05 · 王芳 创建</p>
+        <p class="desc">覆盖本版本核心链路与历史高频缺陷，执行完成后出具验收结论。</p>
+      </header>
+
+      <div class="lock-line">
+        <span class="badge ok">快照</span>
+        已完成计划锁定为结果快照：圈选与批量执行不可修改，重新打开后可继续编辑。
+      </div>
+
+      <div class="plan-sum">
+        <div class="sum-vals">
+          <span class="sv strong"><b id="mTotal">4</b>圈选</span>
+          <span class="sv mute"><b id="mNone">0</b>未执行</span>
+          <span class="sv ok"><b id="mPass">2</b>通过</span>
+          <span class="sv bad"><b id="mFail">1</b>失败</span>
+          <span class="sv warn"><b id="mBlock">1</b>阻塞</span>
+          <span class="sv strong"><b id="mProg">100%</b>进度</span>
+          <span class="sv strong"><b id="mRate">50%</b>通过率</span>
+          <span class="sv bad"><b>1</b>转缺陷</span>
+        </div>
+        <div class="sum-bar" aria-hidden="true">
+          <i class="s-pass" id="barPass" style="width:50%"></i>
+          <i class="s-fail" id="barFail" style="width:25%"></i>
+          <i class="s-block" id="barBlock" style="width:25%"></i>
+        </div>
+      </div>
+
+      <div class="plan-tools">
+        <div class="tools-l">
+          <button class="btn soft" type="button">+ 圈选用例</button>
+          <span class="rule" aria-hidden="true"></span>
+          <label class="chk"><input type="checkbox" id="selAll">全选</label>
+          <span class="sel-count" id="selCount">已选 0 / 4</span>
+          <button class="link-btn" type="button" data-pick="none">选未执行 0</button>
+          <button class="link-btn" type="button" data-pick="failed">选失败 1</button>
+          <button class="link-btn" type="button" data-pick="blocked">选阻塞 1</button>
+          <button class="link-btn" type="button" data-pick="clear" disabled>清除</button>
+        </div>
+        <div class="tools-r">
+          <input class="note-inp" id="batchNote" type="text" maxlength="500" placeholder="批量备注（选填，写入本轮执行记录）">
+          <div class="seg" id="resultSeg" role="group" aria-label="批量执行结果">
+            <button type="button" data-res="passed" aria-pressed="true">通过</button>
+            <button type="button" data-res="failed" aria-pressed="false">失败</button>
+            <button type="button" data-res="blocked" aria-pressed="false">阻塞</button>
+          </div>
+          <button class="btn primary" type="button" id="recordBtn" disabled>记录选中 0 条</button>
+        </div>
+      </div>
+
+      <div class="plan-rows" id="planRows">
+        <div class="prow" data-result="passed">
+          <input type="checkbox" aria-label="选择用例 下单履约全流程">
+          <span class="badge ok">通过</span>
+          <div class="main">
+            <div class="prow-title">下单履约全流程</div>
+            <div class="prow-meta">库存 · P0 · 王芳 11-10 15:37</div>
+            <div class="prow-note">计划内执行结果</div>
+          </div>
+          <div class="prow-side">
+            <span class="lib-ref">用例库最近 <b class="bad">失败</b></span>
+            <button class="icon-btn rm" type="button" aria-label="移出计划" title="移出计划（不删用例）">−</button>
+          </div>
+        </div>
+        <div class="prow" data-result="passed">
+          <input type="checkbox" aria-label="选择用例 拆单与库存">
+          <span class="badge ok">通过</span>
+          <div class="main">
+            <div class="prow-title">拆单与库存</div>
+            <div class="prow-meta">库存 · P0 · 王芳 11-07 15:33</div>
+            <div class="prow-note">计划内执行结果</div>
+          </div>
+          <div class="prow-side">
+            <span class="lib-ref">用例库最近 <b class="ok">通过</b></span>
+            <button class="icon-btn rm" type="button" aria-label="移出计划" title="移出计划（不删用例）">−</button>
+          </div>
+        </div>
+        <div class="prow" data-result="failed">
+          <input type="checkbox" aria-label="选择用例 超时升级">
+          <span class="badge bad">失败</span>
+          <div class="main">
+            <div class="prow-title">超时升级</div>
+            <div class="prow-meta">订单中心 · P2 · 王芳 11-09 15:02</div>
+            <div class="prow-note">计划内执行结果</div>
+          </div>
+          <div class="prow-side">
+            <span class="lib-ref">用例库最近 <b class="bad">失败</b></span>
+            <button class="icon-btn rm" type="button" aria-label="移出计划" title="移出计划（不删用例）">−</button>
+          </div>
+        </div>
+        <div class="prow" data-result="blocked">
+          <input type="checkbox" aria-label="选择用例 逆向退款">
+          <span class="badge warn">阻塞</span>
+          <div class="main">
+            <div class="prow-title">逆向退款</div>
+            <div class="prow-meta">订单中心 · P1 · 王芳 11-07 15:20</div>
+            <div class="prow-note">计划内执行结果</div>
+          </div>
+          <div class="prow-side">
+            <span class="lib-ref">用例库最近 <b class="warn">阻塞</b></span>
+            <button class="icon-btn rm" type="button" aria-label="移出计划" title="移出计划（不删用例）">−</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="plan-foot">
+        <span id="footStat">4 条用例 · 已执行 4 / 4</span>
+        <span class="right">执行结果会写回用例库，并按版本留痕</span>
+      </footer>
+    </article>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var qs = function(s, r){ return (r || document).querySelector(s); };
+
+  /* ---- 主题 ---- */
+  var themeBtn = qs("#themeBtn");
+  function isDark(){ return document.documentElement.getAttribute("data-theme") === "dark"; }
+  themeBtn.addEventListener("click", function(){
+    var dark = !isDark();
+    if(dark) document.documentElement.setAttribute("data-theme","dark");
+    else document.documentElement.removeAttribute("data-theme");
+    themeBtn.textContent = dark ? "◑" : "◐";
+    try{ localStorage.setItem("ds.theme", dark ? "dark" : "light"); }catch(e){}
+  });
+  themeBtn.textContent = isDark() ? "◑" : "◐";
+
+  /* ---- 对照模式 / 状态（支持 ?mode=before&state=done&annot=0 直达某一视图） ---- */
+  var params = new URLSearchParams(location.search);
+  var modeSeg = qs("#modeSeg");
+  modeSeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mode]");
+    if(!b) return;
+    document.body.dataset.mode = b.dataset.mode;
+    modeSeg.querySelectorAll("button").forEach(function(x){
+      x.setAttribute("aria-pressed", x === b ? "true" : "false");
+    });
+  });
+
+  var stateSeg = qs("#stateSeg");
+  var card = qs("#planCard");
+  var doneBtn = qs("#doneBtn");
+  var statusBadge = qs("#statusBadge");
+
+  function setDone(done){
+    card.classList.toggle("is-done", done);
+    statusBadge.className = "badge " + (done ? "ok" : "warn");
+    statusBadge.textContent = done ? "已完成" : "执行中";
+    doneBtn.textContent = done ? "重新打开" : "标记完成";
+    stateSeg.querySelectorAll("button").forEach(function(x){
+      x.setAttribute("aria-pressed", x.dataset.state === (done ? "done" : "running") ? "true" : "false");
+    });
+  }
+  stateSeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-state]");
+    if(!b) return;
+    setDone(b.dataset.state === "done");
+  });
+  doneBtn.addEventListener("click", function(){ setDone(!card.classList.contains("is-done")); });
+
+  /* ---- 标注 ---- */
+  var annotChk = qs("#annotChk");
+  function syncAnnot(){ document.body.classList.toggle("show-annot", annotChk.checked); }
+  annotChk.addEventListener("change", syncAnnot);
+  if(params.get("annot") === "0") annotChk.checked = false;
+  syncAnnot();
+
+  /* ---- 勾选与批量记录 ---- */
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#planRows .prow"));
+  var selAll = qs("#selAll");
+  var selCount = qs("#selCount");
+  var recordBtn = qs("#recordBtn");
+  var resultSeg = qs("#resultSeg");
+  var batchNote = qs("#batchNote");
+  var pickButtons = Array.prototype.slice.call(document.querySelectorAll("[data-pick]"));
+  var result = "passed";
+
+  var LABEL = { passed:["通过","ok"], failed:["失败","bad"], blocked:["阻塞","warn"], none:["未执行","mute"] };
+  var resultClass = { passed:"s-pass", failed:"s-fail", blocked:"s-block" };
+
+  function rowInput(row){ return qs("input[type=checkbox]", row); }
+
+  function counts(){
+    var c = { passed:0, failed:0, blocked:0, none:0 };
+    rows.forEach(function(r){ c[r.dataset.result] = (c[r.dataset.result] || 0) + 1; });
+    return c;
+  }
+
+  function paintMetrics(){
+    var c = counts();
+    var total = rows.length;
+    var executed = total - c.none;
+    var rate = executed ? Math.round(c.passed * 100 / executed) : 0;
+    var prog = total ? Math.round(executed * 100 / total) : 0;
+    qs("#mTotal").textContent = total;
+    qs("#mNone").textContent = c.none;
+    qs("#mPass").textContent = c.passed;
+    qs("#mFail").textContent = c.failed;
+    qs("#mBlock").textContent = c.blocked;
+    qs("#mProg").textContent = prog + "%";
+    qs("#mRate").textContent = executed ? (rate + "%") : "—";
+    qs("#barPass").style.width = (c.passed * 100 / total) + "%";
+    qs("#barFail").style.width = (c.failed * 100 / total) + "%";
+    qs("#barBlock").style.width = (c.blocked * 100 / total) + "%";
+    qs("#footStat").textContent = total + " 条用例 · 已执行 " + executed + " / " + total;
+  }
+
+  function paintBadges(){
+    rows.forEach(function(r){
+      var b = qs(".badge", r);
+      var v = LABEL[r.dataset.result];
+      b.className = "badge " + v[1];
+      b.textContent = v[0];
+    });
+  }
+
+  function selected(){
+    return rows.filter(function(r){ return rowInput(r).checked; });
+  }
+
+  function paintSelection(){
+    var sel = selected();
+    var n = sel.length;
+    selCount.textContent = "已选 " + n + " / " + rows.length;
+    recordBtn.disabled = n === 0;
+    recordBtn.textContent = "记录选中 " + n + " 条";
+    selAll.checked = n === rows.length && n > 0;
+    selAll.indeterminate = n > 0 && n < rows.length;
+    var clearBtn = document.querySelector('[data-pick="clear"]');
+    clearBtn.disabled = n === 0;
+    paintPickCounts();
+  }
+
+  function paintPickCounts(){
+    var c = counts();
+    qs('[data-pick="none"]').textContent = "选未执行 " + c.none;
+    qs('[data-pick="none"]').disabled = c.none === 0;
+    qs('[data-pick="failed"]').textContent = "选失败 " + c.failed;
+    qs('[data-pick="failed"]').disabled = c.failed === 0;
+    qs('[data-pick="blocked"]').textContent = "选阻塞 " + c.blocked;
+    qs('[data-pick="blocked"]').disabled = c.blocked === 0;
+  }
+
+  document.querySelectorAll("#planRows input[type=checkbox]").forEach(function(inp){
+    inp.addEventListener("change", paintSelection);
+  });
+  selAll.addEventListener("change", function(){
+    rows.forEach(function(r){ rowInput(r).checked = selAll.checked; });
+    paintSelection();
+  });
+
+  resultSeg.addEventListener("click", function(e){
+    var b = e.target.closest("[data-res]");
+    if(!b) return;
+    result = b.dataset.res;
+    resultSeg.querySelectorAll("button").forEach(function(x){
+      x.setAttribute("aria-pressed", x === b ? "true" : "false");
+    });
+  });
+
+  pickButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      var mode = b.dataset.pick;
+      rows.forEach(function(r){
+        rowInput(r).checked = mode === "clear"
+          ? false
+          : (mode === "none" ? r.dataset.result === "none" : r.dataset.result === mode);
+      });
+      paintSelection();
+    });
+  });
+
+  recordBtn.addEventListener("click", function(){
+    var sel = selected();
+    if(!sel.length) return;
+    sel.forEach(function(r){ r.dataset.result = result; });
+    sel.forEach(function(r){ rowInput(r).checked = false; });
+    paintBadges();
+    paintMetrics();
+    paintSelection();
+    batchNote.value = "";
+  });
+
+  paintMetrics();
+  paintSelection();
+
+  /* ---- URL 直达初始视图 ---- */
+  var initMode = params.get("mode");
+  if(initMode === "before" || initMode === "after"){
+    document.body.dataset.mode = initMode;
+    modeSeg.querySelectorAll("button").forEach(function(x){
+      x.setAttribute("aria-pressed", x.dataset.mode === initMode ? "true" : "false");
+    });
+  }
+  if(params.get("state") === "done") setDone(true);
+})();
+</script>
+</body>
+</html>

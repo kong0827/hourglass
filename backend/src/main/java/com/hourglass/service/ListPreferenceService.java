@@ -23,6 +23,7 @@ import java.util.Set;
 public class ListPreferenceService {
 
     public static final String TASK_LIST = "task-list";
+    public static final String MY_TASKS = "my-tasks";
     public static final String PROJECT_LIST = "project-list";
     public static final String PORTFOLIO = "portfolio";
     public static final String DEMAND_POOL = "demand-pool";
@@ -32,6 +33,8 @@ public class ListPreferenceService {
     private static final Set<String> TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "title", "type", "column", "priority", "owner", "dueDate", "progress", "project", "version",
             "category", "startDate", "tags", "subtasks", "work", "comments", "updatedAt")));
+    private static final Set<String> MY_TASK_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
+            "title", "type", "priority", "status", "dueDate", "startDate", "progress", "work", "project", "updatedAt")));
     private static final Set<String> PROJECT_COLUMNS = Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
             "name", "status", "description", "ownerName", "plannedEnd", "taskCount", "doneCount", "progress", "docCount",
             "firstReleasedAt", "createdAt", "updatedAt")));
@@ -80,6 +83,9 @@ public class ListPreferenceService {
         if (TASK_LIST.equals(viewKey)) {
             return TASK_COLUMNS;
         }
+        if (MY_TASKS.equals(viewKey)) {
+            return MY_TASK_COLUMNS;
+        }
         if (PROJECT_LIST.equals(viewKey)) {
             return PROJECT_COLUMNS;
         }
@@ -96,14 +102,14 @@ public class ListPreferenceService {
     }
 
     private String requiredColumn(String viewKey) {
-        if (TASK_LIST.equals(viewKey) || DEMAND_POOL.equals(viewKey)) {
+        if (TASK_LIST.equals(viewKey) || MY_TASKS.equals(viewKey) || DEMAND_POOL.equals(viewKey)) {
             return "title";
         }
         return "name";
     }
 
     private String validateViewMode(String viewKey, String viewMode) {
-        if (TASK_LIST.equals(viewKey)) {
+        if (TASK_LIST.equals(viewKey) || MY_TASKS.equals(viewKey)) {
             if (!"table".equals(viewMode)) {
                 throw AppException.badRequest("任务列表仅支持 table 模式");
             }

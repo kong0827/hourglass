@@ -169,6 +169,55 @@
       AND started_at &gt;= #{from} AND started_at &lt; #{to}
   </select>
 
+  <!-- 回顾页工时下钻与 sumWork 共用这组条件：已结束、可见项目、可选项目范围、可选只看某人；
+       from / to 可选，留空即不限起止，便于复用累计口径 -->
+  <sql id="reviewHourLogWhere">
+    WHERE l.workspace_id = #{workspaceId}
+      AND l.ended_at IS NOT NULL
+    <if test="from != null">AND l.started_at &gt;= #{from}</if>
+    <if test="to != null">AND l.started_at &lt; #{to}</if>
+    <if test="viewerId != null">
+      AND NOT EXISTS (SELECT 1 FROM task t
+                      JOIN project_member pm ON pm.workspace_id = t.workspace_id
+                        AND pm.project_id = t.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none'
+                      WHERE t.id = l.task_id)
+    </if>
+    <if test="reqId != null">
+      AND EXISTS (SELECT 1 FROM task t WHERE t.id = l.task_id AND t.req_id = #{reqId})
+    </if>
+    <if test="userId != null">
+      AND l.user_id = #{userId}
+    </if>
+  </sql>
+
+  <select id="selectReviewHourLogs" resultType="com.hourglass.dto.ReviewHourLog">
+    SELECT l.id,
+           DATE(l.started_at) AS date,
+           l.user_id AS user_id,
+           COALESCE(NULLIF(TRIM(u.display_name), ''), u.username, l.user_id) AS member,
+           l.task_id AS task_id,
+           t.title,
+           r.name AS req_name,
+           l.minutes,
+           l.origin
+    FROM time_log l
+    LEFT JOIN task t ON t.id = l.task_id AND t.workspace_id = l.workspace_id
+    LEFT JOIN requirement r ON r.id = t.req_id AND r.workspace_id = t.workspace_id
+    LEFT JOIN app_user u ON u.id = l.user_id
+    <include refid="reviewHourLogWhere"/>
+    ORDER BY l.started_at DESC, l.id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="summaryReviewHourLogs" resultType="com.hourglass.dto.ReviewHourLogSummary">
+    SELECT COUNT(*) AS total,
+           COALESCE(SUM(l.minutes), 0) AS total_minutes
+    FROM time_log l
+    <include refid="reviewHourLogWhere"/>
+  </select>
+
   <!-- N-5 下钻：按成员统计本空间工时 -->
   <select id="sumByWorkspaceGroupByUser" resultType="TimeAgg">
     SELECT user_id AS user_id, SUM(minutes) AS total_minutes

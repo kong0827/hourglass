@@ -2,11 +2,13 @@
 
 import { API } from "../core/api.js";
 import { $ } from "../core/dom.js";
+import { icon } from "../core/icons.js";
 import { rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
-import { caliberHTML, downloadCsv, fmtDate, fmtHours } from "./manager-shared.js";
+import { caliberHTML, downloadCsv, fmtDate, fmtHours, openTaskTable } from "./manager-shared.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
+import { fmtMinutesShort } from "../lib/format.js";
 import { labelFilterText } from "../lib/member-labels.js";
 
 var cache = null, seq = 0, reqId = "", roleTitle = "", companyName = "", loading = false, filterWorkspace = "", reportOptions = {};
@@ -116,8 +118,31 @@ function svgLine(points, max, cls, dashed){
   }).join(" ");
   return '<polyline points="' + coords + '" fill="none" class="' + cls + '"' + (dashed ? ' stroke-dasharray="5 4"' : '') + ' />';
 }
+/* 纵轴取整齐上界：刻度、网格与柱 / 面共用同一标尺 */
+function axisOf(maxValue){
+  var v = Math.max(1, Math.ceil(Number(maxValue) || 0));
+  var mag = 1, steps = [1, 2, 5];
+  while(true){
+    for(var i = 0; i < steps.length; i++){
+      var step = steps[i] * mag;
+      if(step * 4 >= v) return { max: step * 4, step: step };
+    }
+    mag *= 10;
+  }
+}
+function yGrid(max, format){
+  var out = "";
+  for(var i = 0; i <= 4; i++){
+    var y = 184 - i * 148 / 4;
+    out += '<line x1="36" y1="' + y + '" x2="524" y2="' + y + '" class="grid' + (i === 0 ? ' base' : '') + '"/>';
+    out += '<text x="32" y="' + (y + 3.5) + '" text-anchor="end">' + format(i * max / 4) + '</text>';
+  }
+  return out;
+}
+/* 分钟轴：0 显示 0，其余交给精简时长格式，避免出现 0.2h 这种刻度 */
+function axisMinutes(v){ return v ? fmtMinutesShort(v) : "0"; }
 function burnChart(d){
-  var points = d.points || [], max = Math.max(1, d.totalEstimateMinutes || 0);
+  var points = d.points || [], axis = axisOf(d.totalEstimateMinutes || 0), max = axis.max;
   var actual = points.map(function(p){ return p.remainingMinutes; });
   var ideal = points.map(function(p){ return p.idealMinutes; });
   function dots(series, cls, labelKey){
@@ -126,27 +151,39 @@ function burnChart(d){
       var x = 36 + (points.length === 1 ? 0 : i * 488 / (points.length - 1));
       var y = 184 - (max ? p[labelKey] / max * 148 : 0);
       var tip = esc(fmtDate(p.date)) + ' · ' + (cls === 'ideal' ? '理想' : '实际') + ' ' + fmtHours(p[labelKey]);
-      return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="4" class="burn-point ' + cls + '" data-chart-tip="' + tip + '" />';
+      var drill = cls === 'actual' ? ' data-report-drill="burn" data-burn-date="' + esc(String(p.date || "").substring(0, 10)) + '"' : '';
+      return '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="4" class="burn-point ' + cls + '"' + drill + ' data-chart-tip="' + tip + '" />';
     }).join("");
+  }
+  var lastLabel = "";
+  if(points.length){
+    var last = points[points.length - 1];
+    var ly = 184 - (max ? last.remainingMinutes / max * 148 : 0);
+    lastLabel = '<text x="516" y="' + (ly - 8) + '" text-anchor="end" class="bar-value">' + esc(fmtHours(last.remainingMinutes)) + '</text>';
   }
   return '<section class="manager-chart-panel" data-chart="burn"><div class="manager-panel-head"><b>燃尽图</b><span>剩余 ' + fmtHours(d.remainingMinutes) + ' / ' + fmtHours(d.totalEstimateMinutes) + '</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近14天燃尽图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/><line x1="36" y1="36" x2="36" y2="184" class="axis"/>'
+    + yGrid(max, axisMinutes)
     + svgLine(ideal, max, "ideal", true) + svgLine(actual, max, "actual", false)
-    + dots(points, "ideal", "idealMinutes") + dots(points, "actual", "remainingMinutes")
+    + dots(points, "ideal", "idealMinutes") + dots(points, "actual", "remainingMinutes") + lastLabel
     + '<text x="36" y="208">' + esc(points.length ? fmtDate(points[0].date) : "—") + '</text><text x="524" y="208" text-anchor="end">' + esc(points.length ? fmtDate(points[points.length - 1].date) : "—") + '</text></svg>'
     + '<div class="manager-chart-legend"><span><i class="actual-line"></i>实际剩余</span><span><i class="ideal-line"></i>理想燃尽</span></div></section>';
 }
 function velocityChart(d){
-  var weeks = d.weeks || [], max = Math.max(1, d.averageMinutes || 0);
-  weeks.forEach(function(w){ max = Math.max(max, w.completedMinutes); });
+  var weeks = d.weeks || [], raw = Math.max(1, d.averageMinutes || 0);
+  weeks.forEach(function(w){ raw = Math.max(raw, w.completedMinutes); });
+  var max = axisOf(raw).max;
   var bars = weeks.map(function(w, i){
     var h = Math.round(w.completedMinutes / max * 148), x = 64 + i * 120;
     var tip = esc(w.start) + '：' + fmtHours(w.completedMinutes) + '，' + w.completedCount + ' 项';
-    return '<rect x="' + x + '" y="' + (184 - h) + '" width="56" height="' + h + '" rx="5" class="velocity-bar" data-chart-tip="' + tip + '" /><text x="' + (x + 28) + '" y="208" text-anchor="middle">' + esc(fmtDate(w.start)) + '</text>';
+    return '<rect x="' + x + '" y="' + (184 - h) + '" width="56" height="' + h + '" rx="5" class="velocity-bar" data-report-drill="velocity" data-week-start="' + esc(w.start) + '" data-chart-tip="' + tip + '" />'
+      + '<text x="' + (x + 28) + '" y="' + (184 - h - 6) + '" text-anchor="middle" class="bar-value">' + esc(fmtHours(w.completedMinutes)) + '</text>'
+      + '<text x="' + (x + 28) + '" y="208" text-anchor="middle">' + esc(fmtDate(w.start)) + '</text>';
   }).join("");
   var avgY = 184 - Math.round((d.averageMinutes || 0) / max * 148);
   return '<section class="manager-chart-panel" data-chart="velocity"><div class="manager-panel-head"><b>速度图</b><span>近 4 周均值 ' + fmtHours(d.averageMinutes) + '</span></div>'
-    + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近4周速度图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/>' + bars
+    + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近4周速度图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/>'
+    + yGrid(max, axisMinutes) + bars
     + '<line x1="36" y1="' + avgY + '" x2="524" y2="' + avgY + '" class="average" stroke-dasharray="5 4"/></svg>'
     + '<div class="manager-chart-legend"><span><i class="velocity-block"></i>周完成工时</span><span><i class="average-line"></i>均值</span></div></section>';
 }
@@ -166,23 +203,38 @@ function flowPolygon(weeks, lower, upper, max, cls){
   return '<polygon points="' + top.concat(bottom).join(" ") + '" class="' + cls + '" />';
 }
 function flowChart(d){
-  var weeks = d.weeks || [], max = 1;
+  var weeks = d.weeks || [], raw = 1;
   var endedOf = function(w){ return Number(w.ended) || 0; };
-  weeks.forEach(function(w){ max = Math.max(max, w.backlog + w.doing + endedOf(w) + w.done); });
+  weeks.forEach(function(w){ raw = Math.max(raw, w.backlog + w.doing + endedOf(w) + w.done); });
+  var max = axisOf(raw).max;
   var hasEnded = weeks.some(function(w){ return endedOf(w) > 0; });
   var zero = function(){ return 0; }, done = function(w){ return w.done; };
   var ended = function(w){ return w.done + endedOf(w); }, doing = function(w){ return w.done + endedOf(w) + w.doing; };
   var hoverRects = "";
   if(weeks.length > 1){
     var step = 488 / (weeks.length - 1), band = step * 0.75;
+    var bands = [["done", "已完成"], ["ended", "执行结束"], ["doing", "进行中"], ["backlog", "待处理"]];
     hoverRects = weeks.map(function(w, i){
       var x = 36 + i * step - band / 2;
       var tip = esc(w.start) + '：已完成 ' + w.done + (endedOf(w) ? ' / 执行结束 ' + endedOf(w) : '') + ' / 进行中 ' + w.doing + ' / 待处理 ' + w.backlog;
-      return '<rect x="' + x + '" y="36" width="' + band + '" height="148" rx="3" class="flow-hover" data-chart-tip="' + tip + '" />';
+      var lower = 0;
+      return bands.map(function(s){
+        var value = s[0] === "done" ? Number(w.done) || 0
+          : (s[0] === "ended" ? endedOf(w)
+          : (s[0] === "doing" ? Number(w.doing) || 0 : Number(w.backlog) || 0));
+        if(value <= 0) return "";
+        var height = value / max * 148;
+        var top = 184 - (lower + value) / max * 148;
+        lower += value;
+        return '<rect x="' + x + '" y="' + top.toFixed(1) + '" width="' + band + '" height="' + height.toFixed(1)
+          + '" rx="3" class="flow-hover" data-report-drill="flow" data-week-start="' + esc(w.start)
+          + '" data-flow-state="' + s[0] + '" data-chart-tip="' + tip + '" />';
+      }).join("");
     }).join("");
   }
   return '<section class="manager-chart-panel" data-chart="flow"><div class="manager-panel-head"><b>累积流图</b><span>近 8 周 · 按列处理规则归类</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近8周累积流图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/>'
+    + yGrid(max, function(v){ return Math.round(v); })
     + flowPolygon(weeks, zero, done, max, "flow-done") + (hasEnded ? flowPolygon(weeks, done, endedOf, max, "flow-ended") : "")
     + flowPolygon(weeks, ended, function(w){ return w.doing; }, max, "flow-doing")
     + flowPolygon(weeks, doing, function(w){ return w.backlog; }, max, "flow-backlog") + hoverRects + '</svg>'
@@ -192,29 +244,36 @@ function deliveryChart(d){
   return '<section class="manager-chart-panel" data-chart="delivery"><div class="manager-panel-head"><b>交付周期分布</b><span>P50 ' + (d.p50Days === null ? "—" : d.p50Days + " 天") + ' · P85 ' + (d.p85Days === null ? "—" : d.p85Days + " 天") + '</span></div>'
     + '<div class="manager-delivery">' + (d.buckets || []).map(function(b){
       var tip = esc(b.label) + '：' + b.count + ' 项 · ' + b.pct + '%';
-      return '<div data-chart-tip="' + tip + '"><span>' + esc(b.label) + '</span><span class="progress"><i style="width:' + Math.min(100, b.pct) + '%"></i></span><b>' + b.count + ' 项 · ' + b.pct + '%</b></div>';
+      return '<div data-chart-tip="' + tip + '" data-report-drill="delivery" data-delivery-bucket="' + esc(b.label) + '"><span>' + esc(b.label) + '</span><span class="progress"><i style="width:' + Math.min(100, b.pct) + '%"></i></span><b>' + b.count + ' 项 · ' + b.pct + '%</b></div>';
     }).join("") + '</div><p class="manager-note">从开始日期（空则创建日期）到完成日期；平均 ' + (d.averageDays === null ? "—" : d.averageDays + " 天") + '。</p></section>';
 }
 function defectChart(d){
-  var weeks = d.weeks || [], max = 1;
-  weeks.forEach(function(w){ max = Math.max(max, w.opened, w.closed, w.open); });
+  var weeks = d.weeks || [], raw = 1;
+  weeks.forEach(function(w){ raw = Math.max(raw, w.opened, w.closed, w.open); });
+  var max = axisOf(raw).max;
   var step = weeks.length > 1 ? 488 / (weeks.length - 1) : 0;
   var bars = weeks.map(function(w, i){
     var x = 36 + i * step;
     var openedH = Math.round(w.opened / max * 148), closedH = Math.round(w.closed / max * 148);
     var tip = esc(w.start) + '：新增 ' + w.opened + ' / 关闭 ' + w.closed + ' / 存量 ' + w.open;
     return '<g data-chart-tip="' + tip + '">'
-      + '<rect x="' + (x - 12) + '" y="' + (184 - openedH) + '" width="11" height="' + openedH + '" rx="2" class="defect-opened" />'
-      + '<rect x="' + (x + 1) + '" y="' + (184 - closedH) + '" width="11" height="' + closedH + '" rx="2" class="defect-closed" />'
+      + '<rect x="' + (x - 12) + '" y="' + (184 - openedH) + '" width="11" height="' + openedH + '" rx="2" class="defect-opened" data-report-drill="defects" data-week-start="' + esc(w.start) + '" data-defect-state="opened" />'
+      + '<rect x="' + (x + 1) + '" y="' + (184 - closedH) + '" width="11" height="' + closedH + '" rx="2" class="defect-closed" data-report-drill="defects" data-week-start="' + esc(w.start) + '" data-defect-state="closed" />'
       + (i % 2 === 0 ? '<text x="' + x.toFixed(1) + '" y="208" text-anchor="middle">' + esc(fmtDate(w.start)) + '</text>' : '')
       + '</g>';
   }).join("");
   var openPoints = weeks.map(function(w, i){
     return (36 + i * step).toFixed(1) + ',' + (184 - (w.open / max * 148)).toFixed(1);
   }).join(" ");
+  var openHits = weeks.map(function(w, i){
+    return '<circle cx="' + (36 + i * step).toFixed(1) + '" cy="' + (184 - (w.open / max * 148)).toFixed(1)
+      + '" r="7" class="defect-open-hit" data-report-drill="defects" data-week-start="' + esc(w.start)
+      + '" data-defect-state="open" data-chart-tip="' + esc(w.start) + '：周末存量 ' + w.open + ' 个" />';
+  }).join("");
   return '<section class="manager-chart-panel" data-chart="defects"><div class="manager-panel-head"><b>缺陷趋势</b><span>当前存量 ' + (d.openCount || 0) + ' 个</span></div>'
     + '<svg class="manager-chart" viewBox="0 0 560 220" role="img" aria-label="近8周缺陷趋势图"><line x1="36" y1="184" x2="524" y2="184" class="axis"/><line x1="36" y1="36" x2="36" y2="184" class="axis"/>'
-    + bars + '<polyline points="' + openPoints + '" fill="none" class="defect-open-line" />' + '</svg>'
+    + yGrid(max, function(v){ return Math.round(v); })
+    + bars + '<polyline points="' + openPoints + '" fill="none" class="defect-open-line" />' + openHits + '</svg>'
     + '<div class="manager-chart-legend"><span><i class="defect-opened-block"></i>新增</span><span><i class="defect-closed-block"></i>关闭</span><span><i class="defect-open-line"></i>存量</span></div></section>';
 }
 function projectOptions(){
@@ -238,7 +297,7 @@ function reportToolbar(){
     + '<div class="manager-label-filters"><label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
     + '<label>公司 <select id="reportCompanySelect" class="mini-select">' + reportLabelOptions(reportOptions.companyNames, companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select id="reportRoleSelect" class="mini-select">' + reportLabelOptions(reportOptions.roleTitles, roleTitle, '全部角色', '未设角色') + '</select></label>'
-    + '<button class="btn sm ghost" type="button" data-report-clear>清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。</p>';
+    + '<button class="btn sm soft" type="button" data-report-clear>' + icon("close", 13) + '清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。</p>';
 }
 function renderReport(){
   if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
@@ -302,8 +361,49 @@ function exportPng(){
     var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="管理报表.png";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1500);toast("已导出报表 PNG","fs");
   },"image/png");
 }
+/* ---------- 穿透：图表元素 → 与 /api/manager/reports 同范围的工作项明细分页 ---------- */
+var flowStateLabels = {done: "已完成", ended: "执行结束", doing: "进行中", backlog: "待处理"};
+var defectStateLabels = {opened: "新增", closed: "关闭", open: "存量"};
+function openReportTasks(title, params){
+  if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
+  var base = Object.assign({}, cache.scope || {}, params, {limit: 100});
+  API.get("/api/manager/reports/tasks", Object.assign({}, base, {offset: 0})).then(function(page){
+    var rows = (page && page.items) || [];
+    if(!rows.length){ toast("该口径下暂无工作项", "warn"); return; }
+    openTaskTable(title, rows, reportScopeText(cache) + " · 共 " + page.total + " 项 · 点击工作项行打开详情", {
+      total: page.total,
+      hasMore: page.hasMore,
+      fetch: function(offset){
+        return API.get("/api/manager/reports/tasks", Object.assign({}, base, {offset: offset}));
+      }
+    });
+  }).catch(function(ex){ toast(ex && ex.message ? ex.message : "明细加载失败", "bad"); });
+}
+function onReportDrill(el){
+  var chart = el.dataset.reportDrill;
+  if(chart === "burn"){
+    var date = el.dataset.burnDate;
+    openReportTasks("燃尽 · 截至 " + fmtDate(date) + " 已完成", {chart: "burn", date: date});
+  }else if(chart === "velocity"){
+    var week = el.dataset.weekStart;
+    openReportTasks("速度 · " + fmtDate(week) + " 当周完成", {chart: "velocity", weekStart: week});
+  }else if(chart === "flow"){
+    var start = el.dataset.weekStart, state = el.dataset.flowState;
+    openReportTasks("累积流 · " + fmtDate(start) + " 周末「" + (flowStateLabels[state] || state) + "」",
+      {chart: "flow", weekStart: start, state: state});
+  }else if(chart === "delivery"){
+    var bucket = el.dataset.deliveryBucket;
+    openReportTasks("交付周期 · " + bucket, {chart: "delivery", bucket: bucket});
+  }else if(chart === "defects"){
+    var weekStart = el.dataset.weekStart, defectState = el.dataset.defectState;
+    openReportTasks("缺陷 · " + fmtDate(weekStart) + " 周「" + (defectStateLabels[defectState] || defectState) + "」",
+      {chart: "defects", weekStart: weekStart, state: defectState});
+  }
+}
 if($("reportBody")){
   $("reportBody").addEventListener("click",function(e){
+    var drill = e.target.closest("[data-report-drill]");
+    if(drill){ onReportDrill(drill); return; }
     if(e.target.closest("[data-report-csv]")) exportCsv();
     else if(e.target.closest("[data-report-png]")) exportPng();
     else if(e.target.closest("[data-report-clear]")){ reqId = ""; companyName = ""; roleTitle = ""; loadReport(); }

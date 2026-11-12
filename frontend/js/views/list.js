@@ -9,7 +9,7 @@ import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
-import { canEditTask, catNameById, catTag, dueState, dueText, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { canEditTask, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
 import { openDuePopover, taskLink, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { deleteTask, openTaskDrawer, ownerOptions } from "../core/task-drawer.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "../core/ui.js";
@@ -159,7 +159,7 @@ function initSmartTable(){
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +
       '<span class="smart-view-spacer"></span>' +
       '<button class="btn sm" type="button" data-list-export>' + icon("download", 13) + ' 导出当前视图</button>' +
-      '<button class="btn sm primary" type="button" data-list-save>＋ 保存视图</button>' +
+      '<button class="btn sm ghost" type="button" data-list-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(smartBar, toolbar);
   /* 手机：分组/排序/导出/保存视图收进筛选面板，标签行右侧保留入口 */
@@ -373,13 +373,15 @@ function taskCell(t, key, hasTypeCol){
   if(key === "type") return '<span class="cell">' + (typeBadgeHTML(t.itemType) || esc(typeName(t.itemType))) + severityBadgeHTML(t.severity) + '</span>';
   if(key === "column"){
     var colC = colMeta(t.boardColumn), color = colC ? colC.color : CAT_DEFAULT_COLOR;
-    return '<span class="cell"><span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span></span>';
+    var f = dueFlag(t);
+    var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
+    return '<span class="cell"><span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span>' + flagHTML + '</span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
   if(key === "owner") return '<span class="cell" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
   if(key === "dueDate"){
-    var st = dueState(t), txt = t.boardColumn === "done" ? (t.completedAt ? ("完成于 " + fmtShortMD(parseDate(t.completedAt))) : "已完成") : dueText(t);
-    return '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(txt) + '</span>';
+    if(!t.dueDate) return '<span class="cell muted">—</span>';
+    return '<span class="cell" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + '</span>';
   }
   if(key === "progress"){
     var p = progressOf(t);
@@ -594,7 +596,7 @@ function exportListCsv(){
   toast("已导出当前视图 " + rows.length + " 项", "fs");
 }
 function mobileListCardHTML(t){
-  var st = dueState(t);
+  var f = dueFlag(t);
   var col = colMeta(t.boardColumn) || {};
   var p = progressOf(t);
   var projectName = t.reqId ? reqNameById(t.reqId) : "";
@@ -609,7 +611,8 @@ function mobileListCardHTML(t){
     '<h3 class="mtc-title">' + esc(t.title) + '</h3>' + taskPublicationHTML(t) +
     '<div class="mtc-meta">' +
       '<span class="mtc-path">' + esc(projectName || "未关联项目") + '</span>' +
-      '<span class="mtc-due ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(dueText(t)) + '</span>' +
+      (t.dueDate ? '<span class="mtc-due" title="' + esc(dueDateTip(t)) + '">' + esc(dueDateMD(t)) + '</span>' : '<span class="mtc-due">未设截止</span>') +
+      (f ? '<span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : '') +
     '</div>' +
     '<div class="mtc-foot">' +
       '<span class="progress mini' + (p >= 100 ? " full" : "") + '"><span class="bar"><i style="width:' + p + '%"></i></span>' +

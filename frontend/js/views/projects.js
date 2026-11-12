@@ -219,8 +219,8 @@ function resetReqForm(){
   rt.formReqStatus = "active";
   fReqName.classList.remove("invalid");
   syncReqStatusSeg();
-  reqFormTitle.textContent = "新增项目";
-  btnSaveReq.textContent = "添加项目";
+  reqFormTitle.textContent = "新建项目";
+  btnSaveReq.textContent = "新建项目";
   btnCancelReqEdit.hidden = true;
   syncTemplateField();
   if($("dlgProject")) UI.closeModal($("dlgProject"));
@@ -325,7 +325,7 @@ function renderReqList(){
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
-            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新增文档</button>') + '</div>' +
+            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
           docHTML +
         '</section>' +
         '<section class="req-expand-section">' +
@@ -366,7 +366,7 @@ function projectActions(r){
   return '<span class="project-row-acts">' +
     (readOnly ? '' :
       '<button class="icon-btn sm" type="button" data-req-open="' + esc(r.id) + '" title="新建工作项" aria-label="新建工作项">' + icon("plus", 14) + '</button>' +
-      '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新增文档" aria-label="新增文档">' + icon("projects", 14) + '</button>') +
+      '<button class="icon-btn sm" type="button" data-doc-new="' + esc(r.id) + '" title="新建文档" aria-label="新建文档">' + icon("projects", 14) + '</button>') +
     '<button class="icon-btn sm" type="button" data-req-board="' + esc(r.id) + '" title="在看板中查看" aria-label="在看板中查看">' + icon("board", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-demands="' + esc(r.id) + '" title="查看需求池" aria-label="查看需求池">' + icon("demand", 14) + '</button>' +
     '<button class="icon-btn sm" type="button" data-req-docs="' + esc(r.id) + '" title="管理文档" aria-label="管理文档">' + icon("folder", 14) + '</button>' +
@@ -432,7 +432,7 @@ function saveReq(){
   var p = editing ? API.put("/api/reqs/" + encodeURIComponent(rt.editingReqId), body) : API.post("/api/reqs", body);
   btnSaveReq.disabled = true;
   p.then(function(){
-    toast(editing ? ("已更新项目「" + name + "」") : ("已新增项目「" + name + "」"), "fs");
+    toast(editing ? ("已更新项目「" + name + "」") : ("已新建项目「" + name + "」"), "fs");
     if(seq === projectFormSeq) resetReqForm();
     /* 新建项目后端会预置默认模块，模块字典要立即刷新，否则任务抽屉/筛选举不到 */
     if(!editing) loadCategories(true);
@@ -501,7 +501,7 @@ function deleteReq(id){
     UI.showConfirm({
       title:"删除项目",
       msg: msg,
-      okText: (docs || versions || demands || cases) ? "删除项目及关联数据" : "删除"
+      okText: (docs || versions || demands || cases) ? "删除项目及关联数据" : "删除项目"
     }).then(function(ok){
       if(!ok) return;
       /* 二次确认：输入项目名才可删，防误点（项目删除不可恢复） */
@@ -698,8 +698,8 @@ function openProjectDialog(id){
     }
   }
   syncReqStatusSeg();
-  reqFormTitle.textContent = id ? "编辑项目" : "新增项目";
-  btnSaveReq.textContent = id ? "保存修改" : "添加项目";
+  reqFormTitle.textContent = id ? "编辑项目" : "新建项目";
+  btnSaveReq.textContent = id ? "保存" : "新建项目";
   btnCancelReqEdit.hidden = !id;
   /* 模块按项目配置：新建时项目尚不存在（首建后后端预置「其他」），仅编辑态展示 */
   if(projCatCfg) projCatCfg.hidden = !id;
@@ -862,7 +862,7 @@ reqListEl.addEventListener("keydown", function(e){
     loadReqs().then(function(){ renderReqList(); loadBoard({silent:true}); });
   }).catch(function(ex){
     inp.disabled = false;
-    toast(ex.message || "创建失败", "bad");
+    toast(ex.message || "新建失败", "bad");
   });
 });
 

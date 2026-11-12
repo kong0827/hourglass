@@ -55,6 +55,10 @@ function branchStatusMeta(id){
   for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return BRANCH_STATUS[i];
   return { id: id, name: id || "未知", cls: "", timeKey: "", hint: "" };
 }
+function branchStatusIndex(id){
+  for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return i;
+  return -1;
+}
 var brDrawerData = null;     /* 抽屉按 ID 拉取的最新分支（深链 / 加载更多 / 列表模式时不在看板首屏里） */
 function branchById(id){
   if(!id) return null;
@@ -553,13 +557,54 @@ function openBranchStatusMenu(anchor, id){
     var set = e.target.closest("[data-br-set]");
     if(set){
       UI.closeAllPops();
-      setBranchStatus(id, set.dataset.brSet);
+      requestBranchStatus(b, set.dataset.brSet);
       return;
     }
     if(e.target.closest("[data-br-edit]")){ UI.closeAllPops(); openBranchDialog(id); return; }
     if(e.target.closest("[data-br-del]")){ UI.closeAllPops(); deleteBranch(id); }
   });
   UI.openPop(el, anchor, { align: "left" });
+}
+/* 抽屉里的「改状态」：只列状态本身，编辑/删除留在页脚；回退会标出来 */
+function openDrawerStatusMenu(anchor, b){
+  if(!b) return;
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能修改分支", "warn"); return; }
+  var curIdx = branchStatusIndex(b.status);
+  var el = document.createElement("div");
+  el.className = "menu br-status-menu";
+  el.innerHTML = BRANCH_STATUS.map(function(s, i){
+    var cur = s.id === b.status;
+    return '<button class="menu-item' + (cur ? " on" : "") + '" type="button" data-br-drawer-set="' + s.id + '"' +
+        (cur ? " disabled" : "") + '>' +
+        '<i class="br-dot ' + s.cls + '"></i>' + s.name +
+        (cur ? '<span class="k">当前</span>' : (i < curIdx ? '<span class="k">回退</span>' : '')) +
+      '</button>';
+  }).join("");
+  el.addEventListener("click", function(e){
+    var set = e.target.closest("[data-br-drawer-set]");
+    if(!set) return;
+    UI.closeAllPops();
+    requestBranchStatus(b, set.dataset.brDrawerSet);
+  });
+  UI.openPop(el, anchor, { align: "left", onClose: function(){ el.remove(); } });
+}
+/* 所有入口统一走这里：回退（目标状态在当前之前）会改写时间线与负责人通知，先确认；前进保持零阻力 */
+function requestBranchStatus(b, to, after){
+  if(typeof b === "string") b = branchById(b) || branchMetaById(b);
+  if(!b || !to || b.status === to) return;
+  var fromIdx = branchStatusIndex(b.status);
+  var toIdx = branchStatusIndex(to);
+  var toName = branchStatusMeta(to).name;
+  if(toIdx < fromIdx){
+    UI.showConfirm({
+      title: "回退分支状态",
+      msg: "「" + esc(b.name) + "」将从 <b>" + esc(branchStatusMeta(b.status).name) + "</b> 回退到 <b>" + esc(toName) +
+        "</b>，会写入操作记录并通知负责人。确定继续？",
+      okText: "回退到 " + toName
+    }).then(function(ok){ if(ok) setBranchStatus(b.id, to, after); });
+    return;
+  }
+  setBranchStatus(b.id, to, after);
 }
 function setBranchStatus(id, status, after){
   var b = branchMetaById(id);
@@ -641,7 +686,7 @@ function openBranchDialogWith(id, b, options){
     : (fromTask
       ? "建好后会自动选中并挂到当前工作项；保存工作项后关联生效。分支名照 git 里的写法填。"
       : "分支名照 git 里的写法填，建好之后就能跟状态和时间。");
-  $("dlgBranchOk").textContent = b ? "保存" : (fromTask ? "创建并选中" : "创建分支");
+  $("dlgBranchOk").textContent = b ? "保存" : (fromTask ? "新建并选中" : "新建分支");
   /* 编辑时隐藏「初始状态」（状态只能走状态切换接口） */
   if($("brStatusField")) $("brStatusField").hidden = !!b;
   $("brName").value = b ? (b.name || "") : "";
@@ -801,22 +846,34 @@ function renderBranchDrawer(b){
   if(!body) return;
   $("brDrawerTitle").textContent = b.name;
   var stay = branchStay(b);
-  var segs = BRANCH_STATUS.map(function(s){
-    return '<button type="button" class="' + (s.id === b.status ? "on" : "") + '"' +
-      ' data-br-drawer-status="' + s.id + '" aria-pressed="' + (s.id === b.status) + '">' + s.name + '</button>';
-  }).join("");
-  var times = BRANCH_STATUS.map(function(s){
+  var curIdx = branchStatusIndex(b.status);
+  var editable = canEditBranch(b);
+  var next = curIdx >= 0 && curIdx < BRANCH_STATUS.length - 1 ? BRANCH_STATUS[curIdx + 1] : null;
+  /* 状态区是只读进度条：时间点合并进来，改状态只走右侧两个显式按钮 */
+  var flow = BRANCH_STATUS.map(function(s, i){
     var at = b[s.timeKey];
-    return '<div class="br-tnode' + (at ? " on" : "") + '">' +
+    var cls = "br-st-node " + s.cls + (at ? " visited" : "") + (i === curIdx ? " cur" : "");
+    return '<div class="' + cls + '">' +
       '<i class="br-dot ' + s.cls + '"></i>' +
-      '<span class="bt-name">' + s.name + '</span>' +
-      '<span class="bt-time">' + (at ? esc(fmtTs(at)) : "未进入") + '</span>' +
+      '<span class="bf-name">' + s.name + '</span>' +
+      '<span class="bf-time">' + (at ? esc(fmtTs(at)) : "未进入") + '</span>' +
     '</div>';
   }).join("");
 
   body.innerHTML =
-    '<div class="br-drawer-seg seg grid4">' + segs + '</div>' +
-    '<div class="br-drawer-stay">' + esc(stay.text) + ' · ' + esc(stay.tip) + '</div>' +
+    '<div class="br-sect br-st-sect">' +
+      '<h4>状态</h4>' +
+      '<div class="br-st-flow">' + flow + '</div>' +
+      '<div class="br-st-bar">' +
+        '<span class="br-stay">' + esc(stay.text) + ' · ' + esc(stay.tip) + '</span>' +
+        (editable
+          ? '<span class="br-st-actions">' +
+              '<button class="btn sm" type="button" id="brStatusMore" aria-haspopup="menu">改状态' + icon("down", 11) + '</button>' +
+              (next ? '<button class="btn sm primary" type="button" id="brStatusAdvance">推进到 ' + next.name + '</button>' : '') +
+            '</span>'
+          : '') +
+      '</div>' +
+    '</div>' +
     '<div class="br-kv">' +
       '<div><span>目标分支</span><b>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</b></div>' +
       '<div><span>负责人</span><b>' + (b.owner ? esc(b.owner) : "—") + '</b></div>' +
@@ -830,21 +887,24 @@ function renderBranchDrawer(b){
             ? esc(b.projects.map(function(p){ return p.projectName || p.projectId || "未知"; }).join("、")) : "空间级公共分支")) + '</b></div>' +
     '</div>' +
     (b.note ? '<p class="br-drawer-note">' + esc(b.note) + '</p>' : '') +
-    '<div class="br-sect"><h4>状态时间</h4><div class="br-times">' + times + '</div></div>' +
     '<div class="br-sect"><h4>关联工作项</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
-      (canEditBranch(b)
+      (editable
         ? '<button class="btn ghost danger-text" type="button" id="brDrawerDelete">删除分支</button>'
         : '<span class="foot-note">你对该项目只有查看权限，不能修改或删除分支</span>') +
       '<span style="flex:1 1 auto"></span>' +
-      (canEditBranch(b) ? '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' : '') +
+      (editable ? '<button class="btn" type="button" id="brDrawerEdit">编辑信息</button>' : '') +
     '</div>';
 
   var del = $("brDrawerDelete");
   if(del) del.addEventListener("click", function(){ deleteBranch(b.id); });
   var ed = $("brDrawerEdit");
   if(ed) ed.addEventListener("click", function(){ openBranchDialog(b.id); });
+  var more = $("brStatusMore");
+  if(more) more.addEventListener("click", function(){ openDrawerStatusMenu(more, b); });
+  var adv = $("brStatusAdvance");
+  if(adv && next) adv.addEventListener("click", function(){ requestBranchStatus(b, next.id); });
 }
 function loadBranchLogs(id){
   API.getAllPages("/api/branches/" + encodeURIComponent(id) + "/logs").then(function(logs){
@@ -1028,7 +1088,7 @@ function clearGroupOver(){
       dragBranch = null;
       if(g.dataset.status === src.status) return;
       e.preventDefault();
-      setBranchStatus(src.id, g.dataset.status);
+      requestBranchStatus(src.id, g.dataset.status);
     });
     box.addEventListener("dragend", function(e){
       clearGroupOver();
@@ -1119,16 +1179,8 @@ function clearGroupOver(){
   }
 
   if($("branchDrawer")){
-    /* 抽屉内的状态切换与任务跳转：动态内容，统一委托 */
+    /* 抽屉内动态内容的统一委托：只处理工作项跳转，状态改走状态区按钮 */
     $("branchDrawer").addEventListener("click", function(e){
-      var st = e.target.closest("[data-br-drawer-status]");
-      if(st){
-        var b = branchById(brDrawerId);
-        if(b && branchStatusMeta(b.status).id !== st.dataset.brDrawerStatus){
-          setBranchStatus(brDrawerId, st.dataset.brDrawerStatus);
-        }
-        return;
-      }
       var task = e.target.closest("[data-br-task]");
       if(task){
         /* 任务抽屉是另一层浮层，先收起分支抽屉再打开，避免两层遮罩叠在一起 */
@@ -1161,4 +1213,4 @@ function ensureBranchOptions(keep, projectId){
 function openBranchById(id){
   openBranchDrawer(id);
 }
-export { branchMetaById, branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, loadBranches, openBranchById, populateBranchSelect, renderBranches, setBranchStatus };
+export { branchMetaById, branchNameById, branchesLoaded, ensureBranchOptions, enterBranchesView, loadBranches, openBranchById, populateBranchSelect, renderBranches, requestBranchStatus };

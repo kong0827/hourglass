@@ -43,7 +43,7 @@ function workloadFiltersHTML(){
     + rt.reqList.filter(function(p){ return (!p.workspaceId || p.workspaceId === workloadWorkspace()) && (!p.archivedAt || p.id === workloadFilter.reqId); }).map(function(p){ return '<option value="' + esc(p.id) + '"' + (p.id === workloadFilter.reqId ? ' selected' : '') + '>' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select></label>'
     + '<label>公司 <select class="mini-select" data-workload-filter="companyName">' + workloadSelectOptions(workloadOptions.companyNames, workloadFilter.companyName, '全部公司', '未设公司') + '</select></label>'
     + '<label>角色 <select class="mini-select" data-workload-filter="roleTitle">' + workloadSelectOptions(workloadOptions.roleTitles, workloadFilter.roleTitle, '全部角色', '未设角色') + '</select></label>'
-    + '<button class="btn sm ghost" type="button" data-workload-clear>清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；负载、计时、下钻和导出均由后台按同一范围计算。</p>';
+    + '<button class="btn sm soft" type="button" data-workload-clear>' + icon("close", 13) + '清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；负载、计时、下钻和导出均由后台按同一范围计算。</p>';
 }
 function workloadToolbar(){
   return '<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="' + (mode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button><button type="button" data-load-mode="week" aria-pressed="' + (mode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button></div>'

@@ -1,20 +1,21 @@
 /* views/mine · 我的工作（分页 + 分组 + 行内操作） */
 
 import { API } from "../core/api.js";
-import { btnMineRefresh, mineBody, mineGroup, mineMeta, mineSort, mineSpaceFilter, mineSubgroup } from "../core/dom.js";
+import { btnMineFields, btnMineFold, btnMineRefresh, mineBody, mineDensity, mineGroup, mineMeta, mineSort, mineSpaceFilter, mineStats, mineSubgroup } from "../core/dom.js";
 import { clearFilters } from "../core/filters-ui.js";
 import { filterParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
+import * as listPrefs from "../core/list-preferences.js";
 import { currentMode, saveMode } from "../core/mobile-rules.js";
 import { loadPrioritySpaces } from "../core/priorities.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
-import { canEditTask, catNameById, catTag, dueState, dueText, progressOf, rt, state, tagChip, timerAllowed } from "../core/state.js";
+import { canEditTask, catColor, catNameById, dueDateMD, dueDateTip, dueFlag, dueState, progressOf, rt, state, statusBucket, timerAllowed } from "../core/state.js";
 import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, iso, parseDate, priName, priTagHTML } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, fmtMinutesShort, fmtShortMD, iso, parseDate, priName, priTagHTML, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { openTaskTable } from "./manager-shared.js";
@@ -77,6 +78,15 @@ function syncMineFilters(){
     mineSubgroup.disabled = state.mineGroup === "none";
   }
   if(mineSort) mineSort.value = MINE_SORTS.indexOf(state.mineSort) !== -1 ? state.mineSort : "default";
+  syncMineFilterMarks();
+}
+/* 筛选生效态：偏离默认值才标记，默认值与 state.js 首屏一致、不发光 */
+function syncMineFilterMarks(){
+  [[mineGroup, "due"], [mineSubgroup, "none"], [mineSort, "default"], [mineSpaceFilter, ""]]
+    .forEach(function(pair){
+      var el = pair[0];
+      if(el) UI.markFiltered(el, el.value === pair[1]);
+    });
 }
 function populateMineSpaces(spaces){
   if(!mineSpaceFilter) return;
@@ -90,6 +100,7 @@ function populateMineSpaces(spaces){
     state.mineSpace = "";
     mineSpaceFilter.value = "";
   }
+  syncMineFilterMarks();
 }
 var mineCache = {};
 var mineAll = [], mineSpaces = [], mineNameOnly = 0, mineTotal = 0, mineHasMore = false;
@@ -118,12 +129,16 @@ function loadMine(opts){
   }
   var params = filterParams({scope: "open", offset: offset, limit: MINE_PAGE_SIZE});
   delete params.owners;      // 负责人维度天然是我
-  API.getGlobal("/api/my-tasks", params).then(function(d){
+  /* 显示列偏好先就位再渲染，避免首屏按默认列闪一帧 */
+  listPrefs.load("my-tasks").then(function(){
     if(seq !== mineSeq) return;
-    return loadPrioritySpaces(d && d.spaces).then(function(){
+    return API.getGlobal("/api/my-tasks", params).then(function(d){
       if(seq !== mineSeq) return;
-      mineLoading = false;
-      renderMine(d || {}, append);
+      return loadPrioritySpaces(d && d.spaces).then(function(){
+        if(seq !== mineSeq) return;
+        mineLoading = false;
+        renderMine(d || {}, append);
+      });
     });
   }).catch(function(ex){
     if(seq !== mineSeq) return;
@@ -149,11 +164,11 @@ function mineGroupOf(t){
   return parseDate(t.dueDate) <= weekEnd ? "week" : "later";
 }
 var MINE_GROUPS = [
-  {k:"over", label:"逾期", hint:"先处理已经拖过期的"},
-  {k:"today", label:"今天", hint:"今天到期"},
-  {k:"week", label:"本周", hint:"本周内到期"},
-  {k:"ended", label:"执行结束", hint:"所在列已结束计时，不计逾期"},
-  {k:"later", label:"以后", hint:"本周之后或未设截止"}
+  {k:"over", label:"逾期", hint:"先处理已经拖过期的", tone:"danger"},
+  {k:"today", label:"今天", hint:"今天到期", tone:"warning"},
+  {k:"week", label:"本周", hint:"本周内到期", tone:"info"},
+  {k:"ended", label:"执行结束", hint:"所在列已结束计时，不计逾期", tone:"success"},
+  {k:"later", label:"以后", hint:"本周之后或未设截止", tone:"neutral"}
 ];
 
 /* ---- 排序 / 分组（页内工具栏，state.mineSort / state.mineGroup） ---- */
@@ -191,14 +206,28 @@ function mineDueInfo(k){
 function mineSectionInfoBy(t, dim){
   if(dim === "due"){
     var g = mineDueInfo(mineGroupOf(t));
-    return {key:g.k, label:g.label, hint:g.hint, order:MINE_GROUPS.indexOf(g)};
+    return {key:g.k, label:g.label, hint:g.hint, tone:g.tone, order:MINE_GROUPS.indexOf(g)};
   }
-  if(dim === "workspace") return {key:t.workspaceId || "__none", label:t.workspaceName || "未知空间"};
-  if(dim === "priority") return {key:t.priority || "__none", label:t.priority ? priName(t.priority, t.workspaceId) : "未设置优先级", pri:t.priority || ""};
-  if(dim === "status") return {key:t.boardColumn || "__none", label:colName(t.boardColumn) || "未设置状态"};
-  if(dim === "project") return {key:t.reqId || "__none", label:t.reqName || (t.reqId ? "未知项目" : "无项目")};
-  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块"};
+  if(dim === "workspace") return {key:t.workspaceId || "__none", label:t.workspaceName || "未知空间", tone:"neutral"};
+  if(dim === "priority"){
+    var pri = t.priority || "";
+    return {key:pri || "__none", label:pri ? priName(pri, t.workspaceId) : "未设置优先级", pri:pri,
+      tone: pri === "P0" ? "danger" : (pri === "P1" ? "warning" : (pri === "P2" ? "info" : "neutral"))};
+  }
+  if(dim === "status"){
+    var col = t.boardColumn || "__none";
+    return {key:col, label:colName(t.boardColumn) || "未设置状态", tone:mineStatusTone(col, t)};
+  }
+  if(dim === "project") return {key:t.reqId || "__none", label:t.reqName || (t.reqId ? "未知项目" : "无项目"), tone:"neutral"};
+  if(dim === "category") return {key:t.categoryId || "__none", label:catNameById(t.categoryId) || "未指定模块", tone:"neutral"};
   return null;
+}
+function mineStatusTone(col, task){
+  if(!col || col === "__none") return "neutral";
+  var b = statusBucket(task || {boardColumn: col});
+  if(b === "backlog") return "neutral";
+  if(b === "done" || b === "ended") return "success";
+  return "info";
 }
 function mineSectionCompareBy(a, b, dim){
   if(dim === "due") return (a.order === undefined ? 99 : a.order) - (b.order === undefined ? 99 : b.order);
@@ -236,7 +265,7 @@ function mineSections(items){
     MINE_GROUPS.forEach(function(g){ byDue[g.k] = []; });
     items.forEach(function(t){ byDue[mineGroupOf(t)].push(t); });
     sections = MINE_GROUPS.map(function(g){
-      return {key:g.k, label:g.label, hint:g.hint, order:MINE_GROUPS.indexOf(g), rows:byDue[g.k], subs:[]};
+      return {key:g.k, label:g.label, hint:g.hint, tone:g.tone, order:MINE_GROUPS.indexOf(g), rows:byDue[g.k], subs:[]};
     });
   }else{
     var map = {}, order = [];
@@ -245,7 +274,7 @@ function mineSections(items){
       if(!info) return;
       var sec = map[info.key];
       if(!sec){
-        sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", order:info.order, rows:[], subs:[]};
+        sec = map[info.key] = {key:info.key, label:info.label, pri:info.pri || "", hint:info.hint || "", tone:info.tone || "neutral", order:info.order, rows:[], subs:[]};
         order.push(info.key);
       }
       sec.rows.push(t);
@@ -274,7 +303,113 @@ function mineSections(items){
   }
   return sections;
 }
-function mineRowHTML(t){
+/* ---- 列表形态：列 / 密度 / 折叠（与缺陷列表优化后同一套两行行高） ---- */
+var MINE_COLS = [
+  {k:"title", label:"工作项", w:"minmax(300px,2fr)"},
+  {k:"type", label:"类型", w:"64px"},
+  {k:"priority", label:"优先级", w:"64px"},
+  {k:"status", label:"状态", w:"88px"},
+  {k:"dueDate", label:"截止", w:"96px"},
+  {k:"startDate", label:"开始", w:"88px"},
+  {k:"progress", label:"进度", w:"96px"},
+  {k:"work", label:"工时", w:"76px"},
+  {k:"project", label:"项目", w:"minmax(140px,1fr)"},
+  {k:"updatedAt", label:"更新", w:"76px", align:"right"}
+];
+var MINE_OPS_W = "76px";
+var MINE_DENSITY_KEY = "ds.mineDensity";
+var MINE_CLOSED_KEY = "ds.mineClosed";
+function mineDensityValue(){
+  try{ return localStorage.getItem(MINE_DENSITY_KEY) === "relaxed" ? "relaxed" : "standard"; }
+  catch(e){ return "standard"; }
+}
+var mineClosed = (function(){
+  try{
+    var raw = JSON.parse(localStorage.getItem(MINE_CLOSED_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  }catch(e){ return {}; }
+})();
+function mineSaveClosed(){
+  try{ localStorage.setItem(MINE_CLOSED_KEY, JSON.stringify(mineClosed)); }catch(e){ /* 受限环境仅本次生效 */ }
+}
+function mineGroupKey(dim, key){ return "g|" + dim + "|" + key; }
+function mineSubKey(dim, gkey, sdim, skey){ return "s|" + dim + "|" + gkey + "|" + sdim + "|" + skey; }
+/* 与分组维度相同的列自动隐藏，避免同一信息出现两次 */
+function mineDimUsed(dim){ return state.mineGroup === dim || mineSubDim() === dim; }
+function mineWidthHidden(k, w){
+  if(k === "project") return w < 1180;
+  if(k === "startDate") return w < 1080;
+  if(k === "work") return w < 1000;
+  if(k === "updatedAt") return w < 1000;
+  if(k === "progress") return w < 840;
+  return false;
+}
+function mineVisibleCols(w){
+  var prefs = listPrefs.columns("my-tasks");
+  var byKey = {};
+  MINE_COLS.forEach(function(c){ byKey[c.k] = c; });
+  /* 列顺序跟随「显示字段」里的排序，工作项始终在首列 */
+  return prefs.filter(function(k){ return byKey[k]; }).map(function(k){ return byKey[k]; }).filter(function(c){
+    if(c.k === "priority" && mineDimUsed("priority")) return false;
+    if(c.k === "status" && mineDimUsed("status")) return false;
+    if(c.k === "dueDate" && mineDimUsed("due")) return false;
+    if(c.k === "project" && mineDimUsed("project")) return false;
+    return !mineWidthHidden(c.k, w);
+  });
+}
+function mineRelText(v){
+  if(!v) return "—";
+  var s = String(v).replace(" ", "T");
+  var d = new Date(s);
+  if(isNaN(d.getTime())) return String(v).substring(0, 10);
+  var diff = Math.max(0, Date.now() - d.getTime());
+  var min = Math.floor(diff / 60000);
+  if(min < 1) return "刚刚";
+  if(min < 60) return min + " 分钟前";
+  var hr = Math.floor(min / 60);
+  if(hr < 24) return hr + " 小时前";
+  var day = Math.floor(hr / 24);
+  if(day === 1) return "昨天";
+  if(day < 7) return day + " 天前";
+  return fmtShortMD(parseDate(s));
+}
+function mineTaskCell(t, cols){
+  var cat = catNameById(t.categoryId);
+  var colSet = {};
+  (cols || []).forEach(function(c){ colSet[c.k] = true; });
+  var sub = [];
+  if(!mineDimUsed("project") && !colSet.project && t.reqName){
+    sub.push('<span class="mine-proj-chip" title="项目：' + esc(t.reqName) + '">' + esc(t.reqName) + '</span>');
+  }
+  if(!mineDimUsed("workspace") && t.workspaceName){
+    sub.push('<span class="mine-sub-ws" title="空间：' + esc(t.workspaceName) + '">' + esc(t.workspaceName) + '</span>');
+  }
+  if(!mineDimUsed("category") && cat){
+    sub.push('<span class="mine-r-cat" style="--c:' + catColor(t.categoryId) + '"><i></i>' + esc(cat) + '</span>');
+  }
+  /* 模块已在副行用彩色点表达，同名标签不再重复占位 */
+  (t.tags || []).filter(function(n){ return n && n !== cat; }).slice(0, 2).forEach(function(n){
+    sub.push('<span class="mine-r-tag">' + esc(n) + '</span>');
+  });
+  if(t.blocked) sub.push('<span class="mine-r-blocked">被阻塞</span>');
+  return '<span class="mine-tc-main">' +
+    '<span class="mine-tc-title" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
+    (sub.length ? '<span class="mine-tc-sub">' + sub.join("") + '</span>' : '') +
+  '</span>';
+}
+function minePriPill(t){
+  var p = t.priority || "";
+  var name = p ? priName(p, t.workspaceId) : "未设置";
+  return '<span class="mine-pri-pill ' + (p ? p.toLowerCase() : "p3") + '" title="优先级：' + esc(name) + '">' + esc(name) + '</span>';
+}
+function mineStatusPill(t){
+  var b = statusBucket(t);
+  var cls = (b === "done" || b === "ended") ? "done" : (b === "doing" ? "doing" : "todo");
+  var f = dueFlag(t);
+  var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
+  return '<span class="mine-st-pill ' + cls + '">' + esc(colName(t.boardColumn) || "未设置") + '</span>' + flagHTML;
+}
+function mineRowHTML(t, cols){
   var st = dueState(t);
   var p = progressOf(t);
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
@@ -283,25 +418,10 @@ function mineRowHTML(t){
   /* 待处理/已完成列不能计时（与后端 startManual 同口径）：不渲染这个不可用入口 */
   var tAllowed = timerAllowed(t);
   var isDone = t.boardColumn === "done";
-  /* 模块已在标签行用彩色 pill 表达，同名标签不再重复占位 */
-  var tags = (t.tags || []).filter(function(n){ return n && n !== catNameById(t.categoryId); }).slice(0, 2);
-  /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
-  var showProgress = p > 0 || t.boardColumn === "doing";
+  var dueCls = (!t.dueDate || isDone || st.kind === "ended") ? "muted" : "";
   return '<div class="list-row" data-mine-id="' + esc(t.id) + '" data-mine-ws="' + esc(t.workspaceId || "") + '"' +
       ' tabindex="0" role="row">' +
-    '<span class="lr-task"><span class="lr-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
-      '<span class="lr-tags">' + catTag(t.categoryId) +
-        tags.map(tagChip).join("") +
-        (t.blocked ? '<span class="blocked-tag">' + icon("alert", 12) + '被阻塞</span>' : '') + '</span></span>' +
-    '<span class="cell" title="' + esc(t.workspaceName || "") + '">' + esc(t.workspaceName || "—") + '</span>' +
-    '<span class="cell">' + esc(colName(t.boardColumn)) + '</span>' +
-    '<span>' + priTagHTML(t.priority, t.workspaceId) + '</span>' +
-    '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' +
-      esc(dueText(t)) + '</span>' +
-    (showProgress
-      ? '<span><span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span>' +
-        '<span class="pv">' + p + '%</span></span></span>'
-      : '<span class="cell">—</span>') +
+    mineRowCells(t, dueCls, p, cols) +
     '<span class="mine-acts">' +
       ((editable && !isDone) ? '<button class="icon-btn sm" type="button" data-mine-done title="标记完成" aria-label="标记完成">' + icon("check", 14) + '</button>' : '') +
       ((running || (editable && tAllowed)) ? '<button class="icon-btn sm' + (running ? " on" : "") + '" type="button" data-mine-timer' +
@@ -310,6 +430,40 @@ function mineRowHTML(t){
       (editable ? '<button class="icon-btn sm" type="button" data-mine-due title="改期" aria-label="改期">' + icon("calendar", 14) + '</button>' : '') +
     '</span>' +
   '</div>';
+}
+function mineRowCells(t, dueCls, p, cols){
+  return cols.map(function(c){
+    if(c.k === "title") return mineTaskCell(t, cols);
+    if(c.k === "type"){
+      var badge = typeBadgeHTML(t.itemType);
+      return '<span class="cell">' + (badge || esc(typeName(t.itemType))) + '</span>';
+    }
+    if(c.k === "priority") return minePriPill(t);
+    if(c.k === "status") return mineStatusPill(t);
+    if(c.k === "dueDate") return '<span class="cell ' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + (t.dueDate ? esc(dueDateMD(t)) : "—") + '</span>';
+    if(c.k === "startDate") return '<span class="cell muted">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
+    if(c.k === "progress"){
+      /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
+      if(p <= 0 && t.boardColumn !== "doing") return '<span class="cell muted">—</span>';
+      return '<span class="progress mini"><span class="bar"><i style="width:' + p + '%"></i></span><span class="pv">' + p + '%</span></span>';
+    }
+    if(c.k === "work") return '<span class="cell">' + esc(fmtMinutesShort(t.totalMinutes)) + '</span>';
+    if(c.k === "project"){
+      return '<span class="cell" title="' + esc(t.reqName || "未关联项目") + '">' + esc(t.reqName || "—") + '</span>';
+    }
+    if(c.k === "updatedAt"){
+      var rel = mineRelText(t.updatedAt);
+      var upd = parseDate(t.updatedAt);
+      var updTip = upd ? (fmtFull(upd) + " " + weekdayCN(upd)) : rel;
+      return '<span class="cell muted ta-r mine-upd" title="最近更新：' + esc(updTip) + '">' + esc(rel) + '</span>';
+    }
+    return "";
+  }).join("");
+}
+var mineMeasuredWidth = 0;
+function mineListWidth(){
+  if(mineBody && mineBody.clientWidth) mineMeasuredWidth = mineBody.clientWidth;
+  return mineMeasuredWidth || window.innerWidth;
 }
 var mineModeEl = document.getElementById("mineMode");
 var teamSeq = 0;
@@ -415,8 +569,9 @@ function teamSectionError(err, title){
 function renderTeam(opts){
   opts = opts || {};
   syncMineModeUI();
+  if(mineStats) mineStats.innerHTML = "";
   var mineView = document.getElementById("view-mine");
-  if(mineView) mineView.classList.remove("is-empty");
+  if(mineView){ mineView.classList.remove("is-empty"); mineView.classList.add("is-team"); }
   var range = teamRange();
   if(mineMeta) mineMeta.textContent = "团队视图 · " + range.label;
   if(!mineBody) return;
@@ -554,7 +709,7 @@ function renderTeam(opts){
 }
 
 function mobileMineCardHTML(t){
-  var st = dueState(t);
+  var f = dueFlag(t);
   var running = !!(state.runningTimer && state.runningTimer.taskId === t.id);
   var tAllowed = timerAllowed(t);
   var col = colMeta(t.boardColumn) || {};
@@ -575,8 +730,9 @@ function mobileMineCardHTML(t){
     '<h3 class="mtc-title">' + esc(t.title) + '</h3>' +
     '<div class="mtc-meta">' +
       '<span class="mtc-path">' + esc(t.workspaceName || "—") + ' · ' + esc(colName(t.boardColumn)) + '</span>' +
-      '<span class="mtc-due ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' +
-        esc(dueText(t)) + '</span>' +
+      '<span class="mtc-due" title="' + esc(dueDateTip(t)) + '">' +
+        (t.dueDate ? esc(dueDateMD(t)) : "未设截止") + '</span>' +
+      (f ? '<span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : '') +
     '</div>' +
     '<div class="mtc-swipe">' +
       '<button class="mtc-act done" type="button" data-mine-done>完成</button>' +
@@ -585,6 +741,7 @@ function mobileMineCardHTML(t){
   '</article>';
 }
 function renderMobileMine(sections){
+  if(mineStats) mineStats.innerHTML = "";
   var html = '<div class="mob-groups">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
@@ -639,7 +796,10 @@ function renderMine(d, append){
   var filtering = mineFiltering();
   /* 空态时分组/排序/空间控件没有可作用的对象，先收起，避免空页面顶着一排设置 */
   var mineView = document.getElementById("view-mine");
-  if(mineView) mineView.classList.toggle("is-empty", !items.length);
+  if(mineView){
+    mineView.classList.toggle("is-empty", !items.length);
+    mineView.classList.remove("is-team");
+  }
   if(mineMeta){
     var nameOnly = mineNameOnly;
     var loaded = mineAll.length;
@@ -651,6 +811,7 @@ function renderMine(d, append){
       (nameOnly > 0 ? (" · 其中 " + nameOnly + " 项仅按显示名匹配（未绑定账号）") : "");
   }
   if(!mineAll.length){
+    if(mineStats) mineStats.innerHTML = "";
     mineBody.innerHTML = UI.emptyState({
       icon:"checkCircle", title:"没有分派给你的工作项",
       text:"被指派到你账号的工作项会汇总在这里（跨你参与的全部空间）。新成员可以先去「工作项」看看团队正在做什么；若老数据只填了显示名、没有绑定账号，请在工作项里重新指定负责人。",
@@ -663,6 +824,7 @@ function renderMine(d, append){
     return;
   }
   if(!items.length){
+    if(mineStats) mineStats.innerHTML = "";
     mineBody.innerHTML = UI.emptyState({
       icon:"filterOff", title:"当前筛选下没有工作项", compact:true,
       text:"试着放宽顶栏筛选条件，或切换空间。",
@@ -672,43 +834,119 @@ function renderMine(d, append){
     if(btn) btn.addEventListener("click", function(){
       state.mineSpace = "";
       clearFilters();
+      syncMineFilters();
       rerenderMine();
     });
     return;
   }
+  renderMineStats(items);
   var sections = mineSections(items);
   if(isMobile()){ renderMobileMine(sections); return; }
-  /* 表头只出现一次，分组以内嵌分组行区分，避免每组各带一个卡片与表头 */
-  var html = '<div class="mine-groups"><div class="list-scroll mine-list">' +
+  var cols = mineVisibleCols(mineListWidth());
+  /* 表头只出现一次，分组以内嵌可折叠行区分，避免每组各带一个卡片与表头 */
+  var html = '<div class="mine-groups"><div class="list-scroll mine-list" data-density="' + mineDensityValue() + '">' +
     '<div class="list-head">' +
-      '<span>工作项</span><span>空间</span><span>状态</span><span>优先级</span>' +
-      '<span>截止</span><span>进度</span><span>操作</span>' +
+      cols.map(function(c){
+        return '<span' + (c.align === "right" ? ' class="ta-r"' : '') + '>' + esc(c.label) + '</span>';
+      }).join("") + '<span class="ta-r">操作</span>' +
     '</div><div class="list-body">';
   sections.forEach(function(s){
     if(!s.rows.length) return;
-    var inner;
-    if(s.subs.length){
-      inner = s.subs.map(function(sub){
-        if(!sub.rows.length) return "";
-        return '<div class="mine-subgroup-row"><span class="mine-subgroup-name">' + esc(sub.label) + '</span>' +
-          '<span class="mine-subgroup-n">' + sub.rows.length + '</span>' +
-          (sub.hint ? '<span class="mine-group-hint">' + esc(sub.hint) + '</span>' : '') + '</div>' +
-          sub.rows.map(mineRowHTML).join("");
-      }).join("");
-    }else{
-      inner = s.rows.map(mineRowHTML).join("");
-    }
-    html += '<section class="mine-group" data-mine-group="' + esc(s.key) + '">' +
+    var gk = mineGroupKey(state.mineGroup, s.key);
+    var closed = !!mineClosed[gk];
+    html += '<section class="mine-grp' + (closed ? " collapsed" : "") + (s.label ? " has-head" : "") + '" data-mine-group="' + esc(s.key) + '" data-tone="' + esc(s.tone || "neutral") + '">' +
       (s.label
-        ? '<div class="mine-group-row"><span class="mine-group-name">' + esc(s.label) + '</span>' +
-          '<span class="mine-group-n">' + s.rows.length + '</span>' +
-          (s.hint ? '<span class="mine-group-hint">' + esc(s.hint) + '</span>' : '') + '</div>'
+        ? '<div class="mine-grp-h" role="button" tabindex="0" aria-expanded="' + (!closed) + '" data-mine-toggle="' + esc(gk) + '">' +
+            '<span class="mine-grp-chev" aria-hidden="true">' + icon("chevronRight", 15) + '</span>' +
+            '<span class="mine-grp-name">' + esc(s.label) + '</span>' +
+            '<span class="mine-grp-n">' + s.rows.length + '</span>' +
+            (s.hint ? '<span class="mine-grp-hint">' + esc(s.hint) + '</span>' : '') +
+            '<span class="mine-grp-act">' + (closed ? "展开" : "收起") + '</span>' +
+          '</div>'
         : '') +
-      inner +
-    '</section>';
+      '<div class="mine-grp-body">';
+    if(s.subs.length){
+      s.subs.forEach(function(sub){
+        if(!sub.rows.length) return;
+        var sk = mineSubKey(state.mineGroup, s.key, mineSubDim(), sub.key);
+        var sClosed = !!mineClosed[sk];
+        html += '<div class="mine-sub' + (sClosed ? " closed" : "") + '">' +
+          '<div class="mine-sub-h" role="button" tabindex="0" aria-expanded="' + (!sClosed) + '" data-mine-toggle="' + esc(sk) + '">' +
+            '<span class="mine-sub-chev" aria-hidden="true">' + icon("chevronRight", 12) + '</span>' +
+            '<span class="mine-sub-name">' + esc(sub.label) + '</span>' +
+            '<span class="mine-sub-n">' + sub.rows.length + '</span>' +
+          '</div>' +
+          '<div class="mine-sub-body">' + sub.rows.map(function(t){ return mineRowHTML(t, cols); }).join("") + '</div>' +
+        '</div>';
+      });
+    }else{
+      html += s.rows.map(function(t){ return mineRowHTML(t, cols); }).join("");
+    }
+    html += '</div></section>';
   });
   html += '</div></div></div>' + mineMoreHTML();
   mineBody.innerHTML = html;
+  var scroller = mineBody.querySelector(".mine-list");
+  if(scroller) scroller.style.setProperty("--mine-cols", cols.map(function(c){ return c.w; }).concat(MINE_OPS_W).join(" "));
+  mineSyncFoldBtn(sections);
+}
+function renderMineStats(items){
+  if(!mineStats) return;
+  if(isMobile()){ mineStats.innerHTML = ""; return; }
+  var over = 0, today = 0, blocked = 0, noDue = 0;
+  items.forEach(function(t){
+    var s = dueState(t);
+    if(s.kind === "over") over++;
+    else if(s.kind === "today") today++;
+    if(t.blocked) blocked++;
+    if(!t.dueDate && s.kind !== "done" && s.kind !== "ended") noDue++;
+  });
+  mineStats.innerHTML =
+    '<span class="mine-stat">共 <b>' + items.length + '</b> 项</span>' +
+    '<span class="mine-stat over">逾期 <b>' + over + '</b></span>' +
+    '<span class="mine-stat today">今天到期 <b>' + today + '</b></span>' +
+    '<span class="mine-stat blocked">被阻塞 <b>' + blocked + '</b></span>' +
+    '<span class="mine-stat">未设截止 <b>' + noDue + '</b></span>' +
+    '<span class="mine-stat-hint">统计基于已载入项 · 悬停行显示快捷操作</span>';
+}
+function mineAnyGroupOpen(sections){
+  if(state.mineGroup === "none") return false;
+  for(var i = 0; i < sections.length; i++){
+    var s = sections[i];
+    if(s.rows.length && !mineClosed[mineGroupKey(state.mineGroup, s.key)]) return true;
+  }
+  return false;
+}
+function mineSyncFoldBtn(sections){
+  if(!btnMineFold) return;
+  var has = state.mineGroup !== "none";
+  btnMineFold.hidden = !has;
+  btnMineFold.textContent = has && mineAnyGroupOpen(sections) ? "折叠全部" : "展开全部";
+}
+function mineToggleFoldAll(){
+  if(state.mineGroup === "none") return;
+  var sections = mineSections(mineFiltered(mineAll));
+  if(mineAnyGroupOpen(sections)){
+    var sub = mineSubDim();
+    sections.forEach(function(s){
+      if(!s.rows.length) return;
+      mineClosed[mineGroupKey(state.mineGroup, s.key)] = 1;
+      if(sub !== "none"){
+        s.subs.forEach(function(x){ mineClosed[mineSubKey(state.mineGroup, s.key, sub, x.key)] = 1; });
+      }
+    });
+  }else{
+    mineClosed = {};
+  }
+  mineSaveClosed();
+  rerenderMine();
+}
+function mineSyncDensityUI(){
+  if(!mineDensity) return;
+  var cur = mineDensityValue();
+  mineDensity.querySelectorAll("[data-mine-density]").forEach(function(b){
+    b.setAttribute("aria-pressed", String(b.dataset.mineDensity === cur));
+  });
 }
 function mineMoreHTML(){
   if(mineHasMore){
@@ -816,6 +1054,16 @@ function mineReschedule(anchor, t){
 }
 if(mineBody){
   mineBody.addEventListener("click", function(e){
+    var tgl = e.target.closest("[data-mine-toggle]");
+    if(tgl){
+      e.stopPropagation();
+      var tk = tgl.dataset.mineToggle;
+      if(mineClosed[tk]) delete mineClosed[tk];
+      else mineClosed[tk] = 1;
+      mineSaveClosed();
+      rerenderMine();
+      return;
+    }
     if(e.target.closest("[data-mine-more]")){ e.stopPropagation(); loadMine({append:true}); return; }
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
@@ -827,7 +1075,7 @@ if(mineBody){
     var id = row.dataset.mineId;
     var wsId = row.dataset.mineWs;
     if(wsId && rt.currentWs && wsId !== rt.currentWs.id){
-      var rowTitle = row.querySelector(".lr-t");
+      var rowTitle = row.querySelector(".mine-tc-title") || row.querySelector(".mtc-title") || row.querySelector(".lr-t");
       askSwitchWorkspace(wsId, wsNameById(wsId), {
         title: "打开其他空间的工作项",
         okText: "切换并打开",
@@ -841,6 +1089,8 @@ if(mineBody){
   mineBody.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;
     if(e.target.closest("button,input,select,a,textarea")) return;
+    var tgl = e.target.closest("[data-mine-toggle]");
+    if(tgl){ e.preventDefault(); tgl.click(); return; }
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
     e.preventDefault();
@@ -850,6 +1100,7 @@ if(mineBody){
 if(mineSpaceFilter){
   mineSpaceFilter.addEventListener("change", function(){
     state.mineSpace = mineSpaceFilter.value || "";
+    syncMineFilterMarks();
     rerenderMine();
   });
 }
@@ -865,15 +1116,33 @@ if(mineSubgroup){
   mineSubgroup.addEventListener("change", function(){
     if(MINE_GROUP_DIMS.indexOf(mineSubgroup.value) === -1) return;
     state.mineSubgroup = mineSubgroup.value;
+    syncMineFilterMarks();
     rerenderMine();
   });
 }
 if(mineSort){
   mineSort.addEventListener("change", function(){
     state.mineSort = MINE_SORTS.indexOf(mineSort.value) !== -1 ? mineSort.value : "default";
+    syncMineFilterMarks();
     rerenderMine();
   });
 }
+if(mineDensity){
+  mineDensity.addEventListener("click", function(e){
+    var b = e.target.closest("[data-mine-density]");
+    if(!b) return;
+    try{ localStorage.setItem(MINE_DENSITY_KEY, b.dataset.mineDensity === "relaxed" ? "relaxed" : "standard"); }catch(e2){ /* 受限环境仅本次生效 */ }
+    mineSyncDensityUI();
+    var scroller = mineBody && mineBody.querySelector(".mine-list");
+    if(scroller) scroller.dataset.density = mineDensityValue();
+  });
+}
+if(btnMineFields){
+  btnMineFields.addEventListener("click", function(){
+    listPrefs.openColumnSettings("my-tasks", function(){ rerenderMine(); });
+  });
+}
+if(btnMineFold) btnMineFold.addEventListener("click", mineToggleFoldAll);
 if(btnMineRefresh) btnMineRefresh.addEventListener("click", function(){ loadMine(); });
 if(mineModeEl){
   mineModeEl.addEventListener("click", function(e){
@@ -885,9 +1154,19 @@ if(mineModeEl){
 window.addEventListener("ds:layout", function(){
   if(!rt.currentWs || document.body.dataset.view !== "mine") return;
   syncMineModeUI();
+  mineSyncDensityUI();
   if(isMobile() && currentMineMode() === "team"){ renderTeam(); return; }
   /* 从手机团队模式切回桌面时，我的任务可能从未加载过 */
   if(mineAll.length) rerenderMine(); else loadMine();
+});
+/* 列裁剪按容器宽度决定，窗口变化后重绘保持表头与行对齐 */
+var mineResizeTimer = 0;
+window.addEventListener("resize", function(){
+  if(document.body.dataset.view !== "mine" || isMobile() || !mineAll.length) return;
+  clearTimeout(mineResizeTimer);
+  mineResizeTimer = setTimeout(function(){
+    if(currentMineMode() !== "team") rerenderMine();
+  }, 150);
 });
 /* 下拉刷新走统一入口：团队模式刷新团队面板，我的模式刷新任务列表 */
 window.addEventListener("ds:refresh-mine", function(){
@@ -906,5 +1185,6 @@ window.addEventListener("ds:running-timer", function(){
   if(mineAll.length) rerenderMine();
 });
 syncMineModeUI();
+mineSyncDensityUI();
 
 export { askSwitchWorkspace, enterMineView, loadMine, wsNameById };

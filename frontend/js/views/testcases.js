@@ -4,16 +4,19 @@ import { API } from "../core/api.js";
 import { AIProgress, aiApplyFailText, aiErrorText, aiUsageText } from "../core/ai-progress.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
 import { $ } from "../core/dom.js";
+import { attachCombo } from "../core/combo.js";
 import { icon } from "../core/icons.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer } from "../core/task-drawer.js";
-import { canEditReq, rt } from "../core/state.js";
-import { loadViews, savedViewsFor } from "../core/filters-ui.js";
+import { canEditReq, rt, state } from "../core/state.js";
+import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
+import { showView } from "../core/router.js";
 import { PRIORITIES, avatarHTML, fmtTs, priName, priTagHTML, severityBadgeHTML } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
 import { downloadCsv } from "./manager-shared.js";
+import { triggerDownload } from "../lib/download.js";
 
 var cases = [];
 var stats = { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
@@ -414,6 +417,12 @@ function syncDefectFilters(){
   if(sevSel) sevSel.value = defSeverity;
   var stSel = $("tcDefStatus");
   if(stSel) stSel.value = defStatus;
+  /* 「未关闭」是缺陷页默认口径，算中性；其余偏离默认才高亮 */
+  UI.markFiltered($("tcDefReq"), !defReqId);
+  UI.markFiltered($("tcDefSeverity"), defSeverity === "all");
+  UI.markFiltered($("tcDefStatus"), defStatus === "open");
+  UI.markFiltered($("tcDefOwner"), defOwner === "all");
+  UI.markFiltered($("tcDefVersion"), defVersion === "all");
 }
 function filteredDefects(){
   var q = defSearch.trim().toLowerCase();
@@ -475,7 +484,7 @@ function defectStatsHTML(){
     + '<span class="tc-stat mute">平均修复 <b>' + avgFix + '</b></span>'
     + '<span class="tc-def-sev">' + sev + '</span>';
 }
-function defectRowHTML(t){
+function defectRowHTML(t, no){
   var st = defectStatus(t);
   var cases = defectLinkedCases(t);
   var caseHTML = cases.length
@@ -493,6 +502,7 @@ function defectRowHTML(t){
     : '<span class="tc-def-proj" title="' + esc(defectProjectName(t.reqId)) + '">'
       + esc(cut(defectProjectName(t.reqId), 18)) + '</span>';
   return '<div class="tc-def-row" role="button" tabindex="0" data-tc-defect="' + esc(t.id) + '" aria-label="打开缺陷：' + esc(t.title) + '">'
+    + '<div class="tc-def-no" aria-hidden="true" title="当前列表序号，随筛选和排序变化">' + (no || "") + '</div>'
     + '<div>' + sevHTML + '</div>'
     + '<div class="tc-def-main">'
     +   '<div class="tc-def-title">' + esc(t.title || "（无标题）") + '</div>'
@@ -565,7 +575,7 @@ function renderDefects(){
     return;
   }
   var shown = list.slice(0, defectShown);
-  var html = shown.map(defectRowHTML).join("");
+  var html = shown.map(function(t, i){ return defectRowHTML(t, i + 1); }).join("");
   if(list.length > shown.length){
     html += '<button class="btn ghost tc-load-more" type="button" data-tc-def-more>加载更多（已加载 '
       + shown.length + ' / 共 ' + list.length + ' 条）</button>';
@@ -739,6 +749,11 @@ function loadCoverage(){
     $("tcCoverage").innerHTML = UI.errorState(ex.message || "网络异常");
   });
 }
+/* 0 值走中性：绿色代表有通过、红色代表有失败，0 两者都不代表 */
+function covCountHTML(value, cls){
+  var n = Number(value) || 0;
+  return '<span class="' + cls + (n ? "" : " is-zero") + '">' + n + '</span>';
+}
 function renderCoverage(){
   var box = $("tcCoverage");
   if(!box) return;
@@ -748,7 +763,7 @@ function renderCoverage(){
   });
   var head = '<div class="cov-summary">已覆盖需求 <b>' + covered + '</b> / ' + total +
     (total ? '（' + Math.round(covered * 100 / total) + '%）' : '') +
-    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算</span></div>';
+    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算；0 表示未发生，不代表通过或失败</span></div>';
   if(!coverageRows.length){
     box.innerHTML = head + UI.emptyState({ icon:"checklist", title:"还没有可对照的需求或用例", text:"先录入需求池需求与测试用例，覆盖矩阵会自动汇总。" });
     return;
@@ -765,11 +780,11 @@ function renderCoverage(){
       '<span class="cov-name"><b>' + esc(r.demandTitle || "未命名需求") + '</b>' +
         (r.demandId ? '<small>' + esc(demandStatusLabel(r.demandStatus)) + '</small>' : '') + '</span>' +
       '<span>' + total + '</span>' +
-      '<span class="cov-pass">' + (r.passed || 0) + '</span>' +
-      '<span class="cov-fail">' + (r.failed || 0) + '</span>' +
-      '<span class="cov-block">' + (r.blocked || 0) + '</span>' +
+      covCountHTML(r.passed, "cov-pass") +
+      covCountHTML(r.failed, "cov-fail") +
+      covCountHTML(r.blocked, "cov-block") +
       '<span>' + (r.untested || 0) + '</span>' +
-      '<span class="cov-bug">' + (r.bugCount || 0) + '</span>' +
+      covCountHTML(r.bugCount, "cov-bug") +
       '<span><i class="cov-bar"><i style="width:' + pct + '%"></i></i>' + pct + '%</span>' +
       '<span class="mini-tag ' + covCls + '">' + covTxt + '</span>' +
     '</div>';
@@ -907,14 +922,15 @@ function renderTestReport(){
     + '<div><h3>测试报告 · ' + esc(name) + '</h3><p class="foot-note">生成时间 ' + esc(stamp) + ' · 口径：每个用例取最近一轮执行结果</p></div>'
     + '<div class="rep-actions">'
     +   '<button class="btn sm" type="button" data-tc-report-csv>导出 CSV</button>'
-    +   '<button class="btn sm" type="button" data-tc-report-print>打印 / 存 PDF</button>'
+    +   '<button class="btn sm" type="button" data-tc-report-doc>导出 Word</button>'
+    +   '<button class="btn sm" type="button" data-tc-report-print title="打开打印对话框，在目标里选择「另存为 PDF」">导出 PDF</button>'
     + '</div>'
     + '</div>';
   var tiles = '<div class="rep-tiles">'
     + '<span class="tc-stat"><b>' + total + '</b>用例总数</span>'
-    + '<span class="tc-stat ok"><b>' + (s.passed || 0) + '</b>通过 · ' + passRate + '%</span>'
-    + '<span class="tc-stat over"><b>' + (s.failed || 0) + '</b>失败</span>'
-    + '<span class="tc-stat warn"><b>' + (s.blocked || 0) + '</b>阻塞</span>'
+    + '<span class="tc-stat' + ((s.passed || 0) > 0 ? " ok" : " mute") + '"><b>' + (s.passed || 0) + '</b>通过 · ' + passRate + '%</span>'
+    + '<span class="tc-stat' + ((s.failed || 0) > 0 ? " over" : " mute") + '"><b>' + (s.failed || 0) + '</b>失败</span>'
+    + '<span class="tc-stat' + ((s.blocked || 0) > 0 ? " warn" : " mute") + '"><b>' + (s.blocked || 0) + '</b>阻塞</span>'
     + '<span class="tc-stat mute"><b>' + (s.untested || 0) + '</b>未执行</span>'
     + '<span class="tc-stat"><b>' + cov.pct + '%</b>需求覆盖（' + cov.covered + '/' + cov.total + '）</span>'
     + '</div>';
@@ -941,10 +957,11 @@ function renderTestReport(){
         return '<div class="rep-cov-row rep-cov-link" role="button" tabindex="0" data-cov-demand="' + esc(r.demandId) + '" title="查看需求详情"><span>' + esc(r.demandTitle || "未命名需求") + '</span>'
           + '<span>' + (r.caseTotal || 0) + ' 用例 · ' + (r.passed || 0) + ' 通过 · ' + (r.failed || 0) + ' 失败</span>'
           + '<span class="mini-tag ' + (ok ? "ok" : "over") + '">' + (ok ? "已覆盖" : "未覆盖") + '</span></div>';
-      }).join("") + '</div></section>';
+      }).join("") + '</div>'
+      + '<p class="foot-note">0 表示未发生，不代表通过或失败。</p></section>';
   }
   box.innerHTML = head + tiles + failBlock + blockBlock + covBlock
-    + '<p class="foot-note">证据附件在执行历史中随执行记录保存；报告导出与打印均基于当前项目与最近一轮结果。</p>';
+    + '<p class="foot-note">证据附件在执行历史中随执行记录保存；CSV / Word 直接下载，PDF 走浏览器打印（目标选「另存为 PDF」），均基于当前项目与最近一轮结果。</p>';
 }
 function reportPlainRows(){
   if(!reportData) return [];
@@ -974,6 +991,81 @@ function exportTestReport(){
   if(!reportData){ toast("报告还没有加载完成", "warn"); return; }
   downloadCsv("测试报告-" + reqNameOf(caseReqId) + ".csv", reportPlainRows());
   toast("已导出测试报告 CSV", "fs");
+}
+/* Word 导出：Word 兼容 HTML 用表格排版（flex 在 Word 里不生效），.doc 可直接打开并另存为 .docx */
+function exportTestReportDoc(){
+  if(!reportData){ toast("报告还没有加载完成", "warn"); return; }
+  var s = reportData.stats || {};
+  var total = s.total || 0;
+  var cov = coverageSummary(reportData.coverage);
+  var name = reqNameOf(caseReqId);
+  var stamp = reportData.generatedAt.toLocaleString("zh-CN", { hour12: false });
+  var passRate = total ? Math.round((s.passed || 0) * 100 / total) : 0;
+  function cell(tag, v){ return '<' + tag + '>' + esc(v == null ? "" : String(v)) + '</' + tag + '>'; }
+  function td(v){ return cell("td", v); }
+  function th(v){ return cell("th", v); }
+  var html = '<!doctype html><html lang="zh-CN" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
+    + '<meta charset="utf-8"><title>测试报告 · ' + esc(name) + '</title><style>'
+    + '@page{size:A4;margin:1.8cm 1.6cm;}'
+    + 'body{font:10.5pt/1.5 "Microsoft YaHei","PingFang SC",sans-serif;color:#101828;}'
+    + 'h3{font-size:16pt;margin:0 0 3pt;}p{margin:0 0 6pt;}'
+    + 'table{border-collapse:collapse;width:100%;margin:6pt 0 10pt;font-size:9.5pt;}'
+    + 'th,td{border:1px solid #D0D5DD;padding:4pt 5pt;vertical-align:top;text-align:left;}'
+    + 'th{background:#F2F4F7;font-weight:600;}'
+    + '.meta{color:#667085;font-size:9pt;}'
+    + '</style></head><body>'
+    + '<h3>测试报告 · ' + esc(name) + '</h3>'
+    + '<p class="meta">生成时间 ' + esc(stamp) + ' · 口径：每个用例取最近一轮执行结果</p>'
+    + '<table>'
+    + '<tr>' + th("用例总数") + th("通过") + th("失败") + th("阻塞") + '</tr>'
+    + '<tr>' + td(total) + td(s.passed || 0) + td(s.failed || 0) + td(s.blocked || 0) + '</tr>'
+    + '<tr>' + th("未执行") + th("通过率") + th("需求覆盖") + th("报告范围") + '</tr>'
+    + '<tr>' + td(s.untested || 0) + td(passRate + "%") + td(cov.covered + "/" + cov.total + "（" + cov.pct + "%）") + td("当前项目") + '</tr>'
+    + '</table>';
+  var caseHead = '<tr>' + th("结果") + th("用例") + th("模块") + th("优先级") + th("最近执行") + th("备注") + th("证据") + th("缺陷") + '</tr>';
+  function caseRows(list){
+    return list.map(function(c){
+      return '<tr>'
+        + td(c.latestStatus ? (STATUS_LABEL[c.latestStatus] || c.latestStatus) : "未执行")
+        + td(c.title || "（无标题）")
+        + td(c.module || "")
+        + td(c.priority ? priName(c.priority) : "")
+        + td((c.latestBy || "") + (c.latestAt ? " " + fmtTs(c.latestAt) : ""))
+        + td(c.latestNote || "")
+        + td(c.latestEvidenceCount || 0)
+        + td(c.latestBugTaskTitle || c.latestBugTaskId || "")
+        + '</tr>';
+    }).join("");
+  }
+  var failed = reportData.failed || [];
+  var blocked = reportData.blocked || [];
+  if(failed.length){
+    html += '<p><b>失败用例 · ' + (reportData.failedTotal || 0) + ' 条</b></p><table>' + caseHead + caseRows(failed) + '</table>';
+    if((reportData.failedTotal || 0) > failed.length){
+      html += '<p class="meta">部分失败用例加载失败，当前导出 ' + failed.length + ' 条。</p>';
+    }
+  }else{
+    html += '<p><b>失败用例</b></p><p>没有失败用例，最近一轮全部通过或未执行。</p>';
+  }
+  if(blocked.length){
+    html += '<p><b>阻塞用例 · ' + (reportData.blockedTotal || 0) + ' 条</b></p><table>' + caseHead + caseRows(blocked) + '</table>';
+    if((reportData.blockedTotal || 0) > blocked.length){
+      html += '<p class="meta">部分阻塞用例加载失败，当前导出 ' + blocked.length + ' 条。</p>';
+    }
+  }
+  var covRows = (reportData.coverage || []).filter(function(r){ return r.demandId; });
+  if(covRows.length){
+    html += '<p><b>需求覆盖 · ' + cov.covered + ' / ' + cov.total + '（' + cov.pct + '%）</b></p><table>'
+      + '<tr>' + th("需求") + th("用例数") + th("通过") + th("失败") + th("覆盖") + '</tr>'
+      + covRows.map(function(r){
+        return '<tr>' + td(r.demandTitle || "未命名需求") + td(r.caseTotal || 0) + td(r.passed || 0) + td(r.failed || 0)
+          + td((r.caseTotal || 0) > 0 ? "已覆盖" : "未覆盖") + '</tr>';
+      }).join("")
+      + '</table>';
+  }
+  html += '<p class="meta">报告基于当前项目与最近一轮执行结果；证据附件保存在各用例的执行历史中。</p></body></html>';
+  triggerDownload("测试报告-" + name + ".doc", "\ufeff" + html, "application/msword;charset=utf-8");
+  toast("已导出测试报告 Word", "fs");
 }
 function printTestReport(){
   if(!reportData){ toast("报告还没有加载完成", "warn"); return; }
@@ -1198,8 +1290,8 @@ function render(){
         title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "全部项目下还没有测试用例"),
         text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试"
           : (caseCreateTargets().length
-            ? "点右上角「新增用例」，选择目标项目后录入第一条。"
-            : "当前没有可写的项目；获得写权限后即可新增用例。"))
+            ? "点右上角「新建用例」，选择目标项目后录入第一条。"
+            : "当前没有可写的项目；获得写权限后即可新建用例。"))
       });
       return;
     }
@@ -1217,11 +1309,11 @@ function render(){
     $("tcList").innerHTML = UI.emptyState({
       icon: anyFilter ? "filterOff" : "checklist",
       title: searchText ? "没有匹配的用例" : (anyFilter ? "没有符合条件的用例" : "还没有测试用例"),
-      text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试" : "点右上角「新增用例」录入第一条，执行后按结果统计。")
+      text: searchText ? "换个关键词或清空搜索试试" : (anyFilter ? "换个筛选条件试试" : "点右上角「新建用例」录入第一条，执行后按结果统计。")
     });
     return;
   }
-  var html = rows.map(caseRowHTML).join("");
+  var html = rows.map(function(c, i){ return caseRowHTML(c, i + 1); }).join("");
   if(caseHasMore){
     html += '<button class="btn ghost tc-load-more" type="button" data-tc-more>加载更多（已加载 '
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
@@ -1245,7 +1337,7 @@ function caseGroupHTML(g){
   }else if(!g.items.length){
     body = '<p class="tc-group-empty">' + (anyFilter ? "没有符合条件的用例" : "还没有测试用例") + '</p>';
   }else{
-    body = g.items.map(caseRowHTML).join("");
+    body = g.items.map(function(c, i){ return caseRowHTML(c, i + 1); }).join("");
   }
   var more = "";
   if(g.hasMore){
@@ -1293,8 +1385,18 @@ function syncFilterOptions(){
   $("tcModuleList").innerHTML = modules.map(function(m){
     return '<option value="' + esc(m) + '"></option>';
   }).join("");
-  $("tcBug").classList.toggle("primary", bugOnly);
+  $("tcBug").classList.toggle("soft", bugOnly);
   $("tcBug").setAttribute("aria-pressed", bugOnly ? "true" : "false");
+  ["tcModule", "tcPri", "tcOwner"].forEach(function(id){
+    var el = $(id);
+    if(el) UI.markFiltered(el, el.value === "all");
+  });
+  var clearBtn = $("tcClearFilter");
+  if(clearBtn){
+    clearBtn.hidden = tcMode !== "cases" || !(statusFilter !== "all"
+      || (!caseScopeAll && modFilter !== "all") || priFilter !== "all"
+      || ownerFilter !== "all" || bugOnly || !!searchText);
+  }
 }
 function renderStats(){
   var s = stats || {};
@@ -1306,13 +1408,16 @@ function renderStats(){
     [s.blocked, "阻塞", "warn"]
   ];
   $("tcStats").innerHTML = items.map(function(it){
-    return '<span class="tc-stat ' + it[2] + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
+    /* 0 值统一中性：数字为 0 时不借用通过 / 失败的颜色 */
+    var cls = (Number(it[0]) || 0) === 0 ? "mute" : it[2];
+    return '<span class="tc-stat ' + cls + '"><b>' + it[0] + '</b>' + it[1] + '</span>';
   }).join("");
 }
 
 /* ---------- 用例保存视图（scope=testcase：项目 / 执行结果 / 筛选 / 展示方式） ---------- */
 
 var tcViewsMenuEl = $("tcViewsMenu");
+attachCombo($("cModule"), { chevron:true });
 function tcViewParams(){
   return {
     scope: "testcase", reqId: caseReqId || "", all: caseScopeAll ? 1 : 0,
@@ -1371,7 +1476,7 @@ function saveTcView(){
   });
 }
 function deleteTcView(id){
-  UI.showConfirm({ title: "删除视图", msg: "确定删除该用例视图？不影响用例数据。", okText: "删除" }).then(function(ok){
+  UI.showConfirm({ title: "删除视图", msg: "确定删除该用例视图？不影响用例数据。", okText: "删除视图" }).then(function(ok){
     if(!ok) return;
     API.del("/api/views/" + encodeURIComponent(id)).then(function(){
       toast("视图已删除", "fs");
@@ -1408,6 +1513,19 @@ function syncTcSubnav(){
   });
   paintDefectBadge();
 }
+/* 手机端项目域导航：面包屑显示当前项目，子页负责跨域跳转 */
+function tcDomainScopeId(){
+  if(tcMode === "defects") return defReqId || "";
+  return caseScopeAll ? "" : (caseReqId || "");
+}
+function syncTcDomain(){
+  var cur = $("tcCrumbProj");
+  if(!cur) return;
+  var name = tcMode === "defects" ? defectScopeName()
+    : (caseScopeAll || !caseReqId ? "全部项目" : reqNameOf(caseReqId));
+  cur.textContent = name;
+  cur.title = name;
+}
 function setTcMode(mode){
   if(mode !== "cases" && mode !== "defects" && mode !== "plans" && mode !== "coverage" && mode !== "report") return;
   if(mode === tcMode){ syncModeUI(); return; }
@@ -1437,6 +1555,7 @@ function syncModeUI(){
     b.setAttribute("aria-pressed", b.dataset.tcMode === tcMode ? "true" : "false");
   });
   syncTcSubnav();
+  syncTcDomain();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = !cov && !rep && !plan && !def && caseCreateTargets().length ? "" : "none";
   /* 手机把筛选收进可展开面板：非用例模式没有筛选内容，入口一并收起 */
@@ -1464,8 +1583,10 @@ function syncModeUI(){
   if(planNew) planNew.hidden = !plan;
   if(defNew) defNew.hidden = !def || !defectCreateTargets().length;
   var statsEl = $("tcStats"), defPane = $("tcDefects");
-  /* 全部项目下没有单一项目的执行结果，统计条让位给分组标题 */
-  if(statsEl) statsEl.hidden = def || (tcMode === "cases" && caseScopeAll);
+  /* 全部项目下没有单一项目的执行结果，统计条让位给分组标题；
+     计划模式的统计在计划里，列表与详情共用同一个空容器，必须整块隐藏而不是只清空，
+     否则空元素会带着上下外边距夹在两段 flex gap 之间 */
+  if(statsEl) statsEl.hidden = plan || def || (tcMode === "cases" && caseScopeAll);
   if(defPane) defPane.hidden = !def;
   if(def){
     ["tcList", "tcCoverage", "tcReport", "tcPlans"].forEach(function(id){
@@ -1475,11 +1596,10 @@ function syncModeUI(){
   }
   document.querySelectorAll("#tcStatusSeg [data-tc-status]").forEach(function(b){
     var on = b.dataset.tcStatus === statusFilter;
-    b.classList.toggle("primary", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
 }
-function caseRowHTML(c){
+function caseRowHTML(c, no){
   var meta = [];
   var stepCount = (c.steps || []).length;
   if(c.module) meta.push(c.module);
@@ -1510,6 +1630,7 @@ function caseRowHTML(c){
       + '</span>';
   }
   return '<div class="tc-row" data-tc-open="' + esc(c.id) + '">'
+    + '<span class="tc-no" aria-hidden="true" title="当前列表序号，随筛选和排序变化">' + (no || "") + '</span>'
     + statusBadgeHTML(c.latestStatus)
     + '<div class="tc-main">'
     +   '<div class="tc-title">' + esc(c.title) + (c.priority ? ' <span class="tc-pri">' + priTagHTML(c.priority) + '</span>' : "") + '</div>'
@@ -1527,7 +1648,8 @@ function cut(s, n){
 /* ---------- 用例编辑 ---------- */
 
 function demandStatusLabel(st){
-  return { review:"待评审", pass:"已通过", plan:"已排期", rej:"已拒绝" }[st] || st || "";
+  if(!st) return "";
+  return { review:"待评审", pass:"已通过", plan:"已排期", rej:"已拒绝", canceled:"已取消", cancelled:"已取消" }[st] || "未知状态";
 }
 function demandPickLabel(d){
   var tag = demandStatusLabel(d.status);
@@ -1602,11 +1724,11 @@ function syncPriOptions(){
 
 function openNewDialog(targetReqId){
   caseFormReqId = targetReqId || caseReqId || null;
-  if(!caseFormReqId){ toast("先选择项目，再新增用例", "warn"); return; }
+  if(!caseFormReqId){ toast("先选择项目，再新建用例", "warn"); return; }
   editingCase = { id: null, steps: [{ action: "", expected: "" }] };
   $("caseFormTitle").textContent = caseScopeAll
-    ? "新增用例 · " + reqNameOf(caseFormReqId)
-    : "新增用例";
+    ? "新建用例 · " + reqNameOf(caseFormReqId)
+    : "新建用例";
   $("cTitle").value = "";
   $("cModule").value = "";
   syncPriOptions();
@@ -1624,18 +1746,18 @@ function openNewDialog(targetReqId){
   caseFormBaseline = caseFormSnapshot();
   UI.openModal($("dlgCase"), "input");
 }
-/* 全部项目下新增用例必须先落到一个可写项目：只有一个目标就直接开，多个目标用菜单选 */
+/* 全部项目下新建用例必须先落到一个可写项目：只有一个目标就直接开，多个目标用菜单选 */
 function openCaseCreate(){
   var targets = caseCreateTargets();
   if(!targets.length){
-    toast(caseScopeAll ? "全部项目里没有可写项目，无法新增用例" : "当前项目只读，无法新增用例", "warn");
+    toast(caseScopeAll ? "全部项目里没有可写项目，无法新建用例" : "当前项目只读，无法新建用例", "warn");
     return;
   }
   if(targets.length === 1){ openNewDialog(targets[0]); return; }
   var btn = $("btnCaseNew");
   var el = document.createElement("div");
   el.className = "menu";
-  el.innerHTML = '<div class="menu-title">新增用例到</div>'
+  el.innerHTML = '<div class="menu-title">新建用例到</div>'
     + targets.map(function(id){
       return '<button class="menu-item" type="button" data-case-target="' + esc(id) + '">'
         + '<span>' + esc(reqNameOf(id)) + '</span></button>';
@@ -2055,7 +2177,7 @@ function applyAiCases(){
   var btn = $("dlgAiCaseResultOk");
   aiCaseApplying = true;
   btn.disabled = true;
-  btn.textContent = "创建中…";
+  btn.textContent = "新建中…";
   API.post("/api/ai/testcases/apply", {
     reqId: reqId,
     demandId: aiCaseDemandId || null,
@@ -2063,7 +2185,7 @@ function applyAiCases(){
   }).then(function(r){
     aiCaseApplying = false;
     btn.disabled = false;
-    btn.textContent = "创建选中用例";
+    btn.textContent = "新建选中用例";
     UI.closeModal($("dlgAiCaseResult"));
     var msg = "已创建 " + r.created + " 条用例";
     if(r.skipped) msg += "，跳过 " + r.skipped + " 条同名";
@@ -2073,8 +2195,8 @@ function applyAiCases(){
   }).catch(function(ex){
     aiCaseApplying = false;
     btn.disabled = false;
-    btn.textContent = "创建选中用例";
-    toast(ex.message || "创建失败", "bad");
+    btn.textContent = "新建选中用例";
+    toast(ex.message || "新建失败", "bad");
   });
 }
 /* ---------- 执行结果 ---------- */
@@ -2163,7 +2285,7 @@ function doRun(){
 
 function openDefectDialog(id){
   var c = caseById(id);
-  if(!caseWritable(c)){ toast("当前项目只读，无法创建缺陷", "warn"); return; }
+  if(!caseWritable(c)){ toast("当前项目只读，无法新建缺陷", "warn"); return; }
   defectCaseId = id;
   $("caseDefectDesc").textContent = "「" + (c ? c.title : "") + "」将生成一条缺陷工作项，执行步骤与失败备注写入描述。";
   $("defectSeverity").value = "";
@@ -2181,7 +2303,7 @@ function doDefect(){
     return;
   }
   caseDefecting = true;
-  setCaseBusy($("btnDoDefect"), true, "创建中…");
+  setCaseBusy($("btnDoDefect"), true, "新建中…");
   API.post("/api/test-cases/" + encodeURIComponent(defectCaseId) + "/defect", {
     severity: severity,
     environment: $("defectEnvironment").value.trim() || null
@@ -2195,7 +2317,7 @@ function doDefect(){
   }).catch(function(ex){
     caseDefecting = false;
     setCaseBusy($("btnDoDefect"), false);
-    toast(ex.message || "创建失败", "bad");
+    toast(ex.message || "新建失败", "bad");
   });
 }
 
@@ -2814,6 +2936,28 @@ $("tcReq").addEventListener("change", function(){
   else if(tcMode === "plans") loadPlans();
   else loadCases();
 });
+if($("tcDomain")){
+  $("tcDomain").addEventListener("click", function(e){
+    var b = e.target.closest("[data-tc-domain]");
+    if(!b) return;
+    var to = b.dataset.tcDomain;
+    if(to === "testcases") return;
+    if(to === "projects"){ showView("projects"); return; }
+    var reqId = tcDomainScopeId();
+    if(to === "project"){
+      if(reqId){ rt.managerProjectId = reqId; showView("project"); }
+      else showView("projects");
+      return;
+    }
+    if(to === "board" && reqId){
+      state.reqs = [reqId];
+      showView("board");
+      reloadFilteredViews();
+      return;
+    }
+    showView(to);
+  });
+}
 $("tcModeSeg").addEventListener("click", function(e){
   var b = e.target.closest("[data-tc-mode]");
   if(!b) return;
@@ -2855,11 +2999,26 @@ $("tcStatusSeg").addEventListener("click", function(e){
   statusFilter = b.dataset.tcStatus;
   loadCases();
 });
+if($("tcClearFilter")){
+  $("tcClearFilter").addEventListener("click", function(){
+    if(caseSearchTimer){ clearTimeout(caseSearchTimer); caseSearchTimer = null; }
+    searchText = "";
+    statusFilter = "all";
+    modFilter = "all";
+    priFilter = "all";
+    ownerFilter = "all";
+    bugOnly = false;
+    if($("tcSearch")) $("tcSearch").value = "";
+    syncFilterOptions();
+    loadCases();
+  });
+}
 /* 缺陷 tab：筛选在前端派生（状态由列与回归结果计算），数据仍走任务列表 */
 if($("tcDefReq")){
   $("tcDefReq").addEventListener("change", function(){
     defReqId = $("tcDefReq").value;
     defectShown = DEFECT_PAGE;
+    syncTcDomain();
     loadDefects();
   });
 }
@@ -3061,7 +3220,7 @@ $("tcPlans").addEventListener("click", function(e){
       .catch(function(ex){ toast(ex.message || "移出失败", "bad"); });
     return;
   }
-  if((b = e.target.closest("[data-plan-open]")) && !e.target.closest(".tc-acts")){
+  if((b = e.target.closest("[data-plan-open]"))){
     openPlanDetail(b.dataset.planOpen);
   }
 });
@@ -3206,7 +3365,7 @@ $("runsList").addEventListener("click", function(e){
   if(del){
     var caseId = runsCaseId;
     var caseTitle = runsCaseTitle;
-    UI.showConfirm({ title: "删除证据", msg: "证据附件删除后不可恢复，确定删除？", okText: "删除" }).then(function(ok){
+    UI.showConfirm({ title: "删除证据", msg: "证据附件删除后不可恢复，确定删除？", okText: "删除证据" }).then(function(ok){
       if(!ok) return;
       del.disabled = true;
       API.del("/api/attachments/" + encodeURIComponent(del.dataset.runAttDel)).then(function(){
@@ -3247,6 +3406,7 @@ if($("tcCoverage")){
 if($("tcReport")){
   $("tcReport").addEventListener("click", function(e){
     if(e.target.closest("[data-tc-report-csv]")){ exportTestReport(); return; }
+    if(e.target.closest("[data-tc-report-doc]")){ exportTestReportDoc(); return; }
     if(e.target.closest("[data-tc-report-print]")){ printTestReport(); return; }
     var covRow = e.target.closest("[data-cov-demand]");
     if(covRow){ openDemandDetailById(covRow.dataset.covDemand); return; }

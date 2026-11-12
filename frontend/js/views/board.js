@@ -10,13 +10,13 @@ import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canEditReq, canEditTask, catTag, dueMetaClass, dueState, dueText, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
+import { canEditReq, canEditTask, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML } from "../lib/format.js";
+import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, typeBadgeHTML, weekdayCN } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -188,8 +188,8 @@ function cardHTML(t, idx){
   /* 色条只表达状态：完成绿、阻塞琥珀、逾期红、其余中性；优先级已在卡片头部用 P 标签表达 */
   var stripe = isDone ? "var(--success)"
     : (blocked ? "var(--warning)" : (s.kind === "over" ? "var(--danger)" : "var(--border-strong)"));
-  var tip = t.dueDate ? ("截止 " + fmtFull(parseDate(t.dueDate))) : "未设置截止日期";
-  if(isDone && t.completedAt) tip += " · 完成于 " + fmtFull(parseDate(t.completedAt));
+  var tip = t.dueDate ? ("截止 " + fmtFull(parseDate(t.dueDate)) + " " + weekdayCN(parseDate(t.dueDate))) : "未设置截止日期";
+  if(isDone && t.completedAt) tip += " · 完成于 " + fmtFull(parseDate(t.completedAt)) + " " + weekdayCN(parseDate(t.completedAt));
 
   var tagsHTML = catTag(t.categoryId);
   /* 关联文档：点一下跳到正文（不打开任务抽屉，所以单独用 data-open-reqdoc） */
@@ -218,7 +218,9 @@ function cardHTML(t, idx){
 
   var metaHTML = "";
   if(t.dueDate) metaHTML += '<span class="' + dueMetaClass(s.kind) + '" title="' + esc(tip) + '">' +
-    icon("calSmall", 14) + (s.kind === "ok" ? "截止 " : "") + dueText(t) + '</span>';
+    icon("calSmall", 14) + esc(fmtShortMD(parseDate(t.dueDate))) + '</span>';
+  var dueF = dueFlag(t);
+  if(dueF) metaHTML += '<span class="mini-tag ' + (dueF.kind === "over" ? "over" : (dueF.kind === "today" ? "warn" : "")) + '">' + esc(dueF.text) + '</span>';
   if(t.subtaskTotal){
     var allSub = t.subtaskDone >= t.subtaskTotal;
     metaHTML += '<span class="meta' + (allSub ? " full" : "") + '" title="子任务（检查清单）完成 ' +
@@ -314,7 +316,7 @@ function cardHTML(t, idx){
   '</article>';
 }
 function cardAddHTML(colId){
-  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新增工作项">' +
+  return '<button class="card-add" type="button" data-add="' + esc(colId) + '" aria-label="在「' + esc(colName(colId)) + '」新建工作项">' +
     icon("plus", 13) + ' 添加工作项</button>';
 }
 var mobCol = null;
@@ -466,7 +468,7 @@ function render(opts){
         (c.done ? '' : ' role="button" tabindex="0" title="点击改名"') + '>' + esc(c.name) + '</span>' +
       '<span class="col-count" aria-live="polite">' + (filterOn() ? (cd.matched + "/" + cd.total) : cd.total) + '</span>' +
       '<span class="sp"></span>' +
-      '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新增工作项" aria-label="在「' + esc(c.name) + '」新增工作项">' + icon("plus", 14) + '</button>' +
+      '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
         icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
     '</div>';
@@ -538,7 +540,7 @@ function openInlineAdd(colId, preset, focusIt){
   input.maxLength = 120;
   input.placeholder = "输入标题后回车创建…（!P0 / #项目 / @负责人 / +标签 / %进度 / ~每周 / 明天）";
   input.value = preset || "";
-  input.setAttribute("aria-label", "在「" + colName(colId) + "」新增工作项");
+  input.setAttribute("aria-label", "在「" + colName(colId) + "」新建工作项");
   input._restore = addBtn;
 
   var hint = document.createElement("div");
@@ -598,7 +600,7 @@ function openInlineAdd(colId, preset, focusIt){
 function inlineAddCreate(colId, title, input){
   var q = parseQuickAdd(title);
   if(q.reqId && !canEditReq(q.reqId)){
-    toast("「" + q.reqName + "」只有查看权限，无法新增工作项", "warn");
+    toast("「" + q.reqName + "」只有查看权限，无法新建工作项", "warn");
     return;
   }
   var payload = {
@@ -631,7 +633,7 @@ function inlineAddCreate(colId, title, input){
     toast(tip, "fs");
   }).catch(function(ex){
     input.disabled = false;
-    toast(ex.message || "创建失败", "bad");
+    toast(ex.message || "新建失败", "bad");
   });
 }
 var drag = null, pending = null, lastPt = {x:0, y:0}, rafId = null, dragRaf = 0;

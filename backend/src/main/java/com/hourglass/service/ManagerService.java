@@ -4,6 +4,7 @@ import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.common.WorkTime;
+import com.hourglass.dto.PageResult;
 import com.hourglass.entity.Category;
 import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
@@ -57,6 +58,7 @@ public class ManagerService {
     private static final int RED_OVERDUE_PERCENT = 10;
     private static final int PERCENT = 100;
     private static final int MAX_NUDGES = 100;
+    private static final int DRILL_MAX_LIMIT = 100;
     private static final String UNASSIGNED_KEY = "unassigned";
     private static final String UNASSIGNED_NAME = "未指派";
     private static final String UNCATEGORIZED_NAME = "未归类";
@@ -247,6 +249,104 @@ public class ManagerService {
         result.put("defects", defects(tasks, today));
         putFilterMetadata(result, options, filter);
         return result;
+    }
+
+    /**
+     * 交付图表下钻：与 reports 共用同一批任务和筛选标签，按图表口径挑出明细后分页。
+     * 图表本身由后台按同一范围重算，这里只是把参与该点的任务列出来。
+     */
+    public PageResult<Map<String, Object>> reportTasks(String workspaceId, String userId,
+                                                       String reqId, String roleTitle, String companyName,
+                                                       String chart, String weekStart, String state,
+                                                       String bucket, String date,
+                                                       Integer offset, Integer limit) {
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
+        Snapshot snapshot = load(workspaceId, null, null, userId);
+        List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
+        RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
+        List<Task> baseTasks = filter.reqId == null ? snapshot.tasks : tasksForReq(snapshot.tasks, filter.reqId);
+        List<Task> tasks = filterTasks(baseTasks, roles, filter);
+
+        String kind = chart == null ? "" : chart.trim();
+        List<Task> matched = new ArrayList<Task>();
+        if ("velocity".equals(kind)) {
+            LocalDate start = requiredDate(weekStart, "weekStart");
+            matched = completedBetween(tasks, start, start.plusDays(WEEK_DAYS));
+            sortByCompletedDesc(matched);
+        } else if ("flow".equals(kind)) {
+            LocalDate start = requiredDate(weekStart, "weekStart");
+            LocalDate weekEnd = start.plusDays(WEEK_DAYS - 1L);
+            String expected = state == null ? "" : state.trim();
+            if (!"done".equals(expected) && !"ended".equals(expected)
+                    && !"doing".equals(expected) && !"backlog".equals(expected)) {
+                throw AppException.badRequest("不支持的累积流状态");
+            }
+            for (Task task : tasks) {
+                if (expected.equals(flowState(task, weekEnd))) {
+                    matched.add(task);
+                }
+            }
+        } else if ("delivery".equals(kind)) {
+            String expected = bucket == null ? "" : bucket.trim();
+            if (expected.isEmpty()) {
+                throw AppException.badRequest("缺少交付周期分桶");
+            }
+            for (Task task : tasks) {
+                Long days = deliveryDays(task);
+                if (days != null && expected.equals(deliveryBucketLabel(days))) {
+                    matched.add(task);
+                }
+            }
+            sortByCompletedDesc(matched);
+        } else if ("defects".equals(kind)) {
+            LocalDate start = requiredDate(weekStart, "weekStart");
+            LocalDate end = start.plusDays(WEEK_DAYS - 1L);
+            String expected = state == null ? "" : state.trim();
+            if (!"opened".equals(expected) && !"closed".equals(expected) && !"open".equals(expected)) {
+                throw AppException.badRequest("不支持的缺陷口径");
+            }
+            for (Task task : tasks) {
+                if (!"bug".equals(task.getItemType())) {
+                    continue;
+                }
+                LocalDate created = date(task.getCreatedAt());
+                LocalDate completed = task.getCompletedAt();
+                if ("opened".equals(expected) && created != null
+                        && !created.isBefore(start) && !created.isAfter(end)) {
+                    matched.add(task);
+                } else if ("closed".equals(expected) && completed != null
+                        && !completed.isBefore(start) && !completed.isAfter(end)) {
+                    matched.add(task);
+                } else if ("open".equals(expected) && created != null && !created.isAfter(end)
+                        && (completed == null || completed.isAfter(end))) {
+                    matched.add(task);
+                }
+            }
+            if ("opened".equals(expected) || "open".equals(expected)) {
+                sortByCreatedDesc(matched);
+            } else {
+                sortByCompletedDesc(matched);
+            }
+        } else if ("burn".equals(kind)) {
+            LocalDate point = requiredDate(date, "date");
+            for (Task task : tasks) {
+                if (isDone(task) && task.getCompletedAt() != null
+                        && !task.getCompletedAt().isAfter(point)) {
+                    matched.add(task);
+                }
+            }
+            sortByCompletedDesc(matched);
+        } else {
+            throw AppException.badRequest("不支持的图表下钻");
+        }
+
+        int safeOffset = Math.max(0, offset == null ? 0 : offset);
+        int safeLimit = limit == null || limit <= 0 ? DRILL_MAX_LIMIT : Math.min(limit, DRILL_MAX_LIMIT);
+        int total = matched.size();
+        List<Task> pageTasks = safeOffset >= total ? Collections.<Task>emptyList()
+                : matched.subList(safeOffset, Math.min(total, safeOffset + safeLimit));
+        return PageResult.of(taskMaps(pageTasks, requirementNames(requirements)),
+                total, safeOffset, safeLimit);
     }
 
     public Map<String, Object> workload(String workspaceId, String userId) {
@@ -821,19 +921,15 @@ public class ManagerService {
             int done = 0;
             int ended = 0;
             for (Task task : tasks) {
-                LocalDate created = date(task.getCreatedAt());
-                if (created != null && created.isAfter(weekEnd)) {
+                String state = flowState(task, weekEnd);
+                if (state == null) {
                     continue;
                 }
-                if (isDone(task) && (task.getCompletedAt() == null || !task.getCompletedAt().isAfter(weekEnd))) {
+                if ("done".equals(state)) {
                     done++;
-                    continue;
-                }
-                /* 完成日晚于该周的任务沿用原口径计待处理；其余只有当前列状态，按处理规则归类 */
-                String bucket = isDone(task) ? "backlog" : TaskCalc.statusBucket(task.getBoardColumn(), task.getProcessingRule());
-                if ("ended".equals(bucket)) {
+                } else if ("ended".equals(state)) {
                     ended++;
-                } else if ("doing".equals(bucket)) {
+                } else if ("doing".equals(state)) {
                     doing++;
                 } else {
                     backlog++;
@@ -850,6 +946,27 @@ public class ManagerService {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("weeks", weeks);
         return result;
+    }
+
+    /** 某任务在周末时的累积流状态；尚未创建返回 null（与图表逐周快照同口径）。 */
+    private String flowState(Task task, LocalDate weekEnd) {
+        LocalDate created = date(task.getCreatedAt());
+        if (created != null && created.isAfter(weekEnd)) {
+            return null;
+        }
+        if (isDone(task) && (task.getCompletedAt() == null || !task.getCompletedAt().isAfter(weekEnd))) {
+            return "done";
+        }
+        /* 完成日晚于该周的任务沿用原口径计待处理；其余只有当前列状态，按处理规则归类 */
+        String bucket = isDone(task) ? "backlog"
+                : TaskCalc.statusBucket(task.getBoardColumn(), task.getProcessingRule());
+        if ("ended".equals(bucket)) {
+            return "ended";
+        }
+        if ("doing".equals(bucket)) {
+            return "doing";
+        }
+        return "backlog";
     }
 
     /** 缺陷趋势：按周统计新增、关闭与周末存量，只看 item_type=bug 的任务。 */
@@ -900,24 +1017,19 @@ public class ManagerService {
         int moreThanSeven = 0;
         long totalDays = 0;
         for (Task task : tasks) {
-            if (!isDone(task) || task.getCompletedAt() == null) {
+            Long value = deliveryDays(task);
+            if (value == null) {
                 continue;
             }
-            LocalDate start = task.getStartDate() != null ? task.getStartDate() : date(task.getCreatedAt());
-            if (start == null) {
-                continue;
-            }
-            long days = ChronoUnit.DAYS.between(start, task.getCompletedAt());
-            if (days < 0) {
-                continue;
-            }
+            long days = value;
             durations.add(days);
             totalDays += days;
-            if (days < 1) {
+            String label = deliveryBucketLabel(days);
+            if ("<1天".equals(label)) {
                 lessThanOne++;
-            } else if (days < 3) {
+            } else if ("1-3天".equals(label)) {
                 oneToThree++;
-            } else if (days <= 7) {
+            } else if ("3-7天".equals(label)) {
                 threeToSeven++;
             } else {
                 moreThanSeven++;
@@ -945,6 +1057,83 @@ public class ManagerService {
         bucket.put("count", count);
         bucket.put("pct", total == 0 ? 0.0 : round1(count * (double) PERCENT / total));
         return bucket;
+    }
+
+    /** 交付周期天数：开始日期（空则创建日期）到完成日期；未完成或日期倒挂返回 null。 */
+    private Long deliveryDays(Task task) {
+        if (!isDone(task) || task.getCompletedAt() == null) {
+            return null;
+        }
+        LocalDate start = task.getStartDate() != null ? task.getStartDate() : date(task.getCreatedAt());
+        if (start == null) {
+            return null;
+        }
+        long days = ChronoUnit.DAYS.between(start, task.getCompletedAt());
+        return days < 0 ? null : Long.valueOf(days);
+    }
+
+    private String deliveryBucketLabel(long days) {
+        if (days < 1) {
+            return "<1天";
+        }
+        if (days < 3) {
+            return "1-3天";
+        }
+        if (days <= 7) {
+            return "3-7天";
+        }
+        return ">7天";
+    }
+
+    private void sortByCompletedDesc(List<Task> tasks) {
+        Collections.sort(tasks, new Comparator<Task>() {
+            @Override
+            public int compare(Task a, Task b) {
+                LocalDate left = a.getCompletedAt();
+                LocalDate right = b.getCompletedAt();
+                if (left == null && right == null) {
+                    return 0;
+                }
+                if (left == null) {
+                    return 1;
+                }
+                if (right == null) {
+                    return -1;
+                }
+                return right.compareTo(left);
+            }
+        });
+    }
+
+    private void sortByCreatedDesc(List<Task> tasks) {
+        Collections.sort(tasks, new Comparator<Task>() {
+            @Override
+            public int compare(Task a, Task b) {
+                LocalDateTime left = a.getCreatedAt();
+                LocalDateTime right = b.getCreatedAt();
+                if (left == null && right == null) {
+                    return 0;
+                }
+                if (left == null) {
+                    return 1;
+                }
+                if (right == null) {
+                    return -1;
+                }
+                return right.compareTo(left);
+            }
+        });
+    }
+
+    private LocalDate requiredDate(String value, String name) {
+        if (!hasText(value)) {
+            throw AppException.badRequest("缺少 " + name);
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw AppException.badRequest(name + " 需为 yyyy-MM-dd");
+        }
     }
 
     private Long percentile(List<Long> sorted, double quantile) {

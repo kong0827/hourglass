@@ -3,6 +3,7 @@
 import { API } from "../core/api.js";
 import { invalidateRules, loadRules } from "../core/transitions.js";
 import { loadCategories, loadWorkspaces } from "../core/app.js";
+import { attachCombo } from "../core/combo.js";
 import { $, actCount, actList, btnNotifySave, channelCards, notifyStatus, notifyStatusText, searchInput, searchWrap, wsWebhookHint, wsWebhookLabel } from "../core/dom.js";
 import { navTelemetryCsv } from "../core/nav-telemetry.js";
 import { saveViewState } from "../core/filters-ui.js";
@@ -172,16 +173,16 @@ function openRoleGuide(){
     roleGuideRow(["删除工作项（进回收站）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["恢复回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "可见且可写的项目", ROLE_GUIDE_NO]),
     roleGuideRow(["彻底删除回收站工作项", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["新增 / 编辑 / 排序看板列", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
+    roleGuideRow(["添加 / 编辑 / 排序看板列", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO]),
     roleGuideRow(["删除看板列", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["维护项目模块（新增 / 改名 / 排序 / 删除）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
-    roleGuideRow(["创建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
+    roleGuideRow(["维护项目模块（添加 / 改名 / 排序 / 删除）", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "仅项目负责人", ROLE_GUIDE_NO]),
+    roleGuideRow(["新建 / 编辑 / 改状态分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["删除分支", ROLE_GUIDE_YES, ROLE_GUIDE_YES, "项目可写", ROLE_GUIDE_NO]),
     roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["调整成员角色", "除空间主外的角色", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["移出成员", "除空间主外", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["移除成员", "除空间主外", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["完整备份导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -438,7 +439,7 @@ function loadWsMemberList(){
         : '';
       var removeBtn = canRemove
         ? '<button class="btn sm danger" type="button" data-mid-del="' + esc(m.userId) + '">' +
-            (isSelf ? "退出" : "移出") + '</button>'
+            (isSelf ? "退出" : "移除") + '</button>'
         : '';
       return '<div class="member-row" data-mid="' + esc(m.userId) + '">' +
         avatarHTML(m.displayName, "lg") +
@@ -512,12 +513,14 @@ function editMemberLabel(userId, kind){
     isJob ? "维护一次，本空间各项目默认沿用；项目覆盖优先。留空清除默认职能，不改变权限。"
       : "选择已有公司或输入新名称；请避免同一公司的不同写法。留空清除，不改变权限。",
     '<div class="field"><label for="' + inputId + '">' + (isJob ? "空间默认职能" : "公司名称") + '</label>'
-      + '<input id="' + inputId + '" list="' + inputId + 'Options" maxlength="' + max + '" autocomplete="off" value="' + esc(m[field] || "") + '" placeholder="' + (isJob ? "例如：全栈工程师 / 产品经理" : "选择或输入公司") + '">'
+      + '<input id="' + inputId + '" type="text" list="' + inputId + 'Options" maxlength="' + max + '" autocomplete="off" value="' + esc(m[field] || "") + '" placeholder="' + (isJob ? "例如：全栈工程师 / 产品经理" : "选择或输入公司") + '">'
       + '<datalist id="' + inputId + 'Options"></datalist><small class="foot-note">可选择候选或直接输入新的名称。</small></div>');
   var input = layer.querySelector("input"), err = layer.querySelector("[data-label-error]"), form = layer.querySelector("form"), busy = false;
+  var combo = attachCombo(input, { chevron:true });
   loadMemberLabelOptions(wsId).then(function(options){
     var titles = options[isJob ? "roleTitles" : "companyNames"] || [];
     layer.querySelector("datalist").innerHTML = titles.map(function(v){ return '<option value="' + esc(v) + '"></option>'; }).join("");
+    if(combo) combo.refresh();
   }).catch(function(){ err.textContent = "候选加载失败，仍可手动输入；保存时会校验。"; });
   form.addEventListener("submit", function(e){
     e.preventDefault(); if(busy) return;
@@ -535,31 +538,115 @@ function editMemberLabel(userId, kind){
   });
 }
 function editMemberCompany(userId){ editMemberLabel(userId, "company"); }
+var CAND_OPTIONS = {
+  role: { label:"角色 / 职能候选", max:32, placeholder:"输入角色后按 Enter" },
+  company: { label:"公司候选", max:64, placeholder:"输入公司后按 Enter" }
+};
+var CAND_MAX_ITEMS = 100;
+function candSectHTML(kind, inputId){
+  var cfg = CAND_OPTIONS[kind];
+  return '<section class="cand-sect" data-cand="' + kind + '">' +
+    '<div class="cand-head"><label for="' + inputId + '">' + cfg.label + '</label>' +
+      '<span class="cand-count" data-cand-count></span></div>' +
+    '<div class="tag-input-wrap cand-editor" data-cand-editor>' +
+      '<input id="' + inputId + '" type="text" autocomplete="off" maxlength="' + cfg.max + '" placeholder="' + cfg.placeholder + '">' +
+    '</div>' +
+    '<p class="cand-note">按 Enter 或逗号添加，可粘贴多行；单条最多 ' + cfg.max + ' 字，最多 ' + CAND_MAX_ITEMS + ' 项。</p>' +
+  '</section>';
+}
 function openMemberLabelOptions(){
   if(!canManageMemberLabels()){ toast("仅空间主或管理员可维护角色候选", "warn"); return; }
   var wsId = rt.currentWs.id;
-  var layer = memberLabelLayer("公司与角色候选", "一行一个名称，每类最多保存 100 项。内置角色及已使用标签会自动保留为建议；删除自定义候选不会清除成员标签或改变权限。",
-    '<div class="field"><label for="memberRoleOptions">角色 / 职能候选</label><textarea id="memberRoleOptions" rows="7" placeholder="例如：全栈工程师"></textarea></div>'
-    + '<div class="field"><label for="memberCompanyOptions">公司候选</label><textarea id="memberCompanyOptions" rows="5" placeholder="例如：云启实施"></textarea></div>');
-  var form = layer.querySelector("form"), err = layer.querySelector("[data-label-error]"), roles = layer.querySelector("#memberRoleOptions"), companies = layer.querySelector("#memberCompanyOptions"), busy = true;
-  form.querySelector('[type="submit"]').disabled = true; err.textContent = "加载中…";
-  loadMemberLabelOptions(wsId, true).then(function(options){
-    roles.value = (options.roleTitles || DEFAULT_ROLE_TITLES).join("\n"); companies.value = (options.companyNames || []).join("\n");
-    busy = false; form.querySelector('[type="submit"]').disabled = false; err.textContent = "";
-  }).catch(function(ex){ err.textContent = ex.message || "加载失败，请关闭后重试"; });
-  function titles(input, max){
-    var seen = Object.create(null), result = input.value.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(function(s){ if(!s || seen[s]) return false; seen[s] = true; return true; });
-    if(result.length > 100 || result.some(function(s){ return s.length > max; })) throw new Error("每类最多 100 项；" + (max === 32 ? "角色最多 32" : "公司最多 64") + " 个字符。");
-    return result;
+  var layer = memberLabelLayer("公司与角色候选", "维护后供成员标注与筛选选择，内置角色及已使用标签会自动保留为建议；删除候选不会清除成员标签或改变权限。",
+    candSectHTML("role", "memberRoleOptions") + candSectHTML("company", "memberCompanyOptions"));
+  var form = layer.querySelector("form"), err = layer.querySelector("[data-label-error]"), busy = true;
+  var lists = { role:[], company:[] }, editors = {};
+  function setErr(text, isError){ err.textContent = text; err.classList.toggle("is-error", !!isError); }
+  ["role","company"].forEach(function(kind){
+    var cfg = CAND_OPTIONS[kind], sect = layer.querySelector('[data-cand="' + kind + '"]');
+    var wrap = sect.querySelector("[data-cand-editor]"), input = wrap.querySelector("input"), count = sect.querySelector("[data-cand-count]");
+    function render(){
+      wrap.querySelectorAll(".tag").forEach(function(el){ el.remove(); });
+      lists[kind].forEach(function(v, i){
+        var chip = document.createElement("span");
+        chip.className = "tag cand-chip"; chip.title = v;
+        chip.innerHTML = '<span class="ct">' + esc(v) + '</span>' +
+          '<button class="x" type="button" data-cand-del="' + i + '" aria-label="移除 ' + esc(v) + '">' + icon("close", 10) + '</button>';
+        wrap.insertBefore(chip, input);
+      });
+      count.textContent = lists[kind].length ? lists[kind].length + " 项" : "未设置";
+    }
+    /* 返回 false 表示有内容被拒，调用方应中止保存，避免静默丢弃输入 */
+    function add(raw){
+      var rejected = "";
+      String(raw || "").split(/[\r\n,，、;；]+/).forEach(function(part){
+        var v = part.trim(); if(!v) return;
+        if(v.length > cfg.max){ rejected = rejected || (cfg.label + "：单条最多 " + cfg.max + " 字，「" + (v.length > 10 ? v.slice(0, 10) + "…" : v) + "」未添加"); return; }
+        if(lists[kind].indexOf(v) !== -1) return;
+        if(lists[kind].length >= CAND_MAX_ITEMS){ rejected = rejected || (cfg.label + "最多 " + CAND_MAX_ITEMS + " 项"); return; }
+        lists[kind].push(v);
+      });
+      setErr(rejected, !!rejected); render();
+      return !rejected;
+    }
+    editors[kind] = { input:input, add:add, render:render };
+    input.addEventListener("keydown", function(e){
+      if(e.isComposing) return;
+      if(e.key === "Enter" || e.key === "," || e.key === "，" || e.key === "、"){
+        e.preventDefault(); add(input.value); input.value = "";
+      }else if(e.key === "Backspace" && !input.value && lists[kind].length){
+        lists[kind].pop(); setErr(""); render();
+      }
+    });
+    /* 失焦提交半成品输入，避免点保存时把刚输入的内容丢掉 */
+    input.addEventListener("blur", function(){ if(input.value.trim()){ add(input.value); input.value = ""; } });
+    input.addEventListener("paste", function(e){
+      var text = (e.clipboardData || window.clipboardData).getData("text") || "";
+      if(!/[\r\n,，、;；]/.test(text)) return;
+      e.preventDefault(); add(text);
+    });
+    wrap.addEventListener("mousedown", function(e){
+      /* 阻止移除按钮抢走输入焦点：避免 blur 先重渲染导致这一次点击丢失 */
+      if(e.target.closest("[data-cand-del]")) e.preventDefault();
+    });
+    wrap.addEventListener("click", function(e){
+      var del = e.target.closest("[data-cand-del]");
+      if(del){ lists[kind].splice(Number(del.dataset.candDel), 1); setErr(""); render(); return; }
+      if(!e.target.closest("button")) input.focus();
+    });
+    render();
+  });
+  function setBusy(state){
+    busy = state;
+    form.querySelector('[type="submit"]').disabled = state;
+    ["role","company"].forEach(function(kind){ editors[kind].input.disabled = state; });
   }
+  function flushPending(){
+    var ok = true;
+    ["role","company"].forEach(function(kind){
+      if(!ok) return;
+      var val = editors[kind].input.value;
+      if(val.trim()){ if(!editors[kind].add(val)) ok = false; editors[kind].input.value = ""; }
+    });
+    return ok;
+  }
+  setBusy(true); setErr("加载中…");
+  loadMemberLabelOptions(wsId, true).then(function(options){
+    lists.role = (options.roleTitles || DEFAULT_ROLE_TITLES).slice();
+    lists.company = (options.companyNames || []).slice();
+    editors.role.render(); editors.company.render();
+    setBusy(false); setErr("");
+    editors.role.input.focus();
+  }).catch(function(ex){ setErr(ex.message || "加载失败，请关闭后重试", true); });
   form.addEventListener("submit", function(e){
     e.preventDefault(); if(busy) return;
-    if(!rt.currentWs || rt.currentWs.id !== wsId){ err.textContent = "空间已切换，请关闭并重新操作。"; return; }
-    var body; try{ body = {roleTitles:titles(roles, 32),companyNames:titles(companies, 64)}; }catch(ex){ err.textContent = ex.message; return; }
-    busy = true; form.querySelectorAll("button,textarea").forEach(function(el){ el.disabled = true; }); err.textContent = "保存中…";
+    if(!rt.currentWs || rt.currentWs.id !== wsId){ setErr("空间已切换，请关闭并重新操作。", true); return; }
+    if(!flushPending()) return;
+    var body = { roleTitles:lists.role.slice(), companyNames:lists.company.slice() };
+    setBusy(true); setErr("保存中…");
     API.put("/api/workspaces/" + encodeURIComponent(wsId) + "/member-label-options", body).then(function(){
       UI.closeModal(layer); window.dispatchEvent(new CustomEvent("ds:member-label-options-changed", {detail:{workspaceId:wsId}})); toast("已保存公司与角色候选", "fs");
-    }).catch(function(ex){ busy = false; form.querySelectorAll("button,textarea").forEach(function(el){ el.disabled = false; }); err.textContent = ex.message || "保存失败，请重试"; });
+    }).catch(function(ex){ setBusy(false); setErr(ex.message || "保存失败，请重试", true); });
   });
 }
 window.addEventListener("ds:open-member-label-options", openMemberLabelOptions);
@@ -1668,7 +1755,7 @@ var AUDIT_LABEL = {
   role_change:"权限变更", export:"数据导出", import:"备份恢复", clear:"清空数据",
   member_add:"添加成员", member_remove:"移除成员", member_company:"标注成员公司",
   project_role:"标注项目角色", workspace_delete:"删除空间",
-  project_delete:"删除项目", user_create:"创建账号", user_update:"修改账号",
+  project_delete:"删除项目", user_create:"新建账号", user_update:"修改账号",
   user_delete:"删除账号", password_reset:"重置密码", user_disable:"禁用账号", user_enable:"启用账号",
   invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
   password_change:"修改密码", profile_update:"修改个人资料", work_hours_update:"修改计时设置",
@@ -1936,17 +2023,17 @@ function resetMemberPicker(){
   if(box) box.innerHTML = "";
   setMemberOptionsOpen(false);
 }
-/* 无账号的人怎么进空间：平台管理员可直接去创建，其他人只能请平台管理员建号。 */
+/* 无账号的人怎么进空间：平台管理员可直接去新建，其他人只能请平台管理员建号。 */
 function updateInviteAccountHint(isAdmin){
   var text = $("inviteNoAccountText"), btn = $("btnInviteCreateAccount");
   if(text) text.textContent = isAdmin
     ? "对方还没有账号？"
-    : "对方还没有账号？请联系平台管理员先创建账号。";
+    : "对方还没有账号？请联系平台管理员先新建账号。";
   if(btn) btn.hidden = !isAdmin;
 }
 function openCreateAccountFromMember(q){
   var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
-  if(!isAdmin){ toast("请联系平台管理员先创建账号", "warn"); return; }
+  if(!isAdmin){ toast("请联系平台管理员先新建账号", "warn"); return; }
   setMemberOptionsOpen(false);
   platformTab = "account";
   setSettingsTab("platform");
@@ -1969,8 +2056,8 @@ function renderMemberOptions(list){
     var isAdmin = !!(rt.currentUser && rt.currentUser.role === "admin");
     box.innerHTML = '<div class="member-option-empty">没有匹配的账号。' +
       (isAdmin
-        ? '<button class="link-btn" type="button" data-create-account="' + esc(q) + '">去创建账号</button>'
-        : '请联系平台管理员先创建账号。') +
+        ? '<button class="link-btn" type="button" data-create-account="' + esc(q) + '">去新建账号</button>'
+        : '请联系平台管理员先新建账号。') +
       '</div>';
     setMemberOptionsOpen(true);
     return;
@@ -2071,7 +2158,7 @@ wsMemberList.addEventListener("click", function(e){
   UI.showConfirm({
     title: isSelf ? "退出空间" : "移除成员",
     msg: isSelf ? "确定退出该空间？你的工作项会保留在空间里。" : "确定移除该成员？",
-    okText: isSelf ? "退出空间" : "移除"
+    okText: isSelf ? "退出空间" : "移除成员"
   }).then(function(ok){
     if(!ok) return;
     API.del("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" + encodeURIComponent(uid)).then(function(){
@@ -2612,7 +2699,7 @@ $("btnUserAdd").addEventListener("click", function(){
     loadUsers();
   }).catch(function(ex){
     btn.disabled = false;
-    toast(ex.message || "创建失败", "bad");
+    toast(ex.message || "新建失败", "bad");
   });
 });
 var userPwdTargetId = null;

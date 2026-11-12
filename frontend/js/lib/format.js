@@ -200,6 +200,18 @@ function fmtElapsed(total){
   var m = Number(total) || 0;
   return m < 1 ? "0m" : fmtMinutesShort(m);
 }
+/* 图表纵轴：把最大值抬到 4 等分的整齐刻度，避免出现 7.3 这类不可读刻度 */
+function axisTicks(maxValue){
+  var v = Math.max(1, Math.ceil(Number(maxValue) || 0));
+  var mag = 1, steps = [1, 2, 5];
+  while(true){
+    for(var i = 0; i < steps.length; i++){
+      var step = steps[i] * mag;
+      if(step * 4 >= v) return { max: step * 4, step: step };
+    }
+    mag *= 10;
+  }
+}
 function fmtSize(bytes){
   var b = Number(bytes) || 0;
   if(b < 1024) return b + " B";
@@ -332,4 +344,4 @@ function hexToRgb(hex){
 }
 function rgbaOf(hex, a){ var c = hexToRgb(hex); return "rgba("+c.r+","+c.g+","+c.b+","+a+")"; }
 
-export { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, colMeta, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

@@ -140,8 +140,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <select id="iOwner"></select>
         </div>
         <div class="ctx-item" id="ctxColItem">
-          <label class="ctx-label" for="iCol" id="ctxColLabel">创建到</label>
-          <select id="iCol" aria-label="创建到哪一列"></select>
+          <label class="ctx-label" for="iCol" id="ctxColLabel">新建到</label>
+          <select id="iCol" aria-label="新建到哪一列"></select>
         </div>
       </div>
 
@@ -574,7 +574,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
 
           <div class="after-create" id="afterCreateNote">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.4"/><path d="M10 9.2v4M10 6.6h.01"/></svg>
-            <div><b>创建后可继续补充</b><span>检查项、附件、工时、评论与操作时间线在详情里，不再占用创建流程。</span></div>
+            <div><b>新建后可继续补充</b><span>检查项、附件、工时、评论与操作时间线在详情里，不再占用创建流程。</span></div>
           </div>
         </aside>
       </div>
@@ -588,7 +588,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       <button class="btn danger" type="button" id="btnDeleteTask" hidden>删除</button>
       <button class="btn" type="button" id="btnCancelTask">取消</button>
       <button class="btn" type="submit" id="btnSaveTaskContinue" hidden title="保存后留在当前工作项，继续补充评论、检查项或时间">保存并继续</button>
-      <button class="btn primary" type="submit" id="btnSaveTask">保存工作项</button>
+      <button class="btn primary" type="submit" id="btnSaveTask">保存</button>
     </div>
   </form>
 </div>

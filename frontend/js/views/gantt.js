@@ -1142,7 +1142,7 @@ function ganttCaptureBaseline(){
 function ganttClearBaseline(){
   if(ganttReadOnly()){ toast("移动端只读，不能清除基线", "warn"); return; }
   if(!(rt.currentWs && rt.currentWs.myRole === "owner")){ toast("仅空间主可清除基线", "warn"); return; }
-  UI.showConfirm({ title:"清除基线", msg:"清除后无法再对比「计划 vs 当前」，确定？", okText:"清除" }).then(function(ok){
+  UI.showConfirm({ title:"清除基线", msg:"清除后无法再对比「计划 vs 当前」，确定？", okText:"清除基线" }).then(function(ok){
     if(!ok) return;
     API.del("/api/gantt/baseline").then(function(){
       ganttState.baseline = {};
@@ -1908,7 +1908,7 @@ function renderGanttFilterMenu(){
     ganttFilterSection("状态", blockedHTML) +
     '<div class="menu-foot">' +
       '<button class="btn sm" type="button" data-gantt-filter-reset>重置</button>' +
-      '<button class="btn sm primary" type="button" data-gantt-filter-save>保存视图</button>' +
+      '<button class="btn sm ghost" type="button" data-gantt-filter-save>保存视图</button>' +
     '</div>';
   ganttFilterMenu.innerHTML = html;
 }
@@ -2792,7 +2792,7 @@ if(ganttDepMenu){
     }
     if(e.target.closest("[data-gantt-dep-del]")){
       UI.closeAllPops();
-      UI.showConfirm({ title:"删除依赖", msg:"删除后两条工作项不再有先后约束，确定？", okText:"删除" }).then(function(ok){
+      UI.showConfirm({ title:"删除依赖", msg:"删除后两条工作项不再有先后约束，确定？", okText:"删除依赖" }).then(function(ok){
         if(!ok) return;
         API.del("/api/gantt/deps/" + encodeURIComponent(depId)).then(function(){
           toast("依赖已删除", "fs");

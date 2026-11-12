@@ -34,30 +34,30 @@ FALLBACK_DT = datetime(2026, 6, 1, 9, 0, 0)
 # 人员 -> 登录名（顺序即账号编号）
 USERS = [
     ("张伟", "zhangwei", "admin"),
-    ("施亚彬", "shiyabin", "user"),
-    ("周劲松", "zhoujinsong", "user"),
-    ("张亮", "zhangliang", "user"),
-    ("程洪昌", "chenghongchang", "user"),
-    ("马远", "mayuan", "user"),
-    ("王越峰", "wangyuefeng", "user"),
-    ("肖威", "xiaowei", "user"),
-    ("周顺", "zhoushun", "user"),
-    ("邱德华", "qiudehua", "user"),
-    ("李楠", "linan", "user"),
-    ("尼克狐", "nikehu", "user"),
-    ("林潇", "linxiao", "user"),
-    ("叶鑫", "yexin", "user"),
-    ("缪佳豪", "miaojiahao", "user"),
-    ("姜子豪", "jiangzihao", "user"),
-    ("孙钰", "sunyu", "user"),
-    ("吴旻", "wumin", "user"),
-    ("张会朋", "zhanghuipeng", "user"),
-    ("张屹铭", "zhangyiming", "user"),
-    ("朱斌", "zhubin", "user"),
-    ("杨蕾", "yanglei", "user"),
-    ("姜千一", "jiangqianyi", "user"),
-    ("冒张琦", "maozhangqi", "user"),
-    ("刘恬恬", "liutiantian", "user"),
+    ("韩立诚", "hanlicheng", "user"),
+    ("邵天佑", "shaotianyou", "user"),
+    ("许文博", "xuwenbo", "user"),
+    ("周明远", "zhoumingyuan", "user"),
+    ("陆一鸣", "luyiming", "user"),
+    ("江望舒", "jiangwangshu", "user"),
+    ("郑凯文", "zhengkaiwen", "user"),
+    ("方致远", "fangzhiyuan", "user"),
+    ("白泽宇", "baizeyu", "user"),
+    ("林知夏", "linzhixia", "user"),
+    ("苏木", "sumu", "user"),
+    ("邓雨桐", "dengyutong", "user"),
+    ("陈嘉树", "chenjiashu", "user"),
+    ("顾星河", "guxinghe", "user"),
+    ("姜辰", "jiangchen", "user"),
+    ("沈念", "shennian", "user"),
+    ("吴桐", "wutong", "user"),
+    ("张弛", "zhangchi", "user"),
+    ("张屿", "zhangyu", "user"),
+    ("朱可", "zhuke", "user"),
+    ("杨舒", "yangshu", "user"),
+    ("姜禾", "jianghe", "user"),
+    ("毛青", "maoqing", "user"),
+    ("刘夏", "liuxia", "user"),
 ]
 USER_ID = {}
 USERNAME = {}
@@ -67,7 +67,7 @@ for i, (name, login, _role) in enumerate(USERS, 1):
 USER_ROLE = {name: role for name, _login, role in USERS}
 
 # 仅保留开发成员进入种子；PM / 测试 / 设计等非开发成员不再生成账号与成员关系
-KEEP_USERS = ["张伟", "施亚彬", "张亮", "程洪昌", "肖威"]
+KEEP_USERS = ["张伟", "韩立诚", "许文博", "周明远", "郑凯文"]
 MEMBER_USERS = [u for u in USERS if u[0] in KEEP_USERS]
 
 # 系统管理员账号：不参与任务分配，保证重灌库后仍可用 admin 登录
@@ -75,15 +75,15 @@ ADMIN_USER = ("Xku00", "admin", "管理员")
 
 # 项目 -> 负责人 / 分支名 / 状态
 PROJECT_LEAD = {
-    "流程引擎": "施亚彬",
-    "资金通": "张亮",
-    "风控与合规": "程洪昌",
-    "报表服务": "程洪昌",
-    "API开放平台": "肖威",
-    "消息中心": "肖威",
+    "流程引擎": "韩立诚",
+    "资金通": "许文博",
+    "风控与合规": "周明远",
+    "报表服务": "周明远",
+    "API开放平台": "郑凯文",
+    "消息中心": "郑凯文",
     "机构服务平台": "张伟",
-    "AI知识库": "张亮",
-    "小程序平台化": "施亚彬",
+    "AI知识库": "许文博",
+    "小程序平台化": "韩立诚",
 }
 
 
@@ -91,8 +91,8 @@ def keep_user(name, project=None):
     """非开发成员的数据归到项目开发负责人，避免任务/文档出现已删除账号。"""
     if name in KEEP_USERS:
         return name
-    lead = PROJECT_LEAD.get(project or "", "施亚彬")
-    return lead if lead in KEEP_USERS else "施亚彬"
+    lead = PROJECT_LEAD.get(project or "", "韩立诚")
+    return lead if lead in KEEP_USERS else "韩立诚"
 
 
 PROJECT_SLUG = {
@@ -132,7 +132,7 @@ BOARD_COLUMNS = [
     ("testing", "测试中", "#d48806"),
     ("pending_release", "待发布", "#13c2c2"),
 ]
-TESTER = "张亮"
+TESTER = "许文博"
 REQ_STATUS = {
     "已发版": "done",
     "开发完成": "active",
@@ -447,9 +447,9 @@ def build():
         title_count[(project, raw_title)] += 1
         if title_count[(project, raw_title)] > 1:
             raw_title = cut(raw_title + "（%d）" % title_count[(project, raw_title)], 100)
-        owner = person(cell(row, 1)) or person(cell(row, 7)) or PROJECT_LEAD.get(project, "施亚彬")
+        owner = person(cell(row, 1)) or person(cell(row, 7)) or PROJECT_LEAD.get(project, "韩立诚")
         if owner not in USER_ID:
-            owner = PROJECT_LEAD.get(project, "施亚彬")
+            owner = PROJECT_LEAD.get(project, "韩立诚")
         owner = keep_user(owner, project)
         created = d(cell(row, 3)) or date(2026, 6, 1)
         status = REQ_STATUS.get(cell(row, 4), "draft")
@@ -550,9 +550,9 @@ def build():
 
         status_raw = cell(row, 3)
         column, progress, done = TASK_STATE.get(status_raw, ("backlog", 0, False))
-        owner = person(cell(row, 6)) or PROJECT_LEAD.get(project, "施亚彬")
+        owner = person(cell(row, 6)) or PROJECT_LEAD.get(project, "韩立诚")
         if owner not in USER_ID:
-            owner = PROJECT_LEAD.get(project, "施亚彬")
+            owner = PROJECT_LEAD.get(project, "韩立诚")
         owner = keep_user(owner, project)
         start = d(cell(row, 7))
         due = d(cell(row, 8))
@@ -658,9 +658,9 @@ def build():
             column, progress, done = "backlog", 0, False
         if status_raw == "拒绝":
             column, progress, done = "done", 100, True
-        owner = person(cell(row, 12)) or person(cell(row, 10)) or "张亮"
+        owner = person(cell(row, 12)) or person(cell(row, 10)) or "许文博"
         if owner not in USER_ID:
-            owner = "张亮"
+            owner = "许文博"
         owner = keep_user(owner, project)
         created = d(cell(row, 11)) or FALLBACK_DT.date()
         fixed = d(cell(row, 13))
@@ -806,7 +806,7 @@ def build():
     members = defaultdict(dict)
     tester = TESTER
     for project in project_names:
-        lead = PROJECT_LEAD.get(project, "施亚彬")
+        lead = PROJECT_LEAD.get(project, "韩立诚")
         members[project][lead] = "pm"
         owners = Counter()
         for task in tasks:
@@ -816,7 +816,7 @@ def build():
             members[project].setdefault(name, "dev")
         if project in ("机构服务平台", "AI知识库", "小程序平台化"):
             members[project]["张伟"] = "pm"
-            members[project]["施亚彬"] = "read"
+            members[project]["韩立诚"] = "read"
 
     # ---- 测试模块
     test_modules = {}
@@ -888,7 +888,7 @@ def build():
             "start": min((c["latest_at"].date() for c in proj_cases if c["latest_at"]), default=date(2026, 8, 1)),
             "end": max((c["latest_at"].date() for c in proj_cases if c["latest_at"]), default=date(2026, 8, 15)),
             "status": "done" if any(p["name"] == project and p["status"] == "done" for p in projects) else "active",
-            "owner": PROJECT_LEAD.get(project, "施亚彬"),
+            "owner": PROJECT_LEAD.get(project, "韩立诚"),
         }
         plans.append(plan)
         for idx, case in enumerate(proj_cases, 1):
@@ -1043,7 +1043,7 @@ def build():
     wm = [[sql_str(WS_ID), sql_str(ADMIN_USER[0]), sql_str("admin"),
            sql_dt(datetime(2026, 6, 1, 10, 0))]]
     for name, _login, _role in MEMBER_USERS:
-        wrole = "owner" if name == "张伟" else ("admin" if name == "施亚彬" else "member")
+        wrole = "owner" if name == "张伟" else ("admin" if name == "韩立诚" else "member")
         wm.append([sql_str(WS_ID), sql_str(USER_ID[name]), sql_str(wrole),
                    sql_dt(datetime(2026, 6, 1, 10, 0))])
     insert("workspace_member", ["workspace_id", "user_id", "role", "created_at"], wm)
@@ -1104,7 +1104,7 @@ def build():
         req_values.append([
             sql_str(project_ids[name]), sql_str(WS_ID), sql_str(name),
             sql_str(cut(p["objective"], 160)), sql_str(p["objective"]), sql_str(p["status"]),
-            sql_str(USER_ID.get(PROJECT_LEAD.get(name, "施亚彬"), USER_ID["施亚彬"])),
+            sql_str(USER_ID.get(PROJECT_LEAD.get(name, "韩立诚"), USER_ID["韩立诚"])),
             sql_date(planned_start), sql_date(planned_end), sql_date(first_release),
             sql_dt(datetime(2026, 6, 1, 9, 0)), sql_dt(now),
         ])
@@ -1141,7 +1141,7 @@ def build():
                 sql_str(fid), sql_str(WS_ID), sql_str(project_ids[proj]),
                 "NULL", sql_str(mod), "'other'", sql_str(fcontent), "'html'",
                 sql_str(brief), "'active'", "NULL", "0",
-                sql_str("施亚彬"), sql_str(USER_ID["施亚彬"]),
+                sql_str("韩立诚"), sql_str(USER_ID["韩立诚"]),
                 sql_dt(datetime(2026, 6, 1, 9, 0)), sql_dt(datetime(2026, 6, 1, 9, 0)),
             ])
     # 具体文档挂到模块目录下
@@ -1159,7 +1159,7 @@ def build():
             sql_str(cut(doc["description"], 400)), sql_str(doc["status"]),
             sql_dt(dt(doc["published"], 18, 0)) if doc["published"] else "NULL",
             str(sort_no),
-            sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["施亚彬"])),
+            sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["韩立诚"])),
             sql_dt(dt(doc["created"], 9, 30)),
             sql_dt(dt(doc["published"], 18, 0) if doc["published"] else dt(doc["created"], 9, 30)),
         ])
@@ -1179,12 +1179,12 @@ def build():
             sql_date(dem["expect"]), sql_str("功能按需求描述可用；关键路径回归通过；无阻断级缺陷。"),
             sql_str(dem["version"]), sql_str(dem["note"]),
             str(dem["biz"]), str(dem["urgent"]), str(dem["risk"]), str(dem["effort"]),
-            sql_str(USER_ID.get(dem["doc"]["proposer"] or dem["doc"]["owner"], USER_ID["施亚彬"])),
+            sql_str(USER_ID.get(dem["doc"]["proposer"] or dem["doc"]["owner"], USER_ID["韩立诚"])),
             sql_dt(dt(dem["created"], 10, 0)), sql_dt(dt(dem["created"], 10, 0)),
         ])
         action = {"review": "create", "pass": "pass", "plan": "plan", "rej": "rej"}[dem["status"]]
         demand_logs.append([sql_str(WS_ID), sql_str(dem["id"]), "'create'", sql_str("需求进入需求池"),
-                            sql_str(USER_ID.get(dem["doc"]["proposer"] or dem["doc"]["owner"], USER_ID["施亚彬"])),
+                            sql_str(USER_ID.get(dem["doc"]["proposer"] or dem["doc"]["owner"], USER_ID["韩立诚"])),
                             sql_dt(dt(dem["created"], 10, 0))])
         if action != "create":
             demand_logs.append([sql_str(WS_ID), sql_str(dem["id"]), sql_str(action), sql_str(dem["note"]),
@@ -1239,7 +1239,7 @@ def build():
         if name not in projects_with_tasks:
             continue
         p = next(x for x in projects if x["name"] == name)
-        lead = PROJECT_LEAD.get(name, "施亚彬")
+        lead = PROJECT_LEAD.get(name, "韩立诚")
         status = "released" if p["status"] == "done" else ("testing" if name == "流程引擎" else "dev")
         start = min((t["start"] for t in tasks if t["project"] == name and t["start"]), default=date(2026, 6, 1))
         dev_at = dt(start, 10, 0)
@@ -1251,7 +1251,7 @@ def build():
         branch_values.append([
             sql_str(branch_ids[name]), sql_str(WS_ID), sql_str(project_ids[name]),
             sql_str("feature/" + PROJECT_SLUG.get(name, "project")), sql_str(status), sql_str(lead),
-            sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), "'main'", sql_str("对应项目主开发分支"),
+            sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), "'main'", sql_str("对应项目主开发分支"),
             sql_dt(dev_at), sql_dt(test_at) if status in ("testing", "merging", "released") else "NULL",
             sql_dt(merge_at) if status in ("merging", "released") else "NULL",
             sql_dt(released_at) if released_at else "NULL", "0",
@@ -1261,7 +1261,7 @@ def build():
             branch_logs.append([sql_str("Xkbl%04d" % (len(branch_logs) + 1)), sql_str(WS_ID),
                                 sql_str(branch_ids[name]), sql_str(action), frm, to,
                                 sql_str(detail), sql_str(lead),
-                                sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_dt(at)])
+                                sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_dt(at)])
         blog("create", "NULL", "'dev'", "创建开发分支", dev_at)
         if status in ("testing", "merging", "released"):
             blog("status", "'dev'", "'testing'", "开发完成，转入测试", test_at)
@@ -1291,7 +1291,7 @@ def build():
             sql_str(extra.get("found")) if task["item_type"] == "bug" else "NULL",
             sql_str(extra.get("regression")) if task["item_type"] == "bug" else "NULL",
             sql_str(task["priority"]), sql_str(task["owner"]),
-            sql_str(USER_ID.get(task["owner"], USER_ID["施亚彬"])),
+            sql_str(USER_ID.get(task["owner"], USER_ID["韩立诚"])),
             sql_str(task["module"] if task["module"] in category_names else "其他"),
             sql_str(task["column"]), sql_date(task["start"]), sql_date(task["due"]),
             sql_str(project_ids[task["project"]]),
@@ -1338,10 +1338,10 @@ def build():
                              "1" if (done or j == 0) else "0",
                              sql_dt(task["created"]), sql_dt(task["created"])])
         if idx % 7 == 0:
-            author = task["owner"] if idx % 2 == 0 else PROJECT_LEAD.get(task["project"], "施亚彬")
+            author = task["owner"] if idx % 2 == 0 else PROJECT_LEAD.get(task["project"], "韩立诚")
             content = ("缺陷已复现并定位，等待修复验证。" if task["item_type"] == "bug"
                        else "已完成自测，等待提测。" if not done else "已上线，回归通过。")
-            comments.append([sql_str(task["id"]), sql_str(WS_ID), sql_str(USER_ID.get(author, USER_ID["施亚彬"])),
+            comments.append([sql_str(task["id"]), sql_str(WS_ID), sql_str(USER_ID.get(author, USER_ID["韩立诚"])),
                              sql_str(author), sql_str(content),
                              sql_dt(dt(task["completed"] or task["due"] or TODAY, 16, 0))])
     insert("subtask", ["task_id", "workspace_id", "title", "done", "created_at", "updated_at"], subtasks)
@@ -1352,13 +1352,13 @@ def build():
     task_logs = []
     for task in tasks:
         task_logs.append([sql_str(task["id"]), sql_str(WS_ID),
-                          sql_str(USER_ID.get(task["owner"], USER_ID["施亚彬"])),
+                          sql_str(USER_ID.get(task["owner"], USER_ID["韩立诚"])),
                           "'create'", sql_str("创建任务：" + task["title"]),
                           "NULL", "NULL", sql_dt(task["created"])])
         if task["column"] == "done":
             from_col = "backlog" if task["status_raw"] in ("未启动", "") else "doing"
             task_logs.append([sql_str(task["id"]), sql_str(WS_ID),
-                              sql_str(USER_ID.get(task["owner"], USER_ID["施亚彬"])),
+                              sql_str(USER_ID.get(task["owner"], USER_ID["韩立诚"])),
                               "'move'", sql_str("状态变更：" + (task["status_raw"] or "未启动")),
                               sql_str(from_col), "'done'",
                               sql_dt(dt(task["completed"], 18, 0) if task["completed"] else task["created"])])
@@ -1368,7 +1368,7 @@ def build():
     # 工时与完成记录
     time_values = []
     for task_id, owner, begin, finish, minutes in time_logs:
-        time_values.append([sql_str(task_id), sql_str(WS_ID), sql_str(USER_ID.get(owner, USER_ID["施亚彬"])),
+        time_values.append([sql_str(task_id), sql_str(WS_ID), sql_str(USER_ID.get(owner, USER_ID["韩立诚"])),
                             sql_dt(begin), sql_dt(finish), str(minutes), "'manual'",
                             sql_str("历史任务补记（按任务起止日期合成）")])
     insert("time_log", ["task_id", "workspace_id", "user_id", "started_at", "ended_at",
@@ -1384,7 +1384,7 @@ def build():
             sql_str(next(p["name"] for p in projects if p["name"] == task["project"])),
             sql_str(task["doc"]["id"]) if task["doc"] else "NULL",
             sql_str(task["doc"]["title"]) if task["doc"] else "NULL",
-            sql_str(owner), sql_str(USER_ID.get(owner, USER_ID["施亚彬"])),
+            sql_str(owner), sql_str(USER_ID.get(owner, USER_ID["韩立诚"])),
             sql_str(task["module"] if task["module"] in category_names else "其他"),
             sql_str(task["priority"]), sql_date(rec["start"]), sql_date(rec["end"]),
             sql_dt(rec["first"]), sql_dt(rec["last"]), str(rec["minutes"]),
@@ -1411,7 +1411,7 @@ def build():
             sql_str(demand_by_doc.get(id(case["doc"]))), sql_str(case["title"]), sql_str(case["precondition"]),
             sql_str(cut(case["module"], 50)), sql_str(case["priority"]), sql_str(steps),
             sql_str(case["latest"]), sql_str(case["note"]), sql_str(case["latest_by"]),
-            sql_str(USER_ID.get(case["latest_by"], USER_ID["施亚彬"])) if case["latest_by"] else "NULL",
+            sql_str(USER_ID.get(case["latest_by"], USER_ID["韩立诚"])) if case["latest_by"] else "NULL",
             sql_dt(case["latest_at"]), sql_str(case["bug"]),
             sql_dt(datetime(2026, 6, 1, 9, 0)), sql_dt(now),
         ])
@@ -1429,7 +1429,7 @@ def build():
             sql_str("Xktr%04d" % len(run_values)), sql_str(case["id"]), sql_str(WS_ID),
             sql_str(case["latest"]), sql_str(case["note"]), sql_str(case["bug"]),
             sql_str(plan["id"]) if plan else "NULL",
-            sql_str(case["latest_by"]), sql_str(USER_ID.get(case["latest_by"], USER_ID["施亚彬"])),
+            sql_str(case["latest_by"]), sql_str(USER_ID.get(case["latest_by"], USER_ID["韩立诚"])),
             sql_dt(case["latest_at"]),
         ])
     insert("test_case_run",
@@ -1442,7 +1442,7 @@ def build():
             sql_str(plan["id"]), sql_str(WS_ID), sql_str(project_ids[plan["project"]]),
             sql_str(plan["name"]), sql_str(plan["version"]), sql_date(plan["start"]),
             sql_date(plan["end"]), sql_str(plan["status"]), sql_str("运营研发回归测试"),
-            sql_str(plan["owner"]), sql_str(USER_ID.get(plan["owner"], USER_ID["施亚彬"])),
+            sql_str(plan["owner"]), sql_str(USER_ID.get(plan["owner"], USER_ID["韩立诚"])),
             sql_dt(dt(plan["start"], 9, 0)), sql_dt(dt(plan["end"], 18, 0)),
         ])
     insert("test_plan",
@@ -1455,7 +1455,7 @@ def build():
             "executed_at", "created_at"],
            [[sql_str(pc["id"]), sql_str(pc["plan"]), sql_str(pc["case"]), sql_str(pc["result"]),
              sql_str(pc["note"]), sql_str(pc["by"]),
-             sql_str(USER_ID.get(pc["by"], USER_ID["施亚彬"])) if pc["by"] else "NULL",
+             sql_str(USER_ID.get(pc["by"], USER_ID["韩立诚"])) if pc["by"] else "NULL",
              sql_dt(pc["at"]), sql_dt(pc["at"])] for pc in plan_cases if pc["result"]])
 
     # 文档历史 / 项目动态 / 审计
@@ -1465,7 +1465,7 @@ def build():
             sql_str("Xkdh%04d" % len(history_values)), sql_str(doc["id"]), sql_str(WS_ID), "1",
             sql_str(doc["title"]),
             sql_str("<p>%s</p>" % html.escape(doc["description"])), "'html'",
-            sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["施亚彬"])),
+            sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["韩立诚"])),
             sql_dt(dt(doc["created"], 9, 40)),
         ])
         if doc["status"] == "done":
@@ -1473,7 +1473,7 @@ def build():
                 sql_str("Xkdh%04d" % len(history_values)), sql_str(doc["id"]), sql_str(WS_ID), "2",
                 sql_str(doc["title"]),
                 sql_str("<p>%s</p>" % html.escape(doc["description"])), "'html'",
-                sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["施亚彬"])),
+                sql_str(doc["owner"]), sql_str(USER_ID.get(doc["owner"], USER_ID["韩立诚"])),
                 sql_dt(dt(doc["published"], 18, 0)),
             ])
     insert("requirement_doc_history",
@@ -1484,31 +1484,31 @@ def build():
     audit_values = []
     for name in project_names:
         p = next(x for x in projects if x["name"] == name)
-        lead = PROJECT_LEAD.get(name, "施亚彬")
+        lead = PROJECT_LEAD.get(name, "韩立诚")
         at = dt(datetime(2026, 6, 1, 9, 0).date(), 9, 0)
         activity_values.append([sql_str(WS_ID), "'project'", sql_str(project_ids[name]),
-                                sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+                                sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                                 "'create'", sql_str("创建项目：" + name), sql_dt(at)])
-        audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+        audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                              "'create'", "'project'", sql_str(project_ids[name]), sql_str(name),
                              "'success'", sql_str("创建项目：" + name), sql_dt(at)])
         if p["status"] == "done":
             rel_at = dt(date(2026, 8, 19), 18, 0)
             activity_values.append([sql_str(WS_ID), "'project'", sql_str(project_ids[name]),
-                                    sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+                                    sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                                     "'first_release'", sql_str("项目首版上线"), sql_dt(rel_at)])
-            audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+            audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                                  "'first_release'", "'project'", sql_str(project_ids[name]), sql_str(name),
                                  "'success'", sql_str("项目首版上线"), sql_dt(rel_at)])
     for doc in docs:
         if doc["status"] != "done":
             continue
-        lead = PROJECT_LEAD.get(doc["project"], "施亚彬")
+        lead = PROJECT_LEAD.get(doc["project"], "韩立诚")
         at = dt(doc["published"], 18, 0)
         activity_values.append([sql_str(WS_ID), "'requirement_doc'", sql_str(doc["id"]),
-                                sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+                                sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                                 "'first_release'", sql_str("需求随版本发布：" + doc["title"]), sql_dt(at)])
-        audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["施亚彬"])), sql_str(lead),
+        audit_values.append([sql_str(WS_ID), sql_str(USER_ID.get(lead, USER_ID["韩立诚"])), sql_str(lead),
                              "'first_release'", "'requirement_doc'", sql_str(doc["id"]), sql_str(doc["title"]),
                              "'success'", sql_str("需求随版本发布"), sql_dt(at)])
     insert("work_activity",

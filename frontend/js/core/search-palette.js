@@ -18,7 +18,7 @@ var TYPE_META = {
 var TYPE_ORDER = { project:0, branch:1, task:2, doc:3, demand:4, case:5 };
 var BRANCH_STATUS = { dev:"开发中", testing:"待测试", merging:"待合并", released:"已发布" };
 var DOC_TYPE = { requirement: "需求文档", technical: "技术方案", acceptance: "测试验收" };
-var DEMAND_STATUS = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝" };
+var DEMAND_STATUS = { review: "待评审", pass: "已通过", plan: "已排期", rej: "已拒绝", canceled: "已取消", cancelled: "已取消" };
 var CASE_STATUS = { passed: "通过", failed: "失败", blocked: "阻塞" };
 var PROJECT_STATUS = { active: "进行中", done: "已完成", hold: "已搁置" };
 

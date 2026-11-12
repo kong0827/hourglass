@@ -87,6 +87,7 @@ function plannedText(d){
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
 function statusName(st){
+  if(st === "cancelled") return "已取消";
   for(var i = 0; i < COLS.length; i++) if(COLS[i][0] === st) return COLS[i][1];
   return st;
 }
@@ -448,8 +449,8 @@ function demandMenuItems(d){
   return out;
 }
 function demandActs(d, opts){
-  /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为普通按钮，避免整屏都是主色 */
-  var cls = (opts && opts.subtle) ? "btn sm" : "btn sm primary";
+  /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为主色浅底，避免整屏都是主色 */
+  var cls = (opts && opts.subtle) ? "btn sm soft" : "btn sm primary";
   var acts = "";
   if(isOwner() && canWriteDemand(d)){
     if(d.status === "review"){
@@ -850,7 +851,7 @@ function saveDemView(){
   });
 }
 function deleteDemView(id){
-  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响需求数据。", okText:"删除" }).then(function(ok){
+  UI.showConfirm({ title:"删除视图", msg:"确定删除该视图？不影响需求数据。", okText:"删除视图" }).then(function(ok){
     if(!ok) return;
     API.del("/api/views/" + encodeURIComponent(id)).then(function(){
       toast("视图已删除", "fs");
@@ -981,7 +982,7 @@ function initDemSmartBar(){
   demSmartBar.innerHTML =
     '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
     '<div class="smart-view-tools">' +
-      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索需求 / 描述 / 来源 / 模块" aria-label="搜索需求" />' +
+      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 模块" aria-label="搜索当前空间全部需求" />' +
       '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 模块 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
@@ -994,7 +995,7 @@ function initDemSmartBar(){
         '<option value="expect">按期望交付</option><option value="wsjf">按 WSJF</option><option value="created">按提交时间</option></select></label>' +
       '<span class="smart-view-spacer"></span>' +
       '<button class="btn sm" type="button" data-dem-export>' + icon("download", 13) + ' 导出当前视图</button>' +
-      '<button class="btn sm primary" type="button" data-dem-save>＋ 保存视图</button>' +
+      '<button class="btn sm ghost" type="button" data-dem-save>＋ 保存视图</button>' +
     '</div>';
   page.insertBefore(demSmartBar, demandBody);
   if(demandGanttBar) page.insertBefore(demandGanttBar, demandBody);
@@ -1002,7 +1003,7 @@ function initDemSmartBar(){
   demBoardBar.className = "dem-board-bar";
   demBoardBar.hidden = true;
   demBoardBar.innerHTML =
-    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索标题 / 描述 / 来源 / 模块" aria-label="搜索当前项目需求" />' +
+    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 模块" aria-label="搜索当前项目需求" />' +
     '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 模块）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
     '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
     '<span class="demb-spacer"></span>' +
@@ -1665,7 +1666,7 @@ function openDemandDialog(d){
   dWsjfE.value = d && d.wsjfEffort != null ? d.wsjfEffort : "";
   fDemandTitle.classList.remove("invalid");
   demandFormTitle.textContent = d ? "编辑需求" : "提需求";
-  btnSaveDemand.textContent = d ? "保存修改" : "提交评审";
+  btnSaveDemand.textContent = d ? "保存" : "提交评审";
   btnSaveDemand.disabled = false;
   demandFormSeq++;
   syncPriSeg();
@@ -2200,7 +2201,7 @@ function renderDemandDetail(d){
       UI.showConfirm({
         title: "删除附件",
         msg: "附件删除后不可恢复，确定删除？",
-        okText: "删除"
+        okText: "删除附件"
       }).then(function(yes){
         if(!yes) return;
         ad.disabled = true;

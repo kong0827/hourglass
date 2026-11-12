@@ -2,6 +2,7 @@ package com.hourglass.controller;
 
 import com.hourglass.common.ApiResult;
 import com.hourglass.common.CurrentUser;
+import com.hourglass.dto.ReviewHourLogPage;
 import com.hourglass.dto.ReviewResponse;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.ReviewService;
@@ -29,5 +30,19 @@ public class ReviewController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(reviewService.review(ws.getId(), userId, reqId, weekOffset));
+    }
+
+    /** 工时下钻：与 /api/review 的 workMinutes 同口径；mine=true 只看自己，分页最多 100 条 */
+    @GetMapping("/api/review/hour-logs")
+    public ApiResult<ReviewHourLogPage> hourLogs(@RequestParam(required = false) String workspace,
+                                                 @RequestParam(required = false) Integer weekOffset,
+                                                 @RequestParam(required = false) String reqId,
+                                                 @RequestParam(required = false) Boolean mine,
+                                                 @RequestParam(required = false) Integer offset,
+                                                 @RequestParam(required = false) Integer limit) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(reviewService.hourLogs(ws.getId(), userId, reqId, weekOffset,
+                Boolean.TRUE.equals(mine), offset == null ? 0 : offset, limit == null ? 0 : limit));
     }
 }
