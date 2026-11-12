@@ -9,7 +9,7 @@
 说明：
     - 只写增删改：先按空间 SXk01 / 用户 Xku% 清理，再整体插入，可重复执行；
     - 历史任务没有工时数据，工时按任务起止日期合成（origin=manual），并在备注中标注；
-    - 演示账号统一密码 hourglassdemo；admin 为系统管理员账号，kongxiangjin 为空间所有者。
+    - 演示账号统一密码 hourglassdemo；admin 为系统管理员账号，zhangwei 为空间所有者。
 """
 
 import argparse
@@ -33,7 +33,7 @@ FALLBACK_DT = datetime(2026, 6, 1, 9, 0, 0)
 
 # 人员 -> 登录名（顺序即账号编号）
 USERS = [
-    ("孔祥劲", "kongxiangjin", "admin"),
+    ("张伟", "zhangwei", "admin"),
     ("施亚彬", "shiyabin", "user"),
     ("周劲松", "zhoujinsong", "user"),
     ("张亮", "zhangliang", "user"),
@@ -67,7 +67,7 @@ for i, (name, login, _role) in enumerate(USERS, 1):
 USER_ROLE = {name: role for name, _login, role in USERS}
 
 # 仅保留开发成员进入种子；PM / 测试 / 设计等非开发成员不再生成账号与成员关系
-KEEP_USERS = ["孔祥劲", "施亚彬", "张亮", "程洪昌", "肖威"]
+KEEP_USERS = ["张伟", "施亚彬", "张亮", "程洪昌", "肖威"]
 MEMBER_USERS = [u for u in USERS if u[0] in KEEP_USERS]
 
 # 系统管理员账号：不参与任务分配，保证重灌库后仍可用 admin 登录
@@ -81,7 +81,7 @@ PROJECT_LEAD = {
     "报表服务": "程洪昌",
     "API开放平台": "肖威",
     "消息中心": "肖威",
-    "机构服务平台": "孔祥劲",
+    "机构服务平台": "张伟",
     "AI知识库": "张亮",
     "小程序平台化": "施亚彬",
 }
@@ -385,7 +385,7 @@ def build():
         release_list.append({
             "date": day,
             "content": cell(row, 1),
-            "owner": keep_user(person(cell(row, 2)) or "孔祥劲", "流程引擎"),
+            "owner": keep_user(person(cell(row, 2)) or "张伟", "流程引擎"),
             "note": cell(row, 3),
             "explicit": norm_text(cell(row, 5)) or norm_text(cell(row, 4)),
         })
@@ -421,7 +421,7 @@ def build():
         "target": date(2026, 11, 30),
         "released": None,
         "tokens": set(),
-        "owner": "孔祥劲",
+        "owner": "张伟",
     }
     versions.append(planned_version)
     latest_release = release_list[-1]["date"] if release_list else date(2026, 8, 19)
@@ -815,7 +815,7 @@ def build():
         for name, _cnt in owners.most_common(4):
             members[project].setdefault(name, "dev")
         if project in ("机构服务平台", "AI知识库", "小程序平台化"):
-            members[project]["孔祥劲"] = "pm"
+            members[project]["张伟"] = "pm"
             members[project]["施亚彬"] = "read"
 
     # ---- 测试模块
@@ -964,7 +964,7 @@ def build():
     emit("-- 运营研发项目看板种子数据")
     emit("-- 由 tools/gen_kanban_seed.py 从《运营研发项目看板.xlsx》生成，请勿手工修改")
     emit("-- 空间：SXk01 / 运营研发中心（shared）")
-    emit("-- 演示账号：admin（系统管理员）/ kongxiangjin（空间所有者）/ 其余成员，统一密码 hourglassdemo")
+    emit("-- 演示账号：admin（系统管理员）/ zhangwei（空间所有者）/ 其余成员，统一密码 hourglassdemo")
     emit("-- 数据口径：")
     emit("--   * 需求管理 -> requirement_doc + 未发版需求进入 demand 需求池（按模块分组，文档多的项目创建模块目录）")
     emit("--   * 项目子任务管理 + 缺陷管理 -> task（缺陷映射为 item_type=bug）")
@@ -1038,12 +1038,12 @@ def build():
     # 空间与成员
     insert("workspace",
            ["id", "name", "type", "owner_id", "created_at", "updated_at"],
-           [[sql_str(WS_ID), sql_str(WS_NAME), "'shared'", sql_str(USER_ID["孔祥劲"]),
+           [[sql_str(WS_ID), sql_str(WS_NAME), "'shared'", sql_str(USER_ID["张伟"]),
              sql_dt(datetime(2026, 6, 1, 9, 0)), sql_dt(now)]])
     wm = [[sql_str(WS_ID), sql_str(ADMIN_USER[0]), sql_str("admin"),
            sql_dt(datetime(2026, 6, 1, 10, 0))]]
     for name, _login, _role in MEMBER_USERS:
-        wrole = "owner" if name == "孔祥劲" else ("admin" if name == "施亚彬" else "member")
+        wrole = "owner" if name == "张伟" else ("admin" if name == "施亚彬" else "member")
         wm.append([sql_str(WS_ID), sql_str(USER_ID[name]), sql_str(wrole),
                    sql_dt(datetime(2026, 6, 1, 10, 0))])
     insert("workspace_member", ["workspace_id", "user_id", "role", "created_at"], wm)
@@ -1188,7 +1188,7 @@ def build():
                             sql_dt(dt(dem["created"], 10, 0))])
         if action != "create":
             demand_logs.append([sql_str(WS_ID), sql_str(dem["id"]), sql_str(action), sql_str(dem["note"]),
-                                sql_str(USER_ID["孔祥劲"]), sql_dt(dt(add_days(dem["created"], 2), 15, 0))])
+                                sql_str(USER_ID["张伟"]), sql_dt(dt(add_days(dem["created"], 2), 15, 0))])
     insert("demand",
            ["id", "workspace_id", "req_id", "title", "description", "source", "item_kind",
             "priority", "status", "expect_date", "accept_text", "version_id", "review_note",
@@ -1199,7 +1199,7 @@ def build():
     demand_doc_links = []
     for dem in demand_rows:
         demand_doc_links.append([sql_str(WS_ID), sql_str(dem["id"]), sql_str(dem["doc"]["id"]),
-                                 sql_str(USER_ID["孔祥劲"]), sql_dt(dt(dem["created"], 10, 0))])
+                                 sql_str(USER_ID["张伟"]), sql_dt(dt(dem["created"], 10, 0))])
     insert("demand_doc_link", ["workspace_id", "demand_id", "doc_id", "created_by", "created_at"],
            demand_doc_links)
 
