@@ -120,8 +120,13 @@ if errorlevel 1 goto :pack_fail
 
 copy /y "sql\baseline\01_schema_full.sql" "%SQL_DIR%\01_schema_full.sql" >nul
 if errorlevel 1 goto :pack_fail
-copy /y "sql\seeds\seed_yunying.sql" "%SQL_DIR%\seed_yunying.sql" >nul
-if errorlevel 1 goto :pack_fail
+rem 种子数据：开源版已移除含真实姓名的 seed_yunying.sql，存在才复制
+if exist "sql\seeds\seed_yunying.sql" (
+    copy /y "sql\seeds\seed_yunying.sql" "%SQL_DIR%\seed_yunying.sql" >nul
+    if errorlevel 1 goto :pack_fail
+) else (
+    echo [WARN] 未找到 sql\seeds\seed_yunying.sql，按开源版口径跳过
+)
 rem 上线清单属内部资料，已移出仓库：优先取仓库外 ../内部资料 路径，仓库内旧路径作兼容回退
 rem 两处都没有时只告警、不中断打包（交付包内将不含上线清单）
 copy /y "..\内部资料\deploy\上线清单.md" "%SQL_DIR%\上线清单.md" >nul

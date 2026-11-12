@@ -15,9 +15,9 @@
   border-right:1px solid var(--border);
 }
 
-/* 品牌区 56px */
-.side-brand{display:flex;align-items:center;gap:10px;width:100%;height:56px;flex:0 0 auto;padding:0 16px;
-  background:transparent;border:none;border-radius:0;color:inherit;text-align:left;cursor:pointer;}
+/* 品牌区：与顶栏同高，底部线与顶栏底边连成一条 */
+.side-brand{display:flex;align-items:center;gap:10px;width:100%;height:var(--topbar-h);flex:0 0 auto;padding:0 16px;
+  background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;color:inherit;text-align:left;cursor:pointer;}
 .side-brand:hover{background:var(--surface-hover);}
 .brand-mark{
   width:32px;height:32px;border-radius:var(--r-sm);flex:0 0 auto;
@@ -138,7 +138,7 @@
 }
 .tb-left{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
 .tb-title{font-size:20px;line-height:26px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.tb-sub{font-size:12px;line-height:16px;font-weight:500;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tb-sub{font-size:12px;line-height:16px;font-weight:500;color:var(--text-3);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tb-sub.breadcrumb{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-width:0;}
 .tb-sub.breadcrumb span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;max-width:100%;}
 /* 第一段（空间名）限宽，最后一段（页面说明）吃掉剩余宽度，避免统一 180px 截断 */
@@ -412,7 +412,7 @@ body.side-rail .side-foot{flex-direction:column;height:auto;padding:8px 0;gap:6p
 /* 侧边栏收起/展开按钮：压在中缝上（VS Code 那种位置），收起态箭头翻转 */
 .rail-btn{
   /* 压在侧栏中缝上，必须高于顶栏（40）才不会被切掉右半边 */
-  position:absolute;top:16px;right:-13px;z-index:45;
+  position:absolute;top:calc((var(--topbar-h) - 26px) / 2);right:-13px;z-index:45;
   width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
   background:var(--surface);border:1px solid var(--border);
   color:var(--text-3);cursor:pointer;box-shadow:var(--shadow-sm);
