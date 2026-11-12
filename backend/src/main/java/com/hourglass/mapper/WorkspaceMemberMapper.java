@@ -34,6 +34,9 @@ public interface WorkspaceMemberMapper {
                           @Param("userId") String userId,
                           @Param("companyName") String companyName);
 
+    int updateJobTitle(@Param("workspaceId") String workspaceId,
+                       @Param("userId") String userId, @Param("jobTitle") String jobTitle);
+
     int delete(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
 
     int deleteAllByWorkspace(@Param("workspaceId") String workspaceId);

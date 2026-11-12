@@ -2,22 +2,34 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hourglass.mapper.ProjectMemberRoleMapper">
 
-  <select id="selectByProject" resultType="ProjectMemberRole">
-    SELECT workspace_id, project_id, user_id, role_title, created_at, updated_at
+  <resultMap id="roleMap" type="ProjectMemberRole" autoMapping="true">
+    <result column="secondary_role_titles" property="secondaryRoleTitles"
+            typeHandler="com.hourglass.mapper.RoleTitlesTypeHandler"/>
+  </resultMap>
+
+  <select id="selectByProject" resultMap="roleMap">
+    SELECT workspace_id, project_id, user_id, role_title, secondary_role_titles, created_at, updated_at
     FROM project_member_role
     WHERE workspace_id = #{workspaceId} AND project_id = #{projectId}
   </select>
 
-  <select id="selectOne" resultType="ProjectMemberRole">
-    SELECT workspace_id, project_id, user_id, role_title, created_at, updated_at
+  <select id="selectOne" resultMap="roleMap">
+    SELECT workspace_id, project_id, user_id, role_title, secondary_role_titles, created_at, updated_at
     FROM project_member_role
     WHERE workspace_id = #{workspaceId} AND project_id = #{projectId} AND user_id = #{userId}
   </select>
 
+  <select id="selectByWorkspace" resultMap="roleMap">
+    SELECT workspace_id, project_id, user_id, role_title, secondary_role_titles, created_at, updated_at
+    FROM project_member_role WHERE workspace_id = #{workspaceId}
+  </select>
+
   <insert id="upsert">
-    INSERT INTO project_member_role (workspace_id, project_id, user_id, role_title)
-    VALUES (#{workspaceId}, #{projectId}, #{userId}, #{roleTitle})
-    ON DUPLICATE KEY UPDATE role_title = VALUES(role_title)
+    INSERT INTO project_member_role (workspace_id, project_id, user_id, role_title, secondary_role_titles)
+    VALUES (#{workspaceId}, #{projectId}, #{userId}, #{roleTitle},
+            #{secondaryRoleTitles,jdbcType=VARCHAR,typeHandler=com.hourglass.mapper.RoleTitlesTypeHandler})
+    ON DUPLICATE KEY UPDATE role_title = VALUES(role_title),
+                            secondary_role_titles = VALUES(secondary_role_titles)
   </insert>
 
   <delete id="deleteOne">

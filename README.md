@@ -122,14 +122,14 @@ java -jar backend/target/hourglass-server.jar
 
 生产部署执行 `bash deploy/deploy.sh`：自动检测改动 → 按需打包前端 / 后端 → 备份数据库 → 执行增量 SQL → 换包 → 健康校验，支持 `--dry-run` / `--rollback`。详见 [`deploy/README.md`](deploy/README.md)。
 
-本轮 A–E **经用户单独明确授权重建原库**：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留。完整基线 `sql/baseline/01_schema_full.sql` 包含 55 张表（重建时 52 表，其后 65 新增跨版本计划关联表、66 新增邀请项目预分配表、68 新增成员公司与项目角色标注表），不回放 61/62、不迁移旧历史。完整基线会重建表，不是幂等无损脚本；正常部署脚本仍只支持新空库，不能把本次授权泛化为任意部署删库许可。重建后的完整回退须匹配 SQL 恢复并单独授权，软件-only 回退不足。`63_delivery_release.sql` 仅增列与建五张发布相关表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`，不回填、不清空、不构造历史证据；它不是本轮旧库迁移入口。`65_release_plan_versions.sql` 只新增 `version_release_plan_version` 关联表并回填现有计划，使一个计划可跨版本 / 跨项目，不改写任何实际发布证据。既有已发布结构的升级按发布说明评估所需编号脚本，61/62 的破坏性说明仍有效。详见 [`sql/README.md`](sql/README.md)。
+本轮 A–E **经用户单独明确授权重建原库**：原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留。完整基线 `sql/baseline/01_schema_full.sql` 包含 56 张表（重建时 52 表，其后 65 新增跨版本计划关联表、66 新增邀请项目预分配表、68 新增成员公司与项目角色标注表、69 新增成员职能与标签选项表），不回放 61/62、不迁移旧历史。完整基线会重建表，不是幂等无损脚本；正常部署脚本仍只支持新空库，不能把本次授权泛化为任意部署删库许可。重建后的完整回退须匹配 SQL 恢复并单独授权，软件-only 回退不足。`63_delivery_release.sql` 仅增列与建五张发布相关表：`version_release_plan`、`version_release_plan_task`、`version_release`、`version_release_item`、`version_log`，不回填、不清空、不构造历史证据；它不是本轮旧库迁移入口。`65_release_plan_versions.sql` 只新增 `version_release_plan_version` 关联表并回填现有计划，使一个计划可跨版本 / 跨项目，不改写任何实际发布证据。既有已发布结构的升级按发布说明评估所需编号脚本，61/62 的破坏性说明仍有效。详见 [`sql/README.md`](sql/README.md)。
 
 ## 技术栈
 
 | 层 | 选型 |
 | --- | --- |
 | 后端 | Spring Boot 2.7.18 / Java 8 / MyBatis / Spring Security（会话登录 + CSRF） |
-| 数据库 | MySQL 8（utf8mb4），55 张表（含已部署交付闭环、跨版本计划关联、邀请项目预分配与成员公司/项目角色标注），完整基线仅新空库；编号增量须评估破坏性 |
+| 数据库 | MySQL 8（utf8mb4），56 张表（含已部署交付闭环、跨版本计划关联、邀请项目预分配、成员公司/项目角色标注与成员职能标签选项），完整基线仅新空库；编号增量须评估破坏性 |
 | 实时 | SSE 推送变更与通知 |
 | 前端 | 原生 JavaScript ES Module，**无框架、无构建步骤**；PWA 离线壳 |
 | 部署 | 前端由 Nginx 直接托管，后端只提供 `/api/**`；systemd + 一键部署脚本 |

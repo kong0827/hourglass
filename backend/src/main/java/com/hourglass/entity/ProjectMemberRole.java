@@ -15,6 +15,7 @@ public class ProjectMemberRole {
     private String projectId;
     private String userId;
     private String roleTitle;
+    private java.util.List<String> secondaryRoleTitles;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

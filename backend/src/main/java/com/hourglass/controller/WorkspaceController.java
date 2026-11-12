@@ -6,6 +6,10 @@ import com.hourglass.common.CurrentUser;
 import com.hourglass.dto.MemberAddRequest;
 import com.hourglass.dto.MemberCandidate;
 import com.hourglass.dto.MemberCompanyRequest;
+import com.hourglass.dto.MemberJobTitleRequest;
+import com.hourglass.dto.MemberLabelOptions;
+import com.hourglass.dto.ProjectMemberRoleBatchRequest;
+import com.hourglass.dto.ProjectMemberRoleCopyRequest;
 import com.hourglass.dto.ProjectMemberRoleOverview;
 import com.hourglass.dto.ProjectMemberRoleRequest;
 import com.hourglass.dto.WorkspaceCreateRequest;
@@ -204,6 +208,46 @@ public class WorkspaceController {
         return ApiResult.ok();
     }
 
+    @PutMapping("/api/workspaces/{id}/members/{userId}/job-title")
+    public ApiResult<Void> updateMemberJobTitle(@PathVariable String id, @PathVariable String userId,
+                                               @RequestBody(required = false) MemberJobTitleRequest req) {
+        workspaceService.updateMemberJobTitle(CurrentUser.id(), id, userId, req == null ? null : req.getJobTitle());
+        return ApiResult.ok();
+    }
+
+    @GetMapping("/api/workspaces/{id}/member-label-options")
+    public ApiResult<MemberLabelOptions> memberLabelOptions(@PathVariable String id) {
+        return ApiResult.ok(workspaceService.memberLabelOptions(CurrentUser.id(), id));
+    }
+
+    @PutMapping("/api/workspaces/{id}/member-label-options")
+    public ApiResult<Void> updateMemberLabelOptions(@PathVariable String id,
+                                                   @RequestBody MemberLabelOptions req) {
+        workspaceService.updateMemberLabelOptions(CurrentUser.id(), id, req);
+        return ApiResult.ok();
+    }
+
+    @PutMapping("/api/workspaces/{id}/projects/{projectId}/member-roles")
+    public ApiResult<Map<String, Integer>> saveProjectRoles(@PathVariable String id, @PathVariable String projectId,
+            @RequestBody ProjectMemberRoleBatchRequest req) {
+        String me = CurrentUser.id();
+        workspaceService.requireMember(me, id);
+        Requirement project = requireProject(id, projectId);
+        if (req == null) throw AppException.badRequest("请提交成员职能");
+        return ApiResult.ok(projectMemberRoleService.saveRoles(id, project, req.getUserIds(), req.getRoleTitle(),
+                req.getSecondaryRoleTitles(), me));
+    }
+
+    @PostMapping("/api/workspaces/{id}/projects/{projectId}/member-roles/copy")
+    public ApiResult<Map<String, Integer>> copyProjectRoles(@PathVariable String id, @PathVariable String projectId,
+            @RequestBody ProjectMemberRoleCopyRequest req) {
+        String me = CurrentUser.id();
+        workspaceService.requireMember(me, id);
+        Requirement project = requireProject(id, projectId);
+        if (req == null) throw AppException.badRequest("请选择来源项目");
+        return ApiResult.ok(projectMemberRoleService.copyRoles(id, project, req.getSourceProjectId(), req.isOverwrite(), me));
+    }
+
     /** 项目花名册：可见且非查看者的成员 + 公司 + 本项目角色 + 有效权限 */
     @GetMapping("/api/workspaces/{id}/projects/{projectId}/members")
     public ApiResult<ProjectMemberRoleOverview> projectMembers(@PathVariable String id,
@@ -215,7 +259,7 @@ public class WorkspaceController {
         return ApiResult.ok(projectMemberRoleService.roster(id, project, me));
     }
 
-    /** 保存项目角色标注：空间主/管理员或项目负责人可写；空值清除 */
+    /** 保存项目职能覆盖：空间主/管理员或项目负责人可写；兼岗未提供保持，[] 清除。 */
     @PutMapping("/api/workspaces/{id}/projects/{projectId}/member-roles/{userId}")
     public ApiResult<Void> saveProjectRole(@PathVariable String id, @PathVariable String projectId,
                                            @PathVariable String userId,
@@ -224,15 +268,8 @@ public class WorkspaceController {
         String me = CurrentUser.id();
         workspaceService.requireMember(me, id);
         Requirement project = requireProject(id, projectId);
-        String name = memberName(me, id, userId);
-        String saved = projectMemberRoleService.saveRole(id, project, userId,
-                req == null ? null : req.getRoleTitle(), me);
-        activityService.logConfig(id, me, saved.isEmpty()
-                ? "清除成员「" + name + "」在项目「" + project.getName() + "」的角色标注"
-                : "标注成员「" + name + "」在项目「" + project.getName() + "」的角色为「" + saved + "」");
-        audit.recordCurrent(id, "project_role", "project", project.getId(), project.getName(), true,
-                "成员 " + name + " 在项目「" + project.getName() + "」的项目角色标注为「"
-                        + (saved.isEmpty() ? "未设角色" : saved) + "」", request);
+        projectMemberRoleService.saveRole(id, project, userId,
+                req == null ? null : req.getRoleTitle(), req == null ? null : req.getSecondaryRoleTitles(), me);
         return ApiResult.ok();
     }
 

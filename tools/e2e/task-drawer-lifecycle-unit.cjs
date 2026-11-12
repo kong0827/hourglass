@@ -60,7 +60,7 @@ function harness() {
     taskVersionIds:task => task.versionIds || [],
     selectedVersionIds:sel => sel.selectedOptions.map(o => o.value),
     sameIds:(left, right) => JSON.stringify([...left].sort()) === JSON.stringify([...right].sort()),
-    canEditTask:task => task.canEdit !== false, canEditReq:id => id !== "READONLY",
+    canEditTask:task => task.canEdit !== false, canEditReq:id => id !== "READONLY", roleReadOnly:() => false,
     defaultReqId:() => "R1", projCats:() => [], projFirstCat:() => "",
     ownerPick:() => ({ name:"", userId:null }), esc:value => String(value),
     API:{
@@ -84,7 +84,7 @@ function harness() {
   for (const name of ["iItemType", "iSeverity", "iEnvironment", "iReproSteps", "iRegression", "taskFormHint", "reqDocPickerBtn", "btnAttach"]) globals[name] = $(name);
   globals.taskDrawer.querySelector = selector => selector === ".drawer" ? $("drawerRoot") : null;
   globals.taskForm.querySelectorAll = selector => selector === "input,select,textarea" ? Object.values(elements).filter(el => /^i[A-Z]/.test(el.id)) : [];
-  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "stashCommentDraft", "restoreCommentDraft", "discardCommentDraft", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason"]) globals[name] = () => {};
+  for (const name of ["closeMention", "syncDateBounds", "renderActualEstimate", "populateColSelect", "populateReqSelect", "populateOwnerSelect", "refreshOwnerSelect", "renderTagChips", "clearDefectFields", "syncDefectFields", "syncTypeButtons", "syncSeverityButtons", "syncTitleCount", "syncDueNote", "syncDrawerSource", "syncDrawerFacts", "syncAssocMore", "syncAssocViewBtns", "syncProgVal", "syncCatSeg", "syncFormSegs", "syncMoreSummary", "clearPendingCommentFiles", "stashCommentDraft", "restoreCommentDraft", "discardCommentDraft", "loadWatchStatus", "loadWorkStatus", "loadAttachments", "loadSubtasks", "loadComments", "loadTimeline", "loadTaskReleaseRecords", "clearWorkTick", "ensureDemand", "ensureFoundVersion", "ensureEpic", "ensureReqDoc", "ensureBranch", "rememberReqId", "syncVersionReason"]) globals[name] = () => {};
   globals.ensureVersion = keep => {
     const sel = $("iVersion");
     sel.options = (Array.isArray(keep) ? keep : []).map(value => ({ value, selected:true }));

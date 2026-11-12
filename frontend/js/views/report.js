@@ -7,8 +7,18 @@ import { UI, esc, toast } from "../core/ui.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours } from "./manager-shared.js";
 import { fullscreenButtonHTML } from "../core/fullscreen.js";
+import { labelFilterText } from "../lib/member-labels.js";
 
-var cache = null, seq = 0, reqId = "";
+var cache = null, seq = 0, reqId = "", roleTitle = "", companyName = "", loading = false, filterWorkspace = "", reportOptions = {};
+function reportWorkspace(){ return rt.currentWs && rt.currentWs.id || ""; }
+["ds:project-roles-changed","ds:member-company-changed","ds:member-job-title-changed","ds:member-label-options-changed","ds:member-roster-changed"].forEach(function(name){
+  window.addEventListener(name, function(e){
+    var d = e && e.detail || {};
+    if(d.workspaceId && d.workspaceId !== reportWorkspace()) return;
+    cache = null; reportOptions = {}; seq++; hideReportTip();
+    if(document.body.dataset.view === "report") loadReport({ silent:true });
+  });
+});
 function reportThemeColors(){
   var dark = document.documentElement.getAttribute("data-theme") === "dark";
   var s = getComputedStyle(document.documentElement);
@@ -72,24 +82,29 @@ function enterReportView(){
 function loadReport(opts){
   opts = opts || {};
   var body = $("reportBody");
-  if(!body) return;
-  var current = ++seq;
-  /* 选中的项目已被删除/隐藏或切换了空间：退回全部项目，避免卡在 404 错误页且无法再切换 */
-  if(reqId && rt.reqsLoaded && !rt.reqList.some(function(r){ return r.id === reqId; })) reqId = "";
-  if(!opts.silent) body.innerHTML = UI.skeletonCards(4);
-  API.get("/api/manager/reports", {reqId:reqId || null}).then(function(data){
-    if(current !== seq) return;
-    cache = data; renderReport();
+  if(!body) return Promise.resolve(null);
+  var ws = reportWorkspace();
+  if(filterWorkspace !== ws){ reqId = ""; roleTitle = ""; companyName = ""; cache = null; reportOptions = {}; filterWorkspace = ws; }
+  var current = ++seq, scope;
+  /* 项目删除或隐藏后退回全部；异步响应必须仍属于原空间与最新请求。 */
+  if(reqId && rt.reqsLoaded && !rt.reqList.some(function(r){ return r.id === reqId && (!r.workspaceId || r.workspaceId === ws); })) reqId = "";
+  scope = { reqId:reqId || null, roleTitle:roleTitle || null, companyName:companyName || null };
+  loading = true; hideReportTip();
+  body.innerHTML = reportToolbar() + UI.skeletonCards(4); body.setAttribute("aria-busy","true");
+  return API.get("/api/manager/reports", scope).then(function(data){
+    if(current !== seq || ws !== reportWorkspace()) return null;
+    cache = Object.assign({}, data, { scope:data.scope || scope }); reportOptions = data.filterOptions || {}; loading = false;
+    body.setAttribute("aria-busy","false"); renderReport(); return cache;
   }).catch(function(ex){
-    if(current !== seq) return;
+    if(current !== seq || ws !== reportWorkspace()) return null;
     var status = ex && ex.code;
-    if(reqId && (status === 403 || status === 404)){
+    if(scope.reqId && (status === 403 || status === 404)){
       reqId = "";
       toast("所选项目已不可访问，已切换为全部项目", "warn");
-      loadReport(opts);
-      return;
+      return loadReport(opts);
     }
-    body.innerHTML = UI.errorState(ex.message);
+    cache = null; loading = false; body.setAttribute("aria-busy","false");
+    body.innerHTML = reportToolbar() + UI.errorState(ex.message || "加载失败，请重试"); return null;
   });
 }
 function svgLine(points, max, cls, dashed){
@@ -203,18 +218,40 @@ function defectChart(d){
     + '<div class="manager-chart-legend"><span><i class="defect-opened-block"></i>新增</span><span><i class="defect-closed-block"></i>关闭</span><span><i class="defect-open-line"></i>存量</span></div></section>';
 }
 function projectOptions(){
-  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === reqId; });
+  var list = rt.reqList.filter(function(r){ return (!r.workspaceId || r.workspaceId === reportWorkspace()) && (!r.archivedAt || r.id === reqId); });
   return '<option value="">全部项目</option>' + list.map(function(r){ return '<option value="' + esc(r.id) + '"' + (r.id === reqId ? ' selected' : '') + '>' + esc(r.name) + (r.archivedAt ? "（已归档）" : "") + '</option>'; }).join("");
 }
+function reportLabelOptions(values, selected, all, unset){
+  var list = Array.from(new Set((values || []).filter(function(v){ return v && v !== "__unset__"; }).concat(selected && selected !== "__unset__" ? [selected] : [])));
+  return '<option value="">' + all + '</option><option value="__unset__"' + (selected === "__unset__" ? ' selected' : '') + '>' + unset + '</option>'
+    + list.map(function(v){ return '<option value="' + esc(v) + '"' + (v === selected ? ' selected' : '') + '>' + esc(labelFilterText(v)) + '</option>'; }).join("");
+}
+function reportScopeText(data){
+  var scope = data.scope || {}, project = (rt.reqList || []).filter(function(p){ return p.id === scope.reqId; })[0];
+  return '项目：' + (scope.reqId ? (project ? project.name : scope.reqId) : '全部项目')
+    + ' · 公司：' + (scope.companyName === '__unset__' ? '未设公司' : labelFilterText(scope.companyName) || '全部公司')
+    + ' · 角色：' + (scope.roleTitle === '__unset__' ? '未设角色' : labelFilterText(scope.roleTitle) || '全部角色');
+}
+function reportToolbar(){
+  var disabled = loading || !cache ? ' disabled' : '';
+  return '<div class="manager-toolbar"><div><b>交付图表</b></div><div class="manager-actions"><button class="btn sm" type="button" data-report-csv' + disabled + '>导出 CSV</button><button class="btn sm" type="button" data-report-png' + disabled + '>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
+    + '<div class="manager-label-filters"><label>项目 <select id="reportProjectSelect" class="mini-select">' + projectOptions() + '</select></label>'
+    + '<label>公司 <select id="reportCompanySelect" class="mini-select">' + reportLabelOptions(reportOptions.companyNames, companyName, '全部公司', '未设公司') + '</select></label>'
+    + '<label>角色 <select id="reportRoleSelect" class="mini-select">' + reportLabelOptions(reportOptions.roleTitles, roleTitle, '全部角色', '未设角色') + '</select></label>'
+    + '<button class="btn sm ghost" type="button" data-report-clear>清除筛选</button></div><p class="roster-note">按工作项所属项目的有效主角色或兼岗筛选；所有图表与导出由后台按同一范围重算。</p>';
+}
 function renderReport(){
-  $("reportBody").innerHTML = '<div class="manager-toolbar"><div class="manager-project-picker"><b>交付图表</b><select id="reportProjectSelect" aria-label="报表项目范围">' + projectOptions() + '</select></div><div><button class="btn sm" type="button" data-report-csv>导出 CSV</button> <button class="btn sm" type="button" data-report-png>导出 PNG</button>' + fullscreenButtonHTML() + '</div></div>'
+  if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
+  var focused = document.activeElement && document.activeElement.id;
+  $("reportBody").innerHTML = reportToolbar() + '<p class="roster-note">' + esc(reportScopeText(cache)) + '</p>'
     + caliberHTML('燃尽：近 14 天，剩余 = 范围内全部工作项的总预估 − 截至当日已完成工作项的实际工时（不是剩余预估）；理想线从总预估线性降到 0，窗口之前完成的工作项也会扣减，因此首日剩余可能低于理想线。范围 =「全部项目」时含已归档项目，选中单个项目时只含该项目。速度：近 4 个自然周，按完成时间归周；缺陷按创建/完成时间归周，只统计类型为「缺陷」的工作项；所有图表与工作项、计时数据同源。')
     + '<div class="manager-chart-grid">' + burnChart(cache.burndown || {}) + velocityChart(cache.velocity || {}) + flowChart(cache.flow || {}) + deliveryChart(cache.delivery || {}) + defectChart(cache.defects || {}) + '</div>';
   wireReportTooltip($("reportBody"));
+  if(["reportProjectSelect","reportCompanySelect","reportRoleSelect"].indexOf(focused) !== -1){ var field = $(focused); if(field) field.focus(); }
 }
 function exportCsv(){
-  if(!cache) return;
-  var rows = [["交付图表", reqId ? (rt.reqList.filter(function(r){ return r.id === reqId; })[0] || {}).name : "全部项目"], [],
+  if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
+  var rows = [["交付图表", reportScopeText(cache)], [],
     ["燃尽日期","剩余分钟","理想分钟"]];
   ((cache.burndown || {}).points || []).forEach(function(p){ rows.push([p.date,p.remainingMinutes,p.idealMinutes]); });
   rows.push([],["速度周开始","完成分钟","完成工作项数"]);
@@ -228,13 +265,16 @@ function exportCsv(){
   downloadCsv("管理报表.csv", rows); toast("已导出报表 CSV", "fs");
 }
 function exportPng(){
-  if(!cache) return;
+  if(!cache || loading || filterWorkspace !== reportWorkspace()) return;
   var c = reportThemeColors();
   var canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1400;
   var ctx = canvas.getContext("2d");
   ctx.fillStyle = c.bg; ctx.fillRect(0,0,1400,1400);
   ctx.fillStyle = c.text; ctx.font = "bold 28px sans-serif"; ctx.fillText("沙漏 管理报表", 40, 52);
-  ctx.font = "15px sans-serif"; ctx.fillStyle = c.text3; ctx.fillText("数据来自当前项目范围 · " + new Date().toLocaleString(), 40, 80);
+  ctx.font = "15px sans-serif"; ctx.fillStyle = c.text3;
+  /* 范围来自本次已返回的 scope，不读取可能刚被用户修改的筛选值。 */
+  ctx.fillText(reportScopeText(cache), 40, 80, 1320);
+  ctx.font = "12px sans-serif"; ctx.fillText("生成于 " + new Date().toLocaleString(), 40, 100);
   function panel(x,y,title){ ctx.fillStyle=c.surface;ctx.fillRect(x,y,640,390);ctx.fillStyle=c.text;ctx.font="bold 20px sans-serif";ctx.fillText(title,x+24,y+36); }
   function axes(x,y){ctx.strokeStyle=c.border;ctx.beginPath();ctx.moveTo(x+40,y+300);ctx.lineTo(x+600,y+300);ctx.moveTo(x+40,y+70);ctx.lineTo(x+40,y+300);ctx.stroke();}
   panel(40,110,"燃尽图 · 近 14 天"); axes(40,110);
@@ -266,9 +306,17 @@ if($("reportBody")){
   $("reportBody").addEventListener("click",function(e){
     if(e.target.closest("[data-report-csv]")) exportCsv();
     else if(e.target.closest("[data-report-png]")) exportPng();
+    else if(e.target.closest("[data-report-clear]")){ reqId = ""; companyName = ""; roleTitle = ""; loadReport(); }
     else if(e.target.closest("[data-empty-action]")) loadReport();
   });
-  $("reportBody").addEventListener("change",function(e){ if(e.target.id==="reportProjectSelect"){reqId=e.target.value;loadReport();} });
+  $("reportBody").addEventListener("change",function(e){
+    var id = e.target.id;
+    if(id === "reportProjectSelect") reqId = e.target.value;
+    else if(id === "reportCompanySelect") companyName = e.target.value;
+    else if(id === "reportRoleSelect") roleTitle = e.target.value;
+    else return;
+    loadReport(); var next = $(id); if(next) next.focus();
+  });
 }
 
 export { enterReportView, loadReport };

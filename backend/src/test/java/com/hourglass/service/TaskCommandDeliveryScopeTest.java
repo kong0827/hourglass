@@ -55,6 +55,8 @@ class TaskCommandDeliveryScopeTest {
     void prepare() {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", publications);
         when(tasks.update(any(Task.class))).thenReturn(1);
+        // 这些用例聚焦交付权限，负责人成员可见性使用合法基线。
+        when(access.canView(eq("W1"), anyString(), anyString())).thenReturn(true);
         doCallRealMethod().when(bindings).enrichTasks(anyString(), anyList());
         when(bindings.selectVersionIdsByTask(eq("W1"), anyString()))
                 .thenAnswer(call -> persistedBindings.getOrDefault(call.getArgument(1), Collections.emptyList()));

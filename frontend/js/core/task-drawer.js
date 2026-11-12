@@ -3,6 +3,7 @@
 import { API } from "./api.js";
 import { openAttPreview, previewable } from "./att-preview.js";
 import { companyChipHTML, companyNameOf } from "../lib/company.js";
+import { loadProjectMembers, peekProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
@@ -898,6 +899,7 @@ function applyDrawerReadOnly(readOnly){
     var f = fields[i];
     if(readOnly){ f.disabled = true; continue; }
     if(f.id === "iVersion" && !f.getAttribute("data-ready")){ f.disabled = true; continue; }
+    if(f.id === "iOwner"){ refreshOwnerSelect(); continue; }
     if(f.id === "iProg"){ syncProgByCol(); continue; }
     if(f.id === "iBlockedReason"){ f.disabled = !(iBlocked && iBlocked.checked); continue; }
     f.disabled = false;
@@ -1032,62 +1034,51 @@ function populateReqSelect(keepId){
   /* 项目下拉重建时值可能被收回（如项目已删）：记下来，避免把这次程序化变化当成用户换项目 */
   lastReqValue = iReq.value;
 }
-/* 项目角色标注缓存：按 空间:项目 缓存，角色变化时由项目页广播失效 */
-var projectRoleCache = Object.create(null);
-var projectRoleLoading = Object.create(null);
-function currentProjectId(){
-  return iReq ? (iReq.value || "") : "";
-}
-function projectRoleMap(projectId){
-  if(!projectId || !rt.currentWs) return null;
-  return projectRoleCache[rt.currentWs.id + ":" + projectId] || null;
-}
-/* 花名册接口只对当前项目可见者开放；读取失败就不展示角色，不影响负责人选择 */
-function ensureProjectRoles(projectId){
+/* 项目候选以服务端花名册为准；未返回时不先开放全部空间成员。 */
+var projectRoleLoading = Object.create(null), projectRoleErrors = Object.create(null);
+function currentProjectId(){ return iReq ? (iReq.value || "") : ""; }
+function ownerRosterKey(){ return rt.currentWs ? rt.currentWs.id + ":" + currentProjectId() : ""; }
+function ensureProjectRoles(projectId, force){
   if(!projectId || !rt.currentWs || rt.currentWs.type !== "shared") return;
-  var key = rt.currentWs.id + ":" + projectId;
-  if(projectRoleCache[key] || projectRoleLoading[key]) return;
-  projectRoleLoading[key] = true;
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(projectId) + "/members")
-    .then(function(data){
-      var map = {};
-      (data && data.members || []).forEach(function(m){
-        if(m.roleTitle) map[m.userId] = m.roleTitle;
-      });
-      projectRoleCache[key] = map;
-      delete projectRoleLoading[key];
-      refreshOwnerSelect();
-    }).catch(function(){
-      delete projectRoleLoading[key];
-    });
+  var wsId = rt.currentWs.id, key = wsId + ":" + projectId;
+  if(!force && (peekProjectMembers(wsId, projectId) || projectRoleLoading[key])) return;
+  delete projectRoleErrors[key];
+  var request = loadProjectMembers(wsId, projectId, force);
+  projectRoleLoading[key] = request;
+  request.then(function(){
+    if(projectRoleLoading[key] !== request) return;
+    delete projectRoleLoading[key];
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId) refreshOwnerSelect();
+  }).catch(function(ex){
+    if(projectRoleLoading[key] !== request) return;
+    delete projectRoleLoading[key]; projectRoleErrors[key] = ex;
+    if(rt.currentWs && rt.currentWs.id === wsId && currentProjectId() === projectId) refreshOwnerSelect();
+  });
 }
-window.addEventListener("ds:project-roles-changed", function(e){
-  var pid = e && e.detail && e.detail.projectId;
-  if(!pid || !rt.currentWs) return;
-  delete projectRoleCache[rt.currentWs.id + ":" + pid];
-  if(pid === currentProjectId()) ensureProjectRoles(pid);
+["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-label-options-changed", "ds:member-roster-changed"].forEach(function(eventName){
+  window.addEventListener(eventName, function(e){
+    var detail = e.detail || {};
+    if(!rt.currentWs || (detail.workspaceId && detail.workspaceId !== rt.currentWs.id)) return;
+    if(detail.projectId && detail.projectId !== currentProjectId()) return;
+    delete projectRoleErrors[ownerRosterKey()];
+    ensureProjectRoles(currentProjectId(), true);
+    refreshOwnerSelect();
+  });
 });
-function ownerOptions(){
-  var opts = [], seen = {}, roles = projectRoleMap(currentProjectId()) || {};
+function ownerOptions(projectId){
+  var opts = [], seen = Object.create(null), ws = rt.currentWs, pid = projectId === undefined ? currentProjectId() : projectId;
   function push(userId, name, m){
     if(!userId || seen[userId]) return;
-    seen[userId] = 1;
-    opts.push({
-      id: userId,
-      name: name,
-      company: m ? companyNameOf(m) : companyOfUser(userId),
-      role: roles[userId] || ""
-    });
+    seen[userId] = true;
+    opts.push({ id:userId, name:name, company:companyNameOf(m), role:memberRoleTitles(m).join(" / ") });
   }
-  if(rt.currentUser){
-    push(rt.currentUser.id, rt.currentUser.displayName || rt.currentUser.username);
-  }
-  if(rt.currentWs && rt.currentWs.type === "shared"){
-    rt.wsMembersCache.forEach(function(m){
-      /* 空间查看者不参与项目，也不进入负责人可选范围 */
-      if((m.role || "member") === "viewer") return;
-      push(m.userId, m.displayName || m.username, m);
-    });
+  if(ws && ws.type === "shared"){
+    var roster = pid ? peekProjectMembers(ws.id, pid) : null;
+    /* 无项目时按空间非查看者列出；选了项目必须等可见花名册，失败关闭候选。 */
+    var members = pid ? (roster && roster.members || []) : (rt.wsMembersCache || []);
+    members.forEach(function(m){ if(m.role !== "viewer" && m.access !== "none") push(m.userId, m.displayName || m.username || m.userId, m); });
+  } else if(rt.currentUser){
+    push(rt.currentUser.id, rt.currentUser.displayName || rt.currentUser.username, null);
   }
   return opts;
 }
@@ -1097,66 +1088,67 @@ function companyOfUser(userId){
   return hit ? companyNameOf(hit) : "";
 }
 function ownerOptionHTML(o, selected){
-  return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' +
-    esc(o.name) + (o.role ? ' · ' + esc(o.role) : '') + '</option>';
+  var shared = rt.currentWs && rt.currentWs.type === "shared";
+  var label = o.name + (shared ? " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司") : "");
+  return '<option value="' + esc(o.id) + '" data-name="' + esc(o.name) + '"' + (selected ? " selected" : "") + '>' + esc(label) + '</option>';
+}
+function ownerRosterHint(pending, error, unavailable){
+  var hint = $("ownerRosterHint");
+  if(!hint && iOwner && iOwner.parentNode){
+    hint = document.createElement("div"); hint.id = "ownerRosterHint"; hint.className = "foot-note";
+    hint.setAttribute("aria-live", "polite"); iOwner.parentNode.appendChild(hint);
+    hint.addEventListener("click", function(e){ if(e.target.closest("[data-owner-retry]")){ ensureProjectRoles(currentProjectId(), true); refreshOwnerSelect(); } });
+  }
+  if(!hint) return;
+  hint.hidden = !pending && !error && !unavailable;
+  hint.innerHTML = error ? '候选加载失败：' + esc(error.message || "网络异常") + ' <button class="btn sm" type="button" data-owner-retry>重试</button>'
+    : pending ? "正在确认本项目可指派成员…" : unavailable ? "保留当前负责人；该账号已不在本项目候选范围，重新指派请另选成员。" : "";
 }
 function populateOwnerSelect(currentName, currentUserId){
   if(!iOwner || iOwner.tagName !== "SELECT") return;
-  var opts = ownerOptions();
-  var curName = currentName == null ? "" : String(currentName);
-  var curId = currentUserId == null ? "" : String(currentUserId);
-  var html = "", matched = false;
-  var groups = [], groupIndex = {};
+  var ws = rt.currentWs, pid = currentProjectId(), key = ownerRosterKey();
+  var needsRoster = !!(ws && ws.type === "shared" && pid);
+  var error = needsRoster && projectRoleErrors[key];
+  var pending = needsRoster && !peekProjectMembers(ws.id, pid) && !error;
+  var opts = ownerOptions(), curName = currentName == null ? "" : String(currentName), curId = currentUserId == null ? "" : String(currentUserId);
+  var html = "", matched = false, groups = [], groupIndex = Object.create(null);
+  var uniqueName = curName && opts.filter(function(o){ return o.name === curName; }).length === 1;
   var hasCompany = opts.some(function(o){ return !!o.company; });
   opts.forEach(function(o){
-    var on = (curId && o.id === curId) || (!curId && curName && o.name === curName);
+    var on = (curId && o.id === curId) || (!curId && uniqueName && o.name === curName);
     if(on) matched = true;
     if(!hasCompany){ html += ownerOptionHTML(o, on); return; }
-    var label = o.company || "未标注公司";
-    var g = groupIndex[label];
-    if(!g){
-      g = groupIndex[label] = { label:label, items:[] };
-      groups.push(g);
-    }
-    g.items.push({ o:o, on:on });
+    var label = o.company || "未标注公司", g = groupIndex[label];
+    if(!g){ g = groupIndex[label] = {label:label, items:[]}; groups.push(g); }
+    g.items.push({o:o, on:on});
   });
   if(hasCompany){
-    groups.sort(function(a, b){
-      if(a.label === "未标注公司") return 1;
-      if(b.label === "未标注公司") return -1;
-      return a.label.localeCompare(b.label, "zh");
-    });
-    groups.forEach(function(g){
-      html += '<optgroup label="' + esc(g.label) + '">'
-        + g.items.map(function(x){ return ownerOptionHTML(x.o, x.on); }).join("")
-        + '</optgroup>';
-    });
+    groups.sort(function(a, b){ if(a.label === b.label) return 0; if(a.label === "未标注公司") return 1; if(b.label === "未标注公司") return -1; return a.label.localeCompare(b.label, "zh"); });
+    groups.forEach(function(g){ html += '<optgroup label="' + esc(g.label) + '">' + g.items.map(function(x){ return ownerOptionHTML(x.o, x.on); }).join("") + '</optgroup>'; });
   }
-  if(curName && !matched){
-    html += '<option value="__text__" data-name="' + esc(curName) + '" selected>○ ' + esc(curName) + '（非成员）</option>';
-  }
-  if(!opts.length && !curName){
-    html += '<option value="__text__" data-name="' + esc(rt.OWNER_DEFAULT) + '">' + esc(rt.OWNER_DEFAULT) + '</option>';
+  if((curName || curId) && !matched){
+    /* 历史账号绑定不能退化成纯文本，否则无关保存会清掉 owner_user_id。 */
+    html += '<option value="' + esc(curId || "__text__") + '" data-name="' + esc(curName) + '"' + (curId ? ' data-unavailable="1" disabled' : '') + ' selected>' + esc(curName || curId) + (pending ? "（加载中）" : curId ? "（当前不可选）" : "（非成员）") + '</option>';
+  } else if(!matched){
+    html = '<option value="__none__" data-name="" selected disabled>' + (pending ? "加载可指派成员…" : error ? "候选加载失败" : opts.length ? "请选择负责人" : "暂无可指派成员") + '</option>' + html;
   }
   iOwner.innerHTML = html;
-  /* 角色是异步的：先渲染基础选项，拿到花名册后只重绘下拉并保留当前选择 */
-  ensureProjectRoles(currentProjectId());
+  iOwner.disabled = !!pending || !!error || !!rt.drawerReadOnly;
+  ownerRosterHint(pending, error, !!curId && !matched && !pending && !error);
+  if(pending) ensureProjectRoles(pid);
 }
 function refreshOwnerSelect(){
   if(!iOwner || iOwner.tagName !== "SELECT") return;
   var sel = iOwner.options[iOwner.selectedIndex];
-  var name = sel ? (sel.dataset.name || sel.textContent) : "";
-  var uid = sel && sel.value !== "__text__" ? sel.value : "";
+  var name = sel ? (sel.dataset.name !== undefined ? sel.dataset.name : sel.textContent) : "";
+  var uid = sel && sel.value !== "__text__" && sel.value !== "__none__" ? sel.value : "";
   populateOwnerSelect(name, uid);
 }
 function ownerPick(){
   if(!iOwner || iOwner.tagName !== "SELECT") return {name:null, userId:null};
   var sel = iOwner.options[iOwner.selectedIndex];
-  if(!sel) return {name:null, userId:null};
-  return {
-    name: sel.dataset.name || sel.textContent || null,
-    userId: sel.value === "__text__" ? null : sel.value
-  };
+  if(!sel || sel.value === "__none__") return {name:null, userId:null};
+  return { name:sel.dataset.name || sel.textContent || null, userId:sel.value === "__text__" ? null : sel.value };
 }
 function syncFormSegs(){
   segPri.querySelectorAll("[data-fpri]").forEach(function(b){
@@ -2250,6 +2242,7 @@ if(iDemand) iDemand.addEventListener("change", function(){
     ensureVersion([]); ensureFoundVersion(""); ensureEpic("");
     ensureBranch(($("iBranch") || {}).value, wantReq);
     ensureCatForProject(wantReq);
+    refreshOwnerSelect();
     ensureReqDoc("");
     ensureDemand(iDemand.value);
   }

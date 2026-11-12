@@ -69,6 +69,7 @@ class PermissionRulesTest {
 
         WorkspaceMemberCache memberCache = new WorkspaceMemberCache(workspaceMapper, memberMapper,
                 60_000L, new AtomicLong(1_000_000L)::get);
+        projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);
         workspaceService = new WorkspaceService(workspaceMapper, memberMapper, mock(UserMapper.class),
                 mock(BoardColumnMapper.class), mock(com.hourglass.mapper.ColumnTransitionMapper.class),
                 mock(CategoryMapper.class),
@@ -80,8 +81,9 @@ class PermissionRulesTest {
                 mock(com.hourglass.mapper.InviteProjectGrantMapper.class), projectMemberMapper,
                 mock(com.hourglass.mapper.ProjectMemberRoleMapper.class),
                 mock(com.hourglass.mapper.TaskWatchMapper.class), mock(TaskCascade.class),
-                mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class));
-        projectAccessService = new ProjectAccessService(projectMemberMapper, memberMapper);
+                mock(ActivityService.class), memberCache, mock(WorkspaceMetaCache.class),
+                mock(com.hourglass.mapper.WorkspaceMemberLabelOptionMapper.class), mock(MemberLabelLogService.class),
+                projectAccessService);
     }
 
     /* ==================== WorkspaceService ==================== */

@@ -5,11 +5,13 @@ import com.hourglass.common.Consts;
 import com.hourglass.common.TaskCalc;
 import com.hourglass.common.WorkTime;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.TimeLog;
 import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
@@ -58,6 +60,7 @@ public class ManagerService {
     private static final String UNASSIGNED_KEY = "unassigned";
     private static final String UNASSIGNED_NAME = "未指派";
     private static final String UNCATEGORIZED_NAME = "未归类";
+    private static final String UNSET_FILTER = "__unset__";
 
     private final TaskMapper taskMapper;
     private final RequirementMapper requirementMapper;
@@ -68,6 +71,10 @@ public class ManagerService {
     private final CategoryService categoryService;
     private final ReleasePermissionService releasePermission;
     private final Clock clock;
+
+    /** 展示标签可选注入，保留已有构造器与调用方；不参与鉴权。 */
+    @Autowired(required = false)
+    private ProjectMemberRoleMapper roleMapper;
 
     @Autowired
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
@@ -204,20 +211,33 @@ public class ManagerService {
                 userId, workspaceId, requirement.getId()));
         result.put("weekly", weekly(tasks, today));
         result.put("epics", epics(tasks));
-        result.put("members", projectMembers(tasks, snapshot.members, snapshot.logs, today));
+        RoleContext roles = roleContext(workspaceId, Collections.singletonList(requirement), snapshot.members);
+        List<Map<String, Object>> members = projectMembers(tasks, snapshot.members, snapshot.logs, today);
+        Map<String, MemberAccumulator> owners = memberAccumulators(openTasks(tasks), snapshot.members);
+        for (Map<String, Object> row : members) {
+            MemberAccumulator owner = owners.get(row.get("key"));
+            putMemberLabels(row, memberLabels(roles, requirement.getId(), memberUserId(owner, roles)));
+        }
+        result.put("members", members);
         result.put("capacityMinutesPerDay", DAILY_CAPACITY_MINUTES);
         result.put("tasks", taskMaps(tasks, requirementNames(snapshot.requirements)));
         return result;
     }
 
     public Map<String, Object> reports(String workspaceId, String reqId, String userId) {
+        return reports(workspaceId, reqId, userId, null, null);
+    }
+
+    public Map<String, Object> reports(String workspaceId, String reqId, String userId,
+                                       String roleTitle, String companyName) {
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
         LocalDate today = today();
         Snapshot snapshot = load(workspaceId, null, null, userId);
-        List<Task> tasks = snapshot.tasks;
-        if (hasText(reqId)) {
-            Requirement requirement = requireProject(snapshot.requirements, reqId.trim());
-            tasks = tasksForReq(tasks, requirement.getId());
-        }
+        List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
+        RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
+        List<Task> baseTasks = filter.reqId == null ? snapshot.tasks : tasksForReq(snapshot.tasks, filter.reqId);
+        Map<String, Object> options = filterOptions(baseTasks, roles);
+        List<Task> tasks = filterTasks(baseTasks, roles, filter);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("burndown", burndown(tasks, today));
@@ -225,6 +245,7 @@ public class ManagerService {
         result.put("flow", flow(tasks, today));
         result.put("delivery", delivery(tasks));
         result.put("defects", defects(tasks, today));
+        putFilterMetadata(result, options, filter);
         return result;
     }
 
@@ -242,6 +263,18 @@ public class ManagerService {
      */
     public Map<String, Object> workload(String workspaceId, String userId,
                                         LocalDate rangeFrom, LocalDate rangeTo) {
+        return workload(workspaceId, userId, rangeFrom, rangeTo, null, null, null);
+    }
+
+    public Map<String, Object> workload(String workspaceId, String userId,
+                                        String reqId, String roleTitle, String companyName) {
+        return workload(workspaceId, userId, null, null, reqId, roleTitle, companyName);
+    }
+
+    public Map<String, Object> workload(String workspaceId, String userId,
+                                        LocalDate rangeFrom, LocalDate rangeTo,
+                                        String reqId, String roleTitle, String companyName) {
+        DisplayFilter filter = displayFilter(reqId, roleTitle, companyName);
         LocalDate today = today();
         LocalDate weekStart = mondayOf(today);
         LocalDate[] range = normalizeRange(rangeFrom, rangeTo);
@@ -256,13 +289,20 @@ public class ManagerService {
             }
         }
         Snapshot snapshot = load(workspaceId, logFrom, logBefore, userId);
-        Map<String, String> reqNames = requirementNames(snapshot.requirements);
-        List<Task> openTasks = openTasks(snapshot.tasks);
-        LinkedHashMap<String, MemberAccumulator> accumulators = memberAccumulators(openTasks, snapshot.members);
-        includeLoggedMembers(accumulators, snapshot.logs, snapshot.members);
+        List<Requirement> requirements = scopedRequirements(snapshot, filter.reqId);
+        RoleContext roles = roleContext(workspaceId, requirements, snapshot.members);
+        List<Task> baseTasks = filter.reqId == null ? snapshot.tasks : tasksForReq(snapshot.tasks, filter.reqId);
+        List<TimeLog> baseLogs = filter.reqId == null ? snapshot.logs : logsForTasks(snapshot.logs, baseTasks);
+        Map<String, Object> options = filterOptions(baseTasks, roles);
+        List<Task> tasks = filterTasks(baseTasks, roles, filter);
+        // 计时按关联任务的负责人和项目标签裁剪，不能按计时人自己的角色裁剪。
+        List<TimeLog> logs = filter.hasMemberFilter() ? logsForTasks(baseLogs, tasks) : baseLogs;
+        Map<String, String> reqNames = requirementNames(requirements);
+        LinkedHashMap<String, MemberAccumulator> accumulators = memberAccumulators(openTasks(tasks), snapshot.members);
+        includeLoggedMembers(accumulators, logs, snapshot.members);
 
         List<Map<String, Object>> projects = new ArrayList<Map<String, Object>>();
-        for (Requirement requirement : snapshot.requirements) {
+        for (Requirement requirement : requirements) {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
             item.put("id", requirement.getId());
             item.put("name", requirement.getName());
@@ -270,15 +310,16 @@ public class ManagerService {
         }
 
         Map<String, Task> tasksById = new HashMap<String, Task>();
-        for (Task task : snapshot.tasks) {
+        for (Task task : tasks) {
             tasksById.put(task.getId(), task);
         }
 
         List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
         for (MemberAccumulator member : accumulators.values()) {
-            Map<String, Object> item = workloadMember(member, snapshot.logs, weekStart, today, reqNames, tasksById);
+            Map<String, Object> item = workloadMember(member, logs, weekStart, today, reqNames, tasksById);
+            putWorkloadLabels(item, member, roles, filter.reqId, logs, tasksById);
             if (range != null) {
-                item.put("rangeMinutes", minutesInRange(member.userId, snapshot.logs, range[0], range[1]));
+                item.put("rangeMinutes", minutesInRange(member.userId, logs, range[0], range[1]));
             }
             members.add(item);
         }
@@ -295,6 +336,7 @@ public class ManagerService {
         }
         result.put("projects", projects);
         result.put("members", members);
+        putFilterMetadata(result, options, filter);
         return result;
     }
 
@@ -1020,6 +1062,213 @@ public class ManagerService {
         return snapshot;
     }
 
+    private DisplayFilter displayFilter(String reqId, String roleTitle, String companyName) {
+        DisplayFilter filter = new DisplayFilter();
+        filter.reqId = trimmed(reqId);
+        filter.roleUnset = UNSET_FILTER.equals(trimmed(roleTitle));
+        filter.companyUnset = UNSET_FILTER.equals(trimmed(companyName));
+        filter.roleTitle = filterValue(roleTitle, 32, "roleTitle");
+        filter.companyName = filterValue(companyName, 64, "companyName");
+        return filter;
+    }
+
+    private String filterValue(String value, int maxLength, String name) {
+        String normalized = trimmed(value);
+        if (normalized != null && normalized.startsWith("__label__:")) normalized = normalized.substring(10);
+        if (normalized != null && normalized.codePointCount(0, normalized.length()) > maxLength) {
+            throw AppException.badRequest(name + " 最多 " + maxLength + " 个字符");
+        }
+        return normalized;
+    }
+
+    private String trimmed(String value) {
+        return hasText(value) ? value.trim() : null;
+    }
+
+    private List<Requirement> scopedRequirements(Snapshot snapshot, String reqId) {
+        return reqId == null ? snapshot.requirements
+                : Collections.singletonList(requireProject(snapshot.requirements, reqId));
+    }
+
+    /** 只读取经过原有可见性裁剪/requireProject 验证的项目，每个项目一次，不按任务查库。 */
+    private RoleContext roleContext(String workspaceId, List<Requirement> requirements,
+                                    List<WorkspaceMember> members) {
+        RoleContext context = new RoleContext();
+        context.members = membersById(members);
+        context.userIdsByName = userIdsByName(members);
+        for (Requirement requirement : requirements) {
+            Map<String, ProjectMemberRole> byUser = new HashMap<String, ProjectMemberRole>();
+            if (roleMapper != null) {
+                for (ProjectMemberRole role : emptyIfNull(roleMapper.selectByProject(workspaceId, requirement.getId()))) {
+                    if (role != null && hasText(role.getUserId())) {
+                        byUser.put(role.getUserId().trim(), role);
+                    }
+                }
+            }
+            context.projects.put(requirement.getId(), byUser);
+        }
+        return context;
+    }
+
+    private String taskOwnerId(Task task, RoleContext context) {
+        return hasText(task.getOwnerUserId()) ? task.getOwnerUserId().trim()
+                : context.userIdsByName.get(trimmed(task.getOwner()));
+    }
+
+    private String memberUserId(MemberAccumulator member, RoleContext context) {
+        if (member.userId != null) {
+            return member.userId;
+        }
+        return member.tasks.isEmpty() ? null : taskOwnerId(member.tasks.get(0), context);
+    }
+
+    private MemberLabels memberLabels(RoleContext context, String reqId, String userId) {
+        MemberLabels labels = new MemberLabels();
+        labels.userId = userId;
+        WorkspaceMember member = context.members.get(userId);
+        labels.companyName = member == null ? null : trimmed(member.getCompanyName());
+        labels.jobTitle = member == null ? null : trimmed(member.getJobTitle());
+        Map<String, ProjectMemberRole> project = context.projects.get(reqId);
+        ProjectMemberRole role = project == null ? null : project.get(userId);
+        labels.effectiveRoleTitle = role == null ? null : trimmed(role.getRoleTitle());
+        if (labels.effectiveRoleTitle == null) {
+            labels.effectiveRoleTitle = labels.jobTitle;
+        }
+        if (role != null) {
+            for (String secondary : emptyIfNull(role.getSecondaryRoleTitles())) {
+                String title = trimmed(secondary);
+                if (title != null && !labels.secondaryRoleTitles.contains(title)) {
+                    labels.secondaryRoleTitles.add(title);
+                }
+            }
+        }
+        return labels;
+    }
+
+    private Set<String> roleTitles(MemberLabels labels) {
+        Set<String> titles = new LinkedHashSet<String>();
+        if (labels.effectiveRoleTitle != null) {
+            titles.add(labels.effectiveRoleTitle);
+        }
+        titles.addAll(labels.secondaryRoleTitles);
+        return titles;
+    }
+
+    private List<Task> filterTasks(List<Task> tasks, RoleContext roles, DisplayFilter filter) {
+        if (!filter.hasMemberFilter()) {
+            return tasks;
+        }
+        List<Task> result = new ArrayList<Task>();
+        for (Task task : tasks) {
+            MemberLabels labels = memberLabels(roles, task.getReqId(), taskOwnerId(task, roles));
+            Set<String> titles = roleTitles(labels);
+            boolean roleMatches = filter.roleTitle == null || (filter.roleUnset
+                    ? titles.isEmpty() : titles.contains(filter.roleTitle));
+            boolean companyMatches = filter.companyName == null || (filter.companyUnset
+                    ? labels.companyName == null : filter.companyName.equals(labels.companyName));
+            if (roleMatches && companyMatches) {
+                result.add(task);
+            }
+        }
+        return result;
+    }
+
+    private List<TimeLog> logsForTasks(List<TimeLog> logs, List<Task> tasks) {
+        Set<String> ids = taskIds(tasks);
+        List<TimeLog> result = new ArrayList<TimeLog>();
+        for (TimeLog log : logs) {
+            // 无关联工作项无法确定项目/负责人；仅无筛选的原口径保留这些计时。
+            if (log != null && log.getTaskId() != null && ids.contains(log.getTaskId())) {
+                result.add(log);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> filterOptions(List<Task> tasks, RoleContext roles) {
+        Set<String> titles = new LinkedHashSet<String>();
+        Set<String> companies = new LinkedHashSet<String>();
+        for (Task task : tasks) {
+            addFilterOptions(memberLabels(roles, task.getReqId(), taskOwnerId(task, roles)), titles, companies);
+        }
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("roleTitles", sorted(titles));
+        result.put("companyNames", sorted(companies));
+        return result;
+    }
+
+    private void addFilterOptions(MemberLabels labels, Set<String> titles, Set<String> companies) {
+        Set<String> memberTitles = roleTitles(labels);
+        if (memberTitles.isEmpty()) {
+            titles.add(UNSET_FILTER);
+        } else {
+            for (String title : memberTitles) titles.add(labelFilterOption(title));
+        }
+        companies.add(labels.companyName == null ? UNSET_FILTER : labelFilterOption(labels.companyName));
+    }
+
+    private String labelFilterOption(String value) {
+        return value != null && (UNSET_FILTER.equals(value) || value.startsWith("__label__:"))
+                ? "__label__:" + value : value;
+    }
+
+    private List<String> sorted(Set<String> values) {
+        List<String> result = new ArrayList<String>(values);
+        Collections.sort(result);
+        return result;
+    }
+
+    private void putFilterMetadata(Map<String, Object> result, Map<String, Object> options, DisplayFilter filter) {
+        Map<String, Object> scope = new LinkedHashMap<String, Object>();
+        scope.put("reqId", filter.reqId);
+        scope.put("roleTitle", filter.roleUnset ? UNSET_FILTER : labelFilterOption(filter.roleTitle));
+        scope.put("companyName", filter.companyUnset ? UNSET_FILTER : labelFilterOption(filter.companyName));
+        result.put("filterOptions", options);
+        result.put("scope", scope);
+    }
+
+    private void putMemberLabels(Map<String, Object> row, MemberLabels labels) {
+        row.put("userId", labels.userId);
+        row.put("companyName", labels.companyName);
+        row.put("jobTitle", labels.jobTitle);
+        row.put("effectiveRoleTitle", labels.effectiveRoleTitle);
+        row.put("secondaryRoleTitles", labels.secondaryRoleTitles);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void putWorkloadLabels(Map<String, Object> row, MemberAccumulator member, RoleContext roles,
+                                    String reqId, List<TimeLog> logs, Map<String, Task> tasksById) {
+        String userId = memberUserId(member, roles);
+        // 跨项目没有单一有效主角色：保留空间职能，项目职能通过 roleTitles 与项目行展示。
+        MemberLabels labels = memberLabels(roles, reqId, userId);
+        putMemberLabels(row, labels);
+        Set<String> projectIds = new LinkedHashSet<String>();
+        for (Task task : member.tasks) {
+            projectIds.add(task.getReqId());
+        }
+        for (TimeLog log : logs) {
+            if (userId != null && userId.equals(log.getUserId())) {
+                Task task = tasksById.get(log.getTaskId());
+                projectIds.add(task == null ? null : task.getReqId());
+            }
+        }
+        Set<String> titles = new LinkedHashSet<String>();
+        Set<String> secondary = new LinkedHashSet<String>();
+        for (String projectId : projectIds) {
+            MemberLabels projectLabels = memberLabels(roles, projectId, userId);
+            titles.addAll(roleTitles(projectLabels));
+            secondary.addAll(projectLabels.secondaryRoleTitles);
+        }
+        row.put("roleTitles", sorted(titles));
+        row.put("secondaryRoleTitles", sorted(secondary));
+        for (Map<String, Object> project : (List<Map<String, Object>>) row.get("projects")) {
+            MemberLabels projectLabels = memberLabels(roles, (String) project.get("reqId"), userId);
+            project.put("effectiveRoleTitle", projectLabels.effectiveRoleTitle);
+            project.put("secondaryRoleTitles", projectLabels.secondaryRoleTitles);
+            project.put("roleTitles", sorted(roleTitles(projectLabels)));
+        }
+    }
+
     private Requirement requireProject(List<Requirement> requirements, String reqId) {
         for (Requirement requirement : requirements) {
             if (requirement.getId() != null && requirement.getId().equals(reqId)) {
@@ -1380,11 +1629,16 @@ public class ManagerService {
 
     private Map<String, String> userIdsByName(List<WorkspaceMember> members) {
         Map<String, String> result = new HashMap<String, String>();
+        Set<String> ambiguous = new HashSet<String>();
         for (WorkspaceMember member : members) {
             if (member != null && hasText(member.getDisplayName()) && hasText(member.getUserId())) {
-                result.putIfAbsent(member.getDisplayName().trim(), member.getUserId());
+                String name = member.getDisplayName().trim();
+                String previous = result.putIfAbsent(name, member.getUserId());
+                if (previous != null && !previous.equals(member.getUserId())) ambiguous.add(name);
             }
         }
+        // 历史纯文本负责人只有姓名唯一时才解析账号，不能把同名工作量归给首人。
+        for (String name : ambiguous) result.remove(name);
         return result;
     }
 
@@ -1525,6 +1779,33 @@ public class ManagerService {
 
     private <T> List<T> emptyIfNull(List<T> values) {
         return values == null ? Collections.<T>emptyList() : values;
+    }
+
+    private static class DisplayFilter {
+        private String reqId;
+        private String roleTitle;
+        private String companyName;
+        private boolean roleUnset;
+        private boolean companyUnset;
+
+        private boolean hasMemberFilter() {
+            return roleTitle != null || companyName != null;
+        }
+    }
+
+    private static class RoleContext {
+        private Map<String, WorkspaceMember> members;
+        private Map<String, String> userIdsByName;
+        private final Map<String, Map<String, ProjectMemberRole>> projects =
+                new HashMap<String, Map<String, ProjectMemberRole>>();
+    }
+
+    private static class MemberLabels {
+        private String userId;
+        private String companyName;
+        private String jobTitle;
+        private String effectiveRoleTitle;
+        private final List<String> secondaryRoleTitles = new ArrayList<String>();
     }
 
     private static class Snapshot {

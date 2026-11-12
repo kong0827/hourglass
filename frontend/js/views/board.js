@@ -20,6 +20,16 @@ import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, c
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
+import { taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
+function syncBoardMemberTooltips(){
+  var tasks = [];
+  if(state.board && state.board.columns) Object.keys(state.board.columns).forEach(function(k){ tasks = tasks.concat(state.board.columns[k].items || []); });
+  tasks = tasks.concat(state.doneExtra || []);
+  syncTaskMemberTooltips(board, tasks);
+}
+["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-roster-changed"].forEach(function(name){
+  window.addEventListener(name, function(){ if(activeView === "board") syncBoardMemberTooltips(); });
+});
 
 function showBoardSkeleton(){
   board.classList.remove("busy");
@@ -299,7 +309,7 @@ function cardHTML(t, idx){
       : '') +
     (metaHTML ? '<div class="card-meta">' + metaHTML + '</div>' : '') +
     '<div class="card-foot">' + progHTML +
-      '<span title="负责人：' + esc(owner) + '">' + avatarHTML(owner) + '</span>' +
+      '<span data-member-task="' + esc(t.id) + '" title="负责人：' + esc(owner) + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + avatarHTML(owner) + '</span>' +
     '</div>' +
   '</article>';
 }
@@ -400,6 +410,7 @@ function renderMobileBoard(opts){
   renderAlertBar();
   renderFilterChips();
   UI.wireTooltips(board);
+  syncBoardMemberTooltips();
 }
 function render(opts){
   if(isMobile()) return renderMobileBoard(opts);
@@ -512,6 +523,7 @@ function render(opts){
   renderAlertBar();
   renderFilterChips();
   UI.wireTooltips(board);
+  syncBoardMemberTooltips();
 }
 function openInlineAdd(colId, preset, focusIt){
   /* 手机单列模式没有 .board-col 容器，直接开抽屉，复用同一套新建表单 */

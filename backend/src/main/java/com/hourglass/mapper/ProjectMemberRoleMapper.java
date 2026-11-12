@@ -16,6 +16,8 @@ public interface ProjectMemberRoleMapper {
                                 @Param("projectId") String projectId,
                                 @Param("userId") String userId);
 
+    List<ProjectMemberRole> selectByWorkspace(@Param("workspaceId") String workspaceId);
+
     int upsert(ProjectMemberRole role);
 
     int deleteOne(@Param("workspaceId") String workspaceId,

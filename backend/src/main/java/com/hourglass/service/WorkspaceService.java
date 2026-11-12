@@ -6,6 +6,9 @@ import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.common.Webhooks;
 import com.hourglass.dto.MemberCandidate;
+import com.hourglass.dto.MemberLabelOptions;
+import com.hourglass.entity.ProjectMemberRole;
+import com.hourglass.mapper.WorkspaceMemberLabelOptionMapper;
 import com.hourglass.dto.WorkspaceUpdateRequest;
 import com.hourglass.entity.AppUser;
 import com.hourglass.entity.BoardColumn;
@@ -38,6 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +84,10 @@ public class WorkspaceService {
     private final WorkspaceMemberCache memberCache;
     /** 空间 meta 缓存（列/模块/标签，按空间版本号失效） */
     private final WorkspaceMetaCache metaCache;
+    private final WorkspaceMemberLabelOptionMapper memberLabelOptions;
+    private final MemberLabelLogService memberLabelLogs;
+    /** 候选字典的可见性口径与项目读取一致，避免泄露不可见项目的角色标注 */
+    private final ProjectAccessService projectAccessService;
 
     public WorkspaceService(WorkspaceMapper workspaceMapper, WorkspaceMemberMapper memberMapper,
                             UserMapper userMapper, BoardColumnMapper boardColumnMapper,
@@ -95,7 +106,10 @@ public class WorkspaceService {
                             TaskCascade cascade,
                             com.hourglass.service.ActivityService activityService,
                             WorkspaceMemberCache memberCache,
-                            WorkspaceMetaCache metaCache) {
+                            WorkspaceMetaCache metaCache,
+                            WorkspaceMemberLabelOptionMapper memberLabelOptions,
+                            MemberLabelLogService memberLabelLogs,
+                            ProjectAccessService projectAccessService) {
         this.workspaceMapper = workspaceMapper;
         this.memberMapper = memberMapper;
         this.userMapper = userMapper;
@@ -116,6 +130,9 @@ public class WorkspaceService {
         this.activityService = activityService;
         this.memberCache = memberCache;
         this.metaCache = metaCache;
+        this.memberLabelOptions = memberLabelOptions;
+        this.memberLabelLogs = memberLabelLogs;
+        this.projectAccessService = projectAccessService;
     }
 
     /* ==================== 解析与校验 ==================== */
@@ -339,7 +356,7 @@ public class WorkspaceService {
         }
         workspaceMapper.update(ws);
         /* 活动流只记改了哪些项，不写推送地址/令牌本身（成员可见，避免泄露） */
-        List<String> changed = new java.util.ArrayList<String>();
+        List<String> changed = new ArrayList<String>();
         if (!java.util.Objects.equals(oldName, ws.getName())) {
             changed.add("名称");
         }
@@ -378,6 +395,7 @@ public class WorkspaceService {
         projectMemberRoleMapper.deleteAllByWorkspace(workspaceId);
         inviteMapper.deleteAllByWorkspace(workspaceId);
         inviteGrantMapper.deleteAllByWorkspace(workspaceId);
+        memberLabelOptions.deleteAllByWorkspace(workspaceId);
         workspaceMapper.deleteById(workspaceId);
         userMapper.resetLastWorkspaceForAll(workspaceId);
         CacheSync.evictAfterCommitOrNow(() -> {
@@ -428,7 +446,7 @@ public class WorkspaceService {
             throw AppException.notFound("成员不存在：" + targetUserId);
         }
         String name = Texts.trimToNull(companyName);
-        if (name != null && name.length() > 64) {
+        if (name != null && name.codePointCount(0, name.length()) > 64) {
             throw AppException.badRequest("公司名称不能超过 64 个字符");
         }
         memberMapper.updateCompanyName(workspaceId, targetUserId, name);
@@ -439,6 +457,95 @@ public class WorkspaceService {
                 ? "清除成员「" + display + "」的公司标注"
                 : "标注成员「" + display + "」的公司为「" + name + "」");
         return name == null ? "" : name;
+    }
+
+    /** 空间默认职能：只改 job_title，不修改成员角色或项目权限。 */
+    @Transactional
+    public String updateMemberJobTitle(String operatorId, String workspaceId, String targetUserId, String jobTitle) {
+        requireManager(operatorId, workspaceId);
+        memberLabelOptions.lockWorkspace(workspaceId);
+        WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
+        if (target == null) throw AppException.notFound("成员不存在：" + targetUserId);
+        String title = ProjectMemberRoleService.normalizeTitle(jobTitle, 32);
+        memberMapper.updateJobTitle(workspaceId, targetUserId, title.isEmpty() ? null : title);
+        memberLabelLogs.record(workspaceId, operatorId, "member_job_title", "member", targetUserId,
+                target.getDisplayName(), "成员「" + targetUserId + "」的空间默认职能："
+                        + (title.isEmpty() ? "清除" : title));
+        return title;
+    }
+
+    private static final List<String> DEFAULT_ROLE_TITLES = Arrays.asList(
+            "项目经理", "项目负责人", "产品负责人", "产品", "后端开发", "前端开发", "测试", "测试负责人",
+            "技术负责人", "视觉设计", "交互设计", "实施顾问", "客户项目负责人", "业务代表", "全栈工程师", "产品经理");
+
+    /** 自定义字典 + 内置职能 + 本空间现有标注；不查询其它空间。 */
+    public MemberLabelOptions memberLabelOptions(String userId, String workspaceId) {
+        Workspace requester = requireMember(userId, workspaceId);
+        Set<String> roles = new LinkedHashSet<String>(
+                memberLabelOptions.selectTitles(workspaceId, "role"));
+        Set<String> companies = new LinkedHashSet<String>(
+                memberLabelOptions.selectTitles(workspaceId, "company"));
+        roles.addAll(DEFAULT_ROLE_TITLES);
+        for (WorkspaceMember member : memberMapper.selectByWorkspace(workspaceId)) {
+            addLabel(roles, member.getJobTitle());
+            addLabel(companies, member.getCompanyName());
+        }
+        /* 项目角色标注同样按项目可见性收口：不可见项目按“不存在”处理，逐项目缓存判定。 */
+        boolean seesEveryProject = ProjectAccessService.isPrivileged(requester.getMyRole())
+                || ProjectAccessService.isViewer(requester.getMyRole());
+        Map<String, Boolean> visibleProjects = new LinkedHashMap<String, Boolean>();
+        for (ProjectMemberRole row : projectMemberRoleMapper.selectByWorkspace(workspaceId)) {
+            String projectId = row.getProjectId();
+            if (!seesEveryProject && projectId != null) {
+                Boolean visible = visibleProjects.get(projectId);
+                if (visible == null) {
+                    visible = projectAccessService.canView(workspaceId, userId, projectId);
+                    visibleProjects.put(projectId, visible);
+                }
+                if (!visible) continue;
+            }
+            addLabel(roles, row.getRoleTitle());
+            if (row.getSecondaryRoleTitles() != null) {
+                for (String title : row.getSecondaryRoleTitles()) addLabel(roles, title);
+            }
+        }
+        MemberLabelOptions result = new MemberLabelOptions();
+        result.setRoleTitles(new ArrayList<String>(roles));
+        result.setCompanyNames(new ArrayList<String>(companies));
+        return result;
+    }
+
+    /** 先验证两类字典，再原子替换整个空间字典并强一致留痕。 */
+    @Transactional
+    public void updateMemberLabelOptions(String operatorId, String workspaceId,
+                                          MemberLabelOptions req) {
+        requireManager(operatorId, workspaceId);
+        if (req == null || req.getRoleTitles() == null || req.getCompanyNames() == null) {
+            throw AppException.badRequest("请同时提供 roleTitles 和 companyNames 数组");
+        }
+        List<String> roles = normalizeOptions(req.getRoleTitles(), 32);
+        List<String> companies = normalizeOptions(req.getCompanyNames(), 64);
+        memberLabelOptions.lockWorkspace(workspaceId);
+        memberLabelOptions.deleteAllByWorkspace(workspaceId);
+        for (int i = 0; i < roles.size(); i++) memberLabelOptions.insert(workspaceId, "role", roles.get(i), i);
+        for (int i = 0; i < companies.size(); i++) memberLabelOptions.insert(workspaceId, "company", companies.get(i), i);
+        memberLabelLogs.record(workspaceId, operatorId, "member_label_options", "workspace", workspaceId,
+                workspaceId, "替换成员标签字典：职能 " + roles.size() + " 项，公司 " + companies.size() + " 项");
+    }
+
+    private static List<String> normalizeOptions(List<String> raw, int maxLength) {
+        if (raw.size() > 100) throw AppException.badRequest("每类字典最多 100 项");
+        Set<String> titles = new LinkedHashSet<String>();
+        for (String value : raw) {
+            String title = ProjectMemberRoleService.normalizeTitle(value, maxLength);
+            if (!title.isEmpty()) titles.add(title);
+        }
+        return new ArrayList<String>(titles);
+    }
+
+    private static void addLabel(Set<String> values, String raw) {
+        String value = Texts.trimToNull(raw);
+        if (value != null) values.add(value);
     }
 
     @Transactional

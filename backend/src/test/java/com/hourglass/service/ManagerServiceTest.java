@@ -1,17 +1,21 @@
 package com.hourglass.service;
 
+import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.entity.Category;
+import com.hourglass.entity.ProjectMemberRole;
 import com.hourglass.entity.Requirement;
 import com.hourglass.entity.Task;
 import com.hourglass.entity.TimeAgg;
 import com.hourglass.entity.TimeLog;
 import com.hourglass.entity.WorkspaceMember;
+import com.hourglass.mapper.ProjectMemberRoleMapper;
 import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -28,6 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -47,6 +55,7 @@ class ManagerServiceTest {
     private final AppNotificationService notificationService = mock(AppNotificationService.class);
     private final CategoryService categoryService = mock(CategoryService.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
+    private final ProjectMemberRoleMapper roleMapper = mock(ProjectMemberRoleMapper.class);
 
     @Test
     void portfolioHealthUsesOverdueStagnationAndOverload() {
@@ -495,6 +504,314 @@ class ManagerServiceTest {
         assertTrue((Boolean) service.project(WORKSPACE, "R1", VIEWER).get("canManageModules"));
     }
 
+    @Test
+    void projectLabelsInheritWorkspaceJobAndAllowProjectOverrideAndSecondaryRoles() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", " 公司A ", " 开发 ");
+        Task byId = ownedTask("T1", "R1", "U1", 100);
+        Task byName = openTask("T2", "R1", Consts.COL_BACKLOG, 100);
+        byName.setOwner("Alice");
+        Task otherProject = ownedTask("T3", "R2", "U1", 200);
+        when(roleMapper.selectByProject(WORKSPACE, "R1"))
+                .thenReturn(Collections.singletonList(role("R1", "U1", "  ", " 测试 ", "测试", " ")));
+        when(roleMapper.selectByProject(WORKSPACE, "R2"))
+                .thenReturn(Collections.singletonList(role("R2", "U1", "架构")));
+        ManagerService service = service(Arrays.asList(byId, byName, otherProject),
+                Arrays.asList(requirement("R1", "一"), requirement("R2", "二")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Collections.singletonList(alice));
+
+        Map<String, Object> inherited = member(castList(service.project(WORKSPACE, "R1", VIEWER).get("members")), "U1");
+        assertEquals("U1", inherited.get("userId"));
+        assertEquals("公司A", inherited.get("companyName"));
+        assertEquals("开发", inherited.get("jobTitle"));
+        assertEquals("开发", inherited.get("effectiveRoleTitle"));
+        assertEquals(Collections.singletonList("测试"), inherited.get("secondaryRoleTitles"));
+        assertEquals(2, inherited.get("taskCount"), "历史文本负责人也继承同一成员的标签");
+        Map<String, Object> overridden = member(castList(service.project(WORKSPACE, "R2", VIEWER).get("members")), "U1");
+        assertEquals("架构", overridden.get("effectiveRoleTitle"));
+        assertEquals("开发", overridden.get("jobTitle"));
+        verify(roleMapper, times(1)).selectByProject(WORKSPACE, "R1");
+        verify(roleMapper, times(1)).selectByProject(WORKSPACE, "R2");
+    }
+
+    @Test
+    void filtersMatchInheritedPrimaryAndSecondaryButNotOverriddenWorkspaceJob() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "开发");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "B", "运维");
+        Task first = ownedTask("T1", "R1", "U1", 100);
+        Task second = ownedTask("T2", "R1", "U2", 200);
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Arrays.asList(
+                role("R1", "U1", " ", "评审"), role("R1", "U2", "测试")));
+        ManagerService service = service(Arrays.asList(first, second), Collections.singletonList(requirement("R1", "一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Arrays.asList(alice, bob));
+
+        Map<String, Object> inherited = service.reports(WORKSPACE, " R1 ", VIEWER, " 开发 ", " A ");
+        assertEquals(100, castMap(inherited.get("burndown")).get("totalEstimateMinutes"));
+        assertEquals(100, castMap(service.reports(WORKSPACE, "R1", VIEWER, "评审", null).get("burndown"))
+                .get("totalEstimateMinutes"));
+        assertEquals(0, castMap(service.reports(WORKSPACE, "R1", VIEWER, "运维", null).get("burndown"))
+                .get("totalEstimateMinutes"), "项目主角色覆盖空间职能后，不能再按空间职能命中");
+        Map<String, Object> options = castMap(inherited.get("filterOptions"));
+        assertEquals(Arrays.asList("开发", "测试", "评审"), options.get("roleTitles"));
+        assertEquals(Arrays.asList("A", "B"), options.get("companyNames"), "选中公司后其他候选不丢失");
+        assertEquals("R1", castMap(inherited.get("scope")).get("reqId"));
+        assertEquals("开发", castMap(inherited.get("scope")).get("roleTitle"));
+        assertEquals("A", castMap(inherited.get("scope")).get("companyName"));
+        Map<String, Object> workload = service.workload(WORKSPACE, VIEWER, "R1", "评审", "A");
+        assertEquals(1, castList(workload.get("members")).size());
+        assertEquals("开发", member(castList(workload.get("members")), "U1").get("effectiveRoleTitle"));
+        assertEquals(options, workload.get("filterOptions"));
+    }
+
+    @Test
+    void sameMemberRolesStayProjectSpecificWhenRecalculatingWorkload() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "运维");
+        Task dev = ownedTask("T1", "R1", "U1", 120);
+        Task qa = ownedTask("T2", "R2", "U1", 400);
+        Task inherited = ownedTask("T3", "R3", "U1", 80);
+        when(roleMapper.selectByProject(WORKSPACE, "R1"))
+                .thenReturn(Collections.singletonList(role("R1", "U1", "开发", "评审")));
+        when(roleMapper.selectByProject(WORKSPACE, "R2"))
+                .thenReturn(Collections.singletonList(role("R2", "U1", "测试")));
+        ManagerService service = service(Arrays.asList(dev, qa, inherited), Arrays.asList(
+                requirement("R1", "开发项目"), requirement("R2", "测试项目"), requirement("R3", "继承项目")),
+                Arrays.asList(actual("T1", 30), actual("T2", 40)), Arrays.asList(
+                        timeLog("U1", "T1", TODAY.atTime(9, 0), 30),
+                        timeLog("U1", "T2", TODAY.atTime(10, 0), 40)), Collections.singletonList(alice));
+
+        Map<String, Object> all = service.workload(WORKSPACE, VIEWER);
+        Map<String, Object> row = member(castList(all.get("members")), "U1");
+        assertEquals("运维", row.get("effectiveRoleTitle"), "跨项目不能把第一个项目角色当全局主角色");
+        assertEquals(Arrays.asList("开发", "测试", "评审", "运维"), row.get("roleTitles"));
+        Map<String, Object> filtered = service.workload(WORKSPACE, VIEWER, null, "开发", null);
+        Map<String, Object> devRow = member(castList(filtered.get("members")), "U1");
+        assertEquals(90, devRow.get("remainingMinutes"));
+        assertEquals(30, devRow.get("weekMinutes"));
+        assertEquals(1, castList(devRow.get("tasks")).size());
+        assertEquals("T1", castList(devRow.get("tasks")).get(0).get("id"));
+        List<Map<String, Object>> distribution = castList(devRow.get("projects"));
+        assertEquals(1, distribution.size());
+        assertEquals("R1", distribution.get(0).get("reqId"));
+        assertEquals(Arrays.asList("开发", "评审"), distribution.get(0).get("roleTitles"));
+        assertEquals(Arrays.asList("开发", "评审"), devRow.get("roleTitles"));
+        assertEquals(all.get("filterOptions"), filtered.get("filterOptions"));
+        assertEquals(400, castMap(service.reports(WORKSPACE, null, VIEWER, "测试", null).get("burndown"))
+                .get("totalEstimateMinutes"));
+        Map<String, Object> projectOnly = service.workload(WORKSPACE, VIEWER, " R2 ", null, null);
+        assertEquals("测试", member(castList(projectOnly.get("members")), "U1").get("effectiveRoleTitle"));
+        assertEquals(40, member(castList(projectOnly.get("members")), "U1").get("weekMinutes"));
+        assertEquals(1, castList(projectOnly.get("projects")).size());
+    }
+
+    @Test
+    void workloadFiltersTasksAndAllTimeWindowsByTaskOwnerNotLogActor() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "开发");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "B", "测试");
+        Task first = ownedTask("T1", "R1", "U1", 300);
+        first.setDueDate(TODAY);
+        Task excluded = ownedTask("T2", "R1", "U2", 900);
+        Task done = ownedTask("T3", "R1", "U1", 5000);
+        done.setBoardColumn(Consts.COL_DONE);
+        Task otherProject = ownedTask("T4", "R2", "U1", 600);
+        ManagerService service = service(Arrays.asList(first, excluded, done, otherProject),
+                Arrays.asList(requirement("R1", "一"), requirement("R2", "二")),
+                Collections.singletonList(actual("T1", 60)), Arrays.asList(
+                        timeLog("U1", "T1", TODAY.atTime(9, 0), 20),
+                        timeLog("U2", "T1", TODAY.atTime(10, 0), 45),
+                        timeLog("U2", "T3", TODAY.atTime(11, 0), 15),
+                        timeLog("U1", "T2", TODAY.atTime(12, 0), 200),
+                        timeLog("U1", "T4", TODAY.atTime(13, 0), 300),
+                        timeLog("U1", null, TODAY.atTime(14, 0), 400),
+                        timeLog("U1", "T1", TODAY.minusWeeks(1).atTime(9, 0), 10),
+                        timeLog("U1", "T2", TODAY.minusWeeks(1).atTime(9, 0), 100),
+                        timeLog("U1", "T1", TODAY.minusDays(10).atTime(9, 0), 70)), Arrays.asList(alice, bob));
+
+        Map<String, Object> filtered = service.workload(WORKSPACE, VIEWER, TODAY.minusDays(13), TODAY,
+                "R1", "开发", "A");
+        Map<String, Object> aliceRow = member(castList(filtered.get("members")), "U1");
+        assertEquals(240, aliceRow.get("remainingMinutes"));
+        assertEquals(50, aliceRow.get("loadPct"));
+        assertEquals(20, aliceRow.get("weekMinutes"));
+        assertEquals(10, aliceRow.get("lastWeekMinutes"));
+        assertEquals(100, aliceRow.get("rangeMinutes"));
+        assertEquals(Arrays.asList(0, 0, 20, 0, 0, 0, 0), aliceRow.get("dayMinutes"));
+        assertEquals(1, castList(aliceRow.get("tasks")).size(), "完成列仍按原算法不计开放工作量");
+        assertEquals(1, castList(aliceRow.get("projects")).size());
+        assertEquals(1, castList(aliceRow.get("weekLogs")).size(), "下钻/导出明细与统计必须同源");
+        assertEquals("T1", castList(aliceRow.get("weekLogs")).get(0).get("taskId"));
+        Map<String, Object> bobRow = member(castList(filtered.get("members")), "U2");
+        assertEquals(0, bobRow.get("remainingMinutes"));
+        assertEquals(60, bobRow.get("weekMinutes"), "计时人职能不匹配也保留其在匹配负责人任务上的计时");
+        assertEquals(2, castList(bobRow.get("weekLogs")).size(), "匹配的完成任务计时仍保留");
+        assertEquals("B", bobRow.get("companyName"));
+        assertEquals(Arrays.asList("A", "B"), castMap(filtered.get("filterOptions")).get("companyNames"));
+    }
+
+    @Test
+    void reportsRecalculateAllFiveChartsFromMatchingOwners() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "开发");
+        WorkspaceMember bob = workspaceMember("U2", "Bob", "B", "测试");
+        Task open = ownedTask("T1", "R1", "U1", 100);
+        open.setItemType("bug");
+        Task done = ownedTask("T2", "R1", "U1", 200);
+        done.setItemType("bug");
+        done.setBoardColumn(Consts.COL_DONE);
+        done.setStartDate(TODAY.minusDays(3));
+        done.setCompletedAt(TODAY.minusDays(1));
+        Task excluded = ownedTask("T3", "R1", "U2", 900);
+        excluded.setItemType("bug");
+        ManagerService service = service(Arrays.asList(open, done, excluded), Collections.singletonList(requirement("R1", "一")),
+                Collections.singletonList(actual("T2", 80)), Collections.<TimeLog>emptyList(), Arrays.asList(alice, bob));
+
+        Map<String, Object> reports = service.reports(WORKSPACE, "R1", VIEWER, "开发", "A");
+        assertEquals(300, castMap(reports.get("burndown")).get("totalEstimateMinutes"));
+        assertEquals(220, castMap(reports.get("burndown")).get("remainingMinutes"));
+        assertEquals(20, castMap(reports.get("velocity")).get("averageMinutes"));
+        Map<String, Object> velocityWeek = week(castList(castMap(reports.get("velocity")).get("weeks")), TODAY.minusDays(2));
+        assertEquals(1, velocityWeek.get("completedCount"));
+        Map<String, Object> flowWeek = week(castList(castMap(reports.get("flow")).get("weeks")), TODAY.minusDays(2));
+        assertEquals(1, flowWeek.get("doing"));
+        assertEquals(1, flowWeek.get("done"));
+        assertEquals(2L, castMap(reports.get("delivery")).get("p50Days"));
+        assertEquals(1, castList(castMap(reports.get("delivery")).get("buckets")).get(1).get("count"));
+        assertEquals(1, castMap(reports.get("defects")).get("openCount"));
+        Map<String, Object> defectWeek = week(castList(castMap(reports.get("defects")).get("weeks")), TODAY.minusDays(2));
+        assertEquals(2, defectWeek.get("opened"));
+        assertEquals(1, defectWeek.get("closed"));
+    }
+
+    @Test
+    void unsetMatchesOnlyEntirelyBlankRolesAndBlankCompanyIncludingUnassigned() {
+        WorkspaceMember blank = workspaceMember("U1", "Blank", "  ", " ");
+        WorkspaceMember secondary = workspaceMember("U2", "Secondary", null, null);
+        Task first = ownedTask("T1", "R1", "U1", 100);
+        Task second = ownedTask("T2", "R1", "U2", 200);
+        Task unassigned = openTask("T3", "R1", Consts.COL_BACKLOG, 300);
+        when(roleMapper.selectByProject(WORKSPACE, "R1")).thenReturn(Arrays.asList(
+                role("R1", "U1", " ", " "), role("R1", "U2", null, "测试")));
+        ManagerService service = service(Arrays.asList(first, second, unassigned), Collections.singletonList(requirement("R1", "一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Arrays.asList(blank, secondary));
+
+        Map<String, Object> unset = service.reports(WORKSPACE, "R1", VIEWER, "__unset__", "__unset__");
+        assertEquals(400, castMap(unset.get("burndown")).get("totalEstimateMinutes"), "有兼岗就不属于未标角色");
+        assertEquals(Arrays.asList("__unset__", "测试"), castMap(unset.get("filterOptions")).get("roleTitles"));
+        assertEquals(Collections.singletonList("__unset__"), castMap(unset.get("filterOptions")).get("companyNames"));
+        assertEquals(600, castMap(service.reports(WORKSPACE, "R1", VIEWER, null, "__unset__").get("burndown"))
+                .get("totalEstimateMinutes"));
+        Map<String, Object> workload = service.workload(WORKSPACE, VIEWER, "R1", "__unset__", "__unset__");
+        assertNull(member(castList(workload.get("members")), "U2"));
+        Map<String, Object> row = member(castList(workload.get("members")), "U1");
+        assertNull(row.get("effectiveRoleTitle"));
+        assertNull(row.get("companyName"));
+        assertEquals(Collections.emptyList(), row.get("roleTitles"));
+        assertNull(member(castList(workload.get("members")), "unassigned").get("userId"));
+    }
+
+    @Test
+    void hiddenProjectsNeverSupplyFilterOptionsOrTriggerRoleLookup() {
+        WorkspaceMember alice = workspaceMember("U1", "Alice", "A", "开发");
+        WorkspaceMember secret = workspaceMember("U2", "Secret", "秘密公司", "秘密职能");
+        Task visible = ownedTask("T1", "R1", "U1", 100);
+        Task hidden = ownedTask("T2", "R2", "U2", 200);
+        ProjectAccessService access = mock(ProjectAccessService.class);
+        when(access.hiddenProjectIds(WORKSPACE, VIEWER)).thenReturn(Collections.singleton("R2"));
+        ManagerService service = service(Arrays.asList(visible, hidden),
+                Arrays.asList(requirement("R1", "一"), requirement("R2", "隐藏")), Collections.<TimeAgg>emptyList(),
+                Arrays.asList(timeLog("U1", "T1", TODAY.atTime(9, 0), 20),
+                        timeLog("U2", "T2", TODAY.atTime(10, 0), 999)), Arrays.asList(alice, secret), access);
+
+        Map<String, Object> workload = service.workload(WORKSPACE, VIEWER, null, "开发", "A");
+        assertEquals(Collections.singletonList("开发"), castMap(workload.get("filterOptions")).get("roleTitles"));
+        assertEquals(Collections.singletonList("A"), castMap(workload.get("filterOptions")).get("companyNames"));
+        assertEquals(1, castList(workload.get("members")).size());
+        assertEquals(20, member(castList(workload.get("members")), "U1").get("weekMinutes"));
+        assertEquals(workload.get("filterOptions"), service.reports(WORKSPACE, null, VIEWER).get("filterOptions"));
+        assertEquals(404, assertThrows(AppException.class,
+                () -> service.workload(WORKSPACE, VIEWER, " R2 ", null, null)).getCode());
+        assertEquals(404, assertThrows(AppException.class,
+                () -> service.reports(WORKSPACE, "R2", VIEWER, null, null)).getCode());
+        assertEquals(404, assertThrows(AppException.class,
+                () -> service.project(WORKSPACE, "R2", VIEWER)).getCode());
+        verify(roleMapper, never()).selectByProject(WORKSPACE, "R2");
+        verify(roleMapper, times(2)).selectByProject(WORKSPACE, "R1");
+        verify(roleMapper, never()).selectOne(any(), any(), any());
+    }
+
+    @Test
+    void displayFilterValidationTrimsAndKeepsOriginalConstructorsOptional() {
+        Task task = ownedTask("T1", "R1", "U1", 100);
+        String maxRole = String.join("", Collections.nCopies(32, "职"));
+        String maxCompany = String.join("", Collections.nCopies(64, "司"));
+        WorkspaceMember alice = workspaceMember("U1", "Alice", maxCompany, maxRole);
+        ManagerService service = service(Collections.singletonList(task), Collections.singletonList(requirement("R1", "一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Collections.singletonList(alice));
+        ReflectionTestUtils.setField(service, "roleMapper", null);
+
+        Map<String, Object> boundary = service.reports(WORKSPACE, null, VIEWER, " " + maxRole + " ", " " + maxCompany + " ");
+        assertEquals(100, castMap(boundary.get("burndown")).get("totalEstimateMinutes"));
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.reports(WORKSPACE, null, VIEWER, maxRole + "职", null)).getCode());
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.workload(WORKSPACE, VIEWER, null, null, maxCompany + "司")).getCode());
+        Map<String, Object> blanks = service.workload(WORKSPACE, VIEWER, " ", " ", " ");
+        assertNull(castMap(blanks.get("scope")).get("reqId"));
+        assertNull(castMap(blanks.get("scope")).get("roleTitle"));
+        assertNull(castMap(blanks.get("scope")).get("companyName"));
+        assertEquals(100, member(castList(blanks.get("members")), "U1").get("remainingMinutes"));
+    }
+
+    @Test
+    void ambiguousLegacyNamesRemainUnresolvedAndSupplementaryLabelsAreValid() {
+        Task task = openTask("T1", "R1", Consts.COL_DOING, 100);
+        task.setOwner("同名");
+        String supplementary = String.join("", Collections.nCopies(32, "𠀀"));
+        WorkspaceMember first = workspaceMember("U1", "同名", "甲", supplementary);
+        WorkspaceMember second = workspaceMember("U2", "同名", "乙", "测试");
+        ManagerService service = service(Collections.singletonList(task), Collections.singletonList(requirement("R1", "一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Arrays.asList(first, second));
+        assertEquals(0, castMap(service.reports(WORKSPACE, null, VIEWER, supplementary, null).get("burndown")).get("totalEstimateMinutes"));
+        assertEquals(100, castMap(service.reports(WORKSPACE, null, VIEWER, "__unset__", "__unset__").get("burndown")).get("totalEstimateMinutes"));
+        task.setOwnerUserId("U1");
+        assertEquals(100, castMap(service.reports(WORKSPACE, null, VIEWER, supplementary, "甲").get("burndown")).get("totalEstimateMinutes"));
+    }
+
+    @Test
+    void literalUnsetAndEscapedPrefixLabelsDoNotCollideWithUnsetFilters() {
+        Task task = ownedTask("T1", "R1", "U1", 100);
+        WorkspaceMember member = workspaceMember("U1", "一", "__label__:公司", "__unset__");
+        ManagerService service = service(Collections.singletonList(task), Collections.singletonList(requirement("R1", "一")),
+                Collections.<TimeAgg>emptyList(), Collections.<TimeLog>emptyList(), Collections.singletonList(member));
+        Map<String, Object> result = service.reports(WORKSPACE, null, VIEWER, "__label__:__unset__", "__label__:__label__:公司");
+        assertEquals(100, castMap(result.get("burndown")).get("totalEstimateMinutes"));
+        assertEquals(Collections.singletonList("__label__:__unset__"), castMap(result.get("filterOptions")).get("roleTitles"));
+        assertEquals("__label__:__unset__", castMap(result.get("scope")).get("roleTitle"));
+        assertEquals(0, castMap(service.reports(WORKSPACE, null, VIEWER, "__unset__", null).get("burndown")).get("totalEstimateMinutes"));
+    }
+
+    private WorkspaceMember workspaceMember(String id, String name, String company, String job) {
+        WorkspaceMember member = new WorkspaceMember();
+        member.setUserId(id);
+        member.setDisplayName(name);
+        member.setCompanyName(company);
+        member.setJobTitle(job);
+        return member;
+    }
+
+    private ProjectMemberRole role(String projectId, String userId, String title, String... secondary) {
+        ProjectMemberRole role = new ProjectMemberRole();
+        role.setWorkspaceId(WORKSPACE);
+        role.setProjectId(projectId);
+        role.setUserId(userId);
+        role.setRoleTitle(title);
+        role.setSecondaryRoleTitles(Arrays.asList(secondary));
+        return role;
+    }
+
+    private Task ownedTask(String id, String reqId, String ownerId, int estimate) {
+        Task task = openTask(id, reqId, Consts.COL_DOING, estimate);
+        task.setOwnerUserId(ownerId);
+        return task;
+    }
+
     private ManagerService service(List<Task> tasks, List<Requirement> requirements, List<TimeAgg> actual,
                                    List<TimeLog> logs, List<WorkspaceMember> members) {
         return service(tasks, requirements, actual, logs, members, mock(ProjectAccessService.class));
@@ -510,8 +827,10 @@ class ManagerServiceTest {
         when(memberMapper.selectByWorkspace(WORKSPACE)).thenReturn(members);
         when(categoryService.list(eq(WORKSPACE), any())).thenReturn(Collections.<Category>emptyList());
         when(releasePermission.canManageProject(any(), eq(WORKSPACE), any())).thenReturn(false);
-        return new ManagerService(taskMapper, requirementMapper, timeLogMapper, memberMapper,
+        ManagerService service = new ManagerService(taskMapper, requirementMapper, timeLogMapper, memberMapper,
                 notificationService, access, categoryService, releasePermission, CLOCK);
+        ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
+        return service;
     }
 
     private Requirement requirement(String id, String name) {

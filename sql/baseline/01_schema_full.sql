@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-11: full schema after migrations 01-68 (55 tables).
+-- Updated 2026-11-11: full schema after migrations 01-69 (56 tables).
 --
--- 完整结构与 sql/01-68 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-69 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -387,6 +387,7 @@ CREATE TABLE `project_member_role` (
   `project_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目ID（requirement.id）',
   `user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成员账号ID',
   `role_title` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目角色展示标签（不参与鉴权）',
+  `secondary_role_titles` json DEFAULT NULL COMMENT '项目兼岗职能数组（仅展示，不参与鉴权）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`workspace_id`,`project_id`,`user_id`),
@@ -960,10 +961,22 @@ CREATE TABLE `workspace_member` (
   `role` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member' COMMENT '空间角色：owner/admin/member/viewer',
   `project_access_mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'all' COMMENT '项目参与模式：all=默认参与；assigned=按项目分配',
   `company_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '公司名称（空间级自由文本，仅展示，不参与鉴权）',
+  `job_title` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '空间默认职能（仅展示，不参与鉴权）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
   PRIMARY KEY (`workspace_id`,`user_id`),
   KEY `idx_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间成员';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `workspace_member_label_option`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `workspace_member_label_option` (
+  `workspace_id` varchar(32) NOT NULL COMMENT '归属空间ID',
+  `kind` varchar(16) NOT NULL COMMENT 'role / company',
+  `title` varchar(64) NOT NULL COMMENT '展示选项（不参与鉴权）',
+  `sort_order` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`workspace_id`,`kind`,`title`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='空间成员职能与公司选项字典，不参与鉴权';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `workspace_priority`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

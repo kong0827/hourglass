@@ -303,7 +303,7 @@ class WorkspaceControllerProjectAccessTest {
     }
 
     @Test
-    void saveProjectRoleLogsConfigAndAudit() throws Exception {
+    void saveProjectRoleDelegatesTransactionalLogging() throws Exception {
         workspace("shared");
         Requirement p1 = new Requirement();
         p1.setId("P1");
@@ -311,22 +311,16 @@ class WorkspaceControllerProjectAccessTest {
         p1.setName("项目A");
         when(requirementMapper.selectById("P1")).thenReturn(p1);
         when(workspaceService.members("U1", WS)).thenReturn(Collections.singletonList(member("U2", "member")));
-        when(projectMemberRoleService.saveRole(WS, p1, "U2", "前端", "U1")).thenReturn("前端");
+        when(projectMemberRoleService.saveRole(WS, p1, "U2", "前端", null, "U1")).thenReturn("前端");
 
         mvc.perform(put("/api/workspaces/" + WS + "/projects/P1/member-roles/U2")
                         .contentType(APPLICATION_JSON)
                         .content("{\"roleTitle\":\"前端\"}"))
                 .andExpect(status().isOk());
 
-        verify(activityService).logConfig(WS, "U1", "标注成员「U2」在项目「项目A」的角色为「前端」");
-        verify(auditService).recordCurrent(org.mockito.ArgumentMatchers.eq(WS),
-                org.mockito.ArgumentMatchers.eq("project_role"),
-                org.mockito.ArgumentMatchers.eq("project"),
-                org.mockito.ArgumentMatchers.eq("P1"),
-                org.mockito.ArgumentMatchers.eq("项目A"),
-                org.mockito.ArgumentMatchers.eq(true),
-                org.mockito.ArgumentMatchers.contains("前端"),
-                org.mockito.ArgumentMatchers.any(javax.servlet.http.HttpServletRequest.class));
+        verify(projectMemberRoleService).saveRole(WS, p1, "U2", "前端", null, "U1");
+        // 角色服务在业务事务内强一致留痕，控制器不再额外调用吞异常日志入口。
+        verifyNoInteractions(activityService, auditService);
     }
 
     @Test
@@ -349,6 +343,58 @@ class WorkspaceControllerProjectAccessTest {
                 org.mockito.ArgumentMatchers.eq(true),
                 org.mockito.ArgumentMatchers.contains("外部公司"),
                 org.mockito.ArgumentMatchers.any(javax.servlet.http.HttpServletRequest.class));
+    }
+
+    @Test
+    void jobTitleAndDictionaryRoutesDelegateExactContract() throws Exception {
+        mvc.perform(put("/api/workspaces/" + WS + "/members/U2/job-title")
+                .contentType(APPLICATION_JSON).content("{\"jobTitle\":\"全栈工程师\"}"))
+                .andExpect(status().isOk());
+        verify(workspaceService).updateMemberJobTitle("U1", WS, "U2", "全栈工程师");
+        com.hourglass.dto.MemberLabelOptions options = new com.hourglass.dto.MemberLabelOptions();
+        options.setRoleTitles(Collections.singletonList("产品经理"));
+        options.setCompanyNames(Collections.singletonList("公司"));
+        when(workspaceService.memberLabelOptions("U1", WS)).thenReturn(options);
+        mvc.perform(get("/api/workspaces/" + WS + "/member-label-options"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.roleTitles[0]").value("产品经理"));
+        mvc.perform(put("/api/workspaces/" + WS + "/member-label-options")
+                .contentType(APPLICATION_JSON).content("{\"roleTitles\":[\"产品经理\"],\"companyNames\":[\"公司\"]}"))
+                .andExpect(status().isOk());
+        verify(workspaceService).updateMemberLabelOptions("U1", WS, options);
+    }
+
+    @Test
+    void batchAndCopyRoutesReturnCountsAndDefaultOverwriteFalse() throws Exception {
+        Requirement project = new Requirement(); project.setId("P1"); project.setWorkspaceId(WS);
+        when(requirementMapper.selectById("P1")).thenReturn(project);
+        when(projectMemberRoleService.saveRoles(WS, project, Collections.singletonList("U2"), "开发",
+                Collections.emptyList(), "U1")).thenReturn(Collections.singletonMap("updated", 1));
+        mvc.perform(put("/api/workspaces/" + WS + "/projects/P1/member-roles")
+                .contentType(APPLICATION_JSON).content("{\"userIds\":[\"U2\"],\"roleTitle\":\"开发\",\"secondaryRoleTitles\":[]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.updated").value(1));
+        java.util.Map<String, Integer> result = new java.util.LinkedHashMap<String, Integer>();
+        result.put("copied", 1); result.put("skipped", 2);
+        when(projectMemberRoleService.copyRoles(WS, project, "P2", false, "U1")).thenReturn(result);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                "/api/workspaces/" + WS + "/projects/P1/member-roles/copy")
+                .contentType(APPLICATION_JSON).content("{\"sourceProjectId\":\"P2\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.copied").value(1))
+                .andExpect(jsonPath("$.data.skipped").value(2));
+        verify(projectMemberRoleService).copyRoles(WS, project, "P2", false, "U1");
+    }
+
+    @Test
+    void singleRoleRoutePreservesOmittedSecondaryAndForwardsExplicitEmpty() throws Exception {
+        Requirement project = new Requirement(); project.setId("P1"); project.setWorkspaceId(WS);
+        when(requirementMapper.selectById("P1")).thenReturn(project);
+        mvc.perform(put("/api/workspaces/" + WS + "/projects/P1/member-roles/U2")
+                .contentType(APPLICATION_JSON).content("{\"roleTitle\":\"开发\"}"))
+                .andExpect(status().isOk());
+        verify(projectMemberRoleService).saveRole(WS, project, "U2", "开发", null, "U1");
+        mvc.perform(put("/api/workspaces/" + WS + "/projects/P1/member-roles/U2")
+                .contentType(APPLICATION_JSON).content("{\"roleTitle\":\"\",\"secondaryRoleTitles\":[]}"))
+                .andExpect(status().isOk());
+        verify(projectMemberRoleService).saveRole(WS, project, "U2", "", Collections.emptyList(), "U1");
     }
 
     private void workspace(String type) {

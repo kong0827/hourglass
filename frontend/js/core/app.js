@@ -76,7 +76,9 @@ function loadWsMembers(){
   rt.wsMembersCache = [];
   refreshOwnerSelect();
   if(!rt.currentWs || rt.currentWs.type !== "shared") return;
-  API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members").then(function(list){
+  var wsId = rt.currentWs.id;
+  API.get("/api/workspaces/" + encodeURIComponent(wsId) + "/members").then(function(list){
+    if(!rt.currentWs || rt.currentWs.id !== wsId) return;
     rt.wsMembersCache = list || [];
     refreshOwnerSelect();
   }).catch(function(){});

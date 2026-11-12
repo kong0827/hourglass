@@ -18,6 +18,7 @@ import { taskVersionsText, taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PRIO
 import { loadBoard, loadReqs } from "./board.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { triggerDownload } from "../lib/download.js";
+import { loadProjectMembers, memberRoleTitles, taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
 
 /* 共用显示列设置读取同一份可变标签表，统一任务列表及其列设置的版本术语。 */
 listPrefs.labels("task-list").version = "计划版本";
@@ -25,6 +26,9 @@ listPrefs.labels("task-list").version = "计划版本";
 var listBody = $("listBody"), listMeta = $("listMeta"), listSort = $("listSort"),
     btnListBulk = $("btnListBulk"), listHead = $("listHead");
 var lastItems = [];
+["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-roster-changed"].forEach(function(name){
+  window.addEventListener(name, function(){ if(activeView === "list") syncTaskMemberTooltips(listBody, lastItems); });
+});
 var listLoaded = false;
 var listHasMore = false, listLoadingMore = false;
 var LIST_PAGE_SIZE = 100;
@@ -372,7 +376,7 @@ function taskCell(t, key, hasTypeCol){
     return '<span class="cell"><span class="tag tag-cat" style="--tag-c:' + color + '">' + esc(colName(t.boardColumn)) + '</span></span>';
   }
   if(key === "priority") return '<span>' + (t.boardColumn === "done" ? '<span class="pdot" style="color:var(--success-fg)">' + icon("check", 13) + '</span>' : priTagHTML(t.priority)) + '</span>';
-  if(key === "owner") return '<span class="cell" title="' + esc(t.owner || "") + '">' + esc(t.owner || "—") + '</span>';
+  if(key === "owner") return '<span class="cell" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + esc(t.owner || "—") + '</span>';
   if(key === "dueDate"){
     var st = dueState(t), txt = t.boardColumn === "done" ? (t.completedAt ? ("完成于 " + fmtShortMD(parseDate(t.completedAt))) : "已完成") : dueText(t);
     return '<span class="cell ' + (st.kind === "over" ? "over" : (st.kind === "today" ? "today" : "")) + '">' + esc(txt) + '</span>';
@@ -610,7 +614,7 @@ function mobileListCardHTML(t){
     '<div class="mtc-foot">' +
       '<span class="progress mini' + (p >= 100 ? " full" : "") + '"><span class="bar"><i style="width:' + p + '%"></i></span>' +
         '<span class="pv">' + p + '%</span></span>' +
-      '<span class="mtc-owner" title="负责人：' + esc(t.owner || "—") + '">' + avatarHTML(t.owner || "—") + '</span>' +
+      '<span class="mtc-owner" data-member-task="' + esc(t.id) + '" title="负责人：' + esc(t.owner || "—") + (taskMemberLabel(t) ? ' · ' + esc(taskMemberLabel(t)) : '') + '">' + avatarHTML(t.owner || "—") + '</span>' +
     '</div>' +
     '<div class="mtc-swipe">' +
       '<button class="mtc-act done" type="button" data-mob-done="' + esc(t.id) + '">完成</button>' +
@@ -669,6 +673,7 @@ function renderListItems(items){
   viewRows.forEach(function(t){ rt.listCache[t.id] = t; });
   if(isMobile()){
     renderMobileListItems(viewRows, groups);
+    syncTaskMemberTooltips(listBody, viewRows);
     rt.listSelected = {};
     syncListSelectionUI();
     appendListMore();
@@ -704,6 +709,7 @@ function renderListItems(items){
       }).join("");
     }).join("");
   }
+  syncTaskMemberTooltips(listBody, viewRows);
   Array.prototype.forEach.call(listBody.querySelectorAll(".list-row"), applyGrid);
   /* 只保留当前展开行的选中态，避免隐藏任务被批量删除 */
   rt.listSelected = keepSelected;
@@ -822,8 +828,23 @@ function bulkMoveTo(column){
     send();
   });
 }
+function bulkOwnerCandidates(ids, wsId){
+  var projectIds = [], tasks = ids.map(function(id){ return rt.listCache[id]; }).filter(Boolean);
+  tasks.forEach(function(t){ if(t.reqId && projectIds.indexOf(t.reqId) === -1) projectIds.push(t.reqId); });
+  var base = ownerOptions("");
+  return Promise.all(projectIds.map(function(pid){ return loadProjectMembers(wsId, pid, true); })).then(function(rosters){
+    return base.filter(function(o){ return rosters.every(function(data){ return (data && data.members || []).some(function(m){ return m.userId === o.id; }); }); }).map(function(o){
+      var roles = [], company = o.company;
+      rosters.forEach(function(data){
+        var m = (data.members || []).filter(function(x){ return x.userId === o.id; })[0];
+        if(m){ company = m.companyName || company; memberRoleTitles(m).forEach(function(r){ if(roles.indexOf(r) === -1) roles.push(r); }); }
+      });
+      return {id:o.id, name:o.name, company:company, role:roles.length ? roles.join(" / ") : o.role};
+    });
+  });
+}
 function openBulkMenu(anchor, kind){
-  var el = document.createElement("div");
+  var el = document.createElement("div"), disposed = false, selectedIds = bulkIds().slice().sort(), wsId = rt.currentWs && rt.currentWs.id;
   el.className = "menu";
   var html = "";
   if(kind === "pri"){
@@ -832,10 +853,14 @@ function openBulkMenu(anchor, kind){
         priTagHTML(p) + '</button>';
     }).join("");
   }else if(kind === "owner"){
-    html = '<div class="menu-title">改为负责人</div>' + ownerOptions().map(function(o){
-      return '<button class="menu-item" type="button" data-bv="owner" data-v="' + esc(o.id) + '" data-n="' + esc(o.name) + '">' +
-        avatarHTML(o.name, "sm") + esc(o.name) + '</button>';
-    }).join("");
+    html = '<div class="menu-title" role="status">正在确认所选项目的共同可指派成员…</div>';
+    bulkOwnerCandidates(selectedIds, wsId).then(function(options){
+      if(disposed || !rt.currentWs || rt.currentWs.id !== wsId) return;
+      el.innerHTML = '<div class="menu-title">共同可指派成员（各项目角色汇总）</div>' + (options.map(function(o){
+        var label = o.name + " · " + (o.role || "未设角色") + " · " + (o.company || "未标注公司");
+        return '<button class="menu-item" type="button" data-bv="owner" data-v="' + esc(o.id) + '" data-n="' + esc(o.name) + '" title="' + esc(label) + '">' + avatarHTML(o.name, "sm") + '<span style="white-space:normal">' + esc(label) + '</span></button>';
+      }).join("") || '<div class="menu-title">没有所选项目的共同候选，请按项目分别指派。</div>');
+    }).catch(function(ex){ if(!disposed) el.innerHTML = '<div class="menu-title" role="alert">' + esc(ex.message || "加载失败，请关闭后重试") + '</div>'; });
   }else if(kind === "due"){
     html = '<div class="menu-title">改为截止日期</div>' +
       [["0","今天"],["1","明天"],["w5","一周后（5 个工作日）"]].map(function(x){
@@ -856,11 +881,14 @@ function openBulkMenu(anchor, kind){
     var k = b.dataset.bv, v = b.dataset.v, n = b.dataset.n;
     UI.closeAllPops();
     if(k === "pri") bulkApply(function(){ return {priority: v}; }, "改优先级");
-    else if(k === "owner") bulkApply(function(){ return {owner: n, ownerUserId: v || null}; }, "改负责人");
+    else if(k === "owner"){
+      if(!rt.currentWs || rt.currentWs.id !== wsId || JSON.stringify(bulkIds().slice().sort()) !== JSON.stringify(selectedIds)){ toast("空间或选择已变更，请重新打开负责人候选", "warn"); return; }
+      bulkApply(function(){ return {owner: n, ownerUserId: v || null}; }, "改负责人");
+    }
     else if(k === "due") bulkApply(function(){ return {dueDate: duePresetDate(v)}; }, "改截止");
     else if(k === "col") bulkMoveTo(v);
   });
-  UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
+  UI.openPop(el, anchor, {align:"left", width:Math.min(480, window.innerWidth - 16), onClose: function(){ disposed = true; el.remove(); }});
 }
 if(listBulkBar){
   listBulkBar.addEventListener("click", function(e){

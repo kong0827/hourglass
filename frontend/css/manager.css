@@ -326,3 +326,58 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .roster-source{font-size:11.5px;color:var(--text-3);white-space:nowrap;}
 .roster-tbl td{vertical-align:middle;}
 @media(max-width:900px){.roster-tbl{min-width:640px;}}
+
+/* 职能继承、批量设置与管理视图标签筛选：沿用语义令牌和原生控件 */
+#projectBody,#workloadBody,#reportBody{min-width:0;max-width:100%;}
+#projectBody .tbl-wrap,#workloadBody .tbl-wrap,#reportBody .tbl-wrap,.roster-copy-sheet{max-width:100%;min-width:0;}
+#projectBody .tbl-wrap,#workloadBody .tbl-wrap{overflow-x:auto;}
+.manager-label-filters,.roster-actions,.roster-batch{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-bottom:12px;min-width:0;}
+.manager-label-filters label,.roster-batch label{display:flex;align-items:center;gap:6px;min-width:0;font-size:12.5px;color:var(--text-2);}
+.manager-label-filters select{width:180px;max-width:100%;}
+.manager-label-filters select,.roster-batch select,.roster-copy-sheet select{background-color:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--r-sm);}
+.roster-batch{padding:12px;border:1px solid var(--primary-border);border-radius:var(--r-md);background:var(--primary-soft);}
+.roster-batch>span{font-size:12.5px;color:var(--text);font-weight:600;}
+.roster-batch small{flex-basis:100%;font-size:12px;line-height:18px;color:var(--text-2);}
+.roster-role-source{display:block;margin-top:6px;font-size:12px;line-height:18px;color:var(--text-2);overflow-wrap:anywhere;}
+.manager-member-labels{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:6px;max-width:280px;white-space:normal;overflow-wrap:anywhere;}
+.manager-member-labels .tag{white-space:normal;max-width:100%;height:auto;}
+.roster-tbl .roster-check{width:36px;text-align:center;}
+.roster-check-label{display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;}
+.roster-check-label span{display:none;}
+.roster-check input,.roster-copy-overwrite input{width:18px;height:18px;accent-color:var(--primary);cursor:pointer;}
+.roster-source{white-space:normal;overflow-wrap:anywhere;}
+.roster-tbl td{overflow-wrap:anywhere;}
+.roster-copy-sheet{width:min(560px,94vw);}
+.roster-copy-sheet .sheet-body>label{font-size:13px;color:var(--text-2);}
+.roster-copy-overwrite{display:flex;gap:8px;align-items:flex-start;line-height:20px;}
+.roster-copy-overwrite input{flex:0 0 auto;margin-top:1px;}
+.roster-copy-sheet [data-copy-status]{margin:0;font-size:13px;line-height:20px;color:var(--text-2);}
+.roster-copy-sheet [data-copy-status][role="alert"]{color:var(--danger-fg);}
+.manager-label-filters :focus-visible,.roster-panel :focus-visible,.roster-copy-sheet :focus-visible,tr[data-member-key]:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+.roster-panel button:disabled,.roster-panel select:disabled,.roster-copy-sheet :disabled{opacity:.5;cursor:not-allowed;}
+@media(max-width:760px){
+  .manager-label-filters{align-items:stretch;}
+  .manager-label-filters label{flex:1 1 100%;display:grid;grid-template-columns:40px minmax(0,1fr);}
+  .manager-label-filters select{width:100%;min-width:0;height:44px;font-size:16px;}
+  .manager-label-filters button,.roster-actions button,.roster-batch button,.roster-tbl button,.roster-copy-sheet button{min-height:44px;}
+  .roster-batch label{width:100%;}
+  .roster-batch select,.roster-role,.roster-copy-sheet select{min-width:0;width:100%;height:44px;font-size:16px;}
+  .roster-tbl{display:block;min-width:0;width:100%;}
+  .roster-tbl thead{display:block;margin-bottom:8px;}
+  .roster-tbl thead tr{display:block;}
+  .roster-tbl th{display:none;}
+  .roster-tbl th.roster-check{display:flex;align-items:center;width:100%;height:44px;gap:8px;}
+  .roster-check-label{min-height:44px;justify-content:flex-start;}
+  .roster-check-label span{display:inline;font-size:12px;color:var(--text-2);}
+  .roster-tbl tbody{display:block;}
+  .roster-tbl tbody tr[data-roster-user]{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:12px 0;border-bottom:1px solid var(--border);}
+  .roster-tbl tbody tr[data-roster-user] td{display:flex;flex-direction:column;align-items:flex-start;padding:0;border:0;min-width:0;}
+  .roster-tbl td[data-label]::before{content:attr(data-label);font-size:12px;color:var(--text-3);margin-bottom:4px;}
+  .roster-tbl td.roster-check{min-height:44px;justify-content:center;}
+  .roster-tbl .roster-role{max-width:100%;}
+  .roster-tbl .manager-person,.roster-who b{white-space:normal;overflow-wrap:anywhere;}
+  .manager-member-labels{max-width:100%;}
+  .roster-copy-sheet .sheet-body{padding:16px;}
+  .roster-copy-sheet .sheet-foot{flex-wrap:wrap;}
+  .roster-note{font-size:12px;}
+}

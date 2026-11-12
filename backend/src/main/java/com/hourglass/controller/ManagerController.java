@@ -37,15 +37,28 @@ public class ManagerController {
         return ApiResult.ok(managerService.project(ctx.getWsId(), reqId, ctx.getUserId()));
     }
 
-    @GetMapping("/reports")
-    public ApiResult<Map<String, Object>> reports(@RequestParam(required = false) String reqId,
-                                                  @CurrentWorkspace WorkspaceCtx ctx) {
+    public ApiResult<Map<String, Object>> reports(String reqId, WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.reports(ctx.getWsId(), reqId, ctx.getUserId()));
     }
 
-    @GetMapping("/workload")
-    public ApiResult<Map<String, Object>> workload(@CurrentWorkspace WorkspaceCtx ctx) {
+    @GetMapping("/reports")
+    public ApiResult<Map<String, Object>> reports(@RequestParam(required = false) String reqId,
+                                                  @RequestParam(required = false) String roleTitle,
+                                                  @RequestParam(required = false) String companyName,
+                                                  @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(managerService.reports(ctx.getWsId(), reqId, ctx.getUserId(), roleTitle, companyName));
+    }
+
+    public ApiResult<Map<String, Object>> workload(WorkspaceCtx ctx) {
         return ApiResult.ok(managerService.workload(ctx.getWsId(), ctx.getUserId()));
+    }
+
+    @GetMapping("/workload")
+    public ApiResult<Map<String, Object>> workload(@RequestParam(required = false) String reqId,
+                                                   @RequestParam(required = false) String roleTitle,
+                                                   @RequestParam(required = false) String companyName,
+                                                   @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(managerService.workload(ctx.getWsId(), ctx.getUserId(), reqId, roleTitle, companyName));
     }
 
     @GetMapping("/risks")

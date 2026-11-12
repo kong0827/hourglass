@@ -13,7 +13,13 @@ public class ProjectMemberRoleView {
     private String displayName;
     private String username;
     private String companyName;
+    /** 项目覆盖原值；没有覆盖行为 null，不能回填空间默认。 */
     private String roleTitle;
+    private String jobTitle;
+    private String effectiveRoleTitle;
+    /** project / workspace / unset */
+    private String roleSource;
+    private java.util.List<String> secondaryRoleTitles = java.util.Collections.emptyList();
     /** write / read */
     private String access;
     /** 项目负责人 / 空间主 / 空间管理员 / 空间默认参与 / 项目授权 */

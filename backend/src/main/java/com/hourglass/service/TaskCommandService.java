@@ -14,6 +14,8 @@ import com.hourglass.entity.Requirement;
 import com.hourglass.entity.RequirementDoc;
 import com.hourglass.entity.Subtask;
 import com.hourglass.entity.Task;
+import com.hourglass.entity.WorkspaceMember;
+import java.util.Objects;
 import com.hourglass.mapper.CategoryMapper;
 import com.hourglass.mapper.DemandMapper;
 import com.hourglass.mapper.DevBranchMapper;
@@ -196,7 +198,7 @@ public class TaskCommandService {
         if (old.getDeletedAt() != null) {
             throw AppException.notFound("任务不存在");
         }
-        if (!java.util.Objects.equals(observed.getReqId(), old.getReqId())) {
+        if (!Objects.equals(observed.getReqId(), old.getReqId())) {
             throw new AppException(409, "任务所属项目已变化，请刷新后重试");
         }
         projectAccess.assertViewTask(workspaceId, userId, old);
@@ -204,6 +206,8 @@ public class TaskCommandService {
         Task t = new Task();
         t.setId(id);
         t.setWorkspaceId(workspaceId);
+        // applyRequest 需要原项目快照判定历史负责人绑定是否保持不变。
+        t.setReqId(old.getReqId());
         applyRequest(userId, workspaceId, t, req, old.getOwnerUserId());
         projectAccess.assertWriteForUpdate(workspaceId, userId, t.getReqId());
         /* 旧客户端 / 快捷编辑没传里程碑时保留原值，避免被默认值清掉 */
@@ -246,7 +250,7 @@ public class TaskCommandService {
         if (t.getDemandId() != null) {
             Demand demand = taskMapper.selectDemandForScope(workspaceId, t.getDemandId());
             if (demand == null || !workspaceId.equals(demand.getWorkspaceId())
-                    || !java.util.Objects.equals(demand.getReqId(), t.getReqId())) {
+                    || !Objects.equals(demand.getReqId(), t.getReqId())) {
                 t.setDemandId(null);
             }
         }
@@ -254,7 +258,7 @@ public class TaskCommandService {
             assertDemandProjectUnchanged(workspaceId, t.getDemandId(), demandProject);
         }
         validateNewDemandLink(workspaceId, old, t);
-        if (!java.util.Objects.equals(old.getReqId(), t.getReqId())) {
+        if (!Objects.equals(old.getReqId(), t.getReqId())) {
             if (!taskMapper.selectTaskRecordIdsForScope(workspaceId, id).isEmpty()) {
                 throw AppException.badRequest("任务已有正式发布记录，不能改变项目；执行状态仍可独立调整");
             }
@@ -268,7 +272,7 @@ public class TaskCommandService {
             Task epic = taskMapper.selectById(t.getEpicId());
             if (epic == null || !workspaceId.equals(epic.getWorkspaceId()) || epic.getDeletedAt() != null
                     || !"epic".equals(epic.getItemType())
-                    || !java.util.Objects.equals(epic.getReqId(), t.getReqId())) {
+                    || !Objects.equals(epic.getReqId(), t.getReqId())) {
                 t.setEpicId(null);
             }
         }
@@ -323,7 +327,7 @@ public class TaskCommandService {
             String detail = Texts.cut("更新任务「" + t.getTitle() + "」：" + String.join("；", changes), 250);
             audit.log(userId, workspaceId, id, "update", detail);
         }
-        boolean ownerChanged = !java.util.Objects.equals(old.getOwnerUserId(), t.getOwnerUserId());
+        boolean ownerChanged = !Objects.equals(old.getOwnerUserId(), t.getOwnerUserId());
         if (ownerChanged && t.getOwnerUserId() != null && !t.getOwnerUserId().equals(userId)) {
             // 同一次保存即使还改了标题、日期等，也只合并为一条负责人变更通知。
             notificationEvents.notify(t.getOwnerUserId(), workspaceId,
@@ -359,6 +363,7 @@ public class TaskCommandService {
 
     private void applyRequest(String userId, String workspaceId, Task t, TaskSaveRequest req,
                               String oldOwnerUserId) {
+        String oldProjectId = t.getReqId();
         t.setTitle(req.getTitle().trim());
         t.setDescription(Texts.trimToNull(req.getDescription()));
         t.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
@@ -374,11 +379,6 @@ public class TaskCommandService {
             AppUser ou = userMapper.selectById(ownerUserId);
             if (ou == null) {
                 throw AppException.badRequest("负责人账号不存在：" + ownerUserId);
-            }
-            if (memberMapper.selectMember(workspaceId, ownerUserId) == null
-                    && !ownerUserId.equals(oldOwnerUserId)) {
-                /* 成员已离开空间的历史任务允许原样保存，但不能再把任务新指派给非成员 */
-                throw AppException.badRequest("负责人不是该空间成员：" + ownerUserId);
             }
             t.setOwnerUserId(ownerUserId);
             if (owner == null || owner.isEmpty()) {
@@ -486,6 +486,12 @@ public class TaskCommandService {
             }
             if (reqId == null) {
                 reqId = demand.getReqId();
+                if (reqId != null) {
+                    Requirement targetProject = reqMapper.selectById(reqId);
+                    if (targetProject == null || !workspaceId.equals(targetProject.getWorkspaceId())) {
+                        throw AppException.badRequest("所属项目不存在：" + reqId);
+                    }
+                }
                 t.setReqId(reqId);
             } else if (!reqId.equals(demand.getReqId())) {
                 throw AppException.badRequest("所选需求池需求不属于该项目");
@@ -493,6 +499,20 @@ public class TaskCommandService {
             t.setDemandId(demandId);
         } else {
             t.setDemandId(null);
+        }
+        /* 负责人使用花名册同口径：非 viewer 且可见（read 也可选）。
+           仅负责人和项目都未变化时保留已撤权/离开成员的历史绑定；文本负责人仍兼容。
+           放在项目校验及需求联动之后，必须基于最终项目验证，不能用赋值前的 reqId。 */
+        if (ownerUserId != null && (!Objects.equals(ownerUserId, oldOwnerUserId)
+                || !Objects.equals(reqId, oldProjectId))) {
+            WorkspaceMember target = memberMapper.selectMember(workspaceId, ownerUserId);
+            if (target == null) throw AppException.badRequest("负责人不是该空间成员：" + ownerUserId);
+            if (ProjectAccessService.isViewer(target.getRole())) {
+                throw AppException.badRequest("空间查看者不能成为任务负责人");
+            }
+            if (reqId != null && !projectAccess.canView(workspaceId, ownerUserId, reqId)) {
+                throw AppException.badRequest("负责人当前看不到目标项目");
+            }
         }
         /* Epic 校验放在需求联动之后：需求可能把任务补到某个项目，归属必须与最终项目一致 */
         t.setEpicId(validateEpic(workspaceId, t, Texts.trimToNull(req.getEpicId())));
@@ -529,7 +549,7 @@ public class TaskCommandService {
         if (foundVersion != null) {
             ProjectVersion found = versionMapper.selectById(foundVersion);
             if (found == null || !workspaceId.equals(found.getWorkspaceId())
-                    || !java.util.Objects.equals(t.getReqId(), found.getReqId())) {
+                    || !Objects.equals(t.getReqId(), found.getReqId())) {
                 throw AppException.badRequest("发现版本不属于任务所属项目");
             }
         }
@@ -590,7 +610,7 @@ public class TaskCommandService {
         if (!"epic".equals(epic.getItemType())) {
             throw AppException.badRequest("所选任务不是史诗：" + epic.getTitle());
         }
-        if (!java.util.Objects.equals(epic.getReqId(), self.getReqId())) {
+        if (!Objects.equals(epic.getReqId(), self.getReqId())) {
             throw AppException.badRequest("史诗须与任务属于同一项目：" + epic.getTitle());
         }
         /* 历史数据可能已存在多级归属，沿祖先向上检查，防止 A→B→A 循环 */
@@ -739,7 +759,7 @@ public class TaskCommandService {
     private void assertDemandProjectUnchanged(String workspaceId, String demandId, String observedProject) {
         if (demandId != null) {
             Demand current = taskMapper.selectDemandForScope(workspaceId, demandId);
-            if (current == null || !java.util.Objects.equals(observedProject, current.getReqId())) {
+            if (current == null || !Objects.equals(observedProject, current.getReqId())) {
                 throw new AppException(409, "需求所属项目已变化，请刷新后重试");
             }
         }
@@ -747,7 +767,7 @@ public class TaskCommandService {
 
     private void validateNewDemandLink(String workspaceId, Task old, Task task) {
         if (task.getDemandId() == null || (old != null
-                && java.util.Objects.equals(old.getDemandId(), task.getDemandId()))) {
+                && Objects.equals(old.getDemandId(), task.getDemandId()))) {
             return;
         }
         Demand demand = taskMapper.selectDemandForScope(workspaceId, task.getDemandId());
@@ -758,7 +778,7 @@ public class TaskCommandService {
 
     private void logDemandChange(String userId, String workspaceId, Task old, Task task) {
         String beforeId = old == null ? null : old.getDemandId();
-        if (!java.util.Objects.equals(beforeId, task.getDemandId())) {
+        if (!Objects.equals(beforeId, task.getDemandId())) {
             audit.logChange(userId, workspaceId, task.getId(), "demand_change", "关联需求变更",
                     demandState(workspaceId, beforeId), demandState(workspaceId, task.getDemandId()), null);
         }

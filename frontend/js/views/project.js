@@ -11,6 +11,7 @@ import { UI, esc, toast } from "../core/ui.js";
 import { loadCategories } from "../core/app.js";
 import { avatarHTML, fmtMinutesShort, typeBadgeHTML } from "../lib/format.js";
 import { companyChipHTML } from "../lib/company.js";
+import { DEFAULT_ROLE_TITLES, loadMemberLabelOptions, effectiveMemberRole, memberRoleTitles, labelFilterOption, labelFilterText } from "../lib/member-labels.js";
 import { loadReqs } from "./board.js";
 import { caliberHTML, downloadCsv, fmtDate, fmtHours, loadBarHTML, openTaskTable, taskStatusName } from "./manager-shared.js";
 
@@ -27,14 +28,24 @@ window.addEventListener("ds:delivery-changed", function(e){
   else deliveryCache = Object.create(null);
   if(document.body.dataset.view === "project" && currentMode() === "board") loadProject({ silent:true });
 });
-/* 设置页改了公司后，花名册的公司列要重新取数，避免继续显示旧标签 */
-window.addEventListener("ds:member-company-changed", function(){
-  rosterCache.key = "";
-  rosterCache.data = null;
-  if(document.body.dataset.view === "project" && projectTab === "roles" && cache && cache.project){
-    loadRoster(cache.project.id, true);
-  }
+/* 标签变更按空间/项目失效；异步写入完成不能回刷用户已切换到的项目。 */
+["ds:project-roles-changed","ds:member-company-changed","ds:member-job-title-changed","ds:member-label-options-changed","ds:member-roster-changed"].forEach(function(name){
+  window.addEventListener(name, function(e){
+    var d = e && e.detail || {};
+    var eventWs = d.workspaceId || workspaceId();
+    if(rosterCache.key && rosterCache.key.indexOf(eventWs + ":") === 0 && (!d.projectId || rosterCache.key === eventWs + ":" + d.projectId)){
+      rosterCache.key = ""; rosterCache.data = null; rosterCache.seq++;
+    }
+    if(eventWs !== workspaceId() || (d.projectId && d.projectId !== rt.managerProjectId)) return;
+    seq++;
+    if(document.body.dataset.view === "project"){
+      if(projectTab === "roles") paintRoster();
+      loadProject({ silent:true });
+    }
+  });
 });
+var projectWorkspaceId = "", memberFilter = { companyName:"", roleTitle:"" };
+function workspaceId(){ return rt.currentWs && rt.currentWs.id || ""; }
 var effectiveMode = null, drillSort = "default", drillOnlyRisk = false, drillInitialized = false;
 var projectTab = (function(){
   try{ return localStorage.getItem(TAB_KEY) || "overview"; }catch(e){ return "overview"; }
@@ -62,8 +73,9 @@ function enterProjectView(){
 /* 临时覆盖只影响本次浏览：点项目名跳看板不改写用户持久化偏好 */
 function currentMode(){ return effectiveMode || listPrefs.viewMode(VIEW_KEY); }
 function selectableReqs(){
-  var list = rt.reqList.filter(function(r){ return !r.archivedAt || r.id === rt.managerProjectId; });
-  return list.length ? list : rt.reqList;
+  var visible = rt.reqList.filter(function(r){ return !r.workspaceId || r.workspaceId === workspaceId(); });
+  var list = visible.filter(function(r){ return !r.archivedAt || r.id === rt.managerProjectId; });
+  return list.length ? list : visible;
 }
 function selectedProject(){
   var list = selectableReqs();
@@ -79,18 +91,23 @@ function loadProject(opts){
   if(currentMode() === "drill"){ loadDrill(opts); return; }
   var selected = selectedProject();
   if(!selected){
+    seq++; cache = null; rosterCache.seq++; rosterCache.key = ""; rosterCache.data = null;
     body.innerHTML = UI.emptyState({icon:"folder", title:"还没有项目", text:"先在「项目」里创建项目。"});
     return;
   }
-  if(!cache || !cache.project || cache.project.id !== selected.id){
+  var wsId = workspaceId();
+  if(projectWorkspaceId !== wsId || !cache || !cache.project || cache.project.id !== selected.id){
     moduleUi = { adding:false, deleting:"" };
+    memberFilter = { companyName:"", roleTitle:"" };
+    rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
   }
+  projectWorkspaceId = wsId;
   var current = ++seq;
   if(!opts.silent) body.innerHTML = UI.skeletonCards(3);
   API.get("/api/manager/projects/" + encodeURIComponent(selected.id)).then(function(data){
-    if(current !== seq) return;
+    if(current !== seq || wsId !== workspaceId() || selected.id !== rt.managerProjectId) return;
     cache = data; renderProject();
-  }).catch(function(ex){ if(current === seq) body.innerHTML = UI.errorState(ex.message); });
+  }).catch(function(ex){ if(current === seq && wsId === workspaceId() && selected.id === rt.managerProjectId) body.innerHTML = UI.errorState(ex.message); });
 }
 function metric(label, value, foot, kind){
   return '<button class="manager-kpi" type="button" data-project-metric="' + kind + '"><span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(foot) + '</small></button>';
@@ -111,110 +128,244 @@ function weeklyChart(weeks){
 function memberRows(members){
   if(!members.length) return '<tr><td colspan="6" class="manager-empty-cell">暂无未完成工作项</td></tr>';
   return members.map(function(m){
-    return '<tr data-member-key="' + esc(m.key) + '" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span></td>'
+    return '<tr data-member-key="' + esc(m.key) + '" tabindex="0" title="查看该成员的项目工作项"><td><span class="manager-person">' + avatarHTML(m.name, "sm") + '<b>' + esc(m.name) + '</b></span><div class="manager-member-labels">' + companyChipHTML(m.companyName) + (m.jobTitle ? '<span class="roster-empty">空间职能：' + esc(m.jobTitle) + '</span>' : '') + memberRoleTitles(m).map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("") + '</div></td>'
       + '<td class="num">' + m.taskCount + '</td><td class="num">' + fmtHours(m.remainingMinutes) + '</td>'
       + '<td class="num">' + fmtHours(m.actualWeekMinutes) + '</td><td>' + loadBarHTML(m.loadPct) + '</td>'
       + '<td>' + (m.overloaded ? '<span class="mini-tag over">超载</span>' : (m.loadPct >= 85 ? '<span class="mini-tag warn">接近满载</span>' : '<span class="mini-tag ok">正常</span>')) + '</td></tr>';
   }).join("");
 }
-/* ---------- 成员与角色：公司/角色只是展示标签，不改变项目权限 ---------- */
-var ROSTER_ROLES = ["项目经理","项目负责人","产品负责人","产品","后端开发","前端开发","测试","测试负责人","技术负责人","视觉设计","交互设计","实施顾问","客户项目负责人","业务代表"];
-var rosterCache = { key:"", data:null, loading:false, error:null, seq:0 };
+/* ---------- 成员与角色：空间默认职能 + 项目主角色覆盖 + 兼岗 ---------- */
+var rosterCache = { key:"", data:null, loading:false, error:null, seq:0, options:{} };
+var rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
+var rosterWrites = new Set();
+function uniqueLabels(values){ return Array.from(new Set(values.filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,"zh-CN"); }); }
+function roleCandidates(current){
+  return uniqueLabels((rosterCache.options.roleTitles || DEFAULT_ROLE_TITLES).concat(["全栈工程师","产品经理",current === "__custom__" ? "" : current || ""]))
+    .filter(function(role){ return role !== "__custom__" && role !== "__unset__"; });
+}
+function filterLabelOptions(values, selected, all, unset){
+  return '<option value="">' + all + '</option><option value="__unset__"' + (selected === "__unset__" ? ' selected' : '') + '>' + unset + '</option>'
+    + uniqueLabels(values.concat(selected && selected !== "__unset__" ? [labelFilterText(selected)] : [])).map(function(v){
+      var key = labelFilterOption(v);
+      return '<option value="' + esc(key) + '"' + (selected === key ? ' selected' : '') + '>' + esc(v) + '</option>';
+    }).join("");
+}
+function matchesMemberLabels(m, f){
+  var roles = memberRoleTitles(m), company = String(m.companyName || "").trim();
+  return (!f.companyName || (f.companyName === "__unset__" ? !company : company === labelFilterText(f.companyName)))
+    && (!f.roleTitle || (f.roleTitle === "__unset__" ? !roles.length : roles.indexOf(labelFilterText(f.roleTitle)) !== -1));
+}
+function memberLabelFilters(list, f, prefix){
+  return '<div class="manager-label-filters"><label>公司 <select class="mini-select" data-' + prefix + '-filter="companyName">'
+    + filterLabelOptions(list.map(function(m){ return m.companyName; }), f.companyName, "全部公司", "未设公司") + '</select></label>'
+    + '<label>角色 <select class="mini-select" data-' + prefix + '-filter="roleTitle">'
+    + filterLabelOptions(list.reduce(function(a,m){ return a.concat(memberRoleTitles(m)); }, []), f.roleTitle, "全部角色", "未设角色") + '</select></label>'
+    + '<button class="btn sm ghost" type="button" data-' + prefix + '-clear>清除筛选</button></div>';
+}
 function rosterPanel(){
-  return '<section class="manager-panel"><div class="manager-panel-head"><b>成员与角色</b><span id="rosterSummary">加载中…</span></div>'
-    + '<p class="roster-note">公司由空间主 / 管理员维护，是空间级展示标签；项目角色由项目负责人或空间管理员维护，一人一个主角色。两者都只影响展示与筛选，不改变项目可见范围和工作项权限。空间查看者不参与项目，不在此列表。</p>'
-    + '<div class="tbl-wrap"><table class="manager-tbl roster-tbl"><thead><tr><th>成员</th><th>公司</th><th>本项目角色</th><th>项目权限</th><th>可见来源</th></tr></thead>'
-    + '<tbody id="rosterBody"><tr><td colspan="5" class="manager-empty-cell">加载中…</td></tr></tbody></table></div></section>';
+  return '<section class="manager-panel roster-panel"><div class="manager-panel-head"><b>成员与角色</b><span id="rosterSummary" aria-live="polite">加载中…</span></div>'
+    + '<p class="roster-note">公司与默认职能在空间设置中维护；本项目主角色留空时沿用空间默认职能，可另设最多 5 个兼岗。角色只影响展示与筛选，不改变权限；空间查看者不参与项目。</p>'
+    + '<div id="rosterTools"></div><div class="tbl-wrap"><table class="manager-tbl roster-tbl"><thead id="rosterHeader"></thead>'
+    + '<tbody id="rosterBody"><tr><td colspan="8" class="manager-empty-cell">加载中…</td></tr></tbody></table></div></section>';
+}
+function roleOptions(role){
+  return '<option value=""' + (!role ? ' selected' : '') + '>沿用空间默认职能</option>'
+    + roleCandidates(role).map(function(r){ return '<option value="' + esc(r) + '"' + (r === role ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("")
+    + '<option value="__custom__"' + (role === "__custom__" ? ' selected' : '') + '>自定义角色…</option>';
 }
 function rosterRoleSelect(m, canEdit){
-  var role = m.roleTitle || "";
-  if(!canEdit){
-    return role ? '<span class="tag tag-ghost">' + esc(role) + '</span>' : '<span class="roster-empty">未设角色</span>';
-  }
-  var options = ROSTER_ROLES.slice();
-  if(role && options.indexOf(role) === -1) options.unshift(role);
-  return '<select class="mini-select roster-role" data-roster-role="' + esc(m.userId) + '" aria-label="项目角色">'
-    + '<option value=""' + (role ? "" : " selected") + '>未设角色</option>'
-    + options.map(function(r){
-      return '<option value="' + esc(r) + '"' + (r === role ? " selected" : "") + '>' + esc(r) + '</option>';
-    }).join("") + '</select>';
+  var role = m.roleTitle || "", effective = effectiveMemberRole(m);
+  var source = m.roleSource || (role ? "project" : (m.jobTitle ? "workspace" : "unset"));
+  return (canEdit ? '<select class="mini-select roster-role" data-roster-role="' + esc(m.userId) + '" aria-label="' + esc(m.displayName || m.username || m.userId) + '的本项目主角色"' + (rosterBusy() ? ' disabled' : '') + '>' + roleOptions(role) + '</select>'
+    : '<span class="tag tag-ghost">' + esc(effective || "未设角色") + '</span>')
+    + '<small class="roster-role-source">' + esc(source === "project" ? "本项目覆盖 · " + effective : (source === "workspace" ? "空间默认 · " + effective : "未设职能（空间与项目均未设置）")) + '</small>';
 }
+function rosterBusy(){ return rosterWrites.has(rosterCache.key); }
+function filteredRoster(){ return (rosterCache.data && rosterCache.data.members || []).filter(function(m){ return matchesMemberLabels(m, rosterUi); }); }
+function rosterContext(){
+  var pid = cache && cache.project && (cache.project.reqId || cache.project.id), ws = workspaceId();
+  if(!pid || !ws || rosterCache.key !== ws + ":" + pid || !rosterCache.data || !rosterCache.data.canEditRole || rosterCache.loading) return null;
+  return { projectId:pid, workspaceId:ws, key:rosterCache.key, revision:rosterCache.seq,
+    base:"/api/workspaces/" + encodeURIComponent(ws) + "/projects/" + encodeURIComponent(pid) + "/member-roles" };
+}
+function sameRoster(ctx){ return !!ctx && ctx.key === rosterCache.key && ctx.workspaceId === workspaceId() && ctx.projectId === rt.managerProjectId; }
+/* 候选字典是空间级配置，只有空间主/管理员能维护；项目负责人可改角色但不能改字典。 */
+function canManageLabelOptions(){
+  var ws = rt.currentWs;
+  return !!ws && ws.type === "shared" && ["owner", "admin"].indexOf(ws.myRole) !== -1;
+}
+function editableRoster(ctx){ return sameRoster(ctx) && ctx.revision === rosterCache.seq && rosterCache.data && rosterCache.data.canEditRole; }
 function paintRoster(){
-  var body = $("rosterBody"), summary = $("rosterSummary");
+  var body = $("rosterBody"), summary = $("rosterSummary"), tools = $("rosterTools"), header = $("rosterHeader");
   if(!body) return;
-  if(rosterCache.error){
-    if(summary) summary.textContent = "加载失败";
-    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">花名册加载失败：' + esc(rosterCache.error.message || "网络异常")
-      + ' <button class="btn sm" type="button" data-roster-retry>重试</button></td></tr>';
+  if(tools) tools.innerHTML = "";
+  if(header) header.innerHTML = "";
+  if(rosterCache.error || rosterCache.loading || !rosterCache.data){
+    if(summary) summary.textContent = rosterCache.error ? "加载失败" : "加载中…";
+    body.innerHTML = '<tr><td colspan="8" class="manager-empty-cell">' + (rosterCache.error ? '花名册加载失败：' + esc(rosterCache.error.message || "网络异常") + ' <button class="btn sm" type="button" data-roster-retry>重试</button>' : '加载中…') + '</td></tr>';
     return;
   }
-  if(rosterCache.loading || !rosterCache.data){
-    if(summary) summary.textContent = "加载中…";
-    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">加载中…</td></tr>';
-    return;
-  }
-  var list = rosterCache.data.members || [];
-  var canEdit = !!rosterCache.data.canEditRole;
-  var companies = {}, unlabeled = 0;
-  list.forEach(function(m){
-    var name = String(m.companyName || "").trim();
-    if(name) companies[name] = 1; else unlabeled++;
-  });
-  if(summary){
-    summary.textContent = list.length + " 位成员 · " + Object.keys(companies).length + " 家公司" + (unlabeled ? " · " + unlabeled + " 人未标注" : "");
-  }
-  if(!list.length){
-    body.innerHTML = '<tr><td colspan="5" class="manager-empty-cell">当前没有可见的项目成员</td></tr>';
-    return;
-  }
+  var all = rosterCache.data.members || [], list = filteredRoster(), canEdit = !!rosterCache.data.canEditRole, busy = rosterBusy();
+  var disabled = busy ? ' disabled' : '';
+  /* 仅对当前过滤结果执行批量操作，隐藏行不保留选中。 */
+  var visibleIds = new Set(list.map(function(m){ return m.userId; }));
+  rosterUi.selected.forEach(function(id){ if(!visibleIds.has(id)) rosterUi.selected.delete(id); });
+  if(summary) summary.textContent = list.length + " / " + all.length + " 位成员 · " + uniqueLabels(all.map(function(m){ return m.companyName; })).length + " 家公司" + (busy ? " · 正在处理…" : "");
+  if(tools) tools.innerHTML = memberLabelFilters(all, rosterUi, "roster")
+    + (canEdit ? '<div class="roster-actions"><button class="btn sm" type="button" data-roster-copy' + disabled + '>从其他项目复制</button>'
+      + (canManageLabelOptions() ? '<button class="btn sm ghost" type="button" data-roster-options' + disabled + '>管理角色候选</button>' : '') + '</div>'
+      + '<div class="roster-batch"><span aria-live="polite">已选 ' + rosterUi.selected.size + ' 人</span><label>主角色 <select class="mini-select" data-roster-batch-role' + disabled + '>' + roleOptions(rosterUi.batchRole) + '</select></label>'
+      + '<button class="btn sm primary" type="button" data-roster-batch' + (busy || !rosterUi.selected.size ? ' disabled' : '') + '>批量设置</button><button class="btn sm ghost" type="button" data-roster-unselect' + disabled + '>取消选择</button>'
+      + '<small>沿用默认只清除主角色覆盖，不清除兼岗。全选仅当前过滤行。</small></div>' : '');
+  if(header) header.innerHTML = '<tr>' + (canEdit ? '<th class="roster-check"><label class="roster-check-label"><input type="checkbox" data-roster-all aria-label="全选当前过滤成员"' + (list.length && rosterUi.selected.size === list.length ? ' checked' : '') + (busy || !list.length ? ' disabled' : '') + '><span>全选当前过滤成员</span></label></th>' : '')
+    + '<th>成员</th><th>公司</th><th>空间默认职能</th><th>本项目主角色</th><th>兼岗</th><th>项目权限</th><th>可见来源</th></tr>';
+  var allBox = header && header.querySelector("[data-roster-all]");
+  if(allBox) allBox.indeterminate = rosterUi.selected.size > 0 && rosterUi.selected.size < list.length;
   body.innerHTML = list.map(function(m){
     var name = m.displayName || m.username || m.userId;
+    var secondary = m.secondaryRoleTitles || [];
     return '<tr data-roster-user="' + esc(m.userId) + '">'
-      + '<td><span class="manager-person">' + avatarHTML(name, "sm") + '<span class="roster-who"><b>' + esc(name) + '</b><small>@' + esc(m.username || m.userId) + '</small></span></span></td>'
-      + '<td>' + companyChipHTML(m.companyName) + '</td>'
-      + '<td>' + rosterRoleSelect(m, canEdit) + '</td>'
-      + '<td><span class="roster-access ' + (m.access === "read" ? "read" : "write") + '">' + (m.access === "read" ? "只读" : "可参与") + '</span></td>'
-      + '<td><span class="roster-source">' + esc(m.source || "") + '</span></td>'
-      + '</tr>';
-  }).join("");
+      + (canEdit ? '<td class="roster-check"><label class="roster-check-label"><input type="checkbox" data-roster-check="' + esc(m.userId) + '" aria-label="选择' + esc(name) + '"' + (rosterUi.selected.has(m.userId) ? ' checked' : '') + disabled + '><span>选择' + esc(name) + '</span></label></td>' : '')
+      + '<td data-label="成员"><span class="manager-person">' + avatarHTML(name, "sm") + '<span class="roster-who"><b>' + esc(name) + '</b><small>@' + esc(m.username || m.userId) + '</small></span></span></td>'
+      + '<td data-label="公司">' + companyChipHTML(m.companyName) + '</td>'
+      + '<td data-label="空间默认职能">' + esc(m.jobTitle || "未设职能") + '</td>'
+      + '<td data-label="本项目主角色">' + rosterRoleSelect(m, canEdit) + '</td>'
+      + '<td data-label="兼岗"><div class="manager-member-labels">' + secondary.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("")
+      + (canEdit ? '<button class="btn sm ghost" type="button" data-roster-secondary="' + esc(m.userId) + '" aria-label="编辑' + esc(name) + '的兼岗"' + disabled + '>' + (secondary.length ? "编辑兼岗" : "+ 添加兼岗") + '</button>' : (!secondary.length ? '<span class="roster-empty">无兼岗</span>' : '')) + '</div></td>'
+      + '<td data-label="项目权限"><span class="roster-access ' + (m.access === "read" ? "read" : "write") + '">' + (m.access === "read" ? "只读" : "可参与") + '</span></td>'
+      + '<td data-label="可见来源"><span class="roster-source">' + esc(m.source || "") + '</span></td></tr>';
+  }).join("") || '<tr><td colspan="' + (canEdit ? 8 : 7) + '" class="manager-empty-cell">' + (all.length ? '没有匹配的成员，请清除筛选' : '当前没有可见的项目成员') + '</td></tr>';
 }
 function loadRoster(reqId, force){
-  if(!reqId || !rt.currentWs){ paintRoster(); return Promise.resolve(null); }
-  var key = rt.currentWs.id + ":" + reqId;
+  var ws = workspaceId();
+  if(!reqId || !ws) return Promise.resolve(null);
+  var key = ws + ":" + reqId;
   if(!force && rosterCache.key === key){ paintRoster(); return Promise.resolve(rosterCache.data); }
-  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1 };
+  if(rosterCache.key && rosterCache.key !== key) rosterUi = { companyName:"", roleTitle:"", selected:new Set(), batchRole:"" };
+  rosterCache = { key:key, data:null, loading:true, error:null, seq:rosterCache.seq + 1, options:{} };
   var my = rosterCache.seq;
-  return API.get("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(reqId) + "/members")
-    .then(function(data){
-      if(my !== rosterCache.seq) return null;
-      rosterCache.data = data; rosterCache.loading = false;
-      paintRoster();
-      return data;
-    }).catch(function(ex){
-      if(my !== rosterCache.seq) return null;
-      rosterCache.loading = false; rosterCache.error = ex;
-      paintRoster();
-      return null;
-    });
-}
-function saveRosterRole(sel){
-  var m = (rosterCache.data && rosterCache.data.members || []).filter(function(x){ return x.userId === sel.dataset.rosterRole; })[0];
-  if(!m || !rt.currentWs) return;
-  var title = sel.value || "";
-  var prev = m.roleTitle || "";
-  sel.disabled = true;
-  API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/projects/" + encodeURIComponent(cache.project.id)
-      + "/member-roles/" + encodeURIComponent(m.userId), { roleTitle: title }).then(function(){
-    m.roleTitle = title || null;
-    var name = m.displayName || m.username || m.userId;
-    toast(title ? ("已标注「" + name + "」为「" + title + "」") : ("已清除「" + name + "」的项目角色"), "fs");
-    window.dispatchEvent(new CustomEvent("ds:project-roles-changed", { detail:{ projectId: cache.project.id } }));
-    paintRoster();
+  paintRoster();
+  return Promise.all([
+    API.get("/api/workspaces/" + encodeURIComponent(ws) + "/projects/" + encodeURIComponent(reqId) + "/members"),
+    loadMemberLabelOptions(ws, !!force).catch(function(){ return { roleTitles:DEFAULT_ROLE_TITLES }; })
+  ]).then(function(values){
+    if(my !== rosterCache.seq || key !== rosterCache.key || ws !== workspaceId() || reqId !== rt.managerProjectId) return null;
+    rosterCache.data = values[0]; rosterCache.options = values[1] || {}; rosterCache.loading = false;
+    paintRoster(); return values[0];
   }).catch(function(ex){
-    sel.value = prev;
-    sel.disabled = false;
-    toast(ex.message || "角色标注失败", "bad");
+    if(my !== rosterCache.seq || ws !== workspaceId() || reqId !== rt.managerProjectId) return null;
+    rosterCache.loading = false; rosterCache.error = ex; paintRoster(); return null;
   });
+}
+function startRosterWrite(ctx){
+  if(!editableRoster(ctx) || rosterWrites.has(ctx.key)) return false;
+  rosterWrites.add(ctx.key); paintRoster(); return true;
+}
+function finishRosterWrite(ctx){ rosterWrites.delete(ctx.key); if(sameRoster(ctx)) paintRoster(); }
+function announceRosterChange(ctx, message){
+  toast(message, "fs");
+  window.dispatchEvent(new CustomEvent("ds:project-roles-changed", { detail:{ projectId:ctx.projectId, workspaceId:ctx.workspaceId } }));
+}
+function customRole(value, prev){
+  if(value !== "__custom__") return Promise.resolve(value || "");
+  return UI.showPrompt({ title:"自定义项目主角色", desc:"只设置本项目主角色；不修改空间默认职能或兼岗。", label:"角色名称", value:prev || "", maxLength:32, required:true });
+}
+function rosterMember(id){ return (rosterCache.data && rosterCache.data.members || []).filter(function(m){ return m.userId === id; })[0]; }
+function saveRosterRole(sel){
+  var m = rosterMember(sel.dataset.rosterRole), ctx = rosterContext(), value = sel.value;
+  if(!m || !startRosterWrite(ctx)) return;
+  customRole(value, m.roleTitle).then(function(title){
+    if(title === null || !editableRoster(ctx)) return;
+    return API.put(ctx.base + "/" + encodeURIComponent(m.userId), { roleTitle:title }).then(function(){
+      rosterWrites.delete(ctx.key);
+      announceRosterChange(ctx, title ? "已设置项目主角色「" + title + "」" : "已沿用空间默认职能，兼岗保持不变");
+    });
+  }).catch(function(ex){ toast(ex.message || "角色设置失败，请重试", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
+}
+function saveRosterSecondary(id){
+  var m = rosterMember(id), ctx = rosterContext();
+  if(!m || !startRosterWrite(ctx)) return;
+  UI.showPrompt({ title:"编辑兼岗", label:"兼岗角色（逗号分隔）", value:(m.secondaryRoleTitles || []).join("，"), required:false, maxLength:164,
+    desc:"最多 5 个角色，用中文或英文逗号分隔，每个最多 32 字。重复项自动合并；留空清除兼岗，不改变主角色或空间默认职能。" }).then(function(value){
+      if(value === null || !editableRoster(ctx)) return;
+      var roles = uniqueLabels(value.split(/[,，]/).map(function(s){ return s.trim(); }));
+      if(roles.length > 5 || roles.some(function(r){ return Array.from(r).length > 32; })) throw new Error("最多 5 个兼岗，每个最多 32 字；请重新编辑");
+      return API.put(ctx.base + "/" + encodeURIComponent(id), { roleTitle:m.roleTitle || "", secondaryRoleTitles:roles }).then(function(){
+        rosterWrites.delete(ctx.key); announceRosterChange(ctx, "已更新兼岗，主角色保持不变");
+      });
+    }).catch(function(ex){ toast(ex.message || "兼岗设置失败，请重试", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
+}
+function chooseRosterBatchRole(sel){
+  var value = sel.value, ctx = rosterContext();
+  if(value !== "__custom__"){ if(ctx && !rosterBusy()) rosterUi.batchRole = value; return; }
+  if(!startRosterWrite(ctx)) return;
+  customRole(value, rosterUi.batchRole).then(function(title){ if(title !== null && editableRoster(ctx)) rosterUi.batchRole = title; })
+    .catch(function(ex){ toast(ex.message || "自定义角色输入失败", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
+}
+function saveRosterBatch(){
+  var ctx = rosterContext(), ids = filteredRoster().filter(function(m){ return rosterUi.selected.has(m.userId); }).map(function(m){ return m.userId; }), value = rosterUi.batchRole;
+  if(!ids.length || !startRosterWrite(ctx)) return;
+  customRole(value, "").then(function(title){
+    if(title === null || !editableRoster(ctx)) return;
+    return UI.showConfirm({ title:"批量设置 " + ids.length + " 位成员", danger:false, okText:"确认设置",
+      msg:esc(title ? "将主角色设为「" + title + "」。" : "只清除本项目主角色覆盖，沿用各自空间默认职能。") + "<br>不修改兼岗、公司或权限。" }).then(function(ok){
+        if(!ok || !editableRoster(ctx)) return;
+        return API.put(ctx.base, { userIds:ids, roleTitle:title }).then(function(result){
+          rosterWrites.delete(ctx.key);
+          if(sameRoster(ctx)){ rosterUi.selected.clear(); rosterUi.batchRole = title; }
+          announceRosterChange(ctx, "已批量更新 " + (result.updated || 0) + " 位成员；兼岗保持不变");
+        });
+      });
+  }).catch(function(ex){ toast(ex.message || "批量设置失败，未更新，请重试", "bad"); }).finally(function(){ finishRosterWrite(ctx); });
+}
+function openRosterCopy(){
+  var ctx = rosterContext();
+  if(!ctx || rosterBusy()) return;
+  var projects = rt.reqList.filter(function(p){ return p.id !== ctx.projectId && (!p.workspaceId || p.workspaceId === ctx.workspaceId); });
+  var layer = document.createElement("div");
+  layer.className = "modal-layer"; layer.setAttribute("role","dialog"); layer.setAttribute("aria-modal","true"); layer.setAttribute("aria-label","从其他项目复制角色");
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); },0); };
+  layer.innerHTML = '<form class="sheet roster-copy-sheet"><div class="sheet-head"><h2>从其他项目复制角色</h2><button class="icon-btn sm" type="button" data-copy-close aria-label="关闭">' + icon("close",15) + '</button></div>'
+    + '<div class="sheet-body"><p class="roster-note">仅复制同空间、双方都有的成员的有效主角色（含空间继承）与兼岗，形成本项目覆盖快照；不修改公司、空间默认职能或权限。默认跳过目标已有主角色覆盖或兼岗的成员；来源未设角色的不复制。</p>'
+    + '<label for="rosterCopyProject">来源项目</label><select id="rosterCopyProject" class="mini-select"' + (!projects.length ? ' disabled' : '') + '>'
+    + projects.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.name) + (p.archivedAt ? '（已归档）' : '') + '</option>'; }).join("") + '</select>'
+    + (!projects.length ? '<p class="roster-note">当前没有可见的同空间其他项目。</p>' : '')
+    + '<label class="roster-copy-overwrite"><input type="checkbox" data-copy-overwrite>覆盖目标已有主角色与兼岗（需再次确认）</label>'
+    + '<p data-copy-status role="status" aria-live="polite"></p></div><div class="sheet-foot"><button class="btn" type="button" data-copy-close>取消</button><button class="btn primary" type="submit"' + (!projects.length ? ' disabled' : '') + '>复制角色</button></div></form>';
+  document.body.appendChild(layer);
+  layer.addEventListener("click",function(e){ if(e.target.closest("[data-copy-close]")) UI.closeModal(layer); });
+  layer.querySelector("form").addEventListener("submit",function(e){
+    e.preventDefault();
+    var sourceId = layer.querySelector("select").value, overwrite = layer.querySelector("[data-copy-overwrite]").checked;
+    if(!projects.some(function(p){ return p.id === sourceId; }) || !startRosterWrite(ctx)) return;
+    var controls = layer.querySelectorAll('select,input,button[type="submit"]');
+    controls.forEach(function(el){ el.disabled = true; });
+    var status = layer.querySelector("[data-copy-status]"); status.textContent = "正在处理…";
+    var confirmation = overwrite ? UI.showConfirm({ title:"覆盖目标角色？", msg:"将覆盖共同成员在本项目已有的主角色与兼岗；此操作无法撤销。", okText:"确认覆盖" }) : Promise.resolve(true);
+    confirmation.then(function(ok){
+      if(!ok || !layer.classList.contains("open") || !editableRoster(ctx)){ status.textContent = "已取消，未复制"; return; }
+      return API.post(ctx.base + "/copy", { sourceProjectId:sourceId, overwrite:overwrite }).then(function(result){
+        var message = "已复制 " + (result.copied || 0) + " 位成员，跳过 " + (result.skipped || 0) + " 位成员";
+        status.textContent = message; rosterWrites.delete(ctx.key); announceRosterChange(ctx, message);
+      });
+    }).catch(function(ex){ status.textContent = ex.message || "复制失败，请重试"; status.setAttribute("role","alert"); })
+      .finally(function(){ finishRosterWrite(ctx); if(layer.isConnected) controls.forEach(function(el){ el.disabled = !editableRoster(ctx); }); });
+  });
+  UI.openModal(layer, "select");
+}
+function filteredProjectMembers(){ return (cache && cache.members || []).filter(function(m){ return matchesMemberLabels(m, memberFilter); }); }
+function projectMemberTasks(key){
+  return (cache.tasks || []).filter(function(t){ return statusBucket(t) !== "done" && statusBucket(t) !== "ended" && (t.ownerUserId || t.owner || "unassigned") === key; });
+}
+function exportProjectMembers(){
+  if(!cache) return;
+  var rows = [["项目成员负载", cache.project.name], ["公司", memberFilter.companyName === "__unset__" ? "未设公司" : labelFilterText(memberFilter.companyName) || "全部公司", "角色", memberFilter.roleTitle === "__unset__" ? "未设角色" : labelFilterText(memberFilter.roleTitle) || "全部角色"], [],
+    ["成员","公司","空间默认职能","项目有效角色（主+兼岗）","未完成工作项","剩余预估(小时)","本周已计(小时)","负载"]];
+  var members = filteredProjectMembers();
+  members.forEach(function(m){ rows.push([m.name,m.companyName || "未设公司",m.jobTitle || "",memberRoleTitles(m).join(" / "),m.taskCount,hoursNum(m.remainingMinutes),hoursNum(m.actualWeekMinutes),m.loadPct + "%"]); });
+  rows.push([], ["成员","工作项","状态","截止","预估(小时)","实际(小时)"]);
+  members.forEach(function(m){ projectMemberTasks(m.key).forEach(function(t){ rows.push([m.name,t.title,taskStatusName(t),fmtDate(t.dueDate),hoursNum(t.estimateMinutes),hoursNum(t.totalMinutes)]); }); });
+  downloadCsv("项目成员负载.csv", rows); toast("已导出当前筛选成员与工作项", "fs");
 }
 function modeSeg(){
   var mode = currentMode();
@@ -499,8 +650,11 @@ function renderProject(){
     + (epics.length ? epics.map(function(ep){
       return '<button class="manager-epic" type="button" data-epic="' + esc(ep.id) + '"><span><i class="tag tag-plum">史诗</i>' + esc(ep.title) + '</span><span class="progress"><i style="width:' + ep.progressPct + '%"></i></span><b>' + ep.done + ' / ' + ep.total + ' 子项 · ' + ep.progressPct + '%</b></button>';
     }).join("") : '<div class="manager-empty-cell">该项目还没有史诗</div>') + '</section>';
-  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div><div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
-    + memberRows(cache.members || []) + '</tbody></table></div></section>';
+  var membersPanel = '<section class="manager-panel"><div class="manager-panel-head"><b>成员负载</b><span>剩余预估 ÷（剩余工作日 × ' + ((Math.round((Number(cache.capacityMinutesPerDay) || 480) / 6) / 10) + 'h') + '）</span></div>'
+    + memberLabelFilters(cache.members || [], memberFilter, "project-member")
+    + '<p class="roster-note">角色匹配本项目有效主角色或兼岗；下钻与导出使用相同成员范围。</p><button class="btn sm" type="button" data-project-member-export>导出当前成员负载</button>'
+    + '<div class="tbl-wrap"><table class="manager-tbl"><thead><tr><th>成员</th><th class="num">未完成工作项</th><th class="num">剩余预估</th><th class="num">本周已计</th><th>负载</th><th>状态</th></tr></thead><tbody>'
+    + memberRows(filteredProjectMembers()) + '</tbody></table></div></section>';
   var panel = projectTab === "epics" ? epicsPanel
     : (projectTab === "members" ? membersPanel
     : (projectTab === "roles" ? rosterPanel() : overview));
@@ -518,13 +672,15 @@ function loadDrill(opts){
   opts = opts || {};
   var body = $("projectBody");
   if(!body) return;
+  var wsId = workspaceId();
+  if(projectWorkspaceId !== wsId){ pfCache = null; expanded = {}; projectWorkspaceId = wsId; }
   var current = ++seq;
   if(!opts.silent && !pfCache) body.innerHTML = UI.skeletonCards(3);
   API.get("/api/manager/portfolio").then(function(data){
-    if(current !== seq) return;
+    if(current !== seq || wsId !== workspaceId()) return;
     pfCache = data; renderDrill();
   }).catch(function(ex){
-    if(current === seq) body.innerHTML = UI.errorState(ex.message);
+    if(current === seq && wsId === workspaceId()) body.innerHTML = UI.errorState(ex.message);
   });
 }
 function statusName(st){
@@ -795,6 +951,21 @@ function onClick(e){
     loadRoster((cache && cache.project && cache.project.id) || rt.managerProjectId, true);
     return;
   }
+  if(e.target.closest("[data-roster-options]")){
+    var labelCtx = rosterContext();
+    if(labelCtx && !rosterBusy()) import("../core/view-loader.js").then(function(m){ return m.loadView("settings"); }).then(function(){
+      if(workspaceId() === labelCtx.workspaceId) window.dispatchEvent(new CustomEvent("ds:open-member-label-options"));
+    }).catch(function(ex){ toast(ex.message || "候选设置打开失败", "bad"); });
+    return;
+  }
+  if(e.target.closest("[data-roster-copy]")){ openRosterCopy(); return; }
+  if(e.target.closest("[data-roster-batch]")){ saveRosterBatch(); return; }
+  if(e.target.closest("[data-roster-unselect]")){ if(!rosterBusy()){ rosterUi.selected.clear(); paintRoster(); } return; }
+  if(e.target.closest("[data-roster-clear]")){ rosterUi.companyName = ""; rosterUi.roleTitle = ""; paintRoster(); return; }
+  var secondaryBtn = e.target.closest("[data-roster-secondary]");
+  if(secondaryBtn){ saveRosterSecondary(secondaryBtn.dataset.rosterSecondary); return; }
+  if(e.target.closest("[data-project-member-clear]")){ memberFilter = { companyName:"", roleTitle:"" }; renderProject(); return; }
+  if(e.target.closest("[data-project-member-export]")){ exportProjectMembers(); return; }
   if(e.target.closest("[data-module-add]")){
     moduleUi.adding = true;
     moduleUi.deleting = "";
@@ -884,8 +1055,8 @@ function onClick(e){
   var member = e.target.closest("[data-member-key]");
   if(member){
     var key = member.dataset.memberKey;
-    var rows = (cache.tasks || []).filter(function(t){ return t.boardColumn !== "done" && (t.ownerUserId || t.owner || "unassigned") === key; });
-    openTaskTable("成员项目工作项", rows);
+    var hit = filteredProjectMembers().filter(function(m){ return m.key === key; })[0];
+    if(hit) openTaskTable(hit.name + " · 成员项目工作项", projectMemberTasks(key));
   }
 }
 function renderAfterModeSwitch(){
@@ -896,10 +1067,33 @@ function onChange(e){
   if(e.target.id === "managerProjectSelect"){ rt.managerProjectId = e.target.value; loadProject(); }
   if(e.target.id === "drillSort"){ drillSort = e.target.value; renderDrill(); }
   var roleSel = e.target.closest("[data-roster-role]");
-  if(roleSel) saveRosterRole(roleSel);
+  if(roleSel){ saveRosterRole(roleSel); return; }
+  var check = e.target.closest("[data-roster-check]"), all = e.target.closest("[data-roster-all]");
+  if((check || all) && rosterContext() && !rosterBusy()){
+    if(check){ if(check.checked) rosterUi.selected.add(check.dataset.rosterCheck); else rosterUi.selected.delete(check.dataset.rosterCheck); }
+    else filteredRoster().forEach(function(m){ if(all.checked) rosterUi.selected.add(m.userId); else rosterUi.selected.delete(m.userId); });
+    var id = check ? check.dataset.rosterCheck : null;
+    paintRoster();
+    var target = id ? Array.from(document.querySelectorAll("[data-roster-check]")).filter(function(el){ return el.dataset.rosterCheck === id; })[0] : document.querySelector("[data-roster-all]");
+    if(target) target.focus();
+    return;
+  }
+  if(e.target.matches("[data-roster-batch-role]")){ chooseRosterBatchRole(e.target); return; }
+  var filter = e.target.closest("[data-roster-filter]");
+  if(filter){ rosterUi[filter.dataset.rosterFilter] = filter.value; paintRoster(); var next = document.querySelector('[data-roster-filter="' + filter.dataset.rosterFilter + '"]'); if(next) next.focus(); }
+  var mf = e.target.closest("[data-project-member-filter]");
+  if(mf){ memberFilter[mf.dataset.projectMemberFilter] = mf.value; renderProject(); var field = document.querySelector('[data-project-member-filter="' + mf.dataset.projectMemberFilter + '"]'); if(field) field.focus(); }
 }
 /* 透视树行键盘可达：聚焦任务行后 Enter/空格打开详情 */
 function onKeydown(e){
+  var tab = e.target.closest && e.target.closest("[data-project-tab]");
+  if(tab && ["ArrowLeft","ArrowRight","Home","End"].indexOf(e.key) !== -1){
+    var tabs = ["overview","epics","members","roles"], index = tabs.indexOf(tab.dataset.projectTab);
+    var next = e.key === "Home" ? 0 : (e.key === "End" ? tabs.length - 1 : (index + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length);
+    e.preventDefault(); setProjectTab(tabs[next]);
+    var target = document.querySelector('[data-project-tab="' + tabs[next] + '"]'); if(target) target.focus();
+    return;
+  }
   if(e.key === "Enter" && e.target.matches && e.target.matches("[data-module-new-name]")){
     e.preventDefault();
     saveModule();
@@ -908,6 +1102,8 @@ function onKeydown(e){
   if(e.key !== "Enter" && e.key !== " ") return;
   var row = e.target.closest ? e.target.closest("tr[data-open-task]") : null;
   if(row && row === e.target){ e.preventDefault(); openTaskById(row.dataset.openTask); return; }
+  var memberRow = e.target.closest ? e.target.closest("tr[data-member-key]") : null;
+  if(memberRow && memberRow === e.target){ e.preventDefault(); memberRow.click(); return; }
   var moduleRow = e.target.closest ? e.target.closest("tr[data-module-open]") : null;
   if(moduleRow && moduleRow === e.target){ e.preventDefault(); moduleRow.click(); }
 }
