@@ -153,6 +153,7 @@ java -jar backend/target/hourglass-server.jar
 | [`docs/产品说明.md`](docs/产品说明.md) | 产品说明：是什么、为谁、核心价值与部署形态 |
 | [`docs/快速上手指南.md`](docs/快速上手指南.md) | 快速上手：已部署环境中约 30 分钟的主链路练习 |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | 背景与定位、信息模型、模块地图、核心机制与边界取舍 |
+| [`docs/项目起源.md`](docs/项目起源.md) | 项目起源：从个人看板 wokstudio 到团队工作台的来历、时间线与维护者 |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | 面向最终用户的操作手册与统一口径解释 |
 | [`docs/管理员指南.md`](docs/管理员指南.md) | 管理员指南：部署架构、备份升级、通知与 AI、故障速查 |
 | [`docs/常见问题.md`](docs/常见问题.md) | 常见问题：口径、统计、部署与选型对比 |
@@ -172,12 +173,12 @@ java -jar backend/target/hourglass-server.jar
 
 ## 联合开发
 
-本项目由 [chc2](https://gitee.com/chc2)（chenghongchang）发起的个人看板项目逐步升级为面向小团队的私有化研发协作工作台 **沙漏（Hourglass）**，目前由 chc2 持续维护、完善。
+本项目由 [chc2](https://gitee.com/chc2)（chenghongchang）发起的个人看板项目逐步升级为面向小团队的私有化研发协作工作台 **沙漏（Hourglass）**，目前由 kongxiangjin 与 chc2 共同维护、持续完善。来龙去脉与时间线见 [`docs/项目起源.md`](docs/项目起源.md)。
 
 主要贡献者：
 
+- [kongxiangjin](https://github.com/kong0827)（阿劲）— 联合维护者，主导产品定位、产品化、整体架构与产品路线，确定产品名「沙漏」；邮箱 [1351882069@qq.com](mailto:1351882069@qq.com)
 - [chc2](https://gitee.com/chc2)（chenghongchang）— 项目创建者，负责早期个人看板项目的设计与核心实现，并持续参与沙漏的联合开发与功能扩展
-- [kongxiangjin](https://github.com/kong0827)（阿劲）— 联合维护者；邮箱 [1351882069@qq.com](mailto:1351882069@qq.com)
 
 ## 联系与支持
 

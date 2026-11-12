@@ -138,6 +138,7 @@ For the deeper information model, unified metric rules, the role-permission matr
 | [`docs/产品说明.md`](docs/产品说明.md) | Product overview: what it is, who it is for, core value and deployment shape (Chinese) |
 | [`docs/快速上手指南.md`](docs/快速上手指南.md) | Quick start: an approximately 30-minute main-flow exercise in an already deployed environment (Chinese) |
 | [`docs/项目介绍.md`](docs/项目介绍.md) | Background, positioning, information model, module map, core mechanisms (Chinese) |
+| [`docs/项目起源.md`](docs/项目起源.md) | Project origin: from the personal kanban wokstudio to a team workbench, with timeline and maintainers (Chinese) |
 | [`docs/用户使用手册.md`](docs/用户使用手册.md) | End-user manual and unified metric rules (Chinese) |
 | [`docs/管理员指南.md`](docs/管理员指南.md) | Admin guide: deployment, backup and upgrade, notifications and AI, troubleshooting (Chinese) |
 | [`docs/常见问题.md`](docs/常见问题.md) | FAQ: metric conventions, statistics, deployment and trade-offs (Chinese) |
@@ -157,12 +158,12 @@ For the deeper information model, unified metric rules, the role-permission matr
 
 ## Collaboration
 
-This project evolved from a personal kanban project started by [chc2](https://gitee.com/chc2) (chenghongchang) into **Hourglass**, a self-hosted R&D collaboration workbench for small teams. It is now maintained by chc2 and continuously improved.
+This project evolved from a personal kanban project started by [chc2](https://gitee.com/chc2) (chenghongchang) into **Hourglass**, a self-hosted R&D collaboration workbench for small teams. It is now maintained by kongxiangjin and chc2. See [`docs/项目起源.md`](docs/项目起源.md) for the origin and timeline (Chinese).
 
 Key contributors:
 
+- [kongxiangjin](https://github.com/kong0827) (aka 阿劲) — co-maintainer; leads product positioning, productization, overall architecture and product roadmap; named the product Hourglass; email [1351882069@qq.com](mailto:1351882069@qq.com)
 - [chc2](https://gitee.com/chc2) (chenghongchang) — project creator; designed and implemented the original personal kanban project; continues to develop and expand Hourglass
-- [kongxiangjin](https://github.com/kong0827) (aka 阿劲) — co-maintainer; email [1351882069@qq.com](mailto:1351882069@qq.com)
 
 ## Contact
 
