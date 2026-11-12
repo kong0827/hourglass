@@ -498,12 +498,16 @@ function defectRowHTML(t, no){
     ? '<span class="tc-def-ver">' + esc(cut(defectVersionName(t.foundVersionId), 14)) + '</span>'
     : '<span class="tc-def-none">未填</span>';
   var sevHTML = t.severity ? severityBadgeHTML(t.severity) : '<span class="mini-tag mute">未定</span>';
+  var priHTML = t.priority
+    ? '<span class="tc-def-pri" title="优先级：' + esc(priName(t.priority)) + '">' + priTagHTML(t.priority) + '</span>'
+    : '<span class="tc-def-none">—</span>';
   var projHTML = defReqId ? ""
     : '<span class="tc-def-proj" title="' + esc(defectProjectName(t.reqId)) + '">'
       + esc(cut(defectProjectName(t.reqId), 18)) + '</span>';
   return '<div class="tc-def-row" role="button" tabindex="0" data-tc-defect="' + esc(t.id) + '" aria-label="打开缺陷：' + esc(t.title) + '">'
     + '<div class="tc-def-no" aria-hidden="true" title="当前列表序号，随筛选和排序变化">' + (no || "") + '</div>'
     + '<div>' + sevHTML + '</div>'
+    + '<div>' + priHTML + '</div>'
     + '<div class="tc-def-main">'
     +   '<div class="tc-def-title">' + esc(t.title || "（无标题）") + '</div>'
     +   '<div class="tc-def-sub">' + projHTML + '<span class="tc-def-id">' + esc(t.id) + '</span>'
@@ -2983,6 +2987,16 @@ if(tcFilterBtn && tcFilterBar){
     tcFilterBtn.setAttribute("aria-expanded", String(open));
   });
 }
+/* 输入框以 searchText 为准：浏览器回填的值若与应用状态不一致，直接纠正 */
+function reconcileTcSearchInput(){
+  var el = $("tcSearch");
+  if(el && el.value !== searchText && el !== document.activeElement) el.value = searchText;
+}
+window.addEventListener("pageshow", reconcileTcSearchInput);
+window.addEventListener("focus", reconcileTcSearchInput);
+[0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileTcSearchInput, ms); });
+var tcSearchWatch = setInterval(reconcileTcSearchInput, 1000);
+setTimeout(function(){ clearInterval(tcSearchWatch); }, 30000);
 $("tcSearch").addEventListener("input", function(){
   var value = this.value.trim().toLowerCase();
   if(value === searchText) return;

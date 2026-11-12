@@ -420,32 +420,32 @@ function releaseSearchReadonly(){
 ["pointerdown", "touchstart", "focus", "keydown"].forEach(function(type){
   searchInput.addEventListener(type, releaseSearchReadonly, {passive:true});
 });
-function clearAutoFilledOwnAccount(){
-  /* 用户真正键鼠/输入法输入过就不再自动清理，避免把用户主动搜索的账号名删掉 */
+function clearAutoFilledSearch(){
+  /* 用户真正键鼠/输入法输入过就不再自动清理，避免把用户主动搜索的词删掉 */
   if(searchHumanTouched || !searchInput) return;
   var v = searchInput.value;
-  if(!v || !looksLikeOwnAccount(v)) return;
-  // 只清“没有搜索状态”或“搜索状态就是这次自动填充值”的情况，别抹掉用户刚应用的视图
+  if(!v) return;
+  /* 只清“没有搜索状态”或“搜索状态就是这次自动填充值”的情况，别抹掉用户刚应用的视图 */
   if(state.q && state.q !== v.trim()) return;
   searchInput.value = "";
   searchWrap.classList.remove("has");
-  /* 自动填充可能已经触发过一次查询，这里一并复位，避免框空了但结果仍按账号过滤 */
+  /* 自动填充可能已经触发过一次查询，这里一并复位，避免框空了但结果仍按旧词过滤 */
   if(state.q) applySearch("");
 }
-window.addEventListener("ds:user-ready", clearAutoFilledOwnAccount);
-window.addEventListener("pageshow", clearAutoFilledOwnAccount);
-window.addEventListener("focus", clearAutoFilledOwnAccount);
+window.addEventListener("ds:user-ready", clearAutoFilledSearch);
+window.addEventListener("pageshow", clearAutoFilledSearch);
+window.addEventListener("focus", clearAutoFilledSearch);
 document.addEventListener("visibilitychange", function(){
-  if(!document.hidden) clearAutoFilledOwnAccount();
+  if(!document.hidden) clearAutoFilledSearch();
 });
-searchInput.addEventListener("focus", clearAutoFilledOwnAccount);
+searchInput.addEventListener("focus", clearAutoFilledSearch);
 /* Chrome/Edge 自动填充会触发 :-webkit-autofill 上的动画；这是不读取密码也能
    感知“浏览器自己填了值”的可靠信号。 */
 searchInput.addEventListener("animationstart", function(e){
-  if(e.animationName === "ds-autofill-start") clearAutoFilledOwnAccount();
+  if(e.animationName === "ds-autofill-start") clearAutoFilledSearch();
 });
 /* 密码管理器可能在 load 之后一段时间才回填：前 10 秒定期兜底 */
-var autofillWatch = setInterval(clearAutoFilledOwnAccount, 1000);
+var autofillWatch = setInterval(clearAutoFilledSearch, 1000);
 setTimeout(function(){ clearInterval(autofillWatch); }, 10000);
 searchInput.addEventListener("input", function(){
   releaseSearchReadonly();
