@@ -503,7 +503,7 @@ function canManageMemberLabels(){ return rt.currentWs && rt.currentWs.type === "
 function memberLabelLayer(title, desc, content){
   if(memberLabelDialog) UI.closeModal(memberLabelDialog);
   var layer = document.createElement("div"), titleId = "memberLabelTitle" + Date.now();
-  layer.className = "modal-layer"; layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-labelledby", titleId);
+  layer.className = "modal-layer side"; layer.setAttribute("role", "dialog"); layer.setAttribute("aria-modal", "true"); layer.setAttribute("aria-labelledby", titleId);
   layer.innerHTML = '<form class="sheet xs" novalidate><div class="sheet-head"><div style="flex:1;min-width:0"><h2 id="' + titleId + '">' + esc(title) + '</h2><div class="desc">' + esc(desc) + '</div></div>'
     + '<button class="icon-btn sm" type="button" data-label-close aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body">' + content + '<p class="foot-note" data-label-error role="alert"></p></div>'

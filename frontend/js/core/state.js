@@ -95,7 +95,17 @@ function catTagByName(name){
 function tagChip(name){
   return '<span class="tag tag-ghost">' + esc(name) + '</span>';
 }
-function progressOf(t){ return t.boardColumn === "done" ? 100 : (Number(t.progress) || 0); }
+/* 进度优先派生：有子任务（检查项）时按完成比自动计算，没有子任务才用手动值。
+   已完成一律 100%。历史手动值仍保存在 progress 字段，不被改写。 */
+function progressOf(t){
+  if(t.boardColumn === "done") return 100;
+  var total = Number(t.subtaskTotal) || 0;
+  if(total > 0){
+    var done = Math.max(0, Math.min(total, Number(t.subtaskDone) || 0));
+    return Math.round(done / total * 100);
+  }
+  return Number(t.progress) || 0;
+}
 /** 列的有效处理规则：查的是任务当前列时优先任务自带值（跨空间「我的任务」），
     查目标列（如抽屉里改列预览）时必须回落到列定义，否则会拿旧列规则判断新列 */
 function colRuleOf(id, task){

@@ -10,13 +10,13 @@ import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
 import { activeView, showView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
-import { canEditReq, canEditTask, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
+import { canEditReq, canEditTask, catNameById, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { buildFormControls, deleteTask, openTaskDrawer, populateReqSelect, syncFormSegs } from "../core/task-drawer.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { RECUR_LABEL, bindRetry, parseQuickAdd } from "../core/utils.js";
-import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
+import { taskPublicationHTML, CAT_DEFAULT_COLOR, COLUMNS, PALETTE, PRIORITIES, avatarHTML, colMeta, colName, dayDiff, fmtElapsed, fmtFull, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtTs, mdLite, parseDate, priColor, priName, priTagHTML, recurLabel, severityBadgeHTML, syncColumns, taskDescText, typeBadgeHTML, weekdayCN } from "../lib/format.js";
 import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
@@ -24,6 +24,159 @@ import { taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js
 
 /* 已完成是长期累积数据：看板只放最近 N 条，完整回看进「列状态工作页」 */
 var DONE_BOARD_PREVIEW = 6;
+/* 看板一屏只铺「当前在手」的量：首批与每次加载都按 20 条。
+   更长的队列交给列头进度和列底「查看全部」进状态工作页，不靠一直往下拖。 */
+var BOARD_PAGE_SIZE = 20;
+/* 列内排序只影响看板展示，不改服务端保存的手动顺序；自动排序下该列停用拖拽 */
+var COL_SORTS = ["manual", "due", "priority"];
+var COL_SORT_LABEL = { manual: "手动", due: "截止日期", priority: "优先级" };
+var COL_SORT_KEY = "ds.boardColSort.v1";
+/* 回到顶部按钮在列内滚过约一屏后出现 */
+var COL_TOP_AT = 360;
+/* 列内分组：列仍是状态，组只决定卡片怎么归堆，拖拽语义不变。
+   分组偏好按「账号 + 空间」记住，与列内排序同一套做法。 */
+var BOARD_GROUPS = [["none", "不分组"], ["owner", "负责人"], ["priority", "优先级"], ["category", "模块"]];
+var BOARD_GROUP_KEY = "ds.boardGroup.v1";
+var BOARD_GROUP_FOLD_KEY = "ds.boardGroupFold.v1";
+function boardPrefKey(name){
+  var u = (rt.currentUser && rt.currentUser.id) || "";
+  var w = (rt.currentWs && rt.currentWs.id) || "";
+  return name + ":" + u + ":" + w;
+}
+function readBoardGroup(){
+  var v = "";
+  try{ v = localStorage.getItem(boardPrefKey(BOARD_GROUP_KEY)); }catch(e){ return "none"; }
+  for(var i = 0; i < BOARD_GROUPS.length; i++) if(BOARD_GROUPS[i][0] === v) return v;
+  return "none";
+}
+/* 模块加载时空间可能还没就绪（登录/切空间后才写入 rt.currentWs），
+   所以不能只读一次：按「账号 + 空间」的键变化时重新取。 */
+var boardGroup = "none";
+var boardGroupKeySeen = "";
+function currentBoardGroup(){
+  var k = boardPrefKey(BOARD_GROUP_KEY);
+  if(k !== boardGroupKeySeen){ boardGroupKeySeen = k; boardGroup = readBoardGroup(); }
+  return boardGroup;
+}
+function readGroupFolds(){
+  try{ return JSON.parse(localStorage.getItem(boardPrefKey(BOARD_GROUP_FOLD_KEY)) || "{}") || {}; }
+  catch(e){ return {}; }
+}
+function groupFoldId(colId, key){ return colId + "|" + key; }
+function isGroupFolded(colId, key){ return !!readGroupFolds()[groupFoldId(colId, key)]; }
+function toggleGroupFold(colId, key){
+  var all = readGroupFolds(), id = groupFoldId(colId, key);
+  if(all[id]) delete all[id]; else all[id] = 1;
+  try{ localStorage.setItem(boardPrefKey(BOARD_GROUP_FOLD_KEY), JSON.stringify(all)); }
+  catch(e){ /* 受限环境只改本次会话 */ }
+  render({animate:false});
+}
+function setBoardGroup(v){
+  var ok = false;
+  for(var i = 0; i < BOARD_GROUPS.length; i++) if(BOARD_GROUPS[i][0] === v) ok = true;
+  if(!ok || currentBoardGroup() === v) return;
+  boardGroup = v;
+  boardGroupKeySeen = boardPrefKey(BOARD_GROUP_KEY);
+  try{ localStorage.setItem(boardPrefKey(BOARD_GROUP_KEY), v); }
+  catch(e){ /* 受限环境只改本次会话 */ }
+  renderBoardGroupSeg();
+  render({animate:false});
+}
+function renderBoardGroupSeg(){
+  var seg = document.getElementById("boardGroupSeg");
+  if(!seg) return;
+  if(!seg.childElementCount){
+    seg.innerHTML = BOARD_GROUPS.map(function(g){
+      return '<button type="button" data-board-group="' + g[0] + '">' + g[1] + '</button>';
+    }).join("");
+  }
+  var cur = currentBoardGroup();
+  Array.prototype.forEach.call(seg.querySelectorAll("[data-board-group]"), function(b){
+    b.setAttribute("aria-pressed", String(b.dataset.boardGroup === cur));
+  });
+}
+function groupValue(t, dim){
+  if(dim === "owner") return t.owner || "";
+  if(dim === "priority") return t.priority || "";
+  if(dim === "category") return t.categoryId || "";
+  return "";
+}
+function groupLabel(t, dim){
+  var v = groupValue(t, dim);
+  if(!v) return dim === "priority" ? "未设优先级" : "未指定";
+  if(dim === "category") return catNameById(v) || v;
+  return v;
+}
+function groupRank(key, dim){
+  if(!key) return 9999;
+  if(dim === "priority"){
+    var i = PRIORITIES.indexOf(key);
+    return i < 0 ? 500 : i;
+  }
+  return 0;
+}
+function groupColumnItems(items, dim){
+  if(dim === "none") return [{key:"__all", label:"", items:items}];
+  var map = {}, out = [];
+  items.forEach(function(t){
+    var k = groupValue(t, dim) || "__none";
+    if(!map[k]){ map[k] = {key:k, label:groupLabel(t, dim), items:[]}; out.push(map[k]); }
+    map[k].items.push(t);
+  });
+  out.sort(function(a, b){
+    var ra = groupRank(a.key === "__none" ? "" : a.key, dim);
+    var rb = groupRank(b.key === "__none" ? "" : b.key, dim);
+    if(ra !== rb) return ra - rb;
+    if(a.key === "__none") return 1;
+    if(b.key === "__none") return -1;
+    return String(a.label).localeCompare(String(b.label), "zh-Hans-CN");
+  });
+  return out;
+}
+
+function colSortKey(){
+  var u = (rt.currentUser && rt.currentUser.id) || "";
+  var w = (rt.currentWs && rt.currentWs.id) || "";
+  return COL_SORT_KEY + ":" + u + ":" + w;
+}
+function readColSorts(){
+  try{ return JSON.parse(localStorage.getItem(colSortKey()) || "{}") || {}; }catch(e){ return {}; }
+}
+function colSortOf(colId){
+  var v = readColSorts()[colId];
+  return COL_SORTS.indexOf(v) >= 0 ? v : "manual";
+}
+function setColSort(colId, mode){
+  if(COL_SORTS.indexOf(mode) === -1) return;
+  var all = readColSorts();
+  if(mode === "manual") delete all[colId];
+  else all[colId] = mode;
+  try{ localStorage.setItem(colSortKey(), JSON.stringify(all)); }catch(e){ /* 受限环境忽略 */ }
+}
+function colSortRank(code){
+  var i = PRIORITIES.indexOf(code);
+  return i < 0 ? 99 : i;
+}
+function sortColumnItems(items, colId){
+  /* 已完成列固定按完成时间预览，不参与列内排序 */
+  if(colId === "done") return items;
+  var mode = colSortOf(colId);
+  if(mode === "manual") return items;
+  var arr = items.slice();
+  if(mode === "due"){
+    arr.sort(function(a, b){
+      var ad = a.dueDate ? parseDate(a.dueDate) : null;
+      var bd = b.dueDate ? parseDate(b.dueDate) : null;
+      var av = ad ? ad.getTime() : Infinity;
+      var bv = bd ? bd.getTime() : Infinity;
+      if(av === bv) return 0;
+      return av < bv ? -1 : 1;
+    });
+  }else if(mode === "priority"){
+    arr.sort(function(a, b){ return colSortRank(a.priority) - colSortRank(b.priority); });
+  }
+  return arr;
+}
 function syncBoardMemberTooltips(){
   var tasks = [];
   if(state.board && state.board.columns) Object.keys(state.board.columns).forEach(function(k){ tasks = tasks.concat(state.board.columns[k].items || []); });
@@ -71,7 +224,7 @@ function loadBoard(opts){
     if(!state.board) showBoardSkeleton();
     else { board.classList.add("busy"); UI.syncBusy(true); opts._busy = true; }
   }
-  return Promise.all([API.get("/api/board", boardParams({doneLimit: DONE_BOARD_PREVIEW})), loadPriorities()]).then(function(rs){
+  return Promise.all([API.get("/api/board", boardParams({doneLimit: DONE_BOARD_PREVIEW, openLimit: BOARD_PAGE_SIZE})), loadPriorities()]).then(function(rs){
     var data = rs[0];
     if(opts._busy) UI.syncBusy(false);
     if(seq !== state.loadSeq) return;
@@ -128,7 +281,7 @@ function loadMoreColumn(colId){
     board.querySelector(".mob-board-list");
   if(listEl) listEl.classList.add("loading-more");
   UI.syncBusy(true);
-  return API.get("/api/tasks/column", boardParams({col: colId, offset: offset, limit: 60})).then(function(page){
+  return API.get("/api/tasks/column", boardParams({col: colId, offset: offset, limit: BOARD_PAGE_SIZE})).then(function(page){
     UI.syncBusy(false);
     if(listEl) listEl.classList.remove("loading-more");
     if(gen !== state.boardGen) return false;
@@ -349,7 +502,7 @@ function renderMobileBoard(opts){
   }).join("") + '</div>';
 
   var cd = state.board.columns[active] || {items:[], matched:0, total:0, allTotal:0, hasMore:false};
-  var items = (cd.items || []).slice();
+  var items = sortColumnItems((cd.items || []).slice(), active);
   var listHTML;
   if(!items.length){
     var emptyTitle = filterOn() ? "无匹配工作项" : "这一列还没有工作项";
@@ -403,6 +556,7 @@ function render(opts){
   }
   rt.boardDirty = false;
   UI.hideTip();
+  renderBoardGroupSeg();
   if(!state.board) return;
 
   var scrollMemo = {}, boardLeft = board.scrollLeft;
@@ -429,7 +583,7 @@ function render(opts){
 
   COLUMNS.forEach(function(c){
     var cd = state.board.columns[c.id] || {items:[], matched:0, total:0, allTotal:0, hasMore:false};
-    var items = cd.items.slice();
+    var items = sortColumnItems(cd.items.slice(), c.id);
     var collapsed = !!state.collapsedCols[c.id];
 
     var col = document.createElement("section");
@@ -437,16 +591,25 @@ function render(opts){
     col.dataset.col = c.id;
 
     var isCustom = (c.id !== "backlog" && c.id !== "doing" && c.id !== "done");
+    /* 计数同时也是「查看全部」入口：进度只表达已加载多少，完整数据进状态工作页 */
+    var allCount = cd.allTotal || cd.total || 0;
+    var countText = filterOn()
+      ? ((cd.matched || 0) + "/" + (cd.total || 0))
+      : (c.done ? String(cd.total || 0) : (cd.hasMore ? items.length + "/" + (cd.total || 0) : String(cd.total || 0)));
+    var countTip = "查看「" + c.name + "」全部 " + allCount + " 项" + (c.done ? "（含历史）" : "");
+    var sortMode = c.done ? "manual" : colSortOf(c.id);
     var head = '<div class="board-col-head">' +
       '<span class="col-dot" style="background:' + esc(c.color || CAT_DEFAULT_COLOR) + '"' +
         (isCustom ? ' role="button" tabindex="0" data-col-color="' + esc(c.id) + '" title="修改列颜色"' : '') + '></span>' +
       '<span class="col-name" data-col-rename="' + esc(c.id) + '"' +
         (c.done ? '' : ' role="button" tabindex="0" title="点击改名"') + '>' + esc(c.name) + '</span>' +
-      '<button class="icon-btn sm col-open-btn" type="button" data-col-open="' + esc(c.id) + '"' +
+      '<button class="col-count-btn" type="button" data-col-open="' + esc(c.id) + '" aria-live="polite"' +
         (c.done ? ' data-col-range="all"' : '') +
-        ' title="进入「' + esc(c.name) + '」状态工作页" aria-label="进入「' + esc(c.name) + '」状态工作页">' + icon("extlink", 14) + '</button>' +
-      '<span class="col-count" aria-live="polite">' + (filterOn() ? (cd.matched + "/" + cd.total) : cd.total) + '</span>' +
+        ' title="' + esc(countTip) + '" aria-label="' + esc(countTip) + '">' + esc(countText) + '</button>' +
       '<span class="sp"></span>' +
+      (c.done ? '' :
+        '<button class="icon-btn sm col-sort-btn' + (sortMode !== "manual" ? " on" : "") + '" type="button" data-col-sort="' + esc(c.id) + '"' +
+          ' title="列内排序：' + COL_SORT_LABEL[sortMode] + '" aria-label="列内排序：' + COL_SORT_LABEL[sortMode] + '">' + icon("sort", 14) + '</button>') +
       '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
       '<button class="icon-btn sm" type="button" data-col-fold="' + esc(c.id) + '" title="' + (collapsed ? "展开" : "折叠") + '列" aria-label="' + (collapsed ? "展开" : "折叠") + '列" aria-expanded="' + (!collapsed) + '">' +
         icon(collapsed ? "right" : "caretDown", 14) + '</button>' +
@@ -460,7 +623,21 @@ function render(opts){
       else { emptyText = "拖动卡片到这里"; emptyIc = "inbox"; }
       body += UI.colEmpty(emptyText, emptyIc);
     }else{
-      items.forEach(function(t, i){ body += cardHTML(t, i); });
+      var groupDim = currentBoardGroup();
+      groupColumnItems(items, groupDim).forEach(function(g){
+        if(groupDim !== "none"){
+          var folded = isGroupFolded(c.id, g.key);
+          body += '<button class="board-group-head' + (folded ? " folded" : "") + '" type="button"' +
+            ' data-group-fold="' + esc(groupFoldId(c.id, g.key)) + '"' +
+            ' aria-expanded="' + (!folded) + '"' +
+            ' title="' + esc(folded ? "展开" : "折叠") + '本组">' +
+            icon(folded ? "right" : "caretDown", 12) +
+            '<span class="bg-name">' + esc(g.label) + '</span>' +
+            '<span class="bg-n">' + g.items.length + '</span></button>';
+          if(folded) return;
+        }
+        g.items.forEach(function(t){ body += cardHTML(t); });
+      });
     }
     if(!c.done && cd.hasMore){
       body += '<button class="col-more" type="button" data-more="1">加载更多（还有 ' +
@@ -469,6 +646,9 @@ function render(opts){
     body += cardAddHTML(c.id);
     body += '</div>';
 
+    /* 回到顶部收进列脚，和「查看全部」一起靠右；悬浮定位会压住「添加工作项」按钮 */
+    var topBtn = '<button class="col-top" type="button" data-col-top="' + esc(c.id) + '" title="回到顶部" aria-label="回到顶部">' +
+      icon("chevronUp", 12) + '</button>';
     var foot = "";
     if(c.done){
       var scopeDone = cd.total || 0;
@@ -478,7 +658,14 @@ function render(opts){
       var previewNote = previewBase > DONE_BOARD_PREVIEW ? ' · 仅显示前 ' + DONE_BOARD_PREVIEW + ' 条' : '';
       foot = '<div class="col-foot col-foot-split">' +
         '<span class="col-foot-note">' + scopeLabel + ' ' + scopeDone + ' 项' + previewNote + '</span>' +
+        topBtn +
         '<button class="col-foot-link" type="button" data-col-open="' + esc(c.id) + '" data-col-range="all">查看全部 ' + allDone + ' 条 →</button>' +
+      '</div>';
+    }else if(allCount > 0){
+      /* 队列再长也留一个固定出口：看板负责处理，完整检索去工作页 */
+      foot = '<div class="col-foot col-foot-end">' +
+        topBtn +
+        '<button class="col-foot-link" type="button" data-col-open="' + esc(c.id) + '">查看全部 ' + allCount + ' 条 →</button>' +
       '</div>';
     }
 
@@ -487,6 +674,8 @@ function render(opts){
 
     var listEl = col.querySelector(".board-col-body");
     if(scrollMemo[c.id] != null) listEl.scrollTop = scrollMemo[c.id];
+    var topEl = col.querySelector(".col-top");
+    if(topEl) topEl.classList.toggle("on", listEl.scrollTop > COL_TOP_AT);
   });
 
   board.scrollLeft = boardLeft;
@@ -627,6 +816,9 @@ function onPointerDown(e){
   if(e.target.closest("button,input,textarea,select,a")) return;
   /* 只读项目不允许拖动改列：不动卡片位置，也不进入 pending 态 */
   if(!canEditTask(taskById(cardEl.dataset.id))) return;
+  /* 自动排序的列，显示顺序不是手动顺序，拖动会落到反直觉的位置 */
+  var fromColEl = cardEl.closest(".board-col");
+  if(fromColEl && colSortOf(fromColEl.dataset.col) !== "manual") return;
   pending = {
     el: cardEl, id: cardEl.dataset.id,
     x0: e.clientX, y0: e.clientY,
@@ -872,9 +1064,31 @@ document.addEventListener("pointerdown", onPointerDown);
 document.addEventListener("pointermove", onPointerMove, {passive:false});
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", onPointerCancel);
+/* 分组切换在列外工具条，单独接一层，不进卡片点击的判定链 */
+var boardToolbarEl = document.getElementById("boardToolbar");
+if(boardToolbarEl){
+  boardToolbarEl.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-board-group]");
+    if(btn) setBoardGroup(btn.dataset.boardGroup);
+  });
+}
+/* 列内滚过一屏后露出「回到顶部」；scroll 不冒泡，用捕获阶段接住 */
+board.addEventListener("scroll", function(e){
+  var el = e.target;
+  if(!el || !el.classList || !el.classList.contains("board-col-body")) return;
+  var colEl = el.closest(".board-col");
+  var btn = colEl && colEl.querySelector(".col-top");
+  if(btn) btn.classList.toggle("on", el.scrollTop > COL_TOP_AT);
+}, true);
 board.addEventListener("click", function(e){
   var mobTab = e.target.closest("[data-mob-col]");
   if(mobTab){ mobCol = mobTab.dataset.mobCol; render({animate:false}); return; }
+  var gfold = e.target.closest("[data-group-fold]");
+  if(gfold){
+    var raw = gfold.dataset.groupFold, sep = raw.indexOf("|");
+    if(sep > 0) toggleGroupFold(raw.slice(0, sep), raw.slice(sep + 1));
+    return;
+  }
   var colOpen = e.target.closest("[data-col-open]");
   if(colOpen){ openColumnWorkpage(colOpen.dataset.colOpen, colOpen.dataset.colRange); return; }
   var fold = e.target.closest("[data-col-fold]");
@@ -882,6 +1096,15 @@ board.addEventListener("click", function(e){
     var cid = fold.dataset.colFold;
     state.collapsedCols[cid] = !state.collapsedCols[cid];
     render({animate:false});
+    return;
+  }
+  var sortBtn = e.target.closest("[data-col-sort]");
+  if(sortBtn){ openColSortMenu(sortBtn, sortBtn.dataset.colSort); return; }
+  var topBtn = e.target.closest("[data-col-top]");
+  if(topBtn){
+    var topColEl = topBtn.closest(".board-col");
+    var topBodyEl = topColEl && topColEl.querySelector(".board-col-body");
+    if(topBodyEl) topBodyEl.scrollTo({top:0, behavior:"smooth"});
     return;
   }
   var colAdd = e.target.closest("[data-col-add]");
@@ -981,6 +1204,35 @@ function startColRename(el, colId){
 function colColorOf(colId){
   var c = colMeta(colId);
   return safeColor(c && c.color);
+}
+function openColSortMenu(anchor, colId){
+  var cur = colSortOf(colId);
+  var cd = state.board && state.board.columns[colId];
+  var loaded = cd && cd.items ? cd.items.length : 0;
+  var matched = (cd && cd.matched) || 0;
+  var html = '<div class="menu-title">列内排序</div>';
+  COL_SORTS.forEach(function(mode){
+    html += '<button class="menu-item" type="button" data-colsort-pick="' + mode + '">' +
+      '<span>' + COL_SORT_LABEL[mode] + '</span>' +
+      (mode === cur ? '<span class="k">当前</span>' : '') + '</button>';
+  });
+  html += '<div class="menu-note">' +
+    (loaded < matched ? "只对已加载的 " + loaded + " 条排序 · " : "") +
+    "自动排序下不能拖动卡片</div>";
+  var el = document.createElement("div");
+  el.className = "menu";
+  el.innerHTML = html;
+  el.addEventListener("click", function(e){
+    var b = e.target.closest("[data-colsort-pick]");
+    if(!b) return;
+    UI.closeAllPops();
+    setColSort(colId, b.dataset.colsortPick);
+    /* 换了排序就看新顺序的开头，不沿用旧滚动位置 */
+    var bodyEl = board.querySelector('.board-col[data-col="' + colId + '"] .board-col-body');
+    if(bodyEl) bodyEl.scrollTop = 0;
+    render({animate:false});
+  });
+  UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
 }
 function openColColorPop(anchor, colId){
   var html = '<div class="menu-title">列颜色</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:8px">';

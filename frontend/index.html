@@ -343,6 +343,10 @@
 
       <!-- ===== 看板 ===== -->
       <section class="view view-flush on" id="view-board" aria-label="工作项">
+        <div class="board-toolbar" id="boardToolbar">
+          <span class="board-toolbar-label">列内分组</span>
+          <div class="seg mini" id="boardGroupSeg" role="group" aria-label="看板列内分组方式"></div>
+        </div>
         <div class="board" id="board"></div>
       </section>
 
@@ -402,8 +406,8 @@
                 </select>
               </label>
               <div class="seg mini" id="mineDensity" role="group" aria-label="列表密度">
-                <button type="button" data-mine-density="standard" aria-pressed="true">标准</button>
-                <button type="button" data-mine-density="relaxed" aria-pressed="false">宽松</button>
+                <button type="button" data-list-density="standard" aria-pressed="true">标准</button>
+                <button type="button" data-list-density="relaxed" aria-pressed="false">宽松</button>
               </div>
               <button class="btn sm" type="button" id="btnMineFields">显示字段</button>
               <button class="btn sm" type="button" id="btnMineFold">折叠全部</button>
@@ -525,7 +529,7 @@
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
-              <button class="btn sm primary" type="button" id="ganttNew">新建工作项</button>
+              <button class="btn sm" type="button" id="ganttNew">新建工作项</button>
               <button class="btn sm" type="button" id="ganttRefresh">刷新</button>
             </span>
           </div>
@@ -543,11 +547,11 @@
                 <span class="toolbar-meta is-strong">分组</span>
                 <select id="ganttGroup" class="mini-select" aria-label="工作项分组方式">
                   <option value="none">不分组</option>
-                  <option value="project">按项目</option>
-                  <option value="owner">按负责人</option>
-                  <option value="status">按状态</option>
-                  <option value="category">按模块</option>
-                  <option value="priority">按优先级</option>
+                  <option value="owner">负责人</option>
+                  <option value="priority">优先级</option>
+                  <option value="project">项目</option>
+                  <option value="category">模块</option>
+                  <option value="status">状态</option>
                 </select>
               </label>
               <button class="btn sm ghost" type="button" id="ganttUndo" disabled title="撤销上一次改期（Ctrl+Z）">撤销</button>
@@ -645,7 +649,7 @@
               <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.6 3.4h5v5"/><path d="M16.6 3.4 11 9"/><path d="M8.4 16.6h-5v-5"/><path d="M3.4 16.6 9 11"/></svg>
               </button>
-              <button class="btn primary sm" type="button" id="btnReqNew" style="margin-left:auto">新建项目</button>
+              <button class="btn primary sm ml-auto" type="button" id="btnReqNew">新建项目</button>
             </div>
             <div class="req-list" id="reqList"></div>
           </div>
@@ -740,7 +744,7 @@
         </div>
 
         <!-- 版本新建/编辑 -->
-        <div class="modal-layer" id="dlgVersion" role="dialog" aria-modal="true" aria-labelledby="verFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
+        <div class="modal-layer side" id="dlgVersion" role="dialog" aria-modal="true" aria-labelledby="verFormTitle"><div class="sheet"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="verFormTitle">新建版本</h3><button class="icon-btn sm" type="button" id="dlgVersionX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack">
@@ -833,10 +837,11 @@
         </div>
 
         <!-- 提需求 / 编辑需求 -->
-        <div class="modal-layer" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
+        <div class="modal-layer side" id="dlgDemand" role="dialog" aria-modal="true" aria-labelledby="demandFormTitle"><div class="sheet md"><div class="sheet-body proj-dlg-body">
           <div class="panel">
             <div class="panel-head"><h3 id="demandFormTitle">提需求</h3><button class="icon-btn sm" type="button" id="dlgDemandX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
             <div class="stack proj-form-grid">
+              <p class="foot-note span2" id="demandLockNote" hidden>该需求已进入流转，这里只更新描述、验收标准、来源、模块与 WSJF；标题与需求类型保持评审时的结论，优先级和期望交付在列表行内改，计划日期用「调整排期」。</p>
               <div class="field">
                 <label for="dReq">所属项目 <span class="req">*</span></label>
                 <select id="dReq"></select>
@@ -2624,7 +2629,7 @@
 </div>
 
 <!-- 新建 / 编辑分支：放在视图外，工作项抽屉 / 分支页都能打开 -->
-<div class="modal-layer" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
+<div class="modal-layer side" id="dlgBranch" role="dialog" aria-modal="true" aria-labelledby="dlgBranchTitle">
   <div class="sheet reqdoc-dlg br-dlg">
     <h3 class="reqdoc-dlg-title" id="dlgBranchTitle">新建分支</h3>
     <p class="reqdoc-dlg-msg" id="dlgBranchMsg">分支名照 git 里的写法填，建好之后就能跟状态和时间。</p>

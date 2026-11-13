@@ -328,7 +328,7 @@ function renderCalDayList(){
     ? openList.map(function(t){ return cardHTML(t, 0); }).join("")
     : UI.colEmpty("当日没有进行中的工作项", "inbox"));
   if(doneList.length){
-    html += '<button class="btn sm ghost cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
+    html += '<button class="btn sm block cal-side-done" type="button" data-cal-side-done="' + selIso + '">' +
       (showDone ? "收起已完成" : "展开 " + doneList.length + " 项已完成") + '</button>';
     if(showDone){
       html += doneList.map(function(t){ return cardHTML(t, 0); }).join("");

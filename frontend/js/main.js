@@ -20,6 +20,10 @@ import { UI } from "./core/ui.js";
 import { loadBoard, loadReqs, showBoardSkeleton } from "./views/board.js";
 import { loadBranches } from "./views/branches.js";
 import { initTheme } from "./core/theme.js";
+/* 桌面端日期 / 时间、下拉自绘面板（副作用注册，移动端自动回落原生） */
+import "./core/date-picker.js";
+import "./core/select-picker.js";
+import { initListDensity } from "./core/list-density.js";
 
 function boot(){
   function autoRail(){
@@ -37,6 +41,7 @@ function boot(){
     else document.body.classList.remove("side-rail");
   }
   initLayout();
+  initListDensity();
   initMobileGestures();
   autoRail();
   window.addEventListener("resize", autoRail);

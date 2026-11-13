@@ -107,7 +107,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
       <div class="drawer-facts" id="drawerFacts" hidden aria-label="工作项概览">
         <button class="fact fact-status" type="button" id="factStatus" title="切换工作项状态">
           <span class="fact-k">状态</span>
-          <span class="fact-v"><i class="fact-dot" id="factStatusDot"></i><b id="factStatusName">—</b>
+          <span class="fact-v"><i class="fact-dot" id="factStatusDot"></i><b id="factStatusName"></b>
             <span class="fact-caret"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
           </span>
         </button>
@@ -117,15 +117,15 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
         </div>
         <div class="fact">
           <span class="fact-k">实际 / 预估</span>
-          <span class="fact-v"><b id="factActual">—</b><span class="fact-sub" id="factEstimate"></span></span>
+          <span class="fact-v"><b id="factActual"></b><span class="fact-sub" id="factEstimate"></span></span>
         </div>
         <div class="fact fact-due" id="factDueWrap">
           <span class="fact-k">截止</span>
-          <span class="fact-v"><b id="factDue">—</b><span class="fact-sub" id="factDueNote"></span></span>
+          <span class="fact-v"><b id="factDue"></b><span class="fact-sub" id="factDueNote"></span></span>
         </div>
         <div class="fact" id="factTestWrap" hidden>
           <span class="fact-k">测试</span>
-          <span class="fact-v"><b id="factTest">—</b></span>
+          <span class="fact-v"><b id="factTest"></b></span>
         </div>
       </div>
 
@@ -222,7 +222,12 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                 <div class="field">
                   <div class="field-label">实际投入</div>
                   <div class="est-actual" id="iActual">—</div>
-                  <span class="hint" id="iActualHint">按工作时段折算的计时累计</span>
+                  <div class="work-row" style="gap:8px">
+                    <span class="hint" id="iActualHint" style="margin-right:auto">按工作时段折算的计时累计</span>
+                    <button class="btn sm" type="button" id="btnActualAdd" title="手工补记一条实际工时（忘开表、加班等）">
+                      <span data-icon="plus"></span>&nbsp;补记
+                    </button>
+                  </div>
                 </div>
                 <div class="field">
                   <label class="field-label" for="iProg">当前进度</label>
@@ -282,7 +287,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                     前置任务
                   </span>
                   <span class="dep-group-hint">完成这些后才开始当前工作项</span>
-                  <button class="btn sm ghost dep-add" type="button" id="btnDepAddPred">
+                  <button class="btn sm add dep-add" type="button" id="btnDepAddPred">
                     <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
                     添加
                   </button>
@@ -297,7 +302,7 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                     后置任务
                   </span>
                   <span class="dep-group-hint">当前工作项完成后再推进</span>
-                  <button class="btn sm ghost dep-add" type="button" id="btnDepAddSucc">
+                  <button class="btn sm add dep-add" type="button" id="btnDepAddSucc">
                     <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.4v11.2M4.4 10h11.2"/></svg>
                     添加
                   </button>

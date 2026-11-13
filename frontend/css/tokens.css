@@ -35,7 +35,7 @@
   --info:#2E90FA;    --info-soft:#EFF8FF;    --info-border:#B2DDFF;
   /* 语义前景色：文字/图标用，浅底对比度 ≥4.5:1；原色只用于背景、圆点、进度条 */
   --success-fg:#067647; --warning-fg:#B54708; --danger-fg:#B42318; --info-fg:#175CD3;
-  --plum:#7A5AF8;    --plum-soft:#F4F3FF;    --plum-border:#D9D6FE;
+  --plum:#7A5AF8;    --plum-soft:#F4F3FF;    --plum-border:#D9D6FE; --plum-fg:#5B3FD1;
 
   /* ---- 优先级专色 ---- */
   --p0:#F04438; --p0-soft:#FEF3F2; --p0-fg:#B42318;
@@ -143,7 +143,7 @@ html[data-theme="dark"]{
   --danger:#F97066;  --danger-soft:#2B1615;  --danger-border:#5C2A26; --danger-hover:#F04438;
   --danger-solid:#D92D20; --danger-solid-hover:#B42318;
   --info:#53B1FD;    --info-soft:#10202F;    --info-border:#1F4468;
-  --plum:#9B8AFB;    --plum-soft:#1D1933;    --plum-border:#3B3266;
+  --plum:#9B8AFB;    --plum-soft:#1D1933;    --plum-border:#3B3266; --plum-fg:#B9ACFC;
 
   --success-fg:#75E0A7; --warning-fg:#FEC84B; --danger-fg:#FDA29B; --info-fg:#84CAFF;
 

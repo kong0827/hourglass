@@ -192,7 +192,7 @@ function paintRoster(){
   if(header) header.innerHTML = "";
   if(rosterCache.error || rosterCache.loading || !rosterCache.data){
     if(summary) summary.textContent = rosterCache.error ? "加载失败" : "加载中…";
-    body.innerHTML = '<tr><td colspan="8" class="manager-empty-cell">' + (rosterCache.error ? '花名册加载失败：' + esc(rosterCache.error.message || "网络异常") + ' <button class="btn sm" type="button" data-roster-retry>重试</button>' : '加载中…') + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="manager-empty-cell">' + (rosterCache.error ? '花名册加载失败：' + esc(rosterCache.error.message || "网络异常") + ' <button class="link-btn" type="button" data-roster-retry>重试</button>' : '加载中…') + '</td></tr>';
     return;
   }
   var all = rosterCache.data.members || [], list = filteredRoster(), canEdit = !!rosterCache.data.canEditRole, busy = rosterBusy();
@@ -221,7 +221,7 @@ function paintRoster(){
       + '<td data-label="空间默认职能">' + esc(m.jobTitle || "未设职能") + '</td>'
       + '<td data-label="本项目主角色">' + rosterRoleSelect(m, canEdit) + '</td>'
       + '<td data-label="兼岗"><div class="manager-member-labels">' + secondary.map(function(r){ return '<span class="tag tag-ghost">' + esc(r) + '</span>'; }).join("")
-      + (canEdit ? '<button class="btn sm ghost" type="button" data-roster-secondary="' + esc(m.userId) + '" aria-label="编辑' + esc(name) + '的兼岗"' + disabled + '>' + (secondary.length ? "编辑兼岗" : "+ 添加兼岗") + '</button>' : (!secondary.length ? '<span class="roster-empty">无兼岗</span>' : '')) + '</div></td>'
+      + (canEdit ? '<button class="btn sm ' + (secondary.length ? "ghost" : "add") + '" type="button" data-roster-secondary="' + esc(m.userId) + '" aria-label="编辑' + esc(name) + '的兼岗"' + disabled + '>' + (secondary.length ? "编辑兼岗" : "+ 添加兼岗") + '</button>' : (!secondary.length ? '<span class="roster-empty">无兼岗</span>' : '')) + '</div></td>'
       + '<td data-label="项目权限"><span class="roster-access ' + (m.access === "read" ? "read" : "write") + '">' + (m.access === "read" ? "只读" : "可参与") + '</span></td>'
       + '<td data-label="可见来源"><span class="roster-source">' + esc(m.source || "") + '</span></td></tr>';
   }).join("") || '<tr><td colspan="' + (canEdit ? 8 : 7) + '" class="manager-empty-cell">' + (all.length ? '没有匹配的成员，请清除筛选' : '当前没有可见的项目成员') + '</td></tr>';
@@ -313,7 +313,7 @@ function openRosterCopy(){
   if(!ctx || rosterBusy()) return;
   var projects = rt.reqList.filter(function(p){ return p.id !== ctx.projectId && (!p.workspaceId || p.workspaceId === ctx.workspaceId); });
   var layer = document.createElement("div");
-  layer.className = "modal-layer"; layer.setAttribute("role","dialog"); layer.setAttribute("aria-modal","true"); layer.setAttribute("aria-label","从其他项目复制角色");
+  layer.className = "modal-layer side"; layer.setAttribute("role","dialog"); layer.setAttribute("aria-modal","true"); layer.setAttribute("aria-label","从其他项目复制角色");
   layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); },0); };
   layer.innerHTML = '<form class="sheet roster-copy-sheet"><div class="sheet-head"><h2>从其他项目复制角色</h2><button class="icon-btn sm" type="button" data-copy-close aria-label="关闭">' + icon("close",15) + '</button></div>'
     + '<div class="sheet-body"><p class="roster-note">仅复制同空间、双方都有的成员的有效主角色（含空间继承）与兼岗，形成本项目覆盖快照；不修改公司、空间默认职能或权限。默认跳过目标已有主角色覆盖或兼岗的成员；来源未设角色的不复制。</p>'

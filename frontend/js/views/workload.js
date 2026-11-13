@@ -47,7 +47,7 @@ function workloadFiltersHTML(){
 }
 function workloadToolbar(){
   return '<div class="manager-toolbar"><div><b>成员负载 · 横切</b><span>同一成员跨项目工作项合并计算</span></div><div class="seg mini"><button type="button" data-load-mode="person" aria-pressed="' + (mode === 'person') + '"' + (loading || !cache ? ' disabled' : '') + '>按人</button><button type="button" data-load-mode="week" aria-pressed="' + (mode === 'week') + '"' + (loading || !cache ? ' disabled' : '') + '>按周</button></div>'
-    + '<button class="btn sm ghost" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>导出当前范围 CSV</button>' + fullscreenButtonHTML() + '</div>' + workloadFiltersHTML();
+    + '<button class="btn sm" type="button" data-load-export' + (loading || !cache ? ' disabled' : '') + '>导出当前范围 CSV</button>' + fullscreenButtonHTML() + '</div>' + workloadFiltersHTML();
 }
 function loadWorkload(opts){
   opts = opts || {};

@@ -117,7 +117,7 @@
   font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;
 }
 .gantt-day.weekend{background:var(--surface-sunken);}
-.gantt-day.today{color:var(--primary);font-weight:700;background:var(--primary-soft);}
+.gantt-day.today{color:var(--primary-fg);font-weight:700;background:var(--primary-soft);}
 
 /* 行 */
 .gantt-body{position:relative;}
@@ -342,7 +342,7 @@
   font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;
   font-variant-numeric:tabular-nums;
 }
-.gantt-week.today{color:var(--primary);background:var(--primary-soft);font-weight:700;}
+.gantt-week.today{color:var(--primary-fg);background:var(--primary-soft);font-weight:700;}
 /* 月刻度：年行 + 月行 */
 .gantt-years{display:flex;height:28px;background:var(--surface-sunken);}
 .gantt-year{
@@ -396,7 +396,7 @@
 .gantt-link-temp path{fill:none;stroke:var(--primary);stroke-width:1.6;stroke-dasharray:4 3;}
 
 /* 依赖类型徽标（非 FS 或带滞后时才显示） */
-.gantt-analysis-check{width:14px;flex:0 0 auto;color:var(--primary);font-weight:700;}
+.gantt-analysis-check{width:14px;flex:0 0 auto;color:var(--primary-fg);font-weight:700;}
 .gantt-group-head.depth-2{padding-left:26px;font-weight:600;}
 .gantt-dep-badge{
   font-size:9px;fill:var(--text-3);font-weight:650;

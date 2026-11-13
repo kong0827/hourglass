@@ -592,7 +592,7 @@ function renderDefects(){
   var shown = list.slice(0, defectShown);
   var html = shown.map(function(t, i){ return defectRowHTML(t, i + 1); }).join("");
   if(list.length > shown.length){
-    html += '<button class="btn ghost tc-load-more" type="button" data-tc-def-more>加载更多（已加载 '
+    html += '<button class="btn tc-load-more" type="button" data-tc-def-more>加载更多（已加载 '
       + shown.length + ' / 共 ' + list.length + ' 条）</button>';
   }
   rowsEl.innerHTML = html;
@@ -1208,7 +1208,7 @@ function renderRuns(){
       ? '<div class="run-evs">' + atts.map(function(a){ return evidenceHTML(a, writable); }).join("") + '</div>'
       : "";
     var upload = writable
-      ? '<label class="btn sm ghost run-ev-add" title="上传失败证据">' + icon("plus", 12) + ' 证据'
+      ? '<label class="btn sm add run-ev-add" title="上传失败证据">' + icon("plus", 12) + ' 证据'
         + '<input type="file" hidden data-run-file="' + esc(r.id) + '" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" /></label>'
       : "";
     var bug = r.bugTaskId
@@ -1344,7 +1344,7 @@ function render(){
   }
   var html = rows.map(function(c){ return caseRowHTML(c); }).join("");
   if(caseHasMore){
-    html += '<button class="btn ghost tc-load-more" type="button" data-tc-more>加载更多（已加载 '
+    html += '<button class="btn tc-load-more" type="button" data-tc-more>加载更多（已加载 '
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
   }
   $("tcList").innerHTML = html;
@@ -1370,7 +1370,7 @@ function caseGroupHTML(g){
   }
   var more = "";
   if(g.hasMore){
-    more = '<button class="btn ghost tc-load-more" type="button" data-tc-more="' + esc(g.reqId) + '"'
+    more = '<button class="btn tc-load-more" type="button" data-tc-more="' + esc(g.reqId) + '"'
       + (g.loading ? " disabled" : "") + '>'
       + (g.loading ? "加载中…" : "加载更多（已加载 " + g.items.length + " / 共 " + g.total + " 条）")
       + '</button>';
@@ -2875,7 +2875,7 @@ function renderPlanDetail(){
     + '<button class="btn sm ghost" type="button" data-plan-back>' + icon("left", 13) + ' 返回</button>'
     + '<span class="toolbar-title">' + esc(p.name) + '</span>' + planBadgeHTML(p.status)
     + '<span class="toolbar-meta">' + meta.map(esc).join(" · ") + '</span>'
-    + (w ? '<button class="btn sm ghost" type="button" data-plan-status="' + esc(planNextStatus(p.status)) + '">'
+    + (w ? '<button class="btn sm" type="button" data-plan-status="' + esc(planNextStatus(p.status)) + '">'
         + planNextLabel(p.status) + '</button>' : "")
     + '</div>';
   if(p.note) head += '<p class="foot-note">' + esc(p.note) + '</p>';

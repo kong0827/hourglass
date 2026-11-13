@@ -7,6 +7,7 @@ import { boardParams } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { activeView } from "../core/router.js";
+import { GROUP_IDS, groupOptionsHTML } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { canEditTask, catNameById, catTag, dueDateMD, dueDateTip, dueFlag, dueState, filterOn, progressOf, reqNameById, rt, state, tagChip } from "../core/state.js";
@@ -36,7 +37,7 @@ var smartBar = null, smartTabs = null, smartGroup = null;
 var serverSort = listSort.value || "column";
 var smart = { current:"all", preset:"all", group:"none", subgroup:"none", hideDone:false,
   sort:"default", sortDir:"asc", collapsed:{} };
-var LIST_GROUPS = ["none", "status", "owner", "priority", "project", "category", "version"];
+var LIST_GROUPS = GROUP_IDS;
 /* 版本分组需组内完整：自动按 100/页续拉到该上限；单项可入多组，导出仍按唯一工作项去重 */
 var VERSION_GROUP_MAX = 500;
 /* 列头排序：dueDate/updatedAt/work 复用服务端已有的 due/updated/actual，其余按列 key 本地排序 */
@@ -149,13 +150,9 @@ function initSmartTable(){
   smartBar.innerHTML = '<div class="smart-view-tabs" role="tablist" aria-label="视图"></div>' +
     '<div class="smart-view-tools">' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-list-group aria-label="分组方式">' +
-        '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
-        '<option value="priority">按优先级</option><option value="project">按项目</option>' +
-        '<option value="category">按模块</option><option value="version">按版本</option></select></label>' +
+        groupOptionsHTML(LIST_GROUPS, smart.group) + '</select></label>' +
       '<label class="smart-view-control"><span>二级</span><select class="mini-select" data-list-subgroup aria-label="二级分组方式">' +
-        '<option value="none">不分组</option><option value="status">按状态</option><option value="owner">按负责人</option>' +
-        '<option value="priority">按优先级</option><option value="project">按项目</option>' +
-        '<option value="category">按模块</option><option value="version">按版本</option></select></label>' +
+        groupOptionsHTML(LIST_GROUPS, smart.subgroup) + '</select></label>' +
       '<button class="btn sm ghost list-hide-done" type="button" data-list-hide-done aria-pressed="false">隐藏已完成</button>' +
       '<span class="smart-list-sort"></span>' +
       '<button class="btn sm ghost smart-sort-dir" type="button" data-list-sortdir hidden aria-label="切换排序方向">↑</button>' +

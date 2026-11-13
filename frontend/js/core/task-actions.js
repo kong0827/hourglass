@@ -7,6 +7,7 @@ import { activeView, showView } from "./router.js";
 import { taskPayloadWith } from "./shortcuts.js";
 import { state, canEditTask, rt, taskById, taskCacheExtra } from "./state.js";
 import { deleteTask, openTaskDrawer } from "./task-drawer.js";
+import { openDateAt } from "./date-picker.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast } from "./ui.js";
 import { CAT_DEFAULT_COLOR, COLUMNS, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMinutesShort, parseDate } from "../lib/format.js";
@@ -84,8 +85,7 @@ function openDuePopover(anchor, taskId){
       '<button class="btn sm" type="button" data-due-set="">无期限</button>' +
     '</div>' +
     '<div class="dp-row">' +
-      '<input type="date" value="' + esc(t.dueDate || "") + '" data-due-input aria-label="选择截止日期" />' +
-      '<button class="btn sm primary" type="button" data-due-save>确定</button>' +
+      '<button class="btn sm block" type="button" data-due-pick>' + icon("calendar", 13) + '选择其他日期…</button>' +
     '</div>';
   el.addEventListener("click", function(e){
     var b = e.target.closest("[data-due-set]");
@@ -95,16 +95,16 @@ function openDuePopover(anchor, taskId){
       setTaskDue(taskId, duePresetDate(v));
       return;
     }
-    if(e.target.closest("[data-due-save]")){
-      var inp = el.querySelector("[data-due-input]");
+    if(e.target.closest("[data-due-pick]")){
+      var r = e.target.closest("[data-due-pick]").getBoundingClientRect();
       UI.closeAllPops();
-      setTaskDue(taskId, inp.value || null);
+      openDateAt(r, {
+        value: t.dueDate || "",
+        onPick: function(v){ setTaskDue(taskId, v || null); }
+      });
     }
   });
   UI.openPop(el, anchor, {align:"left", onClose: function(){ el.remove(); }});
-  setTimeout(function(){
-    try{ el.querySelector("[data-due-input]").focus(); }catch(e2){ /* noop */ }
-  }, 30);
 }
 var dueSeqByTask = {};
 function setTaskDue(taskId, dueDate){

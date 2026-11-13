@@ -5,7 +5,7 @@ import { openAttPreview, previewable } from "./att-preview.js";
 import { attachCombo } from "./combo.js";
 import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
-import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
+import { $, attachCount, attachList, btnActualAdd, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
 import { canEditReq, canEditTask, canManageProject, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
@@ -763,7 +763,7 @@ function syncDueNote(){
 }
 function fmtFactDate(iso){
   var d = iso ? parseDate(iso) : null;
-  if(!d || isNaN(d.getTime())) return iso || "—";
+  if(!d || isNaN(d.getTime())) return iso || "未设置";
   return (d.getMonth() + 1) + "-" + pad2(d.getDate());
 }
 /* 首屏速览：状态、进度、投入、截止、测试窗口都从当前表单实时取值 */
@@ -780,14 +780,14 @@ function syncDrawerFacts(){
   if($("factProg")) $("factProg").textContent = prog + "%";
   if($("factProgBar")) $("factProgBar").style.width = prog + "%";
   var act = Number(rt.formActualMinutes) || 0, est = Number(rt.formEstimateMinutes) || 0;
-  if($("factActual")) $("factActual").textContent = act ? fmtMinutesShort(act) : "—";
+  if($("factActual")) $("factActual").textContent = act ? fmtMinutesShort(act) : "未记录";
   if($("factEstimate")) $("factEstimate").textContent = est ? "/ " + fmtMinutesShort(est) : "";
   var due = $("factDue"), dueWrap = $("factDueWrap"), dueNote = $("factDueNote");
   if(due && dueWrap){
     var dd = iDue && iDue.value ? parseDate(iDue.value) : null;
     dueWrap.classList.remove("overdue");
     if(!dd || isNaN(dd.getTime())){
-      due.textContent = "—";
+      due.textContent = "未设置";
       if(dueNote) dueNote.textContent = "";
     }else{
       due.textContent = fmtFactDate(iDue.value);
@@ -811,7 +811,7 @@ function syncDrawerFacts(){
   var ts = current.testStartedAt || "", te = current.testFinishedAt || "";
   var testWrap = $("factTestWrap");
   if(testWrap) testWrap.hidden = !(ts || te);
-  if($("factTest")) $("factTest").textContent = ts ? fmtFactDate(ts) + " → " + (te ? fmtFactDate(te) : "进行中") : "—";
+  if($("factTest")) $("factTest").textContent = ts ? fmtFactDate(ts) + " → " + (te ? fmtFactDate(te) : "进行中") : "未设置";
 }
 function demandOption(){
   var sel = $("iDemand");
@@ -1078,6 +1078,7 @@ function applyDrawerReadOnly(readOnly){
   if(btnCommentSend) btnCommentSend.hidden = !!readOnly;
   if(btnTimer) btnTimer.hidden = !!readOnly;
   if(btnTimerAdd) btnTimerAdd.hidden = !!readOnly;
+  if(btnActualAdd) btnActualAdd.hidden = !!readOnly;
   pendingDescReadOnly = !!readOnly;
   syncTaskDescEditorReadOnly();
   var hint = $("taskFormHint");
@@ -1345,7 +1346,7 @@ function renderTimeline(logs){
 /* 附属数据失败显示“加载失败 + 重试”，不能伪装成空态 */
 function drawerLoadErrorHTML(msg, retryAttr){
   return '<div class="sub-empty">' + esc(msg) + ' ' +
-    '<button class="btn sm ghost" type="button" data-' + retryAttr + '>重试</button></div>';
+    '<button class="link-btn" type="button" data-' + retryAttr + '>重试</button></div>';
 }
 function loadTimeline(taskId){
   if(!timelineBox) return;
@@ -1355,7 +1356,7 @@ function loadTimeline(taskId){
   }).catch(function(ex){
     if(rt.editingId !== taskId) return;
     timelineBox.innerHTML = '<div class="tl-empty">操作时间线加载失败：' +
-      esc(ex.message || "网络异常") + ' <button class="btn sm ghost" type="button" data-timeline-retry>重试</button></div>';
+      esc(ex.message || "网络异常") + ' <button class="link-btn" type="button" data-timeline-retry>重试</button></div>';
   });
 }
 if(timelineBox){
@@ -1364,6 +1365,9 @@ if(timelineBox){
   });
 }
 var origProgress = 0;
+/* 有检查项时进度由完成比派生，不再读手填值；这里记住打开时的基数，供渲染与保存复用 */
+var origSubtaskTotal = 0;
+var origSubtaskDone = 0;
 var startedDone = false;
 var commentsCache = [];
 function renderActualEstimate(actualMinutes, estimateMinutes){
@@ -1502,6 +1506,8 @@ function openTaskDrawer(colId, task, defaults){
     ensureReqDoc(task.reqDocId || "");
     ensureBranch(task.branchId || "", task.reqId || "");
     origProgress = (typeof task.progress === "number") ? task.progress : 0;
+    origSubtaskTotal = Math.max(0, Number(task.subtaskTotal) || 0);
+    origSubtaskDone = Math.max(0, Number(task.subtaskDone) || 0);
     iProg.value = origProgress;
     iNote.value = task.note || "";
     rt.formRecur = task.recurType || "";
@@ -1578,6 +1584,8 @@ function openTaskDrawer(colId, task, defaults){
     ensureReqDoc((defaults && defaults.reqDocId) || "");
     ensureBranch("", initialReqId);
     origProgress = 0;
+    origSubtaskTotal = 0;
+    origSubtaskDone = 0;
     iProg.value = 0;
     iNote.value = "";
     rt.formRecur = "";
@@ -2132,6 +2140,8 @@ function flushPendingDependencies(taskId){
 function syncProgByCol(){
   var done = iCol && iCol.value === "done";
   var wrap = $("progWrap");
+  /* 有检查项就按完成比自动算：手填会与检查项打架，还会让两处数字对不上 */
+  var derived = !done && origSubtaskTotal > 0;
   if(done){
     iProg.value = 100;
     iProg.disabled = true;
@@ -2140,8 +2150,17 @@ function syncProgByCol(){
     if(wrap) wrap.title = "已完成工作项的进度按 100% 计";
     if(hintEl()) hintEl().textContent = "已完成工作项的进度按 100% 计" +
       (origProgress && origProgress !== 100 ? "（原记录 " + origProgress + "%）" : "");
+  }else if(derived){
+    var pct = Math.round(origSubtaskDone / origSubtaskTotal * 100);
+    iProg.value = pct;
+    iProg.disabled = true;
+    if(segProg) segProg.classList.add("disabled");
+    if(progVal) progVal.textContent = pct + "%";
+    if(wrap) wrap.title = "按检查项完成比自动计算";
+    if(hintEl()) hintEl().textContent = "按检查项完成比自动计算（" +
+      origSubtaskDone + "/" + origSubtaskTotal + "）；完成以「移入已完成列」为准";
   }else{
-    iProg.disabled = false;
+    iProg.disabled = !!rt.drawerReadOnly;
     iProg.value = origProgress;
     if(segProg) segProg.classList.remove("disabled");
     if(progVal) progVal.textContent = (Number(origProgress) || 0) + "%";
@@ -2289,6 +2308,7 @@ if(segStart) segStart.addEventListener("click", function(e){
 segProg.addEventListener("click", function(e){
   var b = e.target.closest("[data-prog]"); if(!b) return;
   if(denyReadOnly()) return;
+  if(iProg.disabled) return;   /* 派生进度不可手改 */
   iProg.value = b.dataset.prog; syncProgVal(); rt.formDirty = true;
 });
 [segPri, segCat, segRecur, segDue, segStart, segProg].forEach(wireSegKeyboard);
@@ -3408,7 +3428,11 @@ function renderSubtasks(list){
   rt.subtasksCache = list || [];
   var doneN = 0;
   rt.subtasksCache.forEach(function(s){ if(s.done) doneN++; });
+  /* 检查项是进度的唯一事实来源，列表一刷新就重算并同步抽屉里的进度 */
+  origSubtaskTotal = rt.subtasksCache.length;
+  origSubtaskDone = doneN;
   if(subCount) subCount.textContent = rt.subtasksCache.length ? (doneN + "/" + rt.subtasksCache.length) : "";
+  syncProgByCol();
   if(!rt.subtasksCache.length){
     subList.innerHTML = '<div class="sub-empty">暂无检查项，输入后回车即可添加</div>';
     return;
@@ -3642,6 +3666,8 @@ function renderWork(d){
   workVal.textContent = (running ? "计时中 · 已 " + d.elapsedMinutes + " 分钟；" : "") +
     "累计 " + fmtMinutes(d.totalMinutes) + mine;
   workVal.classList.toggle("running", running);
+  /* 补记、作废后「实际投入」要跟着工时汇总变，不能只刷新工时区块那一处 */
+  renderActualEstimate(d.totalMinutes, rt.formEstimateMinutes);
 }
 function fetchTimer(taskId, seq){
   API.get("/api/tasks/" + encodeURIComponent(taskId) + "/timer").then(function(d){
@@ -3778,13 +3804,14 @@ function openTimeAddDialog(){
   if(iTimeNote) iTimeNote.value = "";
   UI.openModal(dlgTimeAdd, "#iTimeHours");
 }
-if(btnTimerAdd){
-  btnTimerAdd.addEventListener("click", function(){
-    if(!rt.editingId) return;
-    if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
-    openTimeAddDialog();
-  });
+/* 「工时」区块和「实际投入」旁边各有一个补记入口，共用同一个弹窗 */
+function openTimeAddFromEntry(){
+  if(!rt.editingId) return;
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return; }
+  openTimeAddDialog();
 }
+if(btnTimerAdd) btnTimerAdd.addEventListener("click", openTimeAddFromEntry);
+if(btnActualAdd) btnActualAdd.addEventListener("click", openTimeAddFromEntry);
 if(dlgTimeAddCancel){
   dlgTimeAddCancel.addEventListener("click", function(){ UI.closeModal(dlgTimeAdd); });
 }

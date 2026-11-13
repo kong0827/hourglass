@@ -799,7 +799,7 @@ function renderReqDocReader(doc){
           '<button class="btn sm ghost" type="button" data-rrd-comments="' + esc(doc.id) + '" title="查看评论；选中正文可划线评论">' + icon("comment", 13) + ' 评论</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-history="' + esc(doc.id) + '" data-can-restore="' + (canWrite ? "1" : "0") + '" title="查看历史版本">' + icon("clock", 13) + ' 历史版本</button>' +
           '<button class="btn sm ghost" type="button" data-rrd-export="' + esc(doc.id) + '" title="导出文档">' + icon("download", 13) + ' 导出</button>' +
-          '<button class="btn sm ghost" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
+          '<button class="btn sm" type="button" data-rrd-edit="' + esc(doc.id) + '">' + icon("edit", 13) + ' 编辑文档</button>' +
         '</span>' +
       '</div>' +
       '<div class="rrd-meta">' + meta.join(" · ") + '</div>' +

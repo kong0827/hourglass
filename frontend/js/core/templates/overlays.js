@@ -72,7 +72,7 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
     </div>
     <div class="sheet-body">
       <div class="field" id="fDlgWsDelete">
-        <label for="dlgWsDeleteInput">请输入空间名称 <b id="dlgWsDeleteName" style="color:var(--danger)"></b> 以确认</label>
+        <label for="dlgWsDeleteInput">请输入空间名称 <b id="dlgWsDeleteName" style="color:var(--danger-fg)"></b> 以确认</label>
         <input id="dlgWsDeleteInput" type="text" maxlength="20" autocomplete="off" />
         <span class="err">名称不一致</span>
       </div>

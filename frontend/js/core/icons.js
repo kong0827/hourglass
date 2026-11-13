@@ -56,6 +56,7 @@
     /* ---- 箭头（需求列表树用） ---- */
     down: function (s) { return svg(s, '<path d="M5 7.8 10 12.8l5-5"/>'); },
     chevronRight: function (s) { return svg(s, '<path d="M7.6 4.6 13 10l-5.4 5.4"/>'); },
+    chevronUp: function (s) { return svg(s, '<path d="M4.6 12.2 10 6.8l5.4 5.4"/>'); },
 
     /* ---- 操作 ---- */
     plus: function (s) { return svg(s, '<path d="M10 4.4v11.2M4.4 10h11.2"/>', 1.8); },

@@ -2,15 +2,9 @@
 
 #view-workcolumn{padding:0;overflow:auto;}
 
-/* ---------- 列头入口（看板） ---------- */
-.board-col-head .col-open-btn{
-  color:var(--primary-fg);background:var(--primary-soft);border-color:var(--primary-border);
-}
-.board-col-head .col-open-btn:hover{
-  background:var(--primary);border-color:var(--primary);color:#fff;
-}
+/* ---------- 列脚入口（看板） ---------- */
 .col-foot-split{justify-content:space-between;gap:10px;}
-.col-foot-note{font-size:11.5px;color:var(--text-3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.col-foot-note{flex:1 1 auto;font-size:11.5px;color:var(--text-3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .col-foot-link{
   flex:0 0 auto;height:24px;padding:0 8px;border-radius:var(--r-xs);
   border:1px solid var(--primary-border);background:var(--primary-soft);
@@ -48,9 +42,9 @@
 }
 .wc-tab .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
 .wc-tab b{font-size:11px;font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums;}
-.wc-tab:hover{color:var(--primary);}
-.wc-tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:650;}
-.wc-tab.on b{color:var(--primary);}
+.wc-tab:hover{color:var(--primary-fg);}
+.wc-tab.on{color:var(--primary-fg);border-bottom-color:var(--primary);font-weight:650;}
+.wc-tab.on b{color:var(--primary-fg);}
 
 /* ---------- 工作页内容 ---------- */
 .wc-body{width:100%;max-width:1600px;margin:0 auto;padding:16px var(--content-pad) 32px;}
@@ -68,9 +62,9 @@
   margin-top:2px;font-size:21px;line-height:1.3;font-weight:680;
   font-variant-numeric:tabular-nums;color:var(--text);
 }
-.wc-metric-value.warn{color:var(--warning);}
-.wc-metric-value.bad{color:var(--danger);}
-.wc-metric-value.ok{color:var(--success);}
+.wc-metric-value.warn{color:var(--warning-fg);}
+.wc-metric-value.bad{color:var(--danger-fg);}
+.wc-metric-value.ok{color:var(--success-fg);}
 .wc-metric-note{
   margin-top:2px;font-size:11.5px;color:var(--text-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -143,7 +137,7 @@
   border:1px dashed var(--border-strong);background:transparent;
   color:var(--text-2);font-size:12.5px;font-weight:600;
 }
-.wc-loadmore:hover{background:var(--surface);color:var(--primary);border-color:var(--primary-border);}
+.wc-loadmore:hover{background:var(--surface);color:var(--primary-fg);border-color:var(--primary-border);}
 /* 并发改动导致去重后条数对不上：不再提供翻页，改为可点击的刷新提示 */
 .wc-loadmore-note{
   display:block;width:100%;margin-top:12px;padding:9px 12px;border-radius:var(--r-sm);
@@ -158,6 +152,37 @@
 .wc-empty h3{margin:0 0 6px;font-size:14px;}
 .wc-empty p{margin:0 0 12px;color:var(--text-3);font-size:12px;}
 .wc-skel{margin-top:12px;}
+
+/* ---------- 列表形态 ---------- */
+.wc-layout{margin-left:auto;}
+.wc-list{display:flex;flex-direction:column;gap:10px;margin-top:12px;overflow-x:auto;}
+.wc-list > *{min-width:var(--wc-min,0);}
+.wc-list .list-head{
+  position:static;grid-template-columns:var(--wc-cols);gap:8px;padding:0 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);
+}
+.wc-lane-list{margin-top:0;padding-bottom:2px;}
+.wc-row{
+  grid-template-columns:var(--wc-cols);gap:8px;min-height:var(--list-row-h);padding:8px 14px;
+  background:transparent;border-bottom:1px solid var(--border);
+}
+.wc-row:last-child{border-bottom:none;}
+.wc-row .cell{min-width:0;font-size:12px;}
+.wc-row .wcl-none{color:var(--text-3);}
+.wc-row .wcl-title{display:flex;flex-direction:column;gap:2px;white-space:normal;}
+.wc-row .wcl-t,.wc-row .wcl-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wc-row .wcl-t{font-size:13px;line-height:19px;color:var(--text);}
+.wc-row .wcl-sub{font-size:11.5px;line-height:16px;color:var(--text-3);}
+.wc-row .wcl-who{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;}
+.wc-row .wcl-who > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.wc-row .wcl-risk > .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+/* 日期与数值列右对齐，和「我的工作」的 ta-r 口径一致 */
+.wc-list .list-head .ta-r,.wc-row .cell.ta-r{text-align:right;}
+/* 宽屏装得下列宽时不再自建滚动容器，表头才能贴住页头吸顶；窄屏保留横向滚动兜底 */
+@media (min-width:1280px){
+  .wc-list{overflow:visible;}
+  .wc-list .list-head{position:sticky;top:var(--wc-sticky-top,0);z-index:6;}
+}
 
 @media (max-width:1100px){
   .wc-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}

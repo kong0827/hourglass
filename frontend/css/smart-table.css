@@ -18,7 +18,7 @@
 #view-list .smart-view-tab:hover,
 #view-demands .smart-view-tab:hover{background:var(--surface-hover);color:var(--text);}
 #view-list .smart-view-tab.on,
-#view-demands .smart-view-tab.on{background:var(--primary-soft);color:var(--primary);font-weight:600;}
+#view-demands .smart-view-tab.on{background:var(--primary-soft);color:var(--primary-fg);font-weight:600;}
 #view-list .smart-view-custom,
 #view-demands .smart-view-custom{display:inline-flex;align-items:center;flex:0 0 auto;border-radius:var(--r-md);}
 #view-list .smart-view-custom .smart-view-tab,

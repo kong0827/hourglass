@@ -588,7 +588,7 @@ function openDrillModal(scope, val, metric){
       + '<td>' + (t.boardColumn === "done"
         ? '<span class="tag tag-success">已完成</span>'
         : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td></tr>';
-  }).join("") || '<tr><td colspan="8" class="foot-note" style="padding:16px;text-align:center">该口径下暂无工作项</td></tr>';
+  }).join("") || '<tr><td colspan="8" class="foot-note tbl-empty">该口径下暂无工作项</td></tr>';
   var layer = document.createElement("div");
   layer.className = "modal-layer";
   layer.setAttribute("role", "dialog");
@@ -662,7 +662,7 @@ function openVersionDemandsModal(versionId){
         + '<td>' + esc(d.itemKind || "其他") + '</td>'
         + '<td><span class="tag ghost">' + esc(demandStatusLabel(d.status)) + '</span></td>'
         + '<td>' + esc(d.priority || "—") + '</td></tr>';
-    }).join("") || '<tr><td colspan="4" class="foot-note" style="padding:16px;text-align:center">该版本没有已排需求</td></tr>';
+    }).join("") || '<tr><td colspan="4" class="foot-note tbl-empty">该版本没有已排需求</td></tr>';
     layer.querySelector(".desc").textContent = "共 " + rows.length + " 项 · 点击需求行打开详情";
     layer.querySelector(".tbl-wrap").innerHTML = '<table class="phase-tbl"><thead><tr>'
       + '<th>需求</th><th>类型</th><th>状态</th><th>优先级</th>'
@@ -724,7 +724,7 @@ function openMemberDrill(userId, name){
     function syncBody(){
       var body = st.items.map(memberDrillRowHTML).join("");
       if(!st.items.length){
-        body = '<tr><td colspan="8" class="foot-note" style="padding:16px;text-align:center">该成员在此项目暂无计时记录</td></tr>';
+        body = '<tr><td colspan="8" class="foot-note tbl-empty">该成员在此项目暂无计时记录</td></tr>';
       } else if(st.hasMore){
         body += '<tr><td colspan="8" class="foot-note" style="padding:10px;text-align:center">'
           + '<button class="btn sm block" type="button" data-member-more' + (st.loading ? " disabled" : "") + '>'
@@ -908,7 +908,7 @@ function taskTable(mode){
       + '<td><span class="mini-tag ' + devCls(dev) + '">' + (dev === null ? "—" : ((dev > 0 ? "+" : "") + dev + "%")) + '</span></td>'
       + '<td>' + (isDone(t) ? '<span class="tag tag-success">已完成</span>' : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
       + '</tr>';
-  }).join("") || '<tr><td colspan="10" class="foot-note" style="padding:16px;text-align:center">该项目还没有工作项</td></tr>';
+  }).join("") || '<tr><td colspan="10" class="foot-note tbl-empty">该项目还没有工作项</td></tr>';
   var segOpts;
   if(mode === "phase"){
     segOpts = [["all", "全部"], ["mvp", "首版开发"], ["post", "迭代维护"]];
@@ -959,7 +959,7 @@ function taskTable(mode){
       + '</div>'
     : "";
   var emptyRow = cache.tasks.length
-    ? '<tr data-tbl-empty hidden><td colspan="10" class="foot-note" style="padding:16px;text-align:center">没有符合筛选条件的工作项</td></tr>'
+    ? '<tr data-tbl-empty hidden><td colspan="10" class="foot-note tbl-empty">没有符合筛选条件的工作项</td></tr>'
     : "";
   return '<div class="panel"><div class="panel-head"><h3>' + head + '</h3>'
     + '<span class="meta-right">计划起止 · 预估 / 实际 · 偏差 · 点击行打开工作项</span>' + seg + '</div>'
@@ -2637,7 +2637,7 @@ function showReleaseNote(id){
         + '<button class="btn sm" type="button" data-note-export>导出当前规划 CSV</button><h4>计划工作项</h4><ul>' + taskRows + '</ul><h4>目标需求</h4><ul>' + demands + '</ul></div>';
     }).catch(function(ex){
       if(!dlg.current()) return;
-      dlg.body.innerHTML = '<p class="release-error" role="alert">' + esc(ex.message || "加载发布说明失败") + '</p><button class="btn" type="button" data-note-retry>重试</button>';
+      dlg.body.innerHTML = '<p class="release-error" role="alert">' + esc(ex.message || "加载发布说明失败") + '</p><button class="link-btn" type="button" data-note-retry>重试</button>';
     });
   }
   dlg.layer.addEventListener("click", function(e){

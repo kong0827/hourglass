@@ -34,7 +34,7 @@
 .manager-project-card:hover{box-shadow:var(--shadow-md);}
 .manager-project-head{display:flex;align-items:center;gap:8px;min-width:0;}
 .manager-project-name{min-width:0;flex:1;text-align:left;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.manager-project-name:hover{color:var(--primary);}
+.manager-project-name:hover{color:var(--primary-fg);}
 .manager-project-main{display:flex;align-items:center;gap:18px;}
 .manager-ring{--ring:var(--success);position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ring) calc(var(--p)*1%),var(--surface-sunken) 0);border:0;padding:0;font:inherit;color:inherit;cursor:pointer;transition:box-shadow var(--dur-fast) var(--ease-out);}
 .manager-ring:hover{box-shadow:0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);}
@@ -45,7 +45,7 @@
 .manager-ring b{position:relative;font-size:13px;font-variant-numeric:tabular-nums;}
 .manager-project-stats{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;}
 .manager-project-stats button{display:flex;align-items:center;justify-content:space-between;padding:3px 5px;border-radius:var(--r-xs);font-size:12px;color:var(--text-2);}
-.manager-project-stats button:hover{background:var(--surface-hover);color:var(--primary);}
+.manager-project-stats button:hover{background:var(--surface-hover);color:var(--primary-fg);}
 .manager-project-stats button.over{color:var(--danger-fg);}
 .manager-project-stats b{font-size:13px;font-variant-numeric:tabular-nums;}
 .manager-project-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px;}
@@ -115,9 +115,9 @@
 .member-layer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 -4px;}
 .member-layer-head>b{font-size:13px;color:var(--text);}
 .member-layer-head>span{min-width:0;font-size:12px;color:var(--text-3);}
-.member-link{padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-link{padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary-fg);cursor:pointer;}
 .member-link:hover{text-decoration:underline;}
-.member-back{align-self:flex-start;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary);cursor:pointer;}
+.member-back{align-self:flex-start;padding:0;border:0;background:none;font:inherit;font-size:12.5px;color:var(--primary-fg);cursor:pointer;}
 .member-back:hover{text-decoration:underline;}
 .member-share{display:flex;align-items:center;gap:8px;min-width:120px;}
 .member-share .progress{flex:1;display:block;height:6px;border-radius:6px;background:var(--surface-sunken);overflow:hidden;}
@@ -184,7 +184,7 @@
 .manager-delivery>div{display:grid;grid-template-columns:58px minmax(100px,1fr) 100px;align-items:center;gap:12px;font-size:12.5px;}
 .manager-delivery b{text-align:right;font-size:11.5px;}
 .manager-note{margin:8px 0 0;color:var(--text-3);font-size:12px;line-height:20px;}
-.manager-cell-link{padding:2px 4px;color:var(--primary);font-weight:600;border-radius:var(--r-xs);}
+.manager-cell-link{padding:2px 4px;color:var(--primary-fg);font-weight:600;border-radius:var(--r-xs);}
 .manager-cell-link:hover{background:var(--primary-soft);}
 .manager-matrix{min-width:900px;}
 .manager-risk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;}
@@ -194,7 +194,7 @@
 .manager-risk-card{padding:12px;display:flex;flex-direction:column;gap:9px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:var(--r-md);}
 .manager-risk-card.blocked{border-left-color:var(--warning)}.manager-risk-card.stagnant{border-left-color:var(--text-3)}
 .manager-risk-title{text-align:left;font-size:13px;line-height:20px;font-weight:500;color:var(--text);}
-.manager-risk-title:hover{color:var(--primary);}
+.manager-risk-title:hover{color:var(--primary-fg);}
 .manager-risk-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);}
 .manager-risk-meta span+span::before{content:"·";margin-right:7px;}
 .manager-risk-foot{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-3);}
@@ -220,7 +220,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .manager-drill-name{display:flex;align-items:center;min-width:0;}
 .manager-drill-title{font-weight:600;color:var(--text);}
 .manager-drill-link{padding:0;border:0;background:transparent;font:inherit;font-weight:600;color:var(--text);cursor:pointer;text-align:left;}
-.manager-drill-link:hover{color:var(--primary);}
+.manager-drill-link:hover{color:var(--primary-fg);}
 .manager-drill-count{margin-left:6px;font-size:11.5px;color:var(--text-3);}
 .manager-drill-tbl tr.drill-group > td{background:var(--surface-sunken);}
 .manager-drill-tbl tr[data-open-task]:hover > td{background:var(--surface-hover);}
@@ -288,7 +288,7 @@ button.manager-overload-note:hover{border-color:var(--warning);}
 .project-module-editor td{padding:8px 0;background:transparent;border-bottom:0;}
 .project-module-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--surface-2);border-radius:var(--r-sm);}
 .project-module-del{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;background:var(--danger-soft);border:1px solid var(--danger-border);border-radius:var(--r-md);}
-.project-module-del-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--surface);border:1px solid var(--danger-border);color:var(--danger);}
+.project-module-del-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--surface);border:1px solid var(--danger-border);color:var(--danger-fg);}
 .project-module-inline>b,.project-module-del-text b{font-size:12.5px;color:var(--text);}
 .project-module-inline input[type="text"],.project-module-target select{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:12.5px;}
 .project-module-inline input[type="text"]{width:220px;}

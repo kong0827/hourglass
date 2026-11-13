@@ -5,8 +5,11 @@ import { loadCategories } from "../core/app.js";
 import { icon } from "../core/icons.js";
 import { activeView } from "../core/router.js";
 import { dueMetaClass, dueState, dueText, reqNameById, rt, state, tagChip } from "../core/state.js";
+import { groupDimName, groupOptionsHTML } from "../core/group-dims.js";
 import { openTaskById } from "../core/task-actions.js";
 import { ownerOptions } from "../core/task-drawer.js";
+import { isMobile } from "../core/layout.js";
+import { listDensitySegHTML } from "../core/list-density.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { COLUMNS, avatarHTML, colMeta, colName, dayDiff, fmtMinutesShort, fmtShortMD, parseDate, priTagHTML, typeBadgeHTML, typeName } from "../lib/format.js";
 
@@ -14,7 +17,9 @@ var PAGE_SIZE = 100;
 var DONE_COL = "done";
 var DEFAULT_RANGE = "week";
 var RANGE_OPTIONS = [["week","本周"],["month","本月"],["quarter","近 90 天"],["all","全部历史"]];
-var GROUP_OPTIONS = [["owner","负责人"],["project","项目"],["priority","优先级"],["category","模块"]];
+/* 工作页一列本身就是一种状态，分组只提供「列内怎么再切一刀」的四个维度 */
+var GROUP_OPTIONS = ["owner", "priority", "project", "category"];
+var GROUP_IDS = GROUP_OPTIONS;
 var TYPE_OPTIONS = [["story","需求"],["task","任务"],["bug","缺陷"],["epic","史诗"]];
 var PRI_OPTIONS = ["P0","P1","P2","P3"];
 var DUE_OPTIONS = [["over","已逾期"],["today","今天到期"],["soon","3 天内"],["none","未设截止"]];
@@ -28,22 +33,48 @@ var COLUMN_RULES = {
 };
 var DEFAULT_RULE = "当前列的队列、风险与工时消耗；统计在服务端聚合，明细分页加载。";
 
+var WC_LAYOUTS = ["card", "list"];
+var wcLayout = wcLayoutPref();
+function wcLayoutPref(){
+  var v = "";
+  try{ v = localStorage.getItem("ds.wc.layout"); }catch(e){ return "card"; }
+  return WC_LAYOUTS.indexOf(v) >= 0 ? v : "card";
+}
+function setWcLayout(v){
+  if(WC_LAYOUTS.indexOf(v) === -1 || wcLayout === v) return;
+  wcLayout = v;
+  try{ localStorage.setItem("ds.wc.layout", v); }catch(e){ /* 受限环境忽略 */ }
+  render();
+}
+function wcListMode(){
+  /* 手机上列表要横向滚动才能放下列宽，形态切换只在桌面端提供 */
+  return wcLayout === "list" && !isMobile();
+}
+function wcLayoutSegHTML(){
+  var names = { card:"卡片", list:"列表" };
+  return '<div class="seg mini wc-layout" role="group" aria-label="工作页展示形态">' + WC_LAYOUTS.map(function(k){
+    return '<button type="button" data-wc-layout="' + k + '" aria-pressed="' + (wcLayout === k) + '">' + names[k] + '</button>';
+  }).join("") + '</div>';
+}
+
 var st = {
   active:false,
   col:"",
   routeKey:"",
+  queryKey:"",
   seq:0,
   loading:false,
   timer:null,
   columns:{}
 };
 
+function defaultGroup(col){ return col === DONE_COL ? "project" : "owner"; }
 function colState(id){
   if(!st.columns[id]){
     st.columns[id] = {
       q:"", req:"", owner:"", pri:"", type:"", cat:"", due:"", blocked:false,
       sort: id === DONE_COL ? "completed" : "due",
-      group: id === DONE_COL ? "project" : "owner",
+      group: defaultGroup(id),
       range: DEFAULT_RANGE,
       offset: 0,
       rows: [],
@@ -61,17 +92,18 @@ function rangeLabel(v){
   for(var i = 0; i < RANGE_OPTIONS.length; i++) if(RANGE_OPTIONS[i][0] === v) return RANGE_OPTIONS[i][1];
   return "本周";
 }
-function groupLabel(v){
-  for(var i = 0; i < GROUP_OPTIONS.length; i++) if(GROUP_OPTIONS[i][0] === v) return GROUP_OPTIONS[i][1];
-  return "负责人";
-}
+function normalizeGroup(v){ return GROUP_IDS.indexOf(v) !== -1 ? v : ""; }
+function groupLabel(v){ return groupDimName(v || "owner"); }
 function typeLabel(v){
   for(var i = 0; i < TYPE_OPTIONS.length; i++) if(TYPE_OPTIONS[i][0] === v) return TYPE_OPTIONS[i][1];
   return v || "任务";
 }
-function routeHash(col, range){
+function routeHash(col, range, group){
   var h = "#/workcolumn?col=" + encodeURIComponent(col);
   if(isDone(col)) h += "&range=" + encodeURIComponent(normalizeRange(range));
+  /* 分组与列、时间窗一起进链接：同一组合能直接发给同事复现 */
+  var g = normalizeGroup(group);
+  if(g) h += "&group=" + encodeURIComponent(g);
   return h;
 }
 function parseRoute(){
@@ -79,10 +111,11 @@ function parseRoute(){
   var qi = raw.indexOf("?");
   if((qi >= 0 ? raw.substring(0, qi) : raw) !== "workcolumn") return null;
   var params = new URLSearchParams(qi >= 0 ? raw.substring(qi + 1) : "");
-  return { col: params.get("col") || "", range: params.get("range") || "" };
+  return { col: params.get("col") || "", range: params.get("range") || "", group: params.get("group") || "" };
 }
-function setRouteHash(push, col, range){
-  var h = routeHash(col || currentCol(), range || currentState().range);
+function setRouteHash(push, col, range, group){
+  var h = routeHash(col || currentCol(), range || currentState().range,
+    group || currentState().group);
   if(window.location.hash === h) return;
   try{
     if(push) history.pushState(null, "", h);
@@ -130,7 +163,8 @@ function load(reset, quiet){
       st.col = resolved;
       cs = colState(resolved);
     }
-    st.routeKey = resolved + "|" + (isDone(resolved) ? cs.range : "");
+    st.queryKey = resolved + "|" + (isDone(resolved) ? cs.range : "");
+    st.routeKey = st.queryKey + "|" + cs.group;
     /* 追问「加载更多」的响应不带指标，沿用首屏结果 */
     var prevMetrics = cs.data && cs.data.metrics;
     cs.data = data;
@@ -145,7 +179,7 @@ function load(reset, quiet){
       items.forEach(function(t){ if(!known[t.id]){ cs.rows.push(t); known[t.id] = 1; } });
     }
     cs.offset = cs.rows.length;
-    setRouteHash(false, resolved, cs.range);
+    setRouteHash(false, resolved, cs.range, cs.group);
     if(activeView === "workcolumn" && st.active) render();
   }).catch(function(ex){
     if(seq !== st.seq) return;
@@ -167,7 +201,9 @@ function enterWorkColumn(){
   st.col = col;
   var cs = colState(col);
   if(route.range) cs.range = normalizeRange(route.range);
-  st.routeKey = col + "|" + (isDone(col) ? cs.range : "");
+  cs.group = normalizeGroup(route.group) || defaultGroup(col);
+  st.queryKey = col + "|" + (isDone(col) ? cs.range : "");
+  st.routeKey = st.queryKey + "|" + cs.group;
   loadCategories().then(function(){ if(activeView === "workcolumn") render(); });
   load(true);
 }
@@ -178,10 +214,14 @@ function refreshFromHash(){
   var col = route.col || "backlog";
   var cs = colState(col);
   if(route.range) cs.range = normalizeRange(route.range);
-  var key = col + "|" + (isDone(col) ? cs.range : "");
-  if(key === st.routeKey && cs.data) return;
+  cs.group = normalizeGroup(route.group) || defaultGroup(col);
+  var queryKey = col + "|" + (isDone(col) ? cs.range : "");
+  var key = queryKey + "|" + cs.group;
+  if(key === st.routeKey) return;
   st.routeKey = key;
   st.col = col;
+  /* 只改了分组：数据一样，重排即可，不重新请求 */
+  if(cs.data && queryKey === st.queryKey){ render(); return; }
   load(true);
 }
 
@@ -210,14 +250,14 @@ function metricsHTML(d){
       : "没有设置截止日期的完成项";
     /* 五张卡统一按 metricRange 口径：全部历史明细时指标收敛到近 90 天，全量数留在头部 */
     return metric(rangeLabel(d.metricRange || d.range) + "完成", Number(m.count || 0) + " 项", windowNote)
-      + metric("平均周期", (m.avgAgeDays == null ? "—" : m.avgAgeDays + " 天"), "创建到完成，按当前时间窗")
+      + metric("平均周期", (m.avgAgeDays == null ? "暂无" : m.avgAgeDays + " 天"), "创建到完成，按当前时间窗")
       + metric("逾期完成", (m.lateCompleted || 0) + " 项", dueNote, (m.lateCompleted || 0) ? "warn" : "ok")
       + timeMetric(m)
-      + metric("最近完成", m.lastCompletedAt ? fmtShortMD(parseDate(m.lastCompletedAt)) : "—", "按完成日期");
+      + metric("最近完成", m.lastCompletedAt ? fmtShortMD(parseDate(m.lastCompletedAt)) : "暂无", "按完成日期");
   }
   return metric("当前列", (d.matched || 0) + " 项", "叠加筛选后的条数")
     + (d.overdueEnabled === false
-      ? metric("已逾期", "—", "该列不累计逾期")
+      ? metric("已逾期", "不适用", "该列不累计逾期")
       : metric("已逾期", (m.overdue || 0) + " 项",
         m.overdue ? "优先确认是否可关闭或改期" : "当前结果无逾期",
         m.overdue ? "bad" : "ok"))
@@ -302,7 +342,7 @@ function filtersHTML(d, cs){
     + '<div class="wc-field"><span>风险</span><button class="wc-toggle" type="button" data-wc-blocked aria-pressed="' +
       (cs.blocked ? "true" : "false") + '">只看被阻塞</button></div>'
     + filterSelect("排序", "sort", optionHTML(sortPairs, cs.sort, "默认顺序").replace('<option value="">默认顺序</option>', ''), false)
-    + filterSelect("分组", "group", optionHTML(GROUP_OPTIONS, cs.group, "不分组").replace('<option value="">不分组</option>', ''), false)
+    + filterSelect("分组", "group", groupOptionsHTML(GROUP_OPTIONS, cs.group), false)
     + '<div class="wc-actions"><span class="wc-note">指标与统计按当前筛选实时聚合 · 明细单次最多 ' + PAGE_SIZE + ' 条</span>' +
       '<button class="btn sm" type="button" data-wc-reset>清空筛选</button></div>'
     + '</div>';
@@ -392,6 +432,118 @@ function cardHTML(t, done){
   '</article>';
 }
 
+function laneHeadHTML(g, d){
+  return '<div class="wc-lane-head">' +
+    '<span class="wc-lane-title">' + esc(g.name) + '</span>' +
+    '<span class="wc-lane-count">' + g.rows.length + '</span>' +
+    '<span class="wc-lane-meta">' + esc(laneMeta(d, g.rows)) + '</span>' +
+    '<div class="wc-lane-stats">' + laneStats(d, g.rows) + '</div></div>';
+}
+
+/* 列表形态：字段与卡片同源，只是把标签行压成列；表头只在整表上方出现一次，分组以内嵌泳道头区分。
+   列宽沿用 task-list 词表（类型80/优先级72/负责人96/截止108/工时120），标签列只放一个 chip 故收到 104；
+   两组列的 min 之和都压在 960 以内，1280 视口即使侧栏展开（内容宽约 992）也不横向滚动。 */
+var WC_COL_DEFS = {
+  title:{ label:"工作项", w:"minmax(176px,2.4fr)", min:176 },
+  type:{ label:"类型", w:"80px", min:80 },
+  priority:{ label:"优先级", w:"72px", min:72, sort:"priority" },
+  owner:{ label:"负责人", w:"96px", min:96 },
+  due:{ label:"截止", w:"108px", min:108, sort:"due" },
+  completed:{ label:"完成", w:"92px", min:92, sort:"completed", align:"right" },
+  cycle:{ label:"周期", w:"72px", min:72, align:"right" },
+  work:{ label:"工时", w:"minmax(120px,1.1fr)", min:120, align:"right" },
+  risk:{ label:"风险", w:"84px", min:84 },
+  tag:{ label:"标签", w:"104px", min:104 }
+};
+/* 排序方向由服务端 SQL 固定（完成/更新倒序，截止/优先级正序），表头只切列、不翻转方向 */
+var WC_SORT_DIR = { completed:"desc", updated:"desc", priority:"asc", due:"asc" };
+var WC_LIST_COLS = {
+  open:["title","type","priority","owner","due","work","risk","tag"],
+  done:["title","type","priority","owner","completed","cycle","work","risk","tag"]
+};
+function wcCols(d, mode){
+  var keys = (d.done ? WC_LIST_COLS.done : WC_LIST_COLS.open).slice();
+  /* 分组泳道的标题就是该维度，行内不再重复一列 */
+  if(mode === "owner") keys = keys.filter(function(k){ return k !== "owner"; });
+  if(mode === "priority") keys = keys.filter(function(k){ return k !== "priority"; });
+  return keys.map(function(k){
+    var def = WC_COL_DEFS[k];
+    return { key:k, label:def.label, w:def.w, align:def.align || "", sort:def.sort || "" };
+  });
+}
+function wcListMinW(cols){
+  return cols.reduce(function(n, c){ return n + WC_COL_DEFS[c.key].min; }, 0) + (cols.length - 1) * 8;
+}
+function wcHeadCellHTML(c, cs){
+  var cls = c.align === "right" ? ' class="ta-r"' : '';
+  if(!c.sort) return '<span' + cls + '>' + esc(c.label) + '</span>';
+  var active = cs.sort === c.sort;
+  var desc = WC_SORT_DIR[c.sort] === "desc";
+  return '<span aria-sort="' + (active ? (desc ? "descending" : "ascending") : "none") + '"' + cls + '>' +
+    '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-wc-sort="' + c.sort + '"' +
+      ' title="按「' + esc(c.label) + '」排序">' + esc(c.label) +
+      '<i class="lh-ind" aria-hidden="true">' + (active ? (desc ? "↓" : "↑") : "") + '</i></button></span>';
+}
+function wcListHTML(groups, d, mode, cs){
+  var cols = wcCols(d, mode);
+  return '<div class="wc-list" style="--wc-cols:' + cols.map(function(c){ return c.w; }).join(" ") +
+    ';--wc-min:' + wcListMinW(cols) + 'px"><div class="list-head">' +
+    cols.map(function(c){ return wcHeadCellHTML(c, cs); }).join("") + '</div>' +
+    groups.map(function(g){
+      return '<section class="wc-lane wc-lane-list">' + laneHeadHTML(g, d) +
+        '<div class="wc-lane-rows" role="list">' +
+        g.rows.map(function(t){ return wcRowHTML(t, d.done, mode, cols); }).join("") + '</div></section>';
+    }).join("") + '</div>';
+}
+function wcRowHTML(t, done, mode, cols){
+  return '<div class="list-row wc-row" data-wc-task="' + esc(t.id) + '" tabindex="0" role="listitem" aria-label="' + esc(t.title) + '">' +
+    cols.map(function(c){
+      return '<span class="cell wcl-' + c.key + (c.align === "right" ? " ta-r" : "") + '">' + wcCell(t, c.key, done, mode) + '</span>';
+    }).join("") +
+    '</div>';
+}
+function wcSubtitle(t, mode){
+  var parts = [];
+  if(mode !== "project") parts.push(t.reqName || reqNameById(t.reqId) || "未归类项目");
+  if(mode !== "category"){
+    var module = catName(t);
+    if(module) parts.push(module);
+  }
+  return parts.join(" · ");
+}
+function wcCell(t, key, done, mode){
+  /* 无值就留白，不用「—」占位 */
+  var none = "";
+  if(key === "title"){
+    var sub = wcSubtitle(t, mode);
+    return '<span class="wcl-t" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' +
+      (sub ? '<span class="wcl-sub" title="' + esc(sub) + '">' + esc(sub) + '</span>' : '');
+  }
+  if(key === "type") return typeBadgeHTML(t.itemType) || '<span class="mini-tag mute">' + esc(typeName(t.itemType)) + '</span>';
+  if(key === "priority") return priTagHTML(t.priority || "P2");
+  if(key === "owner") return '<span class="wcl-who" title="负责人：' + esc(t.owner || "未分配") + '">' +
+    avatarHTML(t.owner || "未分配") + '<span>' + esc(t.owner || "未分配") + '</span></span>';
+  if(key === "due"){
+    if(done || !t.dueDate) return none;
+    return '<span class="' + dueMetaClass(dueState(t).kind) + '">' + esc(dueText(t)) + '</span>';
+  }
+  if(key === "completed") return t.completedAt ? esc(fmtShortMD(parseDate(t.completedAt))) : none;
+  if(key === "cycle"){
+    if(!t.createdAt || !t.completedAt) return none;
+    return esc(Math.max(0, dayDiff(parseDate(t.completedAt), parseDate(t.createdAt))) + " 天");
+  }
+  if(key === "work") return esc(t.estimateMinutes
+    ? '实际 ' + fmtMinutesShort(t.totalMinutes) + ' / 预估 ' + fmtMinutesShort(t.estimateMinutes)
+    : '累计 ' + fmtMinutesShort(t.totalMinutes));
+  if(key === "risk"){
+    if(t.blocked) return '<span class="tag tag-warning" title="' + esc(t.blockedReason || "被阻塞") + '">被阻塞</span>';
+    /* 未完成的逾期已在「截止」列标红，风险列不再重复一次 */
+    if(done && t.completedAt && t.dueDate && t.completedAt > t.dueDate) return '<span class="tag tag-warning">逾期完成</span>';
+    return none;
+  }
+  if(key === "tag") return t.tags && t.tags.length ? tagChip(t.tags[0]) : none;
+  return none;
+}
 function bodyHTML(d, cs){
   if(cs.error){
     return '<div class="wc-empty"><h3>加载失败</h3><p>' + esc(cs.error) + '</p>' +
@@ -412,7 +564,8 @@ function bodyHTML(d, cs){
   if(d.done) notes.unshift(rangeLabel(d.range) + ' <b>' + d.rangeTotal + '</b> 条');
   if(mode) notes.push('按' + groupLabel(mode) + '分组（已加载）');
   if(d.range === "all") notes.push('全部历史仅分页查明细，指标按近 90 天');
-  html += '<div class="wc-result">' + notes.map(function(n){ return '<span>' + n + '</span>'; }).join('<span class="note">·</span>') + '</div>';
+  html += '<div class="wc-result">' + notes.map(function(n){ return '<span>' + n + '</span>'; }).join('<span class="note">·</span>') +
+    (isMobile() ? "" : wcLayoutSegHTML() + (wcListMode() ? listDensitySegHTML() : "")) + '</div>';
 
   if(!cs.rows.length){
     var filtered = cs.q || cs.req || cs.owner || cs.pri || cs.type || cs.cat || cs.due || cs.blocked;
@@ -422,14 +575,14 @@ function bodyHTML(d, cs){
     return html;
   }
 
-  groups.forEach(function(g){
-    html += '<section class="wc-lane"><div class="wc-lane-head">' +
-      '<span class="wc-lane-title">' + esc(g.name) + '</span>' +
-      '<span class="wc-lane-count">' + g.rows.length + '</span>' +
-      '<span class="wc-lane-meta">' + esc(laneMeta(d, g.rows)) + '</span>' +
-      '<div class="wc-lane-stats">' + laneStats(d, g.rows) + '</div></div>' +
-      '<div class="wc-lane-grid">' + g.rows.map(function(t){ return cardHTML(t, d.done); }).join("") + '</div></section>';
-  });
+  if(wcListMode()){
+    html += wcListHTML(groups, d, mode, cs);
+  }else{
+    html += groups.map(function(g){
+      return '<section class="wc-lane">' + laneHeadHTML(g, d) +
+        '<div class="wc-lane-grid" role="list">' + g.rows.map(function(t){ return cardHTML(t, d.done); }).join("") + '</div></section>';
+    }).join("");
+  }
   if(d.hasMore){
     html += '<button class="wc-loadmore" type="button" data-wc-loadmore' + (st.loading ? ' disabled' : '') + '>' +
       (st.loading ? "加载中…" : "加载更多（已显示 " + cs.rows.length + " / " + d.matched + " 条）") + '</button>';
@@ -498,14 +651,26 @@ function render(){
     }
   }
   UI.wireTooltips(el);
+  syncStickyTop();
+}
+
+/* 列表表头要贴在页头下方：页头高度随筛选项换行变化，渲染后与窗口变化后各量一次 */
+function syncStickyTop(){
+  var el = document.getElementById("workcolumnBody");
+  if(!el) return;
+  var list = el.querySelector(".wc-list");
+  if(!list) return;
+  var head = el.querySelector(".wc-head");
+  list.style.setProperty("--wc-sticky-top", (head ? head.offsetHeight : 0) + "px");
 }
 
 function switchCol(col){
   if(!col || col === currentCol()) return;
   st.col = col;
   var cs = colState(col);
-  st.routeKey = col + "|" + (isDone(col) ? cs.range : "");
-  setRouteHash(true, col, cs.range);
+  st.queryKey = col + "|" + (isDone(col) ? cs.range : "");
+  st.routeKey = st.queryKey + "|" + cs.group;
+  setRouteHash(true, col, cs.range, cs.group);
   load(true);
 }
 function resetFilters(){
@@ -535,6 +700,18 @@ if(bodyEl){
       load(true);
       return;
     }
+    var sortBtn = e.target.closest("[data-wc-sort]");
+    if(sortBtn){
+      var scs = currentState();
+      if(scs.sort !== sortBtn.dataset.wcSort){
+        scs.sort = sortBtn.dataset.wcSort;
+        scs.offset = 0;
+        load(true);
+      }
+      return;
+    }
+    var layout = e.target.closest("[data-wc-layout]");
+    if(layout){ setWcLayout(layout.dataset.wcLayout); return; }
     var card = e.target.closest("[data-wc-task]");
     if(card){ openTaskById(card.dataset.wcTask); return; }
   });
@@ -549,7 +726,9 @@ if(bodyEl){
     var key = el.dataset.wcFilter;
     var cs = currentState();
     if(key === "group"){
-      cs.group = el.value || "owner";
+      cs.group = normalizeGroup(el.value) || cs.group;
+      st.routeKey = st.queryKey + "|" + cs.group;
+      setRouteHash(true, currentCol(), cs.range, cs.group);
       render();
       return;
     }
@@ -558,7 +737,7 @@ if(bodyEl){
       cs.offset = 0;
       cs.rows = [];
       cs.data = null;
-      setRouteHash(true, currentCol(), cs.range);
+      setRouteHash(true, currentCol(), cs.range, cs.group);
       load(true);
       return;
     }
@@ -590,6 +769,20 @@ window.addEventListener("ds:task-saved", function(e){
   if(!saved || !cs.data) { load(true, true); return; }
   /* 状态或字段变化会影响当前列口径：静默重拉首屏，避免数字与卡片不一致 */
   load(true, true);
+});
+/* 跨断点重排：窄屏回落卡片形态并收起形态/密度切换器，回到宽屏再恢复上次的选择 */
+window.addEventListener("ds:layout", function(){
+  if(activeView !== "workcolumn") return;
+  var cs = currentState();
+  if(cs.rows.length) render();
+  else if(!st.loading) load(true);
+});
+/* 页头高度只在窗口尺寸变化时才变，量一次吸顶偏移即可 */
+var wcStickyTimer = 0;
+window.addEventListener("resize", function(){
+  if(activeView !== "workcolumn") return;
+  clearTimeout(wcStickyTimer);
+  wcStickyTimer = setTimeout(syncStickyTop, 150);
 });
 
 export { enterWorkColumn, refreshFromHash };

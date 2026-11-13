@@ -6,6 +6,7 @@ import { $ } from "../core/dom.js";
 import { loadViews, pruneUnknownCats, savedViewsFor } from "../core/filters-ui.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
+import { listDensitySegHTML } from "../core/list-density.js";
 import { MOBILE_APPROVALS } from "../core/mobile-rules.js";
 import * as listPrefs from "../core/list-preferences.js";
 import { openTaskById } from "../core/task-actions.js";
@@ -54,14 +55,37 @@ function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
 var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, stageCounts, totalAll} */
 var demandColExtra = {};       /* 看板列已滚动加载的追加条目 */
+/* 三种形态查询口径不同，切回来时先用上次结果顶上，再静默补差，避免闪骨架 */
+var demandViewCache = { board: null, table: null, gantt: null };
 var demBoardStage = "all";
 var demBoardBar = null, demBoardInput = null, demBoardTimer = null;
+/* 工作页两种形态：卡片保留上下文，列表一屏扫完一个批次。只记本机，不占用服务端列表偏好
+   DEM_WORK_LAYOUTS 必须先于 demWork 初始化，否则 demWorkLayoutPref() 读到 undefined 直接抛错 */
+var DEM_WORK_LAYOUTS = ["card", "list"];
 var demWork = {
   active:false, status:"plan", stage:"all", reqId:null, q:"", pris:[],
   versionId:"all", closeReason:"all", closeStage:"all", focus:"all",
-  group:"version", sort:"expect", items:[], total:0, hasMore:false,
+  group:"version", sort:"expect", layout:demWorkLayoutPref(),
+  items:[], total:0, hasMore:false,
   response:null, seq:0, timer:null
 };
+function demWorkLayoutPref(){
+  var v = "";
+  try{ v = localStorage.getItem("ds.demWork.layout"); }catch(e){ return "card"; }
+  return DEM_WORK_LAYOUTS.indexOf(v) >= 0 ? v : "card";
+}
+function setDemWorkLayout(v){
+  if(DEM_WORK_LAYOUTS.indexOf(v) === -1 || demWork.layout === v) return;
+  demWork.layout = v;
+  try{ localStorage.setItem("ds.demWork.layout", v); }catch(e){ /* 受限环境忽略 */ }
+  render();
+}
+function demWorkLayoutSegHTML(){
+  var names = { card:"卡片", list:"列表" };
+  return '<div class="seg mini dem-work-layout" role="group" aria-label="工作页展示形态">' + DEM_WORK_LAYOUTS.map(function(k){
+    return '<button type="button" data-dem-work-layout="' + k + '" aria-pressed="' + (demWork.layout === k) + '">' + names[k] + '</button>';
+  }).join("") + '</div>';
+}
 var demandTotal = 0;           /* 列表模式：当前筛选下的总数 */
 var demandHasMore = false;
 var demandServerFiltered = false;
@@ -205,13 +229,14 @@ function returnDemandBoard(){
   catch(e){ window.location.hash = "#/demands"; }
   loadDemands();
 }
-function loadDemands(){
+function loadDemands(opts){
+  var silent = !!(opts && opts.silent);
   var seq = ++demandLoadSeq;
   var mode = listPrefs.viewMode("demand-pool");
   syncModeUI(mode);
   if(demWork.active){ loadDemandWorkpage(); return; }
-  if(mode === "gantt"){ loadDemandGantt(); return; }
-  if(mode === "table"){ loadAllDemands(); return; }
+  if(mode === "gantt"){ loadDemandGantt(silent); return; }
+  if(mode === "table"){ loadAllDemands(silent); return; }
   if(!rt.demandReqId || !rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
@@ -223,7 +248,7 @@ function loadDemands(){
   var reqId = rt.demandReqId;
   var wsId = rt.currentWs && rt.currentWs.id;
   if(demandsMeta) demandsMeta.textContent = reqNameById(rt.demandReqId);
-  demandBody.innerHTML = UI.skeletonRows(2);
+  if(!silent) demandBody.innerHTML = UI.skeletonRows(2);
   Promise.all([
     API.get("/api/demands/board", {
       reqId: reqId, limit: DEMAND_BOARD_PAGE,
@@ -252,6 +277,7 @@ function loadDemands(){
       if(col) demands = demands.concat(col.items || []);
     });
     versions = rs[1];
+    saveDemandCache("board");
     render();
   }).catch(function(ex){
     if(seq !== demandLoadSeq) return;
@@ -259,6 +285,46 @@ function loadDemands(){
       icon:"alert", title:"加载失败", text: ex.message || "网络异常，请稍后重试"
     });
   });
+}
+/* 视图缓存：签名一致才复用，筛选、项目或项目空间一变就重新拉 */
+function demandCacheSig(mode){
+  return JSON.stringify([
+    mode,
+    (rt.currentWs && rt.currentWs.id) || "",
+    rt.demandReqId || "",
+    demSmart.preset, demSmart.q || "", demSmart.pris.join(","),
+    demSmart.kinds.join(","), demSmart.cats.join(","), demSmart.reqs.join(","),
+    demSmart.sort, demSmart.sortDir,
+    mode === "board" ? demBoardStage : ""
+  ]);
+}
+function saveDemandCache(mode){
+  demandViewCache[mode] = {
+    sig: demandCacheSig(mode),
+    board: demandBoard,
+    demands: demands.slice(),
+    versions: versions.slice(),
+    versionNames: versionNames,
+    colExtra: demandColExtra,
+    total: demandTotal,
+    hasMore: demandHasMore,
+    serverFiltered: demandServerFiltered
+  };
+}
+function applyDemandCache(mode){
+  var c = demandViewCache[mode];
+  if(!c || c.sig !== demandCacheSig(mode)) return false;
+  demandBoard = c.board;
+  demands = c.demands.slice();
+  versions = c.versions.slice();
+  versionNames = c.versionNames;
+  demandColExtra = c.colExtra;
+  demandTotal = c.total;
+  demandHasMore = c.hasMore;
+  demandServerFiltered = c.serverFiltered;
+  demandLoadSeq++;   /* 切换前还没回来的请求不再覆盖当前形态 */
+  render();
+  return true;
 }
 /* 供项目页等外部视图跳转：进入需求池并定位到指定项目（看板模式选项目、列表模式带项目筛选） */
 function openDemandsForReq(reqId){
@@ -309,7 +375,7 @@ function mergeLoadedDemands(items){
   demands.forEach(function(d){ known[d.id] = 1; });
   (items || []).forEach(function(d){ if(!known[d.id]) demands.push(d); });
 }
-function loadAllDemands(){
+function loadAllDemands(silent){
   if(!rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
@@ -320,20 +386,18 @@ function loadAllDemands(){
   }
   var seq = ++demandLoadSeq;
   var wsId = rt.currentWs && rt.currentWs.id;
-  demandBody.innerHTML = UI.skeletonRows(2);
-  demandServerFiltered = true;
-  demandBoard = null;
-  demands = [];
-  demandTotal = 0;
-  demandHasMore = false;
+  if(!silent) demandBody.innerHTML = UI.skeletonRows(2);
   API.get("/api/demands/page", demandPageParams(0, DEMAND_TABLE_PAGE)).then(function(page){
     if(seq !== demandLoadSeq) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    demandServerFiltered = true;
+    demandBoard = null;
     demands = (page.items || []).slice();
     demandTotal = page.total || 0;
     demandHasMore = !!page.hasMore;
     versions = [];
     if(listPrefs.viewMode("demand-pool") !== "table") return;
+    saveDemandCache("table");
     render();
   }).catch(function(ex){
     if(seq !== demandLoadSeq) return;
@@ -391,7 +455,9 @@ function loadMoreDemandColumn(status){
   });
 }
 function reloadDemands(){
-  /* 需求排期会改变版本的「待规划需求」统计，这里只重拉需求与版本名 */
+  /* 需求排期会改变版本的「待规划需求」统计，这里只重拉需求与版本名；
+     写完数据后三种形态的缓存都可能过期，一并作废 */
+  demandViewCache = { board: null, table: null, gantt: null };
   loadDemands();
 }
 
@@ -407,7 +473,7 @@ function mergeGanttItems(items){
     known[it.demand.id] = 1;
   });
 }
-function loadDemandGantt(){
+function loadDemandGantt(silent){
   if(!rt.reqList.length){
     demandBody.innerHTML = UI.emptyState({
       icon:"folder", title:"还没有项目",
@@ -418,20 +484,18 @@ function loadDemandGantt(){
   }
   var seq = ++demandLoadSeq;
   var wsId = rt.currentWs && rt.currentWs.id;
-  demandBody.innerHTML = UI.skeletonRows(3);
-  demandServerFiltered = true;
-  demandBoard = null;
-  demands = [];
-  demandTotal = 0;
-  demandHasMore = false;
+  if(!silent) demandBody.innerHTML = UI.skeletonRows(3);
   API.get("/api/demands/gantt", demandPageParams(0, DEMAND_GANTT_PAGE)).then(function(page){
     if(seq !== demandLoadSeq) return;
     if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    demandServerFiltered = true;
+    demandBoard = null;
     demands = [];
     mergeGanttItems(page.items);
     demandTotal = page.total || 0;
     demandHasMore = !!page.hasMore;
     if(listPrefs.viewMode("demand-pool") !== "gantt") return;
+    saveDemandCache("gantt");
     render();
   }).catch(function(ex){
     if(seq !== demandLoadSeq) return;
@@ -558,8 +622,11 @@ function render(){
 function demandMenuItems(d){
   if(!d) return [];
   var out = [];
-  if(canWriteDemand(d) && d.status === "review"){
-    if(canReviewDemand(d)) out.push({ act: "rej", label: "评审不通过" });
+  if(canWriteDemand(d) && d.status === "review" && canReviewDemand(d)){
+    out.push({ act: "rej", label: "评审不通过" });
+  }
+  /* 已进入流转也能编辑，服务端只放开说明类字段（标题、类型、优先级与日期另有口径） */
+  if(canWriteDemand(d) && !isClosedDemand(d)){
     out.push({ act: "edit", label: "编辑" });
   }
   if(canReviewDemand(d)){
@@ -868,7 +935,7 @@ function demWorkGroupLabel(key){
   if(demWork.group === "reason") return closeReasonName(key);
   return key === "__none" ? "未归类" : (reqNameById(key) || "未命名项目");
 }
-function demWorkLanesHTML(){
+function demWorkGroups(){
   var groups = {}, order = [];
   demWork.items.forEach(function(d){
     var key = demWorkGroupKey(d);
@@ -887,11 +954,122 @@ function demWorkLanesHTML(){
   }else{
     order.sort(function(a, b){ return demWorkGroupLabel(a).localeCompare(demWorkGroupLabel(b), "zh-CN"); });
   }
-  return order.map(function(key){
-    var rows = groups[key];
-    return '<section class="dem-work-lane"><div class="dem-work-lane-head"><h2>' + esc(demWorkGroupLabel(key)) + '</h2><span>' + rows.length + ' 条</span></div><div class="dem-work-grid">'
-      + rows.map(function(d){ return cardHTML(d, {noDrag:true, readOnly:true}); }).join("") + '</div></section>';
+  return order.map(function(key){ return { key:key, label:demWorkGroupLabel(key), rows:groups[key] }; });
+}
+function demWorkListMode(){
+  /* 手机上列表要横向滚动才能放下列宽，形态切换只在桌面端提供 */
+  return demWork.layout === "list" && !isMobile();
+}
+function demWorkLanesHTML(){
+  var gs = demWorkGroups();
+  if(demWorkListMode()) return demWorkListHTML(gs);
+  return gs.map(function(g){
+    return '<section class="dem-work-lane"><div class="dem-work-lane-head"><h2>' + esc(g.label) + '</h2><span>' + g.rows.length + ' 条</span></div><div class="dem-work-grid">'
+      + g.rows.map(function(d){ return cardHTML(d, {noDrag:true, readOnly:true}); }).join("") + '</div></section>';
   }).join("");
+}
+/* 列表形态：字段与卡片同源，只是把标签行压成列；表头只在整表上方出现一次，泳道以内嵌分组行区分 */
+var DEM_WORK_COL_DEFS = {
+  title:{ label:"需求", w:"minmax(180px,2.2fr)", min:180 },
+  kind:{ label:"类型", w:"76px", min:76 },
+  category:{ label:"模块", w:"104px", min:104 },
+  priority:{ label:"优先级", w:"72px", min:72, sort:"priority" },
+  stage:{ label:"交付阶段", w:"112px", min:112 },
+  wsjf:{ label:"WSJF", w:"72px", min:72, sort:"wsjf", align:"right" },
+  close:{ label:"关闭情况", w:"184px", min:184 },
+  evidence:{ label:"交付证据", w:"minmax(140px,1.5fr)", min:140 },
+  version:{ label:"目标版本", w:"96px", min:96 },
+  planned:{ label:"计划区间", w:"140px", min:140 },
+  expect:{ label:"期望交付", w:"76px", min:76, sort:"expect", align:"right" },
+  source:{ label:"来源", w:"80px", min:80 },
+  created:{ label:"提交时间", w:"104px", min:104, align:"right" }
+};
+/* 排序方向由服务端 SQL 固定（WSJF 倒序，优先级/期望交付正序），表头只切列、不翻转方向；
+   可排序列与筛选行的排序下拉同一套词表，两处始终保持一致 */
+var DEM_WORK_SORT_DIR = { priority:"asc", expect:"asc", wsjf:"desc" };
+var DEM_WORK_STATUS_COLS = {
+  plan:["title","kind","category","priority","stage","evidence","version","planned","expect","source"],
+  review:["title","kind","category","priority","wsjf","expect","source","created"],
+  pass:["title","kind","category","priority","wsjf","expect","source","created"],
+  closed:["title","kind","category","priority","close","version","expect","source","created"]
+};
+function demWorkCols(){
+  var keys = (DEM_WORK_STATUS_COLS[demWork.status] || DEM_WORK_STATUS_COLS.plan).slice();
+  /* 按版本分组时泳道标题就是版本名，行内不再重复一列 */
+  if(demWork.group === "version") keys = keys.filter(function(k){ return k !== "version"; });
+  return keys.map(function(k){
+    var def = DEM_WORK_COL_DEFS[k];
+    return { key:k, label:def.label, w:def.w, align:def.align || "", sort:def.sort || "" };
+  });
+}
+function demWorkListMinW(cols){
+  return cols.reduce(function(n, c){ return n + DEM_WORK_COL_DEFS[c.key].min; }, 0) + (cols.length - 1) * 8;
+}
+function demWorkHeadCellHTML(c){
+  var cls = c.align === "right" ? ' class="ta-r"' : '';
+  if(!c.sort) return '<span' + cls + '>' + esc(c.label) + '</span>';
+  var active = demWork.sort === c.sort;
+  var desc = DEM_WORK_SORT_DIR[c.sort] === "desc";
+  return '<span aria-sort="' + (active ? (desc ? "descending" : "ascending") : "none") + '"' + cls + '>' +
+    '<button class="lh-sort' + (active ? " on" : "") + '" type="button" data-dem-work-sort="' + c.sort + '"' +
+      ' title="按「' + esc(c.label) + '」排序">' + esc(c.label) +
+      '<i class="lh-ind" aria-hidden="true">' + (active ? (desc ? "↓" : "↑") : "") + '</i></button></span>';
+}
+function demWorkListHTML(gs){
+  var cols = demWorkCols();
+  return '<div class="dem-work-list" style="--dem-work-cols:' + cols.map(function(c){ return c.w; }).join(" ")
+    + ';--dem-work-min:' + demWorkListMinW(cols) + 'px"><div class="list-head">'
+    + cols.map(function(c){ return demWorkHeadCellHTML(c); }).join("") + '</div>'
+    + gs.map(function(g){
+      return '<section class="dem-work-lane dem-work-lane-list"><div class="dem-work-lane-head"><h2>' + esc(g.label) + '</h2><span>' + g.rows.length + ' 条</span></div>'
+        + '<div class="dem-work-rows" role="list">'
+        + g.rows.map(function(d){ return demWorkRowHTML(d, cols); }).join("") + '</div></section>';
+    }).join("") + '</div>';
+}
+function demWorkRowHTML(d, cols){
+  return '<div class="list-row dem-work-row" data-dem-card="' + esc(d.id) + '" tabindex="0" role="listitem">'
+    + cols.map(function(c){
+      return '<span class="cell dwl-' + c.key + (c.align === "right" ? " ta-r" : "") + '">' + demWorkCell(d, c.key) + '</span>';
+    }).join("")
+    + '</div>';
+}
+function demWorkCell(d, key){
+  var none = '<span class="dwl-none">—</span>';
+  if(key === "title"){
+    return '<div class="dwl-main"><button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
+      + (d.description ? '<p class="dwl-desc">' + esc(d.description) + '</p>' : '') + '</div>';
+  }
+  if(key === "kind") return '<span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>';
+  if(key === "category") return catTag(d.categoryId) || none;
+  if(key === "priority") return priTagHTML(d.priority || "P2");
+  if(key === "stage") return d.status === "plan" ? (deliveryStageTag(d.deliveryStage, d.deliveryStageSource) || none) : none;
+  if(key === "wsjf") return wsjfText(d) || none;
+  if(key === "close") return '<span class="dwl-close" title="' + esc(demandStateNote(d)) + '"><span class="tag ghost">'
+    + esc(closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))) + '</span><i>关闭前 '
+    + esc(closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"))) + '</i></span>';
+  if(key === "evidence") return demWorkEvidenceCell(d);
+  if(key === "version") return demandVersionName(d) ? esc(demandVersionName(d)) : none;
+  if(key === "planned") return plannedText(d) ? esc(plannedText(d)) : none;
+  if(key === "expect") return d.expectDate ? esc(String(d.expectDate).substring(5, 10)) : none;
+  if(key === "source") return d.source ? esc(d.source) : none;
+  if(key === "created") return fmtTs(d.createdAt) ? esc(fmtTs(d.createdAt)) : none;
+  return none;
+}
+function demWorkEvidenceCell(d){
+  if(d.status !== "plan") return '<span class="dwl-none">—</span>';
+  var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
+  var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
+  var html = [], text = [];
+  function push(h, t){ html.push(h); text.push(t); }
+  if(total) push('<span>工作项 ' + done + '/' + total + '</span>', '工作项 ' + done + '/' + total);
+  else push('<span class="tag tag-warning">未拆工作项</span><span class="tag ghost">待补充交付证据</span>', '未拆工作项 · 待补充交付证据');
+  if(cases) push('<span>用例 ' + passed + '/' + cases + ' 通过</span>', '用例 ' + passed + '/' + cases + ' 通过');
+  if(d.deliveredAt){
+    var label = d.deliveryStageSource === "manual" ? "人工交付 " : "生产发布 ";
+    push('<span>' + label + esc(String(d.deliveredAt).substring(0, 10)) + '</span>', label + String(d.deliveredAt).substring(0, 10));
+  }
+  if(d.deliveryEvidenceMissing) push('<span class="dwl-warn">已发布版本缺少有效发布记录，请人工补录</span>', '已发布版本缺少有效发布记录，请人工补录');
+  return '<span class="dwl-ev" title="' + esc(text.join(" · ")) + '">' + html.join('<i class="dwl-sep">·</i>') + '</span>';
 }
 function renderDemandWorkpage(){
   if(!demWork.response) return;
@@ -903,7 +1081,8 @@ function renderDemandWorkpage(){
     + '<section class="dem-work-metrics" aria-label="当前筛选指标">' + demWorkMetricsHTML() + '</section>'
     + demWorkFiltersHTML();
   if(demWork.items.length){
-    html += '<div class="dem-work-result"><b>当前筛选 ' + demWork.total + ' 条</b><span>分组与指标基于服务端聚合；卡片点击可查看需求详情</span></div>' + demWorkLanesHTML();
+    html += '<div class="dem-work-result"><b>当前筛选 ' + demWork.total + ' 条</b><span>分组与指标基于服务端聚合；点击'
+      + (demWorkListMode() ? "行" : "卡片") + '可查看需求详情</span>' + (isMobile() ? "" : demWorkLayoutSegHTML() + (demWorkListMode() ? listDensitySegHTML() : "")) + '</div>' + demWorkLanesHTML();
   }else{
     html += '<div class="dem-work-empty">' + UI.emptyState({icon:"filterOff", title:"当前筛选下没有需求", text:"调整项目、阶段或搜索词，也可以清除全部筛选。"}) + '<button class="btn sm primary" type="button" data-dem-work-reset>清除筛选</button></div>';
   }
@@ -1775,7 +1954,7 @@ function renderDemandTable(){
   }
   if(demandHasMore){
     body += '<tr class="dem-more-row"><td colspan="' + colspan + '">' +
-      '<button class="btn ghost sm" type="button" data-dem-more="table">加载更多（已加载 ' +
+      '<button class="btn sm" type="button" data-dem-more="table">加载更多（已加载 ' +
       demands.length + ' / 共 ' + demandTotal + ' 条）</button></td></tr>';
   }
   demandBody.innerHTML = '<section class="manager-panel"><div class="tbl-wrap"><table class="manager-tbl">'
@@ -2116,7 +2295,7 @@ function renderDemandGantt(){
     '<div class="demg-foot">' +
       '<span class="foot-note">阶段时间取自评审日志、关联文档、工作项、用例与版本记录；无记录阶段不推算。</span>' +
       (demandHasMore
-        ? '<button class="btn ghost sm" type="button" data-dem-more="gantt">加载更多（已加载 ' +
+        ? '<button class="btn sm" type="button" data-dem-more="gantt">加载更多（已加载 ' +
             demands.length + ' / 共 ' + demandTotal + ' 条）</button>'
         : "") +
     '</div>';
@@ -2239,8 +2418,20 @@ function openDemandDialog(d){
   btnSaveDemand.disabled = false;
   demandFormSeq++;
   syncPriSeg();
+  setDemandFormLocked(!!d && d.status !== "review");
   demandFormBaseline = demandFormSnapshot();
   UI.openModal($("dlgDemand"), "input");
+}
+/* 已进入流转的需求只放开说明类字段；标题、类型、优先级与日期沿用原有动作口径，控件锁住而不是提交后静默丢弃 */
+function setDemandFormLocked(locked){
+  [dTitle, dKind, dExpect].forEach(function(el){ if(el) el.disabled = locked; });
+  var seg = $("segDemandPri");
+  if(seg){
+    seg.classList.toggle("disabled", locked);
+    seg.querySelectorAll("[data-dpri]").forEach(function(b){ b.disabled = locked; });
+  }
+  var note = $("demandLockNote");
+  if(note) note.hidden = !locked;
 }
 function saveDemand(){
   var title = dTitle.value.trim();
@@ -2708,8 +2899,11 @@ function demandJudgementSectionHTML(d){
   }
   if(d.canJudgeDelivery){
     html += '<div class="row row-gap">'
-      + '<button class="btn sm ghost" type="button" data-dem-judge>' + (d.manualDeliveryStage ? "修改判定" : "人工判定") + '</button>'
-      + (d.manualDeliveryStage ? '<button class="btn sm ghost" type="button" data-dem-judge-revoke>撤销判定</button>' : '')
+      + '<button class="btn sm soft" type="button" data-dem-judge>'
+      + (d.manualDeliveryStage ? icon("edit", 13) + ' 修改判定' : icon("plus", 13) + ' 人工判定') + '</button>'
+      + (d.manualDeliveryStage
+        ? '<button class="btn sm" type="button" data-dem-judge-revoke>' + icon("undo", 13) + ' 撤销判定</button>'
+        : '')
       + '</div>';
   }else{
     html += '<p class="foot-note">仅空间主、管理员或项目负责人可以维护人工判定。</p>';
@@ -2855,7 +3049,8 @@ function renderDemandDetail(d){
   layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(d.title) + '</h2>'
     + '<div class="desc">' + esc(reqNameById(d.reqId)) + ' · 提交于 ' + esc(fmtTs(d.createdAt) || "—") + '</div></div>'
-    + (canSplit ? '<button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
+    + (writable && !isClosedDemand(d) ? '<button class="btn sm" type="button" data-dem-edit="' + esc(id) + '">' + icon("edit", 13) + ' 编辑</button>' : '')
+    + (canSplit ? '<button class="btn sm add" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button>' : '')
     + '<button class="icon-btn sm" type="button" data-dem-x aria-label="关闭">' + icon("close", 15) + '</button></div>'
     + '<div class="sheet-body phase-note">'
     + '<div class="detail-grid">' + grid.map(function(g){
@@ -2874,15 +3069,15 @@ function renderDemandDetail(d){
     + '<div class="detail-section"><span class="section-title">关联文档</span>'
     + '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
     + (writable ? '<div class="dem-doc-add"><select id="demDocPick" aria-label="选择要关联的文档"></select>'
-      + '<button class="btn sm ghost" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
+      + '<button class="btn sm add" type="button" data-dem-doc-link>' + icon("plus", 13) + ' 关联文档</button></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">关联工作项</span>'
     + '<div id="demTasks"><div class="attach-empty">加载中…</div></div>'
-    + (canSplit ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
+    + (canSplit ? '<div style="margin-top:8px"><button class="btn sm add" type="button" data-dem-addtask>' + icon("plus", 13) + ' 拆分为工作项</button></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">附件</span>'
     + '<div class="attach-list" id="demAtts"><div class="attach-empty">加载中…</div></div>'
-    + (writable ? '<div style="margin-top:8px"><button class="btn sm ghost" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
+    + (writable ? '<div style="margin-top:8px"><button class="btn sm add" type="button" data-dem-attup>' + icon("upload", 13) + ' 上传附件</button>'
       + '<input type="file" id="demAttFile" hidden accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.zip,.xlsx,.xls,.doc,.docx,.ppt,.pptx"></div>' : '')
     + '</div>'
     + '<div class="detail-section"><span class="section-title">流转时间线</span><ul class="dem-logs" id="demLogs"><li class="foot-note">加载中…</li></ul></div>'
@@ -2897,6 +3092,7 @@ function renderDemandDetail(d){
     var ro = e.target.closest("[data-dem-reopen]"); if(ro){ reopenDemand(ro.dataset.demReopen); return; }
     var restore = e.target.closest("[data-dem-restore]"); if(restore){ restoreDemand(restore.dataset.demRestore); return; }
     var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d); return; }
+    var ed = e.target.closest("[data-dem-edit]"); if(ed){ openDemandDialog(d); return; }
     var judge = e.target.closest("[data-dem-judge]"); if(judge){ openJudgementDialog(id); return; }
     var judgeRevoke = e.target.closest("[data-dem-judge-revoke]"); if(judgeRevoke){ revokeJudgement(id); return; }
     var at = e.target.closest("[data-dem-addtask]");
@@ -3073,6 +3269,12 @@ if($("btnDemandNew")) $("btnDemandNew").addEventListener("click", function(){
 });
 if($("dlgDemandX")) $("dlgDemandX").addEventListener("click", function(){ tryCloseDemandDialog(); });
 if($("dlgDemand")) UI.setModalCloseGuard($("dlgDemand"), function(){ tryCloseDemandDialog(); });
+/* 跨断点重排：窄屏回落卡片形态并收起形态/密度切换器，回到宽屏再恢复上次的选择 */
+window.addEventListener("ds:layout", function(){
+  if(!demWork.active) return;
+  if(demWork.items.length) renderDemandWorkpage();
+  else loadDemands();
+});
 window.addEventListener("ds:before-route", function(e){
   var dlg = $("dlgDemand");
   if(!dlg || !dlg.classList.contains("open")) return;
@@ -3102,7 +3304,9 @@ if($("demandModeSeg")) $("demandModeSeg").addEventListener("click", function(e){
   var m = b.dataset.demMode;
   if(m === listPrefs.viewMode("demand-pool")) return;
   listPrefs.setViewMode("demand-pool", m).then(function(){
-    loadDemands();
+    /* 有同一筛选下的上次结果就直接渲染，后台再静默补差，不闪骨架 */
+    if(applyDemandCache(m)) loadDemands({ silent: true });
+    else loadDemands();
   }).catch(function(ex){ toast(ex.message || "切换失败", "bad"); });
 });
 /* 甘特「?」：解释七个阶段的口径、缺口与时间范围；工具条与图例两个入口共用 */
@@ -3182,6 +3386,16 @@ if(demandBody) demandBody.addEventListener("click", function(e){
   }
   var wr = e.target.closest("[data-dem-work-reset]");
   if(wr){ resetDemWorkFilters(); return; }
+  var wl = e.target.closest("[data-dem-work-layout]");
+  if(wl){ setDemWorkLayout(wl.dataset.demWorkLayout); return; }
+  var ws = e.target.closest("[data-dem-work-sort]");
+  if(ws){
+    if(demWork.active && demWork.sort !== ws.dataset.demWorkSort){
+      demWork.sort = ws.dataset.demWorkSort;
+      loadDemands();
+    }
+    return;
+  }
   var wm = e.target.closest("[data-dem-work-more]");
   if(wm){ loadMoreDemandWorkpage(); return; }
   var open = e.target.closest("[data-dem-open]");
@@ -3241,6 +3455,16 @@ if(demandBody) demandBody.addEventListener("click", function(e){
     showDemandDetail(card.dataset.demCard);
   }
 });
+/* 列表形态的行可键盘打开，与鼠标点击同一入口 */
+if(demandBody){
+  demandBody.addEventListener("keydown", function(e){
+    if(e.key !== "Enter" && e.key !== " ") return;
+    var row = e.target.closest(".dem-work-row[data-dem-card]");
+    if(!row || e.target.closest("button,a,input,select,textarea")) return;
+    e.preventDefault();
+    showDemandDetail(row.dataset.demCard);
+  });
+}
 if(demandBody){
   demandBody.addEventListener("change", function(e){
     var inline = e.target.closest("[data-dem-inline]");

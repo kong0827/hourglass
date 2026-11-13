@@ -20,7 +20,7 @@
 .login-product{display:flex;align-items:center;gap:12px;margin-bottom:clamp(40px,5vh,56px);}
 .login-product-mark{
   width:44px;height:44px;display:grid;place-items:center;flex:0 0 auto;
-  color:var(--primary);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:12px;
+  color:var(--primary-fg);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:12px;
 }
 .login-product-name{font-size:20px;line-height:28px;font-weight:700;letter-spacing:.04em;}
 .login-product-en{margin-left:2px;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.16em;color:var(--text-3);}
@@ -88,7 +88,7 @@
 .join-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin-bottom:8px;}
 .join-hero .hero-ic{
   width:48px;height:48px;border-radius:var(--r-lg);display:grid;place-items:center;
-  background:var(--primary-soft);color:var(--primary);margin-bottom:6px;
+  background:var(--primary-soft);color:var(--primary-fg);margin-bottom:6px;
 }
 .join-hero.invalid .hero-ic{background:var(--danger-soft);color:var(--danger-fg);}
 .join-hero h2{font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.01em;}

@@ -220,7 +220,7 @@ function loadProjectTasks(reqId, force){
 }
 function projectTasksHTML(reqId){
   var rows = projectTasks[reqId], error = projectTaskErrors[reqId];
-  if(error) return '<div class="tl-empty">' + esc(error) + ' <button class="btn sm ghost" type="button" data-project-task-retry="' + esc(reqId) + '">重试</button></div>';
+  if(error) return '<div class="tl-empty">' + esc(error) + ' <button class="link-btn" type="button" data-project-task-retry="' + esc(reqId) + '">重试</button></div>';
   if(!rows) return '<div class="tl-empty">工作项加载中…</div>';
   if(!rows.length) return '<p class="foot-note" style="margin:4px 0">该项目还没有工作项。</p>';
   return rows.map(function(t){
@@ -395,12 +395,12 @@ function renderReqList(){
       (open ? '<div class="req-expand" data-req-expand-body="' + esc(r.id) + '">' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>文档</span>' +
-            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
+            (readOnly ? '' : '<button class="btn sm add" type="button" data-doc-new="' + esc(r.id) + '">+ 新建文档</button>') + '</div>' +
           docHTML +
         '</section>' +
         '<section class="req-expand-section">' +
           '<div class="req-expand-head"><span>工作项</span>' +
-            (readOnly ? '' : '<button class="btn sm ghost" type="button" data-req-open="' + esc(r.id) + '">+ 新建工作项</button>') + '</div>' +
+            (readOnly ? '' : '<button class="btn sm add" type="button" data-req-open="' + esc(r.id) + '">+ 新建工作项</button>') + '</div>' +
           '<div class="req-expand-tasks">' + projectTasksHTML(r.id) + '</div>' +
         '</section>' +
         '<div class="req-expand-acts">' +

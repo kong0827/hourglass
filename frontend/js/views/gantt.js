@@ -6,6 +6,7 @@ import { applyView, clearFilters, deleteView, markHumanSearchInput, promptSaveVi
 import { filterParams, setFilterValue, toggleFilterValue } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { activeView, showView } from "../core/router.js";
+import { groupDimsFor } from "../core/group-dims.js";
 import { taskPayloadWith } from "../core/shortcuts.js";
 import { canEditTask, catNameById, catTag, colRuleOf, filterOn, progressOf, reqNameById, rt, selectedFilterCount, state, taskById, taskCacheExtra } from "../core/state.js";
 import { openTaskById } from "../core/task-actions.js";
@@ -1959,8 +1960,8 @@ function renderGanttViewsMenu(){
       return ganttFilterChip("data-gantt-sort", o[0], o[1], ganttState.sortBy === o[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">第二级分组</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
-    [["none", "无"], ["project", "项目"], ["owner", "负责人"], ["status", "状态"], ["category", "模块"], ["priority", "优先级"]].map(function(o){
-      return ganttFilterChip("data-gantt-group2", o[0], o[1], ganttState.groupBy2 === o[0]);
+    groupDimsFor(GANTT_VIEW_GROUPS).map(function(d){
+      return ganttFilterChip("data-gantt-group2", d[0], d[1], ganttState.groupBy2 === d[0]);
     }).join("") + '</div></div>';
   html += '<div class="menu-title">左列字段</div><div class="menu-field"><div class="row row-gap" style="flex-wrap:wrap;gap:6px">' +
     [["project", "项目"], ["owner", "负责人"], ["dates", "日期"], ["work", "工时"], ["subtask", "子任务"], ["tags", "标签"], ["comments", "评论"]].map(function(o){
@@ -1970,7 +1971,7 @@ function renderGanttViewsMenu(){
 }
 /* ---- 保存视图：甘特布局（筛选之外的部分）随视图一起存取 ---- */
 var GANTT_VIEW_SORTS = ["start", "due", "priority", "owner", "progress"];
-var GANTT_VIEW_GROUPS = ["none", "project", "owner", "status", "category", "priority"];
+var GANTT_VIEW_GROUPS = ["none", "owner", "priority", "project", "category", "status"];
 function ganttViewParams(){
   var cols = [];
   for(var k in GANTT_DEFAULT_COLS) if(ganttState.cols[k]) cols.push(k);
