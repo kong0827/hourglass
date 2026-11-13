@@ -1321,18 +1321,18 @@ function clearGroupOver(){
     $("branchDrawer").addEventListener("click", function(e){
       var task = e.target.closest("[data-br-task]");
       if(task){
-        /* 任务抽屉是另一层浮层，先收起分支抽屉再打开，避免两层遮罩叠在一起 */
-        var tid = task.dataset.brTask;
-        closeBranchDrawer();
-        openTaskById(tid);
+        /* 任务抽屉叠在分支抽屉之上，关闭后回到分支详情 */
+        openTaskById(task.dataset.brTask);
       }
     });
     $("branchScrim").addEventListener("click", closeBranchDrawer);
   }
   if($("brDrawerClose")) $("brDrawerClose").addEventListener("click", closeBranchDrawer);
   document.addEventListener("keydown", function(e){
-    if(e.key !== "Escape") return;
+    if(e.key !== "Escape" || e.__dsEscHandled) return;
     if($("dlgBranch") && $("dlgBranch").classList.contains("open")){ closeBranchDialog(); return; }
+    /* 上面还叠着任务抽屉或弹窗时交给上层逐层关闭，别连带收起分支抽屉 */
+    if(UI.anyModalOpen()) return;
     if($("branchDrawer") && $("branchDrawer").classList.contains("on")){ closeBranchDrawer(); }
   });
 })();

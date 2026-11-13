@@ -143,6 +143,11 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <label class="ctx-label" for="iCol" id="ctxColLabel">新建到</label>
           <select id="iCol" aria-label="新建到哪一列"></select>
         </div>
+        <!-- 模块挂项目：常驻在归属条，随项目切换重算候选 -->
+        <div class="ctx-item ctx-item-wide">
+          <div class="ctx-label">模块</div>
+          <div class="seg" id="segCat" role="group" aria-label="模块"></div>
+        </div>
       </div>
 
       <!-- 主体：内容 / 计划 / 缺陷 / 更多 + 关联 -->
@@ -366,14 +371,10 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <details class="drawer-more drawer-settings" id="drawerMore">
             <summary>
               <span>更多设置</span>
-              <span class="foot-note" id="drawerMoreSummary">· 模块：未设置</span>
+              <span class="foot-note" id="drawerMoreSummary">· 未设置</span>
               <span class="caret"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg></span>
             </summary>
             <div class="drawer-more-body drawer-settings-body" id="drawerMoreBody">
-              <div class="field span2">
-                <div class="field-label">模块</div>
-                <div class="seg" id="segCat"></div>
-              </div>
               <div class="field">
                 <div class="field-label">循环</div>
                 <div class="seg grid4" id="segRecur"></div>

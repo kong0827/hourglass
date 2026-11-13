@@ -310,7 +310,7 @@ var MINE_COLS = [
   {k:"title", label:"工作项", w:"minmax(300px,2fr)"},
   {k:"type", label:"类型", w:"64px"},
   {k:"priority", label:"优先级", w:"64px"},
-  {k:"status", label:"状态", w:"88px"},
+  {k:"status", label:"状态", w:"144px"},
   {k:"dueDate", label:"截止", w:"96px"},
   {k:"startDate", label:"开始", w:"88px"},
   {k:"progress", label:"进度", w:"96px"},
@@ -409,7 +409,7 @@ function mineStatusPill(t){
   var cls = (b === "done" || b === "ended") ? "done" : (b === "doing" ? "doing" : "todo");
   var f = dueFlag(t);
   var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
-  return '<span class="mine-st-pill ' + cls + '">' + esc(colName(t.boardColumn) || "未设置") + '</span>' + flagHTML;
+  return '<span class="cell mine-status-cell"><span class="mine-st-pill ' + cls + '">' + esc(colName(t.boardColumn) || "未设置") + '</span>' + flagHTML + '</span>';
 }
 function mineRowHTML(t, cols){
   var st = dueState(t);
@@ -1170,11 +1170,13 @@ window.addEventListener("resize", function(){
     if(currentMineMode() !== "team") rerenderMine();
   }, 150);
 });
-/* 下拉刷新走统一入口：团队模式刷新团队面板，我的模式刷新任务列表 */
-window.addEventListener("ds:refresh-mine", function(){
+function refreshMineIfOpen(){
+  if(document.body.dataset.view !== "mine") return;
   if(isMobile() && currentMineMode() === "team") renderTeam({silent:true});
   else loadMine({silent:true});
-});
+}
+window.addEventListener("ds:refresh-mine", refreshMineIfOpen);
+window.addEventListener("ds:task-saved", refreshMineIfOpen);
 /* 计时状态变化（行内按钮 / 顶部胶囊 / 其他设备）：只在运行任务真正变化时重渲染行 */
 var mineLastRunningId = null;
 window.addEventListener("ds:running-timer", function(){

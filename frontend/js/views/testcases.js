@@ -3377,7 +3377,7 @@ $("runsList").addEventListener("click", function(e){
     return;
   }
   var bug = e.target.closest("[data-run-bug]");
-  if(bug){ closeRunsDialog(); openTaskById(bug.dataset.runBug); }
+  if(bug){ openTaskById(bug.dataset.runBug); }
 });
 $("runsList").addEventListener("change", function(e){
   var inp = e.target.closest("[data-run-file]");

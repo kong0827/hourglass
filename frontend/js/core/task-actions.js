@@ -18,17 +18,17 @@ function taskLink(id){
   return window.location.origin + window.location.pathname + "#/board?task=" + encodeURIComponent(id);
 }
 var openTaskSeq = 0;
-function openTaskById(id){
+function openTaskById(id, opts){
   var seq = ++openTaskSeq;
   var local = taskById(id);
-  if(local && !local.deletedAt){ openTaskDrawer(null, local); return Promise.resolve(true); }
+  if(local && !local.deletedAt){ openTaskDrawer(null, local, opts); return Promise.resolve(true); }
   /* 路径用单数 /api/task/{id}：与 /api/tasks/list、/api/tasks/done 零歧义 */
   return API.get("/api/task/" + encodeURIComponent(id)).then(function(t){
     if(seq !== openTaskSeq) return false;
     if(!t){ toast("工作项不存在或你没有访问权限", "warn"); return false; }
     if(t.deletedAt){ toast("该工作项已被删除，可在回收站查看", "warn"); return false; }
     taskCacheExtra[t.id] = t;
-    openTaskDrawer(null, t);
+    openTaskDrawer(null, t, opts);
     return true;
   }).catch(function(){
     if(seq === openTaskSeq) toast("工作项不存在或你没有访问权限", "warn");

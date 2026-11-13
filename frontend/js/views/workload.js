@@ -250,7 +250,7 @@ function openMemberSheet(member, opts){
     var logs = e.target.closest("[data-member-logs]");
     if(logs){ state.kind = "logs"; state.dayIdx = undefined; state.logScope = logs.dataset.memberLogs === "last" ? "last" : "week"; render(true); return; }
     var task = e.target.closest("[data-open-task]");
-    if(task){ UI.closeModal(layer); openTaskById(task.dataset.openTask); }
+    if(task){ openTaskById(task.dataset.openTask); }
   });
   layer.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;

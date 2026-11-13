@@ -82,12 +82,19 @@ document.addEventListener("keydown", function(e){
     if(gMod && gMod.ganttState.drag){ gMod.onGanttDragCancel(); return; }
     if(gMod && gMod.ganttState.unplannedDrag){ gMod.onGanttUnplannedCancel(); return; }
     if(gMod && gMod.ganttState.depDrag){ gMod.cleanupGanttLink(); return; }
-    if(UI.confirmOpen()){ UI.settleConfirm(false); return; }
+    if(UI.confirmOpen()){ e.__dsEscHandled = true; UI.settleConfirm(false); return; }
     var popEls = document.querySelectorAll(".menu,.ws-menu");
     var hasPop = Array.prototype.some.call(popEls, function(el){ return UI.popOpen(el); });
-    if(hasPop){ UI.closeAllPops(); return; }
-    if(taskDrawer.classList.contains("on")){ tryCloseTaskDrawer(); return; }
-    if(UI.closeTopModal()) return;
+    if(hasPop){ e.__dsEscHandled = true; UI.closeAllPops(); return; }
+    /* 抽屉可能叠在弹层之上（如需求详情里新建工作项）：按实际层级先关最上面的那层 */
+    if(taskDrawer.classList.contains("on")){
+      var drawerZ = parseInt(taskDrawer.style.zIndex, 10) || 0;
+      if(UI.anyDialogOpen() && UI.topModalZ() > drawerZ){ if(UI.closeTopModal()){ e.__dsEscHandled = true; return; } }
+      e.__dsEscHandled = true;
+      tryCloseTaskDrawer();
+      return;
+    }
+    if(UI.closeTopModal()){ e.__dsEscHandled = true; return; }
     var inline = board.querySelector(".card-add-input");
     if(inline){
       var restore = inline._restore;
@@ -150,7 +157,7 @@ document.addEventListener("keydown", function(e){
       topModal.__submitFn();
       return;
     }
-    var openForm = document.querySelector(".modal-layer.open form");
+    var openForm = topModal && topModal.querySelector("form");
     if(openForm){
       e.preventDefault();
       /* 合成的 submit 事件不经过按钮：提交按钮处于禁用（请求在途）时不再重复提交 */
@@ -296,7 +303,7 @@ function taskPayloadWith(t, patch){
     title: t.title,
     description: t.description || "",
     priority: t.priority,
-    categoryId: t.categoryId || null,
+    categoryId: t.categoryId || "",
     owner: t.owner || null,
     ownerUserId: t.ownerUserId || null,
     boardColumn: t.boardColumn,

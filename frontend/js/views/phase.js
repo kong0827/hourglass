@@ -620,11 +620,11 @@ function openDrillModal(scope, val, metric){
       state.reqs = [rt.phaseReqId];
       showView("board");
       reloadFilteredViews();
-      toast("已按版本筛选看板：" + scopeName + "，已完成列显示全部");
+      toast("已按版本筛选看板：" + scopeName + "，已完成列仅预览最近完成项");
       return;
     }
     var t = e.target.closest("[data-open-task]");
-    if(t){ UI.closeModal(layer); openTaskById(t.dataset.openTask); }
+    if(t){ openTaskById(t.dataset.openTask); }
   });
   UI.openModal(layer);
 }
@@ -650,7 +650,7 @@ function openVersionDemandsModal(versionId){
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
     var d = e.target.closest("[data-open-demand]");
-    if(d){ UI.closeModal(layer); openDemandDetailById(d.dataset.openDemand); }
+    if(d){ openDemandDetailById(d.dataset.openDemand); }
   });
   UI.openModal(layer);
   API.getAllPages("/api/demands", { reqId: rt.phaseReqId }).then(function(demands){
@@ -775,7 +775,7 @@ function openMemberDrill(userId, name){
       if(e.target.closest("[data-drill-x]")){ UI.closeModal(layer); return; }
       if(e.target.closest("[data-member-more]")){ loadMore(); return; }
       var t = e.target.closest("[data-open-task]");
-      if(t){ UI.closeModal(layer); openTaskById(t.dataset.openTask); }
+      if(t){ openTaskById(t.dataset.openTask); }
     });
     UI.openModal(layer);
   }).catch(function(ex){ toast("加载成员工时失败：" + (ex.message || "网络异常"), "bad"); });
@@ -1355,7 +1355,7 @@ function openReleaseDetail(id, entry, onClose, knownVersion, presetVersionIds, f
     if(syncRowTimer){ clearTimeout(syncRowTimer); syncRowTimer = null; }
     if(syncDebounceTimer){ clearTimeout(syncDebounceTimer); syncDebounceTimer = null; }
     if(prevClose) prevClose();
-    /* 弹窗关掉后再开抽屉：抽屉层级低于弹窗，且关闭时可能还有未保存确认 */
+    /* 分支抽屉不支持叠在弹窗之上：先关工作区再开抽屉，避免抽屉被压在下面 */
     if(pendingBranchId){ var bid = pendingBranchId; pendingBranchId = null; setTimeout(function(){ openBranchById(bid); }, 0); }
   };
   var storageKey = "hourglass:release-pending:" + JSON.stringify([wsId, userId, id]);
@@ -2412,7 +2412,6 @@ function openVersionTasks(id, fresh){
     if(!guard.current() || guard.busy()) return;
     if(!canWritePhase()){ denyPhaseReadOnly(); return; }
     if(e.target.closest("[data-version-task-new]")){
-      UI.closeModal(layer);
       openTaskDrawer("backlog", null, { reqId: v.reqId, versionIds: [v.id] });
       return;
     }
@@ -2646,9 +2645,9 @@ function showReleaseNote(id){
     if(e.target.closest('[data-note-export]') && note) exportReleaseNoteCSV(note);
     if(e.target.closest('[data-release-export]') && snapshot) exportReleaseRecordCSV(snapshot);
     var task = e.target.closest('[data-note-task]');
-    if(task){ UI.closeModal(dlg.layer); openTaskById(task.dataset.noteTask); return; }
+    if(task){ openTaskById(task.dataset.noteTask); return; }
     var demand = e.target.closest('[data-note-demand]');
-    if(demand){ UI.closeModal(dlg.layer); openDemandDetailById(demand.dataset.noteDemand); }
+    if(demand){ openDemandDetailById(demand.dataset.noteDemand); }
   });
   load();
 }

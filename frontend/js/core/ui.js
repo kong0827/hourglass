@@ -76,6 +76,7 @@ import { icon } from "./icons.js";
   }
 
   /* ==================== 弹窗基础设施（§4.8） ==================== */
+  /* 每层记录打开前的焦点：嵌套弹层逐层关闭时，焦点回到下一层自己的触发点 */
   var lastFocus = null;
 
   /* 不再维护 ID 白名单：页面里所有 .modal-layer 都是弹窗（含运行时新建的提示框） */
@@ -107,13 +108,25 @@ import { icon } from "./icons.js";
     });
     return z;
   }
+  /* 抽屉可作为弹层的子层（如需求详情里新建工作项）：此时它被抬到弹层之上，
+     后续弹窗（确认框、提示框）要再压回抽屉之上，不能只看弹窗的层级 */
+  function topOverlayZ() {
+    var z = topModalZ();
+    var drawers = document.querySelectorAll(".drawer-layer.on");
+    for (var i = 0; i < drawers.length; i++) {
+      var v = parseInt(drawers[i].style.zIndex, 10);
+      if (v > z) z = v;
+    }
+    return z;
+  }
 
   function openModal(m, focusSel) {
     if (!m) return;
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
     if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { requestCloseModal(m); }); }
     lastFocus = document.activeElement;
-    m.style.zIndex = String(topModalZ() + 1);
+    m.__prevFocus = lastFocus;
+    m.style.zIndex = String(topOverlayZ() + 1);
     m.classList.add("open");
     var target = focusSel ? m.querySelector(focusSel) : (m.querySelector("input:not([type=hidden]),textarea,select") || focusables(m)[0]);
     setTimeout(function () { try { if (target) target.focus(); } catch (e) { /* noop */ } }, 40);
@@ -122,19 +135,22 @@ import { icon } from "./icons.js";
     if (!m) return;
     m.classList.remove("open");
     m.style.zIndex = "";
-    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* noop */ } }
+    var back = m.__prevFocus || lastFocus;
+    m.__prevFocus = null;
+    if (back && back.focus) { try { back.focus(); } catch (e) { /* noop */ } }
     lastFocus = null;
     /* showPrompt 等"等待用户输入"的弹窗靠这个回调把 Promise 收口 */
     var done = m.__uiOnClose;
     if (done) { m.__uiOnClose = null; try { done(); } catch (e) { /* noop */ } }
   }
-  /* 关闭最上层弹窗，返回是否关闭了东西 */
+  /* 关闭最上层弹窗，返回是否关闭了东西。
+     层级以打开时写入的 z-index 为准：静态弹窗在 DOM 里靠前、动态弹层 append 在后，
+     只按 DOM 顺序挑会把下层先关掉（如详情之上叠着排期弹窗时，Esc 关掉详情）。 */
   function closeTopModal() {
-    var els = modalEls();
-    for (var i = els.length - 1; i >= 0; i--) {
-      if (els[i].classList.contains("open")) { requestCloseModal(els[i]); return true; }
-    }
-    return false;
+    var m = topOpenModal();
+    if (!m) return false;
+    requestCloseModal(m);
+    return true;
   }
   /* 表单弹窗可注册关闭守卫：X/取消/Esc/遮罩都先经过它，由它决定是否确认与何时关闭 */
   function setModalCloseGuard(m, fn) {
@@ -145,11 +161,15 @@ import { icon } from "./icons.js";
     if (m) m.__submitFn = typeof fn === "function" ? fn : null;
   }
   function topOpenModal() {
-    var els = modalEls();
-    for (var i = els.length - 1; i >= 0; i--) {
-      if (els[i].classList.contains("open")) return els[i];
+    var els = modalEls(), top = null, topZ = -Infinity;
+    for (var i = 0; i < els.length; i++) {
+      if (!els[i].classList.contains("open")) continue;
+      var z = parseInt(els[i].style.zIndex, 10);
+      if (isNaN(z)) z = 0;
+      /* 同层时后来的（DOM 靠后）压在上面，与 openModal 的叠放一致 */
+      if (!top || z >= topZ) { top = els[i]; topZ = z; }
     }
-    return null;
+    return top;
   }
   function requestCloseModal(m) {
     if (!m) return;
@@ -538,6 +558,7 @@ import { icon } from "./icons.js";
     requestCloseModal: requestCloseModal,
     anyModalOpen: anyModalOpen,
     anyDialogOpen: anyDialogOpen,
+    topModalZ: topModalZ,
     openPop: openPop,
     closeAllPops: closeAllPops,
     popOpen: popOpen,

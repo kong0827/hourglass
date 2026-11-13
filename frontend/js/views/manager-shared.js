@@ -157,7 +157,7 @@ function openTaskTable(title, tasks, description, pager){
       return;
     }
     var row = e.target.closest("[data-open-task]");
-    if(row){ UI.closeModal(layer); openTaskById(row.dataset.openTask); }
+    if(row){ openTaskById(row.dataset.openTask); }
   });
   UI.openModal(layer);
 }
@@ -231,7 +231,7 @@ function openLogTable(title, logs, description, opts){
       return;
     }
     var row = e.target.closest("[data-open-task]");
-    if(row){ UI.closeModal(layer); openTaskById(row.dataset.openTask); }
+    if(row){ openTaskById(row.dataset.openTask); }
   });
   UI.openModal(layer);
 }

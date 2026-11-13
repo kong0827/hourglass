@@ -294,7 +294,8 @@ function init(){
       if(active >= 0 && hits[active]) openHit(hits[active]);
       return;
     }
-    if(e.key === "Escape"){ e.preventDefault(); close(); }
+    /* 搜索面板是最顶层：Esc 只收自己，别再让全局快捷键把下层弹窗/抽屉一起关掉 */
+    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); }
   });
   resultsEl.addEventListener("click", function(e){
     var rc = e.target.closest("[data-recent-clear]");

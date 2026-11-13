@@ -7,7 +7,7 @@ import { companyChipHTML, companyNameOf } from "../lib/company.js";
 import { loadProjectMembers, peekProjectMembers, memberRoleTitles } from "../lib/member-labels.js";
 import { $, attachCount, attachList, btnCommentAttach, btnCommentSend, btnDeleteTask, btnTaskNew, btnSaveTask, btnSaveTaskContinue, btnTaskWatch, btnTimer, btnTimerAdd, commentAttachChips, commentAttachTip, commentCount, commentList, commentMention, dlgTimeAdd, dlgTimeAddCancel, dlgTimeAddOk, drawerNotice, drawerNoticeReload, drawerNoticeText, fAttach, fComments, fSubtasks, fTimeline, fTitle, fWork, iActual, iAttachFile, iBlocked, iBlockedReason, iCol, iComment, iCommentFiles, iDesc, iDue, iEstimate, iNote, iOwner, iProg, iRemind, iRemindTarget, iReq, iStart, iSubNew, iTags, iTimeDate, iTimeHours, iTimeNote, iTimeUser, iTitle, progVal, segCat, segDue, segPri, segProg, segRecur, segStart, subCount, subList, tagWrap, taskDrawer, taskDrawerTitle, taskForm, taskWatchLabel, timelineBox, workLogList, workVal } from "./dom.js";
 import { icon } from "./icons.js";
-import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
+import { canEditReq, canEditTask, canManageProject, colRuleOf, reqNameById, roleReadOnly, rt, state, taskById, taskCacheExtra, timerAllowed } from "./state.js";
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
@@ -976,16 +976,16 @@ function syncAutoProject(){
   var want = opt ? (opt.getAttribute("data-req") || "") : "";
   badge.hidden = !(want && reqSel && reqSel.value === want);
 }
-/* 「更多设置」收起时也要看得见已选值：模块常驻，其余仅在设置后追加 */
+/* 「更多设置」收起时也要看得见已选值；模块已常驻归属条，不再重复展示 */
 var RECUR_LABELS = { daily:"每天", weekly:"每周", monthly:"每月" };
 function syncMoreSummary(){
   var el = $("drawerMoreSummary");
   if(!el) return;
-  var parts = ["模块：" + (catNameById(rt.formCat) || "未设置")];
+  var parts = [];
   if(rt.formRecur) parts.push("循环：" + (RECUR_LABELS[rt.formRecur] || rt.formRecur));
   if(iRemind && iRemind.value) parts.push("提醒：" + fmtTs(iRemind.value));
   if(iBlocked && iBlocked.checked) parts.push("已阻塞");
-  el.textContent = "· " + parts.join(" · ");
+  el.textContent = parts.length ? "· " + parts.join(" · ") : "· 未设置";
 }
 if(iSeverity) iSeverity.addEventListener("change", function(){
   var fs = $("fSeverity");
@@ -1015,8 +1015,19 @@ function refreshAssociationViews(){
   var project = viewModule("project");
   if(project) project.loadProject({silent:true});
 }
-function openDrawer(){ taskDrawer.classList.add("on"); }
-function closeDrawer(){ taskDrawer.classList.remove("on"); rt.formDirty = false; }
+/* 从弹层（需求详情、下钻表等）打开时，抽屉要抬到弹层之上；
+   关闭抽屉只收起自己，下面的弹层原样保留，用户回到上一层而不是被一起关掉 */
+function openDrawer(){
+  var hasBelow = UI.anyDialogOpen() || !!document.querySelector(".drawer-layer.on:not(#taskDrawer)");
+  taskDrawer.style.zIndex = hasBelow ? String(UI.topModalZ() + 1) : "";
+  taskDrawer.classList.toggle("nested", hasBelow);
+  taskDrawer.classList.add("on");
+}
+function closeDrawer(){
+  taskDrawer.classList.remove("on", "nested");
+  taskDrawer.style.zIndex = "";
+  rt.formDirty = false;
+}
 /**
  * 只读项目：整张表单（含评论/检查清单/附件）不可写，保存与删除入口收起。
  * 恢复时按各字段原有禁用条件还原，不能一律 disabled=false —— 进度列与阻塞原因有自己的状态。
@@ -1099,27 +1110,33 @@ function projCats(reqId){
   if(!reqId) return [];
   return rt.categoriesCache.filter(function(c){ return c.projectId === reqId; });
 }
-function projFirstCat(reqId){
-  return (projCats(reqId)[0] || {}).id || "";
-}
 function syncCatSeg(){
   if(!segCat) return;
-  if(!currentReqId()){
+  var reqId = currentReqId();
+  if(!reqId){
     segCat.innerHTML = '<span class="foot-note">未挂项目，模块为「未指定」</span>';
     return;
   }
-  segCat.innerHTML = projCats(currentReqId()).map(function(c){
-    return '<button type="button" data-fcat="' + esc(c.id) + '" aria-pressed="' + (c.id === rt.formCat) + '">' + esc(c.name) + '</button>';
-  }).join("");
-}
-/* 切换项目后校准模块选中：原模块不属于新项目则回落到新项目第一个模块 */
-function ensureCatForProject(reqId){
   var cats = projCats(reqId);
-  if(!cats.some(function(c){ return c.id === rt.formCat; })){
-    rt.formCat = (cats[0] || {}).id || "";
-    syncFormSegs(); syncMoreSummary();
+  if(!cats.length){
+    var cfg = canManageProject(reqId)
+      ? '<button class="chip" type="button" data-cat-cfg="1">去项目设置添加</button>'
+      : "";
+    segCat.innerHTML = '<span class="foot-note">该项目还没有模块</span>' + cfg;
+    return;
+  }
+  segCat.innerHTML = '<button type="button" data-fcat="" aria-pressed="' + (rt.formCat === "") + '">未指定</button>' +
+    cats.map(function(c){
+      return '<button type="button" data-fcat="' + esc(c.id) + '" aria-pressed="' + (c.id === rt.formCat) + '">' + esc(c.name) + '</button>';
+    }).join("");
+}
+/* 切换项目后校准模块选中：原模块不属于新项目则回到「未指定」，空值本身合法不再回落第一项 */
+function ensureCatForProject(reqId){
+  if(rt.formCat && !projCats(reqId).some(function(c){ return c.id === rt.formCat; })){
+    rt.formCat = "";
   }
   syncCatSeg();
+  syncFormSegs();
 }
 function populateColSelect(){
   if(!iCol) return;
@@ -1420,6 +1437,8 @@ function openTaskDrawer(colId, task, defaults){
   }
   rt.drawerOpener = (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement)
     ? document.activeElement : null;
+  /* 上层弹层可登记“抽屉关闭后刷新自己”的回调（如下钻表、需求详情的关联列表） */
+  rt.drawerOnClose = (defaults && typeof defaults.onClose === "function") ? defaults.onClose : null;
   /* 切任务前先收好上一条未发送的评论草稿 */
   stashCommentDraft(lastCommentDraftId || rt.editingId);
   rt.taskFormSeq++;
@@ -1460,8 +1479,9 @@ function openTaskDrawer(colId, task, defaults){
     if(iEstimate) iEstimate.value = task.estimateMinutes ? (task.estimateMinutes / 60) : "";
     renderActualEstimate(task.totalMinutes, task.estimateMinutes);
     rt.formPri = task.priority || "P2";
-    /* 模块已删则回落到该项目第一个模块；未挂项目无模块 */
-    rt.formCat = task.categoryId || projFirstCat(task.reqId || "");
+    /* 模块已删/不属于当前项目则视为「未指定」 */
+    var taskCats = projCats(task.reqId || "");
+    rt.formCat = taskCats.some(function(c){ return c.id === task.categoryId; }) ? task.categoryId : "";
     populateColSelect();
     iCol.value = task.boardColumn || "backlog";
     populateReqSelect(task.reqId || "");
@@ -1507,9 +1527,9 @@ function openTaskDrawer(colId, task, defaults){
     }
     if($("fRegression")) $("fRegression").hidden = false;
     if($("afterCreateNote")) $("afterCreateNote").hidden = true;
-    /* 只有确实用了低频设置时才展开，避免编辑态默认撑长表单；模块已填也要展开 */
+    /* 只有确实用了低频设置时才展开，避免编辑态默认撑长表单 */
     var drawerMore = $("drawerMore");
-    if(drawerMore) drawerMore.open = !!(task.categoryId || task.recurType || task.remindAt || task.blocked);
+    if(drawerMore) drawerMore.open = !!(task.recurType || task.remindAt || task.blocked);
     loadWorkStatus(task.id);
     loadAttachments(task.id);
     loadSubtasks(task.id);
@@ -2170,9 +2190,12 @@ function forceCloseTaskDrawer(opts){
   rt.taskFormSeq++;
   setSaveLoading(false);
   var opener = rt.drawerOpener;
+  var onClose = rt.drawerOnClose;
+  rt.drawerOnClose = null;
   closeDrawer();
   clearWorkTick();
   rt.editingId = null;
+  if(onClose){ try{ onClose(); }catch(e){ /* 刷新失败不影响关闭 */ } }
   if(opener && opener.isConnected && opener.focus){
     if(rt.drawerCloseTimer) clearTimeout(rt.drawerCloseTimer);
     rt.drawerCloseTimer = setTimeout(function(){
@@ -2210,9 +2233,15 @@ segPri.addEventListener("click", function(e){
   rt.formPri = b.dataset.fpri; syncFormSegs(); rt.formDirty = true;
 });
 segCat.addEventListener("click", function(e){
+  var cfg = e.target.closest("[data-cat-cfg]");
+  if(cfg){
+    var reqId = currentReqId();
+    if(reqId) loadView("projects").then(function(m){ m.openProjectDialog(reqId); });
+    return;
+  }
   var b = e.target.closest("[data-fcat]"); if(!b) return;
   if(denyReadOnly()) return;
-  rt.formCat = b.dataset.fcat; syncFormSegs(); syncMoreSummary(); rt.formDirty = true;
+  rt.formCat = b.dataset.fcat; syncFormSegs(); rt.formDirty = true;
 });
 segRecur.addEventListener("click", function(e){
   var b = e.target.closest("[data-recur]"); if(!b) return;
@@ -3063,7 +3092,7 @@ taskForm.addEventListener("submit", function(e){
     title: title,
     description: getTaskDescContent(),
     priority: rt.formPri,
-    categoryId: rt.formCat || null,
+    categoryId: rt.formCat || "",
     owner: owner.name,
     ownerUserId: owner.userId,
     boardColumn: iCol.value || "backlog",

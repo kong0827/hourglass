@@ -3846,7 +3846,7 @@ function populateReqDocSelect(keep){
 
   /* Esc：先关弹窗，再问是否保存并关闭编辑页 */
   document.addEventListener("keydown", function(e){
-    if(e.key !== "Escape") return;
+    if(e.key !== "Escape" || e.__dsEscHandled) return;
     if($("dlgReqDocClose") && $("dlgReqDocClose").classList.contains("open")){ closeReqDocCloseDialog(); return; }
     if($("dlgNewReqDoc") && $("dlgNewReqDoc").classList.contains("open")){ closeNewReqDocDialog(); return; }
     if($("dlgReqDocHistory") && $("dlgReqDocHistory").classList.contains("open")){ UI.closeModal($("dlgReqDocHistory")); return; }
