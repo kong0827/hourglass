@@ -64,12 +64,24 @@ public class Demand {
 
     /** 已排期派生阶段（非表字段）：waiting/active/donePending/delivered */
     private String deliveryStage;
+    /** 阶段来源（非表字段）：release真实发布优先 / manual人工判定 / derived自动派生 */
+    private String deliveryStageSource;
     private Integer taskCount;
     private Integer taskDone;
     private Integer caseCount;
     private Integer casePassed;
     private LocalDate devStart;
+    /** 实际交付日期：真实发布日期优先，缺失时取人工“已交付”的生效日期 */
     private LocalDate deliveredAt;
     /** 已指向发布版本但没有有效发布记录；需补录历史证据，不自动推断交付 */
     private Boolean deliveryEvidenceMissing;
+
+    /** 当前生效人工判定（非表字段）：donePending/delivered；null 表示没有 */
+    private String manualDeliveryStage;
+    private LocalDate manualDeliveryEffectiveOn;
+    private String manualDeliveryReason;
+    private String manualDeliveryJudgedBy;
+    private LocalDateTime manualDeliveryJudgedAt;
+    /** 当前用户是否可维护人工判定（非表字段）：空间主、管理员或项目负责人 */
+    private Boolean canJudgeDelivery;
 }

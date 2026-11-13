@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.DemandDeliveryJudgementMapper">
+
+  <sql id="cols">
+    id, workspace_id, demand_id, version_id, judged_stage, effective_on, judge_reason,
+    judged_by_user_id, judged_by_name, judged_at,
+    revoked_at, revoked_by_user_id, revoked_by_name, revoke_reason
+  </sql>
+
+  <select id="selectActive" resultType="com.hourglass.entity.DemandDeliveryJudgement">
+    SELECT <include refid="cols"/> FROM demand_delivery_judgement
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId} AND revoked_at IS NULL
+    ORDER BY id DESC LIMIT 1
+  </select>
+
+  <select id="selectHistory" resultType="com.hourglass.entity.DemandDeliveryJudgement">
+    SELECT <include refid="cols"/> FROM demand_delivery_judgement
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+    ORDER BY judged_at DESC, id DESC
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="countHistory" resultType="int">
+    SELECT COUNT(*) FROM demand_delivery_judgement
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </select>
+
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO demand_delivery_judgement
+      (workspace_id, demand_id, version_id, judged_stage, effective_on, judge_reason,
+       judged_by_user_id, judged_by_name, judged_at)
+    VALUES
+      (#{workspaceId}, #{demandId}, #{versionId}, #{judgedStage}, #{effectiveOn}, #{judgeReason},
+       #{judgedByUserId}, #{judgedByName}, COALESCE(#{judgedAt}, CURRENT_TIMESTAMP(6)))
+  </insert>
+
+  <update id="revoke">
+    UPDATE demand_delivery_judgement
+    SET revoked_at = CURRENT_TIMESTAMP(6),
+        revoked_by_user_id = #{revokedByUserId},
+        revoked_by_name = #{revokedByName},
+        revoke_reason = #{revokeReason}
+    WHERE id = #{id} AND revoked_at IS NULL
+  </update>
+
+  <delete id="deleteByDemand">
+    DELETE FROM demand_delivery_judgement
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE j FROM demand_delivery_judgement j
+    INNER JOIN demand d ON d.id = j.demand_id AND d.workspace_id = j.workspace_id
+    WHERE j.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM demand_delivery_judgement WHERE workspace_id = #{workspaceId}
+  </delete>
+
+</mapper>

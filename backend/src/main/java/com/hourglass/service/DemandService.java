@@ -67,6 +67,9 @@ public class DemandService {
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.ReleaseMapper releases;
+    /** 人工判定是需求的追加式记录，需求删除时必须一起清理 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.DemandDeliveryJudgementMapper judgementMapper;
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public DemandService(DemandMapper demandMapper, RequirementMapper reqMapper,
@@ -756,7 +759,12 @@ public class DemandService {
     }
 
     public Demand get(String workspaceId, String id) {
-        Demand d = requireDemand(workspaceId, id);
+        DemandQuery detailQuery = new DemandQuery();
+        detailQuery.setWorkspaceId(workspaceId);
+        Demand d = demandMapper.selectDetail(detailQuery, id);
+        if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
+            throw AppException.notFound("需求不存在：" + id);
+        }
         fillWsjf(d);
         return d;
     }
@@ -765,7 +773,9 @@ public class DemandService {
     public Demand getVisible(String workspaceId, String userId, String id) {
         Demand d = get(workspaceId, id);
         projectAccess.assertView(workspaceId, userId, d.getReqId());
-        d.setCanSchedule(releasePermission.canManageProject(userId, workspaceId, d.getReqId()));
+        boolean canManage = releasePermission.canManageProject(userId, workspaceId, d.getReqId());
+        d.setCanSchedule(canManage);
+        d.setCanJudgeDelivery(canManage);
         return d;
     }
 
@@ -1067,6 +1077,7 @@ public class DemandService {
         caseMapper.clearDemandRefs(workspaceId, id);
         /* 条目本身要删，留着它自己的流转日志只会变成查不到主人的孤儿行 */
         demandMapper.deleteLogsByDemand(workspaceId, id);
+        judgementMapper.deleteByDemand(workspaceId, id);
         demandMapper.deleteById(workspaceId, id);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被删除",
                 "需求已从需求池删除，关联任务已解绑");

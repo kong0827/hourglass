@@ -140,7 +140,8 @@ class BackupImportBatchTest {
                         mock(DemandMapper.class), mock(com.hourglass.mapper.MailDeliveryMapper.class),
                         mock(com.hourglass.mapper.ReqDocShareMapper.class),
                         mock(com.hourglass.mapper.TestCaseMapper.class),
-                        mock(com.hourglass.mapper.TestCaseRunMapper.class), scopeLock),
+                        mock(com.hourglass.mapper.TestCaseRunMapper.class),
+                        mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class), scopeLock),
                 mock(ActivityService.class),
                 workActivityMapper, transactionManager, scopeLock);
     }

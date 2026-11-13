@@ -116,7 +116,8 @@ class TaskCascadeTest {
                 mock(com.hourglass.mapper.RequirementDocHistoryMapper.class),
                 docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
-                reqDocShareMapper, testCaseMapper, testCaseRunMapper, scopeLock);
+                reqDocShareMapper, testCaseMapper, testCaseRunMapper,
+                mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class), scopeLock);
     }
 
     private List<Task> tasks(String... workspaceAndIds) {

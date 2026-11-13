@@ -7,14 +7,18 @@ import com.hourglass.common.RequireRole;
 import com.hourglass.config.WorkspaceCtx;
 import com.hourglass.dto.DemandActionRequest;
 import com.hourglass.dto.DemandBoardResponse;
+import com.hourglass.dto.DemandDeliveryJudgementRequest;
 import com.hourglass.dto.DemandDocLinkRequest;
 import com.hourglass.dto.DemandGanttPage;
 import com.hourglass.dto.DemandPage;
 import com.hourglass.dto.DemandQuery;
 import com.hourglass.dto.DemandSaveRequest;
+import com.hourglass.dto.PageResult;
 import com.hourglass.dto.ReqDocView;
 import com.hourglass.entity.Demand;
+import com.hourglass.entity.DemandDeliveryJudgement;
 import com.hourglass.entity.Task;
+import com.hourglass.service.DemandDeliveryJudgementService;
 import com.hourglass.service.DemandService;
 import com.hourglass.service.RequirementDocService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,10 +40,13 @@ public class DemandController {
 
     private final DemandService demandService;
     private final RequirementDocService docService;
+    private final DemandDeliveryJudgementService judgementService;
 
-    public DemandController(DemandService demandService, RequirementDocService docService) {
+    public DemandController(DemandService demandService, RequirementDocService docService,
+                            DemandDeliveryJudgementService judgementService) {
         this.demandService = demandService;
         this.docService = docService;
+        this.judgementService = judgementService;
     }
 
     /** 需求池看板首屏：每个状态一列，只下发前 limit 条；搜索/优先级/类型/模块与列表同一口径 */
@@ -189,6 +196,35 @@ public class DemandController {
                                                                @RequestParam(required = false) Integer limit) {
         return ApiResult.ok(demandService.tasks(ctx.getWsId(), ctx.getUserId(), id,
                 offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 人工交付判定历史：追加式记录，最多返回 100 条。 */
+    @GetMapping("/api/demands/{id}/delivery-judgements")
+    public ApiResult<PageResult<DemandDeliveryJudgement>> deliveryJudgements(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(judgementService.history(ctx.getWsId(), ctx.getUserId(), id,
+                offset == null ? 0 : offset, limit == null ? 100 : limit));
+    }
+
+    /** 新建或替换人工判定：空间主、管理员或项目负责人可操作，真实发布证据仍然优先。 */
+    @PostMapping("/api/demands/{id}/delivery-judgement")
+    public ApiResult<Demand> judgeDelivery(@PathVariable String id,
+                                           @Valid @RequestBody DemandDeliveryJudgementRequest body,
+                                           @CurrentWorkspace WorkspaceCtx ctx) {
+        judgementService.judge(ctx.getUserId(), ctx.getWsId(), id, body);
+        return ApiResult.ok(demandService.getVisible(ctx.getWsId(), ctx.getUserId(), id));
+    }
+
+    /** 撤销人工判定：记录撤销原因，恢复自动派生结果。 */
+    @PostMapping("/api/demands/{id}/delivery-judgement/revoke")
+    public ApiResult<Demand> revokeDelivery(@PathVariable String id,
+                                            @Valid @RequestBody DemandDeliveryJudgementRequest body,
+                                            @CurrentWorkspace WorkspaceCtx ctx) {
+        judgementService.revoke(ctx.getUserId(), ctx.getWsId(), id, body);
+        return ApiResult.ok(demandService.getVisible(ctx.getWsId(), ctx.getUserId(), id));
     }
 
     /** 需求详情「关联文档」列表 */

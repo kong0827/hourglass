@@ -13,7 +13,7 @@ import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { PRIORITIES, taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
@@ -488,9 +488,14 @@ function syncModeUI(mode){
   syncDemGanttControls();
   syncDemBoard();
 }
-function deliveryStageTag(stage){
+function deliveryStageTag(stage, source){
   if(!stage) return "";
-  return '<span class="tag dem-stage-tag st-' + esc(stage) + '" title="派生展示，不可手工修改">' + esc(deliveryStageName(stage)) + '</span>';
+  var manual = source === "manual";
+  var tip = manual ? "人工判定；真实发布证据优先"
+    : source === "release" ? "由真实生产发布记录派生"
+    : "由工作项、用例与发布记录自动派生";
+  return '<span class="tag dem-stage-tag st-' + esc(stage) + (manual ? " manual" : "") + '" title="'
+    + esc(tip) + '">' + esc(deliveryStageName(stage)) + (manual ? " · 人工" : "") + '</span>';
 }
 function demandBoardDistHTML(){
   var counts = demandBoard && demandBoard.stageCounts || {};
@@ -647,7 +652,15 @@ function demandEvidenceHTML(d){
     html += '<div class="bkl-tags"><span class="tag tag-warning">未拆工作项</span><span class="tag ghost">待补充交付证据</span></div>';
   }
   if(cases) html += '<div class="dem-evidence-meta">用例 ' + passed + '/' + cases + ' 通过</div>';
-  if(d.deliveredAt) html += '<div class="dem-evidence-meta">生产发布 ' + esc(String(d.deliveredAt).substring(0, 10)) + '</div>';
+  if(d.deliveredAt){
+    var deliveredLabel = d.deliveryStageSource === "manual" ? "人工交付 " : "生产发布 ";
+    html += '<div class="dem-evidence-meta">' + deliveredLabel + esc(String(d.deliveredAt).substring(0, 10)) + '</div>';
+  }
+  if(d.deliveryStageSource === "manual" && d.manualDeliveryStage !== "delivered"){
+    html += '<div class="dem-evidence-meta">人工判定 ' + esc(deliveryStageName(d.manualDeliveryStage))
+      + (d.manualDeliveryEffectiveOn ? " · " + esc(String(d.manualDeliveryEffectiveOn).substring(0, 10)) : "")
+      + (d.manualDeliveryReason ? " · " + esc(d.manualDeliveryReason) : "") + '</div>';
+  }
   if(d.deliveryEvidenceMissing) html += '<div class="dem-evidence-missing">已发布版本缺少有效发布记录，请人工补录</div>';
   return html;
 }
@@ -662,7 +675,7 @@ function cardHTML(d, opts){
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2")
-    + (d.status === "plan" ? deliveryStageTag(d.deliveryStage) : '')
+    + (d.status === "plan" ? deliveryStageTag(d.deliveryStage, d.deliveryStageSource) : '')
     + (isClosedDemand(d) ? '<span class="tag ghost">' + esc(closeReasonName(reason)) + '</span>' : '') + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
@@ -2499,6 +2512,127 @@ function closeDemandDetailIfOpen(){
   demandDetailLayer = null;
   UI.closeModal(layer);
 }
+function demandJudgementSectionHTML(d){
+  if(d.status !== "plan") return "";
+  var html = '<div class="detail-section dem-judgement"><span class="section-title">人工交付判定</span>';
+  if(d.manualDeliveryStage){
+    html += '<div class="dem-judgement-current">'
+      + '<span class="tag dem-stage-tag st-' + esc(d.manualDeliveryStage) + ' manual">' + esc(deliveryStageName(d.manualDeliveryStage)) + '</span>'
+      + '<span class="dem-evidence-meta">生效 ' + esc(d.manualDeliveryEffectiveOn || "—")
+      + ' · ' + esc(d.manualDeliveryJudgedBy || "—") + ' · ' + esc(fmtTs(d.manualDeliveryJudgedAt) || "—") + '</span>'
+      + (d.manualDeliveryReason ? '<p class="dem-evidence-meta">原因：' + esc(d.manualDeliveryReason) + '</p>' : '')
+      + (d.deliveryStageSource === "release" ? '<p class="foot-note">已有真实生产发布，交付阶段以真实发布为准。</p>' : '')
+      + '</div>';
+  }else{
+    html += '<p class="foot-note">当前由工作项、用例与发布记录自动派生；证据缺失时可人工补录。</p>';
+  }
+  if(d.canJudgeDelivery){
+    html += '<div class="row row-gap">'
+      + '<button class="btn sm ghost" type="button" data-dem-judge>' + (d.manualDeliveryStage ? "修改判定" : "人工判定") + '</button>'
+      + (d.manualDeliveryStage ? '<button class="btn sm ghost" type="button" data-dem-judge-revoke>撤销判定</button>' : '')
+      + '</div>';
+  }else{
+    html += '<p class="foot-note">仅空间主、管理员或项目负责人可以维护人工判定。</p>';
+  }
+  html += '<ul class="dem-logs" id="demJudgementLogs"><li class="foot-note">加载中…</li></ul></div>';
+  return html;
+}
+function loadDemandJudgements(layer, id){
+  var ul = layer.querySelector("#demJudgementLogs");
+  if(!ul) return;
+  API.get("/api/demands/" + encodeURIComponent(id) + "/delivery-judgements", { offset:0, limit:100 }).then(function(res){
+    var list = (res && res.items) || [];
+    if(!ul.isConnected) return;
+    ul.innerHTML = list.length ? list.map(function(j){
+      var revoked = !!j.revokedAt;
+      return '<li' + (revoked ? ' class="is-revoked"' : '') + '>'
+        + '<span class="dem-log-ts">' + esc(j.effectiveOn || "—") + '</span>'
+        + '<b>' + esc(deliveryStageName(j.judgedStage)) + '</b>'
+        + '<span>' + esc(j.judgedByName || "—") + '</span>'
+        + '<span class="dem-log-ts">' + esc(fmtTs(j.judgedAt) || "—") + '</span>'
+        + (j.judgeReason ? '<span class="dem-log-note">' + esc(j.judgeReason) + '</span>' : '')
+        + (revoked
+          ? '<span class="tag ghost">已撤销</span><span class="dem-log-note">'
+            + esc(fmtTs(j.revokedAt) || "") + ' · ' + esc(j.revokedByName || "—")
+            + (j.revokeReason ? ' · ' + esc(j.revokeReason) : "") + '</span>'
+          : '<span class="tag tag-success">当前生效</span>')
+        + '</li>';
+    }).join("") : '<li class="foot-note">暂无人工判定记录</li>';
+  }).catch(function(){
+    if(ul.isConnected) ul.innerHTML = '<li class="foot-note">人工判定记录加载失败</li>';
+  });
+}
+function openJudgementDialog(id){
+  var d = findDemand(id);
+  if(!d) return;
+  if(!d.canJudgeDelivery){ toast("仅空间主、管理员或项目负责人可以维护人工判定", "warn"); return; }
+  var stage = d.manualDeliveryStage || (d.deliveryStage === "delivered" ? "delivered" : "donePending");
+  var effectiveOn = d.manualDeliveryEffectiveOn || iso(new Date());
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>'
+    + (d.manualDeliveryStage ? "修改人工交付判定" : "人工交付判定") + '</h3>'
+    + '<button class="icon-btn sm" type="button" data-dem-judge-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
+    + '<div class="stack"><p class="foot-note">人工判定只用于补录缺失证据；真实生产发布记录始终优先。判定绑定当前目标版本，换版本后旧判定不再生效。</p>'
+    + '<label class="field"><span>判定阶段</span><select class="input" id="demJudgeStage">'
+    + '<option value="donePending"' + (stage === "donePending" ? " selected" : "") + '>已完成 · 待发布</option>'
+    + '<option value="delivered"' + (stage === "delivered" ? " selected" : "") + '>已交付</option></select></label>'
+    + '<label class="field"><span>生效日期</span><input class="input" type="date" id="demJudgeDate" value="' + esc(effectiveOn) + '" max="' + esc(iso(new Date())) + '"></label>'
+    + '<label class="field"><span>判定原因（必填）</span><textarea class="input" id="demJudgeNote" rows="4" maxlength="500">' + esc(d.manualDeliveryReason || "") + '</textarea></label>'
+    + '<div class="row row-gap"><button class="btn primary" type="button" data-dem-judge-ok>保存判定</button>'
+    + '<button class="btn" type="button" data-dem-judge-x>取消</button></div>'
+    + '</div></div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-dem-judge-x]")){ UI.closeModal(layer); return; }
+    var ok = e.target.closest("[data-dem-judge-ok]");
+    if(!ok) return;
+    var note = layer.querySelector("#demJudgeNote").value.trim();
+    var date = layer.querySelector("#demJudgeDate").value;
+    if(!date){ toast("请选择判定生效日期", "warn"); layer.querySelector("#demJudgeDate").focus(); return; }
+    if(!note){ toast("请填写判定原因", "warn"); layer.querySelector("#demJudgeNote").focus(); return; }
+    ok.disabled = true;
+    API.post("/api/demands/" + encodeURIComponent(id) + "/delivery-judgement", {
+      stage:layer.querySelector("#demJudgeStage").value,
+      effectiveOn:date, note:note, revision:d.revision
+    }).then(function(){
+      UI.closeModal(layer);
+      closeDemandDetailIfOpen();
+      toast("人工判定已保存，真实发布证据仍然优先", "fs");
+      drawerDemandOpts.reqId = null;
+      loadDemands();
+    }).catch(function(ex){
+      ok.disabled = false;
+      toast(ex.message || "保存判定失败", "bad");
+      if(ex.code === 409){ UI.closeModal(layer); closeDemandDetailIfOpen(); loadDemands(); }
+    });
+  });
+  UI.openModal(layer, "select");
+}
+function revokeJudgement(id){
+  var d = findDemand(id);
+  if(!d) return;
+  if(!d.canJudgeDelivery){ toast("仅空间主、管理员或项目负责人可以维护人工判定", "warn"); return; }
+  UI.showPrompt({ title:"撤销人工判定", desc:"撤销后恢复自动派生结果，历史记录保留。", label:"撤销原因（必填）",
+    required:true, maxLength:500, okText:"撤销判定" }).then(function(note){
+    if(note === null) return;
+    if(!note.trim()){ toast("请填写撤销原因", "warn"); return; }
+    API.post("/api/demands/" + encodeURIComponent(id) + "/delivery-judgement/revoke", {
+      note:note.trim(), revision:d.revision
+    }).then(function(){
+      closeDemandDetailIfOpen();
+      toast("人工判定已撤销，恢复自动派生结果", "fs");
+      drawerDemandOpts.reqId = null;
+      loadDemands();
+    }).catch(function(ex){
+      toast(ex.message || "撤销失败", "bad");
+      if(ex.code === 409){ closeDemandDetailIfOpen(); loadDemands(); }
+    });
+  });
+}
 function renderDemandDetail(d){
   var id = d.id;
   var writable = canWriteDemand(d), canSplit = writable && !isClosedDemand(d);
@@ -2514,9 +2648,9 @@ function renderDemandDetail(d){
     ["需求来源", d.source || "—"]
   ];
   if(d.status === "plan" && d.deliveryStage){
-    grid.push(["交付阶段", deliveryStageName(d.deliveryStage)]);
+    grid.push(["交付阶段", deliveryStageName(d.deliveryStage) + (d.deliveryStageSource === "manual" ? "（人工判定）" : "")]);
     grid.push(["交付证据", "工作项 " + (Number(d.taskDone) || 0) + "/" + (Number(d.taskCount) || 0) + " · 用例 " + (Number(d.casePassed) || 0) + "/" + (Number(d.caseCount) || 0)]);
-    if(d.deliveredAt) grid.push(["生产发布", String(d.deliveredAt).substring(0, 10)]);
+    if(d.deliveredAt) grid.push([d.deliveryStageSource === "manual" ? "人工交付日期" : "生产发布", String(d.deliveredAt).substring(0, 10)]);
   }
   if(isClosedDemand(d)){
     grid.push(["关闭原因", closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))]);
@@ -2552,6 +2686,7 @@ function renderDemandDetail(d){
     + (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
     + '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
     + (demandActs(d) ? '<div class="row row-gap">' + demandActs(d) + '</div>' : '')
+    + demandJudgementSectionHTML(d)
     + (d.description ? '<div class="detail-section"><span class="section-title">需求描述</span><div class="detail-copy">' + esc(d.description) + '</div></div>' : '')
     + (d.acceptText ? '<div class="detail-section"><span class="section-title">验收标准</span><div class="detail-copy">' + esc(d.acceptText) + '</div></div>' : '')
     + (isClosedDemand(d) && d.reviewNote ? '<div class="detail-section"><span class="section-title">关闭原因说明</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
@@ -2582,6 +2717,8 @@ function renderDemandDetail(d){
     var ro = e.target.closest("[data-dem-reopen]"); if(ro){ reopenDemand(ro.dataset.demReopen); return; }
     var restore = e.target.closest("[data-dem-restore]"); if(restore){ restoreDemand(restore.dataset.demRestore); return; }
     var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d); return; }
+    var judge = e.target.closest("[data-dem-judge]"); if(judge){ openJudgementDialog(id); return; }
+    var judgeRevoke = e.target.closest("[data-dem-judge-revoke]"); if(judgeRevoke){ revokeJudgement(id); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
       if(!canSplit){ toast("已关闭的需求不能新拆工作项", "warn"); return; }
@@ -2708,6 +2845,7 @@ function renderDemandDetail(d){
   loadDemandTasks(layer, id, d.versionId);
   loadDemandDocs(layer, id, d.reqId, writable);
   loadDemandAttachments(layer, id, writable);
+  loadDemandJudgements(layer, id);
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/logs").then(function(logs){
     var ul = layer.querySelector("#demLogs");
     if(!ul) return;

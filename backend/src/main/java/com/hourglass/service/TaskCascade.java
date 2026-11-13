@@ -129,6 +129,8 @@ public class TaskCascade {
     private final VersionTaskMapper versionTaskMapper;
     private final ProjectVersionMapper versionMapper;
     private final DemandMapper demandMapper;
+    /** 需求人工判定随需求池一起清理，备份格式暂不包含该表 */
+    private final com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
     private final RequirementDocHistoryMapper docHistoryMapper;
     private final RequirementDocCommentMapper docCommentMapper;
     private final TestCaseMapper testCaseMapper;
@@ -150,6 +152,7 @@ public class TaskCascade {
                        DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
                        ReqDocShareMapper reqDocShareMapper,
                        TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
+                       com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper,
                        DeliveryScopeLock scopeLock) {
         this.scopeLock = scopeLock;
         this.taskMapper = taskMapper;
@@ -177,6 +180,7 @@ public class TaskCascade {
         this.reqDocShareMapper = reqDocShareMapper;
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
+        this.demandJudgementMapper = demandJudgementMapper;
     }
 
     /**
@@ -378,6 +382,7 @@ public class TaskCascade {
         devBranchMapper.deleteByWorkspace(workspaceId);
         versionMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteLogsByWorkspace(workspaceId);
+        demandJudgementMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteByWorkspace(workspaceId);
     }
 
@@ -406,6 +411,8 @@ public class TaskCascade {
         }
         if (clearDemands) {
             requirementDocMapper.deleteDemandLinksByWorkspace(workspaceId);
+            /* 人工判定不在备份格式里：需求整体替换时一并清理，避免同 ID 重建混入旧判定 */
+            demandJudgementMapper.deleteByWorkspace(workspaceId);
             /* 需求流转日志同样不在备份里：保留审计记录，不随导入清空 */
             demandMapper.deleteByWorkspace(workspaceId);
         }

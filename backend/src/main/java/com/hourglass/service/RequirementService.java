@@ -48,6 +48,9 @@ public class RequirementService {
     private final CategoryService categoryService;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskQueryService taskQueries;
+    /** 需求随项目删除时，人工交付判定一并清理 */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper;
     /** 删项目时清掉邀请上对它的预分配 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hourglass.mapper.InviteProjectGrantMapper inviteGrantMapper;
@@ -426,6 +429,7 @@ public class RequirementService {
         /* 版本与绑定关系、需求池条目与流转日志同样强归属项目，一并清理 */
         versionService.deleteByReq(workspaceId, id);
         demandMapper.deleteLogsByReq(workspaceId, id);
+        demandJudgementMapper.deleteByReq(workspaceId, id);
         demandMapper.deleteByReq(workspaceId, id);
         projectAccess.clearProject(workspaceId, id);
         if (inviteGrantMapper != null) {

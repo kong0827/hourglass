@@ -1,8 +1,8 @@
 -- ============================================================================
 -- sql/baseline/01_schema_full.sql · 沙漏 Hourglass 完整基线 DDL（MySQL 8，utf8mb4）
--- Updated 2026-11-12: full schema after migrations 01-70 (56 tables).
+-- Updated 2026-11-13: full schema after migrations 01-70 and 76 (57 tables).
 --
--- 完整结构与 sql/01-70 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序）；不包含历史业务数据回填。
+-- 完整结构与 sql/01-70 + 76 增量链等效（含 64 测试流程、65 计划-版本关联、66 新成员默认不参与、68 成员公司与项目角色标注、69 成员职能与标签选项、70 项目手动排序、76 需求人工交付判定）；不包含历史业务数据回填。
 -- 全新部署执行本文件即可，无需再跑 sql/ 目录；已有库的日常升级仍使用 sql/ 增量脚本。
 -- 可重复执行（DROP TABLE IF EXISTS + CREATE TABLE）。
 -- ⚠ 本文件含 USE hourglass 与 DROP TABLE，只适用于目标库就是 hourglass 的全新部署。
@@ -205,6 +205,42 @@ CREATE TABLE `demand` (
   KEY `idx_ws_category_id` (`workspace_id`,`category_id`),
   KEY `idx_version` (`version_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求池（评审状态机）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `demand_delivery_judgement`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `demand_delivery_judgement` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '人工判定记录ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求ID（demand.id）',
+  `version_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '判定时的目标版本快照；需求换版本后旧判定不再生效',
+  `judged_stage` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '人工判定阶段：donePending已完成待发布/delivered已交付',
+  `effective_on` date NOT NULL COMMENT '判定生效日期；已交付时作为实际交付日期',
+  `judge_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '人工判定原因',
+  `judged_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '判定人账号ID',
+  `judged_by_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '判定人名称快照',
+  `judged_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '判定时间',
+  `revoked_at` datetime(6) DEFAULT NULL COMMENT '撤销时间；为空表示当前生效',
+  `revoked_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销人账号ID',
+  `revoked_by_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销人名称快照',
+  `revoke_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '撤销原因',
+  `active_demand_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (CASE WHEN `revoked_at` IS NULL THEN `demand_id` ELSE NULL END) STORED
+    COMMENT '生效判定归一化键；撤销后为NULL',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_demand_active_judgement` (`workspace_id`,`active_demand_id`),
+  KEY `idx_demand_judgement_history` (`workspace_id`,`demand_id`,`judged_at`,`id`),
+  CONSTRAINT `chk_demand_judgement_stage`
+    CHECK (`judged_stage` IN ('donePending','delivered')),
+  CONSTRAINT `chk_demand_judgement_revoke`
+    CHECK (
+      (`revoked_at` IS NULL AND `revoked_by_user_id` IS NULL
+        AND `revoked_by_name` IS NULL AND `revoke_reason` IS NULL)
+      OR
+      (`revoked_at` IS NOT NULL AND `revoked_by_user_id` IS NOT NULL
+        AND `revoked_by_name` IS NOT NULL AND `revoke_reason` IS NOT NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求人工交付判定（追加式，撤销后保留历史）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `demand_doc_link`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

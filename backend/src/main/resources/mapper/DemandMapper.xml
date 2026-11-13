@@ -16,33 +16,57 @@
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
 
+  <!-- 真实发布证据优先；没有真实发布时才采用人工“已交付”的生效日期。 -->
+  <sql id="effectiveDeliveredAt">
+    COALESCE(ev_release.deliveredAt, CASE WHEN dj.judged_stage = 'delivered' THEN dj.effective_on END)
+  </sql>
+
   <sql id="deliveryEvidenceCols">
     COALESCE(ev_task.taskCount, 0) AS taskCount, COALESCE(ev_task.taskDone, 0) AS taskDone,
     COALESCE(ev_case.caseCount, 0) AS caseCount, COALESCE(ev_case.casePassed, 0) AS casePassed,
-    ev_start.devStart AS devStart, ev_release.deliveredAt AS deliveredAt,
-    CASE WHEN d.status = 'plan' AND v.status = 'released' AND ev_release.deliveredAt IS NULL
+    ev_start.devStart AS devStart, <include refid="effectiveDeliveredAt"/> AS deliveredAt,
+    dj.judged_stage AS manualDeliveryStage, dj.effective_on AS manualDeliveryEffectiveOn,
+    dj.judge_reason AS manualDeliveryReason, dj.judged_by_name AS manualDeliveryJudgedBy,
+    dj.judged_at AS manualDeliveryJudgedAt,
+    CASE WHEN d.status = 'plan' AND v.status = 'released' AND <include refid="effectiveDeliveredAt"/> IS NULL
          THEN 1 ELSE 0 END AS deliveryEvidenceMissing,
-    <include refid="deliveryStageExpr"/> AS deliveryStage
+    <include refid="deliveryStageExpr"/> AS deliveryStage,
+    <include refid="deliveryStageSourceExpr"/> AS deliveryStageSource
   </sql>
 
   <sql id="deliveryStageExpr">
     CASE
       WHEN d.status &lt;&gt; 'plan' THEN NULL
       WHEN ev_release.deliveredAt IS NOT NULL THEN 'delivered'
+      WHEN dj.judged_stage = 'delivered' THEN 'delivered'
       WHEN COALESCE(ev_task.taskCount, 0) &gt; 0
            AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
            AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0) THEN 'donePending'
+      WHEN dj.judged_stage = 'donePending' THEN 'donePending'
       WHEN ev_start.devStart IS NOT NULL THEN 'active'
       ELSE 'waiting'
     END
   </sql>
 
+  <sql id="deliveryStageSourceExpr">
+    CASE
+      WHEN d.status &lt;&gt; 'plan' THEN NULL
+      WHEN ev_release.deliveredAt IS NOT NULL THEN 'release'
+      WHEN dj.judged_stage = 'delivered' THEN 'manual'
+      WHEN COALESCE(ev_task.taskCount, 0) &gt; 0
+           AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
+           AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0) THEN 'derived'
+      WHEN dj.judged_stage = 'donePending' THEN 'manual'
+      ELSE 'derived'
+    END
+  </sql>
+
   <sql id="deliveryRiskExpr">
-    d.status = 'plan' AND ev_release.deliveredAt IS NULL AND (
+    d.status = 'plan' AND <include refid="effectiveDeliveredAt"/> IS NULL AND (
       COALESCE(ev_task.taskCount, 0) = 0
       OR COALESCE(ev_case.casePassed, 0) &lt; COALESCE(ev_case.caseCount, 0)
       OR (d.expect_date IS NOT NULL AND d.expect_date &lt; CURRENT_DATE)
-      OR (ev_release.deliveredAt IS NULL AND EXISTS (
+      OR (<include refid="effectiveDeliveredAt"/> IS NULL AND EXISTS (
             SELECT 1 FROM project_version pv_evidence
             WHERE pv_evidence.workspace_id = d.workspace_id AND pv_evidence.id = d.version_id
               AND pv_evidence.status = 'released'))
@@ -109,6 +133,9 @@
         AND vr.result = 'success' AND vr.environment = 'production' AND i.disposition = 'published'
       GROUP BY i.demand_id
     ) ev_release ON ev_release.demand_id = d.id
+    LEFT JOIN demand_delivery_judgement dj
+      ON dj.workspace_id = d.workspace_id AND dj.active_demand_id = d.id
+     AND dj.version_id &lt;=&gt; d.version_id
   </sql>
 
   <sql id="conditionalDeliveryEvidenceJoins">
@@ -127,6 +154,14 @@
   <select id="selectById" resultType="Demand">
     SELECT <include refid="pageCols"/> FROM demand d
     LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    WHERE d.id = #{id}
+  </select>
+
+  <!-- 详情：在基础字段外带回交付证据、派生阶段与当前人工判定；q 只需 workspaceId。 -->
+  <select id="selectDetail" resultType="Demand">
+    SELECT <include refid="pageCols"/>, <include refid="deliveryEvidenceCols"/> FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    <include refid="deliveryEvidenceJoins"/>
     WHERE d.id = #{id}
   </select>
 
@@ -256,7 +291,7 @@
            COALESCE(SUM(COALESCE(ev_case.caseCount, 0)), 0) AS caseCount,
            COALESCE(SUM(COALESCE(ev_case.casePassed, 0)), 0) AS casePassed,
            COALESCE(SUM(CASE WHEN <include refid="deliveryRiskExpr"/> THEN 1 ELSE 0 END), 0) AS risk,
-           COALESCE(SUM(CASE WHEN d.status = 'plan' AND ev_release.deliveredAt IS NULL AND EXISTS (
+           COALESCE(SUM(CASE WHEN d.status = 'plan' AND <include refid="effectiveDeliveredAt"/> IS NULL AND EXISTS (
                                   SELECT 1 FROM project_version pv_missing
                                   WHERE pv_missing.workspace_id = d.workspace_id AND pv_missing.id = d.version_id
                                     AND pv_missing.status = 'released')
@@ -267,8 +302,8 @@
            COALESCE(MAX(CASE WHEN d.created_at IS NOT NULL
                              THEN GREATEST(0, DATEDIFF(CURRENT_DATE, DATE(d.created_at))) END), 0) AS longestWait,
            MIN(d.expect_date) AS nextExpect,
-           MIN(CASE WHEN ev_release.deliveredAt IS NULL THEN d.expect_date END) AS nextPendingExpect,
-           MAX(ev_release.deliveredAt) AS lastDelivered,
+           MIN(CASE WHEN <include refid="effectiveDeliveredAt"/> IS NULL THEN d.expect_date END) AS nextPendingExpect,
+           MAX(<include refid="effectiveDeliveredAt"/>) AS lastDelivered,
            COALESCE(SUM(CASE WHEN d.expect_date IS NOT NULL
                                   AND d.expect_date &lt;= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)
                              THEN 1 ELSE 0 END), 0) AS dueSoon,

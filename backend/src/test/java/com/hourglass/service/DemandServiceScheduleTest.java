@@ -64,6 +64,10 @@ class DemandServiceScheduleTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "releases", releases);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "versionTaskMapper", bindings);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", publications);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "judgementMapper",
+                mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
+        lenient().when(demands.selectDetail(any(), anyString()))
+                .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
         doCallRealMethod().when(bindings).enrichTasks(anyString(), anyList());
         demand = new Demand();
         demand.setId("D1");

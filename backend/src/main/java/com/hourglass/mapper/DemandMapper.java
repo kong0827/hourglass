@@ -44,6 +44,9 @@ public interface DemandMapper {
 
     Demand selectById(String id);
 
+    /** 详情：附带交付证据、派生阶段与当前人工判定（q.workspaceId 必填）。 */
+    Demand selectDetail(@Param("q") DemandQuery query, @Param("id") String id);
+
     /** 项目锁之后使用当前读，避免 REPEATABLE READ 的旧快照。 */
     Demand selectByIdForUpdate(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
