@@ -11,6 +11,9 @@ import com.hourglass.dto.MyTaskWorkspace;
 import com.hourglass.dto.MyTasksPage;
 import com.hourglass.dto.MyTasksQuery;
 import com.hourglass.dto.TaskListResponse;
+import com.hourglass.dto.TaskWorkMetricsRow;
+import com.hourglass.dto.TaskWorkpageResponse;
+import com.hourglass.dto.WorkColumnQuery;
 import com.hourglass.entity.Attachment;
 import com.hourglass.entity.BoardColumn;
 import com.hourglass.entity.Category;
@@ -133,6 +136,11 @@ public class TaskQueryService {
         pageQuery.setBlocked(query.isBlocked());
         pageQuery.setDue(query.getDue());
         pageQuery.setFocus(query.isFocus());
+        pageQuery.setNoDue(query.isNoDue());
+        pageQuery.setDueFrom(query.getDueFrom());
+        pageQuery.setDueTo(query.getDueTo());
+        pageQuery.setStartFrom(query.getStartFrom());
+        pageQuery.setStartTo(query.getStartTo());
         offset = Math.max(0, offset);
         limit = Math.max(1, Math.min(MY_TASKS_MAX_LIMIT, limit));
         pageQuery.setOffset(offset);
@@ -187,7 +195,7 @@ public class TaskQueryService {
             resp.getColumnDefs().add(new BoardResponse.ColumnDef(c.getId(), c.getName(), c.getColor(),
                     support.processingRule(workspaceId, c.getId()), false));
         }
-        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", "#5f7a4a", "done", true));
+        resp.getColumnDefs().add(new BoardResponse.ColumnDef(Consts.COL_DONE, "已完成", Consts.COL_DONE_COLOR, "done", true));
         for (String col : openColumns) {
             resp.getColumns().put(col, openPage(workspaceId, viewerId, openQuery, query, col,
                     0, query.getOpenLimit(), col.equals(fallbackCol), knownColumns));
@@ -294,6 +302,159 @@ public class TaskQueryService {
         data.setItems(items);
         data.setHasMore(doneMatched > query.getDoneOffset() + query.getDoneLimit());
         return data;
+    }
+
+    /**
+     * 列状态工作页：列 tab 计数 + 当前列时间窗 + 服务端聚合指标 + 单页明细。
+     *
+     * <p>已完成列默认本周，只有 range=all 才查全部历史明细；无论哪个时间窗，
+     * 明细单次不超过 100 条，指标都在 SQL 里做条件聚合。range=all 时指标固定
+     * 收敛到近 90 天（metricRange=quarter），避免大空间全表统计。
+     */
+    public TaskWorkpageResponse workpage(String workspaceId, String userId, BoardQuery query,
+                                         String column, String range, String sort,
+                                         int offset, int limit) {
+        LocalDate today = LocalDate.now();
+        String viewerId = projectAccess.viewerScope(workspaceId, userId);
+        List<BoardColumn> configCols = metaCache.columns(workspaceId);
+        String fallbackCol = configCols.isEmpty() ? Consts.COL_BACKLOG : configCols.get(0).getId();
+        List<String> knownColumns = new ArrayList<String>();
+        for (BoardColumn c : configCols) {
+            knownColumns.add(c.getId());
+        }
+        knownColumns.add(Consts.COL_DONE);
+
+        String col = Texts.trimToNull(column);
+        if (col == null || !knownColumns.contains(col)) {
+            col = fallbackCol;
+        }
+        boolean done = Consts.COL_DONE.equals(col);
+        String safeRange = normalizeWorkRange(range);
+        LocalDate since = workRangeStart(safeRange, today);
+        LocalDate metricSince = since == null ? today.minusDays(Consts.RANGE_QUARTER_DAYS - 1) : since;
+
+        WorkColumnQuery cq = new WorkColumnQuery();
+        cq.setWorkspaceId(workspaceId);
+        cq.setColumn(col);
+        cq.setFallback(col.equals(fallbackCol));
+        cq.setDone(done);
+        cq.setFiltered(hasFilters(query));
+        cq.setKnownColumns(knownColumns);
+        cq.setSince(since);
+        cq.setMetricSince(metricSince);
+        cq.setToday(today);
+        cq.setViewerId(viewerId);
+        cq.setOverdueEnabled(!done && !"ended".equals(support.processingRule(workspaceId, col)));
+
+        GanttQuery gq = GanttQuery.from(query, today, null, null, true);
+        gq.setViewerId(viewerId);
+
+        TaskWorkpageResponse resp = new TaskWorkpageResponse();
+        resp.setColumn(col);
+        resp.setDone(done);
+        resp.setOverdueEnabled(cq.isOverdueEnabled());
+        resp.setRange(safeRange);
+        resp.setMetricRange(since == null ? Consts.RANGE_QUARTER : safeRange);
+        if (done) {
+            resp.setColumnName(Consts.columnName(Consts.COL_DONE));
+            resp.setColumnColor(Consts.COL_DONE_COLOR);
+        } else {
+            BoardColumn current = findColumn(configCols, col);
+            resp.setColumnName(current == null ? Consts.columnName(col) : current.getName());
+            resp.setColumnColor(current == null ? Consts.COLUMN_FALLBACK_COLOR : current.getColor());
+        }
+
+        for (BoardColumn c : configCols) {
+            int n = taskMapper.countOpenColumn(workspaceId, viewerId, c.getId(),
+                    c.getId().equals(fallbackCol), knownColumns);
+            resp.getColumns().add(new TaskWorkpageResponse.ColumnTab(c.getId(), c.getName(), c.getColor(),
+                    false, n, null));
+        }
+        int doneInRange = taskMapper.countDoneSince(workspaceId, viewerId, since);
+        int doneAll = taskMapper.countDoneAll(workspaceId, viewerId);
+        resp.getColumns().add(new TaskWorkpageResponse.ColumnTab(Consts.COL_DONE,
+                Consts.columnName(Consts.COL_DONE), Consts.COL_DONE_COLOR, true, doneInRange, doneAll));
+
+        int rangeTotal = done ? doneInRange
+                : taskMapper.countOpenColumn(workspaceId, viewerId, col, col.equals(fallbackCol),
+                        knownColumns);
+        int matched = cq.isFiltered() ? taskMapper.countWorkColumn(workspaceId, cq, gq) : rangeTotal;
+        int safeOffset = Math.max(0, offset);
+        int safeLimit = limit <= 0 ? Consts.WORKPAGE_MAX_LIMIT : Math.min(limit, Consts.WORKPAGE_MAX_LIMIT);
+        List<Task> items = matched <= safeOffset ? new ArrayList<Task>()
+                : taskMapper.selectWorkPage(workspaceId, cq, gq, normalizeWorkSort(sort, done),
+                        safeOffset, safeLimit);
+        mergeTaskExtras(workspaceId, items);
+
+        /* 指标与工时只在首屏聚合；追加页沿用首屏结果，避免翻页重复统计 */
+        TaskWorkpageResponse.Metrics metrics = new TaskWorkpageResponse.Metrics();
+        if (safeOffset == 0) {
+            TaskWorkMetricsRow row = taskMapper.selectWorkMetrics(workspaceId, cq, gq);
+            if (row != null) {
+                metrics.setCount(row.getCnt());
+                metrics.setOverdue(row.getOverdue());
+                metrics.setBlocked(row.getBlocked());
+                metrics.setHigh(row.getHigh());
+                metrics.setNoDue(row.getNoDue());
+                metrics.setLateCompleted(row.getLateCompleted());
+                metrics.setWithDue(row.getWithDue());
+                metrics.setOnTime(row.getOnTime());
+                metrics.setEstimateMinutes(row.getEstimateMinutes());
+                metrics.setAvgAgeDays(row.getAvgAgeDays() == null ? null
+                        : Math.round(row.getAvgAgeDays() * 10) / 10.0);
+                metrics.setLastCompletedAt(row.getLastCompletedAt());
+            } else {
+                metrics.setCount(matched);
+            }
+            metrics.setLoggedMinutes(taskMapper.sumWorkLoggedMinutes(workspaceId, cq, gq));
+        }
+
+        resp.setMetrics(metrics);
+        resp.setRangeTotal(rangeTotal);
+        resp.setMatched(matched);
+        resp.setItems(items);
+        resp.setHasMore(safeOffset + items.size() < matched);
+        return resp;
+    }
+
+    private static String normalizeWorkRange(String range) {
+        String value = Texts.trimToNull(range);
+        if (Consts.RANGE_MONTH.equals(value) || Consts.RANGE_QUARTER.equals(value)
+                || Consts.RANGE_ALL.equals(value)) {
+            return value;
+        }
+        return Consts.RANGE_WEEK;
+    }
+
+    private static LocalDate workRangeStart(String range, LocalDate today) {
+        if (Consts.RANGE_WEEK.equals(range)) {
+            return today.minusDays(today.getDayOfWeek().getValue() - 1);
+        }
+        if (Consts.RANGE_MONTH.equals(range)) {
+            return today.withDayOfMonth(1);
+        }
+        if (Consts.RANGE_QUARTER.equals(range)) {
+            return today.minusDays(Consts.RANGE_QUARTER_DAYS - 1);
+        }
+        return null;
+    }
+
+    private static String normalizeWorkSort(String sort, boolean done) {
+        String value = Texts.trimToNull(sort);
+        if ("due".equals(value) || "priority".equals(value) || "updated".equals(value)
+                || (done && "completed".equals(value))) {
+            return value;
+        }
+        return done ? "completed" : "due";
+    }
+
+    private static BoardColumn findColumn(List<BoardColumn> cols, String id) {
+        for (BoardColumn c : cols) {
+            if (id.equals(c.getId())) {
+                return c;
+            }
+        }
+        return null;
     }
 
     /** 列表视图：筛选与 LIMIT 下推 SQL（上限 100），sort: due/priority/updated/column */
@@ -637,14 +798,32 @@ public class TaskQueryService {
                 return false;
             }
         }
-        if (!query.getOwners().isEmpty() && !query.getOwners().contains(t.getOwner())) {
-            return false;
+        if (!query.getOwners().isEmpty()) {
+            boolean hit = false;
+            for (String value : query.getOwners()) {
+                if (Consts.REQ_NONE.equals(value) ? Texts.trimToNull(t.getOwner()) == null : value.equals(t.getOwner())) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) {
+                return false;
+            }
         }
         if (!query.getPris().isEmpty() && !query.getPris().contains(t.getPriority())) {
             return false;
         }
-        if (!query.getCats().isEmpty() && !query.getCats().contains(t.getCategoryId())) {
-            return false;
+        if (!query.getCats().isEmpty()) {
+            boolean hit = false;
+            for (String value : query.getCats()) {
+                if (Consts.REQ_NONE.equals(value) ? Texts.trimToNull(t.getCategoryId()) == null : value.equals(t.getCategoryId())) {
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit) {
+                return false;
+            }
         }
         if (!query.getReqs().isEmpty()) {
             boolean hit = false;
@@ -724,6 +903,22 @@ public class TaskQueryService {
         if (query.isNoDue() && t.getDueDate() != null) {
             return false;
         }
+        if (query.getDueFrom() != null
+                && (t.getDueDate() == null || t.getDueDate().isBefore(query.getDueFrom()))) {
+            return false;
+        }
+        if (query.getDueTo() != null
+                && (t.getDueDate() == null || t.getDueDate().isAfter(query.getDueTo()))) {
+            return false;
+        }
+        if (query.getStartFrom() != null
+                && (t.getStartDate() == null || t.getStartDate().isBefore(query.getStartFrom()))) {
+            return false;
+        }
+        if (query.getStartTo() != null
+                && (t.getStartDate() == null || t.getStartDate().isAfter(query.getStartTo()))) {
+            return false;
+        }
         return true;
     }
 
@@ -797,14 +992,24 @@ public class TaskQueryService {
             catNameById.put(c.getId(), c.getName());
         }
         int unassigned = 0;
+        int ownerUnassigned = 0;
+        int catUnassigned = 0;
         Map<String, Integer> versionCount = new LinkedHashMap<String, Integer>();
         for (TaskFacetRow t : facets) {
-            ownerCount.merge(t.getOwner(), 1, Integer::sum);
+            String owner = Texts.trimToNull(t.getOwner());
+            if (owner == null) {
+                ownerUnassigned++;
+            } else {
+                ownerCount.merge(owner, 1, Integer::sum);
+            }
             if (priCount.containsKey(t.getPriority())) {
                 priCount.merge(t.getPriority(), 1, Integer::sum);
             }
-            if (catCount.containsKey(t.getCategoryId())) {
-                catCount.merge(t.getCategoryId(), 1, Integer::sum);
+            String catId = Texts.trimToNull(t.getCategoryId());
+            if (catId == null || !catCount.containsKey(catId)) {
+                catUnassigned++;
+            } else {
+                catCount.merge(catId, 1, Integer::sum);
             }
             if (typeCount.containsKey(t.getItemType())) {
                 typeCount.merge(t.getItemType(), 1, Integer::sum);
@@ -875,6 +1080,8 @@ public class TaskQueryService {
         }
         meta.setUnassigned(unassigned);
         meta.setVersionUnassigned(versionUnassigned);
+        meta.setOwnerUnassigned(ownerUnassigned);
+        meta.setCatUnassigned(catUnassigned);
         return meta;
     }
 

@@ -266,8 +266,14 @@
         <foreach collection="pris" item="p" open="(" separator="," close=")">#{p}</foreach>
       </if>
       <if test="cats != null and cats.size() > 0">
-        AND t.category_id IN
-        <foreach collection="cats" item="c" open="(" separator="," close=")">#{c}</foreach>
+        AND (
+        <foreach collection="cats" item="c" separator=" OR ">
+          <choose>
+            <when test="c == '__none'">(t.category_id IS NULL OR t.category_id = '')</when>
+            <otherwise>t.category_id = #{c}</otherwise>
+          </choose>
+        </foreach>
+        )
       </if>
       <if test="reqs != null and reqs.size() > 0">
         AND (
@@ -324,6 +330,21 @@
               AND NOT EXISTS (SELECT 1 FROM board_column bc
                               WHERE bc.workspace_id = t.workspace_id AND bc.id = t.board_column AND bc.processing_rule = 'ended'))
              OR (t.board_column = 'doing' AND t.priority = 'P0'))
+      </if>
+      <if test="noDue">
+        AND t.due_date IS NULL
+      </if>
+      <if test="dueFrom != null">
+        AND t.due_date &gt;= #{dueFrom}
+      </if>
+      <if test="dueTo != null">
+        AND t.due_date &lt;= #{dueTo}
+      </if>
+      <if test="startFrom != null">
+        AND t.start_date &gt;= #{startFrom}
+      </if>
+      <if test="startTo != null">
+        AND t.start_date &lt;= #{startTo}
       </if>
   </sql>
 
@@ -766,16 +787,28 @@
       )
     </if>
     <if test="query.owners != null and query.owners.size() > 0">
-      AND t.owner IN
-      <foreach collection="query.owners" item="o" open="(" separator="," close=")">#{o}</foreach>
+      AND (
+      <foreach collection="query.owners" item="o" separator=" OR ">
+        <choose>
+          <when test="o == '__none'">(t.owner IS NULL OR t.owner = '')</when>
+          <otherwise>t.owner = #{o}</otherwise>
+        </choose>
+      </foreach>
+      )
     </if>
     <if test="query.pris != null and query.pris.size() > 0">
       AND t.priority IN
       <foreach collection="query.pris" item="p" open="(" separator="," close=")">#{p}</foreach>
     </if>
     <if test="query.cats != null and query.cats.size() > 0">
-      AND t.category_id IN
-      <foreach collection="query.cats" item="cc" open="(" separator="," close=")">#{cc}</foreach>
+      AND (
+      <foreach collection="query.cats" item="cc" separator=" OR ">
+        <choose>
+          <when test="cc == '__none'">(t.category_id IS NULL OR t.category_id = '')</when>
+          <otherwise>t.category_id = #{cc}</otherwise>
+        </choose>
+      </foreach>
+      )
     </if>
     <if test="query.reqNone">
       <choose>
@@ -859,6 +892,18 @@
     </if>
     <if test="query.noDue">
       AND t.due_date IS NULL
+    </if>
+    <if test="query.dueFrom != null">
+      AND t.due_date &gt;= #{query.dueFrom}
+    </if>
+    <if test="query.dueTo != null">
+      AND t.due_date &lt;= #{query.dueTo}
+    </if>
+    <if test="query.startFrom != null">
+      AND t.start_date &gt;= #{query.startFrom}
+    </if>
+    <if test="query.startTo != null">
+      AND t.start_date &lt;= #{query.startTo}
     </if>
   </sql>
 
@@ -967,6 +1012,15 @@
     <include refid="doneScopeAlways"/>
   </select>
 
+  <select id="countDoneSince" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE t.workspace_id = #{workspaceId} AND t.deleted_at IS NULL AND t.board_column = 'done'
+    <include refid="visibleProject"/>
+    <if test="since != null">
+      AND (t.completed_at IS NULL OR t.completed_at &gt;= #{since})
+    </if>
+  </select>
+
   <select id="countDoneMatched" resultType="int">
     SELECT COUNT(*) FROM task t
     WHERE <include refid="ganttWhere"/>
@@ -974,13 +1028,119 @@
     <include refid="doneScope"/>
   </select>
 
+  <!-- 看板已完成列只放最近完成的几条；按完成日期倒序，无完成日期的排最后 -->
   <select id="selectDonePage" resultType="Task">
     SELECT <include refid="cols"/> FROM task t
     WHERE <include refid="ganttWhere"/>
       AND t.board_column = 'done'
     <include refid="doneScope"/>
-    ORDER BY t.sort_order, t.id
+    ORDER BY (t.completed_at IS NULL), t.completed_at DESC, t.id DESC
     LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <!-- ==================== 列状态工作页（按列聚合 + 单页明细） ==================== -->
+  <!--
+    已完成列是长期累积数据：列总数只下推时间窗（默认本周），明细单次 ≤100；
+    指标用条件聚合一次扫描完成，不把明细拉回内存。range=all 时指标由 Service
+    收敛到近 90 天（metricSince），避免全表统计。
+  -->
+  <sql id="workOpenScope">
+    <choose>
+      <when test="q.fallback">
+        AND t.board_column &lt;&gt; 'done'
+        AND (t.board_column = #{q.column} OR t.board_column NOT IN
+        <foreach collection="q.knownColumns" item="cid" open="(" separator="," close=")">#{cid}</foreach>)
+      </when>
+      <otherwise>AND t.board_column = #{q.column}</otherwise>
+    </choose>
+  </sql>
+
+  <sql id="workColumnScope">
+    <choose>
+      <when test="q.done">
+        AND t.board_column = 'done'
+        <if test="q.since != null">
+          AND (t.completed_at IS NULL OR t.completed_at &gt;= #{q.since})
+        </if>
+      </when>
+      <otherwise><include refid="workOpenScope"/></otherwise>
+    </choose>
+  </sql>
+
+  <sql id="workMetricScope">
+    <choose>
+      <when test="q.done">
+        AND t.board_column = 'done'
+        <if test="q.metricSince != null">
+          AND (t.completed_at IS NULL OR t.completed_at &gt;= #{q.metricSince})
+        </if>
+      </when>
+      <otherwise><include refid="workOpenScope"/></otherwise>
+    </choose>
+  </sql>
+
+  <select id="countWorkColumn" resultType="int">
+    SELECT COUNT(*) FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="workColumnScope"/>
+  </select>
+
+  <select id="selectWorkPage" resultType="Task">
+    SELECT <include refid="cols"/> FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="workColumnScope"/>
+    ORDER BY
+    <choose>
+      <when test="sort == 'completed'">
+        (t.completed_at IS NULL), t.completed_at DESC, t.id DESC
+      </when>
+      <when test="sort == 'priority'">
+        CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 9 END,
+        (t.due_date IS NULL), t.due_date, t.sort_order, t.id
+      </when>
+      <when test="sort == 'updated'">
+        t.updated_at DESC, t.id DESC
+      </when>
+      <otherwise>
+        (t.due_date IS NULL), t.due_date,
+        CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 9 END,
+        t.sort_order, t.id
+      </otherwise>
+    </choose>
+    LIMIT #{limit} OFFSET #{offset}
+  </select>
+
+  <select id="selectWorkMetrics" resultType="com.hourglass.dto.TaskWorkMetricsRow">
+    SELECT COUNT(*) AS cnt,
+           <choose>
+             <when test="q.overdueEnabled">
+               COALESCE(SUM(CASE WHEN t.due_date &lt; #{q.today} THEN 1 ELSE 0 END), 0) AS overdue,
+             </when>
+             <otherwise>0 AS overdue,</otherwise>
+           </choose>
+           COALESCE(SUM(CASE WHEN t.is_blocked = 1 THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN t.priority IN ('P0','P1') THEN 1 ELSE 0 END), 0) AS high,
+           COALESCE(SUM(CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END), 0) AS no_due,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL
+                              AND t.completed_at &gt; t.due_date THEN 1 ELSE 0 END), 0) AS late_completed,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_due,
+           COALESCE(SUM(CASE WHEN t.completed_at IS NOT NULL AND t.due_date IS NOT NULL
+                              AND t.completed_at &lt;= t.due_date THEN 1 ELSE 0 END), 0) AS on_time,
+           COALESCE(SUM(t.estimate_minutes), 0) AS estimate_minutes,
+           AVG(CASE WHEN t.completed_at IS NOT NULL THEN DATEDIFF(t.completed_at, DATE(t.created_at))
+                    ELSE DATEDIFF(#{q.today}, DATE(t.created_at)) END) AS avg_age_days,
+           MAX(t.completed_at) AS last_completed_at
+    FROM task t
+    WHERE <include refid="ganttWhere"/>
+    <include refid="workMetricScope"/>
+  </select>
+
+  <select id="sumWorkLoggedMinutes" resultType="long">
+    SELECT COALESCE(SUM(tl.minutes), 0)
+    FROM task t
+    JOIN time_log tl ON tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+    WHERE <include refid="ganttWhere"/>
+    <include refid="workMetricScope"/>
   </select>
 
   <select id="countTaskList" resultType="int">

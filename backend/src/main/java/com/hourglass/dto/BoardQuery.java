@@ -2,6 +2,7 @@ package com.hourglass.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +36,12 @@ public class BoardQuery {
     private boolean blocked;
     /** 仅看没有截止日期的任务（O-25 日历「本月未排期」） */
     private boolean noDue;
+    /** 截止日期区间（含端点），null 表示不限 */
+    private LocalDate dueFrom;
+    private LocalDate dueTo;
+    /** 开始日期区间（含端点），null 表示不限 */
+    private LocalDate startFrom;
+    private LocalDate startTo;
     /** week/all */
     private String doneScope = "week";
     private int doneLimit = 20;
@@ -85,6 +92,20 @@ public class BoardQuery {
             query.openLimit = Math.max(1, Math.min(100, openLimit));
         }
         return query;
+    }
+
+    /** 起止填反时按同一维度对调，避免用户得到空结果却看不出原因 */
+    public void normalizeDateRanges() {
+        if (dueFrom != null && dueTo != null && dueFrom.isAfter(dueTo)) {
+            LocalDate tmp = dueFrom;
+            dueFrom = dueTo;
+            dueTo = tmp;
+        }
+        if (startFrom != null && startTo != null && startFrom.isAfter(startTo)) {
+            LocalDate tmp = startFrom;
+            startFrom = startTo;
+            startTo = tmp;
+        }
     }
 
     private static List<String> splitCsv(String value) {

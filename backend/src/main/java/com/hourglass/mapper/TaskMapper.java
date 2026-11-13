@@ -51,6 +51,33 @@ public interface TaskMapper {
     int countDoneInScope(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
                          @Param("weekStart") LocalDate weekStart, @Param("weekEnd") LocalDate weekEnd);
 
+    /** 已完成列：since 之后完成的条数（since=null 表示全部历史） */
+    int countDoneSince(@Param("workspaceId") String workspaceId, @Param("viewerId") String viewerId,
+                       @Param("since") LocalDate since);
+
+    /* ---- 列状态工作页：列计数 / 明细 / 聚合（单次明细 ≤100） ---- */
+
+    /** 工作页列计数：filtered=false 只算列范围，true 叠加筛选 */
+    int countWorkColumn(@Param("workspaceId") String workspaceId,
+                        @Param("q") com.hourglass.dto.WorkColumnQuery q,
+                        @Param("query") GanttQuery query);
+
+    /** 工作页明细分页：已完成按完成时间倒序，未完成按 sort 指定口径 */
+    List<Task> selectWorkPage(@Param("workspaceId") String workspaceId,
+                              @Param("q") com.hourglass.dto.WorkColumnQuery q,
+                              @Param("query") GanttQuery query, @Param("sort") String sort,
+                              @Param("offset") int offset, @Param("limit") int limit);
+
+    /** 工作页指标：条件聚合成一行，不返回明细 */
+    com.hourglass.dto.TaskWorkMetricsRow selectWorkMetrics(
+            @Param("workspaceId") String workspaceId,
+            @Param("q") com.hourglass.dto.WorkColumnQuery q, @Param("query") GanttQuery query);
+
+    /** 工作页实际工时合计（time_log 按任务汇总） */
+    long sumWorkLoggedMinutes(@Param("workspaceId") String workspaceId,
+                              @Param("q") com.hourglass.dto.WorkColumnQuery q,
+                              @Param("query") GanttQuery query);
+
     /** 已完成列：doneScope + 看板筛选后的条数（ganttWhere 与 TaskQueryService.match 同口径） */
     int countDoneMatched(@Param("workspaceId") String workspaceId, @Param("query") GanttQuery query,
                          @Param("scopeAll") boolean scopeAll,

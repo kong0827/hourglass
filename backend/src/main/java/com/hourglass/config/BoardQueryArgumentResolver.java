@@ -9,6 +9,9 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+
 /**
  * {@code BoardQuery} 参数解析器（BE-ARCH-2）。
  * 看板 / 已完成 / 列表 / 日历 / 甘特原本各自重复声明 13 个 @RequestParam，
@@ -26,7 +29,7 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
                                   NativeWebRequest request, WebDataBinderFactory binderFactory) {
-        return BoardQuery.from(
+        BoardQuery query = BoardQuery.from(
                 request.getParameter("q"),
                 request.getParameter("owners"),
                 request.getParameter("pris"),
@@ -45,6 +48,23 @@ public class BoardQueryArgumentResolver implements HandlerMethodArgumentResolver
                 integer(request.getParameter("openLimit")),
                 request.getParameter("columns"),
                 request.getParameter("completion"));
+        query.setDueFrom(date(request.getParameter("dueFrom")));
+        query.setDueTo(date(request.getParameter("dueTo")));
+        query.setStartFrom(date(request.getParameter("startFrom")));
+        query.setStartTo(date(request.getParameter("startTo")));
+        query.normalizeDateRanges();
+        return query;
+    }
+
+    private LocalDate date(String v) {
+        if (v == null || v.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(v.trim());
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     private Boolean bool(String v) {

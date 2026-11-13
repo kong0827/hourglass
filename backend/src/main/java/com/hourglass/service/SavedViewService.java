@@ -14,12 +14,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class SavedViewService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final int MAX_ARRAY_ITEMS = 50;
+    private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private final SavedViewMapper savedViewMapper;
 
@@ -81,7 +83,7 @@ public class SavedViewService {
         copyString(root, out, "q", 200);
         copyString(root, out, "due", 16);
         copyString(root, out, "doneScope", 16);
-        copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "rej");
+        copyEnum(root, out, "preset", "all", "mine", "doing", "over", "review", "pass", "plan", "closed", "rej");
         copyEnum(root, out, "group", "none", "status", "owner", "priority", "project", "category", "version", "kind");
         copyEnum(root, out, "subgroup", "none", "status", "owner", "priority", "project", "category", "version");
         copyEnum(root, out, "sort", "default", "due", "priority", "estimate", "actual", "updated", "expect", "wsjf", "created",
@@ -98,6 +100,18 @@ public class SavedViewService {
         copyStringArray(root, out, "versions");
         copyStringArray(root, out, "columns");
         copyEnum(root, out, "completion", "open", "done");
+        /* 自定义日期区间与「无截止日期」也是筛选条件，随视图保存 */
+        copyDate(root, out, "dueFrom");
+        copyDate(root, out, "dueTo");
+        copyDate(root, out, "startFrom");
+        copyDate(root, out, "startTo");
+        JsonNode noDue = root.get("noDue");
+        if (noDue != null && !noDue.isNull()) {
+            if (!noDue.isBoolean()) {
+                throw AppException.badRequest("视图参数不合法：noDue 应为布尔值");
+            }
+            out.put("noDue", noDue.asBoolean());
+        }
         JsonNode focus = root.get("focus");
         if (focus != null && !focus.isNull()) {
             if (!focus.isBoolean()) {
@@ -174,6 +188,17 @@ public class SavedViewService {
             throw AppException.badRequest("视图参数不合法：" + key + " 应为字符串");
         }
         out.put(key, Texts.cut(node.asText(), maxLen));
+    }
+
+    private void copyDate(JsonNode root, ObjectNode out, String key) {
+        JsonNode node = root.get(key);
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (!node.isTextual() || !DATE.matcher(node.asText()).matches()) {
+            throw AppException.badRequest("视图参数不合法：" + key + " 应为 yyyy-MM-dd 日期");
+        }
+        out.put(key, node.asText());
     }
 
     private void copyEnum(JsonNode root, ObjectNode out, String key, String... allowed) {

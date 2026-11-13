@@ -28,6 +28,11 @@ public class MyTasksQuery {
     private boolean blocked;
     private String due;
     private boolean focus;
+    private boolean noDue;
+    private LocalDate dueFrom;
+    private LocalDate dueTo;
+    private LocalDate startFrom;
+    private LocalDate startTo;
     private LocalDate today = LocalDate.now();
     private boolean nameOnly;
     private int offset;
@@ -151,6 +156,46 @@ public class MyTasksQuery {
 
     public void setFocus(boolean focus) {
         this.focus = focus;
+    }
+
+    public boolean isNoDue() {
+        return noDue;
+    }
+
+    public void setNoDue(boolean noDue) {
+        this.noDue = noDue;
+    }
+
+    public LocalDate getDueFrom() {
+        return dueFrom;
+    }
+
+    public void setDueFrom(LocalDate dueFrom) {
+        this.dueFrom = dueFrom;
+    }
+
+    public LocalDate getDueTo() {
+        return dueTo;
+    }
+
+    public void setDueTo(LocalDate dueTo) {
+        this.dueTo = dueTo;
+    }
+
+    public LocalDate getStartFrom() {
+        return startFrom;
+    }
+
+    public void setStartFrom(LocalDate startFrom) {
+        this.startFrom = startFrom;
+    }
+
+    public LocalDate getStartTo() {
+        return startTo;
+    }
+
+    public void setStartTo(LocalDate startTo) {
+        this.startTo = startTo;
     }
 
     public LocalDate getToday() {

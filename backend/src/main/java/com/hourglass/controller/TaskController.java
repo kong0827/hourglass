@@ -102,6 +102,22 @@ public class TaskController {
                 offset == null ? 0 : offset, limit == null ? 0 : limit));
     }
 
+    /**
+     * 列状态工作页：列 tab 计数 + 时间窗 + 服务端聚合指标 + 单页明细（≤100）。
+     * range: week(默认) / month / quarter / all；sort: completed / due / priority / updated。
+     */
+    @GetMapping("/api/tasks/workpage")
+    public ApiResult<com.hourglass.dto.TaskWorkpageResponse> workpage(@CurrentWorkspace WorkspaceCtx ctx,
+                                                                     @BoardFilter BoardQuery query,
+                                                                     @RequestParam String col,
+                                                                     @RequestParam(required = false) String range,
+                                                                     @RequestParam(required = false) String sort,
+                                                                     @RequestParam(required = false) Integer offset,
+                                                                     @RequestParam(required = false) Integer limit) {
+        return ApiResult.ok(queryService.workpage(ctx.getWsId(), ctx.getUserId(), query, col, range, sort,
+                offset == null ? 0 : offset, limit == null ? 0 : limit));
+    }
+
     /** 列表视图：筛选后的分页任务，sort: due/priority/updated/column；open=true 只取未完成（团队成员下钻） */
     @GetMapping("/api/tasks/list")
     public ResponseEntity<ApiResult<TaskListResponse>> list(@CurrentWorkspace WorkspaceCtx ctx,

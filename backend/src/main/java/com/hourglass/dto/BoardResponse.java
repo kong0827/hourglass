@@ -80,6 +80,10 @@ public class BoardResponse {
         private int unassigned;
         /** 未绑定版本（待规划）任务数 */
         private int versionUnassigned;
+        /** 未指定负责人任务数 */
+        private int ownerUnassigned;
+        /** 未指定模块任务数 */
+        private int catUnassigned;
     }
 
     @Data

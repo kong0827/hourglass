@@ -41,6 +41,12 @@ public class GanttQuery {
     private boolean focus;
     private boolean blocked;
     private boolean noDue;
+    /** 截止日期区间（含端点），null 表示不限 */
+    private LocalDate dueFrom;
+    private LocalDate dueTo;
+    /** 开始日期区间（含端点），null 表示不限 */
+    private LocalDate startFrom;
+    private LocalDate startTo;
     private boolean includeDone = true;
     private LocalDate today;
     private LocalDate from;
@@ -77,6 +83,10 @@ public class GanttQuery {
         q.focus = b.isFocus();
         q.blocked = b.isBlocked();
         q.noDue = b.isNoDue();
+        q.dueFrom = b.getDueFrom();
+        q.dueTo = b.getDueTo();
+        q.startFrom = b.getStartFrom();
+        q.startTo = b.getStartTo();
         q.includeDone = includeDone;
         q.today = today;
         q.from = from;

@@ -53,6 +53,11 @@ public class MyTasksController {
                                                   @RequestParam(required = false) Boolean blocked,
                                                   @RequestParam(required = false) String due,
                                                   @RequestParam(required = false) Boolean focus,
+                                                  @RequestParam(required = false) Boolean noDue,
+                                                  @RequestParam(required = false) String dueFrom,
+                                                  @RequestParam(required = false) String dueTo,
+                                                  @RequestParam(required = false) String startFrom,
+                                                  @RequestParam(required = false) String startTo,
                                                   @RequestParam(required = false) Integer offset,
                                                   @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
@@ -62,8 +67,13 @@ public class MyTasksController {
 
         /* IA-3：接入与看板相同的筛选参数（负责人维度天然固定为"我"） */
         com.hourglass.dto.BoardQuery query = com.hourglass.dto.BoardQuery.from(
-                q, null, pris, cats, reqs, tags, types, versions, due, focus, blocked, null, null, null, null,
+                q, null, pris, cats, reqs, tags, types, versions, due, focus, blocked, noDue, null, null, null,
                 null, columns, completion);
+        query.setDueFrom(date(dueFrom));
+        query.setDueTo(date(dueTo));
+        query.setStartFrom(date(startFrom));
+        query.setStartTo(date(startTo));
+        query.normalizeDateRanges();
         int off = offset == null ? 0 : Math.max(0, offset);
         int lim = limit == null ? DEFAULT_LIMIT
                 : Math.max(1, Math.min(TaskQueryService.MY_TASKS_MAX_LIMIT, limit));
@@ -92,5 +102,16 @@ public class MyTasksController {
         res.put("spaces", spaces);
         res.put("matchedByNameOnly", page.getNameOnly());
         return ApiResult.ok(res);
+    }
+
+    private static java.time.LocalDate date(String v) {
+        if (v == null || v.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(v.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 }
