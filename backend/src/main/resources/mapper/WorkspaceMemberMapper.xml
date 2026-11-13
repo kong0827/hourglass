@@ -27,6 +27,10 @@
     WHERE workspace_id = #{workspaceId} AND user_id = #{userId}
   </select>
 
+  <select id="countOwners" resultType="int">
+    SELECT COUNT(*) FROM workspace_member WHERE workspace_id = #{workspaceId} AND role = 'owner'
+  </select>
+
   <!-- Delivery authorization current read: acquire only after project/task locks. -->
   <select id="selectDeliveryAccessForUpdate" resultType="map" useCache="false" flushCache="true">
     SELECT m.role, m.project_access_mode, r.owner_user_id AS projectOwnerUserId, pm.access

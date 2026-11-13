@@ -17,6 +17,9 @@ public interface WorkspaceMemberMapper {
 
     WorkspaceMember selectMember(@Param("workspaceId") String workspaceId, @Param("userId") String userId);
 
+    /** 空间主数量：用于「至少保留一位空间主」保护 */
+    int countOwners(@Param("workspaceId") String workspaceId);
+
     /** Current delivery permission snapshot; caller must hold project/task scope locks first. */
     Map<String, Object> selectDeliveryAccessForUpdate(@Param("workspaceId") String workspaceId,
                                                     @Param("userId") String userId,

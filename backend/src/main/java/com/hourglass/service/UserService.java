@@ -316,8 +316,8 @@ public class UserService implements UserDetailsService {
         if (admins.contains(id) && admins.size() <= 1) {
             throw AppException.badRequest("至少保留一个管理员账号");
         }
-        if (workspaceMapper.countSharedByOwner(id) > 0) {
-            throw AppException.badRequest("该账号是共享空间的空间主，请先删除或转交这些空间");
+        if (workspaceMapper.countSharedWithSoleOwner(id) > 0) {
+            throw AppException.badRequest("该账号是共享空间的唯一空间主，请先移交空间主或删除该空间");
         }
         String personalId = WorkspaceService.personalId(id);
         int tasks = taskMapper.countByWorkspace(personalId);

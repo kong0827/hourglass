@@ -141,8 +141,9 @@ function colRuleOptions(selected){
       ' title="' + RULE_TITLES[k] + '">' + RULE_LABELS[k] + '</option>';
   }).join("");
 }
-function roleOptions(selected, allowAdmin){
-  var roles = allowAdmin === false ? ["member","viewer"] : ["admin","member","viewer"];
+function roleOptions(selected, isOwner){
+  /* 空间主可把成员设为任一角色（至少保留一位空间主由后端兜底）；管理员只能管成员/查看者 */
+  var roles = isOwner ? ["owner","admin","member","viewer"] : ["member","viewer"];
   return roles.map(function(r){
     return '<option value="' + r + '"' + (r === selected ? " selected" : "") + '>' + roleLabel(r) + '</option>';
   }).join("");
@@ -181,8 +182,8 @@ function openRoleGuide(){
     roleGuideRow(["甘特分享 / 清除基线", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideGroup("成员与空间"),
     roleGuideRow(["生成邀请链接", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["调整成员角色", "除空间主外的角色", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
-    roleGuideRow(["移除成员", "除空间主外", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["调整成员角色", "可调整其他空间主（至少保留一位）", "仅成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
+    roleGuideRow(["移除成员", "可移除其他空间主（至少保留一位）", "成员 / 查看者", ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["配置项目可见范围", ROLE_GUIDE_YES, ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["空间改名 / 推送配置", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
     roleGuideRow(["完整备份导出 / 导入 / 清空数据", ROLE_GUIDE_YES, ROLE_GUIDE_NO, ROLE_GUIDE_NO, ROLE_GUIDE_NO]),
@@ -406,15 +407,23 @@ function loadWsMemberList(){
   var isManager = isOwner || myRole === "admin";
   var render = function(){
     $("wsMemberCount").textContent = "共 " + rt.wsMembersCache.length + " 人";
+    var ownerCount = rt.wsMembersCache.reduce(function(n, m){ return n + (m.role === "owner" ? 1 : 0); }, 0);
+    /* 多空间主等权：owner 之间可互相管理；最后一位空间主不可降级或移除 */
+    $("btnWsLeave").hidden = isOwner && ownerCount <= 1;
     wsMemberList.innerHTML = (rt.currentWs.type === "shared"
       ? '<div class="member-label-toolbar foot-note">默认职能用于本空间所有项目；项目角色留空时自动沿用，已有项目覆盖不变。'
         + (isManager ? ' <button class="btn sm" type="button" data-member-label-options>管理公司与角色候选</button>' : '') + '</div>' : '')
       + rt.wsMembersCache.map(function(m){
       var isSelf = rt.currentUser && m.userId === rt.currentUser.id;
       var role = m.role || "member";
-      /* 空间主不进入角色下拉（后端禁止改空间主）；管理员只能处理成员与查看者 */
-      var canManageRow = role !== "owner" && (isOwner || (isManager && role !== "admin"));
-      var canRemove = isSelf ? role !== "owner" : (canManageRow && role !== "owner");
+      var isTargetOwner = role === "owner";
+      /* 空间主之间可互相调整；管理员只能处理成员与查看者；自己是最后一位空间主时不提供降级 */
+      var canManageRow = isOwner
+        ? (!isSelf || !isTargetOwner || ownerCount > 1)
+        : (isManager && role !== "admin" && !isTargetOwner);
+      var canRemove = isSelf
+        ? (!isTargetOwner || ownerCount > 1)
+        : (canManageRow && (!isTargetOwner || ownerCount > 1));
       var roleCell = canManageRow
         ? '<select class="mini-select" data-member-role aria-label="空间角色" title="调整空间角色">' +
             roleOptions(role, isOwner) + '</select>'
@@ -661,6 +670,8 @@ wsMemberList.addEventListener("change", function(e){
   API.put("/api/workspaces/" + encodeURIComponent(rt.currentWs.id) + "/members/" +
     encodeURIComponent(userId) + "/role", { role: role }).then(function(){
     toast("角色已改为「" + roleLabel(role) + "」", "fs");
+    /* 改了自己的角色：当前空间角色已变，整页重载拿到新的权限口径 */
+    if(rt.currentUser && userId === rt.currentUser.id){ window.location.reload(); return; }
     /* 角色影响矩阵的整行展示（全部项目 / 逐项目），旧缓存必须作废后再刷新 */
     rt.projectAccessCache = null;
     loadWsMemberList();

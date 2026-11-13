@@ -26,5 +26,6 @@ public interface WorkspaceMapper {
 
     int deleteById(String id);
 
-    int countSharedByOwner(@Param("ownerId") String ownerId);
+    /** 该账号是唯一空间主的共享空间数量（删账号前校验，其他空间主不受影响） */
+    int countSharedWithSoleOwner(@Param("userId") String userId);
 }

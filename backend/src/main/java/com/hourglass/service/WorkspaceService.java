@@ -266,6 +266,7 @@ public class WorkspaceService {
         ws.setId(Ids.gen("S"));
         ws.setName(Texts.cut(n, 20));
         ws.setType("shared");
+        /* owner_id 仅记录创建者；空间权限一律以 workspace_member.role 为准，支持多位空间主 */
         ws.setOwnerId(userId);
         workspaceMapper.insert(ws);
         addMemberInternal(ws.getId(), userId, "owner", ProjectAccessService.MODE_ALL);
@@ -600,30 +601,40 @@ public class WorkspaceService {
         CacheSync.evictAfterCommitOrNow(() -> memberCache.evict(workspaceId, userId));
     }
 
-    /** 调整成员的空间角色（空间主可调整全部；管理员只能调整成员/查看者，不能授予管理员） */
+    /** 调整成员的空间角色（空间主可调整全部角色；管理员只能调整成员/查看者，不能授予空间主） */
     @Transactional
     public void updateMemberRole(String operatorId, String workspaceId, String targetUserId, String role) {
         Workspace ws = requireManager(operatorId, workspaceId);
         if ("personal".equals(ws.getType())) {
             throw AppException.badRequest("个人空间没有角色可调整");
         }
-        if (!ProjectAccessService.isValidRole(role)) {
-            throw AppException.badRequest("角色只能是 admin / member / viewer");
+        boolean toOwner = ProjectAccessService.ROLE_OWNER.equals(role);
+        if (!toOwner && !ProjectAccessService.isValidRole(role)) {
+            throw AppException.badRequest("角色只能是空间主 / 管理员 / 成员 / 查看者");
         }
         WorkspaceMember target = memberMapper.selectMember(workspaceId, targetUserId);
         if (target == null) {
             throw AppException.notFound("成员不存在：" + targetUserId);
         }
-        if ("owner".equals(target.getRole())) {
-            throw AppException.badRequest("不能修改空间主的角色");
-        }
-        if (!"owner".equals(ws.getMyRole())) {
+        boolean actorIsOwner = ProjectAccessService.ROLE_OWNER.equals(ws.getMyRole());
+        boolean targetIsOwner = ProjectAccessService.ROLE_OWNER.equals(target.getRole());
+        if (!actorIsOwner) {
+            if (targetIsOwner) {
+                throw new AppException(403, "仅空间主可调整空间主角色");
+            }
             if ("admin".equals(target.getRole())) {
                 throw new AppException(403, "仅空间主可调整管理员角色");
+            }
+            if (toOwner) {
+                throw new AppException(403, "仅空间主可授予空间主角色");
             }
             if ("admin".equals(role)) {
                 throw new AppException(403, "仅空间主可授予管理员角色");
             }
+        }
+        /* 多空间主等权，但任何时刻都必须保留至少一位，否则空间会失去管理入口 */
+        if (targetIsOwner && !toOwner && memberMapper.countOwners(workspaceId) <= 1) {
+            throw AppException.badRequest("至少保留一位空间主，请先将其他成员设为空间主");
         }
         memberMapper.updateRole(workspaceId, targetUserId, role);
         /* 角色变化不再清空按项目配置，也不改 project_access_mode：
@@ -650,8 +661,10 @@ public class WorkspaceService {
             if (isPersonal) {
                 throw AppException.badRequest("个人空间不可退出");
             }
-            if (userId.equals(ws.getOwnerId())) {
-                throw AppException.badRequest("空间主不能退出自己的空间，可直接删除空间");
+            /* 多空间主等权：存在其他空间主时可退出，唯一空间主必须先移交或删除空间 */
+            if (ProjectAccessService.ROLE_OWNER.equals(ws.getMyRole())
+                    && memberMapper.countOwners(workspaceId) <= 1) {
+                throw AppException.badRequest("你是当前唯一空间主，请先将其他成员设为空间主，或直接删除空间");
             }
             memberMapper.delete(workspaceId, targetUserId);
             projectMemberMapper.deleteByUser(workspaceId, targetUserId);
@@ -666,15 +679,20 @@ public class WorkspaceService {
         if (!ProjectAccessService.isPrivileged(ws.getMyRole())) {
             throw new AppException(403, "仅空间主或管理员可移除成员");
         }
-        if (targetUserId.equals(ws.getOwnerId())) {
-            throw AppException.badRequest("不能移除空间主");
-        }
         WorkspaceMember targetMember = memberMapper.selectMember(workspaceId, targetUserId);
         if (targetMember == null) {
             throw AppException.notFound("成员不存在：" + targetUserId);
         }
-        if (!"owner".equals(ws.getMyRole()) && "admin".equals(targetMember.getRole())) {
+        boolean actorIsOwner = ProjectAccessService.ROLE_OWNER.equals(ws.getMyRole());
+        boolean targetIsOwner = ProjectAccessService.ROLE_OWNER.equals(targetMember.getRole());
+        if (!actorIsOwner && targetIsOwner) {
+            throw new AppException(403, "仅空间主可移除空间主");
+        }
+        if (!actorIsOwner && "admin".equals(targetMember.getRole())) {
             throw new AppException(403, "仅空间主可移除管理员");
+        }
+        if (targetIsOwner && memberMapper.countOwners(workspaceId) <= 1) {
+            throw AppException.badRequest("至少保留一位空间主，不能移除最后一位空间主");
         }
         memberMapper.delete(workspaceId, targetUserId);
         projectMemberMapper.deleteByUser(workspaceId, targetUserId);

@@ -59,7 +59,12 @@
     DELETE FROM workspace WHERE id = #{id}
   </delete>
 
-  <select id="countSharedByOwner" resultType="int">
-    SELECT COUNT(*) FROM workspace WHERE owner_id = #{ownerId} AND type = 'shared'
+  <!-- 删账号保护：只统计该账号是唯一空间主的共享空间；有其他空间主时可安全删除 -->
+  <select id="countSharedWithSoleOwner" resultType="int">
+    SELECT COUNT(*) FROM workspace w
+    JOIN workspace_member m ON m.workspace_id = w.id AND m.user_id = #{userId} AND m.role = 'owner'
+    WHERE w.type = 'shared'
+      AND (SELECT COUNT(*) FROM workspace_member o
+           WHERE o.workspace_id = w.id AND o.role = 'owner') = 1
   </select>
 </mapper>

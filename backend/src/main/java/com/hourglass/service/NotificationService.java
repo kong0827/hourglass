@@ -272,11 +272,13 @@ public class NotificationService {
         /* 成员名→账号映射每空间只查一次；本空间没有到期任务时不必查成员 */
         Map<String, String> memberByName = due.isEmpty()
                 ? Collections.<String, String>emptyMap() : memberNameMap(ws.getId());
+        List<String> workspaceOwners = due.isEmpty()
+                ? Collections.<String>emptyList() : workspaceOwnerIds(ws.getId());
         for (Task t : due) {
             /* 再按任务隔离一次：单条任务的数据异常不应影响同空间其它任务的提醒 */
             try {
                 /* BUG-12：站内与外部各看各的开关；站内默认开启，关外部不会停站内 */
-                boolean inApp = inAppEnabled && notifyTaskRemindInApp(ws, t, memberByName);
+                boolean inApp = inAppEnabled && notifyTaskRemindInApp(ws, t, memberByName, workspaceOwners);
                 if (hook != null) {
                     // 配了外部渠道：异步发送，成功后才闭环；失败/丢弃时留在 6 小时窗口内重试
                     scheduleRemindSend(ws, t, hook);
@@ -336,9 +338,10 @@ public class NotificationService {
         }
     }
 
-    /** N-1：任务级提醒写入应用内通知，投递给负责人本人（可选带上空间主） */
-    private boolean notifyTaskRemindInApp(Workspace ws, Task t, Map<String, String> memberByName) {
-        Set<String> targets = resolveRecipients(ws, t, memberByName);
+    /** N-1：任务级提醒写入应用内通知，投递给负责人本人（可选带上全部空间主） */
+    private boolean notifyTaskRemindInApp(Workspace ws, Task t, Map<String, String> memberByName,
+                                          List<String> workspaceOwners) {
+        Set<String> targets = resolveRecipients(ws, t, memberByName, workspaceOwners);
         if (targets.isEmpty()) {
             return false;
         }
@@ -376,9 +379,10 @@ public class NotificationService {
     /**
      * 解析"提醒谁"：
      *  - owner（默认）：负责人的账号（优先 owner_user_id，历史行回落显示名匹配空间成员）
-     *  - owner+admin：负责人 + 空间主
+     *  - owner+admin：负责人 + 全部空间主（多空间主等权）
      */
-    private Set<String> resolveRecipients(Workspace ws, Task t, Map<String, String> memberByName) {
+    private Set<String> resolveRecipients(Workspace ws, Task t, Map<String, String> memberByName,
+                                          List<String> workspaceOwners) {
         Set<String> out = new LinkedHashSet<String>();
         String ownerId = Texts.trimToNull(t.getOwnerUserId());
         if (ownerId != null) {
@@ -389,10 +393,30 @@ public class NotificationService {
                 out.add(byName);
             }
         }
-        if ("owner+admin".equals(t.getRemindTarget()) && ws.getOwnerId() != null) {
-            out.add(ws.getOwnerId());
+        if ("owner+admin".equals(t.getRemindTarget())) {
+            if (!workspaceOwners.isEmpty()) {
+                out.addAll(workspaceOwners);
+            } else if (ws.getOwnerId() != null) {
+                /* 历史兜底：角色数据异常时仍能提醒创建者 */
+                out.add(ws.getOwnerId());
+            }
         }
         return out;
+    }
+
+    /** 空间主账号集合：提醒「负责人 + 空间主」时覆盖全部空间主，而不是只看创建者 */
+    private List<String> workspaceOwnerIds(String workspaceId) {
+        List<String> ids = new ArrayList<String>();
+        for (WorkspaceMember m : memberMapper.selectByWorkspace(workspaceId)) {
+            if (m == null || !ProjectAccessService.ROLE_OWNER.equals(m.getRole())) {
+                continue;
+            }
+            String uid = Texts.trimToNull(m.getUserId());
+            if (uid != null) {
+                ids.add(uid);
+            }
+        }
+        return ids;
     }
 
     /** 空间成员显示名 → 账号ID（每轮扫描只查一次，避免逐任务 N+1） */

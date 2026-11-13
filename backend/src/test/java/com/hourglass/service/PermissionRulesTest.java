@@ -150,6 +150,81 @@ class PermissionRulesTest {
     }
 
     @Test
+    void ownerCanPromoteMemberToOwner() {
+        workspaceService.updateMemberRole(OWNER, WS, MEMBER, ProjectAccessService.ROLE_OWNER);
+
+        verify(memberMapper).updateRole(WS, MEMBER, ProjectAccessService.ROLE_OWNER);
+    }
+
+    @Test
+    void ownerCanDemoteAnotherOwnerWhenOneRemains() {
+        roles.put(MEMBER, ProjectAccessService.ROLE_OWNER);
+        when(memberMapper.countOwners(WS)).thenReturn(2);
+
+        workspaceService.updateMemberRole(OWNER, WS, MEMBER, ProjectAccessService.ROLE_MEMBER);
+
+        verify(memberMapper).updateRole(WS, MEMBER, ProjectAccessService.ROLE_MEMBER);
+    }
+
+    @Test
+    void cannotDemoteLastOwner() {
+        when(memberMapper.countOwners(WS)).thenReturn(1);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> workspaceService.updateMemberRole(OWNER, WS, OWNER, ProjectAccessService.ROLE_MEMBER))
+                .getCode());
+        verify(memberMapper, never()).updateRole(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void adminCannotGrantOrTouchOwner() {
+        assertEquals(403, assertThrows(AppException.class,
+                () -> workspaceService.updateMemberRole(ADMIN, WS, MEMBER, ProjectAccessService.ROLE_OWNER))
+                .getCode());
+        assertEquals(403, assertThrows(AppException.class,
+                () -> workspaceService.updateMemberRole(ADMIN, WS, OWNER, ProjectAccessService.ROLE_MEMBER))
+                .getCode());
+        verify(memberMapper, never()).updateRole(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void ownerCanLeaveWhenAnotherOwnerRemains() {
+        when(memberMapper.countOwners(WS)).thenReturn(2);
+
+        workspaceService.removeMember(OWNER, WS, OWNER);
+
+        verify(memberMapper).delete(WS, OWNER);
+    }
+
+    @Test
+    void lastOwnerCannotLeave() {
+        when(memberMapper.countOwners(WS)).thenReturn(1);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> workspaceService.removeMember(OWNER, WS, OWNER)).getCode());
+        verify(memberMapper, never()).delete(anyString(), anyString());
+    }
+
+    @Test
+    void ownerCanRemoveAnotherOwnerWhenOneRemains() {
+        roles.put(MEMBER, ProjectAccessService.ROLE_OWNER);
+        when(memberMapper.countOwners(WS)).thenReturn(2);
+
+        workspaceService.removeMember(OWNER, WS, MEMBER);
+
+        verify(memberMapper).delete(WS, MEMBER);
+    }
+
+    @Test
+    void adminCannotRemoveOwner() {
+        roles.put(MEMBER, ProjectAccessService.ROLE_OWNER);
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> workspaceService.removeMember(ADMIN, WS, MEMBER)).getCode());
+        verify(memberMapper, never()).delete(anyString(), anyString());
+    }
+
+    @Test
     void adminCannotRemoveAdmin() {
         assertEquals(403, assertThrows(AppException.class,
                 () -> workspaceService.removeMember(ADMIN, WS, OTHER_ADMIN)).getCode());
