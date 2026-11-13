@@ -202,7 +202,7 @@ function pruneStaleFilters(meta){
   var changed = false;
   var catIds = {};
   (meta.cats || []).forEach(function(c){ catIds[c.id] = 1; });
-  var keptCats = state.cats.filter(function(c){ return catIds[c]; });
+  var keptCats = state.cats.filter(function(c){ return c === "__none" || catIds[c]; });
   if(keptCats.length !== state.cats.length){ state.cats = keptCats; changed = true; }
   var reqIds = {};
   (meta.reqs || []).forEach(function(r){ reqIds[r.id] = 1; });

@@ -20,6 +20,7 @@ rt.tagsCache = [];
 rt.editingId = null;
 rt.taskFormSeq = 0;
 rt.formDirty = false;
+rt.drawerOnClose = null;
 rt.resetArmed = null;
 rt.suppressClickUntil = 0;
 rt.currentUser = null;
@@ -48,7 +49,8 @@ rt.alertTab = "notice";
 var state = {
   q:"", owners:[], pris:[], cats:[], reqs:[], tags:[], types:[], versions:[], columns:[],
   completion:"", due:null, focus:false, doneScope:"week", blocked:false,
-  board:null, doneExtra:[], loadSeq:0, boardGen:0,
+  noDue:false, dueFrom:null, dueTo:null, startFrom:null, startTo:null,
+  board:null, loadSeq:0, boardGen:0,
   reviewData:null, statsWeeks:8, flowDays:90, workScope:"mine", reviewWork:null,
   mineSpace:"", mineGroup:"due", mineSubgroup:"none", mineSort:"default",
   collapsedCols:{}, inlineAdd:null,
@@ -182,7 +184,8 @@ function filterOn(){
   return !!(state.q || state.owners.length || state.pris.length || state.cats.length
     || state.reqs.length || state.tags.length || state.types.length || state.versions.length
     || state.columns.length || state.completion
-    || state.due || state.focus || state.blocked);
+    || state.due || state.focus || state.blocked || state.noDue
+    || state.dueFrom || state.dueTo || state.startFrom || state.startTo);
 }
 function selectedFilterCount(){
   var n = 0;
@@ -192,6 +195,9 @@ function selectedFilterCount(){
   if(state.due) n++;
   if(state.focus) n++;
   if(state.blocked) n++;
+  if(state.noDue) n++;
+  if(state.dueFrom || state.dueTo) n++;
+  if(state.startFrom || state.startTo) n++;
   return n;
 }
 function totalTaskCount(){
@@ -211,7 +217,6 @@ function taskById(id){
       if(!cd) continue;
       for(var j = 0; j < cd.items.length; j++) if(cd.items[j].id === id) return cd.items[j];
     }
-    for(var k = 0; k < state.doneExtra.length; k++) if(state.doneExtra[k].id === id) return state.doneExtra[k];
   }
   return rt.listCache[id] || taskCacheExtra[id] || null;
 }

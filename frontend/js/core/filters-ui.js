@@ -1,14 +1,14 @@
 /* core/filters-ui · 筛选栏、搜索、保存视图 */
 
 import { API } from "./api.js";
-import { $, chipsOwner, chipsPri, chipsType, chipsVersion, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
+import { $, chipsCats, chipsDate, chipsOwner, chipsPri, chipsReqs, chipsTags, chipsType, chipsVersion, dimGroup, dimMenu, filterActions, moreFilterCount, moreFilterMenu, searchInput, searchWrap, selectedSummary, viewBox } from "./dom.js";
 import { currentFilterParams, toggleFilterValue, updateBrand } from "./filters.js";
 import { icon } from "./icons.js";
 import { isMobile } from "./layout.js";
 import { activeView, showView } from "./router.js";
-import { filterOn, rt, selectedFilterCount, state } from "./state.js";
+import { catNameById, filterOn, rt, selectedFilterCount, state } from "./state.js";
 import { UI, esc, toast, toastAction } from "./ui.js";
-import { COLUMNS, PRIORITIES, colName, priColor, priName, typeName } from "../lib/format.js";
+import { COLUMNS, PRIORITIES, colName, iso, priName, typeName } from "../lib/format.js";
 import { loadBoard } from "../views/board.js";
 import { loadCalendar, refreshCalendarIfOpen, refreshGanttIfOpen } from "../views/calendar.js";
 import { loadView } from "./view-loader.js";
@@ -46,6 +46,10 @@ function ownerItems(meta){
     if(o.count === 0 && !on) return;
     items.push({name:o.name, count:o.count, on:on});
   });
+  /* 空值也是一档筛选条件：没填负责人的工作项同样需要能被找出来 */
+  var noneOn = state.owners.indexOf("__none") !== -1;
+  var noneCount = meta.ownerUnassigned || 0;
+  if(noneCount > 0 || noneOn) items.push({id:"__none", name:"无负责人", count:noneCount, on:noneOn});
   return items;
 }
 function priItems(meta){
@@ -106,14 +110,50 @@ function completionLabel(v){
   return "全部";
 }
 function itemVal(o){ return o.id !== undefined ? o.id : o.name; }
-/* 已选维度在筛选栏里只留一枚可清除的 chip；可选值统一收进「更多筛选」Popover */
+/* 项目 / 模块：与其它维度一样带计数，「未指定」作为空值项保留在末位 */
+function reqItems(meta){
+  var items = [];
+  (meta.reqs || []).forEach(function(r){
+    var on = state.reqs.indexOf(r.id) !== -1;
+    if(r.count === 0 && !on) return;
+    items.push({id:r.id, name:r.name, count:r.count, on:on});
+  });
+  var noneOn = state.reqs.indexOf("__none") !== -1;
+  var noneCount = meta.unassigned || 0;
+  if(noneCount > 0 || noneOn) items.push({id:"__none", name:"未归类", count:noneCount, on:noneOn});
+  return items;
+}
+function catItems(meta){
+  var items = [];
+  (meta.cats || []).forEach(function(c){
+    var on = state.cats.indexOf(c.id) !== -1;
+    if(c.count === 0 && !on) return;
+    items.push({id:c.id, name:c.name, count:c.count, on:on});
+  });
+  var noneOn = state.cats.indexOf("__none") !== -1;
+  var noneCount = meta.catUnassigned || 0;
+  if(noneCount > 0 || noneOn) items.push({id:"__none", name:"未指定模块", count:noneCount, on:noneOn});
+  return items;
+}
+function tagItems(meta){
+  var items = [];
+  (meta.tags || []).forEach(function(t){
+    var on = state.tags.indexOf(t.name) !== -1;
+    if(t.count === 0 && !on) return;
+    items.push({name:t.name, count:t.count, on:on});
+  });
+  return items;
+}
+/* 已选维度在筛选栏里只留一枚可清除的 chip；可选值统一收进下拉 Popover */
 function dimTitle(kind){
-  return kind === "owner" ? "负责人" : (kind === "type" ? "类型" : (kind === "version" ? "版本" : "优先级"));
+  return kind === "owner" ? "负责人" : (kind === "type" ? "类型" : (kind === "version" ? "版本"
+    : (kind === "pri" ? "优先级" : (kind === "req" ? "项目" : (kind === "cat" ? "模块" : "标签")))));
 }
 function dimValueLabel(kind, value, items){
   if(kind === "pri") return priName(value);
   if(kind === "type") return typeName(value);
-  if(kind === "owner") return value;
+  if(kind === "owner") return value === "__none" ? "无负责人" : value;
+  if(kind === "tag") return value;
   for(var i = 0; i < items.length; i++) if(itemVal(items[i]) === value) return items[i].name;
   return value;
 }
@@ -164,11 +204,188 @@ function renderCompletionChip(){
     "完成情况：" + esc(completionLabel(state.completion)) + icon("close", 12) + '</button>';
   $("fgCompletion").hidden = false;
 }
+function renderReqsChip(meta){
+  chipsReqs.innerHTML = activeDimHTML("req", state.reqs, reqItems(meta));
+  $("fgReqs").hidden = state.reqs.length === 0;
+}
+function renderCatsChip(meta){
+  chipsCats.innerHTML = activeDimHTML("cat", state.cats, catItems(meta));
+  $("fgCats").hidden = state.cats.length === 0;
+}
+function renderTagsChip(meta){
+  chipsTags.innerHTML = activeDimHTML("tag", state.tags, tagItems(meta));
+  $("fgTags").hidden = state.tags.length === 0;
+}
+/* 日期区间统一按「截止 / 开始」两行展示；无截止日期是一档独立的空值筛选 */
+function shortDay(v){
+  return String(v || "").replace(/^\d{4}-/, "");
+}
+function dateRangeText(from, to){
+  if(from && to) return from === to ? shortDay(from) : shortDay(from) + " ~ " + shortDay(to);
+  if(from) return shortDay(from) + " 起";
+  if(to) return "截至 " + shortDay(to);
+  return "";
+}
+function dateFilterActive(){
+  return !!(state.noDue || state.dueFrom || state.dueTo || state.startFrom || state.startTo);
+}
+function renderDateChip(){
+  var box = $("chipsDate");
+  if(!box) return;
+  if(!dateFilterActive()){ box.innerHTML = ""; $("fgDate").hidden = true; return; }
+  var bits = [];
+  if(state.noDue) bits.push("无截止日期");
+  var due = dateRangeText(state.dueFrom, state.dueTo);
+  if(due) bits.push("截止 " + due);
+  var start = dateRangeText(state.startFrom, state.startTo);
+  if(start) bits.push("开始 " + start);
+  box.innerHTML = '<button class="chip" type="button" data-clear-dates aria-pressed="true" title="清除日期筛选">' +
+    esc(bits.join(" · ")) + icon("close", 12) + '</button>';
+  $("fgDate").hidden = false;
+}
+
+/* ==================== 平铺维度下拉（项目 / 状态 / 负责人 / 优先级） ==================== */
+/* 四个高频维度直接摆在筛选栏上，点开是可多选、带计数与搜索的下拉；
+   其余维度留在「更多筛选」，避免一次性把十几个维度堆在只有 48px 高的栏里。 */
+var DIM_ORDER = { reqs:"项目", columns:"状态", owners:"负责人", pris:"优先级" };
+var dimQ = "";
+function dimItemsOf(kind, meta){
+  if(kind === "reqs") return reqItems(meta);
+  if(kind === "cats") return catItems(meta);
+  if(kind === "tags") return tagItems(meta);
+  if(kind === "owners") return ownerItems(meta);
+  if(kind === "pris") return priItems(meta);
+  if(kind === "types") return typeItems(meta);
+  if(kind === "versions") return versionItems(meta);
+  if(kind === "columns") return columnItems(meta);
+  return [];
+}
+function dimSelected(kind){ return state[kind] || []; }
+function syncDimButtons(){
+  if(!dimGroup) return;
+  dimGroup.querySelectorAll("[data-dim-open]").forEach(function(btn){
+    /* 我的工作天然只含本人任务，负责人维度没有意义，不摆出来制造「点了没反应」 */
+    btn.hidden = activeView === "mine" && btn.dataset.dimOpen === "owners";
+    var n = dimSelected(btn.dataset.dimOpen).length;
+    btn.setAttribute("aria-pressed", n > 0 ? "true" : "false");
+    if(n > 0){
+      btn.title = "已按" + DIM_ORDER[btn.dataset.dimOpen] + "筛选 " + n + " 项，点击修改";
+    }else{
+      btn.title = "按" + DIM_ORDER[btn.dataset.dimOpen] + "筛选（可多选）";
+    }
+    var badge = btn.querySelector(".n");
+    if(n > 0){
+      if(!badge){ badge = document.createElement("span"); badge.className = "n"; btn.appendChild(badge); }
+      badge.textContent = n;
+    }else if(badge){
+      badge.parentNode.removeChild(badge);
+    }
+  });
+}
+function renderDimMenu(kind){
+  var meta = state.board && state.board.meta;
+  if(!meta){
+    dimMenu.innerHTML = '<div class="menu-field"><p class="foot-note" style="margin:0">筛选数据尚未加载，请稍候。</p></div>';
+    return;
+  }
+  var items = dimItemsOf(kind, meta);
+  var rows = items.map(function(o){
+    var val = itemVal(o);
+    var label = String(o.name);
+    return '<button class="menu-item dim-opt" type="button" data-' + kind.slice(0, -1) + '="' + esc(val) +
+      '" data-label="' + esc((label + " " + val).toLowerCase()) + '" aria-pressed="' + (o.on ? "true" : "false") + '">' +
+      '<span class="ck" aria-hidden="true">' + (o.on ? icon("check", 13) : "") + '</span>' +
+      (o.color ? '<i class="cdot" style="background:' + esc(o.color) + '"></i>' : "") +
+      '<span class="dim-name">' + esc(label) + '</span>' +
+      '<span class="k">' + (o.count == null ? "" : o.count) + '</span>' +
+      '</button>';
+  }).join("");
+  if(!rows) rows = '<p class="foot-note dim-empty">当前空间还没有可选的' + DIM_ORDER[kind] + '。</p>';
+  var search = items.length > 8
+    ? '<div class="menu-field dim-search"><input type="search" data-dim-q value="' + esc(dimQ) +
+      '" placeholder="搜索' + DIM_ORDER[kind] + '…（共 ' + items.length + ' 个）" aria-label="搜索' + DIM_ORDER[kind] + '" autocomplete="off"></div>'
+    : "";
+  dimMenu.innerHTML = '<div class="menu-title">' + DIM_ORDER[kind] + '</div>' + search +
+    '<div class="dim-list">' + rows + '<p class="foot-note dim-empty" data-dim-empty hidden>没有匹配的选项</p></div>' +
+    '<div class="menu-foot"><button class="btn sm" type="button" data-dim-clear="' + kind + '"' +
+      (dimSelected(kind).length ? "" : " disabled") + '>清空' + DIM_ORDER[kind] + '</button></div>';
+  applyDimSearch();
+}
+function applyDimSearch(){
+  if(!dimMenu) return;
+  var input = dimMenu.querySelector("[data-dim-q]");
+  if(!input) return;
+  dimQ = String(input.value || "").toLowerCase();
+  var shown = 0;
+  dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
+    var hit = !dimQ || btn.getAttribute("aria-pressed") === "true"
+      || String(btn.dataset.label || "").indexOf(dimQ) !== -1;
+    btn.hidden = !hit;
+    if(hit) shown++;
+  });
+  var empty = dimMenu.querySelector("[data-dim-empty]");
+  if(empty) empty.hidden = shown > 0;
+}
+/* 勾选即时生效、菜单保持打开：只刷新选中态与计数，不重排列表，避免输入焦点和滚动位置丢失 */
+function syncDimMenu(){
+  if(!dimMenu) return;
+  var kind = dimMenu.dataset.kind;
+  if(!kind) return;
+  var selected = dimSelected(kind);
+  dimMenu.querySelectorAll(".dim-opt").forEach(function(btn){
+    var on = selected.indexOf(btn.dataset[kind.slice(0, -1)]) !== -1;
+    if((btn.getAttribute("aria-pressed") === "true") === on) return;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    var ck = btn.querySelector(".ck");
+    if(ck) ck.innerHTML = on ? icon("check", 13) : "";
+  });
+  var clear = dimMenu.querySelector("[data-dim-clear]");
+  if(clear) clear.disabled = selected.length === 0;
+}
+function openDimMenu(kind, anchor){
+  if(UI.popOpen(dimMenu) && dimMenu.dataset.kind === kind){ UI.closeAllPops(); return; }
+  UI.closeAllPops();
+  dimQ = "";
+  dimMenu.dataset.kind = kind;
+  renderDimMenu(kind);
+  UI.openPop(dimMenu, anchor, {align:"left", width:288});
+}
+var DATE_PRESETS = [["week", "本周"], ["month", "本月"], ["next7", "未来 7 天"]];
+/* 快捷区间按自然周 / 自然月计算，给的是可直接落到后端 dueFrom/dueTo 的 ISO 日期 */
+function dateRangeOf(preset){
+  var base = rt.TODAY;
+  if(preset === "week"){
+    var d = new Date(base.getTime());
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    var w = new Date(d.getTime());
+    w.setDate(w.getDate() + 6);
+    return [iso(d), iso(w)];
+  }
+  if(preset === "month"){
+    return [iso(new Date(base.getFullYear(), base.getMonth(), 1)),
+      iso(new Date(base.getFullYear(), base.getMonth() + 1, 0))];
+  }
+  if(preset === "next7"){
+    var e = new Date(base.getTime());
+    e.setDate(e.getDate() + 6);
+    return [iso(base), iso(e)];
+  }
+  return null;
+}
+function datePresetOn(preset){
+  var range = dateRangeOf(preset);
+  return !!range && state.dueFrom === range[0] && state.dueTo === range[1];
+}
+function dateInput(key, label){
+  return '<label class="mf-date-unit"><span class="group-label">' + label + '</span>' +
+    '<input type="date" data-date="' + key + '" value="' + esc(state[key] || "") +
+    '" aria-label="' + label + '" title="' + label + '"></label>';
+}
 function renderMoreFilter(meta){
-  var cats = (meta.cats || []).filter(function(c){ return c.count > 0 || state.cats.indexOf(c.id) !== -1; });
-  var tags = (meta.tags || []).filter(function(t){ return t.count > 0 || state.tags.indexOf(t.name) !== -1; });
-  var reqs = (meta.reqs || []).filter(function(r){ return r.count > 0 || state.reqs.indexOf(r.id) !== -1; });
-  var noneOn = state.reqs.indexOf("__none") !== -1;
+  var cats = catItems(meta);
+  var tags = tagItems(meta);
+  var types = typeItems(meta);
+  var versionList = versionItems(meta);
 
   function section(title, inner){
     if(!inner) return "";
@@ -179,17 +396,9 @@ function renderMoreFilter(meta){
     return '<button class="chip" type="button" data-' + attr + '="' + esc(value) + '" aria-pressed="' + on + '">' +
       (lead || "") + label + ' <span class="n">' + count + '</span></button>';
   }
-  var ownerInner = ownerItems(meta).map(function(o){
-    return option("owner", o.name, esc(o.name), o.count, state.owners.indexOf(o.name) !== -1);
-  }).join("");
-  var priInner = priItems(meta).map(function(o){
-    return option("pri", o.name, esc(priName(o.name)), o.count, state.pris.indexOf(o.name) !== -1,
-      '<i class="cdot" style="background:' + esc(priColor(o.name)) + '"></i>');
-  }).join("");
-  var typeInner = typeItems(meta).map(function(o){
+  var typeInner = types.map(function(o){
     return option("type", o.name, esc(typeName(o.name)), o.count, state.types.indexOf(o.name) !== -1);
   }).join("");
-  var versionList = versionItems(meta);
   var versionInner = versionList.map(function(o){
     return option("version", itemVal(o), esc(o.name), o.count, state.versions.indexOf(itemVal(o)) !== -1)
       .replace('<button class="chip"', '<button class="chip" data-mf-version-item data-label="' + esc(String(o.name).toLowerCase()) + '"');
@@ -202,37 +411,33 @@ function renderMoreFilter(meta){
       '<p class="foot-note mf-version-empty" data-mf-version-empty hidden style="margin:4px 0 0">没有匹配的版本</p></div>';
   }
   var catInner = cats.map(function(c){
-    return option("cat", c.id, esc(c.name), c.count, state.cats.indexOf(c.id) !== -1);
+    return option("cat", itemVal(c), esc(c.name), c.count, state.cats.indexOf(itemVal(c)) !== -1);
   }).join("");
   var tagInner = tags.map(function(t){
     return option("tag", t.name, esc(t.name), t.count, state.tags.indexOf(t.name) !== -1);
   }).join("");
-  var reqInner = reqs.map(function(r){
-    return option("req", r.id, esc(r.name), r.count, state.reqs.indexOf(r.id) !== -1);
-  }).join("");
-  if((meta.unassigned || 0) > 0 || noneOn){
-    reqInner += '<button class="chip ghost" type="button" data-req="__none" aria-pressed="' + noneOn + '">未归类 <span class="n">' +
-      (meta.unassigned || 0) + '</span></button>';
-  }
   var blockedInner = '<button class="chip alert-today" type="button" data-blocked-filter aria-pressed="' + (state.blocked ? "true" : "false") + '">' +
     '<i class="cdot" style="background:var(--warning)"></i>仅看被阻塞</button>';
-  var columnInner = columnItems(meta).map(function(o){
-    return '<button class="chip" type="button" data-column="' + esc(o.id) + '" aria-pressed="' + o.on + '">' +
-      '<i class="cdot" style="background:' + esc(o.color) + '"></i>' + esc(o.name) +
-      (o.count === undefined ? "" : ' <span class="n">' + o.count + '</span>') + '</button>';
-  }).join("");
   var completionInner = COMPLETION_OPTIONS.map(function(o){
     return '<button class="chip" type="button" data-completion="' + o[0] + '" aria-pressed="' +
       ((state.completion || "") === o[0]) + '">' + o[1] + '</button>';
   }).join("");
+  var duePresetInner = DATE_PRESETS.map(function(p){
+    return '<button class="chip" type="button" data-date-preset="' + p[0] + '" aria-pressed="' + datePresetOn(p[0]) + '">' +
+      p[1] + '</button>';
+  }).join('') + '<button class="chip ghost" type="button" data-date-preset="none" aria-pressed="' + (state.noDue ? "true" : "false") + '">无截止日期</button>';
+  var dueBlock = '<div class="menu-field dim-dates"><div class="group-label">截止日期</div>' +
+    '<div class="mf-date-row">' + dateInput("dueFrom", "从") + '<span class="sep">~</span>' + dateInput("dueTo", "到") + '</div>' +
+    '<div class="mf-date-quick">' + duePresetInner + '</div></div>';
+  var startBlock = '<div class="menu-field dim-dates"><div class="group-label">开始日期</div>' +
+    '<div class="mf-date-row">' + dateInput("startFrom", "从") + '<span class="sep">~</span>' + dateInput("startTo", "到") + '</div></div>';
 
-  var html = '<div class="menu-title">筛选</div>' +
-    section("状态", columnInner) +
-    section("负责人", ownerInner) + section("优先级", priInner) +
+  var html = '<div class="menu-title">更多筛选</div>' +
+    section("模块", catInner) + section("标签", tagInner) +
     section("类型", typeInner) + section("版本", versionInner) +
-    section("模块", catInner) + section("标签", tagInner) + section("项目", reqInner) +
+    dueBlock + startBlock +
     section("完成情况", completionInner) + section("其他", blockedInner);
-  if(!ownerInner && !priInner && !typeInner && !versionInner && !catInner && !tagInner && !reqInner){
+  if(!catInner && !tagInner && !typeInner && !versionInner){
     html += '<div class="menu-field"><p class="foot-note" style="margin:0">当前空间还没有可筛选的字段。</p></div>';
   }
   /* O-15 / F11：去掉只负责关闭的「应用」按钮——本栏所有 chip 都是即时生效，留着它会误导用户 */
@@ -244,9 +449,10 @@ function renderMoreFilter(meta){
   moreFilterMenu.scrollTop = scrollTop;
   applyVersionFilter();
 
-  var n = state.owners.length + state.pris.length + state.types.length + state.versions.length
-    + state.cats.length + state.tags.length + state.reqs.length + state.columns.length
-    + (state.completion ? 1 : 0) + (state.blocked ? 1 : 0);
+  var n = state.types.length + state.versions.length + state.cats.length + state.tags.length
+    + (state.completion ? 1 : 0) + (state.blocked ? 1 : 0)
+    + (state.noDue ? 1 : 0) + ((state.dueFrom || state.dueTo) ? 1 : 0)
+    + ((state.startFrom || state.startTo) ? 1 : 0);
   moreFilterCount.hidden = n === 0;
   moreFilterCount.textContent = n;
 }
@@ -308,24 +514,38 @@ function renderFilterChips(){
     renderPriChips(meta);
     renderTypeChips(meta);
     renderVersionChips(meta);
+    renderReqsChip(meta);
+    renderCatsChip(meta);
+    renderTagsChip(meta);
     renderMoreFilter(meta);
   }else{
     chipsOwner.innerHTML = "";
     chipsPri.innerHTML = "";
     chipsType.innerHTML = "";
     chipsVersion.innerHTML = "";
+    chipsReqs.innerHTML = "";
+    chipsCats.innerHTML = "";
+    chipsTags.innerHTML = "";
     moreFilterMenu.innerHTML = "";
     $("fgOwner").hidden = true;
     $("fgPri").hidden = true;
     $("fgType").hidden = true;
     $("fgVersion").hidden = true;
+    $("fgReqs").hidden = true;
+    $("fgCats").hidden = true;
+    $("fgTags").hidden = true;
   }
   renderColumnsChips();
   renderCompletionChip();
+  renderDateChip();
   renderBlockedChip();
   renderQueryChip();
+  syncDimButtons();
+  syncDimMenu();
   updateFilterActions();
-  var sig = [state.owners, state.pris, state.types, state.versions, state.columns, state.completion, state.cats, state.tags, state.reqs, state.blocked, state.q].join("|");
+  var sig = [state.owners, state.pris, state.types, state.versions, state.columns, state.completion,
+    state.cats, state.tags, state.reqs, state.blocked, state.q,
+    state.noDue, state.dueFrom, state.dueTo, state.startFrom, state.startTo].join("|");
   if(sig !== lastActiveSig){
     lastActiveSig = sig;
     var af = $("fbActive");
@@ -378,7 +598,9 @@ function saveViewState(){
         owners: state.owners.slice(), pris: state.pris.slice(), cats: state.cats.slice(), reqs: state.reqs.slice(),
         tags: state.tags.slice(), types: state.types.slice(), versions: state.versions.slice(),
         columns: state.columns.slice(), completion: state.completion,
-        due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope
+        due: state.due, focus: state.focus, blocked: state.blocked, doneScope: state.doneScope,
+        noDue: state.noDue, dueFrom: state.dueFrom, dueTo: state.dueTo,
+        startFrom: state.startFrom, startTo: state.startTo
       },
       list: listSnap
     }));
@@ -410,6 +632,12 @@ function restoreViewState(){
     if(newBlocked !== state.blocked){ state.blocked = newBlocked; changed = true; }
     var newDoneScope = f.doneScope || "week";
     if(newDoneScope !== state.doneScope){ state.doneScope = newDoneScope; changed = true; }
+    var newNoDue = !!f.noDue;
+    if(newNoDue !== state.noDue){ state.noDue = newNoDue; changed = true; }
+    ["dueFrom", "dueTo", "startFrom", "startTo"].forEach(function(k){
+      var nv = typeof f[k] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f[k]) ? f[k] : null;
+      if(nv !== state[k]){ state[k] = nv; changed = true; }
+    });
   }
   if(snap.list && typeof applyListSavedView === "function"){
     var lp = currentListViewParams();
@@ -543,6 +771,8 @@ $("searchClear").addEventListener("click", function(){
 });
 function setDueFilter(v){
   state.due = (state.due === v) ? null : v;
+  /* 截止期预设与自定义区间是同一维度的两种表达，不能叠加 */
+  if(state.due){ state.dueFrom = null; state.dueTo = null; state.noDue = false; }
   reloadFilteredViews();
 }
 $("chipOver").addEventListener("click", function(){ setDueFilter("over"); });
@@ -556,6 +786,8 @@ function clearFilters(){
   state.q = ""; state.owners = []; state.pris = []; state.cats = []; state.reqs = [];
   state.tags = []; state.types = []; state.versions = []; state.columns = []; state.completion = "";
   state.due = null; state.focus = false; state.blocked = false;
+  state.noDue = false; state.dueFrom = null; state.dueTo = null;
+  state.startFrom = null; state.startTo = null;
   searchInput.value = "";
   searchWrap.classList.remove("has");
   reloadFilteredViews();
@@ -575,11 +807,30 @@ selectedSummary.addEventListener("click", function(){
   clearFilters();
 });
 function handleFilterClick(e){
+  var dimBtn = e.target.closest("[data-dim-open]");
+  if(dimBtn){ openDimMenu(dimBtn.dataset.dimOpen, dimBtn); return; }
   var clear = e.target.closest("[data-clear-dim]");
   if(clear){
     var key = clear.dataset.clearDim;
     if(Array.isArray(state[key])) state[key] = [];
     reloadFilteredViews();
+    return;
+  }
+  var dimClear = e.target.closest("[data-dim-clear]");
+  if(dimClear){
+    state[dimClear.dataset.dimClear] = [];
+    reloadFilteredViews();
+    return;
+  }
+  if(e.target.closest("[data-clear-dates]")){
+    state.noDue = false; state.dueFrom = null; state.dueTo = null;
+    state.startFrom = null; state.startTo = null;
+    reloadFilteredViews();
+    return;
+  }
+  var preset = e.target.closest("[data-date-preset]");
+  if(preset){
+    applyDatePreset(preset.dataset.datePreset);
     return;
   }
   var o = e.target.closest("[data-owner]");
@@ -612,6 +863,8 @@ function handleFilterClick(e){
   if(e.target.closest("[data-mf-reset]")){
     state.owners = []; state.pris = []; state.types = []; state.versions = []; state.columns = [];
     state.cats = []; state.tags = []; state.reqs = []; state.blocked = false; state.completion = "";
+    state.noDue = false; state.dueFrom = null; state.dueTo = null;
+    state.startFrom = null; state.startTo = null;
     reloadFilteredViews();
     return;
   }
@@ -627,11 +880,43 @@ function handleFilterClick(e){
     return;
   }
 }
+/* 截止日期预设与区间、无截止日期三者互斥：后选的覆盖先选的，避免叠加出空结果 */
+function applyDatePreset(preset){
+  if(preset === "none"){
+    state.noDue = !state.noDue;
+    if(state.noDue){ state.dueFrom = null; state.dueTo = null; state.due = null; }
+  }else{
+    var range = dateRangeOf(preset);
+    if(!range) return;
+    if(state.dueFrom === range[0] && state.dueTo === range[1]){
+      state.dueFrom = null; state.dueTo = null;
+    }else{
+      state.dueFrom = range[0]; state.dueTo = range[1];
+      state.noDue = false; state.due = null;
+    }
+  }
+  reloadFilteredViews();
+}
 $("filterbar").addEventListener("click", handleFilterClick);
 /* 打开后菜单会被挂到 body 下，点击不再冒泡到筛选栏，需要单独监听 */
 moreFilterMenu.addEventListener("click", handleFilterClick);
 moreFilterMenu.addEventListener("input", function(e){
   if(e.target.closest("[data-mf-version-q]")) applyVersionFilter();
+});
+moreFilterMenu.addEventListener("change", function(e){
+  var inp = e.target.closest("[data-date]");
+  if(!inp) return;
+  var key = inp.dataset.date;
+  state[key] = inp.value || null;
+  if(key.indexOf("due") === 0){
+    if(state[key]){ state.noDue = false; }
+    state.due = null;
+  }
+  reloadFilteredViews();
+});
+dimMenu.addEventListener("click", handleFilterClick);
+dimMenu.addEventListener("input", function(e){
+  if(e.target.closest("[data-dim-q]")) applyDimSearch();
 });
 $("btnMoreFilter").addEventListener("click", function(){
   if(UI.popOpen(moreFilterMenu)){ UI.closeAllPops(); return; }
@@ -659,6 +944,15 @@ function parseViewParams(p){
   if(p.q !== undefined && p.q !== null && typeof p.q !== "string") return null;
   if(p.focus !== undefined && p.focus !== null && typeof p.focus !== "boolean") return null;
   if(p.blocked !== undefined && p.blocked !== null && typeof p.blocked !== "boolean") return null;
+  if(p.noDue !== undefined && p.noDue !== null && typeof p.noDue !== "boolean") return null;
+  function dateStr(v){
+    if(v === undefined || v === null || v === "") return "";
+    if(typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    return v;
+  }
+  var dueFrom = dateStr(p.dueFrom), dueTo = dateStr(p.dueTo),
+      startFrom = dateStr(p.startFrom), startTo = dateStr(p.startTo);
+  if(dueFrom === null || dueTo === null || startFrom === null || startTo === null) return null;
   var preset = (p.preset === undefined || p.preset === null) ? "all" : p.preset;
   var group = (p.group === undefined || p.group === null) ? "none" : p.group;
   var subgroup = (p.subgroup === undefined || p.subgroup === null) ? "none" : p.subgroup;
@@ -676,6 +970,8 @@ function parseViewParams(p){
     columns: columns,
     completion: p.completion === "open" || p.completion === "done" ? p.completion : "",
     due: (p.due === "over" || p.due === "today" || p.due === "soon") ? p.due : null,
+    noDue: p.noDue === true,
+    dueFrom: dueFrom, dueTo: dueTo, startFrom: startFrom, startTo: startTo,
     focus: p.focus === true,
     blocked: p.blocked === true,
     doneScope: p.doneScope === "all" ? "all" : "week",
@@ -704,7 +1000,7 @@ function pruneUnknownCats(cats){
   if(!cache.length || !cats.length) return cats;
   var known = {};
   cache.forEach(function(c){ known[c.id] = 1; });
-  return cats.filter(function(n){ return known[n]; });
+  return cats.filter(function(n){ return n === "__none" || known[n]; });
 }
 function applyView(v){
   var p;
@@ -716,6 +1012,9 @@ function applyView(v){
   state.reqs = f.reqs; state.tags = f.tags; state.types = f.types; state.versions = f.versions;
   state.columns = f.columns; state.completion = f.completion;
   state.due = f.due; state.focus = f.focus;
+  state.noDue = f.noDue;
+  state.dueFrom = f.dueFrom || null; state.dueTo = f.dueTo || null;
+  state.startFrom = f.startFrom || null; state.startTo = f.startTo || null;
   state.blocked = f.blocked;
   state.doneScope = f.doneScope;
   markHumanSearchInput();
@@ -839,9 +1138,15 @@ function updateMobFilterSummary(){
   if(state.q) bits.push("搜索「" + state.q + "」");
   if(state.focus) bits.push("今日聚焦");
   if(state.due) bits.push(dueFilterLabel(state.due));
+  if(state.noDue) bits.push("无截止日期");
+  var dueRange = dateRangeText(state.dueFrom, state.dueTo);
+  if(dueRange) bits.push("截止 " + dueRange);
+  var startRange = dateRangeText(state.startFrom, state.startTo);
+  if(startRange) bits.push("开始 " + startRange);
   if(state.blocked) bits.push("仅看阻塞");
   var n = selectedFilterCount() - (state.q ? 1 : 0) - (state.focus ? 1 : 0)
-    - (state.due ? 1 : 0) - (state.blocked ? 1 : 0);
+    - (state.due ? 1 : 0) - (state.blocked ? 1 : 0) - (state.noDue ? 1 : 0)
+    - ((state.dueFrom || state.dueTo) ? 1 : 0) - ((state.startFrom || state.startTo) ? 1 : 0);
   if(n > 0) bits.push(n + " 项筛选");
   var text = bits.length ? (mobFilterLabel() + " · " + bits.join(" · ")) : (mobFilterLabel() + " · 全部");
   mobFilterText.textContent = text;
@@ -983,6 +1288,8 @@ document.addEventListener("keydown", function(e){
 window.addEventListener("ds:view-change", function(){
   /* 视图切换后按新页面的口径重算「视图」入口与操作区：我的工作不保留工作项列表的视图 */
   renderViews();
+  /* 平铺维度的可见性随视图变化（我的工作不展示负责人），切换后立即重排 */
+  syncDimButtons();
   /* 面板是按当前视图拼装的（列表的视图设置块会搬进去）：换页就收起，避免旧控制条留在新页面 */
   if(sheetOpen) closeMobFilterSheet();
 });

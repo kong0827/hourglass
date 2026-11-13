@@ -22,6 +22,11 @@ var FILTER_KEYS = [
   { k: "columns", kind: "list", s: "columns" },
   { k: "completion", kind: "text" },
   { k: "due", kind: "text" },
+  { k: "noDue", kind: "bool" },
+  { k: "dueFrom", kind: "text" },
+  { k: "dueTo", kind: "text" },
+  { k: "startFrom", kind: "text" },
+  { k: "startTo", kind: "text" },
   { k: "focus", kind: "bool" },
   { k: "blocked", kind: "bool" },
   { k: "doneScope", kind: "text", always: true }
@@ -52,7 +57,9 @@ function currentFilterParams(){
     var v = state[f.s || f.k];
     if(f.kind === "list") p[f.k] = (v || []).slice();
     else if(f.kind === "bool") p[f.k] = !!v;
-    else p[f.k] = v == null ? "" : v;
+    else if(f.always) p[f.k] = v;
+    /* 空值不写成 ""：视图参数按枚举白名单校验，空串会被判为非法值 */
+    else p[f.k] = v || null;
   });
   return p;
 }
