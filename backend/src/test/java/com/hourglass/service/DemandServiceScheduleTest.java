@@ -447,6 +447,47 @@ class DemandServiceScheduleTest {
         assertEquals(5L, service.update("U1", "W1", "D1", body).getRevision());
     }
 
+    @Test
+    void scheduledUpdateAppliesContentButKeepsTitleAndSchedule() {
+        demand.setStatus("plan");
+        demand.setTitle("原标题");
+        demand.setPriority("P1");
+        demand.setExpectDate(LocalDate.of(2026, 11, 20));
+        demand.setPlannedStart(LocalDate.of(2026, 10, 11));
+        demand.setPlannedEnd(LocalDate.of(2026, 11, 10));
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R1");
+        body.setTitle("改掉的标题");
+        body.setPriority("P3");
+        body.setExpectDate(LocalDate.of(2027, 1, 1));
+        body.setPlannedStart(LocalDate.of(2027, 2, 1));
+        body.setPlannedEnd(LocalDate.of(2027, 2, 2));
+        body.setDescription("补充的描述");
+        body.setRevision(4L);
+
+        Demand out = service.update("U1", "W1", "D1", body);
+
+        assertEquals("补充的描述", out.getDescription());
+        assertEquals("原标题", out.getTitle());
+        assertEquals("P1", out.getPriority());
+        assertEquals(LocalDate.of(2026, 11, 20), out.getExpectDate());
+        assertEquals(LocalDate.of(2026, 10, 11), out.getPlannedStart());
+        assertEquals(LocalDate.of(2026, 11, 10), out.getPlannedEnd());
+    }
+
+    @Test
+    void closedDemandCannotBeEditedBeforeRestore() {
+        demand.setStatus("closed");
+        DemandSaveRequest body = new DemandSaveRequest();
+        body.setReqId("R1");
+        body.setTitle("需求");
+        body.setRevision(4L);
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.update("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {403, 404})
     void ordinaryUpdateRevalidatesWritePermissionAfterProjectAndDemandLocks(int code) {

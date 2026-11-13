@@ -154,8 +154,11 @@ public class DemandService {
             q.setStatus(status);
             q.setOffset(0);
             q.setLimit(safeLimit);
-            int matched = "plan".equals(status) && q.getDeliveryStage() != null
-                    ? demandMapper.countPage(q) : countOf(counts, status);
+            // 阶段只从已排期派生，非 plan 行恒为 NULL，带进其他列会把整列清空
+            if (!"plan".equals(status)) {
+                q.setDeliveryStage(null);
+            }
+            int matched = q.getDeliveryStage() != null ? demandMapper.countPage(q) : countOf(counts, status);
             List<Demand> items = matched == 0 ? new java.util.ArrayList<Demand>() : demandMapper.selectPage(q);
             for (Demand d : items) {
                 fillWsjf(d);
@@ -822,7 +825,7 @@ public class DemandService {
         return getVisible(workspaceId, userId, d.getId());
     }
 
-    /** 仅待评审状态可编辑（进入流转后以评审结论为准；被拒需求 reopen 后可再改） */
+    /** 待评审可整单编辑；已通过 / 已排期只补录说明类内容，标题与排期口径仍由原动作维护；已关闭需先恢复 */
     @Transactional
     public Demand update(String userId, String workspaceId, String id, DemandSaveRequest req) {
         Demand initial = requireDemand(workspaceId, id);
@@ -837,18 +840,24 @@ public class DemandService {
         Demand d = requireDemandForUpdate(workspaceId, id);
         projectAccess.assertWriteForUpdate(workspaceId, userId, d.getReqId());
         requireRevision(d, req.getRevision(), true);
-        if (!"review".equals(d.getStatus())) {
-            throw AppException.badRequest("需求已进入流转（" + statusName(d.getStatus()) + "），不能直接编辑");
+        boolean fullEdit = "review".equals(d.getStatus());
+        if (!fullEdit) {
+            requireQuickEditable(d);
         }
         if (!initial.getReqId().equals(d.getReqId())) {
             throw AppException.conflict("需求所属项目已变更，请刷新后重试");
         }
         Map<String, Object> before = snapshot(d);
-        applyFields(d, req);
+        if (fullEdit) {
+            applyFields(d, req);
+        } else {
+            applyContentFields(d, req);
+        }
         save(d);
         logChange(d, userId, "update", null, null, before);
         notifyCreator(d, userId, "需求「" + d.getTitle() + "」已被编辑",
-                "需求内容有更新（仍处于待评审）");
+                fullEdit ? "需求内容有更新（仍处于待评审）"
+                        : "需求内容有更新（" + statusName(d.getStatus()) + "，标题与排期未变）");
         return getVisible(workspaceId, userId, id);
     }
 
@@ -1375,6 +1384,19 @@ public class DemandService {
         validatePriority(req.getPriority());
         d.setPlannedStart(req.getPlannedStart());
         d.setPlannedEnd(req.getPlannedEnd());
+        d.setAcceptText(Texts.trimToNull(req.getAcceptText()));
+        d.setWsjfBusiness(req.getWsjfBusiness());
+        d.setWsjfUrgency(req.getWsjfUrgency());
+        d.setWsjfRisk(req.getWsjfRisk());
+        d.setWsjfEffort(req.getWsjfEffort());
+        fillWsjf(d);
+    }
+
+    /** 已进入流转时的内容补录：只动说明与分类字段，标题、项目、类型、优先级和日期保持原值 */
+    private void applyContentFields(Demand d, DemandSaveRequest req) {
+        d.setDescription(Texts.trimToNull(req.getDescription()));
+        d.setSource(Texts.trimToNull(req.getSource()));
+        d.setCategoryId(validCategoryId(d.getWorkspaceId(), d.getReqId(), req.getCategoryId()));
         d.setAcceptText(Texts.trimToNull(req.getAcceptText()));
         d.setWsjfBusiness(req.getWsjfBusiness());
         d.setWsjfUrgency(req.getWsjfUrgency());
