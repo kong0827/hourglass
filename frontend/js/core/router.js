@@ -43,12 +43,13 @@ function enterSettingsLazy(isCurrent){
 var VIEWS = {
   mine:     { title:"我的工作", sub:"跨空间汇总「分派给我」的待办（按账号归属）", enter:enterMineView },
   board:    { title:"工作项", sub:"看板视图：按列流转；同组可切到列表、日历与甘特", enter:null },
+  workcolumn: { title:"工作项", sub:"列状态工作页：当前列的时间窗、聚合指标与分页明细", enter:lazyEnter("workcolumn", "enterWorkColumn") },
   list:     { title:"工作项", sub:"列表视图：沿用当前筛选，点击行打开详情抽屉", enter:enterListView },
   calendar: { title:"工作项", sub:"日历视图：按 [开始日期, 实际结束日] 逐日铺开", enter:enterCalendarView },
   gantt:    { title:"工作项", sub:"甘特视图：按开始/截止日期排布；拖动条改期", enter:lazyEnter("gantt", "enterGanttView") },
   projects: { title:"项目", sub:"项目列表与全局健康度；点项目名进入项目驾驶舱", enter:lazyEnter("projects", "enterProjectsView") },
   phase:    { title:"版本", sub:"按阶段或版本看投入、偏差与准时率；发布日程跨项目汇总计划；全部项目做首版与迭代对比", enter:lazyEnter("phase", "enterPhaseView") },
-  demands:  { title:"需求池",   sub:"原始需求、评审与排期：待评审 → 已通过 → 已排期；拒绝后可重新打开", enter:lazyEnter("demands", "enterDemandsView") },
+  demands:  { title:"需求池",   sub:"四态看板与主状态工作页：待评审 → 已通过 → 已排期；已关闭保留原因与恢复去向", enter:lazyEnter("demands", "enterDemandsView") },
   requirements: { title:"文档", sub:"需求文档、技术方案与测试验收：支持多级文档树，可关联需求与工作项", enter:enterRequirementsLazy },
   testcases: { title:"测试", sub:"一条质量链路：用例 → 缺陷 → 测试计划 → 覆盖矩阵 → 测试报告", enter:lazyEnter("testcases", "enterTestCasesView") },
   branches: { title:"分支", sub:"一条分支从开发到发布：改状态就留时间，谁卡在哪一步一眼看到", enter:enterBranchesView },
@@ -67,7 +68,7 @@ var VIEWS = {
 var NAV_OF = {
   mine:"mine", review:"review",
   demands:"demands", projects:"projects", portfolio:"projects", project:"projects", phase:"phase",
-  board:"workitems", list:"workitems", calendar:"workitems", gantt:"workitems",
+  board:"workitems", list:"workitems", calendar:"workitems", gantt:"workitems", workcolumn:"workitems",
   requirements:"requirements", testcases:"testcases", branches:"branches",
   analysis:"insight", report:"insight",
   workload:"workload", risks:"risks"
@@ -106,7 +107,7 @@ var SUBNAV = {
   ]
 };
 /* 详情页归属的父级子导航项：驾驶舱从项目列表进入，用父项标出所在分区 */
-var SUBNAV_PARENT = { project:"projects" };
+var SUBNAV_PARENT = { project:"projects", workcolumn:"board" };
 /* 移动端「更多视图」的分组顺序，与侧栏保持一致 */
 var NAV_GROUPS = [
   { title:"我的", items:[["review","周回顾"]] },
@@ -117,7 +118,7 @@ var NAV_GROUPS = [
 ];
 var TAB_OF = {
   mine: "mine", review: "mine",
-  board: "board", list: "board", calendar: "board", gantt: "board", branches: "board",
+  board: "board", list: "board", calendar: "board", gantt: "board", branches: "board", workcolumn: "board",
   projects: "projects", requirements: "projects", demands: "projects", testcases: "projects",
   portfolio: "projects", project: "projects", phase: "projects",
   messages: "messages",
@@ -282,14 +283,23 @@ function syncViewHash(name){
   if(suppressHashSync) return;
   var h = "#/" + name;
   if(window.location.hash === h) return;
-  /* 分支状态深链：保留 ?status=&from=，否则 showView 会把来源与筛选条件一起抹掉 */
-  if(name === "branches" && String(window.location.hash || "").indexOf(h + "?") === 0) return;
+  /* 分支、工作项列与需求主状态工作页深链：保留查询参数，避免 showView 抹掉下钻位置 */
+  if((name === "branches" || name === "workcolumn" || name === "demands")
+      && String(window.location.hash || "").indexOf(h + "?") === 0) return;
   /* pushState：让浏览器后退能回到上一个视图；file:// 等受限环境降级为直接改 hash */
   try{ history.pushState(null, "", h); }
   catch(e){ try{ window.location.hash = h; }catch(e2){ /* 完全不可用则忽略 */ } }
 }
+var demandRouteHash = "";
+function enterDemandRoute(){
+  demandRouteHash = String(window.location.hash || "");
+  loadView("demands").then(function(m){
+    if(viewFromHash() === "demands") m.enterDemandsView();
+  });
+}
 window.addEventListener("popstate", function(){
   var n = viewFromHash();
+  if(n === "demands") demandRouteHash = String(window.location.hash || "");
   /* 后退时正在编辑需求且未保存：留在编辑页并问是否保存，避免静默丢正文 */
   var reqMod = viewModule("requirements");
   if(n !== activeView && activeView === "requirements" && reqMod && reqMod.isReqDocEditing()){
@@ -300,9 +310,20 @@ window.addEventListener("popstate", function(){
   if(n !== activeView){
     suppressHashSync = true;
     try{ showView(n); } finally { suppressHashSync = false; }
+  }else if(n === "workcolumn"){
+    /* 同一视图内只改了 ?col=&range=：把 hash 变化交给工作页自己处理 */
+    var wcMod = viewModule("workcolumn");
+    if(wcMod && wcMod.refreshFromHash) wcMod.refreshFromHash();
+  }else if(n === "demands"){
+    enterDemandRoute();
   }
   /* 返回到带 ?task= 的历史项时直接打开对应任务 */
   handleDeepLink();
+});
+window.addEventListener("hashchange", function(){
+  if(activeView !== "demands" || viewFromHash() !== "demands") return;
+  if(String(window.location.hash || "") === demandRouteHash) return;
+  enterDemandRoute();
 });
 function refreshActiveView(opts){
   /* 看板在 SSE 流程里已由 refreshBoardPreserving 刷新，这里只在手动下拉刷新时兜底 */

@@ -8,7 +8,7 @@ import { boardParams, updateBrand } from "../core/filters.js";
 import { icon } from "../core/icons.js";
 import { isMobile } from "../core/layout.js";
 import { renderAlertBar } from "../core/notifications.js";
-import { activeView } from "../core/router.js";
+import { activeView, showView } from "../core/router.js";
 import { loadPriorities } from "../core/priorities.js";
 import { canEditReq, canEditTask, catTag, dueFlag, dueMetaClass, dueState, filterOn, progressOf, rt, safeColor, state, tagChip, taskById, taskCacheExtra, timerAllowed, totalTaskCount } from "../core/state.js";
 import { loadRunningTimer, openCardMenu, openDuePopover, toggleTaskDone, toggleTaskTimer } from "../core/task-actions.js";
@@ -21,10 +21,12 @@ import { branchNameById } from "./branches.js";
 import { loadView } from "../core/view-loader.js";
 import { loadReqDocs, openReqDocAndJump, reqDocNameById } from "./requirements.js";
 import { taskMemberLabel, syncTaskMemberTooltips } from "../lib/member-labels.js";
+
+/* 已完成是长期累积数据：看板只放最近 N 条，完整回看进「列状态工作页」 */
+var DONE_BOARD_PREVIEW = 6;
 function syncBoardMemberTooltips(){
   var tasks = [];
   if(state.board && state.board.columns) Object.keys(state.board.columns).forEach(function(k){ tasks = tasks.concat(state.board.columns[k].items || []); });
-  tasks = tasks.concat(state.doneExtra || []);
   syncTaskMemberTooltips(board, tasks);
 }
 ["ds:project-roles-changed", "ds:member-company-changed", "ds:member-job-title-changed", "ds:member-roster-changed"].forEach(function(name){
@@ -54,6 +56,14 @@ function showBoardError(msg){
     UI.errorState(msg) + '</div>';
   bindRetry(board, function(){ state.board = null; loadBoard({animate:true}); });
 }
+function openColumnWorkpage(colId, range){
+  if(!colId) return;
+  var hash = "#/workcolumn?col=" + encodeURIComponent(colId);
+  if(range) hash += "&range=" + encodeURIComponent(range);
+  try{ history.pushState(null, "", hash); }
+  catch(e){ window.location.hash = hash; }
+  showView("workcolumn");
+}
 function loadBoard(opts){
   opts = opts || {};
   var seq = ++state.loadSeq;
@@ -61,12 +71,11 @@ function loadBoard(opts){
     if(!state.board) showBoardSkeleton();
     else { board.classList.add("busy"); UI.syncBusy(true); opts._busy = true; }
   }
-  return Promise.all([API.get("/api/board", boardParams()), loadPriorities()]).then(function(rs){
+  return Promise.all([API.get("/api/board", boardParams({doneLimit: DONE_BOARD_PREVIEW})), loadPriorities()]).then(function(rs){
     var data = rs[0];
     if(opts._busy) UI.syncBusy(false);
     if(seq !== state.loadSeq) return;
     state.board = data;
-    state.doneExtra = [];
     state.boardGen++;
     syncColumns(data.columnDefs);
     buildFormControls();
@@ -110,33 +119,6 @@ function loadReqs(){
     }
   });
 }
-function loadMoreDone(){
-  var cd = state.board && state.board.columns.done;
-  if(!cd || !cd.hasMore) return Promise.resolve(false);
-  var gen = state.boardGen;
-  var offset = cd.items.length + state.doneExtra.length;
-  var listEl = board.querySelector('.board-col[data-col="done"] .board-col-body');
-  if(listEl) listEl.classList.add("loading-more");
-  UI.syncBusy(true);
-  return API.get("/api/tasks/done", boardParams({doneLimit:20, doneOffset:offset})).then(function(page){
-    UI.syncBusy(false);
-    if(listEl) listEl.classList.remove("loading-more");
-    if(gen !== state.boardGen) return false;
-    var known = {};
-    cd.items.forEach(function(t){ known[t.id] = 1; });
-    state.doneExtra.forEach(function(t){ known[t.id] = 1; });
-    (page.items || []).forEach(function(t){ if(!known[t.id]) state.doneExtra.push(t); });
-    cd.matched = page.matched;
-    cd.hasMore = (cd.items.length + state.doneExtra.length) < page.matched;
-    render({animate:false});
-    return true;
-  }).catch(function(ex){
-    UI.syncBusy(false);
-    if(listEl) listEl.classList.remove("loading-more");
-    if(gen === state.boardGen) toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
-    return false;
-  });
-}
 function loadMoreColumn(colId){
   var cd = state.board && state.board.columns[colId];
   if(!cd || !cd.hasMore) return Promise.resolve(false);
@@ -166,16 +148,7 @@ function loadMoreColumn(colId){
   });
 }
 function refreshBoardPreserving(){
-  var wanted = state.doneExtra.length;
-  loadBoard({silent:true}).then(function(){
-    if(wanted === 0) return;
-    var tries = 0;
-    (function step(){
-      var cd = state.board && state.board.columns ? state.board.columns.done : null;
-      if(state.doneExtra.length >= wanted || !cd || !cd.hasMore || tries++ > 10) return;
-      loadMoreDone().then(function(ok){ if(ok) step(); });
-    })();
-  });
+  loadBoard({silent:true});
 }
 function cardHTML(t, idx){
   var s = dueState(t);
@@ -377,7 +350,6 @@ function renderMobileBoard(opts){
 
   var cd = state.board.columns[active] || {items:[], matched:0, total:0, allTotal:0, hasMore:false};
   var items = (cd.items || []).slice();
-  if(active === "done" && state.doneExtra.length) items = items.concat(state.doneExtra);
   var listHTML;
   if(!items.length){
     var emptyTitle = filterOn() ? "无匹配工作项" : "这一列还没有工作项";
@@ -386,12 +358,17 @@ function renderMobileBoard(opts){
   }else{
     listHTML = items.map(function(t){ return cardHTML(t, 0); }).join("");
   }
-  if(cd.hasMore){
+  if(active !== "done" && cd.hasMore){
     listHTML += '<button class="btn mob-load-more" type="button" data-more="1">加载更多（还有 ' +
       Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
   }
+  var activeCol = colMeta(active) || {};
+  var stageLink = '<button class="btn mob-stage-link" type="button" data-col-open="' + esc(active) + '"' +
+    (active === "done" ? ' data-col-range="all"' : '') + '>' +
+    '进入「' + esc(activeCol.name || active) + '」状态工作页' +
+    (active === "done" ? '（共 ' + (cd.allTotal || 0) + ' 条）' : '') + '</button>';
 
-  board.innerHTML = '<div class="mob-board">' + seg +
+  board.innerHTML = '<div class="mob-board">' + seg + stageLink +
     '<div class="mob-board-list" role="list">' + listHTML + cardAddHTML(active) + '</div></div>';
 
   var mobSeg = board.querySelector(".mob-col-seg");
@@ -453,7 +430,6 @@ function render(opts){
   COLUMNS.forEach(function(c){
     var cd = state.board.columns[c.id] || {items:[], matched:0, total:0, allTotal:0, hasMore:false};
     var items = cd.items.slice();
-    if(c.id === "done" && state.doneExtra.length) items = items.concat(state.doneExtra);
     var collapsed = !!state.collapsedCols[c.id];
 
     var col = document.createElement("section");
@@ -466,6 +442,9 @@ function render(opts){
         (isCustom ? ' role="button" tabindex="0" data-col-color="' + esc(c.id) + '" title="修改列颜色"' : '') + '></span>' +
       '<span class="col-name" data-col-rename="' + esc(c.id) + '"' +
         (c.done ? '' : ' role="button" tabindex="0" title="点击改名"') + '>' + esc(c.name) + '</span>' +
+      '<button class="icon-btn sm col-open-btn" type="button" data-col-open="' + esc(c.id) + '"' +
+        (c.done ? ' data-col-range="all"' : '') +
+        ' title="进入「' + esc(c.name) + '」状态工作页" aria-label="进入「' + esc(c.name) + '」状态工作页">' + icon("extlink", 14) + '</button>' +
       '<span class="col-count" aria-live="polite">' + (filterOn() ? (cd.matched + "/" + cd.total) : cd.total) + '</span>' +
       '<span class="sp"></span>' +
       '<button class="icon-btn sm" type="button" data-col-add="' + esc(c.id) + '" title="在「' + esc(c.name) + '」新建工作项" aria-label="在「' + esc(c.name) + '」新建工作项">' + icon("plus", 14) + '</button>' +
@@ -477,13 +456,13 @@ function render(opts){
     if(!items.length){
       var emptyText, emptyIc;
       if(filterOn()){ emptyText = "无匹配工作项"; emptyIc = "filterOff"; }
-      else if(c.done && state.doneScope === "week" && cd.allTotal){ emptyText = "本周还没有完成的工作项"; emptyIc = "checkCircle"; }
+      else if(c.done && !cd.total && cd.allTotal){ emptyText = "本周还没有完成的工作项"; emptyIc = "checkCircle"; }
       else { emptyText = "拖动卡片到这里"; emptyIc = "inbox"; }
       body += UI.colEmpty(emptyText, emptyIc);
     }else{
       items.forEach(function(t, i){ body += cardHTML(t, i); });
     }
-    if(cd.hasMore){
+    if(!c.done && cd.hasMore){
       body += '<button class="col-more" type="button" data-more="1">加载更多（还有 ' +
         Math.max((cd.matched || 0) - items.length, 0) + ' 项）</button>';
     }
@@ -492,12 +471,14 @@ function render(opts){
 
     var foot = "";
     if(c.done){
-      var scopeLabel = state.doneScope === "week"
-        ? ("仅本周 ⇄ 显示全部（共 " + cd.allTotal + "）")
-        : "显示全部 ⇄ 仅本周";
-      foot = '<div class="col-foot">' +
-        '<button class="col-scope' + (state.doneScope === "week" ? " on" : "") + '" type="button" data-scope="1" title="切换「仅本周 / 全部」">' +
-          esc(scopeLabel) + '</button>' +
+      var scopeDone = cd.total || 0;
+      var allDone = cd.allTotal || 0;
+      var scopeLabel = state.doneScope === "all" ? "全部完成" : "本周完成";
+      var previewBase = filterOn() ? (cd.matched || 0) : scopeDone;
+      var previewNote = previewBase > DONE_BOARD_PREVIEW ? ' · 仅显示前 ' + DONE_BOARD_PREVIEW + ' 条' : '';
+      foot = '<div class="col-foot col-foot-split">' +
+        '<span class="col-foot-note">' + scopeLabel + ' ' + scopeDone + ' 项' + previewNote + '</span>' +
+        '<button class="col-foot-link" type="button" data-col-open="' + esc(c.id) + '" data-col-range="all">查看全部 ' + allDone + ' 条 →</button>' +
       '</div>';
     }
 
@@ -862,16 +843,6 @@ function optimisticMove(id, toCol, beforeId){
     }
     if(t) break;
   }
-  if(!t){
-    for(var k = 0; k < state.doneExtra.length; k++){
-      if(state.doneExtra[k].id === id){
-        t = state.doneExtra[k];
-        cdFrom = state.board.columns.done;
-        state.doneExtra.splice(k,1);
-        break;
-      }
-    }
-  }
   if(!t) return;
   if(cdFrom){
     cdFrom.matched = Math.max(0, cdFrom.matched - 1);
@@ -904,6 +875,8 @@ document.addEventListener("pointercancel", onPointerCancel);
 board.addEventListener("click", function(e){
   var mobTab = e.target.closest("[data-mob-col]");
   if(mobTab){ mobCol = mobTab.dataset.mobCol; render({animate:false}); return; }
+  var colOpen = e.target.closest("[data-col-open]");
+  if(colOpen){ openColumnWorkpage(colOpen.dataset.colOpen, colOpen.dataset.colRange); return; }
   var fold = e.target.closest("[data-col-fold]");
   if(fold){
     var cid = fold.dataset.colFold;
@@ -919,20 +892,10 @@ board.addEventListener("click", function(e){
   if(colorDot){ openColColorPop(colorDot, colorDot.dataset.colColor); return; }
   var rename = e.target.closest("[data-col-rename]");
   if(rename){ startColRename(rename, rename.dataset.colRename); return; }
-  var sc = e.target.closest("[data-scope]");
-  if(sc){
-    state.doneScope = (state.doneScope === "week") ? "all" : "week";
-    saveViewState();
-    loadBoard({animate:true}).then(function(){
-      toast(state.doneScope === "week" ? "已完成列：仅显示本周" : "已完成列：显示全部记录");
-    });
-    return;
-  }
   var more = e.target.closest("[data-more]");
   if(more){
     var colEl = more.closest(".board-col");
-    var cid = colEl ? colEl.dataset.col : mobileColId();
-    if(cid === "done") loadMoreDone(); else loadMoreColumn(cid);
+    loadMoreColumn(colEl ? colEl.dataset.col : mobileColId());
     return;
   }
   var dueBtn = e.target.closest("[data-due-pop]");

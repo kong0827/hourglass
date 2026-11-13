@@ -55,8 +55,14 @@ function boot(){
   var deepNewTask = hashParam("new") === "1";   // 助手「新建工作项」入口
   /* 空 hash 固定落「我的工作」；有 hash 说明是刷新、收藏或分享链接，尊重原视图 */
   var startView = viewFromHash();
-  try{ history.replaceState(null, "", "#/" + startView); }
-  catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
+  /* 工作页深链带 query：空 hash 才落默认视图，带参数时保留原 hash */
+  var startHash = String(window.location.hash || "");
+  var keepHash = (startView === "branches" || startView === "workcolumn" || startView === "demands")
+    && startHash.indexOf("#/" + startView + "?") === 0;
+  if(!keepHash){
+    try{ history.replaceState(null, "", "#/" + startView); }
+    catch(e){ /* file:// 等受限环境：跳过，不影响功能 */ }
+  }
   /* 视图初始化可能触发低频模块 import / 网络请求，等鉴权通过后再进入 */
 
   /* O-21：快捷键面板首次登录自动展开一次，之后尊重用户的折叠状态。
