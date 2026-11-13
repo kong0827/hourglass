@@ -42,6 +42,7 @@ var SHELL = [
   "js/core/list-preferences.js",
   "js/core/mobile-rules.js",
   "js/core/nav-telemetry.js",
+  "js/core/no-autofill.js",
   "js/core/gestures.js",
   "js/core/notifications.js",
   "js/core/priorities.js",

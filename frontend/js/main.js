@@ -2,6 +2,8 @@
 
 /* 必须第一个：把抽屉/弹窗结构注入 DOM，供 core/dom.js 顶层取元素 */
 import "./core/templates/index.js";
+/* 模板注入后再统一给输入框加禁用自动填充标记（含后续动态插入的表单） */
+import "./core/no-autofill.js";
 import { initNavTelemetry } from "./core/nav-telemetry.js";
 import { initMobileGestures } from "./core/gestures.js";
 import { initAssistant } from "./core/assistant.js";

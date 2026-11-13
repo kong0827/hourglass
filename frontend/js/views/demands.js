@@ -342,6 +342,8 @@ function enterDemandsView(){
     pendingFocusReq = null;
   }
   syncDemControls();
+  /* 浏览器可能无视 autocomplete，把上次搜索词直接写回输入框；以 demSmart.q 为准清理 */
+  [0, 300, 1000, 2000, 4000].forEach(function(ms){ setTimeout(reconcileDemSearchInputs, ms); });
   loadViews().then(renderDemTabs);
   listPrefs.load("demand-pool").then(function(){
     if(rt.reqsLoaded){
@@ -1449,6 +1451,17 @@ function renderDemTabs(){
   }).join("");
   demTabsBox.innerHTML = html;
 }
+/* 输入框里的值必须与应用状态一致：没有搜索词时清掉浏览器回填的残留 */
+function reconcileDemSearchInputs(){
+  if(demSmart.q) return;
+  [demSearchInput, demBoardInput].forEach(function(el){
+    if(el && el.value && el !== document.activeElement) el.value = "";
+  });
+}
+window.addEventListener("pageshow", reconcileDemSearchInputs);
+window.addEventListener("focus", reconcileDemSearchInputs);
+var demSearchWatch = setInterval(reconcileDemSearchInputs, 1000);
+setTimeout(function(){ clearInterval(demSearchWatch); }, 30000);
 function syncDemControls(){
   if(demSmartBar){
     var g = demSmartBar.querySelector("[data-dem-group]");
@@ -1471,7 +1484,8 @@ function saveDemState(){
       wsId: ws,
       view: {
         current: demSmart.current, preset: demSmart.preset, group: demSmart.group, subgroup: demSmart.subgroup, sort: demSmart.sort,
-        q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(),
+        /* 关键词属于临时查询上下文，不跨会话恢复 */
+        pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(),
         cats: demSmart.cats.slice(), reqs: demSmart.reqs.slice(), boardStage: demBoardStage,
         gantt: { scale: demGantt.scale, rangeMode: demGantt.rangeMode, zoomDayW: demGantt.zoomDayW }
       }
@@ -1510,7 +1524,8 @@ function restoreDemState(){
   demSmart.kinds = demStrArr(v.kinds);
   demSmart.cats = demStrArr(v.cats);
   demSmart.reqs = demStrArr(v.reqs);
-  demSmart.q = typeof v.q === "string" ? v.q : "";
+  /* 旧快照里的关键词不再恢复，避免登录/刷新后搜索框自动出现上次的词 */
+  demSmart.q = "";
   demBoardStage = v.boardStage === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === v.boardStage; }) ? (v.boardStage || "all") : "all";
   if(v.gantt && typeof v.gantt === "object"){
     if(["day", "week", "month"].indexOf(v.gantt.scale) !== -1) demGantt.scale = v.gantt.scale;
