@@ -96,11 +96,24 @@ import { icon } from "./icons.js";
     ).filter(function (el) { return el.offsetParent !== null || el === document.activeElement; });
   }
 
+  /* 弹窗统一 z-index 200，同层时按 DOM 顺序叠放；运行时 append 的弹窗排在 #dlgConfirm
+     之后，会把确认框压在下面（表现为"点了没反应"）。这里让每个新弹窗压在当前最上层之上。 */
+  function topModalZ() {
+    var z = 200;
+    modalEls().forEach(function (m) {
+      if (!m.classList.contains("open")) return;
+      var v = parseInt(m.style.zIndex, 10);
+      if (v > z) z = v;
+    });
+    return z;
+  }
+
   function openModal(m, focusSel) {
     if (!m) return;
     /* 所有弹窗共用同一套：焦点陷阱、遮罩关闭、焦点恢复；不再依赖手工在白名单里登记 */
     if (!m.__uiWired) { m.__uiWired = true; wireModal(m, function () { requestCloseModal(m); }); }
     lastFocus = document.activeElement;
+    m.style.zIndex = String(topModalZ() + 1);
     m.classList.add("open");
     var target = focusSel ? m.querySelector(focusSel) : (m.querySelector("input:not([type=hidden]),textarea,select") || focusables(m)[0]);
     setTimeout(function () { try { if (target) target.focus(); } catch (e) { /* noop */ } }, 40);
@@ -108,6 +121,7 @@ import { icon } from "./icons.js";
   function closeModal(m) {
     if (!m) return;
     m.classList.remove("open");
+    m.style.zIndex = "";
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* noop */ } }
     lastFocus = null;
     /* showPrompt 等"等待用户输入"的弹窗靠这个回调把 Promise 收口 */
@@ -286,6 +300,10 @@ import { icon } from "./icons.js";
     if (el.parentNode !== document.body) document.body.appendChild(el);
     el.style.position = "fixed";
     el.style.visibility = "hidden";
+    /* 浮层挂在 body 上，弹窗（.modal-layer）层级更高会把它整个盖住，
+       表现为"点了按钮没反应"；有弹窗时抬到最上层弹窗之上 */
+    var raised = anyModalOpen();
+    if (raised) el.style.zIndex = String(Math.max(260, topModalZ() + 1));
 
     function place() {
       var r = anchor.getBoundingClientRect();
@@ -320,6 +338,7 @@ import { icon } from "./icons.js";
       el.hidden = true;
       anchor.setAttribute("aria-expanded", "false");
       el.style.left = el.style.top = el.style.width = "";
+      if (raised) el.style.zIndex = "";
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("scroll", onScroll, true);

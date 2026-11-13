@@ -661,7 +661,14 @@ function saveProjCatRow(id){
   if(!row) return;
   var name = row.querySelector("[data-pcat-name]").value.trim();
   var color = row.querySelector("[data-pcat-color]").value;
-  if(!name){ toast("模块名不能为空", "warn"); loadProjCats(projCatReqId); return; }
+  if(!name){
+    toast("模块名不能为空", "warn");
+    /* 只回填旧值，不整段重绘：重绘会拆掉行，紧接其后的点击（删除/排序）随按钮一起丢失 */
+    var old = null;
+    for(var i = 0; i < projCatCache.length; i++) if(projCatCache[i].id === id) old = projCatCache[i];
+    row.querySelector("[data-pcat-name]").value = old ? old.name : "";
+    return;
+  }
   API.put("/api/categories/" + encodeURIComponent(id), { name: name, color: color }).then(function(){
     toast("已更新模块「" + name + "」", "fs");
     loadProjCats(projCatReqId);
