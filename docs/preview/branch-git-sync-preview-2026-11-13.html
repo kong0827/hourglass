@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分支池 · GitLab 同步原型</title>
+<style>
+:root{
+  --primary:#3370ff;--primary-soft:rgba(51,112,255,.08);--primary-border:rgba(51,112,255,.3);
+  --success:#389e0d;--success-soft:rgba(56,158,13,.09);
+  --warning:#d48806;--warning-soft:rgba(212,136,6,.1);
+  --danger:#cf1322;--danger-soft:rgba(207,19,34,.08);
+  --info:#1668dc;--info-soft:rgba(22,104,220,.08);
+  --text:#1f2329;--text-2:#4e5969;--text-3:#86909c;
+  --border:#e5e6eb;--border-strong:#d0d3d9;
+  --surface:#fff;--sunken:#f5f6f8;--bg:#f2f3f5;
+  --shadow:0 6px 20px rgba(15,23,42,.08);
+  --r-lg:12px;--r-md:10px;--r-sm:6px;
+}
+body[data-theme="dark"]{
+  --primary:#5b8dff;--primary-soft:rgba(91,141,255,.14);--primary-border:rgba(91,141,255,.42);
+  --success:#6abf4b;--success-soft:rgba(106,191,75,.14);
+  --warning:#e0a33a;--warning-soft:rgba(224,163,58,.14);
+  --danger:#f06b6b;--danger-soft:rgba(240,107,107,.13);
+  --info:#5b9bff;--info-soft:rgba(91,155,255,.14);
+  --text:#e6e8eb;--text-2:#a9b0bb;--text-3:#7d8694;
+  --border:#2b3037;--border-strong:#3a4048;
+  --surface:#1b1e23;--sunken:#15181c;--bg:#101317;
+  --shadow:0 8px 26px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{display:flex;flex-direction:column;min-height:100%}
+
+/* ---------- 顶部 ---------- */
+.app-head{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px 0}
+.head-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.brand h1{margin:0;font-size:16px;font-weight:680;letter-spacing:.2px}
+.brand span{font-size:12px;color:var(--text-3)}
+.tabs{display:flex;gap:2px;background:var(--sunken);border:1px solid var(--border);border-radius:8px;padding:2px}
+.tab{height:26px;padding:0 12px;border:0;background:transparent;border-radius:6px;font-size:12.5px;color:var(--text-2)}
+.tab.on{background:var(--surface);color:var(--text);font-weight:650;box-shadow:0 1px 3px rgba(15,23,42,.1)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.icon-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface);border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+.icon-btn:hover{border-color:var(--border-strong)}
+.sync-btn{height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--primary-border);background:var(--primary-soft);color:var(--primary);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.sync-btn:hover{filter:brightness(.97)}
+.sync-btn:disabled{opacity:.6;cursor:progress}
+.sync-btn.busy .sync-ico{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.syncbar{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--text-2);flex-wrap:wrap;min-height:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex:0 0 auto}
+.dot.busy{background:var(--warning);animation:pulse 1s infinite}
+.syncbar b{color:var(--text);font-weight:650}
+.syncbar .sep{color:var(--border-strong)}
+.ghost-btn{height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--primary-border);background:var(--primary-soft);color:var(--primary);font-size:12px;font-weight:600}
+.ghost-btn:hover{filter:brightness(.97)}
+.mini-btn{height:24px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:11.5px}
+.mini-btn:hover{border-color:var(--border-strong);color:var(--text)}
+.mini-btn.ok{color:var(--success);border-color:rgba(56,158,13,.4);background:var(--success-soft)}
+.mini-btn.no{color:var(--danger);border-color:rgba(207,19,34,.3);background:var(--danger-soft)}
+
+.pending-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;border:1px solid rgba(212,136,6,.32);background:var(--warning-soft);border-radius:8px;font-size:12px;color:var(--text-2);flex-wrap:wrap}
+.pending-bar .pb-ico{color:var(--warning);font-size:13px}
+.pending-bar b{color:var(--warning);font-weight:650}
+.pending-bar .pb-names{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--text-3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pending-bar .pb-acts{margin-left:auto;display:flex;gap:6px}
+
+.stage-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-bottom:10px}
+.stage-label{font-size:11.5px;color:var(--text-3);margin-right:2px}
+.schip{height:26px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--text-2);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.schip b{font-size:11px;color:var(--text-3);font-weight:650}
+.schip:hover{border-color:var(--border-strong)}
+.schip[aria-pressed="true"]{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary);font-weight:600}
+.schip[aria-pressed="true"] b{color:var(--primary)}
+.schip[data-default="1"][aria-pressed="true"]{border-color:var(--border-strong);background:var(--surface);color:var(--text);font-weight:650}
+.schip[data-default="1"][aria-pressed="true"] b{color:var(--text-2)}
+.schip .ldot{width:6px;height:6px;border-radius:50%}
+.hint{margin:0 20px 0;padding:9px 12px;border:1px solid var(--border);background:var(--sunken);border-radius:8px;font-size:12px;color:var(--text-2);line-height:1.6}
+.hint b{color:var(--text);font-weight:650}
+
+/* ---------- 看板 ---------- */
+.board{display:flex;gap:12px;align-items:stretch;padding:12px 20px 22px;overflow-x:auto;flex:1 1 auto;min-height:0}
+.col{flex:1 1 260px;min-width:250px;background:var(--sunken);border:1px solid var(--border);border-radius:var(--r-lg);display:flex;flex-direction:column;max-height:calc(100vh - 296px);min-height:260px;overflow:hidden}
+.col-head{flex:0 0 auto;height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--surface)}
+.pdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.col-title{font-size:13px;font-weight:650}
+.col-count{margin-left:auto;height:20px;min-width:22px;padding:0 6px;border-radius:10px;background:var(--sunken);border:1px solid var(--border);color:var(--text-2);font-size:11.5px;font-weight:650;display:inline-flex;align-items:center;justify-content:center}
+.col-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.col-empty{padding:18px 8px;text-align:center;font-size:12px;color:var(--text-3);border:1px dashed var(--border);border-radius:8px}
+
+/* ---------- 分支卡片 ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 11px;display:flex;flex-direction:column;gap:7px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .12s,box-shadow .12s;cursor:pointer}
+.card:hover{border-color:var(--border-strong);box-shadow:var(--shadow)}
+.card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.card-top{display:flex;align-items:flex-start;gap:8px}
+.bname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;font-weight:650;line-height:1.45;word-break:break-all;min-width:0;flex:1 1 auto}
+.src{flex:0 0 auto;font-size:10.5px;line-height:16px;padding:0 5px;border-radius:4px;border:1px solid var(--border);color:var(--text-3);background:var(--sunken);white-space:nowrap}
+.src.git{color:var(--info);border-color:rgba(22,104,220,.28);background:var(--info-soft)}
+.card-meta{font-size:11.5px;color:var(--text-3);display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.card-meta .sep{color:var(--border-strong)}
+.card-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3)}
+.card-foot .last{margin-left:auto;white-space:nowrap}
+.tag{font-size:11px;line-height:17px;padding:0 6px;border-radius:5px;border:1px solid var(--border);color:var(--text-2);background:var(--sunken);white-space:nowrap}
+.tag.merged{color:var(--info);background:var(--info-soft);border-color:rgba(22,104,220,.22)}
+.tag.unmerged{color:var(--text-3)}
+.tag.warn{color:var(--warning);background:var(--warning-soft);border-color:rgba(212,136,6,.24)}
+.tag.ok{color:var(--success);background:var(--success-soft);border-color:rgba(56,158,13,.24)}
+.tag.bad{color:var(--danger);background:var(--danger-soft);border-color:rgba(207,19,34,.22)}
+.tag.locked{color:var(--text-2);border-style:dashed}
+
+/* ---------- 列表 ---------- */
+.listwrap{margin:12px 20px 26px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:auto}
+.ltable{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;table-layout:fixed}
+.ltable th{position:sticky;top:0;z-index:1;background:var(--sunken);color:var(--text-3);font-weight:600;font-size:11.5px;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.ltable td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.ltable tr:last-child td{border-bottom:0}
+.ltable tbody tr:hover td{background:var(--sunken)}
+.ltable .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltable .muted{color:var(--text-3);font-size:11.5px;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rowacts{display:flex;gap:6px;white-space:nowrap}
+.list-empty{padding:44px 16px;text-align:center;color:var(--text-3);font-size:12.5px}
+
+/* ---------- 设置页 ---------- */
+.settings{max-width:1120px;margin:0;padding:14px 20px 40px;display:grid;gap:14px;width:100%}
+.setcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.setcard h2{margin:0 0 12px;font-size:14px;font-weight:680;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.setcard h2 .tag{margin-left:0}
+.setcard h2 .h2-note{font-size:11.5px;font-weight:400;color:var(--text-3);margin-left:auto}
+.repo-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.repo-head .rname{font-size:13.5px;font-weight:650}
+.repo-url{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--text-2);background:var(--sunken);border:1px solid var(--border);border-radius:6px;padding:3px 8px}
+.health{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--success)}
+.kv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 20px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.kv-grid .k{font-size:11.5px;color:var(--text-3);margin-bottom:2px}
+.kv-grid .v{font-size:12.5px;word-break:break-word}
+.set-acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.sync-result{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text-3)}
+.sync-result .k{margin-right:2px;font-size:11.5px;color:var(--text-3)}
+.btn{height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--border-strong)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.danger{color:var(--danger);border-color:rgba(207,19,34,.3)}
+.btn.sm{height:26px;font-size:12px;padding:0 10px}
+.radio-card{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px}
+.radio-card:last-child{margin-bottom:0}
+.radio-card.on{border-color:var(--primary-border);background:var(--primary-soft)}
+.radio-card input{margin-top:2px;accent-color:var(--primary);flex:0 0 auto}
+.radio-card .rc-t{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.radio-card .rc-d{font-size:11.5px;color:var(--text-3);margin-top:2px;line-height:1.55}
+.rules{display:grid;gap:9px;font-size:12.5px;color:var(--text-2);line-height:1.65}
+.rules b{color:var(--text);font-weight:650}
+.rules .rk{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--text-2)}
+.unbound{width:100%;border-collapse:collapse;font-size:12.5px}
+.unbound th{text-align:left;font-size:11.5px;color:var(--text-3);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border)}
+.unbound td{padding:8px;border-bottom:1px solid var(--border)}
+.unbound tr:last-child td{border-bottom:0}
+
+/* ---------- 抽屉 ---------- */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.38);opacity:0;pointer-events:none;transition:opacity .16s;z-index:40}
+.mask.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow);transform:translateX(102%);transition:transform .2s cubic-bezier(.2,.8,.2,1);z-index:41;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer-head{display:flex;align-items:flex-start;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--border)}
+.drawer-head h2{margin:0;font-size:14px;font-weight:680;line-height:1.5;flex:1 1 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.drawer-body{padding:4px 18px 20px;overflow-y:auto}
+.d-sec{padding:12px 0;border-bottom:1px solid var(--border)}
+.d-sec:last-child{border-bottom:0}
+.d-sec h3{margin:0 0 9px;font-size:12px;font-weight:650;color:var(--text-3);letter-spacing:.3px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+.kv .k{font-size:11.5px;color:var(--text-3);margin-bottom:1px}
+.kv .v{font-size:12.5px;word-break:break-word}
+.kv .v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12px}
+.seg button:hover{border-color:var(--border-strong)}
+.seg button.on{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary);font-weight:600}
+.derive{border:1px solid var(--border);background:var(--sunken);border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.65}
+.derive .dt{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-weight:650}
+.derive .dd{color:var(--text-2)}
+.derive .lock{margin-top:6px;font-size:11.5px;color:var(--text-3);display:flex;gap:5px;align-items:flex-start}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{position:relative;padding:0 0 12px 16px;font-size:12px;color:var(--text-2);line-height:1.6}
+.timeline li::before{content:"";position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--border-strong)}
+.timeline li.sys::before{background:var(--info)}
+.timeline li:not(:last-child)::after{content:"";position:absolute;left:2.5px;top:13px;bottom:0;width:1px;background:var(--border)}
+.timeline .t-when{color:var(--text-3);font-size:11.5px;margin-left:6px}
+.timeline .t-actor{font-weight:600;color:var(--text-2)}
+.timeline li.sys .t-actor{color:var(--info)}
+.foot-note{font-size:11.5px;color:var(--text-3);line-height:1.6;margin:8px 0 0}
+.danger-zone{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ---------- 弹层 / toast ---------- */
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .14s;z-index:50;padding:20px}
+.modal.on{opacity:1;pointer-events:auto}
+.modal-box{width:min(420px,100%);background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:16px 18px}
+.modal-box h3{margin:0 0 6px;font-size:14px;font-weight:680}
+.modal-box p{margin:0 0 14px;font-size:12px;color:var(--text-2);line-height:1.65}
+.modal-acts{display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,12px);background:#1f2329;color:#fff;font-size:12.5px;padding:9px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;z-index:60;max-width:90vw}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:900px){
+  .app-head{padding:10px 12px 0}
+  .hint{margin:0 12px}
+  .board{padding:10px 12px 18px}
+  .listwrap{margin:10px 12px 20px}
+  .settings{padding:10px 12px 30px}
+  .kv{grid-template-columns:1fr}
+  .pending-bar .pb-acts{margin-left:0}
+}
+</style>
+</head>
+<body data-theme="light">
+<div class="app">
+  <header class="app-head">
+    <div class="head-row">
+      <div class="brand">
+        <h1 id="pageTitle">分支池</h1>
+        <span id="pageSub">GitLab 同步 · 原型演示数据</span>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="页面切换">
+        <button class="tab on" data-view="pool" role="tab" aria-selected="true">分支池</button>
+        <button class="tab" data-view="repo" role="tab" aria-selected="false">项目仓库</button>
+      </nav>
+      <div class="tools">
+        <button class="sync-btn" id="syncBtn" type="button"><span class="sync-ico">⟳</span><span id="syncBtnText">立即同步</span></button>
+        <button class="icon-btn" id="themeBtn" type="button" title="切换主题" aria-label="切换主题">☾</button>
+      </div>
+    </div>
+
+    <div class="syncbar" id="syncbar"></div>
+    <div id="pendingBarWrap"></div>
+    <div class="stage-bar" id="lifecycleBar" role="group" aria-label="按生命周期筛选"></div>
+    <div class="hint" id="hintBar" style="margin:0 0 10px"></div>
+  </header>
+
+  <main id="main"></main>
+</div>
+
+<div class="mask" id="drawerMask"></div>
+<aside class="drawer" id="drawer" aria-label="分支详情" aria-hidden="true">
+  <div class="drawer-head">
+    <h2 id="drawerTitle"></h2>
+    <button class="icon-btn" id="drawerClose" type="button" aria-label="关闭详情">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal-box">
+    <h3 id="modalTitle"></h3>
+    <p id="modalDesc"></p>
+    <div class="modal-acts">
+      <button class="btn" type="button" id="modalCancel">取消</button>
+      <button class="btn primary" type="button" id="modalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- 演示数据 ---------------- */
+  /* lc 生命周期：active 进行中 / done 已完成 / canceled 已取消 / pending 待确认
+     remote 远程事实：present 存在 / deleted 已删除 / unknown 无法判断
+     status 人工状态：dev / testing / merging / released（沿用现有 4 态） */
+  var BRANCHES = [
+    {id:"B-1", name:"feature/pay-callback-retry", proj:"聚合支付网关", owner:"陈立明", status:"dev", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"陈立明", lastAgo:"2 小时前", lastAt:"2026-11-13 09:42", sha:"9f3c1ab",
+     created:"2026-11-08", target:"main", tasks:2, syncCount:12},
+    {id:"B-2", name:"feature/merchant-email-subscribe", proj:"商户对账平台", owner:"高敏", status:"testing", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"高敏", lastAgo:"昨天 18:20", lastAt:"2026-11-12 18:20", sha:"41be7d0",
+     created:"2026-11-05", target:"main", tasks:1, syncCount:12},
+    {id:"B-4", name:"feature/report-watermark-custom", proj:"财务对账平台", owner:"钱伟", status:"dev", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"钱伟", lastAgo:"4 天前", lastAt:"2026-11-09 15:10", sha:"c02f9e4",
+     created:"2026-11-09", target:"release/1.3", tasks:0, syncCount:9},
+    {id:"B-5", name:"bugfix/callback-null-guard", proj:"聚合支付网关", owner:"叶琳", status:"dev", source:"git",
+     lc:"canceled", remote:"deleted", merged:false, lastBy:"叶琳", lastAgo:"3 天前", lastAt:"2026-11-10 11:05", sha:"77ad31c",
+     created:"2026-11-10", target:"main", tasks:1, syncCount:8, decidedAt:"2026-11-13 10:22"},
+    {id:"B-6", name:"feature/cross-border-audit", proj:"聚合支付网关", owner:"陈立明", status:"dev", source:"git",
+     lc:"pending", remote:"deleted", merged:null, lastBy:"—", lastAgo:"—", lastAt:"—", sha:"—",
+     created:"2026-11-13", target:"main", tasks:0, syncCount:1, pendingReason:"never"},
+    {id:"B-7", name:"feature/risk-batch-import", proj:"风控引擎", owner:"马骁", status:"dev", source:"manual",
+     lc:"active", remote:"none", merged:null, lastBy:"—", lastAgo:"—", lastAt:"—", sha:"—",
+     created:"2026-11-06", target:"main", tasks:2, syncCount:0},
+    {id:"B-8", name:"feature/merchant-cycle-config", proj:"商户对账平台", owner:"陈立明", status:"testing", source:"git",
+     lc:"done", remote:"present", merged:true, lastBy:"陈立明", lastAgo:"26 分钟前", lastAt:"2026-11-13 10:06", sha:"5d10ee2",
+     created:"2026-10-28", target:"main", tasks:3, syncCount:12, decidedAt:"2026-11-13 10:06"},
+    {id:"B-9", name:"feature/refund-batch-retry", proj:"聚合支付网关", owner:"叶琳", status:"merging", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"叶琳", lastAgo:"5 小时前", lastAt:"2026-11-13 06:30", sha:"aa71c93",
+     created:"2026-11-02", target:"main", tasks:2, syncCount:12},
+    {id:"B-10", name:"feature/data-export-async", proj:"聚合支付网关", owner:"高敏", status:"dev", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"高敏", lastAgo:"昨天 20:15", lastAt:"2026-11-12 20:15", sha:"3e8b7c1",
+     created:"2026-11-04", target:"main", tasks:1, syncCount:12},
+    {id:"B-11", name:"feature/settle-multi-currency", proj:"聚合支付网关", owner:"陈立明", status:"released", source:"git",
+     lc:"done", remote:"deleted", merged:true, lastBy:"陈立明", lastAgo:"2 天前", lastAt:"2026-11-11 17:40", sha:"b19c88f",
+     created:"2026-10-10", target:"main", tasks:3, syncCount:11, manualLock:true, decidedAt:"2026-11-11 17:40"},
+    {id:"B-12", name:"feature/statement-mail-template", proj:"商户对账平台", owner:"高敏", status:"released", source:"git",
+     lc:"done", remote:"deleted", merged:true, lastBy:"高敏", lastAgo:"5 天前", lastAt:"2026-11-08 09:12", sha:"0c7ae15",
+     created:"2026-10-15", target:"main", tasks:2, syncCount:10, manualLock:true, decidedAt:"2026-11-08 09:12"},
+    {id:"B-13", name:"feature/legacy-report", proj:"财务对账平台", owner:"钱伟", status:"dev", source:"git",
+     lc:"pending", remote:"present", merged:false, lastBy:"钱伟", lastAgo:"8 天前", lastAt:"2026-11-05 10:00", sha:"eb41aa0",
+     created:"2026-11-05", target:"main", tasks:1, syncCount:6, pendingReason:"conflict", conflictWith:"手工分支（财务对账平台 · 钱伟）"},
+    {id:"B-14", name:"feature/old-export-v1", proj:"聚合支付网关", owner:"高敏", status:"dev", source:"git",
+     lc:"canceled", remote:"deleted", merged:false, lastBy:"高敏", lastAgo:"7 天前", lastAt:"2026-11-06 14:20", sha:"1d5c0b8",
+     created:"2026-11-03", target:"main", tasks:0, syncCount:7, decidedAt:"2026-11-12 09:31"},
+    {id:"B-15", name:"feature/demand-105-spike", proj:"风控引擎", owner:"马骁", status:"dev", source:"git",
+     lc:"pending", remote:"unknown", merged:null, lastBy:"—", lastAgo:"—", lastAt:"—", sha:"—",
+     created:"2026-11-12", target:"main", tasks:0, syncCount:2, pendingReason:"gap"},
+    {id:"B-17", name:"feature/recon-file-check", proj:"商户对账平台", owner:"刘琼", status:"testing", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"刘琼", lastAgo:"3 小时前", lastAt:"2026-11-13 08:50", sha:"7ba20cd",
+     created:"2026-11-07", target:"main", tasks:2, syncCount:12},
+    {id:"B-18", name:"feature/merchant-fee-ladder", proj:"聚合支付网关", owner:"陈立明", status:"merging", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"陈立明", lastAgo:"1 小时前", lastAt:"2026-11-13 10:55", sha:"e3d19a7",
+     created:"2026-10-30", target:"main", tasks:2, syncCount:12},
+    {id:"B-19", name:"hotfix/rate-limit-fix", proj:"风控引擎", owner:"马骁", status:"released", source:"git",
+     lc:"active", remote:"present", merged:false, lastBy:"马骁", lastAgo:"3 天前", lastAt:"2026-11-10 16:40", sha:"2f9a0b6",
+     created:"2026-11-10", target:"release/1.3", tasks:1, syncCount:8}
+  ];
+
+  var STATUS = [
+    {id:"dev", name:"开发中", color:"#86909c"},
+    {id:"testing", name:"待测试", color:"var(--warning)"},
+    {id:"merging", name:"待合并", color:"var(--info)"},
+    {id:"released", name:"已发布", color:"var(--success)"}
+  ];
+  var LC = {
+    active:{label:"进行中", cls:"", desc:"远程分支存在且未合并，或手工维护中"},
+    done:{label:"已完成", cls:"lc-done", desc:"远程分支已合并"},
+    canceled:{label:"已取消", cls:"lc-canceled", desc:"远程分支已删除且从未合并"},
+    pending:{label:"待确认", cls:"lc-pending", desc:"远程事实不足以判定，需人工确认"}
+  };
+  var PENDING_REASON = {
+    never:"远程分支已被删除，但从未同步到合并状态（创建与删除发生在两次轮询之间）",
+    gap:"远程分支已消失，且没有可用的合并记录",
+    conflict:"与手工创建的同名分支冲突，未自动合并归属"
+  };
+
+  var state = {view:"pool", lc:"active", theme:"light", syncing:false, synced:false,
+               lastSync:"2026-11-13 10:32", repoCount:1};
+
+  var main = document.getElementById("main");
+  var hintBar = document.getElementById("hintBar");
+  var lifecycleBar = document.getElementById("lifecycleBar");
+  var syncbar = document.getElementById("syncbar");
+  var pendingBarWrap = document.getElementById("pendingBarWrap");
+  var drawer = document.getElementById("drawer");
+  var drawerBody = document.getElementById("drawerBody");
+  var drawerTitle = document.getElementById("drawerTitle");
+  var drawerMask = document.getElementById("drawerMask");
+  var modal = document.getElementById("modal");
+  var toastEl = document.getElementById("toast");
+
+  /* ---------------- 工具 ---------------- */
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function byId(id){
+    for(var i=0;i<BRANCHES.length;i++) if(BRANCHES[i].id===id) return BRANCHES[i];
+    return null;
+  }
+  function counts(){
+    var c = {all:BRANCHES.length, active:0, done:0, canceled:0, pending:0};
+    BRANCHES.forEach(function(b){ c[b.lc] = (c[b.lc]||0) + 1; });
+    return c;
+  }
+  function statusOf(id){
+    for(var i=0;i<STATUS.length;i++) if(STATUS[i].id===id) return STATUS[i];
+    return {id:id, name:id, color:"var(--text-3)"};
+  }
+  function lcTag(b){
+    var m = LC[b.lc];
+    var cls = b.lc==="done" ? "tag ok" : b.lc==="canceled" ? "tag locked" : b.lc==="pending" ? "tag warn" : "tag";
+    return '<span class="'+cls+'">'+m.label+'</span>';
+  }
+  function mergedTag(b){
+    if(b.source!=="git") return '<span class="tag">手工维护</span>';
+    if(b.merged === true) return '<span class="tag merged">已合并</span>';
+    if(b.merged === false) return '<span class="tag unmerged">未合并</span>';
+    return '<span class="tag locked">无合并记录</span>';
+  }
+  function sourceTag(b){
+    return b.source==="git" ? '<span class="src git">GitLab</span>' : '<span class="src">手工</span>';
+  }
+  /* 看板里只出现进行中，生命周期标签恒定，不再重复，只留远程事实 */
+  function remoteTag(b){
+    if(b.source!=="git") return '<span class="tag">手工维护</span>';
+    if(b.merged === true) return '<span class="tag merged">已合并</span>';
+    if(b.merged === false) return '<span class="tag unmerged">未合并</span>';
+    return '<span class="tag locked">无合并记录</span>';
+  }
+  function toast(text){
+    toastEl.textContent = text;
+    toastEl.classList.add("on");
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(function(){ toastEl.classList.remove("on"); }, 2600);
+  }
+
+  /* ---------------- 顶部区 ---------------- */
+  function renderHead(){
+    var c = counts();
+    syncbar.innerHTML =
+      '<span class="dot'+ (state.syncing ? " busy" : "") +'"></span>'
+      + (state.syncing
+          ? '<span id="syncStage">同步中：拉取远程分支…</span>'
+          : '<span>同步正常 · <b>'+ state.lastSync +'</b> · 每 10 分钟一轮</span>')
+      + '<span class="sep">·</span>'
+      + '<span>已绑定仓库 <b>'+ state.repoCount +'</b> 个</span>'
+      + '<span class="sep">·</span>'
+      + '<span>最近一轮：新增 3 · 更新 128 · 自动完成 2 · 自动取消 1</span>';
+
+    var pending = BRANCHES.filter(function(b){ return b.lc==="pending"; });
+    if(pending.length && !state.syncing){
+      var names = pending.slice(0,2).map(function(b){ return b.name; }).join("、");
+      pendingBarWrap.innerHTML = '<div class="pending-bar">'
+        + '<span class="pb-ico">⚠</span>'
+        + '<span><b>'+ pending.length +' 个分支待确认</b>，远程事实不足以判定</span>'
+        + '<span class="pb-names">'+ esc(names) + (pending.length>2 ? " 等" : "") +'</span>'
+        + '<span class="pb-acts"><button class="ghost-btn" type="button" id="goPending">逐个确认</button></span>'
+        + '</div>';
+      document.getElementById("goPending").addEventListener("click", function(){
+        state.lc = "pending"; renderAll();
+      });
+    } else {
+      pendingBarWrap.innerHTML = pending.length && state.syncing
+        ? '<div class="pending-bar"><span class="pb-ico">⚠</span><span><b>'+pending.length+' 个分支待确认</b>，本轮结束后更新</span></div>'
+        : "";
+    }
+
+    var chips = [
+      {id:"active", label:"进行中", count:c.active, def:1},
+      {id:"done", label:"已完成", count:c.done},
+      {id:"canceled", label:"已取消", count:c.canceled},
+      {id:"pending", label:"待确认", count:c.pending},
+      {id:"all", label:"全部", count:c.all}
+    ];
+    lifecycleBar.innerHTML = '<span class="stage-label">生命周期</span>' + chips.map(function(ch){
+      var dot = "";
+      if(ch.id==="done") dot = '<span class="ldot" style="background:var(--success)"></span>';
+      if(ch.id==="pending") dot = '<span class="ldot" style="background:var(--warning)"></span>';
+      if(ch.id==="canceled") dot = '<span class="ldot" style="background:var(--text-3)"></span>';
+      return '<button class="schip" type="button" data-lc="'+ch.id+'" aria-pressed="'+(state.lc===ch.id)+'"'
+        + (ch.def ? ' data-default="1"' : '') +'>'+ dot + ch.label + ' <b>'+ch.count+'</b></button>';
+    }).join("");
+    Array.prototype.forEach.call(lifecycleBar.querySelectorAll("[data-lc]"), function(btn){
+      btn.addEventListener("click", function(){
+        state.lc = btn.getAttribute("data-lc");
+        renderAll();
+      });
+    });
+
+    hintBar.innerHTML = '生命周期由 GitLab 事实派生、只读：<b>已合并 = 已完成</b>；<b>删除且未合并 = 已取消</b>；'
+      + '<b>删除但从未同步到 = 待确认</b>。人工 4 态（开发中 → 待测试 → 待合并 → 已发布）仍可流转，'
+      + '已标记「已发布」的分支不会被同步降级。看板只放进行中的分支。';
+  }
+
+  /* ---------------- 分支池 ---------------- */
+  function renderPool(){
+    if(state.lc === "active") renderBoard();
+    else renderList();
+  }
+
+  function renderBoard(){
+    var list = BRANCHES.filter(function(b){ return b.lc==="active"; });
+    main.innerHTML = '<div class="board">' + STATUS.map(function(st){
+      var items = list.filter(function(b){ return b.status===st.id; });
+      return '<section class="col">'
+        + '<div class="col-head"><span class="pdot" style="background:'+st.color+'"></span>'
+        + '<span class="col-title">'+st.name+'</span>'
+        + '<span class="col-count">'+items.length+'</span></div>'
+        + '<div class="col-body">'
+        + (items.length ? items.map(cardHtml).join("") : '<div class="col-empty">暂无进行中的分支</div>')
+        + '</div></section>';
+    }).join("") + '</div>';
+    bindCards();
+  }
+
+  function cardHtml(b){
+    return '<article class="card" tabindex="0" role="button" data-id="'+b.id+'">'
+      + '<div class="card-top"><span class="bname">'+esc(b.name)+'</span>'+sourceTag(b)+'</div>'
+      + '<div class="card-meta"><span>'+esc(b.proj)+'</span><span class="sep">·</span><span>'+esc(b.owner)+'</span></div>'
+      + '<div class="card-foot">'+remoteTag(b)
+      + '<span class="last">'+(b.lastAt==="—" ? "无提交记录" : esc(b.lastBy)+" · "+esc(b.lastAgo))+'</span></div>'
+      + '</article>';
+  }
+
+  function bindCards(){
+    Array.prototype.forEach.call(main.querySelectorAll(".card"), function(el){
+      var open = function(){ openDrawer(el.getAttribute("data-id")); };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", function(e){
+        if(e.key==="Enter" || e.key===" "){ e.preventDefault(); open(); }
+      });
+    });
+  }
+
+  function renderList(){
+    var list = BRANCHES.filter(function(b){
+      return state.lc==="all" ? true : b.lc===state.lc;
+    });
+    var title = state.lc==="all" ? "全部分支" : LC[state.lc].label;
+    var desc = state.lc==="all" ? "" : "：" + LC[state.lc].desc;
+
+    main.innerHTML = '<div class="listwrap">'
+      + '<table class="ltable"><thead><tr>'
+      + '<th style="width:24%">分支</th><th style="width:14%">项目</th><th style="width:11%">人工状态</th>'
+      + '<th style="width:10%">生命周期</th><th style="width:16%">远程事实</th>'
+      + '<th style="width:13%">最后提交</th><th>操作</th>'
+      + '</tr></thead><tbody>'
+      + (list.length ? list.map(function(b){
+          var st = statusOf(b.status);
+          var fact = b.source!=="git" ? '<span class="muted">未绑定远程</span>'
+            : (b.remote==="present" ? "远程存在" : b.remote==="deleted" ? "远程已删除" : "远程不可判定");
+          var acts = b.lc==="pending"
+            ? '<div class="rowacts"><button class="mini-btn ok" data-decide="done" data-id="'+b.id+'">确认完成</button>'
+              + '<button class="mini-btn no" data-decide="canceled" data-id="'+b.id+'">确认取消</button>'
+              + '<button class="mini-btn" data-open="'+b.id+'">详情</button></div>'
+            : '<div class="rowacts"><button class="mini-btn" data-open="'+b.id+'">详情</button></div>';
+          return '<tr>'
+            + '<td><div class="mono">'+esc(b.name)+'</div>'
+            + '<div class="muted">'+ (b.pendingReason ? esc(PENDING_REASON[b.pendingReason]).slice(0,26)+"…" : "") +'</div></td>'
+            + '<td>'+esc(b.proj)+'<div class="muted">'+esc(b.owner)+'</div></td>'
+            + '<td><span class="tag">'+st.name+'</span>'+(b.manualLock ? ' <span class="tag locked">人工锁定</span>' : '')+'</td>'
+            + '<td>'+lcTag(b)+'</td>'
+            + '<td>'+fact+' '+mergedTag(b)+'</td>'
+            + '<td class="muted">'+(b.lastAt==="—" ? "—" : esc(b.lastBy)+"<br>"+esc(b.lastAt))+'</td>'
+            + '<td>'+acts+'</td></tr>';
+        }).join("") : '<tr><td colspan="7"><div class="list-empty">没有'+title+'的分支</div></td></tr>')
+      + '</tbody></table></div>';
+
+    Array.prototype.forEach.call(main.querySelectorAll("[data-open]"), function(el){
+      el.addEventListener("click", function(){ openDrawer(el.getAttribute("data-open")); });
+    });
+    Array.prototype.forEach.call(main.querySelectorAll("[data-decide]"), function(el){
+      el.addEventListener("click", function(e){
+        e.stopPropagation();
+        var id = el.getAttribute("data-id");
+        var to = el.getAttribute("data-decide");
+        confirmBox(
+          "确认将分支标记为「" + LC[to].label + "」？",
+          "远程事实为「" + (to==="done" ? "已完成" : "已取消") + "」，确认后写入时间线，之后同步不会覆盖这次人工判定。",
+          function(){ decide(id, to); }
+        );
+      });
+    });
+  }
+
+  function decide(id, to){
+    var b = byId(id);
+    if(!b) return;
+    b.lc = to;
+    b.decidedByManual = true;
+    b.decidedAt = state.lastSync;
+    if(to==="done" && (b.merged===null || b.merged===undefined)) b.merged = true;
+    closeModal();
+    if(state.lc === "pending" && counts().pending === 0) state.lc = "all";
+    renderAll();
+    if(drawer.classList.contains("on")) renderDrawer(b);
+    toast("已将「" + b.name + "」标记为" + LC[to].label);
+  }
+
+  /* ---------------- 仓库设置 ---------------- */
+  function renderRepo(){
+    main.innerHTML = '<div class="settings">'
+      + '<section class="setcard">'
+      +   '<h2>已绑定仓库 <span class="tag ok">同步正常</span>'
+      +     '<span class="h2-note">一个项目一期只允许绑定一个仓库</span></h2>'
+      +   '<div class="repo-head">'
+      +     '<span class="rname">聚合支付网关</span>'
+      +     '<span class="repo-url">https://gitlab.内网/pay/gateway</span>'
+      +     '<span class="health"><span class="dot"></span>'+ (state.syncing ? "同步中" : "上次成功 "+state.lastSync) +'</span>'
+      +   '</div>'
+      +   '<div class="kv-grid">'
+      +     '<div><div class="k">GitLab 项目 ID</div><div class="v">128</div></div>'
+      +     '<div><div class="k">目标分支</div><div class="v">main（合并判定基准）</div></div>'
+      +     '<div><div class="k">访问令牌</div><div class="v">glpat-••••••7f2a（Read API，仅服务端使用）</div></div>'
+      +     '<div><div class="k">同步频率</div><div class="v">每 10 分钟 + 手动立即同步</div></div>'
+      +     '<div><div class="k">Webhook</div><div class="v">未开启（内网直连，轮询兜底）</div></div>'
+      +   '</div>'
+      +   '<div class="sync-result"><span class="k">最近一轮结果</span>'
+      +     '<span class="tag">新增 3</span><span class="tag">更新 128</span>'
+      +     '<span class="tag ok">自动完成 2</span><span class="tag bad">自动取消 1</span>'
+      +     '<span class="tag warn">待确认 '+counts().pending+'</span></div>'
+      +   '<div class="set-acts">'
+      +     '<button class="btn primary sm" type="button" id="repoSync">立即同步</button>'
+      +     '<button class="btn sm" type="button" id="repoEdit">编辑绑定</button>'
+      +     '<button class="btn sm danger" type="button" id="repoUnbind">解绑</button>'
+      +   '</div>'
+      +   '<p class="foot-note">解绑只停止同步，已建分支保留并转为人工维护，不会被清理。</p>'
+      + '</section>'
+
+      + '<section class="setcard">'
+      +   '<h2>首次导入策略 <span class="tag warn">待确认</span>'
+      +     '<span class="h2-note">决定绑定当天分支池会被灌入多少条</span></h2>'
+      +   '<label class="radio-card on" data-import="window90">'
+      +     '<input type="radio" name="import" value="window90" checked>'
+      +     '<div><div class="rc-t">只导入近 90 天有提交的分支 <span class="tag ok">推荐</span></div>'
+      +     '<div class="rc-d">预计建档 <b>37</b> 条；同时排除 main / develop / 配置的目标分支。历史死分支不进池子，需要时再搜索导入。</div></div>'
+      +   '</label>'
+      +   '<label class="radio-card" data-import="prefix">'
+      +     '<input type="radio" name="import" value="prefix">'
+      +     '<div><div class="rc-t">只导入带项目前缀的分支</div>'
+      +     '<div class="rc-d">匹配 <span class="rk">feature/PAY-*</span>、<span class="rk">bugfix/PAY-*</span>，预计建档 <b>21</b> 条；命名不规范的改动会被漏掉。</div></div>'
+      +   '</label>'
+      +   '<label class="radio-card" data-import="all">'
+      +     '<input type="radio" name="import" value="all">'
+      +     '<div><div class="rc-t">全量导入 <span class="tag bad">不建议</span></div>'
+      +     '<div class="rc-d">预计建档 <b>312</b> 条，其中大部分已无提交；首次绑定后需要人工清理。</div></div>'
+      +   '</label>'
+      +   '<div class="set-acts"><button class="btn primary sm" type="button" id="importApply">按此策略导入</button></div>'
+      + '</section>'
+
+      + '<section class="setcard">'
+      +   '<h2>边界规则</h2>'
+      +   '<div class="rules">'
+      +     '<div><b>分支改名</b>：Git 表现为删旧建新。同一最后提交 SHA 的删除与新建在 5 分钟内视为改名，不判「已取消」。</div>'
+      +     '<div><b>同名冲突</b>：手工已有同名分支可自动关联；若归属项目不一致，不自动改归属，进「待确认」。</div>'
+      +     '<div><b>同步来源分支不可删除</b>：只能「解除绑定」，否则下一轮轮询会重新建回来；现有删除会级联解绑任务，风险更大。</div>'
+      +     '<div><b>人工优先</b>：人工改过状态的分支，同步只追加时间线（操作人记为系统），不覆盖；已标记「已发布」的不降级。</div>'
+      +     '<div><b>不联动业务</b>：分支已完成不会自动关闭关联任务；已取消也不会，只做展示。</div>'
+      +   '</div>'
+      + '</section>'
+
+      + '<section class="setcard">'
+      +   '<h2>未绑定仓库的项目 <span class="h2-note">共 3 个</span></h2>'
+      +   '<table class="unbound"><thead><tr><th>项目</th><th>负责人</th><th>现有分支</th><th style="width:1%">操作</th></tr></thead><tbody>'
+      +     '<tr><td>商户对账平台</td><td>高敏</td><td>14</td><td><button class="btn sm" type="button" data-bind="商户对账平台">绑定仓库</button></td></tr>'
+      +     '<tr><td>风控引擎</td><td>马骁</td><td>9</td><td><button class="btn sm" type="button" data-bind="风控引擎">绑定仓库</button></td></tr>'
+      +     '<tr><td>财务对账平台</td><td>钱伟</td><td>6</td><td><button class="btn sm" type="button" data-bind="财务对账平台">绑定仓库</button></td></tr>'
+      +   '</tbody></table>'
+      + '</section>'
+      + '</div>';
+
+    document.getElementById("repoSync").addEventListener("click", runSync);
+    document.getElementById("repoEdit").addEventListener("click", function(){
+      toast("打开编辑绑定表单（原型未展开）");
+    });
+    document.getElementById("repoUnbind").addEventListener("click", function(){
+      confirmBox("解绑仓库？", "将停止自动同步，已建分支保留并转为人工维护。", function(){
+        closeModal(); toast("已解绑（原型演示）");
+      });
+    });
+    Array.prototype.forEach.call(main.querySelectorAll(".radio-card"), function(card){
+      card.addEventListener("click", function(){
+        Array.prototype.forEach.call(main.querySelectorAll(".radio-card"), function(c){ c.classList.remove("on"); });
+        card.classList.add("on");
+        card.querySelector("input").checked = true;
+      });
+    });
+    document.getElementById("importApply").addEventListener("click", function(){
+      toast("已按所选策略导入（原型演示）");
+    });
+    Array.prototype.forEach.call(main.querySelectorAll("[data-bind]"), function(btn){
+      btn.addEventListener("click", function(){
+        toast("打开「" + btn.getAttribute("data-bind") + "」仓库绑定表单（原型未展开）");
+      });
+    });
+  }
+
+  /* ---------------- 抽屉 ---------------- */
+  var openId = null;
+  function openDrawer(id){
+    openId = id;
+    var b = byId(id);
+    if(!b) return;
+    renderDrawer(b);
+    drawer.classList.add("on");
+    drawer.setAttribute("aria-hidden","false");
+    drawerMask.classList.add("on");
+    document.getElementById("drawerClose").focus();
+  }
+  function closeDrawer(){
+    openId = null;
+    drawer.classList.remove("on");
+    drawer.setAttribute("aria-hidden","true");
+    drawerMask.classList.remove("on");
+  }
+  document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+  drawerMask.addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function(e){
+    if(e.key==="Escape"){
+      if(modal.classList.contains("on")) closeModal();
+      else if(drawer.classList.contains("on")) closeDrawer();
+    }
+  });
+
+  function decideText(b){
+    if(b.decidedByManual) return "人工确认（同步不再覆盖）";
+    if(b.source==="manual") return "手工维护，无远程事实";
+    if(b.lc==="done") return "系统判定（GitLab 已合并）";
+    if(b.lc==="canceled") return "系统判定（远程已删除且从未合并）";
+    if(b.lc==="pending") return "系统标记（远程事实不足，需人工确认）";
+    return "系统判定（远程分支存在且未合并）";
+  }
+
+  function renderDrawer(b){
+    drawerTitle.textContent = b.name;
+    var st = statusOf(b.status);
+    var remoteRows;
+    if(b.source==="manual"){
+      remoteRows = '<div class="kv"><div style="grid-column:1/-1">'
+        + '<div class="k">远程仓库</div>'
+        + '<div class="v">该分支为手工维护，未绑定远程仓库</div></div></div>'
+        + '<div class="set-acts"><button class="btn sm" type="button" id="bindBranch">绑定到仓库分支</button></div>';
+    } else {
+      remoteRows = '<div class="kv">'
+        + '<div><div class="k">所属仓库</div><div class="v">'+esc(b.proj)+' 仓库</div></div>'
+        + '<div><div class="k">目标分支</div><div class="v mono">'+esc(b.target)+'</div></div>'
+        + '<div><div class="k">远程状态</div><div class="v">'
+        +   (b.remote==="present" ? "存在" : b.remote==="deleted" ? "已删除" : "不可判定")
+        + '</div></div>'
+        + '<div><div class="k">合并状态</div><div class="v">'
+        +   (b.merged===true ? "已合并到 "+esc(b.target) : b.merged===false ? "未合并" : "无记录")
+        + '</div></div>'
+        + '<div><div class="k">最后提交</div><div class="v">'+ (b.lastAt==="—" ? "—" : esc(b.lastBy)+" · "+esc(b.lastAt)) +'</div></div>'
+        + '<div><div class="k">提交 SHA</div><div class="v mono">'+esc(b.sha)+'</div></div>'
+        + '<div><div class="k">首次发现</div><div class="v">'+esc(b.created)+'</div></div>'
+        + '<div><div class="k">最近同步</div><div class="v">'+esc(state.lastSync)+'（第 '+b.syncCount+' 次）</div></div>'
+        + '</div>';
+    }
+
+    var deriveExtra = "";
+    if(b.lc==="pending" && b.pendingReason){
+      deriveExtra = '<div class="dd" style="margin-top:6px">'+esc(PENDING_REASON[b.pendingReason])+'</div>'
+        + (b.conflictWith ? '<div class="dd" style="margin-top:4px">冲突对象：'+esc(b.conflictWith)+'</div>' : '')
+        + '<div class="set-acts">'
+        + '<button class="btn sm primary" type="button" data-decide="done">确认完成</button>'
+        + '<button class="btn sm" type="button" data-decide="canceled">确认取消</button>'
+        + '<button class="btn sm" type="button" id="dismissPending">忽略本次</button>'
+        + '</div>';
+    }
+    var lockNote = b.manualLock
+      ? '<div class="lock">🔒 已标记「已发布」，同步仅追加远程信息，不会改回其他状态</div>'
+      : (b.decidedByManual ? '<div class="lock">🔒 本次判定由人工确认，后续同步不覆盖</div>'
+        : '<div class="lock">远程事实只作参考，人工状态仍可修改</div>');
+
+    var timeline = timelineOf(b).map(function(t){
+      return '<li class="'+ (t.sys ? "sys" : "") +'"><span class="t-actor">'+esc(t.actor)+'</span> '
+        + esc(t.text) + '<span class="t-when">'+esc(t.when)+'</span></li>';
+    }).join("");
+
+    drawerBody.innerHTML =
+      '<div class="d-sec">'
+      + '<h3>人工状态（可改）</h3>'
+      + '<div class="seg" id="statusSeg">' + STATUS.map(function(s){
+          return '<button type="button" data-status="'+s.id+'" class="'+(b.status===s.id?"on":"")+'">'+s.name+'</button>';
+        }).join("") + '</div>'
+      + '<p class="foot-note">已完成 / 已取消 不在人工状态下拉里，由远程事实派生。</p>'
+      + '</div>'
+
+      + '<div class="d-sec">'
+      + '<h3>生命周期（派生 · 只读）</h3>'
+      + '<div class="derive">'
+      +   '<div class="dt">'+lcTag(b)+'<span style="font-size:12px;color:var(--text-2);font-weight:500">'+LC[b.lc].desc+'</span></div>'
+      +   '<div class="dd">判定依据：'+esc(decideText(b))+'</div>'
+      +   deriveExtra
+      +   lockNote
+      + '</div>'
+      + '</div>'
+
+      + '<div class="d-sec">'
+      + '<h3>远程信息</h3>'
+      + remoteRows
+      + '</div>'
+
+      + '<div class="d-sec">'
+      + '<h3>归属</h3>'
+      + '<div class="kv">'
+      + '<div><div class="k">项目</div><div class="v">'+esc(b.proj)+'</div></div>'
+      + '<div><div class="k">负责人</div><div class="v">'+esc(b.owner)+'</div></div>'
+      + '<div><div class="k">关联工作项</div><div class="v">'+b.tasks+' 个</div></div>'
+      + '<div><div class="k">来源</div><div class="v">'+(b.source==="git" ? "GitLab 同步" : "手工创建")+'</div></div>'
+      + '</div></div>'
+
+      + '<div class="d-sec">'
+      + '<h3>时间线</h3>'
+      + '<ul class="timeline">'+timeline+'</ul>'
+      + '</div>'
+
+      + '<div class="d-sec">'
+      + '<h3>操作</h3>'
+      + '<div class="danger-zone">'
+      + (b.source==="git"
+          ? '<button class="btn sm" type="button" id="unbindBranch">解除绑定（保留记录）</button>'
+          : '<button class="btn sm danger" type="button" id="deleteBranch">删除分支</button>')
+      + '<button class="btn sm" type="button" id="closeDrawerBtn">关闭</button>'
+      + '</div>'
+      + (b.source==="git" ? '<p class="foot-note">同步来源的分支不提供物理删除：删除后下一轮轮询会重新建回来。</p>' : '')
+      + '</div>';
+
+    Array.prototype.forEach.call(drawerBody.querySelectorAll("#statusSeg button"), function(el){
+      el.addEventListener("click", function(){
+        var to = el.getAttribute("data-status");
+        if(b.manualLock && to !== b.status){
+          confirmBox("该分支已标记「已发布」", "改回其他状态会撤掉人工锁定，同步也不会再保护它。确认修改？", function(){
+            applyStatus(b, to); closeModal();
+          });
+          return;
+        }
+        applyStatus(b, to);
+      });
+    });
+    Array.prototype.forEach.call(drawerBody.querySelectorAll("[data-decide]"), function(el){
+      el.addEventListener("click", function(){
+        var to = el.getAttribute("data-decide");
+        confirmBox("确认将分支标记为「"+LC[to].label+"」？", "确认后写入时间线，后续同步不再覆盖这次人工判定。", function(){
+          decide(b.id, to);
+        });
+      });
+    });
+    var dis = document.getElementById("dismissPending");
+    if(dis) dis.addEventListener("click", function(){
+      b.pendingReason = null;
+      b.lc = "active";
+      renderAll(); renderDrawer(b);
+      toast("已忽略，恢复为进行中（下一轮同步会重新评估）");
+    });
+    var ub = document.getElementById("unbindBranch");
+    if(ub) ub.addEventListener("click", function(){
+      confirmBox("解除绑定？", "该分支将转为手工维护，不再跟随 GitLab 更新，记录与时间线保留。", function(){
+        b.source = "manual"; b.remote = "none"; b.merged = null;
+        closeModal(); closeDrawer(); renderAll(); toast("已解除绑定");
+      });
+    });
+    var bind = document.getElementById("bindBranch");
+    if(bind) bind.addEventListener("click", function(){ toast("打开远程分支选择器（原型未展开）"); });
+    document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
+    var del = document.getElementById("deleteBranch");
+    if(del) del.addEventListener("click", function(){
+      confirmBox("删除分支？", "会解除与关联工作项的绑定，并清空时间线，操作不可撤销。", function(){
+        closeModal(); toast("删除分支（原型演示）");
+      });
+    });
+  }
+
+  function applyStatus(b, to){
+    if(b.status === to) return;
+    var from = statusOf(b.status).name;
+    b.status = to;
+    if(!b._manualNotes) b._manualNotes = [];
+    b._manualNotes.push({when: state.lastSync, text: "人工调整状态 " + from + " → " + statusOf(to).name});
+    renderAll();
+    if(openId === b.id) renderDrawer(b);
+    toast("状态已改为「"+statusOf(to).name+"」");
+  }
+
+  function timelineOf(b){
+    var list = [{actor:b.owner, text:"创建分支（初始状态：开发中）", when:b.created, sys:false}];
+    if(b.source==="git"){
+      list.push({actor:"系统", text:"首次同步到远程分支 " + b.name + "（"+ b.target +"）", when:b.created, sys:true});
+    }
+    if(b.lc==="done"){
+      list.push({actor:"系统", text:"远程分支已合并到 " + b.target + "，生命周期标记为「已完成」", when:b.decidedAt || b.lastAt, sys:true});
+      if(b.remote==="deleted"){
+        list.push({actor:"系统", text:"远程分支已删除，保留记录与关联工作项", when:b.decidedAt || b.lastAt, sys:true});
+      }
+    } else if(b.lc==="canceled"){
+      list.push({actor:"系统", text:"远程分支已删除且从未合并，标记为「已取消」", when:b.decidedAt || b.lastAt, sys:true});
+    } else if(b.lc==="pending"){
+      list.push({actor:"系统", text:"远程事实不足以判定，转入「待确认」：" + PENDING_REASON[b.pendingReason || "gap"], when:state.lastSync, sys:true});
+    } else if(b.source==="git"){
+      list.push({actor:"系统", text:"同步快照：远程分支存在，未合并（第 "+b.syncCount+" 次）", when:state.lastSync, sys:true});
+    }
+    if(b.decidedByManual){
+      list.push({actor:"当前用户", text:"人工判定为「"+LC[b.lc].label+"」", when:b.decidedAt, sys:false});
+    }
+    (b._manualNotes || []).forEach(function(n){
+      list.push({actor:"当前用户", text:n.text, when:n.when, sys:false});
+    });
+    return list;
+  }
+
+  /* ---------------- 同步模拟 ---------------- */
+  function runSync(){
+    if(state.syncing) return;
+    if(state.synced){
+      state.lastSync = "刚刚";
+      renderAll();
+      toast("已是最新，本轮无变化");
+      return;
+    }
+    state.syncing = true;
+    renderAll();
+    var btn = document.getElementById("syncBtn");
+    btn.disabled = true;
+    btn.classList.add("busy");
+    document.getElementById("syncBtnText").textContent = "同步中…";
+
+    var stages = ["同步中：拉取远程分支列表…", "同步中：比对已合并名单…", "同步中：更新生命周期…"];
+    var i = 0;
+    var timer = setInterval(function(){
+      i++;
+      var el = document.getElementById("syncStage");
+      if(el && stages[i]) el.textContent = stages[i];
+    }, 520);
+
+    setTimeout(function(){
+      clearInterval(timer);
+      /* 演示两条规则：未合并分支被删 → 已取消；已合并分支被删 → 已完成 */
+      var cancelTarget = byId("B-2");
+      var doneTarget = byId("B-9");
+      if(cancelTarget){ cancelTarget.lc = "canceled"; cancelTarget.remote = "deleted"; cancelTarget.decidedAt = "2026-11-13 10:40"; }
+      if(doneTarget){ doneTarget.lc = "done"; doneTarget.merged = true; doneTarget.remote = "deleted"; doneTarget.decidedAt = "2026-11-13 10:40"; }
+
+      state.syncing = false;
+      state.synced = true;
+      state.lastSync = "刚刚";
+      btn.disabled = false;
+      btn.classList.remove("busy");
+      document.getElementById("syncBtnText").textContent = "立即同步";
+      renderAll();
+      if(openId) renderDrawer(byId(openId));
+      toast("同步完成：B-9 已合并 → 已完成；B-2 未合并被删 → 已取消");
+    }, 1900);
+  }
+  document.getElementById("syncBtn").addEventListener("click", runSync);
+
+  /* ---------------- 弹层 ---------------- */
+  var modalOkHandler = null;
+  function confirmBox(title, desc, onOk){
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalDesc").textContent = desc;
+    modalOkHandler = onOk;
+    modal.classList.add("on");
+    modal.setAttribute("aria-hidden","false");
+  }
+  function closeModal(){
+    modal.classList.remove("on");
+    modal.setAttribute("aria-hidden","true");
+    modalOkHandler = null;
+  }
+  document.getElementById("modalCancel").addEventListener("click", closeModal);
+  document.getElementById("modalOk").addEventListener("click", function(){
+    var fn = modalOkHandler;
+    if(fn) fn();
+  });
+  modal.addEventListener("click", function(e){ if(e.target === modal) closeModal(); });
+
+  /* ---------------- 视图切换 / 主题 ---------------- */
+  function setView(v){
+    state.view = v;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(t){
+      var on = t.getAttribute("data-view") === v;
+      t.classList.toggle("on", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.getElementById("pageTitle").textContent = v==="pool" ? "分支池" : "项目仓库";
+    document.getElementById("pageSub").textContent = v==="pool"
+      ? "GitLab 同步 · 原型演示数据"
+      : "仓库绑定与导入策略 · 原型演示数据";
+    renderAll();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function(tab){
+    tab.addEventListener("click", function(){ setView(tab.getAttribute("data-view")); });
+  });
+
+  var qs = new URLSearchParams(location.search);
+  var themeBtn = document.getElementById("themeBtn");
+  if(qs.get("theme") === "dark") state.theme = "dark";
+  if(qs.get("lc")) state.lc = qs.get("lc");
+  document.body.setAttribute("data-theme", state.theme);
+  themeBtn.textContent = state.theme === "light" ? "☾" : "☀";
+  themeBtn.addEventListener("click", function(){
+    state.theme = state.theme === "light" ? "dark" : "light";
+    document.body.setAttribute("data-theme", state.theme);
+    themeBtn.textContent = state.theme === "light" ? "☾" : "☀";
+  });
+
+  function renderAll(){
+    var isPool = state.view === "pool";
+    lifecycleBar.style.display = isPool ? "" : "none";
+    pendingBarWrap.style.display = isPool ? "" : "none";
+    hintBar.style.display = isPool ? "" : "none";
+    if(isPool){ renderHead(); renderPool(); }
+    else { renderHead(); renderRepo(); }
+  }
+
+  setView(qs.get("view") === "repo" ? "repo" : "pool");
+  if(qs.get("branch")) openDrawer(qs.get("branch"));
+})();
+</script>
+</body>
+</html>
