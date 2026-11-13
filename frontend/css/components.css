@@ -1114,6 +1114,8 @@ body.dragging-active{cursor:grabbing;user-select:none;}
 }
 .modal-layer.side .sheet-body{flex:1 1 auto;min-height:0;overflow:auto;}
 .modal-layer.side .sheet-foot{border-radius:0;}
+/* 侧滑面板只有 560 宽，原来 720 宽的双列表单会把长文本框压到 250；侧滑内改单列，短字段仍可自行分行 */
+.modal-layer.side .proj-dlg-body .stack.proj-form-grid{grid-template-columns:minmax(0,1fr);}
 @keyframes ds-slide-in-right{from{opacity:.5;transform:translateX(28px);}to{opacity:1;transform:none;}}
 .sheet{
   width:100%;max-width:480px;background:var(--surface);
