@@ -151,8 +151,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
           <section class="drawer-card">
             <div class="drawer-card-head"><h3>内容</h3><span class="foot-note">只有标题必填</span></div>
             <div class="field">
-              <label class="field-label" for="iDesc">描述</label>
-              <textarea id="iDesc" maxlength="2000" placeholder="目标、验收标准、注意事项…（可选）" style="min-height:76px"></textarea>
+              <label class="field-label">描述</label>
+              <div id="iDesc" style="min-height:120px"></div>
             </div>
             <div class="field" style="margin-top:11px">
               <div class="field-label"><label for="iTags">标签</label><span class="foot-note" style="margin-left:auto">回车或逗号添加 · 最多 8 个</span></div>

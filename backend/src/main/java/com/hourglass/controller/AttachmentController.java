@@ -96,6 +96,32 @@ public class AttachmentController {
         return ApiResult.ok(attachmentService.upload(userId, ws.getId(), taskId, AttachmentService.KIND_TASK, file));
     }
 
+    /**
+     * 任务描述内图片上传：与任务附件共用 KIND_TASK 存储，但返回编辑器友好的 URL 对象。
+     * 图片作为描述内容的一部分，删除/清理策略与任务附件一致。
+     */
+    @PostMapping("/api/tasks/{taskId}/description-images")
+    public ApiResult<Map<String, Object>> uploadDescriptionImage(
+            @PathVariable String taskId, @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
+        String ext = original.lastIndexOf('.') >= 0
+                ? original.substring(original.lastIndexOf('.') + 1).toLowerCase()
+                : "";
+        if (!"jpg".equals(ext) && !"jpeg".equals(ext) && !"png".equals(ext)
+                && !"gif".equals(ext) && !"webp".equals(ext)) {
+            throw AppException.badRequest("描述图片只支持 jpg/png/gif/webp");
+        }
+        Attachment a = attachmentService.upload(userId, ws.getId(), taskId, AttachmentService.KIND_TASK, file);
+        Map<String, Object> map = new HashMap<String, Object>();
+        map.put("id", a.getId());
+        map.put("url", "/api/attachments/" + a.getId() + "/download");
+        map.put("filename", a.getFilename());
+        return ApiResult.ok(map);
+    }
+
     /** T2.1 / T2.3：需求池需求附件（attachment 泛化 target=demand） */
     @GetMapping("/api/demands/{demandId}/attachments")
     public ApiResult<com.hourglass.dto.PageResult<Attachment>> listDemand(

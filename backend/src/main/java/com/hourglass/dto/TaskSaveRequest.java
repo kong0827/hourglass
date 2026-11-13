@@ -22,7 +22,6 @@ public class TaskSaveRequest {
     @Size(max = 60, message = "任务标题不能超过 60 字")
     private String title;
 
-    @Size(max = 2000, message = "任务描述不能超过 2000 字")
     private String description;
 
     @Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")

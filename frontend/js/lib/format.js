@@ -344,4 +344,22 @@ function hexToRgb(hex){
 }
 function rgbaOf(hex, a){ var c = hexToRgb(hex); return "rgba("+c.r+","+c.g+","+c.b+","+a+")"; }
 
-export { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+/* 只认白名单标签，别把历史纯文本里的 "<TBD>" 之类误判成 HTML——
+   旧描述是纯文本，误判会让尖括号里的内容被当标签吞掉。 */
+var HTML_TAG_RE = /<(?:p|div|br|span|b|strong|i|em|u|s|strike|sub|sup|ul|ol|li|a|img|font)(?:\s[^<>]*)?\/?>/i;
+function isHtml(str){ return typeof str === "string" && HTML_TAG_RE.test(str.trim()); }
+function stripHtmlTags(html){ return String(html || "").replace(/<[^>]+>/g, " "); }
+
+/**
+ * 任务描述在卡片/列表等紧凑场景下按纯文本展示。
+ * 若后端已存 HTML，则剥离标签后返回；历史纯文本原样返回。
+ */
+function taskDescText(desc, maxLen){
+  if(!desc) return "";
+  var text = isHtml(desc) ? stripHtmlTags(desc) : desc;
+  text = text.replace(/\s+/g, " ").trim();
+  if(maxLen && text.length > maxLen) text = text.substring(0, maxLen) + "…";
+  return text;
+}
+
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

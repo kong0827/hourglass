@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>任务描述图片上传 · 方案 B 原型</title>
+<link rel="stylesheet" href="../../frontend/vendor/suneditor/suneditor.min.css">
+<script src="../../frontend/vendor/suneditor/suneditor.min.js"></script>
+<script src="../../frontend/vendor/markdown/purify.min.js"></script>
+<style>
+:root{
+  --bg:#F7F8FA;--surface:#fff;--border:#E4E7EC;--text:#101828;--text-2:#475467;--text-3:#667085;
+  --primary:#3370ff;--primary-hover:#1d4ed8;--primary-soft:#eff4ff;
+  --success:#389e0d;--danger:#cf1322;--warning:#d48806;
+  --r:8px;--shadow:0 2px 8px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:13px;color:var(--text);background:var(--bg);padding:40px 24px;line-height:1.6;}
+.wrap{max-width:1100px;margin:0 auto;display:grid;gap:24px;}
+h1{font-size:20px;font-weight:600;margin-bottom:4px;}
+.sub{color:var(--text-2);margin-bottom:16px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:20px;}
+.card h2{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.card h2 .tag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;background:var(--primary-soft);color:var(--primary);}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media (max-width:900px){.row{grid-template-columns:1fr;}}
+label.field-label{display:block;font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:6px;}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+button{height:32px;padding:0 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);}
+button.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+button.primary:hover{background:var(--primary-hover);}
+button.ghost{background:var(--primary-soft);border-color:transparent;color:var(--primary);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+.preview{min-height:120px;padding:12px;border:1px dashed var(--border);border-radius:6px;background:#FAFBFC;}
+.preview img{max-width:100%;height:auto;border-radius:4px;margin:8px 0;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--text-2);white-space:pre-wrap;word-break:break-all;background:#F8F9FA;border:1px solid var(--border);border-radius:6px;padding:12px;max-height:220px;overflow:auto;}
+.note{font-size:12px;color:var(--text-3);margin-top:8px;}
+.steps{counter-reset:step;list-style:none;display:grid;gap:10px;}
+.steps li{display:flex;gap:10px;align-items:flex-start;}
+.steps li::before{counter-increment:step;content:counter(step);flex:0 0 22px;height:22px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-size:11px;font-weight:600;display:grid;place-items:center;margin-top:1px;}
+.status{font-size:12px;padding:8px 12px;border-radius:6px;margin-top:12px;display:none;}
+.status.show{display:block;}
+.status.ok{background:#F6FFED;border:1px solid #B7EB8F;color:var(--success);}
+.status.warn{background:#FFFBE6;border:1px solid #FFE58F;color:var(--warning);}
+.sun-editor{outline:none;border-radius:6px!important;}
+.sun-editor .se-wrapper.wysiwyg{padding:12px!important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>任务描述支持图片上传 · 方案 B 原型</h1>
+    <p class="sub">图片走独立 attachment，HTML 中保存 URL；旧纯文本数据可安全回显。</p>
+  </div>
+
+  <div class="card">
+    <h2>方案要点 <span class="tag">可交互</span></h2>
+    <ul class="steps">
+      <li>编辑器从 textarea 换成 SunEditor，保留加粗/列表/链接/图片等轻量能力。</li>
+      <li>图片上传拦截到自定义逻辑，模拟 POST 到 <code>/api/tasks/{id}/attachments?kind=description</code>，后端返回 attachment URL。</li>
+      <li>HTML 保存前服务端用 jsoup 白名单清洗；前端展示再用 DOMPurify 二次过滤。</li>
+      <li>旧数据无 HTML 标签时，按纯文本渲染（换行转 &lt;br&gt;），不破坏现有内容。</li>
+    </ul>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>编辑态</h2>
+      <label class="field-label">任务描述</label>
+      <textarea id="descEditor" style="display:none;"></textarea>
+      <div class="actions">
+        <button class="primary" onclick="save()">保存（看提交内容）</button>
+        <button class="ghost" onclick="loadLegacy()">载入旧纯文本数据</button>
+        <button onclick="clearEditor()">清空</button>
+      </div>
+      <div id="saveStatus" class="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>展示态</h2>
+      <label class="field-label">渲染效果（DOMPurify 清洗后）</label>
+      <div id="preview" class="preview">
+        <span style="color:var(--text-3)">点击左侧“保存”后在此预览…</span>
+      </div>
+      <p class="note">旧文本兼容逻辑：内容不含 HTML 标签时，按纯文本段落渲染。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>实际会提交的 HTML</h2>
+    <pre id="submittedHtml" class="code">（未保存）</pre>
+  </div>
+
+  <div class="card">
+    <h2>与现有系统复用点</h2>
+    <ul class="steps">
+      <li>编辑器：复用 <code>frontend/vendor/suneditor</code>（需求文档已用）。</li>
+      <li>后端存储：复用现有 <code>AttachmentService</code> + <code>app.attach.dir</code> 本地目录。</li>
+      <li>安全清洗：复用/抽出 <code>RequirementDocService</code> 的 jsoup 白名单逻辑。</li>
+      <li>前端展示：复用 <code>frontend/vendor/markdown/purify.min.js</code>（DOMPurify）。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+var editor;
+var nextAttachId = 1001;
+
+function initEditor(){
+  editor = SUNEDITOR.create('descEditor', {
+    width: '100%',
+    height: '260px',
+    minHeight: '180px',
+    placeholder: '目标、验收标准、注意事项… 支持粘贴/上传图片',
+    buttonList: [
+      ['undo','redo'],
+      ['bold','underline','italic','strike'],
+      ['fontColor','hiliteColor'],
+      ['align','list'],
+      ['link','image'],
+      ['removeFormat']
+    ],
+    mode: 'classic',
+    resizingBar: false,
+    showPathLabel: false,
+    charCounter: false,
+    imageUploadSizeLimit: 3 * 1024 * 1024, // 3MB，与需求文档一致
+    imageUploadHandler: function(files, info, core, uploadHandler){
+      // 这里模拟后端上传：真实实现会调用 AttachmentController
+      var file = files[0];
+      if(!file) return;
+
+      var status = document.getElementById('saveStatus');
+      status.className = 'status warn show';
+      status.textContent = '正在上传图片：' + file.name + ' …';
+
+      setTimeout(function(){
+        var reader = new FileReader();
+        reader.onload = function(e){
+          // 模拟后端返回的 attachment URL
+          var attachId = nextAttachId++;
+          var ext = (file.name.split('.').pop() || 'png').toLowerCase();
+          var mockUrl = '/api/attachments/' + attachId + '/preview.' + ext;
+
+          // 真实场景：uploadHandler 接收 { result: [{ url, name, size }] }
+          uploadHandler({
+            result: [{
+              url: mockUrl,
+              name: file.name,
+              size: file.size
+            }]
+          });
+
+          status.className = 'status ok show';
+          status.textContent = '已上传（模拟）：' + file.name + ' → ' + mockUrl;
+        };
+        reader.readAsDataURL(file);
+      }, 600);
+    }
+  });
+
+  // 默认填入一段富文本，含图片占位提示
+  editor.setContents('<p>这是<b>富文本</b>任务描述示例。</p><p>点击工具栏图片按钮上传截图，URL 会落在 HTML 中。</p>');
+}
+
+function isHtml(str){
+  return typeof str === 'string' && /<[a-z][\s\S]*>/i.test(str.trim());
+}
+
+function renderDescription(raw){
+  if(!raw) return '';
+  if(isHtml(raw)){
+    // 新数据：HTML 先安全清洗再渲染
+    return DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ['p','br','b','strong','i','em','u','s','strike','a','ul','ol','li','img','span'],
+      ALLOWED_ATTR: ['href','target','src','alt','title','style'],
+      ALLOW_DATA_ATTR: false
+    });
+  }
+  // 旧数据：纯文本，按段落渲染
+  return '<p>' + raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') + '</p>';
+}
+
+function save(){
+  var html = editor.getContents(false); // false = 不转义
+  var clean = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p','br','b','strong','i','em','u','s','strike','a','ul','ol','li','img','span'],
+    ALLOWED_ATTR: ['href','target','src','alt','title','style'],
+    ALLOW_DATA_ATTR: false
+  });
+
+  document.getElementById('submittedHtml').textContent = clean;
+  document.getElementById('preview').innerHTML = renderDescription(clean);
+
+  var status = document.getElementById('saveStatus');
+  status.className = 'status ok show';
+  status.textContent = '已生成提交 HTML，并同步渲染到右侧预览。';
+}
+
+function loadLegacy(){
+  var legacy = '这是历史遗留的纯文本任务描述。\n\n包含多行内容、特殊字符 <script>，以及需要保留的换行。\n\n升级到富文本后，旧数据应继续正常显示，不应被当成 HTML 执行。';
+  editor.setContents('<p>' + legacy.replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>') + '</p>');
+  document.getElementById('submittedHtml').textContent = legacy;
+  document.getElementById('preview').innerHTML = renderDescription(legacy);
+
+  var status = document.getElementById('saveStatus');
+  status.className = 'status ok show';
+  status.textContent = '已载入旧纯文本数据：编辑器内按段落展示，右侧按兼容模式渲染。';
+}
+
+function clearEditor(){
+  editor.setContents('');
+  document.getElementById('submittedHtml').textContent = '（未保存）';
+  document.getElementById('preview').innerHTML = '<span style="color:var(--text-3)">点击左侧“保存”后在此预览…</span>';
+  document.getElementById('saveStatus').className = 'status';
+}
+
+initEditor();
+</script>
+</body>
+</html>

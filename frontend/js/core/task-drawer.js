@@ -11,7 +11,7 @@ import { canEditReq, canEditTask, catNameById, colRuleOf, reqNameById, roleReadO
 import { loadRunningTimer } from "./task-actions.js";
 import { guard, serverDecision } from "./transitions.js";
 import { UI, copyToClipboard, esc, toast, toastAction } from "./ui.js";
-import { normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
+import { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, releaseSnapshotHTML, fmtReleaseTime, COLUMNS, ITEM_TYPE_DESCS, PRIORITIES, avatarHTML, colMeta, dayDiff, docTypeName, duePresetDate, fmtMinutes, fmtMinutesShort, fmtSize, fmtTs, itemTypeInfoHTML, pad2, parseDate, priColor, priName, startPresetDate, versionPhaseInfoHTML, weekdayCN } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { loadBoard, loadReqs } from "../views/board.js";
 import { loadView, viewModule } from "./view-loader.js";
@@ -28,6 +28,136 @@ function syncDrawerDirty(){
     taskFormHint.textContent = dirty ? "有未保存的改动" : "";
   }
 }
+/* 任务描述富文本编辑器（SunEditor） */
+var taskDescEditor = null, taskDescEditorPromise = null, pendingTaskDesc = null, pendingDescReadOnly = null,
+    taskDescSuppressChange = false;
+function plainTextToHtml(text){
+  if(!text) return "";
+  return text.split(/\n\n+/).map(function(p){
+    return "<p>" + p.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>") + "</p>";
+  }).join("");
+}
+function loadSunEditorLib(){
+  if(typeof window.SUNEDITOR !== "undefined") return Promise.resolve();
+  return new Promise(function(resolve, reject){
+    var css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "vendor/suneditor/suneditor.min.css";
+    document.head.appendChild(css);
+    var s = document.createElement("script");
+    s.src = "vendor/suneditor/suneditor.min.js";
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ reject(new Error("富文本编辑器加载失败，请检查网络后重试")); };
+    document.head.appendChild(s);
+  });
+}
+function syncTaskDescEditorReadOnly(){
+  if(!taskDescEditor) return;
+  if(pendingDescReadOnly) taskDescEditor.disable(); else taskDescEditor.enable();
+}
+function ensureTaskDescEditor(){
+  if(taskDescEditor) return Promise.resolve(taskDescEditor);
+  if(taskDescEditorPromise) return taskDescEditorPromise;
+  taskDescEditorPromise = loadSunEditorLib().then(function(){
+    if(!$("iDesc")){ taskDescEditorPromise = null; return null; }
+    taskDescEditor = SUNEDITOR.create("iDesc", {
+      width: "100%",
+      height: "auto",
+      minHeight: "120px",
+      placeholder: "目标、验收标准、注意事项…（可选）",
+      buttonList: [
+        ["undo","redo"],
+        ["bold","underline","italic","strike"],
+        ["fontColor","hiliteColor"],
+        ["align","list"],
+        ["link","image"],
+        ["removeFormat"]
+      ],
+      mode: "classic",
+      resizingBar: false,
+      showPathLabel: false,
+      charCounter: false,
+      imageUploadSizeLimit: 3 * 1024 * 1024
+    });
+    /* SunEditor 的上传钩子挂在实例上，创建后再赋值；写进 options 不会生效。
+       粘贴图片与工具栏选图都走这里，避免默认塞 base64。 */
+    taskDescEditor.onImageUploadBefore = uploadTaskDescImage;
+    taskDescEditor.onChange = function(){ if(taskDescSuppressChange) return; rt.formDirty = true; };
+    syncTaskDescEditorReadOnly();
+    if(pendingTaskDesc !== null){
+      taskDescSuppressChange = true;
+      try{
+        var html = isHtml(pendingTaskDesc) ? pendingTaskDesc : plainTextToHtml(pendingTaskDesc);
+        taskDescEditor.setContents(descHtmlForEditor(html), false);
+      }finally{ taskDescSuppressChange = false; }
+      pendingTaskDesc = null;
+    }
+    if(formBase) formBase.desc = getTaskDescContent();
+    return taskDescEditor;
+  }).catch(function(e){
+    taskDescEditorPromise = null;
+    throw e;
+  });
+  return taskDescEditorPromise;
+}
+/* 描述内图片在库里存站内相对路径（/api/attachments/...），部署前缀不进数据；
+   编辑器内显示时补 appBase，保存前再剥掉，避免换部署路径后图片全挂。 */
+var DESC_IMG_REL = 'src="/api/attachments/';
+function descHtmlForEditor(html){
+  if(!html || !API.base) return html;
+  return html.split(DESC_IMG_REL).join('src="' + API.base + '/api/attachments/');
+}
+function descHtmlForSave(html){
+  if(!html || !API.base) return html;
+  return html.split('src="' + API.base + '/api/attachments/').join(DESC_IMG_REL);
+}
+function setTaskDescContent(htmlOrText){
+  pendingTaskDesc = htmlOrText === null || htmlOrText === undefined ? "" : htmlOrText;
+  if(taskDescEditor){
+    taskDescSuppressChange = true;
+    try{
+      var html = isHtml(pendingTaskDesc) ? pendingTaskDesc : plainTextToHtml(pendingTaskDesc);
+      taskDescEditor.setContents(descHtmlForEditor(html), false);
+    }finally{ taskDescSuppressChange = false; }
+    pendingTaskDesc = null;
+  }else{
+    ensureTaskDescEditor();
+  }
+}
+function getTaskDescContent(){
+  if(taskDescEditor) return descHtmlForSave(taskDescEditor.getContents(true));
+  if(pendingTaskDesc !== null) return pendingTaskDesc;
+  return "";
+}
+function uploadTaskDescImage(files, info, core, uploadHandler){
+  var f = files[0];
+  if(!f) return false;
+  if(!rt.editingId){ toast("请先保存工作项，再上传描述图片", "warn"); return false; }
+  if(rt.drawerReadOnly){ toast("你对该项目只有查看权限", "warn"); return false; }
+  if(f.size > 3 * 1024 * 1024){ toast("图片超过 3MB，未上传", "warn"); return false; }
+  var fd = new FormData();
+  fd.append("file", f);
+  var url = API.url("/api/tasks/" + encodeURIComponent(rt.editingId) + "/description-images" +
+    (window.CURRENT_WORKSPACE ? ("?workspace=" + encodeURIComponent(window.CURRENT_WORKSPACE)) : ""));
+  fetch(url, {
+    method:"POST",
+    credentials:"same-origin",
+    headers:{ "X-XSRF-TOKEN": csrfCookie() },
+    body: fd
+  }).then(function(res){
+    if(res.status === 401){ window.location.href = API.loginUrl; throw new Error("未登录"); }
+    return res.json().catch(function(){ return null; });
+  }).then(function(json){
+    if(json && json.code === 0 && json.data && json.data.url){
+      uploadHandler({ result: [{ url: API.url(json.data.url), name: json.data.filename || f.name, size: f.size }] });
+    }else{
+      toast((json && json.message) || "图片上传失败", "bad");
+    }
+  }).catch(function(ex){
+    toast(ex && ex.message ? ex.message : "图片上传失败", "bad");
+  });
+}
+
 /* 每次标记改动自增：保存期间又编辑时，不能把新改动误当成已保存 */
 var formRev = 0;
 /* 语义脏检查：事件只是「可能改过」的提示，是否真的脏由当前值和基线比较决定。
@@ -42,7 +172,7 @@ function formProgressValue(){
 function formSnapshot(){
   var snap = {
     title: (iTitle.value || "").trim(),
-    desc: (iDesc.value || "").trim(),
+    desc: getTaskDescContent(),
     start: iStart.value || "",
     due: iDue.value || "",
     milestone: !!($("iMilestone") || {}).checked,
@@ -937,6 +1067,8 @@ function applyDrawerReadOnly(readOnly){
   if(btnCommentSend) btnCommentSend.hidden = !!readOnly;
   if(btnTimer) btnTimer.hidden = !!readOnly;
   if(btnTimerAdd) btnTimerAdd.hidden = !!readOnly;
+  pendingDescReadOnly = !!readOnly;
+  syncTaskDescEditorReadOnly();
   var hint = $("taskFormHint");
   if(hint && !rt.formDirty){
     hint.textContent = readOnly ? "你对该项目只有查看权限，可查看但不能修改" : "保存后可拖动卡片调整状态与顺序";
@@ -1319,7 +1451,7 @@ function openTaskDrawer(colId, task, defaults){
     btnDeleteTask.hidden = false;
     if(btnTaskNew) btnTaskNew.hidden = false;
     iTitle.value = task.title || "";
-    iDesc.value = task.description || "";
+    setTaskDescContent(task.description || "");
     iStart.value = task.startDate || "";
     iDue.value = task.dueDate || "";
     if($("iMilestone")) $("iMilestone").checked = !!task.isMilestone;
@@ -1390,7 +1522,7 @@ function openTaskDrawer(colId, task, defaults){
     btnDeleteTask.hidden = true;
     if(btnTaskNew) btnTaskNew.hidden = true;
     startedDone = false;
-    iTitle.value = ""; iDesc.value = "";
+    iTitle.value = ""; setTaskDescContent("");
     /* 甘特图双击空白处新建时预填起止日期；普通入口保持为空 */
     iStart.value = (defaults && defaults.startDate) || "";
     iDue.value = (defaults && defaults.dueDate) || "";
@@ -2929,7 +3061,7 @@ taskForm.addEventListener("submit", function(e){
   var payload = {
     oldUpdatedAt: current ? (current.updatedAt || null) : null,
     title: title,
-    description: iDesc.value.trim(),
+    description: getTaskDescContent(),
     priority: rt.formPri,
     categoryId: rt.formCat || null,
     owner: owner.name,

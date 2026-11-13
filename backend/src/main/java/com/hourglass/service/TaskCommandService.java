@@ -3,6 +3,7 @@ package com.hourglass.service;
 import com.hourglass.common.AppException;
 import com.hourglass.common.Consts;
 import com.hourglass.common.DefectMeta;
+import com.hourglass.common.HtmlSanitizer;
 import com.hourglass.common.Ids;
 import com.hourglass.common.Texts;
 import com.hourglass.dto.TaskSaveRequest;
@@ -365,7 +366,7 @@ public class TaskCommandService {
                               String oldOwnerUserId) {
         String oldProjectId = t.getReqId();
         t.setTitle(req.getTitle().trim());
-        t.setDescription(Texts.trimToNull(req.getDescription()));
+        t.setDescription(HtmlSanitizer.taskDescription(Texts.trimToNull(req.getDescription())));
         t.setPriority(req.getPriority() == null ? "P2" : req.getPriority());
         String owner = Texts.trimToNull(req.getOwner());
         if (owner != null) {

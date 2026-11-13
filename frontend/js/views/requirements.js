@@ -11,7 +11,7 @@ import { UI, esc, toast } from "../core/ui.js";
 import { AIProgress, aiApplyFailText, aiErrorText as aiErrMsg, aiUsageText } from "../core/ai-progress.js";
 import * as activityUI from "../core/activity-ui.js";
 import { loadViews, savedViewsFor } from "../core/filters-ui.js";
-import { DOC_TYPES, PRIORITIES, colName, docTypeName, fmtTs, pad2, priName, typeBadgeHTML } from "../lib/format.js";
+import { DOC_TYPES, PRIORITIES, colName, docTypeName, fmtTs, pad2, priName, taskDescText, typeBadgeHTML } from "../lib/format.js";
 import * as textDiff from "../lib/text-diff.js";
 import { loadReqs, render } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
@@ -1892,7 +1892,7 @@ function renderAiSplit(d){
       '<input type="checkbox" checked data-pick="' + i + '" aria-label="选择工作项">' +
       '<div class="ai-main">' +
         '<input class="ai-title" type="text" maxlength="60" value="' + esc(t.title) + '" data-title="' + i + '" aria-label="工作项标题">' +
-        (t.description ? '<div class="ai-desc">' + esc(t.description) + '</div>' : '') +
+        (t.description ? '<div class="ai-desc">' + esc(taskDescText(t.description, 200)) + '</div>' : '') +
         '<div class="ai-meta">' +
           '<select class="ai-pri" data-pri="' + i + '" aria-label="优先级">' + opts + '</select>' +
           (t.dependsOnIndex >= 0 ? '<span>依赖第 ' + (t.dependsOnIndex + 1) + ' 条</span>' : '') +

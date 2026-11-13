@@ -7,7 +7,7 @@ import { openTaskById } from "../core/task-actions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { setPageError } from "../core/utils.js";
 import { triggerDownload } from "../lib/download.js";
-import { axisTicks, fmtMinutesShort, pad2, priColor, priName, priTagHTML } from "../lib/format.js";
+import { axisTicks, fmtMinutesShort, pad2, priColor, priName, priTagHTML, taskDescText } from "../lib/format.js";
 import { ganttCsvCell } from "./gantt.js";
 import { openLogTable, openTaskTable } from "./manager-shared.js";
 import { openReqDocAndJump, reqDocList, reqDocNameById } from "./requirements.js";
@@ -120,7 +120,7 @@ function renderCompletions(rows, month){
       "<td>" + (r.taskId
         ? '<button class="comp-t comp-link" type="button" data-open-task="' + esc(r.taskId) + '" title="打开工作项详情">' + esc(r.title) + "</button>"
         : '<span class="comp-t">' + esc(r.title) + "</span>") +
-        (r.description ? '<span class="comp-d">' + esc(r.description) + "</span>" : "") + "</td>" +
+        (r.description ? '<span class="comp-d">' + esc(taskDescText(r.description, 120)) + "</span>" : "") + "</td>" +
       "<td>" + (r.reqName ? esc(r.reqName) : '<span class="comp-dim">—</span>') + "</td>" +
       "<td>" + compDocCell(r) + "</td>" +
       "<td>" + esc(r.owner || "—") + "</td>" +
