@@ -195,6 +195,8 @@ public class BackupData {
         private String categoryId;
         private String priority;
         private String status;
+        private String closeReason;
+        private String closeStage;
         private String expectDate;
         /** 需求层计划日期；旧备份缺字段时保持为空，不从任务或版本日期推导 */
         private String plannedStart;

@@ -88,7 +88,9 @@ class DemandServiceNotificationTest {
 
     @Test
     void reopenNotifiesSubmitter() {
-        Demand d = demand("rej");
+        Demand d = demand("closed");
+        d.setCloseReason("rej");
+        d.setCloseStage("review");
         when(demands.selectById("D1")).thenReturn(d);
         when(demands.selectByIdForUpdate("W1", "D1")).thenReturn(d);
 

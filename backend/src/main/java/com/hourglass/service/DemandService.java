@@ -36,8 +36,8 @@ import java.util.Map;
 /**
  * M2 需求池（T2.1 / T2.4 / T2.5）：CRUD + 状态机 + WSJF。
  *
- * <p>状态机：review（待评审）→ pass（已通过）/ rej（已拒绝）；pass → plan（已排期，选目标版本）；
- * rej → reopen 回 review；pass → unpass 撤回评审；plan → unplan 退回已通过并解绑版本。
+ * <p>状态机：review（待评审）→ pass（已通过）/ closed（已关闭）；pass → plan（已排期，选目标版本）；
+ * closed 按关闭前阶段回 review/pass；pass → unpass 撤回评审；plan → unplan 退回已通过并解绑版本。
  * 评审流转仅空间主可执行；排期/调期/撤排/取消/恢复由管理角色执行，全部动作写 demand_log 留痕。
  * WSJF =（业务价值+时间紧迫度+风险降低）÷ 工作量，四分量齐全才算，禁止手填结果。
  */
@@ -93,17 +93,16 @@ public class DemandService {
         this.deletionTrace = deletionTrace;
     }
 
-    /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 条件 */
+    /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 与列内阶段条件 */
     public DemandPage page(String workspaceId, String userId, DemandQuery query) {
         prepare(workspaceId, userId, query);
-        query.setStatus(validStatus(query.getStatus()));
+        normalizeFilters(query);
         query.setOffset(Math.max(0, query.getOffset()));
         query.setLimit(Math.max(1, Math.min(MAX_PAGE_SIZE, query.getLimit())));
 
         Map<String, Integer> counts = countByStatus(query);
-        int total = query.getStatus() == null
-                ? sumCounts(counts)
-                : countOf(counts, query.getStatus());
+        int total = query.getDeliveryStage() != null ? demandMapper.countPage(query)
+                : query.getStatus() == null ? sumCounts(counts) : countOf(counts, query.getStatus());
         List<Demand> items = total <= query.getOffset()
                 ? new java.util.ArrayList<Demand>()
                 : demandMapper.selectPage(query);
@@ -137,6 +136,7 @@ public class DemandService {
      */
     public DemandBoardResponse board(String workspaceId, String userId, DemandQuery base) {
         prepare(workspaceId, userId, base);
+        normalizeFilters(base);
         int safeLimit = Math.max(1, Math.min(MAX_PAGE_SIZE, base.getLimit() <= 0 ? 50 : base.getLimit()));
         base.setLimit(safeLimit);
         Map<String, Integer> counts = countByStatus(base);
@@ -145,12 +145,14 @@ public class DemandService {
         resp.setCounts(counts);
         resp.setTotalAll(boardTotalAll(base));
         resp.setFacets(boardFacets(base));
+        resp.setStageCounts(deliveryStageCounts(base));
         for (String status : DEMAND_STATUSES) {
             DemandQuery q = copyOf(base);
             q.setStatus(status);
             q.setOffset(0);
             q.setLimit(safeLimit);
-            int matched = countOf(counts, status);
+            int matched = "plan".equals(status) && q.getDeliveryStage() != null
+                    ? demandMapper.countPage(q) : countOf(counts, status);
             List<Demand> items = matched == 0 ? new java.util.ArrayList<Demand>() : demandMapper.selectPage(q);
             for (Demand d : items) {
                 fillWsjf(d);
@@ -165,7 +167,48 @@ public class DemandService {
         return resp;
     }
 
-    private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "rej", "canceled"};
+    private static final String[] DEMAND_STATUSES = {"review", "pass", "plan", "closed"};
+    private static final String[] DELIVERY_STAGES = {"waiting", "active", "donePending", "delivered"};
+
+    /** 主状态工作页：页签总量不受当前筛选影响，指标和分页卡片响应当前筛选。 */
+    public com.hourglass.dto.DemandWorkpageResponse workpage(String workspaceId, String userId, DemandQuery query) {
+        String status = validStatus(query.getStatus());
+        if (status == null) {
+            throw AppException.badRequest("请选择有效的主状态");
+        }
+        query.setStatus(status);
+        DemandPage page = page(workspaceId, userId, query);
+
+        DemandQuery mainScope = copyOf(query);
+        clearWorkFilters(mainScope);
+        Map<String, Integer> statusCounts = countByStatus(mainScope);
+        mainScope.setStatus("plan");
+
+        com.hourglass.dto.DemandWorkpageResponse out = new com.hourglass.dto.DemandWorkpageResponse();
+        out.setPage(page);
+        out.setStatusCounts(statusCounts);
+        out.setStageCounts(deliveryStageCounts(mainScope));
+        Map<String, Object> metrics = demandMapper.workpageMetrics(query);
+        out.setMetrics(metrics == null ? new LinkedHashMap<String, Object>() : metrics);
+
+        DemandQuery versionsQuery = copyOf(query);
+        versionsQuery.setStatus("plan");
+        versionsQuery.setDeliveryStage(null);
+        versionsQuery.setVersionId(null);
+        List<Map<String, Object>> versions = demandMapper.selectWorkpageVersions(versionsQuery);
+        versions.sort((a, b) -> {
+            boolean aNone = "__none".equals(String.valueOf(a.get("versionId")));
+            boolean bNone = "__none".equals(String.valueOf(b.get("versionId")));
+            if (aNone || bNone) {
+                return aNone == bNone ? 0 : aNone ? 1 : -1;
+            }
+            int byName = com.hourglass.common.VersionOrdering.compareDesc(
+                    String.valueOf(a.get("versionName")), String.valueOf(b.get("versionName")));
+            return byName != 0 ? byName : String.valueOf(a.get("versionId")).compareTo(String.valueOf(b.get("versionId")));
+        });
+        out.setVersions(versions);
+        return out;
+    }
 
     /**
      * 甘特：分页口径与列表一致，只对当前页做批量聚合，避免逐条查询。
@@ -281,9 +324,10 @@ public class DemandService {
         LocalDate planAt = toDate(value(log, "planAt"));
         LocalDate replanAt = toDate(value(log, "replanAt"));
         LocalDate cancelAt = toDate(value(log, "cancelAt"));
-        boolean canceled = "canceled".equals(status);
-        /* 已取消的需求停表：仍在进行的阶段收在取消日，不再一路画到今天 */
-        LocalDate horizon = canceled && cancelAt != null ? cancelAt : today;
+        boolean canceled = "closed".equals(status) || "canceled".equals(status) || "rej".equals(status);
+        /* 已关闭的需求停表：仍在进行的阶段收在关闭日，不再一路画到今天 */
+        LocalDate horizon = canceled && cancelAt != null ? cancelAt
+                : canceled && rejAt != null && "review".equals(d.getCloseStage()) ? rejAt : today;
 
         /* 评审整段计算：创建 → 最后一次通过；待评审算到今天；已拒绝停在最后一次拒绝 */
         LocalDate reviewEnd;
@@ -291,8 +335,9 @@ public class DemandService {
         if ("review".equals(status)) {
             reviewEnd = today;
             reviewOpen = true;
-        } else if ("rej".equals(status)) {
-            reviewEnd = rejAt == null ? today : rejAt;
+        } else if ("rej".equals(status) || ("closed".equals(status) && "rej".equals(d.getCloseReason())
+                && "review".equals(d.getCloseStage()))) {
+            reviewEnd = rejAt == null ? horizon : rejAt;
             reviewOpen = rejAt == null;
         } else if (canceled) {
             /* 取消前最后一次评审结论（通过或拒绝）之后没被撤回 / 重新打开，评审就停在结论日；
@@ -528,6 +573,9 @@ public class DemandService {
 
     private String validStatus(String status) {
         String s = Texts.trimToNull(status);
+        if ("rej".equals(s) || "canceled".equals(s)) {
+            return "closed";
+        }
         if (s == null) {
             return null;
         }
@@ -539,10 +587,73 @@ public class DemandService {
         return null;
     }
 
+    private void normalizeFilters(DemandQuery query) {
+        query.setStatus(validStatus(query.getStatus()));
+        query.setDeliveryStage(validChoice(query.getDeliveryStage(), DELIVERY_STAGES));
+        query.setCloseReason(validChoice(query.getCloseReason(), new String[]{"rej", "cancel", "dup"}));
+        query.setCloseStage(validChoice(query.getCloseStage(), new String[]{"review", "pass", "plan"}));
+        query.setFocus(validChoice(query.getFocus(), new String[]{"high", "dueSoon", "risk"}));
+        query.setVersionId(Texts.trimToNull(query.getVersionId()));
+    }
+
+    private static String validChoice(String value, String[] choices) {
+        String text = Texts.trimToNull(value);
+        if (text == null) {
+            return null;
+        }
+        for (String choice : choices) {
+            if (choice.equals(text)) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private static void clearWorkFilters(DemandQuery query) {
+        query.setStatus(null);
+        query.setDeliveryStage(null);
+        query.setVersionId(null);
+        query.setCloseReason(null);
+        query.setCloseStage(null);
+        query.setFocus(null);
+        query.setQ(null);
+        query.setPris(new ArrayList<String>());
+        query.setKinds(new ArrayList<String>());
+        query.setCats(new ArrayList<String>());
+        query.setReqs(new ArrayList<String>());
+    }
+
+    private Map<String, Integer> deliveryStageCounts(DemandQuery query) {
+        DemandQuery scope = copyOf(query);
+        scope.setStatus("plan");
+        scope.setDeliveryStage(null);
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        for (String stage : DELIVERY_STAGES) {
+            counts.put(stage, 0);
+        }
+        for (Map<String, Object> row : demandMapper.countGroupByDeliveryStage(scope)) {
+            Object stage = row.get("stage");
+            if (stage != null && counts.containsKey(String.valueOf(stage))) {
+                counts.put(String.valueOf(stage), intValue(row.get("cnt")));
+            }
+        }
+        int all = 0;
+        for (String stage : DELIVERY_STAGES) {
+            all += countOf(counts, stage);
+        }
+        counts.put("all", all);
+        return counts;
+    }
+
     /** 看板范围（项目/可见性）不变，去掉搜索与筛选后的总数；用于「匹配 M / N」的 N */
     private int boardTotalAll(DemandQuery query) {
         DemandQuery all = copyOf(query);
         all.setStatus(null);
+        all.setDeliveryStage(null);
+        all.setVersionId(null);
+        all.setCloseReason(null);
+        all.setCloseStage(null);
+        all.setFocus(null);
         all.setQ(null);
         all.setPris(new java.util.ArrayList<String>());
         all.setKinds(new java.util.ArrayList<String>());
@@ -555,6 +666,11 @@ public class DemandService {
     private Map<String, Map<String, Integer>> boardFacets(DemandQuery query) {
         DemandQuery scope = copyOf(query);
         scope.setStatus(null);
+        scope.setDeliveryStage(null);
+        scope.setVersionId(null);
+        scope.setCloseReason(null);
+        scope.setCloseStage(null);
+        scope.setFocus(null);
         scope.setPris(new java.util.ArrayList<String>());
         scope.setKinds(new java.util.ArrayList<String>());
         scope.setCats(new java.util.ArrayList<String>());
@@ -588,6 +704,7 @@ public class DemandService {
     private Map<String, Integer> countByStatus(DemandQuery query) {
         DemandQuery countsQuery = copyOf(query);
         countsQuery.setStatus(null);
+        countsQuery.setDeliveryStage(null);
         Map<String, Integer> counts = new java.util.LinkedHashMap<String, Integer>();
         for (String status : DEMAND_STATUSES) {
             counts.put(status, 0);
@@ -621,6 +738,11 @@ public class DemandService {
         q.setWorkspaceId(src.getWorkspaceId());
         q.setReqId(src.getReqId());
         q.setStatus(src.getStatus());
+        q.setDeliveryStage(src.getDeliveryStage());
+        q.setVersionId(src.getVersionId());
+        q.setCloseReason(src.getCloseReason());
+        q.setCloseStage(src.getCloseStage());
+        q.setFocus(src.getFocus());
         q.setQ(src.getQ());
         q.setPris(src.getPris());
         q.setKinds(src.getKinds());
@@ -726,6 +848,8 @@ public class DemandService {
         requireStatus(d, "review", "pass");
         Map<String, Object> before = snapshot(d);
         d.setStatus("pass");
+        d.setCloseReason(null);
+        d.setCloseStage(null);
         d.setReviewNote(Texts.cut(Texts.trimToNull(noteOf(body)), 500));
         save(d);
         logChange(d, userId, "pass", d.getReviewNote(), d.getReviewNote(), before);
@@ -742,7 +866,9 @@ public class DemandService {
         if (note == null) {
             throw AppException.badRequest("请填写拒绝原因");
         }
-        d.setStatus("rej");
+        d.setStatus("closed");
+        d.setCloseReason("rej");
+        d.setCloseStage("review");
         d.setReviewNote(Texts.cut(note, 500));
         save(d);
         logChange(d, userId, "rej", d.getReviewNote(), d.getReviewNote(), before);
@@ -836,36 +962,48 @@ public class DemandService {
         return getVisible(workspaceId, userId, id);
     }
 
-    /** 取消不级联任务；保留原目标，恢复时必须重新排期。 */
+    /** 关闭不级联任务；保留原目标，恢复到已通过时必须重新排期。 */
     @Transactional
     public Demand cancel(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = scheduleDemand(userId, workspaceId, id, body);
         if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus())
                 && !"plan".equals(d.getStatus()) && !"rej".equals(d.getStatus())) {
-            throw AppException.badRequest("只有有效状态的需求可以取消");
+            throw AppException.badRequest("只有有效状态的需求可以关闭");
         }
         String reason = requireReason(body, "cancel");
+        String closeReason = body == null ? null : Texts.trimToNull(body.getCloseReason());
+        if (closeReason == null) {
+            closeReason = "cancel";
+        }
         Map<String, Object> before = snapshot(d);
-        d.setStatus("canceled");
+        d.setCloseStage("rej".equals(d.getStatus()) ? "review" : d.getStatus());
+        d.setStatus("closed");
+        d.setCloseReason(closeReason);
         d.setReviewNote(reason);
         save(d);
-        logChange(d, userId, "cancel", "取消需求：" + reason, reason, before);
-        notifyStatus(d, userId, "已取消", "原因：" + reason + "；关联任务不变");
+        logChange(d, userId, "cancel", "关闭需求：" + reason, reason, before);
+        notifyStatus(d, userId, "已关闭", "原因：" + reason + "；关联任务不变");
         return getVisible(workspaceId, userId, id);
     }
 
     @Transactional
     public Demand restore(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = scheduleDemand(userId, workspaceId, id, body);
-        requireStatus(d, "canceled", "restore");
+        requireStatus(d, "closed", "restore");
         String reason = requireReason(body, "restore");
         Map<String, Object> before = snapshot(d);
-        d.setStatus("pass");
-        clearSchedule(d);
+        String target = "review".equals(d.getCloseStage()) ? "review" : "pass";
+        d.setStatus(target);
+        d.setCloseReason(null);
+        d.setCloseStage(null);
+        if ("pass".equals(target)) {
+            clearSchedule(d);
+        }
         d.setReviewNote(reason);
         save(d);
         logChange(d, userId, "restore", "恢复需求：" + reason, reason, before);
-        notifyStatus(d, userId, "已恢复", "需求回到已通过，请重新排期；关联任务不变");
+        notifyStatus(d, userId, "已恢复", "需求回到" + statusName(target)
+                + ("pass".equals(target) ? "，请重新排期" : "") + "；关联任务不变");
         return getVisible(workspaceId, userId, id);
     }
 
@@ -876,13 +1014,18 @@ public class DemandService {
         d.setPlannedEnd(null);
     }
 
-    /** 重新打开：已拒绝 → 待评审（清掉拒绝原因，重新进入评审） */
+    /** 兼容原评审重开入口：评审不通过的关闭需求回到待评审。 */
     @Transactional
     public Demand reopen(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = reviewDemand(userId, workspaceId, id, body);
-        requireStatus(d, "rej", "reopen");
+        requireStatus(d, "closed", "reopen");
+        if (!"rej".equals(d.getCloseReason())) {
+            throw AppException.badRequest("只有评审不通过的需求可以重新打开");
+        }
         Map<String, Object> before = snapshot(d);
         d.setStatus("review");
+        d.setCloseReason(null);
+        d.setCloseStage(null);
         d.setReviewNote(Texts.cut(Texts.trimToNull(noteOf(body)), 500));
         save(d);
         logChange(d, userId, "reopen", d.getReviewNote(), d.getReviewNote(), before);
@@ -1014,6 +1157,8 @@ public class DemandService {
         data.put("expectDate", d.getExpectDate() == null ? null : d.getExpectDate().toString());
         data.put("priority", d.getPriority());
         data.put("status", d.getStatus());
+        data.put("closeReason", d.getCloseReason());
+        data.put("closeStage", d.getCloseStage());
         data.put("revision", d.getRevision());
         return data;
     }
@@ -1153,6 +1298,9 @@ public class DemandService {
         }
         if ("plan".equals(status)) {
             return "已排期";
+        }
+        if ("closed".equals(status)) {
+            return "已关闭";
         }
         if ("rej".equals(status)) {
             return "已拒绝";

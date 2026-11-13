@@ -13,8 +13,16 @@ public class DemandQuery {
 
     private String workspaceId;
     private String reqId;
-    /** review/pass/plan/rej/canceled，null = 全部 */
+    /** review/pass/plan/closed，null = 全部；旧 rej/canceled 输入归一为 closed */
     private String status;
+    /** 已排期派生阶段：waiting/active/donePending/delivered */
+    private String deliveryStage;
+    /** 目标版本；__none 表示未指定版本 */
+    private String versionId;
+    private String closeReason;
+    private String closeStage;
+    /** high/dueSoon/risk */
+    private String focus;
     private String q;
     private List<String> pris = new ArrayList<String>();
     private List<String> kinds = new ArrayList<String>();

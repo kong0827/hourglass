@@ -17,6 +17,6 @@ public class DemandPage {
     private int limit;
     private List<Demand> items = new ArrayList<Demand>();
     private boolean hasMore;
-    /** 各状态条数（review/pass/plan/rej）+ all，忽略 status 条件 */
+    /** 各状态条数（review/pass/plan/closed）+ all，忽略 status 条件 */
     private Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
 }

@@ -75,7 +75,7 @@ class DemandServiceGanttTest {
 
     @Test
     void canceledDemandWithoutReleaseEvidenceStopsAtCancelDate() {
-        Demand d = demand("canceled");
+        Demand d = demand("closed");
         d.setVersionId("V1");
         stubPage(d);
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
@@ -139,10 +139,10 @@ class DemandServiceGanttTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"canceled", "pass"})
+    @ValueSource(strings = {"closed", "pass"})
     void successfulReleaseEvidenceSurvivesCancelAndUnplan(String status) {
         Demand d = demand(status);
-        if ("canceled".equals(status)) d.setVersionId("V-current");
+        if ("closed".equals(status)) d.setVersionId("V-current");
         stubPage(d);
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
                 row("demandId", "D1", "passAt", date("2026-01-10"), "planAt", date("2026-01-12"),
@@ -162,7 +162,7 @@ class DemandServiceGanttTest {
 
     @Test
     void canceledFromReviewEndsAtCancelDate() {
-        Demand d = demand("canceled");
+        Demand d = demand("closed");
         stubPage(d);
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
                 row("demandId", "D1", "cancelAt", date("2026-03-05"))));
@@ -233,7 +233,7 @@ class DemandServiceGanttTest {
 
     @Test
     void canceledAfterRejectStopsReviewAtRejectDate() {
-        Demand d = demand("canceled");
+        Demand d = demand("closed");
         stubPage(d);
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
                 row("demandId", "D1", "rejAt", LocalDateTime.of(2026, 1, 20, 10, 0),
@@ -247,7 +247,7 @@ class DemandServiceGanttTest {
 
     @Test
     void canceledAfterSameDayReopenKeepsReviewUntilCancel() {
-        Demand d = demand("canceled");
+        Demand d = demand("closed");
         stubPage(d);
         /* 同一天先拒绝后重新打开：只比日期会误判成「停在拒绝日」 */
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
@@ -263,7 +263,7 @@ class DemandServiceGanttTest {
 
     @Test
     void canceledWithPartlyDoneTasksStopsDevAtCancelDate() {
-        Demand d = demand("canceled");
+        Demand d = demand("closed");
         stubPage(d);
         when(demands.selectLogTimeline(eq("W1"), anyList())).thenReturn(Collections.singletonList(
                 row("demandId", "D1", "passAt", date("2026-01-10"), "cancelAt", date("2026-03-05"))));

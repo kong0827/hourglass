@@ -420,8 +420,9 @@ public class AiAssistantService {
             if (demand == null) {
                 throw AppException.notFound("需求不存在或你没有访问权限");
             }
-            if ("canceled".equals(demand.getStatus())) {
-                throw AppException.badRequest("已取消的需求不能新拆工作项");
+            if ("closed".equals(demand.getStatus()) || "canceled".equals(demand.getStatus())
+                    || "rej".equals(demand.getStatus())) {
+                throw AppException.badRequest("已关闭的需求不能新拆工作项");
             }
             String requested = Texts.trimToNull(req.getReqId());
             if (requested != null && !requested.equals(demand.getReqId())) {
@@ -532,7 +533,7 @@ public class AiAssistantService {
         }
         boolean canWrite = projectAccess.canWrite(workspaceId, userId, d.getReqId());
         boolean canManage = releasePermission.canManageProject(userId, workspaceId, d.getReqId());
-        if (!allowedDemandActions(d.getStatus(), canWrite, canManage).contains(action)) {
+        if (!allowedDemandActions(d.getStatus(), d.getCloseReason(), canWrite, canManage).contains(action)) {
             if (SCHEDULE_ACTIONS.contains(action) && !canManage) {
                 throw new AppException(403, "仅空间主、管理员或项目负责人可管理排期与发布计划");
             }
@@ -763,7 +764,8 @@ public class AiAssistantService {
     }
 
     private boolean splittable(String workspaceId, String userId, Demand demand) {
-        return !"canceled".equals(demand.getStatus()) && projectAccess.canWrite(workspaceId, userId, demand.getReqId());
+        return !"closed".equals(demand.getStatus()) && !"canceled".equals(demand.getStatus())
+                && !"rej".equals(demand.getStatus()) && projectAccess.canWrite(workspaceId, userId, demand.getReqId());
     }
 
     private AiAssistantDraft createDemandDraft(JsonNode node, List<ProjectRef> projects, String contextProject) {
@@ -841,7 +843,7 @@ public class AiAssistantService {
             boolean canWrite = projectAccess.canWrite(workspaceId, userId, target.getReqId());
             boolean canManage = releasePermission.canManageProject(userId, workspaceId, target.getReqId());
             d.setCanManage(canManage);
-            List<String> allowed = allowedDemandActions(target.getStatus(), canWrite, canManage);
+            List<String> allowed = allowedDemandActions(target.getStatus(), target.getCloseReason(), canWrite, canManage);
             for (String a : allowed) {
                 d.getAllowedActions().add(new AiAssistantOption(a, demandActionName(a)));
             }
@@ -849,7 +851,7 @@ public class AiAssistantService {
                 d.setDemandAction(proposedAction);
             }
             d.setActionName(demandActionName(d.getDemandAction()));
-            d.setTargetStatusName(demandStatusName(targetStatusFor(d.getDemandAction())));
+            d.setTargetStatusName(demandStatusName(targetStatusFor(d.getDemandAction(), target.getCloseStage())));
             fillProjectName(d, projects, target.getReqId());
             /* 用户可能在卡片里把动作改成排期/调期，只要允许就预取版本；当前版本仍可排期时直接选中，避免下拉里出现两次 */
             if (allowed.contains("plan") || allowed.contains("replan")) {
@@ -1106,7 +1108,8 @@ public class AiAssistantService {
     }
 
     /** 当前状态下当前用户可执行的流转：评审类要写权限，排期/发布类要管理权 */
-    private static List<String> allowedDemandActions(String status, boolean canWrite, boolean canManage) {
+    private static List<String> allowedDemandActions(String status, String closeReason,
+                                                     boolean canWrite, boolean canManage) {
         List<String> out = new ArrayList<String>();
         if ("review".equals(status)) {
             if (canWrite) {
@@ -1125,23 +1128,21 @@ public class AiAssistantService {
                 out.add("replan");
                 out.add("unplan");
             }
-        } else if ("rej".equals(status)) {
-            if (canWrite) {
-                out.add("reopen");
-            }
-        } else if ("canceled".equals(status)) {
+        } else if ("closed".equals(status)) {
             if (canManage) {
                 out.add("restore");
             }
+            if (canWrite && "rej".equals(closeReason)) {
+                out.add("reopen");
+            }
         }
-        if (canManage && ("review".equals(status) || "pass".equals(status)
-                || "plan".equals(status) || "rej".equals(status))) {
+        if (canManage && ("review".equals(status) || "pass".equals(status) || "plan".equals(status))) {
             out.add("cancel");
         }
         return out;
     }
 
-    private static String targetStatusFor(String action) {
+    private static String targetStatusFor(String action, String closeStage) {
         if (action == null) {
             return null;
         }
@@ -1151,17 +1152,17 @@ public class AiAssistantService {
         if ("plan".equals(action) || "replan".equals(action)) {
             return "plan";
         }
-        if ("rej".equals(action)) {
-            return "rej";
+        if ("rej".equals(action) || "cancel".equals(action)) {
+            return "closed";
         }
         if ("unpass".equals(action) || "reopen".equals(action)) {
             return "review";
         }
-        if ("unplan".equals(action) || "restore".equals(action)) {
-            return "pass";
+        if ("restore".equals(action)) {
+            return "review".equals(closeStage) ? "review" : "pass";
         }
-        if ("cancel".equals(action)) {
-            return "canceled";
+        if ("unplan".equals(action)) {
+            return "pass";
         }
         return null;
     }
@@ -1927,6 +1928,9 @@ public class AiAssistantService {
         }
         if ("plan".equals(status)) {
             return "已排期";
+        }
+        if ("closed".equals(status)) {
+            return "已关闭";
         }
         if ("rej".equals(status)) {
             return "已拒绝";

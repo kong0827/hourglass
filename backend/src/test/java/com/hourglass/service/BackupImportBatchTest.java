@@ -479,6 +479,7 @@ class BackupImportBatchTest {
             "plan|2026-12-01|2026-12-10",
             "rej|2026-12-01|2026-12-10",
             "canceled|2026-12-01|2026-12-10",
+            "closed|2026-12-01|2026-12-10",
             "plan|NULL|NULL",
             "plan|2026-12-01|NULL",
             "plan|NULL|2026-12-10",
@@ -503,6 +504,10 @@ class BackupImportBatchTest {
         source.setReqId("R1");
         source.setTitle("需求");
         source.setStatus(status);
+        if ("closed".equals(status)) {
+            source.setCloseReason("dup");
+            source.setCloseStage("pass");
+        }
         source.setVersionId("V1");
         source.setExpectDate(LocalDate.of(2026, 12, 20));
         source.setPlannedStart(start == null ? null : LocalDate.parse(start));
@@ -541,7 +546,17 @@ class BackupImportBatchTest {
 
         assertEquals(1, result.getDemands());
         Demand saved = capturedDemand();
-        assertEquals(status, saved.getStatus());
+        assertEquals("rej".equals(status) || "canceled".equals(status) ? "closed" : status, saved.getStatus());
+        if ("rej".equals(status)) {
+            assertEquals("rej", saved.getCloseReason());
+            assertEquals("review", saved.getCloseStage());
+        } else if ("canceled".equals(status)) {
+            assertEquals("cancel", saved.getCloseReason());
+            assertEquals("plan", saved.getCloseStage());
+        } else if ("closed".equals(status)) {
+            assertEquals("dup", saved.getCloseReason());
+            assertEquals("pass", saved.getCloseStage());
+        }
         assertEquals("V1", saved.getVersionId());
         assertEquals(source.getPlannedStart(), saved.getPlannedStart());
         assertEquals(source.getPlannedEnd(), saved.getPlannedEnd());
@@ -576,7 +591,7 @@ class BackupImportBatchTest {
         service.importData("U1", "W1", data);
 
         Demand saved = capturedDemand();
-        assertEquals(status, saved.getStatus());
+        assertEquals("rej".equals(status) || "canceled".equals(status) ? "closed" : status, saved.getStatus());
         assertEquals("V1", saved.getVersionId());
         assertEquals(LocalDate.of(2026, 12, 20), saved.getExpectDate());
         assertNull(saved.getPlannedStart());
@@ -608,7 +623,7 @@ class BackupImportBatchTest {
         assertEquals("W1", saved.getWorkspaceId());
         assertEquals(versions.getValue().getReqId(), saved.getReqId());
         assertEquals(versions.getValue().getId(), saved.getVersionId());
-        assertEquals(status, saved.getStatus());
+        assertEquals("rej".equals(status) || "canceled".equals(status) ? "closed" : status, saved.getStatus());
         assertEquals(LocalDate.of(2026, 12, 1), saved.getPlannedStart());
         assertEquals(LocalDate.of(2026, 12, 10), saved.getPlannedEnd());
     }
@@ -639,7 +654,7 @@ class BackupImportBatchTest {
             service.importData("U1", "W1", data);
             Demand saved = capturedDemand();
             assertNull(saved.getVersionId());
-            assertEquals(status, saved.getStatus());
+            assertEquals("rej".equals(status) || "canceled".equals(status) ? "closed" : status, saved.getStatus());
             assertEquals(LocalDate.of(2026, 12, 20), saved.getExpectDate());
             assertEquals(LocalDate.of(2026, 12, 1), saved.getPlannedStart());
             assertEquals(LocalDate.of(2026, 12, 10), saved.getPlannedEnd());

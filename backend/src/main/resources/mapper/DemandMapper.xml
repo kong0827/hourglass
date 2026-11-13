@@ -3,24 +3,125 @@
 <mapper namespace="com.hourglass.mapper.DemandMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status, expect_date,
-    planned_start, planned_end, revision,
+    id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status, close_reason, close_stage,
+    expect_date, planned_start, planned_end, revision,
     accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
     created_by, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
     d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
-    d.expect_date, d.planned_start, d.planned_end, d.revision,
+    d.close_reason, d.close_stage, d.expect_date, d.planned_start, d.planned_end, d.revision,
     d.accept_text, d.version_id, v.name AS versionName, v.status AS versionStatus, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
   </sql>
 
-  <!-- 需求池列表（M1 版本卡需求数 / M2 看板共用），已拒绝的排最后 -->
+  <sql id="deliveryEvidenceCols">
+    COALESCE(ev_task.taskCount, 0) AS taskCount, COALESCE(ev_task.taskDone, 0) AS taskDone,
+    COALESCE(ev_case.caseCount, 0) AS caseCount, COALESCE(ev_case.casePassed, 0) AS casePassed,
+    ev_start.devStart AS devStart, ev_release.deliveredAt AS deliveredAt,
+    CASE WHEN d.status = 'plan' AND v.status = 'released' AND ev_release.deliveredAt IS NULL
+         THEN 1 ELSE 0 END AS deliveryEvidenceMissing,
+    <include refid="deliveryStageExpr"/> AS deliveryStage
+  </sql>
+
+  <sql id="deliveryStageExpr">
+    CASE
+      WHEN d.status &lt;&gt; 'plan' THEN NULL
+      WHEN ev_release.deliveredAt IS NOT NULL THEN 'delivered'
+      WHEN COALESCE(ev_task.taskCount, 0) &gt; 0
+           AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
+           AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0) THEN 'donePending'
+      WHEN ev_start.devStart IS NOT NULL THEN 'active'
+      ELSE 'waiting'
+    END
+  </sql>
+
+  <sql id="deliveryRiskExpr">
+    d.status = 'plan' AND ev_release.deliveredAt IS NULL AND (
+      COALESCE(ev_task.taskCount, 0) = 0
+      OR COALESCE(ev_case.casePassed, 0) &lt; COALESCE(ev_case.caseCount, 0)
+      OR (d.expect_date IS NOT NULL AND d.expect_date &lt; CURRENT_DATE)
+      OR (ev_release.deliveredAt IS NULL AND EXISTS (
+            SELECT 1 FROM project_version pv_evidence
+            WHERE pv_evidence.workspace_id = d.workspace_id AND pv_evidence.id = d.version_id
+              AND pv_evidence.status = 'released'))
+      OR (d.version_id IS NULL AND COALESCE(ev_task.taskCount, 0) &gt; 0
+          AND COALESCE(ev_task.taskDone, 0) &gt;= ev_task.taskCount
+          AND COALESCE(ev_case.caseCount, 0) = COALESCE(ev_case.casePassed, 0))
+    )
+  </sql>
+
+  <!-- 与甘特共用证据定义：工作项关闭、真实开工、最新用例结果、成功生产发布。 -->
+  <sql id="deliveryEvidenceJoins">
+    LEFT JOIN (
+      SELECT t.demand_id, COUNT(*) AS taskCount,
+             SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS taskDone
+      FROM task t
+      WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL AND t.demand_id IS NOT NULL
+      GROUP BY t.demand_id
+    ) ev_task ON ev_task.demand_id = d.id
+    LEFT JOIN (
+      SELECT u.demandId, MIN(u.started) AS devStart
+      FROM (
+        SELECT t.demand_id AS demandId, DATE(l.created_at) AS started
+        FROM task t
+        INNER JOIN task_log l ON l.workspace_id = t.workspace_id AND l.task_id = t.id
+        WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL
+          AND l.action = 'move' AND l.to_column IS NOT NULL AND l.to_column &lt;&gt; 'backlog'
+          AND (l.from_column IS NULL OR l.from_column &lt;&gt; l.to_column)
+        UNION ALL
+        SELECT t.demand_id AS demandId, DATE(tl.started_at) AS started
+        FROM task t
+        INNER JOIN time_log tl ON tl.workspace_id = t.workspace_id AND tl.task_id = t.id
+        WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL
+        UNION ALL
+        SELECT t.demand_id AS demandId, DATE(t.created_at) AS started
+        FROM task t
+        WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL
+          AND COALESCE((SELECT l2.from_column FROM task_log l2
+                        WHERE l2.workspace_id = t.workspace_id AND l2.task_id = t.id
+                          AND l2.action = 'move' AND l2.from_column IS NOT NULL
+                          AND l2.to_column IS NOT NULL AND l2.from_column &lt;&gt; l2.to_column
+                        ORDER BY l2.created_at, l2.id LIMIT 1), t.board_column) &lt;&gt; 'backlog'
+      ) u
+      WHERE u.demandId IS NOT NULL
+      GROUP BY u.demandId
+    ) ev_start ON ev_start.demandId = d.id
+    LEFT JOIN (
+      SELECT x.demand_id, COUNT(*) AS caseCount,
+             SUM(CASE WHEN x.lastStatus = 'passed' THEN 1 ELSE 0 END) AS casePassed
+      FROM (
+        SELECT tc.demand_id, tc.id,
+               SUBSTRING_INDEX(GROUP_CONCAT(r.status ORDER BY r.created_at DESC, r.id DESC), ',', 1) AS lastStatus
+        FROM test_case tc
+        LEFT JOIN test_case_run r ON r.case_id = tc.id AND r.workspace_id = tc.workspace_id
+        WHERE tc.workspace_id = #{q.workspaceId} AND tc.demand_id IS NOT NULL
+        GROUP BY tc.demand_id, tc.id
+      ) x
+      GROUP BY x.demand_id
+    ) ev_case ON ev_case.demand_id = d.id
+    LEFT JOIN (
+      SELECT i.demand_id, MAX(COALESCE(vr.published_on, DATE(vr.occurred_at))) AS deliveredAt
+      FROM version_release_item i
+      INNER JOIN version_release vr ON vr.workspace_id = i.workspace_id AND vr.id = i.release_id
+      WHERE i.workspace_id = #{q.workspaceId}
+        AND vr.result = 'success' AND vr.environment = 'production' AND i.disposition = 'published'
+      GROUP BY i.demand_id
+    ) ev_release ON ev_release.demand_id = d.id
+  </sql>
+
+  <sql id="conditionalDeliveryEvidenceJoins">
+    <if test="q.deliveryStage != null or q.focus == 'risk'">
+      <include refid="deliveryEvidenceJoins"/>
+    </if>
+  </sql>
+
+  <!-- 需求池列表（M1 版本卡需求数 / M2 看板共用），已关闭的排最后 -->
   <select id="selectByReq" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej', 'canceled'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <select id="selectById" resultType="Demand">
@@ -46,7 +147,7 @@
   <select id="selectByWorkspace" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
     WHERE workspace_id = #{workspaceId}
-    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'rej', 'canceled'), created_at DESC, id
+    ORDER BY FIELD(status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'), created_at DESC, id
   </select>
 
   <!-- 分页查询的共享 WHERE：看板单列 / 列表筛选 / 计数复用同一口径 -->
@@ -54,6 +155,16 @@
     WHERE d.workspace_id = #{q.workspaceId}
     <if test="q.reqId != null"> AND d.req_id = #{q.reqId} </if>
     <if test="q.status != null"> AND d.status = #{q.status} </if>
+    <if test="q.deliveryStage != null"> AND <include refid="deliveryStageExpr"/> = #{q.deliveryStage} </if>
+    <if test="q.versionId != null and q.versionId == '__none'"> AND d.version_id IS NULL </if>
+    <if test="q.versionId != null and q.versionId != '__none'"> AND d.version_id = #{q.versionId} </if>
+    <if test="q.closeReason != null"> AND d.close_reason = #{q.closeReason} </if>
+    <if test="q.closeStage != null"> AND d.close_stage = #{q.closeStage} </if>
+    <if test="q.focus == 'high'"> AND d.priority IN ('P0', 'P1') </if>
+    <if test="q.focus == 'dueSoon'">
+      AND d.expect_date IS NOT NULL AND d.expect_date &lt;= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)
+    </if>
+    <if test="q.focus == 'risk'"> AND (<include refid="deliveryRiskExpr"/>) </if>
     <if test="q.q != null">
       AND (d.title LIKE CONCAT('%', #{q.q}, '%')
            OR d.description LIKE CONCAT('%', #{q.q}, '%')
@@ -103,7 +214,7 @@
         ORDER BY d.created_at DESC, d.id
       </when>
       <otherwise>
-        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej', 'canceled'),
+        ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'),
                  FIELD(d.priority, 'P0', 'P1', 'P2', 'P3'), d.created_at DESC, d.id
       </otherwise>
     </choose>
@@ -111,12 +222,14 @@
 
   <select id="countPage" resultType="int">
     SELECT COUNT(*) FROM demand d
+    <include refid="conditionalDeliveryEvidenceJoins"/>
     <include refid="pageWhere"/>
   </select>
 
   <select id="selectPage" resultType="Demand">
-    SELECT <include refid="pageCols"/> FROM demand d
+    SELECT <include refid="pageCols"/>, <include refid="deliveryEvidenceCols"/> FROM demand d
     LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    <include refid="deliveryEvidenceJoins"/>
     <include refid="pageWhere"/>
     <include refid="pageOrder"/>
     LIMIT #{q.limit} OFFSET #{q.offset}
@@ -124,8 +237,63 @@
 
   <select id="countGroupByStatus" resultType="map">
     SELECT d.status AS status, COUNT(*) AS cnt FROM demand d
+    <include refid="conditionalDeliveryEvidenceJoins"/>
     <include refid="pageWhere"/>
     GROUP BY d.status
+  </select>
+
+  <select id="countGroupByDeliveryStage" resultType="map">
+    SELECT <include refid="deliveryStageExpr"/> AS stage, COUNT(*) AS cnt FROM demand d
+    <include refid="deliveryEvidenceJoins"/>
+    <include refid="pageWhere"/>
+    GROUP BY <include refid="deliveryStageExpr"/>
+  </select>
+
+  <select id="workpageMetrics" resultType="map">
+    SELECT COUNT(*) AS total,
+           COALESCE(SUM(COALESCE(ev_task.taskCount, 0)), 0) AS taskCount,
+           COALESCE(SUM(COALESCE(ev_task.taskDone, 0)), 0) AS taskDone,
+           COALESCE(SUM(COALESCE(ev_case.caseCount, 0)), 0) AS caseCount,
+           COALESCE(SUM(COALESCE(ev_case.casePassed, 0)), 0) AS casePassed,
+           COALESCE(SUM(CASE WHEN <include refid="deliveryRiskExpr"/> THEN 1 ELSE 0 END), 0) AS risk,
+           COALESCE(SUM(CASE WHEN d.status = 'plan' AND ev_release.deliveredAt IS NULL AND EXISTS (
+                                  SELECT 1 FROM project_version pv_missing
+                                  WHERE pv_missing.workspace_id = d.workspace_id AND pv_missing.id = d.version_id
+                                    AND pv_missing.status = 'released')
+                             THEN 1 ELSE 0 END), 0) AS evidenceMissing,
+           COALESCE(SUM(CASE WHEN d.priority IN ('P0', 'P1') THEN 1 ELSE 0 END), 0) AS high,
+           COALESCE(SUM(CASE WHEN d.expect_date IS NOT NULL AND d.expect_date &lt; CURRENT_DATE
+                             THEN 1 ELSE 0 END), 0) AS overdue,
+           COALESCE(MAX(CASE WHEN d.created_at IS NOT NULL
+                             THEN GREATEST(0, DATEDIFF(CURRENT_DATE, DATE(d.created_at))) END), 0) AS longestWait,
+           MIN(d.expect_date) AS nextExpect,
+           MIN(CASE WHEN ev_release.deliveredAt IS NULL THEN d.expect_date END) AS nextPendingExpect,
+           MAX(ev_release.deliveredAt) AS lastDelivered,
+           COALESCE(SUM(CASE WHEN d.expect_date IS NOT NULL
+                                  AND d.expect_date &lt;= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)
+                             THEN 1 ELSE 0 END), 0) AS dueSoon,
+           COALESCE(SUM(CASE WHEN d.description IS NOT NULL AND TRIM(d.description) &lt;&gt; ''
+                                  AND d.expect_date IS NOT NULL THEN 1 ELSE 0 END), 0) AS ready,
+           AVG(CASE WHEN d.wsjf_business IS NOT NULL AND d.wsjf_urgency IS NOT NULL
+                         AND d.wsjf_risk IS NOT NULL AND d.wsjf_effort IS NOT NULL AND d.wsjf_effort &gt; 0
+                    THEN (d.wsjf_business + d.wsjf_urgency + d.wsjf_risk) * 10.0 / d.wsjf_effort END) AS avgWsjf,
+           COALESCE(SUM(CASE WHEN d.close_reason = 'rej' THEN 1 ELSE 0 END), 0) AS rej,
+           COALESCE(SUM(CASE WHEN d.close_reason = 'cancel' THEN 1 ELSE 0 END), 0) AS cancel,
+           COALESCE(SUM(CASE WHEN d.close_reason = 'dup' THEN 1 ELSE 0 END), 0) AS dup,
+           COALESCE(SUM(CASE WHEN d.close_stage IN ('pass', 'plan') THEN 1 ELSE 0 END), 0) AS restorePass
+    FROM demand d
+    <include refid="deliveryEvidenceJoins"/>
+    <include refid="pageWhere"/>
+  </select>
+
+  <select id="selectWorkpageVersions" resultType="map">
+    SELECT COALESCE(d.version_id, '__none') AS versionId,
+           COALESCE(v.name, '未指定版本') AS versionName, COUNT(*) AS cnt
+    FROM demand d
+    LEFT JOIN project_version v ON v.workspace_id = d.workspace_id AND v.id = d.version_id
+    <include refid="conditionalDeliveryEvidenceJoins"/>
+    <include refid="pageWhere"/>
+    GROUP BY COALESCE(d.version_id, '__none'), COALESCE(v.name, '未指定版本')
   </select>
 
   <select id="countGroupByFacets" resultType="map">
@@ -152,10 +320,10 @@
     </if>
   </select>
 
-  <!-- 发布说明：目标版本指向该版本的需求（不含已拒绝） -->
+  <!-- 发布说明：目标版本指向该版本的需求（不含已关闭） -->
   <select id="selectByVersion" resultType="Demand">
     SELECT <include refid="cols"/> FROM demand
-    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status NOT IN ('rej', 'canceled')
+    WHERE workspace_id = #{workspaceId} AND version_id = #{versionId} AND status NOT IN ('closed', 'rej', 'canceled')
     ORDER BY FIELD(status, 'plan', 'pass', 'review'), created_at, id
   </select>
 
@@ -187,6 +355,8 @@
       category_id = #{categoryId},
       priority = #{priority},
       status = #{status},
+      close_reason = #{closeReason},
+      close_stage = #{closeStage},
       expect_date = #{expectDate},
       planned_start = #{plannedStart},
       planned_end = #{plannedEnd},

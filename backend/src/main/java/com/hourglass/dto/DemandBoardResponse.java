@@ -12,10 +12,12 @@ import java.util.Map;
 @Data
 public class DemandBoardResponse {
 
-    /** key: review/pass/plan/rej */
+    /** key: review/pass/plan/closed */
     private Map<String, Column> columns = new LinkedHashMap<String, Column>();
     /** 当前筛选下的各状态计数；all 为匹配总数 */
     private Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+    /** 已排期列的完整阶段分布，不受列内阶段筛选影响 */
+    private Map<String, Integer> stageCounts = new LinkedHashMap<String, Integer>();
     /** 同一项目范围内不做搜索/筛选的总数，用于「匹配 M / N」 */
     private int totalAll;
     /**

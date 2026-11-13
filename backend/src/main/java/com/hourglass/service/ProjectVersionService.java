@@ -68,6 +68,14 @@ public class ProjectVersionService {
         requireProject(workspaceId, reqId);
         projectAccess.assertView(workspaceId, userId, reqId);
         List<ProjectVersion> versions = versionMapper.selectByReq(workspaceId, reqId);
+        versions.sort((a, b) -> {
+            int byStatus = Integer.compare(versionStatusRank(a.getStatus()), versionStatusRank(b.getStatus()));
+            if (byStatus != 0) {
+                return byStatus;
+            }
+            int byName = com.hourglass.common.VersionOrdering.compareDesc(a.getName(), b.getName());
+            return byName != 0 ? byName : a.getId().compareTo(b.getId());
+        });
         if (versions.isEmpty()) {
             return versions;
         }
@@ -318,6 +326,16 @@ public class ProjectVersionService {
             throw AppException.badRequest("请填写版本名称");
         }
         return name;
+    }
+
+    private static int versionStatusRank(String status) {
+        if ("active".equals(status)) {
+            return 0;
+        }
+        if ("planned".equals(status)) {
+            return 1;
+        }
+        return 2;
     }
 
     private String normalizeStatus(String raw) {

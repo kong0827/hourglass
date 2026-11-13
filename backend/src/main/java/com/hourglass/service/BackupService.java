@@ -403,8 +403,17 @@ public class BackupService {
                 }
                 demand.setCategoryId(demandCatId);
                 demand.setPriority(oneOf(bd.getPriority(), PRIORITIES, "P2"));
-                demand.setStatus(oneOf(bd.getStatus(),
-                        new String[]{"review", "pass", "plan", "rej", "canceled"}, "review"));
+                String importedStatus = oneOf(bd.getStatus(),
+                        new String[]{"review", "pass", "plan", "closed", "rej", "canceled"}, "review");
+                demand.setStatus("rej".equals(importedStatus) || "canceled".equals(importedStatus)
+                        ? "closed" : importedStatus);
+                if ("closed".equals(demand.getStatus())) {
+                    demand.setCloseReason("rej".equals(importedStatus) ? "rej"
+                            : oneOf(bd.getCloseReason(), new String[]{"rej", "cancel", "dup"}, "cancel"));
+                    demand.setCloseStage("rej".equals(importedStatus) ? "review"
+                            : oneOf(bd.getCloseStage(), new String[]{"review", "pass", "plan"},
+                                    bd.getVersionId() == null ? "review" : "plan"));
+                }
                 demand.setExpectDate(parseDate(bd.getExpectDate()));
                 demand.setPlannedStart(parseDate(bd.getPlannedStart()));
                 demand.setPlannedEnd(parseDate(bd.getPlannedEnd()));

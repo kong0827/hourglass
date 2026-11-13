@@ -414,19 +414,26 @@ public class TaskCommandService {
             }
         }
         t.setReqId(reqId);
-        /* 模块挂在项目下：必须属于任务所选项目；未选时默认取项目第一个模块；任务未挂项目则保持「未指定」 */
-        String categoryId = Texts.trimToNull(req.getCategoryId());
-        if (categoryId != null) {
-            Category cat = categoryMapper.selectById(workspaceId, categoryId);
-            if (cat == null) {
-                throw AppException.badRequest("模块不存在：" + categoryId);
-            }
-            if (reqId == null || !reqId.equals(cat.getProjectId())) {
-                throw AppException.badRequest("模块不属于该项目");
-            }
-            t.setCategoryId(categoryId);
-        } else {
+        /* 模块挂在项目下：必须属于任务所选项目。
+           null = 调用方未提供，沿用项目第一个模块（兼容旧客户端与导入）；
+           空串 = 明确选择「未指定」，不再回落第一项 */
+        String rawCategory = req.getCategoryId();
+        if (rawCategory == null) {
             t.setCategoryId(defaultCategory(workspaceId, reqId));
+        } else {
+            String categoryId = rawCategory.trim();
+            if (categoryId.isEmpty()) {
+                t.setCategoryId("");
+            } else {
+                Category cat = categoryMapper.selectById(workspaceId, categoryId);
+                if (cat == null) {
+                    throw AppException.badRequest("模块不存在：" + categoryId);
+                }
+                if (reqId == null || !reqId.equals(cat.getProjectId())) {
+                    throw AppException.badRequest("模块不属于该项目");
+                }
+                t.setCategoryId(categoryId);
+            }
         }
         /* 关联需求：必须存在、同空间、且属于任务所选的那个项目。
            项目为空 / 换了项目时，旧需求自动失效（前端也会在切项目时清空下拉）。 */
@@ -772,11 +779,9 @@ public class TaskCommandService {
             return;
         }
         Demand demand = taskMapper.selectDemandForScope(workspaceId, task.getDemandId());
-        if (demand != null && "canceled".equals(demand.getStatus())) {
-            throw AppException.badRequest("已取消需求不能新建关联任务");
-        }
-        if (demand != null && "rej".equals(demand.getStatus())) {
-            throw AppException.badRequest("已拒绝需求不能新建关联任务");
+        if (demand != null && ("closed".equals(demand.getStatus())
+                || "canceled".equals(demand.getStatus()) || "rej".equals(demand.getStatus()))) {
+            throw AppException.badRequest("已关闭需求不能新建关联任务");
         }
     }
 

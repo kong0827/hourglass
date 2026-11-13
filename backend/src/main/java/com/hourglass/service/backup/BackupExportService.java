@@ -362,6 +362,8 @@ public class BackupExportService {
             bd.setCategoryId(d.getCategoryId());
             bd.setPriority(d.getPriority());
             bd.setStatus(d.getStatus());
+            bd.setCloseReason(d.getCloseReason());
+            bd.setCloseStage(d.getCloseStage());
             bd.setExpectDate(d.getExpectDate() == null ? null : d.getExpectDate().toString());
             bd.setPlannedStart(d.getPlannedStart() == null ? null : d.getPlannedStart().toString());
             bd.setPlannedEnd(d.getPlannedEnd() == null ? null : d.getPlannedEnd().toString());

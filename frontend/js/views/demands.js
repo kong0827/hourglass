@@ -1,4 +1,4 @@
-/* views/demands · 需求池：评审状态机看板（待评审 → 已通过 → 已排期；拒绝可重新打开） */
+/* views/demands · 需求池：四态看板、主状态工作页与交付证据派生阶段 */
 
 import { API } from "../core/api.js";
 import { openAttPreview, previewable } from "../core/att-preview.js";
@@ -31,25 +31,37 @@ var COLS = [
   ["review", "待评审", "var(--text-3)"],
   ["pass", "已通过", "var(--info)"],
   ["plan", "已排期", "var(--success)"],
-  ["rej", "已拒绝", "var(--danger)"],
-  ["canceled", "已取消", "var(--text-3)"]
+  ["closed", "已关闭", "var(--text-3)"]
 ];
-/* 列头提示：直接回答「已拒绝和已取消有什么区别」，避免只靠手册 */
 var STATUS_HINTS = {
-  review: "需求录入后的评审中状态；通过后进入「已通过」，不通过进入「已拒绝」",
-  pass: "评审通过、等待排期；可直接排期到目标版本，也可撤回重新评审",
-  plan: "已指定目标版本或计划时间；可拖回「已通过」撤销排期",
-  rej: "评审结论为不通过，历史保留；可重新打开回到「待评审」",
-  canceled: "需求中途作废/暂不做，历史保留；可恢复为「已通过」。不需要额外的已完成状态，是否交付以版本发布记录为准"
+  review: "评审工作台：通过进入排期准备，不通过进入关闭归档",
+  pass: "排期准备页：只处理评审通过、尚未排期的需求",
+  plan: "交付驾驶舱：交付阶段由工作项、用例和生产发布记录派生",
+  closed: "关闭归档：保留关闭原因与关闭前阶段，可恢复到原流程"
 };
+var DELIVERY_STAGES = [
+  ["waiting", "待开工"],
+  ["active", "推进中"],
+  ["donePending", "已完成 · 待发布"],
+  ["delivered", "已交付"]
+];
+var CLOSE_REASONS = { rej:"评审不通过", cancel:"中途取消", dup:"重复需求" };
+var CLOSE_STAGES = { review:"待评审", pass:"已通过", plan:"已排期" };
 var PRI_ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 };
-var STATUS_ORDER = { review: 0, pass: 1, plan: 2, rej: 3, canceled: 4 };
+var STATUS_ORDER = { review: 0, pass: 1, plan: 2, closed: 3, rej: 4, canceled: 4 };
 /* P0 的排序值是 0，不能用 || 兜底，否则会被当成最低优先级 */
 function priRank(p){ return PRI_ORDER[p] === undefined ? 9 : PRI_ORDER[p]; }
 var demands = [];
-var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, totalAll} */
+var demandBoard = null;        /* 看板：{status: {items, matched, hasMore}, counts, stageCounts, totalAll} */
 var demandColExtra = {};       /* 看板列已滚动加载的追加条目 */
+var demBoardStage = "all";
 var demBoardBar = null, demBoardInput = null, demBoardTimer = null;
+var demWork = {
+  active:false, status:"plan", stage:"all", reqId:null, q:"", pris:[],
+  versionId:"all", closeReason:"all", closeStage:"all", focus:"all",
+  group:"version", sort:"expect", items:[], total:0, hasMore:false,
+  response:null, seq:0, timer:null
+};
 var demandTotal = 0;           /* 列表模式：当前筛选下的总数 */
 var demandHasMore = false;
 var demandServerFiltered = false;
@@ -67,19 +79,20 @@ var versions = [];           /* 当前项目的版本（目标版本展示/排�
 var versionNames = {};       /* 列表模式：全空间 versionId → 名称 */
 var editingDemandId = null;
 var planDemandId = null;
+var demandDetailLayer = null;  /* 当前打开的需求详情，供动作成功后一并关闭 */
 var editingDemandRevision = null, editingPlannedStart = null, editingPlannedEnd = null;
 var planDemandRevision = null, planAction = "plan";
 var formPri = "P2";
-var dragSrc = null;           /* 拖动中的卡片 { id, status }，仅空间主可拖 */
+var dragSrc = null;           /* 拖动中的卡片 { id, status, canSchedule } */
 var dragOverCol = null;       /* 最近悬停的列：drop 未触发时用 dragend 兜底提示 */
 /* 项目页「查看需求池」的跨视图定位参数；enterDemandsView 应用后清空 */
 var pendingFocusReq = null;
 
 function isOwner(){ return !!(rt.currentWs && rt.currentWs.myRole === "owner"); }
-/* 评审流转（拖拽换列=通过/拒绝/撤回等）空间主与管理员都可做；删除仍仅空间主 */
-function canReviewDemand(){ var r = rt.currentWs && rt.currentWs.myRole; return r === "owner" || r === "admin"; }
 /* 需求写权限跟随所属项目：成员在只读项目下不显示/不放行任何写入口 */
 function canWriteDemand(d){ return !!d && canEditReq(d.reqId); }
+/* 评审流转与服务端一致，按所属项目写权限；删除仍仅空间主，排期另按 canSchedule */
+function canReviewDemand(d){ return canWriteDemand(d); }
 function canScheduleDemand(d){ return !!d && d.canSchedule === true; }
 function denySchedule(){ toast("仅空间主、管理员或可写项目负责人可管理需求排期", "warn"); }
 function plannedText(d){
@@ -89,10 +102,19 @@ function plannedText(d){
 function denyDemandReadOnly(){ toast("你对该项目只有查看权限", "warn"); }
 function writableReqs(){ return rt.reqList.filter(function(r){ return canEditReq(r.id); }); }
 function statusName(st){
-  if(st === "cancelled") return "已取消";
+  if(st === "rej") return "已关闭 · 评审不通过";
+  if(st === "canceled" || st === "cancelled") return "已关闭 · 中途取消";
   for(var i = 0; i < COLS.length; i++) if(COLS[i][0] === st) return COLS[i][1];
   return st;
 }
+function deliveryStageName(stage){
+  for(var i = 0; i < DELIVERY_STAGES.length; i++) if(DELIVERY_STAGES[i][0] === stage) return DELIVERY_STAGES[i][1];
+  return stage || "";
+}
+function closeReasonName(reason){ return CLOSE_REASONS[reason] || reason || "未记录原因"; }
+function closeStageName(stage){ return CLOSE_STAGES[stage] || "待评审"; }
+function restoreTargetName(d){ return d && d.closeStage === "review" ? "待评审" : "已通过"; }
+function isClosedDemand(d){ return !!d && (d.status === "closed" || d.status === "rej" || d.status === "canceled" || d.status === "cancelled"); }
 function versionName(id){
   if(!id) return "";
   for(var i = 0; i < versions.length; i++) if(versions[i].id === id) return versions[i].name;
@@ -118,10 +140,76 @@ function syncReqSel(){
   if(rt.demandReqId) demandReq.value = rt.demandReqId;
 }
 var demandLoadSeq = 0;
+function readDemandRoute(){
+  var raw = String(window.location.hash || "").replace(/^#\/?/, "");
+  var q = raw.indexOf("?");
+  var name = q >= 0 ? raw.substring(0, q) : raw;
+  var params = new URLSearchParams(q >= 0 ? raw.substring(q + 1) : "");
+  var status = params.get("status");
+  var valid = COLS.some(function(c){ return c[0] === status; });
+  if(name !== "demands" || !valid){
+    if(demWork.active){ demWork.active = false; demWork.seq++; }
+    return false;
+  }
+  if(!demWork.active || demWork.status !== status){
+    demWork.reqId = rt.demandReqId || null;
+    demWork.q = demSmart.q || "";
+    demWork.pris = demSmart.pris.slice();
+    demWork.versionId = "all";
+    demWork.closeReason = "all";
+    demWork.closeStage = "all";
+    demWork.focus = "all";
+    demWork.group = status === "plan" ? "version" : (status === "closed" ? "reason" : "project");
+    demWork.sort = status === "pass" ? "wsjf" : (status === "closed" ? "created" : "expect");
+  }
+  demWork.active = true;
+  demWork.status = status;
+  var stage = params.get("stage") || "all";
+  demWork.stage = status === "plan" && (stage === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === stage; })) ? stage : "all";
+  demWork.items = [];
+  demWork.response = null;
+  return true;
+}
+function demandWorkHash(status, stage){
+  return "#/demands?status=" + encodeURIComponent(status) + (status === "plan" && stage && stage !== "all" ? "&stage=" + encodeURIComponent(stage) : "");
+}
+function openDemandWorkpage(status, stage){
+  if(!COLS.some(function(c){ return c[0] === status; })) return;
+  var fromWork = demWork.active;
+  var reqId = fromWork ? demWork.reqId : (rt.demandReqId || null);
+  var q = fromWork ? demWork.q : (demSmart.q || "");
+  var pris = fromWork ? demWork.pris.slice() : demSmart.pris.slice();
+  demWork.active = false;
+  demWork.status = status;
+  demWork.reqId = reqId;
+  demWork.q = q;
+  demWork.pris = pris;
+  demWork.versionId = "all";
+  demWork.closeReason = "all";
+  demWork.closeStage = "all";
+  demWork.focus = "all";
+  demWork.group = status === "plan" ? "version" : (status === "closed" ? "reason" : "project");
+  demWork.sort = status === "pass" ? "wsjf" : (status === "closed" ? "created" : "expect");
+  demWork.active = true;
+  demWork.stage = status === "plan" && stage ? stage : "all";
+  demWork.items = [];
+  demWork.response = null;
+  try{ history.pushState(null, "", demandWorkHash(status, demWork.stage)); }
+  catch(e){ window.location.hash = demandWorkHash(status, demWork.stage); }
+  loadDemands();
+}
+function returnDemandBoard(){
+  demWork.active = false;
+  demWork.seq++;
+  try{ history.pushState(null, "", "#/demands"); }
+  catch(e){ window.location.hash = "#/demands"; }
+  loadDemands();
+}
 function loadDemands(){
   var seq = ++demandLoadSeq;
   var mode = listPrefs.viewMode("demand-pool");
   syncModeUI(mode);
+  if(demWork.active){ loadDemandWorkpage(); return; }
   if(mode === "gantt"){ loadDemandGantt(); return; }
   if(mode === "table"){ loadAllDemands(); return; }
   if(!rt.demandReqId || !rt.reqList.length){
@@ -142,7 +230,8 @@ function loadDemands(){
       q: demSmart.q || null,
       pris: demSmart.pris.join(","),
       kinds: demSmart.kinds.join(","),
-      cats: demSmart.cats.join(",")
+      cats: demSmart.cats.join(","),
+      deliveryStage: demBoardStage === "all" ? null : demBoardStage
     }),
     API.get("/api/versions", { reqId: reqId })
   ]).then(function(rs){
@@ -152,6 +241,7 @@ function loadDemands(){
     demandBoard = rs[0].columns || {};
     /* 计数附在列映射上，供元信息与紧凑搜索条共用；列遍历只按 COLS 取键 */
     demandBoard.counts = rs[0].counts || {};
+    demandBoard.stageCounts = rs[0].stageCounts || {};
     demandBoard.totalAll = rs[0].totalAll || 0;
     demandBoard.facets = rs[0].facets || null;
     demandServerFiltered = false;
@@ -177,6 +267,7 @@ function openDemandsForReq(reqId){
 function enterDemandsView(){
   initDemSmartBar();
   restoreDemState();
+  readDemandRoute();
   /* 项目页「查看需求池」携带的项目定位：恢复本地视图状态后应用，避免被快照覆盖 */
   if(pendingFocusReq){
     rt.demandReqId = pendingFocusReq;
@@ -282,7 +373,8 @@ function loadMoreDemandColumn(status){
     q: demSmart.q || null,
     pris: demSmart.pris.join(","),
     kinds: demSmart.kinds.join(","),
-    cats: demSmart.cats.join(",")
+    cats: demSmart.cats.join(","),
+    deliveryStage: status === "plan" && demBoardStage !== "all" ? demBoardStage : null
   }).then(function(page){
     if(seq !== demandLoadSeq || rt.demandReqId !== reqId) return false;
     var known = {};
@@ -375,29 +467,54 @@ function syncModeUI(mode){
     b.classList.toggle("primary", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
-  if(demandReq) demandReq.hidden = mode !== "board";
+  if(demandReq) demandReq.hidden = demWork.active || mode !== "board";
   var bc = $("btnDemandColumns");
-  if(bc) bc.hidden = mode !== "table";
-  /* 智能视图条承载搜索/筛选/分组/排序：列表与甘特共用；看板另用一条紧凑搜索/筛选条 */
-  if(demSmartBar) demSmartBar.hidden = mode === "board";
-  if(demBoardBar) demBoardBar.hidden = mode !== "board" || !rt.demandReqId;
-  if(demandGanttBar) demandGanttBar.hidden = mode !== "gantt";
-  if(demandGanttHelp) demandGanttHelp.hidden = mode !== "gantt";
+  if(bc) bc.hidden = demWork.active || mode !== "table";
+  /* 工作页自带筛选与分组，不叠加看板/列表工具条 */
+  if(demSmartBar) demSmartBar.hidden = demWork.active || mode === "board";
+  if(demBoardBar) demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
+  if(demandGanttBar) demandGanttBar.hidden = demWork.active || mode !== "gantt";
+  if(demandGanttHelp) demandGanttHelp.hidden = demWork.active || mode !== "gantt";
   if(demandsPage){
-    demandsPage.classList.toggle("dem-gantt", mode === "gantt");
+    demandsPage.classList.toggle("dem-work-active", demWork.active);
+    demandsPage.classList.toggle("dem-gantt", !demWork.active && mode === "gantt");
     var vw = demandsPage.closest(".view");
-    if(vw) vw.classList.toggle("is-dem-gantt", mode === "gantt");
+    if(vw) vw.classList.toggle("is-dem-gantt", !demWork.active && mode === "gantt");
   }
-  if(demandBody) demandBody.classList.toggle("demg-body", mode === "gantt");
+  if(demandBody) demandBody.classList.toggle("demg-body", !demWork.active && mode === "gantt");
   /* 只读项目不显示「提需求」；列表/甘特为全空间，只要有一个可写项目即可 */
   var bn = $("btnDemandNew");
-  if(bn) bn.style.display = (writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
+  if(bn) bn.style.display = (!demWork.active && writableReqs().length && (mode !== "board" || canEditReq(rt.demandReqId))) ? "" : "none";
   syncDemGanttControls();
   syncDemBoard();
+}
+function deliveryStageTag(stage){
+  if(!stage) return "";
+  return '<span class="tag dem-stage-tag st-' + esc(stage) + '" title="派生展示，不可手工修改">' + esc(deliveryStageName(stage)) + '</span>';
+}
+function demandBoardDistHTML(){
+  var counts = demandBoard && demandBoard.stageCounts || {};
+  var total = DELIVERY_STAGES.reduce(function(n, s){ return n + (Number(counts[s[0]]) || 0); }, 0);
+  if(!total) return "";
+  return '<div class="demb-dist" role="group" aria-label="进入已排期交付阶段">' + DELIVERY_STAGES.map(function(s){
+    var n = Number(counts[s[0]]) || 0;
+    if(!n) return "";
+    return '<button type="button" class="demb-dist-seg st-' + s[0] + (demBoardStage !== "all" && demBoardStage !== s[0] ? " dim" : "")
+      + '" style="flex:' + n + ' 1 0" data-dem-open="plan" data-dem-stage="' + s[0] + '" title="' + esc(deliveryStageName(s[0])) + ' ' + n + ' 条，点击进入驾驶舱" aria-label="' + esc(deliveryStageName(s[0])) + ' ' + n + ' 条"></button>';
+  }).join("") + '</div>';
+}
+function demandBoardStageFilterHTML(){
+  var counts = demandBoard && demandBoard.stageCounts || {};
+  return '<select class="mini-select demb-stage-filter' + (demBoardStage !== "all" ? " active" : "") + '" data-demb-stage aria-label="只筛选已排期列的交付阶段">'
+    + '<option value="all"' + (demBoardStage === "all" ? " selected" : "") + '>全部阶段</option>'
+    + DELIVERY_STAGES.map(function(s){
+      return '<option value="' + s[0] + '"' + (demBoardStage === s[0] ? " selected" : "") + '>' + esc(deliveryStageName(s[0])) + ' ' + (Number(counts[s[0]]) || 0) + '</option>';
+    }).join("") + '</select>';
 }
 function render(){
   var mode = listPrefs.viewMode("demand-pool");
   syncModeUI(mode);
+  if(demWork.active){ renderDemandWorkpage(); return; }
   if(mode === "gantt"){ renderDemandGantt(); return; }
   if(mode === "table"){ renderDemandTable(); return; }
   if(demandsMeta){
@@ -412,19 +529,22 @@ function render(){
     return;
   }
   demandBody.innerHTML = '<div class="bkl">' + COLS.map(function(c){
-    var col = (demandBoard && demandBoard[c[0]]) || {items:[], matched:0, hasMore:false};
-    var extra = demandColExtra[c[0]] || [];
+    var status = c[0], col = (demandBoard && demandBoard[status]) || {items:[], matched:0, hasMore:false};
+    var extra = demandColExtra[status] || [];
     var items = (col.items || []).concat(extra);
+    var filtered = status === "plan" && demBoardStage !== "all";
     var more = col.hasMore
-      ? '<button class="bkl-more" type="button" data-dem-more="' + esc(c[0]) + '">加载更多（还有 '
+      ? '<button class="bkl-more" type="button" data-dem-more="' + esc(status) + '">加载更多（还有 '
         + Math.max((col.matched || 0) - items.length, 0) + ' 条）</button>'
       : "";
-    return '<div class="bkl-col" data-col="' + c[0] + '"><div class="bkl-head"><span class="bkl-title" title="' +
-      esc(STATUS_HINTS[c[0]] || "") + '">'
-      + '<span class="pdot" style="background:' + c[2] + '"></span>' + c[1] + '</span>'
-      + '<span class="bkl-count">' + (col.matched || 0) + '</span></div>'
-      + (items.map(cardHTML).join("") || '<p class="foot-note demb-col-empty">'
-        + (demBoardHasCond() ? "没有匹配需求" : "暂无需求") + '</p>')
+    return '<div class="bkl-col" data-col="' + status + '"><div class="bkl-head">'
+      + '<button class="bkl-title bkl-title-link" type="button" data-dem-open="' + status + '" title="' + esc(STATUS_HINTS[status] || "") + '">'
+      + '<span class="pdot" style="background:' + c[2] + '"></span><span>' + c[1] + '</span><span class="bkl-open" aria-hidden="true">↗</span></button>'
+      + (status === "plan" ? demandBoardStageFilterHTML() : "")
+      + '<span class="bkl-count">' + (filtered ? (col.matched || 0) + " / " + ((demandBoard.counts || {}).plan || 0) : (col.matched || 0)) + '</span></div>'
+      + (status === "plan" ? demandBoardDistHTML() : "")
+      + (items.map(cardHTML).join("") || '<div class="foot-note demb-col-empty">'
+        + (filtered ? '该阶段暂无需求<br><button type="button" class="link-btn" data-demb-stage-clear>显示全部阶段</button>' : (demBoardHasCond() ? "没有匹配需求" : "暂无需求")) + '</div>')
       + more
       + '</div>';
   }).join("") + '</div>';
@@ -434,10 +554,10 @@ function demandMenuItems(d){
   if(!d) return [];
   var out = [];
   if(canWriteDemand(d) && d.status === "review"){
-    if(canReviewDemand()) out.push({ act: "rej", label: "拒绝" });
+    if(canReviewDemand(d)) out.push({ act: "rej", label: "评审不通过" });
     out.push({ act: "edit", label: "编辑" });
   }
-  if(canReviewDemand() && canWriteDemand(d)){
+  if(canReviewDemand(d)){
     if(d.status === "pass") out.push({ act: "unpass", label: "撤回评审" });
   }
   if(isOwner() && canWriteDemand(d)){
@@ -448,7 +568,7 @@ function demandMenuItems(d){
       out.push({ act: "replan", label: "调整排期" });
       out.push({ act: "unplan", label: "撤销排期" });
     }
-    if(d.status !== "canceled") out.push({ act: "cancel", label: "取消需求", danger: true });
+    if(!isClosedDemand(d)) out.push({ act: "cancel", label: "关闭需求", danger: true });
   }
   return out;
 }
@@ -456,17 +576,17 @@ function demandActs(d, opts){
   /* 列表行里主按钮只保留页头「提需求」一个；行内动作降为主色浅底，避免整屏都是主色 */
   var cls = (opts && opts.subtle) ? "btn sm soft" : "btn sm primary";
   var acts = "";
-  if(canReviewDemand() && canWriteDemand(d)){
+  if(canReviewDemand(d)){
     if(d.status === "review"){
       acts += '<button class="' + cls + '" type="button" data-dem-pass="' + esc(d.id) + '">通过</button>';
     }
-    if(d.status === "rej"){
+    if(isClosedDemand(d) && (d.closeReason === "rej" || d.status === "rej")){
       acts += '<button class="btn sm" type="button" data-dem-reopen="' + esc(d.id) + '">重新打开</button>';
     }
   }
   if(canScheduleDemand(d)){
     if(d.status === "pass") acts += '<button class="' + cls + '" type="button" data-dem-plan="' + esc(d.id) + '">排期进入版本</button>';
-    if(d.status === "canceled") acts += '<button class="btn sm" type="button" data-dem-restore="' + esc(d.id) + '">恢复需求</button>';
+    if(isClosedDemand(d) && d.closeReason !== "rej" && d.status !== "rej") acts += '<button class="btn sm" type="button" data-dem-restore="' + esc(d.id) + '">恢复至' + esc(restoreTargetName(d)) + '</button>';
   }
   if(demandMenuItems(d).length){
     acts += '<button class="btn sm ghost" type="button" data-dem-menu-btn="' + esc(d.id) +
@@ -474,7 +594,7 @@ function demandActs(d, opts){
   }
   return acts;
 }
-function openDemandRowMenu(anchor, d, onAction){
+function openDemandRowMenu(anchor, d){
   if(!anchor || !d) return;
   var items = demandMenuItems(d);
   if(!items.length) return;
@@ -489,7 +609,6 @@ function openDemandRowMenu(anchor, d, onAction){
     var b = e.target.closest("[data-dem-menu]");
     if(!b) return;
     UI.closeAllPops();
-    if(onAction) onAction();
     if(b.dataset.demMenu === "rej") rejectDemand(d.id);
     else if(b.dataset.demMenu === "unpass") unpassDemand(d.id);
     else if(b.dataset.demMenu === "unplan") unplanDemand(d.id);
@@ -501,31 +620,50 @@ function openDemandRowMenu(anchor, d, onAction){
   var first = menu.querySelector(".menu-item");
   if(first){ try{ first.focus(); }catch(e){ /* noop */ } }
 }
-function dragHint(status){
-  if(status === "review") return "可拖到「已通过」或「已拒绝」";
-  if(status === "pass") return "可拖到「已排期」选择目标版本，或拖回「待评审」撤回";
-  if(status === "rej") return "可拖回「待评审」重新打开";
+function dragHint(status, canSchedule){
+  if(status === "review") return "可拖到「已通过」，或拖到「已关闭」记录评审不通过";
+  if(status === "pass") return canSchedule
+    ? "可拖到「已排期」选择目标版本，或拖回「待评审」撤回"
+    : "可拖回「待评审」撤回；排期由空间主、管理员或可写项目负责人操作";
   if(status === "plan") return "可拖回「已通过」撤销排期";
-  return "拖到其他列流转状态";
+  return "关闭归档请使用卡片上的恢复动作";
 }
 /* 状态语义跟着卡片走：底部总注离卡片太远，窄屏与长列里都看不到 */
 function demandStateNote(d){
-  if(!d) return "";
-  if(d.status === "rej") return "评审不通过 · 可重新打开";
-  if(d.status === "canceled") return "中途作废或暂不做 · 可恢复为已通过";
-  return "";
+  if(!d || !isClosedDemand(d)) return "";
+  var reason = d.closeReason || (d.status === "rej" ? "rej" : "cancel");
+  var note = closeReasonName(reason) + " · 关闭前 " + closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"));
+  return note + (reason === "rej" ? " · 可重新打开" : " · 恢复至" + restoreTargetName(d));
+}
+function demandEvidenceHTML(d){
+  if(!d || d.status !== "plan") return "";
+  var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
+  var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
+  var html = "";
+  if(total){
+    var pct = Math.max(0, Math.min(100, Math.round(done / total * 100)));
+    html += '<div class="dem-evidence-row"><span>工作项 ' + done + '/' + total + '</span><span class="dem-progress' + (done === total ? " ok" : "") + '"><i style="width:' + pct + '%"></i></span></div>';
+  }else{
+    html += '<div class="bkl-tags"><span class="tag tag-warning">未拆工作项</span><span class="tag ghost">待补充交付证据</span></div>';
+  }
+  if(cases) html += '<div class="dem-evidence-meta">用例 ' + passed + '/' + cases + ' 通过</div>';
+  if(d.deliveredAt) html += '<div class="dem-evidence-meta">生产发布 ' + esc(String(d.deliveredAt).substring(0, 10)) + '</div>';
+  if(d.deliveryEvidenceMissing) html += '<div class="dem-evidence-missing">已发布版本缺少有效发布记录，请人工补录</div>';
+  return html;
 }
 function cardHTML(d, opts){
-  var acts = demandActs(d);
+  var acts = opts && opts.readOnly ? "" : demandActs(d);
   /* 手机列表没有拖拽落点，卡片不挂 draggable，避免长按误触发拖动 */
-  var drag = (canReviewDemand() && canWriteDemand(d) && d.status !== "canceled" && !(opts && opts.noDrag))
-    ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status)) + '"'
+  var drag = (canReviewDemand(d) && !isClosedDemand(d) && (d.status !== "plan" || canScheduleDemand(d)) && !(opts && opts.noDrag))
+    ? ' draggable="true" data-card-id="' + esc(d.id) + '" data-card-status="' + esc(d.status) + '" title="' + esc(dragHint(d.status, canScheduleDemand(d))) + '"'
     : "";
+  var reason = d.closeReason || (d.status === "rej" ? "rej" : (isClosedDemand(d) ? "cancel" : ""));
   return '<div class="bkl-card" data-dem-card="' + esc(d.id) + '"' + drag + '>'
     + '<div class="bkl-tags"><span class="tag ghost">' + esc(d.itemKind || "其他") + '</span>'
     + catTag(d.categoryId)
     + priTagHTML(d.priority || "P2")
-    + (d.status === "canceled" ? '<span class="tag ghost">已取消</span>' : '') + '</div>'
+    + (d.status === "plan" ? deliveryStageTag(d.deliveryStage) : '')
+    + (isClosedDemand(d) ? '<span class="tag ghost">' + esc(closeReasonName(reason)) + '</span>' : '') + '</div>'
     + '<button class="link-title" type="button" data-dem-detail="' + esc(d.id) + '" title="查看需求详情">' + esc(d.title) + '</button>'
     + (d.description ? '<p class="bkl-desc">' + esc(d.description) + '</p>' : '')
     + '<div class="bkl-tags">'
@@ -535,10 +673,239 @@ function cardHTML(d, opts){
     + (wsjfText(d) ? '<span class="tag tag-plum">' + esc(wsjfText(d)) + '</span>' : '')
     + '</div>'
     + (d.source ? '<div class="bkl-src">来源：' + esc(d.source) + '</div>' : '')
-    + (demandStateNote(d) ? '<div class="bkl-state">' + demandStateNote(d) + '</div>' : '')
-    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="bkl-why' + (d.status === "canceled" ? " is-canceled" : "") + '">' + esc(d.reviewNote) + '</div>' : '')
+    + demandEvidenceHTML(d)
+    + (demandStateNote(d) ? '<div class="bkl-state">' + esc(demandStateNote(d)) + '</div>' : '')
+    + (isClosedDemand(d) && d.reviewNote ? '<div class="bkl-why' + (reason !== "rej" ? " is-canceled" : "") + '">' + esc(d.reviewNote) + '</div>' : '')
     + (acts ? '<div class="bkl-acts">' + acts + '</div>' : '')
     + '</div>';
+}
+
+/* ---------- 主状态工作页：全局页签 + 筛选指标 + 分页泳道卡片 ---------- */
+
+function demWorkParams(offset, limit){
+  return {
+    status:demWork.status,
+    reqId:demWork.reqId || null,
+    q:demWork.q || null,
+    pris:demWork.pris.join(","),
+    deliveryStage:demWork.status === "plan" && demWork.stage !== "all" ? demWork.stage : null,
+    versionId:demWork.status === "plan" && demWork.versionId !== "all" ? demWork.versionId : null,
+    closeReason:demWork.status === "closed" && demWork.closeReason !== "all" ? demWork.closeReason : null,
+    closeStage:demWork.status === "closed" && demWork.closeStage !== "all" ? demWork.closeStage : null,
+    focus:demWork.focus !== "all" ? demWork.focus : null,
+    sort:demWork.sort,
+    offset:offset,
+    limit:Math.min(100, limit)
+  };
+}
+function loadDemandWorkpage(){
+  var seq = ++demWork.seq;
+  var status = demWork.status, stage = demWork.stage;
+  var wsId = rt.currentWs && rt.currentWs.id;
+  demandBody.innerHTML = UI.skeletonRows(3);
+  API.get("/api/demands/workpage", demWorkParams(0, 50)).then(function(res){
+    if(seq !== demWork.seq || !demWork.active || demWork.status !== status || demWork.stage !== stage) return;
+    if(wsId && (!rt.currentWs || rt.currentWs.id !== wsId)) return;
+    demWork.response = res || {};
+    var page = res && res.page || {};
+    demWork.items = page.items || [];
+    demWork.total = page.total || 0;
+    demWork.hasMore = !!page.hasMore;
+    demands = demWork.items.slice();
+    ((res && res.versions) || []).forEach(function(v){ if(v.versionId && v.versionId !== "__none") versionNames[v.versionId] = v.versionName; });
+    render();
+  }).catch(function(ex){
+    if(seq !== demWork.seq) return;
+    demandBody.innerHTML = UI.emptyState({ icon:"alert", title:"工作页加载失败", text:ex.message || "网络异常，请稍后重试" });
+  });
+}
+function loadMoreDemandWorkpage(){
+  if(!demWork.hasMore) return Promise.resolve(false);
+  var seq = demWork.seq;
+  var btn = demandBody.querySelector("[data-dem-work-more]");
+  if(btn){ btn.disabled = true; btn.textContent = "加载中…"; }
+  return API.get("/api/demands/workpage", demWorkParams(demWork.items.length, 50)).then(function(res){
+    if(seq !== demWork.seq || !demWork.active) return false;
+    var page = res && res.page || {};
+    var known = {};
+    demWork.items.forEach(function(d){ known[d.id] = true; });
+    (page.items || []).forEach(function(d){ if(!known[d.id]) demWork.items.push(d); });
+    demWork.total = page.total || demWork.total;
+    demWork.hasMore = !!page.hasMore;
+    demands = demWork.items.slice();
+    render();
+    return true;
+  }).catch(function(ex){
+    toast("加载更多失败：" + (ex.message || "网络异常"), "bad");
+    return false;
+  });
+}
+function demWorkMetric(label, value, note, warn){
+  return '<div class="dem-work-metric"><span>' + esc(label) + '</span><b' + (warn ? ' class="warn"' : '') + '>' + esc(value) + '</b><small>' + esc(note) + '</small></div>';
+}
+function demWorkMetricsHTML(){
+  var m = demWork.response && demWork.response.metrics || {};
+  var total = Number(m.total) || 0;
+  if(demWork.status === "plan"){
+    var tasks = Number(m.taskCount) || 0, taskDone = Number(m.taskDone) || 0;
+    var cases = Number(m.caseCount) || 0, casePassed = Number(m.casePassed) || 0;
+    var risk = Number(m.risk) || 0, missing = Number(m.evidenceMissing) || 0;
+    var dateLabel = demWork.stage === "delivered" ? "最近生产发布" : "下一期望交付";
+    var date = demWork.stage === "delivered" ? m.lastDelivered : (m.nextPendingExpect || m.nextExpect);
+    return demWorkMetric("需求数", total, "当前筛选结果")
+      + demWorkMetric("工作项完成", tasks ? Math.round(taskDone / tasks * 100) + "%" : "—", taskDone + " / " + tasks + " 已关闭")
+      + demWorkMetric("用例通过", cases ? Math.round(casePassed / cases * 100) + "%" : "—", cases ? casePassed + " / " + cases + " 通过" : "当前结果未登记用例")
+      + demWorkMetric("需关注需求", risk + " 条", missing ? missing + " 条缺发布证据" : "未拆解 / 用例 / 日期", risk > 0)
+      + demWorkMetric(dateLabel, date ? String(date).substring(0, 10) : "—", "按真实证据与期望日期");
+  }
+  if(demWork.status === "review"){
+    return demWorkMetric("待评审", total, "当前筛选结果")
+      + demWorkMetric("高优先级", (Number(m.high) || 0) + " 条", "P0 / P1")
+      + demWorkMetric("信息就绪", (Number(m.ready) || 0) + " 条", "已填描述与期望日期")
+      + demWorkMetric("期望已过", (Number(m.overdue) || 0) + " 条", "需重新评估", Number(m.overdue) > 0)
+      + demWorkMetric("最长等待", (Number(m.longestWait) || 0) + " 天", "按提交日期计算");
+  }
+  if(demWork.status === "pass"){
+    var avg = Number(m.avgWsjf);
+    return demWorkMetric("待排期", total, "尚未进入交付阶段")
+      + demWorkMetric("高优先级", (Number(m.high) || 0) + " 条", "P0 / P1")
+      + demWorkMetric("30 天内期望", (Number(m.dueSoon) || 0) + " 条", "包含已过期日期", Number(m.dueSoon) > 0)
+      + demWorkMetric("平均 WSJF", isFinite(avg) && avg > 0 ? (Math.round(avg * 10) / 10) : "—", "只统计四项评分完整的需求")
+      + demWorkMetric("最近期望", m.nextExpect ? String(m.nextExpect).substring(0, 10) : "—", "用于安排排期顺序");
+  }
+  return demWorkMetric("已关闭", total, "历史需求归档")
+    + demWorkMetric("评审不通过", (Number(m.rej) || 0) + " 条", "可重新打开")
+    + demWorkMetric("中途取消", (Number(m.cancel) || 0) + " 条", "保留取消原因")
+    + demWorkMetric("重复需求", (Number(m.dup) || 0) + " 条", "保留查重结论")
+    + demWorkMetric("恢复至已通过", (Number(m.restorePass) || 0) + " 条", "由关闭前阶段决定");
+}
+function demWorkTitle(){
+  if(demWork.status === "review") return "待评审 · 评审工作台";
+  if(demWork.status === "pass") return "已通过 · 排期准备";
+  if(demWork.status === "closed") return "已关闭 · 关闭归档";
+  return demWork.stage === "all" ? "已排期 · 交付驾驶舱" : deliveryStageName(demWork.stage) + " · 交付驾驶舱";
+}
+function demWorkRule(){
+  if(demWork.status === "review") return "只处理评审决策；通过后进入排期准备，不通过进入关闭归档并保留原因。";
+  if(demWork.status === "pass") return "这里只处理评审通过、尚未排期的需求；未产生交付证据，因此不展示交付阶段。";
+  if(demWork.status === "closed") return "按关闭原因和关闭前阶段回看；恢复去向由关闭前阶段决定，交付证据与关闭原因继续保留。";
+  return "待开工、推进中、已完成·待发布与已交付均为派生只读；缺口应补工作项、用例或生产发布记录，不能手工改阶段。";
+}
+function demWorkStatusTabsHTML(){
+  var counts = demWork.response && demWork.response.statusCounts || {};
+  return '<nav class="dem-work-tabs" aria-label="切换主状态工作页">' + COLS.map(function(c){
+    var on = demWork.status === c[0];
+    return '<button type="button" class="dem-work-tab' + (on ? " on" : "") + '" data-dem-work-status="' + c[0] + '"' + (on ? ' aria-current="page"' : '') + '>' + c[1] + '<b>' + (Number(counts[c[0]]) || 0) + '</b></button>';
+  }).join("") + '</nav>';
+}
+function demWorkStageTabsHTML(){
+  if(demWork.status !== "plan") return "";
+  var counts = demWork.response && demWork.response.stageCounts || {};
+  var all = DELIVERY_STAGES.reduce(function(n, s){ return n + (Number(counts[s[0]]) || 0); }, 0);
+  var tabs = [["all", "全部阶段", all]].concat(DELIVERY_STAGES.map(function(s){ return [s[0], s[1], Number(counts[s[0]]) || 0]; }));
+  return '<nav class="dem-work-tabs dem-derived-tabs" aria-label="切换交付阶段">' + tabs.map(function(t){
+    var on = demWork.stage === t[0];
+    return '<button type="button" class="dem-work-tab' + (on ? " on" : "") + '" data-dem-work-stage="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' + esc(t[1]) + '<b>' + t[2] + '</b></button>';
+  }).join("") + '</nav>';
+}
+function demWorkProjectOptions(){
+  return '<option value="all">全部项目</option>' + rt.reqList.map(function(r){
+    return '<option value="' + esc(r.id) + '"' + (demWork.reqId === r.id ? " selected" : "") + '>' + esc(r.name) + '</option>';
+  }).join("");
+}
+function demWorkPriorityOptions(){
+  return '<option value="all">全部优先级</option>' + PRIORITIES.map(function(p){
+    return '<option value="' + p + '"' + (demWork.pris.length === 1 && demWork.pris[0] === p ? " selected" : "") + '>' + esc(priName(p)) + '</option>';
+  }).join("");
+}
+function demWorkFiltersHTML(){
+  var html = '<div class="dem-work-filters"><input class="input dem-work-search" type="search" data-dem-work-q value="' + esc(demWork.q) + '" placeholder="搜索标题、描述或来源…" aria-label="搜索当前工作页需求">'
+    + '<select class="mini-select" data-dem-work-filter="reqId" aria-label="筛选项目">' + demWorkProjectOptions() + '</select>'
+    + '<select class="mini-select" data-dem-work-filter="priority" aria-label="筛选优先级">' + demWorkPriorityOptions() + '</select>';
+  if(demWork.status === "plan"){
+    var versions = demWork.response && demWork.response.versions || [];
+    html += '<select class="mini-select" data-dem-work-filter="versionId" aria-label="筛选目标版本"><option value="all">全部版本</option>' + versions.map(function(v){
+      return '<option value="' + esc(v.versionId) + '"' + (demWork.versionId === v.versionId ? " selected" : "") + '>' + esc(v.versionName) + ' · ' + (Number(v.cnt) || 0) + '</option>';
+    }).join("") + '</select>'
+      + '<select class="mini-select" data-dem-work-filter="focus" aria-label="筛选需关注需求"><option value="all">全部需求</option><option value="risk"' + (demWork.focus === "risk" ? " selected" : "") + '>只看需关注</option></select>'
+      + '<select class="mini-select" data-dem-work-filter="group" aria-label="泳道分组"><option value="version"' + (demWork.group === "version" ? " selected" : "") + '>按版本分组</option><option value="project"' + (demWork.group === "project" ? " selected" : "") + '>按项目分组</option></select>';
+  }else if(demWork.status === "closed"){
+    html += '<select class="mini-select" data-dem-work-filter="closeReason" aria-label="筛选关闭原因"><option value="all">全部关闭原因</option>' + Object.keys(CLOSE_REASONS).map(function(r){
+      return '<option value="' + r + '"' + (demWork.closeReason === r ? " selected" : "") + '>' + esc(CLOSE_REASONS[r]) + '</option>';
+    }).join("") + '</select><select class="mini-select" data-dem-work-filter="closeStage" aria-label="筛选关闭前阶段"><option value="all">全部关闭前阶段</option>' + Object.keys(CLOSE_STAGES).map(function(s){
+      return '<option value="' + s + '"' + (demWork.closeStage === s ? " selected" : "") + '>' + esc(CLOSE_STAGES[s]) + '</option>';
+    }).join("") + '</select><select class="mini-select" data-dem-work-filter="group" aria-label="泳道分组"><option value="reason"' + (demWork.group === "reason" ? " selected" : "") + '>按关闭原因分组</option><option value="project"' + (demWork.group === "project" ? " selected" : "") + '>按项目分组</option></select>';
+  }else{
+    var focus = demWork.status === "review" ? "high" : "dueSoon";
+    html += '<select class="mini-select" data-dem-work-filter="focus" aria-label="筛选重点关注"><option value="all">全部需求</option><option value="' + focus + '"' + (demWork.focus === focus ? " selected" : "") + '>' + (focus === "high" ? "只看高优先级" : "30 天内期望") + '</option></select>'
+      + '<select class="mini-select" data-dem-work-filter="group" aria-label="泳道分组"><option value="project"' + (demWork.group === "project" ? " selected" : "") + '>按项目分组</option><option value="priority"' + (demWork.group === "priority" ? " selected" : "") + '>按优先级分组</option></select>'
+      + '<select class="mini-select" data-dem-work-filter="sort" aria-label="需求排序"><option value="expect"' + (demWork.sort === "expect" ? " selected" : "") + '>按期望交付</option><option value="wsjf"' + (demWork.sort === "wsjf" ? " selected" : "") + '>按 WSJF</option><option value="priority"' + (demWork.sort === "priority" ? " selected" : "") + '>按优先级</option></select>';
+  }
+  return html + '<button class="btn sm" type="button" data-dem-work-reset>清除筛选</button></div>';
+}
+function demWorkGroupKey(d){
+  if(demWork.group === "version") return d.versionId || "__none";
+  if(demWork.group === "priority") return d.priority || "P2";
+  if(demWork.group === "reason") return d.closeReason || (d.status === "rej" ? "rej" : "cancel");
+  return d.reqId || "__none";
+}
+function demWorkGroupLabel(key){
+  if(demWork.group === "version") return key === "__none" ? "未指定版本" : (versionName(key) || "未命名版本");
+  if(demWork.group === "priority") return priName(key);
+  if(demWork.group === "reason") return closeReasonName(key);
+  return key === "__none" ? "未归类" : (reqNameById(key) || "未命名项目");
+}
+function demWorkLanesHTML(){
+  var groups = {}, order = [];
+  demWork.items.forEach(function(d){
+    var key = demWorkGroupKey(d);
+    if(!groups[key]){ groups[key] = []; order.push(key); }
+    groups[key].push(d);
+  });
+  if(demWork.group === "version"){
+    var versionOrder = {};
+    ((demWork.response && demWork.response.versions) || []).forEach(function(v, i){ versionOrder[v.versionId] = i; });
+    order.sort(function(a, b){
+      var ai = versionOrder[a] === undefined ? 9999 : versionOrder[a], bi = versionOrder[b] === undefined ? 9999 : versionOrder[b];
+      return ai - bi || demWorkGroupLabel(a).localeCompare(demWorkGroupLabel(b), "zh-CN", {numeric:true});
+    });
+  }else if(demWork.group === "priority"){
+    order.sort(function(a, b){ return priRank(a) - priRank(b); });
+  }else{
+    order.sort(function(a, b){ return demWorkGroupLabel(a).localeCompare(demWorkGroupLabel(b), "zh-CN"); });
+  }
+  return order.map(function(key){
+    var rows = groups[key];
+    return '<section class="dem-work-lane"><div class="dem-work-lane-head"><h2>' + esc(demWorkGroupLabel(key)) + '</h2><span>' + rows.length + ' 条</span></div><div class="dem-work-grid">'
+      + rows.map(function(d){ return cardHTML(d, {noDrag:true, readOnly:true}); }).join("") + '</div></section>';
+  }).join("");
+}
+function renderDemandWorkpage(){
+  if(!demWork.response) return;
+  if(demandsMeta) demandsMeta.textContent = demWork.reqId ? reqNameById(demWork.reqId) : "全空间";
+  var scope = demWork.reqId ? reqNameById(demWork.reqId) : "全空间需求";
+  var html = '<div class="dem-work-page"><header class="dem-work-head"><div class="dem-work-head-top"><button class="btn sm" type="button" data-dem-work-back>' + icon("left", 13) + ' 返回需求看板</button><span class="dem-work-scope">' + esc(scope) + '</span></div>'
+    + '<div class="dem-work-title"><div><h1>' + esc(demWorkTitle()) + '</h1><p>' + esc(demWorkRule()) + '</p></div><span class="tag ghost">显示 ' + demWork.items.length + ' / ' + demWork.total + ' 条</span></div>'
+    + demWorkStatusTabsHTML() + demWorkStageTabsHTML() + '</header>'
+    + '<section class="dem-work-metrics" aria-label="当前筛选指标">' + demWorkMetricsHTML() + '</section>'
+    + demWorkFiltersHTML();
+  if(demWork.items.length){
+    html += '<div class="dem-work-result"><b>当前筛选 ' + demWork.total + ' 条</b><span>分组与指标基于服务端聚合；卡片点击可查看需求详情</span></div>' + demWorkLanesHTML();
+  }else{
+    html += '<div class="dem-work-empty">' + UI.emptyState({icon:"filterOff", title:"当前筛选下没有需求", text:"调整项目、阶段或搜索词，也可以清除全部筛选。"}) + '<button class="btn sm primary" type="button" data-dem-work-reset>清除筛选</button></div>';
+  }
+  if(demWork.hasMore) html += '<button class="bkl-more dem-work-more" type="button" data-dem-work-more>加载更多（已加载 ' + demWork.items.length + ' / 共 ' + demWork.total + ' 条）</button>';
+  demandBody.innerHTML = html + '</div>';
+}
+function resetDemWorkFilters(){
+  demWork.reqId = null;
+  demWork.q = "";
+  demWork.pris = [];
+  demWork.versionId = "all";
+  demWork.closeReason = "all";
+  demWork.closeStage = "all";
+  demWork.focus = "all";
+  loadDemands();
 }
 
 /* ---------- 列表渲染（全空间，跨项目） ---------- */
@@ -546,8 +913,7 @@ function cardHTML(d, opts){
 function statusTag(st){
   if(st === "plan") return '<span class="tag tag-success">已排期</span>';
   if(st === "pass") return '<span class="tag tag-info">已通过</span>';
-  if(st === "rej") return '<span class="tag tag-danger">已拒绝</span>';
-  if(st === "canceled") return '<span class="tag ghost">已取消</span>';
+  if(st === "closed" || st === "rej" || st === "canceled" || st === "cancelled") return '<span class="tag ghost">已关闭</span>';
   return '<span class="tag ghost">待评审</span>';
 }
 function demandCell(d, key){
@@ -567,11 +933,14 @@ function demandCell(d, key){
 }
 /* ---------- 列表智能视图（预置 Tab + 自定义视图，参考任务列表） ---------- */
 
-var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["rej","已拒绝"],["canceled","已取消"]];
+var DEM_PRESETS = [["all","全部需求"],["review","待评审"],["pass","已通过"],["plan","已排期"],["closed","已关闭"]];
 var DEM_GROUPS = ["none","status","priority","project","kind","category"];
 var DEM_SORTS = ["default","priority","expect","wsjf","created"];
 var DEM_STATE_KEY = "ds.demandView.v1";
 var demSmart = { current:"all", preset:"all", group:"none", subgroup:"none", sort:"default", pris:[], kinds:[], cats:[], reqs:[], q:"", collapsed:{} };
+function normalizeDemPreset(value){
+  return value === "rej" || value === "canceled" || value === "cancelled" ? "closed" : value;
+}
 var demSmartBar = null, demTabsBox = null, demSearchInput = null, demQTimer = null;
 
 function demBaseRows(){
@@ -682,7 +1051,7 @@ function demBoardMatchText(){
 function syncDemBoard(){
   if(!demBoardBar) return;
   var mode = listPrefs.viewMode("demand-pool");
-  demBoardBar.hidden = mode !== "board" || !rt.demandReqId;
+  demBoardBar.hidden = demWork.active || mode !== "board" || !rt.demandReqId;
   if(demBoardInput && demBoardInput.value !== demSmart.q) demBoardInput.value = demSmart.q;
   var fc = demBoardBar.querySelector("[data-demb-fcount]");
   if(fc){ var n = demBoardFilterCount(); fc.hidden = n === 0; fc.textContent = n; }
@@ -731,7 +1100,7 @@ function saveDemState(){
       view: {
         current: demSmart.current, preset: demSmart.preset, group: demSmart.group, subgroup: demSmart.subgroup, sort: demSmart.sort,
         q: demSmart.q, pris: demSmart.pris.slice(), kinds: demSmart.kinds.slice(),
-        cats: demSmart.cats.slice(), reqs: demSmart.reqs.slice(),
+        cats: demSmart.cats.slice(), reqs: demSmart.reqs.slice(), boardStage: demBoardStage,
         gantt: { scale: demGantt.scale, rangeMode: demGantt.rangeMode, zoomDayW: demGantt.zoomDayW }
       }
     }));
@@ -759,8 +1128,9 @@ function restoreDemState(){
     return;
   }
   var v = snap.view;
+  var preset = normalizeDemPreset(v.preset);
   demSmart.current = typeof v.current === "string" ? v.current : "all";
-  demSmart.preset = DEM_PRESETS.some(function(p){ return p[0] === v.preset; }) ? v.preset : "all";
+  demSmart.preset = DEM_PRESETS.some(function(p){ return p[0] === preset; }) ? preset : "all";
   demSmart.group = DEM_GROUPS.indexOf(v.group) !== -1 ? v.group : "none";
   demSmart.subgroup = (demSmart.group !== "none" && DEM_GROUPS.indexOf(v.subgroup) !== -1 && v.subgroup !== demSmart.group) ? v.subgroup : "none";
   demSmart.sort = DEM_SORTS.indexOf(v.sort) !== -1 ? v.sort : "default";
@@ -769,6 +1139,7 @@ function restoreDemState(){
   demSmart.cats = demStrArr(v.cats);
   demSmart.reqs = demStrArr(v.reqs);
   demSmart.q = typeof v.q === "string" ? v.q : "";
+  demBoardStage = v.boardStage === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === v.boardStage; }) ? (v.boardStage || "all") : "all";
   if(v.gantt && typeof v.gantt === "object"){
     if(["day", "week", "month"].indexOf(v.gantt.scale) !== -1) demGantt.scale = v.gantt.scale;
     if(["auto", "month"].indexOf(v.gantt.rangeMode) !== -1) demGantt.rangeMode = v.gantt.rangeMode;
@@ -802,8 +1173,9 @@ function applyDemView(v){
   catch(e){ toast("视图参数损坏，无法应用", "bad"); return; }
   if(!p || p.scope !== "demand"){ toast("视图参数不合法，无法应用（可删除后重新保存）", "bad"); return; }
   UI.closeAllPops();
+  var preset = normalizeDemPreset(p.preset);
   demSmart.current = String(v.id);
-  demSmart.preset = DEM_PRESETS.some(function(x){ return x[0] === p.preset; }) ? p.preset : "all";
+  demSmart.preset = DEM_PRESETS.some(function(x){ return x[0] === preset; }) ? preset : "all";
   demSmart.group = DEM_GROUPS.indexOf(p.group) !== -1 ? p.group : "none";
   demSmart.subgroup = (demSmart.group !== "none" && DEM_GROUPS.indexOf(p.subgroup) !== -1 && p.subgroup !== demSmart.group) ? p.subgroup : "none";
   demSmart.sort = DEM_SORTS.indexOf(p.sort) !== -1 ? p.sort : "default";
@@ -1322,7 +1694,7 @@ function demgGapsHTML(placed, d, range, dayW){
   var released = stages.some(function(s){ return s.stage === "release"; });
   var maxEnd = null;
   placed.forEach(function(p){ if(!maxEnd || p.end > maxEnd) maxEnd = p.end; });
-  if(!maxEnd || released || d.status === "canceled") return html;
+  if(!maxEnd || released || isClosedDemand(d)) return html;
   var today = GS.startOfDay(rt.TODAY);
   var tail = GS.addDays(maxEnd, 1);
   if(tail > today) return html;
@@ -1721,6 +2093,7 @@ function saveDemand(){
     /* 弹窗已被关闭或换成了另一条需求：只刷新列表，不动当前表单 */
     if(seq === demandFormSeq){
       closeDemandDialog();
+      if(wasEdit) closeDemandDetailIfOpen();
       if(body.reqId !== rt.demandReqId){
         rt.demandReqId = body.reqId;
         if(demandReq) demandReq.value = body.reqId;
@@ -1744,6 +2117,7 @@ function deleteDemand(id){
     if(!ok) return;
     API.del("/api/demands/" + encodeURIComponent(id)).then(function(){
       toast("已删除「" + d.title + "」", "fs");
+      closeDemandDetailIfOpen();
       loadDemands();
     }).catch(function(ex){ toast(ex.message || "删除失败", "bad"); });
   });
@@ -1758,8 +2132,12 @@ function passDemand(id){
   function doPass(){
     API.post("/api/demands/" + encodeURIComponent(id) + "/pass", { revision: d.revision }).then(function(){
       toast("已通过「" + d.title + "」，可排期进入版本", "fs");
+      closeDemandDetailIfOpen();
       loadDemands();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }).catch(function(ex){
+      toast(ex.message || "操作失败", "bad");
+      if(ex.code === 409) closeDemandDetailIfOpen();
+    });
   }
   /* 手机端评审通过需二次确认；桌面端保持原有一键通过 */
   if(isMobile() && MOBILE_APPROVALS.review.confirmOnApprove){
@@ -1778,17 +2156,21 @@ function rejectDemand(id){
   if(!d) return;
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   UI.showPrompt({
-    title:"拒绝需求",
-    desc:"拒绝原因会记录在需求时间线，需求进入「已拒绝」，可重新打开再评审。",
+    title:"评审不通过",
+    desc:"原因会记录在需求时间线，需求进入「已关闭 · 评审不通过」，可重新打开再评审。",
     label:"拒绝原因（必填）",
     required:true
   }).then(function(note){
     if(note === null) return;
     if(!note.trim()){ toast("请填写拒绝原因", "warn"); return; }
     API.post("/api/demands/" + encodeURIComponent(id) + "/rej", { note: note.trim(), revision: d.revision }).then(function(){
-      toast("已拒绝「" + d.title + "」", "fs");
+      toast("已记录评审不通过「" + d.title + "」", "fs");
+      closeDemandDetailIfOpen();
       loadDemands();
-    }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+    }).catch(function(ex){
+      toast(ex.message || "操作失败", "bad");
+      if(ex.code === 409) closeDemandDetailIfOpen();
+    });
   });
 }
 function reopenDemand(id){
@@ -1797,8 +2179,12 @@ function reopenDemand(id){
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   API.post("/api/demands/" + encodeURIComponent(id) + "/reopen", { revision: d.revision }).then(function(){
     toast("已重新打开「" + d.title + "」，回到待评审", "fs");
+    closeDemandDetailIfOpen();
     loadDemands();
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  }).catch(function(ex){
+    toast(ex.message || "操作失败", "bad");
+    if(ex.code === 409) closeDemandDetailIfOpen();
+  });
 }
 function unpassDemand(id){
   var d = findDemand(id);
@@ -1806,8 +2192,12 @@ function unpassDemand(id){
   if(!canWriteDemand(d)){ denyDemandReadOnly(); return; }
   API.post("/api/demands/" + encodeURIComponent(id) + "/unpass", { revision: d.revision }).then(function(){
     toast("已撤回「" + d.title + "」，回到待评审", "fs");
+    closeDemandDetailIfOpen();
     loadDemands();
-  }).catch(function(ex){ toast(ex.message || "操作失败", "bad"); });
+  }).catch(function(ex){
+    toast(ex.message || "操作失败", "bad");
+    if(ex.code === 409) closeDemandDetailIfOpen();
+  });
 }
 function reasonAction(id, action, title, desc){
   var d = findDemand(id);
@@ -1819,11 +2209,12 @@ function reasonAction(id, action, title, desc){
     if(!note.trim()){ toast("请填写原因", "warn"); return; }
     API.post("/api/demands/" + encodeURIComponent(id) + "/" + action, { note:note.trim(), revision:revision }).then(function(){
       toast(title + "成功，关联任务未改变", "fs");
+      closeDemandDetailIfOpen();
       drawerDemandOpts.reqId = null;
       loadDemands();
     }).catch(function(ex){
       toast(ex.message || "操作失败", "bad");
-      if(ex.code === 409) loadDemands();
+      if(ex.code === 409){ closeDemandDetailIfOpen(); loadDemands(); }
     });
   });
 }
@@ -1831,10 +2222,50 @@ function unplanDemand(id){
   reasonAction(id, "unplan", "撤销排期", "退回已通过，清除需求目标版本和计划时间；关联任务的版本与日期保持不变。");
 }
 function cancelDemand(id){
-  reasonAction(id, "cancel", "取消需求", "取消后不能新拆工作项；已有任务不自动取消或改期。原因会保存到流转日志。");
+  var d = findDemand(id);
+  if(!d) return;
+  if(!canScheduleDemand(d)){ denySchedule(); return; }
+  var layer = document.createElement("div");
+  layer.className = "modal-layer";
+  layer.setAttribute("role", "dialog");
+  layer.setAttribute("aria-modal", "true");
+  layer.innerHTML = '<div class="sheet xs"><div class="sheet-body"><div class="panel"><div class="panel-head"><h3>关闭需求</h3>'
+    + '<button class="icon-btn sm" type="button" data-dem-close-x aria-label="关闭">' + icon("close", 14) + '</button></div>'
+    + '<div class="stack"><p class="foot-note">关闭后不能新拆工作项；已有任务不自动取消或改期。关闭原因与关闭前阶段会保留。</p>'
+    + '<label class="field"><span>关闭原因</span><select class="input" id="demCloseReason"><option value="cancel">中途取消</option><option value="dup">重复需求</option></select></label>'
+    + '<label class="field"><span>原因说明（必填）</span><textarea class="input" id="demCloseNote" rows="4" maxlength="500"></textarea></label>'
+    + '<div class="row row-gap"><button class="btn primary" type="button" data-dem-close-ok>确认关闭</button><button class="btn" type="button" data-dem-close-x>取消</button></div>'
+    + '</div></div></div></div>';
+  document.body.appendChild(layer);
+  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  layer.addEventListener("click", function(e){
+    if(e.target.closest("[data-dem-close-x]")){ UI.closeModal(layer); return; }
+    var ok = e.target.closest("[data-dem-close-ok]");
+    if(!ok) return;
+    var note = layer.querySelector("#demCloseNote").value.trim();
+    if(!note){ toast("请填写原因说明", "warn"); layer.querySelector("#demCloseNote").focus(); return; }
+    ok.disabled = true;
+    API.post("/api/demands/" + encodeURIComponent(id) + "/cancel", {
+      note:note, revision:d.revision, closeReason:layer.querySelector("#demCloseReason").value
+    }).then(function(){
+      UI.closeModal(layer);
+      closeDemandDetailIfOpen();
+      drawerDemandOpts.reqId = null;
+      toast("需求已关闭，关联任务未改变", "fs");
+      loadDemands();
+    }).catch(function(ex){
+      ok.disabled = false;
+      toast(ex.message || "关闭失败", "bad");
+      if(ex.code === 409){ UI.closeModal(layer); closeDemandDetailIfOpen(); loadDemands(); }
+    });
+  });
+  UI.openModal(layer, "select");
 }
 function restoreDemand(id){
-  reasonAction(id, "restore", "恢复需求", "恢复为已通过，清除原目标版本和计划时间，需要重新排期；已有任务保持不变。");
+  var d = findDemand(id);
+  if(!d) return;
+  var target = restoreTargetName(d);
+  reasonAction(id, "restore", "恢复需求", "恢复至「" + target + "」" + (target === "已通过" ? "，清除原目标版本和计划时间，需要重新排期" : "") + "；已有任务保持不变。");
 }
 /* 优先级档位固定 P0-P3，显示名随空间优先级配置变化，开弹窗时刷新 */
 function syncPlanPriOptions(){
@@ -1902,6 +2333,7 @@ function doPlan(){
   }).then(function(){
     btnDoPlan.disabled = false;
     UI.closeModal($("dlgDemandPlan"));
+    closeDemandDetailIfOpen();
     toast("已" + (planAction === "replan" ? "调期" : "排期") + (verId ? "到「" + versionName(verId) + "」" : "，暂不指定目标版本") + "，关联任务不变", "fs");
     planDemandId = null;
     drawerDemandOpts.reqId = null;
@@ -1909,7 +2341,7 @@ function doPlan(){
   }).catch(function(ex){
     btnDoPlan.disabled = false;
     toast(ex.message || "排期失败", "bad");
-    if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; loadDemands(); }
+    if(ex.code === 409){ UI.closeModal($("dlgDemandPlan")); planDemandId = null; closeDemandDetailIfOpen(); loadDemands(); }
   });
 }
 
@@ -2061,9 +2493,15 @@ function showDemandDetail(id){
     return true;
   }).catch(function(ex){ toast(ex.message || "需求不存在或无权查看", "warn"); return false; });
 }
+function closeDemandDetailIfOpen(){
+  var layer = demandDetailLayer;
+  if(!layer) return;
+  demandDetailLayer = null;
+  UI.closeModal(layer);
+}
 function renderDemandDetail(d){
   var id = d.id;
-  var writable = canWriteDemand(d), canSplit = writable && d.status !== "canceled";
+  var writable = canWriteDemand(d), canSplit = writable && !isClosedDemand(d);
   var grid = [
     ["状态", statusName(d.status)],
     ["需求类型", d.itemKind || "其他"],
@@ -2075,6 +2513,15 @@ function renderDemandDetail(d){
     ["期望交付", d.expectDate || "待评估"],
     ["需求来源", d.source || "—"]
   ];
+  if(d.status === "plan" && d.deliveryStage){
+    grid.push(["交付阶段", deliveryStageName(d.deliveryStage)]);
+    grid.push(["交付证据", "工作项 " + (Number(d.taskDone) || 0) + "/" + (Number(d.taskCount) || 0) + " · 用例 " + (Number(d.casePassed) || 0) + "/" + (Number(d.caseCount) || 0)]);
+    if(d.deliveredAt) grid.push(["生产发布", String(d.deliveredAt).substring(0, 10)]);
+  }
+  if(isClosedDemand(d)){
+    grid.push(["关闭原因", closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))]);
+    grid.push(["关闭前阶段", closeStageName(d.closeStage || (d.status === "rej" ? "review" : "pass"))]);
+  }
   var wsjf = (d.wsjfBusiness != null)
     ? '<div class="detail-section"><span class="section-title">WSJF 评分</span>'
       + '<div class="wsjf-break"><span>业务 ' + d.wsjfBusiness + '</span><span>紧迫 ' + d.wsjfUrgency
@@ -2086,7 +2533,11 @@ function renderDemandDetail(d){
   layer.setAttribute("role", "dialog");
   layer.setAttribute("aria-modal", "true");
   layer.setAttribute("data-ai-demand", id);
-  layer.__uiOnClose = function(){ setTimeout(function(){ layer.remove(); }, 0); };
+  demandDetailLayer = layer;
+  layer.__uiOnClose = function(){
+    if(demandDetailLayer === layer) demandDetailLayer = null;
+    setTimeout(function(){ layer.remove(); }, 0);
+  };
   layer.innerHTML = '<div class="sheet md"><div class="sheet-head"><div style="flex:1;min-width:0">'
     + '<h2>' + esc(d.title) + '</h2>'
     + '<div class="desc">' + esc(reqNameById(d.reqId)) + ' · 提交于 ' + esc(fmtTs(d.createdAt) || "—") + '</div></div>'
@@ -2096,14 +2547,14 @@ function renderDemandDetail(d){
     + '<div class="detail-grid">' + grid.map(function(g){
         return '<div class="detail-item"><span>' + esc(g[0]) + '</span><b>' + esc(g[1]) + '</b></div>';
       }).join("") + '</div>'
-    + (d.status === "rej" ? '<p class="foot-note">评审不通过，历史保留；可重新打开回到「待评审」。</p>' : '')
-    + (d.status === "canceled" ? '<p class="foot-note">中途作废或暂不做，历史保留；可恢复为「已通过」后重新排期，是否交付以版本发布记录为准。</p>' : '')
-    + '<p class="foot-note">需求调期、撤排与取消不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
+    + (isClosedDemand(d) ? '<p class="foot-note">' + esc(closeReasonName(d.closeReason || (d.status === "rej" ? "rej" : "cancel"))) + '，历史保留；'
+      + ((d.closeReason === "rej" || d.status === "rej") ? '可重新打开回到「待评审」。' : '可恢复至「' + esc(restoreTargetName(d)) + '」。') + '</p>' : '')
+    + (d.deliveryEvidenceMissing ? '<p class="foot-note">目标版本已发布，但没有有效生产发布记录；请人工补录真实交付证据。</p>' : '')
+    + '<p class="foot-note">需求调期、撤排与关闭不自动改变已有任务；发布状态仅说明交付，不代表业务验收完成。</p>'
     + (demandActs(d) ? '<div class="row row-gap">' + demandActs(d) + '</div>' : '')
     + (d.description ? '<div class="detail-section"><span class="section-title">需求描述</span><div class="detail-copy">' + esc(d.description) + '</div></div>' : '')
     + (d.acceptText ? '<div class="detail-section"><span class="section-title">验收标准</span><div class="detail-copy">' + esc(d.acceptText) + '</div></div>' : '')
-    + ((d.status === "rej" || d.status === "canceled") && d.reviewNote ? '<div class="detail-section"><span class="section-title">'
-      + (d.status === "canceled" ? '取消原因' : '拒绝原因') + '</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
+    + (isClosedDemand(d) && d.reviewNote ? '<div class="detail-section"><span class="section-title">关闭原因说明</span><div class="detail-copy">' + esc(d.reviewNote) + '</div></div>' : '')
     + wsjf
     + '<div class="detail-section"><span class="section-title">关联文档</span>'
     + '<div class="attach-list" id="demDocs"><div class="attach-empty">加载中…</div></div>'
@@ -2124,20 +2575,22 @@ function renderDemandDetail(d){
   document.body.appendChild(layer);
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-dem-x]")) UI.closeModal(layer);
-    var p = e.target.closest("[data-dem-pass]"); if(p){ UI.closeModal(layer); passDemand(p.dataset.demPass); return; }
-    var r = e.target.closest("[data-dem-rej]"); if(r){ UI.closeModal(layer); rejectDemand(r.dataset.demRej); return; }
-    var pl = e.target.closest("[data-dem-plan]"); if(pl){ UI.closeModal(layer); openPlanDialog(pl.dataset.demPlan); return; }
-    var ro = e.target.closest("[data-dem-reopen]"); if(ro){ UI.closeModal(layer); reopenDemand(ro.dataset.demReopen); return; }
-    var restore = e.target.closest("[data-dem-restore]"); if(restore){ UI.closeModal(layer); restoreDemand(restore.dataset.demRestore); return; }
-    var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d, function(){ UI.closeModal(layer); }); return; }
+    /* 状态动作的子层叠在详情之上：取消回到详情，成功后由动作关闭详情 */
+    var p = e.target.closest("[data-dem-pass]"); if(p){ passDemand(p.dataset.demPass); return; }
+    var r = e.target.closest("[data-dem-rej]"); if(r){ rejectDemand(r.dataset.demRej); return; }
+    var pl = e.target.closest("[data-dem-plan]"); if(pl){ openPlanDialog(pl.dataset.demPlan); return; }
+    var ro = e.target.closest("[data-dem-reopen]"); if(ro){ reopenDemand(ro.dataset.demReopen); return; }
+    var restore = e.target.closest("[data-dem-restore]"); if(restore){ restoreDemand(restore.dataset.demRestore); return; }
+    var menuBtn = e.target.closest("[data-dem-menu-btn]"); if(menuBtn){ openDemandRowMenu(menuBtn, d); return; }
     var at = e.target.closest("[data-dem-addtask]");
     if(at){
-      if(!canSplit){ toast("已取消的需求不能新拆工作项", "warn"); return; }
-      UI.closeModal(layer);
+      if(!canSplit){ toast("已关闭的需求不能新拆工作项", "warn"); return; }
+      /* 抽屉叠在需求详情之上；关闭抽屉回到详情，关联列表随之刷新 */
       openTaskDrawer("backlog", null, {
         reqId: d.reqId, demandId: d.id, versionIds: d.status === "plan" && d.versionId ? [d.versionId] : [],
         startDate: d.plannedStart, dueDate: d.plannedEnd || d.expectDate,
-        categoryId: d.categoryId || null
+        categoryId: d.categoryId || null,
+        onClose: function(){ loadDemandTasks(layer, id, d.versionId); }
       });
       return;
     }
@@ -2174,7 +2627,10 @@ function renderDemandDetail(d){
       return;
     }
     var ot = e.target.closest("[data-open-task]");
-    if(ot){ UI.closeModal(layer); openTaskById(ot.dataset.openTask); return; }
+    if(ot){
+      openTaskById(ot.dataset.openTask, { onClose: function(){ loadDemandTasks(layer, id, d.versionId); } });
+      return;
+    }
     var pv = e.target.closest("[data-att-prev]");
     if(pv){
       e.preventDefault();
@@ -2391,6 +2847,30 @@ if(demandGanttBar){
   });
 }
 if(demandBody) demandBody.addEventListener("click", function(e){
+  var back = e.target.closest("[data-dem-work-back]");
+  if(back){ returnDemandBoard(); return; }
+  var ws = e.target.closest("[data-dem-work-status]");
+  if(ws){ openDemandWorkpage(ws.dataset.demWorkStatus, "all"); return; }
+  var wst = e.target.closest("[data-dem-work-stage]");
+  if(wst){
+    demWork.stage = wst.dataset.demWorkStage;
+    try{ history.pushState(null, "", demandWorkHash("plan", demWork.stage)); }
+    catch(ex){ window.location.hash = demandWorkHash("plan", demWork.stage); }
+    loadDemands();
+    return;
+  }
+  var wr = e.target.closest("[data-dem-work-reset]");
+  if(wr){ resetDemWorkFilters(); return; }
+  var wm = e.target.closest("[data-dem-work-more]");
+  if(wm){ loadMoreDemandWorkpage(); return; }
+  var open = e.target.closest("[data-dem-open]");
+  if(open){ openDemandWorkpage(open.dataset.demOpen, open.dataset.demStage || "all"); return; }
+  if(e.target.closest("[data-demb-stage-clear]")){
+    demBoardStage = "all";
+    saveDemState();
+    loadDemands();
+    return;
+  }
   var dh = e.target.closest("[data-demg-help]");
   if(dh){ openDemandGanttHelp(dh); return; }
   var dm = e.target.closest("[data-dem-more]");
@@ -2438,14 +2918,44 @@ if(demandBody) demandBody.addEventListener("click", function(e){
     showDemandDetail(card.dataset.demCard);
   }
 });
+if(demandBody){
+  demandBody.addEventListener("change", function(e){
+    var boardStage = e.target.closest("[data-demb-stage]");
+    if(boardStage){
+      demBoardStage = boardStage.value === "all" || DELIVERY_STAGES.some(function(s){ return s[0] === boardStage.value; }) ? boardStage.value : "all";
+      saveDemState();
+      loadDemands();
+      return;
+    }
+    var filter = e.target.closest("[data-dem-work-filter]");
+    if(!filter || !demWork.active) return;
+    var key = filter.dataset.demWorkFilter, value = filter.value;
+    if(key === "reqId") demWork.reqId = value === "all" ? null : value;
+    else if(key === "priority") demWork.pris = value === "all" ? [] : [value];
+    else if(key === "group") demWork.group = value;
+    else if(key === "sort") demWork.sort = value;
+    else if(key === "versionId" || key === "closeReason" || key === "closeStage" || key === "focus") demWork[key] = value;
+    else return;
+    if(key === "group") render(); else loadDemands();
+  });
+  demandBody.addEventListener("input", function(e){
+    var q = e.target.closest("[data-dem-work-q]");
+    if(!q || !demWork.active) return;
+    if(demWork.timer) clearTimeout(demWork.timer);
+    demWork.timer = setTimeout(function(){
+      demWork.timer = null;
+      demWork.q = q.value.trim();
+      loadDemands();
+    }, 300);
+  });
+}
 
-/* ---------- 卡片拖动：跨列状态流转（仅空间主；状态机同按钮） ---------- */
+/* ---------- 卡片拖动：跨列状态流转（项目写权限；状态机同按钮） ---------- */
 
-function allowedDrop(from, to){
-  if(from === "review") return to === "pass" || to === "rej";
-  if(from === "pass") return to === "plan" || to === "review";
-  if(from === "rej") return to === "review";
-  if(from === "plan") return to === "pass";
+function allowedDrop(from, to, canSchedule){
+  if(from === "review") return to === "pass" || to === "closed";
+  if(from === "pass") return (to === "plan" && canSchedule) || to === "review";
+  if(from === "plan") return to === "pass" && canSchedule;
   return false;
 }
 function clearColOver(){
@@ -2456,47 +2966,39 @@ function clearColOver(){
   });
 }
 /* 拖动一开始就把所有合法目标列点亮，避免长距离拖动时误以为不支持 */
-function markCanDrop(from){
+function markCanDrop(from, canSchedule){
   demandBody.querySelectorAll(".bkl-col").forEach(function(c){
-    if(allowedDrop(from, c.dataset.col)) c.classList.add("bkl-col-can");
+    if(allowedDrop(from, c.dataset.col, canSchedule)) c.classList.add("bkl-col-can");
   });
 }
 /* 不合法落点给出明确文案，而不是静默吞掉 */
-function dropDenied(status, to){
-  if(status === "plan" && to === "rej"){
-    toast("已排期的需求不能直接拒绝：请先拖回「已通过」撤销排期，再拖到「已拒绝」；若不再推进，可在「⋯」里取消需求并填写原因", "warn");
-  }else if(status === "plan" && to === "canceled"){
-    toast("已排期的需求不能直接取消：请先在「⋯」里取消需求并填写原因", "warn");
+function dropDenied(status, to, canSchedule){
+  if((status === "plan" || status === "pass") && to === "closed"){
+    toast("请先使用「更多 → 关闭需求」选择中途取消或重复需求并填写原因", "warn");
   }else if(to){
-    toast("「" + statusName(status) + "」不能拖到「" + statusName(to) + "」：" + (dragHint(status) || "请按状态流转规则操作"), "warn");
-  }else if(status === "pass"){
-    toast("已通过的需求可拖到「已排期」，或拖回「待评审」撤回", "warn");
-  }else if(status === "plan"){
-    toast("已排期的需求可拖回「已通过」撤销排期", "warn");
-  }else if(status === "rej"){
-    toast("已拒绝的需求只能拖回「待评审」重新打开", "warn");
+    toast("「" + statusName(status) + "」不能拖到「" + statusName(to) + "」：" + (dragHint(status, canSchedule) || "请按状态流转规则操作"), "warn");
   }else{
-    toast("待评审的需求可以拖到「已通过」或「已拒绝」", "warn");
+    toast(dragHint(status, canSchedule), "warn");
   }
 }
 function applyDrop(src, to){
-  if(src.status === "review" && to === "rej"){ rejectDemand(src.id); }
+  if(src.status === "review" && to === "closed"){ rejectDemand(src.id); }
   else if(src.status === "review" && to === "pass"){ passDemand(src.id); }
   else if(src.status === "pass" && to === "plan"){ openPlanDialog(src.id); }
   else if(src.status === "pass" && to === "review"){ unpassDemand(src.id); }
   else if(src.status === "plan" && to === "pass"){ unplanDemand(src.id); }
-  else if(src.status === "rej" && to === "review"){ reopenDemand(src.id); }
 }
 if(demandBody){
   demandBody.addEventListener("dragstart", function(e){
     var card = e.target.closest(".bkl-card");
-    if(!card || !canReviewDemand()) return;
-    dragSrc = { id: card.dataset.cardId, status: card.dataset.cardStatus };
+    var d = card ? findDemand(card.dataset.cardId) : null;
+    if(!canReviewDemand(d)) return;
+    dragSrc = { id: card.dataset.cardId, status: card.dataset.cardStatus, canSchedule: canScheduleDemand(d) };
     dragOverCol = null;
     e.dataTransfer.setData("text/plain", dragSrc.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("bkl-dragging");
-    markCanDrop(dragSrc.status);
+    markCanDrop(dragSrc.status, dragSrc.canSchedule);
   });
   demandBody.addEventListener("dragover", function(e){
     if(!dragSrc) return;
@@ -2509,7 +3011,7 @@ if(demandBody){
     if(!col) return;
     /* 非法列也要 preventDefault：否则 drop 不触发，用户得不到“为什么不让我放”的提示 */
     e.preventDefault();
-    if(!allowedDrop(dragSrc.status, col.dataset.col)){
+    if(!allowedDrop(dragSrc.status, col.dataset.col, dragSrc.canSchedule)){
       col.classList.add("bkl-col-no");
       e.dataTransfer.dropEffect = "none";
       return;
@@ -2524,7 +3026,7 @@ if(demandBody){
     var src = dragSrc;
     dragSrc = null;
     dragOverCol = null;
-    if(!allowedDrop(src.status, col.dataset.col)){ dropDenied(src.status, col.dataset.col); return; }
+    if(!allowedDrop(src.status, col.dataset.col, src.canSchedule)){ dropDenied(src.status, col.dataset.col, src.canSchedule); return; }
     e.preventDefault();
     applyDrop(src, col.dataset.col);
   });
@@ -2533,8 +3035,8 @@ if(demandBody){
     var card = e.target.closest(".bkl-card");
     if(card) card.classList.remove("bkl-dragging");
     /* 某些浏览器在非法落点不派发 drop：dragend 兜底，保证用户始终拿到原因 */
-    if(dragSrc && dragOverCol && !allowedDrop(dragSrc.status, dragOverCol)){
-      dropDenied(dragSrc.status, dragOverCol);
+    if(dragSrc && dragOverCol && !allowedDrop(dragSrc.status, dragOverCol, dragSrc.canSchedule)){
+      dropDenied(dragSrc.status, dragOverCol, dragSrc.canSchedule);
     }
     dragSrc = null;
     dragOverCol = null;
@@ -2562,8 +3064,8 @@ function openDemandDetailById(id){
  * 未选项目时可从全空间挑选，选中后由抽屉自动带出需求所属项目。
  * --------------------------------------------------------------------------- */
 var drawerDemandOpts = { reqId: null, list: [], total: 0, error: null };
-/* 关联需求候选排序：越接近可执行越靠前；已拒绝/已取消只保留原关联 */
-var DEMAND_OPTION_RANK = { plan: 0, pass: 1, review: 2, rej: 3, canceled: 4 };
+/* 关联需求候选排序：越接近可执行越靠前；已关闭只保留原关联 */
+var DEMAND_OPTION_RANK = { plan: 0, pass: 1, review: 2, closed: 3, rej: 4, canceled: 4 };
 function demandOptionRank(st){
   var r = DEMAND_OPTION_RANK[st];
   return r === undefined ? 9 : r;
@@ -2597,8 +3099,8 @@ function fillDrawerDemandSelect(reqId, keep){
   });
   list.forEach(function(d){
     var on = d.id === keep;
-    // 已有关联可保留；已拒绝/已取消需求不作为新任务的候选。
-    if((d.status === "rej" || d.status === "canceled") && !on) return;
+    // 已有关联可保留；已关闭需求不作为新任务的候选。
+    if(isClosedDemand(d) && !on) return;
     if(on) matched = true;
     var tag = drawerDemandStatusLabel(d.status);
     if(d.status === "plan" && d.versionStatus === "released") tag = tag ? tag + " · 已发布" : "已发布";

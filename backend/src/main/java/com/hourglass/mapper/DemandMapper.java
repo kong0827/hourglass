@@ -27,6 +27,15 @@ public interface DemandMapper {
     /** 看板筛选项计数：按 优先级 × 类型 × 模块 一次分组，由调用方聚合成三个维度 */
     List<Map<String, Object>> countGroupByFacets(@Param("q") DemandQuery query);
 
+    /** 已排期交付阶段计数：使用与工作项、用例、发布明细相同的证据口径 */
+    List<Map<String, Object>> countGroupByDeliveryStage(@Param("q") DemandQuery query);
+
+    /** 工作页指标：只返回一行聚合结果，不加载需求明细 */
+    Map<String, Object> workpageMetrics(@Param("q") DemandQuery query);
+
+    /** 交付驾驶舱版本筛选项：按当前其他筛选条件聚合 */
+    List<Map<String, Object>> selectWorkpageVersions(@Param("q") DemandQuery query);
+
     /** 项目列表需求计数：只返回聚合结果，不加载需求明细 */
     List<Map<String, Object>> countGroupByReq(@Param("workspaceId") String workspaceId);
 

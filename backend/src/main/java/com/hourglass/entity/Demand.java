@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/** 需求池条目：评审、需求目标排期与取消状态；任务执行/发布状态独立。 */
+/** 需求池条目：评审、目标排期与关闭归档；交付阶段由执行和发布证据派生。 */
 @Data
 public class Demand {
 
@@ -24,8 +24,12 @@ public class Demand {
     private String categoryId;
     /** P0/P1/P2/P3 */
     private String priority;
-    /** review待评审/pass已通过/plan已排期/rej已拒绝/canceled已取消 */
+    /** review待评审/pass已通过/plan已排期/closed已关闭 */
     private String status;
+    /** 关闭原因：rej评审不通过/cancel中途取消/dup重复需求 */
+    private String closeReason;
+    /** 关闭前主状态：review/pass/plan，决定恢复去向 */
+    private String closeStage;
     /** 期望交付时间 */
     private LocalDate expectDate;
     /** 需求层计划时间，与任务执行日期独立 */
@@ -57,4 +61,15 @@ public class Demand {
 
     /** WSJF 得分（非表字段，读取时计算：(business+urgency+risk)÷effort，保留 1 位） */
     private Double wsjfScore;
+
+    /** 已排期派生阶段（非表字段）：waiting/active/donePending/delivered */
+    private String deliveryStage;
+    private Integer taskCount;
+    private Integer taskDone;
+    private Integer caseCount;
+    private Integer casePassed;
+    private LocalDate devStart;
+    private LocalDate deliveredAt;
+    /** 已指向发布版本但没有有效发布记录；需补录历史证据，不自动推断交付 */
+    private Boolean deliveryEvidenceMissing;
 }

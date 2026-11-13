@@ -173,7 +173,7 @@
     <include refid="openBugJoin"/>
     WHERE d.workspace_id = #{workspaceId} AND d.req_id = #{reqId}
     GROUP BY d.id, d.title, d.status, d.priority, d.created_at
-    ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'rej'), d.created_at DESC, d.id
+    ORDER BY FIELD(d.status, 'review', 'pass', 'plan', 'closed', 'rej', 'canceled'), d.created_at DESC, d.id
   </select>
 
   <select id="selectUnlinkedCoverage" resultType="com.hourglass.dto.CaseCoverageRow">

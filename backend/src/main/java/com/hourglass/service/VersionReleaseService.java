@@ -661,7 +661,8 @@ public class VersionReleaseService {
             if (!Consts.COL_DONE.equals(task.getBoardColumn()) || task.getCompletedAt() == null || task.getCompletedAt().isAfter(r.getOccurredAt().toLocalDate()))
                 c.warnings.add("任务 " + id + " 未完成或完成日晚于实际时间");
             Demand demand = (task.getDemandId() == null ? null : c.demands.get(task.getDemandId()));
-            if (demand != null && ("canceled".equals(demand.getStatus()) || !Objects.equals(version.getId(), demand.getVersionId()))) c.warnings.add("任务 " + id + " 的需求已取消或目标版本不同");
+            if (demand != null && (("closed".equals(demand.getStatus()) || "canceled".equals(demand.getStatus()))
+                    || !Objects.equals(version.getId(), demand.getVersionId()))) c.warnings.add("任务 " + id + " 的需求已关闭或目标版本不同");
         }
         if (c.plan != null) {
             c.omitted.addAll(c.plan.getPlannedTaskIds());

@@ -368,7 +368,7 @@ class DemandServiceScheduleTest {
     @ValueSource(strings = {"replan", "unplan", "cancel", "restore"})
     void scheduleChangesRequireReason(String action) {
         planned();
-        if ("restore".equals(action)) demand.setStatus("canceled");
+        if ("restore".equals(action)) demand.setStatus("closed");
         assertEquals(400, assertThrows(AppException.class, () -> perform(action, action("  "))).getCode());
         verify(demands, never()).update(any());
     }
@@ -378,21 +378,29 @@ class DemandServiceScheduleTest {
     void cancelAndRestoreDoNotModifyTasks(String status) throws Exception {
         planned();
         demand.setStatus(status);
-        Demand canceled = service.cancel("U1", "W1", "D1", action("范围取消"));
-        assertEquals("canceled", canceled.getStatus());
-        assertEquals("V-old", canceled.getVersionId());
+        Demand closed = service.cancel("U1", "W1", "D1", action("范围取消"));
+        assertEquals("closed", closed.getStatus());
+        assertEquals("cancel", closed.getCloseReason());
+        assertEquals("rej".equals(status) ? "review" : status, closed.getCloseStage());
+        assertEquals("V-old", closed.getVersionId());
         JsonNode cancelLog = changeLog("cancel");
         assertEquals(status, cancelLog.path("before").path("status").asText());
-        assertEquals("canceled", cancelLog.path("after").path("status").asText());
+        assertEquals("closed", cancelLog.path("after").path("status").asText());
+        assertEquals("cancel", cancelLog.path("after").path("closeReason").asText());
         DemandActionRequest restore = action("重新纳入计划");
         restore.setRevision(5L);
         Demand restored = service.restore("U1", "W1", "D1", restore);
-        assertEquals("pass", restored.getStatus());
+        String expected = "review".equals(status) || "rej".equals(status) ? "review" : "pass";
+        assertEquals(expected, restored.getStatus());
+        assertNull(restored.getCloseReason());
+        assertNull(restored.getCloseStage());
         assertEquals(6L, restored.getRevision());
-        assertNull(restored.getVersionId());
-        assertNull(restored.getVersionName());
-        assertNull(restored.getPlannedStart());
-        assertNull(restored.getPlannedEnd());
+        if ("pass".equals(expected)) {
+            assertNull(restored.getVersionId());
+            assertNull(restored.getVersionName());
+            assertNull(restored.getPlannedStart());
+            assertNull(restored.getPlannedEnd());
+        }
         assertEquals(LocalDate.of(2026, 12, 20), restored.getExpectDate());
         verifyNoInteractions(tasks);
     }
@@ -412,8 +420,8 @@ class DemandServiceScheduleTest {
     }
 
     @Test
-    void canceledCannotPlanReplanOrCancelAgain() {
-        demand.setStatus("canceled");
+    void closedCannotPlanReplanOrCancelAgain() {
+        demand.setStatus("closed");
         assertThrows(AppException.class, () -> service.plan("U1", "W1", "D1", action("reason")));
         assertThrows(AppException.class, () -> service.replan("U1", "W1", "D1", action("reason")));
         assertThrows(AppException.class, () -> service.cancel("U1", "W1", "D1", action("reason")));

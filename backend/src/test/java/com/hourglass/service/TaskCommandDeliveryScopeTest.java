@@ -185,18 +185,18 @@ class TaskCommandDeliveryScopeTest {
     }
 
     @Test
-    void canceledDemandRejectsNewTask() {
-        demand.setStatus("canceled");
+    void closedDemandRejectsNewTask() {
+        demand.setStatus("closed");
         assertTrue(assertThrows(AppException.class, () -> service.create("U1", "W1", request()))
-                .getMessage().contains("已取消需求"));
+                .getMessage().contains("已关闭需求"));
         verify(tasks, never()).insert(any());
     }
 
     @Test
-    void rejectedDemandRejectsNewTask() {
+    void legacyRejectedDemandRejectsNewTask() {
         demand.setStatus("rej");
         assertTrue(assertThrows(AppException.class, () -> service.create("U1", "W1", request()))
-                .getMessage().contains("已拒绝需求"));
+                .getMessage().contains("已关闭需求"));
         verify(tasks, never()).insert(any());
     }
 

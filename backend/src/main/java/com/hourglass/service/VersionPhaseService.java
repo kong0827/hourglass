@@ -110,7 +110,8 @@ public class VersionPhaseService {
 
         Map<String, int[]> demandCounts = new HashMap<String, int[]>();
         for (Demand d : demandMapper.selectByReq(workspaceId, reqId)) {
-            if (d.getVersionId() == null || "rej".equals(d.getStatus())) {
+            if (d.getVersionId() == null || "closed".equals(d.getStatus())
+                    || "rej".equals(d.getStatus()) || "canceled".equals(d.getStatus())) {
                 continue;
             }
             int[] c = demandCounts.get(d.getVersionId());

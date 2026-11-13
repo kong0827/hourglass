@@ -10,6 +10,10 @@ public class DemandActionRequest {
 
     private String note;
 
+    /** cancel：rej评审不通过/cancel中途取消/dup重复需求，缺省 cancel */
+    @javax.validation.constraints.Pattern(regexp = "rej|cancel|dup", message = "关闭原因类型不合法")
+    private String closeReason;
+
     /** plan/replan：需求目标版本，必须未发布且同项目 */
     private String versionId;
 

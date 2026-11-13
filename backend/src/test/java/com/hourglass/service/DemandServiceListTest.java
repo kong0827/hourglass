@@ -56,19 +56,19 @@ class DemandServiceListTest {
     }
 
     @Test
-    void canceledStatusIsFilterableAndCountedInAll() {
+    void legacyCanceledStatusNormalizesToClosed() {
         when(demands.countGroupByStatus(any(DemandQuery.class))).thenReturn(Arrays.asList(
-                countRow("review", 2L), countRow("canceled", 1L)));
-        Demand canceled = demand();
-        canceled.setStatus("canceled");
-        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(canceled));
+                countRow("review", 2L), countRow("closed", 1L)));
+        Demand closed = demand();
+        closed.setStatus("closed");
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(closed));
         DemandQuery query = query(null);
         query.setStatus("canceled");
         DemandPage page = service.page("W1", "U1", query);
-        assertEquals("canceled", query.getStatus());
+        assertEquals("closed", query.getStatus());
         assertEquals(1, page.getTotal());
         assertEquals(3, page.getCounts().get("all"));
-        assertEquals("canceled", page.getItems().get(0).getStatus());
+        assertEquals("closed", page.getItems().get(0).getStatus());
     }
 
     @Test
@@ -162,6 +162,61 @@ class DemandServiceListTest {
         assertEquals(0, scope.getPris().size());
         assertEquals(0, scope.getKinds().size());
         assertEquals(1, query.getPris().size(), "看板列查询仍按所选优先级过滤");
+    }
+
+    @Test
+    void workpageSeparatesGlobalTabsFromFilteredMetricsAndSortsVersionsNaturally() {
+        when(demands.countGroupByStatus(any(DemandQuery.class))).thenReturn(Arrays.asList(
+                countRow("review", 2L), countRow("plan", 5L), countRow("closed", 1L)));
+        when(demands.countGroupByDeliveryStage(any(DemandQuery.class))).thenReturn(Arrays.asList(
+                stageRow("waiting", 2L), stageRow("active", 3L)));
+        when(demands.countPage(any(DemandQuery.class))).thenReturn(3);
+        Demand item = demand();
+        item.setStatus("plan");
+        when(demands.selectPage(any(DemandQuery.class))).thenReturn(Collections.singletonList(item));
+        Map<String, Object> metrics = new HashMap<String, Object>();
+        metrics.put("demandCount", 3L);
+        when(demands.workpageMetrics(any(DemandQuery.class))).thenReturn(metrics);
+        when(demands.selectWorkpageVersions(any(DemandQuery.class))).thenReturn(new java.util.ArrayList<Map<String, Object>>(Arrays.asList(
+                versionRow("V2", "V1.2"), versionRow("__none", "未指定版本"), versionRow("V10", "V1.10"))));
+        DemandQuery query = query(null);
+        query.setStatus("plan");
+        query.setDeliveryStage("active");
+        query.setVersionId("V2");
+        query.setFocus("risk");
+
+        com.hourglass.dto.DemandWorkpageResponse result = service.workpage("W1", "U1", query);
+
+        assertEquals(8, result.getStatusCounts().get("all"));
+        assertEquals(5, result.getStatusCounts().get("plan"));
+        assertEquals(5, result.getStageCounts().get("all"));
+        assertEquals(3, result.getStageCounts().get("active"));
+        assertEquals(3, result.getPage().getTotal());
+        assertEquals(3L, result.getMetrics().get("demandCount"));
+        assertEquals("V10", result.getVersions().get(0).get("versionId"));
+        assertEquals("V2", result.getVersions().get(1).get("versionId"));
+        assertEquals("__none", result.getVersions().get(2).get("versionId"));
+        ArgumentCaptor<DemandQuery> captor = ArgumentCaptor.forClass(DemandQuery.class);
+        verify(demands).selectWorkpageVersions(captor.capture());
+        assertEquals("plan", captor.getValue().getStatus());
+        assertNull(captor.getValue().getDeliveryStage());
+        assertNull(captor.getValue().getVersionId());
+        assertEquals("risk", captor.getValue().getFocus());
+    }
+
+    private Map<String, Object> stageRow(String stage, long count) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("stage", stage);
+        row.put("cnt", count);
+        return row;
+    }
+
+    private Map<String, Object> versionRow(String id, String name) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("versionId", id);
+        row.put("versionName", name);
+        row.put("demandCount", 1L);
+        return row;
     }
 
     private Map<String, Object> facetRow(String pri, String kind, String cat, long count) {

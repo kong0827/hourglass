@@ -49,10 +49,12 @@ public class DemandController {
                                                 @RequestParam(required = false) String pris,
                                                 @RequestParam(required = false) String kinds,
                                                 @RequestParam(required = false) String cats,
+                                                @RequestParam(required = false) String deliveryStage,
                                                 @RequestParam(required = false) Integer limit,
                                                 @CurrentWorkspace WorkspaceCtx ctx) {
-        return ApiResult.ok(demandService.board(ctx.getWsId(), ctx.getUserId(),
-                query(reqId, null, q, pris, kinds, cats, null, null, 0, limit)));
+        DemandQuery query = query(reqId, null, q, pris, kinds, cats, null, null, 0, limit);
+        query.setDeliveryStage(deliveryStage);
+        return ApiResult.ok(demandService.board(ctx.getWsId(), ctx.getUserId(), query));
     }
 
     /** 需求池分页：看板单列滚动加载 + 列表模式的筛选/排序/分页 */
@@ -65,11 +67,17 @@ public class DemandController {
                                       @RequestParam(required = false) String cats,
                                       @RequestParam(required = false) String reqs,
                                       @RequestParam(required = false) String sort,
+                                      @RequestParam(required = false) String deliveryStage,
+                                      @RequestParam(required = false) String versionId,
+                                      @RequestParam(required = false) String closeReason,
+                                      @RequestParam(required = false) String closeStage,
+                                      @RequestParam(required = false) String focus,
                                       @RequestParam(required = false) Integer offset,
                                       @RequestParam(required = false) Integer limit,
                                       @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.page(ctx.getWsId(), ctx.getUserId(),
-                query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit)));
+                extended(query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit),
+                        deliveryStage, versionId, closeReason, closeStage, focus)));
     }
 
     /** 需求池甘特：分页口径同列表，额外下发每条需求的阶段时间轴 */
@@ -82,11 +90,50 @@ public class DemandController {
                                             @RequestParam(required = false) String cats,
                                             @RequestParam(required = false) String reqs,
                                             @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) String deliveryStage,
+                                            @RequestParam(required = false) String versionId,
+                                            @RequestParam(required = false) String closeReason,
+                                            @RequestParam(required = false) String closeStage,
+                                            @RequestParam(required = false) String focus,
                                             @RequestParam(required = false) Integer offset,
                                             @RequestParam(required = false) Integer limit,
                                             @CurrentWorkspace WorkspaceCtx ctx) {
         return ApiResult.ok(demandService.gantt(ctx.getWsId(), ctx.getUserId(),
-                query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit)));
+                extended(query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit),
+                        deliveryStage, versionId, closeReason, closeStage, focus)));
+    }
+
+    @GetMapping("/api/demands/workpage")
+    public ApiResult<com.hourglass.dto.DemandWorkpageResponse> workpage(
+            @RequestParam String status,
+            @RequestParam(required = false) String reqId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String pris,
+            @RequestParam(required = false) String kinds,
+            @RequestParam(required = false) String cats,
+            @RequestParam(required = false) String reqs,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String deliveryStage,
+            @RequestParam(required = false) String versionId,
+            @RequestParam(required = false) String closeReason,
+            @RequestParam(required = false) String closeStage,
+            @RequestParam(required = false) String focus,
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer limit,
+            @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.workpage(ctx.getWsId(), ctx.getUserId(),
+                extended(query(reqId, status, q, pris, kinds, cats, reqs, sort, offset, limit),
+                        deliveryStage, versionId, closeReason, closeStage, focus)));
+    }
+
+    private static DemandQuery extended(DemandQuery query, String deliveryStage, String versionId,
+                                        String closeReason, String closeStage, String focus) {
+        query.setDeliveryStage(deliveryStage);
+        query.setVersionId(versionId);
+        query.setCloseReason(closeReason);
+        query.setCloseStage(closeStage);
+        query.setFocus(focus);
+        return query;
     }
 
     private static DemandQuery query(String reqId, String status, String q, String pris, String kinds,
