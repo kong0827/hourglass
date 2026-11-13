@@ -2,8 +2,14 @@
    appBase   前端静态资源根路径；默认取本文件所在目录，可显式指定 "/hourglass" 或 ""
    apiBase   后端 API 根路径；默认与 appBase 相同。前后端不同源时可写完整 URL
              （跨域需要后端 CORS 与 Cookie SameSite 配合，默认部署不跨域）
-   loginPath 登录页地址；默认 appBase + "/login.html" */
+   loginPath 登录页地址；默认 appBase + "/login.html"
+   showFooter 是否显示页脚（品牌名 + ICP 备案号）；默认 false，部署时按需开启 */
 (function (w) {
+  /* 部署时直接改这里；也可在加载本文件之前用 window.__APP_CONFIG__ 覆盖同名键 */
+  var DEFAULTS = {
+    showFooter: false
+  };
+
   function stripSlash(v) {
     return String(v == null ? "" : v).replace(/\/+$/, "");
   }
@@ -15,6 +21,10 @@
     } catch (e) { /* 老浏览器或不支持 URL 时走默认 */ }
     return "/hourglass";
   }
+  function bool(v, fallback) {
+    if (v == null) return fallback;
+    return v === true || v === 1 || v === "true";
+  }
 
   var raw = w.__APP_CONFIG__ || {};
   var appBase = stripSlash(raw.appBase != null ? raw.appBase : detectBase());
@@ -22,6 +32,7 @@
   w.__APP_CONFIG__ = {
     appBase: appBase,
     apiBase: apiBase,
-    loginPath: raw.loginPath || (appBase + "/login.html")
+    loginPath: raw.loginPath || (appBase + "/login.html"),
+    showFooter: bool(raw.showFooter, DEFAULTS.showFooter)
   };
 })(window);

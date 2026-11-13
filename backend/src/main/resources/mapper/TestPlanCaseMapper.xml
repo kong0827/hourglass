@@ -15,7 +15,7 @@
 
   <select id="selectViewByPlan" resultType="com.hourglass.dto.TestPlanCaseView">
     SELECT pc.id, pc.plan_id, pc.case_id, pc.result, pc.note, pc.executed_by, pc.executed_at,
-           c.title, c.module, c.priority, c.demand_id,
+           c.title, c.case_no, c.module, c.priority, c.demand_id,
            c.latest_status, c.latest_bug_task_id
     FROM test_plan_case pc
     JOIN test_case c ON c.id = pc.case_id

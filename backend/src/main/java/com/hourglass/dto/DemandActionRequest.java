@@ -24,6 +24,10 @@ public class DemandActionRequest {
     private LocalDate plannedStart;
     private LocalDate plannedEnd;
 
+    /** 列表轻量编辑：更换所属项目时的目标项目ID */
+    @javax.validation.constraints.Size(max = 32, message = "所属项目ID不合法")
+    private String reqId;
+
     @javax.validation.constraints.Pattern(regexp = "P0|P1|P2|P3", message = "优先级不合法")
     private String priority;
 

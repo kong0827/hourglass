@@ -8,6 +8,7 @@
     (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'passed') AS passed_count,
     (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'failed') AS failed_count,
     (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'blocked') AS blocked_count,
+    (SELECT COUNT(*) FROM test_plan_case pc WHERE pc.plan_id = p.id AND pc.result = 'skipped') AS skipped_count,
     <!-- 转缺陷：只算仍在本计划内的用例转出的、未进回收站的缺陷；同一缺陷多次关联只计一次 -->
     (SELECT COUNT(DISTINCT r.bug_task_id) FROM test_case_run r
       JOIN test_plan_case pc ON pc.plan_id = r.plan_id AND pc.case_id = r.case_id

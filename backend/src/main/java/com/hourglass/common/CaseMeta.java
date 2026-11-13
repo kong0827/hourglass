@@ -12,9 +12,11 @@ public final class CaseMeta {
     public static final String STATUS_PASSED = "passed";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_BLOCKED = "blocked";
+    /** 跳过：本次不执行/不适用；不计入通过率分母，也不转缺陷 */
+    public static final String STATUS_SKIPPED = "skipped";
 
     public static final List<String> RUN_STATUSES = Collections.unmodifiableList(Arrays.asList(
-            STATUS_PASSED, STATUS_FAILED, STATUS_BLOCKED));
+            STATUS_PASSED, STATUS_FAILED, STATUS_BLOCKED, STATUS_SKIPPED));
 
     private static final Set<String> STATUS_SET = Collections.unmodifiableSet(new LinkedHashSet<String>(RUN_STATUSES));
 
@@ -34,6 +36,9 @@ public final class CaseMeta {
         }
         if (STATUS_BLOCKED.equals(value)) {
             return "阻塞";
+        }
+        if (STATUS_SKIPPED.equals(value)) {
+            return "跳过";
         }
         return value;
     }

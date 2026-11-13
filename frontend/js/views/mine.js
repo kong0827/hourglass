@@ -15,7 +15,7 @@ import { loadRunningTimer, openTaskById } from "../core/task-actions.js";
 import { guard, serverDecision } from "../core/transitions.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, fmtMinutesShort, fmtShortMD, iso, parseDate, priName, priTagHTML, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
+import { CAT_DEFAULT_COLOR, COLUMNS, PRIORITIES, addDays, colMeta, colName, duePresetDate, fmtFull, fmtMinutesShort, fmtShortMD, iso, parseDate, priColor, priName, priTagHTML, syncColumns, typeBadgeHTML, typeName, weekdayCN } from "../lib/format.js";
 import { loadBoard } from "./board.js";
 import { refreshCalendarIfOpen } from "./calendar.js";
 import { openTaskTable } from "./manager-shared.js";
@@ -106,6 +106,16 @@ var mineCache = {};
 var mineAll = [], mineSpaces = [], mineNameOnly = 0, mineTotal = 0, mineHasMore = false;
 var MINE_PAGE_SIZE = 100;
 var mineLoading = false, mineSeq = 0;
+/* 行内状态下拉要列出当前空间的自定义列；列定义只随空间加载一次，失败时沿用内置列 */
+var mineColsWs = null;
+function loadMineColumns(){
+  var wsId = rt.currentWs && rt.currentWs.id;
+  if(!wsId || mineColsWs === wsId) return Promise.resolve();
+  return API.get("/api/columns").then(function(defs){
+    syncColumns(defs);
+    mineColsWs = wsId;
+  }).catch(function(){ /* 列定义不影响列表主体，继续用内置列渲染 */ });
+}
 function rerenderMine(){
   renderMine({items: mineAll, spaces: mineSpaces, matchedByNameOnly: mineNameOnly,
     total: mineTotal, hasMore: mineHasMore}, false);
@@ -134,8 +144,9 @@ function loadMine(opts){
   /* 显示列偏好先就位再渲染，避免首屏按默认列闪一帧 */
   listPrefs.load("my-tasks").then(function(){
     if(seq !== mineSeq) return;
-    return API.getGlobal("/api/my-tasks", params).then(function(d){
+    return Promise.all([loadMineColumns(), API.getGlobal("/api/my-tasks", params)]).then(function(res){
       if(seq !== mineSeq) return;
+      var d = res[1];
       return loadPrioritySpaces(d && d.spaces).then(function(){
         if(seq !== mineSeq) return;
         mineLoading = false;
@@ -411,6 +422,43 @@ function mineStatusPill(t){
   var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
   return '<span class="cell mine-status-cell"><span class="mine-st-pill ' + cls + '">' + esc(colName(t.boardColumn) || "未设置") + '</span>' + flagHTML + '</span>';
 }
+/* 行内编辑：列定义按当前空间加载，跨空间任务仍需切换空间后再改状态 */
+function mineStatusEditable(t){
+  return !!t && canEditTask(t) && !!rt.currentWs && t.workspaceId === rt.currentWs.id;
+}
+function minePriorityCell(t){
+  if(!canEditTask(t)) return minePriPill(t);
+  var cur = t.priority || "P2";
+  return '<select class="mine-inline-select mine-inline-pri" data-mine-inline="priority" style="color:' +
+    esc(priColor(cur, t.workspaceId)) + '" title="修改优先级" aria-label="优先级">' +
+    PRIORITIES.map(function(p){
+      return '<option value="' + p + '"' + (p === cur ? " selected" : "") + '>' + esc(priName(p, t.workspaceId)) + '</option>';
+    }).join("") + '</select>';
+}
+function mineStatusCell(t){
+  if(!mineStatusEditable(t)) return mineStatusPill(t);
+  var b = statusBucket(t);
+  var cls = (b === "done" || b === "ended") ? "done" : (b === "doing" ? "doing" : "todo");
+  var f = dueFlag(t);
+  var flagHTML = f ? ' <span class="mini-tag ' + (f.kind === "over" ? "over" : (f.kind === "today" ? "warn" : "")) + '">' + esc(f.text) + '</span>' : "";
+  return '<span class="cell mine-status-cell">' +
+    '<select class="mine-inline-select mine-inline-status ' + cls + '" data-mine-inline="status"' +
+      ' title="移动到其他列" aria-label="状态">' +
+      '<option value="current" disabled selected>' + esc(colName(t.boardColumn) || "未设置") + '</option>' +
+      COLUMNS.filter(function(c){ return c.id !== t.boardColumn; }).map(function(c){
+        return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
+      }).join("") +
+    '</select>' + flagHTML + '</span>';
+}
+function mineDueCell(t, dueCls){
+  if(!canEditTask(t)){
+    return '<span class="cell ' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + (t.dueDate ? esc(dueDateMD(t)) : "—") + '</span>';
+  }
+  var val = t.dueDate ? String(t.dueDate).substring(0, 10) : "";
+  return '<span class="cell mine-due-cell ' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' +
+    '<input class="mine-inline-date" type="date" data-mine-inline="dueDate" value="' + esc(val) +
+    '" aria-label="截止日期" /></span>';
+}
 function mineRowHTML(t, cols){
   var st = dueState(t);
   var p = progressOf(t);
@@ -440,9 +488,9 @@ function mineRowCells(t, dueCls, p, cols){
       var badge = typeBadgeHTML(t.itemType);
       return '<span class="cell">' + (badge || esc(typeName(t.itemType))) + '</span>';
     }
-    if(c.k === "priority") return minePriPill(t);
-    if(c.k === "status") return mineStatusPill(t);
-    if(c.k === "dueDate") return '<span class="cell ' + dueCls + '" title="' + esc(dueDateTip(t)) + '">' + (t.dueDate ? esc(dueDateMD(t)) : "—") + '</span>';
+    if(c.k === "priority") return minePriorityCell(t);
+    if(c.k === "status") return mineStatusCell(t);
+    if(c.k === "dueDate") return mineDueCell(t, dueCls);
     if(c.k === "startDate") return '<span class="cell muted">' + (t.startDate ? esc(fmtShortMD(parseDate(t.startDate))) : "—") + '</span>';
     if(c.k === "progress"){
       /* 未开始且进度为 0 时不画空进度条，避免零信息量的灰槽 */
@@ -963,34 +1011,86 @@ function mineMoreHTML(){
 function mineTaskFromRow(row){
   return mineCache[(row.dataset.mineWs || "") + "|" + row.dataset.mineId] || null;
 }
-function mineComplete(t){
-  if(!t) return;
+/* 状态变更统一走 move：沿用流转矩阵的原因/强制弹窗，完成后同步计时与看板 */
+function mineChangeColumn(t, column, failText){
+  if(!t || !column || column === t.boardColumn) return;
   if(!canEditTask(t)){ toast("你对该项目只有查看权限", "warn"); return; }
-  var items = [{ from: t.boardColumn, title: t.title }];
+  var from = t.boardColumn;
+  var items = [{ from: from, title: t.title }];
   function send(pass){
-    var body = { column: "done" };
+    var body = { column: column };
     if(pass.reason) body.reason = pass.reason;
     if(pass.force) body.force = true;
     return API.postWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id) + "/move", body);
   }
-  function ok(){
-    toast("已完成「" + t.title + "」", "fs");
+  function ok(res){
+    var to = (res && res.to) || column;
+    var msg;
+    if(to === "done" && from !== "done") msg = "已完成「" + t.title + "」";
+    else if(from === "done" && to !== "done") msg = "已取消完成「" + t.title + "」";
+    else msg = "「" + t.title + "」已移到「" + colName(to) + "」";
+    if(res && res.autoTimerStarted) msg += " · 已开始计时";
+    toast(msg, "fs");
     loadMine({silent:true});
     loadBoard({silent:true});
     loadRunningTimer();
   }
-  guard(t.workspaceId, items, "done").then(function(pass){
+  guard(t.workspaceId, items, column).then(function(pass){
     if(!pass) return;
     var retried = false;
     send(pass).then(ok).catch(function(ex){
-      if(retried){ toast(ex.message || "完成失败", "bad"); return; }
+      if(retried){ toast(ex.message || failText, "bad"); return; }
       retried = true;
-      serverDecision(t.workspaceId, items, "done", ex).then(function(retry){
-        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || "完成失败", "bad"); return; }
-        send(retry).then(ok).catch(function(e){ toast(e.message || "完成失败", "bad"); });
+      serverDecision(t.workspaceId, items, column, ex).then(function(retry){
+        if(!retry){ if(ex.code !== 412 && ex.code !== 422) toast(ex.message || failText, "bad"); return; }
+        send(retry).then(ok).catch(function(e){ toast(e.message || failText, "bad"); });
       });
     });
   });
+}
+function mineComplete(t){
+  mineChangeColumn(t, "done", "完成失败");
+}
+/* 优先级 / 截止日期：复用任务保存接口，带上行数据里的 updatedAt 做并发校验 */
+function mineInlinePut(el, t, patch, okMsg, revert){
+  if(el) el.disabled = true;
+  var body = taskPayloadWith(t, patch);
+  body.oldUpdatedAt = t.updatedAt || null;
+  API.putWs(t.workspaceId, "/api/tasks/" + encodeURIComponent(t.id), body).then(function(){
+    toast(okMsg, "fs");
+    loadMine({silent:true});
+    loadBoard({silent:true});
+    if(Object.prototype.hasOwnProperty.call(patch, "dueDate")) refreshCalendarIfOpen();
+  }).catch(function(ex){
+    if(el) el.disabled = false;
+    if(revert) revert();
+    toast(ex.message || "修改失败", "bad");
+    if(ex.code === 409) loadMine({silent:true});
+  });
+}
+function handleMineInlineChange(el, t){
+  var field = el.dataset.mineInline, val = el.value;
+  if(field === "status"){
+    /* 下拉只负责转交 move；取消原因弹窗时回到原状态显示 */
+    el.value = "current";
+    mineChangeColumn(t, val, "移动失败");
+    return;
+  }
+  if(field === "priority"){
+    var prev = t.priority || "P2";
+    if(val === prev) return;
+    mineInlinePut(el, t, { priority: val }, "优先级已调整为 " + priName(val, t.workspaceId), function(){
+      el.value = prev;
+      el.style.color = priColor(prev, t.workspaceId);
+    });
+    return;
+  }
+  if(field === "dueDate"){
+    var prevDue = t.dueDate ? String(t.dueDate).substring(0, 10) : "";
+    if((val || "") === prevDue) return;
+    mineInlinePut(el, t, { dueDate: val || null },
+      val ? ("截止日期已设为 " + val) : "已清除截止日期", function(){ el.value = prevDue; });
+  }
 }
 /* 同一时刻只允许一个计时请求在途：双击会基于同一份旧状态连发两次开始/停止 */
 var mineTimerBusy = false;
@@ -1069,6 +1169,8 @@ if(mineBody){
     if(e.target.closest("[data-mine-more]")){ e.stopPropagation(); loadMine({append:true}); return; }
     var row = e.target.closest("[data-mine-id]");
     if(!row) return;
+    /* 行内控件自己处理点击，不能顺带打开详情抽屉 */
+    if(e.target.closest("select,input")) return;
     var t = mineTaskFromRow(row);
     if(e.target.closest("[data-mine-done]")){ e.stopPropagation(); mineComplete(t); return; }
     if(e.target.closest("[data-mine-timer]")){ e.stopPropagation(); mineToggleTimer(t); return; }
@@ -1087,6 +1189,13 @@ if(mineBody){
       return;
     }
     openTaskById(id);
+  });
+  mineBody.addEventListener("change", function(e){
+    var el = e.target.closest("[data-mine-inline]");
+    if(!el) return;
+    var row = el.closest("[data-mine-id]");
+    var t = row ? mineTaskFromRow(row) : null;
+    if(t) handleMineInlineChange(el, t);
   });
   mineBody.addEventListener("keydown", function(e){
     if(e.key !== "Enter" && e.key !== " ") return;

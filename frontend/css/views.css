@@ -259,6 +259,42 @@ body.proj-reordering{cursor:grabbing;}
 .project-name-cell{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);}
 .project-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:2px;}
 .demand-row-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;}
+/* 需求池列表行内编辑：默认贴合文本，悬停/聚焦才显形，避免整张表都是控件 */
+.dem-inline-select{
+  appearance:none;-webkit-appearance:none;
+  max-width:170px;height:26px;padding:0 22px 0 7px;
+  border:1px solid transparent;border-radius:var(--r-xs);
+  background-color:transparent;
+  background-image:var(--select-chevron);
+  background-repeat:no-repeat;background-position:right 5px center;
+  font:inherit;font-size:12.5px;font-weight:550;line-height:24px;
+  color:var(--text-2);cursor:pointer;
+}
+.dem-inline-select:hover{border-color:var(--border);background-color:var(--surface);color:var(--text);}
+.dem-inline-select:focus{outline:none;border-color:var(--primary);background-color:var(--surface);box-shadow:var(--ring-focus);}
+.dem-inline-select:disabled{opacity:.6;cursor:default;}
+.dem-inline-pri{max-width:106px;font-weight:650;}
+.dem-inline-project{max-width:180px;}
+.dem-inline-status.s-review{color:var(--text-2);}
+.dem-inline-status.s-pass{color:var(--info);}
+.dem-inline-status.s-plan{color:var(--success);}
+.dem-inline-date{
+  width:132px;height:26px;padding:0 6px;
+  border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;color:var(--text-2);font:inherit;font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+.dem-inline-date:hover{border-color:var(--border);background:var(--surface);}
+.dem-inline-date:focus{outline:none;border-color:var(--primary);background:var(--surface);box-shadow:var(--ring-focus);}
+.dem-inline-date::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer;}
+.dem-inline-btn{
+  display:inline-flex;align-items:center;gap:5px;max-width:190px;
+  height:26px;padding:0 7px;border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;font-weight:550;cursor:pointer;
+}
+.dem-inline-btn:hover{border-color:var(--border);background:var(--surface);color:var(--text);}
+.dem-inline-btn:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
+.dem-inline-btn [data-icon]{color:var(--text-3);flex:0 0 auto;}
 .manager-tbl .link-title{display:inline;font-size:12.5px;line-height:18px;font-weight:550;color:var(--primary);}
 .manager-tbl .link-title:hover{text-decoration:underline;}
 
@@ -2359,6 +2395,35 @@ mark.rrd-hl{background:var(--primary-soft);color:inherit;padding:0;border-radius
 .mine-st-pill.doing{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-fg);}
 .mine-st-pill.done{background:var(--success-soft);border-color:var(--success-border);color:var(--success-fg);}
 
+/* 我的工作列表行内编辑：默认贴合文本，悬停/聚焦才显形 */
+.mine-inline-select{
+  appearance:none;-webkit-appearance:none;
+  max-width:100%;min-width:0;height:24px;padding:0 20px 0 5px;
+  border:1px solid transparent;border-radius:var(--r-xs);
+  background-color:transparent;
+  background-image:var(--select-chevron);
+  background-repeat:no-repeat;background-position:right 4px center;
+  font:inherit;font-size:12px;font-weight:600;line-height:22px;
+  color:var(--text-2);cursor:pointer;
+}
+.mine-inline-select:hover{border-color:var(--border);background-color:var(--surface);color:var(--text);}
+.mine-inline-select:focus{outline:none;border-color:var(--primary);background-color:var(--surface);box-shadow:var(--ring-focus);}
+.mine-inline-select:disabled{opacity:.6;cursor:default;}
+.mine-inline-pri{width:100%;padding-right:16px;}
+.mine-inline-status{max-width:104px;min-width:0;}
+.mine-inline-status.doing{color:var(--primary-fg);}
+.mine-inline-status.done{color:var(--success-fg);}
+.mine-list .list-row .cell.mine-due-cell{display:flex;align-items:center;min-width:0;}
+.mine-inline-date{
+  width:100%;min-width:0;height:24px;padding:0 2px;
+  border:1px solid transparent;border-radius:var(--r-xs);
+  background:transparent;color:inherit;font:inherit;font-size:11.5px;
+  font-variant-numeric:tabular-nums;
+}
+.mine-inline-date:hover{border-color:var(--border);background:var(--surface);}
+.mine-inline-date:focus{outline:none;border-color:var(--primary);background:var(--surface);box-shadow:var(--ring-focus);}
+.mine-inline-date::-webkit-calendar-picker-indicator{opacity:.5;cursor:pointer;}
+
 /* 一级分组行：吸顶 + 语义色条 */
 .mine-grp-h{
   position:sticky;top:var(--mine-head-h);z-index:4;
@@ -3079,6 +3144,12 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-stat.over b{color:var(--danger);}
 .tc-stat.warn b{color:var(--warning);}
 .tc-stat.mute b{color:var(--text-3);}
+/* 批量维护条：默认淡出，勾选或全选时保持可见；操作按钮未选时禁用 */
+.tc-bulkbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface-sunken);font-size:12px;color:var(--text-2);}
+.tc-bulk-all{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-2);}
+.tc-bulk-count{font-variant-numeric:tabular-nums;color:var(--text-3);}
+.tc-bulk-acts{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.tc-bulkbar .btn[disabled]{opacity:.45;cursor:not-allowed;}
 .tc-list{display:flex;flex-direction:column;gap:6px;}
 /* 全部项目：按项目分组，组头交代项目与条数；组内沿用单项目卡片 */
 .tc-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
@@ -3132,7 +3203,7 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cov-summary b{font-size:18px;color:var(--text);}
 .cov-note{font-size:11.5px;color:var(--text-3);}
 .cov-table{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--surface);}
-.cov-head,.cov-row{display:grid;grid-template-columns:minmax(180px,2.4fr) repeat(6,minmax(52px,.7fr)) minmax(110px,1fr) minmax(70px,.8fr);gap:8px;align-items:center;padding:8px 12px;}
+.cov-head,.cov-row{display:grid;grid-template-columns:minmax(180px,2.4fr) repeat(7,minmax(52px,.7fr)) minmax(110px,1fr) minmax(70px,.8fr);gap:8px;align-items:center;padding:8px 12px;}
 .cov-head{font-size:11.5px;color:var(--text-3);background:var(--surface-sunken);border-bottom:1px solid var(--border);}
 .cov-row{font-size:12.5px;color:var(--text-2);border-bottom:1px solid var(--border);}
 .cov-row:last-child{border-bottom:none;}
@@ -3146,9 +3217,10 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .cov-pass{color:var(--success);}
 .cov-fail{color:var(--danger);}
 .cov-block{color:var(--warning);}
+.cov-skip{color:var(--text-2);}
 .cov-bug{color:var(--danger);}
 /* 0 表示未发生，不着通过 / 失败语义色 */
-.cov-pass.is-zero,.cov-fail.is-zero,.cov-block.is-zero,.cov-bug.is-zero{color:var(--text-3);}
+.cov-pass.is-zero,.cov-fail.is-zero,.cov-block.is-zero,.cov-skip.is-zero,.cov-bug.is-zero{color:var(--text-3);}
 .cov-unlinked .cov-name b{color:var(--text-2);font-weight:500;}
 .cov-bar{display:inline-block;width:54px;height:5px;border-radius:999px;background:var(--border);vertical-align:middle;margin-right:6px;overflow:hidden;}
 .cov-bar i{display:block;height:100%;background:var(--success);border-radius:999px;}
@@ -3229,10 +3301,13 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 }
 /* 紧凑行：大数据量时降低垂直占用，次要操作 hover 才出现 */
 .tc-row{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer;}
+.tc-row.is-selected{border-color:var(--primary-border);background:var(--primary-soft);}
+.tc-pick{flex:0 0 auto;margin:4px 0 0;cursor:pointer;accent-color:var(--primary);}
 .tc-row:hover{border-color:var(--border-strong);box-shadow:var(--shadow-xs);}
 .tc-row .mini-tag{margin-top:2px;flex:0 0 auto;font-size:11px;padding:0 6px;line-height:17px;}
-/* 序号是当前筛选+排序结果的位置，不是用例编号；宽度固定，不随条目数跳动 */
-.tc-no{flex:0 0 26px;text-align:right;font-size:12px;line-height:22px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+/* 用例编号（TC-001）：项目内固定，不随筛选/排序变化；宽度固定避免抖动 */
+.tc-no{flex:0 0 52px;text-align:right;font-size:11.5px;line-height:22px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rep-no{color:var(--text-3);font-weight:500;font-variant-numeric:tabular-nums;}
 .tc-main{flex:1 1 auto;min-width:0;}
 .tc-title{font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--text);word-break:break-all;}
 .tc-pri{margin-left:6px;font-weight:700;}
@@ -3248,6 +3323,8 @@ button.pseg:focus-visible{outline:2px solid var(--surface);outline-offset:-2px;}
 .tc-search{width:200px;height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);font-size:12.5px;color:var(--text);}
 .tc-search:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring-focus);}
 .tc-optional{font-weight:400;color:var(--text-3);font-size:12px;}
+.b-check{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--text-2);cursor:pointer;}
+.b-check input{accent-color:var(--primary);}
 /* 编辑弹框：步骤多时区域内滚动，避免弹框超出视口 */
 .tc-steps{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;max-height:46vh;overflow:auto;padding:2px;}
 .tc-step-row{display:grid;grid-template-columns:22px 1.35fr 1fr auto;gap:8px;align-items:start;}

@@ -359,6 +359,10 @@ body.fs-view .fs-exit{display:inline-flex;}
 .app-foot .af-link{color:var(--text-3);text-decoration:none;transition:color var(--dur-fast) var(--ease-out);}
 .app-foot .af-link:hover{color:var(--primary-fg);text-decoration:none;}
 .app-foot .af-ga:empty{display:none;}
+/* 页脚由运行时配置开关：默认隐藏（html 上的 no-app-foot 在 index.html 首屏脚本里设置），
+   同时把 --app-foot-h 归零，避免助手球/返回顶部等悬浮元素多出 26px 底边距 */
+html.no-app-foot{--app-foot-h:0px;}
+html.no-app-foot .app-foot{display:none;}
 
 /* ===================== 断点（§3.5） ===================== */
 /* 侧边栏收起为 64px 图标态：由 body.side-rail 驱动

@@ -108,6 +108,9 @@ public interface RequirementDocMapper {
                       @Param("viewerId") String viewerId, @Param("userId") String userId,
                       @Param("seeAllDrafts") boolean seeAllDrafts);
 
+    /** 更换需求所属项目前检查：该需求是否已关联文档（不区分草稿可见性） */
+    int countLinksByDemand(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+
     /** 文档关联的需求池需求（id / title / status / priority） */
     List<java.util.Map<String, Object>> selectDemandsByDoc(@Param("workspaceId") String workspaceId,
                                                           @Param("docId") String docId,

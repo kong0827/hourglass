@@ -398,6 +398,7 @@ public class BackupExportService {
             b.setReqId(c.getReqId());
             b.setTitle(c.getTitle());
             b.setPrecondition(c.getPrecondition());
+            b.setTestData(c.getTestData());
             b.setSteps(c.getSteps());
             b.setLatestStatus(c.getLatestStatus());
             b.setLatestNote(c.getLatestNote());

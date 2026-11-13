@@ -11,7 +11,7 @@ import javax.validation.constraints.Size;
 public class CaseRunRequest {
 
     @NotBlank(message = "请选择执行结果")
-    @Pattern(regexp = "^(passed|failed|blocked)$", message = "执行结果不合法")
+    @Pattern(regexp = "^(passed|failed|blocked|skipped)$", message = "执行结果不合法")
     private String status;
 
     @Size(max = 500, message = "备注最多 500 字")

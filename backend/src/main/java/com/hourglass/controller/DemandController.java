@@ -264,6 +264,38 @@ public class DemandController {
         return ApiResult.ok(demandService.update(CurrentUser.id(), ctx.getWsId(), id, req));
     }
 
+    /** 列表行内编辑：优先级，不推进状态 */
+    @PostMapping("/api/demands/{id}/priority")
+    public ApiResult<Demand> quickPriority(@PathVariable String id,
+                                           @Valid @RequestBody(required = false) DemandActionRequest body,
+                                           @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.quickPriority(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    /** 列表行内编辑：期望交付日期（可清空） */
+    @PostMapping("/api/demands/{id}/expect-date")
+    public ApiResult<Demand> quickExpectDate(@PathVariable String id,
+                                             @Valid @RequestBody(required = false) DemandActionRequest body,
+                                             @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.quickExpectDate(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    /** 列表行内编辑：目标版本，仅已排期需求且需排期管理权限 */
+    @PostMapping("/api/demands/{id}/version")
+    public ApiResult<Demand> quickVersion(@PathVariable String id,
+                                          @Valid @RequestBody(required = false) DemandActionRequest body,
+                                          @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.quickVersion(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
+    /** 列表行内编辑：更换所属项目，仅待评审且无执行证据时允许 */
+    @PostMapping("/api/demands/{id}/move")
+    public ApiResult<Demand> move(@PathVariable String id,
+                                  @Valid @RequestBody(required = false) DemandActionRequest body,
+                                  @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(demandService.move(CurrentUser.id(), ctx.getWsId(), id, body));
+    }
+
     @RequireRole(RequireRole.ADMIN)
     @PostMapping("/api/demands/{id}/pass")
     public ApiResult<Demand> pass(@PathVariable String id,

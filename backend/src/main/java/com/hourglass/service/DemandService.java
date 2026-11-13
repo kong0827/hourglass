@@ -852,6 +852,171 @@ public class DemandService {
         return getVisible(workspaceId, userId, id);
     }
 
+    /** 列表行内编辑：优先级不推进状态，未关闭且仍有项目写权限即可改。 */
+    @Transactional
+    public Demand quickPriority(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand d = writableDemandForQuick(userId, workspaceId, id, body);
+        requireQuickEditable(d);
+        String priority = body == null ? null : Texts.trimToNull(body.getPriority());
+        if (priority == null) {
+            throw AppException.badRequest("请选择优先级");
+        }
+        validatePriority(priority);
+        if (priority.equals(d.getPriority())) {
+            return getVisible(workspaceId, userId, id);
+        }
+        String old = d.getPriority() == null ? "未设置" : d.getPriority();
+        Map<String, Object> before = snapshot(d);
+        d.setPriority(priority);
+        save(d);
+        logChange(d, userId, "priority", "优先级：" + old + " → " + priority, null, before);
+        return getVisible(workspaceId, userId, id);
+    }
+
+    /** 列表行内编辑：期望交付可清空，同样不推进状态。 */
+    @Transactional
+    public Demand quickExpectDate(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand d = writableDemandForQuick(userId, workspaceId, id, body);
+        requireQuickEditable(d);
+        LocalDate expectDate = body == null ? null : body.getExpectDate();
+        if (java.util.Objects.equals(expectDate, d.getExpectDate())) {
+            return getVisible(workspaceId, userId, id);
+        }
+        String old = d.getExpectDate() == null ? "未设置" : d.getExpectDate().toString();
+        String next = expectDate == null ? "已清空" : expectDate.toString();
+        Map<String, Object> before = snapshot(d);
+        d.setExpectDate(expectDate);
+        save(d);
+        logChange(d, userId, "expect", "期望交付：" + old + " → " + next, null, before);
+        return getVisible(workspaceId, userId, id);
+    }
+
+    /** 列表行内编辑：目标版本跟随排期权限，只允许已排期需求调整，版本仍需同项目且未发布。 */
+    @Transactional
+    public Demand quickVersion(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand initial = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, initial.getReqId());
+        releasePermission.assertManageProject(userId, workspaceId, initial.getReqId());
+        deliveryLock.lockProjects(workspaceId, initial.getReqId());
+        Demand d = requireDemandForUpdate(workspaceId, id);
+        if (!java.util.Objects.equals(initial.getReqId(), d.getReqId())) {
+            throw AppException.conflict("需求所属项目已变更，请刷新后重试");
+        }
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        releasePermission.assertManageProjectForUpdate(userId, workspaceId, d.getReqId());
+        requireRevision(d, body == null ? null : body.getRevision(), true);
+        if (!"plan".equals(d.getStatus())) {
+            throw AppException.badRequest("只有已排期需求可以调整目标版本");
+        }
+        String versionId = body == null ? null : Texts.trimToNull(body.getVersionId());
+        ProjectVersion target = null;
+        if (versionId != null) {
+            target = demandMapper.selectScheduleVersion(workspaceId, d.getReqId(), versionId);
+            if (target == null || !workspaceId.equals(target.getWorkspaceId())
+                    || !d.getReqId().equals(target.getReqId())) {
+                throw AppException.badRequest("目标版本不存在或不属于该需求所在项目：" + versionId);
+            }
+            if ("released".equals(target.getStatus()) || target.getReleasedAt() != null) {
+                throw AppException.badRequest("不能选择已发布版本");
+            }
+        }
+        if (java.util.Objects.equals(versionId, d.getVersionId())) {
+            return getVisible(workspaceId, userId, id);
+        }
+        /* 换 / 清目标版本属于调期，原因必填，与 replan 留痕口径一致 */
+        String reason = requireReason(body, "replan");
+        String oldName = d.getVersionName() != null ? d.getVersionName()
+                : (d.getVersionId() == null ? "未指定" : d.getVersionId());
+        String nextName = target == null ? "未指定" : target.getName();
+        Map<String, Object> before = snapshot(d);
+        d.setVersionId(versionId);
+        d.setVersionName(target == null ? null : target.getName());
+        d.setReviewNote(reason);
+        save(d);
+        logChange(d, userId, "version", "目标版本：" + oldName + " → " + nextName, reason, before);
+        notifyStatus(d, userId, "目标版本已调整", "目标版本：" + nextName + "；" + reason);
+        return getVisible(workspaceId, userId, id);
+    }
+
+    /**
+     * 列表行内更换所属项目：只放行待评审且尚无执行证据的需求。
+     * 项目归属决定权限、模块和统计口径，已拆工作项 / 关联文档用例 / 有目标版本或发布记录时不允许直接迁移。
+     */
+    @Transactional
+    public Demand move(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand initial = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, initial.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, initial.getReqId());
+        String targetReqId = body == null ? null : Texts.trimToNull(body.getReqId());
+        if (targetReqId == null) {
+            throw AppException.badRequest("请选择目标项目");
+        }
+        if (targetReqId.equals(initial.getReqId())) {
+            return getVisible(workspaceId, userId, id);
+        }
+        Requirement targetProject = requireProject(workspaceId, targetReqId);
+        if (targetProject.getArchivedAt() != null) {
+            throw AppException.badRequest("不能移入已归档项目");
+        }
+        projectAccess.assertView(workspaceId, userId, targetReqId);
+        projectAccess.assertWrite(workspaceId, userId, targetReqId);
+        deliveryLock.lockProjects(workspaceId, initial.getReqId(), targetReqId);
+        Demand d = requireDemandForUpdate(workspaceId, id);
+        if (!java.util.Objects.equals(initial.getReqId(), d.getReqId())) {
+            throw AppException.conflict("需求所属项目已变更，请刷新后重试");
+        }
+        projectAccess.assertWriteForUpdate(workspaceId, userId, d.getReqId());
+        projectAccess.assertWriteForUpdate(workspaceId, userId, targetReqId);
+        requireRevision(d, body == null ? null : body.getRevision(), true);
+        if (!"review".equals(d.getStatus())) {
+            throw AppException.badRequest("只有待评审需求可以更换所属项目");
+        }
+        if (d.getVersionId() != null) {
+            throw AppException.badRequest("需求已有目标版本，请先撤销排期再更换项目");
+        }
+        if (!taskMapper.selectTasksByDemandForScope(workspaceId, id).isEmpty()
+                || docMapper.countLinksByDemand(workspaceId, id) > 0
+                || caseMapper.countByDemandRef(workspaceId, id) > 0
+                || !releases.selectDemandRecords(workspaceId, id).isEmpty()) {
+            throw AppException.badRequest("需求已关联工作项、文档、用例或发布记录，不能更换所属项目；请先解除关联");
+        }
+        Category category = d.getCategoryId() == null ? null : categoryMapper.selectById(workspaceId, d.getCategoryId());
+        boolean categoryCleared = d.getCategoryId() != null
+                && (category == null || !targetReqId.equals(category.getProjectId()));
+        Requirement oldProject = reqMapper.selectById(d.getReqId());
+        String oldName = oldProject == null || oldProject.getName() == null ? d.getReqId() : oldProject.getName();
+        String targetName = targetProject.getName() == null ? targetReqId : targetProject.getName();
+        Map<String, Object> before = snapshot(d);
+        d.setReqId(targetReqId);
+        if (categoryCleared) {
+            d.setCategoryId(null);
+        }
+        Long oldRevision = d.getRevision();
+        if (demandMapper.updateProject(d) != 1) {
+            throw AppException.conflict("需求已被其他人修改，请刷新后重试");
+        }
+        d.setRevision(oldRevision + 1);
+        logChange(d, userId, "move", "所属项目：" + oldName + " → " + targetName
+                + (categoryCleared ? "；原模块不属于目标项目，已清空" : ""), null, before);
+        notifyCreator(d, userId, "需求「" + d.getTitle() + "」所属项目已变更",
+                "从「" + oldName + "」移至「" + targetName + "」");
+        return getVisible(workspaceId, userId, id);
+    }
+
+    private Demand writableDemandForQuick(String userId, String workspaceId, String id, DemandActionRequest body) {
+        Demand d = requireDemand(workspaceId, id);
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        projectAccess.assertWrite(workspaceId, userId, d.getReqId());
+        requireRevision(d, body == null ? null : body.getRevision(), true);
+        return d;
+    }
+
+    private void requireQuickEditable(Demand d) {
+        if (!"review".equals(d.getStatus()) && !"pass".equals(d.getStatus()) && !"plan".equals(d.getStatus())) {
+            throw AppException.badRequest("已关闭的需求不能直接修改，请先恢复");
+        }
+    }
+
     @Transactional
     public Demand pass(String userId, String workspaceId, String id, DemandActionRequest body) {
         Demand d = reviewDemand(userId, workspaceId, id, body);
@@ -1161,6 +1326,7 @@ public class DemandService {
             name = version == null ? d.getVersionId() : version.getName();
         }
         data.put("reqId", d.getReqId());
+        data.put("categoryId", d.getCategoryId());
         data.put("versionId", d.getVersionId());
         data.put("versionName", name);
         data.put("plannedStart", d.getPlannedStart() == null ? null : d.getPlannedStart().toString());

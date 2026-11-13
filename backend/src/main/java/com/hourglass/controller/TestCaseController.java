@@ -8,6 +8,7 @@ import com.hourglass.dto.CaseRunRequest;
 import com.hourglass.dto.CaseRunView;
 import com.hourglass.dto.CaseStatsView;
 import com.hourglass.dto.TestCasePage;
+import com.hourglass.dto.TestCaseBatchRequest;
 import com.hourglass.dto.TestCaseSaveRequest;
 import com.hourglass.dto.TestCaseView;
 import com.hourglass.entity.Attachment;
@@ -123,6 +124,24 @@ public class TestCaseController {
         Workspace ws = workspaceService.resolve(userId, workspace);
         caseService.delete(userId, ws.getId(), id);
         return ApiResult.ok(null);
+    }
+
+    /** 批量设置模块 / 优先级（列表多选） */
+    @PutMapping("/api/test-cases/batch")
+    public ApiResult<java.util.Map<String, Object>> batchUpdate(@Valid @RequestBody TestCaseBatchRequest req,
+                                                                @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.batchUpdate(userId, ws.getId(), req));
+    }
+
+    /** 批量删除（执行流水、计划圈选与证据一并清理） */
+    @PostMapping("/api/test-cases/batch-delete")
+    public ApiResult<java.util.Map<String, Object>> batchDelete(@Valid @RequestBody TestCaseBatchRequest req,
+                                                                @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.batchDelete(userId, ws.getId(), req.getIds()));
     }
 
     /** 记录一次执行结果（passed / failed / blocked） */

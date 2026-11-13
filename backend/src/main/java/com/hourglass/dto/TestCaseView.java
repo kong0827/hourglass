@@ -15,8 +15,11 @@ public class TestCaseView {
     private String reqId;
     private String demandId;
     private String demandTitle;
+    /** 项目内稳定编号（TC-001），与列表序号无关 */
+    private Integer caseNo;
     private String title;
     private String precondition;
+    private String testData;
     private String module;
     private String priority;
     private List<Map<String, String>> steps;

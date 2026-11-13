@@ -1115,6 +1115,7 @@ public class BackupService {
             c.setReqId(reqId);
             c.setTitle(Texts.cut(title, 100));
             c.setPrecondition(Texts.cut(Texts.trimToNull(b.getPrecondition()), 1000));
+            c.setTestData(Texts.cut(Texts.trimToNull(b.getTestData()), 1000));
             c.setSteps(Texts.trimToNull(b.getSteps()));
             String latestStatus = Texts.trimToNull(b.getLatestStatus());
             c.setLatestStatus(CaseMeta.isRunStatus(latestStatus) ? latestStatus : null);
@@ -1126,6 +1127,8 @@ public class BackupService {
             c.setLatestBugTaskId(mappedTaskId(st, b.getLatestBugTaskId()));
             c.setCreatedAt(parseTs(b.getCreatedAt()));
             c.setUpdatedAt(parseTs(b.getUpdatedAt()));
+            /* 编号不在备份里：按项目内当前最大号顺延，避免与既有用例撞号 */
+            c.setCaseNo(testCaseMapper.selectNextCaseNo(st.workspaceId, reqId));
             testCaseMapper.insert(c);
             if (original != null) {
                 caseIdMap.put(original, c.getId());

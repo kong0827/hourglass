@@ -37,7 +37,16 @@ public interface TestCaseMapper {
 
     int insert(TestCase testCase);
 
+    /** 项目内下一个可用编号（MAX+1）；并发抢号由唯一键兜底重试 */
+    int selectNextCaseNo(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
+
     int update(TestCase testCase);
+
+    /** 批量改模块 / 优先级；moduleSet / prioritySet 为 false 时对应列不动 */
+    int batchUpdate(@Param("workspaceId") String workspaceId,
+                    @Param("ids") List<String> ids,
+                    @Param("moduleSet") boolean moduleSet, @Param("module") String module,
+                    @Param("prioritySet") boolean prioritySet, @Param("priority") String priority);
 
     int updateLatest(@Param("workspaceId") String workspaceId, @Param("id") String id,
                      @Param("status") String status, @Param("note") String note,
@@ -55,6 +64,9 @@ public interface TestCaseMapper {
 
     /** 需求删除级联：解除用例上的关联需求引用 */
     int clearDemandRefs(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
+
+    /** 更换需求所属项目前检查：该需求是否已关联用例 */
+    int countByDemandRef(@Param("workspaceId") String workspaceId, @Param("demandId") String demandId);
 
     int delete(@Param("workspaceId") String workspaceId, @Param("id") String id);
 

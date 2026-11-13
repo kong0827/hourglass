@@ -162,7 +162,7 @@ public class SavedViewService {
             copyString(root, out, "module", 50);
             copyString(root, out, "pri", 20);
             copyString(root, out, "owner", 80);
-            copyEnum(root, out, "status", "all", "untested", "passed", "failed", "blocked");
+            copyEnum(root, out, "status", "all", "untested", "passed", "failed", "blocked", "skipped");
             copyEnum(root, out, "mode", "cases", "coverage");
             JsonNode bug = root.get("bug");
             if (bug != null && !bug.isNull()) {

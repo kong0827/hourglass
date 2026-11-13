@@ -15,8 +15,8 @@ public class PlanBatchRequest {
     @NotEmpty(message = "请先勾选用例")
     private List<String> caseIds;
 
-    /** 批量执行结果：passed/failed/blocked；加入计划时忽略 */
-    @Pattern(regexp = "^(passed|failed|blocked)$", message = "执行结果不合法")
+    /** 批量执行结果：passed/failed/blocked/skipped；加入计划时忽略 */
+    @Pattern(regexp = "^(passed|failed|blocked|skipped)$", message = "执行结果不合法")
     private String status;
 
     @Size(max = 500, message = "备注最多 500 字")

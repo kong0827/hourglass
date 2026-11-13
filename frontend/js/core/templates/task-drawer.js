@@ -526,8 +526,8 @@ export var TASK_DRAWER_HTML = `<!-- ==================== 任务详情抽屉（§
                     <label for="iReqDocPicker">关联文档</label>
                     <button type="button" class="label-link" id="iReqDocView" hidden>查看</button>
                   </div>
-                  <button type="button" class="req-doc-trigger" id="iReqDocPicker" aria-haspopup="dialog" aria-expanded="false">
-                    <span class="req-doc-trigger-text placeholder" id="iReqDocPickerText">搜索并选择文档</span>
+                  <button type="button" class="search-trigger" id="iReqDocPicker" aria-haspopup="dialog" aria-expanded="false">
+                    <span class="search-trigger-text placeholder" id="iReqDocPickerText">搜索并选择文档</span>
                     <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
                   </button>
                   <select id="iReqDoc" hidden tabindex="-1" aria-hidden="true"></select>

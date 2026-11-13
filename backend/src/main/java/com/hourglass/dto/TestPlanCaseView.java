@@ -17,6 +17,7 @@ public class TestPlanCaseView {
     private LocalDateTime executedAt;
 
     private String title;
+    private Integer caseNo;
     private String module;
     private String priority;
     private String demandId;

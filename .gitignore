@@ -99,6 +99,8 @@ backend/src/main/resources/application-local.yml
 
 # 本地目录
 /hourglass/
+# 本地演示 nginx 反代配置（含本机绝对路径，不入库）
+deploy/nginx-local.conf
 
 # Python 缓存
 tools/__pycache__/

@@ -619,6 +619,11 @@ class DemandServiceScheduleTest {
         assertTrue(update.contains("revision = revision + 1"));
         assertTrue(update.contains("AND revision = ?"));
         assertTrue(update.contains("planned_start = ?"));
+        String updateProject = configuration.getMappedStatement("com.hourglass.mapper.DemandMapper.updateProject")
+                .getBoundSql(demand).getSql().replaceAll("\\s+", " ");
+        assertTrue(updateProject.contains("req_id = ?"));
+        assertTrue(updateProject.contains("revision = revision + 1"));
+        assertTrue(updateProject.contains("AND revision = ?"));
         Map<String, Object> params = new HashMap<String, Object>();
         params.put("workspaceId", "W1");
         params.put("demandId", "D1");
@@ -640,6 +645,271 @@ class DemandServiceScheduleTest {
         String current = configuration.getMappedStatement("com.hourglass.mapper.DemandMapper.selectByIdForUpdate")
                 .getBoundSql(params).getSql();
         assertTrue(current.contains("FOR UPDATE"));
+    }
+
+    @Test
+    void quickPriorityUpdatesWithoutStatusChangeAndLogsSnapshot() throws Exception {
+        demand.setStatus("review");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setPriority("P0");
+
+        Demand result = service.quickPriority("U1", "W1", "D1", body);
+
+        assertEquals("P0", result.getPriority());
+        assertEquals("review", result.getStatus());
+        assertEquals(5L, result.getRevision());
+        JsonNode log = changeLog("priority");
+        assertEquals("P2", log.path("before").path("priority").asText());
+        assertEquals("P0", log.path("after").path("priority").asText());
+        assertEquals("review", log.path("after").path("status").asText());
+        assertEquals(5, log.path("after").path("revision").asInt());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("priority"),
+                eq("优先级：P2 → P0"), eq("U1"), anyString());
+        verifyNoInteractions(lock, versions);
+    }
+
+    @Test
+    void quickPriorityRejectsClosedDemandAndMissingRevision() {
+        demand.setStatus("closed");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setPriority("P0");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.quickPriority("U1", "W1", "D1", body)).getCode());
+        demand.setStatus("review");
+        body.setRevision(null);
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.quickPriority("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+        verify(demands, never()).insertChangeLog(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void quickExpectDateCanClearAndLogsChange() throws Exception {
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setExpectDate(null);
+
+        Demand result = service.quickExpectDate("U1", "W1", "D1", body);
+
+        assertNull(result.getExpectDate());
+        assertEquals(5L, result.getRevision());
+        JsonNode log = changeLog("expect");
+        assertEquals("2026-12-20", log.path("before").path("expectDate").asText());
+        assertTrue(log.path("after").path("expectDate").isNull());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("expect"),
+                eq("期望交付：2026-12-20 → 已清空"), eq("U1"), anyString());
+    }
+
+    @Test
+    void quickVersionRequiresPlanningStatusAndUnreleasedTarget() throws Exception {
+        demand.setStatus("plan");
+        demand.setCreatedBy("U-submit");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setVersionId("V1");
+        body.setNote("交付节奏调整");
+
+        Demand result = service.quickVersion("U1", "W1", "D1", body);
+
+        assertEquals("V1", result.getVersionId());
+        assertEquals("1.0", result.getVersionName());
+        assertEquals(5L, result.getRevision());
+        JsonNode log = changeLog("version");
+        assertTrue(log.path("before").path("versionId").isNull());
+        assertEquals("1.0", log.path("after").path("versionName").asText());
+        assertEquals("交付节奏调整", log.path("reason").asText());
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「需求」目标版本已调整"), eq("目标版本：1.0；交付节奏调整"), eq("demand"), eq("D1"), eq("R1"));
+
+        demand.setStatus("pass");
+        DemandActionRequest wrongStatus = new DemandActionRequest();
+        wrongStatus.setRevision(5L);
+        wrongStatus.setVersionId("V1");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.quickVersion("U1", "W1", "D1", wrongStatus)).getCode());
+    }
+
+    @Test
+    void quickVersionChangeRequiresReason() {
+        demand.setStatus("plan");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setVersionId("V1");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.quickVersion("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+    }
+
+    @Test
+    void quickVersionRejectsReleasedVersionAndMissingManagePermission() {
+        demand.setStatus("plan");
+        version.setStatus("released");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setVersionId("V1");
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.quickVersion("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+
+        version.setStatus("planning");
+        doThrow(new AppException(403, "forbidden")).when(permissions)
+                .assertManageProject("U1", "W1", "R1");
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.quickVersion("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).update(any());
+    }
+
+    @Test
+    void moveUpdatesProjectAndClearsForeignModuleWithLog() throws Exception {
+        demand.setStatus("review");
+        demand.setCategoryId("C1");
+        demand.setCreatedBy("U-submit");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setName("目标项目");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(1);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        Demand result = service.move("U1", "W1", "D1", body);
+
+        assertEquals("R2", result.getReqId());
+        assertNull(result.getCategoryId());
+        assertEquals(5L, result.getRevision());
+        verify(demands).updateProject(any(Demand.class));
+        verify(demands, never()).update(any());
+        JsonNode log = changeLog("move");
+        assertEquals("R1", log.path("before").path("reqId").asText());
+        assertEquals("C1", log.path("before").path("categoryId").asText());
+        assertEquals("R2", log.path("after").path("reqId").asText());
+        assertTrue(log.path("after").path("categoryId").isNull());
+        verify(demands).insertChangeLog(eq("W1"), eq("D1"), eq("move"),
+                eq("所属项目：R1 → 目标项目；原模块不属于目标项目，已清空"), eq("U1"), anyString());
+        verify(events).notifyLinked(eq("U-submit"), eq("W1"), eq(UserNotificationPreferenceService.DEMAND_STATUS),
+                eq("需求「需求」所属项目已变更"), eq("从「R1」移至「目标项目」"),
+                eq("demand"), eq("D1"), eq("R2"));
+    }
+
+    @Test
+    void moveZeroAffectedRowsIsConflictWithoutLog() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        when(demands.updateProject(any(Demand.class))).thenReturn(0);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(409, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).insertChangeLog(anyString(), anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pass", "plan", "closed"})
+    void moveRejectsDemandThatLeftReview(String status) {
+        demand.setStatus(status);
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).updateProject(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"tasks", "docs", "cases", "releases"})
+    void moveRejectsDemandWithExecutionEvidence(String evidence) {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        if ("tasks".equals(evidence)) {
+            when(tasks.selectTasksByDemandForScope("W1", "D1")).thenReturn(Collections.singletonList(new Task()));
+        }
+        if ("docs".equals(evidence)) {
+            when(docs.countLinksByDemand("W1", "D1")).thenReturn(1);
+        }
+        if ("cases".equals(evidence)) {
+            when(cases.countByDemandRef("W1", "D1")).thenReturn(1);
+        }
+        if ("releases".equals(evidence)) {
+            when(releases.selectDemandRecords("W1", "D1"))
+                    .thenReturn(Collections.singletonList(new com.hourglass.entity.VersionRelease()));
+        }
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveRequiresWritePermissionOnBothProjectsBeforeLock() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        doThrow(new AppException(403, "forbidden")).when(access).assertWrite("W1", "U1", "R2");
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(403, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verifyNoInteractions(lock);
+        verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveRejectsArchivedTargetProjectBeforeLock() {
+        demand.setStatus("review");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        target.setArchivedAt(LocalDateTime.now());
+        when(projects.selectById("R2")).thenReturn(target);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verifyNoInteractions(lock);
+        verify(demands, never()).updateProject(any());
+    }
+
+    @Test
+    void moveRejectsDemandThatAlreadyHasTargetVersion() {
+        demand.setStatus("review");
+        demand.setVersionId("V-old");
+        Requirement target = new Requirement();
+        target.setId("R2");
+        target.setWorkspaceId("W1");
+        when(projects.selectById("R2")).thenReturn(target);
+        DemandActionRequest body = new DemandActionRequest();
+        body.setRevision(4L);
+        body.setReqId("R2");
+
+        assertEquals(400, assertThrows(AppException.class,
+                () -> service.move("U1", "W1", "D1", body)).getCode());
+        verify(demands, never()).updateProject(any());
     }
 
     private void planned() {

@@ -27,6 +27,9 @@ public class TestCaseSaveRequest {
     @Size(max = 1000, message = "前置条件最多 1000 字")
     private String precondition;
 
+    @Size(max = 1000, message = "测试数据最多 1000 字")
+    private String testData;
+
     @Size(max = 50, message = "功能模块最多 50 字")
     private String module;
 

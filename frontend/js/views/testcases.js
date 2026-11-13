@@ -19,9 +19,11 @@ import { downloadCsv } from "./manager-shared.js";
 import { triggerDownload } from "../lib/download.js";
 
 var cases = [];
-var stats = { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
+var stats = { total: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, untested: 0 };
 var caseTotal = 0;        /* 当前筛选下的总数（服务端） */
 var caseHasMore = false;
+var caseSel = {};          /* 批量维护：勾选的用例 id → true，加载/筛选变化后清空 */
+var caseBatchSaving = false;
 var caseModules = [];     /* 筛选下拉候选（服务端 facets） */
 var caseOwners = [];
 var CASE_PAGE = 100;
@@ -51,9 +53,13 @@ var runningCaseId = null;
 var defectCaseId = null;
 var runStatus = "passed";
 var loadSeq = 0;
-/* 项目需求池条目缓存：填充「关联需求」下拉，避免每次开弹窗都请求 */
+/* 项目需求池条目缓存：候选浮层先给一页，输入关键词后走服务端搜索 */
 var DEMAND_OPTIONS_PAGE_SIZE = 100;
+var DEMAND_SEARCH_PAGE_SIZE = 50;
+var DEMAND_SEARCH_DEBOUNCE = 250;
 var demandOptions = { reqId: null, list: [], total: 0, loading: null, error: null };
+/* seq 标记浮层实例，reqSeq 标记搜索请求：旧请求返回时不能覆盖新浮层 */
+var demandPicker = { el: null, seq: 0, reqSeq: 0, query: "", list: [], total: 0, loading: false, error: null, timer: null };
 var caseSaving = false;
 var caseRunning = false;
 var caseDefecting = false;
@@ -96,10 +102,18 @@ var DEFECT_STATUSES = {
 };
 var SEVERITY_RANK = { blocker: 0, critical: 1, major: 2, minor: 3 };
 
-var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞" };
+var STATUS_LABEL = { passed: "通过", failed: "失败", blocked: "阻塞", skipped: "跳过" };
+/* 项目内稳定编号：创建后不变，缺陷单/评审都用它引用；与列表序号无关 */
+function caseNoText(c){
+  var n = Number(c && c.caseNo) || 0;
+  if(n <= 0) return "";
+  var s = String(n);
+  while(s.length < 3) s = "0" + s;
+  return "TC-" + s;
+}
 function statusBadgeHTML(s){
   if(!s) return '<span class="mini-tag mute">未执行</span>';
-  var cls = { passed: "ok", failed: "over", blocked: "warn" }[s];
+  var cls = { passed: "ok", failed: "over", blocked: "warn", skipped: "mute" }[s];
   return '<span class="mini-tag ' + cls + '">' + STATUS_LABEL[s] + '</span>';
 }
 function caseById(id){
@@ -187,6 +201,7 @@ function caseQueryParams(offset, reqId){
 }
 function loadCases(){
   var seq = ++loadSeq;
+  resetCaseSel();
   if(caseScopeAll) return loadCasesAll(seq);
   if(!caseReqId || !rt.reqList.length){
     cases = [];
@@ -215,7 +230,7 @@ function loadCases(){
     caseHasMore = !!page.hasMore;
     caseModules = page.modules || [];
     caseOwners = page.owners || [];
-    stats = rs[1] || { total: 0, passed: 0, failed: 0, blocked: 0, untested: 0 };
+    stats = rs[1] || { total: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, untested: 0 };
     render();
     return true;
   }).catch(function(ex){
@@ -770,7 +785,9 @@ function renderCoverage(){
   }
   var rows = coverageRows.map(function(r){
     var total = r.caseTotal || 0;
-    var pct = total ? Math.round((r.passed || 0) * 100 / total) : 0;
+    /* 跳过表示本次不适用，从通过率分母里剔除 */
+    var base = Math.max(0, total - (r.skipped || 0));
+    var pct = base ? Math.round((r.passed || 0) * 100 / base) : 0;
     var covTxt = !r.demandId ? "—" : (total ? "已覆盖" : "未覆盖");
     var covCls = !r.demandId ? "mute" : (total ? "ok" : "over");
     var linked = !!r.demandId;
@@ -783,6 +800,7 @@ function renderCoverage(){
       covCountHTML(r.passed, "cov-pass") +
       covCountHTML(r.failed, "cov-fail") +
       covCountHTML(r.blocked, "cov-block") +
+      covCountHTML(r.skipped, "cov-skip") +
       '<span>' + (r.untested || 0) + '</span>' +
       covCountHTML(r.bugCount, "cov-bug") +
       '<span><i class="cov-bar"><i style="width:' + pct + '%"></i></i>' + pct + '%</span>' +
@@ -790,7 +808,7 @@ function renderCoverage(){
     '</div>';
   }).join("");
   box.innerHTML = head + '<div class="cov-table">' +
-    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>' +
+    '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span title="本次不执行 / 不适用">跳过</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>' +
     rows + '</div>';
 }
 
@@ -871,7 +889,9 @@ function reportCaseRow(c, kind){
     : '<button class="btn sm ghost" type="button" data-report-runs="' + esc(c.id) + '" title="查看执行历史">记录</button>';
   return '<div class="rep-row ' + kind + '">'
     + statusBadgeHTML(c.latestStatus)
-    + '<div class="rep-main"><button class="rep-title" type="button" data-report-case="' + esc(c.id) + '" title="打开用例"><b>' + esc(c.title) + '</b></button><small>' + caseMetaLine(c) + '</small>'
+    + '<div class="rep-main"><button class="rep-title" type="button" data-report-case="' + esc(c.id) + '" title="打开用例"><b>'
+    + (caseNoText(c) ? '<span class="rep-no">' + esc(caseNoText(c)) + '</span> ' : '')
+    + esc(c.title) + '</b></button><small>' + caseMetaLine(c) + '</small>'
     + (c.latestNote ? '<span class="rep-note">' + esc(c.latestNote) + '</span>' : '')
     + '</div>'
     + '<div class="rep-acts">' + bug + ev + '</div>'
@@ -912,7 +932,9 @@ function renderTestReport(){
   if(!box || !reportData) return;
   var s = reportData.stats || {};
   var total = s.total || 0;
-  var passRate = total ? Math.round((s.passed || 0) * 100 / total) : 0;
+  /* 通过与通过率都不把跳过算作未通过：分母剔除跳过的用例 */
+  var rateBase = Math.max(0, total - (s.skipped || 0));
+  var passRate = rateBase ? Math.round((s.passed || 0) * 100 / rateBase) : 0;
   var cov = coverageSummary(reportData.coverage);
   var failed = reportData.failed || [];
   var blocked = reportData.blocked || [];
@@ -931,6 +953,7 @@ function renderTestReport(){
     + '<span class="tc-stat' + ((s.passed || 0) > 0 ? " ok" : " mute") + '"><b>' + (s.passed || 0) + '</b>通过 · ' + passRate + '%</span>'
     + '<span class="tc-stat' + ((s.failed || 0) > 0 ? " over" : " mute") + '"><b>' + (s.failed || 0) + '</b>失败</span>'
     + '<span class="tc-stat' + ((s.blocked || 0) > 0 ? " warn" : " mute") + '"><b>' + (s.blocked || 0) + '</b>阻塞</span>'
+    + '<span class="tc-stat' + ((s.skipped || 0) > 0 ? "" : " mute") + '" title="本次不执行 / 不适用，不计入通过率"><b>' + (s.skipped || 0) + '</b>跳过</span>'
     + '<span class="tc-stat mute"><b>' + (s.untested || 0) + '</b>未执行</span>'
     + '<span class="tc-stat"><b>' + cov.pct + '%</b>需求覆盖（' + cov.covered + '/' + cov.total + '）</span>'
     + '</div>';
@@ -955,7 +978,8 @@ function renderTestReport(){
       + '<div class="rep-cov">' + reportData.coverage.filter(function(r){ return r.demandId; }).map(function(r){
         var ok = (r.caseTotal || 0) > 0;
         return '<div class="rep-cov-row rep-cov-link" role="button" tabindex="0" data-cov-demand="' + esc(r.demandId) + '" title="查看需求详情"><span>' + esc(r.demandTitle || "未命名需求") + '</span>'
-          + '<span>' + (r.caseTotal || 0) + ' 用例 · ' + (r.passed || 0) + ' 通过 · ' + (r.failed || 0) + ' 失败</span>'
+          + '<span>' + (r.caseTotal || 0) + ' 用例 · ' + (r.passed || 0) + ' 通过 · ' + (r.failed || 0) + ' 失败'
+          + (r.skipped ? ' · ' + r.skipped + ' 跳过' : '') + '</span>'
           + '<span class="mini-tag ' + (ok ? "ok" : "over") + '">' + (ok ? "已覆盖" : "未覆盖") + '</span></div>';
       }).join("") + '</div>'
       + '<p class="foot-note">0 表示未发生，不代表通过或失败。</p></section>';
@@ -967,6 +991,7 @@ function reportPlainRows(){
   if(!reportData) return [];
   var s = reportData.stats || {};
   var total = s.total || 0;
+  var rateBase = Math.max(0, total - (s.skipped || 0));
   var cov = coverageSummary(reportData.coverage);
   var rows = [
     ["测试报告", reqNameOf(caseReqId)],
@@ -975,14 +1000,15 @@ function reportPlainRows(){
     ["通过", s.passed || 0],
     ["失败", s.failed || 0],
     ["阻塞", s.blocked || 0],
+    ["跳过", s.skipped || 0],
     ["未执行", s.untested || 0],
-    ["通过率", (total ? Math.round((s.passed || 0) * 100 / total) : 0) + "%"],
+    ["通过率", (rateBase ? Math.round((s.passed || 0) * 100 / rateBase) : 0) + "%"],
     ["需求覆盖", cov.covered + "/" + cov.total + "（" + cov.pct + "%）"],
     [],
-    ["失败用例", "模块", "优先级", "最近执行", "备注", "证据数", "缺陷"]
+    ["失败用例", "编号", "模块", "优先级", "最近执行", "备注", "证据数", "缺陷"]
   ];
   (reportData.failed || []).forEach(function(c){
-    rows.push([c.title, c.module || "", c.priority || "", (c.latestBy || "") + (c.latestAt ? " " + fmtTs(c.latestAt) : ""),
+    rows.push([c.title, caseNoText(c), c.module || "", c.priority || "", (c.latestBy || "") + (c.latestAt ? " " + fmtTs(c.latestAt) : ""),
       c.latestNote || "", c.latestEvidenceCount || 0, c.latestBugTaskTitle || c.latestBugTaskId || ""]);
   });
   return rows;
@@ -1000,7 +1026,8 @@ function exportTestReportDoc(){
   var cov = coverageSummary(reportData.coverage);
   var name = reqNameOf(caseReqId);
   var stamp = reportData.generatedAt.toLocaleString("zh-CN", { hour12: false });
-  var passRate = total ? Math.round((s.passed || 0) * 100 / total) : 0;
+  var rateBase = Math.max(0, total - (s.skipped || 0));
+  var passRate = rateBase ? Math.round((s.passed || 0) * 100 / rateBase) : 0;
   function cell(tag, v){ return '<' + tag + '>' + esc(v == null ? "" : String(v)) + '</' + tag + '>'; }
   function td(v){ return cell("td", v); }
   function th(v){ return cell("th", v); }
@@ -1017,16 +1044,16 @@ function exportTestReportDoc(){
     + '<h3>测试报告 · ' + esc(name) + '</h3>'
     + '<p class="meta">生成时间 ' + esc(stamp) + ' · 口径：每个用例取最近一轮执行结果</p>'
     + '<table>'
-    + '<tr>' + th("用例总数") + th("通过") + th("失败") + th("阻塞") + '</tr>'
-    + '<tr>' + td(total) + td(s.passed || 0) + td(s.failed || 0) + td(s.blocked || 0) + '</tr>'
-    + '<tr>' + th("未执行") + th("通过率") + th("需求覆盖") + th("报告范围") + '</tr>'
-    + '<tr>' + td(s.untested || 0) + td(passRate + "%") + td(cov.covered + "/" + cov.total + "（" + cov.pct + "%）") + td("当前项目") + '</tr>'
+    + '<tr>' + th("用例总数") + td(total) + th("通过") + td(s.passed || 0) + th("失败") + td(s.failed || 0) + '</tr>'
+    + '<tr>' + th("阻塞") + td(s.blocked || 0) + th("跳过") + td(s.skipped || 0) + th("未执行") + td(s.untested || 0) + '</tr>'
+    + '<tr>' + th("通过率") + td(passRate + "%") + th("需求覆盖") + td(cov.covered + "/" + cov.total + "（" + cov.pct + "%）") + th("报告范围") + td("当前项目") + '</tr>'
     + '</table>';
-  var caseHead = '<tr>' + th("结果") + th("用例") + th("模块") + th("优先级") + th("最近执行") + th("备注") + th("证据") + th("缺陷") + '</tr>';
+  var caseHead = '<tr>' + th("结果") + th("编号") + th("用例") + th("模块") + th("优先级") + th("最近执行") + th("备注") + th("证据") + th("缺陷") + '</tr>';
   function caseRows(list){
     return list.map(function(c){
       return '<tr>'
         + td(c.latestStatus ? (STATUS_LABEL[c.latestStatus] || c.latestStatus) : "未执行")
+        + td(caseNoText(c))
         + td(c.title || "（无标题）")
         + td(c.module || "")
         + td(c.priority ? priName(c.priority) : "")
@@ -1056,9 +1083,9 @@ function exportTestReportDoc(){
   var covRows = (reportData.coverage || []).filter(function(r){ return r.demandId; });
   if(covRows.length){
     html += '<p><b>需求覆盖 · ' + cov.covered + ' / ' + cov.total + '（' + cov.pct + '%）</b></p><table>'
-      + '<tr>' + th("需求") + th("用例数") + th("通过") + th("失败") + th("覆盖") + '</tr>'
+      + '<tr>' + th("需求") + th("用例数") + th("通过") + th("失败") + th("跳过") + th("覆盖") + '</tr>'
       + covRows.map(function(r){
-        return '<tr>' + td(r.demandTitle || "未命名需求") + td(r.caseTotal || 0) + td(r.passed || 0) + td(r.failed || 0)
+        return '<tr>' + td(r.demandTitle || "未命名需求") + td(r.caseTotal || 0) + td(r.passed || 0) + td(r.failed || 0) + td(r.skipped || 0)
           + td((r.caseTotal || 0) > 0 ? "已覆盖" : "未覆盖") + '</tr>';
       }).join("")
       + '</table>';
@@ -1153,7 +1180,8 @@ function openRunsDialog(id, title){
   runsCaseTitle = title || (c ? c.title : "");
   runsList = [];
   $("runsTitle").textContent = "执行历史 · " + cut(runsCaseTitle, 18);
-  $("runsSub").textContent = "最近在前；失败证据随执行记录保存。";
+  var no = caseNoText(c);
+  $("runsSub").textContent = (no ? no + " · " : "") + "最近在前；失败证据随执行记录保存。";
   $("runsList").innerHTML = UI.skeletonRows(3);
   $("runsReadonlyHint").hidden = caseWritable(c);
   var seq = ++runsSeq;
@@ -1265,6 +1293,7 @@ function render(){
   $("tcPlans").hidden = true;
   $("tcDefects").hidden = true;
   $("tcStats").hidden = caseScopeAll;
+  syncBulkBar();
   syncFilterOptions();
   var anyFilter = statusFilter !== "all" || (!caseScopeAll && modFilter !== "all") || priFilter !== "all"
     || ownerFilter !== "all" || bugOnly || !!searchText;
@@ -1313,7 +1342,7 @@ function render(){
     });
     return;
   }
-  var html = rows.map(function(c, i){ return caseRowHTML(c, i + 1); }).join("");
+  var html = rows.map(function(c){ return caseRowHTML(c); }).join("");
   if(caseHasMore){
     html += '<button class="btn ghost tc-load-more" type="button" data-tc-more>加载更多（已加载 '
       + cases.length + ' / 共 ' + caseTotal + ' 条）</button>';
@@ -1337,7 +1366,7 @@ function caseGroupHTML(g){
   }else if(!g.items.length){
     body = '<p class="tc-group-empty">' + (anyFilter ? "没有符合条件的用例" : "还没有测试用例") + '</p>';
   }else{
-    body = g.items.map(function(c, i){ return caseRowHTML(c, i + 1); }).join("");
+    body = g.items.map(function(c){ return caseRowHTML(c); }).join("");
   }
   var more = "";
   if(g.hasMore){
@@ -1405,7 +1434,8 @@ function renderStats(){
     [s.untested, "未执行", "mute"],
     [s.passed, "通过", "ok"],
     [s.failed, "失败", "over"],
-    [s.blocked, "阻塞", "warn"]
+    [s.blocked, "阻塞", "warn"],
+    [s.skipped, "跳过", "mute"]
   ];
   $("tcStats").innerHTML = items.map(function(it){
     /* 0 值统一中性：数字为 0 时不借用通过 / 失败的颜色 */
@@ -1558,6 +1588,8 @@ function syncModeUI(){
   syncTcDomain();
   var bn = $("btnCaseNew");
   if(bn) bn.style.display = !cov && !rep && !plan && !def && caseCreateTargets().length ? "" : "none";
+  var bulkBar = $("tcBulkBar");
+  if(bulkBar && tcMode !== "cases") bulkBar.hidden = true;
   /* 手机把筛选收进可展开面板：非用例模式没有筛选内容，入口一并收起 */
   var filterBtn = $("tcFilterBtn"), filterBar = $("tcFilterBar"), defBar = $("tcDefectBar");
   if(filterBtn) filterBtn.style.display = tcMode === "cases" ? "" : "none";
@@ -1599,13 +1631,133 @@ function syncModeUI(){
     b.setAttribute("aria-pressed", on ? "true" : "false");
   });
 }
-function caseRowHTML(c, no){
+/* ---------- 批量维护：勾选、全选与批量设置 ---------- */
+
+function caseSelIds(){ return Object.keys(caseSel); }
+function caseWritableLoaded(){ return cases.filter(caseWritable); }
+/* 列表重新加载前直接收起批量条，避免骨架屏上方残留上一次的勾选数 */
+function resetCaseSel(){
+  caseSel = {};
+  var bar = $("tcBulkBar");
+  if(bar) bar.hidden = true;
+}
+function clearCaseSel(){
+  caseSel = {};
+  syncBulkBar();
+}
+function toggleCaseSel(id, on){
+  if(!id) return;
+  if(on){
+    if(caseSelIds().length >= 200){
+      toast("单次最多勾选 200 条用例", "warn");
+      syncBulkBar();
+      return;
+    }
+    caseSel[id] = true;
+  }else{
+    delete caseSel[id];
+  }
+  syncBulkBar();
+}
+function syncBulkBar(){
+  var bar = $("tcBulkBar");
+  if(!bar) return;
+  var writable = tcMode === "cases" ? caseWritableLoaded() : [];
+  var show = !!writable.length && !$("tcList").hidden;
+  bar.hidden = !show;
+  if(!show) return;
+  var ids = caseSelIds();
+  var allOn = writable.every(function(c){ return !!caseSel[c.id]; });
+  var allBox = $("tcBulkAll");
+  allBox.checked = allOn;
+  allBox.indeterminate = !allOn && ids.length > 0;
+  $("tcBulkCount").textContent = ids.length
+    ? ("已选 " + ids.length + " 条")
+    : ("共 " + writable.length + " 条可编辑");
+  ["btnTcBatchEdit", "btnTcBatchDel"].forEach(function(id){
+    var b = $(id);
+    if(b) b.disabled = !ids.length;
+  });
+  $("btnTcBatchClear").hidden = !ids.length;
+  Array.prototype.forEach.call($("tcList").querySelectorAll("[data-tc-pick]"), function(box){
+    var on = !!caseSel[box.dataset.tcPick];
+    box.checked = on;
+    var row = box.closest(".tc-row");
+    if(row) row.classList.toggle("is-selected", on);
+  });
+}
+function openBatchDialog(){
+  var ids = caseSelIds();
+  if(!ids.length){ toast("请先勾选用例", "warn"); return; }
+  $("caseBatchSub").textContent = "已选 " + ids.length + " 条用例；只修改填写的项，留空或「保持原值」不变。";
+  $("bModule").value = "";
+  $("bModuleClear").checked = false;
+  $("bPri").value = "";
+  $("btnBatchSave").disabled = false;
+  UI.openModal($("dlgCaseBatch"), "input");
+  setTimeout(function(){ $("bModule").focus(); }, 30);
+}
+function saveBatchEdit(){
+  if(caseBatchSaving) return;
+  var ids = caseSelIds();
+  if(!ids.length){ toast("请先勾选用例", "warn"); return; }
+  var module = ($("bModule").value || "").trim();
+  var pri = $("bPri").value;
+  var body = { ids: ids };
+  if($("bModuleClear").checked) body.moduleAction = "clear";
+  else if(module){ body.moduleAction = "set"; body.module = module; }
+  else body.moduleAction = "keep";
+  if(pri === "__clear") body.priorityAction = "clear";
+  else if(pri){ body.priorityAction = "set"; body.priority = pri; }
+  else body.priorityAction = "keep";
+  if(body.moduleAction === "keep" && body.priorityAction === "keep"){
+    toast("填写功能模块或选择优先级后再应用", "warn");
+    return;
+  }
+  caseBatchSaving = true;
+  $("btnBatchSave").disabled = true;
+  API.put("/api/test-cases/batch", body).then(function(r){
+    var msg = "已更新 " + ((r && r.updated) || 0) + " 条用例";
+    if(r && r.skipped) msg += "，跳过 " + r.skipped + " 条（已不存在）";
+    toast(msg, "fs");
+    caseBatchSaving = false;
+    $("btnBatchSave").disabled = false;
+    UI.closeModal($("dlgCaseBatch"));
+    clearCaseSel();
+    loadCases();
+  }).catch(function(ex){
+    caseBatchSaving = false;
+    $("btnBatchSave").disabled = false;
+    toast(ex.message || "批量更新失败", "bad");
+  });
+}
+function batchDeleteCases(){
+  var ids = caseSelIds();
+  if(!ids.length){ toast("请先勾选用例", "warn"); return; }
+  UI.showConfirm({
+    title: "批量删除用例",
+    msg: "将删除选中的 " + ids.length + " 条用例，执行流水、失败证据与计划圈选一并清理，且不可恢复。",
+    okText: "删除 " + ids.length + " 条"
+  }).then(function(ok){
+    if(!ok) return;
+    return API.post("/api/test-cases/batch-delete", { ids: ids }).then(function(r){
+      var msg = "已删除 " + ((r && r.deleted) || 0) + " 条用例";
+      if(r && r.skipped) msg += "，跳过 " + r.skipped + " 条（已不存在）";
+      toast(msg, "fs");
+      clearCaseSel();
+      loadCases();
+    });
+  }).catch(function(ex){ toast(ex.message || "批量删除失败", "bad"); });
+}
+
+function caseRowHTML(c){
   var meta = [];
   var stepCount = (c.steps || []).length;
   if(c.module) meta.push(c.module);
   if(c.demandTitle) meta.push("需求：" + cut(c.demandTitle, 30));
   meta.push(stepCount ? (stepCount + " 步") : "无步骤");
   if(c.precondition) meta.push("前置：" + cut(c.precondition, 36));
+  if(c.testData) meta.push("数据：" + cut(c.testData, 30));
   if(c.latestStatus){
     meta.push((c.latestBy || "—") + " " + (c.latestAt ? fmtTs(c.latestAt) : ""));
   }
@@ -1629,8 +1781,13 @@ function caseRowHTML(c, no){
       + '<button class="icon-btn sm" type="button" data-tc-del="' + esc(c.id) + '" aria-label="删除用例">' + icon("trash", 14) + '</button>'
       + '</span>';
   }
-  return '<div class="tc-row" data-tc-open="' + esc(c.id) + '">'
-    + '<span class="tc-no" aria-hidden="true" title="当前列表序号，随筛选和排序变化">' + (no || "") + '</span>'
+  var pick = w
+    ? '<input type="checkbox" class="tc-pick" data-tc-pick="' + esc(c.id) + '" aria-label="选择用例 ' + esc(c.title) + '" />'
+    : "";
+  return '<div class="tc-row' + (caseSel[c.id] ? " is-selected" : "") + '" data-tc-open="' + esc(c.id) + '">'
+    + pick
+    + '<span class="tc-no" title="' + (caseNoText(c) ? "用例编号（项目内固定，可用于缺陷与评审引用）" : "该用例暂无编号") + '">'
+    + esc(caseNoText(c)) + '</span>'
     + statusBadgeHTML(c.latestStatus)
     + '<div class="tc-main">'
     +   '<div class="tc-title">' + esc(c.title) + (c.priority ? ' <span class="tc-pri">' + priTagHTML(c.priority) + '</span>' : "") + '</div>'
@@ -1684,37 +1841,220 @@ function loadDemandOptions(reqId){
   });
   return demandOptions.loading;
 }
-function fillDemandSelect(selected, fallbackLabel){
+/* ---------- 关联需求选择器：候选一页 + 关键词走服务端搜索 ---------- */
+
+function demandMetaText(d){
+  return [demandStatusLabel(d.status), d.priority, d.versionName].filter(Boolean).join(" · ");
+}
+function syncDemandTrigger(){
+  var sel = $("cDemand"), text = $("cDemandPickerText");
+  if(!sel || !text) return;
+  var label = sel.value && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].textContent : "";
+  text.textContent = sel.value ? (label || "原关联需求") : "搜索并选择需求";
+  text.classList.toggle("placeholder", !sel.value);
+}
+/* 隐藏的 select 只承载 id：候选浮层不依赖 option 列表，避免上百条 option 拖慢弹窗 */
+function setDemandValue(id, label){
   var sel = $("cDemand");
-  if(demandOptions.error){
-    var keep = selected || "";
-    sel.innerHTML = keep
-      ? '<option value="' + esc(keep) + '">' + esc(fallbackLabel || "原关联需求") + '（需求列表加载失败，已保留）</option>'
-      : '<option value="">需求列表加载失败，暂无法选择（可重试）</option>';
-    sel.value = keep;
-    sel.dataset.loadError = "1";
+  if(!sel) return;
+  sel.innerHTML = id ? '<option value="' + esc(id) + '">' + esc(label || "原关联需求") + '</option>' : "";
+  sel.value = id || "";
+  syncDemandTrigger();
+}
+function resetDemandFirstPage(){
+  var cached = demandOptions.reqId === caseFormReqId;
+  demandPicker.list = cached ? demandOptions.list : [];
+  demandPicker.total = cached ? demandOptions.total : 0;
+}
+function renderDemandPicker(){
+  var el = demandPicker.el;
+  if(!el) return;
+  var box = el.querySelector("[data-demand-results]");
+  var count = el.querySelector("[data-demand-count]");
+  var selectedId = $("cDemand").value || "";
+  if(demandPicker.error){
+    box.innerHTML = '<div class="search-picker-error">' + esc(demandPicker.error) +
+      '<br><button class="btn sm" type="button" data-demand-retry>重新加载</button></div>';
+    if(count) count.textContent = "加载失败";
     return;
   }
-  delete sel.dataset.loadError;
-  var list = (demandOptions.reqId === caseFormReqId && demandOptions.list) ? demandOptions.list : [];
-  var valid = selected && list.some(function(d){ return d.id === selected; });
-  sel.innerHTML = '<option value="">不关联</option>'
-    + list.map(function(d){
-      return '<option value="' + esc(d.id) + '">' + esc(demandPickLabel(d)) + '</option>';
-    }).join("")
-    + (demandOptions.total > list.length
-      ? '<option value="" disabled>仅显示前 ' + list.length + ' 条，共 ' + demandOptions.total + ' 条</option>' : "");
-  sel.value = valid ? selected : "";
-  if(selected && !valid && list.length) sel.value = "";
+  if(demandPicker.loading && !demandPicker.list.length){
+    box.innerHTML = UI.skeletonRows(4);
+    if(count) count.textContent = "搜索中";
+    return;
+  }
+  if(count){
+    count.textContent = demandPicker.loading
+      ? "搜索中…"
+      : (demandPicker.total > demandPicker.list.length
+        ? "共 " + demandPicker.total + " 条 · 前 " + demandPicker.list.length + " 条"
+        : demandPicker.list.length + " 条");
+  }
+  var html = '<button type="button" class="search-picker-clear' + (selectedId ? "" : " selected") + '"'
+    + ' data-demand-clear aria-pressed="' + (selectedId ? "false" : "true") + '">'
+    + icon("close", 13) + '<span>不关联需求</span></button>';
+  if(!demandPicker.list.length){
+    html += '<div class="search-picker-empty">'
+      + (demandPicker.query ? "没有找到匹配的需求，换个关键词试试。" : "本项目需求池暂无需求。")
+      + (demandPicker.query ? '<br><button class="btn sm" type="button" data-demand-reset>清除搜索</button>' : "")
+      + '</div>';
+    box.innerHTML = html;
+    return;
+  }
+  demandPicker.list.forEach(function(d){
+    var selected = d.id === selectedId;
+    var meta = demandMetaText(d);
+    html += '<button type="button" class="search-picker-option' + (selected ? " selected" : "") + '"'
+      + ' data-demand-id="' + esc(d.id) + '" aria-pressed="' + (selected ? "true" : "false") + '">'
+      + '<span class="search-picker-option-main">'
+      + '<span class="search-picker-option-title">' + esc(d.title || "未命名需求") + '</span>'
+      + (meta ? '<span class="search-picker-option-meta">' + esc(meta) + '</span>' : "")
+      + '</span>' + (selected ? icon("check", 15) : "") + '</button>';
+  });
+  box.innerHTML = html;
 }
-function demandOptionsFailedMessage(){
-  return "关联需求加载失败，已保留原有需求；可关闭后重新打开用例再试";
+function loadDemandFirstPage(el, seq){
+  demandPicker.loading = true;
+  demandPicker.error = null;
+  renderDemandPicker();
+  loadDemandOptions(caseFormReqId).then(function(list){
+    if(seq !== demandPicker.seq) return;
+    demandPicker.loading = false;
+    if(list === null){
+      demandPicker.error = "需求加载失败，请重试";
+      demandPicker.list = [];
+      demandPicker.total = 0;
+    }else{
+      resetDemandFirstPage();
+    }
+    renderDemandPicker();
+  });
 }
-function setDemandLoading(){
-  $("cDemand").innerHTML = '<option value="">需求加载中…</option>';
-  $("cDemand").value = "";
+function searchDemands(el, seq, q){
+  var reqSeq = ++demandPicker.reqSeq;
+  demandPicker.loading = true;
+  demandPicker.error = null;
+  renderDemandPicker();
+  API.get("/api/demands/page", {
+    reqId: caseFormReqId, q: q, offset: 0, limit: DEMAND_SEARCH_PAGE_SIZE, sort: "created"
+  }).then(function(page){
+    if(seq !== demandPicker.seq || reqSeq !== demandPicker.reqSeq) return;
+    demandPicker.loading = false;
+    demandPicker.list = page.items || [];
+    demandPicker.total = page.total || 0;
+    renderDemandPicker();
+  }).catch(function(ex){
+    if(seq !== demandPicker.seq || reqSeq !== demandPicker.reqSeq) return;
+    demandPicker.loading = false;
+    demandPicker.list = [];
+    demandPicker.total = 0;
+    demandPicker.error = (ex && ex.message) || "需求搜索失败，请重试";
+    renderDemandPicker();
+  });
 }
-/* 优先级档位固定 P0-P3，显示名随空间优先级配置变化，开弹窗时刷新 */
+function chooseDemand(id){
+  var picked = id ? demandPicker.list.filter(function(d){ return d.id === id; })[0] : null;
+  if(id && !picked) return;
+  setDemandValue(id || "", picked ? picked.title : "");
+  UI.closeAllPops();
+  var anchor = $("cDemandPicker");
+  if(anchor) anchor.focus({ preventScroll:true });
+}
+function openDemandPicker(){
+  if(!caseFormWritable()) return;
+  if(demandPicker.el && UI.popOpen(demandPicker.el)){ UI.closeAllPops(); return; }
+  var anchor = $("cDemandPicker");
+  if(!anchor || !caseFormReqId) return;
+  clearTimeout(demandPicker.timer);
+  var seq = ++demandPicker.seq;
+  var el = document.createElement("div");
+  el.className = "menu search-picker";
+  el.id = "cDemandPickerPop";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "选择关联需求");
+  el.innerHTML = '<div class="search-picker-head">'
+    + '<div class="search-picker-search">' + icon("search", 15)
+    + '<input type="search" data-demand-search placeholder="搜索需求标题、描述或来源" aria-label="搜索需求" autocomplete="off" /></div>'
+    + '<div class="search-picker-tools"><span class="search-picker-count" data-demand-count role="status"></span></div>'
+    + '</div>'
+    + '<div class="search-picker-results" data-demand-results></div>'
+    + '<div class="search-picker-foot">仅本项目需求池；输入关键词可搜索全部条目</div>';
+  demandPicker.el = el;
+  demandPicker.query = "";
+  demandPicker.error = null;
+  demandPicker.list = [];
+  demandPicker.total = 0;
+  demandPicker.reqSeq++;
+  anchor.setAttribute("aria-controls", el.id);
+  var fieldWidth = anchor.getBoundingClientRect().width;
+  UI.openPop(el, anchor, {
+    align:"left",
+    width:Math.max(280, Math.min(fieldWidth || 460, window.innerWidth - 24)),
+    onClose:function(){
+      if(demandPicker.el === el) demandPicker.el = null;
+      demandPicker.seq++;
+      clearTimeout(demandPicker.timer);
+      el.remove();
+    }
+  });
+  el.addEventListener("input", function(e){
+    if(!e.target.closest("[data-demand-search]")) return;
+    demandPicker.query = e.target.value.trim();
+    clearTimeout(demandPicker.timer);
+    if(!demandPicker.query){
+      demandPicker.reqSeq++;
+      demandPicker.loading = false;
+      demandPicker.error = null;
+      resetDemandFirstPage();
+      renderDemandPicker();
+      return;
+    }
+    demandPicker.timer = setTimeout(function(){
+      if(seq !== demandPicker.seq) return;
+      searchDemands(el, seq, demandPicker.query);
+    }, DEMAND_SEARCH_DEBOUNCE);
+  });
+  el.addEventListener("click", function(e){
+    var option = e.target.closest("[data-demand-id]");
+    if(option){ chooseDemand(option.getAttribute("data-demand-id")); return; }
+    if(e.target.closest("[data-demand-clear]")){ chooseDemand(""); return; }
+    if(e.target.closest("[data-demand-reset]")){
+      var input = el.querySelector("[data-demand-search]");
+      input.value = "";
+      demandPicker.query = "";
+      demandPicker.reqSeq++;
+      demandPicker.loading = false;
+      demandPicker.error = null;
+      resetDemandFirstPage();
+      renderDemandPicker();
+      input.focus();
+      return;
+    }
+    if(e.target.closest("[data-demand-retry]")){
+      if(demandPicker.query) searchDemands(el, seq, demandPicker.query);
+      else loadDemandFirstPage(el, seq);
+    }
+  });
+  el.addEventListener("keydown", function(e){
+    if(e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    var buttons = Array.prototype.slice.call(el.querySelectorAll(".search-picker-clear,.search-picker-option"));
+    if(!buttons.length) return;
+    e.preventDefault();
+    var index = buttons.indexOf(document.activeElement);
+    var next = e.key === "ArrowDown" ? (index + 1) % buttons.length : (index <= 0 ? buttons.length - 1 : index - 1);
+    buttons[next].focus();
+  });
+  if(demandOptions.reqId === caseFormReqId && demandOptions.list.length && !demandOptions.error){
+    resetDemandFirstPage();
+    renderDemandPicker();
+  }else{
+    loadDemandFirstPage(el, seq);
+  }
+  setTimeout(function(){
+    var input = el.querySelector("[data-demand-search]");
+    if(input) input.focus();
+  }, 40);
+}
 function syncPriOptions(){
   $("cPri").innerHTML = '<option value="">不设置</option>'
     + PRIORITIES.map(function(p){
@@ -1734,13 +2074,9 @@ function openNewDialog(targetReqId){
   syncPriOptions();
   $("cPri").value = "";
   $("cPrecondition").value = "";
-  setDemandLoading();
-  loadDemandOptions(caseFormReqId).then(function(list){
-    if(!editingCase || editingCase.id) return;
-    fillDemandSelect("");
-    syncCaseDemandBaseline();
-    if(list === null) toast(demandOptionsFailedMessage(), "warn");
-  });
+  $("cTestData").value = "";
+  setDemandValue("", "");
+  loadDemandOptions(caseFormReqId);
   renderStepRows();
   applyReadOnly(!caseFormWritable());
   caseFormBaseline = caseFormSnapshot();
@@ -1782,19 +2118,16 @@ function openEditDialog(id){
     steps: (c.steps || []).map(function(s){ return { action: s.action || "", expected: s.expected || "" }; })
   };
   $("caseFormTitle").textContent = (caseFormWritable() ? "编辑用例" : "查看用例")
+    + (caseNoText(c) ? " · " + caseNoText(c) : "")
     + (caseScopeAll ? " · " + reqNameOf(caseFormReqId) : "");
   $("cTitle").value = c.title || "";
   $("cModule").value = c.module || "";
   syncPriOptions();
   $("cPri").value = c.priority || "";
   $("cPrecondition").value = c.precondition || "";
-  setDemandLoading();
-  loadDemandOptions(caseFormReqId).then(function(list){
-    if(!editingCase || editingCase.id !== id) return;
-    fillDemandSelect(editingCase.demandId, editingCase.demandTitle);
-    syncCaseDemandBaseline();
-    if(list === null) toast(demandOptionsFailedMessage(), "warn");
-  });
+  $("cTestData").value = c.testData || "";
+  setDemandValue(c.demandId || "", c.demandTitle || "");
+  loadDemandOptions(caseFormReqId);
   renderStepRows();
   applyReadOnly(!caseFormWritable());
   caseFormBaseline = caseFormSnapshot();
@@ -1819,7 +2152,8 @@ function focusStep(i){
   if(ta) ta.focus();
 }
 function applyReadOnly(on){
-  ["cTitle", "cPrecondition", "cDemand", "cModule", "cPri"].forEach(function(id){ $(id).disabled = on; });
+  ["cTitle", "cPrecondition", "cTestData", "cDemand", "cModule", "cPri"].forEach(function(id){ $(id).disabled = on; });
+  $("cDemandPicker").disabled = on;
   $("tcSteps").querySelectorAll("textarea").forEach(function(inp){ inp.disabled = on; });
   $("tcSteps").querySelectorAll("[data-step-del]").forEach(function(b){ b.style.display = on ? "none" : ""; });
   $("btnCaseAddStep").style.display = on ? "none" : "";
@@ -1858,20 +2192,10 @@ function stepsSnapshot(){
 }
 function caseFormSnapshot(){
   return JSON.stringify([$("cTitle").value, $("cModule").value, $("cPri").value,
-    $("cDemand").value, $("cPrecondition").value, stepsSnapshot()]);
+    $("cDemand").value, $("cPrecondition").value, $("cTestData").value, stepsSnapshot()]);
 }
 function caseFormDirty(){
   return !!caseFormBaseline && caseFormSnapshot() !== caseFormBaseline;
-}
-/* 需求候选异步加载：加载期间 cDemand 只有占位项，不能拿它的空值当基线。
-   加载完成只校正基线的需求项，避免把加载期间用户对其他字段的编辑一起吞掉。 */
-function syncCaseDemandBaseline(){
-  if(!caseFormBaseline) return;
-  try{
-    var arr = JSON.parse(caseFormBaseline);
-    arr[3] = $("cDemand").value;
-    caseFormBaseline = JSON.stringify(arr);
-  }catch(e){ caseFormBaseline = caseFormSnapshot(); }
 }
 function runFormSnapshot(){
   var files = $("runFiles") && $("runFiles").files ? Array.prototype.map.call($("runFiles").files, function(f){ return f.name; }) : [];
@@ -1969,6 +2293,7 @@ function saveCase(){
     reqId: caseFormReqId,
     title: title,
     precondition: $("cPrecondition").value.trim() || null,
+    testData: $("cTestData").value.trim() || null,
     module: $("cModule").value.trim() || null,
     priority: $("cPri").value || null,
     demandId: $("cDemand").value || null,
@@ -2462,6 +2787,7 @@ function planRowHTML(p){
     + '<div class="plan-counts">'
     +   '<span class="mini-tag ok">通过 ' + (p.passedCount || 0) + '</span>'
     +   '<span class="mini-tag over">失败 ' + (p.failedCount || 0) + '</span>'
+    +   (p.skippedCount ? '<span class="mini-tag mute">跳过 ' + p.skippedCount + '</span>' : "")
     +   (p.defectCount ? '<span class="mini-tag over">缺陷 ' + p.defectCount + '</span>' : "")
     + '</div>'
     + '<div class="tc-acts">' + acts + '</div>'
@@ -2561,6 +2887,7 @@ function renderPlanDetail(){
     + '<span class="tc-stat ok"><b>' + (p.passedCount || 0) + '</b>通过</span>'
     + '<span class="tc-stat over"><b>' + (p.failedCount || 0) + '</b>失败</span>'
     + '<span class="tc-stat warn"><b>' + (p.blockedCount || 0) + '</b>阻塞</span>'
+    + '<span class="tc-stat' + ((p.skippedCount || 0) > 0 ? "" : " mute") + '" title="本次不执行 / 不适用，不计入通过率"><b>' + (p.skippedCount || 0) + '</b>跳过</span>'
     + '<span class="tc-stat"><b>' + pct + '%</b>进度</span>'
     + '<span class="tc-stat"><b>' + (d.passRate == null ? "—" : d.passRate + "%") + '</b>通过率</span>'
     + '<span class="tc-stat over"><b>' + (p.defectCount || 0) + '</b>转缺陷</span>'
@@ -2572,6 +2899,7 @@ function renderPlanDetail(){
       + '<button type="button" data-pbatch="passed" aria-pressed="' + (planBatchStatus === "passed") + '">通过</button>'
       + '<button type="button" data-pbatch="failed" aria-pressed="' + (planBatchStatus === "failed") + '">失败</button>'
       + '<button type="button" data-pbatch="blocked" aria-pressed="' + (planBatchStatus === "blocked") + '">阻塞</button>'
+      + '<button type="button" data-pbatch="skipped" aria-pressed="' + (planBatchStatus === "skipped") + '" title="本次不执行 / 不适用，不计入通过率">跳过</button>'
       + '</span>'
       + '<input id="planRunNote" type="text" maxlength="500" class="plan-note-inp" placeholder="批量备注（选填，写入本轮执行记录）" />'
       + '<button class="btn sm primary" type="button" data-plan-runs>记录选中 ' + selCount + ' 条</button>';
@@ -2580,17 +2908,19 @@ function renderPlanDetail(){
   acts += '</div>';
   var selBar = "";
   if(editable && cs.length){
-    var noneN = 0, failedN = 0, blockedN = 0;
+    var noneN = 0, failedN = 0, blockedN = 0, skippedN = 0;
     cs.forEach(function(c){
       if(!c.result) noneN++;
       else if(c.result === "failed") failedN++;
       else if(c.result === "blocked") blockedN++;
+      else if(c.result === "skipped") skippedN++;
     });
     selBar = '<div class="plan-selbar" data-plan-selbar>'
       + '<label><input type="checkbox" class="cbx" data-plan-select-all aria-label="全选计划内用例" />全选</label>'
       + '<button class="btn sm ghost" type="button" data-plan-pick-status="none" title="替换当前选择"' + (noneN ? "" : " disabled") + '>选未执行 (' + noneN + ')</button>'
       + (failedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="failed" title="替换当前选择">选失败 (' + failedN + ')</button>' : "")
       + (blockedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="blocked" title="替换当前选择">选阻塞 (' + blockedN + ')</button>' : "")
+      + (skippedN ? '<button class="btn sm ghost" type="button" data-plan-pick-status="skipped" title="替换当前选择">选跳过 (' + skippedN + ')</button>' : "")
       + '<button class="btn sm ghost" type="button" data-plan-clear' + (selCount ? "" : " disabled") + '>清除选择</button>'
       + '<span class="plan-sel-count" data-plan-sel-count>已选 ' + selCount + ' / ' + cs.length + '</span>'
       + '</div>';
@@ -2615,6 +2945,7 @@ function renderPlanDetail(){
         ? '<button class="icon-btn sm" type="button" data-plan-rm="' + esc(c.caseId) + '" aria-label="移出计划" title="移出计划（不删用例）">' + icon("minus", 14) + '</button>'
         : "";
       return '<div class="tc-row plan-case">' + chk
+        + '<span class="tc-no" title="用例编号">' + esc(caseNoText(c)) + '</span>'
         + statusBadgeHTML(c.result)
         + '<div class="tc-main">'
         +   '<div class="tc-title">' + esc(c.title) + '</div>'
@@ -2685,9 +3016,9 @@ function planStatusTo(status){
 function exportPlanCsv(){
   var d = planDetail;
   if(!d) return;
-  var rows = [["标题", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
+  var rows = [["编号", "标题", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
   (d.cases || []).forEach(function(c){
-    rows.push([c.title, c.module || "", c.priority || "",
+    rows.push([caseNoText(c), c.title, c.module || "", c.priority || "",
       c.result ? (STATUS_LABEL[c.result] || c.result) : "未执行",
       c.executedBy || "", c.executedAt ? fmtTs(c.executedAt) : "", c.note || ""]);
   });
@@ -2888,20 +3219,41 @@ function exportCasesCsv(){
     toast("已导出用例 CSV", "fs");
   }).catch(function(ex){ toast(ex.message || "导出失败", "bad"); });
 }
+/* Excel 在中文 Windows 上默认导出的 CSV 是 GBK：先按 UTF-8 严格解码，失败再退 GBK */
+function readCsvFile(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var buf = new Uint8Array(reader.result || new ArrayBuffer(0));
+      var text;
+      try{
+        text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      }catch(e){
+        try{ text = new TextDecoder("gbk").decode(buf); }
+        catch(e2){ text = new TextDecoder("utf-8").decode(buf); }
+      }
+      resolve(String(text || "").replace(/^\uFEFF/, ""));
+    };
+    reader.onerror = function(){ reject(new Error("读取文件失败")); };
+    reader.readAsArrayBuffer(file);
+  });
+}
 function importCasesCsv(file){
   if(caseScopeAll){ toast("导入 CSV 需要先切到单个项目", "warn"); return; }
   if(!caseReqId){ toast("先选择项目", "warn"); return; }
   if(file.size > 2 * 1024 * 1024){ toast("CSV 超过 2MB 上限，请拆分后导入", "warn"); return; }
-  var reader = new FileReader();
-  reader.onload = function(){
-    var text = String(reader.result || "");
+  readCsvFile(file).then(function(text){
     if(!text.trim()){ toast("CSV 内容为空", "warn"); return; }
-    API.post("/api/test-cases/import?reqId=" + encodeURIComponent(caseReqId), { csv: text })
+    return API.post("/api/test-cases/import?reqId=" + encodeURIComponent(caseReqId), { csv: text })
     .then(function(r){
       r = r || {};
       var msg = "导入完成：新增 " + (r.created || 0) + " 条";
       if(r.failed) msg += "，失败 " + r.failed + " 条";
       if((r.total || 0) > 1000 || r.skipped) msg += "，超限跳过 " + (r.skipped || 0) + " 条";
+      if(r.renumbered) msg += "；原编号未保留，已按项目重新分配";
+      if(r.ignored && r.ignored.length){
+        msg += "；忽略列：" + r.ignored.slice(0, 3).join("、") + (r.ignored.length > 3 ? " 等" : "");
+      }
       toast(msg, r.failed ? "warn" : "fs");
       if(r.errors && r.errors.length){
         UI.showConfirm({
@@ -2911,10 +3263,8 @@ function importCasesCsv(file){
         });
       }
       loadCases();
-    }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
-  };
-  reader.onerror = function(){ toast("读取文件失败", "bad"); };
-  reader.readAsText(file);
+    });
+  }).catch(function(ex){ toast(ex.message || "导入失败", "bad"); });
 }
 
 /* ---------- 事件 ---------- */
@@ -3196,7 +3546,8 @@ $("tcPlans").addEventListener("click", function(e){
     planSel = {};
     (planDetail && planDetail.cases || []).forEach(function(c){
       var r = c.result || "";
-      if((st === "none" && !r) || (st === "failed" && r === "failed") || (st === "blocked" && r === "blocked")){
+      if((st === "none" && !r) || (st === "failed" && r === "failed") || (st === "blocked" && r === "blocked")
+        || (st === "skipped" && r === "skipped")){
         planSel[c.caseId] = true;
       }
     });
@@ -3254,6 +3605,8 @@ $("btnPlanPickAll").addEventListener("click", function(){
 });
 UI.setModalSubmit($("dlgPlanPick"), function(){ if(!pickingPlan) doPlanPick(); });
 $("tcList").addEventListener("click", function(e){
+  var pick = e.target.closest("[data-tc-pick]");
+  if(pick){ toggleCaseSel(pick.dataset.tcPick, pick.checked); return; }
   var more = e.target.closest("[data-tc-more]");
   if(more){ loadMoreCases(more.dataset.tcMore || null); return; }
   var runs = e.target.closest("[data-tc-runs]");
@@ -3276,6 +3629,24 @@ $("tcList").addEventListener("click", function(e){
   var open = e.target.closest("[data-tc-open]");
   if(open && !e.target.closest(".tc-acts")) openEditDialog(open.dataset.tcOpen);
 });
+$("tcBulkAll").addEventListener("change", function(){
+  if(this.checked){
+    var all = caseWritableLoaded();
+    var hitCap = all.length > 200;
+    (hitCap ? all.slice(0, 200) : all).forEach(function(c){ caseSel[c.id] = true; });
+    if(hitCap) toast("单次最多勾选 200 条用例，已选前 200 条", "warn");
+  }else{
+    caseSel = {};
+  }
+  syncBulkBar();
+});
+$("btnTcBatchClear").addEventListener("click", clearCaseSel);
+$("btnTcBatchEdit").addEventListener("click", openBatchDialog);
+$("btnTcBatchDel").addEventListener("click", batchDeleteCases);
+$("btnBatchSave").addEventListener("click", saveBatchEdit);
+$("dlgCaseBatchX").addEventListener("click", function(){ UI.closeModal($("dlgCaseBatch")); });
+UI.setModalCloseGuard($("dlgCaseBatch"), function(){ UI.closeModal($("dlgCaseBatch")); });
+UI.setModalSubmit($("dlgCaseBatch"), function(){ saveBatchEdit(); });
 $("btnCaseAddStep").addEventListener("click", function(){
   if(!editingCase) return;
   if(editingCase.steps.length >= 30){ toast("步骤最多 30 条", "warn"); return; }
@@ -3307,6 +3678,7 @@ $("tcSteps").addEventListener("keydown", function(e){
 });
 $("btnSaveCase").addEventListener("click", saveCase);
 $("cTitle").addEventListener("input", function(){ $("fCaseTitle").classList.remove("invalid"); });
+$("cDemandPicker").addEventListener("click", openDemandPicker);
 $("dlgCaseX").addEventListener("click", function(){ tryCloseCaseDialog(); });
 /* 单行输入 Enter 提交；步骤 textarea 保持换行，CJK 组合输入不触发 */
 $("dlgCase").addEventListener("keydown", function(e){

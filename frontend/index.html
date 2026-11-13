@@ -13,6 +13,9 @@
   try{var t=localStorage.getItem("ds.theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}
   var w=window.innerWidth||0;
   document.documentElement.setAttribute("data-layout", w<=639?"mobile":(w<=1023?"tablet":"desktop"));
+  /* 页脚（品牌 + 备案号）默认隐藏，部署时把 __APP_CONFIG__.showFooter 设为 true 才显示 */
+  var cfg=window.__APP_CONFIG__||{};
+  if(!cfg.showFooter) document.documentElement.classList.add("no-app-foot");
 })();
 </script>
 <link rel="stylesheet" href="css/tokens.css" />
@@ -1328,7 +1331,7 @@
                   <button class="btn sm ghost" type="button" id="tcViewsBtn" aria-haspopup="true" aria-expanded="false" title="用例视图：保存当前项目、筛选与展示方式">视图</button>
                   <div class="menu popover" id="tcViewsMenu" hidden></div>
                 </span>
-                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 步骤" aria-label="在所选项目内搜索测试用例" />
+                <input id="tcSearch" type="search" class="tc-search" placeholder="搜索本项目用例…" title="在所选项目内搜索用例 / 前置 / 测试数据 / 步骤" aria-label="在所选项目内搜索测试用例" />
                 <select id="tcModule" class="mini-select" aria-label="按功能模块筛选用例"></select>
                 <select id="tcPri" class="mini-select" aria-label="按优先级筛选用例"></select>
                 <select id="tcOwner" class="mini-select" aria-label="按执行人筛选用例"></select>
@@ -1339,6 +1342,7 @@
                   <button class="chip" type="button" data-tc-status="passed" aria-pressed="false">通过</button>
                   <button class="chip" type="button" data-tc-status="failed" aria-pressed="false">失败</button>
                   <button class="chip" type="button" data-tc-status="blocked" aria-pressed="false">阻塞</button>
+                  <button class="chip" type="button" data-tc-status="skipped" aria-pressed="false" title="本次不执行 / 不适用">跳过</button>
                 </div>
                 <button class="btn sm soft" type="button" id="tcClearFilter" hidden><span data-icon="close"></span>&nbsp;清除筛选</button>
               </span>
@@ -1346,9 +1350,9 @@
                 <button class="btn sm ghost tc-filter-toggle" type="button" id="tcFilterBtn" aria-expanded="false" aria-controls="tcFilterBar">筛选</button>
                 <select id="tcReq" class="mini-select" aria-label="选择项目"></select>
                 <button class="btn sm ghost ai-action" type="button" id="btnCaseAi" title="用 AI 从需求文档或需求池条目生成测试用例草稿，勾选确认后才会创建"><span data-icon="ai"></span>&nbsp;AI 生成用例</button>
-                <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
+                <button class="btn sm ghost" type="button" id="btnCaseCsvOut" title="导出当前项目全部用例为 CSV（含编号、测试数据与步骤），可用于迁移与备份"><span data-icon="download"></span>&nbsp;导出 CSV</button>
                 <input type="file" id="tcCsvFile" accept=".csv,text/csv" hidden aria-hidden="true" />
-                <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入用例（模板见导出 CSV 表头）"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
+                <button class="btn sm ghost" type="button" id="btnCaseCsvIn" title="从 CSV 批量导入：按表头识别列，兼容「用例名称 / 需求对应 / 测试步骤 / 期望结果」；Excel 请先另存为 CSV"><span data-icon="upload"></span>&nbsp;导入 CSV</button>
                 <button class="btn sm ghost" type="button" id="btnPlanNew" hidden><span data-icon="plus"></span>&nbsp;新建计划</button>
                 <button class="btn sm primary" type="button" id="btnDefectNew" hidden><span data-icon="plus"></span>&nbsp;新建缺陷</button>
                 <button class="icon-btn sm" type="button" data-view-fullscreen aria-label="全屏查看" title="全屏查看（Esc 退出）" aria-pressed="false">
@@ -1381,6 +1385,15 @@
             <button class="btn sm soft" type="button" id="tcDefReset" title="恢复默认：未关闭、全部严重度"><span data-icon="refresh"></span>&nbsp;重置</button>
           </div>
           <div class="tc-stats" id="tcStats"></div>
+          <div class="tc-bulkbar" id="tcBulkBar" hidden>
+            <label class="tc-bulk-all"><input type="checkbox" id="tcBulkAll" /> 全选已加载</label>
+            <span class="tc-bulk-count" id="tcBulkCount"></span>
+            <span class="tc-bulk-acts">
+              <button class="btn sm soft" type="button" id="btnTcBatchEdit">批量设置</button>
+              <button class="btn sm ghost danger" type="button" id="btnTcBatchDel">删除</button>
+              <button class="btn sm ghost" type="button" id="btnTcBatchClear">取消选择</button>
+            </span>
+          </div>
           <div class="tc-defects" id="tcDefects" hidden>
             <div class="tc-def-stats" id="tcDefStats"></div>
             <div class="tc-def-card">
@@ -1408,8 +1421,12 @@
                 <span class="err">请填写用例标题</span>
               </div>
               <div class="field">
-                <label for="cDemand">关联需求 <small class="tc-optional">选填 · 仅本项目需求池条目</small></label>
-                <select id="cDemand" aria-label="关联需求（选填）"></select>
+                <label for="cDemandPicker">关联需求 <small class="tc-optional">选填 · 仅本项目需求池条目</small></label>
+                <button type="button" class="search-trigger" id="cDemandPicker" aria-haspopup="dialog" aria-expanded="false">
+                  <span class="search-trigger-text placeholder" id="cDemandPickerText">搜索并选择需求</span>
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>
+                </button>
+                <select id="cDemand" hidden tabindex="-1" aria-hidden="true"></select>
               </div>
               <div class="row row-gap">
                 <div class="field" style="flex:1 1 55%">
@@ -1427,6 +1444,10 @@
                 <textarea id="cPrecondition" maxlength="1000" placeholder="选填：数据准备、环境要求…"></textarea>
               </div>
               <div class="field">
+                <label for="cTestData">测试数据 <small class="tc-optional">选填 · 执行时要准备的账号、金额、边界值</small></label>
+                <textarea id="cTestData" maxlength="1000" placeholder="如：账号 demo / 密码 123456；金额 0.01、99999.99"></textarea>
+              </div>
+              <div class="field">
                 <label>执行步骤</label>
                 <div class="tc-steps" id="tcSteps"></div>
                 <button class="btn sm ghost" type="button" id="btnCaseAddStep" title="步骤输入中按 Ctrl+Enter 可在下方快捷插入新行"><span data-icon="plus"></span>&nbsp;添加步骤</button>
@@ -1434,6 +1455,35 @@
               <p class="foot-note" id="caseReadonlyHint" hidden>只读 · 你对该项目只有查看权限</p>
               <div class="row row-gap" id="caseSaveRow">
                 <button class="btn primary" type="button" id="btnSaveCase">保存</button>
+              </div>
+            </div>
+          </div>
+        </div></div></div>
+
+        <!-- 批量设置模块与优先级 -->
+        <div class="modal-layer" id="dlgCaseBatch" role="dialog" aria-modal="true" aria-labelledby="caseBatchTitle"><div class="sheet xs"><div class="sheet-body">
+          <div class="panel">
+            <div class="panel-head"><h3 id="caseBatchTitle">批量设置</h3><button class="icon-btn sm" type="button" id="dlgCaseBatchX" aria-label="关闭"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3 3 13"/></svg></button></div>
+            <div class="stack">
+              <p class="foot-note" id="caseBatchSub"></p>
+              <div class="field">
+                <label for="bModule">功能模块 <small class="tc-optional">留空则保持原值</small></label>
+                <input id="bModule" type="text" maxlength="50" list="tcModuleList" placeholder="如：登录 / 订单 / 支付" autocomplete="off" />
+                <label class="b-check"><input type="checkbox" id="bModuleClear" /> 清空所选用例的模块</label>
+              </div>
+              <div class="field">
+                <label for="bPri">优先级 <small class="tc-optional">选择后统一覆盖</small></label>
+                <select id="bPri" aria-label="批量设置优先级">
+                  <option value="">保持原值</option>
+                  <option value="P0">P0</option>
+                  <option value="P1">P1</option>
+                  <option value="P2">P2</option>
+                  <option value="P3">P3</option>
+                  <option value="__clear">清空优先级</option>
+                </select>
+              </div>
+              <div class="row row-gap">
+                <button class="btn primary" type="button" id="btnBatchSave">应用到所选用例</button>
               </div>
             </div>
           </div>
@@ -1450,6 +1500,7 @@
                   <button type="button" data-run-status="passed" aria-pressed="true">通过</button>
                   <button type="button" data-run-status="failed" aria-pressed="false">失败</button>
                   <button type="button" data-run-status="blocked" aria-pressed="false">阻塞</button>
+                  <button type="button" data-run-status="skipped" aria-pressed="false" title="本次不执行 / 不适用，不计入通过率">跳过</button>
                 </div>
               </div>
               <div class="field">

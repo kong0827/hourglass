@@ -14,8 +14,12 @@ public class TestCase {
     private String reqId;
     /** 关联需求 ID（demand.id，选填） */
     private String demandId;
+    /** 项目内用例编号：创建时顺序分配，展示为 TC-001，创建后不变 */
+    private Integer caseNo;
     private String title;
     private String precondition;
+    /** 测试数据：执行时要准备或输入的数据（账号、金额、边界值等） */
+    private String testData;
     /** 功能模块：自由填写，列表筛选用 */
     private String module;
     /** 优先级档位：P0/P1/P2/P3，空 = 未设置 */

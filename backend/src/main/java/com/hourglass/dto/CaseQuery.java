@@ -10,7 +10,7 @@ public class CaseQuery {
 
     private String workspaceId;
     private String reqId;
-    /** passed/failed/blocked/__untested，null = 全部 */
+    /** passed/failed/blocked/skipped/__untested，null = 全部 */
     private String status;
     /** 模块名 / __none */
     private String module;

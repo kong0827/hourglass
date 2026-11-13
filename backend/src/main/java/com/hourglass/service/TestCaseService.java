@@ -165,9 +165,11 @@ public class TestCaseService {
                 s.setFailed(cnt);
             } else if (CaseMeta.STATUS_BLOCKED.equals(status)) {
                 s.setBlocked(cnt);
+            } else if (CaseMeta.STATUS_SKIPPED.equals(status)) {
+                s.setSkipped(cnt);
             }
         }
-        s.setUntested(s.getTotal() - s.getPassed() - s.getFailed() - s.getBlocked());
+        s.setUntested(s.getTotal() - s.getPassed() - s.getFailed() - s.getBlocked() - s.getSkipped());
         return s;
     }
 
@@ -255,8 +257,39 @@ public class TestCaseService {
         c.setId(Ids.gen("C"));
         c.setWorkspaceId(workspaceId);
         apply(c, reqId, req);
-        caseMapper.insert(c);
+        insertWithNo(c);
         return caseMapper.selectById(c.getId());
+    }
+
+    /**
+     * 分配项目内编号后插入。并发建用例会抢到同一个号，由唯一键 uk_case_no 拒绝，
+     * 这里重算重试；失败的 INSERT 不会让 InnoDB 事务失效。
+     */
+    private void insertWithNo(TestCase c) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            c.setCaseNo(caseMapper.selectNextCaseNo(c.getWorkspaceId(), c.getReqId()));
+            try {
+                caseMapper.insert(c);
+                return;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                log.warn("用例编号并发冲突，重试第 {} 次：project={}", attempt + 2, c.getReqId());
+            }
+        }
+        throw AppException.badRequest("用例编号生成冲突，请重试");
+    }
+
+    /** 换项目：编号是当前项目内的序号，过去后重新取号，避免与目标项目已有编号撞唯一键 */
+    private void updateMovedWithNo(TestCase c) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            c.setCaseNo(caseMapper.selectNextCaseNo(c.getWorkspaceId(), c.getReqId()));
+            try {
+                caseMapper.update(c);
+                return;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                log.warn("用例换项目编号冲突，重试第 {} 次：project={}", attempt + 2, c.getReqId());
+            }
+        }
+        throw AppException.badRequest("用例编号生成冲突，请重试");
     }
 
     @Transactional
@@ -265,7 +298,8 @@ public class TestCaseService {
         projectAccess.assertWrite(workspaceId, userId, c.getReqId());
         String reqId = ensureProject(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
-        if (!reqId.equals(c.getReqId())) {
+        boolean moved = !reqId.equals(c.getReqId());
+        if (moved) {
             /* 计划只圈选本项目用例：改项目会让原项目计划里留下跨项目行（已完成计划是快照，不受限） */
             List<String> open = planCaseMapper.selectOpenPlanNamesByCase(workspaceId, id);
             if (open != null && !open.isEmpty()) {
@@ -274,7 +308,11 @@ public class TestCaseService {
             }
         }
         apply(c, reqId, req);
-        caseMapper.update(c);
+        if (moved) {
+            updateMovedWithNo(c);
+        } else {
+            caseMapper.update(c);
+        }
         return caseMapper.selectById(id);
     }
 
@@ -289,6 +327,116 @@ public class TestCaseService {
         attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
         auditService.recordCurrent(workspaceId, "test_case_delete", "test_case", id, c.getTitle(), true,
                 "删除测试用例「" + c.getTitle() + "」，执行流水与计划圈选一并清理", null);
+    }
+
+    /* ---------- 批量维护（列表多选） ---------- */
+
+    /** 批量改模块 / 优先级：跨项目勾选时逐个校验写权限，已删除的行跳过并回报 */
+    @Transactional
+    public Map<String, Object> batchUpdate(String userId, String workspaceId, com.hourglass.dto.TestCaseBatchRequest req) {
+        List<String> ids = distinctIds(req.getIds());
+        String moduleAction = Texts.trimToNull(req.getModuleAction());
+        String priorityAction = Texts.trimToNull(req.getPriorityAction());
+        boolean moduleClear = "clear".equals(moduleAction);
+        boolean moduleSet = "set".equals(moduleAction);
+        boolean priorityClear = "clear".equals(priorityAction);
+        boolean prioritySet = "set".equals(priorityAction);
+        if (!moduleSet && !moduleClear && !prioritySet && !priorityClear) {
+            throw AppException.badRequest("没有要修改的内容");
+        }
+        String module = null;
+        if (moduleSet) {
+            module = Texts.trimToNull(req.getModule());
+            if (module == null) {
+                throw AppException.badRequest("请填写功能模块，或勾选「清空模块」");
+            }
+            module = Texts.cut(module, 50);
+        }
+        String priority = null;
+        if (prioritySet) {
+            priority = Texts.trimToNull(req.getPriority());
+            if (priority == null || !priority.matches("P[0-3]")) {
+                throw AppException.badRequest("优先级只允许 P0/P1/P2/P3");
+            }
+        }
+        List<String> allowed = new ArrayList<String>();
+        int skipped = 0;
+        for (String id : ids) {
+            TestCase c = caseMapper.selectById(id);
+            if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
+                skipped++;
+                continue;
+            }
+            projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+            allowed.add(id);
+        }
+        if (allowed.isEmpty()) {
+            throw AppException.badRequest("勾选的用例已不存在或无权修改");
+        }
+        int updated = caseMapper.batchUpdate(workspaceId, allowed,
+                moduleSet || moduleClear, module, prioritySet || priorityClear, priority);
+        StringBuilder what = new StringBuilder();
+        if (moduleSet) {
+            what.append("模块=「").append(module).append("」");
+        }
+        if (moduleClear) {
+            what.append(what.length() > 0 ? "、" : "").append("清空模块");
+        }
+        if (prioritySet) {
+            what.append(what.length() > 0 ? "、" : "").append("优先级=").append(priority);
+        }
+        if (priorityClear) {
+            what.append(what.length() > 0 ? "、" : "").append("清空优先级");
+        }
+        auditService.recordCurrent(workspaceId, "test_case_batch_update", "project", null, null, true,
+                "批量更新 " + updated + " 条用例：" + what, null);
+        Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
+        out.put("updated", updated);
+        out.put("skipped", skipped);
+        return out;
+    }
+
+    /** 批量删除：逐条走单例删除链路（流水、计划圈选、证据一并清理并逐条留痕） */
+    @Transactional
+    public Map<String, Object> batchDelete(String userId, String workspaceId, List<String> rawIds) {
+        List<String> ids = distinctIds(rawIds);
+        int deleted = 0;
+        int skipped = 0;
+        for (String id : ids) {
+            TestCase c = caseMapper.selectById(id);
+            if (c == null || !workspaceId.equals(c.getWorkspaceId())) {
+                skipped++;
+                continue;
+            }
+            projectAccess.assertWrite(workspaceId, userId, c.getReqId());
+            delete(userId, workspaceId, id);
+            deleted++;
+        }
+        if (deleted == 0) {
+            throw AppException.badRequest("勾选的用例已不存在或无权删除");
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<String, Object>();
+        out.put("deleted", deleted);
+        out.put("skipped", skipped);
+        return out;
+    }
+
+    private static List<String> distinctIds(List<String> raw) {
+        List<String> out = new ArrayList<String>();
+        if (raw == null) {
+            return out;
+        }
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (String id : raw) {
+            String s = Texts.trimToNull(id);
+            if (s != null && seen.add(s)) {
+                out.add(s);
+            }
+        }
+        if (out.size() > 200) {
+            throw AppException.badRequest("单次最多勾选 200 条用例");
+        }
+        return out;
     }
 
     /** 记录一次执行：流水追加一行，最近一轮结果冗余回用例；返回流水 id 供上传失败证据 */
@@ -371,14 +519,15 @@ public class TestCaseService {
 
     /* ---------- CSV 导入导出（A3：存量测试资产迁移入口） ---------- */
 
-    private static final String CSV_HEADER = "标题,模块,优先级,前置条件,步骤（每行：操作 => 预期）";
+    private static final String CSV_HEADER = "用例编号,标题,模块,优先级,前置条件,测试数据,步骤（每行：操作 => 预期）";
     private static final int IMPORT_MAX_ROWS = 1000;
 
     /** 模板：表头 + 一行示例（示例行导入前请删除或直接当第一条用例改） */
     public byte[] templateCsv() {
         List<String> lines = new ArrayList<String>();
         lines.add(CSV_HEADER);
-        lines.add(com.hourglass.common.Csv.row("登录成功跳转首页", "账号体系", "P0", "已注册账号 demo/123456",
+        lines.add(com.hourglass.common.Csv.row("", "登录成功跳转首页", "账号体系", "P0", "已注册账号 demo/123456",
+                "账号：demo / 密码：123456",
                 "打开登录页 => 出现用户名/密码输入框\n输入正确账号密码并提交 => 3 秒内进入首页且右上角显示昵称"));
         return com.hourglass.common.Csv.toCsv(lines);
     }
@@ -404,16 +553,23 @@ public class TestCaseService {
                     }
                 }
             }
-            lines.add(com.hourglass.common.Csv.row(v.getTitle(), v.getModule(), v.getPriority(),
-                    v.getPrecondition(), steps.toString()));
+            lines.add(com.hourglass.common.Csv.row(caseNoLabel(v.getCaseNo()), v.getTitle(), v.getModule(),
+                    v.getPriority(), v.getPrecondition(), v.getTestData(), steps.toString()));
         }
         return com.hourglass.common.Csv.toCsv(lines);
     }
 
     /**
      * 导入用例：逐行校验并创建，单行失败不影响其余行；返回
-     * {total, created, failed, errors:[{row, message}]}（errors 最多 20 条）。
-     * 步骤列按换行分步，"操作 => 预期" 中预期可省略。
+     * {total, created, failed, errors:[{row, message}], ignored:[列名]}（errors 最多 20 条）。
+     *
+     * 两种格式都接受：
+     * 1) 表头驱动：按列名识别（标题/用例名称、模块/需求对应、优先级、前置条件、
+     *    测试步骤、期望结果），外部 Excel 另存 CSV 后可直接导入；
+     *    步骤与期望分两列时按行号一一配对，行首"1."等编号自动去掉。
+     * 2) 无表头：沿用旧位置口径（标题, 模块, 优先级, 前置条件, 步骤），
+     *    步骤列按换行分步、"操作 => 预期"。
+     * 执行结果、截图、缺陷等列无法还原成执行流水，明确忽略并在结果里回报。
      */
     @Transactional
     public Map<String, Object> importCsv(String userId, String workspaceId, String reqId, String text) {
@@ -424,11 +580,13 @@ public class TestCaseService {
         List<Map<String, Object>> errors = new ArrayList<Map<String, Object>>();
         int created = 0;
         int start = 0;
+        Map<String, Integer> cols = new java.util.HashMap<String, Integer>();
         if (!rows.isEmpty()) {
-            String head = rows.get(0).isEmpty() ? "" : rows.get(0).get(0).trim();
-            if ("标题".equals(head) || "title".equalsIgnoreCase(head)) {
-                start = 1; // 表头行
-            }
+            cols = mapHeader(rows.get(0));
+        }
+        boolean headerMode = cols.containsKey("title");
+        if (headerMode) {
+            start = 1; // 表头行
         }
         int dataRows = rows.size() - start;
         if (dataRows > IMPORT_MAX_ROWS) {
@@ -436,7 +594,7 @@ public class TestCaseService {
         }
         for (int i = start; i < rows.size(); i++) {
             List<String> r = rows.get(i);
-            String title = cell(r, 0);
+            String title = headerMode ? cell(r, cols.get("title")) : cell(r, 0);
             if (title == null) {
                 continue; // 空行跳过
             }
@@ -444,17 +602,30 @@ public class TestCaseService {
                 TestCaseSaveRequest req = new TestCaseSaveRequest();
                 req.setReqId(rid);
                 req.setTitle(title);
-                req.setModule(cell(r, 1));
-                String pri = cell(r, 2);
-                if (pri != null) {
-                    String up = pri.toUpperCase();
-                    if (!up.matches("^P[0-3]$")) {
-                        throw AppException.badRequest("优先级只允许 P0/P1/P2/P3：" + pri);
+                if (headerMode) {
+                    if (cols.containsKey("module")) {
+                        req.setModule(cell(r, cols.get("module")));
                     }
-                    req.setPriority(up);
+                    applyPriority(req, cell(r, cols.get("priority")));
+                    if (cols.containsKey("precondition")) {
+                        req.setPrecondition(cell(r, cols.get("precondition")));
+                    }
+                    if (cols.containsKey("data")) {
+                        req.setTestData(cell(r, cols.get("data")));
+                    }
+                    String stepCell = cols.containsKey("steps") ? cell(r, cols.get("steps")) : null;
+                    String expectedCell = cols.containsKey("expected") ? cell(r, cols.get("expected")) : null;
+                    if (expectedCell != null) {
+                        req.setSteps(pairSteps(stepCell, expectedCell));
+                    } else if (stepCell != null) {
+                        req.setSteps(parseStepsCell(stepCell));
+                    }
+                } else {
+                    req.setModule(cell(r, 1));
+                    applyPriority(req, cell(r, 2));
+                    req.setPrecondition(cell(r, 3));
+                    req.setSteps(parseStepsCell(cell(r, 4)));
                 }
-                req.setPrecondition(cell(r, 3));
-                req.setSteps(parseStepsCell(cell(r, 4)));
                 create(userId, workspaceId, req);
                 created++;
             } catch (AppException ex) {
@@ -470,6 +641,9 @@ public class TestCaseService {
         out.put("created", created);
         out.put("failed", errors.size());
         out.put("errors", errors);
+        out.put("headerMode", headerMode);
+        out.put("renumbered", headerMode && cols.containsKey("no"));
+        out.put("ignored", headerMode ? ignoredColumns(rows.get(0)) : new ArrayList<String>());
         int skipped = Math.max(0, dataRows - created - errors.size());
         out.put("skipped", skipped);
         /* 一条都没导入且存在错误时，审计结果记为失败，便于按结果筛选问题导入 */
@@ -477,6 +651,148 @@ public class TestCaseService {
                 created > 0 || errors.isEmpty(), "导入测试用例：成功 " + created + " 条，失败 "
                         + errors.size() + " 条，跳过 " + skipped + " 条", null);
         return out;
+    }
+
+    /** 列名 → 语义键；未知列返回 null，调用方只取认识的列 */
+    private static Map<String, Integer> mapHeader(List<String> header) {
+        Map<String, Integer> map = new java.util.HashMap<String, Integer>();
+        if (header == null) {
+            return map;
+        }
+        for (int i = 0; i < header.size(); i++) {
+            String kind = headerKind(header.get(i));
+            if (kind != null && !map.containsKey(kind)) {
+                map.put(kind, i);
+            }
+        }
+        return map;
+    }
+
+    private static String headerKind(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.trim().replace(" ", "").replace("\u3000", "")
+                .replace("（", "(").replace("）", ")").replace("：", ":").toLowerCase();
+        if (s.isEmpty()) {
+            return null;
+        }
+        if ("编号".equals(s) || "用例编号".equals(s) || "用例id".equals(s)
+                || "测试用例id".equals(s) || "id".equals(s)) {
+            return "no";
+        }
+        if ("标题".equals(s) || "用例标题".equals(s) || "用例名称".equals(s)
+                || "名称".equals(s) || "title".equals(s) || "name".equals(s)) {
+            return "title";
+        }
+        if (s.contains("模块") || s.contains("需求对应")) {
+            return "module";
+        }
+        if (s.contains("优先级") || "级别".equals(s) || "pri".equals(s) || "priority".equals(s)) {
+            return "priority";
+        }
+        if (s.contains("前置") || s.contains("前提") || s.contains("预置")) {
+            return "precondition";
+        }
+        if (s.contains("测试数据") || "数据".equals(s)) {
+            return "data";
+        }
+        if (s.contains("步骤")) {
+            return "steps";
+        }
+        if (s.contains("期望") || s.contains("预期")) {
+            return "expected";
+        }
+        return null;
+    }
+
+    /** 引用了但无法落库的列：执行结果、截图、缺陷、执行人/时间 */
+    private static List<String> ignoredColumns(List<String> header) {
+        List<String> out = new ArrayList<String>();
+        if (header == null) {
+            return out;
+        }
+        for (String h : header) {
+            if (h == null) {
+                continue;
+            }
+            String s = h.trim();
+            if (s.isEmpty()) {
+                continue;
+            }
+            boolean ignore = s.contains("测试结果") || s.contains("截图") || s.contains("缺陷")
+                    || s.contains("测试人员") || s.contains("测试时间") || s.contains("执行人");
+            if (ignore && !out.contains(s)) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    private static void applyPriority(TestCaseSaveRequest req, String pri) {
+        if (pri == null) {
+            return;
+        }
+        String up = pri.toUpperCase();
+        if (!up.matches("^P[0-3]$")) {
+            throw AppException.badRequest("优先级只允许 P0/P1/P2/P3：" + pri);
+        }
+        req.setPriority(up);
+    }
+
+    /** 步骤行首编号："1." "1、" "1)" "（1）" 等，导入时去掉，避免与系统步骤序号重复 */
+    private static final java.util.regex.Pattern STEP_NO =
+            java.util.regex.Pattern.compile("^\\s*(?:\\d+\\s*[.、．)）]|[（(]\\s*\\d+\\s*[)）])\\s*");
+
+    private static List<String> splitLines(String raw) {
+        List<String> out = new ArrayList<String>();
+        if (raw == null) {
+            return out;
+        }
+        for (String line : raw.split("\r?\n")) {
+            String s = STEP_NO.matcher(line.trim()).replaceFirst("").trim();
+            if (!s.isEmpty()) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 两列结构（测试步骤 / 期望结果）按行号配对：第 n 条操作对应第 n 条期望。
+     * 行数不一致时以操作为准，多出的期望行并入最后一步，避免内容丢失。
+     */
+    private List<TestCaseSaveRequest.StepItem> pairSteps(String stepsRaw, String expectedRaw) {
+        List<String> actions = splitLines(stepsRaw);
+        List<String> expects = splitLines(expectedRaw);
+        if (actions.isEmpty()) {
+            throw AppException.badRequest("「测试步骤」为空，无法与期望结果逐行对应");
+        }
+        if (actions.size() > 30) {
+            throw AppException.badRequest("单条用例步骤最多 30 条（当前 " + actions.size() + " 条）");
+        }
+        List<TestCaseSaveRequest.StepItem> items = new ArrayList<TestCaseSaveRequest.StepItem>();
+        for (int i = 0; i < actions.size(); i++) {
+            TestCaseSaveRequest.StepItem item = new TestCaseSaveRequest.StepItem();
+            item.setAction(Texts.cut(actions.get(i), 200));
+            if (i < expects.size()) {
+                item.setExpected(Texts.cut(expects.get(i), 500));
+            }
+            items.add(item);
+        }
+        if (expects.size() > actions.size()) {
+            StringBuilder extra = new StringBuilder();
+            for (int i = actions.size(); i < expects.size(); i++) {
+                if (extra.length() > 0) {
+                    extra.append('\n');
+                }
+                extra.append(expects.get(i));
+            }
+            TestCaseSaveRequest.StepItem last = items.get(items.size() - 1);
+            String merged = last.getExpected() == null ? extra.toString() : last.getExpected() + "\n" + extra;
+            last.setExpected(Texts.cut(merged, 500));
+        }
+        return items;
     }
 
     private static String cell(List<String> row, int idx) {
@@ -526,6 +842,7 @@ public class TestCaseService {
         c.setDemandId(resolveDemand(c.getWorkspaceId(), reqId, req.getDemandId()));
         c.setTitle(Texts.cut(req.getTitle().trim(), 100));
         c.setPrecondition(Texts.trimToNull(req.getPrecondition()));
+        c.setTestData(Texts.trimToNull(req.getTestData()));
         c.setModule(Texts.trimToNull(req.getModule()));
         c.setPriority(Texts.trimToNull(req.getPriority()));
         c.setSteps(serializeSteps(req.getSteps()));
@@ -601,11 +918,22 @@ public class TestCaseService {
         }
     }
 
+    /** 用例编号展示口径：TC-001；历史数据编号为 0 时留空，不臆造 */
+    private static String caseNoLabel(Integer caseNo) {
+        if (caseNo == null || caseNo <= 0) {
+            return "";
+        }
+        return String.format("TC-%03d", caseNo);
+    }
+
     private String buildDefectDescription(TestCase c) {
         StringBuilder sb = new StringBuilder();
-        sb.append("测试用例「").append(c.getTitle()).append("」执行失败，自动转出。\n");
+        sb.append("测试用例 ").append(caseNoLabel(c.getCaseNo())).append("「").append(c.getTitle()).append("」执行失败，自动转出。\n");
         if (c.getPrecondition() != null) {
             sb.append("\n前置条件：\n").append(c.getPrecondition()).append("\n");
+        }
+        if (c.getTestData() != null) {
+            sb.append("\n测试数据：\n").append(c.getTestData()).append("\n");
         }
         List<Map<String, String>> steps = parseSteps(c.getSteps());
         if (steps != null && !steps.isEmpty()) {

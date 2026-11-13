@@ -414,7 +414,7 @@ function renderReqDocPickerResults(el){
     return;
   }
   if(el._error){
-    box.innerHTML = '<div class="req-doc-picker-error">' + esc(el._error) +
+    box.innerHTML = '<div class="search-picker-error">' + esc(el._error) +
       '<br><button class="btn sm" type="button" data-req-doc-retry>重新加载</button></div>';
     if(count) count.textContent = "加载失败";
     return;
@@ -438,11 +438,11 @@ function renderReqDocPickerResults(el){
     return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
   });
   if(count) count.textContent = docs.length + " 篇";
-  var html = '<button type="button" class="req-doc-picker-clear' + (!selectedId ? " selected" : "") + '"' +
+  var html = '<button type="button" class="search-picker-clear' + (!selectedId ? " selected" : "") + '"' +
     ' data-req-doc-clear aria-pressed="' + (!selectedId) + '">' +
     icon("close", 13) + '<span>不关联文档</span></button>';
   if(!docs.length){
-    html += '<div class="req-doc-picker-empty">' +
+    html += '<div class="search-picker-empty">' +
       (el._docs.length ? "没有找到匹配文档，试试文档标题、项目名或文档类型。" : "当前暂无可关联文档，可先到文档页新建。") +
       ((query || scope) ? '<br><button class="btn sm" type="button" data-req-doc-reset>清除搜索与筛选</button>'
         : '<br><button class="btn sm" type="button" data-req-doc-retry>刷新文档列表</button>') +
@@ -455,15 +455,15 @@ function renderReqDocPickerResults(el){
     if(doc.reqId !== lastReqId){
       lastReqId = doc.reqId;
       var n = docs.filter(function(d){ return d.reqId === lastReqId; }).length;
-      html += '<div class="req-doc-picker-group">' + esc(reqDocPickerProjectName(doc)) +
+      html += '<div class="search-picker-group">' + esc(reqDocPickerProjectName(doc)) +
         (doc.reqId === current ? " · 当前项目" : "") + ' · ' + n + ' 篇</div>';
     }
     var selected = doc.id === selectedId;
-    html += '<button type="button" class="req-doc-picker-option' + (selected ? " selected" : "") + '"' +
+    html += '<button type="button" class="search-picker-option' + (selected ? " selected" : "") + '"' +
       ' data-req-doc-id="' + esc(doc.id) + '" aria-pressed="' + selected + '">' +
-      '<span class="req-doc-picker-option-main">' +
-        '<span class="req-doc-picker-option-title">' + esc(doc.title || "未命名文档") + '</span>' +
-        '<span class="req-doc-picker-option-meta">' + esc(docTypeName(doc.docType)) + '</span>' +
+      '<span class="search-picker-option-main">' +
+        '<span class="search-picker-option-title">' + esc(doc.title || "未命名文档") + '</span>' +
+        '<span class="search-picker-option-meta">' + esc(docTypeName(doc.docType)) + '</span>' +
       '</span>' + (selected ? icon("check", 15) : "") + '</button>';
   });
   box.innerHTML = html;
@@ -516,24 +516,24 @@ function openReqDocPicker(){
   if(!anchor) return;
   var seq = ++reqDocPickerSeq;
   var el = document.createElement("div");
-  el.className = "menu req-doc-picker";
+  el.className = "menu search-picker";
   el.id = "reqDocPickerPop";
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-label", "选择关联文档");
   el._docs = [];
   el._module = null;
   el._loading = true;
-  el.innerHTML = '<div class="req-doc-picker-head">' +
-      '<div class="req-doc-search">' + icon("search", 15) +
+  el.innerHTML = '<div class="search-picker-head">' +
+      '<div class="search-picker-search">' + icon("search", 15) +
         '<input type="search" data-req-doc-search placeholder="搜索文档标题、项目或类型" aria-label="搜索关联文档" autocomplete="off" />' +
       '</div>' +
-      '<div class="req-doc-picker-tools">' +
+      '<div class="search-picker-tools">' +
         '<select data-req-doc-scope aria-label="按项目筛选文档"><option value="">全部项目</option></select>' +
-        '<span class="req-doc-picker-count" data-req-doc-count aria-live="polite"></span>' +
+        '<span class="search-picker-count" data-req-doc-count aria-live="polite"></span>' +
       '</div>' +
     '</div>' +
-    '<div class="req-doc-picker-results" data-req-doc-results></div>' +
-    '<div class="req-doc-picker-foot">无需先选项目；选择其他项目的文档时，会自动同步所属项目</div>';
+    '<div class="search-picker-results" data-req-doc-results></div>' +
+    '<div class="search-picker-foot">无需先选项目；选择其他项目的文档时，会自动同步所属项目</div>';
   reqDocPickerEl = el;
   anchor.setAttribute("aria-controls", el.id);
   UI.openPop(el, anchor, {
@@ -573,7 +573,7 @@ function openReqDocPicker(){
     var next = e.key === "ArrowDown" ? (index + 1) % buttons.length : (index <= 0 ? buttons.length - 1 : index - 1);
     buttons[next].focus();
   });
-  function boxButtons(){ return el.querySelectorAll(".req-doc-picker-clear,.req-doc-picker-option"); }
+  function boxButtons(){ return el.querySelectorAll(".search-picker-clear,.search-picker-option"); }
   el.addEventListener("click", function(e){
     var option = e.target.closest("[data-req-doc-id]");
     if(option){ chooseReqDoc(el, option.dataset.reqDocId); return; }

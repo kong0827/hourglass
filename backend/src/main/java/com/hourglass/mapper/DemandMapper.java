@@ -63,6 +63,9 @@ public interface DemandMapper {
 
     int update(Demand demand);
 
+    /** 仅更换所属项目与模块，避免把整行字段一起写回；仍按 revision 做 CAS。 */
+    int updateProject(Demand demand);
+
     int deleteById(@Param("workspaceId") String workspaceId, @Param("id") String id);
 
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);

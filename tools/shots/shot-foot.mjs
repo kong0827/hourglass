@@ -34,6 +34,8 @@ try {
   await b.nav(PREVIEW + '#/board', 900)
   await b.waitFor(`!!document.querySelector('.app-foot')`, { timeoutMs: 8000 })
   await b.eval(dropBanner)
+  /* 页脚默认由 __APP_CONFIG__.showFooter 关闭，本脚本专门验页脚布局，先强制打开 */
+  await b.eval(`document.documentElement.classList.remove('no-app-foot')`)
   await sleep(300)
 
   const geo = await b.eval(`(() => {
@@ -97,6 +99,7 @@ try {
     await b2.nav(PREVIEW + '#/board', 900)
     await b2.waitFor(`!!document.querySelector('.app-foot')`, { timeoutMs: 8000 })
     await b2.eval(dropBanner)
+    await b2.eval(`document.documentElement.classList.remove('no-app-foot')`)
     await b2.eval(`document.body.classList.add('side-rail')`)
     await sleep(300)
     const g2 = await b2.eval(`(() => {

@@ -78,8 +78,10 @@ public class TestPlanService {
         TestPlanView view = planMapper.selectViewById(id);
         Map<String, Object> out = new LinkedHashMap<String, Object>();
         out.put("plan", view);
-        out.put("passRate", view == null || view.getExecutedCount() == 0
-                ? null : Math.round(view.getPassedCount() * 1000.0 / view.getExecutedCount()) / 10.0);
+        /* 通过率分母排除跳过的用例：跳过表示本次不适用，不该拉低通过率 */
+        int rateBase = view == null ? 0 : view.getExecutedCount() - view.getSkippedCount();
+        out.put("passRate", rateBase <= 0
+                ? null : Math.round(view.getPassedCount() * 1000.0 / rateBase) / 10.0);
         return out;
     }
 
@@ -232,9 +234,7 @@ public class TestPlanService {
      */
     @Transactional
     public int batchRun(String userId, String workspaceId, String planId, PlanBatchRequest req) {
-        if (!CaseMeta.STATUS_PASSED.equals(req.getStatus())
-                && !CaseMeta.STATUS_FAILED.equals(req.getStatus())
-                && !CaseMeta.STATUS_BLOCKED.equals(req.getStatus())) {
+        if (!CaseMeta.isRunStatus(req.getStatus())) {
             throw AppException.badRequest("执行结果不合法");
         }
         TestPlan p = requirePlan(workspaceId, planId);

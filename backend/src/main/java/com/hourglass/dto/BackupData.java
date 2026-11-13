@@ -226,6 +226,7 @@ public class BackupData {
         private String reqId;
         private String title;
         private String precondition;
+        private String testData;
         /** 步骤 JSON 原文 */
         private String steps;
         private String latestStatus;

@@ -10,5 +10,7 @@ public class CaseStatsView {
     private int passed;
     private int failed;
     private int blocked;
+    /** 跳过/不适用：本次不执行的用例，不计入通过率分母 */
+    private int skipped;
     private int untested;
 }

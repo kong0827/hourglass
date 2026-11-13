@@ -29,6 +29,8 @@ public class TestPlanView {
     private int passedCount;
     private int failedCount;
     private int blockedCount;
+    /** 跳过/不适用：计入已执行，但不计入通过率分母 */
+    private int skippedCount;
     /** 计划内转出的缺陷数（口径：仍在计划内的用例、test_case_run.plan_id 关联、缺陷未进回收站，按缺陷去重） */
     private int defectCount;
 }

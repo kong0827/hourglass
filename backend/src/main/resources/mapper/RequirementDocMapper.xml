@@ -246,6 +246,11 @@
     WHERE <include refid="demandDocWhere"/>
   </select>
 
+  <select id="countLinksByDemand" resultType="int">
+    SELECT COUNT(*) FROM demand_doc_link
+    WHERE workspace_id = #{workspaceId} AND demand_id = #{demandId}
+  </select>
+
   <select id="selectDemandsByDoc" resultType="java.util.HashMap">
     SELECT dm.id AS id, dm.title AS title, dm.status AS status, dm.priority AS priority
     FROM demand_doc_link l
