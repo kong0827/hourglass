@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 对象全景</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-object">
+  <style>
+    #hg-object {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --surface-soft: #FAFBFC;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 48px 56px 46px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    #hg-object * { box-sizing: border-box; }
+
+    .om-head { text-align: center; margin-bottom: 30px; }
+    .om-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+    .om-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, #3B82F6 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .om-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .om-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .om-sub { font-size: 17px; color: var(--text-2); }
+
+    .band {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      padding: 22px 26px 24px; margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .band.blue { border-left: 4px solid var(--primary); }
+    .band.green { border-left: 4px solid var(--success); }
+    .band.plum { border-left: 4px solid var(--plum); }
+
+    .band-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .badge {
+      font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+      border: 1px solid transparent;
+    }
+    .blue .badge { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-fg); }
+    .green .badge { background: var(--success-soft); border-color: var(--success-border); color: var(--success-fg); }
+    .plum .badge { background: var(--plum-soft); border-color: var(--plum-border); color: var(--plum-fg); }
+    .band-title { font-size: 17px; font-weight: 700; }
+    .band-note { font-size: 13px; color: var(--text-3); margin-left: auto; }
+
+    .tree { display: flex; align-items: center; gap: 14px; }
+    .node {
+      background: var(--surface-soft); border: 1px solid var(--border-strong); border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .node.ws { width: 300px; border-color: var(--primary-border); background: var(--primary-soft); }
+    .node.proj { width: 200px; border-color: var(--primary-border); }
+    .node-name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .node-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+    .node .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+    .node .chips span {
+      font-size: 11px; color: var(--primary-fg); background: #fff;
+      border: 1px solid var(--primary-border); border-radius: 5px; padding: 2px 6px;
+    }
+    .arrow { font-size: 18px; color: var(--text-3); }
+    .children {
+      flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .child {
+      background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 9px;
+      padding: 9px 12px;
+    }
+    .child b { font-size: 12.5px; font-weight: 700; color: var(--text); display: block; }
+    .child span { font-size: 11px; color: var(--text-3); }
+    .child.work { background: var(--primary-soft); border-color: var(--primary-border); }
+    .child.work .types { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .child.work .types i {
+      font-style: normal; font-size: 10.5px; color: var(--primary-fg); background: #fff;
+      border: 1px solid var(--primary-border); border-radius: 4px; padding: 1px 5px;
+    }
+
+    .flow { display: flex; align-items: center; gap: 10px; }
+    .step {
+      flex: 1; background: var(--surface-soft); border: 1px solid var(--border-strong); border-radius: 11px;
+      padding: 12px 14px; text-align: center;
+    }
+    .step b { display: block; font-size: 14px; font-weight: 700; color: var(--text); }
+    .step span { font-size: 11.5px; color: var(--text-3); }
+    .step.core { background: var(--success-soft); border-color: var(--success-border); }
+    .step.core b { color: var(--success-fg); }
+    .step.evidence { background: #fff; border: 2px solid var(--success); }
+    .step.evidence b { color: var(--success-fg); }
+    .flow-arrow { color: var(--success); font-size: 17px; font-weight: 700; }
+    .flow-note {
+      margin-top: 12px; display: flex; align-items: center; gap: 8px;
+      background: var(--surface-soft); border: 1px dashed var(--border-strong); border-radius: 9px;
+      padding: 9px 14px; font-size: 12px; color: var(--text-2);
+    }
+    .flow-note b { color: var(--text); }
+    .flow-note .tag {
+      font-size: 11px; color: var(--success-fg); background: var(--success-soft);
+      border: 1px solid var(--success-border); border-radius: 999px; padding: 2px 8px;
+    }
+
+    .relations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .rel {
+      background: var(--surface-soft); border: 1px solid var(--border); border-left: 3px solid var(--plum);
+      border-radius: 9px; padding: 11px 14px;
+    }
+    .rel .pair { font-size: 13px; font-weight: 700; color: var(--text); }
+    .rel .pair em { font-style: normal; color: var(--plum-fg); }
+    .rel .desc { font-size: 11.5px; color: var(--text-3); margin-top: 3px; }
+
+    .om-foot {
+      margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px 22px; display: flex; align-items: center; gap: 26px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .foot-seg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); }
+    .foot-seg b { color: var(--text); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot.blue { background: var(--primary); }
+    .dot.green { background: var(--success); }
+    .dot.plum { background: var(--plum); }
+    .foot-concl { margin-left: auto; font-size: 12px; color: var(--text-3); }
+
+    @media (max-width: 760px) {
+      #hg-object { width: 100%; padding: 28px 20px; }
+      .tree, .flow, .om-foot { flex-wrap: wrap; }
+      .children, .relations { grid-template-columns: 1fr; }
+      .node.ws, .node.proj { width: 100%; }
+      .om-sub { font-size: 15px; }
+    }
+  </style>
+
+  <div class="om-head">
+    <div class="om-brand">
+      <div class="om-logo">⏳</div>
+      <div class="om-title">沙漏 <span>Hourglass</span></div>
+    </div>
+    <div class="om-sub">对象全景 · 组织线定归属，交付线留证据，聚合线只引用 · 三条线分开看，才不会把同名概念套错</div>
+  </div>
+
+  <section class="band blue">
+    <div class="band-head">
+      <span class="badge">组织线</span>
+      <span class="band-title">谁在哪做</span>
+      <span class="band-note">决定数据放在哪、谁能看、删除时清理什么</span>
+    </div>
+    <div class="tree">
+      <div class="node ws">
+        <div class="node-name">空间</div>
+        <div class="node-sub">协作与数据隔离边界</div>
+        <div class="chips">
+          <span>成员与角色</span><span>看板列</span><span>标签字典</span><span>公共分支</span><span>通知与 AI</span>
+        </div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node proj">
+        <div class="node-name">项目</div>
+        <div class="node-sub">交付单元 · 归属锚点</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="children">
+        <div class="child"><b>模块</b><span>项目级分类，不是层级节点</span></div>
+        <div class="child"><b>版本</b><span>项目内切分的交付批次</span></div>
+        <div class="child"><b>需求文档</b><span>项目内多级文档树</span></div>
+        <div class="child"><b>测试用例 / 测试计划</b><span>质量验证资产与执行容器</span></div>
+        <div class="child"><b>分支</b><span>也可为空间级公共分支</span></div>
+        <div class="child work">
+          <b>工作项</b>
+          <div class="types"><i>任务</i><i>用户故事</i><i>缺陷</i><i>史诗</i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band green">
+    <div class="band-head">
+      <span class="badge">交付线</span>
+      <span class="band-title">一件事怎样从想法变成证据</span>
+      <span class="band-note">记录做过什么、什么时候上线；发布记录不可变</span>
+    </div>
+    <div class="flow">
+      <div class="step"><b>需求池条目</b><span>评审 · 排期</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step core"><b>工作项</b><span>拆解 · 执行 · 计时</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step"><b>版本</b><span>计划与实际交付批次</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step evidence"><b>发布记录</b><span>生产事实 · 不可变 · 完成 ≠ 发布</span></div>
+    </div>
+    <div class="flow-note">
+      <span class="tag">提测支线</span>
+      <span><b>工作项 → 测试计划 / 用例执行 → 失败 → 缺陷工作项</b>，缺陷回到同一块看板继续流转</span>
+    </div>
+  </section>
+
+  <section class="band plum">
+    <div class="band-head">
+      <span class="badge">聚合线</span>
+      <span class="band-title">只引用，不改归属</span>
+      <span class="band-note">可留空、可多个；不带来额外权限</span>
+    </div>
+    <div class="relations">
+      <div class="rel"><div class="pair">史诗 <em>←</em> 工作项.所属史诗</div><div class="desc">同项目、不嵌套，用于归堆大颗粒需求</div></div>
+      <div class="rel"><div class="pair">需求池条目 <em>←</em> 工作项.关联需求</div><div class="desc">评审通过后建立，取消不连带删除工作项</div></div>
+      <div class="rel"><div class="pair">需求文档 <em>←</em> 工作项.关联文档</div><div class="desc">方案与执行对齐，可从文档派生草稿</div></div>
+      <div class="rel"><div class="pair">分支 <em>←</em> 工作项.所属分支</div><div class="desc">跟踪一条分支从开发到发布</div></div>
+      <div class="rel"><div class="pair">版本 <em>↔</em> 工作项</div><div class="desc">多对多；可关联多个计划版本，都须同项目</div></div>
+      <div class="rel"><div class="pair">发布计划 <em>↔</em> 版本</div><div class="desc">一个计划可跨版本、跨项目</div></div>
+    </div>
+  </section>
+
+  <div class="om-foot">
+    <div class="foot-seg"><span class="dot blue"></span><b>组织线</b> 决定放哪、谁能看、删什么</div>
+    <div class="foot-seg"><span class="dot green"></span><b>交付线</b> 记录做过什么、何时上线</div>
+    <div class="foot-seg"><span class="dot plum"></span><b>聚合线</b> 归堆、筛选与追溯</div>
+    <div class="foot-concl">归属是硬边界，关联只是软链接</div>
+  </div>
+</div>
+</body>
+</html>

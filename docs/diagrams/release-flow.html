@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 发布三步</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #F7F8FA; }
+</style>
+</head>
+<body>
+<div id="hg-release">
+  <style>
+    #hg-release {
+      --surface: #FFFFFF;
+      --surface-sunken: #F2F4F7;
+      --border: #E4E7EC;
+      --border-strong: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #667085;
+      --primary: #2563EB;
+      --primary-soft: #EFF4FF;
+      --primary-border: #BFD3FE;
+      --primary-fg: #1D4ED8;
+      --success: #12B76A;
+      --success-soft: #ECFDF3;
+      --success-border: #A6F4C5;
+      --success-fg: #067647;
+      --plum: #7A5AF8;
+      --plum-soft: #F4F3FF;
+      --plum-border: #D9D6FE;
+      --plum-fg: #5925DC;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #F7F8FA;
+      padding: 48px 56px 44px;
+      width: 1680px;
+      margin: 0 auto;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    #hg-release * { box-sizing: border-box; }
+
+    .rf-head { text-align: center; margin-bottom: 30px; }
+    .rf-brand { display: inline-flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+    .rf-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: linear-gradient(180deg, #3B82F6 0%, var(--primary-fg) 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 22px; font-weight: 700;
+      box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.28);
+    }
+    .rf-title { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .rf-title span { font-size: 18px; font-weight: 500; color: var(--text-3); margin-left: 10px; letter-spacing: 0; }
+    .rf-sub { font-size: 17px; color: var(--text-2); }
+
+    .steps { display: flex; align-items: stretch; gap: 12px; }
+    .card {
+      flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 20px 22px 22px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+      border-top: 4px solid var(--border-strong);
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card.plan { border-top-color: var(--primary); }
+    .card.preview { border-top-color: var(--plum); }
+    .card.record { border-top-color: var(--success); }
+
+    .card-head { display: flex; align-items: center; gap: 10px; }
+    .no {
+      width: 28px; height: 28px; border-radius: 50%; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700;
+    }
+    .plan .no { background: var(--primary-soft); color: var(--primary-fg); }
+    .preview .no { background: var(--plum-soft); color: var(--plum-fg); }
+    .record .no { background: var(--success-soft); color: var(--success-fg); }
+    .card-title { font-size: 20px; font-weight: 700; }
+    .card-sub { font-size: 12.5px; color: var(--text-3); margin-left: auto; }
+
+    .card p { font-size: 13.5px; color: var(--text-2); line-height: 1.65; }
+    .card p b { color: var(--text); font-weight: 700; }
+
+    .rows { display: flex; flex-direction: column; gap: 8px; }
+    .row {
+      display: flex; align-items: baseline; gap: 8px;
+      background: var(--surface-sunken); border-radius: 8px; padding: 8px 10px;
+    }
+    .row .k { flex: none; font-size: 12px; font-weight: 700; color: var(--text-3); }
+    .row .v { font-size: 12.5px; color: var(--text-2); }
+    .plan .row { background: var(--primary-soft); }
+    .preview .row { background: var(--plum-soft); }
+    .record .row { background: var(--success-soft); }
+
+    .state { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pill {
+      font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px;
+      border: 1px solid transparent;
+    }
+    .pill.draft { background: #fff; border-color: var(--border-strong); color: var(--text-2); }
+    .pill.ready { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .pill.done { background: var(--success); border-color: var(--success); color: #fff; }
+    .pill.fail { background: #fff; border-color: var(--border-strong); color: var(--text-2); }
+    .arrow { color: var(--text-3); font-size: 15px; }
+
+    .arrow-mid { align-self: center; flex: none; font-size: 26px; color: #98A2B3; }
+
+    .guards {
+      margin-top: 16px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 22px 20px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+    .guards-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .guard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .guard {
+      background: var(--surface-sunken); border-radius: 10px; padding: 11px 14px;
+      border-left: 3px solid var(--border-strong);
+    }
+    .guard b { display: block; font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .guard span { font-size: 12px; color: var(--text-3); line-height: 1.55; }
+    .guard.g1 { border-left-color: var(--success); }
+    .guard.g2 { border-left-color: var(--plum); }
+    .guard.g3 { border-left-color: var(--primary); }
+    .guard.g4 { border-left-color: var(--border-strong); }
+
+    .foot {
+      margin-top: 14px; text-align: center; font-size: 12.5px; color: var(--text-3);
+    }
+  </style>
+
+  <div class="rf-head">
+    <div class="rf-brand">
+      <div class="rf-logo">沙</div>
+      <div class="rf-title">发布三步<span>计划 → 预览 → 确认</span></div>
+    </div>
+    <div class="rf-sub">计划只是预期；只有成功的生产发布记录，才形成不可变的发布证据</div>
+  </div>
+
+  <div class="steps">
+    <div class="card plan">
+      <div class="card-head"><div class="no">1</div><div class="card-title">建计划</div><div class="card-sub">谁能发、发哪些</div></div>
+      <div class="rows">
+        <div class="row"><span class="k">覆盖版本</span><span class="v">可跨版本、跨项目，当前版本固定包含</span></div>
+        <div class="row"><span class="k">计划信息</span><span class="v">计划时间 · 负责人 · 环境 · 说明</span></div>
+        <div class="row"><span class="k">工作项范围</span><span class="v">取所选版本内容的并集</span></div>
+      </div>
+      <div class="state">
+        <span class="pill draft">草稿</span><span class="arrow">→</span>
+        <span class="pill ready">就绪</span>
+        <span class="v" style="font-size:12.5px;color:var(--text-3)">需时间、负责人与至少 1 个工作项</span>
+      </div>
+    </div>
+
+    <div class="arrow-mid">→</div>
+
+    <div class="card preview">
+      <div class="card-head"><div class="no">2</div><div class="card-title">预览核对</div><div class="card-sub">三个范围分开看</div></div>
+      <div class="rows">
+        <div class="row"><span class="k">版本内容</span><span class="v">这个版本计划交付的工作项</span></div>
+        <div class="row"><span class="k">计划范围</span><span class="v">本次计划选中的工作项</span></div>
+        <div class="row"><span class="k">实际范围</span><span class="v">本次真实要发布的工作项</span></div>
+      </div>
+      <p>未完成、晚于事件完成、需求已取消或跨范围的工作项都会<b>显式列出</b>，不静默排除。</p>
+    </div>
+
+    <div class="arrow-mid">→</div>
+
+    <div class="card record">
+      <div class="card-head"><div class="no">3</div><div class="card-title">确认留证</div><div class="card-sub">不可变记录</div></div>
+      <div class="rows">
+        <div class="row"><span class="k">失败</span><span class="v">只留一次不可变尝试</span></div>
+        <div class="row"><span class="k">成功</span><span class="v">记录 + 条目 + 快照</span></div>
+        <div class="row"><span class="k">归属</span><span class="v">实际记录始终归属当前版本</span></div>
+      </div>
+      <div class="state">
+        <span class="pill done">成功 · 发布证据</span>
+        <span class="pill fail">失败 · 仅尝试</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="guards">
+    <div class="guards-title">四条护栏</div>
+    <div class="guard-grid">
+      <div class="guard g1"><b>完成 ≠ 发布</b><span>test / staging、回滚与部分成功都不计为有效生产发布。</span></div>
+      <div class="guard g2"><b>计划完成有前提</b><span>覆盖的全部版本都完成成功生产部署 / 重部署，计划才完成。</span></div>
+      <div class="guard g3"><b>成功事实冻结内容</b><span>冻结的是内容关联，不锁任务完成、回退与计时。</span></div>
+      <div class="guard g4"><b>响应未知先查询</b><span>保留原请求与幂等键，先查记录再决定重试，不换键重发。</span></div>
+    </div>
+  </div>
+
+  <div class="foot">仅空间主 / 管理员或项目负责人且项目可写；任务负责人没有整版本发布权，发布人固定为当前登录者</div>
+</div>
+</body>
+</html>
