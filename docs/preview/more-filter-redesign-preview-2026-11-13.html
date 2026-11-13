@@ -75,7 +75,7 @@ svg{flex:0 0 auto}
 
 /* ---------- 模拟筛选栏 ---------- */
 .stage{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:0 12px 14px}
-.fbar{display:flex;align-items:center;gap:6px;height:48px;overflow:hidden;position:relative;z-index:10}
+.fbar{display:flex;align-items:center;gap:6px;min-height:48px;flex-wrap:wrap;padding:8px 0;position:relative;z-index:10}
 .fbar .grow{flex:1 1 auto}
 .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:550;color:var(--text-2);flex:0 0 auto;white-space:nowrap;transition:background var(--dur),border-color var(--dur),color var(--dur)}
 .chip:hover{background:var(--surface-hover);border-color:var(--border-strong);color:var(--text)}
@@ -403,8 +403,8 @@ function chipBtn(attr,val,label,count,on){
     label + ' <span class="n">' + count + '</span></button>';
 }
 function renderBefore(){
-  var pop = document.getElementById("popBefore");
-  var st = pop.scrollTop, q = (pop.querySelector("[data-mfverq]") || {value:""}).value;
+  var body = document.getElementById("popBeforeBody");
+  var st = body.scrollTop, q = (body.querySelector("[data-mfverq]") || {value:""}).value;
   var catChips = CATS.map(function(o){ return chipBtn("bcat",o.id,o.name,o.count,sel.cats.indexOf(o.id) !== -1); }).join("");
   var tagChips = TAGS().map(function(o){ return chipBtn("btag",o.id,o.name,o.count,sel.tags.indexOf(o.id) !== -1); }).join("");
   var typeChips = TYPES.map(function(o){ return chipBtn("btype",o.id,o.name,o.count,sel.types.indexOf(o.id) !== -1); }).join("");
@@ -417,7 +417,7 @@ function renderBefore(){
   var compChips = COMPLETIONS.map(function(o){
     return '<button class="chip" type="button" data-bcompletion="' + o[0] + '" aria-pressed="' + ((sel.completion || "") === o[0]) + '">' + o[1] + '</button>';
   }).join("");
-  pop.innerHTML =
+  body.innerHTML =
     '<div class="menu-title">更多筛选</div>' +
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">模块</div><div class="mf-chips">' + catChips + '</div></div>' +
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">标签</div><div class="mf-chips">' + tagChips + '</div></div>' +
@@ -433,27 +433,26 @@ function renderBefore(){
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">完成情况</div><div class="mf-chips">' + compChips + '</div></div>' +
     '<div class="menu-field"><div class="group-label" style="margin-bottom:6px">其他</div><div class="mf-chips">' +
       '<button class="chip alert-today" type="button" data-bblocked aria-pressed="' + sel.blocked + '"><i class="cdot"></i>仅看被阻塞</button></div></div>' +
-    '<div class="menu-foot"><button class="btn" type="button" data-breset>重置筛选</button></div>' +
-    '<div class="scroll-hint" data-scrolldown><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4.5v11M5.5 11 10 15.5 14.5 11"/></svg>整体滚动：下面还有日期 / 完成情况 / 其他</div>';
-  pop.scrollTop = st;
+    '<div class="menu-foot"><button class="btn" type="button" data-breset>重置筛选</button></div>';
+  body.scrollTop = st;
   applyBeforeVersionSearch();
   updateScrollHint();
 }
 function applyBeforeVersionSearch(){
-  var pop = document.getElementById("popBefore");
-  var input = pop.querySelector("[data-mfverq]"); if(!input) return;
+  var body = document.getElementById("popBeforeBody");
+  var input = body.querySelector("[data-mfverq]"); if(!input) return;
   var q = input.value.trim().toLowerCase(), shown = 0;
-  pop.querySelectorAll("[data-bver]").forEach(function(b){
+  body.querySelectorAll("[data-bver]").forEach(function(b){
     var hit = !q || b.dataset.bver.toLowerCase().indexOf(q) !== -1;
     b.hidden = !hit; if(hit) shown++;
   });
-  var empty = pop.querySelector("[data-mfverempty]");
+  var empty = body.querySelector("[data-mfverempty]");
   if(empty) empty.hidden = shown > 0;
 }
 function updateScrollHint(){
-  var pop = document.getElementById("popBefore");
-  var hint = pop.querySelector("[data-scrolldown]"); if(!hint) return;
-  hint.hidden = pop.scrollHeight <= pop.clientHeight + 8;
+  var body = document.getElementById("popBeforeBody");
+  var hint = document.getElementById("popBefore").querySelector("[data-scrolldown]");
+  if(hint) hint.hidden = body.scrollHeight <= body.clientHeight + 8;
 }
 
 /* ==================== 渲染：改后 ==================== */
@@ -607,7 +606,7 @@ document.getElementById("popBefore").addEventListener("input", function(e){
   if(e.target.matches("[data-mfverq]")) applyBeforeVersionSearch();
   if(e.target.matches("[data-bdate]")){ sel[e.target.dataset.bdate] = e.target.value; sync(); }
 });
-document.getElementById("popBefore").addEventListener("scroll", updateScrollHint);
+document.getElementById("popBeforeBody").addEventListener("scroll", updateScrollHint);
 
 document.getElementById("popAfter").addEventListener("click", function(e){
   var t = e.target;
@@ -707,6 +706,10 @@ document.getElementById("btnResetAll").addEventListener("click", function(){ res
   if(qs.get("theme") === "dark"){
     document.body.dataset.theme = "dark";
     document.getElementById("btnTheme").setAttribute("aria-pressed","true");
+  }
+  if(qs.get("scale") === "stress"){
+    scale = "stress";
+    document.querySelectorAll("[data-scale]").forEach(function(x){ x.setAttribute("aria-selected", String(x.dataset.scale === "stress")); });
   }
   if(qs.get("pane")){
     afterPane = qs.get("pane");
