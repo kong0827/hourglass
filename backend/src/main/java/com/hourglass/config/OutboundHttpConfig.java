@@ -63,4 +63,14 @@ public class OutboundHttpConfig {
         f.setReadTimeout(3000);
         return new RestTemplate(f);
     }
+
+    /** GitLab 只读同步：连接 5s / 读 30s；分页可能较大，但不应无限等待 */
+    @Bean
+    public RestTemplate gitRestTemplate(CloseableHttpClient outboundHttpClient) {
+        HttpComponentsClientHttpRequestFactory f =
+                new HttpComponentsClientHttpRequestFactory(outboundHttpClient);
+        f.setConnectTimeout(5000);
+        f.setReadTimeout(30000);
+        return new RestTemplate(f);
+    }
 }

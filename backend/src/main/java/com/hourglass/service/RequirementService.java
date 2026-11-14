@@ -56,6 +56,11 @@ public class RequirementService {
     /** 删项目时清掉邀请上对它的预分配 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.hourglass.mapper.InviteProjectGrantMapper inviteGrantMapper;
+    /** 项目仓库绑定与分支改名记录随项目清理（字段注入避免改动既有构造签名） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.ProjectRepoMapper repoMapper;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.DevBranchAliasMapper branchAliasMapper;
 
     public RequirementService(RequirementMapper reqMapper, TaskMapper taskMapper, TaskLogMapper logMapper,
                               ActivityService activityService, WorkActivityService workActivityService,
@@ -425,9 +430,9 @@ public class RequirementService {
         /* 编号是项目内序号：解绑后这些工作项归入「无项目」桶，接着该桶当前最大号往下取，
            否则与已有无项目工作项撞 uk_task_item_no */
         taskMapper.clearReq(workspaceId, id, taskMapper.selectNextItemNo(workspaceId, null) - 1);
-        /* 直接归属该项目的分支退回空间级公共分支（分支本身保留）；与公共分支重名的先改名避免唯一键冲突 */
-        branchMapper.renameClashesBeforeDetach(workspaceId, id);
-        branchMapper.clearReqIdByReq(workspaceId, id);
+        /* 项目分支转为人工墓碑（保留分支本身）：先解决同名冲突，再解绑仓库、退回空间级 */
+        detachProjectBranches(workspaceId, id);
+        dropProjectRepos(workspaceId, id);
         /* 项目没了，它下面的需求也是孤儿，一起清掉（需求强归属项目）；同时解绑任务的 req_doc_id */
         docService.deleteByReq(workspaceId, id);
         /* 测试用例同样强归属项目：用例与执行流水一并清理 */
@@ -458,5 +463,83 @@ public class RequirementService {
         result.setDemands(demands);
         result.setCases(cases);
         return result;
+    }
+
+    /**
+     * 项目删除：分支不物理删除，转成人工墓碑（repo_id/source 归零，远程事实清空）。
+     * 同一项目内多个仓库可能有同名分支，退回空间级后与已有公共分支也会撞名，
+     * 所以先按确定性顺序改名，再统一解绑。
+     */
+    private void detachProjectBranches(String workspaceId, String reqId) {
+        List<com.hourglass.entity.DevBranch> namespace = branchMapper.selectManualNamespace(workspaceId, reqId);
+        java.util.Set<String> taken = new java.util.HashSet<String>();
+        List<com.hourglass.entity.DevBranch> affected = new ArrayList<com.hourglass.entity.DevBranch>();
+        for (com.hourglass.entity.DevBranch b : namespace) {
+            if (reqId.equals(b.getReqId())) {
+                affected.add(b);
+            } else {
+                taken.add(b.getName());
+            }
+        }
+        affected.sort((a, c) -> {
+            /* 手工分支优先保留原名，其次仓库分支按 id 稳定排序 */
+            boolean am = a.getRepoId() == null;
+            boolean cm = c.getRepoId() == null;
+            if (am != cm) {
+                return am ? -1 : 1;
+            }
+            return String.valueOf(a.getId()).compareTo(String.valueOf(c.getId()));
+        });
+        for (com.hourglass.entity.DevBranch b : affected) {
+            if (!taken.contains(b.getName())) {
+                taken.add(b.getName());
+                continue;
+            }
+            String suffix = b.getRepoId() == null ? shortSuffix(reqId) : shortSuffix(b.getRepoId());
+            String candidate = uniqueBranchName(b.getName(), suffix, taken);
+            branchMapper.renameById(workspaceId, b.getId(), candidate);
+            taken.add(candidate);
+        }
+        branchMapper.detachByReq(workspaceId, reqId);
+        branchMapper.clearReqIdByReq(workspaceId, reqId);
+    }
+
+    private void dropProjectRepos(String workspaceId, String reqId) {
+        if (repoMapper == null) {
+            return;
+        }
+        List<com.hourglass.entity.ProjectRepo> repos = repoMapper.selectByReq(workspaceId, reqId);
+        if (branchAliasMapper != null) {
+            for (com.hourglass.entity.ProjectRepo repo : repos) {
+                branchAliasMapper.deleteByRepo(workspaceId, repo.getId());
+            }
+        }
+        repoMapper.deleteByReq(workspaceId, reqId);
+    }
+
+    private static String uniqueBranchName(String name, String suffix, java.util.Set<String> taken) {
+        String base = name == null ? "branch" : name;
+        String candidate = base;
+        if (taken.contains(candidate)) {
+            int room = 80 - suffix.length() - 1;
+            String prefix = base.length() > room ? base.substring(0, Math.max(1, room)) : base;
+            candidate = prefix + "-" + suffix;
+        }
+        int n = 2;
+        while (taken.contains(candidate)) {
+            String tail = "-" + n;
+            int room = 80 - tail.length();
+            candidate = (base.length() > room ? base.substring(0, Math.max(1, room)) : base) + tail;
+            n++;
+        }
+        return candidate;
+    }
+
+    /** 仓库/项目 ID 的短后缀：取末 6 位，足以在空间内区分来源 */
+    private static String shortSuffix(String id) {
+        if (id == null || id.isEmpty()) {
+            return "x";
+        }
+        return id.length() <= 6 ? id : id.substring(id.length() - 6);
     }
 }

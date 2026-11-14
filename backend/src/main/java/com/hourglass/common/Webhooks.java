@@ -15,6 +15,14 @@ public final class Webhooks {
 
     /** 校验通过返回 null，否则返回中文错误说明；空值视为未配置（通过） */
     public static String check(String raw) {
+        return check(raw, false);
+    }
+
+    /**
+     * @param allowPrivate 允许解析到内网/本机地址（仅 GitLab 自建内网部署使用，
+     *                     由 {@code app.git.allow-private} 显式开启）
+     */
+    public static String check(String raw, boolean allowPrivate) {
         String url = Texts.trimToNull(raw);
         if (url == null) {
             return null;
@@ -39,9 +47,12 @@ public final class Webhooks {
         } catch (UnknownHostException e) {
             return "推送地址无法解析：" + host;
         }
+        if (allowPrivate) {
+            return null;
+        }
         for (InetAddress addr : addrs) {
             if (isBlocked(addr)) {
-                return "推送地址不能指向本机或内网地址：" + host;
+                return "地址不能指向本机或内网地址：" + host;
             }
         }
         return null;

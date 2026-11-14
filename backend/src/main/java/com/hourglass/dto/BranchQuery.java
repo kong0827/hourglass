@@ -15,6 +15,13 @@ public class BranchQuery {
     /** 直接归属该项目的分支 + 归属于该项目（或尚未关联任务）的公共分支 */
     private String projectId;
     private String status;
+    /**
+     * 生命周期：open / done / canceled / ignored / pending / all（空 = 不限）。
+     * 服务端未传时保持旧行为（全部），分支页显式传 open。
+     */
+    private String outcome;
+    /** 非空时只保留来源仓库匹配的分支 */
+    private String repoId;
     /** 非空时按负责人账号过滤（owner_user_id）；__none__ 表示未指派（账号与姓名都为空） */
     private String ownerUserId;
     /** 非空时只保留影响版本包含该版本的分支（task → version_task 推导） */

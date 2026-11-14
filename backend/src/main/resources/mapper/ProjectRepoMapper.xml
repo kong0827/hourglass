@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.ProjectRepoMapper">
+
+  <sql id="cols">
+    r.id, r.workspace_id, r.req_id, r.name, r.provider, r.repo_url, r.project_ref, r.default_target,
+    r.token_cipher, r.import_policy, r.sync_enabled, r.last_sync_at, r.last_sync_status,
+    r.last_sync_error, r.last_sync_summary, r.created_by, r.created_at, r.updated_at,
+    req.name AS req_name
+  </sql>
+
+  <select id="selectByWorkspace" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+    ORDER BY r.created_at, r.id
+  </select>
+
+  <select id="selectVisible" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId}
+    <if test="viewerId != null and viewerId != ''">
+      AND NOT EXISTS (SELECT 1 FROM project_member pm
+                      WHERE pm.workspace_id = r.workspace_id
+                        AND pm.project_id = r.req_id
+                        AND pm.user_id = #{viewerId}
+                        AND pm.access = 'none')
+    </if>
+    ORDER BY r.created_at, r.id
+  </select>
+
+  <select id="selectById" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.id = #{id}
+  </select>
+
+  <select id="selectByWorkspaceAndUrl" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND r.repo_url = #{repoUrl} AND r.project_ref = #{projectRef}
+  </select>
+
+  <select id="selectByReq" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.workspace_id = #{workspaceId} AND r.req_id = #{reqId}
+    ORDER BY r.created_at, r.id
+  </select>
+
+  <select id="selectDue" resultType="ProjectRepo">
+    SELECT <include refid="cols"/>
+    FROM project_repo r
+    LEFT JOIN requirement req ON req.id = r.req_id AND req.workspace_id = r.workspace_id
+    WHERE r.sync_enabled = 1
+      AND (r.last_sync_at IS NULL OR r.last_sync_at &lt;= #{before})
+    ORDER BY r.last_sync_at IS NOT NULL, r.last_sync_at, r.id
+    LIMIT #{limit}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO project_repo (id, workspace_id, req_id, name, provider, repo_url, project_ref,
+                              default_target, token_cipher, import_policy, sync_enabled,
+                              last_sync_at, last_sync_status, last_sync_error, last_sync_summary,
+                              created_by, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{provider}, #{repoUrl}, #{projectRef},
+            #{defaultTarget}, #{tokenCipher}, #{importPolicy}, #{syncEnabled},
+            #{lastSyncAt}, #{lastSyncStatus}, #{lastSyncError}, #{lastSyncSummary},
+            #{createdBy}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <update id="update">
+    UPDATE project_repo SET
+      req_id         = #{reqId},
+      name           = #{name},
+      provider       = #{provider},
+      repo_url       = #{repoUrl},
+      project_ref    = #{projectRef},
+      default_target = #{defaultTarget},
+      token_cipher   = #{tokenCipher},
+      import_policy  = #{importPolicy},
+      sync_enabled   = #{syncEnabled},
+      updated_at     = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateEnabled">
+    UPDATE project_repo SET sync_enabled = #{enabled}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateSyncResult">
+    UPDATE project_repo SET
+      last_sync_at      = #{at},
+      last_sync_status  = #{status},
+      last_sync_error   = #{error},
+      last_sync_summary = #{summary},
+      updated_at        = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="clearToken">
+    UPDATE project_repo SET token_cipher = NULL, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <delete id="deleteById">
+    DELETE FROM project_repo WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE FROM project_repo WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM project_repo WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

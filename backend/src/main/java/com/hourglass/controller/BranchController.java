@@ -8,6 +8,7 @@ import com.hourglass.entity.DevBranch;
 import com.hourglass.entity.DevBranchLog;
 import com.hourglass.entity.Workspace;
 import com.hourglass.service.BranchService;
+import com.hourglass.service.GitSyncService;
 import com.hourglass.service.WorkspaceService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,10 +33,13 @@ import java.util.List;
 public class BranchController {
 
     private final BranchService branchService;
+    private final GitSyncService gitSyncService;
     private final WorkspaceService workspaceService;
 
-    public BranchController(BranchService branchService, WorkspaceService workspaceService) {
+    public BranchController(BranchService branchService, GitSyncService gitSyncService,
+                            WorkspaceService workspaceService) {
         this.branchService = branchService;
+        this.gitSyncService = gitSyncService;
         this.workspaceService = workspaceService;
     }
 
@@ -45,6 +49,8 @@ public class BranchController {
                                                           @RequestParam(required = false) String project,
                                                           @RequestParam(required = false) String ownerUserId,
                                                           @RequestParam(required = false) String version,
+                                                          @RequestParam(required = false) String repo,
+                                                          @RequestParam(required = false) String outcome,
                                                           @RequestParam(required = false) String q,
                                                           @RequestParam(required = false) Integer limit) {
         String userId = CurrentUser.id();
@@ -53,6 +59,8 @@ public class BranchController {
         query.setProjectId(project);
         query.setOwnerUserId(ownerUserId);
         query.setVersionId(version);
+        query.setRepoId(repo);
+        query.setOutcome(outcome);
         query.setQ(q);
         if (limit != null) {
             query.setLimit(limit);
@@ -67,6 +75,8 @@ public class BranchController {
                                                         @RequestParam(required = false) String project,
                                                         @RequestParam(required = false) String ownerUserId,
                                                         @RequestParam(required = false) String version,
+                                                        @RequestParam(required = false) String repo,
+                                                        @RequestParam(required = false) String outcome,
                                                         @RequestParam(required = false) String q,
                                                         @RequestParam(required = false) Integer offset,
                                                         @RequestParam(required = false) Integer limit) {
@@ -77,6 +87,8 @@ public class BranchController {
         query.setProjectId(project);
         query.setOwnerUserId(ownerUserId);
         query.setVersionId(version);
+        query.setRepoId(repo);
+        query.setOutcome(outcome);
         query.setQ(q);
         if (offset != null) {
             query.setOffset(offset);
@@ -108,6 +120,48 @@ public class BranchController {
         String userId = CurrentUser.id();
         Workspace ws = workspaceService.resolve(userId, workspace);
         return ApiResult.ok(branchService.versions(ws.getId(), userId, project));
+    }
+
+    /** 待确认队列：按仓库分组，条数与「待确认」chips 同口径 */
+    @GetMapping("/api/branches/pending")
+    public ApiResult<List<com.hourglass.dto.BranchPendingGroup>> pending(
+            @RequestParam(required = false) String workspace,
+            @RequestParam(required = false) String project,
+            @RequestParam(required = false) String repo,
+            @RequestParam(required = false) String ownerUserId,
+            @RequestParam(required = false) String version,
+            @RequestParam(required = false) String q) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        com.hourglass.dto.BranchQuery query = new com.hourglass.dto.BranchQuery();
+        query.setProjectId(project);
+        query.setRepoId(repo);
+        query.setOwnerUserId(ownerUserId);
+        query.setVersionId(version);
+        query.setQ(q);
+        return ApiResult.ok(gitSyncService.pendingGroups(ws.getId(), userId, query));
+    }
+
+    /** 人工判定：done / canceled / ignored；decision 为空串 = 撤销判定并按远程事实重算 */
+    @PostMapping("/api/branches/{id}/outcome")
+    public ApiResult<DevBranch> decide(@PathVariable String id,
+                                       @Valid @RequestBody com.hourglass.dto.BranchOutcomeRequest req,
+                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
+        return ApiResult.ok(gitSyncService.decide(userId, ws.getId(), id, req));
+    }
+
+    /** 批量人工判定：逐条校验项目写权限，单条失败不中断整批，返回逐条结果 */
+    @PostMapping("/api/branches/outcomes/batch")
+    public ApiResult<List<com.hourglass.dto.BranchOutcomeResult>> decideBatch(
+            @Valid @RequestBody com.hourglass.dto.BranchOutcomeBatchRequest req,
+            @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        workspaceService.requireWriter(userId, ws.getId());
+        return ApiResult.ok(gitSyncService.decideBatch(userId, ws.getId(), req));
     }
 
     @GetMapping("/api/branches/{id}")

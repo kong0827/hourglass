@@ -96,6 +96,10 @@ app:
     crypto-key: ${AI_CRYPTO_KEY:hourglass-local-ai-key-change-me}
     # 默认禁止自定义 AI 地址访问内网/回环；本地 Ollama 或局域网中转需显式置 true
     allow-private-network: ${AI_ALLOW_PRIVATE_NETWORK:false}
+  git:
+    # GitLab 仓库地址默认同样禁止指向本机/内网（SSRF 防护）；
+    # 内网自建 GitLab 需显式置 true，开启前请确认该地址可信
+    allow-private: ${GIT_ALLOW_PRIVATE:false}
   notification:
     # 站内通知保留天数；每天 03:20 清理超期记录
     retain-days: ${NOTIFICATION_RETAIN_DAYS:90}

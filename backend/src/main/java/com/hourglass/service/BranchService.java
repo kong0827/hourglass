@@ -51,6 +51,14 @@ public class BranchService {
     public static final String ST_MERGING = "merging";
     public static final String ST_RELEASED = "released";
 
+    public static final String OUTCOME_OPEN = "open";
+    public static final String OUTCOME_DONE = "done";
+    public static final String OUTCOME_CANCELED = "canceled";
+    public static final String OUTCOME_IGNORED = "ignored";
+    public static final String OUTCOME_PENDING = "pending";
+    private static final java.util.Set<String> OUTCOMES = new java.util.HashSet<String>(java.util.Arrays.asList(
+            OUTCOME_OPEN, OUTCOME_DONE, OUTCOME_CANCELED, OUTCOME_IGNORED, OUTCOME_PENDING));
+
     /** 状态中文名（日志文案用） */
     private static final Map<String, String> LABELS = new LinkedHashMap<String, String>();
 
@@ -160,6 +168,7 @@ public class BranchService {
         BranchPage page = new BranchPage();
         page.setStatus(q.getStatus());
         page.setCounts(counts);
+        page.setOutcomeCounts(outcomeCountsOf(q));
         page.setAvgCycleDays(avgCycleDays(q));
         int total = q.getStatus() != null ? countOf(counts, q.getStatus()) : sumCounts(counts);
         page.setTotal(total);
@@ -181,6 +190,7 @@ public class BranchService {
         Map<String, Integer> counts = countsOf(base);
         BranchBoard board = new BranchBoard();
         board.setCounts(counts);
+        board.setOutcomeCounts(outcomeCountsOf(base));
         board.setAvgCycleDays(avgCycleDays(base));
         List<DevBranch> all = new ArrayList<DevBranch>();
         for (String status : LABELS.keySet()) {
@@ -233,10 +243,14 @@ public class BranchService {
         q.setProjectId(Texts.trimToNull(q.getProjectId()));
         q.setOwnerUserId(Texts.trimToNull(q.getOwnerUserId()));
         q.setVersionId(Texts.trimToNull(q.getVersionId()));
+        q.setRepoId(Texts.trimToNull(q.getRepoId()));
         q.setQ(Texts.trimToNull(q.getQ()));
         if (q.getStatus() != null && !LABELS.containsKey(q.getStatus())) {
             q.setStatus(null);
         }
+        /* outcome 空 = 不限（兼容旧调用方）；all 也按不限处理；非法值直接忽略 */
+        String outcome = Texts.trimToNull(q.getOutcome());
+        q.setOutcome(outcome == null || "all".equals(outcome) || !OUTCOMES.contains(outcome) ? null : outcome);
         q.setOffset(Math.max(0, q.getOffset()));
         q.setLimit(Math.max(1, Math.min(100, q.getLimit())));
         return q;
@@ -258,9 +272,29 @@ public class BranchService {
         return counts;
     }
 
+    private Map<String, Integer> outcomeCountsOf(BranchQuery q) {
+        Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+        for (String outcome : new String[]{OUTCOME_OPEN, OUTCOME_DONE, OUTCOME_CANCELED,
+                OUTCOME_IGNORED, OUTCOME_PENDING}) {
+            counts.put(outcome, 0);
+        }
+        /* chips 计数要忽略当前 outcome 选择，否则其它格子永远是 0 */
+        BranchQuery cq = copyOf(q);
+        cq.setOutcome(null);
+        for (Map<String, Object> row : branchMapper.countGroupByOutcome(cq)) {
+            String outcome = String.valueOf(row.get("outcome"));
+            int cnt = ((Number) row.get("cnt")).intValue();
+            counts.put(outcome, cnt);
+        }
+        counts.put("all", sumCounts(counts));
+        return counts;
+    }
+
     private Double avgCycleDays(BranchQuery q) {
         BranchQuery cq = copyOf(q);
         cq.setStatus(ST_RELEASED);
+        /* 平均发布周期按状态统计，不跟随生命周期筛选（否则「只看进行中」会漏掉已判定完成的发布） */
+        cq.setOutcome(null);
         return branchMapper.selectAvgCycleDays(cq);
     }
 
@@ -286,6 +320,8 @@ public class BranchService {
         q.setProjectId(src.getProjectId());
         q.setOwnerUserId(src.getOwnerUserId());
         q.setVersionId(src.getVersionId());
+        q.setRepoId(src.getRepoId());
+        q.setOutcome(src.getOutcome());
         q.setStatus(src.getStatus());
         q.setQ(src.getQ());
         q.setOffset(src.getOffset());
@@ -312,6 +348,10 @@ public class BranchService {
         DevBranch stats = branchMapper.selectTaskStats(workspaceId, viewerId, b.getId());
         b.setTaskCount(stats != null && stats.getTaskCount() != null ? stats.getTaskCount() : 0);
         b.setDoneCount(stats != null && stats.getDoneCount() != null ? stats.getDoneCount() : 0);
+        if (b.getDecidedByUserId() != null) {
+            AppUser decider = userMapper.selectById(b.getDecidedByUserId());
+            b.setDecidedByName(decider == null ? null : decider.getDisplayName());
+        }
         return b;
     }
 
@@ -442,6 +482,15 @@ public class BranchService {
         String name = req.getName() == null ? b.getName() : normalizeName(req.getName());
         String reqId = req.getReqId() == null ? b.getReqId() : normalizeReqId(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
+        /* 同步分支的名称/归属来自仓库：本地改名会让下一次同步把它判成「消失 + 新分支」 */
+        if (b.getRepoId() != null) {
+            if (!name.equals(b.getName())) {
+                throw AppException.badRequest("同步分支的名称来自仓库，不能手动改名");
+            }
+            if (!eq(reqId, b.getReqId())) {
+                throw AppException.badRequest("同步分支的所属项目来自仓库绑定，不能手动调整");
+            }
+        }
         if ((!name.equals(b.getName()) || !eq(reqId, b.getReqId()))
                 && branchMapper.countByName(workspaceId, name, reqId, id) > 0) {
             throw AppException.badRequest("分支「" + name + "」已存在");
@@ -633,6 +682,7 @@ public class BranchService {
         AppUser u = userMapper.selectById(userId);
         l.setActorName(u == null ? null : Texts.cut(u.getDisplayName(), 32));
         l.setActorUserId(userId);
+        l.setActorType("user");
         branchMapper.insertLog(l);
     }
 

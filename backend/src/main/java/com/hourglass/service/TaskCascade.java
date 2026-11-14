@@ -159,6 +159,13 @@ public class TaskCascade {
     /** 自定义分组是引用关系：用例清空后成员行必须摘掉，整空间删除时分组本体一起清 */
     private final com.hourglass.mapper.CaseSetMapper caseSetMapper;
 
+    /* 仓库绑定/改名记录不在任务链路内，只在整空间清空或覆盖导入清分支时一并清理；
+       测试直接 new TaskCascade 时允许未注入 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.ProjectRepoMapper repoMapper;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.hourglass.mapper.DevBranchAliasMapper branchAliasMapper;
+
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
                        AppNotificationMapper appNotificationMapper,
@@ -412,9 +419,18 @@ public class TaskCascade {
         appNotificationMapper.deleteAllByWorkspace(workspaceId);
     }
 
+    /** 仓库绑定与分支改名记录：先删改名记录，再删绑定 */
+    private void deleteRepoBindings(String workspaceId) {
+        if (branchAliasMapper != null) {
+            branchAliasMapper.deleteByWorkspace(workspaceId);
+        }
+        if (repoMapper != null) {
+            repoMapper.deleteByWorkspace(workspaceId);
+        }
+    }
+
     /** 清空空间：共用任务数据 + 操作时间线 + 附件（含文件）+ 需求文档（含历史快照）+ 分支时间线 + 版本/需求池 */
-    public void wipeWorkspaceData(String workspaceId) {
-        assertWorkspaceCanBeRebuilt(workspaceId);
+    public void wipeWorkspaceData(String workspaceId) {        assertWorkspaceCanBeRebuilt(workspaceId);
         logMapper.deleteAllByWorkspace(workspaceId);
         /* 测试计划与用例模块强归属项目：整空间删除时一起清，避免留下指向已删项目/用例的孤儿行 */
         testCaseMapper.deletePlanCasesByWorkspace(workspaceId);
@@ -430,6 +446,7 @@ public class TaskCascade {
         reqDocShareMapper.deleteByWorkspace(workspaceId);
         requirementDocMapper.deleteAllByWorkspace(workspaceId);
         attachmentService.deleteAllWithFiles(workspaceId);
+        deleteRepoBindings(workspaceId);
         devBranchMapper.deleteLogsByWorkspace(workspaceId);
         devBranchMapper.deleteByWorkspace(workspaceId);
         versionMapper.deleteByWorkspace(workspaceId);
@@ -462,6 +479,8 @@ public class TaskCascade {
             requirementDocMapper.deleteAllByWorkspace(workspaceId);
         }
         if (clearBranches) {
+            /* 备份格式不含仓库绑定：清分支时一并清仓库与改名记录，避免下次同步又把分支导回来 */
+            deleteRepoBindings(workspaceId);
             devBranchMapper.deleteLogsByWorkspace(workspaceId);
             devBranchMapper.deleteByWorkspace(workspaceId);
         }

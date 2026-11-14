@@ -349,12 +349,34 @@ CREATE TABLE `dev_branch` (
   `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
   `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '所属项目ID（requirement.id），空=空间级公共分支',
   `req_key` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (ifnull(`req_id`,_utf8mb4'')) STORED COMMENT '唯一性归一化：空间级分支用空串代替 NULL',
+  `repo_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '来源仓库ID（project_repo.id），空=手工/空间级',
+  `source` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual' COMMENT '来源：manual 手工 / git 同步',
   `name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支名（如 feature/login，允许 / . - _ 等字符）',
   `status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'dev' COMMENT '状态：dev=开发中 / testing=待测试 / merging=待合并 / released=已发布',
   `owner` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人显示名',
   `owner_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人账号ID',
   `target_branch` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '目标分支（要合到哪，如 main / release/1.2）',
   `note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
+  `remote_state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '远程状态：active 存在 / deleted 已删除；人工分支为空',
+  `remote_head_sha` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '远程 HEAD 提交 SHA',
+  `remote_head_at` datetime DEFAULT NULL COMMENT '远程 HEAD 提交时间',
+  `remote_head_author` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '远程 HEAD 提交作者',
+  `last_seen_at` datetime DEFAULT NULL COMMENT '最近一次在远程列表中看到的时间',
+  `last_seen_head_sha` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近一次看到时的 HEAD SHA（改名识别用）',
+  `merged` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否有已合并 MR 证据',
+  `merged_into` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '合并目标分支',
+  `merged_at` datetime DEFAULT NULL COMMENT '合并时间',
+  `merge_evidence` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '合并证据（MR 编号/目标/链接摘要）',
+  `decision` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '人工判定：done / canceled / ignored；空=未判定',
+  `decision_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '人工判定理由（取消/忽略必填，≤32 字）',
+  `decision_note` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '人工判定备注',
+  `decided_by_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '判定人账号ID',
+  `decided_at` datetime DEFAULT NULL COMMENT '判定时间',
+  `outcome` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open' COMMENT '生命周期：open / done / canceled / ignored / pending',
+  `pending_reason` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '待确认原因：disappeared / closed_new_commit / name_conflict',
+  `sync_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近同步状态：ok / error',
+  `sync_error` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近同步失败原因',
+  `owner_key` varchar(96) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (ifnull(`repo_id`, concat('m:', ifnull(`req_id`, '')))) STORED COMMENT '唯一性归一化：仓库分支用 repo_id，手工分支用 m:req_id',
   `dev_at` datetime DEFAULT NULL COMMENT '进入「开发中」的时间',
   `test_at` datetime DEFAULT NULL COMMENT '进入「待测试」的时间',
   `merge_at` datetime DEFAULT NULL COMMENT '进入「待合并」的时间',
@@ -363,10 +385,12 @@ CREATE TABLE `dev_branch` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ws_req_name` (`workspace_id`,`req_key`,`name`),
+  UNIQUE KEY `uk_ws_owner_name` (`workspace_id`,`owner_key`,`name`),
   KEY `idx_ws_status` (`workspace_id`,`status`),
   KEY `idx_ws_updated` (`workspace_id`,`updated_at`),
-  KEY `idx_branch_req` (`workspace_id`,`req_id`)
+  KEY `idx_branch_req` (`workspace_id`,`req_id`),
+  KEY `idx_ws_outcome` (`workspace_id`,`outcome`),
+  KEY `idx_ws_repo_state` (`workspace_id`,`repo_id`,`remote_state`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支（空间级分支池，可归属项目）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `dev_branch_log`;
@@ -382,11 +406,56 @@ CREATE TABLE `dev_branch_log` (
   `detail` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '补充说明（状态备注 / 改了哪些字段）',
   `actor_name` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人显示名',
   `actor_user_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '操作人账号ID',
+  `actor_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'user' COMMENT '操作来源：user 人工 / system 同步',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
   PRIMARY KEY (`id`),
   KEY `idx_branch` (`branch_id`,`created_at`),
   KEY `idx_ws` (`workspace_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支状态变更记录（时间线）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `project_repo`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_repo` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '仓库绑定ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `req_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '所属项目ID（requirement.id）',
+  `name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '仓库显示名',
+  `provider` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'gitlab' COMMENT '仓库服务：gitlab',
+  `repo_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'GitLab 站点地址（如 https://gitlab.example.com）',
+  `project_ref` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'GitLab 项目标识：数字ID 或 group/project 路径',
+  `default_target` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '默认目标分支（同步时排除，不导入）',
+  `token_cipher` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '访问令牌密文（AES-GCM，复用 AiCrypto）',
+  `import_policy` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'recent90' COMMENT '首次导入策略：recent90 / all / manual',
+  `sync_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否参与定时同步',
+  `last_sync_at` datetime DEFAULT NULL COMMENT '最近一次同步开始时间',
+  `last_sync_status` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近同步结果：ok / error',
+  `last_sync_error` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近同步失败原因（不含令牌）',
+  `last_sync_summary` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '最近同步摘要（分支/合并/待确认数量）',
+  `created_by` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '绑定人账号ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_repo` (`workspace_id`,`repo_url`,`project_ref`),
+  KEY `idx_ws_req` (`workspace_id`,`req_id`),
+  KEY `idx_ws_sync` (`workspace_id`,`sync_enabled`,`last_sync_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目仓库绑定（GitLab 只读同步）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `dev_branch_alias`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `dev_branch_alias` (
+  `id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '改名记录ID',
+  `workspace_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '归属空间ID',
+  `repo_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '来源仓库ID',
+  `branch_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分支ID（改名后）',
+  `old_name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '旧分支名',
+  `new_name` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '新分支名',
+  `detected_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '识别时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ws_repo_old_name` (`workspace_id`,`repo_id`,`old_name`),
+  KEY `idx_alias_branch` (`branch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分支改名识别记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `gantt_share`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

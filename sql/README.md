@@ -10,7 +10,7 @@
 mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sql
 ```
 
-基线包含当前全部 72 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
+基线包含当前全部 74 张表（含已部署交付闭环、跨版本计划关联、新成员默认不参与、成员公司/项目角色标注、成员职能标签选项、需求人工交付判定、版本终态、版本承诺基线、项目里程碑、交付说明、编号序列、用例—工作项追溯、用例目录层级 / 自定义分组（动态收录与指定成员可见）、文档分类树与空间级文档、子任务排序与团队共享 AI 配置、Git 仓库只读同步与分支别名）、索引与全文索引，执行后无需再跑根目录的增量脚本。**正常部署只用于新空库**：完整基线会重建表，不是幂等无损升级脚本，不得作为普通升级在已有数据的库上重跑。本轮交付闭环经用户单独明确授权，原 `hourglass` 46 表先受限备份并恢复验证，再 DROP / CREATE 为 52 表；原历史在备份中，不再原表在线保留，不回放 61/62、不迁移旧历史。认证 JDBC 与 `DB_NAME=hourglass`，`hourglass_20261110` 保留额外回退点；此授权不是默认部署删库许可，软件-only 回退不足，匹配 SQL 恢复另须单独授权。基线需要 `CREATE DATABASE` / `CREATE USER` / `GRANT` 权限，建议用 root 执行。应用账号固定为 `hourglass` @ `%`（允许外部连接），密码 `Dzqh@123456`；外部直连还需 MySQL `bind-address` 允许非本机连接并放行 3306。
 
 ## 2. 已有库升级
 
@@ -49,6 +49,8 @@ mysql -uroot -p --default-character-set=utf8mb4 < sql/baseline/01_schema_full.sq
 `89_release_test_check.sql` 给 `requirement` 增 `release_check_policy`（strict/standard/loose，默认 standard）。发布前检查按该策略区分阻断与提醒；只读取用例与计划结果，不改变任务状态，确认发布时把结论冻结进 `version_release.plan_snapshot.testEvidence`。
 
 `92_case_creator_run_env.sql` 给 `test_case` 增 `created_by` / `created_by_user_id`（创建时写入、不随执行变化，区分「谁写的用例」与「谁执行的」），给 `test_case_run` 增 `environment`（执行环境，转缺陷时预填）。只增结构、幂等可重复执行；历史用例与执行记录不回填创建人/环境，旧数据没有可靠记录时不伪造。
+
+`98_git_repo_sync.sql` 支持项目多仓库 Git 只读同步：新建 `project_repo`（仓库地址、GitLab 项目标识、默认目标分支、AES-GCM 令牌密文、导入策略 `recent90` / `all` / `manual`、启停与最近同步结果）与 `dev_branch_alias`（同一 SHA 的删旧建新识别为改名）；`dev_branch` 增远程事实（`remote_state` / `remote_head_*` / `last_seen_*`）、合并证据（`merged*` / `merge_evidence`）、人工判定（`decision*` / `decided_*`）、生命周期 `outcome`（open / done / canceled / ignored / pending）与 `pending_reason`、`sync_status`、`sync_error`，并用生成列 `owner_key` 把唯一键从 `uk_ws_req_name` 换成 `uk_ws_owner_name`（仓库分支按 repo 隔离、手工分支按项目隔离），新增 `idx_ws_outcome` / `idx_ws_repo_state`；`dev_branch_log` 增 `actor_type` 区分人工与系统同步。脚本幂等、只增结构，不物理删除分支、不回填历史提交事实；执行时须带 `--default-character-set=utf8mb4`。
 
 不要执行 `sql/legacy/` 与 `sql/seeds/` 下的文件；前者只保留旧版本结构用于追溯，后者是旧结构的演示种子。
 

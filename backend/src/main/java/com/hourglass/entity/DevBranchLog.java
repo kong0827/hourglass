@@ -24,5 +24,7 @@ public class DevBranchLog {
     private String detail;
     private String actorName;
     private String actorUserId;
+    /** user 人工 / system 同步 */
+    private String actorType;
     private LocalDateTime createdAt;
 }

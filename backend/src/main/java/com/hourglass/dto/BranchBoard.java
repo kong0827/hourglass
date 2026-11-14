@@ -15,6 +15,8 @@ public class BranchBoard {
     private Map<String, Column> columns = new LinkedHashMap<String, Column>();
     /** 各状态条数 + all */
     private Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
+    /** 生命周期条数（open/done/canceled/ignored/pending）+ all，忽略 outcome 条件 */
+    private Map<String, Integer> outcomeCounts = new LinkedHashMap<String, Integer>();
     private Double avgCycleDays;
 
     @Data

@@ -27,6 +27,10 @@ public class DevBranch {
     private String workspaceId;
     /** 所属项目ID（requirement.id），空 = 空间级公共分支 */
     private String reqId;
+    /** 来源仓库ID（project_repo.id），空 = 手工 / 已解绑仓库 */
+    private String repoId;
+    /** manual 手工 / git 同步 */
+    private String source;
     /** 分支名，如 feature/login、hotfix/order-500 */
     private String name;
     /** dev / testing / merging / released */
@@ -36,6 +40,37 @@ public class DevBranch {
     /** 目标分支（要合到哪），选填 */
     private String targetBranch;
     private String note;
+
+    /* ---- 远程事实（只读同步写入，人工分支为空） ---- */
+    /** active 远程存在 / deleted 远程已删除；人工分支为空 */
+    private String remoteState;
+    private String remoteHeadSha;
+    private LocalDateTime remoteHeadAt;
+    private String remoteHeadAuthor;
+    /** 最近一次在远程列表中看到的时间 */
+    private LocalDateTime lastSeenAt;
+    /** 最近一次看到时的 HEAD SHA（改名识别） */
+    private String lastSeenHeadSha;
+
+    /* ---- 合并证据（来自已合并 MR） ---- */
+    private Boolean merged;
+    private String mergedInto;
+    private LocalDateTime mergedAt;
+    private String mergeEvidence;
+
+    /* ---- 人工判定：优先级最高，远程同步不覆盖 ---- */
+    private String decision;
+    private String decisionReason;
+    private String decisionNote;
+    private String decidedByUserId;
+    private LocalDateTime decidedAt;
+
+    /* ---- 生命周期：open / done / canceled / ignored / pending ---- */
+    private String outcome;
+    /** disappeared / closed_new_commit / name_conflict */
+    private String pendingReason;
+    private String syncStatus;
+    private String syncError;
 
     private LocalDateTime devAt;
     private LocalDateTime testAt;
@@ -55,4 +90,11 @@ public class DevBranch {
     private java.util.List<com.hourglass.dto.BranchVersionTag> versions;
     /** 归属项目标签（由该分支下任务所在的项目推导，见 BranchService#fillProjects） */
     private java.util.List<com.hourglass.dto.BranchProjectTag> projects;
+    /** 来源仓库显示名 / 地址（列表 SQL 关联 project_repo 填充） */
+    private String repoName;
+    private String repoUrl;
+    /** 判定人显示名（详情页填充） */
+    private String decidedByName;
+    /** 同一待确认分组内的条数（待确认列表用） */
+    private Integer pendingCount;
 }

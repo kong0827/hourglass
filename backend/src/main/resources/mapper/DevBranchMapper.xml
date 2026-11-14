@@ -2,18 +2,28 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hourglass.mapper.DevBranchMapper">
 
-  <sql id="cols">
-    id, workspace_id, req_id, name, status, owner, owner_user_id, target_branch, note,
-    dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at
+  <sql id="branchCols">
+    b.id, b.workspace_id, b.req_id, b.repo_id, b.`source`, b.name, b.status, b.owner, b.owner_user_id,
+    b.target_branch, b.note,
+    b.remote_state, b.remote_head_sha, b.remote_head_at, b.remote_head_author, b.last_seen_at,
+    b.last_seen_head_sha, b.merged, b.merged_into, b.merged_at, b.merge_evidence,
+    b.decision, b.decision_reason, b.decision_note, b.decided_by_user_id, b.decided_at,
+    b.outcome, b.pending_reason, b.sync_status, b.sync_error,
+    b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at
+  </sql>
+
+  <sql id="repoCols">
+    pr.name AS repo_name, pr.repo_url AS repo_url
   </sql>
 
   <!-- 列表：任务数用一次 GROUP BY 汇总，避免每条分支两个相关子查询 -->
   <select id="selectByWorkspace" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
-           b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
+    SELECT <include refid="branchCols"/>,
+           <include refid="repoCols"/>,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
     FROM dev_branch b
+    LEFT JOIN project_repo pr ON pr.id = b.repo_id
     LEFT JOIN (
       SELECT branch_id,
              COUNT(*) AS task_count,
@@ -30,11 +40,12 @@
   </select>
 
   <select id="selectVisibleByWorkspace" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
-           b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
+    SELECT <include refid="branchCols"/>,
+           <include refid="repoCols"/>,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
     FROM dev_branch b
+    LEFT JOIN project_repo pr ON pr.id = b.repo_id
     LEFT JOIN (
       SELECT t.branch_id,
              COUNT(*) AS task_count,
@@ -66,8 +77,8 @@
     </if>
   </sql>
 
-  <!-- 分页/计数共用的筛选条件：可见范围、项目、状态、关键词全部下推 -->
-  <sql id="pageWhere">
+  <!-- 分页/计数共用的筛选条件：可见范围、项目、状态、负责人、版本、仓库、关键词全部下推 -->
+  <sql id="pageWhereBase">
     b.workspace_id = #{q.workspaceId}
     <if test="q.viewerId != null and q.viewerId != ''">
       AND (b.req_id IS NULL OR NOT EXISTS (
@@ -96,6 +107,9 @@
         AND b.owner_user_id = #{q.ownerUserId}
       </when>
     </choose>
+    <if test="q.repoId != null and q.repoId != ''">
+      AND b.repo_id = #{q.repoId}
+    </if>
     <if test="q.versionId != null and q.versionId != ''">
       AND EXISTS (SELECT 1 FROM task tv
                    JOIN version_task vtv ON vtv.task_id = tv.id AND vtv.workspace_id = tv.workspace_id
@@ -122,13 +136,22 @@
     </if>
   </sql>
 
+  <!-- 生命周期口径：空 / all 表示不限（旧调用方不传时保持全部）；分支页显式传 open -->
+  <sql id="pageWhere">
+    <include refid="pageWhereBase"/>
+    <if test="q.outcome != null and q.outcome != '' and q.outcome != 'all'">
+      AND b.outcome = #{q.outcome}
+    </if>
+  </sql>
+
   <!-- 分页列表：任务数用一次 GROUP BY 汇总（只统计查看人可见项目的任务） -->
   <select id="selectPage" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.owner, b.owner_user_id, b.target_branch, b.note,
-           b.dev_at, b.test_at, b.merge_at, b.released_at, b.sort_order, b.created_at, b.updated_at,
+    SELECT <include refid="branchCols"/>,
+           <include refid="repoCols"/>,
            COALESCE(tc.task_count, 0) AS task_count,
            COALESCE(tc.done_count, 0) AS done_count
     FROM dev_branch b
+    LEFT JOIN project_repo pr ON pr.id = b.repo_id
     LEFT JOIN (
       SELECT t.branch_id,
              COUNT(*) AS task_count,
@@ -149,10 +172,12 @@
     LIMIT #{q.limit} OFFSET #{q.offset}
   </select>
 
+  <!-- 下拉选项只给「还活着」的分支：已判定完成/取消/忽略、待确认的不再出现在任务关联里 -->
   <select id="selectOptions" resultType="DevBranch">
-    SELECT b.id, b.workspace_id, b.req_id, b.name, b.status, b.target_branch, b.owner
+    SELECT b.id, b.workspace_id, b.req_id, b.repo_id, b.name, b.status, b.target_branch, b.owner, b.outcome
     FROM dev_branch b
     WHERE <include refid="pageWhere"/>
+      AND b.outcome = 'open'
     ORDER BY FIELD(b.status, 'dev', 'testing', 'merging', 'released'), b.updated_at DESC, b.id DESC
     LIMIT #{q.limit} OFFSET #{q.offset}
   </select>
@@ -160,6 +185,7 @@
   <select id="countOptions" resultType="int">
     SELECT COUNT(*) FROM dev_branch b
     WHERE <include refid="pageWhere"/>
+      AND b.outcome = 'open'
   </select>
 
   <select id="countGroupByStatus" resultType="map">
@@ -167,6 +193,14 @@
     FROM dev_branch b
     WHERE <include refid="pageWhere"/>
     GROUP BY b.status
+  </select>
+
+  <!-- 生命周期 chips 计数：忽略 outcome 自身（否则每格只剩自己），其余筛选照旧 -->
+  <select id="countGroupByOutcome" resultType="map">
+    SELECT b.outcome AS outcome, COUNT(*) AS cnt
+    FROM dev_branch b
+    WHERE <include refid="pageWhereBase"/>
+    GROUP BY b.outcome
   </select>
 
   <select id="selectAvgCycleDays" resultType="double">
@@ -177,7 +211,10 @@
   </select>
 
   <select id="selectById" resultType="DevBranch">
-    SELECT <include refid="cols"/> FROM dev_branch WHERE id = #{id}
+    SELECT <include refid="branchCols"/>, <include refid="repoCols"/>
+    FROM dev_branch b
+    LEFT JOIN project_repo pr ON pr.id = b.repo_id
+    WHERE b.id = #{id}
   </select>
 
   <select id="selectTaskStats" resultType="DevBranch">
@@ -263,17 +300,217 @@
     WHERE workspace_id = #{workspaceId}
   </select>
 
+  <!-- 手工分支查重：仓库分支有独立命名空间（owner_key=repo_id），不挡手工同名 -->
   <select id="countByName" resultType="int">
     SELECT COUNT(*) FROM dev_branch
-    WHERE workspace_id = #{workspaceId} AND name = #{name}
+    WHERE workspace_id = #{workspaceId} AND name = #{name} AND repo_id IS NULL
       AND (req_id = #{reqId} OR (req_id IS NULL AND #{reqId} IS NULL))
     <if test="excludeId != null and excludeId != ''"> AND id &lt;&gt; #{excludeId} </if>
   </select>
 
+  <!-- ==================== Git 只读同步 ==================== -->
+
+  <select id="selectByRepo" resultType="DevBranch">
+    SELECT <include refid="branchCols"/>
+    FROM dev_branch b
+    WHERE b.workspace_id = #{workspaceId} AND b.repo_id = #{repoId}
+    ORDER BY b.name
+  </select>
+
+  <select id="selectByRepoAndName" resultType="DevBranch">
+    SELECT <include refid="branchCols"/>
+    FROM dev_branch b
+    WHERE b.workspace_id = #{workspaceId} AND b.repo_id = #{repoId} AND b.name = #{name}
+    LIMIT 1
+  </select>
+
+  <select id="selectManualByName" resultType="DevBranch">
+    SELECT <include refid="branchCols"/>
+    FROM dev_branch b
+    WHERE b.workspace_id = #{workspaceId} AND b.repo_id IS NULL AND b.name = #{name}
+    <choose>
+      <when test="reqId != null and reqId != ''">AND b.req_id = #{reqId}</when>
+      <otherwise>AND b.req_id IS NULL</otherwise>
+    </choose>
+    LIMIT 1
+  </select>
+
+  <!-- 项目删除前的命名空间快照：该项目全部分支 + 空间级手工分支 -->
+  <select id="selectManualNamespace" resultType="DevBranch">
+    SELECT <include refid="branchCols"/>
+    FROM dev_branch b
+    WHERE b.workspace_id = #{workspaceId}
+      AND (b.req_id = #{reqId} OR (b.req_id IS NULL AND b.repo_id IS NULL))
+    ORDER BY b.req_id IS NULL, b.name
+  </select>
+
+  <!-- 待确认队列：按仓库分组由服务层完成；分页口径与分支列表一致 -->
+  <select id="selectPending" resultType="DevBranch">
+    SELECT <include refid="branchCols"/>,
+           <include refid="repoCols"/>,
+           COALESCE(tc.task_count, 0) AS task_count,
+           COALESCE(tc.done_count, 0) AS done_count
+    FROM dev_branch b
+    LEFT JOIN project_repo pr ON pr.id = b.repo_id
+    LEFT JOIN (
+      SELECT t.branch_id,
+             COUNT(*) AS task_count,
+             SUM(CASE WHEN t.board_column = 'done' THEN 1 ELSE 0 END) AS done_count
+      FROM task t
+      WHERE t.workspace_id = #{q.workspaceId} AND t.deleted_at IS NULL AND t.branch_id IS NOT NULL
+      <if test="q.viewerId != null and q.viewerId != ''">
+        AND NOT EXISTS (SELECT 1 FROM project_member pm
+                        WHERE pm.workspace_id = t.workspace_id
+                          AND pm.project_id = t.req_id
+                          AND pm.user_id = #{q.viewerId}
+                          AND pm.access = 'none')
+      </if>
+      GROUP BY t.branch_id
+    ) tc ON tc.branch_id = b.id
+    WHERE <include refid="pageWhereBase"/>
+      AND b.outcome = 'pending'
+    ORDER BY b.repo_id, b.updated_at DESC, b.id DESC
+  </select>
+
+  <!-- 同步事实只动远程列与同步状态，不碰 updated_at（避免每 10 分钟把列表顺序洗一遍） -->
+  <update id="updateRemoteFacts">
+    UPDATE dev_branch SET
+      remote_state       = #{remoteState},
+      remote_head_sha    = #{headSha},
+      remote_head_at     = #{headAt},
+      remote_head_author = #{headAuthor},
+      last_seen_at       = #{lastSeenAt},
+      last_seen_head_sha = #{lastSeenSha},
+      sync_status        = 'ok',
+      sync_error         = NULL,
+      updated_at         = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <!-- 不覆盖 last_seen_at：它是「最后一次真正看到」的时间，改名识别窗口依赖它 -->
+  <update id="markRemoteDeleted">
+    UPDATE dev_branch SET
+      remote_state = 'deleted',
+      sync_status  = 'ok',
+      sync_error   = NULL,
+      updated_at   = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateMerge">
+    UPDATE dev_branch SET
+      merged         = 1,
+      merged_into    = #{mergedInto},
+      merged_at      = #{mergedAt},
+      merge_evidence = #{evidence},
+      updated_at     = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="updateOutcome">
+    UPDATE dev_branch SET
+      outcome        = #{outcome},
+      pending_reason = #{pendingReason},
+      updated_at     = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="applyDecision">
+    UPDATE dev_branch SET
+      decision           = #{decision},
+      decision_reason    = #{reason},
+      decision_note      = #{note},
+      decided_by_user_id = #{userId},
+      decided_at         = #{decidedAt},
+      outcome            = #{decision},
+      pending_reason     = NULL,
+      updated_at         = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="clearDecision">
+    UPDATE dev_branch SET
+      decision           = NULL,
+      decision_reason    = NULL,
+      decision_note      = NULL,
+      decided_by_user_id = NULL,
+      decided_at         = NULL,
+      updated_at         = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="renameById">
+    UPDATE dev_branch SET name = #{name}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="adoptToRepo">
+    UPDATE dev_branch SET
+      repo_id            = #{repoId},
+      `source`           = 'git',
+      remote_state       = 'active',
+      remote_head_sha    = #{headSha},
+      remote_head_at     = #{headAt},
+      remote_head_author = #{headAuthor},
+      last_seen_at       = #{lastSeenAt},
+      last_seen_head_sha = #{lastSeenSha},
+      sync_status        = 'ok',
+      sync_error         = NULL,
+      updated_at         = updated_at
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <insert id="insertGitBranch">
+    INSERT INTO dev_branch (id, workspace_id, req_id, repo_id, `source`, name, status, owner, owner_user_id,
+                            target_branch, note, remote_state, remote_head_sha, remote_head_at, remote_head_author,
+                            last_seen_at, last_seen_head_sha, merged, merged_into, merged_at, merge_evidence,
+                            decision, decision_reason, decision_note, decided_by_user_id, decided_at,
+                            outcome, pending_reason, sync_status, sync_error,
+                            dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at)
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{repoId}, COALESCE(#{source}, 'git'), #{name},
+            COALESCE(#{status}, 'dev'), #{owner}, #{ownerUserId},
+            #{targetBranch}, #{note}, #{remoteState}, #{remoteHeadSha}, #{remoteHeadAt}, #{remoteHeadAuthor},
+            #{lastSeenAt}, #{lastSeenHeadSha}, COALESCE(#{merged}, 0), #{mergedInto}, #{mergedAt}, #{mergeEvidence},
+            #{decision}, #{decisionReason}, #{decisionNote}, #{decidedByUserId}, #{decidedAt},
+            COALESCE(#{outcome}, 'open'), #{pendingReason}, #{syncStatus}, #{syncError},
+            #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt},
+            COALESCE(#{sortOrder}, 0), COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <!-- 失败隔离：只写同步状态，绝不动 remote_state / outcome / 状态列 -->
+  <update id="updateSyncState">
+    UPDATE dev_branch SET
+      sync_status = #{status},
+      sync_error  = #{error},
+      updated_at  = updated_at
+    WHERE workspace_id = #{workspaceId} AND repo_id = #{repoId}
+  </update>
+
+  <!-- 项目删除：分支转人工墓碑（仓库解绑、远程事实清空），名称冲突由服务层先改名 -->
+  <update id="detachByReq">
+    UPDATE dev_branch SET
+      repo_id        = NULL,
+      `source`       = 'manual',
+      remote_state   = NULL,
+      merged         = 0,
+      merged_into    = NULL,
+      merged_at      = NULL,
+      merge_evidence = NULL,
+      sync_status    = NULL,
+      sync_error     = NULL,
+      updated_at     = NOW()
+    WHERE workspace_id = #{workspaceId}
+      AND (req_id = #{reqId}
+        OR repo_id IN (SELECT pr.id FROM project_repo pr
+                       WHERE pr.workspace_id = #{workspaceId} AND pr.req_id = #{reqId}))
+  </update>
+
   <insert id="insert">
     INSERT INTO dev_branch (id, workspace_id, req_id, name, status, owner, owner_user_id, target_branch, note,
+                            `source`, outcome, merged,
                             dev_at, test_at, merge_at, released_at, sort_order, created_at, updated_at)
     VALUES (#{id}, #{workspaceId}, #{reqId}, #{name}, #{status}, #{owner}, #{ownerUserId}, #{targetBranch}, #{note},
+            COALESCE(#{source}, 'manual'), COALESCE(#{outcome}, 'open'), COALESCE(#{merged}, 0),
             #{devAt}, #{testAt}, #{mergeAt}, #{releasedAt},
             COALESCE(#{sortOrder}, 0), COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
@@ -302,14 +539,6 @@
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>
 
-  <!-- 项目删除前：与同名公共分支冲突的项目分支先改名为「原名-项目ID」，否则退回公共分支时撞 uk_ws_req_name -->
-  <update id="renameClashesBeforeDetach">
-    UPDATE dev_branch b
-    JOIN dev_branch pub ON pub.workspace_id = b.workspace_id AND pub.req_id IS NULL AND pub.name = b.name
-    SET b.name = CONCAT(LEFT(b.name, 79 - CHAR_LENGTH(b.req_id)), '-', b.req_id)
-    WHERE b.workspace_id = #{workspaceId} AND b.req_id = #{reqId}
-  </update>
-
   <update id="clearReqIdByReq">
     UPDATE dev_branch SET req_id = NULL, updated_at = NOW()
     WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
@@ -326,12 +555,15 @@
   <!-- ==================== 时间线 ==================== -->
 
   <insert id="insertLog">
-    INSERT INTO dev_branch_log (id, workspace_id, branch_id, action, from_status, to_status, detail, actor_name, actor_user_id)
-    VALUES (#{id}, #{workspaceId}, #{branchId}, #{action}, #{fromStatus}, #{toStatus}, #{detail}, #{actorName}, #{actorUserId})
+    INSERT INTO dev_branch_log (id, workspace_id, branch_id, action, from_status, to_status, detail,
+                                actor_name, actor_user_id, actor_type)
+    VALUES (#{id}, #{workspaceId}, #{branchId}, #{action}, #{fromStatus}, #{toStatus}, #{detail},
+            #{actorName}, #{actorUserId}, COALESCE(#{actorType}, 'user'))
   </insert>
 
   <select id="selectLogs" resultType="DevBranchLog">
-    SELECT id, workspace_id, branch_id, action, from_status, to_status, detail, actor_name, actor_user_id, created_at
+    SELECT id, workspace_id, branch_id, action, from_status, to_status, detail,
+           actor_name, actor_user_id, actor_type, created_at
     FROM dev_branch_log
     WHERE branch_id = #{branchId}
     ORDER BY created_at DESC, id DESC

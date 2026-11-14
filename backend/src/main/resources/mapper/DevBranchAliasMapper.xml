@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.DevBranchAliasMapper">
+
+  <sql id="cols">
+    id, workspace_id, repo_id, branch_id, old_name, new_name, detected_at
+  </sql>
+
+  <insert id="insert">
+    INSERT INTO dev_branch_alias (id, workspace_id, repo_id, branch_id, old_name, new_name, detected_at)
+    VALUES (#{id}, #{workspaceId}, #{repoId}, #{branchId}, #{oldName}, #{newName},
+            COALESCE(#{detectedAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <select id="selectByBranch" resultType="DevBranchAlias">
+    SELECT <include refid="cols"/> FROM dev_branch_alias
+    WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId}
+    ORDER BY detected_at DESC
+  </select>
+
+  <select id="selectByRepo" resultType="DevBranchAlias">
+    SELECT <include refid="cols"/> FROM dev_branch_alias
+    WHERE workspace_id = #{workspaceId} AND repo_id = #{repoId}
+    ORDER BY detected_at DESC
+  </select>
+
+  <delete id="deleteByBranch">
+    DELETE FROM dev_branch_alias WHERE workspace_id = #{workspaceId} AND branch_id = #{branchId}
+  </delete>
+
+  <delete id="deleteByRepo">
+    DELETE FROM dev_branch_alias WHERE workspace_id = #{workspaceId} AND repo_id = #{repoId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM dev_branch_alias WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

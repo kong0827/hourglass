@@ -20,6 +20,22 @@ var BRANCH_STATUS = [
   { id:"merging",  name:"待合并", cls:"br-st-merging",  timeKey:"mergeAt",    hint:"测过了，等合并窗口" },
   { id:"released", name:"已发布", cls:"br-st-released", timeKey:"releasedAt", hint:"已上线" }
 ];
+/* 生命周期（outcome）与开发状态（status）正交：chips 只切 outcome，看板列仍按 status */
+var BRANCH_OUTCOMES = [
+  { id:"open",     name:"进行中" },
+  { id:"done",     name:"已完成" },
+  { id:"canceled", name:"已取消" },
+  { id:"ignored",  name:"已忽略" },
+  { id:"pending",  name:"待确认" },
+  { id:"all",      name:"全部" }
+];
+var branchOutcomeFilter = "open";   /* 兼容后方：接口缺省不限，前端显式只取进行中 */
+var branchRepoFilter = "";
+var branchRepoCache = [];
+var branchPendingGroups = [];
+var branchPendingSeq = 0;
+var branchSelected = {};            /* 列表批量判定：id → true */
+var branchBulkBusy = false;
 var branchList = [];            /* 当前已加载的分支（首屏 + 滚动加载），抽屉/拖拽查用 */
 var branchRefs = [];            /* 全量轻量引用：id → 名称，看板卡片标签用 */
 var branchBoard = null;         /* { columns, counts, avgCycleDays } */
@@ -63,6 +79,16 @@ function branchStatusMeta(id){
   for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return BRANCH_STATUS[i];
   return { id: id, name: id || "未知", cls: "", timeKey: "", hint: "" };
 }
+function branchOutcomeMeta(id){
+  for(var i = 0; i < BRANCH_OUTCOMES.length; i++) if(BRANCH_OUTCOMES[i].id === id) return BRANCH_OUTCOMES[i];
+  return { id: id || "open", name: id || "进行中" };
+}
+function branchPendingReasonText(reason){
+  if(reason === "disappeared") return "远程分支已消失";
+  if(reason === "closed_new_commit") return "关闭后远程又有新提交";
+  if(reason === "name_conflict") return "分支名冲突";
+  return "需要人工确认";
+}
 function branchStatusIndex(id){
   for(var i = 0; i < BRANCH_STATUS.length; i++) if(BRANCH_STATUS[i].id === id) return i;
   return -1;
@@ -78,6 +104,11 @@ function branchById(id){
     for(var j = 0; j < extra.length; j++) if(extra[j].id === id) return extra[j];
   }
   for(var r = 0; r < branchRows.length; r++) if(branchRows[r].id === id) return branchRows[r];
+  /* 待确认队列里的分支可能没进看板/列表快照（如当前只筛进行中） */
+  for(var g = 0; g < branchPendingGroups.length; g++){
+    var items = branchPendingGroups[g].items || [];
+    for(var p = 0; p < items.length; p++) if(items[p].id === id) return items[p];
+  }
   return null;
 }
 function branchNameById(id){
@@ -121,8 +152,10 @@ function branchStay(b){
 function branchQueryParams(extra){
   var p = {};
   if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchRepoFilter) p.repo = branchRepoFilter;
   if(branchOwnerFilter) p.ownerUserId = branchOwnerFilter;
   if(branchVersionFilter) p.version = branchVersionFilter;
+  p.outcome = branchOutcomeFilter || "open";
   var kw = (($("branchSearch") || {}).value || "").trim();
   if(kw) p.q = kw;
   if(extra) for(var k in extra) if(Object.prototype.hasOwnProperty.call(extra, k)) p[k] = extra[k];
@@ -133,6 +166,7 @@ function applyBoard(board){
   branchBoard = {
     columns: board.columns || {},
     counts: board.counts || {},
+    outcomeCounts: board.outcomeCounts || {},
     avgCycleDays: board.avgCycleDays == null ? null : board.avgCycleDays
   };
   branchExtra = { dev:[], testing:[], merging:[], released:[] };
@@ -143,13 +177,31 @@ function applyBoard(board){
   });
 }
 var branchLoadSeq = 0;
+var branchReposLoaded = false;
+var branchReposSeq = 0;
+function loadRepos(force){
+  if(branchReposLoaded && !force) return Promise.resolve(branchRepoCache);
+  var seq = ++branchReposSeq;
+  return API.get("/api/repos").then(function(list){
+    if(seq !== branchReposSeq) return branchRepoCache;
+    branchRepoCache = list || [];
+    branchReposLoaded = true;
+    populateRepoFilter();
+    updateRepoButton();
+    return branchRepoCache;
+  }).catch(function(){
+    updateRepoButton();
+    return branchRepoCache;
+  });
+}
 function loadBranches(force){
   if(branchesLoaded && !force && branchBoard) return Promise.resolve(branchList);
   /* 筛选/搜索连续触发时只认最后一次请求，避免慢响应把新筛选结果盖回旧的 */
   var seq = ++branchLoadSeq;
   return Promise.all([
     API.get("/api/branches/board", branchQueryParams({ limit: BRANCH_BOARD_PAGE })),
-    API.getAllPages("/api/branches/options")
+    API.getAllPages("/api/branches/options"),
+    loadRepos()
   ]).then(function(res){
     if(seq !== branchLoadSeq) return;
     applyBoard(res[0]);
@@ -158,13 +210,30 @@ function loadBranches(force){
     branchesLoaded = true;
     if(activeView === "branches") renderBranches();
     populateProjectFilter();
+    populateRepoFilter();
     populateOwnerFilter();
     populateVersionFilter();
+    loadPendingGroups();
     /* 列表模式要有全量数据：看板刷新后顺带刷新一次列表，避免新增/改状态后列表还是旧的 */
     if(activeView === "branches" && branchViewMode === "list" && !branchRowsLoading) loadBranchRows();
     /* 看板卡片上带着分支标签，数据回来后要重画一次（render 会重建 DOM，所以只在看板停留时做） */
     if(state.board && activeView === "board") render({animate:false});
   }).catch(function(){ /* 分支模块不可用时静默降级，不影响主流程 */ });
+}
+function loadPendingGroups(){
+  var seq = ++branchPendingSeq;
+  var p = {};
+  if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchRepoFilter) p.repo = branchRepoFilter;
+  if(branchOwnerFilter) p.ownerUserId = branchOwnerFilter;
+  if(branchVersionFilter) p.version = branchVersionFilter;
+  var kw = (($("branchSearch") || {}).value || "").trim();
+  if(kw) p.q = kw;
+  return API.get("/api/branches/pending", p).then(function(groups){
+    if(seq !== branchPendingSeq) return;
+    branchPendingGroups = groups || [];
+    renderPendingBar();
+  }).catch(function(){ /* 待确认队列拉取失败不影响看板主流程 */ });
 }
 function loadMoreBranches(status){
   var col = branchBoard && branchBoard.columns[status];
@@ -191,16 +260,21 @@ function applyBranchDeepLink(){
   }
   branchSource = { from: from === "accept" || from === "merge" ? from : "link", status: status };
   branchFilter = branchStatusMeta(status).id;
-  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 负责人 / 关键词筛选 */
+  /* 来源条条数要与「我的工作」一致：深链按全空间该状态看，不叠加此前留下的项目 / 仓库 / 负责人 / 版本 / 关键词筛选 */
   var search = $("branchSearch");
-  var reset = !!branchProjectFilter || !!branchOwnerFilter || !!branchVersionFilter || !!(search && search.value.trim());
+  var reset = !!branchProjectFilter || !!branchRepoFilter || !!branchOwnerFilter || !!branchVersionFilter
+    || !!(search && search.value.trim()) || branchOutcomeFilter !== "open";
   branchProjectFilter = "";
+  branchRepoFilter = "";
+  branchOutcomeFilter = "open";
   branchOwnerFilter = "";
   branchVersionFilter = "";
   if($("branchProjectFilter")) $("branchProjectFilter").value = "";
+  if($("branchRepoFilter")) $("branchRepoFilter").value = "";
   if($("branchOwnerFilter")) $("branchOwnerFilter").value = "";
   if($("branchVersionFilter")) $("branchVersionFilter").value = "";
   if(search) search.value = "";
+  syncBranchFilterControls();
   return reset;
 }
 function branchSourceName(){
@@ -267,14 +341,18 @@ function loadBranchRows(){
   renderBranches();
   var p = {};
   if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchRepoFilter) p.repo = branchRepoFilter;
   if(branchOwnerFilter) p.ownerUserId = branchOwnerFilter;
   if(branchVersionFilter) p.version = branchVersionFilter;
+  p.outcome = branchOutcomeFilter || "open";
   return API.getAllPages("/api/branches", p)
     .then(function(rows){
       if(seq !== branchRowsSeq) return;
       branchRows = rows || [];
       branchRowsLoading = false;
+      pruneBranchSelection();
       if(activeView === "branches") renderBranches();
+      loadPendingGroups();
     })
     .catch(function(ex){
       if(seq !== branchRowsSeq) return;
@@ -289,6 +367,8 @@ function branchSearchText(){
 function filteredBranchRows(){
   var q = branchSearchText();
   return branchRows.filter(function(b){
+    if(branchOutcomeFilter !== "all" && (b.outcome || "open") !== branchOutcomeFilter) return false;
+    if(branchRepoFilter && b.repoId !== branchRepoFilter) return false;
     if(branchFilter && b.status !== branchFilter) return false;
     if(branchOwnerFilter === "__none__"){
       if(b.ownerUserId || b.owner) return false;
@@ -313,12 +393,18 @@ function branchRowHTML(b){
   var stay = branchStay(b);
   var writable = canEditBranch(b);
   var taskTxt = b.taskCount ? ((b.doneCount || 0) + "/" + b.taskCount) : "—";
+  var oc = b.outcome || "open";
+  var ocTag = oc === "open" ? "" : '<span class="br-tag-mini' + (oc === "pending" ? " warn" : (oc === "done" ? " ok" : ""))
+    + '" title="' + esc(oc === "pending" ? branchPendingReasonText(b.pendingReason) : "生命周期：" + branchOutcomeMeta(oc).name)
+    + '">' + esc(branchOutcomeMeta(oc).name) + '</span>';
   return '<tr data-branch="' + esc(b.id) + '" tabindex="0">' +
+    '<td class="br-sel-cell"><input type="checkbox" data-br-select="' + esc(b.id) + '"'
+      + (branchSelected[b.id] ? " checked" : "") + ' aria-label="选择分支 ' + esc(b.name) + '" /></td>' +
     '<td class="br-name-cell" title="' + esc(b.name) + '">' + esc(b.name) + '</td>' +
     '<td>' + (writable
       ? '<button class="br-badge ' + sm.cls + '" type="button" data-br-status-menu="' + esc(b.id) +
         '" title="点击切换状态">' + sm.name + icon("down", 11) + '</button>'
-      : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + '</td>' +
+      : '<span class="br-badge ' + sm.cls + '" title="只读分支，不能改状态">' + sm.name + '</span>') + ocTag + '</td>' +
     '<td>' + (b.owner ? avatarHTML(b.owner, "sm") + ' ' + esc(b.owner) : '<span class="foot-note">未指派</span>') + '</td>' +
     '<td>' + esc(branchProjectsText(b)) + '</td>' +
     '<td>' + (b.targetBranch ? esc(b.targetBranch) : "—") + '</td>' +
@@ -369,23 +455,211 @@ function buildBranchGroups(rows){
 }
 function renderBranchList(rows){
   var body;
+  var allSel = !!rows.length && rows.every(function(b){ return !!branchSelected[b.id]; });
   if(!rows.length){
-    body = '<tr><td colspan="8" class="manager-empty-cell">没有匹配的分支</td></tr>';
+    body = '<tr><td colspan="9" class="manager-empty-cell">没有匹配的分支</td></tr>';
   }else if(branchListGroup !== "none"){
     body = buildBranchGroups(rows).map(function(g){
       var head = (g.dot ? '<i class="br-dot ' + esc(g.dot) + '"></i>' : '') +
         '<span class="bgr-name">' + esc(g.label) + '</span>' +
         '<span class="bgr-n">' + g.rows.length + ' 条</span>';
-      return '<tr class="br-group-row"><td colspan="8">' + head + '</td></tr>' +
+      return '<tr class="br-group-row"><td colspan="9">' + head + '</td></tr>' +
         g.rows.map(branchRowHTML).join("");
     }).join("");
   }else{
     body = rows.map(branchRowHTML).join("");
   }
   return '<div class="br-list-wrap"><table class="manager-tbl br-list">' +
-    '<thead><tr><th>分支</th><th>状态</th><th>负责人</th><th>项目</th><th>目标分支</th>' +
+    '<thead><tr><th class="br-sel-cell"><input type="checkbox" data-br-select-all aria-label="全选当前列表"'
+      + (allSel ? " checked" : "") + ' /></th><th>分支</th><th>状态</th><th>负责人</th><th>项目</th><th>目标分支</th>' +
       '<th class="num">工作项</th><th>停留</th><th>更新时间</th></tr></thead>' +
     '<tbody>' + body + '</tbody></table></div>';
+}
+function selectedBranchIds(){
+  var ids = [];
+  for(var k in branchSelected) if(Object.prototype.hasOwnProperty.call(branchSelected, k) && branchSelected[k]) ids.push(k);
+  return ids;
+}
+function pruneBranchSelection(){
+  var rows = filteredBranchRows();
+  var alive = {};
+  rows.forEach(function(b){ if(branchSelected[b.id]) alive[b.id] = true; });
+  branchSelected = alive;
+}
+function renderBulkBar(){
+  var n = selectedBranchIds().length;
+  var has = n > 0;
+  return '<div class="br-bulk" role="toolbar" aria-label="批量人工判定">' +
+    '<span>已选 <b class="sel-n">' + n + '</b> 条</span>' +
+    (has ? '<span class="foot-note">判定会记录操作人与时间，可撤销</span>' : '<span class="foot-note">勾选分支后可批量标记生命周期</span>') +
+    '<span class="spacer"></span>' +
+    '<button class="btn sm" type="button" data-br-bulk-decide="done"' + (has ? "" : " disabled") + '>完成</button>' +
+    '<button class="btn sm" type="button" data-br-bulk-decide="canceled"' + (has ? "" : " disabled") + '>取消</button>' +
+    '<button class="btn sm" type="button" data-br-bulk-decide="ignored"' + (has ? "" : " disabled") + '>忽略</button>' +
+    '<button class="btn sm ghost" type="button" data-br-bulk-decide=""' + (has ? "" : " disabled") + '>撤销判定</button>' +
+  '</div>';
+}
+function renderLifecycleChips(){
+  var host = $("branchLifeChips");
+  if(!host) return;
+  var counts = (branchBoard && branchBoard.outcomeCounts) || {};
+  host.innerHTML = BRANCH_OUTCOMES.map(function(o){
+    var n = o.id === "all" ? (counts.all || 0) : (counts[o.id] || 0);
+    var on = branchOutcomeFilter === o.id;
+    return '<button type="button" class="br-chip' + (o.id === "pending" ? " br-chip-pending" : "") + (on ? " on" : "") +
+      '" data-br-outcome="' + o.id + '" aria-pressed="' + on + '">' + o.name +
+      '<span class="n">' + n + '</span></button>';
+  }).join("");
+}
+function renderPendingBar(){
+  var host = $("branchPending");
+  if(!host) return;
+  var total = 0;
+  branchPendingGroups.forEach(function(g){ total += (g.count || 0); });
+  if(!total){
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  var groups = branchPendingGroups.map(function(g){
+    var items = (g.items || []);
+    var shown = items.slice(0, 4);
+    var rows = shown.map(function(b){
+      var editable = canEditBranch(b);
+      return '<div class="br-pending-item">' +
+        '<button type="button" class="name" data-br-pending-open="' + esc(b.id) + '" title="查看分支详情">' + esc(b.name) + '</button>' +
+        '<span class="why">' + esc(branchPendingReasonText(b.pendingReason)) + '</span>' +
+        '<span class="acts">' + (editable
+          ? '<button class="btn sm" type="button" data-br-pending-decide="done" data-br-id="' + esc(b.id) + '">完成</button>' +
+            '<button class="btn sm ghost" type="button" data-br-pending-decide="canceled" data-br-id="' + esc(b.id) + '">取消</button>' +
+            '<button class="btn sm ghost" type="button" data-br-pending-decide="ignored" data-br-id="' + esc(b.id) + '">忽略</button>'
+          : '<span class="foot-note">只读</span>') + '</span>' +
+      '</div>';
+    }).join("");
+    var more = items.length > shown.length
+      ? '<button class="btn sm ghost" type="button" data-br-pending-repo="' + esc(g.repoId || "") + '">还有 ' + (items.length - shown.length) + ' 条，查看全部</button>'
+      : "";
+    return '<div class="br-pending-group">' +
+      '<div class="br-pending-repo">' +
+        '<b>' + esc(g.repoName || "已解绑仓库") + '</b>' +
+        (g.reqName ? '<span class="foot-note">' + esc(g.reqName) + '</span>' : "") +
+        '<span class="n">' + (g.count || 0) + ' 条</span>' +
+      '</div>' + rows + more +
+    '</div>';
+  }).join("");
+  host.hidden = false;
+  host.innerHTML = '<div class="br-pending-head">待确认队列 · 共 ' + total + ' 条' +
+    '<button class="btn sm" type="button" data-br-outcome="pending">只看待确认</button></div>' + groups;
+}
+function branchRepoName(id){
+  for(var i = 0; i < branchRepoCache.length; i++){
+    if(branchRepoCache[i].id === id) return branchRepoCache[i].name || branchRepoCache[i].repoUrl || id;
+  }
+  return id || "";
+}
+function populateRepoFilter(){
+  var sel = $("branchRepoFilter");
+  if(!sel) return;
+  var cur = branchRepoFilter || "";
+  var html = '<option value="">全部仓库</option>';
+  branchRepoCache.forEach(function(r){
+    html += '<option value="' + esc(r.id) + '">' + esc(r.name || r.repoUrl || r.id) + '</option>';
+  });
+  sel.innerHTML = html;
+  var hasCur = !cur || branchRepoCache.some(function(r){ return r.id === cur; });
+  if(!hasCur) branchRepoFilter = "";
+  sel.value = branchRepoFilter || "";
+}
+function isWorkspaceOwner(){
+  return !!(rt.currentWs && rt.currentWs.myRole === "owner");
+}
+function updateRepoButton(){
+  var btn = $("branchReposBtn");
+  if(btn) btn.hidden = !isWorkspaceOwner();
+}
+function decideBranch(id, decision){
+  var b = branchById(id);
+  if(!b){ toast("分支不存在或未加载", "warn"); return Promise.resolve(false); }
+  if(!canEditBranch(b)){ toast("你对该项目只有查看权限，不能做人工判定", "warn"); return Promise.resolve(false); }
+  var flow;
+  if(decision === "canceled" || decision === "ignored"){
+    flow = UI.showPrompt({
+      title: decision === "canceled" ? "取消分支" : "忽略分支",
+      desc: "只标记生命周期，不删除分支；判定人与时间会记入操作记录，之后可撤销。",
+      label: "理由（必填，≤32 字）", maxLength: 32, required: true,
+      okText: decision === "canceled" ? "确认取消" : "确认忽略"
+    });
+  }else if(!decision){
+    flow = UI.showConfirm({
+      title: "撤销人工判定",
+      msg: "「" + esc(b.name) + "」将按远程事实与合并证据重新计算生命周期。确定撤销？",
+      okText: "撤销判定", danger: false
+    });
+  }else{
+    flow = Promise.resolve(true);
+  }
+  return flow.then(function(v){
+    if(!v) return false;
+    var reason = (decision === "canceled" || decision === "ignored") ? v : null;
+    return API.post("/api/branches/" + encodeURIComponent(id) + "/outcome", {
+      decision: decision || "",
+      reason: reason
+    }).then(function(nb){
+      toast("「" + nb.name + "」→ " + branchOutcomeMeta(nb.outcome).name, "fs");
+      branchSelected = {};
+      return loadBranches(true).then(function(){
+        if(branchViewMode === "list") loadBranchRows();
+        if(brDrawerId === id) openBranchDrawer(id);
+      });
+    }).catch(function(ex){
+      toast(ex.message || "判定失败", "bad");
+      return false;
+    });
+  });
+}
+function batchDecide(decision){
+  if(branchBulkBusy) return;
+  var ids = selectedBranchIds();
+  if(!ids.length){ toast("先勾选要判定的分支", "warn"); return; }
+  var run = function(reason){
+    branchBulkBusy = true;
+    API.post("/api/branches/outcomes/batch", {
+      ids: ids,
+      decision: decision || "",
+      reason: reason || null
+    }).then(function(results){
+      branchBulkBusy = false;
+      var list = results || [];
+      var ok = list.filter(function(r){ return r.ok; }).length;
+      var lines = list.map(function(r){
+        return (r.ok ? "✓ " : "✗ ") + (r.name || r.id)
+          + (r.ok ? " → " + branchOutcomeMeta(r.outcome).name : "：" + (r.message || "失败"));
+      });
+      branchSelected = {};
+      return UI.showConfirm({
+        title: "批量判定结果（成功 " + ok + " / 失败 " + (list.length - ok) + "）",
+        msg: '<div class="br-bulk-result">' + lines.map(esc).join("<br>") + '</div>',
+        okText: "知道了", cancelText: "关闭", danger: false
+      }).then(function(){
+        loadBranches(true).then(function(){
+          if(branchViewMode === "list") loadBranchRows();
+        });
+      });
+    }).catch(function(ex){
+      branchBulkBusy = false;
+      toast(ex.message || "批量判定失败", "bad");
+    });
+  };
+  if(decision === "canceled" || decision === "ignored"){
+    UI.showPrompt({
+      title: decision === "canceled" ? "批量取消" : "批量忽略",
+      desc: "将给所选 " + ids.length + " 条分支写入同一判定理由；单条失败不影响其他条目。",
+      label: "理由（必填，≤32 字）", maxLength: 32, required: true,
+      okText: "确认"
+    }).then(function(reason){ if(reason) run(reason); });
+    return;
+  }
+  run(null);
 }
 function branchStat(){
   var counts = (branchBoard && branchBoard.counts) || {};
@@ -403,6 +677,9 @@ function renderBranches(){
   if(!box) return;
   renderBranchSource(box);
   syncBranchFilterControls();
+  renderLifecycleChips();
+  renderPendingBar();
+  updateRepoButton();
   /* 列表模式没有四列分组，容器要退出 grid 布局，否则表格只能占 1/4 宽 */
   box.classList.toggle("br-list-mode", branchViewMode === "list");
   var st = branchStat();
@@ -412,8 +689,10 @@ function renderBranches(){
     var cycle = branchCycleAvg();
     var extra = "";
     if(branchProjectFilter) extra += " · 项目「" + esc(projectFilterName) + "」";
+    if(branchRepoFilter) extra += " · 仓库「" + esc(branchRepoName(branchRepoFilter)) + "」";
     if(branchOwnerFilter) extra += " · 负责人「" + esc(branchOwnerFilterName()) + "」";
     if(branchVersionFilter) extra += " · 版本「" + esc(branchVersionFilterName()) + "」";
+    if(branchOutcomeFilter !== "open") extra += " · 生命周期「" + esc(branchOutcomeMeta(branchOutcomeFilter).name) + "」";
     if(branchGroupMode === "project") extra += " · 按项目分组（仅统计已加载 " + branchList.length + " 条）";
     if(branchViewMode === "list") extra += " · 列表视图";
     /* 汇总里的每一档都可点击：直接按状态筛选，和分组头的点击等价 */
@@ -434,6 +713,7 @@ function renderBranches(){
   }
 
   var isList = branchViewMode === "list";
+  if(isList) pruneBranchSelection();
   var listRows = isList ? filteredBranchRows() : null;
   var hasFilter = branchHasFilter();
   /* 全空时空态里已有主操作，工具栏不再重复放一个「新建分支」；有数据或筛选无结果时保留 */
@@ -466,7 +746,7 @@ function renderBranches(){
       }
       return;
     }
-    box.innerHTML = renderBranchList(listRows);
+    box.innerHTML = renderBulkBar() + renderBranchList(listRows);
     return;
   }
   if(!st.total){
@@ -593,6 +873,28 @@ function branchProjectChips(b){
     return assocLinkHTML("project", p.projectId, label, {cls:"tag", title:"打开项目：" + label});
   }).join("") + '</div>';
 }
+function branchShortSha(sha){
+  return sha && sha.length > 8 ? sha.slice(0, 8) : (sha || "");
+}
+/* 卡片/列表的仓库、远程与生命周期标记：只展示事实，不把状态说成结论 */
+function branchCardBadges(b){
+  var out = [];
+  if(b.repoId || b.repoName){
+    out.push('<span class="br-tag-mini repo" title="' + esc("来源仓库：" + (b.repoUrl || b.repoName || b.repoId)) + '">'
+      + esc(b.repoName || "已解绑仓库") + '</span>');
+  }
+  var oc = b.outcome || "open";
+  if(oc !== "open"){
+    var cls = oc === "pending" ? " warn" : (oc === "done" ? " ok" : "");
+    var tip = oc === "pending" ? branchPendingReasonText(b.pendingReason) : "生命周期：" + branchOutcomeMeta(oc).name;
+    out.push('<span class="br-tag-mini' + cls + '" title="' + esc(tip) + '">' + esc(branchOutcomeMeta(oc).name) + '</span>');
+  }
+  if(b.remoteState === "deleted") out.push('<span class="br-tag-mini warn" title="远程列表中已看不到该分支">远程已删除</span>');
+  if(b.merged) out.push('<span class="br-tag-mini ok" title="' + esc(b.mergeEvidence || ("已合并到 " + (b.mergedInto || "目标分支"))) + '">已合并</span>');
+  if(b.remoteHeadSha) out.push('<span class="br-tag-mini sha" title="' + esc("远程 HEAD：" + b.remoteHeadSha + (b.remoteHeadAuthor ? " · " + b.remoteHeadAuthor : "")) + '">HEAD ' + esc(branchShortSha(b.remoteHeadSha)) + '</span>');
+  if(b.syncError) out.push('<span class="br-tag-mini warn" title="' + esc(b.syncError) + '">同步失败</span>');
+  return out.length ? '<div class="br-card-badges">' + out.join("") + '</div>' : "";
+}
 function branchCardHTML(b){
   var sm = branchStatusMeta(b.status);
   var stay = branchStay(b);
@@ -611,6 +913,7 @@ function branchCardHTML(b){
       (b.owner ? '<span class="br-owner" title="负责人：' + esc(b.owner) + '">' + avatarHTML(b.owner) + '</span>' : '') +
     '</div>' +
     '<div class="br-name" title="' + esc(b.name) + '">' + esc(b.name) + '</div>' +
+    branchCardBadges(b) +
     branchVersionChips(b) +
     branchProjectChips(b) +
     (b.targetBranch ? '<div class="br-target" title="目标分支：' + esc(b.targetBranch) + '">→ ' + esc(b.targetBranch) + '</div>' : '') +
@@ -980,6 +1283,69 @@ function closeBranchDrawer(){
   brDrawerId = null;
   brDrawerData = null;
 }
+function branchRemoteStateText(s){
+  if(s === "deleted") return "已删除";
+  if(s === "active") return "存在";
+  return "未知";
+}
+function shortSha(sha){
+  var v = String(sha || "");
+  return v ? v.slice(0, 8) : "";
+}
+/** 远程事实区：只展示同步写入的 GitLab 侧事实，供人工判定时核对 */
+function branchRemoteFactsHTML(b){
+  if(!b.source || b.source !== "git") return "";
+  var head = b.remoteHeadSha
+    ? esc(shortSha(b.remoteHeadSha)) + (b.remoteHeadAt ? " · " + esc(fmtTs(b.remoteHeadAt)) : "")
+    : "—";
+  var merged = b.merged
+    ? ("是" + (b.mergedInto ? " → " + esc(b.mergedInto) : "") + (b.mergedAt ? " · " + esc(fmtTs(b.mergedAt)) : ""))
+    : "否";
+  var evidence = b.mergeEvidence ? ("（" + esc(b.mergeEvidence) + "）") : "";
+  var err = b.syncStatus === "error" && b.syncError
+    ? '<div><span>同步失败</span><b class="err" title="' + esc(b.syncError) + '">' + esc(b.syncError) + '</b></div>'
+    : "";
+  return '<div class="br-sect">' +
+    '<h4>远程事实</h4>' +
+    '<div class="br-facts">' +
+      '<div><span>来源</span><b>GitLab 同步</b></div>' +
+      '<div><span>仓库</span><b title="' + esc(b.repoUrl || "") + '">' + esc(b.repoName || branchRepoName(b.repoId) || "—") + '</b></div>' +
+      '<div><span>远程状态</span><b>' + esc(branchRemoteStateText(b.remoteState)) + '</b></div>' +
+      '<div><span>HEAD</span><b class="mono">' + head + '</b></div>' +
+      '<div><span>最后提交人</span><b>' + (b.remoteHeadAuthor ? esc(b.remoteHeadAuthor) : "—") + '</b></div>' +
+      '<div><span>最后同步</span><b>' + (b.lastSeenAt ? esc(fmtTs(b.lastSeenAt)) : "—") + '</b></div>' +
+      '<div><span>合并证据</span><b>' + merged + evidence + '</b></div>' +
+      '<div><span>同步状态</span><b>' + (b.syncStatus === "ok" ? "正常" : (b.syncStatus === "error" ? "失败" : "—")) + '</b></div>' +
+      err +
+    '</div>' +
+  '</div>';
+}
+/** 人工判定区：判定优先于远程事实；只读项目只展示不可操作 */
+function branchDecisionHTML(b, editable){
+  var oc = b.outcome || "open";
+  var meta = branchOutcomeMeta(oc);
+  var lines = '<div class="br-decision-line"><span>生命周期</span>' +
+    '<span class="tag ' + (oc === "pending" ? "tag-warning" : (oc === "done" ? "tag-success" : "")) + '">' + esc(meta.name) + '</span>' +
+    (oc === "pending" ? '<span class="foot-note">' + esc(branchPendingReasonText(b.pendingReason)) + '</span>' : '') +
+  '</div>';
+  if(b.decidedAt){
+    lines += '<div class="br-decision-line"><span>人工判定</span><b>' + esc(branchOutcomeMeta(b.decision || "done").name) + '</b>' +
+      '<span class="foot-note">' + (b.decidedByName ? esc(b.decidedByName) + " · " : "") + esc(fmtTs(b.decidedAt)) + '</span></div>';
+  }
+  if(b.decisionReason) lines += '<p class="br-decision-reason">理由：' + esc(b.decisionReason) + '</p>';
+  if(b.decisionNote) lines += '<p class="br-decision-reason">备注：' + esc(b.decisionNote) + '</p>';
+  var acts = editable
+    ? '<div class="br-decision-acts">' +
+        '<button class="btn sm" type="button" data-br-decide="done" data-br-id="' + esc(b.id) + '">标记完成</button>' +
+        '<button class="btn sm ghost" type="button" data-br-decide="canceled" data-br-id="' + esc(b.id) + '">取消</button>' +
+        '<button class="btn sm ghost" type="button" data-br-decide="ignored" data-br-id="' + esc(b.id) + '">忽略</button>' +
+        (b.decidedAt
+          ? '<button class="btn sm ghost" type="button" data-br-decide="" data-br-id="' + esc(b.id) + '">撤销判定</button>'
+          : '') +
+      '</div>'
+    : '<p class="foot-note" style="margin:0">你对该项目只有查看权限，不能做人工判定</p>';
+  return '<div class="br-sect"><h4>人工判定</h4><div class="br-decision">' + lines + acts + '</div></div>';
+}
 function renderBranchDrawer(b){
   var body = $("brDrawerBody");
   if(!body) return;
@@ -1026,6 +1392,8 @@ function renderBranchDrawer(b){
             ? esc(b.projects.map(function(p){ return p.projectName || p.projectId || "未知"; }).join("、")) : "空间级公共分支")) + '</b></div>' +
     '</div>' +
     (b.note ? '<p class="br-drawer-note">' + esc(b.note) + '</p>' : '') +
+    branchRemoteFactsHTML(b) +
+    branchDecisionHTML(b, editable) +
     '<div class="br-sect"><h4>关联工作项</h4><div id="brTaskList" class="br-tasklist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-sect"><h4>操作记录</h4><div id="brLogList" class="br-loglist"><div class="tl-empty">加载中…</div></div></div>' +
     '<div class="br-drawer-foot">' +
@@ -1197,7 +1565,9 @@ function populateOwnerFilter(){
   var seq = ++branchOwnerSeq;
   var p = {};
   if(branchProjectFilter) p.project = branchProjectFilter;
+  if(branchRepoFilter) p.repo = branchRepoFilter;
   if(branchVersionFilter) p.version = branchVersionFilter;
+  p.outcome = branchOutcomeFilter || "open";
   API.getAllPages("/api/branches", p).then(function(rows){
     if(seq !== branchOwnerSeq) return;
     var counts = {};
@@ -1273,12 +1643,15 @@ function branchVersionFilterName(){
 }
 /* 筛选下拉与内部状态同源：深链 / 汇总点选改了 branchFilter 后，下拉值与生效态跟着走 */
 function branchHasFilter(){
-  return !!(branchFilter || branchProjectFilter || branchOwnerFilter || branchVersionFilter
+  return !!(branchFilter || branchProjectFilter || branchRepoFilter || branchOwnerFilter || branchVersionFilter
+    || (branchOutcomeFilter && branchOutcomeFilter !== "open")
     || (($("branchSearch") || {}).value || "").trim());
 }
 function branchFilterCount(){
   var n = 0;
   if(branchFilter) n++;
+  if(branchRepoFilter) n++;
+  if(branchOutcomeFilter && branchOutcomeFilter !== "open") n++;
   if(branchOwnerFilter) n++;
   if(branchVersionFilter) n++;
   if((($("branchSearch") || {}).value || "").trim()) n++;
@@ -1286,7 +1659,8 @@ function branchFilterCount(){
 }
 /* 清空筛选保留当前项目：项目范围是浏览上下文，其他条件才是筛选 */
 function branchHasClearable(){
-  return !!(branchFilter || branchOwnerFilter || branchVersionFilter
+  return !!(branchFilter || branchProjectFilter || branchRepoFilter || branchOwnerFilter || branchVersionFilter
+    || (branchOutcomeFilter && branchOutcomeFilter !== "open")
     || (($("branchSearch") || {}).value || "").trim() || branchSource);
 }
 function syncBranchFilterControls(){
@@ -1298,6 +1672,8 @@ function syncBranchFilterControls(){
   if(verSel) verSel.value = branchVersionFilter || "";
   var prSel = $("branchProjectFilter");
   if(prSel) prSel.value = branchProjectFilter || "";
+  var repoSel = $("branchRepoFilter");
+  if(repoSel) repoSel.value = branchRepoFilter || "";
   /* 搜索范围跟随项目筛选：选了项目就只在该项目内搜 */
   var search = $("branchSearch");
   if(search){
@@ -1311,6 +1687,7 @@ function syncBranchFilterControls(){
   UI.markFiltered(owSel, !branchOwnerFilter);
   UI.markFiltered(verSel, !branchVersionFilter);
   UI.markFiltered(prSel, !branchProjectFilter);
+  UI.markFiltered(repoSel, !branchRepoFilter);
   var clr = $("branchClearFilter");
   if(clr) clr.hidden = !branchHasClearable();
   /* 手机筛选面板默认收起：按钮上带生效条件数，收起时也知道有几项在筛 */
@@ -1321,15 +1698,19 @@ function syncBranchFilterControls(){
     cnt.textContent = n;
   }
 }
-/* 一键清空状态 / 负责人 / 版本 / 关键词与深链来源，保留当前项目范围 */
+/* 一键清空状态 / 负责人 / 版本 / 仓库 / 关键词与深链来源，保留当前项目范围 */
 function clearBranchFilters(){
   var had = branchHasClearable();
   clearTimeout(branchSearchTimer);
   branchFilter = "";
   branchOwnerFilter = "";
   branchVersionFilter = "";
+  branchRepoFilter = "";
+  branchOutcomeFilter = "open";
+  branchSelected = {};
   if($("branchOwnerFilter")) $("branchOwnerFilter").value = "";
   if($("branchVersionFilter")) $("branchVersionFilter").value = "";
+  if($("branchRepoFilter")) $("branchRepoFilter").value = "";
   if($("branchSearch")) $("branchSearch").value = "";
   dropBranchSource();
   syncBranchFilterControls();
@@ -1343,13 +1724,14 @@ var branchViewsMenuEl = $("branchViewsMenu");
 function branchViewParams(){
   return {
     scope: "branch", project: branchProjectFilter || "", status: branchFilter || "",
+    repo: branchRepoFilter || "", outcome: branchOutcomeFilter || "open",
     owner: branchOwnerFilter || "", version: branchVersionFilter || "",
     q: (($("branchSearch") || {}).value || "").trim(),
     mode: branchViewMode, group: branchGroupMode, listGroup: branchListGroup
   };
 }
 function branchViewMeaningful(p){
-  return !!(p.project || p.status || p.owner || p.version || p.q);
+  return !!(p.project || p.status || p.repo || (p.outcome && p.outcome !== "open") || p.owner || p.version || p.q);
 }
 function applyBranchView(v){
   var p;
@@ -1360,6 +1742,8 @@ function applyBranchView(v){
     return;
   }
   branchProjectFilter = p.project && (rt.reqList || []).some(function(r){ return r.id === p.project; }) ? p.project : "";
+  branchRepoFilter = typeof p.repo === "string" ? p.repo : "";
+  branchOutcomeFilter = BRANCH_OUTCOMES.some(function(o){ return o.id === p.outcome; }) ? p.outcome : "open";
   branchFilter = p.status && branchStatusMeta(p.status).hint ? p.status : "";
   branchOwnerFilter = p.owner === "__none__"
     ? "__none__"
@@ -1448,6 +1832,150 @@ function updateBranchModeUI(){
   updateBranchGroupToggle();
 }
 
+/* ---------- GitLab 仓库绑定（仅空间主可管理） ---------- */
+
+var repoEditingId = null;
+function fillRepoReqOptions(cur){
+  var sel = $("repoReq");
+  if(!sel) return;
+  if(!rt.reqsLoaded){
+    ensureReqs(function(){ fillRepoReqOptions(cur); });
+    return;
+  }
+  var html = '<option value="">请选择项目</option>';
+  (rt.reqList || []).forEach(function(r){
+    if(r.archivedAt && r.id !== cur) return;
+    html += '<option value="' + esc(r.id) + '"' + (r.id === cur ? " selected" : "") + '>' + esc(r.name || r.id) + '</option>';
+  });
+  sel.innerHTML = html;
+  if(cur) sel.value = cur;
+}
+function resetRepoForm(repo){
+  repoEditingId = repo ? repo.id : null;
+  if($("repoId")) $("repoId").value = repo ? repo.id : "";
+  fillRepoReqOptions(repo ? (repo.reqId || "") : (branchProjectFilter || ""));
+  if($("repoName")) $("repoName").value = repo ? (repo.name || "") : "";
+  if($("repoUrl")) $("repoUrl").value = repo ? (repo.repoUrl || "") : "";
+  if($("repoRef")) $("repoRef").value = repo ? (repo.projectRef || "") : "";
+  if($("repoTarget")) $("repoTarget").value = repo ? (repo.defaultTarget || "") : "";
+  if($("repoPolicy")) $("repoPolicy").value = repo ? (repo.importPolicy || "recent90") : "recent90";
+  if($("repoEnabled")) $("repoEnabled").checked = repo ? repo.syncEnabled !== false : true;
+  var token = $("repoToken");
+  if(token){
+    token.value = "";
+    token.placeholder = repo
+      ? (repo.tokenConfigured ? "已配置令牌，留空表示不修改" : "未配置令牌，填写后保存")
+      : "填写 GitLab 访问令牌（PRIVATE-TOKEN）";
+  }
+  if($("dlgRepoOk")) $("dlgRepoOk").textContent = repo ? "保存修改" : "创建绑定";
+}
+function paintRepoList(){
+  var box = $("repoList");
+  if(!box) return;
+  if(!branchRepoCache.length){
+    box.innerHTML = '<div class="tl-empty">还没有绑定仓库。填写下方信息后点「创建绑定」。</div>';
+    return;
+  }
+  box.innerHTML = branchRepoCache.map(function(r){
+    var last = r.lastSyncAt ? esc(fmtTs(r.lastSyncAt)) : "尚未同步";
+    var status = r.lastSyncStatus === "ok" ? "同步正常"
+      : (r.lastSyncStatus === "error" ? "同步失败" : "未同步");
+    var detail = r.lastSyncStatus === "error" && r.lastSyncError ? r.lastSyncError : (r.lastSyncSummary || "");
+    return '<div class="br-repo-card' + (r.syncEnabled === false ? " paused" : "") + '">' +
+      '<div class="info">' +
+        '<div class="nm">' + esc(r.name || r.repoUrl || r.id) +
+          (r.tokenConfigured ? '<span class="br-tag-mini ok">令牌已配置</span>' : '<span class="br-tag-mini warn">未配置令牌</span>') +
+          (r.syncEnabled === false ? '<span class="br-tag-mini">已暂停</span>' : "") +
+        '</div>' +
+        '<div class="url" title="' + esc(r.repoUrl || "") + '">' + esc(r.repoUrl || "—") + ' · ' + esc(r.projectRef || "—") + '</div>' +
+        '<div class="meta">' + esc(r.reqName || projectNameById(r.reqId) || r.reqId || "未关联项目") +
+          ' · ' + last + ' · ' + esc(status) + (detail ? ' · ' + esc(detail) : "") + '</div>' +
+      '</div>' +
+      '<div class="acts">' +
+        '<button class="btn sm" type="button" data-repo-edit="' + esc(r.id) + '">编辑</button>' +
+        '<button class="btn sm ghost" type="button" data-repo-sync="' + esc(r.id) + '">立即同步</button>' +
+        '<button class="btn sm ghost" type="button" data-repo-toggle="' + esc(r.id) + '">' + (r.syncEnabled === false ? "启用" : "暂停") + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+function openRepoDialog(){
+  if(!isWorkspaceOwner()){ toast("只有空间主可以管理仓库绑定", "warn"); return; }
+  resetRepoForm(null);
+  paintRepoList();
+  UI.openModal($("dlgRepo"));
+  loadRepos(true).then(function(){
+    paintRepoList();
+    populateRepoFilter();
+  });
+}
+function findRepo(id){
+  for(var i = 0; i < branchRepoCache.length; i++) if(branchRepoCache[i].id === id) return branchRepoCache[i];
+  return null;
+}
+function submitRepoDialog(){
+  var reqId = (($("repoReq") || {}).value || "").trim();
+  var repoUrl = (($("repoUrl") || {}).value || "").trim();
+  var projectRef = (($("repoRef") || {}).value || "").trim();
+  if(!reqId){ toast("请选择所属项目", "warn"); return; }
+  if(!repoUrl){ toast("请填写 GitLab 地址", "warn"); return; }
+  if(!projectRef){ toast("请填写 GitLab 项目标识", "warn"); return; }
+  var token = (($("repoToken") || {}).value || "").trim();
+  var payload = {
+    reqId: reqId,
+    name: (($("repoName") || {}).value || "").trim() || null,
+    repoUrl: repoUrl,
+    projectRef: projectRef,
+    defaultTarget: (($("repoTarget") || {}).value || "").trim() || null,
+    importPolicy: (($("repoPolicy") || {}).value || "recent90"),
+    syncEnabled: !!($("repoEnabled") && $("repoEnabled").checked)
+  };
+  if(token) payload.token = token;
+  var btn = $("dlgRepoOk");
+  if(btn) btn.disabled = true;
+  var req = repoEditingId
+    ? API.put("/api/repos/" + encodeURIComponent(repoEditingId), payload)
+    : API.post("/api/repos", payload);
+  req.then(function(r){
+    if(btn) btn.disabled = false;
+    toast(repoEditingId ? ("已保存仓库「" + (r.name || r.repoUrl) + "」") : ("已绑定仓库「" + (r.name || r.repoUrl) + "」"), "fs");
+    resetRepoForm(null);
+    return loadRepos(true).then(function(){
+      paintRepoList();
+      populateRepoFilter();
+      loadBranches(true);
+    });
+  }).catch(function(ex){
+    if(btn) btn.disabled = false;
+    toast(ex.message || "仓库保存失败", "bad");
+  });
+}
+function toggleRepo(id){
+  var r = findRepo(id);
+  if(!r) return;
+  API.post("/api/repos/" + encodeURIComponent(id) + "/enabled?enabled=" + (r.syncEnabled === false ? "true" : "false"))
+    .then(function(){ return loadRepos(true); })
+    .then(function(){ paintRepoList(); toast(r.syncEnabled === false ? "已启用定时同步" : "已暂停定时同步", "fs"); })
+    .catch(function(ex){ toast(ex.message || "修改同步状态失败", "bad"); });
+}
+function syncRepoNow(id){
+  var r = findRepo(id);
+  if(!r) return;
+  toast("正在同步「" + (r.name || r.repoUrl) + "」…", "fs");
+  API.post("/api/repos/" + encodeURIComponent(id) + "/sync-now")
+    .then(function(nb){
+      toast(nb.lastSyncStatus === "ok"
+        ? ("同步完成：" + (nb.lastSyncSummary || "已更新分支"))
+        : ("同步失败：" + (nb.lastSyncError || "未知错误")), nb.lastSyncStatus === "ok" ? "fs" : "bad");
+      return loadRepos(true);
+    })
+    .then(function(){
+      paintRepoList();
+      loadBranches(true).then(function(){ if(branchViewMode === "list") loadBranchRows(); });
+    })
+    .catch(function(ex){ toast(ex.message || "同步失败", "bad"); });
+}
+
 function clearGroupOver(){
   var box = $("branchGroups");
   if(box) box.querySelectorAll(".br-group").forEach(function(g){ g.classList.remove("br-group-over"); });
@@ -1456,12 +1984,32 @@ function clearGroupOver(){
   var box = $("branchGroups");
   if(box){
     box.addEventListener("click", function(e){
+      var bulk = e.target.closest("[data-br-bulk-decide]");
+      if(bulk){ batchDecide(bulk.dataset.brBulkDecide); return; }
+      /* 勾选框与全选不触发抽屉 */
+      if(e.target.closest("[data-br-select],[data-br-select-all]")) return;
       var more = e.target.closest("[data-br-more]");
       if(more){ loadMoreBranches(more.dataset.brMore); return; }
       var menu = e.target.closest("[data-br-status-menu]");
       if(menu){ e.stopPropagation(); openBranchStatusMenu(menu, menu.dataset.brStatusMenu); return; }
       var card = e.target.closest("[data-branch]");
       if(card) openBranchDrawer(card.dataset.branch);
+    });
+    box.addEventListener("change", function(e){
+      if(e.target.closest("[data-br-select-all]")){
+        var on = !!e.target.checked;
+        var rows = branchViewMode === "list" ? filteredBranchRows() : [];
+        branchSelected = {};
+        if(on) rows.forEach(function(b){ branchSelected[b.id] = true; });
+        renderBranches();
+        return;
+      }
+      var boxSel = e.target.closest("[data-br-select]");
+      if(!boxSel) return;
+      var id = boxSel.dataset.brSelect;
+      if(boxSel.checked) branchSelected[id] = true;
+      else delete branchSelected[id];
+      renderBranches();
     });
     box.addEventListener("keydown", function(e){
       if(e.key !== "Enter" && e.key !== " ") return;
@@ -1642,6 +2190,65 @@ function clearGroupOver(){
       loadBranches(true);
     });
   }
+  /* 生命周期 chips：与状态正交，切换后重拉看板/列表；深链来源视为已接管 */
+  if($("branchLifeChips")){
+    $("branchLifeChips").addEventListener("click", function(e){
+      var chip = e.target.closest("[data-br-outcome]");
+      if(!chip || chip.dataset.brOutcome === branchOutcomeFilter) return;
+      branchOutcomeFilter = chip.dataset.brOutcome;
+      branchSelected = {};
+      dropBranchSource();
+      syncBranchFilterControls();
+      if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
+    });
+  }
+  /* 待确认队列：查看详情 / 逐条判定 / 只看待确认 / 按仓库展开 */
+  if($("branchPending")){
+    $("branchPending").addEventListener("click", function(e){
+      var open = e.target.closest("[data-br-pending-open]");
+      if(open){ openBranchDrawer(open.dataset.brPendingOpen); return; }
+      var dec = e.target.closest("[data-br-pending-decide]");
+      if(dec){ decideBranch(dec.dataset.brId, dec.dataset.brPendingDecide); return; }
+      var all = e.target.closest("[data-br-pending-repo]");
+      if(all){
+        branchOutcomeFilter = "pending";
+        branchRepoFilter = all.dataset.brPendingRepo || "";
+        if($("branchRepoFilter")) $("branchRepoFilter").value = branchRepoFilter;
+        syncBranchFilterControls();
+        if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
+        return;
+      }
+      var only = e.target.closest("[data-br-outcome]");
+      if(only){
+        branchOutcomeFilter = only.dataset.brOutcome;
+        branchSelected = {};
+        dropBranchSource();
+        syncBranchFilterControls();
+        if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
+      }
+    });
+  }
+  if($("branchRepoFilter")){
+    $("branchRepoFilter").addEventListener("change", function(e){
+      branchRepoFilter = e.target.value;
+      syncBranchFilterControls();
+      if(branchViewMode === "list") loadBranchRows(); else loadBranches(true);
+    });
+  }
+  if($("branchReposBtn")) $("branchReposBtn").addEventListener("click", openRepoDialog);
+  if($("repoNew")) $("repoNew").addEventListener("click", function(){ resetRepoForm(null); });
+  if($("dlgRepoCancel")) $("dlgRepoCancel").addEventListener("click", function(){ UI.closeModal($("dlgRepo")); });
+  if($("dlgRepoOk")) $("dlgRepoOk").addEventListener("click", submitRepoDialog);
+  if($("repoList")){
+    $("repoList").addEventListener("click", function(e){
+      var ed = e.target.closest("[data-repo-edit]");
+      if(ed){ var r = findRepo(ed.dataset.repoEdit); if(r) resetRepoForm(r); return; }
+      var sy = e.target.closest("[data-repo-sync]");
+      if(sy){ syncRepoNow(sy.dataset.repoSync); return; }
+      var tg = e.target.closest("[data-repo-toggle]");
+      if(tg) toggleRepo(tg.dataset.repoToggle);
+    });
+  }
   if($("branchListGroup")){
     $("branchListGroup").addEventListener("change", function(e){
       branchListGroup = e.target.value;
@@ -1666,8 +2273,10 @@ function clearGroupOver(){
   }
 
   if($("branchDrawer")){
-    /* 抽屉内动态内容的统一委托：只处理工作项跳转，状态改走状态区按钮 */
+    /* 抽屉内动态内容的统一委托：工作项跳转 + 人工判定 */
     $("branchDrawer").addEventListener("click", function(e){
+      var dec = e.target.closest("[data-br-decide]");
+      if(dec){ decideBranch(dec.dataset.brId, dec.dataset.brDecide || ""); return; }
       var task = e.target.closest("[data-br-task]");
       if(task){
         /* 任务抽屉叠在分支抽屉之上，关闭后回到分支详情 */
