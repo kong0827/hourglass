@@ -290,9 +290,10 @@
       <if test="completion == 'open'"> AND t.board_column != 'done' </if>
       <if test="completion == 'done'"> AND t.board_column = 'done' </if>
       <if test="q != null">
-        <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 -->
+        <!-- 口径与 ganttWhere 一致：标题/描述/备注/模块 + 项目名 + 标签名 + 附件名 + 工作项编号 -->
         AND (t.title LIKE CONCAT('%', #{q}, '%')
              OR t.description LIKE CONCAT('%', #{q}, '%')
+             <if test="itemNo != null">OR t.item_no = #{itemNo}</if>
              OR t.note LIKE CONCAT('%', #{q}, '%')
              OR EXISTS (SELECT 1 FROM category cg
                         WHERE cg.id = t.category_id AND cg.workspace_id = t.workspace_id

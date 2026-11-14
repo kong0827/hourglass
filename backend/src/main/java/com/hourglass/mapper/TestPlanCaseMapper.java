@@ -21,12 +21,19 @@ public interface TestPlanCaseMapper {
 
     int countByPlan(@Param("planId") String planId);
 
+    /** 发布检查：计划内全部用例的结果与必测标记 */
+    List<com.hourglass.dto.ReleaseCheckCase> selectEvidenceCases(@Param("planId") String planId);
+
     TestPlanCase selectByPlanAndCase(@Param("planId") String planId, @Param("caseId") String caseId);
 
     /** 批量执行结果回写（计划内口径） */
     int updateResult(@Param("planId") String planId, @Param("caseId") String caseId,
                      @Param("result") String result, @Param("note") String note,
                      @Param("by") String by, @Param("byUserId") String byUserId);
+
+    /** 发布必测标记（逐条切换） */
+    int updateRequired(@Param("planId") String planId, @Param("caseId") String caseId,
+                       @Param("required") boolean required);
 
     int deleteByPlanAndCase(@Param("planId") String planId, @Param("caseId") String caseId);
 

@@ -61,12 +61,16 @@ public class DemandService {
     private final ReleasePermissionService releasePermission;
     /** 删除不可逆：需求自身的流转日志会一起清掉，必须在删除前写独立墓碑 */
     private final DeletionTraceService deletionTrace;
+    private final NumberSeqService numberSeq;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.VersionTaskMapper versionTaskMapper;
     @org.springframework.beans.factory.annotation.Autowired
     private TaskPublicationService publications;
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.ReleaseMapper releases;
+    /** 需求删除后，其下工作项的用例关联也要解除（工作项本身保留但会失去 demand_id） */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     /** 人工判定是需求的追加式记录，需求删除时必须一起清理 */
     @org.springframework.beans.factory.annotation.Autowired
     private com.hourglass.mapper.DemandDeliveryJudgementMapper judgementMapper;
@@ -79,7 +83,7 @@ public class DemandService {
                          com.hourglass.mapper.MailDeliveryMapper mailDeliveryMapper,
                          com.hourglass.mapper.TestCaseMapper caseMapper, CategoryMapper categoryMapper,
                          DeliveryScopeLock deliveryLock, ReleasePermissionService releasePermission,
-                         DeletionTraceService deletionTrace) {
+                         DeletionTraceService deletionTrace, NumberSeqService numberSeq) {
         this.demandMapper = demandMapper;
         this.reqMapper = reqMapper;
         this.versionMapper = versionMapper;
@@ -94,6 +98,7 @@ public class DemandService {
         this.deliveryLock = deliveryLock;
         this.releasePermission = releasePermission;
         this.deletionTrace = deletionTrace;
+        this.numberSeq = numberSeq;
     }
 
     /** 列表模式分页：筛选/排序/分页全在 SQL，counts 忽略 status 与列内阶段条件 */
@@ -820,9 +825,30 @@ public class DemandService {
         d.setStatus("review");
         d.setCreatedBy(userId);
         d.setRevision(0L);
-        demandMapper.insert(d);
+        insertWithNo(d);
         logChange(d, userId, "create", null, null, null);
         return getVisible(workspaceId, userId, d.getId());
+    }
+
+    /**
+     * 并发提需求会抢到同一个项目内编号，由唯一键 uk_demand_no 拒绝后重算重试。
+     * 失败的 INSERT 不会让 InnoDB 事务失效，与工作项编号同一口径。
+     * 取号走 number_seq（sql/87）：删除需求不回收编号，重试时序列继续前进。
+     */
+    private void insertWithNo(Demand d) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            d.setDemandNo(numberSeq.nextDemand(d.getWorkspaceId(), d.getReqId()));
+            try {
+                demandMapper.insert(d);
+                return;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                String message = e.getMessage();
+                if (message == null || !message.contains("uk_demand_no")) {
+                    throw e;
+                }
+            }
+        }
+        throw AppException.badRequest("需求编号生成冲突，请重试");
     }
 
     /** 待评审可整单编辑；已通过 / 已排期只补录说明类内容，标题与排期口径仍由原动作维护；已关闭需先恢复 */
@@ -1241,6 +1267,8 @@ public class DemandService {
         attachmentService.deleteByTarget(workspaceId, id, AttachmentService.KIND_DEMAND);
         mailDeliveryMapper.deleteByReferenceIds(java.util.Collections.singletonList(id));
         docMapper.deleteDemandLinksByDemand(workspaceId, id);
+        /* 工作项失去需求归口后，用例—工作项关联也不再成立；必须在解绑任务前按 demand_id 清理 */
+        caseTaskMapper.deleteByDemand(workspaceId, id);
         /* 需求没了，任务上的 demand_id 必须一起解绑，否则编辑任务会被"关联需求不存在"拦住 */
         taskMapper.clearDemandRef(workspaceId, id);
         java.util.List<String> affectedTaskIds = new java.util.ArrayList<String>(linkedTasks.size());

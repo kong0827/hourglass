@@ -118,7 +118,11 @@ public class SearchService {
             hits.add(h);
         }
 
-        hits.addAll(caseMapper.searchVisible(workspaceId, viewerId, q, per));
+        List<SearchHit> caseHits = caseMapper.searchVisible(workspaceId, viewerId, q, Nos.parseCase(q), per);
+        for (SearchHit h : caseHits) {
+            h.setExtra(caseExtra(h));
+        }
+        hits.addAll(caseHits);
 
         Collections.sort(hits, new Comparator<SearchHit>() {
             @Override
@@ -138,6 +142,16 @@ public class SearchService {
         }
         String owner = Texts.trimToNull(t.getOwner());
         return owner == null ? no : no + " · " + owner;
+    }
+
+    /** 用例命中理由与工作项同口径：编号在前、模块在后；未取号保持原样 */
+    private static String caseExtra(SearchHit h) {
+        String no = Nos.testCase(h.getCaseNo());
+        if (no.isEmpty()) {
+            return h.getExtra();
+        }
+        String module = Texts.trimToNull(h.getExtra());
+        return module == null ? no : no + " · " + module;
     }
 
     private static int typeOrder(String type) {

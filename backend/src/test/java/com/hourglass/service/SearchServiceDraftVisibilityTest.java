@@ -1,12 +1,16 @@
 package com.hourglass.service;
 
 import com.hourglass.dto.DemandPage;
+import com.hourglass.dto.SearchHit;
 import com.hourglass.dto.TaskListResponse;
 import com.hourglass.mapper.RequirementDocMapper;
 import com.hourglass.mapper.TestCaseMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -53,12 +57,29 @@ class SearchServiceDraftVisibilityTest {
         verify(docs).searchVisible(WS, null, USER, true, "结算", 5);
     }
 
+    @Test
+    void caseHitsCarryTheirNumberInExtra() {
+        stubEmptySources();
+        when(access.viewerScope(WS, USER)).thenReturn(USER);
+        when(access.roleOf(WS, USER)).thenReturn("member");
+        SearchHit hit = new SearchHit();
+        hit.setType("case");
+        hit.setId("C1");
+        hit.setCaseNo(12);
+        hit.setExtra("结算");
+        when(cases.searchVisible(WS, USER, "TC-012", 12, 5)).thenReturn(Collections.singletonList(hit));
+
+        List<SearchHit> hits = service.search(WS, USER, "TC-012", 5);
+
+        assertEquals("TC-012 · 结算", hits.get(0).getExtra());
+    }
+
     private void stubEmptySources() {
         when(reqs.list(WS, USER)).thenReturn(Collections.emptyList());
         when(tasks.list(eq(WS), eq(USER), any(), eq("updated"), eq(0), anyInt())).thenReturn(new TaskListResponse());
         when(demands.page(eq(WS), eq(USER), any())).thenReturn(new DemandPage());
         when(docs.searchVisible(anyString(), any(), anyString(), anyBoolean(), anyString(), anyInt()))
                 .thenReturn(Collections.emptyList());
-        when(cases.searchVisible(anyString(), any(), anyString(), anyInt())).thenReturn(Collections.emptyList());
+        when(cases.searchVisible(anyString(), any(), anyString(), any(), anyInt())).thenReturn(Collections.emptyList());
     }
 }

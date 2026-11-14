@@ -194,15 +194,43 @@ function noText(prefix, no){
 }
 function itemNoText(no){ return noText("WI", no); }
 function releaseNoText(no){ return noText("REL", no); }
+function demandNoText(no){ return noText("DM", no); }
+function releasePlanNoText(no){ return noText("PL", no); }
+function releaseSnapshotObject(record){
+  var plan = record && record.planSnapshot;
+  if(typeof plan === "string"){ try{ plan = JSON.parse(plan); }catch(ex){ return null; } }
+  return plan && typeof plan === "object" ? plan : null;
+}
+/* 冻结证据只读展示：历史记录不随之后用例结果变化，因此不提供重算入口 */
+function releaseEvidenceHTML(record){
+  var plan = releaseSnapshotObject(record), ev = plan && plan.testEvidence;
+  if(!ev) return "";
+  var policy = {strict:"严格", standard:"标准", loose:"宽松"}[ev.policy] || ev.policy || "标准";
+  var verdict = ev.verdict === "block" ? ["有阻断项", "tag-danger"] : ev.verdict === "warn" ? ["有提醒", "tag-warning"] : ["通过", "tag-success"];
+  var lines = [];
+  if(ev.requiredTotal != null) lines.push("发布必测 " + (ev.requiredTotal || 0) + " 条：通过 " + (ev.requiredPassed || 0) + "，失败 / 阻塞 " + (ev.requiredFailed || 0) + "，未执行 / 跳过 " + (ev.requiredUntested || 0));
+  if(ev.caseTotal != null) lines.push("计划用例 " + (ev.caseTotal || 0) + " 条：已执行 " + (ev.caseExecuted || 0) + "，通过 " + (ev.casePassed || 0) + "，失败 " + (ev.caseFailed || 0) + "，阻塞 " + (ev.caseBlocked || 0) + "，跳过 " + (ev.caseSkipped || 0) + "，未执行 " + (ev.caseUntested || 0));
+  if(ev.demandsTotal != null || ev.workItemsTotal != null) lines.push("需求级覆盖 " + (ev.demandsCovered || 0) + "/" + (ev.demandsTotal || 0) + " · 工作项级覆盖 " + (ev.workItemsCovered || 0) + "/" + (ev.workItemsTotal || 0));
+  var cases = Array.isArray(ev.requiredCases) ? ev.requiredCases : [];
+  return '<div class="release-evidence"><p class="release-text"><b>发布检查（冻结证据）</b> <span class="tag ' + verdict[1] + '">' + verdict[0] + '</span> 策略：' + esc(policy) + ' · 检查于 ' + esc(fmtReleaseTime(ev.checkedAt)) + '</p>'
+    + (lines.length ? '<p class="hint">' + lines.map(esc).join('<br>') + '</p>' : "")
+    + (Array.isArray(ev.blockers) && ev.blockers.length ? '<p class="release-error">阻断：' + ev.blockers.map(esc).join("；") + '</p>' : "")
+    + (Array.isArray(ev.reminders) && ev.reminders.length ? '<p class="hint">提醒：' + ev.reminders.map(esc).join("；") + '</p>' : "")
+    + (cases.length ? '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr><th>未通过的发布必测用例</th><th>需求</th><th>结果</th></tr></thead><tbody>'
+      + cases.map(function(c){ return '<tr><td>' + esc(c.caseNo || c.caseId || "") + '<br>' + esc(c.title || "—") + '</td><td>' + esc(c.demandTitle || "—") + '</td><td>' + esc(c.result === "untested" ? "未执行" : c.result === "blocked" ? "阻塞" : c.result === "failed" ? "失败" : c.result || "—") + '</td></tr>'; }).join("")
+      + '</tbody></table></div>' : "")
+    + '</div>';
+}
 function releaseSnapshotHTML(record, taskId){
   var items = (record.items || []).filter(function(item){ return !taskId || item.taskId === taskId; });
   var rows = items.map(function(item){
-    return '<tr><td>' + esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—") + '</td><td>' + esc(item.demandId || "") + '<br>' + esc(item.demandTitle || "—") + '</td><td>' + esc(item.ownerName || item.ownerUserId || "—") + '</td><td>' + esc(record.versionName || record.versionId || "—") + '</td><td>' + esc(fmtReleaseTime(item.completedAt)) + '</td><td>' + esc(item.disposition || "—") + '</td></tr>';
+    return '<tr><td>' + esc(itemNoText(item.taskItemNo) || item.taskId || "") + '<br>' + esc(item.title || "—") + '</td><td>' + esc(demandNoText(item.demandNo) || item.demandId || "") + '<br>' + esc(item.demandTitle || "—") + '</td><td>' + esc(item.ownerName || item.ownerUserId || "—") + '</td><td>' + esc(record.versionName || record.versionId || "—") + '</td><td>' + esc(fmtReleaseTime(item.completedAt)) + '</td><td>' + esc(item.disposition || "—") + '</td></tr>';
   }).join("");
   return '<details class="release-record"><summary><span class="tag ' + (record.result === "success" ? "tag-success" : "tag-neutral") + '">' + esc(record.result === "success" ? "成功" : record.result === "failed" ? "失败" : record.result || "未记录结果") + '</span> ' + esc(releaseEnvironmentName(record.environment)) + ' · ' + esc(releaseOperationName(record.operation)) + ' · ' + esc(fmtReleaseTime(record.occurredAt)) + ' · ' + esc(record.versionName || record.versionId || "") + '</summary>'
     + '<p class="hint">记录 ' + esc(releaseNoText(record.releaseNo) || ("#" + record.id)) + ' · 计划时间 ' + esc(fmtReleaseTime(releasePlanTime(record))) + ' · 记录时间 ' + esc(fmtReleaseTime(record.recordedAt)) + '</p>'
     + '<p class="release-text">目标：' + esc(normalizedIds(record.targetKeys).join("、") || "未记录") + ' · 覆盖：' + esc(record.coverage || "unknown") + '<br>制品：' + esc(record.artifactRef || "未记录") + '<br>SHA256：' + esc(record.artifactDigest || "未记录") + '<br>记录人：' + esc(record.recordedByName || record.recordedByUserId || record.releasedByName || record.releasedBy || "未记录") + ' · 实际执行人：' + esc(record.executorName || record.executorUserId || "未记录") + '<br>关联事件：' + esc(releaseNoText(record.relatedReleaseNo) || record.relatedReleaseId || "—") + '</p>'
     + (record.notes ? '<p class="release-text">说明：' + esc(record.notes) + '</p>' : "") + (record.deviationReason ? '<p class="release-text">偏差理由：' + esc(record.deviationReason) + '</p>' : "") + (record.failureReason ? '<p class="release-error">失败原因：' + esc(record.failureReason) + '</p>' : "")
+    + releaseEvidenceHTML(record)
     + (!taskId ? '<button class="btn sm" type="button" data-release-export="' + esc(record.id) + '">导出快照 CSV</button> '
       + '<button class="btn sm" type="button" data-release-delivery="' + esc(record.id) + '" data-release-delivery-version="' + esc(record.versionId || "") + '" title="以这条发布记录为依据生成一页式交付说明">交付说明</button>' : "")
     + '<div class="tbl-wrap"><table class="phase-tbl"><thead><tr><th>工作项快照</th><th>需求快照</th><th>负责人快照</th><th>实际记录版本</th><th>完成时间</th><th>处理结果</th></tr></thead><tbody>' + (rows || '<tr><td colspan="6">未留工作项快照</td></tr>') + '</tbody></table></div></details>';
@@ -386,4 +414,4 @@ function taskDescText(desc, maxLen){
   return text;
 }
 
-export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, elapsedText, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };
+export { isHtml, normalizedIds, taskVersionIds, taskVersionsText, sameIds, selectedVersionIds, taskPublicationHTML, fmtReleaseTime, localDatetime, releaseEnvironmentName, releaseOperationName, releasePlanTime, releaseSnapshotHTML, itemNoText, releaseNoText, demandNoText, releasePlanNoText, BACKUP_NAME, CAT_DEFAULT_COLOR, COLUMNS, COL_INDEX, DOC_TYPES, ITEM_TYPE_DESCS, PALETTE, PRIORITIES, SEVERITY_LABELS, demandGanttInfoHTML, docTypeName, addDays, avatarColor, avatarColorIndex, avatarHTML, axisTicks, colMeta, colName, dayDiff, duePresetDate, elapsedText, fmtElapsed, fmtFull, fmtMD, fmtMinutes, fmtMinutesShort, fmtShortMD, fmtSize, fmtTs, initial, iso, itemTypeInfoHTML, mdLite, pad2, parseDate, priColor, priName, priTagHTML, recurLabel, reqStatusName, rgbaOf, severityBadgeHTML, startOfDay, startPresetDate, syncColumns, syncPriorities, taskDescText, typeBadgeHTML, typeName, versionPhaseInfoHTML, weekdayCN };

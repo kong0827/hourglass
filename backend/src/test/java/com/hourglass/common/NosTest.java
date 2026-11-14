@@ -45,4 +45,40 @@ class NosTest {
         assertNull(Nos.parseWorkItem("12345678"));
         assertNull(Nos.parseWorkItem("12 34"));
     }
+
+    @Test
+    void demandAndPlanNumbersUseTheSameForm() {
+        assertEquals("DM-001", Nos.demand(1));
+        assertEquals("DM-042", Nos.demand(42));
+        assertEquals("", Nos.demand(null));
+        assertEquals("PL-001", Nos.releasePlan(1));
+        assertEquals("PL-120", Nos.releasePlan(120));
+        assertEquals("", Nos.releasePlan(0));
+    }
+
+    @Test
+    void demandAndPlanSearchesOnlyAcceptTheirOwnPrefix() {
+        assertEquals(Integer.valueOf(3), Nos.parseDemand("DM-003"));
+        assertEquals(Integer.valueOf(3), Nos.parseDemand("dm3"));
+        assertEquals(Integer.valueOf(3), Nos.parseDemand("3"));
+        assertNull(Nos.parseDemand("WI-003"));
+        assertEquals(Integer.valueOf(5), Nos.parseReleasePlan("PL-005"));
+        assertEquals(Integer.valueOf(5), Nos.parseReleasePlan("pl5"));
+        assertEquals(Integer.valueOf(5), Nos.parseReleasePlan("5"));
+        assertNull(Nos.parseReleasePlan("DM-005"));
+        assertNull(Nos.parseDemand("需求"));
+    }
+
+    @Test
+    void caseNumbersUseTheSameFormAndOnlyAcceptTheirOwnPrefix() {
+        assertEquals("TC-001", Nos.testCase(1));
+        assertEquals("TC-1000", Nos.testCase(1000));
+        assertEquals("", Nos.testCase(null));
+        assertEquals("", Nos.testCase(0));
+        assertEquals(Integer.valueOf(9), Nos.parseCase("TC-009"));
+        assertEquals(Integer.valueOf(9), Nos.parseCase("tc9"));
+        assertEquals(Integer.valueOf(9), Nos.parseCase("9"));
+        assertNull(Nos.parseCase("WI-009"));
+        assertNull(Nos.parseCase("登录"));
+    }
 }

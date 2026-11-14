@@ -16,6 +16,8 @@ public class Requirement {
     private String objective;
     /** active/done/hold */
     private String status;
+    /** 发布前测试检查策略（sql/89）：strict / standard / loose */
+    private String releaseCheckPolicy;
     /** 项目负责人（sql/50，app_user.id） */
     private String ownerUserId;
     private LocalDate plannedStart;

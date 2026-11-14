@@ -71,6 +71,7 @@ public class BackupExportService {
     private final TaskCommentMapper commentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     private final RequirementDocCommentMapper docCommentMapper;
     private final RequirementDocMapper requirementDocMapper;
     private final DevBranchMapper devBranchMapper;
@@ -81,7 +82,7 @@ public class BackupExportService {
     private final VersionTaskMapper versionTaskMapper;
     private final DemandMapper demandMapper;
 
-    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper) {
+    public BackupExportService(TaskMapper taskMapper, RequirementMapper reqMapper, SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper, BoardColumnMapper boardColumnMapper, CategoryMapper categoryMapper, TaskCommentMapper commentMapper, TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper, com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper, RequirementDocCommentMapper docCommentMapper, RequirementDocMapper requirementDocMapper, DevBranchMapper devBranchMapper, TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper, ProjectVersionMapper versionMapper, VersionTaskMapper versionTaskMapper, DemandMapper demandMapper, com.hourglass.mapper.VersionCommitmentMapper commitmentMapper) {
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -92,6 +93,7 @@ public class BackupExportService {
         this.commentMapper = commentMapper;
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
+        this.caseTaskMapper = caseTaskMapper;
         this.docCommentMapper = docCommentMapper;
         this.requirementDocMapper = requirementDocMapper;
         this.devBranchMapper = devBranchMapper;
@@ -200,6 +202,7 @@ public class BackupExportService {
             b.setReproduceSteps(t.getReproduceSteps());
             b.setFoundVersionId(t.getFoundVersionId());
             b.setRegressionStatus(t.getRegressionStatus());
+            b.setItemNo(t.getItemNo());
             b.setVersionIds(new ArrayList<String>(versionByTask.getOrDefault(t.getId(), java.util.Collections.emptyList())));
             tasks.add(b);
         }
@@ -238,6 +241,7 @@ public class BackupExportService {
             b.setStatus(r.getStatus());
             b.setCreatedAt(r.getCreatedAt() == null ? null : r.getCreatedAt().toLocalDate().toString());
             b.setFirstReleasedAt(r.getFirstReleasedAt() == null ? null : r.getFirstReleasedAt().toString());
+            b.setReleaseCheckPolicy(r.getReleaseCheckPolicy());
             reqs.add(b);
         }
         data.setReqs(reqs);
@@ -395,6 +399,7 @@ public class BackupExportService {
             bd.setCreatedBy(d.getCreatedBy());
             bd.setCreatedAt(d.getCreatedAt() == null ? null : d.getCreatedAt().format(ISO_TS));
             bd.setUpdatedAt(d.getUpdatedAt() == null ? null : d.getUpdatedAt().format(ISO_TS));
+            bd.setDemandNo(d.getDemandNo());
             demands.add(bd);
         }
         data.setDemands(demands);
@@ -424,8 +429,10 @@ public class BackupExportService {
             b.setLatestByUserId(c.getLatestByUserId());
             b.setLatestAt(ts(c.getLatestAt()));
             b.setLatestBugTaskId(c.getLatestBugTaskId());
+            b.setDemandId(c.getDemandId());
             b.setCreatedAt(ts(c.getCreatedAt()));
             b.setUpdatedAt(ts(c.getUpdatedAt()));
+            b.setCaseNo(c.getCaseNo());
             testCases.add(b);
         }
         data.setTestCases(testCases);
@@ -444,6 +451,17 @@ public class BackupExportService {
             testCaseRuns.add(b);
         }
         data.setTestCaseRuns(testCaseRuns);
+
+        List<BackupData.BackupCaseTask> caseTasks = new ArrayList<BackupData.BackupCaseTask>();
+        for (com.hourglass.entity.TestCaseTask link : caseTaskMapper.selectAllByWorkspace(workspaceId)) {
+            BackupData.BackupCaseTask b = new BackupData.BackupCaseTask();
+            b.setCaseId(link.getCaseId());
+            b.setTaskId(link.getTaskId());
+            b.setCreatedBy(link.getCreatedBy());
+            b.setCreatedAt(ts(link.getCreatedAt()));
+            caseTasks.add(b);
+        }
+        data.setCaseTasks(caseTasks);
 
         List<BackupData.BackupDocComment> docComments = new ArrayList<BackupData.BackupDocComment>();
         for (RequirementDocComment c : docCommentMapper.selectByWorkspace(workspaceId)) {

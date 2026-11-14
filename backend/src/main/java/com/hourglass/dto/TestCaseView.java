@@ -29,6 +29,8 @@ public class TestCaseView {
     private LocalDateTime latestAt;
     private String latestBugTaskId;
     private String latestBugTaskTitle;
+    /** 验证的工作项（多对多）；空数组表示只到需求级覆盖 */
+    private List<CaseTaskLink> tasks;
     /** 最近一轮执行挂载的证据附件数（失败截图等） */
     private Integer latestEvidenceCount;
     private LocalDateTime createdAt;

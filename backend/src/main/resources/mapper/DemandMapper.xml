@@ -3,14 +3,14 @@
 <mapper namespace="com.hourglass.mapper.DemandMapper">
 
   <sql id="cols">
-    id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status, close_reason, close_stage,
+    id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status, close_reason, close_stage,
     expect_date, planned_start, planned_end, revision,
     accept_text, version_id, review_note, wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort,
     created_by, created_at, updated_at
   </sql>
 
   <sql id="pageCols">
-    d.id, d.workspace_id, d.req_id, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
+    d.id, d.workspace_id, d.req_id, d.demand_no, d.title, d.description, d.source, d.item_kind, d.category_id, d.priority, d.status,
     d.close_reason, d.close_stage, d.expect_date, d.planned_start, d.planned_end, d.revision,
     d.accept_text, d.version_id, v.name AS versionName, v.status AS versionStatus, d.review_note,
     d.wsjf_business, d.wsjf_urgency, d.wsjf_risk, d.wsjf_effort, d.created_by, d.created_at, d.updated_at
@@ -203,6 +203,7 @@
     <if test="q.q != null">
       AND (d.title LIKE CONCAT('%', #{q.q}, '%')
            OR d.description LIKE CONCAT('%', #{q.q}, '%')
+           <if test="q.itemNo != null">OR d.demand_no = #{q.itemNo}</if>
            OR d.source LIKE CONCAT('%', #{q.q}, '%')
            OR EXISTS (SELECT 1 FROM category cg
                       WHERE cg.id = d.category_id AND cg.workspace_id = d.workspace_id
@@ -371,15 +372,16 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO demand (id, workspace_id, req_id, title, description, source, item_kind, category_id, priority, status,
+    INSERT INTO demand (id, workspace_id, req_id, demand_no, title, description, source, item_kind, category_id, priority, status,
                         expect_date, planned_start, planned_end, revision, accept_text, version_id, review_note,
                         wsjf_business, wsjf_urgency, wsjf_risk, wsjf_effort, created_by,
                         created_at, updated_at)
-    VALUES (#{id}, #{workspaceId}, #{reqId}, #{title}, #{description}, #{source}, #{itemKind}, #{categoryId}, #{priority}, #{status},
+    VALUES (#{id}, #{workspaceId}, #{reqId}, #{demandNo}, #{title}, #{description}, #{source}, #{itemKind}, #{categoryId}, #{priority}, #{status},
             #{expectDate}, #{plannedStart}, #{plannedEnd}, #{revision}, #{acceptText}, #{versionId}, #{reviewNote},
             #{wsjfBusiness}, #{wsjfUrgency}, #{wsjfRisk}, #{wsjfEffort}, #{createdBy},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
+
 
   <update id="update">
     UPDATE demand SET

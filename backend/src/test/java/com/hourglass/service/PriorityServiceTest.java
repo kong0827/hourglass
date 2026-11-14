@@ -22,7 +22,7 @@ class PriorityServiceTest {
     private static final String WS = "W1";
 
     private final WorkspacePriorityMapper mapper = mock(WorkspacePriorityMapper.class);
-    private final PriorityService service = new PriorityService(mapper);
+    private final PriorityService service = new PriorityService(mapper, mock(ActivityService.class));
 
     @Test
     void listReturnsDefaultsInFixedOrderWithoutPersisting() {

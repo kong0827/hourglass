@@ -80,6 +80,7 @@ public class CategoryService {
         c.setSortOrder(categoryMapper.maxSortOrder(workspaceId, projectId) + 1);
         categoryMapper.insert(c);
         evictCategories(workspaceId);
+        activityService.logConfig(workspaceId, "新建模块「" + c.getName() + "」（项目「" + project.getName() + "」）");
         return categoryMapper.selectById(workspaceId, c.getId());
     }
 
@@ -181,7 +182,7 @@ public class CategoryService {
 
     @Transactional
     public void order(String workspaceId, String userId, String projectId, List<String> ids) {
-        requireProject(workspaceId, projectId);
+        Requirement project = requireProject(workspaceId, projectId);
         assertManage(workspaceId, userId, projectId);
         List<Category> all = metaCache.categories(workspaceId);
         Set<String> known = new HashSet<String>();
@@ -198,6 +199,14 @@ public class CategoryService {
             categoryMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
         evictCategories(workspaceId);
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        for (Category c : metaCache.categories(workspaceId)) {
+            if (projectId.equals(c.getProjectId())) {
+                names.add(c.getName());
+            }
+        }
+        activityService.logConfig(workspaceId, "调整项目「" + project.getName() + "」的模块顺序："
+                + String.join(" › ", names));
     }
 
     /** 模块维护口径：空间主 / 管理员，或该项目的负责人；查看者与普通成员只读 */

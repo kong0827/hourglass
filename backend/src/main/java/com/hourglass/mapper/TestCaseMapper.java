@@ -47,8 +47,6 @@ public interface TestCaseMapper {
 
     int insert(TestCase testCase);
 
-    /** 项目内下一个可用编号（MAX+1）；并发抢号由唯一键兜底重试 */
-    int selectNextCaseNo(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);
 
     int update(TestCase testCase);
 
@@ -91,10 +89,11 @@ public interface TestCaseMapper {
     com.hourglass.dto.CaseCoverageRow selectUnlinkedCoverage(@Param("workspaceId") String workspaceId,
                                                              @Param("reqId") String reqId);
 
-    /** 全局搜索：跨项目匹配标题/模块/前置条件，viewerId 非空时排除无权限项目 */
+    /** 全局搜索：跨项目匹配标题/模块/前置条件/编号，viewerId 非空时排除无权限项目 */
     List<com.hourglass.dto.SearchHit> searchVisible(@Param("workspaceId") String workspaceId,
                                                     @Param("viewerId") String viewerId,
                                                     @Param("q") String q,
+                                                    @Param("caseNo") Integer caseNo,
                                                     @Param("limit") int limit);
 
     int deleteByReq(@Param("workspaceId") String workspaceId, @Param("reqId") String reqId);

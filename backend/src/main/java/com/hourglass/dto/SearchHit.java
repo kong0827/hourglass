@@ -18,5 +18,7 @@ public class SearchHit {
     private String status;
     /** 类型特有的补充信息：负责人、模块、文档分类等 */
     private String extra;
+    /** 用例编号，仅 type=case 时有值；由服务层并入 extra 展示 */
+    private Integer caseNo;
     private LocalDateTime updatedAt;
 }

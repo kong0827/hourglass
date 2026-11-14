@@ -13,10 +13,6 @@
        COALESCE(#{createdAt}, CURRENT_TIMESTAMP), COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
   </insert>
 
-  <select id="selectNextCaseNo" resultType="int">
-    SELECT COALESCE(MAX(case_no), 0) + 1 FROM test_case
-    WHERE workspace_id = #{workspaceId} AND req_id = #{reqId}
-  </select>
 
   <update id="update">
     UPDATE test_case
@@ -143,7 +139,8 @@
            OR c.latest_note LIKE CONCAT('%', #{q.q}, '%')
            OR c.steps LIKE CONCAT('%', #{q.q}, '%')
            OR d.title LIKE CONCAT('%', #{q.q}, '%')
-           OR t.title LIKE CONCAT('%', #{q.q}, '%'))
+           OR t.title LIKE CONCAT('%', #{q.q}, '%')
+           <if test="q.caseNo != null"> OR c.case_no = #{q.caseNo} </if>)
     </if>
   </sql>
 
@@ -221,7 +218,7 @@
 
   <select id="searchVisible" resultType="com.hourglass.dto.SearchHit">
     SELECT 'case' AS type, c.id, c.title, c.req_id AS reqId, r.name AS reqName,
-           c.latest_status AS status, c.module AS extra, c.updated_at AS updatedAt
+           c.latest_status AS status, c.module AS extra, c.case_no AS caseNo, c.updated_at AS updatedAt
     FROM test_case c
     LEFT JOIN requirement r ON r.id = c.req_id AND r.workspace_id = c.workspace_id
     WHERE c.workspace_id = #{workspaceId}
@@ -229,6 +226,7 @@
         LOCATE(LOWER(#{q}), LOWER(c.title)) > 0
         OR LOCATE(LOWER(#{q}), LOWER(c.module)) > 0
         OR LOCATE(LOWER(#{q}), LOWER(c.precondition)) > 0
+        <if test="caseNo != null"> OR c.case_no = #{caseNo} </if>
       )
       <if test="viewerId != null">
         AND NOT EXISTS (SELECT 1 FROM project_member pm

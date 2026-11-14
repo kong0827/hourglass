@@ -65,6 +65,7 @@ public class BoardColumnService {
         c.setSortOrder(boardColumnMapper.maxSortOrder(workspaceId) + 1);
         boardColumnMapper.insert(c);
         evictColumns(workspaceId);
+        activityService.logConfig(workspaceId, "新建看板列「" + c.getName() + "」");
         return boardColumnMapper.selectById(workspaceId, c.getId());
     }
 
@@ -76,6 +77,9 @@ public class BoardColumnService {
         }
         String name = req.getName().trim();
         checkName(workspaceId, name, id);
+        String oldName = c.getName();
+        String oldColor = c.getColor();
+        String oldRule = c.getProcessingRule();
         c.setName(Texts.cut(name, 12));
         c.setColor(normalizeColor(req.getColor()));
         /* 待处理/进行中是固定语义，只允许改名改色，库里始终保持 normal；
@@ -90,6 +94,27 @@ public class BoardColumnService {
         }
         boardColumnMapper.update(c);
         evictColumns(workspaceId);
+        StringBuilder changed = new StringBuilder();
+        if (!oldName.equals(c.getName())) {
+            changed.append("名称「").append(oldName).append("」→「").append(c.getName()).append("」");
+        }
+        if (!equal(oldColor, c.getColor())) {
+            if (changed.length() > 0) {
+                changed.append("、");
+            }
+            changed.append("颜色 ").append(oldColor == null ? "默认" : oldColor)
+                    .append(" → ").append(c.getColor() == null ? "默认" : c.getColor());
+        }
+        if (!equal(oldRule, c.getProcessingRule())) {
+            if (changed.length() > 0) {
+                changed.append("、");
+            }
+            changed.append("计时规则「").append(ruleLabel(oldRule))
+                    .append("」→「").append(ruleLabel(c.getProcessingRule())).append("」");
+        }
+        if (changed.length() > 0) {
+            activityService.logConfig(workspaceId, "修改看板列「" + c.getName() + "」：" + changed);
+        }
         return boardColumnMapper.selectById(workspaceId, id);
     }
 
@@ -150,6 +175,25 @@ public class BoardColumnService {
             boardColumnMapper.updateSortOrder(workspaceId, ids.get(i), i);
         }
         evictColumns(workspaceId);
+        List<String> names = new ArrayList<String>();
+        for (BoardColumn c : metaCache.columns(workspaceId)) {
+            names.add(c.getName());
+        }
+        activityService.logConfig(workspaceId, "调整看板列顺序：" + String.join(" › ", names));
+    }
+
+    private static boolean equal(String a, String b) {
+        return a == null ? b == null : a.equals(b);
+    }
+
+    private static String ruleLabel(String rule) {
+        if (RULE_WAITING.equals(rule)) {
+            return "不计时";
+        }
+        if (RULE_ENDED.equals(rule)) {
+            return "结束计时";
+        }
+        return "正常计时";
     }
 
     private static boolean isBuiltIn(String id) {

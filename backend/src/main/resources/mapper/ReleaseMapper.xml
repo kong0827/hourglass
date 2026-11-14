@@ -18,7 +18,7 @@
     i.id AS item_id, i.workspace_id AS item_workspace_id, i.release_id AS item_release_id,
     i.task_id AS item_task_id, i.task_item_no AS item_task_item_no, i.title AS item_title, i.item_type AS item_item_type,
     i.owner_user_id AS item_owner_user_id, i.owner_name AS item_owner_name,
-    i.demand_id AS item_demand_id, i.demand_title AS item_demand_title,
+    i.demand_id AS item_demand_id, i.demand_no AS item_demand_no, i.demand_title AS item_demand_title,
     i.target_version_id AS item_target_version_id, i.target_version_name AS item_target_version_name,
     i.board_column AS item_board_column, i.completed_at AS item_completed_at, i.disposition AS item_disposition, i.reason AS item_reason,
     i.content_summary AS item_content_summary, i.work_minutes AS item_work_minutes, i.estimate_minutes AS item_estimate_minutes
@@ -224,10 +224,11 @@
   </select>
   <insert id="insertPlan">
     INSERT INTO version_release_plan
-      (id, workspace_id, version_id, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)
-    VALUES (#{id}, #{workspaceId}, #{versionId}, #{plannedAt}, #{ownerUserId}, #{notes}, #{risks}, #{status}, 0, #{scopeToken},
+      (id, workspace_id, version_id, plan_no, planned_at, owner_user_id, notes, risks, status, revision, scope_token, environment, target_keys, coverage)
+    VALUES (#{id}, #{workspaceId}, #{versionId}, #{planNo}, #{plannedAt}, #{ownerUserId}, #{notes}, #{risks}, #{status}, 0, #{scopeToken},
       #{environment}, #{targetKeys,typeHandler=com.hourglass.mapper.ReleaseMapper$StringListTypeHandler}, #{coverage})
   </insert>
+
   <update id="updatePlan">
     UPDATE version_release_plan SET version_id = #{versionId}, planned_at = #{plannedAt}, owner_user_id = #{ownerUserId},
       notes = #{notes}, risks = #{risks}, status = #{status}, scope_token = #{scopeToken},
@@ -287,10 +288,10 @@
   </insert>
   <insert id="insertItem" useGeneratedKeys="true" keyProperty="id">
     INSERT INTO version_release_item
-      (workspace_id, release_id, task_id, task_item_no, title, item_type, owner_user_id, owner_name, demand_id, demand_title,
+      (workspace_id, release_id, task_id, task_item_no, title, item_type, owner_user_id, owner_name, demand_id, demand_no, demand_title,
        target_version_id, target_version_name, board_column, completed_at, disposition, work_minutes, estimate_minutes, reason, content_summary)
     VALUES (#{workspaceId}, #{releaseId}, #{taskId}, #{taskItemNo}, #{title}, #{itemType}, #{ownerUserId}, #{ownerName}, #{demandId},
-      #{demandTitle}, #{targetVersionId}, #{targetVersionName}, #{boardColumn}, #{completedAt}, #{disposition}, #{workMinutes}, #{estimateMinutes}, #{reason}, #{contentSummary})
+      #{demandNo}, #{demandTitle}, #{targetVersionId}, #{targetVersionName}, #{boardColumn}, #{completedAt}, #{disposition}, #{workMinutes}, #{estimateMinutes}, #{reason}, #{contentSummary})
   </insert>
   <select id="selectItems" resultType="VersionReleaseItem">
     SELECT * FROM version_release_item WHERE workspace_id = #{workspaceId} AND release_id = #{releaseId}

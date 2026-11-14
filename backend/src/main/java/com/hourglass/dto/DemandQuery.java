@@ -36,4 +36,9 @@ public class DemandQuery {
     private int limit = 50;
     /** 项目可见范围：null 表示不过滤（owner/admin/viewer） */
     private String viewerId;
+
+    /** 搜索词里的需求编号（DM-001 / dm1 / 纯数字）；不是编号形态返回 null，走文本匹配 */
+    public Integer getItemNo() {
+        return com.hourglass.common.Nos.parseDemand(q);
+    }
 }

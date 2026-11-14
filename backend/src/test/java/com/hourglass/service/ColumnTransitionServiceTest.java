@@ -34,7 +34,7 @@ class ColumnTransitionServiceTest {
         metaCache = mock(WorkspaceMetaCache.class);
         when(metaCache.transitions(WS)).thenReturn(Collections.<ColumnTransition>emptyList());
         when(columnService.list(WS)).thenReturn(Collections.<BoardColumn>emptyList());
-        service = new ColumnTransitionService(mapper, columnService, metaCache);
+        service = new ColumnTransitionService(mapper, columnService, metaCache, mock(ActivityService.class));
     }
 
     @Test

@@ -16,6 +16,8 @@ public class VersionReleaseItem {
     private String ownerUserId;
     private String ownerName;
     private String demandId;
+    /** 快照时的需求编号（sql/86）：需求删除或移植后历史证据不跟着变 */
+    private Integer demandNo;
     private String demandTitle;
     private String targetVersionId;
     private String targetVersionName;

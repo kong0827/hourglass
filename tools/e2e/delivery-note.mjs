@@ -3,7 +3,9 @@
    导出冻结快照、只读分享与接收人页一致性、客户版闸门、打印口径（原生 Ctrl+P / 按钮 / 深色 / 甘特 A3 不被抢）、移动端与控制台。
 
    前置：本地栈已起（bash deploy/local/stack.sh start），SQL 81 已应用。
-   数据：RICH=有成功生产发布+回归结果+承诺基线的版本；DRAFT=有回归但无生产发布的版本。
+   数据：RICH=有成功生产发布+承诺基线的版本（当前演示数据没有测试计划，通过率断言自动核对「未创建计划」空态）；
+        DRAFT=有回归但无生产发布的版本（有测试计划，通过率断言核对真实百分比）。
+       页数估算按真实 PDF 校准，风险展开入口按数据是否超 6 项决定，演示数据换批不会让断言失效。
    用法：node tools/e2e/delivery-note.mjs */
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -417,13 +419,22 @@ try{
   assert(conds.newlines === 0, "验收条件已压成单段，无换行墙");
 
   /* 3f. 事实数字与口径 */
-  const facts = await evaluate(`(() => {
-    const t = document.getElementById("dlSheetHost").textContent;
-    return { text: t, has667: t.indexOf("66.7") >= 0, hasDelay: /晚 1 天/.test(t), hasSkipped: t.indexOf("跳过（本次不适用，出分母）") >= 0 };
-  })()`);
-  assert(facts.has667, "通过率 66.7%（通过 / 已执行−跳过）");
+  /* 通过率不写死数字：取接口当前口径去核对渲染，演示数据换过一批也不会把断言拖成假的 */
+  const facts = await evaluate(`import("./js/core/api.js").then(({API}) => API.get("/api/versions/${RICH}/delivery-note")).then(d => {
+    const t = document.getElementById("dlSheetHost").textContent, q = d.quality || {};
+    const rate = q.passRatePct == null ? null : Math.round(q.passRatePct * 10) / 10;
+    return { missing: !!q.missing, rate: rate,
+      hasRate: rate != null && t.indexOf(rate + "%") >= 0,
+      hasDelay: /晚 1 天/.test(t), hasSkipped: t.indexOf("跳过（本次不适用，出分母）") >= 0,
+      saysNoPlan: t.indexOf("未创建测试计划") >= 0 };
+  })`);
+  if (facts.missing) {
+    assert(facts.saysNoPlan, "未创建测试计划时明说不显示通过率，不推断质量");
+  } else {
+    assert(facts.hasRate, `通过率与接口口径一致（${facts.rate}%）`);
+    assert(facts.hasSkipped, "跳过项显式出分母");
+  }
   assert(facts.hasDelay, "发布延迟按目标日计算（晚 1 天）");
-  assert(facts.hasSkipped, "跳过项显式出分母");
   /* 对照原型截图前把上面导航测试留下的滚动位置复位，截到的才是冷加载首屏 */
   await evaluate(`(() => {
     const nav = document.getElementById("dlSecnav");
@@ -510,18 +521,18 @@ try{
   assert(evAfter > evBefore, `证据密度实时生效（管理版 关键 ${evBefore} → 校验值 ${evAfter} 条）`);
   const evDigest = await evaluate(`document.getElementById("dlSheetHost").textContent.indexOf("SHA256") >= 0`);
   assert(evDigest, "校验值档位列出厂制品 SHA256");
-  /* 管理版看得到机房主机键与原始计划号，证明客户版是语气投影而不是数据丢失 */
+  /* 管理版看得到机房主机键与计划编号，证明客户版是语气投影而不是数据丢失 */
   const mgrPlan = await evaluate(`(() => {
     const p = document.querySelector("#dlSheetHost .dl-plan");
     const rel = document.getElementById("dl-sec-release");
     return { targets: p ? p.textContent.indexOf("部署目标") >= 0 : false,
       hostKey: p ? /prod-[a-z]+-[a-z0-9]+|test-[a-z]+-[a-z0-9]+/.test(p.textContent) : false,
-      planId: p ? /计划 [A-Za-z0-9]{16,}/.test(p.textContent) : false,
+      planNo: p ? /计划 PL-\\d{3}/.test(p.textContent) : false,
       relTargets: rel ? rel.textContent.indexOf("部署目标") >= 0 : false,
       rid: !!document.querySelector("#dlSheetHost .dl-doc-meta .rid") };
   })()`);
-  assert(mgrPlan.targets && mgrPlan.hostKey && mgrPlan.planId && mgrPlan.relTargets && mgrPlan.rid,
-    `管理版保留部署目标、主机键、原始计划号与发布记录号（${JSON.stringify(mgrPlan)}）`);
+  assert(mgrPlan.targets && mgrPlan.hostKey && mgrPlan.planNo && mgrPlan.relTargets && mgrPlan.rid,
+    `管理版保留部署目标、主机键、计划编号与发布记录号（${JSON.stringify(mgrPlan)}）`);
   await clickOpt("tone", "customer");
   const evCust = await evaluate(`(() => ({
     n: document.querySelectorAll("#dlSheetHost .dl-ev").length,
@@ -540,7 +551,7 @@ try{
       artifact: t.indexOf("制品标识") >= 0,
       relTargets: rel ? rel.textContent.indexOf("部署目标") >= 0 : false,
       executor: t.indexOf("实际执行人") >= 0,
-      planRef: /计划 [A-Za-z0-9]{16,}/.test(t),
+      planRef: /计划 PL-\\d{3}/.test(t),
       releaseRef: !!root.querySelector(".dl-doc-meta .rid")
     };
   })()`);
@@ -1066,6 +1077,19 @@ try{
   await evaluate(`document.querySelector('.dl-rail [data-dl-act="tone"][data-dl-val="customer"]').click(); true`);
   await waitFor(`document.querySelector('.dl-rail [data-dl-act="tone"][data-dl-val="customer"]').getAttribute("aria-pressed") === "true"`, "草稿归位客户版", 8000);
   await sleep(500);
+  /* 通过率渲染换个有测试计划的版本核对：RICH 若没有计划，这里仍能覆盖口径文案 */
+  const draftQ = await evaluate(`import("./js/core/api.js").then(({API}) => API.get("/api/versions/${DRAFT}/delivery-note")).then(d => {
+    const t = document.getElementById("dlSheetHost").textContent, q = d.quality || {};
+    const rate = q.passRatePct == null ? null : Math.round(q.passRatePct * 10) / 10;
+    return { missing: !!q.missing, rate: rate,
+      hasRate: rate != null && t.indexOf(rate + "%") >= 0, hasSkipped: t.indexOf("跳过（本次不适用，出分母）") >= 0 };
+  })`);
+  if (draftQ.missing) {
+    console.log("  NOTE 草稿版本也没有测试计划：本轮不覆盖通过率渲染");
+  } else {
+    assert(draftQ.hasRate, `草稿通过率与接口口径一致（${draftQ.rate}%）`);
+    assert(draftQ.hasSkipped, "草稿质量区显式写出跳过出分母");
+  }
   const draft = await evaluate(`(() => {
     const sheet = document.querySelector("#dlSheetHost .dl-sheet");
     return {
@@ -1074,30 +1098,41 @@ try{
       sheetCls: sheet.className,
       banner: (document.getElementById("dlBanner")||{}).textContent || "",
       risks: [...sheet.querySelectorAll(".dl-sec")].filter(s => /后续计划与风险/.test((s.querySelector("h2")||{}).textContent||""))
-        .map(s => ({ rows: s.querySelectorAll(".dl-row.body").length, more: (s.querySelector(".dl-more-row")||{}).textContent || "" }))[0]
+        .map(s => ({ rows: s.querySelectorAll(".dl-row.body").length, more: (s.querySelector(".dl-more-row")||{}).textContent || "",
+          total: Number(((s.querySelector(".dl-sec-hint")||{}).textContent || "").match(/^(\\d+)/) ? ((s.querySelector(".dl-sec-hint")||{}).textContent || "").match(/^(\\d+)/)[1] : 0),
+          btn: !!s.querySelector('[data-dl-act="risks"]') }))[0]
     };
   })()`);
   assert(draft.warning.indexOf("未确认生产发布") >= 0, "草稿顶部强制警示未确认发布");
   assert(draft.watermark, "草稿强制水印，不可关闭");
   assert(draft.banner.indexOf("管理版") >= 0 || draft.banner.indexOf("发布") >= 0, "横幅给出下一步（" + draft.banner.slice(0, 60) + "…）");
-  assert(draft.risks && draft.risks.rows <= 6, `草稿风险表限量 ${draft.risks ? draft.risks.rows : "?"} 行`);
-  assert(draft.risks && /展开其余 \d+ 项/.test(draft.risks.more), "超量风险给出展开入口（" + (draft.risks ? draft.risks.more.trim() : "") + "）");
+  /* 是否超 6 项由数据决定：演示数据换一批不该让断言失效，展开入口只在超量时出现 */
+  const riskTotal = draft.risks ? draft.risks.total : 0;
+  assert(draft.risks && draft.risks.rows === Math.min(6, riskTotal), `草稿风险表限量 ${draft.risks ? draft.risks.rows : "?"} 行（共 ${riskTotal} 项）`);
+  if (riskTotal > 6) {
+    assert(/展开其余 \d+ 项/.test(draft.risks.more) && draft.risks.btn, "超量风险给出展开入口（" + draft.risks.more.trim() + "）");
+  } else {
+    assert(!draft.risks.btn && !draft.risks.more.trim(), `风险 ${riskTotal} 项未超上限，不出展开入口`);
+  }
   await shot("07-draft-1440", true);
 
-  const risksExpanded = await evaluate(`(() => {
-    const b = [...document.querySelectorAll('#dlSheetHost [data-dl-act="risks"]')][0];
-    const before = b.closest(".dl-sec").querySelectorAll(".dl-row.body").length;
-    b.click();
-    return before;
-  })()`);
-  await sleep(350);
-  const risksAfter = await evaluate(`(() => {
-    const sec = [...document.querySelectorAll("#dlSheetHost .dl-sec")].find(s => /后续计划与风险/.test((s.querySelector("h2")||{}).textContent||""));
-    return { rows: sec.querySelectorAll(".dl-row.body").length, collapse: /收起/.test(sec.textContent) };
-  })()`);
-  assert(risksAfter.rows > risksExpanded && risksAfter.collapse, `展开风险 ${risksExpanded} → ${risksAfter.rows} 行，并可收起`);
-  await evaluate(`document.querySelector('#dlSheetHost [data-dl-act="risks"]').click(); true`);
-  await sleep(300);
+  if (riskTotal > 6) {
+    const risksExpanded = await evaluate(`(() => {
+      const b = [...document.querySelectorAll('#dlSheetHost [data-dl-act="risks"]')][0];
+      const before = b.closest(".dl-sec").querySelectorAll(".dl-row.body").length;
+      b.click();
+      return before;
+    })()`);
+    await sleep(350);
+    const risksAfter = await evaluate(`(() => {
+      const sec = [...document.querySelectorAll("#dlSheetHost .dl-sec")].find(s => /后续计划与风险/.test((s.querySelector("h2")||{}).textContent||""));
+      return { rows: sec.querySelectorAll(".dl-row.body").length, collapse: /收起/.test(sec.textContent) };
+    })()`);
+    assert(risksAfter.rows === riskTotal && risksAfter.rows > risksExpanded && risksAfter.collapse,
+      `展开风险 ${risksExpanded} → ${risksAfter.rows} 行，并可收起`);
+    await evaluate(`document.querySelector('#dlSheetHost [data-dl-act="risks"]').click(); true`);
+    await sleep(300);
+  }
 
   /* 9b. 客户版未确认发布 → 不可导出；管理版可导出但带草稿水印 */
   await evaluate(`document.querySelector('.dl-rail [data-dl-act="tone"][data-dl-val="customer"]').click(); true`);

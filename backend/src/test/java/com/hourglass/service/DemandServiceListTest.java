@@ -38,7 +38,7 @@ class DemandServiceListTest {
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
             mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
-            mock(ReleasePermissionService.class), mock(DeletionTraceService.class));
+            mock(ReleasePermissionService.class), mock(DeletionTraceService.class), mock(NumberSeqService.class));
 
     @Test
     void pagesWholeWorkspaceAndComputesWsjf() {

@@ -92,6 +92,7 @@ public class BackupService {
     private final TaskCommentMapper commentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     private final RequirementDocCommentMapper docCommentMapper;
     private final AppNotificationMapper appNotificationMapper;
     private final RequirementDocMapper requirementDocMapper;
@@ -113,6 +114,7 @@ public class BackupService {
     private final com.hourglass.mapper.WorkActivityMapper workActivityMapper;
     private final BackupExportService exportService;
     private final DeliveryScopeLock scopeLock;
+    private final NumberSeqService numberSeq;
 
     public BackupService(TaskMapper taskMapper, RequirementMapper reqMapper,
                          SubtaskMapper subtaskMapper, TagMapper tagMapper, TimeLogMapper timeLogMapper,
@@ -121,6 +123,7 @@ public class BackupService {
                          TaskCommentMapper commentMapper,
                          TestCaseMapper testCaseMapper,
                          TestCaseRunMapper testCaseRunMapper,
+                         com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
                          RequirementDocCommentMapper docCommentMapper,
                          AppNotificationMapper appNotificationMapper,
                          RequirementDocMapper requirementDocMapper,
@@ -136,8 +139,10 @@ public class BackupService {
                          TaskCascade cascade,
                          ActivityService activityService,
                          com.hourglass.mapper.WorkActivityMapper workActivityMapper,
-                         PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock) {
+                         PlatformTransactionManager transactionManager, DeliveryScopeLock scopeLock,
+                         NumberSeqService numberSeq) {
         this.scopeLock = scopeLock;
+        this.numberSeq = numberSeq;
         this.taskMapper = taskMapper;
         this.reqMapper = reqMapper;
         this.subtaskMapper = subtaskMapper;
@@ -150,6 +155,7 @@ public class BackupService {
         this.commentMapper = commentMapper;
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
+        this.caseTaskMapper = caseTaskMapper;
         this.docCommentMapper = docCommentMapper;
         this.appNotificationMapper = appNotificationMapper;
         this.requirementDocMapper = requirementDocMapper;
@@ -167,7 +173,7 @@ public class BackupService {
         this.workActivityMapper = workActivityMapper;
         this.exportService = new BackupExportService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, boardColumnMapper, categoryMapper, commentMapper, testCaseMapper,
-                testCaseRunMapper, docCommentMapper, requirementDocMapper, devBranchMapper,
+                testCaseRunMapper, caseTaskMapper, docCommentMapper, requirementDocMapper, devBranchMapper,
                 dependencyMapper, baselineMapper, versionMapper, versionTaskMapper, demandMapper, commitmentMapper);
         this.txTemplate = new TransactionTemplate(transactionManager);
         /* 覆盖导入必须整体成功或整体回滚：外层事务包住所有阶段，批次只做语句切分 */
@@ -291,6 +297,8 @@ public class BackupService {
                 req.setDescription(Texts.cut(Texts.trimToNull(r.getDesc()), 1000));
                 req.setStatus(oneOf(r.getStatus(), REQ_STATUS, "active"));
                 req.setFirstReleasedAt(parseDate(r.getFirstReleasedAt()));
+                req.setReleaseCheckPolicy(oneOf(r.getReleaseCheckPolicy(),
+                        new String[]{"strict", "standard", "loose"}, "standard"));
                 /* 按备份里的项目顺序编号，恢复后列表与下拉框保持一致 */
                 req.setSortOrder(st.reqCount);
                 reqMapper.insert(req);
@@ -363,6 +371,9 @@ public class BackupService {
         Map<String, String> demandIdMap = st.demandIdMap;
         if (data.getDemands() != null) {
             Set<String> seenDemandIds = new HashSet<String>();
+            /* 需求表导入前已清空：备份里的编号可用就沿用，缺号/撞号从项目当前最大号顺延 */
+            Map<String, Set<Integer>> usedDemandNos = new HashMap<String, Set<Integer>>();
+            Map<String, Integer> maxDemandNo = new HashMap<String, Integer>();
             for (BackupData.BackupDemand bd : data.getDemands()) {
                 if (bd == null) {
                     continue;
@@ -443,6 +454,10 @@ public class BackupService {
                 demand.setCreatedBy(createdBy != null && st.memberIds.contains(createdBy) ? createdBy : null);
                 demand.setCreatedAt(parseTs(bd.getCreatedAt()));
                 demand.setUpdatedAt(parseTs(bd.getUpdatedAt()));
+                Set<Integer> used = usedDemandNos.computeIfAbsent(reqId, key -> new HashSet<Integer>());
+                int demandNo = keepOrNext(bd.getDemandNo(), used, maxDemandNo.getOrDefault(reqId, 0) + 1);
+                demand.setDemandNo(demandNo);
+                maxDemandNo.put(reqId, Math.max(maxDemandNo.getOrDefault(reqId, 0), demandNo));
                 demandMapper.insert(demand);
                 st.demandReqId.put(id, reqId);
                 st.demandIds.add(id);
@@ -450,6 +465,10 @@ public class BackupService {
                     demandIdMap.put(original, id);
                 }
                 st.demandCount++;
+            }
+            /* 序列只抬不降：把恢复出的最大号抬进序列，之后新建需求从其后继续，不撞恢复的编号 */
+            for (Map.Entry<String, Integer> entry : maxDemandNo.entrySet()) {
+                numberSeq.raiseDemand(workspaceId, entry.getKey(), entry.getValue());
             }
         }
 
@@ -880,6 +899,12 @@ public class BackupService {
             t.setSortOrder(sortOrder);
             st.colSeq.put(col, sortOrder + 1);
 
+            /* 编号随备份往返；旧备份没有该字段时由 assignItemNos 顺延补号 */
+            Integer itemNo = b.getItemNo();
+            if (itemNo != null && itemNo > 0) {
+                t.setItemNo(itemNo);
+            }
+
             /* 回收站任务：按原删除时间放回回收站（不重新出现在看板） */
             t.setDeletedAt(parseTs(b.getDeletedAt()));
             tasks.add(t);
@@ -959,7 +984,7 @@ public class BackupService {
         }
 
         if (!tasks.isEmpty()) {
-            assignItemNos(workspaceId, tasks);
+            assignItemNos(workspaceId, tasks, st);
             taskMapper.insertBatch(tasks);
         }
         insertInBatches(subtasks, subtaskMapper::insertBatch);
@@ -968,23 +993,45 @@ public class BackupService {
     }
 
     /**
-     * 编号不在备份里：按目标项目内当前最大号顺延，避免与既有工作项撞号（与用例导入同一口径）。
-     * 批量写入一次落库，故在内存里按项目分组续号；排序与 sql/82 回填一致（created_at, id）。
+     * 备份里的编号有效且未重复就沿用（恢复后 WI 不变），否则按目标项目内当前最大号顺延。
+     * 分批导入共用外层事务，故在 ImportState 里按项目记录已占用编号，跨批次也不会撞 uk_task_item_no。
+     * 排序与 sql/82 回填一致（created_at, id）。
      */
-    private void assignItemNos(String workspaceId, List<Task> tasks) {
+    private void assignItemNos(String workspaceId, List<Task> tasks, ImportState st) {
         List<Task> ordered = new ArrayList<Task>(tasks);
         ordered.sort(Comparator.comparing(Task::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(Task::getId));
         Map<String, Integer> next = new HashMap<String, Integer>();
         for (Task t : ordered) {
             String scope = t.getReqId() == null ? "" : t.getReqId();
+            Set<Integer> used = st.usedItemNos.computeIfAbsent(scope, key -> new HashSet<Integer>());
             Integer no = next.get(scope);
             if (no == null) {
                 no = taskMapper.selectNextItemNo(workspaceId, t.getReqId());
             }
+            Integer kept = t.getItemNo();
+            if (kept != null && kept > 0 && used.add(kept)) {
+                next.put(scope, Math.max(no, kept + 1));
+                continue;
+            }
+            while (!used.add(no)) {
+                no++;
+            }
             t.setItemNo(no);
             next.put(scope, no + 1);
         }
+    }
+
+    /** 备份编号可用就沿用，否则从 floor 起找空号；used 由调用方跨行维护（目标表导入前已清空） */
+    private static int keepOrNext(Integer kept, Set<Integer> used, int floor) {
+        if (kept != null && kept > 0 && used.add(kept)) {
+            return kept;
+        }
+        int no = Math.max(1, floor);
+        while (!used.add(no)) {
+            no++;
+        }
+        return no;
     }
 
     /** 阶段 3a：依赖 / 基线 / 循环派生关联 */
@@ -1155,6 +1202,9 @@ public class BackupService {
             return;
         }
         Map<String, String> caseIdMap = new HashMap<String, String>();
+        /* 用例表导入前已清空：备份里的编号可用就沿用，缺号/撞号从项目当前最大号顺延 */
+        Map<String, Set<Integer>> usedCaseNos = new HashMap<String, Set<Integer>>();
+        Map<String, Integer> maxCaseNo = new HashMap<String, Integer>();
         for (BackupData.BackupTestCase b : data.getTestCases()) {
             if (b == null) {
                 continue;
@@ -1191,15 +1241,29 @@ public class BackupService {
             c.setLatestByUserId(latestBy != null && st.memberIds.contains(latestBy) ? latestBy : null);
             c.setLatestAt(parseTs(b.getLatestAt()));
             c.setLatestBugTaskId(mappedTaskId(st, b.getLatestBugTaskId()));
+            String oldDemand = Texts.trimToNull(b.getDemandId());
+            String demandId = oldDemand != null && st.demandIdMap.containsKey(oldDemand)
+                    ? st.demandIdMap.get(oldDemand) : oldDemand;
+            if (demandId != null && (!st.demandIds.contains(demandId)
+                    || !reqId.equals(st.demandReqId.get(demandId)))) {
+                demandId = null;
+            }
+            c.setDemandId(demandId);
             c.setCreatedAt(parseTs(b.getCreatedAt()));
             c.setUpdatedAt(parseTs(b.getUpdatedAt()));
-            /* 编号不在备份里：按项目内当前最大号顺延，避免与既有用例撞号 */
-            c.setCaseNo(testCaseMapper.selectNextCaseNo(st.workspaceId, reqId));
+            Set<Integer> used = usedCaseNos.computeIfAbsent(reqId, key -> new HashSet<Integer>());
+            int caseNo = keepOrNext(b.getCaseNo(), used, maxCaseNo.getOrDefault(reqId, 0) + 1);
+            c.setCaseNo(caseNo);
+            maxCaseNo.put(reqId, Math.max(maxCaseNo.getOrDefault(reqId, 0), caseNo));
             testCaseMapper.insert(c);
             if (original != null) {
                 caseIdMap.put(original, c.getId());
             }
             st.testCaseCount++;
+        }
+        /* 序列只抬不降：把恢复出的最大号抬进序列，之后新建用例从其后继续，不撞恢复的编号 */
+        for (Map.Entry<String, Integer> entry : maxCaseNo.entrySet()) {
+            numberSeq.raiseCase(st.workspaceId, entry.getKey(), entry.getValue());
         }
         if (data.getTestCaseRuns() == null) {
             return;
@@ -1226,6 +1290,29 @@ public class BackupService {
             run.setExecutedByUserId(executedBy != null && st.memberIds.contains(executedBy) ? executedBy : null);
             run.setCreatedAt(parseTs(b.getCreatedAt()));
             testCaseRunMapper.insert(run);
+        }
+        if (data.getCaseTasks() == null) {
+            return;
+        }
+        for (BackupData.BackupCaseTask b : data.getCaseTasks()) {
+            if (b == null) {
+                continue;
+            }
+            String originalCaseId = Texts.trimToNull(b.getCaseId());
+            String caseId = originalCaseId == null ? null : caseIdMap.get(originalCaseId);
+            String taskId = mappedTaskId(st, b.getTaskId());
+            if (caseId == null || taskId == null) {
+                continue;
+            }
+            com.hourglass.entity.TestCaseTask link = new com.hourglass.entity.TestCaseTask();
+            link.setId(Ids.gen("CT"));
+            link.setWorkspaceId(st.workspaceId);
+            link.setCaseId(caseId);
+            link.setTaskId(taskId);
+            String createdBy = Texts.trimToNull(b.getCreatedBy());
+            link.setCreatedBy(createdBy != null && st.memberIds.contains(createdBy) ? createdBy : null);
+            link.setCreatedAt(parseTs(b.getCreatedAt()));
+            caseTaskMapper.insert(link);
         }
     }
 
@@ -1350,6 +1437,8 @@ public class BackupService {
         final String workspaceId;
         /** 其它空间已占用的任务 ID（本空间任务已清空，可复用原 ID） */
         Set<String> existingTaskIds = new HashSet<String>();
+        /** 按项目记录本次导入已占用的工作项编号，跨批次防撞号 */
+        final Map<String, Set<Integer>> usedItemNos = new HashMap<String, Set<Integer>>();
         Set<String> memberIds = new HashSet<String>();
         final Set<String> reqIds = new HashSet<String>();
         final Map<String, String> reqIdMap = new HashMap<String, String>();
@@ -1597,7 +1686,7 @@ public class BackupService {
     /** Transfer validation is pure and always runs before any destructive statement. */
     private void validateTransfer(BackupData data) {
         if (!Integer.valueOf(BackupData.FORMAT_VERSION).equals(data.getV())) {
-            throw AppException.badRequest("仅支持 v13 新格式 JSON 工作项迁移，不支持旧格式或发布历史迁移");
+            throw AppException.badRequest("仅支持 v14 新格式 JSON 工作项迁移，不支持旧格式或发布历史迁移");
         }
         if (data.getReqs() == null || data.getVersions() == null || data.getDemands() == null) {
             throw AppException.badRequest("新格式必须包含 reqs、versions、demands 字典（可为空数组）");

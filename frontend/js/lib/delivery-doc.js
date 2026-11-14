@@ -26,6 +26,8 @@ import { icon } from "../core/icons.js";
   }
   function itemNo(x) { return noText("WI", x.itemNo, x.id); }
   function relNo(x) { return noText("REL", x.releaseNo, x.id); }
+  function demandNo(x) { return noText("DM", x.demandNo, x.id); }
+  function planNo(x) { return noText("PL", x.planNo, x.id); }
 
   /* ---- 日期：后端 LocalDate 给 "YYYY-MM-DD"，LocalDateTime 给 "YYYY-MM-DDTHH:mm:ss" ---- */
   function p2(n) { return n < 10 ? "0" + n : String(n); }
@@ -521,7 +523,7 @@ import { icon } from "../core/icons.js";
       + "</div>" + bar(segs, nz(ds.total)) + legend(segs) + gap()
       + '<div class="dl-rows"><div class="dl-row head"><span>模块</span><span>需求</span><span>工作项</span><span>兑现</span></div>'
       + rows.map(function (x) {
-        var sub = [x.id, x.priority, x.targetVersionName ? "去向 " + x.targetVersionName : "", x.deliveredAt ? "交付 " + dateText(x.deliveredAt) : ""]
+        var sub = [demandNo(x), x.priority, x.targetVersionName ? "去向 " + x.targetVersionName : "", x.deliveredAt ? "交付 " + dateText(x.deliveredAt) : ""]
           .filter(Boolean).join(" · ");
         var cls = x.state === "fulfilled" ? "ok" : x.state === "deferred" ? "warn" : x.state === "partial" ? "pri" : "";
         return '<div class="dl-row body"><span class="dl-mod">' + esc(x.module || "未分模块") + "</span>"
@@ -715,7 +717,7 @@ import { icon } from "../core/icons.js";
     if (txt(p.notes)) boxes.push(kv("发布安排（计划原文）", p.notes, "wide"));
     if (txt(p.risks)) boxes.push(kv("风险与回滚约定（计划原文）", p.risks, "wide"));
     return '<div class="dl-plan"><div class="dl-plan-head">' + icon("calendar", 13)
-      + "<b>发布计划与窗口</b><span>计划 " + esc(p.id) + " · 原文引用，不改写</span></div>"
+      + "<b>发布计划与窗口</b><span>计划 " + esc(planNo(p)) + " · 原文引用，不改写</span></div>"
       + '<div class="dl-kvs">' + boxes.join("") + "</div>"
       + (txt(p.risks) ? "" : '<div class="dl-plan-note">该计划未填写风险与回滚约定，此处不代拟；如需对外承诺回滚口径，请在发布计划中补齐。</div>')
       + "</div>";
@@ -1113,7 +1115,7 @@ import { icon } from "../core/icons.js";
     if (idx.demands) {
       heading("demands", "需求兑现");
       arr(d.demands).forEach(function (x) {
-        L.push("- [" + (STATE_NAMES[x.state] || x.state) + "] " + x.title + "　工作项 " + nz(x.releasedCount) + "/" + nz(x.taskCount)
+        L.push("- [" + (STATE_NAMES[x.state] || x.state) + "] " + x.title + "（" + demandNo(x) + "）　工作项 " + nz(x.releasedCount) + "/" + nz(x.taskCount)
           + (x.targetVersionName ? "　去向 " + x.targetVersionName : ""));
       });
     }
@@ -1175,7 +1177,7 @@ import { icon } from "../core/icons.js";
       if (d.plan) {
         var p = d.plan;
         L.push("");
-        L.push("**发布计划与窗口**（计划 " + p.id + "，原文引用）");
+        L.push("**发布计划与窗口**（计划 " + planNo(p) + "，原文引用）");
         L.push("- 计划窗口：" + (p.plannedAt ? timeText(p.plannedAt) : "未定") + "　状态：" + (p.statusName || p.status || "未记录"));
         L.push("- 环境与覆盖：" + (p.environmentName || p.environment || "未记录") + " · " + (COVERAGE_NAMES[p.coverage] || "覆盖未知")
           + "　计划范围：" + nz(p.taskCount) + " 项");

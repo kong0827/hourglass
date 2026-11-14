@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.NumberSeqMapper">
+
+  <!--
+    取号 = 先自增、再读回。两步必须在同一事务里：自增拿到行锁直到提交，
+    并发调用会排队，读回的一定是自己那一次的值；拆到两个事务会读到同一个号。
+  -->
+  <update id="bump">
+    INSERT INTO number_seq (workspace_id, kind, scope_id, next_no)
+    VALUES (#{workspaceId}, #{kind}, #{scopeId}, 1)
+    ON DUPLICATE KEY UPDATE next_no = next_no + 1
+  </update>
+
+  <select id="selectNext" resultType="java.lang.Integer">
+    SELECT next_no FROM number_seq
+    WHERE workspace_id = #{workspaceId} AND kind = #{kind} AND scope_id = #{scopeId}
+  </select>
+
+  <!-- 只抬高不降低：恢复的编号可能比当前序列大，也可能是重叠的历史数据 -->
+  <update id="raiseTo">
+    INSERT INTO number_seq (workspace_id, kind, scope_id, next_no)
+    VALUES (#{workspaceId}, #{kind}, #{scopeId}, #{nextNo})
+    ON DUPLICATE KEY UPDATE next_no = GREATEST(next_no, #{nextNo})
+  </update>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM number_seq WHERE workspace_id = #{workspaceId}
+  </delete>
+</mapper>

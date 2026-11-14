@@ -74,6 +74,14 @@ public class MyTasksQuery {
         this.q = q;
     }
 
+    /**
+     * 搜索词里的工作项编号（WI-001 / wi1 / 纯数字）。
+     * 与 ganttWhere 共用同一口径，编号在项目内唯一，因此跨空间搜索会命中各项目的同号工作项。
+     */
+    public Integer getItemNo() {
+        return com.hourglass.common.Nos.parseWorkItem(q);
+    }
+
     public List<String> getTestOwners() {
         return testOwners;
     }

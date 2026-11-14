@@ -18,6 +18,8 @@ import com.hourglass.mapper.TaskMapper;
 import com.hourglass.mapper.TimeLogMapper;
 import com.hourglass.mapper.VersionTaskMapper;
 import com.hourglass.mapper.WorkspaceMemberMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -61,6 +63,9 @@ public class ManagerService {
     private static final int RED_OVERDUE_PERCENT = 10;
     private static final int PERCENT = 100;
     private static final int MAX_NUDGES = 100;
+    /** 审计摘要里最多列出的任务名个数，其余用「等 N 个」收口 */
+    private static final int NUDGE_AUDIT_TITLES = 5;
+    private static final Logger log = LoggerFactory.getLogger(ManagerService.class);
     private static final int DRILL_MAX_LIMIT = 100;
     private static final String UNASSIGNED_KEY = "unassigned";
     private static final String UNASSIGNED_NAME = "未指派";
@@ -75,6 +80,8 @@ public class ManagerService {
     private final ProjectAccessService projectAccess;
     private final CategoryService categoryService;
     private final ReleasePermissionService releasePermission;
+    private final AuditService auditService;
+    private final TaskAuditLogger taskAuditLogger;
     private final Clock clock;
 
     /** 展示标签可选注入，保留已有构造器与调用方；不参与鉴权。 */
@@ -89,15 +96,18 @@ public class ManagerService {
     public ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                           TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
                           AppNotificationService notificationService, ProjectAccessService projectAccess,
-                          CategoryService categoryService, ReleasePermissionService releasePermission) {
+                          CategoryService categoryService, ReleasePermissionService releasePermission,
+                          AuditService auditService, TaskAuditLogger taskAuditLogger) {
         this(taskMapper, requirementMapper, timeLogMapper, memberMapper, notificationService,
-                projectAccess, categoryService, releasePermission, Clock.systemDefaultZone());
+                projectAccess, categoryService, releasePermission, auditService, taskAuditLogger,
+                Clock.systemDefaultZone());
     }
 
     ManagerService(TaskMapper taskMapper, RequirementMapper requirementMapper,
                    TimeLogMapper timeLogMapper, WorkspaceMemberMapper memberMapper,
                    AppNotificationService notificationService, ProjectAccessService projectAccess,
-                   CategoryService categoryService, ReleasePermissionService releasePermission, Clock clock) {
+                   CategoryService categoryService, ReleasePermissionService releasePermission,
+                   AuditService auditService, TaskAuditLogger taskAuditLogger, Clock clock) {
         this.taskMapper = taskMapper;
         this.requirementMapper = requirementMapper;
         this.timeLogMapper = timeLogMapper;
@@ -106,6 +116,8 @@ public class ManagerService {
         this.projectAccess = projectAccess;
         this.categoryService = categoryService;
         this.releasePermission = releasePermission;
+        this.auditService = auditService;
+        this.taskAuditLogger = taskAuditLogger;
         this.clock = clock;
     }
 
@@ -601,6 +613,7 @@ public class ManagerService {
         int sent = 0;
         int skipped = 0;
         int deduped = 0;
+        List<Task> nudged = new ArrayList<Task>();
         for (Task task : selected) {
             String ownerUserId = null;
             if (hasText(task.getOwnerUserId())) {
@@ -622,16 +635,55 @@ public class ManagerService {
             if (notificationService.push(ownerUserId, workspaceId, "manager_nudge",
                     "管理催办：" + safe(task.getTitle()), nudgeBody(task, today), task.getId())) {
                 sent++;
+                nudged.add(task);
             } else {
                 deduped++;
             }
         }
+
+        recordNudges(workspaceId, userId, nudged, today, skipped, deduped);
 
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("sent", sent);
         result.put("skipped", skipped);
         result.put("deduped", deduped);
         return result;
+    }
+
+    /**
+     * 催办留痕：批次一条管理员审计，实际发出的任务各写一条任务时间线。
+     * 通知已发出后日志失败不能反过来让请求报错，因此逐条降级告警。
+     */
+    private void recordNudges(String workspaceId, String userId, List<Task> nudged, LocalDate today,
+                              int skipped, int deduped) {
+        if (nudged.isEmpty()) {
+            return;
+        }
+        List<String> titles = new ArrayList<String>();
+        for (int i = 0; i < nudged.size() && i < NUDGE_AUDIT_TITLES; i++) {
+            titles.add(safe(nudged.get(i).getTitle()));
+        }
+        StringBuilder detail = new StringBuilder("催办 ").append(nudged.size()).append(" 个工作项：")
+                .append(String.join("、", titles));
+        if (nudged.size() > NUDGE_AUDIT_TITLES) {
+            detail.append(" 等 ").append(nudged.size()).append(" 个");
+        }
+        if (skipped > 0) {
+            detail.append("（跳过 ").append(skipped).append("：未指派或不可见）");
+        }
+        if (deduped > 0) {
+            detail.append("（6 小时内已催办，去重 ").append(deduped).append("）");
+        }
+        auditService.recordCurrent(workspaceId, "manager_nudge", "workspace", workspaceId, null,
+                true, detail.toString(), null);
+        for (Task task : nudged) {
+            try {
+                taskAuditLogger.log(userId, workspaceId, task.getId(), "nudge",
+                        "被管理员催办：" + nudgeBody(task, today));
+            } catch (Exception e) {
+                log.warn("催办任务时间线写入失败（workspace={} task={}）：{}", workspaceId, task.getId(), e);
+            }
+        }
     }
 
     private Map<String, Object> projectCard(Requirement requirement, List<Task> tasks,

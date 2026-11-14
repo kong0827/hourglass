@@ -58,7 +58,8 @@ public class TaskCascade {
             "task_dependency",
             "task_baseline",
             "version_task",
-            "project_milestone_task"));
+            "project_milestone_task",
+            "test_case_task"));
 
     /** 带任务引用、但彻底删除任务时保留的表（BUG-6 A：历史快照不随任务消失） */
     public static final List<String> PRESERVED_TASK_REF_TABLES = Collections.unmodifiableList(Arrays.asList(
@@ -90,6 +91,7 @@ public class TaskCascade {
             "task",
             "test_case_run",
             "test_case",
+            "test_case_task",
             "requirement",
             "requirement_doc",
             "req_doc_share",
@@ -146,9 +148,13 @@ public class TaskCascade {
     private final RequirementDocCommentMapper docCommentMapper;
     private final TestCaseMapper testCaseMapper;
     private final TestCaseRunMapper testCaseRunMapper;
+    /** 用例—工作项关联：任务物理删除或空间清空时一并清理 */
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     /** 交付说明强归属版本：版本整体清空时草稿、快照与分享令牌一起清，避免留下打不开的对外链接 */
     private final com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper;
     private final DeliveryScopeLock scopeLock;
+    /** 编号序列随空间一起清；导入覆盖不清（序列只增不减），避免下一次取号回收已发出的编号 */
+    private final com.hourglass.mapper.NumberSeqMapper numberSeqMapper;
 
     public TaskCascade(TaskMapper taskMapper, TaskLogMapper logMapper,
                        TaskCommentMapper commentMapper, TaskWatchMapper watchMapper,
@@ -165,13 +171,16 @@ public class TaskCascade {
                        DemandMapper demandMapper, MailDeliveryMapper mailDeliveryMapper,
                        ReqDocShareMapper reqDocShareMapper,
                        TestCaseMapper testCaseMapper, TestCaseRunMapper testCaseRunMapper,
+                       com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
                        com.hourglass.mapper.DemandDeliveryJudgementMapper demandJudgementMapper,
                        com.hourglass.mapper.VersionCommitmentMapper versionCommitmentMapper,
                        com.hourglass.mapper.ProjectMilestoneMapper milestoneMapper,
                        com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper,
-                       DeliveryScopeLock scopeLock) {
+                       DeliveryScopeLock scopeLock,
+                       com.hourglass.mapper.NumberSeqMapper numberSeqMapper) {
         this.deliveryNoteMapper = deliveryNoteMapper;
         this.scopeLock = scopeLock;
+        this.numberSeqMapper = numberSeqMapper;
         this.taskMapper = taskMapper;
         this.logMapper = logMapper;
         this.commentMapper = commentMapper;
@@ -197,6 +206,7 @@ public class TaskCascade {
         this.reqDocShareMapper = reqDocShareMapper;
         this.testCaseMapper = testCaseMapper;
         this.testCaseRunMapper = testCaseRunMapper;
+        this.caseTaskMapper = caseTaskMapper;
         this.demandJudgementMapper = demandJudgementMapper;
         this.versionCommitmentMapper = versionCommitmentMapper;
         this.milestoneMapper = milestoneMapper;
@@ -342,6 +352,8 @@ public class TaskCascade {
            否则列表会继续展示一个打不开的缺陷入口 */
         testCaseMapper.clearBugTaskRefs(workspaceId, taskIds);
         testCaseRunMapper.clearBugTaskRefs(workspaceId, taskIds);
+        /* 工作项被物理删除：验证它的用例保留，只解除关联，覆盖口径回到需求级 */
+        caseTaskMapper.deleteByTaskIds(workspaceId, taskIds);
     }
 
     /**
@@ -361,6 +373,8 @@ public class TaskCascade {
            旧备份保留用例时也要解除，避免列表继续展示打不开的缺陷入口。 */
         testCaseMapper.clearAllBugTaskRefs(workspaceId);
         testCaseRunMapper.clearAllBugTaskRefs(workspaceId);
+        /* 任务整体清空后，用例—工作项关联一定失效；覆盖口径回到需求级 */
+        caseTaskMapper.deleteByWorkspace(workspaceId);
         /* 用例强归属项目：先清流水与用例，再删项目，避免空间级清理留下孤儿。
            旧备份没有用例字段时不清理，避免导入把现有用例误删。 */
         if (clearTestCases) {
@@ -413,6 +427,7 @@ public class TaskCascade {
         demandMapper.deleteLogsByWorkspace(workspaceId);
         demandJudgementMapper.deleteByWorkspace(workspaceId);
         demandMapper.deleteByWorkspace(workspaceId);
+        numberSeqMapper.deleteByWorkspace(workspaceId);
     }
 
     /**

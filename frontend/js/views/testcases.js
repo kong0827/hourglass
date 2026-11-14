@@ -12,7 +12,7 @@ import { canEditReq, catNameById, rt, state } from "../core/state.js";
 import { loadViews, reloadFilteredViews, savedViewsFor } from "../core/filters-ui.js";
 import { UI, esc, toast } from "../core/ui.js";
 import { showView } from "../core/router.js";
-import { PRIORITIES, avatarHTML, fmtTs, priName, priTagHTML, severityBadgeHTML } from "../lib/format.js";
+import { PRIORITIES, avatarHTML, fmtTs, priName, priTagHTML, severityBadgeHTML, colName, typeName, itemNoText } from "../lib/format.js";
 import { loadReqs } from "./board.js";
 import { openDemandDetailById } from "./demands.js";
 import { downloadCsv } from "./manager-shared.js";
@@ -38,6 +38,11 @@ var caseFormReqId = null; /* 当前用例弹窗的所属项目：编辑取用例
 var statusFilter = "all";
 var tcMode = "cases";
 var coverageRows = [];
+/* 覆盖矩阵展开态：需求 → 工作项 → 用例；数据按需加载后缓存 */
+var covExpanded = {};
+var covTaskCache = {};
+var covCaseIndex = null;
+var covLoadSeq = 0;
 var reportData = null;
 var reportSeq = 0;
 var runsCaseId = null;
@@ -50,6 +55,13 @@ var ownerFilter = "all";
 var bugOnly = false;
 var searchText = "";
 var editingCase = null;
+/* 用例编辑：验证工作项多选。caseTaskSel = taskId → 候选行，候选限定主需求 */
+var caseTaskSel = {};
+var caseTaskOptions = [];
+var caseTaskSeq = 0;
+var caseTaskLoading = false;
+var caseTaskError = null;
+var caseTaskQuery = "";
 var runningCaseId = null;
 var defectCaseId = null;
 var runStatus = "passed";
@@ -1011,19 +1023,113 @@ function enterTestCasesView(){
 function loadCoverage(){
   render();
   if(!caseReqId) return;
+  var reqId = caseReqId;
+  var seq = ++covLoadSeq;
+  covExpanded = {};
+  covTaskCache = {};
+  covCaseIndex = null;
   $("tcCoverage").innerHTML = UI.skeletonRows(4);
-  API.get("/api/test-cases/coverage", { reqId: caseReqId }).then(function(rows){
-    if(tcMode !== "coverage") return;
-    coverageRows = rows || [];
+  Promise.all([
+    API.get("/api/test-cases/coverage", { reqId: reqId }),
+    loadAllCases({ reqId: reqId })
+  ]).then(function(rs){
+    if(seq !== covLoadSeq || tcMode !== "coverage" || caseReqId !== reqId) return;
+    coverageRows = rs[0] || [];
+    covCaseIndex = buildCoverageCaseIndex((rs[1] && rs[1].items) || []);
     renderCoverage();
   }).catch(function(ex){
+    if(seq !== covLoadSeq || caseReqId !== reqId) return;
     $("tcCoverage").innerHTML = UI.errorState(ex.message || "网络异常");
   });
+}
+/* 用例索引：按需求与工作项归组，同时区分“需求级覆盖”（未关联工作项） */
+function buildCoverageCaseIndex(items){
+  var idx = { byId: {}, byDemand: {}, byTask: {} };
+  items.forEach(function(c){
+    idx.byId[c.id] = c;
+    var dk = c.demandId || "__none__";
+    var bucket = idx.byDemand[dk];
+    if(!bucket){ bucket = { all: [], direct: [] }; idx.byDemand[dk] = bucket; }
+    bucket.all.push(c);
+    var tasks = c.tasks || [];
+    if(!tasks.length) bucket.direct.push(c);
+    tasks.forEach(function(t){
+      if(!idx.byTask[t.taskId]) idx.byTask[t.taskId] = [];
+      idx.byTask[t.taskId].push(c);
+    });
+  });
+  return idx;
+}
+function covDemandTasks(demandId){
+  return covCaseIndex && covCaseIndex.byTask ? covCaseIndex.byTask : {};
+}
+function covDirectCases(demandId){
+  var b = covCaseIndex && covCaseIndex.byDemand[demandId || "__none__"];
+  return b ? b.direct : [];
+}
+function covWorkItemCount(demandId){
+  var all = (covCaseIndex && covCaseIndex.byDemand[demandId || "__none__"] || {}).all || [];
+  var seen = {};
+  all.forEach(function(c){ (c.tasks || []).forEach(function(t){ seen[t.taskId] = true; }); });
+  return Object.keys(seen).length;
 }
 /* 0 值走中性：绿色代表有通过、红色代表有失败，0 两者都不代表 */
 function covCountHTML(value, cls){
   var n = Number(value) || 0;
   return '<span class="' + cls + (n ? "" : " is-zero") + '">' + n + '</span>';
+}
+function covCaseChip(c){
+  return '<button class="cov-case-chip" type="button" data-cov-case="' + esc(c.id) + '" title="'
+    + esc(c.title) + '">'
+    + '<span class="cov-case-no">' + esc(caseNoText(c) || "TC") + '</span>'
+    + '<span class="cov-case-title">' + esc(c.title) + '</span>'
+    + statusBadgeHTML(c.latestStatus)
+    + '</button>';
+}
+function covTaskChildrenHTML(r){
+  var demandId = r.demandId;
+  var cached = covTaskCache[demandId];
+  if(cached === null){
+    return '<div class="cov-children"><p class="cov-child-empty">正在加载工作项覆盖…</p></div>';
+  }
+  if(cached === "error"){
+    return '<div class="cov-children"><p class="cov-child-empty">工作项覆盖加载失败，'
+      + '<button class="btn sm ghost" type="button" data-cov-retry="' + esc(demandId) + '">重试</button></p></div>';
+  }
+  var tasks = cached || [];
+  var direct = covDirectCases(demandId);
+  var html = '<div class="cov-children">';
+  if(!tasks.length && !direct.length){
+    html += '<p class="cov-child-empty">该需求下还没有工作项，也没有需求级用例。</p></div>';
+    return html;
+  }
+  tasks.forEach(function(t){
+    var cases = (covCaseIndex && covCaseIndex.byTask[t.taskId]) || [];
+    var covered = (t.caseTotal || 0) > 0;
+    html += '<div class="cov-wi-block">'
+      + '<div class="cov-wi-head">'
+      +   '<span class="cov-wi-name"><span class="cov-wi-no">' + esc(itemNoText(t) || "WI") + '</span>'
+      +     '<span class="cov-wi-title">' + esc(t.taskTitle || "未命名工作项") + '</span></span>'
+      +   '<span class="cov-wi-count">' + (covered
+            ? (t.caseTotal || 0) + ' 条用例 · ' + (t.passed || 0) + ' 通过 · ' + (t.failed || 0) + ' 失败'
+              + ((t.untested || 0) ? ' · ' + t.untested + ' 未执行' : "")
+            : '未覆盖') + '</span>'
+      +   '<span class="mini-tag ' + (covered ? "ok" : "over") + '">' + (covered ? "工作项级覆盖" : "未覆盖") + '</span>'
+      + '</div>'
+      + (cases.length ? '<div class="cov-wi-cases">' + cases.map(covCaseChip).join("") + '</div>' : "")
+      + '</div>';
+  });
+  html += '<div class="cov-wi-block cov-direct-block">'
+    + '<div class="cov-wi-head">'
+    +   '<span class="cov-wi-name"><span class="cov-wi-no direct">需求级</span>'
+    +     '<span class="cov-wi-title">未关联工作项的用例</span></span>'
+    +   '<span class="cov-wi-count">' + (direct.length ? direct.length + ' 条用例' : '无') + '</span>'
+    +   '<span class="mini-tag ' + (direct.length ? "mute" : "over") + '">'
+    +     (direct.length ? "仅需求级覆盖" : (tasks.length ? "需求级已细化到工作项" : "需求级未覆盖")) + '</span>'
+    + '</div>'
+    + (direct.length ? '<div class="cov-wi-cases">' + direct.map(covCaseChip).join("") + '</div>' : "")
+    + '</div></div>';
+  return html;
 }
 function renderCoverage(){
   var box = $("tcCoverage");
@@ -1034,25 +1140,36 @@ function renderCoverage(){
   });
   var head = '<div class="cov-summary">已覆盖需求 <b>' + covered + '</b> / ' + total +
     (total ? '（' + Math.round(covered * 100 / total) + '%）' : '') +
-    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算；0 表示未发生，不代表通过或失败</span></div>';
+    '<span class="cov-note">覆盖率按「该需求至少有一条用例」计算；展开需求可区分需求级与工作项级覆盖；0 表示未发生，不代表通过或失败</span></div>';
   if(!coverageRows.length){
     box.innerHTML = head + UI.emptyState({ icon:"checklist", title:"还没有可对照的需求或用例", text:"先录入需求池需求与测试用例，覆盖矩阵会自动汇总。" });
     return;
   }
   var rows = coverageRows.map(function(r){
-    var total = r.caseTotal || 0;
+    var rowTotal = r.caseTotal || 0;
     /* 跳过表示本次不适用，从通过率分母里剔除 */
-    var base = Math.max(0, total - (r.skipped || 0));
+    var base = Math.max(0, rowTotal - (r.skipped || 0));
     var pct = base ? Math.round((r.passed || 0) * 100 / base) : 0;
-    var covTxt = !r.demandId ? "—" : (total ? "已覆盖" : "未覆盖");
-    var covCls = !r.demandId ? "mute" : (total ? "ok" : "over");
+    var covTxt = !r.demandId ? "—" : (rowTotal ? "已覆盖" : "未覆盖");
+    var covCls = !r.demandId ? "mute" : (rowTotal ? "ok" : "over");
     var linked = !!r.demandId;
-    return '<div class="cov-row' + (linked ? " cov-link" : " cov-unlinked") + '"' +
+    var expanded = linked && !!covExpanded[r.demandId];
+    var wiCount = linked ? covWorkItemCount(r.demandId) : 0;
+    var name = '<span class="cov-name"><b>' + esc(r.demandTitle || "未命名需求") + '</b>'
+      + '<small>' + esc(demandStatusLabel(r.demandStatus))
+      + (wiCount ? ' · 已关联 ' + wiCount + ' 项工作项' : '')
+      + '</small></span>';
+    var toggle = linked
+      ? '<button class="cov-toggle" type="button" data-cov-toggle="' + esc(r.demandId) + '"'
+        + ' aria-expanded="' + (expanded ? "true" : "false") + '"'
+        + ' aria-label="' + (expanded ? "收起" : "展开") + '工作项覆盖">'
+        + icon(expanded ? "chevronUp" : "chevronRight", 12) + '</button>'
+      : '<span class="cov-toggle space"></span>';
+    var row = '<div class="cov-row' + (linked ? " cov-link" : " cov-unlinked") + '"' +
       (linked ? ' role="button" tabindex="0" data-cov-demand="' + esc(r.demandId) + '" title="'
-        + (total ? "查看需求详情" : "该需求还没有用例，点击查看需求详情") + '"' : '') + '>' +
-      '<span class="cov-name"><b>' + esc(r.demandTitle || "未命名需求") + '</b>' +
-        (r.demandId ? '<small>' + esc(demandStatusLabel(r.demandStatus)) + '</small>' : '') + '</span>' +
-      '<span>' + total + '</span>' +
+        + (rowTotal ? "查看需求详情" : "该需求还没有用例，点击查看需求详情") + '"' : '') + '>' +
+      '<span class="cov-name-cell">' + toggle + name + '</span>' +
+      '<span>' + rowTotal + '</span>' +
       covCountHTML(r.passed, "cov-pass") +
       covCountHTML(r.failed, "cov-fail") +
       covCountHTML(r.blocked, "cov-block") +
@@ -1062,6 +1179,8 @@ function renderCoverage(){
       '<span><i class="cov-bar"><i style="width:' + pct + '%"></i></i>' + pct + '%</span>' +
       '<span class="mini-tag ' + covCls + '">' + covTxt + '</span>' +
     '</div>';
+    if(expanded) row += covTaskChildrenHTML(r);
+    return row;
   }).join("");
   box.innerHTML = head + '<div class="cov-table">' +
     '<div class="cov-head"><span>需求</span><span>用例</span><span>通过</span><span>失败</span><span>阻塞</span><span title="本次不执行 / 不适用">跳过</span><span>未执行</span><span title="关联缺陷中未删除、未完成的数量">未关闭缺陷</span><span>通过率</span><span>覆盖</span></div>' +
@@ -1705,9 +1824,9 @@ function syncFilterOptions(){
   if(caseSearchEl){
     caseSearchEl.placeholder = caseScopeAll ? "搜索全部项目用例…" : "搜索本项目用例…";
     caseSearchEl.title = caseScopeAll
-      ? "在全部项目中搜索用例 / 前置 / 测试数据 / 步骤"
-      : "在所选项目内搜索用例 / 前置 / 测试数据 / 步骤";
-    caseSearchEl.setAttribute("aria-label", caseScopeAll ? "在全部项目中搜索测试用例" : "在所选项目内搜索测试用例");
+      ? "在全部项目中搜索用例 / 前置 / 测试数据 / 步骤 / 编号（如 TC-001）"
+      : "在所选项目内搜索用例 / 前置 / 测试数据 / 步骤 / 编号（如 TC-001）";
+    caseSearchEl.setAttribute("aria-label", caseScopeAll ? "在全部项目中按标题、前置、测试数据、步骤或编号搜索测试用例" : "在所选项目内按标题、前置、测试数据、步骤或编号搜索测试用例");
   }
   $("tcModuleList").innerHTML = modules.map(function(m){
     return '<option value="' + esc(m) + '"></option>';
@@ -2058,6 +2177,11 @@ function caseRowHTML(c){
   var stepCount = (c.steps || []).length;
   if(c.module) meta.push(c.module);
   if(c.demandTitle) meta.push("需求：" + cut(c.demandTitle, 30));
+  if(c.tasks && c.tasks.length){
+    var first = c.tasks[0];
+    var firstLabel = (itemNoText(first.itemNo) ? itemNoText(first.itemNo) + " " : "") + cut(first.taskTitle || first.taskId, 18);
+    meta.push(c.tasks.length > 1 ? "验证 " + c.tasks.length + " 个工作项：" + firstLabel + " 等" : "验证：" + firstLabel);
+  }
   meta.push(stepCount ? (stepCount + " 步") : "无步骤");
   if(c.precondition) meta.push("前置：" + cut(c.precondition, 36));
   if(c.testData) meta.push("数据：" + cut(c.testData, 30));
@@ -2258,11 +2382,134 @@ function searchDemands(el, seq, q){
 function chooseDemand(id){
   var picked = id ? demandPicker.list.filter(function(d){ return d.id === id; })[0] : null;
   if(id && !picked) return;
+  var changed = ($("cDemand").value || "") !== (id || "");
   setDemandValue(id || "", picked ? picked.title : "");
   UI.closeAllPops();
   var anchor = $("cDemandPicker");
   if(anchor) anchor.focus({ preventScroll:true });
+  if(changed) syncCaseTasksForDemand();
 }
+
+/* ---------- 验证工作项：先选主需求，再选该需求下的工作项 ---------- */
+function resetCaseTaskState(){
+  caseTaskSel = {};
+  caseTaskOptions = [];
+  caseTaskLoading = false;
+  caseTaskError = null;
+  caseTaskQuery = "";
+  caseTaskSeq++;
+  var input = $("cTaskSearch");
+  if(input) input.value = "";
+}
+
+function syncCaseTasksForDemand(){
+  resetCaseTaskState();
+  var demandId = $("cDemand").value || "";
+  if(!demandId){ renderCaseTaskPicker(); return; }
+  loadCaseTaskOptions();
+}
+
+function loadCaseTaskOptions(){
+  var demandId = $("cDemand").value || "";
+  if(!demandId){ renderCaseTaskPicker(); return; }
+  var seq = ++caseTaskSeq;
+  caseTaskLoading = true;
+  caseTaskError = null;
+  renderCaseTaskPicker();
+  API.get("/api/test-cases/task-options", { reqId: caseFormReqId, demandId: demandId }).then(function(rows){
+    if(seq !== caseTaskSeq) return;
+    caseTaskLoading = false;
+    caseTaskOptions = rows || [];
+    /* 已选项如果不在候选里（历史悬空关联），保留标题但不再显示勾选；保存时按当前选择重算 */
+    renderCaseTaskPicker();
+  }).catch(function(ex){
+    if(seq !== caseTaskSeq) return;
+    caseTaskLoading = false;
+    caseTaskError = (ex && ex.message) || "工作项加载失败";
+    renderCaseTaskPicker();
+  });
+}
+
+function renderCaseTaskPicker(){
+  var box = $("cTaskBox"), list = $("cTaskList"), empty = $("cTaskEmpty");
+  var tools = $("cTaskTools"), count = $("cTaskCount");
+  if(!box || !list || !empty) return;
+  var demandId = $("cDemand").value || "";
+  var selected = Object.keys(caseTaskSel);
+  var ro = !caseFormWritable();
+  var search = $("cTaskSearch");
+  if(search) search.disabled = ro;
+  if(tools) tools.hidden = !demandId;
+  if(count){
+    count.textContent = caseTaskLoading ? "加载中…"
+      : (caseTaskOptions.length
+        ? "已选 " + selected.length + " / " + caseTaskOptions.length
+        : (caseTaskError ? "加载失败" : "暂无工作项"));
+  }
+  if(!demandId){
+    list.hidden = true;
+    list.innerHTML = "";
+    empty.hidden = false;
+    empty.textContent = "关联主需求后，可选择该需求下的工作项。";
+    return;
+  }
+  if(caseTaskLoading && !caseTaskOptions.length){
+    list.hidden = false;
+    empty.hidden = true;
+    list.innerHTML = UI.skeletonRows(3);
+    return;
+  }
+  if(caseTaskError){
+    list.hidden = false;
+    empty.hidden = true;
+    list.innerHTML = '<div class="case-task-empty">' + esc(caseTaskError)
+      + ' <button class="btn sm ghost" type="button" data-task-retry>重试</button></div>';
+    return;
+  }
+  if(!caseTaskOptions.length){
+    list.hidden = true;
+    list.innerHTML = "";
+    empty.hidden = false;
+    empty.textContent = "该需求下还没有工作项；先在需求详情「拆分为工作项」。";
+    return;
+  }
+  var q = caseTaskQuery.toLowerCase();
+  var rows = caseTaskOptions.filter(function(t){
+    if(!q) return true;
+    return ((t.taskTitle || "") + " " + (itemNoText(t.itemNo) || "")).toLowerCase().indexOf(q) >= 0;
+  });
+  if(!rows.length){
+    list.hidden = false;
+    empty.hidden = true;
+    list.innerHTML = '<div class="case-task-empty">没有匹配的工作项，换个关键词试试。</div>';
+    return;
+  }
+  empty.hidden = true;
+  list.hidden = false;
+  list.innerHTML = rows.map(function(t){
+    var no = itemNoText(t.itemNo);
+    var meta = [typeName(t.itemType), colName(t.boardColumn)];
+    if(no) meta.unshift(no);
+    return '<label class="case-task-option">'
+      + '<input type="checkbox" data-case-task="' + esc(t.taskId) + '"'
+      + (caseTaskSel[t.taskId] ? " checked" : "") + (ro ? " disabled" : "") + ' />'
+      + '<span class="case-task-option-main">'
+      +   '<span class="case-task-option-title">' + esc(t.taskTitle || t.taskId) + '</span>'
+      +   '<span class="case-task-option-meta">' + esc(meta.filter(Boolean).join(" · ")) + '</span>'
+      + '</span></label>';
+  }).join("");
+}
+
+function toggleCaseTask(taskId, on){
+  if(on){
+    var found = caseTaskOptions.filter(function(t){ return t.taskId === taskId; })[0];
+    if(found) caseTaskSel[taskId] = found;
+  }else{
+    delete caseTaskSel[taskId];
+  }
+  renderCaseTaskPicker();
+}
+
 function openDemandPicker(){
   if(!caseFormWritable()) return;
   if(demandPicker.el && UI.popOpen(demandPicker.el)){ UI.closeAllPops(); return; }
@@ -2379,6 +2626,8 @@ function openNewDialog(targetReqId){
   $("cPrecondition").value = "";
   $("cTestData").value = "";
   setDemandValue("", "");
+  resetCaseTaskState();
+  renderCaseTaskPicker();
   loadDemandOptions(caseFormReqId);
   renderStepRows();
   applyReadOnly(!caseFormWritable());
@@ -2430,6 +2679,9 @@ function openEditDialog(id){
   $("cPrecondition").value = c.precondition || "";
   $("cTestData").value = c.testData || "";
   setDemandValue(c.demandId || "", c.demandTitle || "");
+  resetCaseTaskState();
+  (c.tasks || []).forEach(function(t){ caseTaskSel[t.taskId] = t; });
+  if(c.demandId) loadCaseTaskOptions(); else renderCaseTaskPicker();
   loadDemandOptions(caseFormReqId);
   renderStepRows();
   applyReadOnly(!caseFormWritable());
@@ -2455,9 +2707,10 @@ function focusStep(i){
   if(ta) ta.focus();
 }
 function applyReadOnly(on){
-  ["cTitle", "cPrecondition", "cTestData", "cDemand", "cModule", "cPri"].forEach(function(id){ $(id).disabled = on; });
+  ["cTitle", "cPrecondition", "cTestData", "cDemand", "cModule", "cPri", "cTaskSearch"].forEach(function(id){ $(id).disabled = on; });
   $("cDemandPicker").disabled = on;
   $("tcSteps").querySelectorAll("textarea").forEach(function(inp){ inp.disabled = on; });
+  $("cTaskList").querySelectorAll("input").forEach(function(inp){ inp.disabled = on; });
   $("tcSteps").querySelectorAll("[data-step-del]").forEach(function(b){ b.style.display = on ? "none" : ""; });
   $("btnCaseAddStep").style.display = on ? "none" : "";
   $("caseSaveRow").style.display = on ? "none" : "";
@@ -2495,7 +2748,7 @@ function stepsSnapshot(){
 }
 function caseFormSnapshot(){
   return JSON.stringify([$("cTitle").value, $("cModule").value, $("cPri").value,
-    $("cDemand").value, $("cPrecondition").value, $("cTestData").value, stepsSnapshot()]);
+    $("cDemand").value, Object.keys(caseTaskSel).sort(), $("cPrecondition").value, $("cTestData").value, stepsSnapshot()]);
 }
 function caseFormDirty(){
   return !!caseFormBaseline && caseFormSnapshot() !== caseFormBaseline;
@@ -2600,6 +2853,7 @@ function saveCase(){
     module: $("cModule").value.trim() || null,
     priority: $("cPri").value || null,
     demandId: $("cDemand").value || null,
+    taskIds: Object.keys(caseTaskSel),
     steps: collectSteps()
   };
   var isEdit = !!editingCase.id;
@@ -2962,6 +3216,8 @@ var planFormReqId = null;     /* 当前计划弹窗的所属项目：编辑取�
 var planSaving = false;
 var planDialogSeq = 0;
 var planPickCases = [];
+var planPickSel = {};
+var planPickDemand = "";
 var pickingPlan = false;
 var planGroupErrors = {};     /* 全部项目下记录拉取失败的项目，渲染时逐项目提示 */
 var planSearch = "";          /* 计划搜索：名称 / 版本 / 备注 / 项目名 */
@@ -3246,6 +3502,33 @@ function renderPlanDetail(){
     + '</div>';
   if(p.note) head += '<p class="foot-note">' + esc(p.note) + '</p>';
   if(done) head += '<p class="foot-note">已完成计划是结果快照：圈选与批量执行已锁定，可重新打开后继续编辑。</p>';
+  /* 需求范围：由计划内用例的主需求派生，不单独存计划字段 */
+  var scope = [], scopeMap = {};
+  cs.forEach(function(c){
+    var key = c.demandId || "__none__";
+    if(!scopeMap[key]){
+      scopeMap[key] = { id: c.demandId || "", title: c.demandTitle || "未关联需求", cases: 0, workItems: {}, required: 0 };
+      scope.push(scopeMap[key]);
+    }
+    var s = scopeMap[key];
+    s.cases++;
+    if(c.required) s.required++;
+    (c.tasks || []).forEach(function(t){ s.workItems[t.taskId] = true; });
+  });
+  if(scope.length){
+    head += '<div class="plan-scope" role="list" aria-label="计划需求范围">'
+      + '<span class="plan-scope-label">需求范围</span>'
+      + scope.map(function(s){
+          var wi = Object.keys(s.workItems).length;
+          return '<span class="plan-scope-chip" role="listitem" title="' + esc(s.title) + '">'
+            + '<b>' + esc(s.title) + '</b>'
+            + '<span class="plan-scope-count">' + s.cases + ' 条用例'
+            + (wi ? ' · ' + wi + ' 项工作项' : ' · 需求级') + '</span>'
+            + (s.required ? '<span class="plan-req-tag" title="发布必测">必测 ' + s.required + '</span>' : "")
+            + '</span>';
+        }).join("")
+      + '</div>';
+  }
   var pct = p.caseCount ? Math.round((p.executedCount || 0) * 100 / p.caseCount) : 0;
   head += '<div class="tc-stats plan-stats">'
     + '<span class="tc-stat"><b>' + (p.caseCount || 0) + '</b>圈选</span>'
@@ -3304,9 +3587,26 @@ function renderPlanDetail(){
           + ' aria-label="选择用例「' + esc(c.title) + '」" />'
         : "";
       var tail = [];
+      if(c.demandTitle) tail.push("需求：" + cut(c.demandTitle, 24));
+      var tasks = c.tasks || [];
+      if(tasks.length){
+        var names = tasks.map(function(t){ return (itemNoText(t) || "WI") + " " + t.taskTitle; });
+        tail.push("工作项：" + cut(names.join("、"), 40));
+      }else{
+        tail.push("需求级覆盖");
+      }
       if(c.module) tail.push(c.module);
       tail.push((c.priority || "—"));
       if(c.executedBy) tail.push(c.executedBy + " " + (fmtTs(c.executedAt) || ""));
+      var reqTag = c.required
+        ? '<span class="plan-req-tag" title="发布检查必须执行并通过">发布必测</span>' : "";
+      var reqToggle = editable
+        ? '<button class="plan-req-toggle' + (c.required ? " on" : "") + '" type="button"'
+          + ' data-plan-req="' + esc(c.caseId) + '" data-required="' + (c.required ? "1" : "0") + '"'
+          + ' aria-pressed="' + (c.required ? "true" : "false") + '"'
+          + ' title="' + (c.required ? "取消发布必测" : "标记为发布必测") + '">'
+          + icon("star", 13) + '</button>'
+        : "";
       var del = editable
         ? '<button class="icon-btn sm" type="button" data-plan-rm="' + esc(c.caseId) + '" aria-label="移出计划" title="移出计划（不删用例）">' + icon("minus", 14) + '</button>'
         : "";
@@ -3314,12 +3614,12 @@ function renderPlanDetail(){
         + '<span class="tc-no" title="用例编号">' + esc(caseNoText(c)) + '</span>'
         + statusBadgeHTML(c.result)
         + '<div class="tc-main">'
-        +   '<div class="tc-title">' + esc(c.title) + '</div>'
+        +   '<div class="tc-title">' + esc(c.title) + ' ' + reqTag + '</div>'
         +   '<div class="tc-meta">' + tail.map(esc).join(" · ") + '</div>'
         +   (c.note ? '<div class="tc-note">' + esc(c.note) + '</div>' : "")
         + '</div>'
         + '<div class="tc-acts">' + (c.latestStatus ? '<span class="toolbar-meta">用例库最近：'
-            + (STATUS_LABEL[c.latestStatus] || c.latestStatus) + '</span>' : "") + del + '</div>'
+            + (STATUS_LABEL[c.latestStatus] || c.latestStatus) + '</span>' : "") + reqToggle + del + '</div>'
         + '</div>';
     }).join("");
   }
@@ -3372,6 +3672,21 @@ function doPlanBatchRun(){
   }).catch(function(ex){ toast(ex.message || "批量记录失败", "bad"); })
   .then(function(){ planRunBusy = false; if(btn) btn.disabled = false; });
 }
+var planReqBusy = {};
+function togglePlanRequired(caseId, required){
+  if(!planDetail || planReqBusy[caseId]) return;
+  var planId = planDetail.plan.id;
+  planReqBusy[caseId] = true;
+  API.put("/api/test-plans/" + encodeURIComponent(planId) + "/cases/" + encodeURIComponent(caseId)
+      + "/required?required=" + (required ? "true" : "false"), {})
+    .then(function(){
+      (planDetail.cases || []).forEach(function(c){ if(c.caseId === caseId) c.required = required; });
+      renderPlanDetail();
+      toast(required ? "已标记为发布必测" : "已取消发布必测", "fs");
+    })
+    .catch(function(ex){ toast(ex.message || "更新失败", "bad"); })
+    .then(function(){ delete planReqBusy[caseId]; });
+}
 function planStatusTo(status){
   API.put("/api/test-plans/" + encodeURIComponent(planDetail.plan.id) + "/status?status=" + encodeURIComponent(status), {})
   .then(function(){
@@ -3382,9 +3697,11 @@ function planStatusTo(status){
 function exportPlanCsv(){
   var d = planDetail;
   if(!d) return;
-  var rows = [["编号", "标题", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
+  var rows = [["编号", "标题", "需求", "工作项", "发布必测", "模块", "优先级", "计划结果", "执行人", "执行时间", "备注"]];
   (d.cases || []).forEach(function(c){
-    rows.push([caseNoText(c), c.title, c.module || "", c.priority || "",
+    var tasks = (c.tasks || []).map(function(t){ return (itemNoText(t) || "WI") + " " + t.taskTitle; }).join("、");
+    rows.push([caseNoText(c), c.title, c.demandTitle || "", tasks || "需求级覆盖", c.required ? "是" : "",
+      c.module || "", c.priority || "",
       c.result ? (STATUS_LABEL[c.result] || c.result) : "未执行",
       c.executedBy || "", c.executedAt ? fmtTs(c.executedAt) : "", c.note || ""]);
   });
@@ -3509,8 +3826,12 @@ function openPlanPick(){
   var d = planDetail;
   if(!d) return;
   pickingPlan = false;
+  planPickSel = {};
+  planPickDemand = "";
   $("planPickList").innerHTML = UI.skeletonRows(3);
   $("planPickCount").textContent = "";
+  var demandSel = $("planPickDemand");
+  if(demandSel) demandSel.innerHTML = '<option value="">全部需求</option>';
   UI.openModal($("dlgPlanPick"), "input");
   loadAllCases({ reqId: d.plan.reqId }).then(function(page){
     var inPlan = {};
@@ -3519,28 +3840,74 @@ function openPlanPick(){
     if(!planPickCases.length){
       $("planPickList").innerHTML = '<p class="rep-empty">项目用例库里的用例都已在本计划中。要更多用例可先在「用例」页录入或 CSV 导入。</p>';
       $("btnDoPlanPick").disabled = true;
+      renderPlanPickDemandOptions();
       return;
     }
     $("btnDoPlanPick").disabled = false;
-    $("planPickList").innerHTML = planPickCases.map(function(c){
-      return '<label class="pick-row"><input type="checkbox" data-pick-case="' + esc(c.id) + '" />'
-        + statusBadgeHTML(c.latestStatus)
-        + '<span class="pick-main"><b>' + esc(c.title) + '</b>'
-        + '<small>' + esc([c.module, c.priority || "—"].join(" · ")) + '</small></span></label>';
-    }).join("");
-    syncPickCount();
+    renderPlanPickDemandOptions();
+    renderPlanPickList();
   }).catch(function(ex){
     $("planPickList").innerHTML = UI.errorState(ex.message || "用例加载失败");
   });
 }
+/* 按需求归组候选用例：需求下拉只列还有可加入用例的需求 */
+function renderPlanPickDemandOptions(){
+  var sel = $("planPickDemand");
+  if(!sel) return;
+  var map = {}, list = [];
+  planPickCases.forEach(function(c){
+    var key = c.demandId || "__none__";
+    if(!map[key]){
+      map[key] = { id: key, title: c.demandTitle || "未关联需求", count: 0 };
+      list.push(map[key]);
+    }
+    map[key].count++;
+  });
+  list.sort(function(a, b){
+    if(a.id === "__none__") return 1;
+    if(b.id === "__none__") return -1;
+    return a.title.localeCompare(b.title, "zh-CN");
+  });
+  sel.innerHTML = '<option value="">全部需求（' + planPickCases.length + '）</option>'
+    + list.map(function(d){
+        return '<option value="' + esc(d.id) + '">' + esc(d.title) + '（' + d.count + '）</option>';
+      }).join("");
+  sel.value = planPickDemand || "";
+}
+function planPickVisibleCases(){
+  if(!planPickDemand) return planPickCases;
+  return planPickCases.filter(function(c){
+    return (c.demandId || "__none__") === planPickDemand;
+  });
+}
+function renderPlanPickList(){
+  var list = planPickVisibleCases();
+  if(!list.length){
+    $("planPickList").innerHTML = '<p class="rep-empty">该需求下没有可加入的用例。</p>';
+    syncPickCount();
+    return;
+  }
+  $("planPickList").innerHTML = list.map(function(c){
+    return '<label class="pick-row"><input type="checkbox" data-pick-case="' + esc(c.id) + '"'
+      + (planPickSel[c.id] ? " checked" : "") + ' />'
+      + statusBadgeHTML(c.latestStatus)
+      + '<span class="pick-main"><b>' + esc(c.title) + '</b>'
+      + '<small>' + esc([c.demandTitle || "未关联需求", c.module, c.priority || "—"].filter(Boolean).join(" · ")) + '</small></span></label>';
+  }).join("");
+  syncPickCount();
+}
 function syncPickCount(){
-  var n = $("planPickList").querySelectorAll("[data-pick-case]:checked").length;
-  $("planPickCount").textContent = "已选 " + n + " / 可加入 " + planPickCases.length + " 条";
+  var n = Object.keys(planPickSel).length;
+  var label = "";
+  if(planPickDemand){
+    var hit = planPickCases.filter(function(c){ return (c.demandId || "__none__") === planPickDemand; })[0];
+    label = " · 当前需求：" + (hit ? (hit.demandTitle || "未关联需求") : "");
+  }
+  $("planPickCount").textContent = "已选 " + n + " / 可加入 " + planPickCases.length + " 条" + label;
 }
 function doPlanPick(){
   if(pickingPlan) return;
-  var ids = [];
-  $("planPickList").querySelectorAll("[data-pick-case]:checked").forEach(function(inp){ ids.push(inp.dataset.pickCase); });
+  var ids = Object.keys(planPickSel);
   if(!ids.length){ toast("先勾选要加入的用例", "warn"); return; }
   pickingPlan = true;
   setCaseBusy($("btnDoPlanPick"), true, "加入中…");
@@ -3990,6 +4357,10 @@ $("tcPlans").addEventListener("click", function(e){
     });
     return;
   }
+  if((b = e.target.closest("[data-plan-req]"))){
+    togglePlanRequired(b.dataset.planReq, b.dataset.required !== "1");
+    return;
+  }
   if((b = e.target.closest("[data-plan-rm]"))){
     var planId = planDetail && planDetail.plan.id;
     API.del("/api/test-plans/" + encodeURIComponent(planId) + "/cases/" + encodeURIComponent(b.dataset.planRm))
@@ -4021,13 +4392,30 @@ $("dlgPlanX").addEventListener("click", function(){ UI.closeModal($("dlgPlan"));
 UI.setModalSubmit($("dlgPlan"), function(){ if(!planSaving) savePlan(); });
 $("dlgPlanPickX").addEventListener("click", function(){ UI.closeModal($("dlgPlanPick")); });
 $("btnDoPlanPick").addEventListener("click", doPlanPick);
-$("planPickList").addEventListener("change", syncPickCount);
-$("btnPlanPickAll").addEventListener("click", function(){
-  var boxes = $("planPickList").querySelectorAll("[data-pick-case]");
-  var allOn = true;
-  boxes.forEach(function(x){ if(!x.checked) allOn = false; });
-  boxes.forEach(function(x){ x.checked = !allOn; });
+$("planPickList").addEventListener("change", function(e){
+  var box = e.target.closest("[data-pick-case]");
+  if(!box) return;
+  if(box.checked) planPickSel[box.dataset.pickCase] = true;
+  else delete planPickSel[box.dataset.pickCase];
   syncPickCount();
+});
+if($("planPickDemand")) $("planPickDemand").addEventListener("change", function(){
+  planPickDemand = this.value || "";
+  renderPlanPickList();
+});
+if($("btnPlanPickDemandAll")) $("btnPlanPickDemandAll").addEventListener("click", function(){
+  if(!planPickDemand){ toast("先选择一个需求", "warn"); return; }
+  planPickVisibleCases().forEach(function(c){ planPickSel[c.id] = true; });
+  renderPlanPickList();
+});
+$("btnPlanPickAll").addEventListener("click", function(){
+  var list = planPickVisibleCases();
+  var allOn = list.length > 0 && list.every(function(c){ return !!planPickSel[c.id]; });
+  list.forEach(function(c){
+    if(allOn) delete planPickSel[c.id];
+    else planPickSel[c.id] = true;
+  });
+  renderPlanPickList();
 });
 UI.setModalSubmit($("dlgPlanPick"), function(){ if(!pickingPlan) doPlanPick(); });
 $("tcList").addEventListener("click", function(e){
@@ -4105,12 +4493,25 @@ $("tcSteps").addEventListener("keydown", function(e){
 $("btnSaveCase").addEventListener("click", saveCase);
 $("cTitle").addEventListener("input", function(){ $("fCaseTitle").classList.remove("invalid"); });
 $("cDemandPicker").addEventListener("click", openDemandPicker);
+$("cTaskSearch").addEventListener("input", function(){
+  caseTaskQuery = this.value.trim();
+  renderCaseTaskPicker();
+});
+$("cTaskList").addEventListener("change", function(e){
+  var box = e.target.closest("[data-case-task]");
+  if(!box) return;
+  toggleCaseTask(box.getAttribute("data-case-task"), box.checked);
+});
+$("cTaskList").addEventListener("click", function(e){
+  if(e.target.closest("[data-task-retry]")) loadCaseTaskOptions();
+});
 $("dlgCaseX").addEventListener("click", function(){ tryCloseCaseDialog(); });
 /* 单行输入 Enter 提交；步骤 textarea 保持换行，CJK 组合输入不触发 */
 $("dlgCase").addEventListener("keydown", function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
   if(!e.target || e.target.tagName !== "INPUT") return;
   if(e.target.type === "checkbox" || e.target.type === "file") return;
+  if(e.target.id === "cTaskSearch") return;
   if(!caseFormWritable()) return;
   e.preventDefault();
   if(!caseSaving && !$("btnSaveCase").disabled) saveCase();
@@ -4185,6 +4586,18 @@ $("runsList").addEventListener("change", function(e){
   if(runsCaseId) uploadRunEvidence(runsCaseId, inp.dataset.runFile, file);
 });
 
+function loadCoverageTasks(demandId){
+  if(!demandId) return;
+  covTaskCache[demandId] = null;
+  renderCoverage();
+  API.get("/api/test-cases/task-coverage", { demandId: demandId }).then(function(rows){
+    covTaskCache[demandId] = rows || [];
+    if(tcMode === "coverage") renderCoverage();
+  }).catch(function(){
+    covTaskCache[demandId] = "error";
+    if(tcMode === "coverage") renderCoverage();
+  });
+}
 /* 覆盖矩阵 / 报告：需求行、失败行跳转 */
 function covRowKeyActivate(e){
   if(e.key !== "Enter" && e.key !== " ") return;
@@ -4195,6 +4608,20 @@ function covRowKeyActivate(e){
 }
 if($("tcCoverage")){
   $("tcCoverage").addEventListener("click", function(e){
+    var toggle = e.target.closest("[data-cov-toggle]");
+    if(toggle){
+      e.stopPropagation();
+      var id = toggle.dataset.covToggle;
+      if(covExpanded[id]){ delete covExpanded[id]; renderCoverage(); return; }
+      covExpanded[id] = true;
+      if(!covTaskCache.hasOwnProperty(id)) loadCoverageTasks(id);
+      else renderCoverage();
+      return;
+    }
+    var retry = e.target.closest("[data-cov-retry]");
+    if(retry){ e.stopPropagation(); loadCoverageTasks(retry.dataset.covRetry); return; }
+    var chip = e.target.closest("[data-cov-case]");
+    if(chip){ e.stopPropagation(); openReportCase(chip.dataset.covCase); return; }
     var row = e.target.closest("[data-cov-demand]");
     if(row) openDemandDetailById(row.dataset.covDemand);
   });

@@ -56,12 +56,16 @@ class TestCaseServiceTest {
     private final AttachmentService attachments = mock(AttachmentService.class);
     private final com.hourglass.mapper.TestPlanCaseMapper planCases = mock(com.hourglass.mapper.TestPlanCaseMapper.class);
     private final AuditService auditService = mock(AuditService.class);
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTasks = mock(com.hourglass.mapper.TestCaseTaskMapper.class);
+    private final com.hourglass.mapper.TaskMapper tasks = mock(com.hourglass.mapper.TaskMapper.class);
+    private final com.hourglass.mapper.DemandMapper demands = mock(com.hourglass.mapper.DemandMapper.class);
     private final TestCaseService service =
             new TestCaseService(cases, runs, taskCommand, access, reqs,
-                    mock(com.hourglass.mapper.DemandMapper.class), mock(com.hourglass.mapper.TestModuleMapper.class),
+                    demands, mock(com.hourglass.mapper.TestModuleMapper.class),
                     mock(com.hourglass.mapper.AttachmentMapper.class), attachments,
                     mock(com.hourglass.mapper.TestPlanMapper.class),
-                    planCases, auditService);
+                    planCases, auditService, mock(NumberSeqService.class),
+                    caseTasks, tasks);
 
     @BeforeEach
     void setUp() {
@@ -158,6 +162,43 @@ class TestCaseServiceTest {
         TestCaseSaveRequest req = saveRequest("标题");
         req.setReqId(reqId);
         return req;
+    }
+
+    /* ---------- 用例—工作项关联 ---------- */
+
+    @Test
+    void taskLinksMustBelongToCasePrimaryDemand() {
+        TestCase c = existing("C1", null);
+        c.setDemandId("D1");
+        when(cases.selectById("C1")).thenReturn(c);
+        com.hourglass.entity.Demand demand = new com.hourglass.entity.Demand();
+        demand.setId("D1");
+        demand.setWorkspaceId(WS);
+        demand.setReqId(REQ);
+        when(demands.selectById("D1")).thenReturn(demand);
+        Task foreign = new Task();
+        foreign.setId("T9");
+        foreign.setWorkspaceId(WS);
+        foreign.setReqId(REQ);
+        foreign.setDemandId("D2");
+        foreign.setTitle("另一个需求的工作项");
+        when(tasks.selectById("T9")).thenReturn(foreign);
+        TestCaseSaveRequest req = saveRequest("登录");
+        req.setDemandId("D1");
+        req.setTaskIds(Collections.singletonList("T9"));
+        AppException ex = assertThrows(AppException.class, () -> service.update(USER, WS, "C1", req));
+        assertTrue(ex.getMessage().contains("不属于用例主需求"));
+        verify(caseTasks, never()).insert(any(com.hourglass.entity.TestCaseTask.class));
+    }
+
+    @Test
+    void taskLinksRequirePrimaryDemand() {
+        TestCase c = existing("C1", null);
+        when(cases.selectById("C1")).thenReturn(c);
+        TestCaseSaveRequest req = saveRequest("登录");
+        req.setTaskIds(Collections.singletonList("T9"));
+        AppException ex = assertThrows(AppException.class, () -> service.update(USER, WS, "C1", req));
+        assertTrue(ex.getMessage().contains("请先关联主需求"));
     }
 
     /* ---------- 创建与步骤清洗 ---------- */

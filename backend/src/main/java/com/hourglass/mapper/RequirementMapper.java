@@ -33,6 +33,10 @@ public interface RequirementMapper {
 
     int update(Requirement requirement);
 
+    /** 发布前测试检查策略：strict / standard / loose */
+    int updateReleasePolicy(@Param("workspaceId") String workspaceId, @Param("id") String id,
+                            @Param("policy") String policy);
+
     int setArchived(@Param("workspaceId") String workspaceId, @Param("id") String id,
                     @Param("archived") boolean archived);
 

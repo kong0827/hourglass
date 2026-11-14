@@ -324,7 +324,7 @@ export var OVERLAYS_HTML = `<!-- ==================== 弹窗层 ================
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
         <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
       </svg>
-      <input id="paletteInput" type="search" name="global-search" placeholder="搜索项目、工作项、分支、文档" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="全局搜索" />
+      <input id="paletteInput" type="search" name="global-search" placeholder="搜索项目、工作项、文档、需求、用例或编号" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="全局搜索：支持 WI-001、TC-001 等编号" />
       <span class="palette-scope" id="paletteScope">仅当前空间</span>
       <kbd>Esc</kbd>
     </div>

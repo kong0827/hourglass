@@ -81,9 +81,11 @@ class TaskCascadeTest {
     private DemandMapper demandMapper;
     private TestCaseMapper testCaseMapper;
     private TestCaseRunMapper testCaseRunMapper;
+    private com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
     private TaskCascade cascade;
     private DeliveryScopeLock scopeLock;
     private com.hourglass.mapper.DeliveryNoteMapper deliveryNoteMapper;
+    private com.hourglass.mapper.NumberSeqMapper numberSeqMapper;
 
     @BeforeEach
     void setUp() {
@@ -111,17 +113,20 @@ class TaskCascadeTest {
         demandMapper = mock(DemandMapper.class);
         testCaseMapper = mock(TestCaseMapper.class);
         testCaseRunMapper = mock(TestCaseRunMapper.class);
+        caseTaskMapper = mock(com.hourglass.mapper.TestCaseTaskMapper.class);
         deliveryNoteMapper = mock(com.hourglass.mapper.DeliveryNoteMapper.class);
+        numberSeqMapper = mock(com.hourglass.mapper.NumberSeqMapper.class);
         cascade = new TaskCascade(taskMapper, logMapper, commentMapper, watchMapper, notificationMapper,
                 subtaskMapper, tagMapper, timeLogMapper, attachmentService, dependencyMapper,
                 baselineMapper, ganttShareMapper, reqMapper, requirementDocMapper,
                 mock(com.hourglass.mapper.RequirementDocHistoryMapper.class),
                 docCommentMapper, completionService, devBranchMapper, versionTaskMapper, versionMapper, demandMapper,
                 mock(com.hourglass.mapper.MailDeliveryMapper.class),
-                reqDocShareMapper, testCaseMapper, testCaseRunMapper,
+                reqDocShareMapper, testCaseMapper, testCaseRunMapper, caseTaskMapper,
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class),
                 mock(com.hourglass.mapper.VersionCommitmentMapper.class),
-                mock(com.hourglass.mapper.ProjectMilestoneMapper.class), deliveryNoteMapper, scopeLock);
+                mock(com.hourglass.mapper.ProjectMilestoneMapper.class), deliveryNoteMapper, scopeLock,
+                numberSeqMapper);
     }
 
     private List<Task> tasks(String... workspaceAndIds) {
@@ -368,6 +373,8 @@ class TaskCascadeTest {
         verify(deliveryNoteMapper).deleteByWorkspace(WS);
         verify(demandMapper).deleteLogsByWorkspace(WS);
         verify(demandMapper).deleteByWorkspace(WS);
+        /* 删除空间时编号序列一起清，避免留下孤立行 */
+        verify(numberSeqMapper).deleteByWorkspace(WS);
     }
 
     @Test
@@ -409,6 +416,8 @@ class TaskCascadeTest {
         /* 需求流转日志不在备份里，导入时必须保留 */
         verify(demandMapper, never()).deleteLogsByWorkspace(WS);
         verify(demandMapper).deleteByWorkspace(WS);
+        /* 覆盖导入不清编号序列：序列只增不减，导入后下一次取号不能回收旧号 */
+        verify(numberSeqMapper, never()).deleteByWorkspace(WS);
     }
 
     @Test
@@ -416,7 +425,7 @@ class TaskCascadeTest {
         assertEquals(Arrays.asList(
                 "task_log", "task_comment", "task_watch", "app_notification", "subtask", "task_tag",
                 "attachment", "time_log", "task_dependency", "task_baseline", "version_task",
-                "project_milestone_task"),
+                "project_milestone_task", "test_case_task"),
                 TaskCascade.TASK_CHILD_TABLES);
         assertEquals(Arrays.asList("task_completion_record", "version_release_item", "version_release_plan_task"),
                 TaskCascade.PRESERVED_TASK_REF_TABLES);
@@ -432,7 +441,7 @@ class TaskCascadeTest {
 
         assertEquals(Arrays.asList(
                 "task_log", "task_dependency", "task_baseline", "gantt_share", "task",
-                "test_case_run", "test_case",
+                "test_case_run", "test_case", "test_case_task",
                 "requirement", "requirement_doc", "req_doc_share", "task_completion_record", "subtask",
                 "task_tag", "tag", "time_log", "attachment", "task_comment", "task_watch",
                 "app_notification", "dev_branch_log", "dev_branch",

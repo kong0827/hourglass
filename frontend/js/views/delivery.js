@@ -235,13 +235,14 @@ function renderDoc() {
 var PAPER_W = 703, PAPER_H = 1017;
 
 /* 区块设了 break-inside:avoid，整节放不下时会整节挪到下一页，
-   所以页数不是总高除以页高那么简单，要按同样的规则走一遍页光标。 */
+   所以页数不是总高除以页高那么简单，要按同样的规则走一遍页光标。
+   比一页还高的区块也一样先挪页：Chrome 会把它挪到下一页再拆，剩页空间不会留残段。 */
 function countPages(sheet) {
   var y = 0, parts = sheet.children;
   for (var i = 0; i < parts.length; i++) {
     /* offsetHeight 是布局高度：预览纸带 scale 变换，getBoundingClientRect 会把缩放算进去，页数就虚高了 */
     var h = parts[i].offsetHeight;
-    if (parts[i].classList.contains("dl-sec") && h <= PAPER_H && y % PAPER_H + h > PAPER_H) {
+    if (parts[i].classList.contains("dl-sec") && y % PAPER_H + h > PAPER_H) {
       y = Math.ceil(y / PAPER_H) * PAPER_H;
     }
     y += h;

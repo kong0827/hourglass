@@ -11,6 +11,8 @@ public class TestPlanCase {
     private String id;
     private String planId;
     private String caseId;
+    /** 发布必测：发布检查要求该用例执行通过 */
+    private Boolean required;
     /** passed/failed/blocked，空=计划内未执行 */
     private String result;
     private String note;

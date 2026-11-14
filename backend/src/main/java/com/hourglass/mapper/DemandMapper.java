@@ -61,6 +61,7 @@ public interface DemandMapper {
 
     int insert(Demand demand);
 
+
     int update(Demand demand);
 
     /** 仅更换所属项目与模块，避免把整行字段一起写回；仍按 revision 做 CAS。 */

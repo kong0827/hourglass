@@ -40,6 +40,13 @@ public class TestCaseSaveRequest {
     @Size(max = 30, message = "步骤最多 30 条")
     private List<StepItem> steps;
 
+    /**
+     * 验证的工作项（选填）。填写时必须先关联主需求，且每个工作项都属于该需求。
+     * 编辑时传 null 表示保持原关联，传空数组表示清空。
+     */
+    @Size(max = 100, message = "单条用例最多关联 100 个工作项")
+    private List<String> taskIds;
+
     @Data
     public static class StepItem {
         @Size(max = 200, message = "单条操作步骤最多 200 字")

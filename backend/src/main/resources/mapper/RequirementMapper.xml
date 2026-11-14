@@ -3,7 +3,7 @@
 <mapper namespace="com.hourglass.mapper.RequirementMapper">
 
   <sql id="cols">
-    id, workspace_id, name, description, objective, status, owner_user_id, planned_start, planned_end,
+    id, workspace_id, name, description, objective, status, release_check_policy, owner_user_id, planned_start, planned_end,
     first_released_at, created_at, updated_at, archived_at, sort_order
   </sql>
 
@@ -47,9 +47,9 @@
   </select>
 
   <insert id="insert">
-    INSERT INTO requirement (id, workspace_id, name, description, objective, status, owner_user_id,
+    INSERT INTO requirement (id, workspace_id, name, description, objective, status, release_check_policy, owner_user_id,
       planned_start, planned_end, first_released_at, sort_order)
-    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{objective}, #{status}, #{ownerUserId},
+    VALUES (#{id}, #{workspaceId}, #{name}, #{description}, #{objective}, #{status}, COALESCE(#{releaseCheckPolicy}, 'standard'), #{ownerUserId},
       #{plannedStart}, #{plannedEnd}, #{firstReleasedAt}, #{sortOrder})
   </insert>
 
@@ -78,8 +78,13 @@
     <if test="updatedAt != null">AND updated_at = #{updatedAt}</if>
   </update>
 
-  <update id="setArchived">
-    UPDATE requirement SET archived_at = <choose><when test="archived">NOW()</when><otherwise>NULL</otherwise></choose>,
+  <!-- 发布检查策略单独写入：普通项目编辑不携带该列，避免误重置 -->
+  <update id="updateReleasePolicy">
+    UPDATE requirement SET release_check_policy = #{policy}, updated_at = NOW()
+    WHERE id = #{id} AND workspace_id = #{workspaceId}
+  </update>
+
+  <update id="setArchived">    UPDATE requirement SET archived_at = <choose><when test="archived">NOW()</when><otherwise>NULL</otherwise></choose>,
       updated_at = NOW()
     WHERE id = #{id} AND workspace_id = #{workspaceId}
   </update>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hourglass.mapper.TestCaseTaskMapper">
+
+  <insert id="insert">
+    INSERT INTO test_case_task
+      (id, workspace_id, case_id, task_id, created_by, created_at)
+    VALUES
+      (#{id}, #{workspaceId}, #{caseId}, #{taskId}, #{createdBy}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+  </insert>
+
+  <delete id="deleteByCase">
+    DELETE FROM test_case_task WHERE case_id = #{caseId}
+  </delete>
+
+  <delete id="deleteByCaseIds">
+    DELETE FROM test_case_task
+    WHERE workspace_id = #{workspaceId}
+      AND case_id IN
+      <foreach collection="caseIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </delete>
+
+  <delete id="deleteByTaskIds">
+    DELETE FROM test_case_task
+    WHERE workspace_id = #{workspaceId}
+      AND task_id IN
+      <foreach collection="taskIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+  </delete>
+
+  <delete id="deleteByDemand">
+    DELETE ct FROM test_case_task ct
+    JOIN task t ON t.id = ct.task_id AND t.workspace_id = ct.workspace_id
+    WHERE ct.workspace_id = #{workspaceId} AND t.demand_id = #{demandId}
+  </delete>
+
+  <delete id="deleteByReq">
+    DELETE ct FROM test_case_task ct
+    JOIN test_case c ON c.id = ct.case_id AND c.workspace_id = ct.workspace_id
+    WHERE ct.workspace_id = #{workspaceId} AND c.req_id = #{reqId}
+  </delete>
+
+  <delete id="deleteByWorkspace">
+    DELETE FROM test_case_task WHERE workspace_id = #{workspaceId}
+  </delete>
+
+  <select id="selectAllByWorkspace" resultType="com.hourglass.entity.TestCaseTask">
+    SELECT * FROM test_case_task
+    WHERE workspace_id = #{workspaceId}
+    ORDER BY created_at, id
+  </select>
+
+  <select id="selectByCaseIds" resultType="com.hourglass.dto.CaseTaskLink">
+    SELECT ct.case_id, ct.task_id, t.title AS task_title, t.item_type, t.board_column,
+           t.demand_id, t.item_no
+    FROM test_case_task ct
+    JOIN task t ON t.id = ct.task_id AND t.workspace_id = ct.workspace_id
+    WHERE ct.workspace_id = #{workspaceId}
+      AND ct.case_id IN
+      <foreach collection="caseIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+      AND t.deleted_at IS NULL
+    ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
+  </select>
+
+  <select id="selectOptions" resultType="com.hourglass.dto.CaseTaskLink">
+    SELECT NULL AS case_id, t.id AS task_id, t.title AS task_title, t.item_type, t.board_column,
+           t.demand_id, t.item_no
+    FROM task t
+    WHERE t.workspace_id = #{workspaceId}
+      AND t.req_id = #{reqId}
+      AND t.demand_id = #{demandId}
+      AND t.deleted_at IS NULL
+    <if test="q != null">
+      AND (t.title LIKE CONCAT('%', #{q}, '%')
+           <if test="itemNo != null">OR t.item_no = #{itemNo}</if>)
+    </if>
+    ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectCoverageByDemand" resultType="com.hourglass.dto.TaskCoverageRow">
+    <!-- 从工作项出发左连关联与用例：没有用例的工作项也要出现，才能区分「需求级覆盖」与「工作项未覆盖」 -->
+    SELECT t.id AS task_id, t.title AS task_title, t.item_no, t.item_type, t.board_column,
+           COUNT(c.id) AS case_total,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested
+    FROM task t
+    LEFT JOIN test_case_task ct
+      ON ct.task_id = t.id AND ct.workspace_id = t.workspace_id
+    LEFT JOIN test_case c
+      ON c.id = ct.case_id AND c.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId}
+      AND t.demand_id = #{demandId}
+      AND t.deleted_at IS NULL
+    GROUP BY t.id, t.title, t.item_no, t.item_type, t.board_column, t.created_at
+    ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
+  </select>
+
+  <select id="selectCoverageByProject" resultType="com.hourglass.dto.TaskCoverageRow">
+    <!-- 项目级工作项覆盖：发布检查统计“已被用例验证的工作项 / 全部工作项” -->
+    SELECT t.id AS task_id, t.demand_id, t.title AS task_title, t.item_no, t.item_type, t.board_column,
+           COUNT(c.id) AS case_total,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'passed' THEN 1 ELSE 0 END), 0) AS passed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+           COALESCE(SUM(CASE WHEN c.latest_status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked,
+           COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND c.latest_status IS NULL THEN 1 ELSE 0 END), 0) AS untested
+    FROM task t
+    LEFT JOIN test_case_task ct
+      ON ct.task_id = t.id AND ct.workspace_id = t.workspace_id
+    LEFT JOIN test_case c
+      ON c.id = ct.case_id AND c.workspace_id = t.workspace_id
+    WHERE t.workspace_id = #{workspaceId}
+      AND t.req_id = #{reqId}
+      AND t.deleted_at IS NULL
+    GROUP BY t.id, t.demand_id, t.title, t.item_no, t.item_type, t.board_column, t.created_at
+    ORDER BY t.item_no IS NULL, t.item_no, t.created_at, t.id
+  </select>
+
+  <select id="selectTaskIdsByCase" resultType="string">
+    SELECT task_id FROM test_case_task WHERE case_id = #{caseId}
+  </select>
+</mapper>

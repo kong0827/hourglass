@@ -191,7 +191,7 @@
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
             <circle cx="8.8" cy="8.8" r="5.4"/><path d="M12.9 12.9 17 17"/>
           </svg>
-          <input id="searchInput" type="search" name="task-search" placeholder="搜索工作项…" autocomplete="new-password" autocapitalize="off" spellcheck="false" readonly data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="按标题、描述、备注、项目、标签、附件名搜索工作项" />
+          <input id="searchInput" type="search" name="task-search" placeholder="搜索工作项…" autocomplete="new-password" autocapitalize="off" spellcheck="false" readonly data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" aria-label="按标题、描述、备注、项目、标签、附件名或编号（如 WI-001）搜索工作项" />
           <button class="gs-clear" id="searchClear" type="button" aria-label="清空搜索">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
@@ -1551,6 +1551,18 @@
                 </button>
                 <select id="cDemand" hidden tabindex="-1" aria-hidden="true"></select>
               </div>
+              <div class="field">
+                <label for="cTaskSearch">验证工作项 <small class="tc-optional">选填 · 先关联主需求，仅可选该需求下的工作项</small></label>
+                <div class="case-task-box" id="cTaskBox">
+                  <div class="case-task-tools" id="cTaskTools" hidden>
+                    <input id="cTaskSearch" type="search" maxlength="50" placeholder="筛选工作项标题或编号" autocomplete="off" aria-label="筛选工作项" />
+                    <span class="case-task-count" id="cTaskCount" role="status"></span>
+                  </div>
+                  <div class="case-task-list" id="cTaskList" role="group" aria-label="验证工作项"></div>
+                  <div class="case-task-empty" id="cTaskEmpty">关联主需求后，可选择该需求下的工作项。</div>
+                </div>
+                <p class="foot-note case-task-hint">未选择工作项时按「需求级覆盖」统计；选择后可在需求详情与覆盖矩阵按工作项追溯。</p>
+              </div>
               <div class="row row-gap">
                 <div class="field" style="flex:1 1 55%">
                   <label for="cModule">功能模块 <small class="tc-optional">选填 · 列表筛选用</small></label>
@@ -1777,6 +1789,8 @@
             <div class="stack">
               <p class="foot-note" id="planPickSub">勾选要加入本计划的用例（已在计划内的自动跳过）。</p>
               <div class="row row-gap" style="align-items:center">
+                <select id="planPickDemand" class="tc-search" aria-label="按需求筛选用例" style="width:auto;min-width:180px"></select>
+                <button class="btn sm ghost" type="button" id="btnPlanPickDemandAll" title="把当前需求下可加入的用例全部选中">选本需求全部</button>
                 <button class="btn sm ghost" type="button" id="btnPlanPickAll">全选/反选</button>
                 <span class="toolbar-meta" id="planPickCount"></span>
               </div>
@@ -2509,8 +2523,17 @@
                   <option value="ai_assistant_exec">AI 助手执行</option>
                   <option value="gantt_share_create">生成甘特分享</option>
                   <option value="gantt_share_revoke">撤销甘特分享</option>
+                  <option value="manager_nudge">管理催办</option>
                   <option value="test_case_delete">删除测试用例</option>
                   <option value="test_case_import">导入测试用例</option>
+                  <option value="test_case_create">新建测试用例</option>
+                  <option value="test_case_update">编辑测试用例</option>
+                  <option value="test_plan_create">新建测试计划</option>
+                  <option value="test_plan_update">编辑测试计划</option>
+                  <option value="test_plan_cases_add">计划加入用例</option>
+                  <option value="test_plan_cases_remove">计划移出用例</option>
+                  <option value="test_plan_required">计划必测标记</option>
+                  <option value="test_plan_run">计划批量执行</option>
                   <option value="test_plan_delete">删除测试计划</option>
                   <option value="test_plan_status">测试计划状态变更</option>
                   <option value="comment_delete">删除评论</option>

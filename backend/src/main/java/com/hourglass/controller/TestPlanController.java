@@ -125,6 +125,18 @@ public class TestPlanController {
         return ApiResult.ok(null);
     }
 
+    /** 发布必测：逐条切换，发布检查据此判断必测用例是否通过 */
+    @PutMapping("/api/test-plans/{id}/cases/{caseId}/required")
+    public ApiResult<Void> setRequired(@PathVariable String id,
+                                       @PathVariable String caseId,
+                                       @RequestParam boolean required,
+                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        planService.setRequired(userId, ws.getId(), id, caseId, required);
+        return ApiResult.ok(null);
+    }
+
     /** 批量执行：一次录入多例结果（status=passed/failed/blocked），流水带计划归属 */
     @PostMapping("/api/test-plans/{id}/runs")
     public ApiResult<Integer> batchRun(@PathVariable String id,

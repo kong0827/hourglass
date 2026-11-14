@@ -43,12 +43,15 @@ public class TestPlanService {
     private final com.hourglass.mapper.ProjectVersionMapper versionMapper;
     /** 计划删除与状态流转影响交付判断，需独立审计 */
     private final AuditService auditService;
+    /** 计划用例行带出验证的工作项，供需求范围与覆盖追溯 */
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
 
     public TestPlanService(TestPlanMapper planMapper, TestPlanCaseMapper planCaseMapper,
                            TestCaseMapper caseMapper, TestCaseService caseService,
                            ProjectAccessService projectAccess,
                            com.hourglass.mapper.ProjectVersionMapper versionMapper,
-                           AuditService auditService) {
+                           AuditService auditService,
+                           com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper) {
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.caseMapper = caseMapper;
@@ -56,6 +59,7 @@ public class TestPlanService {
         this.projectAccess = projectAccess;
         this.versionMapper = versionMapper;
         this.auditService = auditService;
+        this.caseTaskMapper = caseTaskMapper;
     }
 
     /* ---------- 查询 ---------- */
@@ -94,7 +98,34 @@ public class TestPlanService {
         int total = planCaseMapper.countByPlan(id);
         List<TestPlanCaseView> items = total <= safeOffset ? new ArrayList<TestPlanCaseView>()
                 : planCaseMapper.selectViewByPlan(id, safeOffset, safeLimit);
+        attachCaseTasks(plan.getWorkspaceId(), items);
         return com.hourglass.dto.PageResult.of(items, total, safeOffset, safeLimit);
+    }
+
+    /** 一次取完本页用例的工作项关联，避免逐行查询 */
+    private void attachCaseTasks(String workspaceId, List<TestPlanCaseView> items) {
+        List<String> caseIds = new ArrayList<String>();
+        for (TestPlanCaseView item : items) {
+            if (item.getCaseId() != null) {
+                caseIds.add(item.getCaseId());
+            }
+        }
+        Map<String, List<com.hourglass.dto.CaseTaskLink>> byCase =
+                new LinkedHashMap<String, List<com.hourglass.dto.CaseTaskLink>>();
+        if (!caseIds.isEmpty()) {
+            for (com.hourglass.dto.CaseTaskLink link : caseTaskMapper.selectByCaseIds(workspaceId, caseIds)) {
+                List<com.hourglass.dto.CaseTaskLink> list = byCase.get(link.getCaseId());
+                if (list == null) {
+                    list = new ArrayList<com.hourglass.dto.CaseTaskLink>();
+                    byCase.put(link.getCaseId(), list);
+                }
+                list.add(link);
+            }
+        }
+        for (TestPlanCaseView item : items) {
+            List<com.hourglass.dto.CaseTaskLink> list = byCase.get(item.getCaseId());
+            item.setTasks(list == null ? new ArrayList<com.hourglass.dto.CaseTaskLink>() : list);
+        }
     }
 
     /* ---------- 写入 ---------- */
@@ -117,6 +148,8 @@ public class TestPlanService {
         p.setCreatedBy(CurrentUser.get().getDisplayName());
         p.setCreatedByUserId(userId);
         planMapper.insert(p);
+        auditService.recordCurrent(workspaceId, "test_plan_create", "test_plan", p.getId(), p.getName(), true,
+                "新建测试计划「" + p.getName() + "」（草稿）", null);
         return planMapper.selectViewById(p.getId());
     }
 
@@ -130,6 +163,7 @@ public class TestPlanService {
             throw AppException.badRequest("测试计划的所属项目不可修改");
         }
         checkDates(req);
+        String oldName = p.getName();
         p.setName(Texts.cut(req.getName().trim(), 100));
         String keepVersion = Texts.trimToNull(req.getVersionId());
         if (keepVersion != null && keepVersion.equals(p.getVersionId()) && versionMapper.selectById(keepVersion) == null) {
@@ -141,6 +175,11 @@ public class TestPlanService {
         p.setPlannedEnd(req.getPlannedEnd());
         p.setNote(Texts.trimToNull(req.getNote()));
         planMapper.update(p);
+        String planDetail = java.util.Objects.equals(oldName, p.getName())
+                ? "编辑测试计划「" + p.getName() + "」"
+                : "编辑测试计划「" + oldName + "」→「" + p.getName() + "」";
+        auditService.recordCurrent(workspaceId, "test_plan_update", "test_plan", id, p.getName(), true,
+                planDetail, null);
         return planMapper.selectViewById(id);
     }
 
@@ -216,6 +255,10 @@ public class TestPlanService {
             exists.add(caseId);
             added++;
         }
+        if (added > 0) {
+            auditService.recordCurrent(workspaceId, "test_plan_cases_add", "test_plan", planId, p.getName(), true,
+                    "向测试计划「" + p.getName() + "」加入 " + added + " 条用例", null);
+        }
         return added;
     }
 
@@ -225,6 +268,28 @@ public class TestPlanService {
         projectAccess.assertWrite(workspaceId, userId, p.getReqId());
         assertEditable(p);
         planCaseMapper.deleteByPlanAndCase(planId, caseId);
+        auditService.recordCurrent(workspaceId, "test_plan_cases_remove", "test_plan", planId, p.getName(), true,
+                "从测试计划「" + p.getName() + "」移出用例「" + caseTitle(caseId) + "」", null);
+    }
+
+    /** 发布必测标记：发布检查按此判断必测用例是否执行通过 */
+    @Transactional
+    public void setRequired(String userId, String workspaceId, String planId, String caseId, boolean required) {
+        TestPlan p = requirePlan(workspaceId, planId);
+        projectAccess.assertWrite(workspaceId, userId, p.getReqId());
+        assertEditable(p);
+        if (planCaseMapper.selectByPlanAndCase(planId, caseId) == null) {
+            throw AppException.notFound("用例不在该计划中：" + caseId);
+        }
+        planCaseMapper.updateRequired(planId, caseId, required);
+        auditService.recordCurrent(workspaceId, "test_plan_required", "test_plan", planId, p.getName(), true,
+                "测试计划「" + p.getName() + "」用例「" + caseTitle(caseId) + "」标记为"
+                        + (required ? "必测" : "非必测"), null);
+    }
+
+    private String caseTitle(String caseId) {
+        com.hourglass.entity.TestCase c = caseMapper.selectById(caseId);
+        return c == null ? caseId : c.getTitle();
     }
 
     /**
@@ -261,7 +326,24 @@ public class TestPlanService {
         if ("draft".equals(p.getStatus())) {
             planMapper.updateStatus(planId, "running");
         }
+        auditService.recordCurrent(workspaceId, "test_plan_run", "test_plan", planId, p.getName(), true,
+                "测试计划「" + p.getName() + "」批量记录 " + done + " 条执行结果："
+                        + runStatusLabel(req.getStatus())
+                        + ("draft".equals(p.getStatus()) ? "（计划由草稿自动流转为执行中）" : ""), null);
         return done;
+    }
+
+    private static String runStatusLabel(String status) {
+        if ("passed".equals(status)) {
+            return "通过";
+        }
+        if ("failed".equals(status)) {
+            return "失败";
+        }
+        if ("blocked".equals(status)) {
+            return "阻塞";
+        }
+        return "跳过";
     }
 
     /* ---------- 内部 ---------- */

@@ -314,7 +314,7 @@ class TaskWorkflowDeliveryScopeTest {
 
     private void enforceDeniedTransition() {
         ColumnTransitionService rules = spy(new ColumnTransitionService(mock(ColumnTransitionMapper.class),
-                mock(BoardColumnService.class), mock(WorkspaceMetaCache.class)));
+                mock(BoardColumnService.class), mock(WorkspaceMetaCache.class), mock(ActivityService.class)));
         doReturn(ColumnTransitionService.RULE_DENY).when(rules).effectiveRule("W1", "done", "backlog");
         when(transitions.check(anyString(), anyString(), anyString(), any(), anyBoolean(), anyBoolean()))
                 .thenAnswer(call -> rules.check(call.getArgument(0), call.getArgument(1), call.getArgument(2),

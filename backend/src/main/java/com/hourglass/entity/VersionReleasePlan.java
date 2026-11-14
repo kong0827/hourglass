@@ -8,6 +8,8 @@ public class VersionReleasePlan {
     private String id;
     private String workspaceId;
     private String versionId;
+    /** 空间内发布计划编号（sql/85，展示为 PL-001；null 表示存量尚未取号） */
+    private Integer planNo;
     private LocalDateTime plannedAt;
     private String ownerUserId;
     private String notes;

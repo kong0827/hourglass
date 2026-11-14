@@ -71,12 +71,14 @@ public class GanttService {
     private final WorkspaceMapper workspaceMapper;
     private final ProjectAccessService projectAccess;
     private final PriorityService priorityService;
+    private final ActivityService activityService;
 
     public GanttService(TaskQueryService taskService, TaskMapper taskMapper,
                         TaskDependencyMapper dependencyMapper, TaskBaselineMapper baselineMapper,
                         GanttShareMapper shareMapper, TimeLogMapper timeLogMapper,
                         UserMapper userMapper, WorkspaceMapper workspaceMapper,
-                        ProjectAccessService projectAccess, PriorityService priorityService) {
+                        ProjectAccessService projectAccess, PriorityService priorityService,
+                        ActivityService activityService) {
         this.taskService = taskService;
         this.taskMapper = taskMapper;
         this.dependencyMapper = dependencyMapper;
@@ -87,6 +89,7 @@ public class GanttService {
         this.workspaceMapper = workspaceMapper;
         this.projectAccess = projectAccess;
         this.priorityService = priorityService;
+        this.activityService = activityService;
     }
 
     /* ==================== 任务分页 ==================== */
@@ -245,6 +248,8 @@ public class GanttService {
         dep.setDepType(depType);
         dep.setLagDays(req.getLagDays() == null ? 0 : req.getLagDays());
         dependencyMapper.insert(dep);
+        activityService.logConfig(workspaceId, "新增任务依赖：" + taskLabel(a) + " → " + taskLabel(b)
+                + "（" + depTypeLabel(dep.getDepType()) + "，" + lagLabel(dep.getLagDays()) + "）");
         return dependencyMapper.selectById(dep.getId());
     }
 
@@ -259,9 +264,25 @@ public class GanttService {
         if (!"FS".equals(type) && !"SS".equals(type) && !"FF".equals(type) && !"SF".equals(type)) {
             throw AppException.badRequest("依赖类型不合法：" + type);
         }
+        String oldType = dep.getDepType();
+        Integer oldLag = dep.getLagDays();
         dep.setDepType(type);
         dep.setLagDays(req.getLagDays() == null ? dep.getLagDays() : req.getLagDays());
         dependencyMapper.update(dep);
+        StringBuilder changed = new StringBuilder();
+        if (!java.util.Objects.equals(oldType, type)) {
+            changed.append("类型 ").append(depTypeLabel(oldType)).append(" → ").append(depTypeLabel(type));
+        }
+        if (oldLag == null ? dep.getLagDays() != null : !oldLag.equals(dep.getLagDays())) {
+            if (changed.length() > 0) {
+                changed.append("，");
+            }
+            changed.append(lagLabel(oldLag)).append(" → ").append(lagLabel(dep.getLagDays()));
+        }
+        if (changed.length() > 0) {
+            activityService.logConfig(workspaceId, "修改任务依赖：" + taskLabel(dep.getFromTaskId())
+                    + " → " + taskLabel(dep.getToTaskId()) + "：" + changed);
+        }
         return dependencyMapper.selectById(id);
     }
 
@@ -275,6 +296,42 @@ public class GanttService {
         if (dependencyMapper.deleteById(id, workspaceId) == 0) {
             throw AppException.notFound("依赖不存在：" + id);
         }
+        activityService.logConfig(workspaceId, "删除任务依赖：" + taskLabel(dep.getFromTaskId())
+                + " → " + taskLabel(dep.getToTaskId())
+                + "（" + depTypeLabel(dep.getDepType()) + "，" + lagLabel(dep.getLagDays()) + "）");
+    }
+
+    private String taskLabel(String taskId) {
+        Task t = taskMapper.selectById(taskId);
+        if (t == null) {
+            return "已删除任务(" + taskId + ")";
+        }
+        return "「" + t.getTitle() + "」";
+    }
+
+    private String taskLabel(Task t) {
+        return "「" + t.getTitle() + "」";
+    }
+
+    private static String depTypeLabel(String type) {
+        if ("SS".equals(type)) {
+            return "开始-开始";
+        }
+        if ("FF".equals(type)) {
+            return "完成-完成";
+        }
+        if ("SF".equals(type)) {
+            return "开始-完成";
+        }
+        return "完成-开始";
+    }
+
+    private static String lagLabel(Integer lag) {
+        int n = lag == null ? 0 : lag;
+        if (n == 0) {
+            return "无延后";
+        }
+        return n > 0 ? "延后 " + n + " 天" : "提前 " + (-n) + " 天";
     }
 
     /** 依赖两端都必须是可写项目；任务已被物理清理时不再追溯 */
@@ -361,12 +418,15 @@ public class GanttService {
         if (!rows.isEmpty()) {
             baselineMapper.insertBatch(rows);
         }
+        activityService.logConfig(workspaceId, "重拍甘特基线：拍下 " + rows.size()
+                + " 个工作项的计划起止（覆盖旧基线）");
         return baselineInfo(workspaceId, userId);
     }
 
     @Transactional
     public void clearBaseline(String workspaceId) {
         baselineMapper.deleteByWorkspace(workspaceId);
+        activityService.logConfig(workspaceId, "清除甘特基线");
     }
 
     private Map<String, GanttResponse.BaselinePoint> baselineMap(String workspaceId, String viewerId) {

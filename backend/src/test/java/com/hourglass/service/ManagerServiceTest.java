@@ -37,7 +37,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -56,6 +58,8 @@ class ManagerServiceTest {
     private final CategoryService categoryService = mock(CategoryService.class);
     private final ReleasePermissionService releasePermission = mock(ReleasePermissionService.class);
     private final ProjectMemberRoleMapper roleMapper = mock(ProjectMemberRoleMapper.class);
+    private final TaskAuditLogger taskAuditLogger = mock(TaskAuditLogger.class);
+    private final AuditService auditService = mock(AuditService.class);
 
     @Test
     void portfolioHealthUsesOverdueStagnationAndOverload() {
@@ -445,6 +449,11 @@ class ManagerServiceTest {
         assertEquals(1, result.get("sent"), "6 小时去重命中的不计入已发送");
         assertEquals(1, result.get("deduped"));
         assertEquals(0, result.get("skipped"));
+        verify(auditService).recordCurrent(eq(WORKSPACE), eq("manager_nudge"), eq("workspace"), eq(WORKSPACE),
+                isNull(), eq(true), contains("催办 1 个工作项：T1"), isNull());
+        verify(taskAuditLogger).log(eq("M1"), eq(WORKSPACE), eq("T1"), eq("nudge"),
+                contains("被管理员催办"));
+        verify(taskAuditLogger, never()).log(any(), any(), eq("T2"), any(), any());
     }
 
     @Test
@@ -896,7 +905,8 @@ class ManagerServiceTest {
         when(categoryService.list(eq(WORKSPACE), any())).thenReturn(Collections.<Category>emptyList());
         when(releasePermission.canManageProject(any(), eq(WORKSPACE), any())).thenReturn(false);
         ManagerService service = new ManagerService(taskMapper, requirementMapper, timeLogMapper, memberMapper,
-                notificationService, access, categoryService, releasePermission, CLOCK);
+                notificationService, access, categoryService, releasePermission,
+                auditService, taskAuditLogger, CLOCK);
         ReflectionTestUtils.setField(service, "roleMapper", roleMapper);
         return service;
     }

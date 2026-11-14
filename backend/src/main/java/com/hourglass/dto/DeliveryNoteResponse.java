@@ -131,6 +131,8 @@ public class DeliveryNoteResponse {
     @Data
     public static class PlanInfo {
         private String id;
+        /** 空间内发布计划编号（sql/85），null 表示存量尚未取号 */
+        private Integer planNo;
         private LocalDateTime plannedAt;
         private String status;
         private String statusName;
@@ -209,6 +211,8 @@ public class DeliveryNoteResponse {
     @Data
     public static class DemandRow {
         private String id;
+        /** 项目内需求编号（sql/84），null 表示存量尚未取号 */
+        private Integer demandNo;
         private String title;
         private String module;
         private String priority;

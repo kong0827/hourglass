@@ -79,6 +79,8 @@ class BackupImportBatchTest {
     private ProjectVersionMapper versionMapper;
     private VersionTaskMapper versionTaskMapper;
     private DemandMapper demandMapper;
+    private com.hourglass.mapper.TestCaseMapper caseMapper;
+    private NumberSeqService numberSeq;
     private PlatformTransactionManager transactionManager;
     private BackupService service;
     private DeliveryScopeLock scopeLock;
@@ -118,12 +120,15 @@ class BackupImportBatchTest {
         }).when(versionMapper).insert(any(ProjectVersion.class));
         versionTaskMapper = mock(VersionTaskMapper.class);
         demandMapper = mock(DemandMapper.class);
+        caseMapper = mock(com.hourglass.mapper.TestCaseMapper.class);
+        numberSeq = mock(NumberSeqService.class);
         workActivityMapper = mock(com.hourglass.mapper.WorkActivityMapper.class);
         service = new BackupService(taskMapper, reqMapper, subtaskMapper, tagMapper,
                 timeLogMapper, columnMapper, categoryMapper, mock(WorkspaceService.class), memberMapper,
                 mock(TaskCommentMapper.class),
-                mock(com.hourglass.mapper.TestCaseMapper.class),
+                caseMapper,
                 mock(com.hourglass.mapper.TestCaseRunMapper.class),
+                mock(com.hourglass.mapper.TestCaseTaskMapper.class),
                 mock(com.hourglass.mapper.RequirementDocCommentMapper.class),
                 mock(AppNotificationMapper.class), docMapper, branchMapper,
                 mock(TaskDependencyMapper.class), mock(TaskBaselineMapper.class), mock(GanttShareMapper.class),
@@ -143,12 +148,14 @@ class BackupImportBatchTest {
                         mock(com.hourglass.mapper.ReqDocShareMapper.class),
                         mock(com.hourglass.mapper.TestCaseMapper.class),
                         mock(com.hourglass.mapper.TestCaseRunMapper.class),
+                        mock(com.hourglass.mapper.TestCaseTaskMapper.class),
                         mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class),
                         mock(com.hourglass.mapper.VersionCommitmentMapper.class),
                         mock(com.hourglass.mapper.ProjectMilestoneMapper.class),
-                        mock(com.hourglass.mapper.DeliveryNoteMapper.class), scopeLock),
+                        mock(com.hourglass.mapper.DeliveryNoteMapper.class), scopeLock,
+                        mock(com.hourglass.mapper.NumberSeqMapper.class)),
                 mock(ActivityService.class),
-                workActivityMapper, transactionManager, scopeLock);
+                workActivityMapper, transactionManager, scopeLock, numberSeq);
     }
 
     @ParameterizedTest
@@ -440,7 +447,116 @@ class BackupImportBatchTest {
     }
 
     @Test
-    void v13RoundTripKeepsVersionArraysEpicAndScalarDemandTarget() {
+    void importedTaskNumbersAreKeptUnlessMissingOrDuplicated() {
+        BackupData data = backup(0);
+        BackupData.BackupReq p1 = new BackupData.BackupReq();
+        p1.setId("R1");
+        p1.setName("项目一");
+        BackupData.BackupReq p2 = new BackupData.BackupReq();
+        p2.setId("R2");
+        p2.setName("项目二");
+        data.setReqs(Arrays.asList(p1, p2));
+        List<BackupData.BackupTask> rows = new ArrayList<BackupData.BackupTask>();
+        String[][] pairs = {{"K1", "R1"}, {"K2", "R1"}, {"K3", "R1"}, {"K4", "R2"}};
+        Integer[] nos = {7, 7, null, 2};
+        for (int i = 0; i < pairs.length; i++) {
+            BackupData.BackupTask t = new BackupData.BackupTask();
+            t.setId(pairs[i][0]);
+            t.setTitle("任务" + pairs[i][0]);
+            t.setReqId(pairs[i][1]);
+            t.setItemNo(nos[i]);
+            t.setVersionIds(Collections.emptyList());
+            rows.add(t);
+        }
+        data.setTasks(rows);
+        when(taskMapper.selectNextItemNo("W1", "R1")).thenReturn(2);
+        when(taskMapper.selectNextItemNo("W1", "R2")).thenReturn(9);
+
+        service.importData("U1", "W1", data);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Task>> imported = ArgumentCaptor.forClass(List.class);
+        verify(taskMapper).insertBatch(imported.capture());
+        Map<String, Integer> byId = new HashMap<String, Integer>();
+        for (Task t : imported.getValue()) {
+            byId.put(t.getId(), t.getItemNo());
+        }
+        /* 备份里的号沿用；重复号与缺号从项目最大号顺延，WI 不会因为恢复而重排 */
+        assertEquals(Integer.valueOf(7), byId.get("K1"));
+        assertEquals(Integer.valueOf(8), byId.get("K2"));
+        assertEquals(Integer.valueOf(9), byId.get("K3"));
+        assertEquals(Integer.valueOf(2), byId.get("K4"));
+    }
+
+    @Test
+    void importedDemandNumbersAreKeptAndRaiseTheSequence() {
+        BackupData data = backup(0);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        List<BackupData.BackupDemand> rows = new ArrayList<BackupData.BackupDemand>();
+        Integer[] nos = {5, 5, null};
+        for (int i = 0; i < nos.length; i++) {
+            BackupData.BackupDemand d = new BackupData.BackupDemand();
+            d.setId("D" + (i + 1));
+            d.setReqId("R1");
+            d.setTitle("需求" + (i + 1));
+            d.setDemandNo(nos[i]);
+            rows.add(d);
+        }
+        data.setDemands(rows);
+
+        service.importData("U1", "W1", data);
+
+        ArgumentCaptor<Demand> saved = ArgumentCaptor.forClass(Demand.class);
+        verify(demandMapper, times(3)).insert(saved.capture());
+        Map<String, Integer> byTitle = new HashMap<String, Integer>();
+        for (Demand d : saved.getAllValues()) {
+            byTitle.put(d.getTitle(), d.getDemandNo());
+        }
+        assertEquals(Integer.valueOf(5), byTitle.get("需求1"));
+        assertEquals(Integer.valueOf(6), byTitle.get("需求2"));
+        assertEquals(Integer.valueOf(7), byTitle.get("需求3"));
+        verify(numberSeq).raiseDemand("W1", "R1", 7);
+    }
+
+    @Test
+    void importedCaseNumbersAreKeptAndRaiseTheSequence() {
+        BackupData data = backup(0);
+        BackupData.BackupReq project = new BackupData.BackupReq();
+        project.setId("R1");
+        project.setName("项目");
+        data.setReqs(Collections.singletonList(project));
+        List<BackupData.BackupTestCase> rows = new ArrayList<BackupData.BackupTestCase>();
+        Integer[] nos = {4, 4, null};
+        for (int i = 0; i < nos.length; i++) {
+            BackupData.BackupTestCase c = new BackupData.BackupTestCase();
+            c.setId("C" + (i + 1));
+            c.setReqId("R1");
+            c.setTitle("用例" + (i + 1));
+            c.setCaseNo(nos[i]);
+            rows.add(c);
+        }
+        data.setTestCases(rows);
+
+        service.importData("U1", "W1", data);
+
+        ArgumentCaptor<com.hourglass.entity.TestCase> saved =
+                ArgumentCaptor.forClass(com.hourglass.entity.TestCase.class);
+        verify(caseMapper, times(3)).insert(saved.capture());
+        Map<String, Integer> byTitle = new HashMap<String, Integer>();
+        for (com.hourglass.entity.TestCase c : saved.getAllValues()) {
+            byTitle.put(c.getTitle(), c.getCaseNo());
+        }
+        assertEquals(Integer.valueOf(4), byTitle.get("用例1"));
+        assertEquals(Integer.valueOf(5), byTitle.get("用例2"));
+        assertEquals(Integer.valueOf(6), byTitle.get("用例3"));
+        verify(numberSeq).raiseCase("W1", "R1", 6);
+    }
+
+    @Test
+    void v14RoundTripKeepsVersionArraysEpicAndScalarDemandTarget() {
         Requirement project = new Requirement();
         project.setId("R1");
         project.setWorkspaceId("W1");
@@ -460,6 +576,7 @@ class BackupImportBatchTest {
         story.setItemType("story");
         story.setEpicId("T9");
         story.setDemandId("D1");
+        story.setItemNo(9);
         when(taskMapper.selectAll("W1")).thenReturn(Arrays.asList(epic, story));
 
         com.hourglass.dto.TaskVersionBinding binding = new com.hourglass.dto.TaskVersionBinding();
@@ -481,11 +598,12 @@ class BackupImportBatchTest {
         demand.setTitle("需求");
         demand.setStatus("plan");
         demand.setVersionId("V1");
+        demand.setDemandNo(3);
         when(demandMapper.selectByWorkspace("W1")).thenReturn(Collections.singletonList(demand));
 
         BackupData exported = service.export("W1");
 
-        assertEquals(13, exported.getV());
+        assertEquals(14, exported.getV());
         assertEquals("2026-05-10", exported.getReqs().get(0).getFirstReleasedAt());
         BackupData.BackupTask exportedStory = null;
         for (BackupData.BackupTask task : exported.getTasks()) {
@@ -496,6 +614,8 @@ class BackupImportBatchTest {
         assertNotNull(exportedStory);
         assertEquals(Collections.singletonList("V1"), exportedStory.getVersionIds());
         assertEquals("D1", exportedStory.getDemandId());
+        assertEquals(Integer.valueOf(9), exportedStory.getItemNo());
+        assertEquals(Integer.valueOf(3), exported.getDemands().get(0).getDemandNo());
         assertEquals("T9", exportedStory.getEpicId());
         assertEquals(1, exported.getVersions().size());
         assertEquals(1, exported.getDemands().size());
@@ -623,7 +743,7 @@ class BackupImportBatchTest {
     @ParameterizedTest
     @ValueSource(strings = {"plan", "canceled"})
     void newFormatDemandJsonWithoutPlannedDatesDoesNotInferDates(String status) throws Exception {
-        BackupData data = new ObjectMapper().readValue("{\"v\":13,\"tasks\":[],"
+        BackupData data = new ObjectMapper().readValue("{\"v\":14,\"tasks\":[],"
                 + "\"reqs\":[{\"id\":\"R1\",\"name\":\"项目\"}],"
                 + "\"versions\":[{\"id\":\"V1\",\"reqId\":\"R1\",\"name\":\"目标版本\","
                 + "\"targetDate\":\"2026-12-30\"}],"

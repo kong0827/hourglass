@@ -15,9 +15,9 @@ import { activeView } from "../core/router.js";
 import { openTaskById } from "../core/task-actions.js";
 import { openTaskDrawer, syncAssocViewBtns } from "../core/task-drawer.js";
 import { canEditReq, catNameById, catTag, reqNameById, rt } from "../core/state.js";
-import { UI, esc, toast } from "../core/ui.js";
+import { UI, esc, toast, copyToClipboard } from "../core/ui.js";
 import { bindRetry } from "../core/utils.js";
-import { PRIORITIES, taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML } from "../lib/format.js";
+import { PRIORITIES, taskVersionIds, taskVersionsText, taskPublicationHTML, fmtReleaseTime, colName, demandGanttInfoHTML, docTypeName, fmtMinutesShort, fmtSize, fmtTs, iso, priColor, priName, priTagHTML, typeBadgeHTML, demandNoText } from "../lib/format.js";
 import { GS } from "../lib/gantt-shared.js";
 import { triggerDownload } from "../lib/download.js";
 import { loadReqs } from "./board.js";
@@ -966,7 +966,7 @@ function demWorkPriorityOptions(){
   }).join("");
 }
 function demWorkFiltersHTML(){
-  var html = '<div class="dem-work-filters"><input class="input dem-work-search" type="search" data-dem-work-q value="' + esc(demWork.q) + '" placeholder="搜索标题、描述或来源…" aria-label="搜索当前工作页需求">'
+  var html = '<div class="dem-work-filters"><input class="input dem-work-search" type="search" data-dem-work-q value="' + esc(demWork.q) + '" placeholder="搜索标题、描述、来源或编号…" aria-label="搜索当前工作页需求（含需求编号）">'
     + '<select class="mini-select" data-dem-work-filter="reqId" aria-label="筛选项目">' + demWorkProjectOptions() + '</select>'
     + '<select class="mini-select" data-dem-work-filter="priority" aria-label="筛选优先级">' + demWorkPriorityOptions() + '</select>';
   if(demWork.status === "plan"){
@@ -1901,7 +1901,7 @@ function initDemSmartBar(){
   demSmartBar.innerHTML =
     '<div class="smart-view-tabs" role="tablist" aria-label="需求视图"></div>' +
     '<div class="smart-view-tools">' +
-      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 模块" aria-label="搜索当前空间全部需求" />' +
+      '<input class="input dem-search" type="search" data-dem-q placeholder="搜索全部需求…" title="在当前空间需求池中搜索需求 / 描述 / 来源 / 模块 / 编号" aria-label="搜索当前空间全部需求" />' +
       '<button class="chip ghost" type="button" data-dem-filter aria-haspopup="true" aria-expanded="false" title="筛选需求（优先级 / 类型 / 模块 / 项目）">筛选 <span class="n" data-dem-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
       '<label class="smart-view-control"><span>分组</span><select class="mini-select" data-dem-group aria-label="分组方式">' +
         '<option value="none">不分组</option><option value="status">按状态</option><option value="priority">按优先级</option>' +
@@ -1922,7 +1922,7 @@ function initDemSmartBar(){
   demBoardBar.className = "dem-board-bar";
   demBoardBar.hidden = true;
   demBoardBar.innerHTML =
-    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 模块" aria-label="搜索当前项目需求" />' +
+    '<input class="input demb-search" type="search" data-demb-q placeholder="搜索本项目需求…" title="在当前项目需求中搜索标题 / 描述 / 来源 / 模块 / 编号" aria-label="搜索当前项目需求" />' +
     '<button class="chip ghost" type="button" data-demb-filter aria-haspopup="true" aria-expanded="false" title="筛选当前项目需求（优先级 / 类型 / 模块）">筛选 <span class="n" data-demb-fcount hidden>0</span>' + icon("caretDown", 12) + '</button>' +
     '<button class="chip ghost demb-clear" type="button" data-demb-clear hidden>清除</button>' +
     '<span class="demb-spacer"></span>' +
@@ -2943,7 +2943,15 @@ function loadDemandTasks(layer, id, targetVersionId){
   var count = layer.querySelector("#tabDeliveryCount");
   if(!box && !overview && !count) return;
   API.getAllPages("/api/demands/" + encodeURIComponent(id) + "/tasks").then(function(tasks){
+    return Promise.all([
+      Promise.resolve(tasks),
+      API.get("/api/test-cases/task-coverage", { demandId: id }).catch(function(){ return []; })
+    ]);
+  }).then(function(results){
     if(!layer.isConnected) return;
+    var tasks = results[0] || [];
+    var covByTask = {};
+    (results[1] || []).forEach(function(r){ covByTask[r.taskId] = r; });
     tasks = tasks || [];
     if(!tasks.length){
       if(count) count.textContent = "0/0";
@@ -2970,11 +2978,17 @@ function loadDemandTasks(layer, id, targetVersionId){
     box.innerHTML = '<p class="foot-note">' + esc(delivery) + '（' + published + '/' + tasks.length
       + '）。任务发布不等于需求业务验收；版本为当前计划，实际交付以工作项详情中的版本发布记录为准。</p>'
       + '<div class="tbl-wrap phase-tbl-wrap"><table class="phase-tbl dem-evidence-tbl"><thead><tr>'
-      + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>生产发布</th></tr></thead><tbody>'
+      + '<th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th><th>生产发布</th></tr></thead><tbody>'
       + tasks.map(function(t){
         var isDone = t.boardColumn === "done";
         var verText = taskVersionsText(t) || "未绑版本";
         var mismatch = targetVersionId && taskVersionIds(t).indexOf(targetVersionId) === -1;
+        var cov = covByTask[t.id];
+        var covCell = !cov || !(cov.caseTotal > 0)
+          ? '<span class="tag tag-warning" title="该工作项还没有用例验证；用例可只关联需求，因此不等于需求整体未覆盖">未覆盖</span>'
+          : '<span class="tag ' + (cov.failed > 0 ? "tag-danger" : "tag-success") + '" title="工作项级覆盖：' + cov.caseTotal + ' 条用例">'
+            + cov.caseTotal + ' 条' + (cov.failed > 0 ? " · " + cov.failed + " 失败" : "")
+            + (cov.untested > 0 ? " · " + cov.untested + " 未执行" : "") + '</span>';
         return '<tr data-open-task="' + esc(t.id) + '" title="打开工作项详情">'
           + '<td class="t-title-cell"><div class="t-title">' + esc(t.title) + '</div>'
             + '<div class="t-sub">' + esc((t.estimateMinutes ? fmtMinutesShort(t.estimateMinutes) + " · " : "") + verText)
@@ -2983,6 +2997,7 @@ function loadDemandTasks(layer, id, targetVersionId){
           + '<td>' + esc(t.owner || "—") + '</td>'
           + '<td>' + (isDone ? '<span class="tag tag-success">已完成</span>'
             : '<span class="tag tag-info">' + esc(colName(t.boardColumn)) + '</span>') + '</td>'
+          + '<td>' + covCell + '</td>'
           + '<td>' + demandPublicationCell(t) + '</td>'
           + '</tr>';
       }).join("")
@@ -3618,6 +3633,8 @@ function renderDemandDetail(d){
   var total = Number(d.taskCount) || 0, done = Number(d.taskDone) || 0;
   var cases = Number(d.caseCount) || 0, passed = Number(d.casePassed) || 0;
   var statusLabel = demandStatusLabel(d);
+  /* 项目内需求编号：存量未取号时不出胶囊，不编造编号 */
+  var demandNo = demandNoText(d.demandNo);
   var statusDot = demandStatusDot(d.status);
   function headMetaText(){
     return [
@@ -3738,6 +3755,7 @@ function renderDemandDetail(d){
     +         '<i id="demandStatusDot" style="background:' + statusDot + '"></i><span id="demandStatusName">' + esc(statusLabel) + '</span>'
     +         '<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>'
     +       '</button>'
+    +       (demandNo ? '<button class="drawer-no" type="button" data-dem-copy-no title="点击复制需求编号">' + esc(demandNo) + '</button>' : '')
     +     '</div>'
     +     '<div class="head-sub">' + esc(meta) + '</div>'
     +   '</div>'
@@ -3899,6 +3917,8 @@ function renderDemandDetail(d){
   }
   layer.addEventListener("click", function(e){
     if(e.target.closest("[data-dem-x]")){ UI.closeModal(layer); return; }
+    var copyNo = e.target.closest("[data-dem-copy-no]");
+    if(copyNo){ copyToClipboard(copyNo.textContent, "需求编号 " + copyNo.textContent + " 已复制到剪贴板"); return; }
     var tab = e.target.closest("[data-dem-tab]");
     if(tab){ setDemandTab(tab.dataset.demTab); return; }
     var go = e.target.closest("[data-demand-goto]");

@@ -443,6 +443,7 @@ public class DeliveryNoteService {
             int rel = agg == null ? 0 : agg[1];
             DeliveryNoteResponse.DemandRow row = new DeliveryNoteResponse.DemandRow();
             row.setId(d.getId());
+            row.setDemandNo(d.getDemandNo());
             row.setTitle(d.getTitle());
             row.setModule(moduleName(modules, d.getCategoryId()));
             row.setPriority(d.getPriority());
@@ -931,6 +932,7 @@ public class DeliveryNoteService {
         }
         DeliveryNoteResponse.PlanInfo info = new DeliveryNoteResponse.PlanInfo();
         info.setId(picked.getId());
+        info.setPlanNo(picked.getPlanNo());
         info.setPlannedAt(picked.getPlannedAt());
         info.setStatus(picked.getStatus());
         info.setStatusName(planStatusName(picked.getStatus()));
@@ -1025,6 +1027,7 @@ public class DeliveryNoteService {
                     + " · " + dateTime(selected.getOccurredAt()) + " · " + resultName(selected.getResult())
                     + " · " + nz(selected.getPublishedCount()) + " 项快照", "note",
                     "success".equals(selected.getResult()) ? "ok" : "warn", 0, false, false, "phase", selected.getId()));
+            addFrozenTestEvidence(list, selected);
         } else {
             list.add(evidenceRow("发布记录", "尚无成功的生产发布记录，本说明为内部草稿", "note", "warn", 0, false, true, "phase", version.getId()));
         }
@@ -1033,7 +1036,7 @@ public class DeliveryNoteService {
                 + " · 发布后内容只读", "layers", "", 0, false, version.getCommitmentAt() == null, "phase", version.getId()));
         DeliveryNoteResponse.PlanInfo plan = r.getPlan();
         if (plan != null) {
-            list.add(evidenceRow("发布计划", plan.getId() + " · " + plan.getEnvironmentName()
+            list.add(evidenceRow("发布计划", planLabel(plan) + " · " + plan.getEnvironmentName()
                     + " · 窗口 " + (plan.getPlannedAt() == null ? "未定" : dateTime(plan.getPlannedAt()))
                     + " · " + plan.getStatusName() + " · 计划范围 " + nz(plan.getTaskCount()) + " 项",
                     "calendar", "", 1, false, false, "phase", version.getId()));
@@ -1046,7 +1049,7 @@ public class DeliveryNoteService {
         if (!r.getDemands().isEmpty()) {
             List<String> ids = new ArrayList<String>();
             for (DeliveryNoteResponse.DemandRow row : r.getDemands()) {
-                ids.add(row.getId());
+                ids.add(demandLabel(row));
             }
             list.add(evidenceRow("需求来源", join(ids, 8), "demands", "", 1, false, false, "demands", null));
         }
@@ -1066,6 +1069,58 @@ public class DeliveryNoteService {
             list.add(evidenceRow("发布尝试历史", "共 " + records.size() + " 次记录，含失败与回滚，可逐条回溯",
                     "note", "", 2, true, false, "phase", version.getId()));
         }
+    }
+
+    /** 记录冻结的发布检查证据：只读回放当时结论，不按当前用例结果重算 */
+    @SuppressWarnings("unchecked")
+    private void addFrozenTestEvidence(List<DeliveryNoteResponse.EvidenceRow> list, VersionRelease selected) {
+        Map<String, Object> ev = null;
+        try {
+            String raw = selected.getPlanSnapshot();
+            if (Texts.trimToNull(raw) != null) {
+                Map<String, Object> plan = json.readValue(raw, new TypeReference<Map<String, Object>>() { });
+                Object found = plan == null ? null : plan.get("testEvidence");
+                if (found instanceof Map) ev = (Map<String, Object>) found;
+            }
+        } catch (Exception ex) {
+            ev = null;
+        }
+        if (ev == null) return;
+        String verdict = text(ev.get("verdict"));
+        StringBuilder meta = new StringBuilder();
+        meta.append("策略 ").append(policyName(text(ev.get("policy"))));
+        meta.append(" · ").append("block".equals(verdict) ? "有阻断项" : "warn".equals(verdict) ? "有提醒" : "通过");
+        if (ev.get("requiredTotal") != null) {
+            meta.append(" · 发布必测 ").append(number(ev.get("requiredTotal"))).append(" 条：通过 ")
+                    .append(number(ev.get("requiredPassed"))).append("，失败 / 阻塞 ")
+                    .append(number(ev.get("requiredFailed"))).append("，未执行 / 跳过 ")
+                    .append(number(ev.get("requiredUntested")));
+        }
+        if (ev.get("caseTotal") != null) {
+            meta.append(" · 计划用例 ").append(number(ev.get("caseTotal"))).append(" 条：通过 ")
+                    .append(number(ev.get("casePassed"))).append(" / 已执行 ")
+                    .append(number(ev.get("caseExecuted")));
+        }
+        if (ev.get("blockers") instanceof List && !((List<?>) ev.get("blockers")).isEmpty()) {
+            List<String> blockers = new ArrayList<String>();
+            for (Object item : (List<?>) ev.get("blockers")) blockers.add(text(item));
+            meta.append(" · 阻断：").append(String.join("；", blockers));
+        }
+        String refId = text(ev.get("planId"));
+        list.add(evidenceRow("发布测试检查", meta.toString(), "test", "block".equals(verdict) ? "warn" : "ok",
+                1, false, false, "testcases", Texts.trimToNull(refId)));
+    }
+
+    private static String policyName(String policy) {
+        return "strict".equals(policy) ? "严格" : "loose".equals(policy) ? "宽松" : "标准";
+    }
+
+    private static String text(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static int number(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
     private static DeliveryNoteResponse.EvidenceRow evidenceRow(String name, String meta, String icon, String color,
@@ -1620,6 +1675,16 @@ public class DeliveryNoteService {
     private static String releaseLabel(VersionRelease record) {
         String no = Nos.release(record.getReleaseNo());
         return no.isEmpty() ? record.getId() : no;
+    }
+
+    private static String demandLabel(DeliveryNoteResponse.DemandRow row) {
+        String no = Nos.demand(row.getDemandNo());
+        return no.isEmpty() ? row.getId() : no;
+    }
+
+    private static String planLabel(DeliveryNoteResponse.PlanInfo plan) {
+        String no = Nos.releasePlan(plan.getPlanNo());
+        return no.isEmpty() ? plan.getId() : no;
     }
 
     private ProjectVersion requireVersion(String workspaceId, String versionId) {

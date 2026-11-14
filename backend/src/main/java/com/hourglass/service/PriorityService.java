@@ -38,9 +38,11 @@ public class PriorityService {
     }
 
     private final WorkspacePriorityMapper priorityMapper;
+    private final ActivityService activityService;
 
-    public PriorityService(WorkspacePriorityMapper priorityMapper) {
+    public PriorityService(WorkspacePriorityMapper priorityMapper, ActivityService activityService) {
         this.priorityMapper = priorityMapper;
+        this.activityService = activityService;
     }
 
     /** 固定按 P0-P3 顺序返回四档；未配置过的档位用内置默认（不写库） */
@@ -65,6 +67,14 @@ public class PriorityService {
         String name = cleanName(req.getName());
         String color = normalizeColor(code, req.getColor());
         WorkspacePriority row = priorityMapper.selectByCode(workspaceId, code);
+        String oldName = row == null ? DEFAULT_NAMES.get(code) : row.getName();
+        String oldColor = row == null ? DEFAULT_COLORS.get(code) : row.getColor();
+        if (oldColor == null) {
+            oldColor = "";
+        }
+        if (oldName == null) {
+            oldName = "";
+        }
         if (row == null) {
             row = defaultOf(workspaceId, code);
             row.setId(Ids.gen("PR"));
@@ -76,12 +86,15 @@ public class PriorityService {
             row.setColor(color);
             priorityMapper.update(row);
         }
+        activityService.logConfig(workspaceId, "修改优先级「" + code + "」："
+                + oldName + "(" + oldColor + ") → " + name + "(" + color + ")");
         return priorityMapper.selectByCode(workspaceId, code);
     }
 
     @Transactional
     public void reset(String workspaceId) {
         priorityMapper.deleteAllByWorkspace(workspaceId);
+        activityService.logConfig(workspaceId, "恢复默认优先级配置（P0-P3 显示名与颜色）");
     }
 
     private WorkspacePriority defaultOf(String workspaceId, String code) {

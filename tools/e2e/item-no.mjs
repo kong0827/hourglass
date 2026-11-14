@@ -1,9 +1,9 @@
-/* 工作项 / 发布记录人类可读编号 E2E（真实 ESM 应用，原生 CDP 骨架同 delivery-note.mjs）
+/* 工作项 / 发布记录 / 需求 / 发布计划 / 用例人类可读编号 E2E（真实 ESM 应用，原生 CDP 骨架同 delivery-note.mjs）
    覆盖：项目内取号、改类型不换号、换项目重取号、软删除后编号不回收、
    按编号搜索（看板 + 全局）、抽屉编号胶囊与复制、发布记录编号与快照定格、
-   交付纸张与接收人页不出现原始长 ID、快照 CSV 编号列、移动端与控制台。
+   交付纸张与接收人页不出现原始长 ID、快照 CSV 编号列、需求 / 计划 / 用例编号、移动端与控制台。
 
-   前置：本地栈已起（bash deploy/local/stack.sh start），SQL 82 / 83 已应用。
+   前置：本地栈已起（bash deploy/local/stack.sh start），SQL 82–87 已应用。
    用法：node tools/e2e/item-no.mjs */
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -71,6 +71,9 @@ const pass = m => console.log("  PASS " + m);
 const assert = (cond, msg) => { if(!cond){ failed++; console.log("  FAIL " + msg); } else pass(msg); };
 const label = n => "WI-" + String(n).padStart(3, "0");
 const relLabel = n => "REL-" + String(n).padStart(3, "0");
+const dmLabel = n => "DM-" + String(n).padStart(3, "0");
+const plLabel = n => "PL-" + String(n).padStart(3, "0");
+const tcLabel = n => "TC-" + String(n).padStart(3, "0");
 
 try{
   let version = null;
@@ -115,10 +118,14 @@ try{
   }
 
   async function hardOpen(url){
-    /* 导航偶发被上一次 about:blank 吞掉，加载不到就重来一次，避免把环境抖动记成产品缺陷 */
+    /* 首次直接导航，加载不到才退回 about:blank 重来。
+       一上来就 about:blank 会掐断上一页仍在进行的懒加载（视图模块、编辑器脚本），
+       在控制台留下「Failed to fetch dynamically imported module」这类假报错。 */
     for(let attempt = 0; ; attempt++){
-      await call("Page.navigate", { url: "about:blank" });
-      await sleep(200);
+      if(attempt > 0){
+        await call("Page.navigate", { url: "about:blank" });
+        await sleep(200);
+      }
       await call("Page.navigate", { url });
       try{
         await waitFor(`document.readyState === "complete" && !!document.body`, "页面加载 " + url, 20000);
@@ -150,6 +157,9 @@ try{
   await waitFor("location.pathname.indexOf('/login') === -1 && document.body && document.body.dataset.view", "登录完成", 15000);
   await waitFor(`import("./js/core/state.js").then(({rt}) => !!rt.currentUser && !!rt.currentWs && rt.reqsLoaded)`, "应用初始化", 25000);
   await api("post", `/api/workspaces/${WS}/select`, {});
+  /* 先回 about:blank：登录跳转已停在同一个 #/board，直接导航只改 hash 不会重载，空间偏好不生效 */
+  await call("Page.navigate", { url: "about:blank" });
+  await sleep(200);
   await hardOpen(BASE + "/#/board");
   await waitFor(`import("./js/core/state.js").then(({rt}) => rt.currentWs && rt.currentWs.id === ${JSON.stringify(WS)} && rt.reqsLoaded)`, "切换空间", 25000);
   pass("登录 " + USER + " 并切到空间 " + WS);
@@ -188,11 +198,9 @@ try{
 
   /* ---------- 3. 换项目重取号 ---------- */
   const aMoved = await api("put", `/api/tasks/${a.id}`, { title: a.title, reqId: P2, itemType: "bug", severity: "major", boardColumn: "backlog", oldUpdatedAt: aBug.updatedAt });
-  assert(aMoved.itemNo !== a.itemNo && aMoved.itemNo > 0, "换项目重新取号（" + label(a.itemNo) + " → " + label(aMoved.itemNo) + "）");
-  assert(aMoved.itemNo > c.itemNo, "换项目后接着目标项目当前最大号取（" + label(c.itemNo) + " → " + label(aMoved.itemNo) + "）");
-  const movedLogs = await api("get", `/api/tasks/${a.id}/logs`);
-  const movedText = JSON.stringify(movedLogs);
-  assert(movedText.indexOf("编号") >= 0 && movedText.indexOf(label(aMoved.itemNo)) >= 0, "换项目留痕写明编号变化");
+  /* 两个项目的序列可能恰好对到同一个值，编号相同也算重新取号；关键是不能重复占用目标项目已有编号 */
+  assert(aMoved.itemNo > c2.itemNo, "换项目后接着目标项目当前最大号重新取号（" + label(c2.itemNo) + " → " + label(aMoved.itemNo) + "）");
+  assert(aMoved.itemNo > 0, "换项目后编号有效（" + label(aMoved.itemNo) + "）");
 
   /* ---------- 4. 软删除后编号不回收 ---------- */
   await api("delete", `/api/tasks/${b.id}`);
@@ -200,6 +208,12 @@ try{
   const d = await api("post", "/api/tasks", { title: "编号验证D" + stamp, reqId: P1, boardColumn: "backlog" });
   created.push(d.id);
   assert(d.itemNo > b.itemNo, "回收站里的编号不发给新工作项（已删 " + label(b.itemNo) + "，新建 " + label(d.itemNo) + "）");
+  /* 再换回原项目：此时两边的序列已经错开，能验证「编号变化」的留痕文案 */
+  const aBack = await api("put", `/api/tasks/${a.id}`, { title: a.title, reqId: P1, itemType: "bug", severity: "major", boardColumn: "backlog", oldUpdatedAt: aMoved.updatedAt });
+  assert(aBack.itemNo > d.itemNo, "换回原项目仍按原项目序列取号（" + label(d.itemNo) + " → " + label(aBack.itemNo) + "）");
+  const movedLogs = await api("get", `/api/tasks/${a.id}/logs`);
+  const movedText = JSON.stringify(movedLogs);
+  assert(movedText.indexOf("编号") >= 0 && movedText.indexOf(label(aBack.itemNo)) >= 0, "换项目留痕写明编号变化");
 
   /* ---------- 5. 按编号搜索 ---------- */
   for(const q of [label(d.itemNo), "wi" + d.itemNo, String(d.itemNo)]){
@@ -215,6 +229,13 @@ try{
   assert(!!globalHit, "全局搜索按编号命中工作项");
   assert(globalHit && String(globalHit.extra || "").indexOf(label(d.itemNo)) >= 0,
     "全局搜索命中理由显示编号（" + (globalHit ? globalHit.extra : "无") + "）");
+  /* 我的工作：筛选条搜索框与看板共用口径，同样认编号 */
+  const meId = await evaluate(`import("./js/core/state.js").then(({rt}) => rt.currentUser.id)`);
+  const mine = await api("post", "/api/tasks", { title: "编号验证M" + stamp, reqId: P1, boardColumn: "backlog", ownerUserId: meId });
+  created.push(mine.id);
+  const myHit = await api("get", `/api/my-tasks?scope=all&q=${encodeURIComponent(label(mine.itemNo))}&limit=50`)
+    .then(r => (r.items || []).some(t => t.id === mine.id));
+  assert(myHit, "「我的工作」搜索认编号（" + label(mine.itemNo) + "）");
 
   /* ---------- 6. 抽屉编号胶囊 ---------- */
   await hardOpen(BASE + "/#/board?task=" + encodeURIComponent(d.id));
@@ -234,6 +255,8 @@ try{
   /* 新建抽屉尚未取号：不显示胶囊，也不编造 WI-000 */
   await evaluate(`(() => { const b = document.getElementById("btnTaskNew"); if(b) b.click(); return true; })()`);
   await sleep(700);
+  /* 描述编辑器是本地 2.5MB vendor 脚本：等它落地再关抽屉跳页，否则导航会掐断加载并触发 onerror */
+  await waitFor(`!document.getElementById("iDesc") || typeof window.SUNEDITOR !== "undefined"`, "描述编辑器就绪", 20000);
   const blankChip = await evaluate(`(() => {
     const el = document.getElementById("drawerItemNo");
     return JSON.stringify({ hidden: !el || el.hidden, text: el ? el.textContent.trim() : "" });
@@ -291,6 +314,8 @@ try{
     .concat((note.scope || []).map(x => x.id))
     .concat(((note.defects || {}).open || []).map(x => x.id))
     .concat(((note.defects || {}).fixed || []).map(x => x.id))
+    .concat((note.demands || []).map(x => x.id))
+    .concat(note.plan ? [note.plan.id] : [])
     .concat(allRecords.map(r => r.id))
     .filter(Boolean);
   const paper = await evaluate(`(() => {
@@ -311,7 +336,7 @@ try{
   });
   if(leaked.length) console.log("  泄漏明细：" + JSON.stringify(leaked, null, 1));
   const leakedText = leaked.filter(x => x.inText);
-  assert(leakedText.length === 0, "纸张可见正文不含工作项 / 发布记录原始 ID（泄漏 " + leakedText.length + " 个）");
+  assert(leakedText.length === 0, "纸张可见正文不含工作项 / 需求 / 计划 / 发布记录原始 ID（泄漏 " + leakedText.length + " 个）");
   assert(leaked.length === 0, "纸张属性（除 data-* 导航钩子）也不含原始 ID（泄漏 " + (leaked.length - leakedText.length) + " 个）");
   /* 编号只换展示面，导航仍按原 ID 走，否则「打开原始记录」会断链 */
   const refOk = await evaluate(`(() => {
@@ -321,6 +346,16 @@ try{
   assert(refOk, "证据行仍带原 ID 导航钩子，可打开原始发布记录");
   assert(/WI-\d{3}/.test(paper.text), "纸张用 WI-001 形态引用工作项");
   assert(/REL-\d{3}/.test(paper.text), "纸张用 REL-001 形态引用发布记录");
+  if((note.demands || []).some(x => Number.isInteger(x.demandNo) && x.demandNo > 0)){
+    assert(/DM-\d{3}/.test(paper.text), "纸张用 DM-001 形态引用需求");
+  }else{
+    pass("该交付说明没有已取号的目标需求，跳过 DM 断言");
+  }
+  if(note.plan && Number.isInteger(note.plan.planNo) && note.plan.planNo > 0){
+    assert(/PL-\d{3}/.test(paper.text), "纸张用 PL-001 形态引用发布计划");
+  }else{
+    pass("该交付说明没有发布计划，跳过 PL 断言");
+  }
   await shot("delivery-paper-1440");
 
   /* ---------- 9. 快照 CSV 编号列（走版本卡「查看实际记录」真实入口） ---------- */
@@ -368,7 +403,115 @@ try{
     assert(name.indexOf(relLabel(snapRecord.releaseNo)) >= 0, "CSV 文件名用编号而非长 ID（" + name + "）");
   }
 
-  /* ---------- 10. 移动端 ---------- */
+  /* ---------- 10. 需求编号（DM-001） ---------- */
+  const dem = await api("post", "/api/demands", { reqId: P1, title: "编号验证需求" + stamp, priority: "P2" });
+  const dem2 = await api("post", "/api/demands", { reqId: P1, title: "编号验证需求2" + stamp, priority: "P2" });
+  const demIds = [dem.id, dem2.id];
+  assert(Number.isInteger(dem.demandNo) && dem.demandNo > 0, "新建需求即取到项目内编号（" + dmLabel(dem.demandNo) + "）");
+  assert(dem2.demandNo === dem.demandNo + 1, "同项目第二个需求顺延取号（" + dmLabel(dem.demandNo) + " → " + dmLabel(dem2.demandNo) + "）");
+  const demPage = q => api("get", `/api/demands?q=${encodeURIComponent(q)}&limit=100`).then(p => (p.items || []));  for(const q of [dmLabel(dem.demandNo), "dm" + dem.demandNo, String(dem.demandNo)]){
+    const hit = await demPage(q).then(items => items.some(x => x.id === dem.id));
+    assert(hit, "需求池搜索认编号形态「" + q + "」");
+  }
+  const demTextHit = await demPage("编号验证需求" + stamp).then(items => items.some(x => x.id === dem.id));
+  assert(demTextHit, "需求普通文本搜索未被编号分支破坏");
+  /* 删掉当前最大号再提一条：序列只增不减，不能把 DM-008 发给新需求 */
+  await api("delete", `/api/demands/${dem2.id}`);
+  demIds.splice(demIds.indexOf(dem2.id), 1);   /* 已删，收尾不再重复删（重复删会 404 并污染控制台断言） */
+  const dem3 = await api("post", "/api/demands", { reqId: P1, title: "编号验证需求3" + stamp, priority: "P2" });
+  demIds.push(dem3.id);
+  assert(dem3.demandNo === dem2.demandNo + 1,
+    "删除当前最大号后编号不回收（" + dmLabel(dem2.demandNo) + " → " + dmLabel(dem3.demandNo) + "）");
+  /* 需求编号在项目内唯一，跨项目允许重号；这里只校验本项目的两条 */
+  await hardOpen(BASE + "/#/demands");
+  await waitFor(`document.body.dataset.view === "demands"`, "进入需求池", 20000);
+  await evaluate(`import("./js/views/demands.js").then(m => m.openDemandDetailById(${JSON.stringify(dem.id)}))`);
+  await waitFor(`!!document.querySelector(".demand-sheet [data-dem-copy-no]")`, "需求抽屉编号胶囊", 20000);
+  const demChip = await evaluate(`document.querySelector(".demand-sheet [data-dem-copy-no]").textContent.trim()`);
+  assert(demChip === dmLabel(dem.demandNo), "需求抽屉胶囊显示 " + dmLabel(dem.demandNo) + "（实际 " + demChip + "）");
+  await evaluate(`(() => { document.querySelector(".demand-sheet [data-dem-copy-no]").click(); return true; })()`);
+  await waitFor(`Array.from(document.querySelectorAll(".toast, .toast-item, [class*=toast]")).some(t => t.textContent.indexOf("需求编号") >= 0)`, "复制需求编号吐司", 8000);
+  pass("点击需求胶囊提示编号已复制");
+  await evaluate(`(() => { const x = document.querySelector(".demand-sheet [data-dem-x]"); if(x) x.click(); return true; })()`);
+  await sleep(300);
+
+  /* ---------- 11. 发布计划编号（PL-001，空间内） ----------
+     发布计划没有删除接口，E2E 不能建了再删，否则演示库会永久留下脏计划；
+     取号逻辑由 VersionReleaseServiceTest 兜底，这里只读现有计划验证展示面。 */
+  const allPlans = [], planSeen = new Set();
+  for(const v of versions){
+    const rows = (await api("get", `/api/versions/${v.versionId}/release-plans`).catch(() => [])) || [];
+    rows.forEach(p => {
+      if(planSeen.has(p.id)) return;
+      planSeen.add(p.id);
+      p.versionId = v.versionId; p.versionName = v.versionName; p.reqId = v.reqId;
+      allPlans.push(p);
+    });
+  }
+  assert(allPlans.length > 0, "空间内有发布计划（" + allPlans.length + " 条）");
+  const planUnnumbered = allPlans.filter(p => !(Number.isInteger(p.planNo) && p.planNo > 0));
+  assert(planUnnumbered.length === 0, "每条发布计划都有空间内编号（未取号 " + planUnnumbered.length + " 条）");
+  /* 计划可跨版本、跨项目，编号是空间内序列，因此去重按空间而不是按项目 */
+  const planNoSeen = new Set(), planNoDup = [];
+  allPlans.forEach(p => { if(planNoSeen.has(p.planNo)) planNoDup.push(plLabel(p.planNo)); else planNoSeen.add(p.planNo); });
+  assert(planNoDup.length === 0, "空间内发布计划编号不重复" + (planNoDup.length ? "（重复 " + planNoDup.join("、") + "）" : ""));
+  const plan = allPlans.find(p => Number.isInteger(p.planNo) && p.planNo > 0) || null;
+  if(plan){
+    await hardOpen(BASE + "/#/phase");
+    await waitFor(`document.body.dataset.view === "phase"`, "进入版本视图", 20000);
+    await evaluate(`import("./js/views/phase.js").then(m => { m.setPhaseProject(${JSON.stringify(plan.reqId)}, "version"); return true; })`);
+    const detailBtn = `[data-ver-detail="${plan.versionId}"]`;
+    await waitFor(`!!document.querySelector(${JSON.stringify(detailBtn)})`, "版本卡「计划与历史」入口", 25000);
+    await evaluate(`(() => { document.querySelector(${JSON.stringify(detailBtn)}).click(); return true; })()`);
+    await waitFor(`!!document.querySelector("[data-plan-select]")`, "发布计划选择框", 25000);
+    await evaluate(`(() => {
+      const sel = document.querySelector("[data-plan-select]");
+      sel.value = ${JSON.stringify(plan.id)};
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    })()`);
+    await waitFor(`!!document.querySelector("[data-plan-select]") && document.querySelector(".release-section .hint")`, "计划摘要", 15000);
+    const planHint = await evaluate(`document.querySelector(".release-section .hint").textContent`);
+    assert(planHint.indexOf(plLabel(plan.planNo)) >= 0, "计划摘要显示 " + plLabel(plan.planNo) + "（实际：" + planHint.slice(0, 40) + "…）");
+    assert(planHint.indexOf(plan.id) < 0, "计划摘要不再出现计划原始 ID");
+    await shot("release-plan-no-1440");
+  }else{
+    pass("空间内没有已取号的发布计划，跳过摘要断言");
+  }
+
+  /* ---------- 12. 用例编号（TC-001） ---------- */
+  const tc = await api("post", "/api/test-cases", { reqId: P1, title: "编号验证用例" + stamp, priority: "P2" });
+  assert(Number.isInteger(tc.caseNo) && tc.caseNo > 0, "新建用例即取到项目内编号（" + tcLabel(tc.caseNo) + "）");
+  const tcPage = q => api("get", `/api/test-cases?reqId=${encodeURIComponent(P1)}&q=${encodeURIComponent(q)}&limit=100`).then(p => (p.items || []));
+  for(const q of [tcLabel(tc.caseNo), "tc" + tc.caseNo, String(tc.caseNo)]){
+    const hit = await tcPage(q).then(items => items.some(x => x.id === tc.id));
+    assert(hit, "用例列表搜索认编号形态「" + q + "」");
+  }
+  const tcTextHit = await tcPage("编号验证用例" + stamp).then(items => items.some(x => x.id === tc.id));
+  assert(tcTextHit, "用例普通文本搜索未被编号分支破坏");
+  const globalCase = await api("get", `/api/search?q=${encodeURIComponent(tcLabel(tc.caseNo))}&limit=10`);
+  const caseHit = (Array.isArray(globalCase) ? globalCase : []).find(h => h.type === "case" && h.id === tc.id);
+  assert(!!caseHit, "全局搜索按 " + tcLabel(tc.caseNo) + " 命中用例");
+  assert(!!caseHit && String(caseHit.extra || "").indexOf(tcLabel(tc.caseNo)) >= 0,
+    "全局搜索用例结果带编号（实际：" + (caseHit && caseHit.extra) + "）");
+  await hardOpen(BASE + "/#/testcases");
+  await waitFor(`document.body.dataset.view === "testcases"`, "进入测试用例页", 20000);
+  const tcRow = `[data-tc-open="${tc.id}"]`;
+  await evaluate(`(() => {
+    const sel = document.getElementById("tcReq");
+    if(sel){ sel.value = ${JSON.stringify(P1)}; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    return true;
+  })()`);
+  await waitFor(`!!document.querySelector(${JSON.stringify(tcRow)})`, "用例行出现", 25000);
+  const chipText = await evaluate(`(document.querySelector(${JSON.stringify(tcRow)} + " .tc-no") || {}).textContent`);
+  assert(String(chipText || "").trim() === tcLabel(tc.caseNo), "列表行编号胶囊显示 " + tcLabel(tc.caseNo) + "（实际 " + chipText + "）");
+  /* 删除当前最大号再建一条：序列只增不减，TC 编号不能回收 */
+  await api("delete", `/api/test-cases/${tc.id}`);
+  const tc2 = await api("post", "/api/test-cases", { reqId: P1, title: "编号验证用例2" + stamp, priority: "P2" });
+  assert(tc2.caseNo === tc.caseNo + 1,
+    "删除用例后编号不回收（" + tcLabel(tc.caseNo) + " → " + tcLabel(tc2.caseNo) + "）");
+
+  /* ---------- 13. 移动端 ---------- */
   await call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await hardOpen(BASE + "/#/board?task=" + encodeURIComponent(d.id));
   await waitFor(`document.getElementById("drawerItemNo") && !document.getElementById("drawerItemNo").hidden`, "移动端编号胶囊", 20000);
@@ -385,9 +528,13 @@ try{
   await shot("drawer-no-390");
   await call("Emulation.clearDeviceMetricsOverride");
 
-  /* ---------- 11. 清理与控制台 ---------- */
+  /* ---------- 14. 清理与控制台 ---------- */
   for(const id of created){ await api("delete", `/api/tasks/${id}`).catch(() => {}); }
   pass("清理本次新建的 " + created.length + " 个工作项（软删除，编号不回收）");
+  for(const id of demIds){ await api("delete", `/api/demands/${id}`).catch(() => {}); }
+  pass("清理本次新建的 " + demIds.length + " 条需求（需求删除是硬删除）");
+  await api("delete", `/api/test-cases/${tc2.id}`).catch(() => {});
+  pass("清理本次新建的用例（用例删除是硬删除）");
   const errors = cdp.errors.filter(e => e.indexOf("favicon") < 0);
   assert(errors.length === 0, "控制台无报错" + (errors.length ? "：" + errors.slice(0, 3).join(" | ") : ""));
 

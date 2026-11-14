@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沙漏 · 需求全链路追溯 · 交互原型 · 2026-11-14</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10M8 3v3.5c0 1.4.7 2.7 1.9 3.5L12 12l2.1-2c1.2-.8 1.9-2.1 1.9-3.5V3M8 21v-3.5c0-1.4.7-2.7 1.9-3.5L12 12l2.1 2c1.2.8 1.9 2.1 1.9 3.5V21"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 13h4l2 3h4l2-3h4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-check-square" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 7h6a4 4 0 0 1 4 4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 15.5c2.8.2 5 2.1 5 4.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19z"/><path d="M12 9v5M12 17h.01"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1L14.5 3h-5l-.4 2.1a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.4 2.1h5l.4-2.1a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5c.1-.3.1-.7.1-1z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5M15 8l4 4-4 4M19 12H9"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0v1h2v3h-2v3a4 4 0 0 1-8 0v-3H6V9h2z"/><path d="M9 5 7 3M15 5l2-2M9 19l-2 2M15 19l2 2M4 12H2M22 12h-2"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+</svg>
+
+<div class="proto-bar">
+  <span class="proto-kicker"><i></i>PROTOTYPE</span>
+  <span class="proto-title">沙漏 · 需求全链路追溯</span>
+  <span class="proto-note">2026-11-14 · 可交互原型</span>
+  <div class="proto-grow"></div>
+  <nav class="proto-tabs" aria-label="原型页面">
+    <button type="button" data-view="demand" class="on">需求全链路</button>
+    <button type="button" data-view="matrix">覆盖矩阵</button>
+    <button type="button" data-view="plan">计划详情</button>
+    <button type="button" data-view="version">版本交付</button>
+  </nav>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="#" aria-label="沙漏首页">
+      <span class="brand-mark"><svg class="ic"><use href="#i-hourglass"></use></svg></span>
+      <span>沙漏</span>
+    </a>
+    <button class="ws-switch" type="button">
+      <span class="avatar" style="--a:#2563EB">支</span>
+      <span class="ws-meta"><b>支付业务部</b><small>9 人 · 空间主</small></span>
+      <svg class="ic ws-chev"><use href="#i-chevron-down"></use></svg>
+    </button>
+    <div class="nav-sec">我的</div>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-home"></use></svg>我的工作</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-calendar"></use></svg>周回顾</button>
+    <div class="nav-sec">规划</div>
+    <button class="nav-item" type="button" data-nav="demand"><svg class="ic"><use href="#i-inbox"></use></svg>需求池</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-folder"></use></svg>项目</button>
+    <button class="nav-item" type="button" data-nav="version"><svg class="ic"><use href="#i-layers"></use></svg>版本</button>
+    <div class="nav-sec">交付</div>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-list"></use></svg>工作项</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-file"></use></svg>文档</button>
+    <button class="nav-item" type="button" data-nav="test"><svg class="ic"><use href="#i-check-square"></use></svg>测试</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-branch"></use></svg>分支</button>
+    <div class="nav-sec">洞察</div>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-chart"></use></svg>报表</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-users"></use></svg>成员负载</button>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-alert"></use></svg>逾期与阻塞</button>
+    <div class="nav-spacer"></div>
+    <button class="nav-item" type="button"><svg class="ic"><use href="#i-settings"></use></svg>设置</button>
+    <div class="user-row">
+      <span class="avatar" style="--a:#475467">孔</span>
+      <span class="user-meta"><b>kongxiangjin</b><small>空间主</small></span>
+      <svg class="ic"><use href="#i-logout"></use></svg>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs" id="crumbs"><b>需求池</b><svg class="ic"><use href="#i-chevron-right"></use></svg><span>REQ-2026-018</span></div>
+      <div class="top-grow"></div>
+      <label class="top-search">
+        <svg class="ic"><use href="#i-search"></use></svg>
+        <input type="search" placeholder="搜索需求、工作项、用例…" aria-label="搜索">
+        <kbd>⌘ K</kbd>
+      </label>
+      <button class="btn primary" type="button"><svg class="ic"><use href="#i-plus"></use></svg>新建</button>
+      <button class="icon-btn" type="button" aria-label="帮助">?</button>
+      <button class="icon-btn" type="button" aria-label="通知"><svg class="ic"><use href="#i-inbox"></use></svg><i class="notif-dot"></i></button>
+      <span class="avatar" style="--a:#5B3FD1">孔</span>
+    </header>
+
+    <main class="content">
+      <!-- ================= 需求全链路 ================= -->
+      <section class="screen" data-screen="demand">
+        <div class="page-head">
+          <div class="page-head-main">
+            <div class="title-line">
+              <span class="id-chip">REQ-2026-018</span>
+              <h1>对账中心支持按项目批量导出</h1>
+              <span class="tag blue"><i class="dot"></i>开发中</span>
+              <span class="tag red">P1</span>
+            </div>
+            <div class="meta-line">
+              <span>统一支付网关</span><span class="sep">·</span>
+              <span>目标版本 <b>支付网关 v2.2</b></span><span class="sep">·</span>
+              <span>负责人 赵磊</span><span class="sep">·</span>
+              <span>期望交付 11-22</span><span class="sep">·</span>
+              <span>来源 财务 · 刘</span>
+            </div>
+          </div>
+          <div class="page-actions">
+            <button class="btn" type="button">编辑需求</button>
+            <button class="btn" type="button">拆分为工作项</button>
+            <button class="btn primary" type="button" data-open-release-check="demand"><svg class="ic"><use href="#i-shield"></use></svg>发起发布检查</button>
+            <button class="icon-btn" type="button" aria-label="更多"><svg class="ic"><use href="#i-more"></use></svg></button>
+          </div>
+        </div>
+
+        <div class="banner warning">
+          <div class="banner-ico"><svg class="ic"><use href="#i-alert"></use></svg></div>
+          <div class="banner-main">
+            <h2>有风险，暂不建议发布</h2>
+            <p>4 个阻断项、3 个提醒。失败用例还没复测，性能用例被阻塞，另有 3 个工作项未完成。</p>
+          </div>
+          <div class="banner-metrics">
+            <div><b>2/5</b><span>工作项完成</span></div>
+            <div><b>4/7</b><span>用例通过</span></div>
+            <div><b>4</b><span>阻断项</span></div>
+          </div>
+          <button class="btn sm" type="button" data-scroll="riskCard">查看阻断项</button>
+        </div>
+
+        <div class="chain" id="chain" aria-label="需求全链路"></div>
+
+        <div class="demand-layout">
+          <div class="stack">
+            <section class="card summary-card">
+              <div class="card-head">
+                <h2>需求摘要</h2>
+                <span class="muted">财务对账按项目拆分</span>
+                <div class="grow"></div>
+                <span class="tag gray">已评审</span>
+              </div>
+              <div class="card-body">
+                <p class="summary-text">财务在对账时需要按项目拆分账单，目前只能全量导出后再手工筛选，容易漏项。希望支持按项目筛选后导出 Excel，并保留操作记录。</p>
+                <details class="accept">
+                  <summary>验收标准 5 条<svg class="ic"><use href="#i-chevron-down"></use></svg></summary>
+                  <ol>
+                    <li>支持按项目多选筛选后导出 Excel</li>
+                    <li>10 万行以内 30 秒完成</li>
+                    <li>失败可重试，且不产生重复数据</li>
+                    <li>导出与重试写入审计日志</li>
+                    <li>无权限项目不可见、不可导出</li>
+                  </ol>
+                </details>
+              </div>
+            </section>
+
+            <section class="card" id="riskCard">
+              <div class="card-head">
+                <h2>风险与断点</h2>
+                <span class="count">7 项</span>
+                <div class="grow"></div>
+                <span class="muted">按发布影响排序</span>
+              </div>
+              <div class="card-body" id="riskList"></div>
+            </section>
+
+            <section class="card" id="workItemCard">
+              <div class="card-head">
+                <h2>工作项</h2>
+                <span class="count">5 项</span>
+                <div class="grow"></div>
+                <span class="tag amber"><i class="dot"></i>1 项未精确覆盖</span>
+              </div>
+              <div class="table-wrap">
+                <table class="tbl work-tbl">
+                  <colgroup><col style="width:29%"><col style="width:9%"><col style="width:10%"><col style="width:9%"><col style="width:21%"><col style="width:10%"><col style="width:12%"></colgroup>
+                  <thead><tr><th>工作项</th><th>类型</th><th>负责人</th><th>状态</th><th>验证用例</th><th>覆盖</th><th>结果</th></tr></thead>
+                  <tbody id="workItemBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="card" id="caseCard">
+              <div class="card-head">
+                <h2>测试用例</h2>
+                <span class="count">7 条</span>
+                <div class="grow"></div>
+                <div class="chip-filter" id="caseFilters">
+                  <button type="button" class="on" data-case-filter="all">全部 7</button>
+                  <button type="button" data-case-filter="failed">失败 1</button>
+                  <button type="button" data-case-filter="untested">未执行 1</button>
+                  <button type="button" data-case-filter="unlinked">未关联工作项 1</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="tbl case-tbl">
+                  <colgroup><col style="width:28%"><col style="width:8%"><col style="width:16%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:16%"></colgroup>
+                  <thead><tr><th>用例</th><th>优先级</th><th>验证工作项</th><th>最近结果</th><th>计划</th><th>缺陷</th><th>执行</th></tr></thead>
+                  <tbody id="caseBody"></tbody>
+                </table>
+              </div>
+              <div class="card-foot">
+                <span>未关联工作项的用例按“需求级覆盖”统计，不会显示为未覆盖。</span>
+                <button class="link-btn" type="button" data-view="matrix">在覆盖矩阵中查看<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+            </section>
+
+            <section class="card" id="planCard">
+              <div class="card-head">
+                <h2>测试计划</h2>
+                <span class="count">2 个</span>
+                <div class="grow"></div>
+                <button class="link-btn" type="button" data-view="plan">打开计划详情<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+              <div class="card-body" id="planList"></div>
+            </section>
+
+            <section class="card" id="defectCard">
+              <div class="card-head">
+                <h2>缺陷</h2>
+                <span class="count">3 个</span>
+                <div class="grow"></div>
+                <span class="muted">2 个未关闭</span>
+              </div>
+              <div class="table-wrap">
+                <table class="tbl defect-tbl">
+                  <colgroup><col style="width:33%"><col style="width:15%"><col style="width:8%"><col style="width:15%"><col style="width:11%"><col style="width:18%"></colgroup>
+                  <thead><tr><th>缺陷</th><th>来源用例</th><th>优先级</th><th>状态</th><th>负责人</th><th>创建</th></tr></thead>
+                  <tbody id="defectBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="card" id="releaseCard">
+              <div class="card-head">
+                <h2>发布</h2>
+                <span class="count">目标版本</span>
+                <div class="grow"></div>
+                <button class="link-btn" type="button" data-view="version">查看版本交付<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+              <div class="card-body" id="releaseBody"></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="card judge-card">
+              <div class="judge-head">
+                <div>
+                  <div class="eyebrow">交付判断 · 满分 100</div>
+                  <div class="judge-verdict"><span class="tag amber"><i class="dot"></i>有风险</span><span>4 个阻断 · 3 个提醒</span></div>
+                </div>
+                <div class="score-ring" style="--score:58%;--ring:var(--warning)"><b>58</b></div>
+              </div>
+              <div class="judge-list" id="judgeList"></div>
+              <button class="btn primary wide" type="button" data-open-release-check="demand"><svg class="ic"><use href="#i-shield"></use></svg>发起发布检查</button>
+              <p class="footnote">发布检查只做风险提示，允许填写原因后带风险发布。</p>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h2>链路完整度</h2><div class="grow"></div><span class="muted">按当前需求</span></div>
+              <div class="card-body" id="compList"></div>
+            </section>
+
+            <section class="card version-card">
+              <div class="card-head"><h2>版本与发布</h2></div>
+              <div class="card-body">
+                <div class="kv"><span>目标版本</span><b>支付网关 v2.2</b></div>
+                <div class="kv"><span>发布计划</span><b>RP-2026-024</b></div>
+                <div class="kv"><span>计划发布</span><b>11-22</b></div>
+                <div class="kv"><span>当前状态</span><span class="tag amber">待检查</span></div>
+                <button class="btn wide" type="button" data-view="version">查看版本交付<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= 覆盖矩阵 ================= -->
+      <section class="screen" data-screen="matrix" hidden>
+        <div class="page-head">
+          <div class="page-head-main">
+            <div class="title-line"><h1>覆盖矩阵</h1><span class="tag blue">测试</span></div>
+            <div class="meta-line">统一支付网关 · 支付网关 v2.2 · 需求 → 工作项 → 用例</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn" type="button"><svg class="ic"><use href="#i-download"></use></svg>导出 CSV</button>
+            <button class="btn primary" type="button"><svg class="ic"><use href="#i-plus"></use></svg>新建用例</button>
+          </div>
+        </div>
+
+        <div class="filterbar card">
+          <label class="filter"><span>项目</span><select><option>统一支付网关</option></select></label>
+          <label class="filter"><span>版本</span><select><option>支付网关 v2.2</option><option>支付网关 v2.1</option></select></label>
+          <label class="filter"><span>需求</span><select><option>全部需求</option><option>对账中心支持按项目批量导出</option><option>支付结果页支持按渠道筛选</option></select></label>
+          <label class="filter"><span>覆盖</span><select><option>全部覆盖级别</option><option>工作项级覆盖</option><option>需求级覆盖</option><option>未覆盖</option></select></label>
+          <div class="filter-grow"></div>
+          <label class="search-inline"><svg class="ic"><use href="#i-search"></use></svg><input type="search" placeholder="搜索需求、工作项、用例" data-matrix-search></label>
+        </div>
+
+        <div class="metric-grid four">
+          <div class="metric"><span>需求</span><b>12</b><small>已覆盖 10 · 83%</small></div>
+          <div class="metric"><span>工作项</span><b>38</b><small>精确覆盖 26 · 68%</small></div>
+          <div class="metric"><span>用例</span><b>48</b><small>通过率 87%</small></div>
+          <div class="metric"><span>工作项级缺口</span><b class="warn">12</b><small>其中 3 个无用例</small></div>
+        </div>
+
+        <section class="card matrix-card">
+          <div class="card-head">
+            <h2>按需求展开</h2>
+            <span class="muted">需求级覆盖 ≠ 工作项级覆盖</span>
+            <div class="grow"></div>
+            <div class="legend">
+              <span><i class="lg lg-green"></i>工作项级</span>
+              <span><i class="lg lg-blue"></i>需求级</span>
+              <span><i class="lg lg-red"></i>未覆盖</span>
+            </div>
+          </div>
+          <div class="tree" id="matrixTree"></div>
+        </section>
+
+        <div class="def-grid">
+          <div class="def"><b><span class="lg lg-green"></span>工作项级覆盖</b><p>至少 1 条用例显式关联了该工作项，可以回答“这个工作项由哪条用例验证”。</p></div>
+          <div class="def"><b><span class="lg lg-blue"></span>需求级覆盖</b><p>用例挂在需求下，但没有精确到工作项；计入需求覆盖，不算工作项缺口。</p></div>
+          <div class="def"><b><span class="lg lg-red"></span>未覆盖</b><p>没有任何用例关联，发布检查会给出阻断或提醒，取决于工作项类型和优先级。</p></div>
+        </div>
+      </section>
+
+      <!-- ================= 计划详情 ================= -->
+      <section class="screen" data-screen="plan" hidden>
+        <div class="page-head">
+          <div class="page-head-main">
+            <div class="title-line"><span class="id-chip">TP-009</span><h1>支付网关 v2.2 回归</h1><span class="tag blue"><i class="dot"></i>进行中</span></div>
+            <div class="meta-line">版本 <b>支付网关 v2.2</b><span class="sep">·</span>11-15 ~ 11-22<span class="sep">·</span>负责人 赵磊<span class="sep">·</span>19 条用例</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn" type="button">编辑计划</button>
+            <button class="btn" type="button" data-open-add-cases><svg class="ic"><use href="#i-plus"></use></svg>按需求添加用例</button>
+            <button class="btn primary" type="button"><svg class="ic"><use href="#i-play"></use></svg>执行未执行用例</button>
+          </div>
+        </div>
+
+        <div class="metric-grid six" id="planMetrics"></div>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>需求范围</h2>
+            <span class="muted">范围由用例关联自动派生，计划不绑定单个需求</span>
+            <div class="grow"></div>
+            <span class="tag gray">3 个需求 · 19 条用例</span>
+          </div>
+          <div class="card-body" id="planDemandChips"></div>
+        </section>
+
+        <div class="filterbar card">
+          <label class="filter"><span>需求</span><select id="planDemandFilter"><option value="all">全部需求</option><option value="REQ-2026-018">对账中心支持按项目批量导出</option><option value="REQ-2026-011">支付结果页支持按渠道筛选</option><option value="REQ-2026-009">退款回调幂等校验</option></select></label>
+          <label class="filter"><span>结果</span><select id="planResultFilter"><option value="all">全部结果</option><option value="passed">通过</option><option value="failed">失败</option><option value="blocked">阻塞</option><option value="untested">未执行</option></select></label>
+          <label class="filter"><span>执行人</span><select><option>全部执行人</option><option>赵磊</option><option>李娜</option><option>王强</option><option>陈晨</option></select></label>
+          <div class="filter-grow"></div>
+          <label class="search-inline"><svg class="ic"><use href="#i-search"></use></svg><input type="search" placeholder="搜索用例标题" data-plan-search></label>
+        </div>
+
+        <section class="card">
+          <div class="card-head">
+            <h2>用例执行</h2>
+            <span class="count" id="planTableCount">显示 13 / 19</span>
+            <div class="grow"></div>
+            <span class="muted">点击用例查看关联关系与执行历史</span>
+          </div>
+          <div class="table-wrap">
+            <table class="tbl plan-tbl">
+              <colgroup><col style="width:30%"><col style="width:19%"><col style="width:16%"><col style="width:7%"><col style="width:8%"><col style="width:9%"><col style="width:11%"></colgroup>
+              <thead><tr><th>用例</th><th>需求</th><th>验证工作项</th><th>优先级</th><th>执行人</th><th>结果</th><th>缺陷 / 时间</th></tr></thead>
+              <tbody id="planTableBody"></tbody>
+            </table>
+          </div>
+          <div class="card-foot">
+            <span>还有 6 条用例未显示。计划范围按需求筛选后，可快速定位某个需求的执行情况。</span>
+            <button class="link-btn" type="button" data-view="matrix">查看覆盖矩阵<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+          </div>
+        </section>
+      </section>
+
+      <!-- ================= 版本交付 ================= -->
+      <section class="screen" data-screen="version" hidden>
+        <div class="page-head">
+          <div class="page-head-main">
+            <div class="title-line"><span class="id-chip">v2.2</span><h1>支付网关 v2.2</h1><span class="tag amber"><i class="dot"></i>待发布</span></div>
+            <div class="meta-line">10-26 ~ 11-27<span class="sep">·</span>发布计划 RP-2026-024<span class="sep">·</span>计划发布 11-22<span class="sep">·</span>负责人 张伟</div>
+          </div>
+          <div class="page-actions">
+            <button class="btn" type="button">查看交付说明</button>
+            <button class="btn primary" type="button" data-open-release-check="version"><svg class="ic"><use href="#i-shield"></use></svg>发布检查</button>
+          </div>
+        </div>
+
+        <div class="metric-grid four" id="versionMetrics"></div>
+
+        <div class="banner warning compact" id="versionBanner">
+          <div class="banner-ico"><svg class="ic"><use href="#i-alert"></use></svg></div>
+          <div class="banner-main">
+            <h2>有风险，暂不建议发布</h2>
+            <p>5 个阻断项、3 个提醒。阻断主要集中在失败用例未复测、性能用例阻塞和 2 个未关闭缺陷。</p>
+          </div>
+          <div class="banner-metrics">
+            <div><b>10/12</b><span>需求已覆盖</span></div>
+            <div><b>41/48</b><span>用例通过</span></div>
+            <div><b>5</b><span>阻断项</span></div>
+          </div>
+          <button class="btn sm" type="button" data-open-release-check="version">查看检查项</button>
+        </div>
+
+        <div class="version-layout">
+          <div class="stack">
+            <section class="card">
+              <div class="card-head">
+                <h2>按需求看交付</h2>
+                <span class="muted">12 个需求 · 显示 5 个</span>
+                <div class="grow"></div>
+                <button class="link-btn" type="button" data-view="matrix">打开覆盖矩阵<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+              <div class="table-wrap">
+                <table class="tbl version-tbl">
+                  <colgroup><col style="width:30%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:12%"><col style="width:10%"><col style="width:16%"></colgroup>
+                  <thead><tr><th>需求</th><th>工作项</th><th>用例</th><th>未关闭缺陷</th><th>覆盖</th><th>结论</th><th>操作</th></tr></thead>
+                  <tbody id="versionDemandBody"></tbody>
+                </table>
+              </div>
+              <div class="card-foot">
+                <span>“结论”只反映测试与交付证据，不代表业务验收。</span>
+                <button class="link-btn" type="button">查看全部 12 个需求<svg class="ic"><use href="#i-arrow-right"></use></svg></button>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head">
+                <h2>发布记录</h2>
+                <span class="muted">发布时冻结测试证据，后续修改不影响历史记录</span>
+                <div class="grow"></div>
+                <span class="tag gray">3 个版本</span>
+              </div>
+              <div class="card-body" id="releaseTimeline"></div>
+            </section>
+          </div>
+
+          <aside class="rail">
+            <section class="card">
+              <div class="card-head"><h2>发布检查</h2><div class="grow"></div><span class="tag amber"><i class="dot"></i>待检查</span></div>
+              <div class="card-body">
+                <div class="check-summary">
+                  <div class="check-num"><b>5</b><span>阻断</span></div>
+                  <div class="check-num amber"><b>3</b><span>提醒</span></div>
+                  <div class="check-num green"><b>10/12</b><span>需求覆盖</span></div>
+                </div>
+                <div class="check-list" id="versionCheckList"></div>
+                <button class="btn primary wide" type="button" data-open-release-check="version"><svg class="ic"><use href="#i-shield"></use></svg>打开发布检查</button>
+                <p class="footnote">允许带风险发布；原因会写入发布记录，并随测试证据一起冻结。</p>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h2>版本概览</h2></div>
+              <div class="card-body">
+                <div class="kv"><span>计划发布</span><b>11-22</b></div>
+                <div class="kv"><span>发布环境</span><b>生产</b></div>
+                <div class="kv"><span>发布负责人</span><b>张伟</b></div>
+                <div class="kv"><span>分支</span><b class="mono">release/pay-v2.2</b></div>
+                <div class="kv"><span>最近提交</span><b class="mono">a18f3c2</b></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden></aside>
+<div class="modal-wrap" id="modalWrap" hidden>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

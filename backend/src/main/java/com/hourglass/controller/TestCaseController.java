@@ -91,6 +91,26 @@ public class TestCaseController {
         return ApiResult.ok(caseService.coverage(ws.getId(), userId, reqId));
     }
 
+    /** 用例编辑器的工作项候选：必须先有主需求，只返回该需求下的工作项 */
+    @GetMapping("/api/test-cases/task-options")
+    public ApiResult<List<com.hourglass.dto.CaseTaskLink>> taskOptions(@RequestParam String reqId,
+                                                                       @RequestParam String demandId,
+                                                                       @RequestParam(required = false) String q,
+                                                                       @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.taskOptions(ws.getId(), userId, reqId, demandId, q));
+    }
+
+    /** 工作项级覆盖：需求详情用它回答「哪项工作项有验证用例」 */
+    @GetMapping("/api/test-cases/task-coverage")
+    public ApiResult<List<com.hourglass.dto.TaskCoverageRow>> taskCoverage(@RequestParam String demandId,
+                                                                           @RequestParam(required = false) String workspace) {
+        String userId = CurrentUser.id();
+        Workspace ws = workspaceService.resolve(userId, workspace);
+        return ApiResult.ok(caseService.taskCoverage(ws.getId(), userId, demandId));
+    }
+
     /** 缺陷 tab：反查执行流水记录过的缺陷任务 → 用例 */
     @GetMapping("/api/test-cases/linked-bugs")
     public ApiResult<List<com.hourglass.dto.CaseBugLink>> linkedBugs(@RequestParam(required = false) String reqId,

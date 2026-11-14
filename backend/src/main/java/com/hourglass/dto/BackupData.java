@@ -9,7 +9,7 @@ import java.util.List;
  */
 @Data
 public class BackupData {
-    public static final int FORMAT_VERSION = 13;
+    public static final int FORMAT_VERSION = 14;
 
     private Integer v;
     private String exportedAt;
@@ -39,6 +39,8 @@ public class BackupData {
     private List<BackupTestCase> testCases;
     /** 测试用例执行流水（v10；依赖 testCases 的 ID 映射） */
     private List<BackupTestCaseRun> testCaseRuns;
+    /** 用例验证的工作项（v14；旧备份没有该字段时按需求级覆盖，不强行补链） */
+    private List<BackupCaseTask> caseTasks;
     /** 需求文档评论（v10；旧备份没有该字段时保留现有评论） */
     private List<BackupDocComment> docComments;
     /** 模块字典（v11 起纳入；任务/需求按 ID 关联，导入时补齐缺失模块。旧备份没有该字段时，
@@ -133,6 +135,8 @@ public class BackupData {
         private String foundVersionId;
         /** 回归状态 pending/passed/failed（v9 起） */
         private String regressionStatus;
+        /** 项目内工作项编号 WI-001 的数字部分；旧备份没有该字段时按目标项目顺延取号 */
+        private Integer itemNo;
     }
 
     @Data
@@ -161,6 +165,8 @@ public class BackupData {
         private String createdAt;
         /** 首版上线日（v8 起；阶段统计的归组锚点） */
         private String firstReleasedAt;
+        /** 发布前测试检查策略（v14 起；旧备份缺省按 standard） */
+        private String releaseCheckPolicy;
     }
 
     @Data
@@ -229,6 +235,8 @@ public class BackupData {
         private String createdBy;
         private String createdAt;
         private String updatedAt;
+        /** 项目内需求编号 DM-001 的数字部分；旧备份没有该字段时顺延取号 */
+        private Integer demandNo;
     }
 
     @Data
@@ -255,6 +263,18 @@ public class BackupData {
         private String latestBugTaskId;
         private String createdAt;
         private String updatedAt;
+        /** 项目内用例编号 TC-001 的数字部分；旧备份没有该字段时顺延取号 */
+        private Integer caseNo;
+        /** 主需求（v14；旧备份没有该字段时导入不关联需求） */
+        private String demandId;
+    }
+
+    @Data
+    public static class BackupCaseTask {
+        private String caseId;
+        private String taskId;
+        private String createdBy;
+        private String createdAt;
     }
 
     @Data

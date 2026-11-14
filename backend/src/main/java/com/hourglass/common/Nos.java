@@ -13,6 +13,12 @@ public final class Nos {
 
     /** 搜索词里的工作项编号：WI-001 / wi1 / 纯数字都认，最多 7 位（int 范围内） */
     private static final Pattern WORK_ITEM = Pattern.compile("^(?:WI-?)?(\\d{1,7})$", Pattern.CASE_INSENSITIVE);
+    /** 需求编号：DM-001 / dm1 / 纯数字 */
+    private static final Pattern DEMAND = Pattern.compile("^(?:DM-?)?(\\d{1,7})$", Pattern.CASE_INSENSITIVE);
+    /** 发布计划编号：PL-001 / pl1 / 纯数字 */
+    private static final Pattern RELEASE_PLAN = Pattern.compile("^(?:PL-?)?(\\d{1,7})$", Pattern.CASE_INSENSITIVE);
+    /** 用例编号：TC-001 / tc1 / 纯数字 */
+    private static final Pattern CASE = Pattern.compile("^(?:TC-?)?(\\d{1,7})$", Pattern.CASE_INSENSITIVE);
 
     private Nos() {
     }
@@ -26,12 +32,40 @@ public final class Nos {
         return no == null || no <= 0 ? "" : String.format("REL-%03d", no);
     }
 
+    public static String demand(Integer no) {
+        return no == null || no <= 0 ? "" : String.format("DM-%03d", no);
+    }
+
+    public static String releasePlan(Integer no) {
+        return no == null || no <= 0 ? "" : String.format("PL-%03d", no);
+    }
+
+    public static String testCase(Integer no) {
+        return no == null || no <= 0 ? "" : String.format("TC-%03d", no);
+    }
+
     /** 不是编号形态的搜索词返回 null，走原有文本匹配 */
     public static Integer parseWorkItem(String text) {
+        return parse(WORK_ITEM, text);
+    }
+
+    public static Integer parseDemand(String text) {
+        return parse(DEMAND, text);
+    }
+
+    public static Integer parseReleasePlan(String text) {
+        return parse(RELEASE_PLAN, text);
+    }
+
+    public static Integer parseCase(String text) {
+        return parse(CASE, text);
+    }
+
+    private static Integer parse(Pattern pattern, String text) {
         if (text == null) {
             return null;
         }
-        Matcher m = WORK_ITEM.matcher(text.trim());
+        Matcher m = pattern.matcher(text.trim());
         if (!m.matches()) {
             return null;
         }

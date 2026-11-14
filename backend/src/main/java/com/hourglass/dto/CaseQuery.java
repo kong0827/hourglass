@@ -23,4 +23,9 @@ public class CaseQuery {
     private String q;
     private int offset;
     private int limit = 100;
+
+    /** 搜索词里的用例编号（TC-001 / tc1 / 纯数字）；不是编号形态返回 null，走文本匹配 */
+    public Integer getCaseNo() {
+        return com.hourglass.common.Nos.parseCase(q);
+    }
 }

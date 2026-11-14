@@ -51,7 +51,7 @@ class DemandServiceScheduleTest {
     private final DemandService service = new DemandService(demands, projects, versions, tasks, events,
             docs, access, attachments, mail, cases,
             mock(com.hourglass.mapper.CategoryMapper.class), lock, permissions,
-            deletionTrace);
+            deletionTrace, mock(NumberSeqService.class));
     private final com.hourglass.mapper.ReleaseMapper releases = mock(com.hourglass.mapper.ReleaseMapper.class);
     private final com.hourglass.mapper.VersionTaskMapper bindings = mock(com.hourglass.mapper.VersionTaskMapper.class);
     private final TaskPublicationService publications = new TaskPublicationService(tasks, releases,
@@ -66,6 +66,8 @@ class DemandServiceScheduleTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "publications", publications);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "judgementMapper",
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
+                mock(com.hourglass.mapper.TestCaseTaskMapper.class));
         lenient().when(demands.selectDetail(any(), anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));
         doCallRealMethod().when(bindings).enrichTasks(anyString(), anyList());

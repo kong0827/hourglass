@@ -13,6 +13,8 @@ public class Demand {
     private String workspaceId;
     /** 所属项目ID（requirement 表） */
     private String reqId;
+    /** 项目内需求编号（sql/84，展示为 DM-001；null 表示存量尚未取号） */
+    private Integer demandNo;
     private String title;
     /** 为什么做（背景与价值） */
     private String description;

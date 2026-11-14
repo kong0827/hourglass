@@ -30,9 +30,14 @@ class VersionReleaseServiceTest {
     private final PlatformTransactionManager tx = mock(PlatformTransactionManager.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     private final RequirementMapper reqMapper = mock(RequirementMapper.class);
+    private final NumberSeqService numberSeq = mock(NumberSeqService.class);
+    private final TestPlanCaseMapper planCases = mock(TestPlanCaseMapper.class);
+    private final TestCaseTaskMapper caseTasks = mock(TestCaseTaskMapper.class);
+    private final TestCaseMapper cases = mock(TestCaseMapper.class);
     private final VersionReleaseService service = new VersionReleaseService(mapper, versions, reqMapper,
             mock(DemandMapper.class), users, versionTasks, members, locks, permissions, access,
-            mock(TaskPublicationService.class), notifications, json, tx);
+            mock(TaskPublicationService.class), notifications, json, tx, numberSeq,
+            planCases, caseTasks, cases);
     private final Map<String, VersionReleasePlan> plans = new HashMap<String, VersionReleasePlan>();
     private final Map<String, VersionRelease> records = new HashMap<String, VersionRelease>();
     private final Map<String, List<VersionReleaseItem>> items = new HashMap<String, List<VersionReleaseItem>>();
@@ -76,6 +81,7 @@ class VersionReleaseServiceTest {
         });
         when(mapper.selectTaskForUpdate(eq("W"), anyString())).thenAnswer(i -> scope.stream().filter(t -> t.getId().equals(i.getArgument(1))).findFirst().orElse(null));
         when(mapper.selectPlanForUpdate(eq("W"), anyString())).thenAnswer(i -> plans.get(i.getArgument(1)));
+        when(mapper.selectPlans(eq("W"), anyString())).thenAnswer(i -> new ArrayList<VersionReleasePlan>(plans.values()));
         when(mapper.selectPlannedTaskIdsForUpdate(eq("W"), anyString())).thenAnswer(i -> new ArrayList<String>(plans.get(i.getArgument(1)).getPlannedTaskIds()));
         when(mapper.insertPlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); plans.put(p.getId(), p); return 1; });
         when(mapper.updatePlan(any())).thenAnswer(i -> { VersionReleasePlan p = i.getArgument(0); p.setRevision(p.getRevision() + 1); plans.put(p.getId(), p); return 1; });
@@ -483,6 +489,52 @@ class VersionReleaseServiceTest {
         assertEquals(Integer.valueOf(3), rolled.getItems().get(0).getTaskItemNo());
     }
 
+    @Test void releasePlanNumbersAreAllocatedPerWorkspace() {
+        when(numberSeq.nextPlan("W")).thenReturn(4, 5);
+
+        VersionReleasePlan first = plan("production");
+        VersionReleasePlan second = plan("production");
+
+        assertEquals(Integer.valueOf(4), first.getPlanNo());
+        assertEquals(Integer.valueOf(5), second.getPlanNo());
+        verify(numberSeq, times(2)).nextPlan("W");
+    }
+
+    @Test void planNumberConflictRetriesOnlyForThePlanNumberKey() {
+        when(numberSeq.nextPlan("W")).thenReturn(1, 2);
+        /* 用 do* 形式重设桩，否则重设时的空参调用会触发 setup 里的落库 Answer */
+        doThrow(new org.springframework.dao.DuplicateKeyException("Duplicate entry '1' for key 'uk_plan_no'"))
+                .doAnswer(i -> { VersionReleasePlan p = i.getArgument(0); plans.put(p.getId(), p); return 1; })
+                .when(mapper).insertPlan(any());
+
+        VersionReleasePlan saved = plan("production");
+
+        assertEquals(Integer.valueOf(2), saved.getPlanNo());
+        verify(numberSeq, times(2)).nextPlan("W");
+    }
+
+    @Test void planInsertKeyConflictOtherThanNumberIsNotRetried() {
+        when(numberSeq.nextPlan("W")).thenReturn(1);
+        doThrow(new org.springframework.dao.DuplicateKeyException("Duplicate entry 'RP1' for key 'PRIMARY'"))
+                .when(mapper).insertPlan(any());
+
+        org.springframework.dao.DuplicateKeyException e = assertThrows(org.springframework.dao.DuplicateKeyException.class,
+                () -> plan("production"));
+
+        assertTrue(e.getMessage().contains("PRIMARY"));
+        verify(numberSeq, times(1)).nextPlan("W");
+    }
+
+    @Test void planNumberConflictGivesUpAfterThreeAttempts() {
+        when(numberSeq.nextPlan("W")).thenReturn(1);
+        doThrow(new org.springframework.dao.DuplicateKeyException("Duplicate entry '1' for key 'uk_plan_no'"))
+                .when(mapper).insertPlan(any());
+
+        code(400, () -> plan("production"));
+
+        verify(numberSeq, times(3)).nextPlan("W");
+    }
+
     private VersionRelease confirmVersion(VersionReleasePlan plan, String versionId, String key, String environment, String taskId) {
         ReleaseConfirmRequest r = request(plan, key);
         r.setEnvironment(environment);
@@ -492,6 +544,72 @@ class VersionReleaseServiceTest {
         r.setPlanRevision(p.getPlanRevision());
         r.setScopeToken(p.getScopeToken());
         return service.confirm("U", "W", versionId, r);
+    }
+
+    @Test void releaseCheckBlocksFailedRequiredCaseUnderStandardPolicy() {
+        VersionReleasePlan p = plan("production");
+        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Arrays.asList(
+                requiredCase("C1", "passed", true), requiredCase("C2", "failed", true), requiredCase("C3", null, false)));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
+        assertEquals("standard", c.getPolicy());
+        assertEquals("block", c.getVerdict());
+        assertEquals(3, c.getCaseTotal()); assertEquals(1, c.getRequiredFailed()); assertEquals(1, c.getRequiredPassed());
+        assertTrue(c.getBlockers().stream().anyMatch(x -> x.contains("发布必测用例失败")));
+        assertFalse(service.preview("U", "W", "V", request(p, "check-block")).isCanPublish());
+    }
+
+    @Test void loosePolicyDowngradesRequiredFailureToReminder() {
+        VersionReleasePlan p = plan("production");
+        Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("loose");
+        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Collections.singletonList(requiredCase("C1", "failed", true)));
+        ReleaseCheckResponse c = service.releaseCheck("U", "W", "V", p.getId());
+        assertEquals("warn", c.getVerdict()); assertTrue(c.getBlockers().isEmpty());
+        assertTrue(c.getReminders().stream().anyMatch(x -> x.contains("发布必测用例失败")));
+        /* 宽松策略不阻断，但不等于静默：证据仍会冻结并显示提醒 */
+        VersionRelease record = confirm(request(p, "loose-record"));
+        assertEquals("warn", frozenEvidence(record).get("verdict"));
+    }
+
+    @Test void confirmRequiresRiskReasonWhenCheckBlockedAndFreezesEvidence() {
+        VersionReleasePlan p = plan("production");
+        Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("strict");
+        when(planCases.selectEvidenceCases(p.getId())).thenReturn(Collections.singletonList(requiredCase("C1", null, true)));
+        ReleaseConfirmRequest r = request(p, "evidence-block");
+        ReleasePreviewResponse pv = service.preview("U", "W", "V", r);
+        assertNotNull(pv.getTestCheck()); assertFalse(pv.isCanPublish());
+        r.setPlanRevision(pv.getPlanRevision()); r.setScopeToken(pv.getScopeToken());
+        code(422, () -> service.confirm("U", "W", "V", r));
+        r.setDeviationReason("风险放行：未执行项已人工核对");
+        preview(r);
+        VersionRelease record = service.confirm("U", "W", "V", r);
+        Map<String, Object> ev = frozenEvidence(record);
+        assertEquals("block", ev.get("verdict"));
+        assertEquals("strict", ev.get("policy"));
+        assertEquals(1, ((Number) ev.get("requiredUntested")).intValue());
+        assertEquals(1, ((List<?>) ev.get("requiredCases")).size());
+    }
+
+    @Test void releasePolicyIsValidatedAndSavedPerProject() {
+        when(reqMapper.updateReleasePolicy("W", "P", "strict")).thenReturn(1);
+        assertEquals("strict", service.saveReleasePolicy("U", "W", "P", "strict"));
+        code(400, () -> service.saveReleasePolicy("U", "W", "P", "paranoid"));
+        Requirement project = reqMapper.selectById("P"); project.setReleaseCheckPolicy("loose");
+        assertEquals("loose", service.releasePolicy("U", "W", "P"));
+    }
+
+    private static ReleaseCheckCase requiredCase(String id, String result, boolean required) {
+        ReleaseCheckCase c = new ReleaseCheckCase();
+        c.setCaseId(id); c.setCaseNo(id.charAt(1) - '0'); c.setTitle("Case " + id);
+        c.setDemandId("D1"); c.setDemandTitle("Demand"); c.setResult(result); c.setRequired(required);
+        return c;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> frozenEvidence(VersionRelease record) {
+        try {
+            Map<String, Object> plan = json.readValue(record.getPlanSnapshot(), Map.class);
+            return (Map<String, Object>) plan.get("testEvidence");
+        } catch (Exception ex) { throw new AssertionError("plan snapshot must be readable JSON", ex); }
     }
 
     private VersionRelease confirm(ReleaseConfirmRequest r) { preview(r); return service.confirm("U", "W", "V", r); }

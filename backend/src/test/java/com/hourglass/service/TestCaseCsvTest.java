@@ -53,7 +53,9 @@ class TestCaseCsvTest {
             mock(AttachmentService.class),
             mock(com.hourglass.mapper.TestPlanMapper.class),
             mock(com.hourglass.mapper.TestPlanCaseMapper.class),
-            auditService);
+            auditService, mock(NumberSeqService.class),
+            mock(com.hourglass.mapper.TestCaseTaskMapper.class),
+            mock(com.hourglass.mapper.TaskMapper.class));
 
     @BeforeEach
     void setUp() {

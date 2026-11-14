@@ -12,6 +12,8 @@ import com.hourglass.dto.ReleasePlanOptionRow;
 import com.hourglass.dto.ReleasePlanOptions;
 import com.hourglass.dto.ReleasePlanRequest;
 import com.hourglass.dto.ReleasePlanRow;
+import com.hourglass.dto.ReleaseCheckCase;
+import com.hourglass.dto.ReleaseCheckResponse;
 import com.hourglass.dto.ReleasePreviewResponse;
 import com.hourglass.dto.ReleasePreviewRequest;
 import com.hourglass.dto.TaskVersionBinding;
@@ -80,7 +82,12 @@ public class VersionReleaseService {
     private final TaskPublicationService taskPublication;
     private final NotificationEventService notifications;
     private final ObjectMapper json;
+    private final NumberSeqService numberSeq;
     private final TransactionTemplate notificationTx;
+    /** 发布检查：读取计划用例结果、需求与工作项覆盖；只读，不写用例状态 */
+    private final com.hourglass.mapper.TestPlanCaseMapper planCaseMapper;
+    private final com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper;
+    private final com.hourglass.mapper.TestCaseMapper caseMapper;
 
     public VersionReleaseService(ReleaseMapper mapper, ProjectVersionMapper versionMapper,
                                  RequirementMapper reqMapper, DemandMapper demandMapper, UserMapper userMapper,
@@ -88,7 +95,11 @@ public class VersionReleaseService {
                                  WorkspaceMemberMapper memberMapper, DeliveryScopeLock scopeLock,
                                  ReleasePermissionService permissions, ProjectAccessService access,
                                  TaskPublicationService taskPublication, NotificationEventService notifications,
-                                 ObjectMapper json, PlatformTransactionManager transactionManager) {
+                                 ObjectMapper json, PlatformTransactionManager transactionManager,
+                                 NumberSeqService numberSeq,
+                                 com.hourglass.mapper.TestPlanCaseMapper planCaseMapper,
+                                 com.hourglass.mapper.TestCaseTaskMapper caseTaskMapper,
+                                 com.hourglass.mapper.TestCaseMapper caseMapper) {
         this.mapper = mapper;
         this.versionMapper = versionMapper;
         this.reqMapper = reqMapper;
@@ -102,6 +113,10 @@ public class VersionReleaseService {
         this.taskPublication = taskPublication;
         this.notifications = notifications;
         this.json = json;
+        this.numberSeq = numberSeq;
+        this.planCaseMapper = planCaseMapper;
+        this.caseTaskMapper = caseTaskMapper;
+        this.caseMapper = caseMapper;
         this.notificationTx = new TransactionTemplate(transactionManager);
         this.notificationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -134,8 +149,200 @@ public class VersionReleaseService {
         return plans;
     }
 
-    /** 计划编辑器：只返回当前用户可管理的项目与版本，避免选出必然保存失败的组合。 */
-    public ReleasePlanOptions planOptions(String userId, String workspaceId) {
+    /**
+     * 发布前测试检查：只读汇总计划必测用例与需求/工作项覆盖。
+     * planId 为空时仍返回覆盖事实，但提示未关联计划、无法核对必测用例。
+     */
+    public ReleaseCheckResponse releaseCheck(String userId, String workspaceId, String versionId, String planId) {
+        ProjectVersion version = requireVersion(userId, workspaceId, versionId);
+        VersionReleasePlan plan = findPlan(workspaceId, versionId, Texts.trimToNull(planId));
+        return evaluate(workspaceId, version, plan);
+    }
+
+    /** 项目级测试检查策略：strict / standard / loose，默认 standard */
+    public String releasePolicy(String userId, String workspaceId, String reqId) {
+        Requirement project = reqMapper.selectById(reqId);
+        if (project == null || !workspaceId.equals(project.getWorkspaceId())) throw AppException.notFound("项目不存在");
+        access.assertView(workspaceId, userId, reqId);
+        return normalizePolicy(project.getReleaseCheckPolicy());
+    }
+
+    public String saveReleasePolicy(String userId, String workspaceId, String reqId, String policy) {
+        Requirement project = reqMapper.selectById(reqId);
+        if (project == null || !workspaceId.equals(project.getWorkspaceId())) throw AppException.notFound("项目不存在");
+        permissions.assertManageProject(userId, workspaceId, reqId);
+        String normalized = normalizePolicy(policy);
+        if (!normalized.equals(policy)) throw AppException.badRequest("发布检查策略无效");
+        if (reqMapper.updateReleasePolicy(workspaceId, reqId, normalized) != 1) throw new AppException(409, "策略写入冲突");
+        return normalized;
+    }
+
+    private VersionReleasePlan findPlan(String workspaceId, String versionId, String planId) {
+        if (planId == null) return null;
+        for (VersionReleasePlan plan : mapper.selectPlans(workspaceId, versionId)) {
+            if (planId.equals(plan.getId())) return plan;
+        }
+        throw AppException.notFound("发布计划不存在或不属于该版本");
+    }
+
+    private static String normalizePolicy(String policy) {
+        String value = Texts.trimToNull(policy);
+        return value != null && Arrays.asList("strict", "standard", "loose").contains(value) ? value : "standard";
+    }
+
+    private ReleaseCheckResponse evaluate(String workspaceId, ProjectVersion version, VersionReleasePlan plan) {
+        Requirement project = reqMapper.selectById(version.getReqId());
+        String policy = normalizePolicy(project == null ? null : project.getReleaseCheckPolicy());
+        ReleaseCheckResponse check = new ReleaseCheckResponse();
+        check.setVersionId(version.getId());
+        check.setPolicy(policy);
+        check.setPlanId(plan == null ? null : plan.getId());
+        check.setPlanRevision(plan == null ? null : plan.getRevision());
+        check.setCheckedAt(LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS));
+
+        int total = 0, executed = 0, passed = 0, failed = 0, blocked = 0, skipped = 0;
+        int requiredTotal = 0, requiredPassed = 0, requiredFailed = 0, requiredUntested = 0;
+        List<ReleaseCheckCase> cases = plan == null ? new ArrayList<ReleaseCheckCase>()
+                : planCaseMapper.selectEvidenceCases(plan.getId());
+        if (cases == null) cases = new ArrayList<ReleaseCheckCase>();
+        Set<String> demandTitles = new TreeSet<String>();
+        for (ReleaseCheckCase c : cases) {
+            total++;
+            boolean required = Boolean.TRUE.equals(c.getRequired());
+            if (required) requiredTotal++;
+            String result = Texts.trimToNull(c.getResult());
+            if (result != null) executed++;
+            if ("passed".equals(result)) { passed++; if (required) requiredPassed++; }
+            else if ("failed".equals(result)) { failed++; if (required) { requiredFailed++; check.getRequiredFailures().add(c); } }
+            else if ("blocked".equals(result)) { blocked++; if (required) { requiredFailed++; check.getRequiredFailures().add(c); } }
+            else if ("skipped".equals(result)) { skipped++; if (required) { requiredUntested++; check.getRequiredUnexecuted().add(c); } }
+            else if (required) { requiredUntested++; check.getRequiredUnexecuted().add(c); }
+            if (Texts.trimToNull(c.getDemandTitle()) != null && demandTitles.add(c.getDemandTitle())) {
+                check.getDemandTitles().add(c.getDemandTitle());
+            }
+        }
+        check.setCaseTotal(total);
+        check.setCaseExecuted(executed);
+        check.setCasePassed(passed);
+        check.setCaseFailed(failed);
+        check.setCaseBlocked(blocked);
+        check.setCaseSkipped(skipped);
+        check.setCaseUntested(total - executed);
+        check.setRequiredTotal(requiredTotal);
+        check.setRequiredPassed(requiredPassed);
+        check.setRequiredFailed(requiredFailed);
+        check.setRequiredUntested(requiredUntested);
+
+        List<com.hourglass.dto.CaseCoverageRow> demands = caseMapper.selectCoverageByDemand(workspaceId, version.getReqId());
+        int demandsTotal = 0, demandsCovered = 0;
+        if (demands != null) {
+            for (com.hourglass.dto.CaseCoverageRow row : demands) {
+                demandsTotal++;
+                if (row.getCaseTotal() != null && row.getCaseTotal() > 0) demandsCovered++;
+            }
+        }
+        check.setDemandsTotal(demandsTotal);
+        check.setDemandsCovered(demandsCovered);
+        List<com.hourglass.dto.TaskCoverageRow> workItems = caseTaskMapper.selectCoverageByProject(workspaceId, version.getReqId());
+        int workItemsTotal = 0, workItemsCovered = 0;
+        if (workItems != null) {
+            for (com.hourglass.dto.TaskCoverageRow row : workItems) {
+                workItemsTotal++;
+                if (row.getCaseTotal() != null && row.getCaseTotal() > 0) workItemsCovered++;
+            }
+        }
+        check.setWorkItemsTotal(workItemsTotal);
+        check.setWorkItemsCovered(workItemsCovered);
+
+        boolean strict = "strict".equals(policy), loose = "loose".equals(policy);
+        if (plan == null) {
+            check.getReminders().add("未关联发布计划，无法核对发布必测用例；本记录只冻结需求与工作项覆盖事实");
+        } else if (requiredTotal == 0) {
+            check.getReminders().add("计划内还没有标记「发布必测」的用例");
+        }
+        if (requiredFailed > 0) {
+            String msg = "发布必测用例失败或阻塞 " + requiredFailed + " 条";
+            (loose ? check.getReminders() : check.getBlockers()).add(msg);
+        }
+        if (requiredUntested > 0) {
+            String msg = "发布必测用例未执行或跳过 " + requiredUntested + " 条";
+            (strict ? check.getBlockers() : check.getReminders()).add(msg);
+        }
+        if (strict && total > 0 && check.getCaseUntested() > 0) {
+            check.getBlockers().add("严格策略：计划内还有 " + check.getCaseUntested() + " 条用例未执行");
+        } else if (!strict && check.getCaseUntested() > 0 && plan != null) {
+            check.getReminders().add("计划内还有 " + check.getCaseUntested() + " 条用例未执行");
+        }
+        if (strict && failed > 0) {
+            check.getBlockers().add("严格策略：计划内用例失败 " + failed + " 条");
+        }
+        if (workItemsTotal > 0 && workItemsCovered < workItemsTotal) {
+            check.getReminders().add("工作项级覆盖 " + workItemsCovered + "/" + workItemsTotal
+                    + "，未覆盖工作项可按需求级用例兜底核对");
+        }
+        if (demandsTotal > 0 && demandsCovered < demandsTotal) {
+            check.getReminders().add("需求级覆盖 " + demandsCovered + "/" + demandsTotal + "，仍有需求没有任何用例");
+        }
+        check.setVerdict(check.getBlockers().isEmpty()
+                ? (check.getReminders().isEmpty() ? "pass" : "warn") : "block");
+        return check;
+    }
+
+    /** 冻结进 plan_snapshot.testEvidence 的紧凑证据：只记结论与计数，不复制用例全文 */
+    private Map<String, Object> testEvidence(ReleaseCheckResponse check) {
+        Map<String, Object> evidence = new LinkedHashMap<String, Object>();
+        evidence.put("policy", check.getPolicy());
+        evidence.put("verdict", check.getVerdict());
+        evidence.put("planId", check.getPlanId());
+        evidence.put("planRevision", check.getPlanRevision());
+        evidence.put("caseTotal", check.getCaseTotal());
+        evidence.put("caseExecuted", check.getCaseExecuted());
+        evidence.put("casePassed", check.getCasePassed());
+        evidence.put("caseFailed", check.getCaseFailed());
+        evidence.put("caseBlocked", check.getCaseBlocked());
+        evidence.put("caseSkipped", check.getCaseSkipped());
+        evidence.put("caseUntested", check.getCaseUntested());
+        evidence.put("requiredTotal", check.getRequiredTotal());
+        evidence.put("requiredPassed", check.getRequiredPassed());
+        evidence.put("requiredFailed", check.getRequiredFailed());
+        evidence.put("requiredUntested", check.getRequiredUntested());
+        evidence.put("demandsTotal", check.getDemandsTotal());
+        evidence.put("demandsCovered", check.getDemandsCovered());
+        evidence.put("workItemsTotal", check.getWorkItemsTotal());
+        evidence.put("workItemsCovered", check.getWorkItemsCovered());
+        evidence.put("blockers", check.getBlockers());
+        evidence.put("reminders", check.getReminders());
+        evidence.put("demandTitles", check.getDemandTitles());
+        List<Map<String, Object>> requiredCases = new ArrayList<Map<String, Object>>();
+        for (ReleaseCheckCase c : check.getRequiredFailures()) requiredCases.add(requiredCaseEvidence(c));
+        for (ReleaseCheckCase c : check.getRequiredUnexecuted()) requiredCases.add(requiredCaseEvidence(c));
+        evidence.put("requiredCases", requiredCases);
+        evidence.put("checkedAt", check.getCheckedAt() == null ? null : check.getCheckedAt().toString());
+        return evidence;
+    }
+
+    private Map<String, Object> requiredCaseEvidence(ReleaseCheckCase c) {
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        row.put("caseId", c.getCaseId());
+        row.put("caseNo", c.getCaseNo());
+        row.put("title", c.getTitle());
+        row.put("demandTitle", c.getDemandTitle());
+        row.put("result", Texts.trimToNull(c.getResult()) == null ? "untested" : c.getResult());
+        return row;
+    }
+
+    /** 计划快照 = 计划本体 + 本次检查证据；无计划时也保留证据对象，历史口径一致 */
+    private String planSnapshot(VersionReleasePlan plan, ReleaseCheckResponse check) {
+        Map<String, Object> snapshot = new LinkedHashMap<String, Object>();
+        if (plan != null) {
+            Map<String, Object> body = json.convertValue(plan, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+            if (body != null) snapshot.putAll(body);
+        }
+        snapshot.put("testEvidence", testEvidence(check));
+        return encode(snapshot);
+    }
+
+    /** 计划编辑器：只返回当前用户可管理的项目与版本，避免选出必然保存失败的组合。 */    public ReleasePlanOptions planOptions(String userId, String workspaceId) {
         ReleasePlanOptions options = new ReleasePlanOptions();
         Map<String, ReleasePlanOptions.ProjectOption> projects = new LinkedHashMap<String, ReleasePlanOptions.ProjectOption>();
         for (ReleasePlanOptionRow row : mapper.selectPlanVersionOptions(workspaceId)) {
@@ -193,6 +400,26 @@ public class VersionReleaseService {
         row.setReleased(Boolean.FALSE);
         versions.add(row);
         return versions;
+    }
+
+    /**
+     * 计划跨项目，编号按空间取；并发新建撞 uk_plan_no 时重算重试（与其他编号同一口径）。
+     * 只重试编号撞键：主键冲突是另一回事，不能并入同一段重试。
+     * 取号走 number_seq（sql/87）：删除计划不回收编号。
+     */
+    private int insertPlanWithNo(VersionReleasePlan plan) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            plan.setPlanNo(numberSeq.nextPlan(plan.getWorkspaceId()));
+            try {
+                return mapper.insertPlan(plan);
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                String message = e.getMessage();
+                if (message == null || !message.contains("uk_plan_no")) {
+                    throw e;
+                }
+            }
+        }
+        throw AppException.badRequest("发布计划编号生成冲突，请重试");
     }
 
     private VersionReleasePlan hydratePlan(String workspaceId, VersionReleasePlan plan) {
@@ -331,7 +558,7 @@ public class VersionReleaseService {
         next.setCoverage(request.getCoverage());
         next.setPlannedTaskIds(ids);
         next.setScopeToken(digest(encode(Arrays.asList(versionIds, ids, targets, next.getEnvironment(), next.getCoverage()))));
-        int rows = old == null ? mapper.insertPlan(next) : mapper.updatePlan(next);
+        int rows = old == null ? insertPlanWithNo(next) : mapper.updatePlan(next);
         if (rows != 1) {
             throw new AppException(409, "发布计划已被其他人修改");
         }
@@ -414,7 +641,12 @@ public class VersionReleaseService {
         }
         response.setWarnings(c.warnings);
         response.setRequiresDeviationReason(!c.warnings.isEmpty());
-        response.setCanPublish(!request.getActualTaskIds().isEmpty() && (c.warnings.isEmpty() || request.getDeviationReason() != null));
+        ReleaseCheckResponse testCheck = evaluate(workspaceId, version, c.plan);
+        response.setTestCheck(testCheck);
+        boolean testBlocked = "block".equals(testCheck.getVerdict());
+        response.setCanPublish(!request.getActualTaskIds().isEmpty()
+                && (c.warnings.isEmpty() || request.getDeviationReason() != null)
+                && (!testBlocked || request.getDeviationReason() != null));
         response.setScopeToken(token(version, c, request));
         return response;
     }
@@ -444,6 +676,11 @@ public class VersionReleaseService {
         if (c.scopeDeviation && request.getDeviationReason() == null) throw new AppException(422, "计划或任务版本偏离必须说明原因");
         if (success && request.getActualTaskIds().isEmpty()) throw new AppException(422, "成功记录必须明确选择实际任务");
         if (success && !c.warnings.isEmpty() && request.getDeviationReason() == null) throw new AppException(422, "异常事实必须说明偏离原因");
+        /* 测试检查阻断项不禁止记录事实，但必须留下风险放行理由；结论随记录冻结 */
+        ReleaseCheckResponse testCheck = evaluate(workspaceId, version, c.plan);
+        if (success && "block".equals(testCheck.getVerdict()) && request.getDeviationReason() == null) {
+            throw new AppException(422, "发布检查存在阻断项，请填写风险放行理由后再确认");
+        }
         String failure = Texts.trimToNull(request.getFailureReason());
         if (!success && failure == null) throw AppException.badRequest("失败记录必须说明原因");
         AppUser actor = userMapper.selectById(userId);
@@ -472,7 +709,7 @@ public class VersionReleaseService {
         record.setExcludedCount(c.omitted.size());
         record.setIdempotencyKey(request.getIdempotencyKey());
         record.setRequestHash(hash);
-        record.setPlanSnapshot(encode(c.plan));
+        record.setPlanSnapshot(planSnapshot(c.plan, testCheck));
         insertRecordWithNo(record);
         Map<String, Integer> counts = new LinkedHashMap<String, Integer>();
         for (String id : request.getActualTaskIds()) {
@@ -592,6 +829,7 @@ public class VersionReleaseService {
         item.setOwnerName(task.getOwner());
         item.setDemandId(task.getDemandId());
         if (demand != null) {
+            item.setDemandNo(demand.getDemandNo());
             item.setDemandTitle(demand.getTitle());
             item.setTargetVersionId(demand.getVersionId());
             item.setTargetVersionName(demand.getVersionName());

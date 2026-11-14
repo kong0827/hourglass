@@ -30,13 +30,15 @@ class DemandServiceNotificationTest {
             mock(ProjectAccessService.class), mock(AttachmentService.class),
             mock(com.hourglass.mapper.MailDeliveryMapper.class), mock(com.hourglass.mapper.TestCaseMapper.class),
             mock(com.hourglass.mapper.CategoryMapper.class), mock(DeliveryScopeLock.class),
-            mock(ReleasePermissionService.class), mock(DeletionTraceService.class));
+            mock(ReleasePermissionService.class), mock(DeletionTraceService.class), mock(NumberSeqService.class));
 
     @org.junit.jupiter.api.BeforeEach
     void successfulUpdates() {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "releases", mock(com.hourglass.mapper.ReleaseMapper.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "judgementMapper",
                 mock(com.hourglass.mapper.DemandDeliveryJudgementMapper.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "caseTaskMapper",
+                mock(com.hourglass.mapper.TestCaseTaskMapper.class));
         org.mockito.Mockito.lenient()
                 .when(demands.selectDetail(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> demands.selectById(inv.getArgument(1)));

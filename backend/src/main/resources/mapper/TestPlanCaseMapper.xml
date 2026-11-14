@@ -4,9 +4,9 @@
 
   <insert id="insert">
     INSERT INTO test_plan_case
-      (id, plan_id, case_id, result, note, executed_by, executed_by_user_id, executed_at)
+      (id, plan_id, case_id, required, result, note, executed_by, executed_by_user_id, executed_at)
     VALUES
-      (#{id}, #{planId}, #{caseId}, #{result}, #{note}, #{executedBy}, #{executedByUserId}, #{executedAt})
+      (#{id}, #{planId}, #{caseId}, COALESCE(#{required}, 0), #{result}, #{note}, #{executedBy}, #{executedByUserId}, #{executedAt})
   </insert>
 
   <select id="selectCaseIds" resultType="string">
@@ -14,11 +14,12 @@
   </select>
 
   <select id="selectViewByPlan" resultType="com.hourglass.dto.TestPlanCaseView">
-    SELECT pc.id, pc.plan_id, pc.case_id, pc.result, pc.note, pc.executed_by, pc.executed_at,
-           c.title, c.case_no, c.module, c.priority, c.demand_id,
+    SELECT pc.id, pc.plan_id, pc.case_id, pc.result, pc.required, pc.note, pc.executed_by, pc.executed_at,
+           c.title, c.case_no, c.module, c.priority, c.demand_id, d.title AS demand_title,
            c.latest_status, c.latest_bug_task_id
     FROM test_plan_case pc
     JOIN test_case c ON c.id = pc.case_id
+    LEFT JOIN demand d ON d.id = c.demand_id
     WHERE pc.plan_id = #{planId}
     ORDER BY c.module, c.created_at DESC, c.id DESC
     LIMIT #{limit} OFFSET #{offset}
@@ -41,6 +42,21 @@
         executed_at = CURRENT_TIMESTAMP
     WHERE plan_id = #{planId} AND case_id = #{caseId}
   </update>
+
+  <update id="updateRequired">
+    UPDATE test_plan_case SET required = #{required}
+    WHERE plan_id = #{planId} AND case_id = #{caseId}
+  </update>
+
+  <select id="selectEvidenceCases" resultType="com.hourglass.dto.ReleaseCheckCase">
+    SELECT pc.case_id, pc.result, pc.required, pc.executed_by, pc.executed_at,
+           c.case_no, c.title, c.demand_id, d.title AS demand_title
+    FROM test_plan_case pc
+    JOIN test_case c ON c.id = pc.case_id
+    LEFT JOIN demand d ON d.id = c.demand_id
+    WHERE pc.plan_id = #{planId}
+    ORDER BY c.case_no IS NULL, c.case_no, c.id
+  </select>
 
   <delete id="deleteByPlanAndCase">
     DELETE FROM test_plan_case WHERE plan_id = #{planId} AND case_id = #{caseId}

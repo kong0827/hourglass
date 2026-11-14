@@ -37,12 +37,14 @@ public class ColumnTransitionService {
     private final ColumnTransitionMapper mapper;
     private final BoardColumnService columnService;
     private final WorkspaceMetaCache metaCache;
+    private final ActivityService activityService;
 
     public ColumnTransitionService(ColumnTransitionMapper mapper, BoardColumnService columnService,
-                                   WorkspaceMetaCache metaCache) {
+                                   WorkspaceMetaCache metaCache, ActivityService activityService) {
         this.mapper = mapper;
         this.columnService = columnService;
         this.metaCache = metaCache;
+        this.activityService = activityService;
     }
 
     /** 设置页矩阵：全部列 + 生效规则（含默认值） */
@@ -83,6 +85,8 @@ public class ColumnTransitionService {
         t.setRule(rule);
         mapper.upsert(t);
         evict(workspaceId);
+        activityService.logConfig(workspaceId, "状态流转「" + columnName(workspaceId, from)
+                + " → " + columnName(workspaceId, to) + "」设为「" + ruleLabel(rule) + "」");
     }
 
     /** 恢复默认：删除全部显式配置（已完成 → 其他列回到「需填原因」） */
@@ -90,6 +94,7 @@ public class ColumnTransitionService {
     public void reset(String workspaceId) {
         mapper.deleteAllByWorkspace(workspaceId);
         evict(workspaceId);
+        activityService.logConfig(workspaceId, "恢复默认状态流转规则（清除全部显式配置）");
     }
 
     /** 删除看板列时清理与之相关的规则，未配置过的格子不受影响 */
@@ -198,6 +203,16 @@ public class ColumnTransitionService {
             }
         }
         return id;
+    }
+
+    private static String ruleLabel(String rule) {
+        if (RULE_REASON.equals(rule)) {
+            return "需填原因";
+        }
+        if (RULE_DENY.equals(rule)) {
+            return "禁止";
+        }
+        return "允许";
     }
 
     /** 禁止提示里给一个两跳可达的中间列，避免用户只看到“拖不过去” */

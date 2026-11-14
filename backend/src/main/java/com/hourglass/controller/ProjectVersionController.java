@@ -158,6 +158,24 @@ public class ProjectVersionController {
         return ApiResult.ok(releaseService.savePlan(ctx.getUserId(), ctx.getWsId(), id, request));
     }
 
+    @GetMapping("/api/versions/{id}/release-check")
+    public ApiResult<com.hourglass.dto.ReleaseCheckResponse> releaseCheck(@PathVariable String id,
+                                                                         @RequestParam(required = false) String planId,
+                                                                         @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.releaseCheck(ctx.getUserId(), ctx.getWsId(), id, planId));
+    }
+
+    @GetMapping("/api/projects/{reqId}/release-policy")
+    public ApiResult<String> releasePolicy(@PathVariable String reqId, @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.releasePolicy(ctx.getUserId(), ctx.getWsId(), reqId));
+    }
+
+    @PutMapping("/api/projects/{reqId}/release-policy")
+    public ApiResult<String> saveReleasePolicy(@PathVariable String reqId, @RequestParam String policy,
+                                               @CurrentWorkspace WorkspaceCtx ctx) {
+        return ApiResult.ok(releaseService.saveReleasePolicy(ctx.getUserId(), ctx.getWsId(), reqId, policy));
+    }
+
     @PostMapping("/api/versions/{id}/release-preview")
     public ApiResult<ReleasePreviewResponse> releasePreview(@PathVariable String id,
                                                             @Valid @RequestBody ReleasePreviewRequest request,

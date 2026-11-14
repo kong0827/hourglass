@@ -25,6 +25,8 @@ import com.hourglass.mapper.RequirementMapper;
 import com.hourglass.mapper.AttachmentMapper;
 import com.hourglass.mapper.TestCaseMapper;
 import com.hourglass.mapper.TestCaseRunMapper;
+import com.hourglass.mapper.TestCaseTaskMapper;
+import com.hourglass.mapper.TaskMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -61,6 +63,10 @@ public class TestCaseService {
     private final com.hourglass.mapper.TestPlanCaseMapper planCaseMapper;
     /** 用例删除会连带执行流水，批量导入会一次性写入大量数据：都属于需可追责的动作 */
     private final AuditService auditService;
+    private final NumberSeqService numberSeq;
+    /** 用例 ↔ 工作项多对多：验证链路的核心关联 */
+    private final TestCaseTaskMapper caseTaskMapper;
+    private final TaskMapper taskMapper;
 
     public TestCaseService(TestCaseMapper caseMapper, TestCaseRunMapper runMapper,
                            TaskCommandService taskCommandService, ProjectAccessService projectAccess,
@@ -69,7 +75,8 @@ public class TestCaseService {
                            AttachmentMapper attachmentMapper, AttachmentService attachmentService,
                            com.hourglass.mapper.TestPlanMapper planMapper,
                            com.hourglass.mapper.TestPlanCaseMapper planCaseMapper,
-                           AuditService auditService) {
+                           AuditService auditService, NumberSeqService numberSeq,
+                           TestCaseTaskMapper caseTaskMapper, TaskMapper taskMapper) {
         this.caseMapper = caseMapper;
         this.runMapper = runMapper;
         this.taskCommandService = taskCommandService;
@@ -82,6 +89,9 @@ public class TestCaseService {
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.auditService = auditService;
+        this.numberSeq = numberSeq;
+        this.caseTaskMapper = caseTaskMapper;
+        this.taskMapper = taskMapper;
     }
 
     /* ---------- 查询 ---------- */
@@ -94,6 +104,7 @@ public class TestCaseService {
             v.setSteps(parseSteps(v.getStepsJson()));
             v.setStepsJson(null);
         }
+        attachTaskLinks(workspaceId, rows);
         return rows;
     }
 
@@ -118,6 +129,7 @@ public class TestCaseService {
             v.setSteps(parseSteps(v.getStepsJson()));
             v.setStepsJson(null);
         }
+        attachTaskLinks(workspaceId, rows);
 
         TestCasePage page = new TestCasePage();
         page.setTotal(total);
@@ -165,6 +177,45 @@ public class TestCaseService {
             rows.add(unlinked);
         }
         return rows;
+    }
+
+    /**
+     * 用例编辑器的工作项候选：只返回本例主需求下的工作项。
+     * 没有主需求时返回空列表——先选需求，再选需求下的工作项。
+     */
+    public List<com.hourglass.dto.CaseTaskLink> taskOptions(String workspaceId, String userId,
+                                                            String reqId, String demandId, String q) {
+        String rid = ensureProject(workspaceId, reqId);
+        projectAccess.assertView(workspaceId, userId, rid);
+        String did = Texts.trimToNull(demandId);
+        if (did == null) {
+            return new ArrayList<com.hourglass.dto.CaseTaskLink>();
+        }
+        requireDemandInProject(workspaceId, rid, did);
+        String key = Texts.trimToNull(q);
+        if (key != null && key.matches("(?i)^WI-?\\d+$")) {
+            key = key.replaceAll("(?i)^WI-?0*", "");
+            if (key.isEmpty()) {
+                key = "0";
+            }
+        }
+        Integer itemNo = key != null && key.matches("^\\d{1,9}$") ? Integer.valueOf(key) : null;
+        return caseTaskMapper.selectOptions(workspaceId, rid, did,
+                key == null ? null : Texts.cut(key, 50), itemNo, 200);
+    }
+
+    /** 需求详情的工作项级覆盖：每项工作项被多少条用例验证、结果分布。 */
+    public List<com.hourglass.dto.TaskCoverageRow> taskCoverage(String workspaceId, String userId, String demandId) {
+        String did = Texts.trimToNull(demandId);
+        if (did == null) {
+            throw AppException.badRequest("请选择需求");
+        }
+        Demand d = demandMapper.selectById(did);
+        if (d == null || !workspaceId.equals(d.getWorkspaceId())) {
+            throw AppException.notFound("需求不存在：" + did);
+        }
+        projectAccess.assertView(workspaceId, userId, d.getReqId());
+        return caseTaskMapper.selectCoverageByDemand(workspaceId, did);
     }
 
     /** 空字符串统一映射为 __none，供前端「未指定模块 / 未设置 / 未执行」计数使用 */
@@ -290,16 +341,20 @@ public class TestCaseService {
         c.setWorkspaceId(workspaceId);
         apply(c, reqId, req);
         insertWithNo(c);
+        syncTaskLinks(userId, c, req.getTaskIds());
+        auditService.recordCurrent(workspaceId, "test_case_create", "test_case", c.getId(), c.getTitle(), true,
+                "新建测试用例「" + caseNoText(c) + " " + c.getTitle() + "」", null);
         return caseMapper.selectById(c.getId());
     }
 
     /**
      * 分配项目内编号后插入。并发建用例会抢到同一个号，由唯一键 uk_case_no 拒绝，
      * 这里重算重试；失败的 INSERT 不会让 InnoDB 事务失效。
+     * 取号走 number_seq（sql/87）：删除用例不回收编号。
      */
     private void insertWithNo(TestCase c) {
         for (int attempt = 0; attempt < 3; attempt++) {
-            c.setCaseNo(caseMapper.selectNextCaseNo(c.getWorkspaceId(), c.getReqId()));
+            c.setCaseNo(numberSeq.nextCase(c.getWorkspaceId(), c.getReqId()));
             try {
                 caseMapper.insert(c);
                 return;
@@ -313,7 +368,7 @@ public class TestCaseService {
     /** 换项目：编号是当前项目内的序号，过去后重新取号，避免与目标项目已有编号撞唯一键 */
     private void updateMovedWithNo(TestCase c) {
         for (int attempt = 0; attempt < 3; attempt++) {
-            c.setCaseNo(caseMapper.selectNextCaseNo(c.getWorkspaceId(), c.getReqId()));
+            c.setCaseNo(numberSeq.nextCase(c.getWorkspaceId(), c.getReqId()));
             try {
                 caseMapper.update(c);
                 return;
@@ -331,6 +386,9 @@ public class TestCaseService {
         String reqId = ensureProject(workspaceId, req.getReqId());
         projectAccess.assertWrite(workspaceId, userId, reqId);
         boolean moved = !reqId.equals(c.getReqId());
+        String oldReqId = c.getReqId();
+        String oldTitle = c.getTitle();
+        String oldDemandId = c.getDemandId();
         if (moved) {
             /* 计划只圈选本项目用例：改项目会让原项目计划里留下跨项目行（已完成计划是快照，不受限） */
             List<String> open = planCaseMapper.selectOpenPlanNamesByCase(workspaceId, id);
@@ -345,7 +403,121 @@ public class TestCaseService {
         } else {
             caseMapper.update(c);
         }
+        boolean demandChanged = !java.util.Objects.equals(oldDemandId, c.getDemandId());
+        /* taskIds=null 表示旧客户端没带该字段：保持原关联；主需求换了则必须重算，避免跨需求残留 */
+        if (req.getTaskIds() != null || demandChanged) {
+            syncTaskLinks(userId, c, req.getTaskIds() == null
+                    ? new ArrayList<String>() : req.getTaskIds());
+        }
+        StringBuilder what = new StringBuilder("编辑测试用例「").append(caseNoText(c)).append(" ")
+                .append(c.getTitle()).append("」");
+        if (!java.util.Objects.equals(oldTitle, c.getTitle())) {
+            what.append("，标题由「").append(oldTitle).append("」修改");
+        }
+        if (moved) {
+            what.append("，所属项目由「").append(projectName(workspaceId, oldReqId))
+                    .append("」改为「").append(projectName(workspaceId, reqId)).append("」（编号重取）");
+        }
+        if (demandChanged) {
+            what.append(oldDemandId == null ? "，补充主需求" : (c.getDemandId() == null ? "，解除主需求" : "，更换主需求"));
+        }
+        auditService.recordCurrent(workspaceId, "test_case_update", "test_case", id, c.getTitle(), true,
+                what.toString(), null);
         return caseMapper.selectById(id);
+    }
+
+    private String caseNoText(TestCase c) {
+        int n = c.getCaseNo() == null ? 0 : c.getCaseNo();
+        if (n <= 0) {
+            return "";
+        }
+        StringBuilder s = new StringBuilder(String.valueOf(n));
+        while (s.length() < 3) {
+            s.insert(0, "0");
+        }
+        return "TC-" + s;
+    }
+
+    private String projectName(String workspaceId, String reqId) {
+        com.hourglass.entity.Requirement r = reqId == null ? null : reqMapper.selectById(reqId);
+        return r == null ? String.valueOf(reqId) : r.getName();
+    }
+
+    /**
+     * 保存用例—工作项关联：整体替换。校验每个工作项都属于用例主需求，
+     * 未选主需求时不允许挂工作项（否则追溯链没有共同的归口）。
+     */
+    private void syncTaskLinks(String userId, TestCase c, List<String> rawTaskIds) {
+        List<String> taskIds = distinctTaskIds(rawTaskIds);
+        if (!taskIds.isEmpty() && c.getDemandId() == null) {
+            throw AppException.badRequest("请先关联主需求，再选择该需求下的工作项");
+        }
+        for (String taskId : taskIds) {
+            Task t = taskMapper.selectById(taskId);
+            if (t == null || !c.getWorkspaceId().equals(t.getWorkspaceId()) || t.getDeletedAt() != null) {
+                throw AppException.badRequest("工作项不存在或已删除：" + taskId);
+            }
+            if (!c.getReqId().equals(t.getReqId())) {
+                throw AppException.badRequest("工作项不属于用例所在项目：" + t.getTitle());
+            }
+            if (!c.getDemandId().equals(t.getDemandId())) {
+                throw AppException.badRequest("工作项「" + Texts.cut(t.getTitle(), 30)
+                        + "」不属于用例主需求，请先调整主需求或改选工作项");
+            }
+        }
+        caseTaskMapper.deleteByCase(c.getId());
+        for (String taskId : taskIds) {
+            com.hourglass.entity.TestCaseTask link = new com.hourglass.entity.TestCaseTask();
+            link.setId(Ids.gen("CT"));
+            link.setWorkspaceId(c.getWorkspaceId());
+            link.setCaseId(c.getId());
+            link.setTaskId(taskId);
+            link.setCreatedBy(userId);
+            caseTaskMapper.insert(link);
+        }
+    }
+
+    private static List<String> distinctTaskIds(List<String> raw) {
+        List<String> out = new ArrayList<String>();
+        if (raw == null) {
+            return out;
+        }
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (String id : raw) {
+            String s = Texts.trimToNull(id);
+            if (s != null && seen.add(s)) {
+                out.add(s);
+            }
+        }
+        if (out.size() > 100) {
+            throw AppException.badRequest("单条用例最多关联 100 个工作项");
+        }
+        return out;
+    }
+
+    /** 列表页批量挂载工作项，避免逐行查询；没有关联的用例下发空数组而不是 null。 */
+    private void attachTaskLinks(String workspaceId, List<TestCaseView> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<String>(rows.size());
+        for (TestCaseView v : rows) {
+            ids.add(v.getId());
+        }
+        Map<String, List<com.hourglass.dto.CaseTaskLink>> byCase =
+                new java.util.HashMap<String, List<com.hourglass.dto.CaseTaskLink>>();
+        for (com.hourglass.dto.CaseTaskLink link : caseTaskMapper.selectByCaseIds(workspaceId, ids)) {
+            List<com.hourglass.dto.CaseTaskLink> bucket = byCase.get(link.getCaseId());
+            if (bucket == null) {
+                bucket = new ArrayList<com.hourglass.dto.CaseTaskLink>();
+                byCase.put(link.getCaseId(), bucket);
+            }
+            bucket.add(link);
+        }
+        for (TestCaseView v : rows) {
+            List<com.hourglass.dto.CaseTaskLink> links = byCase.get(v.getId());
+            v.setTasks(links == null ? new ArrayList<com.hourglass.dto.CaseTaskLink>() : links);
+        }
     }
 
     @Transactional
@@ -355,6 +527,7 @@ public class TestCaseService {
         runMapper.deleteByCase(workspaceId, id);
         /* 用例被删后测试计划里的圈选行也成孤儿，一并摘除 */
         planCaseMapper.deleteByCase(id);
+        caseTaskMapper.deleteByCase(id);
         caseMapper.delete(workspaceId, id);
         attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
         auditService.recordCurrent(workspaceId, "test_case_delete", "test_case", id, c.getTitle(), true,
@@ -539,6 +712,7 @@ public class TestCaseService {
         int count = caseMapper.countByReq(workspaceId, reqId);
         if (count > 0) {
             runMapper.deleteByReq(workspaceId, reqId);
+            caseTaskMapper.deleteByReq(workspaceId, reqId);
             caseMapper.deleteByReq(workspaceId, reqId);
             attachmentService.deleteOrphanCaseRunAttachments(workspaceId);
         }
@@ -886,11 +1060,16 @@ public class TestCaseService {
         if (demandId == null) {
             return null;
         }
+        requireDemandInProject(workspaceId, reqId, demandId);
+        return demandId;
+    }
+
+    private Demand requireDemandInProject(String workspaceId, String reqId, String demandId) {
         Demand d = demandMapper.selectById(demandId);
         if (d == null || !workspaceId.equals(d.getWorkspaceId()) || !reqId.equals(d.getReqId())) {
             throw AppException.badRequest("关联需求不存在或不属于该项目：" + demandId);
         }
-        return demandId;
+        return d;
     }
 
     private String ensureProject(String workspaceId, String rawReqId) {

@@ -1711,7 +1711,7 @@ if($("wsWebhook")) $("wsWebhook").addEventListener("input", function(){ validate
 if($("wsNotifyToken")) $("wsNotifyToken").addEventListener("input", function(){
   if(this.value.trim() && $("wsNotifyClearToken")) $("wsNotifyClearToken").checked = false;
 });
-var ACT_LABEL = {create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置"};
+var ACT_LABEL = {create:"新建", update:"修改", move:"移动", delete:"删除", restore:"恢复", config:"配置", nudge:"催办"};
 var actState = {items:[], total:0, hasMore:false, loading:false};
 function loadActivity(opts){
   if(!actList) return;
@@ -1771,8 +1771,12 @@ var AUDIT_LABEL = {
   invite_create:"生成邀请链接", invite_revoke:"撤销邀请链接",
   password_change:"修改密码", profile_update:"修改个人资料", work_hours_update:"修改计时设置",
   mail_settings_update:"修改邮件服务器", ai_config_update:"修改 AI 配置", ai_assistant_exec:"AI 助手执行",
-  gantt_share_create:"生成甘特分享", gantt_share_revoke:"撤销甘特分享",
+  gantt_share_create:"生成甘特分享", gantt_share_revoke:"撤销甘特分享", manager_nudge:"管理催办",
   test_case_delete:"删除测试用例", test_case_import:"导入测试用例",
+  test_case_create:"新建测试用例", test_case_update:"编辑测试用例",
+  test_plan_create:"新建测试计划", test_plan_update:"编辑测试计划",
+  test_plan_cases_add:"计划加入用例", test_plan_cases_remove:"计划移出用例",
+  test_plan_required:"计划必测标记", test_plan_run:"计划批量执行",
   test_plan_delete:"删除测试计划", test_plan_status:"测试计划状态变更",
   comment_delete:"删除评论", task_purge:"彻底删除任务",
   demand_delete:"删除需求", requirement_doc_delete:"删除需求文档",
